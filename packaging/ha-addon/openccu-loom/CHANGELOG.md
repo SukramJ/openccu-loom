@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.11
+
+- **System variables update again.** Their values reached Home Assistant
+  over MQTT but not over the REST/WebSocket connection, where they stayed on
+  the value they had when the integration started — including after you had
+  written one yourself. Templates and services read the correct value the
+  whole time, which made the two disagree.
+
 ## 0.52.10
 
 - **A deactivated program now greys out its "run now" button.** The CCU

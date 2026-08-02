@@ -8,7 +8,9 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // TestHubEventsSubscriberProgramChanged pins the broadcast a client needs to
@@ -89,5 +91,46 @@ func TestHubEventsSubscriberProgramChangedActive(t *testing.T) {
 	}
 	if !p.Active || !p.ExecuteAvailable {
 		t.Fatalf("expected an active, runnable program, got %+v", p)
+	}
+}
+
+// TestSysvarChangeReachesTheBroadcast measures the whole chain the hub scan
+// walks: a value observed on the model must arrive as a `hub.sysvar_changed`
+// broadcast. Only the MQTT publisher subscribed to the model, and the bus
+// event the WebSocket bridge listens for had no production publisher — so
+// this broadcast was declared, bridged, contract-tested, and silent.
+func TestSysvarChangeReachesTheBroadcast(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+	sv := hub.NewSysvar("home", "Testvar", "", hmenum.HubValueTypeFloat, nil)
+	cu.HubModel.PutSysvar(sv)
+
+	// The coordinator owns the model→bus wiring; attaching it is what a real
+	// central does at boot.
+	cu.Hub.SetHubModel(cu.HubModel)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	sv.OnValue(hmtypes.FloatValue(42))
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == SysvarTopic("home", "Testvar")
+	})
+	if ev.Type != string(hmevent.EventTypeSysvarChanged) {
+		t.Fatalf("type = %q, want %q", ev.Type, string(hmevent.EventTypeSysvarChanged))
+	}
+	p, ok := ev.Payload.(SysvarChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want SysvarChangedPayload", ev.Payload)
+	}
+	if p.Value != 42.0 {
+		t.Fatalf("value = %v, want 42", p.Value)
+	}
+	if p.UniqueID == "" {
+		t.Fatal("unique_id must be resolved for a sysvar")
 	}
 }

@@ -1,6 +1,6 @@
 {
-  "generated": "97fcefd8",
-  "head": "97fcefd8",
+  "generated": "4d2461e5",
+  "head": "4d2461e5",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27293,
+    "total_exported": 27302,
     "reachable": 4737,
-    "whitelisted": 19651,
+    "whitelisted": 19660,
     "unreachable": 2905
   },
   "by_package": [
@@ -4439,28 +4439,28 @@
       "package": "internal/central/coordinators",
       "identifier": "ProgramExecutor",
       "file": "internal/central/coordinators/hub.go",
-      "line": 605,
+      "line": 637,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ProgramExecutor",
       "file": "internal/central/coordinators/hub.go",
-      "line": 605,
+      "line": 637,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ProgramStateWriter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 589,
+      "line": 621,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ProgramStateWriter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 589,
+      "line": 621,
       "kind": "type"
     },
     {
@@ -4530,42 +4530,42 @@
       "package": "internal/central/coordinators",
       "identifier": "RefreshHooks",
       "file": "internal/central/coordinators/hub.go",
-      "line": 233,
+      "line": 253,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "RefreshHooks",
       "file": "internal/central/coordinators/hub.go",
-      "line": 233,
+      "line": 253,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageReader",
       "file": "internal/central/coordinators/hub.go",
-      "line": 689,
+      "line": 721,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageReader",
       "file": "internal/central/coordinators/hub.go",
-      "line": 689,
+      "line": 721,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageSuppressor",
       "file": "internal/central/coordinators/hub.go",
-      "line": 349,
+      "line": 369,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageSuppressor",
       "file": "internal/central/coordinators/hub.go",
-      "line": 349,
+      "line": 369,
       "kind": "type"
     },
     {
@@ -4600,28 +4600,28 @@
       "package": "internal/central/coordinators",
       "identifier": "SysvarCreator",
       "file": "internal/central/coordinators/hub.go",
-      "line": 808,
+      "line": 840,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarCreator",
       "file": "internal/central/coordinators/hub.go",
-      "line": 808,
+      "line": 840,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarGetter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 682,
+      "line": 714,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarGetter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 682,
+      "line": 714,
       "kind": "type"
     },
     {
@@ -4642,14 +4642,14 @@
       "package": "internal/central/coordinators",
       "identifier": "SysvarValueWriter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 651,
+      "line": 683,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarValueWriter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 651,
+      "line": 683,
       "kind": "type"
     },
     {
@@ -33401,7 +33401,7 @@
       "identifier": "TestCalculatedSlotStateGatedOnSourceValidity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/eventbridge_calculated_availability_test.go",
-      "line": 98
+      "line": 99
     },
     {
       "package": "internal/central/adapter",
@@ -47517,6 +47517,13 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestValueChangedPushCarriesAvailability",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/eventbridge_calculated_availability_test.go",
+      "line": 178
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestValueListEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/uischema_helpers_test.go",
@@ -51479,6 +51486,13 @@
     },
     {
       "package": "internal/central/coordinators",
+      "identifier": "TestProgramNotifiersReachScanRegisteredPrograms",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/coordinators/hub_program_notifier_test.go",
+      "line": 22
+    },
+    {
+      "package": "internal/central/coordinators",
       "identifier": "TestPublishBackendParameterEventEmits",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
@@ -52179,6 +52193,13 @@
     },
     {
       "package": "internal/central/coordinators",
+      "identifier": "TestSetHubModelDetachesPreviousProgramHook",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/coordinators/hub_program_notifier_test.go",
+      "line": 83
+    },
+    {
+      "package": "internal/central/coordinators",
       "identifier": "TestSetOnConfigSettledNilIsSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/event_deep_test.go",
@@ -52406,6 +52427,13 @@
       "identifier": "TestSuppressServiceMessageUnsuppress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/hub_connectivity_suppress_test.go",
+      "line": 120
+    },
+    {
+      "package": "internal/central/coordinators",
+      "identifier": "TestSysvarNotifiersReachScanRegisteredSysvars",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/coordinators/hub_program_notifier_test.go",
       "line": 120
     },
     {
@@ -91487,28 +91515,28 @@
       "identifier": "CleanSysvarNames",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 166
+      "line": 172
     },
     {
       "package": "internal/model/hub",
       "identifier": "CleanSysvarNames",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 166
+      "line": 172
     },
     {
       "package": "internal/model/hub",
       "identifier": "IsExcludedSysvar",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 149
+      "line": 155
     },
     {
       "package": "internal/model/hub",
       "identifier": "IsExcludedSysvar",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 149
+      "line": 155
     },
     {
       "package": "internal/model/hub",
@@ -91837,14 +91865,14 @@
       "identifier": "NewSysvar",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 107
+      "line": 113
     },
     {
       "package": "internal/model/hub",
       "identifier": "NewSysvar",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 107
+      "line": 113
     },
     {
       "package": "internal/model/hub",
@@ -93570,10 +93598,24 @@
     },
     {
       "package": "internal/model/hub",
+      "identifier": "TestProgramOnActive_NotifiesOnTransition",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/hub/program_activity_test.go",
+      "line": 16
+    },
+    {
+      "package": "internal/model/hub",
       "identifier": "TestProgramOnExecutionFires",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_test.go",
       "line": 87
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "TestProgramOnExecution_CarriesExecutionKind",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/hub/program_activity_test.go",
+      "line": 56
     },
     {
       "package": "internal/model/hub",
@@ -140855,6 +140897,20 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "TestHubEventsSubscriberProgramChanged",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/hub_events_program_changed_test.go",
+      "line": 20
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestHubEventsSubscriberProgramChangedActive",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/hub_events_program_changed_test.go",
+      "line": 64
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "TestHubEventsSubscriberProgramUniqueIDResolvable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/hub_events_test.go",
@@ -142756,6 +142812,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/hub_events_test.go",
       "line": 499
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestSysvarChangeReachesTheBroadcast",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/hub_events_program_changed_test.go",
+      "line": 102
     },
     {
       "package": "internal/north/rest/ws",

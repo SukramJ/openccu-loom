@@ -4,6 +4,30 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.11]
+
+### Fixed
+
+- **A system variable's value never reached a REST/WebSocket client after
+  start-up.** The daemon polls the CCU and pushes what changed — that is the
+  design, and it worked over MQTT, whose publisher subscribes to the hub
+  model directly. The WebSocket plane listens for the internal
+  `SysvarChangedEvent` instead, and nothing in a running daemon ever
+  published it: the only publisher was a coordinator method with no caller
+  (the hub scan writes to the model, not through it). So
+  `hub.sysvar_changed` was declared, bridged, contract-tested — and silent.
+  A client's variables froze at whatever its bootstrap read.
+
+  The model now notifies on an actual value change, and attaching the hub
+  model wires that notifier for every system variable — the ones already
+  present and everything the scan registers later. Re-observing the same
+  value on a scan cycle stays silent, as before.
+
+  Same defect as the program notifiers fixed in 0.52.10, and the same blind
+  spot: the contract guard checks that a declared broadcast has a WebSocket
+  emitter, not that anything upstream feeds it. Both are now pinned by tests
+  that drive the model and assert the broadcast arrives.
+
 ## [0.52.10]
 
 ### Fixed

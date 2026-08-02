@@ -56,10 +56,12 @@ type HubCoordinator struct {
 	// Wired via SetHubModel; nil when not configured.
 	hubModel *hub.Hub
 
-	// unwireProgramNotifiers detaches the OnProgramRegistered hook installed
-	// by SetHubModel, so re-attaching a model does not leave the previous
-	// subscription behind. Nil when no model is wired. Guarded by mu.
+	// unwireProgramNotifiers / unwireSysvarNotifiers detach the
+	// OnProgramRegistered / OnSysvarRegistered hooks installed by
+	// SetHubModel, so re-attaching a model does not leave the previous
+	// subscriptions behind. Nil when no model is wired. Guarded by mu.
 	unwireProgramNotifiers func()
+	unwireSysvarNotifiers  func()
 
 	mu      sync.RWMutex
 	sysvars map[string]SysvarSnapshot
@@ -156,14 +158,32 @@ func (h *HubCoordinator) UpdateSysvar(_ context.Context, snap SysvarSnapshot) {
 	if existed {
 		oldVal = prev.Value
 	}
+	h.NotifySysvarChanged(snap.Name, oldVal, snap.Value, snap.ValueType)
+}
+
+// NotifySysvarChanged publishes a [hmevent.SysvarChangedEvent].
+func (h *HubCoordinator) NotifySysvarChanged(
+	name string, old, next hmtypes.ParamValue, valueType hmenum.HubValueType,
+) {
 	events.Publish(h.bus, hmevent.SysvarChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: h.centralName,
-		Name:        snap.Name,
-		OldValue:    oldVal,
-		NewValue:    snap.Value,
-		ValueType:   snap.ValueType,
+		Name:        name,
+		OldValue:    old,
+		NewValue:    next,
+		ValueType:   valueType,
 	})
+}
+
+// wireSysvarNotifier connects one system variable's notifier hook to the bus.
+// Idempotent, so the periodic hub scan can call it freely.
+func (h *HubCoordinator) wireSysvarNotifier(sv *hub.Sysvar) {
+	if sv == nil {
+		return
+	}
+	sv.ValueNotifier = func(name string, old, next hmtypes.ParamValue) {
+		h.NotifySysvarChanged(name, old, next, sv.ValueType)
+	}
 }
 
 // Sysvars returns a snapshot of every known sysvar.
@@ -388,30 +408,42 @@ func (h *HubCoordinator) SuppressServiceMessage(ctx context.Context, interfaceID
 // Call once at daemon boot after constructing both objects. Returns
 // the receiver for chaining. Nil detaches the model.
 //
-// Attaching the model also wires every program's notifier hooks — the
-// existing set plus everything the hub scan registers later. Without that
-// the hooks stayed nil for every program the scan created (it registers
-// through [hub.Hub.PutProgram], not through [AddProgramDP]), so neither
-// execution nor activity ever reached the bus.
+// Attaching the model also wires the notifier hooks of every program and
+// system variable — the existing set plus everything the hub scan registers
+// later. Without that the hooks stayed nil for every entity the scan created
+// (it registers through [hub.Hub.PutProgram] / [hub.Hub.PutSysvar], not
+// through [AddProgramDP] / [AddSysvarDP]), so neither a program's execution
+// or activity nor a system variable's value ever reached the bus. The MQTT
+// publisher subscribes to the model directly and was unaffected; every
+// bus-driven consumer — the WebSocket plane above all — saw nothing.
 func (h *HubCoordinator) SetHubModel(m *hub.Hub) *HubCoordinator {
 	h.mu.Lock()
 	if h.unwireProgramNotifiers != nil {
 		h.unwireProgramNotifiers()
 		h.unwireProgramNotifiers = nil
 	}
+	if h.unwireSysvarNotifiers != nil {
+		h.unwireSysvarNotifiers()
+		h.unwireSysvarNotifiers = nil
+	}
 	h.hubModel = m
 	h.mu.Unlock()
 	if m == nil {
 		return h
 	}
-	// Subscribe before the snapshot walk so a program registered in between
-	// is not missed; re-wiring an already-wired program is harmless.
-	unwire := m.OnProgramRegistered(h.wireProgramNotifiers)
+	// Subscribe before the snapshot walk so an entity registered in between is
+	// not missed; re-wiring an already-wired one is harmless.
+	unwirePrograms := m.OnProgramRegistered(h.wireProgramNotifiers)
 	for _, p := range m.Programs() {
 		h.wireProgramNotifiers(p)
 	}
+	unwireSysvars := m.OnSysvarRegistered(h.wireSysvarNotifier)
+	for _, sv := range m.Sysvars() {
+		h.wireSysvarNotifier(sv)
+	}
 	h.mu.Lock()
-	h.unwireProgramNotifiers = unwire
+	h.unwireProgramNotifiers = unwirePrograms
+	h.unwireSysvarNotifiers = unwireSysvars
 	h.mu.Unlock()
 	return h
 }
