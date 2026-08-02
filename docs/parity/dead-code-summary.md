@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: edb42f6a
-HEAD: edb42f6a
+Generated: faeb6d1e
+HEAD: faeb6d1e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27225 |
-| Reachable | 4712 |
-| Whitelisted | 19614 |
-| **Unreachable** | **2899** |
+| Total Exported | 27271 |
+| Reachable | 4729 |
+| Whitelisted | 19639 |
+| **Unreachable** | **2903** |
 
 ## Top-20 Packages by Dead Code
 
@@ -22,7 +22,7 @@ HEAD: edb42f6a
 | internal/central/adapter | 4 | 92 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
-| internal/payload | 4 | 232 | 6 |
+| internal/payload | 4 | 236 | 6 |
 | pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -102,7 +102,7 @@ HEAD: edb42f6a
 | internal/central/adapter | 4 | 92 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
-| internal/payload | 4 | 232 | 6 |
+| internal/payload | 4 | 236 | 6 |
 | pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
