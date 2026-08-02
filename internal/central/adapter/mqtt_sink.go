@@ -141,6 +141,21 @@ func (s *MQTTCommandSink) TriggerProgram(ctx context.Context, centralName, id st
 	return p.Execute(ctx)
 }
 
+// SetProgramEnabled toggles a program's CCU-side active flag. A
+// deactivated program ignores its triggers, so this is the control that
+// decides whether [MQTTCommandSink.TriggerProgram] can do anything.
+func (s *MQTTCommandSink) SetProgramEnabled(ctx context.Context, centralName, id string, enabled bool) error {
+	c, ok := s.registry.Get(centralName)
+	if !ok {
+		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
+	}
+	p, ok := c.HubModel.Program(id)
+	if !ok {
+		return fmt.Errorf("mqtt_sink: unknown program %q on %s", id, centralName)
+	}
+	return p.SetEnabled(ctx, enabled)
+}
+
 // InvokeCustomDP implements [mqtt.CDPInvocationSink]. It delegates to
 // the embedded [CustomDPDispatcher] using the source tag
 // "mqtt:custom-dp:invoke" for the audit log.

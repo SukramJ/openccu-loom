@@ -57,6 +57,10 @@ func (s *ctxCapturingSink) TriggerProgram(ctx context.Context, _, _ string) erro
 	return nil
 }
 
+func (s *ctxCapturingSink) SetProgramEnabled(_ context.Context, _, _ string, _ bool) error {
+	return nil
+}
+
 func (s *ctxCapturingSink) snapshot() (called bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

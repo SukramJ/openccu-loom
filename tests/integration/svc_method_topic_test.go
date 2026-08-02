@@ -199,6 +199,8 @@ func (recordingSink) SetMasterValue(context.Context, string, string, string, hme
 func (recordingSink) SetSysvar(context.Context, string, string, any) error { return nil }
 func (recordingSink) TriggerProgram(context.Context, string, string) error { return nil }
 
+func (recordingSink) SetProgramEnabled(context.Context, string, string, bool) error { return nil }
+
 type recordingCDPSink struct {
 	calls       atomic.Int32
 	lastCentral string

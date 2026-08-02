@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -421,10 +422,18 @@ func (p *HubMQTTPublisher) wireOneProgram(
 		return
 	}
 	active, _ := prog.Active()
-	_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, programSpecFor(prog)))
+	// The model declares which controls the program surfaces; the bridge
+	// transcribes them (ADR 0011). Roles are resolved against the bridge's
+	// own topic base, which is runtime context the model does not hold.
+	roles := b.ProgramRoles(centralName, prog)
+	for _, item := range disco.BuildProgramDiscoveryRoles(centralName, programSpecFor(prog), roles) {
+		_ = b.PublishHubDiscovery(ctx, item)
+	}
 	w.PublishProgramState(ctx, centralName, prog, active)
+	p.publishProgramExecuteAvailability(ctx, b, roles, prog)
 	p.addUnsub(prog.OnUpdate(func(e hub.ProgramEvent) {
 		w.PublishProgramState(ctx, centralName, prog, e.Active)
+		p.publishProgramExecuteAvailability(ctx, b, roles, prog)
 	}))
 }
 
@@ -500,7 +509,11 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 		if prog == nil || prog.IsInternal {
 			continue
 		}
-		_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, programSpecFor(prog)))
+		for _, item := range disco.BuildProgramDiscoveryRoles(
+			centralName, programSpecFor(prog), b.ProgramRoles(centralName, prog),
+		) {
+			_ = b.PublishHubDiscovery(ctx, item)
+		}
 	}
 	for _, sv := range hubModel.Sysvars() {
 		if sv == nil {
@@ -564,4 +577,26 @@ func sysvarStateForMQTT(sv *hub.Sysvar, raw any) any {
 		return raw
 	}
 	return sv.ValueList[idx]
+}
+
+// publishProgramExecuteAvailability reports each declared role's usability
+// from the model's own answer. The rule — a deactivated program refuses to
+// run — lives in [hub.Program.State]; this only transcribes it, so the
+// bridge stays free of domain knowledge (ADR 0011).
+func (p *HubMQTTPublisher) publishProgramExecuteAvailability(
+	ctx context.Context, b *mqtt.Bridge, roles []payload.MQTTRole, prog *hub.Program,
+) {
+	if len(roles) == 0 || prog == nil {
+		return
+	}
+	state, _ := prog.State().(*payload.ProgramState)
+	if state == nil {
+		return
+	}
+	for i := range roles {
+		if roles[i].Topics.Availability == "" {
+			continue
+		}
+		_ = b.PublishRoleAvailability(ctx, &roles[i], state.ExecuteAvailable)
+	}
 }

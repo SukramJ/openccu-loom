@@ -113,7 +113,50 @@ func (p *Program) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	}
 	return payload.MQTTTopicSet{
 		State:   naming.MQTTHubProgramState(base, centralName, p.ID),
+		Set:     naming.MQTTHubProgramSet(base, centralName, p.ID),
 		Trigger: naming.MQTTHubProgramTrigger(base, centralName, p.ID),
+	}
+}
+
+// Role keys for the two controls a program surfaces. The activity toggle
+// is the principal role and keeps the program's plain identity, which is
+// what the switch already published before the execution grew a control
+// of its own.
+const (
+	// ProgramRoleExecute addresses the "run it now" control.
+	ProgramRoleExecute = "execute"
+)
+
+// MQTTRoles implements [payload.MQTTRoleAddressable].
+//
+// A CCU program is two controls, because the CCU treats it as two things:
+// an activity flag that decides whether the program reacts at all, and an
+// execution that runs it once. Running a deactivated program does
+// nothing, so the execution carries its own availability topic, fed from
+// [Program.State]'s ExecuteAvailable. Toggling activity has no such
+// gate — it is what brings a deactivated program back.
+func (p *Program) MQTTRoles(base, centralName string) []payload.MQTTRole {
+	if p.ID == "" {
+		return nil
+	}
+	return []payload.MQTTRole{
+		{
+			// Principal role: unchanged identity and topics.
+			Component: "switch",
+			Topics: payload.MQTTTopicSet{
+				State: naming.MQTTHubProgramState(base, centralName, p.ID),
+				Set:   naming.MQTTHubProgramSet(base, centralName, p.ID),
+			},
+		},
+		{
+			Key:        ProgramRoleExecute,
+			Component:  "button",
+			NameSuffix: "Execute",
+			Topics: payload.MQTTTopicSet{
+				Trigger:      naming.MQTTHubProgramTrigger(base, centralName, p.ID),
+				Availability: naming.MQTTHubProgramExecuteAvailability(base, centralName, p.ID),
+			},
+		},
 	}
 }
 

@@ -110,6 +110,7 @@ exclude_docs: |
   testplan.md
   roadmap.md
   alarm-concept.md
+  external-sources-concept.md
   matter-conformance.md
   matter-ui-concept.md
   TODO.md

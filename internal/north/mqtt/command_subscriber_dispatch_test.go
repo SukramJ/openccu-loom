@@ -196,3 +196,7 @@ func TestCommandSubscriberCloseDrainsCleanly(t *testing.T) {
 	// Close is idempotent.
 	sub.Close()
 }
+
+func (s *slowSink) SetProgramEnabled(_ context.Context, _, _ string, _ bool) error {
+	return nil
+}

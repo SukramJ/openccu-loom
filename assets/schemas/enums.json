@@ -3039,6 +3039,10 @@
           "wire_value": "poll_com_test"
         },
         {
+          "go_name": "RegaScriptPoweroffCCU",
+          "wire_value": "poweroff_ccu"
+        },
+        {
           "go_name": "RegaScriptRebootCCU",
           "wire_value": "reboot_ccu"
         },
@@ -3049,6 +3053,10 @@
         {
           "go_name": "RegaScriptRenameRoom",
           "wire_value": "rename_room"
+        },
+        {
+          "go_name": "RegaScriptSetCCUPosition",
+          "wire_value": "set_ccu_position"
         },
         {
           "go_name": "RegaScriptSetDeviceFunctions",

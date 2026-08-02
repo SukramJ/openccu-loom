@@ -208,8 +208,21 @@ type ModulatingValveState struct {
 
 // ProgramState is the live program state.
 type ProgramState struct {
-	StateUncertain    bool   `json:"state_uncertain"`
-	IsActive          *bool  `json:"is_active,omitempty"`
+	StateUncertain bool  `json:"state_uncertain"`
+	IsActive       *bool `json:"is_active,omitempty"`
+	// ExecuteAvailable reports whether running the program would do
+	// anything: a program the CCU has deactivated ignores its triggers and
+	// refuses a manual run.
+	//
+	// The daemon answers this rather than leaving each consumer to derive
+	// it, because it is CCU semantics, not a presentation choice — and the
+	// consumers that surface a program as two controls (an active toggle
+	// and an execute action) otherwise each have to rediscover that the
+	// second one depends on the first.
+	//
+	// Toggling activity stays available regardless: it is what brings a
+	// deactivated program back, so gating it would leave no way back.
+	ExecuteAvailable  bool   `json:"execute_available"`
 	LastExecuted      string `json:"last_executed,omitempty"`
 	LastResultSuccess *bool  `json:"last_result_success,omitempty"`
 }
