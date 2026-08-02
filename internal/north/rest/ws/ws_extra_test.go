@@ -51,7 +51,11 @@ func TestPublishCentralStateChanged(t *testing.T) {
 // TestPublishDataPointValueChanged smoke-tests the typed publisher.
 func TestPublishDataPointValueChanged(t *testing.T) {
 	h := NewHub()
-	h.PublishDataPointValueChanged("home", "HmIP-RF", "VCU123", 1, "LEVEL", "VALUES", 1.0, 0.0, time.Now())
+	h.PublishDataPointValueChanged(ValueChange{
+		Central: "home", Interface: "HmIP-RF", DeviceAddress: "VCU123", Channel: 1,
+		Parameter: "LEVEL", ParamsetKey: "VALUES", Value: 1.0, Previous: 0.0, When: time.Now(),
+		Available: true,
+	})
 	// No panic = pass.
 }
 

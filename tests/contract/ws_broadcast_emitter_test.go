@@ -76,7 +76,7 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 	},
 	"datapoint.value_changed": {
 		Files:     []string{"internal/north/rest/ws/payloads.go"},
-		Tokens:    []string{"func (h *Hub) PublishDataPointValueChangedKind", "h.Publish(Event{", "string(hmevent.EventTypeDataPointValueChanged)"},
+		Tokens:    []string{"func (h *Hub) PublishDataPointValueChanged", "h.Publish(Event{", "string(hmevent.EventTypeDataPointValueChanged)"},
 		WireValue: string(hmevent.EventTypeDataPointValueChanged),
 	},
 	"datapoint.optimistic_rolled_back": {
@@ -103,6 +103,11 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Files:     []string{"internal/north/rest/ws/hub_events.go"},
 		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeProgramExecuted)"},
 		WireValue: string(hmevent.EventTypeProgramExecuted),
+	},
+	"hub.program_changed": {
+		Files:     []string{"internal/north/rest/ws/hub_events.go"},
+		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeProgramChanged)"},
+		WireValue: string(hmevent.EventTypeProgramChanged),
 	},
 	"hub.sysvar_changed": {
 		Files:     []string{"internal/north/rest/ws/hub_events.go"},

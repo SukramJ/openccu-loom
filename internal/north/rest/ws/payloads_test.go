@@ -57,8 +57,11 @@ func TestPublishDataPointValueChangedEmitsCanonicalShape(t *testing.T) {
 		t.Fatalf("DataPointTopic = %q, want %q", got, wantTopic)
 	}
 	// Hub method exists and does not panic for an empty hub.
-	hub.PublishDataPointValueChanged("ccu-01", "HmIP-RF", "0001ABCDEF", 3,
-		"LEVEL", "VALUES", 0.5, 0.0, when)
+	hub.PublishDataPointValueChanged(ValueChange{
+		Central: "ccu-01", Interface: "HmIP-RF", DeviceAddress: "0001ABCDEF", Channel: 3,
+		Parameter: "LEVEL", ParamsetKey: "VALUES", Value: 0.5, Previous: 0.0, When: when,
+		Available: true,
+	})
 }
 
 // TestPublishCentralStateChangedShape pins the wire shape of the

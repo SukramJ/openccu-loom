@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: faeb6d1e
-HEAD: faeb6d1e
+Generated: 97fcefd8
+HEAD: 97fcefd8
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27271 |
-| Reachable | 4729 |
-| Whitelisted | 19639 |
-| **Unreachable** | **2903** |
+| Total Exported | 27293 |
+| Reachable | 4737 |
+| Whitelisted | 19651 |
+| **Unreachable** | **2905** |
 
 ## Top-20 Packages by Dead Code
 
@@ -31,7 +31,7 @@ HEAD: faeb6d1e
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 14 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 59 | 42 |
+| internal/model/hub | 2 | 61 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -111,7 +111,7 @@ HEAD: faeb6d1e
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 14 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 59 | 42 |
+| internal/model/hub | 2 | 61 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |

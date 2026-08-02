@@ -85,6 +85,35 @@ type ProgramExecutedPayload struct {
 	DeviceAddress string `json:"device_address,omitempty"`
 }
 
+// ProgramChangedPayload is the WebSocket payload published on the
+// `hub.<central>.programs.<id>` topic whenever a program's activity flag
+// changes — the operator toggled it in the CCU WebUI, or a client wrote it.
+//
+// A CCU program is two controls: the activity flag decides whether it reacts
+// at all, and the execution runs it once. A deactivated program refuses the
+// execution, so a client offering "run now" needs the transition to render
+// that control unavailable. `execute_available` carries the daemon's answer
+// so the rule is not re-derived per consumer — the same field the REST
+// ProgramSummary and the MQTT availability topic carry.
+type ProgramChangedPayload struct {
+	Central   string `json:"central"`
+	ProgramID string `json:"program_id"`
+	// UniqueID is the canonical loom-namespaced routing key for this
+	// program. Optional for the same reason as on
+	// [ProgramExecutedPayload]: it keys on the program *name*, resolved
+	// from the hub model, and is empty for a program not yet loaded.
+	UniqueID string `json:"unique_id,omitempty"`
+	// Active is the program's activity flag as the CCU reports it.
+	Active bool `json:"active"`
+	// ExecuteAvailable reports whether running the program would do
+	// anything. False exactly while the program is deactivated.
+	ExecuteAvailable bool `json:"execute_available"`
+	// Channel / DeviceAddress mirror [ProgramExecutedPayload]; omitted when
+	// the program belongs to no device.
+	Channel       string `json:"channel,omitempty"`
+	DeviceAddress string `json:"device_address,omitempty"`
+}
+
 // SysvarTopic returns the canonical topic for a sysvar-change event:
 //
 //	hub.<central>.sysvars.<name>
@@ -260,6 +289,26 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 				},
 			})
 		})
+		unsubPc := events.Subscribe(bus, func(e hmevent.ProgramChangedEvent) {
+			channel, deviceAddress := programDeviceLink(reg, centralName, e.ProgramID)
+			hub.Publish(Event{
+				Topic: ProgramTopic(centralName, e.ProgramID),
+				Type:  string(hmevent.EventTypeProgramChanged),
+				When:  e.Timestamp(),
+				Payload: ProgramChangedPayload{
+					Central:   centralName,
+					ProgramID: e.ProgramID,
+					UniqueID:  programUniqueID(reg, centralName, e.ProgramID),
+					Active:    e.Active,
+					// The CCU refuses to run a deactivated program, so the two
+					// travel together: a client re-renders both controls off one
+					// message instead of re-deriving the rule.
+					ExecuteAvailable: e.Active,
+					Channel:          channel,
+					DeviceAddress:    deviceAddress,
+				},
+			})
+		})
 		unsubIM := events.Subscribe(bus, func(e hmevent.InstallModeChangedEvent) {
 			hub.Publish(Event{
 				Topic: InstallModeTopic(centralName),
@@ -289,7 +338,7 @@ func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
 				},
 			})
 		})
-		unsubs = append(unsubs, unsubSv, unsubPg, unsubIM, unsubConn)
+		unsubs = append(unsubs, unsubSv, unsubPg, unsubPc, unsubIM, unsubConn)
 	}
 	return unwireAll(unsubs)
 }

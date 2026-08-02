@@ -582,6 +582,14 @@
     },
     {
       "category": "hub",
+      "description": "Server-pushed: a CCU program's activity flag changed (CCU WebUI toggle or a client write). A program is two controls — the activity flag decides whether it reacts at all, the execution runs it once — and a deactivated program refuses the execution, so `execute_available` travels with the flag. Topic is scoped per central and per program-id.",
+      "kind": "broadcast",
+      "name": "hub.program_changed",
+      "topic": "hub.{central}.programs.{id}",
+      "payload": "ProgramChangedPayload"
+    },
+    {
+      "category": "hub",
       "description": "Server-pushed: a CCU system variable's value changed. Topic is scoped per central and per sysvar name.",
       "kind": "broadcast",
       "name": "hub.sysvar_changed",

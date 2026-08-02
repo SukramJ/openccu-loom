@@ -29,11 +29,12 @@ func TestClassifyOptIn_WithClassify_ReceivesClassificationFields(t *testing.T) {
 	})
 	waitForMatch(t, hub, "device.DEV001.channels.4.data_points.LEVEL")
 
-	hub.PublishDataPointValueChangedKind(
-		KindChange, "home", "HmIP-RF", "DEV001", 4,
-		"LEVEL", "VALUES", 0.75, 0.0, time.Now(),
-		"sensor", "float", "",
-	)
+	hub.PublishDataPointValueChanged(ValueChange{
+		EnvelopeKind: KindChange, Central: "home", Interface: "HmIP-RF",
+		DeviceAddress: "DEV001", Channel: 4, Parameter: "LEVEL", ParamsetKey: "VALUES",
+		Value: 0.75, Previous: 0.0, When: time.Now(),
+		Category: "sensor", DataPointType: "float", Available: true,
+	})
 
 	var ev outboundEvent
 	c.recv(&ev)
@@ -73,11 +74,12 @@ func TestClassifyOptOut_WithoutClassify_StripsClassificationFields(t *testing.T)
 	})
 	waitForMatch(t, hub, "device.DEV001.channels.4.data_points.LEVEL")
 
-	hub.PublishDataPointValueChangedKind(
-		KindChange, "home", "HmIP-RF", "DEV001", 4,
-		"LEVEL", "VALUES", 0.5, 0.0, time.Now(),
-		"actuator", "float", "",
-	)
+	hub.PublishDataPointValueChanged(ValueChange{
+		EnvelopeKind: KindChange, Central: "home", Interface: "HmIP-RF",
+		DeviceAddress: "DEV001", Channel: 4, Parameter: "LEVEL", ParamsetKey: "VALUES",
+		Value: 0.5, Previous: 0.0, When: time.Now(),
+		Category: "actuator", DataPointType: "float", Available: true,
+	})
 
 	var ev outboundEvent
 	c.recv(&ev)
@@ -133,11 +135,12 @@ func TestClassifyNoCrossTalk_TwoClients(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	hub.PublishDataPointValueChangedKind(
-		KindChange, "home", "HmIP-RF", "DEV002", 1,
-		"STATE", "VALUES", true, false, time.Now(),
-		"switch", "bool", "",
-	)
+	hub.PublishDataPointValueChanged(ValueChange{
+		EnvelopeKind: KindChange, Central: "home", Interface: "HmIP-RF",
+		DeviceAddress: "DEV002", Channel: 1, Parameter: "STATE", ParamsetKey: "VALUES",
+		Value: true, Previous: false, When: time.Now(),
+		Category: "switch", DataPointType: "bool", Available: true,
+	})
 
 	// Both clients receive the event; order between the two is not specified,
 	// so we read from each independently.

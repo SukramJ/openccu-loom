@@ -4,6 +4,43 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.10]
+
+### Fixed
+
+- **A program's activity flag was a change nobody was told about.** A CCU
+  program is two controls: the activity flag decides whether it reacts at
+  all, and the execution runs it once — and a deactivated program refuses
+  the execution. 0.52.7 made that rule explicit in the model and on the REST
+  surface, but the transition itself never left the daemon. `Program.OnActive`
+  recorded the flag silently, so the only thing that ever notified a
+  subscriber was an execution: over MQTT a program's execute-availability
+  stayed stale until the program next ran, and over WebSocket there was no
+  program-changed message at all. A client could ask for the right answer,
+  but never learn that it had changed.
+
+  The activity flag now notifies on every transition, which is what the MQTT
+  availability topic was already listening for, and a new
+  `hub.program_changed` broadcast carries `active` + `execute_available` to
+  WebSocket clients (API 3.14.0). Re-observing the same flag on the periodic
+  hub scan stays silent.
+
+- **`hub.program_executed` never fired.** Its wiring lived in a method with
+  no caller: the hub scan registers programs directly on the hub model, so
+  every program a running daemon had carried an unwired notifier. Attaching
+  the hub model now wires both notifiers — for the programs already present
+  and for everything the scan registers later.
+
+- **The WebSocket value-changed push now says whether the value is a
+  confirmed reading.** `available` (the same verdict the MQTT slot state
+  carries, added for calculated data points in 0.52.9) rides on every
+  `datapoint.value_changed` message. A consumer could not derive it:
+  `observed` stays true through a measurement fault, and the transition
+  *into* a fault usually arrives as a value change — so a client reading
+  availability only when it refreshes its catalogue rendered the faulted
+  value as confirmed. MASTER-paramset entries are always reported available;
+  configuration is not a runtime reading.
+
 ## [0.52.9]
 
 ### Fixed

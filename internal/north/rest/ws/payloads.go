@@ -43,9 +43,21 @@ type DataPointValueChangedPayload struct {
 	// the daemon is the sole owner of the key, so clients consume it
 	// unconditionally (an empty string signals an unresolved central serial,
 	// not "field absent"). See docs/external-clients/ha-unique-id-migration.md.
-	UniqueID   string `json:"unique_id"`
-	Value      any    `json:"value"`
-	Previous   any    `json:"previous,omitempty"`
+	UniqueID string `json:"unique_id"`
+	Value    any    `json:"value"`
+	Previous any    `json:"previous,omitempty"`
+	// Available reports whether the new value is a confirmed reading:
+	// observed AND valid (refreshed, paired STATUS acceptable, value type as
+	// declared, within the declared bounds). For a calculated data point it
+	// additionally folds in the validity of every source it derives from.
+	//
+	// Carried on the push because it can flip without the value changing —
+	// a paired `<param>_STATUS` fault does not move the reading — and
+	// because the transition *into* a fault usually arrives as a value
+	// change, so a consumer reading availability only at catalogue-refresh
+	// time renders the faulted value as confirmed. MASTER-paramset entries
+	// are always reported available: configuration is not a runtime reading.
+	Available  bool   `json:"available"`
 	ModifiedAt string `json:"modified_at"`
 	// Category and DataPointType classify the DP inline so a client that
 	// reconnects mid-stream can route the event without a prior catalogue
@@ -81,59 +93,68 @@ type CentralStateChangedPayload struct {
 	NewState string `json:"new_state"`
 }
 
-// PublishDataPointValueChanged emits a typed value-changed envelope
-// with the default envelope-kind ("change"). For initial-snapshot
-// emissions use [Hub.PublishDataPointValueChangedKind] with
-// [KindInitial].
-// Topic follows the spec convention
-// `device.<addr>.channels.<no>.data_points.<parameter>`.
-func (h *Hub) PublishDataPointValueChanged(
-	centralName, iface, deviceAddr string,
-	channel int,
-	parameter, paramsetKey string,
-	value, previous any,
-	when time.Time,
-) {
-	h.PublishDataPointValueChangedKind(KindChange, centralName, iface, deviceAddr, channel,
-		parameter, paramsetKey, value, previous, when, "", "", "")
+// ValueChange describes one `datapoint.value_changed` emission.
+//
+// A struct rather than a parameter list: the emission carries four
+// same-typed identity strings, two untyped values and two flags, and every
+// extension appended another positional argument to a call nobody could
+// read. Named fields also make the zero value safe to reason about —
+// EnvelopeKind falls back to [KindChange], and the optional classification
+// fields simply stay empty.
+type ValueChange struct {
+	// EnvelopeKind distinguishes initial-snapshot pushes ([KindInitial])
+	// and source-token re-emits ([KindRefresh]) from incremental changes.
+	// Empty means [KindChange].
+	EnvelopeKind  string
+	Central       string
+	Interface     string
+	DeviceAddress string
+	Channel       int
+	Parameter     string
+	ParamsetKey   string
+	Value         any
+	Previous      any
+	When          time.Time
+	// Category / DataPointType classify the data point. They are always
+	// carried on the buffered payload (so a replay keeps them) and stripped
+	// per-client at write time unless the client opted into `classify` —
+	// see [client.writePump]. Empty omits them.
+	Category      string
+	DataPointType string
+	// UniqueID is the canonical loom routing key; empty omits it.
+	UniqueID string
+	// Available reports whether the value is a confirmed reading. See
+	// [DataPointValueChangedPayload.Available].
+	Available bool
 }
 
-// PublishDataPointValueChangedKind is the kind-aware variant of
-// [Hub.PublishDataPointValueChanged]. Callers that distinguish
-// initial-snapshot pushes from incremental changes pass [KindInitial]
-// or [KindRefresh] here; the default [KindChange] is what
-// [Hub.PublishDataPointValueChanged] uses.
-// The trailing category / dataPointType arguments classify the DP. They
-// are always carried on the buffered payload (so a replay keeps them) and
-// stripped per-client at write time unless the client opted into
-// `classify` — see [client.writePump]. Pass empty strings to omit.
-// uniqueID is the canonical loom routing key; pass "" to omit it.
-func (h *Hub) PublishDataPointValueChangedKind(
-	envKind, centralName, iface, deviceAddr string,
-	channel int,
-	parameter, paramsetKey string,
-	value, previous any,
-	when time.Time,
-	category, dataPointType, uniqueID string,
-) {
+// PublishDataPointValueChanged emits a typed value-changed envelope.
+// Topic follows the spec convention
+// `device.<addr>.channels.<no>.data_points.<parameter>`.
+func (h *Hub) PublishDataPointValueChanged(ev ValueChange) {
+	envKind := ev.EnvelopeKind
+	if envKind == "" {
+		envKind = KindChange
+	}
 	h.Publish(Event{
 		Kind:  envKind,
-		Topic: DataPointTopic(deviceAddr, channel, parameter),
+		Topic: DataPointTopic(ev.DeviceAddress, ev.Channel, ev.Parameter),
 		Type:  string(hmevent.EventTypeDataPointValueChanged),
-		When:  when,
+		When:  ev.When,
 		Payload: DataPointValueChangedPayload{
-			Central:       centralName,
-			Interface:     iface,
-			DeviceAddress: deviceAddr,
-			Channel:       channel,
-			Parameter:     parameter,
-			ParamsetKey:   paramsetKey,
-			UniqueID:      uniqueID,
-			Value:         value,
-			Previous:      previous,
-			ModifiedAt:    when.UTC().Format(time.RFC3339Nano),
-			Category:      category,
-			DataPointType: dataPointType,
+			Central:       ev.Central,
+			Interface:     ev.Interface,
+			DeviceAddress: ev.DeviceAddress,
+			Channel:       ev.Channel,
+			Parameter:     ev.Parameter,
+			ParamsetKey:   ev.ParamsetKey,
+			UniqueID:      ev.UniqueID,
+			Value:         ev.Value,
+			Previous:      ev.Previous,
+			Available:     ev.Available,
+			ModifiedAt:    ev.When.UTC().Format(time.RFC3339Nano),
+			Category:      ev.Category,
+			DataPointType: ev.DataPointType,
 		},
 	})
 }

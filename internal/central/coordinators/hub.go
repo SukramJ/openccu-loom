@@ -56,6 +56,11 @@ type HubCoordinator struct {
 	// Wired via SetHubModel; nil when not configured.
 	hubModel *hub.Hub
 
+	// unwireProgramNotifiers detaches the OnProgramRegistered hook installed
+	// by SetHubModel, so re-attaching a model does not leave the previous
+	// subscription behind. Nil when no model is wired. Guarded by mu.
+	unwireProgramNotifiers func()
+
 	mu      sync.RWMutex
 	sysvars map[string]SysvarSnapshot
 
@@ -181,6 +186,31 @@ func (h *HubCoordinator) NotifyProgramExecuted(_ context.Context, programID stri
 		Trigger:     trigger,
 		Success:     success,
 	})
+}
+
+// NotifyProgramActiveChanged publishes a [hmevent.ProgramChangedEvent].
+func (h *HubCoordinator) NotifyProgramActiveChanged(programID string, active bool) {
+	events.Publish(h.bus, hmevent.ProgramChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: h.centralName,
+		ProgramID:   programID,
+		Active:      active,
+	})
+}
+
+// wireProgramNotifiers connects one program's notifier hooks to the bus.
+// Idempotent: re-wiring an already-wired program replaces the closures with
+// equivalent ones, so the periodic hub scan can call it freely.
+func (h *HubCoordinator) wireProgramNotifiers(p *hub.Program) {
+	if p == nil {
+		return
+	}
+	p.ExecuteNotifier = func(ctx context.Context, id string, trigger hmenum.ProgramTrigger, success bool) {
+		h.NotifyProgramExecuted(ctx, id, trigger, success)
+	}
+	p.ActiveNotifier = func(id string, active bool) {
+		h.NotifyProgramActiveChanged(id, active)
+	}
 }
 
 // SetRefreshHooks wires the periodic-refresh callbacks the background
@@ -357,9 +387,31 @@ func (h *HubCoordinator) SuppressServiceMessage(ctx context.Context, interfaceID
 // SetHubModel wires the [hub.Hub] domain model into the coordinator.
 // Call once at daemon boot after constructing both objects. Returns
 // the receiver for chaining. Nil detaches the model.
+//
+// Attaching the model also wires every program's notifier hooks — the
+// existing set plus everything the hub scan registers later. Without that
+// the hooks stayed nil for every program the scan created (it registers
+// through [hub.Hub.PutProgram], not through [AddProgramDP]), so neither
+// execution nor activity ever reached the bus.
 func (h *HubCoordinator) SetHubModel(m *hub.Hub) *HubCoordinator {
 	h.mu.Lock()
+	if h.unwireProgramNotifiers != nil {
+		h.unwireProgramNotifiers()
+		h.unwireProgramNotifiers = nil
+	}
 	h.hubModel = m
+	h.mu.Unlock()
+	if m == nil {
+		return h
+	}
+	// Subscribe before the snapshot walk so a program registered in between
+	// is not missed; re-wiring an already-wired program is harmless.
+	unwire := m.OnProgramRegistered(h.wireProgramNotifiers)
+	for _, p := range m.Programs() {
+		h.wireProgramNotifiers(p)
+	}
+	h.mu.Lock()
+	h.unwireProgramNotifiers = unwire
 	h.mu.Unlock()
 	return h
 }
@@ -476,10 +528,10 @@ func (h *HubCoordinator) AddProgramDP(p *hub.Program) {
 	if m == nil || p == nil {
 		return
 	}
-	// Wire the notifier so Execute emits a bus event.
-	p.ExecuteNotifier = func(ctx context.Context, id string, trigger hmenum.ProgramTrigger, success bool) {
-		h.NotifyProgramExecuted(ctx, id, trigger, success)
-	}
+	// Wire the notifiers so execution and activity emit bus events. The
+	// OnProgramRegistered hook installed by SetHubModel does the same for
+	// programs the hub scan registers directly.
+	h.wireProgramNotifiers(p)
 	m.PutProgram(p)
 }
 

@@ -11,7 +11,11 @@ import (
 func TestPublishDataPointValueChangedKind_DefaultsViaWrapper(t *testing.T) {
 	t.Parallel()
 	h := NewHub()
-	h.PublishDataPointValueChanged("home", "HmIP-RF", "VCU123", 1, "LEVEL", "VALUES", 1.0, 0.0, time.Now())
+	h.PublishDataPointValueChanged(ValueChange{
+		Central: "home", Interface: "HmIP-RF", DeviceAddress: "VCU123", Channel: 1,
+		Parameter: "LEVEL", ParamsetKey: "VALUES", Value: 1.0, Previous: 0.0, When: time.Now(),
+		Available: true,
+	})
 	res := h.Replay(0, nil)
 	if len(res.Events) != 1 || res.Events[0].Kind != KindChange {
 		t.Fatalf("default-wrapper Kind = %q, want change", res.Events[0].Kind)
@@ -21,7 +25,11 @@ func TestPublishDataPointValueChangedKind_DefaultsViaWrapper(t *testing.T) {
 func TestPublishDataPointValueChangedKind_InitialPropagates(t *testing.T) {
 	t.Parallel()
 	h := NewHub()
-	h.PublishDataPointValueChangedKind(KindInitial, "home", "HmIP-RF", "VCU123", 1, "LEVEL", "VALUES", 1.0, nil, time.Now(), "", "", "")
+	h.PublishDataPointValueChanged(ValueChange{
+		EnvelopeKind: KindInitial, Central: "home", Interface: "HmIP-RF", DeviceAddress: "VCU123",
+		Channel: 1, Parameter: "LEVEL", ParamsetKey: "VALUES", Value: 1.0, When: time.Now(),
+		Available: true,
+	})
 	res := h.Replay(0, nil)
 	if len(res.Events) != 1 || res.Events[0].Kind != KindInitial {
 		t.Fatalf("Kind = %q, want initial", res.Events[0].Kind)

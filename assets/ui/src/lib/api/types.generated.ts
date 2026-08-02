@@ -7232,6 +7232,22 @@ export interface components {
              */
             previous?: unknown;
             /**
+             * @description Whether the new value is a confirmed reading: observed AND valid
+             *     (refreshed, paired `<param>_STATUS` acceptable, value type as
+             *     declared, within the declared bounds). For a calculated data
+             *     point it additionally folds in the validity of every source it
+             *     derives from.
+             *
+             *     Carried on the push because it can flip without the value
+             *     changing — a STATUS fault does not move the reading — and
+             *     because the transition *into* a fault usually arrives as a value
+             *     change, so a consumer reading availability only at
+             *     catalogue-refresh time renders the faulted value as confirmed.
+             *     MASTER-paramset entries are always reported available:
+             *     configuration is not a runtime reading.
+             */
+            available: boolean;
+            /**
              * Format: date-time
              * @description RFC3339Nano timestamp the CCU observed the change at.
              */
@@ -7362,6 +7378,48 @@ export interface components {
              * @description Canonical channel address ("ADDR:idx") of the device channel
              *     this program is associated with (name match — the same value
              *     the REST ProgramSummary carries). Omitted when the program
+             *     belongs to no device or is not yet loaded in the hub model.
+             */
+            channel?: string;
+            /**
+             * @description Device part of `channel` (before the ":"); omitted together
+             *     with `channel`.
+             */
+            device_address?: string;
+        };
+        /**
+         * @description Payload of a `hub.program_changed` broadcast. Topic pattern
+         *     `hub.{central}.programs.{id}`. Fires when a CCU program's activity
+         *     flag changes — the operator toggled it in the CCU WebUI, or a client
+         *     wrote it.
+         *
+         *     A CCU program is two controls: the activity flag decides whether it
+         *     reacts at all, and the execution runs it once. A deactivated program
+         *     refuses the execution, so a client offering "run now" needs this
+         *     transition to render that control unavailable.
+         */
+        ProgramChangedPayload: {
+            central: string;
+            program_id: string;
+            /** @description The program's activity flag as the CCU reports it. */
+            active: boolean;
+            /**
+             * @description Whether running the program would do anything — false exactly
+             *     while the program is deactivated. Carried alongside `active` so
+             *     the rule is not re-derived per consumer; the same field the REST
+             *     ProgramSummary and the MQTT availability topic carry.
+             */
+            execute_available: boolean;
+            /**
+             * @description Canonical loom-namespaced routing key
+             *     (`loom_<serial10>_program_<hub-slug(name)>`) for this program.
+             *     Optional — omitted when the program name cannot be resolved;
+             *     see DataPointValueChangedPayload.unique_id.
+             */
+            unique_id?: string;
+            /**
+             * @description Canonical channel address ("ADDR:idx") of the device channel
+             *     this program is associated with. Omitted when the program
              *     belongs to no device or is not yet loaded in the hub model.
              */
             channel?: string;
