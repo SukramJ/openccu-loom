@@ -4,6 +4,36 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.9]
+
+### Fixed
+
+- **A calculated sensor no longer reports a value its own sources have
+  disowned.** Dew point, frost point, enthalpy, apparent temperature, vapour
+  concentration and the derived battery level are computed from a channel's
+  ordinary readings. Those readings can be *read but unusable* — the CCU
+  flags a measurement fault through the paired `…_STATUS` parameter, or the
+  value falls outside the bounds the device itself declares. The reading then
+  reports unavailable, exactly as intended, but the derived sensor kept
+  reporting available and kept recomputing from it: a temperature stuck at
+  `OVERFLOW` still produced a confident dew point, and a 999 °C reading
+  produced a dew point of 4124 °C.
+
+  A derived value is only as good as its inputs, so every calculated data
+  point is now available only while all the sources it derives from are
+  usable. It recovers on its own as soon as they are, without waiting for a
+  fresh value. Configuration inputs stay exempt: `LOW_BAT_LIMIT` is read from
+  the device's MASTER paramset, and a sleeping battery device may never
+  deliver a fresh one — that must not take the battery level down.
+
+  Over MQTT the calculated topics were the one plane that published
+  `available: true` unconditionally, so this is where the effect is visible:
+  an affected Home Assistant entity now goes unavailable instead of showing a
+  wrong number. `GET /api/v1/devices/{addr}/channels/{no}/calc-dps` and the
+  `calc_dp.*` WebSocket records gain the same `available` flag (API 3.13.0);
+  the existing `observed` field cannot answer this — it stays true right
+  through a source fault.
+
 ## [0.52.8]
 
 ### Fixed

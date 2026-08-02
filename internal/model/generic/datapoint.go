@@ -309,6 +309,15 @@ type DataPoint[T comparable] struct {
 	// optimistic.IsActive(). Protected by mu.
 	stateUncertain bool
 
+	// validityGate is an optional extra condition ANDed into [IsValid] by
+	// [SetValidityGate]. Nil for every wire-backed data point — a CCU
+	// parameter's validity is fully described by the four conditions
+	// [IsValid] checks itself. Derived data points install a gate because
+	// their own value carries no descriptor to validate against: a
+	// calculated sensor is only as trustworthy as the sources it was
+	// computed from. Protected by mu.
+	validityGate func() bool
+
 	rollbackCallbacks []func(reason RollbackReason, rolledBack, restored T, restoredSet bool)
 
 	updateCallbacks []func(old, next T)
@@ -1413,15 +1422,48 @@ func (d *DataPoint[T]) HasValidValueType() bool {
 // IsStatusValid() — the paired _STATUS parameter, if any, is OK. 3.
 // HasValidValueType() — the current value has the expected type. 4.
 // IsCurrentValueInRange() — the current value is within declared bounds.
+// 5. The validity gate installed by [SetValidityGate], if any.
 //
-// When all four conditions hold the data point is considered valid for
+// When all conditions hold the data point is considered valid for
 // north-bound exposure (REST, MQTT, UI). A false result should suppress
 // publishing or flag the entity as unavailable.
 func (d *DataPoint[T]) IsValid() bool {
+	if gate := d.ValidityGate(); gate != nil && !gate() {
+		return false
+	}
 	return !d.RefreshedAt().IsZero() &&
 		d.IsStatusValid() &&
 		d.HasValidValueType() &&
 		d.IsCurrentValueInRange()
+}
+
+// SetValidityGate installs an extra condition that [IsValid] evaluates
+// before its own four checks. Passing nil clears a previously installed
+// gate.
+//
+// The seam exists for derived data points whose value is computed rather
+// than pushed: their own descriptor has no bounds and no paired status
+// parameter, so the four intrinsic checks can never fail and every
+// consumer of [IsValid] — including the `available` flag of [State] —
+// would report a value derived from an unusable input as confirmed. A
+// calculated sensor installs a gate that answers "are all the sources I
+// derive from valid?".
+//
+// The gate is invoked while no data-point lock is held, so it may read
+// other data points without risking a lock cycle. It must not call back
+// into this data point's [IsValid].
+func (d *DataPoint[T]) SetValidityGate(gate func() bool) {
+	d.mu.Lock()
+	d.validityGate = gate
+	d.mu.Unlock()
+}
+
+// ValidityGate returns the currently installed validity gate, or nil when
+// none is installed.
+func (d *DataPoint[T]) ValidityGate() func() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.validityGate
 }
 
 // RequiresPolling reports whether the background scheduler should

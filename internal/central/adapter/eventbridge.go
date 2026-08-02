@@ -1338,10 +1338,14 @@ func (b *EventBridge) publishSlotState(
 		// the reference is_valid north-bound gate (model/data_point.py
 		// is_valid): refreshed + acceptable STATUS + value type + range. An
 		// unobserved, out-of-range or OVERFLOW/UNDERFLOW reading publishes as
-		// unavailable so HA never records it as a confirmed value. Only the
-		// runtime VALUES plane is gated; MASTER config and CALCULATED derived
-		// slots keep their existing availability.
-		if bucket == payload.BucketValues {
+		// unavailable so HA never records it as a confirmed value.
+		//
+		// CALCULATED slots are gated too: a derived value is only as good as
+		// the sources it was computed from, and the calculated sensor answers
+		// that through its source-validity gate. MASTER stays exempt —
+		// configuration values are not runtime readings, and a sleeping
+		// battery device may never deliver a fresh MASTER read.
+		if bucket != payload.BucketMaster {
 			state.Available = dpValid(dp)
 		}
 		pd := dp.ParameterData()

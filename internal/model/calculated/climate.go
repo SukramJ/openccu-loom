@@ -96,9 +96,11 @@ func NewDewPointSensor() *DewPointSensor {
 // `<central>:<channelAddress>:CALCULATED/DEW_POINT`. ADR 0002 (multi-
 // CCU first-class) requires production callers to set both segments.
 func NewDewPointSensorWithIdentity(centralName, channelAddress string) *DewPointSensor {
-	return &DewPointSensor{
+	s := &DewPointSensor{
 		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterDewPoint, centralName, channelAddress),
 	}
+	installSourceValidityGate(s.Sensor, &s.sourceSink)
+	return s
 }
 
 // OnTemperature feeds a temperature observation and recomputes.
@@ -150,9 +152,11 @@ func NewDewPointSpreadSensor() *DewPointSpreadSensor {
 // NewDewPointSpreadSensorWithIdentity constructs the sensor rooted at
 // `<central>:<channelAddress>:CALCULATED/DEW_POINT_SPREAD`.
 func NewDewPointSpreadSensorWithIdentity(centralName, channelAddress string) *DewPointSpreadSensor {
-	return &DewPointSpreadSensor{
+	s := &DewPointSpreadSensor{
 		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterDewPointSpread, centralName, channelAddress),
 	}
+	installSourceValidityGate(s.Sensor, &s.sourceSink)
+	return s
 }
 
 // OnTemperature feeds a temperature observation.
@@ -204,9 +208,11 @@ func NewFrostPointSensor() *FrostPointSensor {
 // NewFrostPointSensorWithIdentity constructs the sensor rooted at
 // `<central>:<channelAddress>:CALCULATED/FROST_POINT`.
 func NewFrostPointSensorWithIdentity(centralName, channelAddress string) *FrostPointSensor {
-	return &FrostPointSensor{
+	s := &FrostPointSensor{
 		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterFrostPoint, centralName, channelAddress),
 	}
+	installSourceValidityGate(s.Sensor, &s.sourceSink)
+	return s
 }
 
 // OnTemperature feeds a temperature observation.
@@ -258,9 +264,11 @@ func NewVaporConcentrationSensor() *VaporConcentrationSensor {
 // NewVaporConcentrationSensorWithIdentity constructs the sensor rooted
 // at `<central>:<channelAddress>:CALCULATED/VAPOR_CONCENTRATION`.
 func NewVaporConcentrationSensorWithIdentity(centralName, channelAddress string) *VaporConcentrationSensor {
-	return &VaporConcentrationSensor{
+	s := &VaporConcentrationSensor{
 		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterVaporConcentration, centralName, channelAddress),
 	}
+	installSourceValidityGate(s.Sensor, &s.sourceSink)
+	return s
 }
 
 // OnTemperature feeds a temperature observation.
@@ -313,9 +321,11 @@ func NewEnthalpySensor() *EnthalpySensor {
 // NewEnthalpySensorWithIdentity constructs the sensor rooted at
 // `<central>:<channelAddress>:CALCULATED/ENTHALPY`.
 func NewEnthalpySensorWithIdentity(centralName, channelAddress string) *EnthalpySensor {
-	return &EnthalpySensor{
+	s := &EnthalpySensor{
 		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterEnthalpy, centralName, channelAddress),
 	}
+	installSourceValidityGate(s.Sensor, &s.sourceSink)
+	return s
 }
 
 // OnTemperature feeds a temperature observation.
@@ -377,9 +387,11 @@ func NewApparentTemperatureSensor() *ApparentTemperatureSensor {
 // NewApparentTemperatureSensorWithIdentity constructs the sensor rooted
 // at `<central>:<channelAddress>:CALCULATED/APPARENT_TEMPERATURE`.
 func NewApparentTemperatureSensorWithIdentity(centralName, channelAddress string) *ApparentTemperatureSensor {
-	return &ApparentTemperatureSensor{
+	s := &ApparentTemperatureSensor{
 		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterApparentTemperature, centralName, channelAddress),
 	}
+	installSourceValidityGate(s.Sensor, &s.sourceSink)
+	return s
 }
 
 // OnTemperature feeds a temperature observation.

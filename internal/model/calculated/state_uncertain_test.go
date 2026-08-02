@@ -15,11 +15,16 @@ type stubSourceDP struct {
 	observed          bool
 	uncertain         bool
 	publishedRecently bool
+	// unusable marks a source that was read but carries nothing to
+	// calculate from — the observed-but-invalid case a real DP reaches via
+	// a bad paired STATUS or an out-of-range reading.
+	unusable bool
 }
 
 func (s *stubSourceDP) RawValue() (any, bool)        { return s.value, s.observed }
 func (s *stubSourceDP) StateUncertain() bool         { return s.uncertain }
 func (s *stubSourceDP) PublishedEventRecently() bool { return s.publishedRecently }
+func (s *stubSourceDP) IsValid() bool                { return s.observed && !s.unusable }
 func (s *stubSourceDP) setObserved(v any)            { s.value = v; s.observed = true }
 func (s *stubSourceDP) setUncertain(u bool)          { s.uncertain = u }
 func (s *stubSourceDP) clearObserved()               { s.value = nil; s.observed = false }
@@ -338,4 +343,47 @@ func TestShouldPublishCalcUpdateThreeSources(t *testing.T) {
 	if shouldPublishCalcUpdate([]SourceDP{a, b, c}) {
 		t.Fatal("all 3 published recently → shouldPublishCalcUpdate must suppress")
 	}
+}
+
+// --- SourcesValid ---
+
+func TestSourceSinkSourcesValid(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no sources is not valid", func(t *testing.T) {
+		t.Parallel()
+		var ss sourceSink
+		if ss.SourcesValid() {
+			t.Fatal("without a state carrier there is nothing to derive a value from")
+		}
+	})
+
+	t.Run("all sources usable", func(t *testing.T) {
+		t.Parallel()
+		var ss sourceSink
+		ss.RegisterSource(&stubSourceDP{value: 20.0, observed: true})
+		ss.RegisterSource(&stubSourceDP{value: 50.0, observed: true})
+		if !ss.SourcesValid() {
+			t.Fatal("every source carries a usable reading")
+		}
+	})
+
+	t.Run("one source read but unusable", func(t *testing.T) {
+		t.Parallel()
+		var ss sourceSink
+		ss.RegisterSource(&stubSourceDP{value: 20.0, observed: true, unusable: true})
+		ss.RegisterSource(&stubSourceDP{value: 50.0, observed: true})
+		if ss.SourcesValid() {
+			t.Fatal("an observed-but-unusable source must invalidate the aggregate")
+		}
+	})
+
+	t.Run("unobserved source", func(t *testing.T) {
+		t.Parallel()
+		var ss sourceSink
+		ss.RegisterSource(&stubSourceDP{})
+		if ss.SourcesValid() {
+			t.Fatal("a source that never delivered a value is not valid")
+		}
+	})
 }

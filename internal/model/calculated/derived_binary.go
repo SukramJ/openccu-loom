@@ -64,13 +64,15 @@ func NewDerivedBinarySensorWithIdentity(
 	source hmenum.Parameter,
 	onValues, offValues []string,
 ) *DerivedBinarySensor {
-	return &DerivedBinarySensor{
+	s := &DerivedBinarySensor{
 		BinarySensor:    newDerivedBinarySensor(calcParam, centralName, channelAddress),
 		SourceParameter: source,
 		OnValues:        toSet(onValues),
 		OffValues:       toSet(offValues),
 		calcParam:       calcParam,
 	}
+	installSourceValidityGate(s.BinarySensor, &s.sourceSink)
+	return s
 }
 
 // CalculatedParameter returns the calculated parameter id this sensor

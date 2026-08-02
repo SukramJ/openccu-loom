@@ -6446,6 +6446,16 @@ export interface components {
              *     (the Go DTO marshals the pointer with omitempty: absent, not null).
              */
             active?: boolean;
+            /**
+             * @description Whether running the program would do anything. A program the CCU
+             *     has deactivated ignores its triggers and refuses a manual run, so
+             *     a consumer that offers "run now" as its own control should render
+             *     it unavailable. The daemon answers this rather than leaving each
+             *     consumer to derive it from `active` — it is CCU semantics, not
+             *     presentation. True while the flag has not been observed, so a
+             *     control is never greyed out on missing information.
+             */
+            execute_available?: boolean;
             /** @description RFC3339 timestamp of the most recent execution. */
             last_executed?: string;
             /**
@@ -8290,6 +8300,18 @@ export interface components {
             category?: string;
             value: unknown;
             observed: boolean;
+            /**
+             * @description Whether the value is a confirmed reading — observed AND valid,
+             *     the same rule the generic data-point state payload applies.
+             *     For a calculated data point validity folds in the validity of
+             *     every source it derives from: a source the CCU flagged (bad
+             *     paired STATUS, reading outside the declared bounds) makes the
+             *     calculated data point unavailable even though the derived
+             *     number keeps updating. Clients that restore a previous state
+             *     for unavailable entities must read this flag; `observed` stays
+             *     true across a source fault.
+             */
+            available: boolean;
             /**
              * @description Locale-aware per-entity name, resolved through the same
              *     chain as generic data points (channel-typed translation →
