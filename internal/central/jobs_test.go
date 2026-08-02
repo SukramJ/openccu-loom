@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -1054,5 +1055,67 @@ func TestHealthHeartbeatRecordsSchedulerLiveness(t *testing.T) {
 	}
 	if !comp.LastSample.Healthy {
 		t.Errorf("recovery path: scheduler Healthy=false after quiet interval; want true (delta recovery)")
+	}
+}
+
+// findJobInterval returns the configured interval of the named job, or 0
+// when the job is not registered.
+func findJobInterval(c *Unit, name string) time.Duration {
+	for _, j := range c.Scheduler.Jobs() {
+		if j.Name == name {
+			return j.Interval
+		}
+	}
+	return 0
+}
+
+// TestHubScanIntervalIsFloored pins the clamp that backs the config
+// validation. Config rejects a too-short cadence, so reaching this clamp
+// means the value arrived another way — a direct StandardJobs override or a
+// hand-edited database row. Each cycle costs a ReGa script run on a
+// single-threaded interpreter, so overlapping cycles starve the CCU rather
+// than delivering fresher data.
+func TestHubScanIntervalIsFloored(t *testing.T) {
+	noop := func(context.Context) error { return nil }
+	cases := []struct {
+		name     string
+		interval time.Duration
+		want     time.Duration
+	}{
+		{"zero falls back to the default", 0, defaultSysvarRefreshSlot},
+		{"below the floor is clamped", 500 * time.Millisecond, config.MinHubScanInterval},
+		{"exactly the floor survives", config.MinHubScanInterval, config.MinHubScanInterval},
+		{"a normal cadence is untouched", time.Minute, time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, err := New(Config{Name: "test"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := RegisterStandardJobs(c, StandardJobs{
+				SysvarRefresh:         noop,
+				SysvarRefreshInterval: tc.interval,
+			}); err != nil {
+				t.Fatalf("RegisterStandardJobs: %v", err)
+			}
+			if got := findJobInterval(c, "hub.sysvar_refresh"); got != tc.want {
+				t.Errorf("hub.sysvar_refresh interval = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHubScanDefaultsMatchTheReference pins the compiled-in cadence for the
+// two hub scans an operator notices most: a system variable or program
+// added on the CCU should appear within half a minute, which is what the
+// reference stack's shared sys_scan_interval does.
+func TestHubScanDefaultsMatchTheReference(t *testing.T) {
+	t.Parallel()
+	if defaultSysvarRefreshSlot != 30*time.Second {
+		t.Errorf("defaultSysvarRefreshSlot = %s, want 30s", defaultSysvarRefreshSlot)
+	}
+	if defaultProgramRefreshSlot != 30*time.Second {
+		t.Errorf("defaultProgramRefreshSlot = %s, want 30s", defaultProgramRefreshSlot)
 	}
 }

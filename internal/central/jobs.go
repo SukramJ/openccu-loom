@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -140,11 +141,11 @@ type StandardJobs struct {
 //	 not the primary data source; 5 min
 //	 reduces CCU load without sacrificing
 //	 correctness.
-//	defaultProgramRefreshSlot 5 min sys_scan_interval 30 s Parity divergence: Go uses per-job
-//	defaultSysvarRefreshSlot 5 min sys_scan_interval 30 s intervals; Python reuses one shared
-//	defaultInboxRefreshSlot 5 min sys_scan_interval 30 s `sys_scan_interval` for all five.
-//	defaultServiceMessagesSlot 5 min sys_scan_interval 30 s Go 5 min is more conservative; adjust
-//	defaultAlarmMessagesSlot 5 min sys_scan_interval 30 s via StandardJobs.*Interval overrides.
+//	defaultProgramRefreshSlot 30 s sys_scan_interval 30 s Exact match ✓ — a hub entry added on
+//	defaultSysvarRefreshSlot 30 s sys_scan_interval 30 s the CCU appears within half a minute.
+//	defaultInboxRefreshSlot 5 min sys_scan_interval 30 s Go uses per-job intervals where Python
+//	defaultServiceMessagesSlot 5 min sys_scan_interval 30 s reuses one shared `sys_scan_interval`;
+//	defaultAlarmMessagesSlot 5 min sys_scan_interval 30 s these three stay conservative.
 //	defaultHubMetrics 5 min metrics_refresh_interval 60 s Slight divergence; non-critical.
 //	defaultHubConnectivity 2 min metrics_refresh_interval 60 s Python reuses metrics interval for
 //	 connectivity; Go separates them.
@@ -171,8 +172,8 @@ const (
 	defaultFirmwareCheckSlot     = 60 * time.Minute
 	defaultFirmwareDeliverySlot  = 1 * time.Hour
 	defaultFirmwareUpdatingSlot  = 30 * time.Second
-	defaultProgramRefreshSlot    = 5 * time.Minute
-	defaultSysvarRefreshSlot     = 5 * time.Minute
+	defaultProgramRefreshSlot    = 30 * time.Second
+	defaultSysvarRefreshSlot     = 30 * time.Second
 	defaultInboxRefreshSlot      = 5 * time.Minute
 	defaultServiceMessagesSlot   = 5 * time.Minute
 	defaultAlarmMessagesSlot     = 5 * time.Minute
@@ -616,6 +617,15 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 		interval := j.interval
 		if interval <= 0 {
 			interval = j.dflt
+		}
+		// Floor an operator-set cadence. Config validation rejects anything
+		// below this, so reaching the clamp means the value arrived some
+		// other way (a direct StandardJobs override, a hand-edited database
+		// row). Each cycle costs a ReGa script run and the interpreter is
+		// single-threaded, so overlapping cycles starve the CCU's own
+		// automations instead of delivering fresher data.
+		if interval < config.MinHubScanInterval {
+			interval = config.MinHubScanInterval
 		}
 		runFn := gatedRun(unit, true, j.fn)
 		if j.needsDevicesReady {

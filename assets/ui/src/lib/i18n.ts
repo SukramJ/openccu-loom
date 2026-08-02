@@ -1542,7 +1542,7 @@ const EN: Catalog = {
   "config.help.centrals.behavior.sysvar_markers":
     "Tokens the CCU description of a system variable may carry. Markers do not decide whether a variable is imported — everything is imported — only how it arrives: marker-matched variables arrive enabled in Home Assistant, everything else arrives disabled for you to switch on per entity. HAHM makes a variable writable (switch, select, number, text instead of a read-only sensor). HX is a free marker for your own filtering. INTERNAL additionally includes the CCU's internal variables. Empty: everything is imported, everything disabled.",
   "config.help.centrals.behavior.sysvar_scan_interval":
-    "How often the daemon refreshes system variables from the CCU; zero uses the compiled-in default.",
+    "How often the daemon refreshes system variables from the CCU. Zero uses the compiled-in default of 30 seconds; below 3 seconds is rejected, because each cycle costs the CCU a script run on a single-threaded interpreter.",
   "config.help.centrals.behavior.use_group_channel_for_cover_state":
     "Report a cover's position from its group-channel LEVEL rather than from its own channel; default true.",
   "config.help.north.mqtt.retain_cleanup_window_ms":
@@ -1832,7 +1832,7 @@ const EN: Catalog = {
   "centrals.behavior.delay_new_device_creation":
     "Defer new-device creation to the inbox",
   "centrals.behavior.sysvar_scan_interval":
-    "System-variable scan interval (seconds, 0 = default)",
+    "System-variable scan interval (seconds, 0 = default 30, minimum 3)",
   "centrals.behavior.sysvar_markers": "System-variable markers",
   "centrals.behavior.program_markers": "Program markers",
   "centrals.behavior.markers_hint":
@@ -4908,7 +4908,7 @@ const DE: Catalog = {
   "config.help.centrals.behavior.sysvar_markers":
     "Token, die die CCU-Beschreibung einer Systemvariablen tragen kann. Marker entscheiden nicht, ob eine Variable importiert wird — importiert wird alles —, sondern nur wie sie ankommt: Variablen mit Marker-Treffer kommen in Home Assistant aktiviert an, alle übrigen deaktiviert und werden pro Entität eingeschaltet. HAHM macht eine Variable schreibbar (Schalter, Auswahl, Zahl, Text statt nur lesendem Sensor). HX ist ein freier Marker für eigene Filterung. INTERNAL schließt zusätzlich die internen Variablen der CCU ein. Leer: alles wird importiert, alles deaktiviert.",
   "config.help.centrals.behavior.sysvar_scan_interval":
-    "Wie oft der Daemon Systemvariablen von der CCU aktualisiert; 0 = Daemon-Standard.",
+    "Wie oft der Daemon Systemvariablen von der CCU aktualisiert. 0 verwendet den Standard von 30 Sekunden; unter 3 Sekunden wird abgelehnt, weil jeder Durchlauf die CCU einen Skriptlauf auf einem Einzel-Thread-Interpreter kostet.",
   "config.help.centrals.behavior.use_group_channel_for_cover_state":
     "Rollladen-Position vom LEVEL-Wert des Gruppenkanals statt vom eigenen Kanal melden. Standard: an.",
   "config.help.north.mqtt.retain_cleanup_window_ms":
@@ -5204,7 +5204,7 @@ const DE: Catalog = {
   "centrals.behavior.delay_new_device_creation":
     "Neue Geräte erst über den Posteingang anlegen",
   "centrals.behavior.sysvar_scan_interval":
-    "Scan-Intervall für Systemvariablen (Sekunden, 0 = Standard)",
+    "Scan-Intervall für Systemvariablen (Sekunden, 0 = Standard 30, Minimum 3)",
   "centrals.behavior.sysvar_markers": "Systemvariablen-Marker",
   "centrals.behavior.program_markers": "Programm-Marker",
   "centrals.behavior.markers_hint":

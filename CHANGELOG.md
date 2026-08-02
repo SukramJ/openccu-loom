@@ -15,6 +15,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   editor drops a stored value when it opens, so what is shown is what gets
   saved. The token is still stripped from the CCU description, so a variable
   whose description still carries it does not show it in its name.
+- **System variables and programs are picked up within 30 seconds instead
+  of 5 minutes.** Both hub scans ran on a 5-minute cadence, so a variable or
+  program added on the CCU could take that long to appear. The compiled-in
+  default is now 30 seconds, matching the reference stack's shared
+  `sys_scan_interval`. The cost is modest: each cycle is one JSON-RPC call
+  that already carries the values, plus one script run for the metadata.
+- **An operator-set scan interval below 3 seconds is rejected.** Each cycle
+  costs the CCU a script run on a single-threaded interpreter, so a cadence
+  short enough for cycles to overlap starves the CCU's own automations
+  rather than delivering fresher data. Configuration validation names the
+  offending central, and the scheduler floors the value independently in
+  case it arrives another way. `0` still selects the default.
+
 
 ## [0.52.6]
 
