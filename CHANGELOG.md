@@ -8,6 +8,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A button press never reached a REST/WebSocket client.** The CCU reports
+  a keypress as a callback like any other, but a keypress is not a value:
+  `PRESS_SHORT` arriving twice is two presses, and no consumer can recover
+  "a button was pressed" from a value-changed message without re-deriving
+  the classification and the repeat semantics the daemon already owns. That
+  is what the `device.trigger` broadcast is for — and its only publisher had
+  no caller in a running daemon, so the raw callback path emitted the value
+  change and nothing else.
+
+  Consequence for Home Assistant: device triggers and keypress event
+  entities never fired through this daemon. Remotes and wall switches
+  produced no automation trigger.
+
+  The callback path now emits the trigger alongside the value.
+  `event.Classify` decides — click parameters become keypresses,
+  `SEQUENCE_OK` an impulse, the `ERROR` / `SENSOR_ERROR` prefixes a device
+  error, everything else nothing — so the rule lives in one place. Repeated
+  identical presses each surface, matching the exemption the value path
+  already makes for edge-trigger parameters.
+
+  Found by walking all 36 declared broadcasts against their publishers after
+  the same defect turned up in 0.52.10 and in the system-variable fix below.
+  This was the last one: every other broadcast has a live publisher.
+
 - **A system variable's value never reached a REST/WebSocket client after
   start-up.** The daemon polls the CCU and pushes what changed — that is the
   design, and it worked over MQTT, whose publisher subscribes to the hub

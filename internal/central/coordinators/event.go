@@ -6,10 +6,13 @@ package coordinators
 import (
 	"context"
 	"log/slog"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -146,7 +149,7 @@ func (c *EventCoordinator) MarkEvent(interfaceID string, at time.Time) {
 // Wire-to-domain conversion (xmlrpc.Value → hmtypes.ParamValue) is the
 // caller's responsibility; the adapter layer holds the xmlrpc import.
 func (c *EventCoordinator) HandleRawEvent(
-	_ context.Context,
+	ctx context.Context,
 	interfaceID, channelAddress, parameter string,
 	value hmtypes.ParamValue,
 ) {
@@ -183,6 +186,7 @@ func (c *EventCoordinator) HandleRawEvent(
 		OldValue: oldVal,
 		NewValue: newVal,
 	})
+	c.publishDeviceTriggerFor(ctx, interfaceID, channelAddress, parameter, newVal)
 
 	// CONFIG_PENDING True → False signals the device has applied a MASTER
 	// paramset write. Invoke the configured hook so the adapter layer can
@@ -220,6 +224,51 @@ func (c *EventCoordinator) PublishBackendParameterEvent(
 		Parameter:      parameter,
 		RawValue:       rawValue,
 	})
+}
+
+// publishDeviceTriggerFor emits the device-trigger twin of a raw callback
+// when the parameter carries an event rather than a state.
+//
+// A keypress is not a value: PRESS_SHORT arriving twice is two presses, and
+// no consumer can recover "a button was pressed" from a value-changed
+// message — it would have to re-derive both the classification and the
+// repeat semantics the daemon already owns. So one callback produces both,
+// the value for anything tracking state and the trigger for anything acting
+// on the edge.
+//
+// [event.Classify] is the sole authority: click parameters become
+// keypresses, SEQUENCE_OK an impulse, and the ERROR / SENSOR_ERROR prefixes
+// a device error. Everything else emits nothing.
+func (c *EventCoordinator) publishDeviceTriggerFor(
+	ctx context.Context,
+	interfaceID, channelAddress, parameter string,
+	value hmtypes.ParamValue,
+) {
+	kind, ok := event.Classify(hmenum.Parameter(parameter))
+	if !ok {
+		return
+	}
+	deviceAddress, channelNo := splitChannelAddress(channelAddress)
+	c.PublishDeviceTriggerEvent(
+		ctx,
+		interfaceID, deviceAddress, channelNo,
+		hmenum.DeviceTriggerEventType(kind), parameter, value,
+	)
+}
+
+// splitChannelAddress splits "ADDR:idx" into its device address and channel
+// number. A channel-less or malformed address yields channel 0, matching how
+// the CCU addresses device-level parameters.
+func splitChannelAddress(channelAddress string) (deviceAddress string, channelNo int) {
+	addr, suffix, found := strings.Cut(channelAddress, ":")
+	if !found {
+		return channelAddress, 0
+	}
+	no, err := strconv.Atoi(suffix)
+	if err != nil {
+		return addr, 0
+	}
+	return addr, no
 }
 
 // PublishDeviceTriggerEvent converts a raw device-trigger callback into a
@@ -490,10 +539,6 @@ func isFalseBool(v hmtypes.ParamValue) bool {
 // to every channel of the device, so callers operate on the device
 // address (everything before the first colon).
 func splitDeviceAddress(channelAddress string) string {
-	for i := range len(channelAddress) {
-		if channelAddress[i] == ':' {
-			return channelAddress[:i]
-		}
-	}
-	return channelAddress
+	addr, _ := splitChannelAddress(channelAddress)
+	return addr
 }

@@ -1,6 +1,6 @@
 {
-  "generated": "4d2461e5",
-  "head": "4d2461e5",
+  "generated": "5bd66ac4",
+  "head": "5bd66ac4",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27302,
+    "total_exported": 27307,
     "reachable": 4579,
-    "whitelisted": 19660,
+    "whitelisted": 19665,
     "unreachable": 3063
   },
   "by_package": [
@@ -4143,7 +4143,7 @@
       "package": "internal/central/coordinators",
       "identifier": "EventCoordinator",
       "file": "internal/central/coordinators/event.go",
-      "line": 24,
+      "line": 27,
       "kind": "type"
     },
     {
@@ -51064,6 +51064,13 @@
     },
     {
       "package": "internal/central/coordinators",
+      "identifier": "TestDeviceLevelParameterKeepsChannelZero",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/coordinators/event_device_trigger_test.go",
+      "line": 119
+    },
+    {
+      "package": "internal/central/coordinators",
       "identifier": "TestDeviceLinkExtendedFieldsPresent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_device_event_methods_test.go",
@@ -52681,6 +52688,20 @@
     },
     {
       "package": "internal/central/coordinators",
+      "identifier": "TestRawEventClassifiesTriggerKinds",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/coordinators/event_device_trigger_test.go",
+      "line": 78
+    },
+    {
+      "package": "internal/central/coordinators",
+      "identifier": "TestRawEventPublishesDeviceTrigger",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/coordinators/event_device_trigger_test.go",
+      "line": 36
+    },
+    {
+      "package": "internal/central/coordinators",
       "identifier": "TestReadinessGateRetriableWhenGateRejectsFirstAttempt",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/connection_recovery_failover_scenarios_test.go",
@@ -53140,6 +53161,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_device_event_methods_test.go",
       "line": 180
+    },
+    {
+      "package": "internal/central/coordinators",
+      "identifier": "TestRepeatedKeypressPublishesEveryEdge",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/coordinators/event_device_trigger_test.go",
+      "line": 64
     },
     {
       "package": "internal/central/coordinators",
@@ -141529,6 +141557,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/device_trigger_test.go",
       "line": 28
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestDeviceTriggerReachesTheBroadcast",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/hub_events_program_changed_test.go",
+      "line": 143
     },
     {
       "package": "internal/north/rest/ws",

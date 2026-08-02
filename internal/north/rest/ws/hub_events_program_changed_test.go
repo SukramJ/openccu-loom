@@ -134,3 +134,35 @@ func TestSysvarChangeReachesTheBroadcast(t *testing.T) {
 		t.Fatal("unique_id must be resolved for a sysvar")
 	}
 }
+
+// TestDeviceTriggerReachesTheBroadcast measures the last leg: a raw CCU
+// callback for a keypress must arrive as a `device.trigger` broadcast. This
+// broadcast was declared, bridged and contract-tested while its only
+// publisher had no production caller — so Home Assistant device triggers and
+// keypress event entities never fired through this daemon.
+func TestDeviceTriggerReachesTheBroadcast(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	sub := NewDeviceTriggerSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	cu.Events.HandleRawEvent(t.Context(), "HmIP-RF", "0001ABCD:2", "PRESS_SHORT", hmtypes.BoolValue(true))
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == DeviceTriggerTopic("0001ABCD", 2)
+	})
+	if ev.Type != string(hmevent.EventTypeDeviceTrigger) {
+		t.Fatalf("type = %q, want %q", ev.Type, string(hmevent.EventTypeDeviceTrigger))
+	}
+	p, ok := ev.Payload.(DeviceTriggerPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want DeviceTriggerPayload", ev.Payload)
+	}
+	if p.Parameter != "PRESS_SHORT" || p.Channel != 2 {
+		t.Fatalf("payload lost its coordinates: %+v", p)
+	}
+}

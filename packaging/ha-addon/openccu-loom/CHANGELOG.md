@@ -2,6 +2,12 @@
 
 ## 0.52.11
 
+- **Button presses trigger automations again.** Pressing a remote or wall
+  switch produced no event in Home Assistant — neither a device trigger nor
+  an event entity — because the daemon reported the press only as a value
+  change. Keypresses, impulses and device errors now arrive as the events
+  they are, and a repeated press counts each time.
+
 - **System variables update again.** Their values reached Home Assistant
   over MQTT but not over the REST/WebSocket connection, where they stayed on
   the value they had when the integration started — including after you had
