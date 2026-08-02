@@ -750,3 +750,7 @@ func TestServiceDiscoveryShape_TopicSegmentContract(t *testing.T) {
 		})
 	}
 }
+
+func (f *contractFakeSink) SetProgramEnabled(_ context.Context, _, _ string, _ bool) error {
+	return nil
+}

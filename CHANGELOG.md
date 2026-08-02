@@ -35,6 +35,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   generic traversal (`fs.WalkDir`) would have failed. Found by running the
   standard library's own conformance suite over it, which now guards it.
 
+- **A CCU program is two controls, and the daemon now says so.** A program
+  has an activity flag that decides whether it reacts at all, and an
+  execution that runs it once — and a deactivated program refuses the
+  execution. That rule was nowhere in the daemon: consumers each had to
+  rediscover it, and the MQTT plane collapsed both into a single switch
+  whose `turn_on` *executed* the program instead of activating it.
+
+  `GET /api/v1/programs` and the WS payload gain `execute_available`
+  (API 3.12.0), and the program model declares its two controls through
+  the generalised `MQTTAddressable` surface, so the bridge transcribes
+  them rather than knowing them (ADR 0011). Over MQTT a program now
+  surfaces as a switch on `…/programs/<id>/set` (activity) and a button on
+  `…/programs/<id>/trigger` (execution) whose availability follows the
+  flag.
+
+  **Breaking for MQTT:** publishing to `…/trigger` still executes the
+  program, but the switch entity no longer triggers — it toggles activity.
+  An automation that used the switch to run a program has to use the
+  button, or publish to the trigger topic directly.
+
 
 ## [0.52.6]
 

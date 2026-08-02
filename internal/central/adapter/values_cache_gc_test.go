@@ -164,19 +164,31 @@ func TestWireValuesCacheFlusher_RunsPeriodicGC(t *testing.T) {
 	}
 
 	logger := slog.New(slog.DiscardHandler)
-	// A 5ms flush interval pushes gcTickInterval's derived cadence down
-	// far enough that the GC ticker also fires within the sleep window
-	// below, without needing to wait out the multi-minute production
-	// default.
+	// A 5ms flush interval pushes gcTickInterval's derived cadence down far
+	// enough that the GC ticker fires promptly, without waiting out the
+	// multi-minute production default.
 	closer := WireValuesCacheFlusher(reg, store, 5*time.Millisecond, logger)
-	time.Sleep(200 * time.Millisecond)
-	closer()
+	defer closer()
 
-	rows, err := store.LoadChannel(ctx, centralName, "if1", "DEV:1")
-	if err != nil {
-		t.Fatalf("LoadChannel: %v", err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("LoadChannel after flusher run returned %d rows, want 1 (orphan not GC'd): %+v", len(rows), rows)
+	// Poll for the effect rather than sleeping a fixed span and checking
+	// once: the assertion is that the GC runs, not that it runs within any
+	// particular window, and a loaded CI runner can miss a tight one.
+	var rows []sqlite.CachedValue
+	start := time.Now()
+	deadline := start.Add(10 * time.Second)
+	for {
+		var err error
+		rows, err = store.LoadChannel(ctx, centralName, "if1", "DEV:1")
+		if err != nil {
+			t.Fatalf("LoadChannel: %v", err)
+		}
+		if len(rows) == 1 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("LoadChannel returned %d rows after %s, want 1 (orphan not GC'd): %+v",
+				len(rows), time.Since(start).Round(time.Millisecond), rows)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

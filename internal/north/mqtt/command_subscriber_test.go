@@ -33,7 +33,12 @@ type fakeSink struct {
 		centralName, name string
 		value             any
 	}
-	lastProgram struct{ centralName, id string }
+	programEnables    atomic.Int32
+	lastProgram       struct{ centralName, id string }
+	lastProgramEnable struct {
+		centralName, id string
+		enabled         bool
+	}
 }
 
 func (f *fakeSink) SetValue(_ context.Context, centralName, iface, chanAddr string,
@@ -72,6 +77,14 @@ func (f *fakeSink) TriggerProgram(_ context.Context, centralName, id string) err
 	f.triggers.Add(1)
 	f.lastProgram.centralName = centralName
 	f.lastProgram.id = id
+	return nil
+}
+
+func (f *fakeSink) SetProgramEnabled(_ context.Context, centralName, id string, enabled bool) error {
+	f.programEnables.Add(1)
+	f.lastProgramEnable.centralName = centralName
+	f.lastProgramEnable.id = id
+	f.lastProgramEnable.enabled = enabled
 	return nil
 }
 
@@ -679,5 +692,50 @@ func TestCommandSubscriberDefaultQoSIsQoS1(t *testing.T) {
 		if qos != QoS1 {
 			t.Fatalf("filter %q subscribed at QoS %d, want default QoS1", filter, qos)
 		}
+	}
+}
+
+// TestCommandSubscriberProgramEnableTopic covers the activation control,
+// which is separate from the trigger: a deactivated program refuses to
+// run, so turning it back on cannot go through the same topic that runs it.
+func TestCommandSubscriberProgramEnableTopic(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		payload string
+		want    bool
+		applied bool
+	}{
+		{"true activates", "true", true, true},
+		{"ON activates", "ON", true, true},
+		{"false deactivates", "false", false, true},
+		{"0 deactivates", "0", false, true},
+		// A typo must not silently deactivate a program.
+		{"gibberish is rejected", "maybe", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			noop := NewNoopClient()
+			sink := &fakeSink{}
+			sub := NewCommandSubscriber(noop, NewTopicBuilder("openccu-loom"), sink, nil)
+			_ = sub.Start(context.Background())
+			noop.DeliverInbound("openccu-loom/+/hub/programs/+/set",
+				"openccu-loom/ccu-01/hub/programs/1234/set", []byte(tc.payload))
+			sub.dispatcher.flush()
+
+			if !tc.applied {
+				if sink.programEnables.Load() != 0 {
+					t.Fatalf("payload %q was applied, want rejection", tc.payload)
+				}
+				return
+			}
+			if sink.programEnables.Load() != 1 {
+				t.Fatalf("payload %q was not applied", tc.payload)
+			}
+			if sink.lastProgramEnable.id != "1234" || sink.lastProgramEnable.centralName != "ccu-01" {
+				t.Errorf("routed to %+v", sink.lastProgramEnable)
+			}
+			if sink.lastProgramEnable.enabled != tc.want {
+				t.Errorf("enabled = %v, want %v", sink.lastProgramEnable.enabled, tc.want)
+			}
+		})
 	}
 }

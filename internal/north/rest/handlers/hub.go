@@ -127,6 +127,16 @@ type ProgramSummary struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Active      *bool  `json:"active,omitempty"`
+	// ExecuteAvailable reports whether running the program would do
+	// anything. A program the CCU has deactivated ignores its triggers and
+	// refuses a manual run, so a consumer that offers "run now" as its own
+	// control should render it unavailable rather than let the call fail.
+	//
+	// The daemon answers this rather than leaving each consumer to derive
+	// it from `active`: it is CCU semantics, not presentation. True when
+	// the flag has not been observed yet, so a control is never greyed out
+	// on missing information.
+	ExecuteAvailable bool `json:"execute_available"`
 	// LastExecuted is the RFC3339 timestamp of the most recent execution,
 	// omitted when no execution has been observed yet. Closes H-032.
 	LastExecuted string `json:"last_executed,omitempty"`
@@ -391,9 +401,11 @@ func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSumma
 		Name:        p.Name,
 		Description: p.Description,
 	}
+	e.ExecuteAvailable = true
 	if observed {
 		v := active
 		e.Active = &v
+		e.ExecuteAvailable = active
 	}
 	// H-032: expose last_executed when a run has been observed.
 	if ts, hasTS := p.LastExecution(); hasTS {

@@ -1178,6 +1178,10 @@ func (e *errSink) TriggerProgram(_ context.Context, _, _ string) error {
 	return errors.New("trigger error")
 }
 
+func (e *errSink) SetProgramEnabled(_ context.Context, _, _ string, _ bool) error {
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // handleCDPInvoke: bad topic shape (too few segments)
 // ---------------------------------------------------------------------------

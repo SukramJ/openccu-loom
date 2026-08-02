@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -453,9 +454,117 @@ type HubProgramSpec struct {
 	EnabledDefault bool
 }
 
+// BuildProgramDiscoveryRoles emits the discovery payloads for one CCU program.
+//
+// Which controls a program surfaces, and on which topics, is declared by
+// the model ([payload.MQTTRoleAddressable]) — this function transcribes
+// that declaration into HA discovery bodies and adds nothing of its own.
+// A program that declares no roles falls back to the single-switch shape,
+// so a source that is one control needs to say nothing.
+func (d *DefaultDiscoveryBuilder) BuildProgramDiscoveryRoles(
+	centralName string, p HubProgramSpec, roles []payload.MQTTRole,
+) []DiscoveryItem {
+	if len(roles) == 0 {
+		item := d.BuildProgramDiscovery(centralName, p)
+		if !item.OK {
+			return nil
+		}
+		return []DiscoveryItem{item}
+	}
+	out := make([]DiscoveryItem, 0, len(roles))
+	for i := range roles {
+		if item := d.buildProgramRole(centralName, p, &roles[i]); item.OK {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// buildProgramRole renders one declared role. The role supplies the
+// component, the topics and the availability gate; everything else is the
+// program's shared identity.
+func (d *DefaultDiscoveryBuilder) buildProgramRole(
+	centralName string, p HubProgramSpec, role *payload.MQTTRole,
+) DiscoveryItem {
+	serial10, ok := d.hubSerial(centralName)
+	if !ok || p.ID == "" || role.Component == "" {
+		return DiscoveryItem{}
+	}
+	programSlug := routingkey.HubSlug(p.Name)
+	if programSlug == "" {
+		programSlug = routingkey.HubSlug(p.ID)
+	}
+	uniqueID := routingkey.CanonicalUniqueID(serial10, "program", programSlug, "")
+	objectID := safeLower(p.ID)
+	displayName := p.Name
+	if displayName == "" {
+		displayName = p.ID
+	}
+	if role.Key != "" {
+		// A secondary control needs an identity of its own; the principal
+		// role keeps the one the program always had.
+		uniqueID += "_" + role.Key
+		objectID += "_" + safeLower(role.Key)
+	}
+	if role.NameSuffix != "" {
+		displayName += " " + role.NameSuffix
+	}
+
+	availability := hubAvailability(d.TopicBuilder)
+	if role.Topics.Availability != "" {
+		// The role's own gate joins the bridge/device ones; availability_mode
+		// "all" below means every listed topic must report online.
+		availability = append(availability, map[string]string{
+			"topic":                 role.Topics.Availability,
+			"payload_available":     "online",
+			"payload_not_available": "offline",
+		})
+	}
+
+	body := map[string]any{
+		"name":               displayName,
+		"unique_id":          uniqueID,
+		"object_id":          uniqueID,
+		"enabled_by_default": p.EnabledDefault,
+		"availability":       availability,
+		"availability_mode":  "all",
+		"device":             hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)),
+		"origin":             BuildOriginInfo(),
+	}
+	if role.Topics.State != "" {
+		body["state_topic"] = role.Topics.State
+		body["state_on"] = "true"
+		body["state_off"] = "false"
+		body["optimistic"] = false
+	}
+	switch {
+	case role.Topics.Set != "":
+		body["command_topic"] = role.Topics.Set
+		body["payload_on"] = "true"
+		body["payload_off"] = "false"
+	case role.Topics.Trigger != "":
+		body["command_topic"] = role.Topics.Trigger
+		body["payload_press"] = "true"
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{
+		Component: role.Component,
+		NodeID:    hubNodeID(centralName, "programs"),
+		ObjectID:  objectID,
+		Payload:   buf,
+		OK:        true,
+	}
+}
+
 // BuildProgramDiscovery emits one HA `switch` per CCU program.
 // `turn_on` triggers the program (write to /trigger); state reflects
 // the most recent execution active flag.
+//
+// Deprecated: kept for sources that declare no roles. Prefer
+// [DefaultDiscoveryBuilder.BuildProgramDiscoveryRoles].
 func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p HubProgramSpec) DiscoveryItem {
 	if p.ID == "" {
 		return DiscoveryItem{}
