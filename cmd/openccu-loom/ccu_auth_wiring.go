@@ -114,40 +114,56 @@ func parseCCURoleMapping(m map[string]string, logger *slog.Logger) map[int]auth.
 // consumed by CCUAuthDomain. It resolves against the persisted centrals
 // store — the same table a runtime central-adopt (POST/PUT
 // /admin/centrals) writes to — so a central adopted after boot is
-// authenticatable without a restart. When centrals is nil (persistence
-// unavailable) it falls back to the boot-time cfg.Centrals snapshot,
-// preserving pre-existing behaviour for that degraded mode.
+// authenticatable without a restart.
 //
-// A disabled or unknown central, or any store error, resolves to
-// (zero, false): the caller treats that as "central not found" and the
-// login is rejected. This is the fail-closed direction and must not be
-// widened.
+// Tier rule, mirroring configstore.layerCentrals: the centrals table wins
+// whenever it holds any row; an EMPTY table (or no store at all) means the
+// DB tier is unused and the boot-time cfg.Centrals snapshot — the YAML
+// tier — is authoritative. Failing closed on an empty table instead left a
+// config.yaml-only deployment unable to authenticate anyone against its
+// CCU.
+//
+// Within the authoritative tier a disabled or unknown central, or a store
+// error, resolves to (zero, false): the caller treats that as "central not
+// found" and the login is rejected. This is the fail-closed direction and
+// must not be widened.
 func newCCUAuthCentralResolver(cfg *config.Config, centrals *sqlitestore.CentralsStore) adapter.CentralConfigResolver {
 	return func(ctx context.Context, name string) (config.CentralConfig, bool) {
-		if centrals == nil {
+		rows, ok := enabledCentralRows(ctx, centrals)
+		if !ok {
 			return centralConfigFromSnapshot(cfg.Centrals, name)
 		}
-		if name != "" {
-			row, err := centrals.Get(ctx, name)
-			if err != nil || !row.Enabled {
-				return config.CentralConfig{}, false
-			}
-			cc, _ := configstore.RowToCentralConfig(row, os.Getenv)
-			return cc, true
-		}
-		rows, err := centrals.List(ctx)
-		if err != nil {
-			return config.CentralConfig{}, false
-		}
 		for i := range rows {
-			row := &rows[i]
-			if row.Enabled {
-				cc, _ := configstore.RowToCentralConfig(*row, os.Getenv)
+			if name == "" || rows[i].Name == name {
+				cc, _ := configstore.RowToCentralConfig(rows[i], os.Getenv)
 				return cc, true
 			}
 		}
 		return config.CentralConfig{}, false
 	}
+}
+
+// enabledCentralRows returns the enabled rows of the centrals table and
+// whether the DB tier is in use at all. ok is false when there is no store,
+// the listing fails, or the table is empty — every case in which the caller
+// must defer to the YAML tier. A table that holds only DISABLED rows is in
+// use (ok true, no rows returned), so a parked central keeps failing closed
+// rather than silently resurrecting a YAML entry of the same name.
+func enabledCentralRows(ctx context.Context, centrals *sqlitestore.CentralsStore) ([]sqlitestore.CentralRow, bool) {
+	if centrals == nil {
+		return nil, false
+	}
+	rows, err := centrals.List(ctx)
+	if err != nil || len(rows) == 0 {
+		return nil, false
+	}
+	enabled := make([]sqlitestore.CentralRow, 0, len(rows))
+	for i := range rows {
+		if rows[i].Enabled {
+			enabled = append(enabled, rows[i])
+		}
+	}
+	return enabled, true
 }
 
 // centralConfigFromSnapshot replicates the pre-store resolution rule

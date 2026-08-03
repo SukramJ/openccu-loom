@@ -433,16 +433,48 @@ func TestCCUAuthCentralResolverStoreDisabledFailsClosed(t *testing.T) {
 }
 
 // TestCCUAuthCentralResolverStoreUnknownNameFailsClosed verifies a name
-// absent from the store fails closed rather than falling back to
-// cfg.Centrals — once a store is available it is the sole source of
-// truth for named lookups.
+// absent from a POPULATED store fails closed rather than falling back to
+// cfg.Centrals — once the centrals table is in use it is the sole source
+// of truth for named lookups.
 func TestCCUAuthCentralResolverStoreUnknownNameFailsClosed(t *testing.T) {
 	t.Parallel()
 	store := buildCentralsTestStore(t)
-	cfg := &config.Config{Centrals: []config.CentralConfig{{Name: "ccu1", Host: "192.0.2.1"}}}
+	ctx := context.Background()
+
+	if err := store.Put(ctx, sqlitestore.CentralRow{Name: "db-ccu", Host: "192.0.2.30", Enabled: true}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	cfg := &config.Config{Centrals: []config.CentralConfig{{Name: "yaml-ccu", Host: "192.0.2.1"}}}
 	resolve := newCCUAuthCentralResolver(cfg, store)
 
-	if _, ok := resolve(context.Background(), "ccu1"); ok {
-		t.Error("expected a name absent from the (empty) store to fail closed even though it exists in cfg.Centrals")
+	if _, ok := resolve(ctx, "yaml-ccu"); ok {
+		t.Error("expected a name absent from the populated store to fail closed even though it exists in cfg.Centrals")
+	}
+}
+
+// TestCCUAuthCentralResolverEmptyStoreFallsBackToYAML pins the tier rule
+// configstore.layerCentrals applies at boot: an EMPTY centrals table means
+// the DB tier is unused, so the YAML-configured centrals are authoritative.
+// Without this a config.yaml-only deployment (no SPA-adopted central) could
+// never authenticate anyone against the CCU — the resolver failed closed on
+// a store that simply had nothing to say.
+func TestCCUAuthCentralResolverEmptyStoreFallsBackToYAML(t *testing.T) {
+	t.Parallel()
+	store := buildCentralsTestStore(t)
+	cfg := &config.Config{Centrals: []config.CentralConfig{
+		{Name: "yaml-ccu", Host: "192.0.2.1"},
+		{Name: "yaml-ccu2", Host: "192.0.2.2"},
+	}}
+	resolve := newCCUAuthCentralResolver(cfg, store)
+
+	if cc, ok := resolve(context.Background(), "yaml-ccu"); !ok || cc.Host != "192.0.2.1" {
+		t.Errorf("named YAML central: got %+v ok=%v, want host 192.0.2.1", cc, ok)
+	}
+	if cc, ok := resolve(context.Background(), ""); !ok || cc.Name != "yaml-ccu" {
+		t.Errorf("empty name: expected the first YAML central, got %+v ok=%v", cc, ok)
+	}
+	if _, ok := resolve(context.Background(), "unknown"); ok {
+		t.Error("unknown name: expected a miss even with the YAML fallback in play")
 	}
 }

@@ -69,6 +69,42 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The CCU add-on registered no control-panel tile.** The install hook
+  called `/bin/update_hm_addons.tcl` — a helper that exists on no CCU
+  firmware. Guarded by an `-x` probe, the call was skipped silently, so
+  nothing was ever written to `/etc/config/hm_addons.cfg` and the WebUI's
+  "Systemsteuerung" had no OpenCCU-Loom button to render. Both the
+  install and the uninstall path now use the real platform helper,
+  `/bin/updateAddonConfig.tcl`, fall back to the HomeMatic Tcl API
+  (`AddConfigPage` / `RemoveConfigPage`) on firmware that predates it,
+  and print a warning when neither is available instead of leaving the
+  operator with a silently tile-less install. The tile appears on the
+  next install or update of the add-on.
+
+- **A fresh CCU add-on install was locked out completely.** CCU-delegated
+  login is on by default there, which suppressed the first-run onboarding
+  wizard — but it cannot authenticate anyone until a central is
+  configured, and configuring one requires an authenticated session. The
+  result was no wizard *and* no working CCU login. CCU-delegated login
+  now only counts as an available authentication source once at least one
+  central exists, so onboarding stays reachable until it can genuinely
+  take over.
+
+- **CCU login ignored centrals configured in `config.yaml`.** The auth
+  resolver consulted only the SQLite `centrals` table and failed closed
+  when it was empty, instead of deferring to the YAML tier the way the
+  rest of the daemon does. A deployment that declares its centrals in
+  `config.yaml` — never adopting one through the SPA — could therefore
+  never sign in with a CCU account. The table now wins whenever it holds
+  any row; an empty table hands authority back to `config.yaml`. Unknown
+  and disabled centrals still fail closed.
+
+- **The onboarding wizard's CCU stayed dark until the next restart.** The
+  wizard wrote its optional central straight to the store, bypassing the
+  live-adopt path that `POST /admin/centrals` uses. The freshly onboarded
+  CCU is now brought up immediately, so devices appear — and CCU-delegated
+  login starts working — without restarting the daemon.
+
 - **A hazard sensor could be configured never to fire.** A sensor typed
   `hazard` but not marked `always_on` falls into the arm-state machine,
   so it only fires while the zone is armed in one of its listed modes —

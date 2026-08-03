@@ -265,8 +265,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		SPAHandler:              ui.SPAHandler(),
 		Bootstrap:               d.bootstrap,
 		Setup: &handlers.SetupService{
-			Users:    d.sqUsers,
-			Centrals: d.sqCentrals,
+			Users: d.sqUsers,
+			// The live-adopt decorator, not the raw store: the wizard's CCU
+			// must come up immediately, exactly as an admin-created one does.
+			Centrals: d.centSvc,
 			Sections: d.sqSections,
 			Required: d.noUsers,
 		},
