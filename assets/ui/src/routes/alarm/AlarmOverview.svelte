@@ -328,12 +328,24 @@
       </Badge>
     </span>
 
-    {#if anyTriggered}
-      <Button variant="destructive" size="sm" onclick={silenceAll}>
-        <Icon name="mdi:bell-off" size={16} aria-label="" />
-        {t("alarm.overview.silence_all")}
-      </Button>
-    {/if}
+    <div class="ml-auto flex items-center gap-2">
+      {#if anyTriggered}
+        <Button variant="destructive" size="sm" onclick={silenceAll}>
+          <Icon name="mdi:bell-off" size={16} aria-label="" />
+          {t("alarm.overview.silence_all")}
+        </Button>
+      {/if}
+      <!-- Cross-link into the Security & Safety domain (docs/security-safety-
+           concept.md §7.8): smoke/water/gas/tamper/battery/technical hazard
+           classes and the standing-fault ledger live there, independent of
+           this zone panel. -->
+      <a href="#/security">
+        <Button variant="outline" size="sm">
+          <Icon name="mdi:shield-alert" size={16} aria-label="" />
+          {t("alarm.overview.open_security")}
+        </Button>
+      </a>
+    </div>
   </div>
 
   <div class="grid gap-4 lg:grid-cols-2">

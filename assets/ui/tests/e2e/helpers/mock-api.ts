@@ -310,6 +310,29 @@ export async function mockAllApis(page: Page): Promise<void> {
     return route.fulfill({ json: fixture('alarm-codes.json') });
   });
 
+  // Security & Safety domain (classifier-driven hazard/fault index, runs
+  // independently of the alarm engine above). Default snapshot: severity
+  // "warning", an active "water" class with two named sources, an inactive
+  // "smoke" class, one zone, one open fault and a last_alarm/last_fault pair
+  // each carrying a real subject + message — the thing an operator reads
+  // first. security.spec.ts overrides individual routes (an empty snapshot,
+  // a failing acknowledge) where a test needs a different state.
+  await page.route('**/api/v1/security/faults/*/acknowledge', (route) =>
+    route.fulfill({ status: 204 }),
+  );
+  await page.route('**/api/v1/security/faults', (route) =>
+    route.fulfill({ json: fixture('security-faults.json') }),
+  );
+  await page.route('**/api/v1/security/sources/*', (route) =>
+    route.fulfill({ status: 204 }),
+  );
+  await page.route('**/api/v1/security/sources', (route) =>
+    route.fulfill({ json: fixture('security-sources.json') }),
+  );
+  await page.route('**/api/v1/security', (route) =>
+    route.fulfill({ json: fixture('security-snapshot.json') }),
+  );
+
   // Auth users and tokens
   await page.route('**/api/v1/auth/users', (route) =>
     route.fulfill({ json: fixture('users.json') }),

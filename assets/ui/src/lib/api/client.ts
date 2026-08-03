@@ -19,6 +19,11 @@ import type {
   AlarmSensor,
   AlarmVerbRequest,
   AlarmWalkTestStatus,
+  SecurityClassState,
+  SecurityFault,
+  SecuritySnapshot,
+  SecuritySourceOverride,
+  SecuritySourceView,
   AuditEntry,
   BackupEntry,
   CentralLinksReport,
@@ -1979,6 +1984,58 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),
     });
+  },
+
+  // --- Security & Safety domain (classifier-driven, independent of the
+  // alarm engine above) -------------------------------------------
+  getSecuritySnapshot() {
+    return request<SecuritySnapshot>(`/security`);
+  },
+  getSecurityClass(cls: string) {
+    return request<SecurityClassState>(
+      `/security/classes/${encodeURIComponent(cls)}`,
+    );
+  },
+  // Filters are applied server-side when supplied, but the views in this
+  // SPA currently fetch the unfiltered inventory and filter client-side
+  // (matching Inbox/SignalQualityList) so the central/class/zone option
+  // lists never shrink as another filter narrows the visible rows.
+  listSecuritySources(
+    filters: {
+      class?: string;
+      central?: string;
+      zone_id?: string;
+      relevant?: boolean;
+      active?: boolean;
+    } = {},
+  ) {
+    const params = new URLSearchParams();
+    if (filters.class) params.set("class", filters.class);
+    if (filters.central) params.set("central", filters.central);
+    if (filters.zone_id) params.set("zone_id", filters.zone_id);
+    if (filters.relevant) params.set("relevant", "true");
+    if (filters.active) params.set("active", "true");
+    const q = params.toString() ? `?${params.toString()}` : "";
+    return request<SecuritySourceView[]>(`/security/sources${q}`);
+  },
+  // An empty `class` + `included: true` + no `note` removes the override,
+  // returning the source to the classifier's own verdict.
+  putSecuritySourceOverride(ref: string, body: SecuritySourceOverride) {
+    return request<void>(`/security/sources/${encodeURIComponent(ref)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+  listSecurityFaults() {
+    return request<SecurityFault[]>(`/security/faults`);
+  },
+  // Never clears the fault — only records that an operator has seen it.
+  acknowledgeSecurityFault(id: string) {
+    return request<void>(
+      `/security/faults/${encodeURIComponent(id)}/acknowledge`,
+      { method: "POST" },
+    );
   },
 };
 

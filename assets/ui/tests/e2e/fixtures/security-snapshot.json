@@ -1,0 +1,59 @@
+{
+  "severity": "warning",
+  "classes": [
+    {
+      "class": "water",
+      "active": true,
+      "known": 2,
+      "sources": [
+        { "ref": "ccu1|HmIP-RF|VEQ0000040:1|STATE", "name": "Küche Wasser", "at": "2026-07-30T08:00:00Z" },
+        { "ref": "ccu1|HmIP-RF|VEQ0000041:1|STATE", "name": "Keller Wasser", "at": "2026-07-30T08:05:00Z" }
+      ],
+      "since": "2026-07-30T08:00:00Z"
+    },
+    { "class": "smoke", "active": false, "known": 1, "sources": [] }
+  ],
+  "zones": [
+    {
+      "id": "zone-eg",
+      "slug": "erdgeschoss",
+      "name": "Erdgeschoss",
+      "state": "armed",
+      "mode": "full",
+      "since": "2026-07-01T00:00:00Z"
+    }
+  ],
+  "faults": [
+    {
+      "id": "fault-1",
+      "class": "smoke",
+      "reason": "unreachable",
+      "severity": "warning",
+      "source": {
+        "ref": "ccu1|HmIP-RF|VEQ0000050:1|STATE",
+        "name": "Dachgeschoss Rauchmelder",
+        "at": "2026-07-29T12:00:00Z"
+      },
+      "since": "2026-07-29T12:00:00Z"
+    }
+  ],
+  "engine_healthy": true,
+  "last_alarm": {
+    "class": "water",
+    "severity": "warning",
+    "verb": "triggered",
+    "subject": "Water detected in the kitchen",
+    "message": "Küche Wasser reported water at 08:00 this morning.",
+    "i18n_key": "security.notification.water.triggered",
+    "at": "2026-07-30T08:00:00Z"
+  },
+  "last_fault": {
+    "class": "smoke",
+    "severity": "warning",
+    "verb": "raised",
+    "subject": "Smoke detector unreachable",
+    "message": "Dachgeschoss Rauchmelder has been unreachable since yesterday noon.",
+    "i18n_key": "security.notification.smoke.fault_raised",
+    "at": "2026-07-29T12:00:00Z"
+  }
+}

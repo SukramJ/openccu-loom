@@ -1,0 +1,64 @@
+[
+  {
+    "ref": "ccu1|HmIP-RF|VEQ0000040:1|STATE",
+    "central": "ccu1",
+    "interface_id": "HmIP-RF",
+    "channel_address": "VEQ0000040:1",
+    "device_address": "VEQ0000040",
+    "parameter": "STATE",
+    "name": "Küche Wasser",
+    "class": "water",
+    "active": true,
+    "relevant": true
+  },
+  {
+    "ref": "ccu1|HmIP-RF|VEQ0000041:1|STATE",
+    "central": "ccu1",
+    "interface_id": "HmIP-RF",
+    "channel_address": "VEQ0000041:1",
+    "device_address": "VEQ0000041",
+    "parameter": "STATE",
+    "name": "Keller Wasser",
+    "class": "water",
+    "active": true,
+    "relevant": true
+  },
+  {
+    "ref": "ccu1|HmIP-RF|VEQ0000050:1|STATE",
+    "central": "ccu1",
+    "interface_id": "HmIP-RF",
+    "channel_address": "VEQ0000050:1",
+    "device_address": "VEQ0000050",
+    "parameter": "STATE",
+    "name": "Dachgeschoss Rauchmelder",
+    "class": "smoke",
+    "reason": "unreachable",
+    "active": false,
+    "relevant": true
+  },
+  {
+    "ref": "ccu1|HmIP-RF|VEQ0000060:1|STATE",
+    "central": "ccu1",
+    "interface_id": "HmIP-RF",
+    "channel_address": "VEQ0000060:1",
+    "device_address": "VEQ0000060",
+    "parameter": "STATE",
+    "name": "Garage Temperatur",
+    "class": "technical",
+    "active": false,
+    "relevant": false
+  },
+  {
+    "ref": "ccu1|HmIP-RF|VEQ0000070:1|STATE",
+    "central": "ccu1",
+    "interface_id": "HmIP-RF",
+    "channel_address": "VEQ0000070:1",
+    "device_address": "VEQ0000070",
+    "parameter": "STATE",
+    "name": "Nebenraum Fenster",
+    "class": "intrusion",
+    "active": false,
+    "relevant": true,
+    "overridden": true
+  }
+]

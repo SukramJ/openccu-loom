@@ -1,6 +1,6 @@
 {
-  "generated": "09bf64c8",
-  "head": "09bf64c8",
+  "generated": "2c3681b0",
+  "head": "2c3681b0",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27621,
+    "total_exported": 27630,
     "reachable": 4890,
-    "whitelisted": 19773,
-    "unreachable": 2958
+    "whitelisted": 19777,
+    "unreachable": 2963
   },
   "by_package": [
     {
@@ -403,7 +403,7 @@
     {
       "package": "internal/model/security",
       "unreachable_funcs": 0,
-      "unreachable_types": 4,
+      "unreachable_types": 5,
       "unreachable_other": 0
     },
     {
@@ -643,7 +643,7 @@
     {
       "package": "pkg/hmapi",
       "unreachable_funcs": 0,
-      "unreachable_types": 145,
+      "unreachable_types": 149,
       "unreachable_other": 16
     },
     {
@@ -10468,6 +10468,13 @@
     },
     {
       "package": "internal/model/security",
+      "identifier": "SourceView",
+      "file": "internal/model/security/snapshot.go",
+      "line": 168,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/security",
       "identifier": "ZoneState",
       "file": "internal/model/security/snapshot.go",
       "line": 68,
@@ -18878,6 +18885,34 @@
       "identifier": "SecuritySnapshot",
       "file": "pkg/hmapi/security.go",
       "line": 10,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "SecuritySourceOverride",
+      "file": "pkg/hmapi/security.go",
+      "line": 137,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "SecuritySourceOverride",
+      "file": "pkg/hmapi/security.go",
+      "line": 137,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "SecuritySourceView",
+      "file": "pkg/hmapi/security.go",
+      "line": 108,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "SecuritySourceView",
+      "file": "pkg/hmapi/security.go",
+      "line": 108,
       "kind": "type"
     },
     {
@@ -120905,14 +120940,14 @@
       "identifier": "AcknowledgeSecurityFault",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 83
+      "line": 88
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AcknowledgeSecurityFault",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 83
+      "line": 88
     },
     {
       "package": "internal/north/rest/handlers",
@@ -124153,28 +124188,28 @@
       "identifier": "GetSecurityClass",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 40
+      "line": 45
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSecurityClass",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 40
+      "line": 45
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSecuritySnapshot",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 29
+      "line": 34
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSecuritySnapshot",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 29
+      "line": 34
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125441,14 +125476,28 @@
       "identifier": "ListSecurityFaults",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 65
+      "line": 70
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSecurityFaults",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 65
+      "line": 70
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListSecuritySources",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/security.go",
+      "line": 248
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListSecuritySources",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/security.go",
+      "line": 248
     },
     {
       "package": "internal/north/rest/handlers",
@@ -127188,6 +127237,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "PutSecuritySourceOverride",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/security.go",
+      "line": 286
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PutSecuritySourceOverride",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/security.go",
+      "line": 286
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "PutStartupCapture",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_admin.go",
@@ -127681,14 +127744,14 @@
       "identifier": "SecurityDomain",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 22
+      "line": 24
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SecurityDomain",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 22
+      "line": 24
     },
     {
       "package": "internal/north/rest/handlers",

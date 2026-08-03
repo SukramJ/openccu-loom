@@ -976,6 +976,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/security/faults", handlers.ListSecurityFaults(d.Security))
 				pr.With(op).Post("/security/faults/{id}/acknowledge",
 					handlers.AcknowledgeSecurityFault(d.Security, d.AuditRecorder))
+				pr.Get("/security/sources", handlers.ListSecuritySources(d.Security))
+				pr.With(op).Put("/security/sources/{ref}",
+					handlers.PutSecuritySourceOverride(d.Security, d.AuditRecorder))
 			}
 			if d.SystemStatus != nil {
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.17.0
+  version: 3.18.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6792,6 +6792,82 @@ paths:
           description: The class is defined but this installation has no source for it.
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /security/sources:
+    get:
+      operationId: listSecuritySources
+      summary: The classified data-point inventory
+      description: >
+        What the domain believes about every data point it knows: the class it
+        was given, whether an operator overrode that, whether an alarm zone
+        holds it, and whether it currently contributes to an aggregate.
+
+
+        The unfiltered list is deliberately available. A source the classifier
+        got wrong is invisible in every aggregate, so listing everything is the
+        only way to find it.
+      tags: [security]
+      parameters:
+        - in: query
+          name: class
+          schema:
+            type: string
+            enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+        - in: query
+          name: central
+          schema: { type: string }
+        - in: query
+          name: zone_id
+          schema: { type: string }
+        - in: query
+          name: relevant
+          schema: { type: string, enum: ["true"] }
+          description: Only sources that contribute to an aggregate.
+        - in: query
+          name: active
+          schema: { type: string, enum: ["true"] }
+      responses:
+        "200":
+          description: The inventory.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SecuritySourceView" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /security/sources/{ref}:
+    parameters:
+      - name: ref
+        in: path
+        required: true
+        schema: { type: string }
+        description: >
+          The routing key `<central>|<interface_id>|<channel_address>|<parameter>`,
+          URL-encoded.
+    put:
+      operationId: putSecuritySourceOverride
+      summary: Override the classification of one data point (operator)
+      description: >
+        An empty class with `included: true` and no note removes the override,
+        returning the data point to the classifier's verdict — the undo a wrong
+        override needs.
+      tags: [security]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecuritySourceOverride" }
+      responses:
+        "204": { description: Recorded }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   /security/faults:
     get:
       operationId: listSecurityFaults
@@ -11745,6 +11821,48 @@ components:
             axis in one object rather than a zone-by-class matrix of entities.
         incident_id: { type: integer, format: int64 }
         since: { type: string, format: date-time }
+
+    SecuritySourceView:
+      type: object
+      required: [ref, central, interface_id, channel_address, device_address, parameter, class, active, relevant]
+      properties:
+        ref: { type: string }
+        central: { type: string }
+        interface_id: { type: string }
+        channel_address: { type: string }
+        device_address: { type: string }
+        parameter: { type: string }
+        name: { type: string }
+        class: { type: string }
+        reason: { type: string }
+        active: { type: boolean }
+        relevant:
+          type: boolean
+          description: >
+            Whether the source contributes to an aggregate. A classifiable
+            source on a device with no alarm role is indexed but not
+            aggregated; that gate keeps the fault plane from standing
+            permanently on across a whole fleet.
+        zone_id: { type: string }
+        overridden:
+          type: boolean
+          description: An operator decision, not the classifier, produced this verdict.
+        since: { type: string, format: date-time }
+
+    SecuritySourceOverride:
+      type: object
+      properties:
+        class:
+          type: string
+          enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+          description: Empty keeps the classifier verdict.
+        included:
+          type: boolean
+          description: >
+            false removes the source from every aggregate. Omitting the field
+            leaves inclusion unchanged — a request that only names a class
+            reclassifies and never excludes.
+        note: { type: string }
 
     SecurityFault:
       type: object

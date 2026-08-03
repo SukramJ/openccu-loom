@@ -74,6 +74,7 @@ const EN: Catalog = {
   "alarm.overview.master": "All zones",
   "alarm.overview.ready": "Ready",
   "alarm.overview.silence_all": "Silence all sirens",
+  "alarm.overview.open_security": "Security & Safety",
   "alarm.readiness.ready": "ready",
   "alarm.readiness.blocked": "{count} blocking",
   "alarm.readiness.warning": "{count} warning(s)",
@@ -921,6 +922,7 @@ const EN: Catalog = {
     "Clear the suppression and let this service message be raised again?",
   "messages.unsuppressed": "Suppression cleared.",
   "nav.alarm": "Alarm system",
+  "nav.security": "Security & Safety",
   "nav.audit": "History",
   "nav.backups": "Backups",
   "nav.devices": "Devices",
@@ -2451,6 +2453,7 @@ const EN: Catalog = {
   "app.switch_language": "Switch language",
   "page.title.default": "OpenCCU-Loom",
   "page.title.alarm": "Alarm system — OpenCCU-Loom",
+  "page.title.security": "Security & Safety — OpenCCU-Loom",
   "page.title.devices": "Devices — OpenCCU-Loom",
   "page.title.overview": "Overview — OpenCCU-Loom",
   "page.title.diagnostics": "Diagnostics — OpenCCU-Loom",
@@ -3365,6 +3368,128 @@ const EN: Catalog = {
   "areas.rooms_dialog.empty":
     "No rooms known yet — assign a room to a device first.",
   "areas.rooms_dialog.current_area": "currently: {name}",
+  // --- Security & Safety domain (docs/security-safety-concept.md §7.8).
+  //     Classifier-driven hazard/fault classes, a fault ledger and the
+  //     classified data-point inventory. Runs independently of the alarm
+  //     engine above ("alarm.*") — a smoke/water/gas-only installation
+  //     still gets classes and faults, only zones stays empty. ---
+  "security.title": "Security & Safety",
+  "security.subtitle":
+    "Smoke, water, gas, tamper and other hazard classes — works with or without the alarm engine.",
+  "security.tab.overview": "Overview",
+  "security.tab.sources": "Sources",
+  "security.tab.faults": "Faults",
+  "security.intro.overview":
+    "The folded severity, one tile per hazard class, the last report and the standing-fault count.",
+  "security.intro.sources":
+    "Every classified data point the domain knows about — filter it, and correct a wrong classification.",
+  "security.intro.faults":
+    "Standing faults, oldest first. Acknowledging records that you have seen it — it does not clear the condition.",
+  // Hazard/fault classes, in escalation order.
+  "security.class.smoke": "Smoke",
+  "security.class.water": "Water",
+  "security.class.gas": "Gas",
+  "security.class.co": "Carbon monoxide",
+  "security.class.tamper": "Tamper",
+  "security.class.battery": "Battery",
+  "security.class.technical": "Technical fault",
+  "security.class.intrusion": "Intrusion",
+  "security.class.panic": "Panic",
+  // Folded severity.
+  "security.severity.ok": "OK",
+  "security.severity.info": "Info",
+  "security.severity.warning": "Warning",
+  "security.severity.alarm": "Alarm",
+  "security.severity.critical": "Critical",
+  // Standing-fault reasons.
+  "security.fault_reason.unreachable": "Unreachable",
+  "security.fault_reason.blocked": "Blocked",
+  "security.fault_reason.device_error": "Device error",
+  "security.fault_reason.central_lost": "CCU connection lost",
+  "security.fault_reason.duty_cycle": "Duty-cycle limit",
+  "security.fault_reason.low_battery": "Low battery",
+  "security.fault_reason.tamper": "Tamper",
+  // Overview.
+  "security.overview.empty": "Nothing classified yet",
+  "security.overview.empty.description":
+    "Once a device with a smoke, water, gas, tamper or other security role comes online, it appears here automatically.",
+  "security.overview.engine_healthy": "Alarm engine healthy",
+  "security.overview.engine_unhealthy": "Alarm engine unhealthy",
+  "security.overview.classes_title": "Hazard & fault classes",
+  "security.overview.no_classes": "No sources classified yet",
+  "security.overview.no_classes.description":
+    "Sources appear here once the classifier finds a smoke, water, gas, tamper or other security-relevant data point.",
+  "security.overview.class_active": "{count} active",
+  "security.overview.class_inactive": "No active sources",
+  "security.overview.class_known": "{count} known",
+  "security.overview.class_since": "since {time}",
+  "security.overview.sources_more": "+{count} more",
+  "security.overview.zones_title": "Zones",
+  "security.overview.zones_empty": "No alarm engine configured",
+  "security.overview.zones_empty.description":
+    "This domain works independently of the alarm engine — that's a feature, not an error. Set up zones in the alarm panel to see them here too.",
+  "security.overview.zones_open_alarm": "Open alarm panel",
+  "security.overview.faults_count": "{count} open",
+  "security.overview.faults_none": "No standing faults",
+  "security.overview.last_alarm_title": "Last alarm report",
+  "security.overview.last_fault_title": "Last fault report",
+  "security.overview.no_report": "No report yet.",
+  // Sources inventory.
+  "security.sources.filter.class": "Class",
+  "security.sources.filter.central": "CCU",
+  "security.sources.filter.zone": "Zone",
+  "security.sources.filter.relevant": "Relevant only",
+  "security.sources.filter.active": "Active only",
+  "security.sources.filter.all": "All",
+  "security.sources.search": "Search…",
+  "security.sources.empty": "No classified sources yet",
+  "security.sources.empty.description":
+    "Sources appear here once the classifier finds a smoke, water, gas, tamper or other security-relevant data point.",
+  "security.sources.col.source": "Source",
+  "security.sources.col.class": "Class",
+  "security.sources.col.central": "CCU",
+  "security.sources.col.zone": "Zone",
+  "security.sources.col.relevant": "Relevant",
+  "security.sources.col.active": "Active",
+  "security.sources.col.override": "Override",
+  "security.sources.badge.overridden": "Overridden",
+  "security.sources.badge.relevant": "Relevant",
+  "security.sources.badge.not_relevant": "Not relevant",
+  "security.sources.badge.active": "Active",
+  "security.sources.badge.inactive": "Inactive",
+  "security.sources.override.keep": "Keep classifier verdict",
+  "security.sources.override.included": "Included",
+  "security.sources.override.note_placeholder": "Note (optional)",
+  "security.sources.override.save": "Save override",
+  "security.sources.override.reset": "Remove override",
+  "security.sources.override.reset_title":
+    "Return to the classifier's own verdict — the undo for a wrong override.",
+  "security.sources.toast.saved": "Override saved",
+  "security.sources.toast.save_failed": "Saving the override failed",
+  "security.sources.toast.reset": "Override removed",
+  "security.sources.toast.reset_failed": "Removing the override failed",
+  // Faults.
+  "security.faults.hint":
+    "Acknowledging a fault only records that you have seen it — the underlying condition remains until it clears on its own.",
+  "security.faults.empty": "No standing faults",
+  "security.faults.empty.description": "Every classified source is currently healthy.",
+  "security.faults.col.class": "Class",
+  "security.faults.col.reason": "Reason",
+  "security.faults.col.source": "Source",
+  "security.faults.col.standing": "Standing for",
+  "security.faults.col.status": "Status",
+  "security.faults.col.actions": "Actions",
+  "security.faults.status.acknowledged": "Acknowledged {time}",
+  "security.faults.status.acknowledged_by": "Acknowledged {time} by {who}",
+  "security.faults.status.open": "Not yet acknowledged",
+  "security.faults.acknowledge_confirm.title": "Acknowledge this fault?",
+  "security.faults.acknowledge_confirm.body":
+    "This only records that you have seen it — the {reason} condition on {source} remains until it clears on its own.",
+  "security.faults.toast.acknowledged": "Fault acknowledged — condition still stands",
+  "security.faults.toast.acknowledge_failed": "Acknowledge failed",
+  "security.faults.duration.days_hours": "{days}d {hours}h",
+  "security.faults.duration.hours_minutes": "{hours}h {minutes}m",
+  "security.faults.duration.minutes": "{minutes}m",
 };
 
 const DE: Catalog = {
@@ -3404,6 +3529,7 @@ const DE: Catalog = {
   "alarm.overview.master": "Alle Zonen",
   "alarm.overview.ready": "Bereit",
   "alarm.overview.silence_all": "Alle Sirenen aus",
+  "alarm.overview.open_security": "Sicherheit & Sicherheitstechnik",
   "alarm.readiness.ready": "bereit",
   "alarm.readiness.blocked": "{count} blockierend",
   "alarm.readiness.warning": "{count} Warnung(en)",
@@ -4289,6 +4415,7 @@ const DE: Catalog = {
     "Unterdrückung aufheben und diese Service-Meldung wieder zulassen?",
   "messages.unsuppressed": "Unterdrückung aufgehoben.",
   "nav.alarm": "Alarmanlage",
+  "nav.security": "Sicherheit & Sicherheitstechnik",
   "nav.audit": "Verlauf",
   "nav.backups": "Backups",
   "nav.devices": "Geräte",
@@ -5841,6 +5968,7 @@ const DE: Catalog = {
   "app.switch_language": "Sprache wechseln",
   "page.title.default": "OpenCCU-Loom",
   "page.title.alarm": "Alarmanlage — OpenCCU-Loom",
+  "page.title.security": "Sicherheit & Sicherheitstechnik — OpenCCU-Loom",
   "page.title.devices": "Geräte — OpenCCU-Loom",
   "page.title.overview": "Übersicht — OpenCCU-Loom",
   "page.title.diagnostics": "Diagnose — OpenCCU-Loom",
@@ -6732,6 +6860,129 @@ const DE: Catalog = {
   "areas.rooms_dialog.empty":
     "Noch keine Räume bekannt — weise zunächst einem Gerät einen Raum zu.",
   "areas.rooms_dialog.current_area": "aktuell: {name}",
+  // --- Sicherheit & Sicherheitstechnik (docs/security-safety-concept.md
+  //     §7.8). Klassifikator-gesteuerte Gefahren-/Störungsklassen, ein
+  //     Störungs-Ledger und das klassifizierte Datenpunkt-Inventar. Läuft
+  //     unabhängig von der Alarmanlage oben ("alarm.*") — eine reine
+  //     Rauch-/Wasser-/Gas-Installation bekommt weiterhin Klassen und
+  //     Störungen, nur Zonen bleibt leer. ---
+  "security.title": "Sicherheit & Sicherheitstechnik",
+  "security.subtitle":
+    "Rauch, Wasser, Gas, Sabotage und weitere Gefahrenklassen — funktioniert mit oder ohne Alarmanlage.",
+  "security.tab.overview": "Übersicht",
+  "security.tab.sources": "Quellen",
+  "security.tab.faults": "Störungen",
+  "security.intro.overview":
+    "Der zusammengefasste Schweregrad, eine Kachel pro Gefahrenklasse, die letzte Meldung und die Anzahl offener Störungen.",
+  "security.intro.sources":
+    "Jeder klassifizierte Datenpunkt, den die Domäne kennt — filtern und eine falsche Klassifizierung korrigieren.",
+  "security.intro.faults":
+    "Offene Störungen, älteste zuerst. Quittieren vermerkt nur, dass du es gesehen hast — es behebt die Störung nicht.",
+  // Gefahren-/Störungsklassen, in Eskalationsreihenfolge.
+  "security.class.smoke": "Rauch",
+  "security.class.water": "Wasser",
+  "security.class.gas": "Gas",
+  "security.class.co": "Kohlenmonoxid",
+  "security.class.tamper": "Sabotage",
+  "security.class.battery": "Batterie",
+  "security.class.technical": "Technische Störung",
+  "security.class.intrusion": "Einbruch",
+  "security.class.panic": "Panik",
+  // Zusammengefasster Schweregrad.
+  "security.severity.ok": "OK",
+  "security.severity.info": "Info",
+  "security.severity.warning": "Warnung",
+  "security.severity.alarm": "Alarm",
+  "security.severity.critical": "Kritisch",
+  // Gründe offener Störungen.
+  "security.fault_reason.unreachable": "Nicht erreichbar",
+  "security.fault_reason.blocked": "Blockiert",
+  "security.fault_reason.device_error": "Gerätefehler",
+  "security.fault_reason.central_lost": "CCU-Verbindung verloren",
+  "security.fault_reason.duty_cycle": "Duty-Cycle-Grenze",
+  "security.fault_reason.low_battery": "Schwache Batterie",
+  "security.fault_reason.tamper": "Sabotage",
+  // Übersicht.
+  "security.overview.empty": "Noch nichts klassifiziert",
+  "security.overview.empty.description":
+    "Sobald ein Gerät mit Rauch-, Wasser-, Gas-, Sabotage- oder einer anderen Sicherheitsrolle online geht, erscheint es hier automatisch.",
+  "security.overview.engine_healthy": "Alarmanlage gesund",
+  "security.overview.engine_unhealthy": "Alarmanlage gestört",
+  "security.overview.classes_title": "Gefahren- & Störungsklassen",
+  "security.overview.no_classes": "Noch keine Quellen klassifiziert",
+  "security.overview.no_classes.description":
+    "Quellen erscheinen hier, sobald der Klassifikator einen Rauch-, Wasser-, Gas-, Sabotage- oder anderen sicherheitsrelevanten Datenpunkt findet.",
+  "security.overview.class_active": "{count} aktiv",
+  "security.overview.class_inactive": "Keine aktiven Quellen",
+  "security.overview.class_known": "{count} bekannt",
+  "security.overview.class_since": "seit {time}",
+  "security.overview.sources_more": "+{count} weitere",
+  "security.overview.zones_title": "Zonen",
+  "security.overview.zones_empty": "Keine Alarmanlage eingerichtet",
+  "security.overview.zones_empty.description":
+    "Diese Domäne funktioniert unabhängig von der Alarmanlage — das ist ein Feature, kein Fehler. Richte Zonen im Alarm-Panel ein, damit sie auch hier erscheinen.",
+  "security.overview.zones_open_alarm": "Alarm-Panel öffnen",
+  "security.overview.faults_count": "{count} offen",
+  "security.overview.faults_none": "Keine offenen Störungen",
+  "security.overview.last_alarm_title": "Letzte Alarmmeldung",
+  "security.overview.last_fault_title": "Letzte Störungsmeldung",
+  "security.overview.no_report": "Noch keine Meldung.",
+  // Quellen-Inventar.
+  "security.sources.filter.class": "Klasse",
+  "security.sources.filter.central": "CCU",
+  "security.sources.filter.zone": "Zone",
+  "security.sources.filter.relevant": "Nur relevante",
+  "security.sources.filter.active": "Nur aktive",
+  "security.sources.filter.all": "Alle",
+  "security.sources.search": "Suchen…",
+  "security.sources.empty": "Noch keine klassifizierten Quellen",
+  "security.sources.empty.description":
+    "Quellen erscheinen hier, sobald der Klassifikator einen Rauch-, Wasser-, Gas-, Sabotage- oder anderen sicherheitsrelevanten Datenpunkt findet.",
+  "security.sources.col.source": "Quelle",
+  "security.sources.col.class": "Klasse",
+  "security.sources.col.central": "CCU",
+  "security.sources.col.zone": "Zone",
+  "security.sources.col.relevant": "Relevant",
+  "security.sources.col.active": "Aktiv",
+  "security.sources.col.override": "Override",
+  "security.sources.badge.overridden": "Überschrieben",
+  "security.sources.badge.relevant": "Relevant",
+  "security.sources.badge.not_relevant": "Nicht relevant",
+  "security.sources.badge.active": "Aktiv",
+  "security.sources.badge.inactive": "Inaktiv",
+  "security.sources.override.keep": "Klassifikator-Urteil beibehalten",
+  "security.sources.override.included": "Einbezogen",
+  "security.sources.override.note_placeholder": "Notiz (optional)",
+  "security.sources.override.save": "Override speichern",
+  "security.sources.override.reset": "Override entfernen",
+  "security.sources.override.reset_title":
+    "Zurück zum Urteil des Klassifikators — die Rückgängig-Funktion für einen falschen Override.",
+  "security.sources.toast.saved": "Override gespeichert",
+  "security.sources.toast.save_failed": "Speichern des Override fehlgeschlagen",
+  "security.sources.toast.reset": "Override entfernt",
+  "security.sources.toast.reset_failed": "Entfernen des Override fehlgeschlagen",
+  // Störungen.
+  "security.faults.hint":
+    "Das Quittieren einer Störung vermerkt nur, dass du sie gesehen hast — die zugrunde liegende Ursache bleibt bestehen, bis sie sich von selbst behebt.",
+  "security.faults.empty": "Keine offenen Störungen",
+  "security.faults.empty.description": "Jede klassifizierte Quelle ist derzeit gesund.",
+  "security.faults.col.class": "Klasse",
+  "security.faults.col.reason": "Grund",
+  "security.faults.col.source": "Quelle",
+  "security.faults.col.standing": "Offen seit",
+  "security.faults.col.status": "Status",
+  "security.faults.col.actions": "Aktionen",
+  "security.faults.status.acknowledged": "Quittiert {time}",
+  "security.faults.status.acknowledged_by": "Quittiert {time} von {who}",
+  "security.faults.status.open": "Noch nicht quittiert",
+  "security.faults.acknowledge_confirm.title": "Diese Störung quittieren?",
+  "security.faults.acknowledge_confirm.body":
+    "Das vermerkt nur, dass du es gesehen hast — die Ursache {reason} bei {source} bleibt bestehen, bis sie sich von selbst behebt.",
+  "security.faults.toast.acknowledged": "Störung quittiert — Ursache besteht weiterhin",
+  "security.faults.toast.acknowledge_failed": "Quittieren fehlgeschlagen",
+  "security.faults.duration.days_hours": "{days}d {hours}h",
+  "security.faults.duration.hours_minutes": "{hours}h {minutes}m",
+  "security.faults.duration.minutes": "{minutes}m",
 };
 
 const catalogs: Record<string, Catalog> = { en: EN, de: DE };

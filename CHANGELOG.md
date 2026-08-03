@@ -8,6 +8,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Security & Safety views in the config UI.** An overview that
+  leads with the last report — subject and message, the thing an
+  operator reads first — plus a tile per hazard and fault class, the
+  open faults and the engine health. A source inventory that shows what
+  the classifier believes about every data point and lets an operator
+  override it, including removing an override again. A fault list with
+  acknowledgement, which records that someone has seen the problem
+  without pretending it went away.
+
+  The inventory is deliberately listable unfiltered: a source the
+  classifier got wrong is invisible in every aggregate, so listing
+  everything is the only way to find it.
+
+  New: `GET /api/v1/security/sources` and
+  `PUT /api/v1/security/sources/{ref}`.
+
 - **Security & Safety reaches Home Assistant.** The domain now publishes
   its own MQTT plane and its own device card: a folded state, an "is
   something wrong right now" flag, a fault flag, one entity per hazard

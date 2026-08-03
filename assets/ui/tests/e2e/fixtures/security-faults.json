@@ -1,0 +1,14 @@
+[
+  {
+    "id": "fault-1",
+    "class": "smoke",
+    "reason": "unreachable",
+    "severity": "warning",
+    "source": {
+      "ref": "ccu1|HmIP-RF|VEQ0000050:1|STATE",
+      "name": "Dachgeschoss Rauchmelder",
+      "at": "2026-07-29T12:00:00Z"
+    },
+    "since": "2026-07-29T12:00:00Z"
+  }
+]
