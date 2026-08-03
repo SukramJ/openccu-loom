@@ -20,18 +20,21 @@ type Stores struct {
 	Journal   *sqlitestore.AlarmJournalStore
 	Runtime   *sqlitestore.AlarmRuntimeStore
 	Codes     *sqlitestore.AlarmCodeStore
+	// IncidentSources is the per-incident source ledger.
+	IncidentSources *sqlitestore.AlarmIncidentSourceStore
 }
 
 // NewStores builds the bundle on db.
 func NewStores(db *sql.DB) *Stores {
 	return &Stores{
-		Zones:     sqlitestore.NewAlarmZoneStore(db),
-		Sensors:   sqlitestore.NewAlarmSensorStore(db),
-		Outputs:   sqlitestore.NewAlarmOutputStore(db),
-		State:     sqlitestore.NewAlarmStateStore(db),
-		Incidents: sqlitestore.NewAlarmIncidentStore(db),
-		Journal:   sqlitestore.NewAlarmJournalStore(db),
-		Runtime:   sqlitestore.NewAlarmRuntimeStore(db),
-		Codes:     sqlitestore.NewAlarmCodeStore(db),
+		Zones:           sqlitestore.NewAlarmZoneStore(db),
+		Sensors:         sqlitestore.NewAlarmSensorStore(db),
+		Outputs:         sqlitestore.NewAlarmOutputStore(db),
+		State:           sqlitestore.NewAlarmStateStore(db),
+		Incidents:       sqlitestore.NewAlarmIncidentStore(db),
+		Journal:         sqlitestore.NewAlarmJournalStore(db),
+		Runtime:         sqlitestore.NewAlarmRuntimeStore(db),
+		IncidentSources: sqlitestore.NewAlarmIncidentSourceStore(db),
+		Codes:           sqlitestore.NewAlarmCodeStore(db),
 	}
 }

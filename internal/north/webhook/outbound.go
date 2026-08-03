@@ -332,6 +332,7 @@ func (o *Outbound) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
 		ZoneID: e.ZoneID, ZoneName: e.ZoneName, IncidentID: e.IncidentID,
 		SensorID: e.SensorID, SensorName: e.SensorName,
 		Cause: e.Cause, Mode: string(e.Mode),
+		Sources: alarmSources(e.Sources),
 	})
 }
 
@@ -345,6 +346,7 @@ func (o *Outbound) onAlarmNotification(e hmevent.AlarmNotificationEvent) {
 	o.enqueueAlarm(string(hmevent.EventTypeAlarmNotification), alarmPayload{
 		ZoneID: e.ZoneID, ZoneName: e.ZoneName, IncidentID: e.IncidentID,
 		Mode: string(e.Mode), OutputID: e.OutputID, OutputName: e.OutputName,
+		Cause: e.Cause, Sources: alarmSources(e.Sources),
 	})
 }
 
@@ -607,6 +609,45 @@ type alarmPayload struct {
 	// on alarm_panel.notification events.
 	OutputID   string `json:"output_id,omitempty"`
 	OutputName string `json:"output_name,omitempty"`
+	// Sources carries every data point that contributed to the
+	// incident. A messenger integration reads this to name what set the
+	// alarm off; sensor_id / sensor_name only ever held the first one.
+	Sources []alarmSourcePayload `json:"sources,omitempty"`
+}
+
+// alarmSourcePayload is the webhook projection of a contributing data
+// point. Field names match the MQTT alarm plane and the REST incident
+// shape so one parser serves all three.
+type alarmSourcePayload struct {
+	Ref            string `json:"ref"`
+	Central        string `json:"central,omitempty"`
+	InterfaceID    string `json:"interface_id,omitempty"`
+	ChannelAddress string `json:"channel_address,omitempty"`
+	DeviceAddress  string `json:"device_address,omitempty"`
+	Parameter      string `json:"parameter,omitempty"`
+	SensorID       string `json:"sensor_id,omitempty"`
+	Name           string `json:"name,omitempty"`
+	SensorType     string `json:"sensor_type,omitempty"`
+	Class          string `json:"class,omitempty"`
+	AtMS           int64  `json:"at_ms,omitempty"`
+}
+
+// alarmSources projects the domain refs onto the webhook wire shape.
+func alarmSources(refs []hmevent.SecuritySourceRef) []alarmSourcePayload {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]alarmSourcePayload, 0, len(refs))
+	for i := range refs {
+		r := &refs[i]
+		out = append(out, alarmSourcePayload{
+			Ref: r.Ref, Central: r.Central, InterfaceID: r.InterfaceID,
+			ChannelAddress: r.ChannelAddress, DeviceAddress: r.DeviceAddress,
+			Parameter: r.Parameter, SensorID: r.SensorID, Name: r.Name,
+			SensorType: string(r.SensorType), Class: string(r.Class), AtMS: r.AtMS,
+		})
+	}
+	return out
 }
 
 // marshalValue JSON-encodes a datapoint value. A marshal error (should not

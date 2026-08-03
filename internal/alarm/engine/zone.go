@@ -60,6 +60,15 @@ type zone struct {
 	bypassed map[string]bool
 	incident *sqlitestore.AlarmIncident
 
+	// sources accumulates every data point that has contributed to the
+	// running incident, oldest first. It mirrors the persisted ledger
+	// so the trigger path can publish the full list without reading the
+	// database back. Reset when the incident closes.
+	sources []hmevent.SecuritySourceRef
+	// sourceSeen deduplicates sources within the running incident: a
+	// detector that re-activates must not appear twice.
+	sourceSeen map[string]bool
+
 	// openAtArm records the member sensors that were active when the
 	// arm completed. A restore uses it to tell "was already open when
 	// armed" from "opened while the daemon was down"; live closings
@@ -123,6 +132,25 @@ type zone struct {
 
 	// walk is the running walk-test session, nil when none.
 	walk *walkSession
+}
+
+// sourcesCopy returns a defensive copy of the incident's source list.
+// Callers publish it onto the event bus, where a shared backing array
+// would let a later append mutate an already-delivered event.
+func (a *zone) sourcesCopy() []hmevent.SecuritySourceRef {
+	if len(a.sources) == 0 {
+		return nil
+	}
+	out := make([]hmevent.SecuritySourceRef, len(a.sources))
+	copy(out, a.sources)
+	return out
+}
+
+// resetSources clears the accumulator when an incident closes, so the
+// next incident starts from an empty list.
+func (a *zone) resetSources() {
+	a.sources = nil
+	a.sourceSeen = nil
 }
 
 // zoneContext is the persisted runtime-context document stored in

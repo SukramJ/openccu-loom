@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.14.0
+  version: 3.15.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6745,6 +6745,56 @@ paths:
                 items: { $ref: "#/components/schemas/AlarmJournalEntry" }
         "400": { $ref: "#/components/responses/BadRequest" }
 
+  /alarm/incidents:
+    get:
+      operationId: listAlarmIncidents
+      summary: List the incident history of one alarm zone
+      description: >
+        Returns the zone's alarm episodes, newest first. Unlike the journal —
+        which records individual events — an incident is the whole episode, and
+        it carries the full source ledger: every data point that contributed,
+        not only the one that opened it. A second detector firing while the
+        siren already sounds appears in `sources` and nowhere else.
+      tags: [alarm]
+      parameters:
+        - in: query
+          name: zone_id
+          required: true
+          schema: { type: string }
+          description: The alarm zone whose incidents to return.
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+          description: Maximum incidents to return.
+      responses:
+        "200":
+          description: Incidents of the zone (newest first).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmIncident" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /alarm/incidents/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getAlarmIncident
+      summary: Get one alarm incident with its full source ledger
+      tags: [alarm]
+      responses:
+        "200":
+          description: The incident.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmIncident" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /alarm/zones/{id}/walktest/start:
     parameters:
       - name: id
@@ -11502,6 +11552,77 @@ components:
         exit_delay_s:
           type: integer
           description: Exit delay in seconds the zone is now counting down; 0 when armed immediately.
+
+    AlarmSource:
+      type: object
+      description: >
+        One data point that contributed to an incident or blocked an arm.
+        Carries the full identity, so a client can resolve the device behind
+        an alarm instead of only its display name.
+      required: [ref, at]
+      properties:
+        ref:
+          type: string
+          description: >
+            Stable routing key `<central>|<interface_id>|<channel_address>|<parameter>`.
+            Deduplication key; two centrals with identical channel addresses
+            never collide.
+        central: { type: string }
+        interface_id: { type: string }
+        channel_address: { type: string }
+        device_address:
+          type: string
+          description: channel_address without the channel suffix.
+        parameter: { type: string }
+        sensor_id:
+          type: string
+          description: Enrolled alarm-sensor row; empty for non-enrolled sources.
+        name: { type: string }
+        sensor_type:
+          type: string
+          description: Alarm role (motion, opening, hazard, panic, ...).
+        class:
+          type: string
+          description: Security & Safety hazard/fault class.
+          enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+        cause:
+          type: string
+          description: Incident cause token the contribution arrived under.
+        at: { type: string, format: date-time }
+
+    AlarmIncident:
+      type: object
+      description: One alarm episode of a zone.
+      required: [id, zone_id, mode, started_at, silenced, retrigger_cycles, acoustic_seconds, open]
+      properties:
+        id: { type: integer, format: int64 }
+        zone_id: { type: string }
+        mode:
+          type: string
+          enum: [disarmed, perimeter, full, night, vacation, custom]
+        cause:
+          type: string
+          description: Machine-readable cause token that opened the incident.
+        cause_sensor_id: { type: string }
+        cause_sensor_name: { type: string }
+        sources:
+          type: array
+          description: Every contributing data point, oldest first.
+          items: { $ref: "#/components/schemas/AlarmSource" }
+        started_at: { type: string, format: date-time }
+        closed_at:
+          type: string
+          format: date-time
+          description: Absent while the incident is still running.
+        close_reason:
+          type: string
+          enum: [disarm, post_trigger, incident_lost]
+        silenced: { type: boolean }
+        silenced_at: { type: string, format: date-time }
+        silenced_by: { type: string }
+        retrigger_cycles: { type: integer }
+        acoustic_seconds: { type: integer }
+        open: { type: boolean }
 
     AlarmJournalEntry:
       type: object

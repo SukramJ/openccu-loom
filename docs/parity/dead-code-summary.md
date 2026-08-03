@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 5db8cc08
-HEAD: 5db8cc08
+Generated: 7e0be109
+HEAD: 7e0be109
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27402 |
-| Reachable | 4795 |
-| Whitelisted | 19686 |
-| **Unreachable** | **2921** |
+| Total Exported | 27448 |
+| Reachable | 4821 |
+| Whitelisted | 19697 |
+| **Unreachable** | **2930** |
 
 ## Top-20 Packages by Dead Code
 
@@ -24,7 +24,7 @@ HEAD: 5db8cc08
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
-| pkg/hmenum | 4 | 106 | 46 |
+| pkg/hmenum | 4 | 105 | 46 |
 | pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -104,7 +104,7 @@ HEAD: 5db8cc08
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
-| pkg/hmenum | 4 | 106 | 46 |
+| pkg/hmenum | 4 | 105 | 46 |
 | pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -121,7 +121,7 @@ HEAD: 5db8cc08
 | internal/addonupdate | 0 | 18 | 18 |
 | internal/alarm | 0 | 23 | 0 |
 | internal/alarm/codes | 0 | 13 | 0 |
-| internal/alarm/engine | 0 | 25 | 6 |
+| internal/alarm/engine | 0 | 26 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
 | internal/alarm/outputs | 0 | 24 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
@@ -197,8 +197,8 @@ HEAD: 5db8cc08
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 100 | 28 |
-| pkg/hmapi | 0 | 129 | 16 |
-| pkg/hmevent | 0 | 7 | 0 |
+| internal/store/sqlite | 0 | 103 | 28 |
+| pkg/hmapi | 0 | 133 | 16 |
+| pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |

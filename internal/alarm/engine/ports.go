@@ -163,6 +163,14 @@ type Journal interface {
 	Append(ctx context.Context, e JournalEntry) (int64, error)
 }
 
+// IncidentSourceLedger records every data point that contributed to an
+// incident. Like [Journal] it is best-effort: the engine logs a failed
+// append and continues, because losing an audit row must never mute an
+// alarm. A nil ledger disables recording entirely.
+type IncidentSourceLedger interface {
+	Append(ctx context.Context, row sqlitestore.AlarmIncidentSource) error
+}
+
 // SensorReader supplies fresh sensor activation values during restore
 // (a window opened while the daemon was down must be detected). A nil
 // reader means no fresh values are available; restore then keeps the

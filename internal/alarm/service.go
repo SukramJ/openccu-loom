@@ -11,6 +11,7 @@ package alarm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -94,7 +95,7 @@ type Service struct {
 // can wire that publisher in one line via SetArmFailureHook. A nil
 // hook (the default) means the schedule chain's AutoArm failures stay
 // journal-only (docs/alarm-concept.md §15 row 19).
-type ArmFailureHook func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string)
+type ArmFailureHook func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail)
 
 // NewService builds the alarm service. Construction is cheap and
 // side-effect free; Start loads state and subscribes.
@@ -181,6 +182,7 @@ func NewService(deps Deps) (*Service, error) {
 		Outputs:             mgr,
 		Sink:                sinkFunc(s.publish),
 		Journal:             s.journal,
+		SourceLedger:        deps.Stores.IncidentSources,
 		SensorReader:        &sensorReader{reg: deps.Registry},
 		Validator:           s.codes,
 		Logger:              logger,
@@ -200,7 +202,7 @@ func NewService(deps Deps) (*Service, error) {
 		Publish: s.publish,
 		Clock:   clk,
 		Logger:  logger,
-		ArmFailure: func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string) {
+		ArmFailure: func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail) {
 			if hook := s.armFailureHookRef(); hook != nil {
 				hook(zoneID, zoneName, mode, blockers)
 			}
@@ -520,6 +522,16 @@ func (s *Service) notifyOutputFired(row sqlitestore.AlarmOutputRow, cfg outputs.
 			}
 		}
 	}
+	var sources []hmevent.SecuritySourceRef
+	cause := ""
+	if s.engine != nil {
+		// Read from the engine's in-memory accumulator rather than the
+		// ledger table: a notification must not wait on a query.
+		sources = s.engine.IncidentSources(row.ZoneID)
+	}
+	if len(sources) > 0 {
+		cause = incidentCauseKind(incident.CauseJSON)
+	}
 	events.Publish(s.bus, hmevent.AlarmNotificationEvent{
 		Base:       hmevent.NewBaseAt(s.clk.Now()),
 		ZoneID:     row.ZoneID,
@@ -530,6 +542,8 @@ func (s *Service) notifyOutputFired(row sqlitestore.AlarmOutputRow, cfg outputs.
 		Mode:       incident.Mode,
 		MQTT:       cfg.NotifyMQTTEnabled(),
 		Webhook:    cfg.NotifyWebhookEnabled(),
+		Cause:      cause,
+		Sources:    sources,
 	})
 }
 
@@ -624,6 +638,7 @@ func (s *Service) scheduleRetention() {
 			} else if n > 0 {
 				s.log.Info("alarm journal retention", "deleted", n)
 			}
+			s.purgeIncidents(maxAge)
 			s.mu.Lock()
 			started := s.started
 			s.mu.Unlock()
@@ -636,4 +651,51 @@ func (s *Service) scheduleRetention() {
 		s.mu.Unlock()
 	}
 	chain()
+}
+
+// incidentCauseKind extracts the cause token from a persisted incident
+// cause document. An unparsable or empty document yields the empty
+// string — the notification then carries its sources without a cause
+// label rather than failing.
+func incidentCauseKind(causeJSON string) string {
+	if causeJSON == "" {
+		return ""
+	}
+	var doc struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal([]byte(causeJSON), &doc); err != nil {
+		return ""
+	}
+	return doc.Kind
+}
+
+// purgeIncidents applies the journal retention window to closed
+// incidents and then drops the source rows their incidents left
+// behind. Order matters: the incident purge is a plain DELETE with no
+// cascade, so sweeping orphans afterwards is what keeps the ledger
+// from outliving every incident it describes.
+//
+// Retention runs on the service lifetime, detached from any caller.
+//
+//nolint:contextcheck // periodic retention has no caller ctx
+func (s *Service) purgeIncidents(maxAge time.Duration) {
+	if s.stores == nil || s.stores.Incidents == nil {
+		return
+	}
+	ctx := context.Background()
+	cutoff := s.clk.Now().Add(-maxAge).UnixMilli()
+	if n, err := s.stores.Incidents.PurgeClosedBefore(ctx, cutoff); err != nil {
+		s.log.Error("alarm incident retention failed", "error", err)
+	} else if n > 0 {
+		s.log.Info("alarm incident retention", "deleted", n)
+	}
+	if s.stores.IncidentSources == nil {
+		return
+	}
+	if n, err := s.stores.IncidentSources.PurgeOrphans(ctx); err != nil {
+		s.log.Error("alarm incident source retention failed", "error", err)
+	} else if n > 0 {
+		s.log.Info("alarm incident source retention", "deleted", n)
+	}
 }

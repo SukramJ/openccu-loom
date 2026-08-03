@@ -332,3 +332,65 @@ type AlarmCodeRequest struct {
 	ValidUntilMS int64           `json:"valid_until_ms,omitempty"`
 	Enabled      bool            `json:"enabled"`
 }
+
+// AlarmSource is one data point that contributed to an incident or
+// blocked an arm. It is the REST projection of the domain source
+// reference: identity plus enough context to deep-link into the device
+// view without a second lookup.
+type AlarmSource struct {
+	// Ref is the stable routing key
+	// `<central>|<interface_id>|<channel_address>|<parameter>`.
+	Ref            string `json:"ref"`
+	Central        string `json:"central,omitempty"`
+	InterfaceID    string `json:"interface_id,omitempty"`
+	ChannelAddress string `json:"channel_address,omitempty"`
+	DeviceAddress  string `json:"device_address,omitempty"`
+	Parameter      string `json:"parameter,omitempty"`
+	// SensorID is the enrolled alarm-sensor row; empty when the source
+	// is not an enrolled sensor.
+	SensorID string `json:"sensor_id,omitempty"`
+	Name     string `json:"name,omitempty"`
+	// SensorType is the alarm role (motion, opening, hazard, panic, …).
+	SensorType string `json:"sensor_type,omitempty"`
+	// Class is the Security & Safety hazard/fault class.
+	Class string `json:"class,omitempty"`
+	// Cause is the incident cause token the contribution arrived under.
+	Cause string    `json:"cause,omitempty"`
+	At    time.Time `json:"at"`
+}
+
+// AlarmIncident is one alarm episode of a zone.
+type AlarmIncident struct {
+	ID     int64  `json:"id"`
+	ZoneID string `json:"zone_id"`
+	// Mode is the protection mode active when the incident opened.
+	Mode string `json:"mode"`
+	// Cause is the machine-readable cause token that opened it.
+	Cause string `json:"cause,omitempty"`
+	// CauseSensorID / CauseSensorName identify the source that opened
+	// the incident, when it was a sensor.
+	CauseSensorID   string `json:"cause_sensor_id,omitempty"`
+	CauseSensorName string `json:"cause_sensor_name,omitempty"`
+	// Sources lists every data point that contributed, oldest first —
+	// not just the one that opened the incident. A second detector
+	// firing while the siren already sounds appears here and nowhere
+	// else.
+	Sources []AlarmSource `json:"sources,omitempty"`
+	// StartedAt is when the incident opened.
+	StartedAt time.Time `json:"started_at"`
+	// ClosedAt is when it closed; zero while it is still running.
+	ClosedAt time.Time `json:"closed_at,omitzero"`
+	// CloseReason is disarm, post_trigger or incident_lost.
+	CloseReason string `json:"close_reason,omitempty"`
+	// Silenced reports whether an operator silenced the incident, and
+	// SilencedAt / SilencedBy record when and by whom.
+	Silenced   bool      `json:"silenced"`
+	SilencedAt time.Time `json:"silenced_at,omitzero"`
+	SilencedBy string    `json:"silenced_by,omitempty"`
+	// RetriggerCycles counts the output cycles the incident drove;
+	// AcousticSeconds the acoustic budget it consumed.
+	RetriggerCycles int `json:"retrigger_cycles"`
+	AcousticSeconds int `json:"acoustic_seconds"`
+	// Open reports whether the incident is still running.
+	Open bool `json:"open"`
+}
