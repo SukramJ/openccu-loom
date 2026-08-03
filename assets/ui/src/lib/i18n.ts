@@ -1173,6 +1173,7 @@ const EN: Catalog = {
     "Siren stop verification window (s)",
   "config.field.alarm.journal_retention_days": "Journal retention (days)",
   "config.field.alarm.restart_loop_breaker": "Restart loop breaker (re-fires)",
+  "config.field.alarm.duress_visibility": "Duress and silent panic visibility",
   "config.field.persistence.history.enabled": "Enable history recorder",
   "config.field.persistence.history.retention": "Sample retention period",
   "config.field.persistence.history.energy_price_per_kwh":
@@ -1467,6 +1468,8 @@ const EN: Catalog = {
     "How many days alarm-journal entries are kept before being pruned. Zero disables retention (entries are kept forever).",
   "config.help.alarm.restart_loop_breaker":
     "Caps how many times a restore-driven output may re-fire within one incident before the engine degrades to optical signalling and notifications only.",
+  "config.help.alarm.duress_visibility":
+    "Where a duress-code use or a silent panic trigger may appear. 'hidden' keeps it on the webhook and the raw alarm topic only. 'notify_only' (default) additionally sends the notification event, so a phone is reached, but never writes it to retained state or the local screens. 'full' treats it like any other alarm. The threat is not an insecure Home Assistant — it is that whoever stands next to you sees the same screen. Whether Home Assistant shows the notification as a lock-screen banner is outside this setting; use a notify channel without preview if that matters.",
   "config.help.persistence.history.enabled":
     "Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job.",
   "config.help.persistence.history.retention":
@@ -4540,6 +4543,8 @@ const DE: Catalog = {
   "config.field.alarm.journal_retention_days": "Journal-Aufbewahrung (Tage)",
   "config.field.alarm.restart_loop_breaker":
     "Neustart-Schleifenbegrenzer (Reaktivierungen)",
+  "config.field.alarm.duress_visibility":
+    "Sichtbarkeit von Bedrohungscode und stiller Panik",
   "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
   "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
   "config.field.persistence.history.energy_price_per_kwh": "Strompreis pro kWh",
@@ -4839,6 +4844,8 @@ const DE: Catalog = {
     "Wie viele Tage Alarm-Journal-Einträge aufbewahrt werden, bevor sie bereinigt werden. Null deaktiviert die Aufbewahrungsbegrenzung (Einträge bleiben dauerhaft erhalten).",
   "config.help.alarm.restart_loop_breaker":
     "Begrenzt, wie oft ein wiederherstellungsgetriebener Ausgang innerhalb eines Vorfalls erneut auslösen darf, bevor die Anlage auf reine optische Signalisierung und Benachrichtigungen zurückstuft.",
+  "config.help.alarm.duress_visibility":
+    "Wo die Verwendung eines Bedrohungscodes oder eine stille Panikauslösung erscheinen darf. „hidden“ belässt sie beim Webhook und dem rohen Alarm-Topic. „notify_only“ (Standard) sendet zusätzlich die Meldung, erreicht also ein Handy, schreibt sie aber nie in gespeicherte Zustände oder auf lokale Bildschirme. „full“ behandelt sie wie jeden anderen Alarm. Die Gefahr ist nicht ein unsicheres Home Assistant, sondern dass die Person neben Ihnen denselben Bildschirm sieht. Ob Home Assistant die Meldung als Banner auf dem Sperrbildschirm anzeigt, steuert diese Einstellung nicht — dafür einen Benachrichtigungskanal ohne Vorschau einrichten.",
   "config.help.persistence.history.enabled":
     "Hauptschalter der Messwerthistorie. Standardmäßig aus (Opt-in) — wenn aktiv, öffnet der Daemon history.db und startet den Retention-Job.",
   "config.help.persistence.history.retention":

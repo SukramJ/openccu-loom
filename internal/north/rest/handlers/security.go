@@ -1,0 +1,235 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package handlers
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/model/security"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+)
+
+// SecurityDomain is the narrow facade the /security handlers drive.
+// *security.Service satisfies it; a nil field unmounts the surface.
+type SecurityDomain interface {
+	Snapshot() security.Snapshot
+	Faults() []security.Fault
+	AcknowledgeFault(ctx context.Context, id, by string) (bool, error)
+}
+
+// GetSecuritySnapshot serves the whole domain state.
+func GetSecuritySnapshot(d SecurityDomain) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d == nil {
+			writeSecurityUnavailable(w, r)
+			return
+		}
+		JSON(w, http.StatusOK, apiSecuritySnapshot(d.Snapshot()))
+	}
+}
+
+// GetSecurityClass serves one class with its full source list.
+func GetSecurityClass(d SecurityDomain) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d == nil {
+			writeSecurityUnavailable(w, r)
+			return
+		}
+		class := hmenum.SecurityClass(chi.URLParam(r, "class"))
+		if !class.Valid() {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Unknown security class", string(class)))
+			return
+		}
+		snap := d.Snapshot()
+		st, ok := snap.Classes[class]
+		if !ok {
+			// The class is defined but this installation has no source
+			// for it — a 404 says "not here", which is the truth.
+			writeSecurityNotFound(w, r)
+			return
+		}
+		JSON(w, http.StatusOK, apiSecurityClass(st))
+	}
+}
+
+// ListSecurityFaults serves the standing fault ledger.
+func ListSecurityFaults(d SecurityDomain) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d == nil {
+			writeSecurityUnavailable(w, r)
+			return
+		}
+		rows := d.Faults()
+		out := make([]hmapi.SecurityFault, 0, len(rows))
+		for i := range rows {
+			out = append(out, apiSecurityFault(rows[i]))
+		}
+		JSON(w, http.StatusOK, out)
+	}
+}
+
+// AcknowledgeSecurityFault marks a standing fault as seen. It never
+// clears the fault: the condition is still there, the operator has
+// merely stopped needing to be told.
+func AcknowledgeSecurityFault(d SecurityDomain, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d == nil {
+			writeSecurityUnavailable(w, r)
+			return
+		}
+		id := chi.URLParam(r, "id")
+		ok, err := d.AcknowledgeFault(r.Context(), id, identityFromCtx(r.Context()))
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal,
+				"Acknowledge fault failed", err)
+			return
+		}
+		if !ok {
+			writeSecurityNotFound(w, r)
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "security_fault_ack="+id)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func writeSecurityUnavailable(w http.ResponseWriter, r *http.Request) {
+	problem.Write(w, http.StatusServiceUnavailable,
+		problem.New(problem.TypeInternal, r, "Security domain unavailable",
+			"the persistence tier is required for the fault ledger"))
+}
+
+func writeSecurityNotFound(w http.ResponseWriter, r *http.Request) {
+	problem.Write(w, http.StatusNotFound, problem.New(problem.TypeNotFound, r, "Not found", ""))
+}
+
+func apiSecuritySnapshot(snap security.Snapshot) hmapi.SecuritySnapshot {
+	out := hmapi.SecuritySnapshot{
+		Severity:      string(snap.Severity),
+		EngineHealthy: snap.EngineHealthy,
+		LastAlarm:     apiSecurityNotification(snap.LastAlarm),
+		LastFault:     apiSecurityNotification(snap.LastFault),
+	}
+	// Classes are emitted in the taxonomy's escalation order rather than
+	// map order, so a client can render the list without sorting.
+	for _, c := range hmenum.SecurityClasses() {
+		if st, ok := snap.Classes[c]; ok {
+			out.Classes = append(out.Classes, apiSecurityClass(st))
+		}
+	}
+	if out.Classes == nil {
+		out.Classes = []hmapi.SecurityClassState{}
+	}
+	for slug := range snap.Zones {
+		out.Zones = append(out.Zones, apiSecurityZone(snap.Zones[slug]))
+	}
+	for i := range snap.Faults {
+		out.Faults = append(out.Faults, apiSecurityFault(snap.Faults[i]))
+	}
+	return out
+}
+
+func apiSecurityClass(st security.ClassState) hmapi.SecurityClassState {
+	return hmapi.SecurityClassState{
+		Class:    string(st.Class),
+		Active:   st.Active,
+		Sources:  apiSecuritySources(st.Sources),
+		Known:    st.Known,
+		Centrals: st.Centrals,
+		Since:    msToTime(st.SinceMS),
+	}
+}
+
+func apiSecurityZone(z security.ZoneState) hmapi.SecurityZoneState {
+	out := hmapi.SecurityZoneState{
+		ID:         z.ID,
+		Slug:       z.Slug,
+		Name:       z.Name,
+		State:      string(z.State),
+		Mode:       string(z.Mode),
+		Sources:    apiSecuritySources(z.Sources),
+		IncidentID: z.IncidentID,
+		Since:      msToTime(z.SinceMS),
+	}
+	if len(z.ByClass) > 0 {
+		out.ByClass = make(map[string][]string, len(z.ByClass))
+		for c, names := range z.ByClass {
+			out.ByClass[string(c)] = names
+		}
+	}
+	return out
+}
+
+func apiSecurityFault(f security.Fault) hmapi.SecurityFault {
+	return hmapi.SecurityFault{
+		ID:             f.ID,
+		Class:          string(f.Class),
+		Reason:         string(f.Reason),
+		Severity:       string(f.Severity),
+		Source:         apiSecuritySource(f.Source),
+		Since:          msToTime(f.SinceMS),
+		AcknowledgedAt: msToTime(f.AcknowledgedAtMS),
+		AcknowledgedBy: f.AcknowledgedBy,
+	}
+}
+
+func apiSecurityNotification(n *security.Notification) *hmapi.SecurityNotification {
+	if n == nil {
+		return nil
+	}
+	return &hmapi.SecurityNotification{
+		Class:      string(n.Class),
+		Severity:   string(n.Severity),
+		Verb:       string(n.Verb),
+		Subject:    n.Subject,
+		Message:    n.Message,
+		I18nKey:    n.I18nKey,
+		Args:       n.Args,
+		Sources:    apiSecuritySources(n.Sources),
+		ZoneID:     n.ZoneID,
+		ZoneSlug:   n.ZoneSlug,
+		ZoneName:   n.ZoneName,
+		Mode:       string(n.Mode),
+		IncidentID: n.IncidentID,
+		Link:       n.Link,
+		At:         msToTime(n.AtMS),
+	}
+}
+
+// apiSecuritySources reuses the alarm source shape so one parser serves
+// incidents and security state alike.
+func apiSecuritySources(refs []hmevent.SecuritySourceRef) []hmapi.AlarmSource {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]hmapi.AlarmSource, 0, len(refs))
+	for i := range refs {
+		out = append(out, apiSecuritySource(refs[i]))
+	}
+	return out
+}
+
+func apiSecuritySource(r hmevent.SecuritySourceRef) hmapi.AlarmSource {
+	return hmapi.AlarmSource{
+		Ref:            r.Ref,
+		Central:        r.Central,
+		InterfaceID:    r.InterfaceID,
+		ChannelAddress: r.ChannelAddress,
+		DeviceAddress:  r.DeviceAddress,
+		Parameter:      r.Parameter,
+		SensorID:       r.SensorID,
+		Name:           r.Name,
+		SensorType:     string(r.SensorType),
+		Class:          string(r.Class),
+		At:             msToTime(r.AtMS),
+	}
+}

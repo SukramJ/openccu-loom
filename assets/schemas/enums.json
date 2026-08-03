@@ -1042,6 +1042,23 @@
       ]
     },
     {
+      "name": "DuressVisibility",
+      "values": [
+        {
+          "go_name": "DuressVisibilityFull",
+          "wire_value": "full"
+        },
+        {
+          "go_name": "DuressVisibilityHidden",
+          "wire_value": "hidden"
+        },
+        {
+          "go_name": "DuressVisibilityNotifyOnly",
+          "wire_value": "notify_only"
+        }
+      ]
+    },
+    {
       "name": "FailureReason",
       "values": [
         {
@@ -3352,6 +3369,39 @@
         {
           "go_name": "SecuritySeverityWarning",
           "wire_value": "warning"
+        }
+      ]
+    },
+    {
+      "name": "SecurityVerb",
+      "values": [
+        {
+          "go_name": "SecurityVerbCleared",
+          "wire_value": "cleared"
+        },
+        {
+          "go_name": "SecurityVerbFailedToArm",
+          "wire_value": "failed_to_arm"
+        },
+        {
+          "go_name": "SecurityVerbPreAlarm",
+          "wire_value": "pre_alarm"
+        },
+        {
+          "go_name": "SecurityVerbRaised",
+          "wire_value": "raised"
+        },
+        {
+          "go_name": "SecurityVerbSilenced",
+          "wire_value": "silenced"
+        },
+        {
+          "go_name": "SecurityVerbTest",
+          "wire_value": "test"
+        },
+        {
+          "go_name": "SecurityVerbTriggered",
+          "wire_value": "triggered"
         }
       ]
     },

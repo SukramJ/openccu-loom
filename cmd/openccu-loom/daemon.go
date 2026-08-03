@@ -351,6 +351,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		webhookOutbound.SetAlarmBus(alarmSvc.Bus())
 	}
 
+	// The Security & Safety domain aggregates above the alarm engine but
+	// does not require it: an installation with smoke and water detectors
+	// and no burglar alarm still gets the hazard classes, the fault plane
+	// and the notifications.
+	securitySvc := wireSecurityService(cfg, reg, auditDB, alarmSvc, catalogs, logger)
+	if securitySvc != nil {
+		northBridges.Register(securitySvc)
+	}
+
 	// CCU add-on self-update (ADR 0057): constructed only when the
 	// platform capability check passes (add-on build + firmware
 	// installer present); nil everywhere else so REST/WS/MQTT all
@@ -579,6 +588,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// unavailable).
 	centralOrch.setMatterCentralHook(matter.centralHook)
 	centralOrch.setAlarmCentralHook(alarmCentralHook(alarmSvc))
+	centralOrch.setSecurityCentralHook(securityCentralHook(securitySvc))
 	// Matter's ordered teardown is owned by the north-bound registry (it
 	// stops after REST, before the webhook). Only registered when enabled —
 	// a disabled bridge yields a no-op matterStop and is not a surface. The
@@ -725,6 +735,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		ifaceAdapter:            ifaceAdapter,
 		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
 		alarm:                   alarmSvc,
+		security:                securitySvc,
 		masterProfiles:          masterProfilesStore,
 		sysStatusBuf:            sysStatusBuf,
 		visFilter:               visFilter,

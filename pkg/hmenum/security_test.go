@@ -21,6 +21,21 @@ var allSecurityClasses = []SecurityClass{
 	SecurityClassPanic,
 }
 
+// allSecurityVerbs is the independently-enumerated set of every defined
+// SecurityVerb constant. Tests derive their expectations from this list
+// rather than from SecurityVerbs() so that a verb added to the const
+// block but forgotten in SecurityVerbs() — and therefore missing from
+// the i18n completeness guard — is caught.
+var allSecurityVerbs = []SecurityVerb{
+	SecurityVerbTriggered,
+	SecurityVerbPreAlarm,
+	SecurityVerbCleared,
+	SecurityVerbSilenced,
+	SecurityVerbFailedToArm,
+	SecurityVerbRaised,
+	SecurityVerbTest,
+}
+
 // TestSecurityClassValid verifies every defined class is Valid and an
 // invented one is not.
 func TestSecurityClassValid(t *testing.T) {
@@ -255,4 +270,141 @@ func TestSecurityEnumStringRoundTrip(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestSecurityVerbValid verifies every defined verb is Valid and an
+// invented one is not.
+func TestSecurityVerbValid(t *testing.T) {
+	t.Parallel()
+
+	for _, v := range allSecurityVerbs {
+		if !v.Valid() {
+			t.Errorf("SecurityVerb(%q).Valid() = false, want true", v)
+		}
+	}
+
+	if SecurityVerb("bogus").Valid() {
+		t.Errorf("SecurityVerb(%q).Valid() = true, want false", "bogus")
+	}
+	if SecurityVerb("").Valid() {
+		t.Errorf("SecurityVerb(%q).Valid() = true, want false", "")
+	}
+}
+
+// TestSecurityVerbString verifies String returns the raw wire value for
+// every defined verb.
+func TestSecurityVerbString(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		verb SecurityVerb
+		want string
+	}{
+		{SecurityVerbTriggered, "triggered"},
+		{SecurityVerbPreAlarm, "pre_alarm"},
+		{SecurityVerbCleared, "cleared"},
+		{SecurityVerbSilenced, "silenced"},
+		{SecurityVerbFailedToArm, "failed_to_arm"},
+		{SecurityVerbRaised, "raised"},
+		{SecurityVerbTest, "test"},
+	}
+	for _, tc := range cases {
+		if got := tc.verb.String(); got != tc.want {
+			t.Errorf("SecurityVerb.String() = %q, want %q", got, tc.want)
+		}
+	}
+}
+
+// TestSecurityVerbs verifies SecurityVerbs returns every defined verb
+// exactly once. The expected set is derived from allSecurityVerbs (built
+// independently of the production slice), so a verb added to the const
+// block without updating SecurityVerbs fails this test — the same
+// omission that would leave the i18n catalogue completeness guard
+// silently skipping the new verb.
+func TestSecurityVerbs(t *testing.T) {
+	t.Parallel()
+
+	got := SecurityVerbs()
+
+	if len(got) != len(allSecurityVerbs) {
+		t.Fatalf("SecurityVerbs() has %d entries, want %d", len(got), len(allSecurityVerbs))
+	}
+
+	seen := make(map[SecurityVerb]struct{}, len(got))
+	for _, v := range got {
+		if _, dup := seen[v]; dup {
+			t.Errorf("SecurityVerbs() contains duplicate %q", v)
+		}
+		seen[v] = struct{}{}
+	}
+
+	for _, v := range allSecurityVerbs {
+		if _, ok := seen[v]; !ok {
+			t.Errorf("SecurityVerbs() is missing %q", v)
+		}
+	}
+}
+
+// TestDuressVisibilityValid verifies every defined level is Valid and an
+// invented one is not.
+func TestDuressVisibilityValid(t *testing.T) {
+	t.Parallel()
+
+	levels := []DuressVisibility{
+		DuressVisibilityHidden,
+		DuressVisibilityNotifyOnly,
+		DuressVisibilityFull,
+	}
+	for _, d := range levels {
+		if !d.Valid() {
+			t.Errorf("DuressVisibility(%q).Valid() = false, want true", d)
+		}
+	}
+
+	if DuressVisibility("bogus").Valid() {
+		t.Errorf("DuressVisibility(%q).Valid() = true, want false", "bogus")
+	}
+	if DuressVisibility("").Valid() {
+		t.Errorf("DuressVisibility(%q).Valid() = true, want false", "")
+	}
+}
+
+// TestDuressVisibilityAllowsNotificationAndRetained pins the whole point
+// of the notify_only level: it must allow a duress report to reach the
+// non-retained notification surfaces (a phone) while explicitly NOT
+// allowing it to reach retained state (the last-alarm sensor, a wall
+// tablet) — that split is what makes a covert trigger covert. hidden
+// allows neither; full allows both.
+func TestDuressVisibilityAllowsNotificationAndRetained(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		level            DuressVisibility
+		wantNotification bool
+		wantRetained     bool
+	}{
+		{DuressVisibilityHidden, false, false},
+		{DuressVisibilityNotifyOnly, true, false},
+		{DuressVisibilityFull, true, true},
+		{DuressVisibility("bogus"), false, false},
+	}
+
+	for _, tc := range cases {
+		if got := tc.level.AllowsNotification(); got != tc.wantNotification {
+			t.Errorf("DuressVisibility(%q).AllowsNotification() = %v, want %v", tc.level, got, tc.wantNotification)
+		}
+		if got := tc.level.AllowsRetained(); got != tc.wantRetained {
+			t.Errorf("DuressVisibility(%q).AllowsRetained() = %v, want %v", tc.level, got, tc.wantRetained)
+		}
+	}
+
+	// The load-bearing assertion: notify_only allows notification but
+	// explicitly not retention.
+	if !DuressVisibilityNotifyOnly.AllowsNotification() {
+		t.Error("DuressVisibilityNotifyOnly.AllowsNotification() = false, want true")
+	}
+	if DuressVisibilityNotifyOnly.AllowsRetained() {
+		t.Error("DuressVisibilityNotifyOnly.AllowsRetained() = true, want false — " +
+			"a duress report must never linger in retained state")
+	}
 }

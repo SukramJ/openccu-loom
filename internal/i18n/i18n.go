@@ -71,6 +71,49 @@ func (c *Catalogs) T(locale, key string) string {
 	return key
 }
 
+// TF looks up key for locale and substitutes named placeholders.
+//
+// A placeholder is written {name} in the catalogue and replaced by
+// args["name"]. An unknown placeholder is left standing rather than
+// blanked: a message reading "3 detectors in {zone}" makes the missing
+// argument obvious, while silently dropping it produces a sentence that
+// looks complete and is wrong.
+//
+// Substitution is single-pass, so a value that itself contains braces
+// cannot inject a further placeholder — device names come from the CCU
+// and are not trusted to be free of them.
+func (c *Catalogs) TF(locale, key string, args map[string]string) string {
+	msg := c.T(locale, key)
+	if len(args) == 0 || !strings.ContainsRune(msg, '{') {
+		return msg
+	}
+	var b strings.Builder
+	b.Grow(len(msg))
+	for i := 0; i < len(msg); {
+		open := strings.IndexByte(msg[i:], '{')
+		if open < 0 {
+			b.WriteString(msg[i:])
+			break
+		}
+		open += i
+		closeIdx := strings.IndexByte(msg[open:], '}')
+		if closeIdx < 0 {
+			b.WriteString(msg[i:])
+			break
+		}
+		closeIdx += open
+		b.WriteString(msg[i:open])
+		name := msg[open+1 : closeIdx]
+		if v, ok := args[name]; ok {
+			b.WriteString(v)
+		} else {
+			b.WriteString(msg[open : closeIdx+1])
+		}
+		i = closeIdx + 1
+	}
+	return b.String()
+}
+
 // Locales returns every loaded locale tag.
 func (c *Catalogs) Locales() []string {
 	c.mu.RLock()

@@ -196,6 +196,18 @@ type AlarmConfig struct {
 	// RestartLoopBreaker caps restore-driven output re-fires per
 	// incident before degradation to optical and notifications.
 	RestartLoopBreaker int `yaml:"restart_loop_breaker" json:"restart_loop_breaker" cfg:"expert"`
+	// DuressVisibility bounds where a duress-code use or a silent panic
+	// trigger may appear: "hidden", "notify_only" (default) or "full".
+	//
+	// The threat model is not that Home Assistant is insecure — it is
+	// that whoever stands next to you sees the same screen you do. A
+	// hallway wall tablet, or a lock-screen banner while the attacker
+	// watches, defeats the covert trigger the feature exists for. But an
+	// installation that notifies only through Home Assistant and runs no
+	// webhook would get no duress notification at all under a
+	// hidden-only policy, which is a safety function failing silently.
+	// The trade-off therefore belongs to the operator.
+	DuressVisibility string `yaml:"duress_visibility" json:"duress_visibility" cfg:"expert"`
 }
 
 // AlarmEnabled reports the tri-state Enabled flag with its nil→true
@@ -1546,6 +1558,11 @@ func (c *Config) applyDefaults() {
 	if c.Alarm.RestartLoopBreaker == 0 {
 		c.Alarm.RestartLoopBreaker = 3
 	}
+	if c.Alarm.DuressVisibility == "" {
+		// notify_only reaches a phone without leaving the report on a
+		// screen an attacker could read back.
+		c.Alarm.DuressVisibility = string(hmenum.DuressVisibilityNotifyOnly)
+	}
 	if c.AddonUpdate.CheckInterval == 0 {
 		c.AddonUpdate.CheckInterval = 24 * time.Hour
 	}
@@ -1609,7 +1626,7 @@ func (c *Config) Validate() error {
 	if c.Callback.MaxConnections < 0 {
 		return fmt.Errorf("config: callback.max_connections must be >= 0: %d", c.Callback.MaxConnections)
 	}
-	if err := validatePublicURL(c.North.REST.PublicURL); err != nil {
+	if err := validateOperatorSurfaces(c); err != nil {
 		return err
 	}
 	names := make(map[string]struct{}, len(c.Centrals))
@@ -1703,6 +1720,28 @@ func validateCentralHost(idx int, host string) error {
 // URL with a host — the value is handed to a browser as the "Open
 // Config UI" target, so a relative or schemeless string would not be
 // reachable from the public side.
+// validateOperatorSurfaces groups the checks on operator-facing surface
+// settings. They are collected here rather than inlined because Validate
+// sits at the cyclomatic-complexity ceiling the linter enforces, and a
+// grouped call keeps room for the next one.
+func validateOperatorSurfaces(c *Config) error {
+	if err := validatePublicURL(c.North.REST.PublicURL); err != nil {
+		return err
+	}
+	return validateDuressVisibility(c.Alarm.DuressVisibility)
+}
+
+// validateDuressVisibility rejects an unrecognised covert-trigger level.
+//
+// It fails loudly rather than falling back: a typo that quietly widened
+// duress visibility would be discovered only by the person it endangers.
+func validateDuressVisibility(raw string) error {
+	if raw == "" || hmenum.DuressVisibility(raw).Valid() {
+		return nil
+	}
+	return fmt.Errorf("config: alarm.duress_visibility must be hidden, notify_only or full: %q", raw)
+}
+
 func validatePublicURL(raw string) error {
 	if raw == "" {
 		return nil

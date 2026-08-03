@@ -8,6 +8,39 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Security & Safety: the domain that says what is wrong and tells someone.**
+  A new daemon-level plane aggregates every classified data point into
+  hazard classes (smoke, water, gas, CO, intrusion, panic) and fault
+  classes (tamper, battery, technical), per system and per zone, and
+  renders a report a person can read: a one-line subject and a full
+  sentence naming cause, place and time — in German and English.
+
+  It runs **independently of the alarm engine**. A household with smoke
+  and water detectors but no burglar alarm gets the hazard classes, the
+  fault plane and the notifications; only the zone half stays empty.
+
+  Reports carry the rendered text *and* the machine facets — class,
+  severity, verb, sources, and the catalogue key with its arguments.
+  The text makes a three-line automation possible; the key lets a
+  consumer render in its own locale instead of translating prose.
+
+  Faults are persistent, because `since` is the interesting part:
+  "unreachable for three days" is a different fact from "unreachable",
+  and a restart must not reset that clock. They can be acknowledged
+  without being cleared — the condition stands, the operator has merely
+  stopped needing to be told.
+
+  New: `GET /api/v1/security`, `/security/classes/{class}`,
+  `/security/faults`, `POST /security/faults/{id}/acknowledge`.
+
+- **`alarm.duress_visibility` decides where a covert trigger may
+  appear.** `hidden` keeps a duress-code use or silent panic on the
+  webhook only, `notify_only` (the default) additionally sends the
+  notification so a phone is reached but never writes it to retained
+  state or a local screen, `full` treats it like any other alarm. The
+  threat is not an insecure Home Assistant — it is that whoever stands
+  next to you sees the same screen.
+
 - **A smoke detector can no longer be triggered by the alarm system's own
   siren.** `SMOKE_DETECTOR_ALARM_STATUS` has the value list `[IDLE_OFF,
   PRIMARY_ALARM, INTRUSION_ALARM, SECONDARY_ALARM]`, and the engine's

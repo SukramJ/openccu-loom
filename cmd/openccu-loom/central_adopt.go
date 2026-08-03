@@ -80,6 +80,11 @@ type centralOrchestrator struct {
 	// event routing. Set via [centralOrchestrator.setAlarmCentralHook];
 	// nil while the alarm engine is disabled.
 	alarmHook func(u *central.Unit) (unwire func())
+	// securityHook subscribes an adopted central onto the Security &
+	// Safety domain. Its unwire half also drops the central from the
+	// aggregate, without which a removed CCU leaves ghost sources
+	// pinning their hazard class permanently active.
+	securityHook func(u *central.Unit) (unwire func())
 	// hubEventsHook attaches an adopted central to the WebSocket
 	// hub-singleton broadcasts (alarm / service message counts, inbox,
 	// metrics, connectivity). Set via
@@ -103,6 +108,17 @@ func (o *centralOrchestrator) setAlarmCentralHook(hook func(u *central.Unit) (un
 	}
 	o.mu.Lock()
 	o.alarmHook = hook
+	o.mu.Unlock()
+}
+
+// setSecurityCentralHook installs the per-central Security & Safety
+// wiring hook. Nil-safe on both sides, mirroring setAlarmCentralHook.
+func (o *centralOrchestrator) setSecurityCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.securityHook = hook
 	o.mu.Unlock()
 }
 
@@ -257,6 +273,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	o.mu.Lock()
 	matterHook := o.matterHook
 	alarmHook := o.alarmHook
+	securityHook := o.securityHook
 	hubEventsHook := o.hubEventsHook
 	hubReadyTrigger := o.hubReadyTrigger
 	o.mu.Unlock()
@@ -272,6 +289,13 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 		alarmUnwire = alarmHook(unit)
 		if alarmUnwire != nil {
 			undo = append(undo, alarmUnwire)
+		}
+	}
+	// The security domain attaches after the alarm service so its index
+	// rebuild sees the enrollment the alarm service has already loaded.
+	if securityHook != nil {
+		if unwire := securityHook(unit); unwire != nil {
+			undo = append(undo, unwire)
 		}
 	}
 	// Attach the WebSocket hub-singleton broadcasts. Before the southbound
