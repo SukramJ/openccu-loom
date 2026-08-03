@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 5bd66ac4
-HEAD: 5bd66ac4
+Generated: 5db8cc08
+HEAD: 5db8cc08
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27307 |
-| Reachable | 4737 |
-| Whitelisted | 19665 |
-| **Unreachable** | **2905** |
+| Total Exported | 27402 |
+| Reachable | 4795 |
+| Whitelisted | 19686 |
+| **Unreachable** | **2921** |
 
 ## Top-20 Packages by Dead Code
 
@@ -20,9 +20,11 @@ HEAD: 5bd66ac4
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
 | internal/central/adapter | 4 | 92 | 48 |
+| internal/model/safety | 4 | 2 | 0 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
+| pkg/hmenum | 4 | 106 | 46 |
 | pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -34,8 +36,6 @@ HEAD: 5bd66ac4
 | internal/model/hub | 2 | 61 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
-| internal/routingkey | 2 | 0 | 2 |
-| cmd/openccu-loom | 0 | 2 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -81,16 +81,16 @@ HEAD: 5bd66ac4
 | internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
+| internal/model/safety | Classify | internal/model/safety/classify.go | 181 |
+| internal/model/safety | Classify | internal/model/safety/classify.go | 181 |
+| internal/model/safety | Excluded | internal/model/safety/classify.go | 218 |
+| internal/model/safety | Excluded | internal/model/safety/classify.go | 218 |
 | internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
 | internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
 
 ## Full By-Package Breakdown
 
@@ -100,9 +100,11 @@ HEAD: 5bd66ac4
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
 | internal/central/adapter | 4 | 92 | 48 |
+| internal/model/safety | 4 | 2 | 0 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
+| pkg/hmenum | 4 | 106 | 46 |
 | pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -197,7 +199,6 @@ HEAD: 5bd66ac4
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 100 | 28 |
 | pkg/hmapi | 0 | 129 | 16 |
-| pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |

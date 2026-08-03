@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.53.0
+
+- **Water and rain sensors show up properly again.** The config UI looked
+  for channel names no CCU actually uses, so leak and rain sensors were
+  missing their headline value and their quick-control tile. They now
+  render like every other sensor.
+- Groundwork for the upcoming Security & Safety view: hazard and fault
+  classification of smoke, water, tamper, battery and technical signals.
+  Nothing changes in Home Assistant yet.
+
 ## 0.52.12
 
 - **Program switches and system variables now update live.** The 0.52.10 /

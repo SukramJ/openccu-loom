@@ -158,6 +158,22 @@ func TestDeviceParamBinarySensorOverrides(t *testing.T) {
 	}
 }
 
+// TestDeviceParamBinarySensorOverridesExcludesHmIPSWD pins
+// BD-Safety-SWDWindowRuleDropped (docs/parity/by_design.md):
+// HmIP-SWD is the water sensor, not a window contact. Its ported
+// grouping with the window-contact family assigned STATE the window
+// quantity, but HmIP-SWD carries no STATE parameter and the mapping
+// would invert the classification the Security & Safety domain
+// (internal/model/safety) must derive from it, so the entry is
+// deliberately not carried into this table.
+func TestDeviceParamBinarySensorOverridesExcludesHmIPSWD(t *testing.T) {
+	t.Parallel()
+
+	if q, ok := generic.BinarySensorQuantityForDeviceParameter("HmIP-SWD", "STATE"); ok {
+		t.Errorf("BinarySensorQuantityForDeviceParameter(HmIP-SWD, STATE) = (%q, true), want ok=false", q)
+	}
+}
+
 // TestUnitFallback pins the unit-keyed fallback.
 func TestUnitFallback(t *testing.T) {
 	t.Parallel()

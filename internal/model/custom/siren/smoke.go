@@ -23,7 +23,6 @@ type SmokeAlarmStatus string
 // SmokeAlarmStatus values.
 const (
 	SmokeStatusIdleOff        SmokeAlarmStatus = "IDLE_OFF"
-	SmokeStatusIdleOn         SmokeAlarmStatus = "IDLE_ON"
 	SmokeStatusPrimaryAlarm   SmokeAlarmStatus = "PRIMARY_ALARM"
 	SmokeStatusSecondaryAlarm SmokeAlarmStatus = "SECONDARY_ALARM"
 	SmokeStatusIntrusion      SmokeAlarmStatus = "INTRUSION_ALARM"

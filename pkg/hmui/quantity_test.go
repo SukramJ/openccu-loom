@@ -46,7 +46,8 @@ func TestHintFor_ResolutionOrder(t *testing.T) {
 		{name: "ON_TIME exact", parameter: "ON_TIME", paramType: "FLOAT", wantSem: "duration", wantIcon: "mdi:timer-outline"},
 		{name: "RAINING exact", parameter: "RAINING", paramType: "BOOL", wantSem: "rain", wantIcon: "mdi:weather-pouring"},
 		// Parameter substrings
-		{name: "WATER_DETECTOR_ALARMSTATE", parameter: "WATER_DETECTOR_ALARMSTATE", paramType: "BOOL", wantSem: "water_leak", wantIcon: "mdi:water-alert"},
+		{name: "WATERLEVEL_DETECTED", parameter: "WATERLEVEL_DETECTED", paramType: "BOOL", wantSem: "water_leak", wantIcon: "mdi:water-alert"},
+		{name: "MOISTURE_DETECTED", parameter: "MOISTURE_DETECTED", paramType: "BOOL", wantSem: "water_leak", wantIcon: "mdi:water-alert"},
 		{name: "SABOTAGE", parameter: "SABOTAGE", paramType: "BOOL", wantSem: "tamper", wantIcon: "mdi:shield-alert"},
 		{name: "LOWBAT", parameter: "LOWBAT", paramType: "BOOL", wantSem: "battery_low", wantIcon: "mdi:battery-alert"},
 		{name: "UNREACH", parameter: "UNREACH", paramType: "BOOL", wantSem: "connectivity", wantIcon: "mdi:lan-disconnect"},

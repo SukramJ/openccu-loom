@@ -3845,3 +3845,38 @@ hs485d) owns the type-compatibility check and legitimately approves
 compatible cross-type swaps; rejecting one after the CCU already performed
 it would strand Loom's model. A cross-type replace is logged
 (`device_coordinator.replace_device.cross_type`) and proceeds.
+
+### BD-Safety-SWDWindowRuleDropped — the ported `HmIP-SWD → STATE → window` rule is not carried
+
+Both binary-sensor classification tables are ports of the Python reference:
+`internal/model/generic/quantity.go::binarySensorQuantityByDeviceAndParam`
+mirrors `data_point_metadata.py:_BINARY_SENSOR_QUANTITY_BY_DEVICE_AND_PARAM`,
+and `internal/north/mqtt/entity_description_rules_binary_sensors.go::binarySensorRulesByDeviceAndParam`
+mirrors the `devices=`-carrying entries of `binary_sensors.py`. In both
+references `HmIP-SWD` is grouped with the window/door-contact family
+(`HmIP-SWDO`, `HmIP-SWDM`, `HM-Sec-SC`, `HM-SCI-3-FM`, `ZEL STG RM FFK`) and
+maps `STATE` onto the window quantity / `device_class: window`.
+
+OpenCCU-Loom drops the `HmIP-SWD` half of that grouping. Three reasons, all
+verifiable against `tests/integration/testdata/model_snapshot_openccu-loom.json`:
+
+1. **The rule is unreachable.** HmIP-SWD is the water sensor. Its only channel
+   with data points is `WATER_DETECTION_TRANSMITTER`, carrying `ALARMSTATE`,
+   `MOISTURE_DETECTED` and `WATERLEVEL_DETECTED`. There is no `STATE`
+   parameter on the model, so no lookup can ever hit the entry.
+2. **It cannot serve as a prefix fallback either.** `hasModelPrefix`
+   (`internal/north/mqtt/entity_descriptions.go:216-224`) requires a `-`
+   separator after the prefix, so `HmIP-SWD` matches neither `HmIP-SWDM`
+   (length guard) nor `HmIP-SWDM-B2` / `HmIP-SWDO-I` (separator guard). Those
+   models resolve through their own `HmIP-SWDM` / `HmIP-SWDO` entries, which
+   stay.
+3. **It is semantically inverted.** Were a firmware to add `STATE` to the
+   water sensor, the rule would label a leak detector a window contact —
+   the opposite of what the Security & Safety classifier
+   (`internal/model/safety`) must derive, and a silent mis-cast in the one
+   domain where a wrong class costs the most.
+
+Dropping an unreachable row changes no observable behaviour today; it removes a
+trap for the day the model gains the parameter. The window-contact siblings are
+untouched, so the reference's intent for the family is preserved. Should the
+reference ever be re-imported wholesale, this row must be dropped again.

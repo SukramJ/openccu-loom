@@ -134,7 +134,8 @@ var parameterSubstrings = []struct {
 	hint  Hint
 }{
 	{"SMOKE_DETECTOR", Hint{Icon: "mdi:smoke-detector-variant", Semantic: "smoke", StateColorRule: "alarm_active"}},
-	{"WATER_DETECT", Hint{Icon: "mdi:water-alert", Semantic: "water_leak", StateColorRule: "alarm_active"}},
+	{"WATERLEVEL_DETECTED", Hint{Icon: "mdi:water-alert", Semantic: "water_leak", StateColorRule: "alarm_active"}},
+	{"MOISTURE_DETECTED", Hint{Icon: "mdi:water-alert", Semantic: "water_leak", StateColorRule: "alarm_active"}},
 	{"SABOTAGE", Hint{Icon: "mdi:shield-alert", Semantic: "tamper", StateColorRule: "alarm_active"}},
 	{"LOWBAT", Hint{Icon: "mdi:battery-alert", Semantic: "battery_low", StateColorRule: "alarm_active"}},
 	{"LOW_BAT", Hint{Icon: "mdi:battery-alert", Semantic: "battery_low", StateColorRule: "alarm_active"}},

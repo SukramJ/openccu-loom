@@ -89,14 +89,33 @@ func TestLookupBinarySensorRuleSabotageDisabledDiagnostic(t *testing.T) {
 	}
 }
 
-func TestLookupBinarySensorRuleHmIPSWDWindow(t *testing.T) {
-	// Per-device rule: HmIP-SWD / STATE → window.
-	d, ok := LookupBinarySensorRule("HmIP-SWD", "STATE")
-	if !ok {
-		t.Fatal("HmIP-SWD/STATE: not found")
+// TestLookupBinarySensorRuleWindowContacts pins the window-contact family and
+// the deliberate exclusion of HmIP-SWD from it (docs/parity/by_design.md,
+// BD-Safety-SWDWindowRuleDropped).
+//
+// HmIP-SWD is the water sensor: it carries no STATE parameter, so the rule was
+// unreachable, and labelling a leak detector a window contact is inverted for
+// the safety classifier. The exclusion must survive a re-import of the ported
+// table, hence the negative assertion.
+func TestLookupBinarySensorRuleWindowContacts(t *testing.T) {
+	for _, model := range []string{"HmIP-SWDO", "HmIP-SWDM", "HM-Sec-SC"} {
+		d, ok := LookupBinarySensorRule(model, "STATE")
+		if !ok {
+			t.Fatalf("%s/STATE: not found", model)
+		}
+		if d.DeviceClass != "window" {
+			t.Fatalf("%s/STATE: device_class=%q want window", model, d.DeviceClass)
+		}
 	}
-	if d.DeviceClass != "window" {
-		t.Fatalf("HmIP-SWD/STATE: device_class=%q want window", d.DeviceClass)
+	// The prefix walk requires a "-" separator, so the variants resolve
+	// through their own entries rather than through a shorter prefix.
+	for _, model := range []string{"HmIP-SWDM-B2", "HmIP-SWDO-I"} {
+		if _, ok := LookupBinarySensorRule(model, "STATE"); !ok {
+			t.Fatalf("%s/STATE: not found", model)
+		}
+	}
+	if d, ok := LookupBinarySensorRule("HmIP-SWD", "STATE"); ok {
+		t.Fatalf("HmIP-SWD/STATE: resolved to device_class=%q, want no rule", d.DeviceClass)
 	}
 }
 

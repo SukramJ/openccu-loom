@@ -175,7 +175,6 @@ var binarySensorQuantityByDeviceAndParam = map[string]map[hmenum.Parameter]hmenu
 	"HmIP-FCI1":      {"STATE": hmenum.QuantityOpening},
 	"HmIP-FCI6":      {"STATE": hmenum.QuantityOpening},
 	"HM-Sec-SD":      {"STATE": hmenum.QuantitySmoke},
-	"HmIP-SWD":       {"STATE": hmenum.QuantityWindow},
 	"HmIP-SWDO":      {"STATE": hmenum.QuantityWindow},
 	"HmIP-SWDM":      {"STATE": hmenum.QuantityWindow},
 	"HM-Sec-SC":      {"STATE": hmenum.QuantityWindow},

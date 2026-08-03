@@ -4,6 +4,47 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.53.0]
+
+### Added
+
+- **Security & Safety taxonomy — the classification layer.** A new
+  package classifies device data points into a hazard/fault taxonomy
+  (smoke, water, gas, CO, tamper, battery, technical, intrusion, panic)
+  keyed on the triple (model, channel type, parameter) rather than on the
+  parameter alone, because the same parameter means different things on
+  different channels. This is the foundation of the Security & Safety
+  domain described in `docs/security-safety-concept.md`; on its own it
+  changes no north-bound surface.
+
+  The classifier refuses to read back anything the alarm engine writes.
+  Most consequential case: `SMOKE_DETECTOR_ALARM_STATUS` carries
+  `INTRUSION_ALARM` at index 2 of its value list, so the established
+  "active means index != 0" rule counts it as a smoke detection — while it
+  actually means the installation drove that smoke detector as a *siren*
+  for a burglary. A domain built on that rule would report its own siren
+  command as the cause of a fire.
+
+### Fixed
+
+- **Water and rain sensors get their sensor tile back.** The config UI
+  looked up the channel types `WATER_DETECTOR` and `RAIN_DETECTOR`, which
+  no CCU emits — the real names are `WATER_DETECTION_TRANSMITTER`,
+  `WATERDETECTIONSENSOR`, `RAIN_DETECTION_TRANSMITTER` and `RAINDETECTOR`.
+  Both the primary-value lookup and the quick-control status list missed
+  every leak and rain sensor as a result. The leak icon and colour rule
+  matched an equally non-existent parameter and now match the real
+  `MOISTURE_DETECTED` / `WATERLEVEL_DETECTED`.
+
+### Removed
+
+- `HmIP-SWD` no longer maps `STATE` onto `device_class: window`. HmIP-SWD
+  is the water sensor and has no `STATE` parameter, so the rule was
+  unreachable — and had it ever matched, it would have labelled a leak
+  detector a window contact. Window contacts (`HmIP-SWDO`, `HmIP-SWDM`,
+  `HM-Sec-SC` and their variants) are unaffected. Recorded as a deliberate
+  divergence in `docs/parity/by_design.md`.
+
 ## [0.52.12]
 
 ### Fixed
