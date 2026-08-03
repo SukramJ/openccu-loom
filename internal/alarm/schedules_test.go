@@ -271,14 +271,20 @@ func TestScheduleFireAutoArmNotReadyNotifiesHookWhenWired(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	journal := &fakeJournalRecorder{}
 	eng := &fakeScheduleEngine{
-		zones:  map[string]engine.ZoneSnapshot{"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed}},
-		armErr: &engine.NotReadyError{Blockers: []string{"sensor-1", "sensor-2"}},
+		zones: map[string]engine.ZoneSnapshot{"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed}},
+		armErr: &engine.NotReadyError{
+			Blockers: []string{"sensor-1", "sensor-2"},
+			Details: []hmevent.AlarmBlockerDetail{
+				{SensorID: "sensor-1", Name: "Front door", Reason: hmevent.AlarmBlockerReasonOpen, Blocking: true},
+				{SensorID: "sensor-2", Name: "Terrace", Reason: hmevent.AlarmBlockerReasonUnreachable, Blocking: true},
+			},
+		},
 	}
 	var hookCalls int
-	var gotBlockers []string
+	var gotBlockers []hmevent.AlarmBlockerDetail
 	r := newScheduleRunner(scheduleRunnerDeps{
 		Engine: eng, Journal: journal, Clock: clk,
-		ArmFailure: func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string) {
+		ArmFailure: func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail) {
 			hookCalls++
 			gotBlockers = blockers
 			if zoneID != "a1" || zoneName != "House" || mode != hmenum.AlarmModeFull {
@@ -297,6 +303,15 @@ func TestScheduleFireAutoArmNotReadyNotifiesHookWhenWired(t *testing.T) {
 	}
 	if len(gotBlockers) != 2 {
 		t.Fatalf("expected the blockers to be forwarded, got %v", gotBlockers)
+	}
+	// The hook must carry the reason, not just the opaque row ID —
+	// that is the point of forwarding details instead of Blockers.
+	if gotBlockers[0].Reason != hmevent.AlarmBlockerReasonOpen ||
+		gotBlockers[1].Reason != hmevent.AlarmBlockerReasonUnreachable {
+		t.Errorf("blocker reasons not forwarded: %+v", gotBlockers)
+	}
+	if gotBlockers[0].Name != "Front door" {
+		t.Errorf("blocker name not forwarded: %+v", gotBlockers[0])
 	}
 	entries := journal.snapshot()
 	if len(entries) != 1 || entries[0].Event != "failed_to_arm" || entries[0].Class != hmenum.AlarmJournalClassFault {
@@ -337,7 +352,7 @@ func TestScheduleFireAutoArmOtherErrorJournalsGeneric(t *testing.T) {
 	}
 	r := newScheduleRunner(scheduleRunnerDeps{
 		Engine: eng, Journal: journal, Clock: clk,
-		ArmFailure: func(string, string, hmenum.AlarmMode, []string) { hookCalls++ },
+		ArmFailure: func(string, string, hmenum.AlarmMode, []hmevent.AlarmBlockerDetail) { hookCalls++ },
 	})
 
 	r.fire(context.Background(), scheduleEntry{

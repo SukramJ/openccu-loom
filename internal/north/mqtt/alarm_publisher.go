@@ -48,6 +48,63 @@ type alarmEventPayload struct {
 	// Output carries the enrolled notification output's name (or ID
 	// when unnamed) on NOTIFICATION events.
 	Output string `json:"output,omitempty"`
+	// Sources carries the full identity of every contributing data
+	// point on TRIGGER events: address, parameter, central and the
+	// hazard class. OpenSensors stays the human-readable short form.
+	Sources []alarmSourcePayload `json:"sources,omitempty"`
+}
+
+// alarmSourcePayload is one contributing data point on the alarm event
+// topic. The field names match the Security & Safety source shape so a
+// consumer parses one form across both planes.
+type alarmSourcePayload struct {
+	Ref            string `json:"ref"`
+	Central        string `json:"central,omitempty"`
+	InterfaceID    string `json:"interface_id,omitempty"`
+	ChannelAddress string `json:"channel_address,omitempty"`
+	DeviceAddress  string `json:"device_address,omitempty"`
+	Parameter      string `json:"parameter,omitempty"`
+	SensorID       string `json:"sensor_id,omitempty"`
+	Name           string `json:"name,omitempty"`
+	SensorType     string `json:"sensor_type,omitempty"`
+	Class          string `json:"class,omitempty"`
+	AtMS           int64  `json:"at_ms,omitempty"`
+}
+
+// alarmSourcePayloads projects the domain refs onto the wire shape.
+func alarmSourcePayloads(refs []hmevent.SecuritySourceRef) []alarmSourcePayload {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]alarmSourcePayload, 0, len(refs))
+	for i := range refs {
+		r := &refs[i]
+		out = append(out, alarmSourcePayload{
+			Ref: r.Ref, Central: r.Central, InterfaceID: r.InterfaceID,
+			ChannelAddress: r.ChannelAddress, DeviceAddress: r.DeviceAddress,
+			Parameter: r.Parameter, SensorID: r.SensorID, Name: r.Name,
+			SensorType: string(r.SensorType), Class: string(r.Class), AtMS: r.AtMS,
+		})
+	}
+	return out
+}
+
+// alarmSourceNames returns the display names of the refs, falling back
+// to the channel address when a source has no name.
+func alarmSourceNames(refs []hmevent.SecuritySourceRef) []string {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(refs))
+	for i := range refs {
+		switch {
+		case refs[i].Name != "":
+			out = append(out, refs[i].Name)
+		case refs[i].ChannelAddress != "":
+			out = append(out, refs[i].ChannelAddress)
+		}
+	}
+	return out
 }
 
 // alarmEventMsg is one queued non-retained event-topic publish.
@@ -183,17 +240,29 @@ func (p *AlarmMQTTPublisher) Stop() {
 // zone. The composition root wires this as the master-arm failure hook so
 // a best-effort master arm reports each zone it could not arm, with the
 // blocking sensors. Safe to call from any goroutine.
-func (p *AlarmMQTTPublisher) PublishFailedToArm(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string) {
+func (p *AlarmMQTTPublisher) PublishFailedToArm(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail) {
 	name := zoneName
 	if name == "" {
 		name = p.lookupName(zoneID)
 	}
+	refs := make([]hmevent.SecuritySourceRef, 0, len(blockers))
+	for i := range blockers {
+		ref := blockers[i].Source
+		if ref.Name == "" {
+			ref.Name = blockers[i].Name
+		}
+		refs = append(refs, ref)
+	}
 	p.enqueueEvent(zoneID, alarmEventPayload{
-		Type:        alarmEventTypeFailedToArm,
-		ZoneID:      zoneID,
-		ZoneName:    name,
-		Mode:        string(mode),
-		OpenSensors: blockers,
+		Type:     alarmEventTypeFailedToArm,
+		ZoneID:   zoneID,
+		ZoneName: name,
+		Mode:     string(mode),
+		// Display names, matching the TRIGGER event. Before this the
+		// two events disagreed: TRIGGER carried names, FAILED_TO_ARM
+		// carried opaque sensor row IDs.
+		OpenSensors: alarmSourceNames(refs),
+		Sources:     alarmSourcePayloads(refs),
 	})
 }
 
@@ -222,8 +291,14 @@ func (p *AlarmMQTTPublisher) onTriggered(e hmevent.AlarmTriggeredEvent) {
 	p.rememberName(e.ZoneID, e.ZoneName)
 	pay := alarmEventPayload{
 		Type: alarmEventTypeTrigger, ZoneID: e.ZoneID, ZoneName: e.ZoneName, Mode: string(e.Mode),
+		Sources: alarmSourcePayloads(e.Sources),
 	}
-	if e.SensorName != "" {
+	// Prefer the accumulated source list: a second detector firing
+	// during the same incident belongs in open_sensors too. The single
+	// headline name remains the fallback for causes without a source.
+	if names := alarmSourceNames(e.Sources); len(names) > 0 {
+		pay.OpenSensors = names
+	} else if e.SensorName != "" {
 		pay.OpenSensors = []string{e.SensorName}
 	}
 	p.enqueueEvent(e.ZoneID, pay)

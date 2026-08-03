@@ -6,9 +6,16 @@
   for channel names no CCU actually uses, so leak and rain sensors were
   missing their headline value and their quick-control tile. They now
   render like every other sensor.
+- **Alarm notifications now say what set the alarm off.** The
+  notification output an operator enrols for a messenger carried no
+  sensor identity at all. It now names every detector that fired — and
+  every detector, not just the first: a second one going off while the
+  siren already sounds used to leave no trace.
+- **"Why can I not arm?" is answerable.** A failed arm now reports the
+  reason per sensor (open, unreachable, sabotage, low battery) instead of
+  an opaque internal id.
 - Groundwork for the upcoming Security & Safety view: hazard and fault
   classification of smoke, water, tamper, battery and technical signals.
-  Nothing changes in Home Assistant yet.
 
 ## 0.52.12
 

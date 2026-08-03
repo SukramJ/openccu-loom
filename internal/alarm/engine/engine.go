@@ -96,6 +96,10 @@ func isPreAuthenticatedSource(source string) bool {
 // sensors, so surfaces can render the bypass sheet.
 type NotReadyError struct {
 	Blockers []string
+	// Details carries the reason and the full source identity per
+	// blocking sensor. Blockers holds bare row IDs, which are opaque to
+	// an operator and cannot be resolved by a north-bound consumer.
+	Details []hmevent.AlarmBlockerDetail
 }
 
 // Error implements error.
@@ -128,21 +132,67 @@ type incidentCause struct {
 	SensorID   string `json:"sensor_id,omitempty"`
 	SensorName string `json:"sensor_name,omitempty"`
 	Central    string `json:"central,omitempty"`
+	// The identity components below are additive: rows written before
+	// they existed decode with empty values and need no migration.
+	SensorType     string `json:"sensor_type,omitempty"`
+	InterfaceID    string `json:"interface_id,omitempty"`
+	ChannelAddress string `json:"channel_address,omitempty"`
+	Parameter      string `json:"parameter,omitempty"`
+}
+
+// causeFromSensor builds a cause document carrying the sensor's full
+// data-point identity, so a consumer can resolve the device behind an
+// alarm instead of only its display name.
+func causeFromSensor(kind string, row sqlitestore.AlarmSensorRow) incidentCause {
+	return incidentCause{
+		Kind:           kind,
+		SensorID:       row.ID,
+		SensorName:     row.Name,
+		Central:        row.CentralName,
+		SensorType:     string(row.SensorType),
+		InterfaceID:    row.InterfaceID,
+		ChannelAddress: row.ChannelAddress,
+		Parameter:      row.Parameter,
+	}
+}
+
+// sourceRef projects a cause onto the domain-wide source reference.
+// A cause without a channel address (central loss, an adopted siren)
+// yields an empty reference, which callers drop.
+func (c incidentCause) sourceRef(atMS int64) hmevent.SecuritySourceRef {
+	if c.ChannelAddress == "" {
+		return hmevent.SecuritySourceRef{}
+	}
+	ref := hmevent.NewSecuritySourceRef(c.Central, c.InterfaceID, c.ChannelAddress, c.Parameter)
+	ref.SensorID = c.SensorID
+	ref.Name = c.SensorName
+	ref.SensorType = hmenum.AlarmSensorType(c.SensorType)
+	// The sensor role decides the class for intrusion, panic and
+	// tamper. A hazard sensor stays unclassified here: the role covers
+	// smoke, water and gas alike, and separating them needs the device
+	// model and channel type, which an enrollment does not carry.
+	if class, ok := hmenum.SecurityClassForSensorType(ref.SensorType); ok {
+		ref.Class = class
+	}
+	ref.AtMS = atMS
+	return ref
 }
 
 // Deps wires the engine's ports. Stores are required; every other
 // dependency has a safe default.
 type Deps struct {
-	Clock        clock.Clock
-	Scheduler    TimerScheduler
-	Zones        ZoneStore
-	Sensors      SensorStore
-	State        StateStore
-	Incidents    IncidentStore
-	Runtime      RuntimeStore
-	Outputs      OutputPort
-	Sink         EventSink
-	Journal      Journal
+	Clock     clock.Clock
+	Scheduler TimerScheduler
+	Zones     ZoneStore
+	Sensors   SensorStore
+	State     StateStore
+	Incidents IncidentStore
+	Runtime   RuntimeStore
+	Outputs   OutputPort
+	Sink      EventSink
+	Journal   Journal
+	// SourceLedger records the per-incident source ledger; nil disables it.
+	SourceLedger IncidentSourceLedger
 	SensorReader SensorReader
 	// Validator resolves alarm codes for the code-policy checks. A nil
 	// validator disables codes entirely: every CodePolicy is inert.
@@ -168,6 +218,7 @@ type Engine struct {
 	outputs      OutputPort
 	sink         EventSink
 	journal      Journal
+	ledger       IncidentSourceLedger
 	reader       SensorReader
 	validator    CodeValidator
 	log          *slog.Logger
@@ -231,6 +282,7 @@ func New(deps Deps) (*Engine, error) {
 		outputs:      outputs,
 		sink:         sink,
 		journal:      journal,
+		ledger:       deps.SourceLedger,
 		reader:       deps.SensorReader,
 		validator:    deps.Validator,
 		log:          logger,
@@ -371,7 +423,17 @@ func (e *Engine) beginArm(ctx context.Context, a *zone, req ArmRequest, mcfg Mod
 		}
 	}
 	if len(remaining) > 0 && !req.Force {
-		return ArmResult{}, &NotReadyError{Blockers: remaining}
+		blocking := map[string]bool{}
+		for _, id := range remaining {
+			blocking[id] = true
+		}
+		var details []hmevent.AlarmBlockerDetail
+		for i := range rd.Details {
+			if rd.Details[i].Blocking && blocking[rd.Details[i].SensorID] {
+				details = append(details, rd.Details[i])
+			}
+		}
+		return ArmResult{}, &NotReadyError{Blockers: remaining, Details: details}
 	}
 	for _, id := range remaining {
 		bypass[id] = true
@@ -763,7 +825,7 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 // already filtered walk tests, always-on sensors, bypasses, and
 // mode membership.
 func (e *Engine) dispatchSensorActivation(ctx context.Context, a *zone, s *sensorState, sensorID string) {
-	cause := incidentCause{Kind: causeKindSensor, SensorID: sensorID, SensorName: s.row.Name}
+	cause := causeFromSensor(causeKindSensor, s.row)
 
 	switch a.state {
 	case hmenum.AlarmZoneStateArming:
@@ -796,6 +858,12 @@ func (e *Engine) dispatchSensorActivation(ctx context.Context, a *zone, s *senso
 			Class: hmenum.AlarmJournalClassTrigger, Event: "sensor_activity",
 			IncidentID: incID, Details: map[string]any{"sensor_id": sensorID},
 		})
+		// The zone stays triggered and the state machine starts no new
+		// output cycle, but the contribution is recorded: "the kitchen
+		// detector also went off" is exactly what attribution needs.
+		if e.recordSource(ctx, a, incID, causeFromSensor(causeKindSensor, s.row)) {
+			e.publishSourcesChanged(a, incID)
+		}
 	case hmenum.AlarmZoneStateDisarmed:
 	}
 }
@@ -984,6 +1052,7 @@ func (e *Engine) trigger(ctx context.Context, a *zone, cause incidentCause, opts
 		e.scheduleStateTimer(a, timerKindTrigger, dur)
 	}
 	e.persist(ctx, a)
+	e.recordSource(ctx, a, a.incident.ID, cause)
 
 	if err := e.outputs.FireCycle(ctx, a.id, *a.incident, opts); err != nil {
 		e.journalFault(ctx, a, "output_fire_failed", err, a.incident.ID)
@@ -1005,6 +1074,7 @@ func (e *Engine) trigger(ctx context.Context, a *zone, cause incidentCause, opts
 		IncidentID: a.incident.ID,
 		SensorID:   cause.SensorID, SensorName: cause.SensorName,
 		Cause: cause.Kind, Mode: a.mode,
+		Sources: a.sourcesCopy(),
 	})
 	e.publishState(a, from, "", "engine")
 }
@@ -1149,6 +1219,7 @@ func (e *Engine) closeIncident(ctx context.Context, a *zone, reason string) {
 	}
 	a.incident = nil
 	a.silencedIncidentID = 0
+	a.resetSources()
 }
 
 // scheduleStateTimer replaces the zone's state timer. The caller
@@ -1351,6 +1422,7 @@ func (e *Engine) AdoptSounding(ctx context.Context, zoneID string, outputIDs []s
 		ZoneID: a.id, ZoneName: a.name,
 		IncidentID: a.incident.ID,
 		Cause:      causeKindAdopted, Mode: a.mode,
+		Sources: a.sourcesCopy(),
 	})
 	e.publishState(a, from, "engine:reconcile", "engine")
 	return true, nil
@@ -1412,7 +1484,7 @@ func (e *Engine) alwaysOnFromSensor(ctx context.Context, a *zone, s *sensorState
 			policy.Silent = true
 		}
 	}
-	cause := incidentCause{Kind: causeKind, SensorID: s.row.ID, SensorName: s.row.Name}
+	cause := causeFromSensor(causeKind, s.row)
 	e.alwaysOnFire(ctx, a, causeKind, policy, cause, s.row.Name, "engine")
 }
 
@@ -1442,6 +1514,12 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *zone, causeKind string, po
 			Actor: by, Source: source, IncidentID: incID,
 			Details: map[string]any{"cause": causeKind, "sensor_id": cause.SensorID},
 		})
+		// A hazard detector joining a running intrusion incident is the
+		// sharpest case for the ledger: the escalation class changes
+		// even though the zone state does not.
+		if e.recordSource(ctx, a, incID, cause) {
+			e.publishSourcesChanged(a, incID)
+		}
 		return
 	}
 
@@ -1474,6 +1552,7 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *zone, causeKind string, po
 	a.state = hmenum.AlarmZoneStateTriggered
 	e.scheduleStateTimer(a, timerKindTrigger, dur)
 	e.persist(ctx, a)
+	e.recordSource(ctx, a, a.incident.ID, cause)
 	if err := e.outputs.FireCycle(ctx, a.id, *a.incident, FireOptions{Policy: policy}); err != nil {
 		e.journalFault(ctx, a, "output_fire_failed", err, a.incident.ID)
 	}
@@ -1488,6 +1567,7 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *zone, causeKind string, po
 		IncidentID: a.incident.ID,
 		SensorID:   cause.SensorID, SensorName: cause.SensorName,
 		Cause: causeKind, Mode: a.mode,
+		Sources: a.sourcesCopy(),
 	})
 	e.publishState(a, from, by, source)
 }

@@ -304,3 +304,31 @@ func (p AlarmCentralLossPolicy) Valid() bool {
 		return false
 	}
 }
+
+// SecurityClassForSensorType maps an alarm sensor role onto its
+// Security & Safety class, reporting ok=false when the role does not
+// determine one.
+//
+// Door, window and motion sensors always mean intrusion, and a panic
+// input always means panic — those four are decided by the role alone.
+// A hazard sensor is deliberately undecidable here: the role covers
+// smoke, water and gas alike, and telling them apart needs the device
+// model and channel type, which the alarm enrollment does not carry.
+// A tamper sensor maps onto the tamper class.
+//
+// Returning ok=false rather than guessing keeps an unclassified hazard
+// visibly unclassified instead of mislabelling a water leak as smoke.
+func SecurityClassForSensorType(t AlarmSensorType) (SecurityClass, bool) {
+	switch t {
+	case AlarmSensorTypeDoor, AlarmSensorTypeWindow, AlarmSensorTypeMotion:
+		return SecurityClassIntrusion, true
+	case AlarmSensorTypePanic:
+		return SecurityClassPanic, true
+	case AlarmSensorTypeTamper:
+		return SecurityClassTamper, true
+	case AlarmSensorTypeHazard:
+		return "", false
+	default:
+		return "", false
+	}
+}

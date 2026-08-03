@@ -30,6 +30,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // The REST/HTTP server lifecycle is owned by the north-bound bridge.Registry
@@ -278,7 +279,7 @@ type alarmMQTTSink struct {
 	svc *alarm.Service
 
 	mu           sync.RWMutex
-	onArmFailure func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string)
+	onArmFailure func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail)
 }
 
 // Compile-time proof the sink satisfies the command-subscriber contract.
@@ -295,7 +296,7 @@ func newAlarmMQTTSink(svc *alarm.Service) *alarmMQTTSink {
 
 // setArmFailureHook installs the FAILED_TO_ARM publisher. A nil hook
 // disables the per-zone failure event.
-func (s *alarmMQTTSink) setArmFailureHook(fn func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string)) {
+func (s *alarmMQTTSink) setArmFailureHook(fn func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail)) {
 	s.mu.Lock()
 	s.onArmFailure = fn
 	s.mu.Unlock()
@@ -364,10 +365,10 @@ func (s *alarmMQTTSink) emitArmFailure(zoneID, zoneName string, mode hmenum.Alar
 	if hook == nil {
 		return
 	}
-	var blockers []string
+	var blockers []hmevent.AlarmBlockerDetail
 	var nre *engine.NotReadyError
 	if errors.As(cause, &nre) {
-		blockers = nre.Blockers
+		blockers = nre.Details
 	}
 	hook(zoneID, zoneName, mode, blockers)
 }

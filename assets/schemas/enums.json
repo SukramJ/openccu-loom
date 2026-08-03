@@ -1765,6 +1765,10 @@
           "wire_value": "AIR_PRESSURE"
         },
         {
+          "go_name": "ParameterAlarmState",
+          "wire_value": "ALARMSTATE"
+        },
+        {
           "go_name": "ParameterAutoMode",
           "wire_value": "AUTO_MODE"
         },
@@ -1941,8 +1945,24 @@
           "wire_value": "ERROR"
         },
         {
+          "go_name": "ParameterErrorAlarmTest",
+          "wire_value": "ERROR_ALARM_TEST"
+        },
+        {
+          "go_name": "ParameterErrorCode",
+          "wire_value": "ERROR_CODE"
+        },
+        {
           "go_name": "ParameterErrorJammed",
           "wire_value": "ERROR_JAMMED"
+        },
+        {
+          "go_name": "ParameterErrorNonFlatPositioning",
+          "wire_value": "ERROR_NON_FLAT_POSITIONING"
+        },
+        {
+          "go_name": "ParameterErrorSmokeChamber",
+          "wire_value": "ERROR_SMOKE_CHAMBER"
         },
         {
           "go_name": "ParameterFrequency",
@@ -2055,6 +2075,10 @@
         {
           "go_name": "ParameterMinMaxNotRelevantForManuMode",
           "wire_value": "MIN_MAX_VALUE_NOT_RELEVANT_FOR_MANU_MODE"
+        },
+        {
+          "go_name": "ParameterMoistureDetected",
+          "wire_value": "MOISTURE_DETECTED"
         },
         {
           "go_name": "ParameterMotion",
@@ -2193,6 +2217,10 @@
           "wire_value": "RSSI_PEER"
         },
         {
+          "go_name": "ParameterRaining",
+          "wire_value": "RAINING"
+        },
+        {
           "go_name": "ParameterRampTime",
           "wire_value": "RAMP_TIME"
         },
@@ -2277,6 +2305,10 @@
           "wire_value": "SETPOINT"
         },
         {
+          "go_name": "ParameterSmokeAlarm",
+          "wire_value": "SMOKE_ALARM"
+        },
+        {
           "go_name": "ParameterSmokeDetectorAlarmStatus",
           "wire_value": "SMOKE_DETECTOR_ALARM_STATUS"
         },
@@ -2351,6 +2383,10 @@
         {
           "go_name": "ParameterWaterFlow",
           "wire_value": "WATER_FLOW"
+        },
+        {
+          "go_name": "ParameterWaterLevelDetected",
+          "wire_value": "WATERLEVEL_DETECTED"
         },
         {
           "go_name": "ParameterWaterVolume",
@@ -3217,6 +3253,105 @@
         {
           "go_name": "ScheduleTypeDefault",
           "wire_value": "default"
+        }
+      ]
+    },
+    {
+      "name": "SecurityClass",
+      "values": [
+        {
+          "go_name": "SecurityClassBattery",
+          "wire_value": "battery"
+        },
+        {
+          "go_name": "SecurityClassCO",
+          "wire_value": "co"
+        },
+        {
+          "go_name": "SecurityClassGas",
+          "wire_value": "gas"
+        },
+        {
+          "go_name": "SecurityClassIntrusion",
+          "wire_value": "intrusion"
+        },
+        {
+          "go_name": "SecurityClassPanic",
+          "wire_value": "panic"
+        },
+        {
+          "go_name": "SecurityClassSmoke",
+          "wire_value": "smoke"
+        },
+        {
+          "go_name": "SecurityClassTamper",
+          "wire_value": "tamper"
+        },
+        {
+          "go_name": "SecurityClassTechnical",
+          "wire_value": "technical"
+        },
+        {
+          "go_name": "SecurityClassWater",
+          "wire_value": "water"
+        }
+      ]
+    },
+    {
+      "name": "SecurityFaultReason",
+      "values": [
+        {
+          "go_name": "SecurityFaultReasonBlocked",
+          "wire_value": "blocked"
+        },
+        {
+          "go_name": "SecurityFaultReasonCentralLost",
+          "wire_value": "central_lost"
+        },
+        {
+          "go_name": "SecurityFaultReasonDeviceError",
+          "wire_value": "device_error"
+        },
+        {
+          "go_name": "SecurityFaultReasonDutyCycle",
+          "wire_value": "duty_cycle"
+        },
+        {
+          "go_name": "SecurityFaultReasonLowBattery",
+          "wire_value": "low_battery"
+        },
+        {
+          "go_name": "SecurityFaultReasonTamper",
+          "wire_value": "tamper"
+        },
+        {
+          "go_name": "SecurityFaultReasonUnreachable",
+          "wire_value": "unreachable"
+        }
+      ]
+    },
+    {
+      "name": "SecuritySeverity",
+      "values": [
+        {
+          "go_name": "SecuritySeverityAlarm",
+          "wire_value": "alarm"
+        },
+        {
+          "go_name": "SecuritySeverityCritical",
+          "wire_value": "critical"
+        },
+        {
+          "go_name": "SecuritySeverityInfo",
+          "wire_value": "info"
+        },
+        {
+          "go_name": "SecuritySeverityOK",
+          "wire_value": "ok"
+        },
+        {
+          "go_name": "SecuritySeverityWarning",
+          "wire_value": "warning"
         }
       ]
     },

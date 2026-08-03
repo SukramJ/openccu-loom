@@ -1,6 +1,6 @@
 {
-  "generated": "5db8cc08",
-  "head": "5db8cc08",
+  "generated": "7e0be109",
+  "head": "7e0be109",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27402,
-    "reachable": 4637,
-    "whitelisted": 19686,
-    "unreachable": 3079
+    "total_exported": 27448,
+    "reachable": 4661,
+    "whitelisted": 19697,
+    "unreachable": 3090
   },
   "by_package": [
     {
@@ -97,7 +97,7 @@
     {
       "package": "pkg/hmenum",
       "unreachable_funcs": 4,
-      "unreachable_types": 110,
+      "unreachable_types": 109,
       "unreachable_other": 46
     },
     {
@@ -187,7 +187,7 @@
     {
       "package": "pkg/hmapi",
       "unreachable_funcs": 2,
-      "unreachable_types": 130,
+      "unreachable_types": 134,
       "unreachable_other": 16
     },
     {
@@ -223,7 +223,7 @@
     {
       "package": "internal/alarm/engine",
       "unreachable_funcs": 0,
-      "unreachable_types": 25,
+      "unreachable_types": 26,
       "unreachable_other": 6
     },
     {
@@ -643,13 +643,13 @@
     {
       "package": "internal/store/sqlite",
       "unreachable_funcs": 0,
-      "unreachable_types": 104,
+      "unreachable_types": 107,
       "unreachable_other": 28
     },
     {
       "package": "pkg/hmevent",
       "unreachable_funcs": 0,
-      "unreachable_types": 61,
+      "unreachable_types": 65,
       "unreachable_other": 0
     },
     {
@@ -936,14 +936,14 @@
       "package": "internal/alarm",
       "identifier": "ArmFailureHook",
       "file": "internal/alarm/service.go",
-      "line": 97,
+      "line": 98,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "ArmFailureHook",
       "file": "internal/alarm/service.go",
-      "line": 97,
+      "line": 98,
       "kind": "type"
     },
     {
@@ -1020,14 +1020,14 @@
       "package": "internal/alarm",
       "identifier": "Deps",
       "file": "internal/alarm/service.go",
-      "line": 48,
+      "line": 49,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "Deps",
       "file": "internal/alarm/service.go",
-      "line": 48,
+      "line": 49,
       "kind": "type"
     },
     {
@@ -1062,21 +1062,21 @@
       "package": "internal/alarm",
       "identifier": "Service",
       "file": "internal/alarm/service.go",
-      "line": 61,
+      "line": 62,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "Settings",
       "file": "internal/alarm/service.go",
-      "line": 34,
+      "line": 35,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "Settings",
       "file": "internal/alarm/service.go",
-      "line": 34,
+      "line": 35,
       "kind": "type"
     },
     {
@@ -1195,14 +1195,14 @@
       "package": "internal/alarm/engine",
       "identifier": "ArmRequest",
       "file": "internal/alarm/engine/engine.go",
-      "line": 284,
+      "line": 336,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
       "identifier": "ArmResult",
       "file": "internal/alarm/engine/engine.go",
-      "line": 303,
+      "line": 355,
       "kind": "type"
     },
     {
@@ -1230,7 +1230,7 @@
       "package": "internal/alarm/engine",
       "identifier": "Deps",
       "file": "internal/alarm/engine/engine.go",
-      "line": 135,
+      "line": 183,
       "kind": "type"
     },
     {
@@ -1291,6 +1291,13 @@
     },
     {
       "package": "internal/alarm/engine",
+      "identifier": "IncidentSourceLedger",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 170,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
       "identifier": "IncidentStore",
       "file": "internal/alarm/engine/ports.go",
       "line": 37,
@@ -1335,14 +1342,14 @@
       "package": "internal/alarm/engine",
       "identifier": "SensorHealth",
       "file": "internal/alarm/engine/engine.go",
-      "line": 827,
+      "line": 895,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
       "identifier": "SensorReader",
       "file": "internal/alarm/engine/ports.go",
-      "line": 170,
+      "line": 178,
       "kind": "type"
     },
     {
@@ -1363,7 +1370,7 @@
       "package": "internal/alarm/engine",
       "identifier": "TimerScheduler",
       "file": "internal/alarm/engine/ports.go",
-      "line": 179,
+      "line": 187,
       "kind": "type"
     },
     {
@@ -1391,7 +1398,7 @@
       "package": "internal/alarm/engine",
       "identifier": "ZoneSnapshot",
       "file": "internal/alarm/engine/zone.go",
-      "line": 259,
+      "line": 287,
       "kind": "type"
     },
     {
@@ -14782,7 +14789,7 @@
       "package": "internal/north/mqtt",
       "identifier": "AlarmMQTTPublisher",
       "file": "internal/north/mqtt/alarm_publisher.go",
-      "line": 73,
+      "line": 130,
       "kind": "type"
     },
     {
@@ -17622,6 +17629,27 @@
     },
     {
       "package": "internal/store/sqlite",
+      "identifier": "AlarmIncidentSource",
+      "file": "internal/store/sqlite/alarm_incident_sources.go",
+      "line": 16,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmIncidentSource",
+      "file": "internal/store/sqlite/alarm_incident_sources.go",
+      "line": 16,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmIncidentSourceStore",
+      "file": "internal/store/sqlite/alarm_incident_sources.go",
+      "line": 35,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
       "identifier": "AlarmIncidentStore",
       "file": "internal/store/sqlite/alarm_incidents.go",
       "line": 43,
@@ -18595,6 +18623,20 @@
     },
     {
       "package": "pkg/hmapi",
+      "identifier": "AlarmIncident",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 363,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmIncident",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 363,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
       "identifier": "AlarmIncidentRef",
       "file": "pkg/hmapi/alarm.go",
       "line": 121,
@@ -18717,6 +18759,20 @@
       "identifier": "AlarmSensor",
       "file": "pkg/hmapi/alarm.go",
       "line": 33,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmSource",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 340,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmSource",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 340,
       "kind": "type"
     },
     {
@@ -20478,13 +20534,6 @@
     },
     {
       "package": "pkg/hmenum",
-      "identifier": "SecurityClass",
-      "file": "pkg/hmenum/security.go",
-      "line": 15,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
       "identifier": "SecurityClasses",
       "file": "pkg/hmenum/security.go",
       "line": 84,
@@ -20940,51 +20989,72 @@
     },
     {
       "package": "pkg/hmevent",
+      "identifier": "AlarmBlockerDetail",
+      "file": "pkg/hmevent/security.go",
+      "line": 135,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmBlockerDetail",
+      "file": "pkg/hmevent/security.go",
+      "line": 135,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmBlockerReason",
+      "file": "pkg/hmevent/security.go",
+      "line": 93,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
       "identifier": "AlarmCodesChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 108,
+      "line": 119,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmCountdownEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 180,
+      "line": 191,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmDuressEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 63,
+      "line": 74,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmHealthChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 149,
+      "line": 160,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmJournalAppendedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 276,
+      "line": 309,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmevent/alarm.go",
-      "line": 250,
+      "line": 270,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmevent/alarm.go",
-      "line": 250,
+      "line": 270,
       "kind": "type"
     },
     {
@@ -20998,42 +21068,42 @@
       "package": "pkg/hmevent",
       "identifier": "AlarmPanelChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 119,
+      "line": 130,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmReadinessChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 262,
+      "line": 295,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmReminderEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 89,
+      "line": 100,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmStateChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 198,
+      "line": 209,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmTriggeredEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 225,
+      "line": 236,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmWalkTestEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 162,
+      "line": 173,
       "kind": "type"
     },
     {
@@ -21342,6 +21412,13 @@
       "identifier": "RequestCoalescedEvent",
       "file": "pkg/hmevent/catalogue.go",
       "line": 241,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "SecuritySourceRef",
+      "file": "pkg/hmevent/security.go",
+      "line": 24,
       "kind": "type"
     },
     {
@@ -28820,7 +28897,7 @@
       "identifier": "TestNextFire",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 603
+      "line": 618
     },
     {
       "package": "internal/alarm",
@@ -29002,7 +29079,7 @@
       "identifier": "TestParseHHMM",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 568
+      "line": 583
     },
     {
       "package": "internal/alarm",
@@ -29044,21 +29121,21 @@
       "identifier": "TestScheduleChainFiresAtTheRightTimeAndRechains",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 411
+      "line": 426
     },
     {
       "package": "internal/alarm",
       "identifier": "TestScheduleChainSkipsInvalidTimeWithoutCrashing",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 516
+      "line": 531
     },
     {
       "package": "internal/alarm",
       "identifier": "TestScheduleFireAutoArmNotReadyJournalOnlyWithoutHook",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 307
+      "line": 322
     },
     {
       "package": "internal/alarm",
@@ -29072,7 +29149,7 @@
       "identifier": "TestScheduleFireAutoArmOtherErrorJournalsGeneric",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 330
+      "line": 345
     },
     {
       "package": "internal/alarm",
@@ -29100,42 +29177,42 @@
       "identifier": "TestScheduleFireUnknownZoneIsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 357
+      "line": 372
     },
     {
       "package": "internal/alarm",
       "identifier": "TestScheduleLoadEntriesPropagatesStoreError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 557
+      "line": 572
     },
     {
       "package": "internal/alarm",
       "identifier": "TestScheduleLoadEntriesSkipsMalformedZoneConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 539
+      "line": 554
     },
     {
       "package": "internal/alarm",
       "identifier": "TestScheduleStartBuildsOneChainPerScheduleEntry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 384
+      "line": 399
     },
     {
       "package": "internal/alarm",
       "identifier": "TestScheduleStartRecomputesChainsOnReload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 487
+      "line": 502
     },
     {
       "package": "internal/alarm",
       "identifier": "TestScheduleStopCancelsAllChains",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
-      "line": 458
+      "line": 473
     },
     {
       "package": "internal/alarm",
@@ -124262,6 +124339,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "GetAlarmIncident",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_incidents.go",
+      "line": 85
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GetAlarmIncident",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_incidents.go",
+      "line": 85
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "GetAlarmWalkTestStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm.go",
@@ -125491,6 +125582,20 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm_codes.go",
       "line": 71
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmIncidents",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_incidents.go",
+      "line": 34
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmIncidents",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_incidents.go",
+      "line": 34
     },
     {
       "package": "internal/north/rest/handlers",
@@ -148573,6 +148678,55 @@
     },
     {
       "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentSourceStoreAppendIsIdempotentByRef",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incident_sources_test.go",
+      "line": 65
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentSourceStoreAppendListByIncidentRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incident_sources_test.go",
+      "line": 39
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentSourceStoreDifferentRefsOrderedByAtMS",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incident_sources_test.go",
+      "line": 99
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentSourceStoreListByIncidentsBatches",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incident_sources_test.go",
+      "line": 128
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentSourceStoreListByIncidentsEmptyInput",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incident_sources_test.go",
+      "line": 162
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentSourceStoreListByIncidentsUnknownIDs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incident_sources_test.go",
+      "line": 177
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentSourceStorePurgeOrphansDeletesOnlyOrphans",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incident_sources_test.go",
+      "line": 200
+    },
+    {
+      "package": "internal/store/sqlite",
       "identifier": "TestAlarmIncidentStoreAddAcousticMSAccumulates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/alarm_incidents_test.go",
@@ -158061,7 +158215,7 @@
       "identifier": "TestCentralRegistryLookupRequiresName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/multi_ccu_scope_test.go",
-      "line": 658
+      "line": 660
     },
     {
       "package": "tests/contract",

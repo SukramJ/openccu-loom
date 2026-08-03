@@ -48,6 +48,17 @@ type AlarmNotificationEvent struct {
 	// for (both default true); each consumer honours its own flag.
 	MQTT    bool
 	Webhook bool
+	// Cause is the machine-readable cause token of the incident this
+	// notification belongs to (sensor, hazard, panic, …).
+	Cause string
+	// Sources carries the identity of every data point that has
+	// contributed to the incident.
+	//
+	// This is the event an operator enrols as a notification output, so
+	// it is the one that most needs to answer "what set this off?" —
+	// without it a downstream messenger can only report that *some*
+	// alarm fired in some zone.
+	Sources []SecuritySourceRef
 }
 
 // Type implements Event.
@@ -240,6 +251,15 @@ type AlarmTriggeredEvent struct {
 	Cause string
 	// Mode is the protection mode that was active at trigger time.
 	Mode hmenum.AlarmMode
+	// Sources carries the full identity of every data point that has
+	// contributed to this incident so far, newest last. SensorID and
+	// SensorName stay populated with the first cause for consumers
+	// that only need the headline.
+	//
+	// A running incident keeps collecting: a second detector going off
+	// while the siren already sounds appends here, which is what makes
+	// "which detectors fired?" answerable at all.
+	Sources []SecuritySourceRef
 }
 
 // Type implements Event.
@@ -251,9 +271,22 @@ type AlarmModeReadiness struct {
 	// Ready reports whether the mode can be armed without force.
 	Ready bool
 	// Blockers lists the sensor IDs currently blocking the arm.
+	//
+	// Superseded by [AlarmModeReadiness.Details] for anything that has
+	// to explain itself: this list carries no reason and deduplicates a
+	// sensor that blocks for several reasons down to one entry. It stays
+	// populated for existing consumers — a bare ID list is still the
+	// right shape for the bypass sheet, which only needs to know which
+	// sensors to offer.
 	Blockers []string
 	// Warnings lists sensor IDs with non-blocking health warnings.
+	// Same limitation as Blockers; see [AlarmModeReadiness.Details].
 	Warnings []string
+	// Details carries one entry per (sensor, reason) pair with the full
+	// source identity, so a client can answer "why can I not arm?" and
+	// deep-link to the offending device. Blocking entries correspond to
+	// Blockers, non-blocking ones to Warnings.
+	Details []AlarmBlockerDetail
 }
 
 // AlarmReadinessChangedEvent fires when the ready-to-arm computation

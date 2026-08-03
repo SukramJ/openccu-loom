@@ -8,6 +8,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Every alarm trigger is recorded, not just the first.** The engine's
+  trigger path returns early once a zone is already triggered, so a
+  second detector going off while the siren sounds left no trace beyond
+  a journal line carrying an opaque row id. A new per-incident source
+  ledger records every contributing data point with its full identity —
+  central, interface, channel address, parameter, sensor role — and the
+  trigger event re-publishes with the grown list. "Which detectors
+  fired?" is now answerable; before it was not.
+
+- **`GET /api/v1/alarm/incidents` and `/alarm/incidents/{id}`.** An
+  alarm's history was reachable only through the journal, which records
+  events rather than episodes and holds no source identity. The incident
+  store had carried a list query since it existed, with no caller.
+
+- **Notifications say what set the alarm off.**
+  `alarm_panel.notification` — the event an operator enrols for a
+  messenger — carried no sensor identity at all. It now carries the
+  cause and the full source list, on both the webhook and MQTT planes.
+
 - **Security & Safety taxonomy — the classification layer.** A new
   package classifies device data points into a hazard/fault taxonomy
   (smoke, water, gas, CO, tamper, battery, technical, intrusion, panic)
@@ -26,6 +45,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command as the cause of a fire.
 
 ### Fixed
+
+- **`FAILED_TO_ARM` reported opaque sensor ids where `TRIGGER` reported
+  names.** The two alarm events disagreed on what `open_sensors` even
+  contained, so a consumer could not treat the field uniformly. Both now
+  carry display names, plus a structured `sources` array. The arm-failure
+  hook forwards the blocking reason with each sensor, so "why can I not
+  arm?" is answerable — readiness previously deduplicated the reason away
+  and a sensor blocking for two reasons collapsed into one entry.
+
+- **Closed alarm incidents were never purged.** The journal retention
+  chain ran daily; incidents were kept forever, and the store's purge
+  method had no caller. Retention now applies the same window to closed
+  incidents and sweeps source rows their incidents left behind.
 
 - **Water and rain sensors get their sensor tile back.** The config UI
   looked up the channel types `WATER_DETECTOR` and `RAIN_DETECTOR`, which

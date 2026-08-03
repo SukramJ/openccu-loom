@@ -27,18 +27,38 @@ func (a *zone) computeReadiness(mode hmenum.AlarmMode) hmevent.AlarmModeReadines
 func (a *zone) readinessDetail(mode hmenum.AlarmMode) (verdict hmevent.AlarmModeReadiness, autoBypassed []string) {
 	pol := a.cfg.Blockers
 	var blockers, warnings, autoBypass []string
-	classify := func(id string, p hmenum.AlarmBlockerPolicy, auto bool) {
+	var details []hmevent.AlarmBlockerDetail
+	// detail records the reason alongside the sensor ID. The flat ID
+	// lists deduplicate, so a sensor that is both unreachable and
+	// low on battery collapses to one entry there and the reason is
+	// lost entirely — which is why "why can I not arm?" needs this
+	// second, un-deduplicated channel.
+	detail := func(s *sensorState, id string, reason hmevent.AlarmBlockerReason, blocking bool) {
+		ref := hmevent.NewSecuritySourceRef(s.row.CentralName, s.row.InterfaceID,
+			s.row.ChannelAddress, s.row.Parameter)
+		ref.SensorID = id
+		ref.Name = s.row.Name
+		ref.SensorType = s.row.SensorType
+		details = append(details, hmevent.AlarmBlockerDetail{
+			SensorID: id, Name: s.row.Name, Source: ref,
+			Reason: reason, Blocking: blocking,
+		})
+	}
+	classify := func(s *sensorState, id string, p hmenum.AlarmBlockerPolicy, auto bool, reason hmevent.AlarmBlockerReason) {
 		switch {
 		case p == hmenum.AlarmBlockerPolicyIgnore:
 		case p == hmenum.AlarmBlockerPolicyWarn:
 			warnings = append(warnings, id)
+			detail(s, id, reason, false)
 		case auto:
 			// Would block, but the flag converts the failure into a
 			// recorded exclusion.
 			warnings = append(warnings, id)
 			autoBypass = append(autoBypass, id)
+			detail(s, id, reason, false)
 		default:
 			blockers = append(blockers, id)
+			detail(s, id, reason, true)
 		}
 	}
 	for id, s := range a.sensors {
@@ -47,29 +67,37 @@ func (a *zone) readinessDetail(mode hmenum.AlarmMode) (verdict hmevent.AlarmMode
 		}
 		if a.bypassed[id] {
 			warnings = append(warnings, id)
+			detail(s, id, hmevent.AlarmBlockerReasonBypassed, false)
 			continue
 		}
 		auto := s.cfg.BypassAuto
 		if s.activeKnown && s.active && !s.cfg.AllowOpenAfterArming {
-			classify(id, pol.Open, auto)
+			classify(s, id, pol.Open, auto, hmevent.AlarmBlockerReasonOpen)
 		}
 		if !s.available {
-			classify(id, pol.Unreachable, auto)
+			classify(s, id, pol.Unreachable, auto, hmevent.AlarmBlockerReasonUnreachable)
 		}
 		if s.sabotage {
-			classify(id, pol.Sabotage, auto)
+			classify(s, id, pol.Sabotage, auto, hmevent.AlarmBlockerReasonSabotage)
 		}
 		if s.lowBattery {
-			classify(id, pol.LowBattery, auto)
+			classify(s, id, pol.LowBattery, auto, hmevent.AlarmBlockerReasonLowBattery)
 		}
 	}
 	sort.Strings(blockers)
 	sort.Strings(warnings)
 	sort.Strings(autoBypass)
+	sort.Slice(details, func(i, j int) bool {
+		if details[i].SensorID != details[j].SensorID {
+			return details[i].SensorID < details[j].SensorID
+		}
+		return details[i].Reason < details[j].Reason
+	})
 	return hmevent.AlarmModeReadiness{
 		Ready:    len(blockers) == 0,
 		Blockers: dedupe(blockers),
 		Warnings: dedupe(warnings),
+		Details:  details,
 	}, dedupe(autoBypass)
 }
 

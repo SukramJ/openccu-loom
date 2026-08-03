@@ -545,7 +545,7 @@ Sieben eigenständig mergebare Slices. Jede Slice ist für sich grün, jede hat 
 ### Slice 2 — Engine-Quellenledger & Readiness-Gründe (≈ 4 Tage, M)
 
 `SecuritySourceRef`; additive Felder auf `AlarmTriggeredEvent` **und** `AlarmNotificationEvent`; `incidentCause`-Erweiterung; Migration `033_alarm_incident_sources.sql`; `BlockerDetails`; `ZoneSnapshot` + offene/gestörte Sensoren; `GET /alarm/incidents`; Verdrahtung von `PurgeClosedBefore` an die bestehende Journal-Retention; Korrektur des `open_sensors[]`-Identifikatorbruchs.
-**Sicherheitshinweis:** Schreibpfad in `alarm_incident_sources` **asynchron** zur Engine-Goroutine (Vorbild Journal), damit eine langsame Platte nie eine Sirene verzögert.
+**Korrigiert bei der Umsetzung:** Der Schreibpfad ist **synchron**, nicht asynchron. Die Annahme „Vorbild Journal" traf nicht zu — `internal/alarm/journal/journal.go` schreibt selbst synchron auf der Engine-Goroutine, und `trigger()` persistiert den Incident laut eigenem Kommentar bewusst **vor** dem Auslösen der Ausgänge, damit ein Absturz nur über- statt unterzählen kann. Ein asynchroner Ledger-Schreibpfad hätte die Platte also nicht vom Auslösepfad genommen — Journal und Incident liegen weiterhin darauf — sondern nur den Nachweis lückenhafter gemacht als die Zähler, die er erklärt. Der Ledger-Insert gehört in dieselbe Safety-First-Phase.
 **Tests:** Test-first — der fehlschlagende Reproduzierer für den Rauch-Rückkopplungsfall zuerst; Unit-Tests der Engine für Folgeauslösungen im laufenden Incident; Contract-Test, dass `AlarmNotificationEvent` Sensoridentität trägt; Golden-Update für Journal/Incident-Serialisierung.
 
 ### Slice 3 — ENUM-Aktivwerte & Sensor-Kandidaten (≈ 3 Tage, M)

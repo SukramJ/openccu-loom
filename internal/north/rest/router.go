@@ -944,6 +944,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/alarm/silence-all", handlers.SilenceAllAlarmZones(d.Alarm, d.AuditRecorder))
 				pr.Get("/alarm/zones/{id}/readiness", handlers.GetAlarmZoneReadiness(d.Alarm))
 				pr.Get("/alarm/journal", handlers.ListAlarmJournal(d.Alarm))
+				pr.Get("/alarm/incidents", handlers.ListAlarmIncidents(d.Alarm))
+				pr.Get("/alarm/incidents/{id}", handlers.GetAlarmIncident(d.Alarm))
 				pr.Get("/alarm/panels", handlers.ListAlarmPanels(d.Alarm))
 				pr.With(op).Post("/alarm/zones/{id}/walktest/start", handlers.StartAlarmWalkTest(d.Alarm, d.AuditRecorder))
 				pr.With(op).Post("/alarm/zones/{id}/walktest/stop", handlers.StopAlarmWalkTest(d.Alarm, d.AuditRecorder))

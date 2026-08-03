@@ -225,7 +225,7 @@ func (r *scheduleRunner) fire(ctx context.Context, e scheduleEntry) {
 			"mode": string(e.sched.Mode), "blockers": nre.Blockers,
 		})
 		if r.deps.ArmFailure != nil {
-			r.deps.ArmFailure(e.zoneID, e.zoneName, e.sched.Mode, nre.Blockers)
+			r.deps.ArmFailure(e.zoneID, e.zoneName, e.sched.Mode, nre.Details)
 		}
 		return
 	}
