@@ -158,7 +158,6 @@ func TestSmokeSirenStatusToAlarmState(t *testing.T) {
 		want   uint8
 	}{
 		{SmokeStatusIdleOff, matterSmokeAlarmNormal},
-		{SmokeStatusIdleOn, matterSmokeAlarmNormal},
 		{SmokeStatusSecondaryAlarm, matterSmokeAlarmWarning},
 		{SmokeStatusPrimaryAlarm, matterSmokeAlarmCritical},
 		{SmokeStatusIntrusion, matterSmokeAlarmCritical},

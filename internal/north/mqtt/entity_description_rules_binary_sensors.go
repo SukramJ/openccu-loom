@@ -61,13 +61,11 @@ var binarySensorRulesByDeviceAndParam = map[devParam]EntityDescription{
 		SuggestedDisplayPrecision: -1,
 	},
 
-	// Window/door contact sensors — STATE → window
-	{"HmIP-SWD", "STATE"}: {
-		Key:                       "STATE",
-		DeviceClass:               "window",
-		EnabledByDefault:          true,
-		SuggestedDisplayPrecision: -1,
-	},
+	// Window/door contact sensors — STATE → window.
+	// HmIP-SWD is deliberately absent: it is the water sensor, it has no
+	// STATE parameter, and hasModelPrefix requires a "-" separator so the
+	// entry could not serve HmIP-SWDM*/HmIP-SWDO* as a prefix either.
+	// Divergence from the ported table, see docs/parity/by_design.md.
 	{"HmIP-SWDO", "STATE"}: {
 		Key:                       "STATE",
 		DeviceClass:               "window",

@@ -1,6 +1,6 @@
 {
-  "generated": "5bd66ac4",
-  "head": "5bd66ac4",
+  "generated": "5db8cc08",
+  "head": "5db8cc08",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27307,
-    "reachable": 4579,
-    "whitelisted": 19665,
-    "unreachable": 3063
+    "total_exported": 27402,
+    "reachable": 4637,
+    "whitelisted": 19686,
+    "unreachable": 3079
   },
   "by_package": [
     {
@@ -59,6 +59,12 @@
       "unreachable_other": 48
     },
     {
+      "package": "internal/model/safety",
+      "unreachable_funcs": 4,
+      "unreachable_types": 2,
+      "unreachable_other": 0
+    },
+    {
       "package": "internal/north/matter/commissioning",
       "unreachable_funcs": 4,
       "unreachable_types": 7,
@@ -87,6 +93,12 @@
       "unreachable_funcs": 4,
       "unreachable_types": 0,
       "unreachable_other": 0
+    },
+    {
+      "package": "pkg/hmenum",
+      "unreachable_funcs": 4,
+      "unreachable_types": 110,
+      "unreachable_other": 46
     },
     {
       "package": "internal/audit",
@@ -633,12 +645,6 @@
       "unreachable_funcs": 0,
       "unreachable_types": 104,
       "unreachable_other": 28
-    },
-    {
-      "package": "pkg/hmenum",
-      "unreachable_funcs": 0,
-      "unreachable_types": 104,
-      "unreachable_other": 46
     },
     {
       "package": "pkg/hmevent",
@@ -2596,14 +2602,14 @@
       "package": "internal/central",
       "identifier": "Readiness",
       "file": "internal/central/central.go",
-      "line": 482,
+      "line": 493,
       "kind": "type"
     },
     {
       "package": "internal/central",
       "identifier": "Readiness",
       "file": "internal/central/central.go",
-      "line": 482,
+      "line": 493,
       "kind": "type"
     },
     {
@@ -3212,28 +3218,28 @@
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2329,
+      "line": 2328,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2329,
+      "line": 2328,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2208,
+      "line": 2207,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2208,
+      "line": 2207,
       "kind": "var"
     },
     {
@@ -8889,14 +8895,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "SmokeSirenConfig",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 94,
+      "line": 93,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "SmokeSirenConfig",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 94,
+      "line": 93,
       "kind": "type"
     },
     {
@@ -10585,6 +10591,48 @@
       "file": "internal/model/optimistic/tracker.go",
       "line": 93,
       "kind": "type"
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "Classification",
+      "file": "internal/model/safety/classify.go",
+      "line": 13,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "Classification",
+      "file": "internal/model/safety/classify.go",
+      "line": 13,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "Classify",
+      "file": "internal/model/safety/classify.go",
+      "line": 181,
+      "kind": "func"
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "Classify",
+      "file": "internal/model/safety/classify.go",
+      "line": 181,
+      "kind": "func"
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "Excluded",
+      "file": "internal/model/safety/classify.go",
+      "line": 218,
+      "kind": "func"
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "Excluded",
+      "file": "internal/model/safety/classify.go",
+      "line": 218,
+      "kind": "func"
     },
     {
       "package": "internal/model/value",
@@ -19697,14 +19745,14 @@
       "package": "pkg/hmenum",
       "identifier": "ClickEvents",
       "file": "pkg/hmenum/parameter.go",
-      "line": 191,
+      "line": 200,
       "kind": "var"
     },
     {
       "package": "pkg/hmenum",
       "identifier": "ClickEvents",
       "file": "pkg/hmenum/parameter.go",
-      "line": 191,
+      "line": 200,
       "kind": "var"
     },
     {
@@ -19865,14 +19913,14 @@
       "package": "pkg/hmenum",
       "identifier": "DeviceChannel0Parameters",
       "file": "pkg/hmenum/parameter.go",
-      "line": 239,
+      "line": 248,
       "kind": "var"
     },
     {
       "package": "pkg/hmenum",
       "identifier": "DeviceChannel0Parameters",
       "file": "pkg/hmenum/parameter.go",
-      "line": 239,
+      "line": 248,
       "kind": "var"
     },
     {
@@ -20201,14 +20249,14 @@
       "package": "pkg/hmenum",
       "identifier": "OptionalParameters",
       "file": "pkg/hmenum/parameter.go",
-      "line": 312,
+      "line": 321,
       "kind": "var"
     },
     {
       "package": "pkg/hmenum",
       "identifier": "OptionalParameters",
       "file": "pkg/hmenum/parameter.go",
-      "line": 312,
+      "line": 321,
       "kind": "var"
     },
     {
@@ -20423,6 +20471,62 @@
     },
     {
       "package": "pkg/hmenum",
+      "identifier": "SecurityClass",
+      "file": "pkg/hmenum/security.go",
+      "line": 15,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SecurityClass",
+      "file": "pkg/hmenum/security.go",
+      "line": 15,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SecurityClasses",
+      "file": "pkg/hmenum/security.go",
+      "line": 84,
+      "kind": "func"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SecurityClasses",
+      "file": "pkg/hmenum/security.go",
+      "line": 84,
+      "kind": "func"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SecurityFaultReason",
+      "file": "pkg/hmenum/security.go",
+      "line": 163,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SecurityFaultReason",
+      "file": "pkg/hmenum/security.go",
+      "line": 163,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SecuritySeverity",
+      "file": "pkg/hmenum/security.go",
+      "line": 95,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SecuritySeverity",
+      "file": "pkg/hmenum/security.go",
+      "line": 95,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
       "identifier": "ServiceMessageType",
       "file": "pkg/hmenum/incident.go",
       "line": 126,
@@ -20441,6 +20545,20 @@
       "file": "pkg/hmenum/command.go",
       "line": 47,
       "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SeverityForClass",
+      "file": "pkg/hmenum/security.go",
+      "line": 145,
+      "kind": "func"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "SeverityForClass",
+      "file": "pkg/hmenum/security.go",
+      "line": 145,
+      "kind": "func"
     },
     {
       "package": "pkg/hmenum",
@@ -32364,6 +32482,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/central_test.go",
       "line": 17
+    },
+    {
+      "package": "internal/central",
+      "identifier": "TestNewWiresHubModelNotifiers",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/hub_notifier_wiring_test.go",
+      "line": 29
     },
     {
       "package": "internal/central",
@@ -82294,14 +82419,14 @@
       "identifier": "NewSmokeSiren",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 100
+      "line": 99
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSmokeSiren",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 100
+      "line": 99
     },
     {
       "package": "internal/model/custom/siren",
@@ -82756,21 +82881,21 @@
       "identifier": "TestSirenOnMatterValueChangedFiresOnConfirmedAcousticChange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 216
+      "line": 215
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenOnMatterValueChangedNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 244
+      "line": 243
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenOnMatterValueChangedUnsubscribeStopsCallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 230
+      "line": 229
     },
     {
       "package": "internal/model/custom/siren",
@@ -83001,7 +83126,7 @@
       "identifier": "TestSmokeSirenCOStateAlwaysNormal",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 190
+      "line": 189
     },
     {
       "package": "internal/model/custom/siren",
@@ -83022,7 +83147,7 @@
       "identifier": "TestSmokeSirenFeatureMapAdvertisesSmoke",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 179
+      "line": 178
     },
     {
       "package": "internal/model/custom/siren",
@@ -83064,7 +83189,7 @@
       "identifier": "TestSmokeSirenInvokeRejectsAllCommands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 201
+      "line": 200
     },
     {
       "package": "internal/model/custom/siren",
@@ -83169,21 +83294,21 @@
       "identifier": "TestSmokeSirenOnMatterValueChangedFiresOnConfirmedStatusChange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 263
+      "line": 262
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenOnMatterValueChangedNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 290
+      "line": 289
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenOnMatterValueChangedUnsubscribeStopsCallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/matter_test.go",
-      "line": 276
+      "line": 275
     },
     {
       "package": "internal/model/custom/siren",
@@ -88055,28 +88180,28 @@
       "identifier": "BinarySensorQuantityForDeviceParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 232
+      "line": 231
     },
     {
       "package": "internal/model/generic",
       "identifier": "BinarySensorQuantityForDeviceParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 232
+      "line": 231
     },
     {
       "package": "internal/model/generic",
       "identifier": "BinarySensorQuantityForParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 225
+      "line": 224
     },
     {
       "package": "internal/model/generic",
       "identifier": "BinarySensorQuantityForParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 225
+      "line": 224
     },
     {
       "package": "internal/model/generic",
@@ -89049,28 +89174,28 @@
       "identifier": "QuantityForDeviceParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 285
+      "line": 284
     },
     {
       "package": "internal/model/generic",
       "identifier": "QuantityForDeviceParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 285
+      "line": 284
     },
     {
       "package": "internal/model/generic",
       "identifier": "QuantityForParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 259
+      "line": 258
     },
     {
       "package": "internal/model/generic",
       "identifier": "QuantityForParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 259
+      "line": 258
     },
     {
       "package": "internal/model/generic",
@@ -89217,42 +89342,42 @@
       "identifier": "SensorQuantityMetadataForDeviceParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 202
+      "line": 201
     },
     {
       "package": "internal/model/generic",
       "identifier": "SensorQuantityMetadataForDeviceParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 202
+      "line": 201
     },
     {
       "package": "internal/model/generic",
       "identifier": "SensorQuantityMetadataForParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 192
+      "line": 191
     },
     {
       "package": "internal/model/generic",
       "identifier": "SensorQuantityMetadataForParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 192
+      "line": 191
     },
     {
       "package": "internal/model/generic",
       "identifier": "SensorQuantityMetadataForUnit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 218
+      "line": 217
     },
     {
       "package": "internal/model/generic",
       "identifier": "SensorQuantityMetadataForUnit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 218
+      "line": 217
     },
     {
       "package": "internal/model/generic",
@@ -92472,14 +92597,14 @@
       "identifier": "ValueBehaviorForParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 301
+      "line": 300
     },
     {
       "package": "internal/model/generic",
       "identifier": "ValueBehaviorForParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/quantity.go",
-      "line": 301
+      "line": 300
     },
     {
       "package": "internal/model/generic",
@@ -96764,6 +96889,55 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/optimistic/extra_test.go",
       "line": 15
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "TestClassificationActive",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/safety/classify_test.go",
+      "line": 221
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "TestClassifyByChannelAndParameter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/safety/classify_test.go",
+      "line": 16
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "TestClassifyByParameter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/safety/classify_test.go",
+      "line": 126
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "TestClassifyRainIsNotWater",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/safety/classify_test.go",
+      "line": 297
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "TestClassifySmokeAlarmStatusExcludesIntrusion",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/safety/classify_test.go",
+      "line": 104
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "TestClassifyUnclassifiedParameters",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/safety/classify_test.go",
+      "line": 264
+    },
+    {
+      "package": "internal/model/safety",
+      "identifier": "TestExcludedParametersNeverClassify",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/safety/classify_test.go",
+      "line": 183
     },
     {
       "package": "internal/model/schedule",
@@ -118379,14 +118553,14 @@
       "identifier": "TestDoorbellEventType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 404
+      "line": 423
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForEventPressShort",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 178
+      "line": 197
     },
     {
       "package": "internal/north/mqtt",
@@ -118435,63 +118609,63 @@
       "identifier": "TestEntityDescriptionForLightComponentReturnsZeroValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 170
+      "line": 189
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForNumberFrequencyUnit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 162
+      "line": 181
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForSensorOperatingVoltageDiagnosticDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 152
+      "line": 171
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForSensorRSSIDeviceDiagnosticDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 142
+      "line": 161
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForSensorTemperatureMatches",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 129
+      "line": 148
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionLookupBasicMatches",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 204
+      "line": 223
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionLookupDevicePrefixMatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 291
+      "line": 310
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionLookupReturnsNilOnMiss",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 279
+      "line": 298
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionLookupRuleCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 305
+      "line": 324
     },
     {
       "package": "internal/north/mqtt",
@@ -118533,7 +118707,7 @@
       "identifier": "TestEventDeviceClassForModel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 321
+      "line": 340
     },
     {
       "package": "internal/north/mqtt",
@@ -118929,13 +119103,6 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "TestLookupBinarySensorRuleHmIPSWDWindow",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 92
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "TestLookupBinarySensorRuleLowBatteryAliases",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
@@ -118950,6 +119117,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestLookupBinarySensorRuleWindowContacts",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/entity_descriptions_test.go",
+      "line": 100
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestLookupButtonRule",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
@@ -118960,7 +119134,7 @@
       "identifier": "TestLookupCoverRuleHmIPBBLBlind",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 113
+      "line": 132
     },
     {
       "package": "internal/north/mqtt",
@@ -119023,7 +119197,7 @@
       "identifier": "TestLookupNumberRuleHmwIo12FrequencyMHz",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 103
+      "line": 122
     },
     {
       "package": "internal/north/mqtt",
@@ -119079,21 +119253,21 @@
       "identifier": "TestMapDoorbellEventTypesClassicModelAlsoRewrites",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 372
+      "line": 391
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestMapDoorbellEventTypesNonDoorbellPassesThrough",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 386
+      "line": 405
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestMapDoorbellEventTypesRewritesPressShortToRing",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 353
+      "line": 372
     },
     {
       "package": "internal/north/mqtt",
@@ -120297,7 +120471,7 @@
       "identifier": "TestUnitMicrometersIsValidUtf8",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 190
+      "line": 209
     },
     {
       "package": "internal/north/mqtt",
@@ -155462,6 +155636,48 @@
     },
     {
       "package": "pkg/hmenum",
+      "identifier": "TestSecurityClassHazardDiagnosticPartition",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "pkg/hmenum/security_test.go",
+      "line": 46
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "TestSecurityClassValid",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "pkg/hmenum/security_test.go",
+      "line": 26
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "TestSecurityClasses",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "pkg/hmenum/security_test.go",
+      "line": 69
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "TestSecurityEnumStringRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "pkg/hmenum/security_test.go",
+      "line": 190
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "TestSecurityFaultReasonValid",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "pkg/hmenum/security_test.go",
+      "line": 160
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "TestSecuritySeverityRank",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "pkg/hmenum/security_test.go",
+      "line": 96
+    },
+    {
+      "package": "pkg/hmenum",
       "identifier": "TestServiceMessageTypeString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmenum/string_methods_test.go",
@@ -155473,6 +155689,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmenum/string_methods_test.go",
       "line": 169
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "TestSeverityForClass",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "pkg/hmenum/security_test.go",
+      "line": 127
     },
     {
       "package": "pkg/hmenum",
@@ -157607,21 +157830,21 @@
       "identifier": "TestEnumShapeHint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmui/quantity_test.go",
-      "line": 130
+      "line": 131
     },
     {
       "package": "pkg/hmui",
       "identifier": "TestHintFor_FallbackLayers",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmui/quantity_test.go",
-      "line": 241
+      "line": 242
     },
     {
       "package": "pkg/hmui",
       "identifier": "TestHintFor_NeverEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmui/quantity_test.go",
-      "line": 119
+      "line": 120
     },
     {
       "package": "pkg/hmui",
@@ -157635,21 +157858,21 @@
       "identifier": "TestHintFor_StateColorRules",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmui/quantity_test.go",
-      "line": 87
+      "line": 88
     },
     {
       "package": "pkg/hmui",
       "identifier": "TestTypeFallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmui/quantity_test.go",
-      "line": 206
+      "line": 207
     },
     {
       "package": "pkg/hmui",
       "identifier": "TestUnitHintFor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmui/quantity_test.go",
-      "line": 167
+      "line": 168
     },
     {
       "package": "pkg/interfaces",
@@ -158805,6 +159028,48 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/spa_cdp_operation_contract_test.go",
       "line": 27
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSafetyActiveValuesArePinnedValueLists",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/safety_classifier_test.go",
+      "line": 198
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSafetyCoverageFloorKnownDevices",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/safety_classifier_test.go",
+      "line": 248
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSafetyExclusionListIsNonEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/safety_classifier_test.go",
+      "line": 100
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSafetyFleetClassifiedTriplesAreValidTaxonomy",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/safety_classifier_test.go",
+      "line": 151
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSafetyFleetExcludedParametersNeverClassify",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/safety_classifier_test.go",
+      "line": 127
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSafetyFleetMatchesExpectedClassification",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/safety_classifier_test.go",
+      "line": 180
     },
     {
       "package": "tests/contract",
