@@ -73,10 +73,13 @@ type Service struct {
 	manager *outputs.Manager
 	codes   *codes.Facade
 
-	mu           sync.Mutex
-	started      bool
-	unsubs       map[string][]func() // per central
-	dpIndex      map[string]string   // central|iface|channel|param → sensor ID
+	mu      sync.Mutex
+	started bool
+	unsubs  map[string][]func()      // per central
+	dpIndex map[string]sensorBinding // central|iface|channel|param → routing entry
+	// enums resolves enumeration indices to labels for sensors that
+	// narrow activation via active_values.
+	enums        *enumResolver
 	devIndex     map[string][]string // central|deviceAddress → sensor IDs
 	devHealth    map[string]engine.SensorHealth
 	ifaceDown    map[string]map[string]bool // central → interface → unreachable
@@ -119,7 +122,8 @@ func NewService(deps Deps) (*Service, error) {
 		log:       logger,
 		bus:       events.NewBus(),
 		unsubs:    map[string][]func(){},
-		dpIndex:   map[string]string{},
+		dpIndex:   map[string]sensorBinding{},
+		enums:     newEnumResolver(deps.Registry),
 		devIndex:  map[string][]string{},
 		devHealth: map[string]engine.SensorHealth{},
 		ifaceDown: map[string]map[string]bool{},

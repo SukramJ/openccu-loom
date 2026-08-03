@@ -48,6 +48,9 @@ type AlarmPanel interface {
 	// RemoteKeyCandidates enumerates the physical remote/wall-button
 	// key channels a remote-key code binding can dispatch on.
 	RemoteKeyCandidates() []alarm.RemoteKeyCandidate
+	// SensorCandidates enumerates the data points a zone can enrol as
+	// alarm sensors, with the pre-fill a picker needs.
+	SensorCandidates(ctx context.Context) []alarm.SensorCandidate
 }
 
 // Compile-time proof the daemon-level alarm service satisfies the

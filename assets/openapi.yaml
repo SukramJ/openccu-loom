@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.15.0
+  version: 3.16.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6745,6 +6745,39 @@ paths:
                 items: { $ref: "#/components/schemas/AlarmJournalEntry" }
         "400": { $ref: "#/components/responses/BadRequest" }
 
+  /alarm/sensor-candidates:
+    get:
+      operationId: listAlarmSensorCandidates
+      summary: List the data points a zone can enrol as alarm sensors
+      description: >
+        Sensor enrollment was the one alarm surface without a candidate list —
+        outputs and remote keys had one, sensors were unvalidated free text over
+        (central, interface, channel address, parameter), so a typo produced a
+        sensor that silently never fired.
+
+
+        Each candidate carries the pre-fill an enrollment needs: the suggested
+        alarm role, the hazard class, the parameter's value list, and
+        `active_values` wherever the default "anything but index 0 is active"
+        rule would be wrong. The clearest case is
+        `SMOKE_DETECTOR_ALARM_STATUS`, whose value list contains
+        `INTRUSION_ALARM` — the alarm system driving that detector as a siren,
+        not a smoke detection.
+      tags: [alarm]
+      parameters:
+        - in: query
+          name: enrolled
+          schema: { type: string, enum: ["false"] }
+          description: Pass `false` to hide data points a zone already holds.
+      responses:
+        "200":
+          description: Enrollable sensor data points.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmSensorCandidate" }
+
   /alarm/incidents:
     get:
       operationId: listAlarmIncidents
@@ -11552,6 +11585,54 @@ components:
         exit_delay_s:
           type: integer
           description: Exit delay in seconds the zone is now counting down; 0 when armed immediately.
+
+    AlarmSensorCandidate:
+      type: object
+      description: One data point a zone can enrol as an alarm sensor.
+      required: [central, interface_id, device_address, channel_address, channel_no, parameter]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        device_address: { type: string }
+        device_name: { type: string }
+        model: { type: string }
+        channel_address: { type: string }
+        channel_no: { type: integer }
+        channel_name: { type: string }
+        channel_type: { type: string }
+        parameter: { type: string }
+        rooms: { type: array, items: { type: string } }
+        functions: { type: array, items: { type: string } }
+        sensor_type:
+          type: string
+          enum: [door, window, motion, tamper, hazard, panic]
+          description: The suggested alarm role.
+        security_class:
+          type: string
+          enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+        value_list:
+          type: array
+          items: { type: string }
+          description: The parameter's enumeration vocabulary; absent for a boolean.
+        value_labels:
+          type: array
+          items: { type: string }
+          description: Localized renderings of value_list, in the same order.
+        active_values:
+          type: array
+          items: { type: string }
+          description: >
+            Recommended active-value selection. Present only where the default
+            rule would be wrong.
+        recommended:
+          type: boolean
+          description: Prefer this data point when a device offers several.
+        deprioritised:
+          type: boolean
+          description: Workable, but a better sibling exists; see reason.
+        reason: { type: string }
+        enrolled: { type: boolean }
+        zone_id: { type: string }
 
     AlarmSource:
       type: object

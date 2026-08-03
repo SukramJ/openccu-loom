@@ -36,7 +36,21 @@ export function guessSensorType(device: DeviceLike): AlarmSensorType {
   return "door";
 }
 
-/** Default STATE-family parameter for a sensor type. */
+/**
+ * Default STATE-family parameter for a sensor type.
+ *
+ * Hazard resolves to the derived boolean SMOKE_ALARM rather than the raw
+ * SMOKE_DETECTOR_ALARM_STATUS enumeration. The raw status carries
+ * INTRUSION_ALARM in its value list, which means the installation drove
+ * that detector as a siren for a burglary — the default "anything but
+ * index 0 is active" rule would read the alarm system's own output back
+ * as a smoke detection. Pre-selecting the boolean keeps an operator out
+ * of that trap without having to understand it.
+ *
+ * The server-side candidate list (`GET /alarm/sensor-candidates`) makes
+ * the same recommendation and additionally supplies active_values for
+ * anyone who does pick the raw enumeration.
+ */
 export function guessSensorParameter(type: AlarmSensorType): string {
   switch (type) {
     case "motion":
@@ -44,7 +58,7 @@ export function guessSensorParameter(type: AlarmSensorType): string {
     case "tamper":
       return "SABOTAGE";
     case "hazard":
-      return "SMOKE_DETECTOR_ALARM_STATUS";
+      return "SMOKE_ALARM";
     case "panic":
       return "PRESS_SHORT";
     default:

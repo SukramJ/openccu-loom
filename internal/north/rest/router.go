@@ -951,6 +951,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/alarm/zones/{id}/walktest/stop", handlers.StopAlarmWalkTest(d.Alarm, d.AuditRecorder))
 				pr.Get("/alarm/zones/{id}/walktest", handlers.GetAlarmWalkTestStatus(d.Alarm))
 				pr.Get("/alarm/output-candidates", handlers.ListAlarmOutputCandidates(d.Alarm, d.Labels))
+				pr.Get("/alarm/sensor-candidates", handlers.ListAlarmSensorCandidates(d.Alarm, d.Labels))
 				pr.Get("/alarm/remote-key-candidates", handlers.ListAlarmRemoteKeyCandidates(d.Alarm))
 				pr.With(op).Post("/alarm/outputs/{id}/test", handlers.TestAlarmOutput(d.Alarm, d.AuditRecorder))
 				// Alarm codes: reads and writes both require the operator

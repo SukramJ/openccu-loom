@@ -394,3 +394,45 @@ type AlarmIncident struct {
 	// Open reports whether the incident is still running.
 	Open bool `json:"open"`
 }
+
+// AlarmSensorCandidate is one data point a zone can enrol as an alarm
+// sensor, with the pre-fill a picker needs to enrol it correctly.
+type AlarmSensorCandidate struct {
+	Central        string   `json:"central"`
+	InterfaceID    string   `json:"interface_id"`
+	DeviceAddress  string   `json:"device_address"`
+	DeviceName     string   `json:"device_name,omitempty"`
+	Model          string   `json:"model,omitempty"`
+	ChannelAddress string   `json:"channel_address"`
+	ChannelNo      int      `json:"channel_no"`
+	ChannelName    string   `json:"channel_name,omitempty"`
+	ChannelType    string   `json:"channel_type,omitempty"`
+	Parameter      string   `json:"parameter"`
+	Rooms          []string `json:"rooms,omitempty"`
+	Functions      []string `json:"functions,omitempty"`
+	// SensorType is the suggested alarm role.
+	SensorType string `json:"sensor_type,omitempty"`
+	// SecurityClass is the hazard/fault class of the data point.
+	SecurityClass string `json:"security_class,omitempty"`
+	// ValueList is the parameter's enumeration vocabulary, empty for a
+	// boolean parameter.
+	ValueList []string `json:"value_list,omitempty"`
+	// ValueLabels are the localized renderings of ValueList, in the
+	// same order, when a translation exists.
+	ValueLabels []string `json:"value_labels,omitempty"`
+	// ActiveValues is the recommended active-value selection. It is set
+	// only where the default "anything but index 0" rule would be
+	// wrong.
+	ActiveValues []string `json:"active_values,omitempty"`
+	// Recommended marks the data point to prefer when a device offers
+	// several for the same purpose.
+	Recommended bool `json:"recommended,omitempty"`
+	// Deprioritised marks a workable data point with a better sibling;
+	// Reason names why.
+	Deprioritised bool   `json:"deprioritised,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+	// Enrolled reports whether the data point is already enrolled, and
+	// ZoneID names the zone holding it.
+	Enrolled bool   `json:"enrolled,omitempty"`
+	ZoneID   string `json:"zone_id,omitempty"`
+}

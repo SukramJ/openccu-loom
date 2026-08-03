@@ -118,6 +118,8 @@ func (f *alarmVerbCodeFixture) OutputTargetEligible(string, string, hmenum.Alarm
 
 func (f *alarmVerbCodeFixture) RemoteKeyCandidates() []alarm.RemoteKeyCandidate { return nil }
 
+func (f *alarmVerbCodeFixture) SensorCandidates(context.Context) []alarm.SensorCandidate { return nil }
+
 // newAlarmVerbCodeFixture builds an empty, started fixture wired with
 // validator and a recordingSink.
 func newAlarmVerbCodeFixture(t *testing.T, validator *fakeVerbCodeValidator) *alarmVerbCodeFixture {

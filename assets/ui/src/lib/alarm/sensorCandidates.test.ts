@@ -156,7 +156,10 @@ describe("guessSensorParameter", () => {
   it.each([
     ["motion", "MOTION"],
     ["tamper", "SABOTAGE"],
-    ["hazard", "SMOKE_DETECTOR_ALARM_STATUS"],
+    // The derived boolean, not the raw enumeration: the raw status
+    // carries INTRUSION_ALARM, which is the alarm system driving this
+    // detector as a siren rather than a smoke detection.
+    ["hazard", "SMOKE_ALARM"],
     ["panic", "PRESS_SHORT"],
     ["door", "STATE"],
     ["window", "STATE"],

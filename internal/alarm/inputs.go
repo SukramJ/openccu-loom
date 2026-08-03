@@ -11,6 +11,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/model/safety"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -25,11 +27,25 @@ func (s *Service) rebuildIndexes(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load sensors: %w", err)
 	}
-	dpIndex := map[string]string{}
+	dpIndex := map[string]sensorBinding{}
 	devIndex := map[string][]string{}
 	for i := range rows {
 		row := &rows[i]
-		dpIndex[dpKey(row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter)] = row.ID
+		// A malformed config must not drop the sensor from routing: it
+		// keeps the historical activation rule and stays armed.
+		cfg, err := engine.ParseSensorConfig(row.ConfigJSON)
+		if err != nil {
+			s.log.Error("alarm sensor config unparsable; falling back to the default activation rule",
+				"sensor", row.ID, "error", err)
+		}
+		dpIndex[dpKey(row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter)] = sensorBinding{
+			id:             row.ID,
+			rule:           activationRule{labels: cfg.ActiveValues},
+			centralName:    row.CentralName,
+			interfaceID:    row.InterfaceID,
+			channelAddress: row.ChannelAddress,
+			parameter:      row.Parameter,
+		}
 		dev := devKey(row.CentralName, deviceAddress(row.ChannelAddress))
 		devIndex[dev] = append(devIndex[dev], row.ID)
 	}
@@ -37,6 +53,9 @@ func (s *Service) rebuildIndexes(ctx context.Context) error {
 	s.dpIndex = dpIndex
 	s.devIndex = devIndex
 	s.mu.Unlock()
+	// A re-enrolled sensor must not keep a stale value list.
+	s.enums.reset()
+	s.warnContradictingEnrollments(rows)
 	return nil
 }
 
@@ -71,7 +90,7 @@ func (s *Service) attachUnit(u *central.Unit) {
 func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChangedEvent) {
 	ctx := context.Background()
 	s.mu.Lock()
-	sensorID, isSensorDP := s.dpIndex[dpKey(centralName, e.Key.InterfaceID, e.Key.ChannelAddress, e.Key.Parameter)]
+	binding, isSensorDP := s.dpIndex[dpKey(centralName, e.Key.InterfaceID, e.Key.ChannelAddress, e.Key.Parameter)]
 	devSensors := append([]string(nil), s.devIndex[devKey(centralName, deviceAddress(e.Key.ChannelAddress))]...)
 	s.mu.Unlock()
 
@@ -81,8 +100,8 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 	s.intents.onEvent(ctx, centralName, e)
 
 	if isSensorDP {
-		if active, known := paramValueActive(e.NewValue); known {
-			s.engine.HandleSensorEvent(ctx, sensorID, active)
+		if active, known := s.active(binding, e.NewValue); known {
+			s.engine.HandleSensorEvent(ctx, binding.id, active)
 		}
 	}
 	if len(devSensors) == 0 {
@@ -165,9 +184,9 @@ func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChang
 	nowAllDown := s.allEnrolledDownLocked(centralName)
 	// Collect the sensors of the affected interface.
 	var affected []string
-	for key, id := range s.dpIndex {
+	for key, b := range s.dpIndex {
 		if strings.HasPrefix(key, centralName+"|"+e.InterfaceID+"|") {
-			affected = append(affected, id)
+			affected = append(affected, b.id)
 		}
 	}
 	s.mu.Unlock()
@@ -254,4 +273,61 @@ func paramValueBool(v hmtypes.ParamValue) (val, ok bool) {
 		return v.Bool, true
 	}
 	return false, false
+}
+
+// warnContradictingEnrollments logs enrollments the security
+// classifier disagrees with. It only reports; it never rewrites an
+// operator's choice, because a classifier is a heuristic and an
+// enrollment is a decision.
+//
+// The case worth surfacing is the raw smoke-detector status enrolled
+// without active values: it works, but its value list contains the
+// alarm system's own intrusion-siren command, so the default rule
+// treats that command as a smoke detection.
+func (s *Service) warnContradictingEnrollments(rows []sqlitestore.AlarmSensorRow) {
+	for i := range rows {
+		row := &rows[i]
+		cfg, err := engine.ParseSensorConfig(row.ConfigJSON)
+		if err != nil {
+			continue
+		}
+		param := hmenum.Parameter(row.Parameter)
+		if safety.Excluded(param) {
+			s.log.Warn("alarm sensor enrolled on an actuator-feedback parameter: the engine writes this value, so the alarm can retrigger itself",
+				"sensor", row.ID, "zone", row.ZoneID,
+				"channel", row.ChannelAddress, "parameter", row.Parameter)
+			continue
+		}
+		cls, ok := safety.Classify("", s.channelTypeOf(row), param)
+		if !ok {
+			continue
+		}
+		if len(cls.ActiveValues) > 0 && len(cfg.ActiveValues) == 0 {
+			s.log.Warn("alarm sensor has no active_values on an enumerated parameter: every value but the first counts as an activation",
+				"sensor", row.ID, "zone", row.ZoneID,
+				"channel", row.ChannelAddress, "parameter", row.Parameter,
+				"recommended", cls.ActiveValues)
+		}
+		if row.SensorType == hmenum.AlarmSensorTypeHazard && !cfg.AlwaysOn {
+			s.log.Warn("hazard sensor is not always_on: it only fires while the zone is armed in one of its listed modes",
+				"sensor", row.ID, "zone", row.ZoneID, "parameter", row.Parameter)
+		}
+	}
+}
+
+// channelTypeOf resolves the channel type of an enrolled sensor from
+// the model, returning "" when the central or channel is unavailable.
+func (s *Service) channelTypeOf(row *sqlitestore.AlarmSensorRow) string {
+	if s.reg == nil {
+		return ""
+	}
+	u, ok := s.reg.Get(row.CentralName)
+	if !ok {
+		return ""
+	}
+	ch := u.GetChannel(row.ChannelAddress)
+	if ch == nil {
+		return ""
+	}
+	return ch.Type
 }
