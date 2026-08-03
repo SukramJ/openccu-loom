@@ -6,6 +6,12 @@
   for channel names no CCU actually uses, so leak and rain sensors were
   missing their headline value and their quick-control tile. They now
   render like every other sensor.
+- **Security & Safety now appears in Home Assistant.** Its own device
+  card with the overall state, a "something is wrong" flag, one sensor
+  per hazard type your installation actually has, one per zone, and two
+  event entities — one for hazards, one for faults — so you can route
+  them to different notifications. Types you have no detector for are
+  not created at all.
 - **New: Security & Safety.** One place that answers what is wrong —
   smoke, water, gas, intrusion, sabotage, weak batteries, technical
   faults — per zone and per type, with a ready-made subject and message

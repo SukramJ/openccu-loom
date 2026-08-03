@@ -8,6 +8,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Security & Safety reaches Home Assistant.** The domain now publishes
+  its own MQTT plane and its own device card: a folded state, an "is
+  something wrong right now" flag, a fault flag, one entity per hazard
+  and fault class the installation actually has, one per zone, and two
+  event streams — hazards and faults kept apart so they can be routed to
+  different destinations without inspecting the class.
+
+  A class with no source is not published at all. An installation
+  without gas detectors should not carry a permanently-off gas alarm.
+
+  The event topics are deliberately **not** retained: a consumer ignores
+  retained payloads on an event topic, and a retained alarm event would
+  re-fire every automation on every broker restart. `last_alarm` and
+  `last_fault` are retained precisely because of that — after a consumer
+  restart they are the only record of what happened.
+
+  Topic reference: `docs/mqtt-topic-schema.md`; rationale: ADR 0059.
+
+- **`alarm.duress_visibility` now actually does something.** The setting
+  shipped earlier in this release but nothing produced a duress report
+  yet. The domain subscribes the duress event and applies the policy at
+  the single point where the report is created, so MQTT, the webhook and
+  the API cannot disagree about it.
+
 - **Security & Safety: the domain that says what is wrong and tells someone.**
   A new daemon-level plane aggregates every classified data point into
   hazard classes (smoke, water, gas, CO, intrusion, panic) and fault
@@ -101,6 +125,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command as the cause of a fire.
 
 ### Fixed
+
+- **Retained discovery of the two daemon-level planes could never be
+  cleaned up.** The orphan sweep filtered on the `<central>_` node
+  prefix, which neither the alarm plane nor the security plane carries —
+  so a retracted zone panel kept a retained discovery config alive in
+  every consumer indefinitely, unreachable by any cleanup pass. Both node
+  ids are now named explicitly.
 
 - **The CCU add-on registered no control-panel tile.** The install hook
   called `/bin/update_hm_addons.tcl` — a helper that exists on no CCU

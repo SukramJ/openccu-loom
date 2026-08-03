@@ -31,6 +31,7 @@ func (s *Service) subscribeAlarm() {
 		events.Subscribe(s.alarmBus, s.onAlarmTriggered),
 		events.Subscribe(s.alarmBus, s.onAlarmStateChanged),
 		events.Subscribe(s.alarmBus, s.onAlarmHealthChanged),
+		events.Subscribe(s.alarmBus, s.onAlarmDuress),
 	}
 	s.mu.Lock()
 	s.unsubs = append(s.unsubs, unsubs...)
@@ -251,6 +252,42 @@ func (s *Service) onAlarmHealthChanged(e hmevent.AlarmHealthChangedEvent) {
 	snap := s.agg.snapshot()
 	s.mu.Unlock()
 	s.publishState(snap)
+}
+
+// onAlarmDuress reports a duress-code use or a silent panic trigger,
+// bounded by the configured visibility.
+//
+// The policy is applied here, at the single point where the report is
+// created, rather than in each plane: a decision replicated across MQTT,
+// the webhook and the WebSocket is a decision that will eventually be
+// implemented three different ways, and the one that gets it wrong
+// exposes the person the feature protects.
+//
+//   - hidden: the security plane stays silent entirely. The alarm
+//     domain's own webhook path still carries it, which is the
+//     historical behaviour.
+//   - notify_only: the report is delivered but marked non-retainable, so
+//     it reaches a phone and never lands in retained state or on a local
+//     screen.
+//   - full: an ordinary report.
+func (s *Service) onAlarmDuress(e hmevent.AlarmDuressEvent) {
+	vis := s.settings.DuressVisibility
+	if !vis.AllowsNotification() {
+		return
+	}
+	s.mu.Lock()
+	z := s.agg.zones[e.ZoneID]
+	s.mu.Unlock()
+	s.notify(reportInput{
+		Class:      hmenum.SecurityClassPanic,
+		Verb:       hmenum.SecurityVerbTriggered,
+		ZoneID:     e.ZoneID,
+		ZoneSlug:   z.Slug,
+		ZoneName:   e.ZoneName,
+		IncidentID: e.IncidentID,
+		At:         s.clk.Now(),
+		Retainable: vis.AllowsRetained(),
+	}, false)
 }
 
 // publishZone announces a zone view change.

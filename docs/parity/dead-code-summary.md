@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 304ef164
-HEAD: 304ef164
+Generated: 09bf64c8
+HEAD: 09bf64c8
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27598 |
-| Reachable | 4884 |
-| Whitelisted | 19760 |
-| **Unreachable** | **2954** |
+| Total Exported | 27621 |
+| Reachable | 4890 |
+| Whitelisted | 19773 |
+| **Unreachable** | **2958** |
 
 ## Top-20 Packages by Dead Code
 
@@ -87,10 +87,10 @@ HEAD: 304ef164
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 96 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 96 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 93 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 93 |
 
 ## Full By-Package Breakdown
 
@@ -143,7 +143,7 @@ HEAD: 304ef164
 | internal/health | 0 | 16 | 0 |
 | internal/history | 0 | 13 | 0 |
 | internal/i18n | 0 | 2 | 0 |
-| internal/metrics | 0 | 62 | 2 |
+| internal/metrics | 0 | 63 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
 | internal/model/alarmpanel | 0 | 1 | 0 |
 | internal/model/calculated | 0 | 10 | 0 |
@@ -186,7 +186,7 @@ HEAD: 304ef164
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 8 | 0 |
-| internal/north/mqtt | 0 | 83 | 4 |
+| internal/north/mqtt | 0 | 86 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |
