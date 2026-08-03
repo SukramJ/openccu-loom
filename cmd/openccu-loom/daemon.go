@@ -358,6 +358,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	securitySvc := wireSecurityService(cfg, reg, auditDB, alarmSvc, catalogs, logger)
 	if securitySvc != nil {
 		northBridges.Register(securitySvc)
+		// Forward the rendered reports and fault transitions through the
+		// outbound webhook. Set before the PhaseLate StartAll so the
+		// bridge subscribes on start, mirroring SetAlarmBus.
+		webhookOutbound.SetSecurityBus(securitySvc.Bus())
+		_, stopSecurityCollector := metrics.NewSecurityCollector(metricsReg, securitySvc.Bus())
+		defer stopSecurityCollector()
 	}
 
 	// CCU add-on self-update (ADR 0057): constructed only when the
@@ -680,7 +686,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, hubEventsCentralHook, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, hubEventsCentralHook, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, securitySvc, cfg.Locale, cfg.North.REST.PublicURL, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
 	// Installed here rather than next to the Matter/alarm hooks above because
 	// the subscriber it closes over is built by the call right above. Runtime

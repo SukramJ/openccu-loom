@@ -1,6 +1,6 @@
 {
-  "generated": "304ef164",
-  "head": "304ef164",
+  "generated": "09bf64c8",
+  "head": "09bf64c8",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27598,
-    "reachable": 4884,
-    "whitelisted": 19760,
-    "unreachable": 2954
+    "total_exported": 27621,
+    "reachable": 4890,
+    "whitelisted": 19773,
+    "unreachable": 2958
   },
   "by_package": [
     {
@@ -301,7 +301,7 @@
     {
       "package": "internal/metrics",
       "unreachable_funcs": 0,
-      "unreachable_types": 62,
+      "unreachable_types": 63,
       "unreachable_other": 2
     },
     {
@@ -559,7 +559,7 @@
     {
       "package": "internal/north/mqtt",
       "unreachable_funcs": 0,
-      "unreachable_types": 83,
+      "unreachable_types": 86,
       "unreachable_other": 4
     },
     {
@@ -7027,6 +7027,13 @@
       "identifier": "RpcServerMetrics",
       "file": "internal/metrics/snapshots.go",
       "line": 64,
+      "kind": "type"
+    },
+    {
+      "package": "internal/metrics",
+      "identifier": "SecurityCollector",
+      "file": "internal/metrics/security_collector.go",
+      "line": 19,
       "kind": "type"
     },
     {
@@ -14738,6 +14745,27 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "SecurityMQTTPublisher",
+      "file": "internal/north/mqtt/security_publisher.go",
+      "line": 56,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "SecuritySnapshotSource",
+      "file": "internal/north/mqtt/security_publisher.go",
+      "line": 27,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "SecuritySnapshotSource",
+      "file": "internal/north/mqtt/security_publisher.go",
+      "line": 27,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "SubDeviceInspector",
       "file": "internal/north/mqtt/bridge.go",
       "line": 332,
@@ -14929,14 +14957,14 @@
       "package": "internal/north/webhook",
       "identifier": "Option",
       "file": "internal/north/webhook/outbound.go",
-      "line": 86,
+      "line": 90,
       "kind": "type"
     },
     {
       "package": "internal/north/webhook",
       "identifier": "Option",
       "file": "internal/north/webhook/outbound.go",
-      "line": 86,
+      "line": 90,
       "kind": "type"
     },
     {
@@ -14950,28 +14978,28 @@
       "package": "internal/north/webhook",
       "identifier": "WithBackoff",
       "file": "internal/north/webhook/outbound.go",
-      "line": 92,
+      "line": 96,
       "kind": "func"
     },
     {
       "package": "internal/north/webhook",
       "identifier": "WithBackoff",
       "file": "internal/north/webhook/outbound.go",
-      "line": 92,
+      "line": 96,
       "kind": "func"
     },
     {
       "package": "internal/north/webhook",
       "identifier": "WithHTTPClient",
       "file": "internal/north/webhook/outbound.go",
-      "line": 89,
+      "line": 93,
       "kind": "func"
     },
     {
       "package": "internal/north/webhook",
       "identifier": "WithHTTPClient",
       "file": "internal/north/webhook/outbound.go",
-      "line": 89,
+      "line": 93,
       "kind": "func"
     },
     {
@@ -115281,6 +115309,20 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "BuildSecurityDiscovery",
+      "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
+      "file": "internal/north/mqtt/security_discovery.go",
+      "line": 124
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "BuildSecurityDiscovery",
+      "reason": "auto-whitelist:pattern=mqtt-discovery-builder",
+      "file": "internal/north/mqtt/security_discovery.go",
+      "line": 124
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "Client",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
@@ -116996,6 +117038,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestBuildSecurityDiscovery_EmptyKeyRejected",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/security_discovery_test.go",
+      "line": 269
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestBuildSystemHealthDiscovery_EmptyCentral_ReturnsNoOp",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/hub_discovery_test.go",
@@ -117588,6 +117637,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
       "line": 2592
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestDaemonLevelNodeIDs_CoversBothPlanes",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/retain_cleanup_test.go",
+      "line": 234
     },
     {
       "package": "internal/north/mqtt",
@@ -119219,6 +119275,41 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
       "line": 901
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestSecurityClassEntity_DeviceClassAndDiagnosticMapping",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/security_discovery_test.go",
+      "line": 196
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestSecurityDeviceBlock_DistinctFromAlarmDeviceBlock",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/security_discovery_test.go",
+      "line": 243
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestSecuritySystemEntities_BinarySensorShape",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/security_discovery_test.go",
+      "line": 149
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestSecuritySystemEntities_CommonShape",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/security_discovery_test.go",
+      "line": 40
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestSecuritySystemEntities_EventEntitiesShape",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/security_discovery_test.go",
+      "line": 107
     },
     {
       "package": "internal/north/mqtt",
@@ -144033,14 +144124,14 @@
       "identifier": "WithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/north/webhook/outbound.go",
-      "line": 95
+      "line": 99
     },
     {
       "package": "internal/north/webhook",
       "identifier": "WithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/north/webhook/outbound.go",
-      "line": 95
+      "line": 99
     },
     {
       "package": "internal/observability",
@@ -158418,7 +158509,7 @@
       "identifier": "TestRESTRouterMatchesOpenAPISpec",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/rest_router_openapi_walk_test.go",
-      "line": 768
+      "line": 767
     },
     {
       "package": "tests/contract",
@@ -158727,6 +158818,34 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/schema_digest_test.go",
       "line": 39
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSecurityPlane_AnnouncedEventTypesCoverEmittedVerbs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/security_mqtt_plane_test.go",
+      "line": 176
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSecurityPlane_AttributePayloadsAreObjects",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/security_mqtt_plane_test.go",
+      "line": 294
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSecurityPlane_EventTopicsNeverRetained",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/security_mqtt_plane_test.go",
+      "line": 232
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestSecurityPlane_TruncationIsAnnounced",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/security_mqtt_plane_test.go",
+      "line": 356
     },
     {
       "package": "tests/contract",

@@ -294,6 +294,20 @@ type retainCleanupError string
 
 func (e retainCleanupError) Error() string { return string(e) }
 
+// daemonLevelNodeIDs are the discovery node ids of the planes that are
+// not scoped to a central: the alarm engine and the Security & Safety
+// domain.
+//
+// They need naming explicitly because the orphan sweep otherwise filters
+// on the `<central>_` node prefix — which these deliberately do not
+// carry (ADR 0052). Without this, a retracted zone panel or a class that
+// lost its last source would keep a retained discovery config alive in
+// every consumer forever, and no cleanup pass could ever reach it.
+var daemonLevelNodeIDs = map[string]bool{
+	alarmDiscoveryNodeID:    true,
+	securityDiscoveryNodeID: true,
+}
+
 // RunDiscoveryOrphanCleanupOnce subscribes to `homeassistant/#` for a
 // short snapshot window, accumulates every retained HA-Discovery
 // config topic that targets a node_id this daemon owns, then evicts
@@ -351,8 +365,8 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 		if len(parts) != 4 {
 			return
 		}
-		nodeID := parts[1]
-		if !strings.HasPrefix(strings.ToLower(nodeID), nodePrefix) {
+		nodeID := strings.ToLower(parts[1])
+		if !strings.HasPrefix(nodeID, nodePrefix) && !daemonLevelNodeIDs[nodeID] {
 			// Not our daemon's namespace — skip.
 			return
 		}

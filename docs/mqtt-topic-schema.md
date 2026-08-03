@@ -328,3 +328,35 @@ are non-retained QoS 0. Command (`/set`, `/trigger`, `/invoke`) topics
 are non-retained and subscribed at QoS 1 (at-least-once) by default —
 configurable via `QoSProfile.Commands` — so an inbound write is not
 silently dropped on a flaky broker connection.
+
+
+## Security & Safety plane (daemon-level)
+
+The third daemon-level tree beside `bridge/` and `alarm/` — see
+[ADR 0059](./adr/0059-security-safety-mqtt-plane.md). Like the alarm
+plane it carries no `<central>` segment: a hazard class aggregates
+across every configured CCU.
+
+| Topic | Retained | Payload |
+|---|---|---|
+| `<base>/security/state` | yes | JSON; `state` is the folded severity (`ok`/`info`/`warning`/`alarm`/`critical`), plus per-class and per-zone facets |
+| `<base>/security/alarm` | yes | JSON; `state` is `ON` while any hazard class is active, with `sources[]` and `by_class{}` |
+| `<base>/security/problem` | yes | JSON; `state` is `ON` while any fault stands, with the fault list |
+| `<base>/security/health` | yes | `ON` while the alarm engine reports itself unhealthy |
+| `<base>/security/class/<class>` | yes | JSON; `state` is `ON`/`OFF` per hazard or fault class |
+| `<base>/security/zone/<slug>` | yes | JSON; `state` is the count of active sources, with `by_class{}` |
+| `<base>/security/last_alarm` | yes | The last hazard report: `subject`, `message`, `i18n_key`, `args`, `sources[]` |
+| `<base>/security/last_fault` | yes | The last fault report, same shape |
+| `<base>/security/event` | **no** | One hazard report per occurrence, QoS 0 |
+| `<base>/security/fault` | **no** | One fault transition per occurrence, QoS 0 |
+| `<base>/security/availability` | yes | `online` / `offline` |
+
+The two event topics are deliberately **not** retained and publish at
+QoS 0: a consumer ignores retained payloads on an event topic, and a
+re-delivered alarm event re-fires every automation subscribed to it. The
+`last_alarm` / `last_fault` topics exist precisely because of that — a
+consumer that restarts has no way to replay an event.
+
+Discovery uses node id `security` and the device card
+`openccu-loom_security`, deliberately separate from `openccu-loom_alarm`
+so the two publishers cannot make each other's card name flap.

@@ -216,3 +216,29 @@ func TestRunRetainCleanupOnce_RawDisabledSkips(t *testing.T) {
 		t.Errorf("no publishes expected when RawEnabled=false; got %v", mc.evicted())
 	}
 }
+
+// TestDaemonLevelNodeIDs_CoversBothPlanes locks the orphan sweep's
+// escape hatch for the two daemon-level discovery planes.
+//
+// [Bridge.RunDiscoveryOrphanCleanupOnce] otherwise scopes every retained
+// discovery config to the `<central>_` node prefix; the alarm engine and
+// the Security & Safety domain deliberately do not carry that prefix
+// (ADR 0052), so without an entry here a retracted zone panel or a
+// class that lost its last source would be treated as belonging to some
+// other integration and would keep its retained discovery config alive
+// in every consumer forever — no cleanup pass could ever reach it.
+//
+// This check lives in-package rather than in tests/contract: both
+// daemonLevelNodeIDs and the node ids it must contain are unexported, so
+// an external package cannot name them.
+func TestDaemonLevelNodeIDs_CoversBothPlanes(t *testing.T) {
+	t.Parallel()
+	if len(daemonLevelNodeIDs) == 0 {
+		t.Fatal("daemonLevelNodeIDs is empty — the orphan sweep would treat every daemon-level discovery config as belonging to another integration")
+	}
+	for _, nodeID := range []string{alarmDiscoveryNodeID, securityDiscoveryNodeID} {
+		if !daemonLevelNodeIDs[nodeID] {
+			t.Errorf("daemonLevelNodeIDs is missing %q", nodeID)
+		}
+	}
+}

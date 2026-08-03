@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/security"
 )
 
 // wireSystemStatusSubscribers stands up the north-bound forwarders for
@@ -32,6 +33,8 @@ func wireSystemStatusSubscribers(
 	mqttSup *mqttSupervisor,
 	alarmSvc *alarm.Service,
 	alarmSink *alarmMQTTSink,
+	securitySvc *security.Service,
+	locale, publicURL string,
 	logger *slog.Logger,
 ) (sysStatusBuf *handlers.SystemStatusBuffer, hubEventsHook func(u *central.Unit) (unwire func()), teardown func()) {
 	sysStatusBuf = handlers.NewSystemStatusBuffer(100)
@@ -91,8 +94,26 @@ func wireSystemStatusSubscribers(
 		}
 	}
 
+	// The Security & Safety plane mirrors the domain onto its own
+	// daemon-level tree and its own device card. Independent of the alarm
+	// service: the domain reports hazards and faults with or without one.
+	var mqttSecurity *mqtt.SecurityMQTTPublisher
+	if mqttWiring != nil && securitySvc != nil {
+		mqttSecurity = mqtt.NewSecurityMQTTPublisher(securitySvc, mqttWiring, locale, publicURL, logger)
+		mqttSecurity.Start(securitySvc.Bus()) //nolint:contextcheck // Start subscribes to the event bus internally
+		if mqttSup != nil {
+			// A broker restart wipes the retained store, and a quiet
+			// installation would never repopulate it on its own.
+			//nolint:contextcheck // the reconcile path runs on the publisher lifetime, detached from the connect ctx by design
+			mqttSup.OnConnect(func(context.Context) { mqttSecurity.OnBrokerConnect() })
+		}
+	}
+
 	teardown = func() {
 		// LIFO: mirror the order the original inline defers would have run.
+		if mqttSecurity != nil {
+			mqttSecurity.Stop()
+		}
 		if mqttAlarm != nil {
 			mqttAlarm.Stop()
 		}

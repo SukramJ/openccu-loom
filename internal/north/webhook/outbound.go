@@ -62,6 +62,10 @@ type Outbound struct {
 	// SetAlarmBus). It is separate from the per-central buses because
 	// alarm zones are daemon-level, not central-scoped.
 	alarmBus *events.Bus
+	// securityBus is the Security & Safety domain bus (nil until wired
+	// via SetSecurityBus). Independent of alarmBus: the domain reports
+	// with or without an alarm engine.
+	securityBus *events.Bus
 
 	mu      sync.Mutex
 	started bool
@@ -127,6 +131,19 @@ func (o *Outbound) SetAlarmBus(bus *events.Bus) {
 	o.mu.Unlock()
 }
 
+// SetSecurityBus wires the Security & Safety domain bus so the bridge
+// forwards the rendered reports and the fault transitions. Must be
+// called before Start; a nil bus leaves the plane unwired.
+//
+// This is the plane a messenger integration subscribes to when it wants
+// the sentence rather than the raw facts: the notification payload
+// carries subject and message alongside the machine facets.
+func (o *Outbound) SetSecurityBus(bus *events.Bus) {
+	o.mu.Lock()
+	o.securityBus = bus
+	o.mu.Unlock()
+}
+
 // Name implements bridge.Service.
 func (o *Outbound) Name() string { return "webhook-outbound" }
 
@@ -158,6 +175,9 @@ func (o *Outbound) Start(_ context.Context) error {
 		o.subscribeCentral(u.EventBus, name)
 	}
 	centralSubs := len(o.unsubs)
+	if o.securityBus != nil {
+		o.subscribeSecurity(o.securityBus)
+	}
 	if o.alarmBus != nil {
 		o.subscribeAlarm(o.alarmBus)
 	}
@@ -203,6 +223,44 @@ func (o *Outbound) subscribeAlarm(bus *events.Bus) {
 		events.Subscribe(bus, o.onAlarmReminder),
 		events.Subscribe(bus, o.onAlarmDuress),
 	)
+}
+
+// subscribeSecurity wires the Security & Safety reports.
+//
+// Only the two reporting events are forwarded, not the aggregate
+// changes: a webhook consumer wants "something happened, here is what",
+// and a class flag flipping is already implied by the report that
+// accompanies it.
+func (o *Outbound) subscribeSecurity(bus *events.Bus) {
+	o.unsubs = append(
+		o.unsubs,
+		events.Subscribe(bus, o.onSecurityNotification),
+		events.Subscribe(bus, o.onSecurityFaultChanged),
+	)
+}
+
+// onSecurityNotification forwards a rendered report.
+func (o *Outbound) onSecurityNotification(e hmevent.SecurityNotificationEvent) {
+	o.enqueueAlarm(string(hmevent.EventTypeSecurityNotification), alarmPayload{
+		ZoneID: e.ZoneID, ZoneName: e.ZoneName, Mode: string(e.Mode),
+		IncidentID: e.IncidentID, Class: string(e.Class), Cause: string(e.Verb),
+		Subject: e.Subject, Message: e.Message, Severity: string(e.Severity),
+		I18nKey: e.I18nKey, Args: e.Args, Link: e.Link,
+		Sources: alarmSources(e.Sources),
+	})
+}
+
+// onSecurityFaultChanged forwards a fault opening or closing.
+func (o *Outbound) onSecurityFaultChanged(e hmevent.SecurityFaultChangedEvent) {
+	verb := "cleared"
+	if e.Open {
+		verb = "raised"
+	}
+	o.enqueueAlarm(string(hmevent.EventTypeSecurityFaultChanged), alarmPayload{
+		Class: string(e.Class), Cause: verb, Severity: string(e.Severity),
+		Note: string(e.Reason), EntryID: int64(e.OpenCount),
+		Sources: alarmSources([]hmevent.SecuritySourceRef{e.Source}),
+	})
 }
 
 // Stop unsubscribes every handler, stops the worker and waits for the
@@ -613,6 +671,15 @@ type alarmPayload struct {
 	// incident. A messenger integration reads this to name what set the
 	// alarm off; sensor_id / sensor_name only ever held the first one.
 	Sources []alarmSourcePayload `json:"sources,omitempty"`
+	// The fields below appear on Security & Safety reports: the rendered
+	// sentence plus the catalogue key that lets a consumer re-render it
+	// in its own locale.
+	Subject  string            `json:"subject,omitempty"`
+	Message  string            `json:"message,omitempty"`
+	Severity string            `json:"severity,omitempty"`
+	I18nKey  string            `json:"i18n_key,omitempty"`
+	Args     map[string]string `json:"args,omitempty"`
+	Link     string            `json:"link,omitempty"`
 }
 
 // alarmSourcePayload is the webhook projection of a contributing data
