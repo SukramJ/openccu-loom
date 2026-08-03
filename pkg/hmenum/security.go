@@ -201,3 +201,108 @@ func (r SecurityFaultReason) Valid() bool {
 		return false
 	}
 }
+
+// SecurityVerb names what happened, independent of the class it
+// happened to. It is the second half of a message key
+// (`security.message.<class>.<verb>`), so the catalogue needs one entry
+// per meaningful pair rather than one per event type.
+type SecurityVerb string
+
+// SecurityVerb values.
+const (
+	// SecurityVerbTriggered means a hazard became active.
+	SecurityVerbTriggered SecurityVerb = "triggered"
+	// SecurityVerbPreAlarm means a pre-alarm phase started — the alarm
+	// is imminent but the full output policy has not fired yet.
+	SecurityVerbPreAlarm SecurityVerb = "pre_alarm"
+	// SecurityVerbCleared means the condition ended.
+	SecurityVerbCleared SecurityVerb = "cleared"
+	// SecurityVerbSilenced means an operator silenced a running alarm.
+	SecurityVerbSilenced SecurityVerb = "silenced"
+	// SecurityVerbFailedToArm means an arm attempt was refused.
+	SecurityVerbFailedToArm SecurityVerb = "failed_to_arm"
+	// SecurityVerbRaised means a fault opened.
+	SecurityVerbRaised SecurityVerb = "raised"
+	// SecurityVerbTest is an operator-requested test notification.
+	SecurityVerbTest SecurityVerb = "test"
+)
+
+// String returns the wire representation.
+func (v SecurityVerb) String() string { return string(v) }
+
+// Valid reports whether v is one of the defined verbs.
+func (v SecurityVerb) Valid() bool {
+	switch v {
+	case SecurityVerbTriggered, SecurityVerbPreAlarm, SecurityVerbCleared,
+		SecurityVerbSilenced, SecurityVerbFailedToArm, SecurityVerbRaised,
+		SecurityVerbTest:
+		return true
+	default:
+		return false
+	}
+}
+
+// SecurityVerbs returns every defined verb. Callers that enumerate
+// verbs — the i18n completeness guard above all — use this so a new
+// verb cannot be added without a catalogue entry.
+func SecurityVerbs() []SecurityVerb {
+	return []SecurityVerb{
+		SecurityVerbTriggered, SecurityVerbPreAlarm, SecurityVerbCleared,
+		SecurityVerbSilenced, SecurityVerbFailedToArm, SecurityVerbRaised,
+		SecurityVerbTest,
+	}
+}
+
+// DuressVisibility bounds where a duress-code use or a silent panic
+// trigger may appear.
+//
+// The threat model is not that Home Assistant is insecure: it is that
+// whoever stands next to you sees the same screen you do. A wall tablet
+// in the hallway, or a banner on a lock screen while the attacker
+// watches, defeats the covert trigger the feature exists for. But an
+// installation that notifies only through Home Assistant and runs no
+// webhook would get no duress notification at all under a hidden-only
+// policy — a safety function failing silently. The choice therefore
+// belongs to the operator, not to the product.
+type DuressVisibility string
+
+// DuressVisibility values.
+const (
+	// DuressVisibilityHidden keeps duress on the webhook and the raw
+	// alarm event topic only, reproducing the historical behaviour.
+	DuressVisibilityHidden DuressVisibility = "hidden"
+	// DuressVisibilityNotifyOnly additionally emits the non-retained
+	// notification event, so a phone is reached — but never the
+	// retained last-alarm sensor, and never the local screen surfaces.
+	// The report reaches the operator without lingering where an
+	// attacker could read it.
+	DuressVisibilityNotifyOnly DuressVisibility = "notify_only"
+	// DuressVisibilityFull treats duress like any other notification,
+	// including the retained sensor, the SPA and the WebSocket.
+	DuressVisibilityFull DuressVisibility = "full"
+)
+
+// String returns the wire representation.
+func (d DuressVisibility) String() string { return string(d) }
+
+// Valid reports whether d is one of the defined levels.
+func (d DuressVisibility) Valid() bool {
+	switch d {
+	case DuressVisibilityHidden, DuressVisibilityNotifyOnly, DuressVisibilityFull:
+		return true
+	default:
+		return false
+	}
+}
+
+// AllowsNotification reports whether the level lets a duress event
+// reach the non-retained notification surfaces.
+func (d DuressVisibility) AllowsNotification() bool {
+	return d == DuressVisibilityNotifyOnly || d == DuressVisibilityFull
+}
+
+// AllowsRetained reports whether the level lets a duress event reach
+// retained state — the last-alarm sensor and the local screens. Only
+// the full level does: a retained value stays readable long after the
+// moment has passed.
+func (d DuressVisibility) AllowsRetained() bool { return d == DuressVisibilityFull }

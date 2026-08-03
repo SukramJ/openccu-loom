@@ -32,6 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	securitypkg "github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -579,6 +580,29 @@ func (fakeCustomDPWriter) InvokeCustomDP(
 // mustAlarmPanel builds a minimal real alarm service on an in-memory
 // database — the walk only needs the Deps field non-nil so the alarm
 // routes mount; no handler body ever runs.
+// mustSecurityDomain builds a Security & Safety service on an in-memory
+// database so the walk covers the /security routes. Like the alarm
+// stub it is never started — the walk only needs the routes mounted.
+func mustSecurityDomain() handlers.SecurityDomain {
+	db, err := sqlite.Open(context.Background(), ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	svc, err := securitypkg.New(securitypkg.Deps{
+		Registry: centralpkg.NewRegistry(),
+		Stores: &securitypkg.Stores{
+			Faults:  sqlite.NewSecurityFaultStore(db),
+			Sources: sqlite.NewSecuritySourceStore(db),
+			Sensors: sqlite.NewAlarmSensorStore(db),
+			Zones:   sqlite.NewAlarmZoneStore(db),
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return svc
+}
+
 func mustAlarmPanel() handlers.AlarmPanel {
 	db, err := sqlite.Open(context.Background(), ":memory:")
 	if err != nil {
@@ -630,6 +654,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		CentralLinks:            fakeCentralLinksService{},
 		Incidents:               fakeIncidentsReader{},
 		Alarm:                   mustAlarmPanel(),
+		Security:                mustSecurityDomain(),
 		IncidentsAdmin:          fakeIncidentsClearer{},
 		SystemStatus:            fakeSystemStatusReader{},
 		LogLevels:               fakeLogLevelsService{},

@@ -6,6 +6,14 @@
   for channel names no CCU actually uses, so leak and rain sensors were
   missing their headline value and their quick-control tile. They now
   render like every other sensor.
+- **New: Security & Safety.** One place that answers what is wrong —
+  smoke, water, gas, intrusion, sabotage, weak batteries, technical
+  faults — per zone and per type, with a ready-made subject and message
+  in German and English you can send straight to a messenger. It works
+  with or without the alarm system.
+- **Faults remember how long they have been there.** "Unreachable for
+  three days" survives a restart, and you can acknowledge a fault
+  without pretending it went away.
 - **A smoke detector can no longer set itself off.** When the alarm
   system sounds a smoke detector as a siren for a burglary, the detector
   reports that state — and the engine used to read it back as smoke. You

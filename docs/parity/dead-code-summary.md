@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 6f99fd3d
-HEAD: 6f99fd3d
+Generated: 304ef164
+HEAD: 304ef164
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27454 |
-| Reachable | 4825 |
-| Whitelisted | 19699 |
-| **Unreachable** | **2930** |
+| Total Exported | 27598 |
+| Reachable | 4884 |
+| Whitelisted | 19760 |
+| **Unreachable** | **2954** |
 
 ## Top-20 Packages by Dead Code
 
@@ -23,7 +23,6 @@ HEAD: 6f99fd3d
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
-| pkg/hmenum | 4 | 105 | 46 |
 | pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -36,6 +35,7 @@ HEAD: 6f99fd3d
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
+| pkg/hmenum | 2 | 105 | 46 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -103,7 +103,6 @@ HEAD: 6f99fd3d
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
-| pkg/hmenum | 4 | 105 | 46 |
 | pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -116,6 +115,7 @@ HEAD: 6f99fd3d
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
+| pkg/hmenum | 2 | 105 | 46 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 | internal/addonupdate | 0 | 18 | 18 |
 | internal/alarm | 0 | 25 | 0 |
@@ -160,6 +160,7 @@ HEAD: 6f99fd3d
 | internal/model/group | 0 | 14 | 0 |
 | internal/model/naming | 0 | 2 | 4 |
 | internal/model/safety | 0 | 2 | 0 |
+| internal/model/security | 0 | 4 | 0 |
 | internal/model/value | 0 | 0 | 1 |
 | internal/north/bridge | 0 | 7 | 0 |
 | internal/north/discovery | 0 | 1 | 0 |
@@ -192,13 +193,14 @@ HEAD: 6f99fd3d
 | internal/orderedjson | 0 | 5 | 0 |
 | internal/restapi | 0 | 5 | 0 |
 | internal/scheduler | 0 | 4 | 0 |
+| internal/security | 0 | 7 | 0 |
 | internal/store/devicedetails | 0 | 2 | 0 |
 | internal/store/linkprofile | 0 | 1 | 1 |
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 103 | 28 |
-| pkg/hmapi | 0 | 135 | 16 |
+| internal/store/sqlite | 0 | 108 | 28 |
+| pkg/hmapi | 0 | 145 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |

@@ -147,3 +147,122 @@ type AlarmBlockerDetail struct {
 	// operator bypass).
 	Blocking bool
 }
+
+// Security & Safety event tags. The namespace is `security.` on both
+// the internal bus and the WebSocket, unlike the alarm domain where the
+// two diverged historically — one vocabulary from the start costs
+// nothing and saves a translation layer.
+const (
+	EventTypeSecurityStateChanged EventType = "security.state_changed"
+	EventTypeSecurityClassChanged EventType = "security.class_changed"
+	EventTypeSecurityZoneChanged  EventType = "security.zone_changed"
+	EventTypeSecurityFaultChanged EventType = "security.fault_changed"
+	EventTypeSecurityNotification EventType = "security.notification"
+)
+
+// SecurityStateChangedEvent fires when the folded severity of the
+// domain changes. It carries only the fold; consumers that need the
+// detail read the snapshot.
+type SecurityStateChangedEvent struct {
+	Base
+	From hmenum.SecuritySeverity
+	To   hmenum.SecuritySeverity
+	// ActiveClasses names the classes contributing to To.
+	ActiveClasses []hmenum.SecurityClass
+	// OpenFaults counts the standing faults.
+	OpenFaults int
+}
+
+// Type implements Event.
+func (SecurityStateChangedEvent) Type() EventType { return EventTypeSecurityStateChanged }
+
+// SecurityClassChangedEvent fires when one hazard or fault class
+// becomes active or inactive, or when its source set changes while
+// active — a second smoke detector joining an existing fire is a
+// change worth announcing even though the class was already on.
+type SecurityClassChangedEvent struct {
+	Base
+	Class   hmenum.SecurityClass
+	Active  bool
+	Sources []SecuritySourceRef
+	// Centrals names the centrals contributing active sources.
+	Centrals []string
+	SinceMS  int64
+}
+
+// Type implements Event.
+func (SecurityClassChangedEvent) Type() EventType { return EventTypeSecurityClassChanged }
+
+// SecurityZoneChangedEvent fires when a zone's security view changes.
+type SecurityZoneChangedEvent struct {
+	Base
+	ZoneID   string
+	ZoneSlug string
+	ZoneName string
+	State    hmenum.AlarmZoneState
+	Mode     hmenum.AlarmMode
+	Sources  []SecuritySourceRef
+	// ByClass groups active source names per class.
+	ByClass    map[hmenum.SecurityClass][]string
+	IncidentID int64
+}
+
+// Type implements Event.
+func (SecurityZoneChangedEvent) Type() EventType { return EventTypeSecurityZoneChanged }
+
+// SecurityFaultChangedEvent fires when a fault opens, clears or is
+// acknowledged.
+type SecurityFaultChangedEvent struct {
+	Base
+	FaultID  string
+	Class    hmenum.SecurityClass
+	Reason   hmenum.SecurityFaultReason
+	Severity hmenum.SecuritySeverity
+	Source   SecuritySourceRef
+	// Open reports the direction: true when raised, false when cleared.
+	Open bool
+	// Acknowledged marks an acknowledgement rather than a state change.
+	Acknowledged bool
+	SinceMS      int64
+	// OpenCount is the standing fault count after this change.
+	OpenCount int
+}
+
+// Type implements Event.
+func (SecurityFaultChangedEvent) Type() EventType { return EventTypeSecurityFaultChanged }
+
+// SecurityNotificationEvent is one rendered report — the event a
+// messenger integration consumes.
+//
+// It is the only event in the domain that carries prose. Everything
+// else carries facts; this carries facts plus a sentence built from
+// them, because the alternative is every consumer reinventing German
+// and English alarm wording.
+type SecurityNotificationEvent struct {
+	Base
+	Class    hmenum.SecurityClass
+	Severity hmenum.SecuritySeverity
+	Verb     hmenum.SecurityVerb
+	Subject  string
+	Message  string
+	// I18nKey and Args let a consumer render in its own locale.
+	I18nKey    string
+	Args       map[string]string
+	Sources    []SecuritySourceRef
+	ZoneID     string
+	ZoneSlug   string
+	ZoneName   string
+	Mode       hmenum.AlarmMode
+	IncidentID int64
+	Link       string
+	// Fault marks a fault report rather than a hazard report, so a
+	// consumer can route the two to different destinations without
+	// inspecting the class.
+	Fault bool
+	// Retainable reports whether the report may be written to retained
+	// state. A covert-trigger report is delivered but never retained.
+	Retainable bool
+}
+
+// Type implements Event.
+func (SecurityNotificationEvent) Type() EventType { return EventTypeSecurityNotification }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.16.0
+  version: 3.17.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6745,6 +6745,94 @@ paths:
                 items: { $ref: "#/components/schemas/AlarmJournalEntry" }
         "400": { $ref: "#/components/responses/BadRequest" }
 
+  /security:
+    get:
+      operationId: getSecuritySnapshot
+      summary: The Security & Safety domain state
+      description: >
+        What is active per hazard class and per zone, what is broken and since
+        when, and what was last reported. The domain runs independently of the
+        alarm engine: an installation with smoke and water detectors but no
+        burglar alarm still gets the hazard classes, the fault plane and the
+        notifications — only `zones` stays empty.
+
+
+        A class the installation has no source for is omitted rather than
+        reported inactive, so a home without gas detectors does not advertise a
+        permanently-off gas alarm.
+      tags: [security]
+      responses:
+        "200":
+          description: The domain snapshot.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecuritySnapshot" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /security/classes/{class}:
+    parameters:
+      - name: class
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+    get:
+      operationId: getSecurityClass
+      summary: One hazard or fault class with its full source list
+      tags: [security]
+      responses:
+        "200":
+          description: The class state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecurityClassState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: The class is defined but this installation has no source for it.
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /security/faults:
+    get:
+      operationId: listSecurityFaults
+      summary: The standing fault ledger
+      description: >
+        Faults are persistent because `since` is the interesting part —
+        "unreachable for three days" is a different fact from "unreachable", and
+        a restart must not reset that clock.
+      tags: [security]
+      responses:
+        "200":
+          description: Standing faults, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SecurityFault" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /security/faults/{id}/acknowledge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: acknowledgeSecurityFault
+      summary: Mark a standing fault as seen (operator)
+      description: >
+        Acknowledgement never clears the fault: the condition is still there,
+        the operator has merely stopped needing to be told.
+      tags: [security]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Acknowledged }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   /alarm/sensor-candidates:
     get:
       operationId: listAlarmSensorCandidates
@@ -11585,6 +11673,131 @@ components:
         exit_delay_s:
           type: integer
           description: Exit delay in seconds the zone is now counting down; 0 when armed immediately.
+
+    SecuritySnapshot:
+      type: object
+      description: The whole Security & Safety domain at one instant.
+      required: [severity, classes, engine_healthy]
+      properties:
+        severity:
+          type: string
+          enum: [ok, info, warning, alarm, critical]
+          description: The folded overall state.
+        classes:
+          type: array
+          description: >
+            One entry per class the installation has sources for, in escalation
+            order. A class without sources is absent, not inactive.
+          items: { $ref: "#/components/schemas/SecurityClassState" }
+        zones:
+          type: array
+          description: Empty when the alarm engine is disabled.
+          items: { $ref: "#/components/schemas/SecurityZoneState" }
+        faults:
+          type: array
+          items: { $ref: "#/components/schemas/SecurityFault" }
+        engine_healthy:
+          type: boolean
+          description: >
+            The alarm engine's verdict about itself, distinct from a transport
+            outage.
+        last_alarm: { $ref: "#/components/schemas/SecurityNotification" }
+        last_fault: { $ref: "#/components/schemas/SecurityNotification" }
+
+    SecurityClassState:
+      type: object
+      required: [class, active, known]
+      properties:
+        class:
+          type: string
+          enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+        active: { type: boolean }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/AlarmSource" }
+        known:
+          type: integer
+          description: Sources of this class the index knows, active or not.
+        centrals: { type: array, items: { type: string } }
+        since: { type: string, format: date-time }
+
+    SecurityZoneState:
+      type: object
+      required: [id, slug, name, state, mode]
+      properties:
+        id: { type: string }
+        slug:
+          type: string
+          description: >
+            Stable, human-readable zone identifier. Frozen at creation —
+            renaming a zone does not change it, so consumer entity ids survive.
+        name: { type: string }
+        state: { type: string }
+        mode: { type: string }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/AlarmSource" }
+        by_class:
+          type: object
+          additionalProperties: { type: array, items: { type: string } }
+          description: >
+            Active source names grouped per class — the "per zone and per type"
+            axis in one object rather than a zone-by-class matrix of entities.
+        incident_id: { type: integer, format: int64 }
+        since: { type: string, format: date-time }
+
+    SecurityFault:
+      type: object
+      required: [id, class, reason, severity, source, since]
+      properties:
+        id: { type: string }
+        class: { type: string }
+        reason:
+          type: string
+          enum: [unreachable, blocked, device_error, central_lost, duty_cycle, low_battery, tamper]
+        severity: { type: string }
+        source: { $ref: "#/components/schemas/AlarmSource" }
+        since: { type: string, format: date-time }
+        acknowledged_at: { type: string, format: date-time }
+        acknowledged_by: { type: string }
+
+    SecurityNotification:
+      type: object
+      description: >
+        One rendered report. It carries the sentence and the machine facets side
+        by side: the text makes a three-line automation possible, the facets
+        make a different wording possible without parsing prose.
+      required: [class, severity, verb, subject, message, i18n_key, at]
+      properties:
+        class: { type: string }
+        severity: { type: string }
+        verb:
+          type: string
+          enum: [triggered, pre_alarm, cleared, silenced, failed_to_arm, raised, test]
+        subject:
+          type: string
+          description: One line, at most 120 characters, suitable as a notification title.
+        message:
+          type: string
+          description: A full sentence naming cause, place and time.
+        i18n_key:
+          type: string
+          description: >
+            Catalogue key of the message, so a consumer can re-render in its own
+            locale instead of translating prose.
+        args:
+          type: object
+          additionalProperties: { type: string }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/AlarmSource" }
+        zone_id: { type: string }
+        zone_slug: { type: string }
+        zone_name: { type: string }
+        mode: { type: string }
+        incident_id: { type: integer, format: int64 }
+        link: { type: string }
+        at: { type: string, format: date-time }
 
     AlarmSensorCandidate:
       type: object

@@ -120,6 +120,9 @@ type Deps struct {
 	// drivers + config stores). Nil leaves every /alarm route unmounted
 	// (the alarm subsystem is disabled or failed to come up).
 	Alarm handlers.AlarmPanel
+	// Security is the Security & Safety domain. Nil unmounts the
+	// surface; the domain needs persistence for its fault ledger.
+	Security handlers.SecurityDomain
 	// AlarmCodes backs the /alarm/codes CRUD surface (the argon2id-hashed
 	// alarm-code store, docs/alarm-concept.md §11). The routes mount
 	// whenever Alarm is set; a nil AlarmCodes serves them as 503 so the
@@ -963,6 +966,16 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Get("/alarm/codes/{id}", handlers.GetAlarmCode(d.AlarmCodes))
 				pr.With(op).Put("/alarm/codes/{id}", handlers.PutAlarmCode(d.AlarmCodes, d.AuditRecorder))
 				pr.With(op).Delete("/alarm/codes/{id}", handlers.DeleteAlarmCode(d.AlarmCodes, d.AuditRecorder))
+			}
+			// The Security & Safety domain mounts independently of the
+			// alarm engine: it reports hazards and faults with or without
+			// one.
+			if d.Security != nil {
+				pr.Get("/security", handlers.GetSecuritySnapshot(d.Security))
+				pr.Get("/security/classes/{class}", handlers.GetSecurityClass(d.Security))
+				pr.Get("/security/faults", handlers.ListSecurityFaults(d.Security))
+				pr.With(op).Post("/security/faults/{id}/acknowledge",
+					handlers.AcknowledgeSecurityFault(d.Security, d.AuditRecorder))
 			}
 			if d.SystemStatus != nil {
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))

@@ -30,6 +30,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
+	"github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
@@ -98,6 +99,9 @@ type restMountDeps struct {
 	// start); alarmPanelFrom converts that to a nil interface so the
 	// routes stay unmounted rather than dispatching to a nil pointer.
 	alarm *alarm.Service
+	// security is the Security & Safety domain backing /security. Nil
+	// when the persistence tier is unavailable.
+	security *security.Service
 	// masterProfiles backs the read-only master-profiles REST routes
 	// (GET .../master-profiles[/{id}], POST .../master-profiles/match) —
 	// the same *masterprofile.Store instance the WS
@@ -232,6 +236,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Incidents:               d.incidents,
 		IncidentsAdmin:          incidentsClearerFrom(d.incidents),
 		Alarm:                   alarmPanelFrom(d.alarm),
+		Security:                securityDomainFrom(d.security),
 		AlarmCodes:              alarmCodeAdminFrom(d.alarm),
 		MasterProfiles:          d.masterProfiles,
 		SystemStatus:            d.sysStatusBuf,
@@ -474,6 +479,17 @@ func firmwareRefresherFrom(d *adapter.FirmwareDomain) handlers.FirmwareRefresher
 // pointer so the router leaves the /alarm routes unmounted (a non-nil
 // interface wrapping a nil pointer would dispatch and panic).
 func alarmPanelFrom(s *alarm.Service) handlers.AlarmPanel {
+	if s == nil {
+		return nil
+	}
+	return s
+}
+
+// securityDomainFrom converts *security.Service into the handler
+// facade, mapping a nil pointer to a genuinely nil interface so the
+// router leaves /security unmounted rather than dispatching into a nil
+// receiver.
+func securityDomainFrom(s *security.Service) handlers.SecurityDomain {
 	if s == nil {
 		return nil
 	}
