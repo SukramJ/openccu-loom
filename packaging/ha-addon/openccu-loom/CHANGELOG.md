@@ -6,6 +6,14 @@
   for channel names no CCU actually uses, so leak and rain sensors were
   missing their headline value and their quick-control tile. They now
   render like every other sensor.
+- **A smoke detector can no longer set itself off.** When the alarm
+  system sounds a smoke detector as a siren for a burglary, the detector
+  reports that state — and the engine used to read it back as smoke. You
+  can now say exactly which values count as an alarm; leaving it unset
+  keeps the previous behaviour.
+- **Picking an alarm sensor is no longer free-hand typing.** The config
+  UI offers the sensors a device actually has, with the right one
+  pre-selected.
 - **Alarm notifications now say what set the alarm off.** The
   notification output an operator enrols for a messenger carried no
   sensor identity at all. It now names every detector that fired — and

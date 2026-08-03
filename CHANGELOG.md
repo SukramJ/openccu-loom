@@ -8,6 +8,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A smoke detector can no longer be triggered by the alarm system's own
+  siren.** `SMOKE_DETECTOR_ALARM_STATUS` has the value list `[IDLE_OFF,
+  PRIMARY_ALARM, INTRUSION_ALARM, SECONDARY_ALARM]`, and the engine's
+  rule was "anything but index 0 counts as an activation" — so
+  `INTRUSION_ALARM`, which means the installation drove that detector as
+  a siren for a burglary, counted as a smoke detection. A new
+  `active_values` list on a sensor enrollment names exactly which values
+  activate. **Leaving it empty keeps the previous behaviour**, so no
+  existing enrollment changes meaning.
+
+  The live event path and the restore path now reach that verdict
+  through one shared function. They carried separate copies of the rule,
+  and a divergence would have meant a sensor reading active while
+  running and inactive after a restart.
+
+- **`GET /api/v1/alarm/sensor-candidates`.** Outputs and remote keys had
+  candidate lists; sensors did not, so enrollment was unvalidated free
+  text over central, interface, channel address and parameter — a typo
+  produced a sensor that silently never fired. Each candidate carries
+  the suggested role, the hazard class, the parameter's value list, and
+  the recommended `active_values`. The config UI now pre-selects the
+  derived `SMOKE_ALARM` boolean instead of the raw status enumeration.
+
 - **Every alarm trigger is recorded, not just the first.** The engine's
   trigger path returns early once a zone is already triggered, so a
   second detector going off while the siren sounds left no trace beyond
@@ -45,6 +68,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command as the cause of a fire.
 
 ### Fixed
+
+- **A hazard sensor could be configured never to fire.** A sensor typed
+  `hazard` but not marked `always_on` falls into the arm-state machine,
+  so it only fires while the zone is armed in one of its listed modes —
+  and with the empty mode list that is normal for a smoke detector, it
+  never fires at all. The API now couples the two on write, so the
+  failure cannot be configured. Existing enrollments in that state are
+  reported at startup.
 
 - **`FAILED_TO_ARM` reported opaque sensor ids where `TRIGGER` reported
   names.** The two alarm events disagreed on what `open_sensors` even

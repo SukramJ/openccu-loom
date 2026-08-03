@@ -211,6 +211,22 @@ type SensorConfig struct {
 	// arm-state machine. Accepted and persisted here; the always-on
 	// trigger path ships with the hazard/panic slice.
 	AlwaysOn bool `json:"always_on,omitempty"`
+	// ActiveValues names the enumerated values that count as an
+	// activation. It exists because the default rule — "active unless
+	// the value sits at index 0" — is wrong for enumerations that carry
+	// more than one kind of non-idle state.
+	//
+	// The load-bearing case is SMOKE_DETECTOR_ALARM_STATUS, whose value
+	// list is [IDLE_OFF, PRIMARY_ALARM, INTRUSION_ALARM,
+	// SECONDARY_ALARM]. Under the default rule INTRUSION_ALARM counts as
+	// a smoke detection, while it means the installation drove that
+	// detector as a siren for a burglary — the alarm system reading back
+	// its own output as an input.
+	//
+	// Empty selects exactly the previous behaviour, so an existing
+	// enrollment keeps its meaning; a value is only ever narrowed by an
+	// explicit operator choice.
+	ActiveValues []string `json:"active_values,omitempty"`
 	// AllowOpenAfterArming lets the sensor remain open through
 	// arming; only a re-activation after clearing triggers.
 	AllowOpenAfterArming bool `json:"allow_open_after_arming,omitempty"`

@@ -68,6 +68,8 @@ func (f *alarmPanelFixture) OutputTargetEligible(string, string, hmenum.AlarmOut
 
 func (f *alarmPanelFixture) RemoteKeyCandidates() []alarm.RemoteKeyCandidate { return nil }
 
+func (f *alarmPanelFixture) SensorCandidates(context.Context) []alarm.SensorCandidate { return nil }
+
 // Reload mirrors the driver + engine half of alarm.Service.Reload; the
 // REST surface never touches the sensor-event routing indexes that
 // belong to the daemon-level service's central subscriptions.

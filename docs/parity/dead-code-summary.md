@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 7e0be109
-HEAD: 7e0be109
+Generated: 6f99fd3d
+HEAD: 6f99fd3d
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27448 |
-| Reachable | 4821 |
-| Whitelisted | 19697 |
+| Total Exported | 27454 |
+| Reachable | 4825 |
+| Whitelisted | 19699 |
 | **Unreachable** | **2930** |
 
 ## Top-20 Packages by Dead Code
@@ -20,7 +20,6 @@ HEAD: 7e0be109
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
 | internal/central/adapter | 4 | 92 | 48 |
-| internal/model/safety | 4 | 2 | 0 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -36,6 +35,7 @@ HEAD: 7e0be109
 | internal/model/hub | 2 | 61 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 4 |
+| internal/routingkey | 2 | 0 | 2 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -81,16 +81,16 @@ HEAD: 7e0be109
 | internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
-| internal/model/safety | Classify | internal/model/safety/classify.go | 181 |
-| internal/model/safety | Classify | internal/model/safety/classify.go | 181 |
-| internal/model/safety | Excluded | internal/model/safety/classify.go | 218 |
-| internal/model/safety | Excluded | internal/model/safety/classify.go | 218 |
 | internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
 | internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
 
 ## Full By-Package Breakdown
 
@@ -100,7 +100,6 @@ HEAD: 7e0be109
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
 | internal/central/adapter | 4 | 92 | 48 |
-| internal/model/safety | 4 | 2 | 0 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -119,7 +118,7 @@ HEAD: 7e0be109
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 | internal/addonupdate | 0 | 18 | 18 |
-| internal/alarm | 0 | 23 | 0 |
+| internal/alarm | 0 | 25 | 0 |
 | internal/alarm/codes | 0 | 13 | 0 |
 | internal/alarm/engine | 0 | 26 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
@@ -160,6 +159,7 @@ HEAD: 7e0be109
 | internal/model/device/definitionexport | 0 | 6 | 2 |
 | internal/model/group | 0 | 14 | 0 |
 | internal/model/naming | 0 | 2 | 4 |
+| internal/model/safety | 0 | 2 | 0 |
 | internal/model/value | 0 | 0 | 1 |
 | internal/north/bridge | 0 | 7 | 0 |
 | internal/north/discovery | 0 | 1 | 0 |
@@ -198,7 +198,7 @@ HEAD: 7e0be109
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 103 | 28 |
-| pkg/hmapi | 0 | 133 | 16 |
+| pkg/hmapi | 0 | 135 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |

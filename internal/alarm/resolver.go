@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	lightcdp "github.com/SukramJ/openccu-loom/internal/model/custom/light"
@@ -171,7 +172,18 @@ func (r *sensorReader) CurrentActive(_ context.Context, row sqlitestore.AlarmSen
 	if !ok {
 		return false, false
 	}
-	return normalizeActive(raw)
+	// Restore must reach the same verdict as the live event path, or a
+	// sensor reads active while running and inactive after a restart.
+	// Both resolve through resolveActive; the row carries the config, so
+	// no service state is needed here.
+	cfg, err := engine.ParseSensorConfig(row.ConfigJSON)
+	if err != nil {
+		// An unparsable config falls back to the historical rule, the
+		// same way the routing index does.
+		return normalizeActive(raw)
+	}
+	active, known, _ = resolveActive(activationRule{labels: cfg.ActiveValues}, raw, p.ParameterData().ValueList)
+	return active, known
 }
 
 // normalizeActive maps a wire value onto the binary sensor-activation

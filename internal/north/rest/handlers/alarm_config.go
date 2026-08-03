@@ -226,10 +226,28 @@ func PutAlarmZoneSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 					problem.New(problem.TypeValidation, r, "Invalid sensor type", "unknown sensor type: "+t))
 				return
 			}
-			if _, err := engine.ParseSensorConfig(string(in[i].Config)); err != nil {
+			cfg, err := engine.ParseSensorConfig(string(in[i].Config))
+			if err != nil {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Invalid sensor configuration", err.Error()))
 				return
+			}
+			// A hazard sensor that is not always-on falls into the
+			// arm-state machine and therefore only fires while the zone
+			// is armed in one of its listed modes. With an empty mode
+			// list — the normal shape for a smoke detector — it never
+			// fires at all. Coupling the two server-side means the
+			// failure cannot be configured, rather than merely being
+			// documented.
+			if in[i].Type == string(hmenum.AlarmSensorTypeHazard) && !cfg.AlwaysOn {
+				cfg.AlwaysOn = true
+				patched, err := json.Marshal(cfg)
+				if err != nil {
+					writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal,
+						"Sensor configuration re-encode failed", err)
+					return
+				}
+				in[i].Config = patched
 			}
 		}
 		all, err := p.Stores().Sensors.GetAll(r.Context())
