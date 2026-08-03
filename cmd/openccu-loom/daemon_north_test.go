@@ -20,6 +20,7 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 	tests := []struct {
 		name           string
 		localUserCount int
+		hasCentral     bool
 		mutate         func(*config.Config)
 		want           bool
 	}{
@@ -37,12 +38,26 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			want: false,
 		},
 		{
-			name:           "CCU auth explicitly enabled",
+			name:           "CCU auth explicitly enabled with a configured central",
 			localUserCount: 0,
+			hasCentral:     true,
 			mutate: func(c *config.Config) {
 				c.North.REST.Auth.CCU.Enabled = ptrBool(true)
 			},
 			want: false,
+		},
+		{
+			// The add-on's lockout: CCU-delegated login is enabled by
+			// default there, but it cannot authenticate anyone until a
+			// central exists — and adding one requires being logged in.
+			// Onboarding must stay reachable.
+			name:           "CCU auth enabled but no central configured",
+			localUserCount: 0,
+			hasCentral:     false,
+			mutate: func(c *config.Config) {
+				c.North.REST.Auth.CCU.Enabled = ptrBool(true)
+			},
+			want: true,
 		},
 		{
 			name:           "OIDC enabled",
@@ -75,9 +90,10 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			if tt.mutate != nil {
 				tt.mutate(cfg)
 			}
-			got := firstRunNeedsSetup(cfg, tt.localUserCount)
+			got := firstRunNeedsSetup(cfg, tt.localUserCount, tt.hasCentral)
 			if got != tt.want {
-				t.Errorf("firstRunNeedsSetup(..., %d) = %v, want %v", tt.localUserCount, got, tt.want)
+				t.Errorf("firstRunNeedsSetup(..., %d, %v) = %v, want %v",
+					tt.localUserCount, tt.hasCentral, got, tt.want)
 			}
 		})
 	}

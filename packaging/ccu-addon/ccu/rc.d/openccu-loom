@@ -65,15 +65,40 @@ info() {
   echo "Update: /addons/${ADDON_ID}/update-check.cgi"
 }
 
+# unregister_menu drops the control-panel tile from
+# /etc/config/hm_addons.cfg. Mirrors the registration in update_script:
+# platform helper first, the HomeMatic Tcl API as the fallback. The API
+# call is guarded by an `info procs` probe because RemoveConfigPage is a
+# RaspberryMatic/OpenCCU addition — stock firmware only ships
+# AddConfigPage, and an unguarded call would abort the uninstall.
+unregister_menu_tcl() {
+  cat <<EOF
+package require HomeMatic
+if {[info procs ::HomeMatic::Addon::RemoveConfigPage] ne ""} {
+  ::HomeMatic::Addon::RemoveConfigPage "${ADDON_ID}"
+}
+EOF
+}
+
+unregister_menu() {
+  if [ -x /bin/updateAddonConfig.tcl ]; then
+    if /bin/updateAddonConfig.tcl -d ${ADDON_ID}; then
+      return 0
+    fi
+  fi
+  if [ -x /bin/tclsh ]; then
+    unregister_menu_tcl | /bin/tclsh || true
+  fi
+  return 0
+}
+
 uninstall() {
   logger -t ${ADDON_ID} -p user.debug "Uninstalling"
   if [ -x /usr/bin/monit ]; then
     monit unmonitor ${ADDON_ID} 2>/dev/null || true
   fi
   stop
-  if [ -x /bin/update_hm_addons.tcl ]; then
-    /bin/update_hm_addons.tcl -d ${ADDON_ID} 2>/dev/null || true
-  fi
+  unregister_menu
   rm -f ${RCD_DIR}/${ADDON_ID}
   rm -f ${ETC_DIR}/monit-${ADDON_ID}.cfg
   rm -rf ${ADDON_DIR}

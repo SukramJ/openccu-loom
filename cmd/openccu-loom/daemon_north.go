@@ -158,7 +158,12 @@ func buildBootstrapRouter(cfg *config.Config, logger *slog.Logger, d uiMountDeps
 // (GET /api/v1/setup/status, POST /api/v1/setup). nil sqUsers (no durable
 // store) reports "not first run" so the probe never traps an operator on a
 // backend that cannot persist the onboarding result.
-func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore) func(context.Context) bool {
+//
+// sqCentrals supplies the live central count. CCU-delegated login only
+// counts as an authentication source once a central is configured, so the
+// probe must read the same table a runtime adopt writes to rather than the
+// boot-time snapshot alone.
+func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore, sqCentrals *sqlitestore.CentralsStore) func(context.Context) bool {
 	return func(ctx context.Context) bool {
 		if sqUsers == nil {
 			return false
@@ -167,8 +172,32 @@ func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore) func(cont
 		if err != nil {
 			return false
 		}
-		return firstRunNeedsSetup(cfg, n)
+		return firstRunNeedsSetup(cfg, n, hasConfiguredCentral(ctx, cfg, sqCentrals))
 	}
+}
+
+// hasConfiguredCentral reports whether the operator has a central in either
+// tier: the boot-time cfg.Centrals snapshot (the YAML tier, plus the DB rows
+// layered in at boot) or an enabled row added to the SQLite centrals table
+// since — the table is consulted live so a runtime adopt counts immediately.
+// A store error falls back to the snapshot alone.
+func hasConfiguredCentral(ctx context.Context, cfg *config.Config, sqCentrals *sqlitestore.CentralsStore) bool {
+	if len(cfg.Centrals) > 0 {
+		return true
+	}
+	if sqCentrals == nil {
+		return false
+	}
+	rows, err := sqCentrals.List(ctx)
+	if err != nil {
+		return false
+	}
+	for i := range rows {
+		if rows[i].Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 // firstRunNeedsSetup reports whether the operator still needs onboarding: ONLY
@@ -176,13 +205,20 @@ func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore) func(cont
 // provider. In the add-on CCU auth is on by default, so most operators log in
 // with their CCU account and never create a local admin; treating that as
 // "first run" would trap them on the wizard (regression fixed in 0.14.1).
-func firstRunNeedsSetup(cfg *config.Config, localUserCount int) bool {
+//
+// CCU-delegated login only counts once at least one central is configured:
+// it authenticates against a CCU's user database, and with no central there
+// is nothing to ask (ADR 0043). Counting it regardless locked a fresh CCU
+// add-on install out completely — the wizard was suppressed AND every CCU
+// login was rejected, while adding the central needs an authenticated
+// session.
+func firstRunNeedsSetup(cfg *config.Config, localUserCount int, hasCentral bool) bool {
 	switch {
 	case localUserCount > 0:
 		return false // a persisted local admin exists
 	case len(cfg.North.REST.Auth.Users) > 0:
 		return false // a YAML-pinned local user exists
-	case ccuAuthEnabled(cfg.North.REST.Auth.CCU):
+	case ccuAuthEnabled(cfg.North.REST.Auth.CCU) && hasCentral:
 		return false // CCU-delegated login is available (ADR 0043)
 	case cfg.North.REST.Auth.OIDC.Enabled:
 		return false // OIDC SSO is available

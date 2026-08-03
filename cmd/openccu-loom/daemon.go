@@ -691,7 +691,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// First-run probe gates the SPA onboarding endpoints. Built independently
 	// of the UI router so it works whenever REST is up, even with the
 	// diagnostic UI disabled.
-	noUsers := firstRunProbe(cfg, sqUsers)
+	noUsers := firstRunProbe(cfg, sqUsers, sqCentrals)
 
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS

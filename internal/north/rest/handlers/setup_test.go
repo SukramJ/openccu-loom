@@ -226,6 +226,61 @@ func TestSetup_WithCCUAndMQTT_204(t *testing.T) {
 	}
 }
 
+// recordingCentralAdmin is a [CentralAdminService] that records what the
+// wizard writes. Production wires the live-adopt decorator here, so the
+// recorded Put stands in for "the CCU was adopted, not just persisted".
+type recordingCentralAdmin struct {
+	*sqlite.CentralsStore
+	puts []sqlite.CentralRow
+}
+
+func (r *recordingCentralAdmin) Put(ctx context.Context, row sqlite.CentralRow) error {
+	r.puts = append(r.puts, row)
+	return r.CentralsStore.Put(ctx, row)
+}
+
+// TestSetup_CCUGoesThroughCentralAdminService pins that the wizard's optional
+// CCU step writes through the injected [CentralAdminService] rather than a
+// raw store. Production injects the live-adopt decorator there, which is what
+// brings the CCU up immediately — without it a freshly onboarded add-on stays
+// dark (and CCU-delegated login keeps failing) until the next restart.
+func TestSetup_CCUGoesThroughCentralAdminService(t *testing.T) {
+	users, centrals, sections := openSetupStores(t)
+	rec := &recordingCentralAdmin{CentralsStore: centrals}
+	svc := &SetupService{
+		Users:    users,
+		Centrals: rec,
+		Sections: sections,
+		Required: func(context.Context) bool { return true },
+	}
+
+	body := strings.NewReader(`{
+		"admin":  {"username":"admin","password":"password123"},
+		"locale": {"locale":"de","theme":"system"},
+		"ccu":    {"name":"ccu1","host":"192.168.1.1","username":"Admin","password":"ccu-secret","interfaces":["HmIP-RF","BidCos-RF"]}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup", body)
+	w := httptest.NewRecorder()
+	Setup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("got %d body=%s, want 204", w.Code, w.Body.String())
+	}
+	if len(rec.puts) != 1 {
+		t.Fatalf("expected exactly one Put through the central-admin service, got %d", len(rec.puts))
+	}
+	got := rec.puts[0]
+	if got.Name != "ccu1" || got.Host != "192.168.1.1" || !got.Enabled {
+		t.Errorf("row = %+v, want name=ccu1 host=192.168.1.1 enabled=true", got)
+	}
+	if got.PasswordPlain != "ccu-secret" || got.Username != "Admin" {
+		t.Errorf("credentials not forwarded: user=%q password set=%v", got.Username, got.PasswordPlain != "")
+	}
+	if len(got.Interfaces) != 2 {
+		t.Errorf("interfaces = %+v, want 2 entries", got.Interfaces)
+	}
+}
+
 // --- Setup failure paths ---
 
 func TestSetup_AlreadyCompleted_409(t *testing.T) {

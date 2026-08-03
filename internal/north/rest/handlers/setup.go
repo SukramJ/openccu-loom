@@ -22,8 +22,13 @@ import (
 // optional MQTT section to SQLite. Nil stores mean "no durable backend" — the
 // endpoints then report setup as not required and refuse to finalize.
 type SetupService struct {
-	Users    *sqlite.UserStore
-	Centrals *sqlite.CentralsStore
+	Users *sqlite.UserStore
+	// Centrals persists the wizard's optional CCU. It is the same service
+	// POST /admin/centrals writes through, so the CCU the operator names in
+	// the wizard is adopted live instead of only landing in the table — a
+	// central that is merely persisted stays dark (and CCU-delegated login
+	// stays impossible) until the next daemon restart.
+	Centrals CentralAdminService
 	Sections *sqlite.ConfigSectionStore
 	// Required reports first-run state: true only when there is no way to
 	// authenticate yet (no local admin, no YAML user, no CCU-delegated login,
@@ -184,10 +189,14 @@ func validateSetup(req *setupRequest) string {
 	return ""
 }
 
-// finalizeSetup commits the validated onboarding payload to SQLite in a fixed
-// order: admin user first (required), then the locale section, the optional
-// CCU row, and the optional MQTT section. Mirrors the prior server-rendered
-// wizard's finalization so the persisted shape is byte-for-byte identical.
+// finalizeSetup commits the validated onboarding payload to SQLite: admin
+// user first (required), then the locale section, the optional MQTT section,
+// and the optional CCU last. The CCU comes last because it is the only step
+// with an effect beyond persistence — [CentralAdminService] also brings the
+// central up live — so it is the only one that can fail for a reason the
+// preceding steps do not share. Ordering it last keeps such a failure from
+// swallowing settings the operator already got right. The persisted shape is
+// unchanged.
 func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) error {
 	actor := req.Admin.Username
 
@@ -206,6 +215,20 @@ func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) erro
 		return err
 	}
 
+	if req.MQTT != nil {
+		mqttSec, err := json.Marshal(map[string]string{
+			"broker_url": req.MQTT.BrokerURL,
+			"username":   req.MQTT.Username,
+			"password":   req.MQTT.Password,
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := s.Sections.Put(ctx, "north.mqtt", mqttSec, actor); err != nil {
+			return err
+		}
+	}
+
 	if req.CCU != nil && s.Centrals != nil {
 		ifaces := make([]config.InterfaceSpec, 0, len(req.CCU.Interfaces))
 		for _, name := range req.CCU.Interfaces {
@@ -222,20 +245,6 @@ func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) erro
 			row.PasswordPlain = req.CCU.Password
 		}
 		if err := s.Centrals.Put(ctx, row); err != nil {
-			return err
-		}
-	}
-
-	if req.MQTT != nil {
-		mqttSec, err := json.Marshal(map[string]string{
-			"broker_url": req.MQTT.BrokerURL,
-			"username":   req.MQTT.Username,
-			"password":   req.MQTT.Password,
-		})
-		if err != nil {
-			return err
-		}
-		if _, err := s.Sections.Put(ctx, "north.mqtt", mqttSec, actor); err != nil {
 			return err
 		}
 	}

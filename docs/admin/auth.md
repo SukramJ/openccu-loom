@@ -266,6 +266,21 @@ unset, it resolves to the build's add-on stamp — **on** in the CCU
 add-on, **off** in a plain binary or Docker build. An explicit
 `true`/`false` always overrides the build default.
 
+**Requires a configured central.** The scheme authenticates against a
+CCU's user database, so it can only sign anyone in once at least one
+central exists. Until then it does not count as an available
+authentication source and the [first-run setup](../user-guide.md#first-run-setup)
+wizard stays reachable — otherwise a fresh add-on install would be
+locked out: no wizard, and every CCU login rejected for want of a
+central to ask.
+
+`central: ""` picks the first configured central, resolved the same way
+the rest of the daemon resolves centrals: the SQLite `centrals` table
+wins whenever it holds any row (this is what makes a central adopted at
+runtime authenticatable without a restart); an empty table means the
+`centrals:` block of `config.yaml` is authoritative. A named central
+that is unknown or disabled in the authoritative tier fails closed.
+
 ## HA Ingress passthrough
 
 Supervised Home Assistant add-on deployments can let the HA Supervisor

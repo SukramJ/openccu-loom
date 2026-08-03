@@ -71,14 +71,37 @@ chmod 755 ${RCD_DIR}/${ADDON_ID}
 mkdir -p ${ADDON_DIR}/var
 chmod 755 ${ADDON_DIR}/var
 
-# Register the add-on in the CCU web menu via the system helper. Not
-# vendored here (it is eQ-3 platform code); skip gracefully if absent so
-# the daemon still installs and runs without the menu entry.
-if [ -x /bin/update_hm_addons.tcl ]; then
-  /bin/update_hm_addons.tcl -a ${ADDON_ID} -name "${ADDON_NAME}" \
-    -url /addons/${ADDON_ID}/config.cgi \
-    -de "${ADDON_DESCR_DE}" -en "${ADDON_DESCR_EN}" 2>/dev/null || true
-fi
+# Register the add-on's control-panel tile ("Systemsteuerung"). The WebUI
+# renders one button per entry of /etc/config/hm_addons.cfg; entries are
+# written by the platform helper /bin/updateAddonConfig.tcl, or — on
+# firmware that predates it — by the underlying HomeMatic Tcl API the
+# helper itself calls. Neither is vendored here (platform code), so both
+# are probed. A miss is announced rather than swallowed: the daemon runs
+# fine without the tile, but a silent skip is indistinguishable from a
+# broken install.
+register_menu_tcl() {
+  cat <<EOF
+package require HomeMatic
+::HomeMatic::Addon::AddConfigPage "${ADDON_ID}" "/addons/${ADDON_ID}/config.cgi" "${ADDON_NAME}" [list de "<li>${ADDON_DESCR_DE}</li>" en "<li>${ADDON_DESCR_EN}</li>"]
+EOF
+}
+
+register_menu() {
+  if [ -x /bin/updateAddonConfig.tcl ]; then
+    if /bin/updateAddonConfig.tcl -a ${ADDON_ID} -name "${ADDON_NAME}" \
+         -url /addons/${ADDON_ID}/config.cgi \
+         -de "${ADDON_DESCR_DE}" -en "${ADDON_DESCR_EN}"; then
+      return 0
+    fi
+  fi
+  if [ -x /bin/tclsh ] && register_menu_tcl | /bin/tclsh; then
+    return 0
+  fi
+  echo "Warning: could not register the ${ADDON_NAME} control panel entry"
+  return 0
+}
+
+register_menu
 
 sync
 echo "Installed ${ADDON_NAME} (${ADDON_BIN})"
