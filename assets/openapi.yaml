@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.19.0
+  version: 3.20.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4375,6 +4375,15 @@ paths:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
         "202": { description: Restore dispatched asynchronously }
+        "422":
+          description: >
+            The backup names no owning CCU and several are configured, so the
+            restore target cannot be derived. Restore it from that CCU's own
+            backup list instead. Nothing was sent to any CCU.
+        "501":
+          description: >
+            No restore path is configured, so nothing was sent to the CCU.
+            Distinct from 502, which means a CCU was asked and refused.
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 

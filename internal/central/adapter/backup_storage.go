@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
@@ -53,7 +55,7 @@ type BackupRestorer interface {
 // concrete [BackupRestorer] has been wired. The handler surfaces a
 // 502/501 with this error's message so the SPA can render a clear
 // status.
-var ErrRestoreUnsupported = errors.New("backup: restore not configured (wire a BackupRestorer)")
+var ErrRestoreUnsupported = hmerr.ErrRestoreUnsupported
 
 // FilesystemBackupStorage reads `.sbk` files from a directory. The
 // directory is created on construction if it doesn't exist.

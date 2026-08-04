@@ -109,7 +109,26 @@ func RestoreBackup(svc BackupService) http.HandlerFunc {
 		}
 		id := chi.URLParam(r, "id")
 		jobID, err := svc.Restore(r.Context(), id)
-		if err != nil {
+		switch {
+		case errors.Is(err, hmerr.ErrRestoreTargetAmbiguous):
+			// Not an upstream failure: nothing was attempted. Saying so
+			// with 422 and the reason beats the 502 this used to return,
+			// which told an operator the CCU had refused when in fact the
+			// daemon never asked it anything.
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "Restore target is ambiguous", err.Error()))
+			return
+		case errors.Is(err, hmerr.ErrRestoreUnsupported):
+			// 501, not 502: nothing was sent to the CCU, so calling this
+			// an upstream failure blames the wrong party. It is also the
+			// only way a caller — or a black-box test — can tell "the
+			// daemon cannot do this" apart from "the CCU refused", which
+			// is exactly the distinction that let a dead restore path go
+			// unnoticed.
+			writeServerError(w, r, http.StatusNotImplemented, problem.TypeServiceUnready,
+				"Backup restore is not configured", err)
+			return
+		case err != nil:
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup restore failed", err)
 			return
 		}

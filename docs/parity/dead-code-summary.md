@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 95daeba7
-HEAD: 95daeba7
+Generated: ac36ea86
+HEAD: ac36ea86
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27647 |
+| Total Exported | 27651 |
 | Reachable | 4886 |
 | Whitelisted | 19796 |
-| **Unreachable** | **2965** |
+| **Unreachable** | **2969** |
 
 ## Top-20 Packages by Dead Code
 
@@ -23,7 +23,7 @@ HEAD: 95daeba7
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
-| pkg/hmerr | 4 | 5 | 28 |
+| pkg/hmerr | 4 | 5 | 32 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
@@ -103,7 +103,7 @@ HEAD: 95daeba7
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
-| pkg/hmerr | 4 | 5 | 28 |
+| pkg/hmerr | 4 | 5 | 32 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
 | internal/ccudata | 2 | 31 | 4 |

@@ -306,20 +306,63 @@ func (a *BackupAdapter) ownerCentralName(id string) string {
 }
 
 // resolveRestorer picks the [BackupRestorer] that must handle a restore
-// of id. When id resolves to a known central via
+// of id, and says why when it cannot.
+//
+// When id resolves to a known central via
 // [BackupAdapter.ownerCentralName] the lookup is strict: only that
 // central's own restorer (or nil, meaning "not yet available") is ever
-// returned — the legacy [BackupAdapter.restorer] fallback is not
-// consulted, so a central whose restorer has not (yet) come up cannot
-// silently receive another central's restore. When id's owner cannot be
-// resolved at all (unknown id shape, e.g. a manually-imported archive,
-// or a test double with no realistic id) the legacy single-restorer
-// fallback applies, preserving single-CCU behaviour.
-func (a *BackupAdapter) resolveRestorer(id string) BackupRestorer {
+// returned, so a central whose restorer has not come up cannot silently
+// receive another central's restore.
+//
+// An uploaded archive carries no owner — its id is "upload-<timestamp>",
+// which matches no central's safe name. That case used to fall through
+// to the legacy single-restorer field, which nothing in production ever
+// set, so every restore of an uploaded backup ended in
+// ErrRestoreUnsupported and a 502. It now resolves to the only
+// configured central when there is exactly one, which is the ordinary
+// installation, and refuses with [hmerr.ErrRestoreTargetAmbiguous] when
+// there are several.
+func (a *BackupAdapter) resolveRestorer(id string) (BackupRestorer, error) {
 	if owner := a.ownerCentralName(id); owner != "" {
-		return a.restorers[owner]
+		return a.restorers[owner], nil
 	}
-	return a.restorer
+	// An explicitly installed single restorer wins over everything below:
+	// somebody chose it, and this code has no better information.
+	if a.restorer != nil {
+		return a.restorer, nil
+	}
+	if r := a.soleRestorer(); r != nil {
+		return r, nil
+	}
+	if a.countCentrals() > 1 {
+		return nil, fmt.Errorf("%w: an uploaded backup names no central and %d are configured; "+
+			"restore it from that central's own backup list",
+			hmerr.ErrRestoreTargetAmbiguous, a.countCentrals())
+	}
+	return nil, nil
+}
+
+// soleRestorer returns the restorer of the only configured central, or
+// nil when zero or several are configured.
+func (a *BackupAdapter) soleRestorer() BackupRestorer {
+	if len(a.restorers) != 1 {
+		return nil
+	}
+	for _, r := range a.restorers {
+		return r
+	}
+	return nil
+}
+
+// countCentrals reports how many centrals could be a restore target.
+func (a *BackupAdapter) countCentrals() int {
+	if len(a.restorers) > 0 {
+		return len(a.restorers)
+	}
+	if a.registry == nil {
+		return 0
+	}
+	return len(a.registry.List())
 }
 
 // List implements handlers.BackupService. When a [BackupStorage] is
@@ -369,7 +412,10 @@ func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) 
 	if a.storage == nil {
 		return "", ErrRestoreUnsupported
 	}
-	restorer := a.resolveRestorer(id)
+	restorer, err := a.resolveRestorer(id)
+	if err != nil {
+		return "", err
+	}
 	if restorer == nil {
 		return "", ErrRestoreUnsupported
 	}
