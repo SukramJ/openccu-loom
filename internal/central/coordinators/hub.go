@@ -695,16 +695,39 @@ func (h *HubCoordinator) SetSysvarValueWriter(w SysvarValueWriter) *HubCoordinat
 	return h
 }
 
-// SetSystemVariable writes a system-variable value to the CCU via the wired
-// [SysvarValueWriter]. Returns nil when no writer is wired.
+// ErrNoSysvarWriter reports that no south-bound sysvar write path is
+// wired, so a value cannot reach the CCU.
+//
+// It exists because the previous behaviour was to return nil — success —
+// which turned a missing wire into a silent no-op. The alarm sysvar
+// mirror creates its variable through a separately wired creator and
+// then writes the value through here; with the write path unwired the
+// variable existed, never changed, and the caller's error branch never
+// ran. A CCU program reading that variable waited forever for a trigger
+// that could not arrive.
+var ErrNoSysvarWriter = errors.New("hub: no sysvar value writer wired")
+
+// SetSystemVariable writes a system-variable value to the CCU via the
+// wired [SysvarValueWriter]. It returns [ErrNoSysvarWriter] when none is
+// wired rather than reporting a write that did not happen as success.
 func (h *HubCoordinator) SetSystemVariable(ctx context.Context, name string, value any) error {
 	h.mu.RLock()
 	w := h.sysvarValueWriter
 	h.mu.RUnlock()
 	if w == nil {
-		return nil
+		return ErrNoSysvarWriter
 	}
 	return w.SetSysvar(ctx, name, value)
+}
+
+// HasSysvarValueWriter reports whether a south-bound sysvar write path is
+// wired. The daemon checks it once at start-up so an operator learns
+// about a missing wire from a log line rather than from a CCU program
+// that never fires.
+func (h *HubCoordinator) HasSysvarValueWriter() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.sysvarValueWriter != nil
 }
 
 // --- Hub data-point lookups + install-mode publish -------

@@ -74,6 +74,13 @@ func wireHomegearHubSysvars(ctx context.Context, unit *central.Unit, backend hom
 	// lossy half-mapping. Reading sysvars and writing their values — the
 	// actual Homegear parity surface — work through here.
 	writer := &homegearSysvarWriter{backend: backend}
+	// Homegear models no sysvar metadata, so no creator is wired — but
+	// writing a value is the actual parity surface and must reach the
+	// backend. Without this the alarm sysvar mirror is silently inert on
+	// Homegear exactly as it was on the CCU.
+	if unit.Hub != nil {
+		unit.Hub.SetSysvarValueWriter(writer)
+	}
 
 	refresh := func(ctx context.Context) error {
 		return loadHomegearSysvars(ctx, backend, unit.HubModel, writer)

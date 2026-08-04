@@ -77,7 +77,6 @@ var wiringSeamsUnderInvestigation = map[string]string{
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetRecorder":                  "the sibling coordinators receive the recorder at central.go:213-214; this one does not",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.HubCoordinator.SetProgramStateWriter":           "unclassified",
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators.HubCoordinator.SetSysvarGetter":                 "unclassified",
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators.HubCoordinator.SetSysvarValueWriter":            "unclassified",
 
 	// A confirmed consequence, kept here because fixing it is feature
 	// work: nothing ever attaches a generic event to a channel, and

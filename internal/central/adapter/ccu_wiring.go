@@ -273,6 +273,17 @@ func gatedCentralBringUp(
 				CentralName: cc.Name,
 			})
 			recordCentralReadiness(unit, hmenum.ReadinessReady, len(cc.Interfaces), len(cc.Interfaces))
+			// A regression detector, not a routine check: both backends
+			// wire the sysvar write path during hub bring-up, so this
+			// line should never appear. It exists because the omission it
+			// reports was invisible for a whole release — the alarm
+			// sysvar mirror created its variable, never wrote a value,
+			// and reported success while doing so.
+			if unit.Hub != nil && !unit.Hub.HasSysvarValueWriter() {
+				logger.Warn("wire.hub.sysvar_writer.missing",
+					slog.String("central", cc.Name),
+					slog.String("impact", "alarm sysvar mirror and every sysvar write will fail"))
+			}
 			logger.Info("wire.central.ready", slog.String("central", cc.Name))
 			return
 		}
