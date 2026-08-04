@@ -1,5 +1,20 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.53.1
+
+- **The "Install" button on a device's firmware card did nothing.** Home
+  Assistant showed it, and pressing it changed nothing at all — the
+  command never reached the daemon. The card now shows the available
+  firmware version without a button that promises an action it cannot
+  perform. Installing a device firmware stays where it was already
+  guarded: the OpenCCU-Loom web UI.
+- **Corrected what the duress setting promises.** The help text for the
+  duress and silent-panic visibility said the "hidden" level still
+  delivers to the raw alarm topic. It never did — on that level, only a
+  configured webhook is notified. If you rely on duress notifications and
+  have no webhook, use the default level "notify_only". The text now says
+  so in both languages.
+
 ## 0.53.0
 
 - **Water and rain sensors show up properly again.** The config UI looked
