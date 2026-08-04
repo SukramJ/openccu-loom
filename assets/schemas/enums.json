@@ -1966,16 +1966,8 @@
           "wire_value": "ERROR_ALARM_TEST"
         },
         {
-          "go_name": "ParameterErrorCode",
-          "wire_value": "ERROR_CODE"
-        },
-        {
           "go_name": "ParameterErrorJammed",
           "wire_value": "ERROR_JAMMED"
-        },
-        {
-          "go_name": "ParameterErrorNonFlatPositioning",
-          "wire_value": "ERROR_NON_FLAT_POSITIONING"
         },
         {
           "go_name": "ParameterErrorSmokeChamber",

@@ -1,6 +1,6 @@
 {
-  "generated": "2c3681b0",
-  "head": "2c3681b0",
+  "generated": "ba87e3f3",
+  "head": "ba87e3f3",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,8 +10,8 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27630,
-    "reachable": 4890,
+    "total_exported": 27626,
+    "reachable": 4886,
     "whitelisted": 19777,
     "unreachable": 2963
   },
@@ -19402,14 +19402,14 @@
       "package": "pkg/hmenum",
       "identifier": "ClickEvents",
       "file": "pkg/hmenum/parameter.go",
-      "line": 200,
+      "line": 198,
       "kind": "var"
     },
     {
       "package": "pkg/hmenum",
       "identifier": "ClickEvents",
       "file": "pkg/hmenum/parameter.go",
-      "line": 200,
+      "line": 198,
       "kind": "var"
     },
     {
@@ -19570,14 +19570,14 @@
       "package": "pkg/hmenum",
       "identifier": "DeviceChannel0Parameters",
       "file": "pkg/hmenum/parameter.go",
-      "line": 248,
+      "line": 246,
       "kind": "var"
     },
     {
       "package": "pkg/hmenum",
       "identifier": "DeviceChannel0Parameters",
       "file": "pkg/hmenum/parameter.go",
-      "line": 248,
+      "line": 246,
       "kind": "var"
     },
     {
@@ -19899,14 +19899,14 @@
       "package": "pkg/hmenum",
       "identifier": "OptionalParameters",
       "file": "pkg/hmenum/parameter.go",
-      "line": 321,
+      "line": 319,
       "kind": "var"
     },
     {
       "package": "pkg/hmenum",
       "identifier": "OptionalParameters",
       "file": "pkg/hmenum/parameter.go",
-      "line": 321,
+      "line": 319,
       "kind": "var"
     },
     {
@@ -96223,7 +96223,7 @@
       "identifier": "TestClassificationActive",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/safety/classify_test.go",
-      "line": 221
+      "line": 219
     },
     {
       "package": "internal/model/safety",
@@ -96244,7 +96244,7 @@
       "identifier": "TestClassifyRainIsNotWater",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/safety/classify_test.go",
-      "line": 297
+      "line": 295
     },
     {
       "package": "internal/model/safety",
@@ -96258,14 +96258,14 @@
       "identifier": "TestClassifyUnclassifiedParameters",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/safety/classify_test.go",
-      "line": 264
+      "line": 262
     },
     {
       "package": "internal/model/safety",
       "identifier": "TestExcludedParametersNeverClassify",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/safety/classify_test.go",
-      "line": 183
+      "line": 181
     },
     {
       "package": "internal/model/schedule",

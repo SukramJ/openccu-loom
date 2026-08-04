@@ -142,6 +142,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A smoke detector's two self-diagnosis faults had no data point.** A
+  soiled smoke chamber and a failed self-test are the conditions that
+  make a detector stop protecting without announcing it, and both were
+  suppressed by the visibility rules — so neither could appear in any
+  fault list. Un-ignored on HmIP-SWSD.
+
+- **Two parameter constants named things that are not parameters.** The
+  published enum schema loses two entries as a result; the API version
+  moves by a minor step rather than a major one because neither value
+  could ever appear on the wire — they described data points no device
+  has, so no consumer can have received one.
+  `ERROR_CODE` and `ERROR_NON_FLAT_POSITIONING` were added to the
+  taxonomy as data points and mapped by the classifier, but neither
+  exists: the CCU firmware string table carries the real smoke-detector
+  error parameters as `SMOKE_DETECTOR|<PARAM>=<VALUE>` and these two not
+  at all, the reference library lists the second as an error *value*,
+  and neither appears on any device in the simulated fleet. Removed
+  along with their classifier entries, which could never have matched.
+
+- **Water leaks now reach the Matter bridge.** The binary classifier
+  said in its own comment that leak parameters were "not classified
+  yet"; `MOISTURE_DETECTED` and `WATERLEVEL_DETECTED` now map to the
+  Leak class. `ALARMSTATE` deliberately does not: it is a device-wide
+  alarm flag, and on a siren the same name means actuator feedback.
+
 - **Retained discovery of the two daemon-level planes could never be
   cleaned up.** The orphan sweep filtered on the `<central>_` node
   prefix, which neither the alarm plane nor the security plane carries —

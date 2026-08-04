@@ -1,14 +1,14 @@
 # Dead-Code Summary
 
-Generated: 2c3681b0
-HEAD: 2c3681b0
+Generated: ba87e3f3
+HEAD: ba87e3f3
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27630 |
-| Reachable | 4890 |
+| Total Exported | 27626 |
+| Reachable | 4886 |
 | Whitelisted | 19777 |
 | **Unreachable** | **2963** |
 

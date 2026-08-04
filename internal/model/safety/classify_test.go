@@ -148,10 +148,8 @@ func TestClassifyByParameter(t *testing.T) {
 		{"blocked temporary", hmenum.ParameterBlockedTemporary, hmenum.SecurityClassTechnical, hmenum.SecurityFaultReasonBlocked},
 		{"blocked permanent", hmenum.ParameterBlockedPermanent, hmenum.SecurityClassTechnical, hmenum.SecurityFaultReasonBlocked},
 
-		{"error code", hmenum.ParameterErrorCode, hmenum.SecurityClassTechnical, hmenum.SecurityFaultReasonDeviceError},
 		{"error smoke chamber", hmenum.ParameterErrorSmokeChamber, hmenum.SecurityClassTechnical, hmenum.SecurityFaultReasonDeviceError},
 		{"error alarm test", hmenum.ParameterErrorAlarmTest, hmenum.SecurityClassTechnical, hmenum.SecurityFaultReasonDeviceError},
-		{"error non flat positioning", hmenum.ParameterErrorNonFlatPositioning, hmenum.SecurityClassTechnical, hmenum.SecurityFaultReasonDeviceError},
 		{"error jammed", hmenum.ParameterErrorJammed, hmenum.SecurityClassTechnical, hmenum.SecurityFaultReasonDeviceError},
 
 		{"dutycycle", "DUTYCYCLE", hmenum.SecurityClassTechnical, hmenum.SecurityFaultReasonDutyCycle},

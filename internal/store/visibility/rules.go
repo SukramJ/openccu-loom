@@ -297,6 +297,12 @@ var unIgnoreParametersByDevice = map[string]map[hmenum.Parameter]struct{}{
 		hmenum.ParameterDirtLevel:                {},
 		hmenum.ParameterSmokeLevel:               {},
 		hmenum.ParameterSmokeDetectorAlarmStatus: {},
+		// A soiled smoke chamber and a failed self-test are the two
+		// conditions that make a smoke detector stop protecting without
+		// announcing it. Suppressed, they had no data point at all and
+		// could appear in no fault list.
+		hmenum.ParameterErrorSmokeChamber: {},
+		hmenum.ParameterErrorAlarmTest:    {},
 	},
 	"HmIP-WRCD": {
 		hmenum.ParameterDisplayDataCommit: {},
