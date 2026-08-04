@@ -318,6 +318,33 @@
     return next;
   }
 
+  // deleteDeep removes the leaf at the dotted path. Mutates obj. Used to drop
+  // an untouched secret from the save payload: an absent key tells the backend
+  // "unchanged, keep the stored value", which is what keeps a save that edits
+  // some other field from wiping the credential.
+  function deleteDeep(obj: Record<string, unknown>, dotted: string): void {
+    if (dotted === "") return;
+    const parts = dotted.split(".");
+    let cur: Record<string, unknown> = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const next = cur[parts[i]];
+      if (typeof next !== "object" || next === null) return;
+      cur = next as Record<string, unknown>;
+    }
+    delete cur[parts[parts.length - 1]];
+  }
+
+  // secretIsSet reports whether a secret field currently holds a value. The
+  // backend leaves an unset secret empty instead of masking it, so "" means
+  // "not configured" rather than "hidden".
+  function secretIsSet(v: unknown): boolean {
+    if (v == null) return false;
+    if (typeof v === "string") return v !== "";
+    if (Array.isArray(v)) return v.length > 0;
+    if (typeof v === "object") return Object.keys(v as object).length > 0;
+    return true;
+  }
+
   function parseValue(raw: unknown, f: ConfigSchemaField): unknown {
     const def = f.default;
     // Fallback chain: explicit DB value > schema-curated default >
@@ -550,12 +577,17 @@
         const rel = relativePath(f.path);
         const v = getDeep(payload, rel);
         if (f.class === "secret") {
-          // An unchanged/unset secret is a placeholder — an empty string for an
-          // unset field, or the masked "***" sentinel. Send null instead of a
-          // mistyped string: a complex (map) secret would otherwise 400 on the
-          // strict unmarshal, and the backend reconciles the null/sentinel back
-          // to the stored value. A genuinely typed secret keeps its value.
-          if (v === "" || v === "***") setDeep(payload, rel, null);
+          // A secret the operator did not touch is dropped from the payload
+          // entirely; the backend reads an absent key as "unchanged" and
+          // substitutes the stored value. Sending a placeholder instead is
+          // what silently wiped credentials: the masked "***" sentinel (or the
+          // null it used to be rewritten to) has no way of saying "keep this",
+          // so a save that edited some other field of the same section
+          // persisted an empty secret. An edited secret is sent as typed —
+          // including the empty string, which is how a credential is cleared.
+          const untouched =
+            JSON.stringify(v ?? null) === JSON.stringify(getDeep(original, rel) ?? null);
+          if (untouched) deleteDeep(payload, rel);
           continue;
         }
         if (f.go_type === "[]string" && typeof v === "string") {
@@ -641,6 +673,11 @@
           {fromEnv
             ? t("settings.secret_from_env", { name: envName })
             : t("settings.secret_env_override", { name: envName })}
+        </p>
+      {/if}
+      {#if !fromEnv && !secretIsSet(v)}
+        <p class="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+          {t("settings.secret_not_set")}
         </p>
       {/if}
     </div>

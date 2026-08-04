@@ -602,3 +602,135 @@ describe("SectionEditor — go_type badge visibility", () => {
     expect(queryByText("string")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Secret payload contract
+//
+// The backend reads an ABSENT secret key as "unchanged, keep the stored
+// value". Sending a placeholder instead is what silently wiped credentials:
+// editing an unrelated field of the same section persisted an empty secret,
+// after which the daemon connected to the broker without a password.
+// An edited secret is sent as typed — including "" to clear it.
+// ---------------------------------------------------------------------------
+
+const MQTT_PASSWORD_FIELD: ConfigSchemaField = {
+  path: "north.rest.password",
+  class: "secret",
+  go_type: "string",
+};
+
+async function renderAndSave(
+  fields: ConfigSchemaField[],
+  edit: (container: HTMLElement) => Promise<void>,
+): Promise<Record<string, unknown>> {
+  const { container } = renderEditor(fields);
+  await waitFor(() => {
+    expect(mockGetConfigSection).toHaveBeenCalledWith("north.rest");
+  });
+  await waitFor(() => {
+    expect(container.querySelectorAll("input").length).toBeGreaterThan(0);
+  });
+
+  await edit(container);
+
+  await waitFor(() => {
+    const saveBtn = (
+      Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim().includes("common.save"));
+    expect(saveBtn).toBeDefined();
+    expect(saveBtn!.disabled).toBe(false);
+  });
+  const saveBtn = (
+    Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+  ).find((b) => b.textContent?.trim().includes("common.save"))!;
+  await fireEvent.click(saveBtn);
+
+  await waitFor(() => {
+    expect(mockPutConfigSection).toHaveBeenCalledTimes(1);
+  });
+  return mockPutConfigSection.mock.calls[0][1] as Record<string, unknown>;
+}
+
+describe("SectionEditor.save — secret payload contract", () => {
+  it("omits an untouched secret so the stored credential survives the save", async () => {
+    mockGetConfigSectionResult = {
+      public_url: "https://old.example.com",
+      password: "***",
+    };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const payload = await renderAndSave(
+      [PUBLIC_URL_FIELD, MQTT_PASSWORD_FIELD],
+      async (container) => {
+        const urlInput = container.querySelector(
+          'input[type="text"]',
+        ) as HTMLInputElement;
+        await fireEvent.input(urlInput, {
+          target: { value: "https://new.example.com" },
+        });
+      },
+    );
+
+    expect(payload.public_url).toBe("https://new.example.com");
+    // Core assertion: the key must be absent, not null and not "***".
+    expect("password" in payload).toBe(false);
+  });
+
+  it("sends a newly typed secret verbatim", async () => {
+    mockGetConfigSectionResult = { public_url: "https://old.example.com", password: "***" };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const payload = await renderAndSave(
+      [PUBLIC_URL_FIELD, MQTT_PASSWORD_FIELD],
+      async (container) => {
+        const pw = container.querySelector(
+          'input[type="password"]',
+        ) as HTMLInputElement;
+        await fireEvent.input(pw, { target: { value: "brand-new-secret" } });
+      },
+    );
+
+    expect(payload.password).toBe("brand-new-secret");
+  });
+
+  it("sends an emptied secret as \"\" so a credential can be cleared", async () => {
+    mockGetConfigSectionResult = { public_url: "https://old.example.com", password: "***" };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const payload = await renderAndSave(
+      [PUBLIC_URL_FIELD, MQTT_PASSWORD_FIELD],
+      async (container) => {
+        const pw = container.querySelector(
+          'input[type="password"]',
+        ) as HTMLInputElement;
+        await fireEvent.input(pw, { target: { value: "" } });
+      },
+    );
+
+    expect(payload.password).toBe("");
+  });
+
+  it("omits untouched complex secrets the editor never renders", async () => {
+    mockGetConfigSectionResult = {
+      public_url: "https://old.example.com",
+      auth: { users: "", tokens: "" },
+    };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const payload = await renderAndSave(
+      [PUBLIC_URL_FIELD, AUTH_USERS_FIELD, AUTH_TOKENS_FIELD],
+      async (container) => {
+        const urlInput = container.querySelector(
+          'input[type="text"]',
+        ) as HTMLInputElement;
+        await fireEvent.input(urlInput, {
+          target: { value: "https://new.example.com" },
+        });
+      },
+    );
+
+    const auth = (payload.auth ?? {}) as Record<string, unknown>;
+    expect("users" in auth).toBe(false);
+    expect("tokens" in auth).toBe(false);
+  });
+});

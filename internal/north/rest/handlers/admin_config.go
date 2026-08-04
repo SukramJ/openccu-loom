@@ -282,12 +282,53 @@ func maskSecrets(cfg *config.Config) map[string]any {
 
 func secretPathSet() map[string]struct{} {
 	set := make(map[string]struct{})
-	for _, f := range config.ClassifyFields(&config.Config{}) {
-		if f.Class == config.FieldSecret {
-			set[f.Path] = struct{}{}
-		}
+	for path := range secretPathTypes() {
+		set[path] = struct{}{}
 	}
 	return set
+}
+
+// secretPathTypes maps every secret-class config path to its Go type name.
+// The type decides how an empty payload value is read on save: an empty
+// string clears a string secret but is only ever a placeholder for a
+// complex one (see [restoreMaskedSecrets]).
+func secretPathTypes() map[string]string {
+	types := make(map[string]string)
+	for _, f := range config.ClassifyFields(&config.Config{}) {
+		if f.Class == config.FieldSecret {
+			types[f.Path] = f.GoType
+		}
+	}
+	return types
+}
+
+// isStringSecret reports whether the secret at path is a plain string
+// field, i.e. one the operator can clear by emptying its input.
+func isStringSecret(goType string) bool { return goType == "string" }
+
+// secretIsSet reports whether a secret value carries anything worth
+// masking. An unset secret masked to "***" is indistinguishable from a
+// configured one, which hides exactly the failure this matters for: a
+// credential that was silently dropped still reads as "configured" in the
+// UI. Empty values are therefore passed through so the SPA can render
+// "not set".
+func secretIsSet(v any) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case string:
+		return t != ""
+	case map[string]any:
+		return len(t) > 0
+	case []any:
+		return len(t) > 0
+	case float64:
+		return t != 0
+	case bool:
+		return t
+	default:
+		return true
+	}
 }
 
 func maskPath(v any, prefix string, set map[string]struct{}) {
@@ -311,7 +352,9 @@ func maskPath(v any, prefix string, set map[string]struct{}) {
 			path = prefix + "." + k
 		}
 		if _, hit := set[path]; hit {
-			m[k] = maskSentinel
+			if secretIsSet(val) {
+				m[k] = maskSentinel
+			}
 			continue
 		}
 		maskPath(val, path, set)
@@ -357,17 +400,21 @@ func maskSectionSecrets(section configstore.Section, valueJSON []byte) []byte {
 const maskSentinel = "***"
 
 // restoreMaskedSecrets reconciles the secret fields of a section PUT against
-// the operator's current real values, scoped to one section. The SPA echoes a
-// secret it is not changing as a string placeholder — either the masked "***"
-// sentinel (from the snapshot view) or an empty "" (an unset complex secret,
-// e.g. north.rest.auth.users, which the editor's parseValue yields as the
-// empty string). Left as-is such a placeholder would either fail strict
-// type-validation — a string into a map[string]string secret 400s — or
-// overwrite the stored secret with the placeholder. This walks every secret
-// path under the section and, wherever the payload carries such a placeholder,
-// substitutes the current real value (a map, string, number — any shape, or
-// null when unset). A secret the operator actually changed carries a
-// non-placeholder value and is left untouched, so new secrets still persist.
+// the operator's current real values, scoped to one section. A save must never
+// destroy a credential the operator did not touch, and must still let them
+// clear one deliberately. The payload distinguishes the two:
+//
+//   - key absent, JSON null, or the masked "***" sentinel → unchanged: the
+//     stored value is substituted before validation and persistence.
+//   - "" on a string secret → deliberately cleared: persisted as empty.
+//   - "" on a complex secret (map[string]string, e.g. north.rest.auth.users)
+//     → unchanged: the editor renders no widget for these, so an empty string
+//     is only ever its "no value" placeholder. Persisting it verbatim would
+//     fail the strict unmarshal with a 400.
+//   - anything else → an operator-supplied new secret, left untouched.
+//
+// Treating an absent key as "unchanged" also means a REST client that omits a
+// secret field keeps the stored one instead of silently wiping it.
 func restoreMaskedSecrets(current *config.Config, section configstore.Section, raw json.RawMessage) json.RawMessage {
 	if current == nil {
 		return raw
@@ -385,21 +432,21 @@ func restoreMaskedSecrets(current *config.Config, section configstore.Section, r
 		return raw
 	}
 	prefix := string(section) + "."
+	unmanaged := configstore.UnmanagedFieldPaths()
 	changed := false
-	for full := range secretPathSet() {
+	for full, goType := range secretPathTypes() {
 		rel, ok := strings.CutPrefix(full, prefix)
 		if !ok {
 			continue
 		}
-		ps, isStr := getDeepAny(payload, rel).(string)
-		// The SPA echoes a secret it is not changing as a string placeholder:
-		// the masked "***" sentinel (the snapshot view) or an empty "" (an
-		// unset complex secret that parsed to the empty string). Neither may be
-		// persisted verbatim — a string into a map[string]string secret fails
-		// strict validation, and "***" would overwrite a real string secret. A
-		// genuine operator-typed secret is a non-empty, non-sentinel string (or
-		// a real object) and is left untouched.
-		if !isStr || (ps != maskSentinel && ps != "") {
+		// Never restore a field the section does not carry: the SQLite-managed
+		// credentials (north.rest.auth.users / .tokens) were just stripped from
+		// the payload on purpose, and putting them back would re-persist them
+		// into the very section they were removed from.
+		if _, skip := unmanaged[full]; skip {
+			continue
+		}
+		if !secretPayloadIsPlaceholder(payload, rel, goType) {
 			continue
 		}
 		setDeepAny(payload, rel, getDeepAny(curMap, full))
@@ -413,6 +460,45 @@ func restoreMaskedSecrets(current *config.Config, section configstore.Section, r
 		return raw
 	}
 	return out
+}
+
+// secretPayloadIsPlaceholder reports whether the value the payload carries at
+// rel means "unchanged" rather than an operator edit. See
+// [restoreMaskedSecrets] for the contract this implements.
+func secretPayloadIsPlaceholder(payload map[string]any, rel, goType string) bool {
+	v, present := lookupDeepAny(payload, rel)
+	if !present || v == nil {
+		return true
+	}
+	s, isStr := v.(string)
+	if !isStr {
+		return false // a real object/number the operator supplied
+	}
+	if s == maskSentinel {
+		return true
+	}
+	// An empty string clears a string secret but is only ever the editor's
+	// "no value" placeholder for a complex one.
+	return s == "" && !isStringSecret(goType)
+}
+
+// lookupDeepAny walks a dotted path through nested JSON objects and reports
+// whether the leaf key exists at all. The distinction matters for secrets: an
+// absent key and an explicit JSON null both mean "unchanged", but a present
+// empty string can mean "cleared" — [getDeepAny] alone cannot tell an absent
+// key from a null value.
+func lookupDeepAny(m map[string]any, path string) (any, bool) {
+	parts := strings.Split(path, ".")
+	cur := m
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := cur[part].(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		cur = next
+	}
+	v, ok := cur[parts[len(parts)-1]]
+	return v, ok
 }
 
 // getDeepAny walks a dotted path through nested JSON objects, returning nil
@@ -568,24 +654,10 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 	}
 }
 
-// cloneConfig returns an independent deep copy of c via a JSON round-trip so
-// the REST handler can assemble a candidate effective config (current with a
-// section overlaid) without mutating the caller's config. A nil input or a
-// round-trip failure degrades to a fresh defaulted config.
-func cloneConfig(c *config.Config) *config.Config {
-	if c == nil {
-		return config.Default()
-	}
-	raw, err := json.Marshal(c)
-	if err != nil {
-		return config.Default()
-	}
-	out := &config.Config{}
-	if err := json.Unmarshal(raw, out); err != nil {
-		return config.Default()
-	}
-	return out
-}
+// cloneConfig returns an independent deep copy of c so the REST handler can
+// assemble a candidate effective config (current with a section overlaid)
+// without mutating the caller's config.
+func cloneConfig(c *config.Config) *config.Config { return config.Clone(c) }
 
 // DeleteConfigSection reverts to defaults.
 func DeleteConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFunc {

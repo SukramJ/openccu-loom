@@ -207,6 +207,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if ov.db != nil {
 		recordSecretHealth(healthTracker, metricsReg, ov.secretsAvailable)
 	}
+	// Teach the reload path how to re-derive the effective config, so a
+	// REST-triggered reload picks up section edits the SPA persisted to the
+	// database after boot.
+	wireConfigAssembler(deps, ov)
 	catalogs := si.catalogs
 	visReg := si.visReg
 	visFilter := si.visFilter
