@@ -118,11 +118,14 @@ var byParameter = map[hmenum.Parameter]Classification{
 	hmenum.ParameterBlockedPermanent: {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonBlocked},
 	hmenum.ParameterBlockedTemporary: {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonBlocked},
 
-	hmenum.ParameterErrorAlarmTest:          {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonDeviceError},
-	hmenum.ParameterErrorCode:               {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonDeviceError},
-	hmenum.ParameterErrorJammed:             {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonDeviceError},
-	hmenum.ParameterErrorNonFlatPositioning: {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonDeviceError},
-	hmenum.ParameterErrorSmokeChamber:       {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonDeviceError},
+	// ERROR_ALARM_TEST and ERROR_SMOKE_CHAMBER are enumerations on the
+	// SMOKE_DETECTOR channel: the CCU firmware string table carries them
+	// as `SMOKE_DETECTOR|<PARAM>=<VALUE>`. Their idle value is NO_ERROR,
+	// which sits at index 0, so the default rule already reads them
+	// correctly without a value narrowing.
+	hmenum.ParameterErrorAlarmTest:    {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonDeviceError},
+	hmenum.ParameterErrorJammed:       {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonDeviceError},
+	hmenum.ParameterErrorSmokeChamber: {Class: hmenum.SecurityClassTechnical, Reason: hmenum.SecurityFaultReasonDeviceError},
 }
 
 // lowBatAliases are the spellings of the low-battery signal that the

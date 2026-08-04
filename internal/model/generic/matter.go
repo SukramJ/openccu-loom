@@ -87,12 +87,13 @@ func matterMeasurementForParameter(p hmenum.Parameter) interfaces.MatterMeasurem
 // matterMeasurementForBinaryParameter handles the binary-sensor
 // classification distinct from the analog one because several
 // parameters (MOTION, contact STATE, OPEN, SABOTAGE) only make sense
-// as boolean sources. Leak/moisture parameters are not classified yet;
-// when they are wired they map to the Leak class, which materialises
-// as a ContactSensor endpoint (see
-// interfaces.MatterMeasurementClassDeviceType for the rationale).
-// Battery alerts (LOWBAT / LOW_BAT) also surface here so the bridge
-// can roll them up onto the host endpoint's PowerSource cluster.
+// as boolean sources. Leak and moisture parameters map to the Leak
+// class, which materialises as a ContactSensor endpoint rather than the
+// dedicated WaterLeakDetector device type — see
+// interfaces.MatterMeasurementClassDeviceType and the pinning test for
+// why that divergence is deliberate. Battery alerts (LOWBAT / LOW_BAT)
+// also surface here so the bridge can roll them up onto the host
+// endpoint's PowerSource cluster.
 func matterMeasurementForBinaryParameter(p hmenum.Parameter) interfaces.MatterMeasurementClass {
 	switch p {
 	case hmenum.ParameterMotion, hmenum.ParameterMotionDetectionActive:
@@ -103,6 +104,11 @@ func matterMeasurementForBinaryParameter(p hmenum.Parameter) interfaces.MatterMe
 		hmenum.ParameterSabotageMagneticField,
 		hmenum.ParameterSabotageVertical:
 		return interfaces.MatterMeasurementContact
+	case hmenum.ParameterMoistureDetected, hmenum.ParameterWaterLevelDetected:
+		// The HmIP-SWD leak parameters. ALARMSTATE is deliberately not
+		// here: it is a device-wide alarm flag, not a leak reading, and
+		// on a siren the same name means actuator feedback.
+		return interfaces.MatterMeasurementLeak
 	case hmenum.ParameterLowBat, hmenum.ParameterLowbat:
 		return interfaces.MatterMeasurementBattery
 	default:
