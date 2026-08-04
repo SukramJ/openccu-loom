@@ -111,7 +111,7 @@ func (p *SecurityMQTTPublisher) publishDiscoveryOnce(snap security.Snapshot) {
 		if known {
 			continue
 		}
-		p.publishDiscovery(ctx, base, device, securityClassEntity(class, p.tr8))
+		p.publishDiscovery(ctx, base, device, securityClassEntity(base, class, p.tr8))
 	}
 	for slug := range snap.Zones {
 		p.mu.Lock()
@@ -121,7 +121,7 @@ func (p *SecurityMQTTPublisher) publishDiscoveryOnce(snap security.Snapshot) {
 		if known {
 			continue
 		}
-		p.publishDiscovery(ctx, base, device, securityZoneEntity(slug, snap.Zones[slug].Name, p.tr8))
+		p.publishDiscovery(ctx, base, device, securityZoneEntity(base, slug, snap.Zones[slug].Name, p.tr8))
 	}
 }
 

@@ -8,10 +8,12 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/safety"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -73,7 +75,43 @@ func (s *Service) RebuildIndex(ctx context.Context) error {
 	}
 	s.agg.sources = index
 	s.mu.Unlock()
+	s.refreshZoneSlugs(ctx)
 	return nil
+}
+
+// refreshZoneSlugs loads the stable external identifier of every zone.
+//
+// Without it the domain fell back to the zone UUID, which then reached
+// the MQTT topic and the consumer entity id — exactly what the slug
+// exists to prevent. A pre-migration row with an empty slug gets one
+// derived here rather than keeping the UUID.
+func (s *Service) refreshZoneSlugs(ctx context.Context) {
+	if s.stores.Zones == nil {
+		return
+	}
+	rows, err := s.stores.Zones.GetAll(ctx)
+	if err != nil {
+		s.log.Error("security: load zone slugs", "error", err)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range rows {
+		slug := rows[i].Slug
+		if slug == "" {
+			slug = routingkey.HubSlug(rows[i].Name)
+		}
+		if slug == "" {
+			slug = "zone"
+		}
+		z := s.agg.zones[rows[i].ID]
+		z.ID = rows[i].ID
+		z.Slug = slug
+		if z.Name == "" {
+			z.Name = rows[i].Name
+		}
+		s.agg.zones[rows[i].ID] = z
+	}
 }
 
 // indexUnit classifies every data point of one central.
@@ -102,6 +140,8 @@ func (s *Service) indexUnit(u *central.Unit, overrides map[string]sqlitestore.Se
 				// reads inactive until it changes, which for a latching
 				// hazard sensor can be never. The same gap reappears
 				// after every index rebuild for newly added sources.
+				src.valueList = dp.ParameterData().ValueList
+				src.silentPanic = silentPanicFromConfig(enrolled[key])
 				if raw, ok := dp.RawValue(); ok {
 					if active, known := activeFromRaw(src.activeValues, raw,
 						dp.ParameterData().ValueList); known && active {
@@ -178,6 +218,28 @@ func (s *Service) classify(centralName, model, channelType, channelAddress, inte
 	}
 	// The source is indexed either way; relevance decides aggregation.
 	return src, true
+}
+
+// silentPanicFromConfig resolves the covert-trigger flag out of the
+// enrollment's opaque config document.
+//
+// The flag decides whether a trigger may reach a retained surface, and
+// the domain cannot read that decision from anywhere else: the sensor
+// row keeps it inside ConfigJSON, and every consumer downstream sees
+// only the rendered report.
+func silentPanicFromConfig(row sqlitestore.AlarmSensorRow) bool {
+	if row.ID == "" || row.SensorType != hmenum.AlarmSensorTypePanic {
+		return false
+	}
+	cfg, err := engine.ParseSensorConfig(row.ConfigJSON)
+	if err != nil {
+		// An unparsable config is treated as covert. The safe direction
+		// is to withhold, not to expose: a report that fails to arrive
+		// is a bug, a report that exposes a person under coercion is a
+		// harm.
+		return true
+	}
+	return cfg.PanicSilent
 }
 
 // loadOverrides indexes the operator decisions by routing key.

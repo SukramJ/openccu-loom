@@ -55,6 +55,18 @@ type indexedSource struct {
 	reason hmenum.SecurityFaultReason
 	// activeValues narrows which enumerated values count as active.
 	activeValues []string
+	// valueList is the parameter's declared enumeration vocabulary.
+	//
+	// It has to travel with the source: a wire event carries only the
+	// key and the value, and without the list the narrowing silently
+	// degrades to "anything but index 0". For the smoke status that
+	// reads INTRUSION_ALARM — the daemon's own siren command — as a
+	// fire.
+	valueList []string
+	// silentPanic marks a panic source configured to trigger covertly.
+	// The visibility policy has to see it here; PanicSilent otherwise
+	// lives only inside the alarm engine's opaque config document.
+	silentPanic bool
 	// relevant marks the source as security-relevant. A source that is
 	// merely classifiable is not automatically aggregated: tamper,
 	// battery and technical are gated on the device carrying an alarm
@@ -147,6 +159,12 @@ func (a *aggregate) severity() hmenum.SecuritySeverity {
 		}
 	}
 	for _, f := range a.faults {
+		if src, ok := a.sources[f.Source.Ref]; ok && !src.relevant {
+			// The source was excluded or lost its alarm role after the
+			// fault opened; a stale ledger row must not keep pinning the
+			// overall severity.
+			continue
+		}
 		raise(f.Severity)
 	}
 	if !a.engineHealthy {

@@ -4,9 +4,12 @@
 package security
 
 import (
+	"context"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -47,10 +50,34 @@ func (s *Service) attachUnit(u *central.Unit) {
 		return
 	}
 	name := u.Name()
+	// The classification index is built from the device model, and the
+	// model is populated asynchronously by the readiness-gated bring-up
+	// — long after this service starts. Subscribing only to value
+	// changes left the index permanently empty in a real daemon: every
+	// wire event was discarded at the first lookup and the whole
+	// classification half of the domain was silently inert while Start
+	// logged success.
+	//
+	// Rebuild when the central reports southbound-ready (the boot batch)
+	// and on device create/remove afterwards (hot-plug), mirroring how
+	// the Matter bridge feeds its topology reassemble.
+	rebuild := func() {
+		if err := s.RebuildIndex(context.Background()); err != nil {
+			s.log.Error("security: rebuild index", "central", name, "error", err)
+		}
+	}
+	afterReady := func() {
+		if u.IsSouthboundReady() {
+			rebuild()
+		}
+	}
 	unsubs := []func(){
 		events.Subscribe(u.EventBus, func(e hmevent.DataPointValueChangedEvent) {
 			s.onDataPoint(name, e)
 		}),
+		events.Subscribe(u.EventBus, func(hmevent.CentralSouthboundReadyEvent) { rebuild() }),
+		events.Subscribe(u.EventBus, func(hmevent.DeviceCreatedEvent) { afterReady() }),
+		events.Subscribe(u.EventBus, func(hmevent.DeviceRemovedEvent) { afterReady() }),
 	}
 	s.mu.Lock()
 	s.centralUnsubs[name] = append(s.centralUnsubs[name], unsubs...)
@@ -88,6 +115,22 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 	snap := s.agg.snapshot()
 	s.mu.Unlock()
 
+	// Relevance gates everything downstream of the activation itself.
+	// The inventory keeps showing the true value — an operator has to be
+	// able to see what an excluded source is doing — but an excluded or
+	// non-security-relevant source produces no class event, no fault, no
+	// report and no severity contribution.
+	//
+	// Without this gate every radio gap and every flat battery across a
+	// whole fleet opened a persisted fault and raised the folded
+	// severity, so `problem` stood permanently ON; and a hazard source
+	// an operator had explicitly excluded still fired a retained alarm
+	// report, with the sensor list already filtered out from under it —
+	// the planes contradicted each other.
+	if !src.relevant {
+		return
+	}
+
 	events.Publish(s.bus, hmevent.SecurityClassChangedEvent{
 		Base:     hmevent.NewBaseAt(s.clk.Now()),
 		Class:    src.class,
@@ -106,12 +149,22 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 		if !active {
 			verb = hmenum.SecurityVerbCleared
 		}
+		vis := s.settings.DuressVisibility
+		if src.silentPanic && !vis.AllowsNotification() {
+			// hidden: a covert trigger reaches no surface of this domain.
+			return
+		}
 		s.notify(reportInput{
-			Class:      src.class,
-			Verb:       verb,
-			Sources:    state.Sources,
-			At:         s.clk.Now(),
-			Retainable: true,
+			Class:   src.class,
+			Verb:    verb,
+			Sources: state.Sources,
+			At:      s.clk.Now(),
+			// A covert panic trigger is delivered but never retained
+			// unless the operator chose `full`. Retained state stays
+			// readable on a hallway tablet long after the moment has
+			// passed, which is precisely the exposure the silent flag
+			// exists to avoid.
+			Retainable: !src.silentPanic || vis.AllowsRetained(),
 		}, false)
 	} else {
 		s.applyFault(src, active)
@@ -121,7 +174,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 // sourceActive maps a wire value onto the domain's activation
 // semantics, honouring the classifier's value narrowing.
 func sourceActive(src *indexedSource, v hmtypes.ParamValue) (active, known bool) {
-	return activeFromRaw(src.activeValues, v.Unwrap(), nil)
+	return activeFromRaw(src.activeValues, v.Unwrap(), src.valueList)
 }
 
 // activeFromRaw is the single activation rule of the domain, shared by
@@ -198,7 +251,11 @@ func (s *Service) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
 	z.ID = e.ZoneID
 	z.Name = e.ZoneName
 	if z.Slug == "" {
-		z.Slug = e.ZoneID
+		// The zone-slug refresh has not reached this zone yet. Derive
+		// one rather than fall back to the UUID: the slug reaches an
+		// MQTT topic and a consumer entity id, and a UUID there is
+		// exactly what the field exists to avoid.
+		z.Slug = zoneSlugFallback(e.ZoneName, e.ZoneID)
 	}
 	z.State = hmenum.AlarmZoneStateTriggered
 	z.Mode = e.Mode
@@ -215,6 +272,15 @@ func (s *Service) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
 
 	s.publishZone(z)
 	s.publishState(snap)
+
+	// An incident opened by a covert panic source is bound by the same
+	// policy as a duress code. The trigger event carries no silent
+	// marker, so the flag is resolved from the sources it names.
+	covert := s.incidentIsCovert(e.Sources)
+	vis := s.settings.DuressVisibility
+	if covert && !vis.AllowsNotification() {
+		return
+	}
 	s.notify(reportInput{
 		Class:      hmenum.SecurityClassIntrusion,
 		Verb:       hmenum.SecurityVerbTriggered,
@@ -225,8 +291,28 @@ func (s *Service) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
 		Mode:       e.Mode,
 		IncidentID: e.IncidentID,
 		At:         s.clk.Now(),
-		Retainable: true,
+		Retainable: !covert || vis.AllowsRetained(),
 	}, false)
+}
+
+// incidentIsCovert reports whether any source of an incident is a
+// covert panic trigger.
+//
+// One covert source is enough: the point of the flag is that nobody
+// present learns the alarm fired, and a retained report naming the
+// zone defeats that regardless of what else contributed.
+func (s *Service) incidentIsCovert(refs []hmevent.SecuritySourceRef) bool {
+	if len(refs) == 0 {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range refs {
+		if src, ok := s.agg.sources[refs[i].Ref]; ok && src.silentPanic {
+			return true
+		}
+	}
+	return false
 }
 
 // onAlarmStateChanged tracks the zone state and reports a cleared
@@ -237,7 +323,11 @@ func (s *Service) onAlarmStateChanged(e hmevent.AlarmStateChangedEvent) {
 	z.ID = e.ZoneID
 	z.Name = e.ZoneName
 	if z.Slug == "" {
-		z.Slug = e.ZoneID
+		// The zone-slug refresh has not reached this zone yet. Derive
+		// one rather than fall back to the UUID: the slug reaches an
+		// MQTT topic and a consumer entity id, and a UUID there is
+		// exactly what the field exists to avoid.
+		z.Slug = zoneSlugFallback(e.ZoneName, e.ZoneID)
 	}
 	wasTriggered := z.State == hmenum.AlarmZoneStateTriggered
 	z.State = e.To
@@ -350,4 +440,19 @@ func groupByClass(refs []hmevent.SecuritySourceRef) map[hmenum.SecurityClass][]s
 		out[c] = append(out[c], name)
 	}
 	return out
+}
+
+// zoneSlugFallback derives a usable identifier when the stored slug has
+// not been loaded yet. It never returns the raw id.
+func zoneSlugFallback(name, id string) string {
+	if slug := routingkey.HubSlug(name); slug != "" {
+		return slug
+	}
+	// A name that slugs to nothing still needs a stable identifier;
+	// a short id fragment keeps it unique without exposing a UUID as
+	// the whole entity name.
+	if len(id) >= 8 {
+		return "zone-" + id[:8]
+	}
+	return "zone"
 }

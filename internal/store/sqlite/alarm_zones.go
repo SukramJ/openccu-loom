@@ -16,8 +16,17 @@ import (
 // policies); it is always loaded and saved as a whole and never queried
 // relationally.
 type AlarmZoneRow struct {
-	ID          string
-	Name        string
+	ID   string
+	Name string
+	// Slug is the stable, human-readable external identifier. It is
+	// derived from the name once and then frozen: it reaches consumer
+	// entity ids and MQTT topics, so letting it follow a rename would
+	// orphan every entity of that zone on every rename.
+	//
+	// Empty on read means a row written before the column existed; the
+	// caller derives one rather than falling back to the UUID, which is
+	// unusable in an entity id.
+	Slug        string
 	Position    int
 	ConfigJSON  string
 	CreatedAtMS int64
@@ -35,10 +44,14 @@ func NewAlarmZoneStore(db *sql.DB) *AlarmZoneStore { return &AlarmZoneStore{db: 
 // Upsert inserts or updates the zone row identified by row.ID. CreatedAtMS
 // is written on insert only; an update leaves the existing created_at_ms
 // untouched.
+// The slug is deliberately absent from the conflict-update list: it is
+// frozen at creation. Letting a rename move it would orphan every
+// consumer entity of that zone, which is the whole reason it exists
+// beside the UUID.
 func (s *AlarmZoneStore) Upsert(ctx context.Context, row AlarmZoneRow) error {
 	const q = `
-INSERT INTO alarm_zones (id, name, position, config_json, created_at_ms, updated_at_ms)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO alarm_zones (id, name, slug, position, config_json, created_at_ms, updated_at_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     position = excluded.position,
@@ -46,7 +59,7 @@ ON CONFLICT(id) DO UPDATE SET
     updated_at_ms = excluded.updated_at_ms`
 	_, err := s.db.ExecContext(
 		ctx, q,
-		row.ID, row.Name, row.Position, row.ConfigJSON, row.CreatedAtMS, row.UpdatedAtMS,
+		row.ID, row.Name, row.Slug, row.Position, row.ConfigJSON, row.CreatedAtMS, row.UpdatedAtMS,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: upsert alarm zone: %w", err)
@@ -57,7 +70,7 @@ ON CONFLICT(id) DO UPDATE SET
 // Get returns the zone with id. The boolean reports whether it exists.
 func (s *AlarmZoneStore) Get(ctx context.Context, id string) (AlarmZoneRow, bool, error) {
 	const q = `
-SELECT id, name, position, config_json, created_at_ms, updated_at_ms
+SELECT id, name, slug, position, config_json, created_at_ms, updated_at_ms
 FROM alarm_zones WHERE id = ?`
 	row, err := scanAlarmZoneRow(s.db.QueryRowContext(ctx, q, id))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -72,7 +85,7 @@ FROM alarm_zones WHERE id = ?`
 // GetAll returns every alarm zone ordered by position, then name.
 func (s *AlarmZoneStore) GetAll(ctx context.Context) ([]AlarmZoneRow, error) {
 	const q = `
-SELECT id, name, position, config_json, created_at_ms, updated_at_ms
+SELECT id, name, slug, position, config_json, created_at_ms, updated_at_ms
 FROM alarm_zones ORDER BY position, name`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
@@ -100,7 +113,7 @@ func (s *AlarmZoneStore) Delete(ctx context.Context, id string) error {
 
 func scanAlarmZoneRow(sc scannable) (AlarmZoneRow, error) {
 	var row AlarmZoneRow
-	if err := sc.Scan(&row.ID, &row.Name, &row.Position, &row.ConfigJSON, &row.CreatedAtMS, &row.UpdatedAtMS); err != nil {
+	if err := sc.Scan(&row.ID, &row.Name, &row.Slug, &row.Position, &row.ConfigJSON, &row.CreatedAtMS, &row.UpdatedAtMS); err != nil {
 		return AlarmZoneRow{}, err
 	}
 	return row, nil

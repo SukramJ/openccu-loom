@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	gosql "database/sql"
 	"log/slog"
 
@@ -81,4 +82,26 @@ func securityCentralHook(svc *security.Service) func(u *central.Unit) (unwire fu
 		svc.AttachCentral(name)
 		return func() { svc.DetachCentral(name) }
 	}
+}
+
+// wireSecurityIndexRefresh makes an alarm-config change reach the
+// Security & Safety classification index.
+//
+// Enrollment decides which data points the domain treats as
+// security-relevant and which zone owns them, so a sensor added through
+// the alarm surface must re-enter the index immediately. Without this a
+// newly enrolled sensor stayed outside every aggregate until the next
+// daemon restart.
+//
+// Nil-safe on both sides: either service may be absent.
+func wireSecurityIndexRefresh(alarmSvc *alarm.Service, securitySvc *security.Service, logger *slog.Logger) {
+	if alarmSvc == nil || securitySvc == nil {
+		return
+	}
+	alarmSvc.SetConfigChangedHook(func(ctx context.Context) {
+		if err := securitySvc.RebuildIndex(ctx); err != nil {
+			logger.Error("security: rebuild index after alarm config change",
+				slog.String("err", err.Error()))
+		}
+	})
 }

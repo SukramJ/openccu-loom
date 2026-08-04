@@ -114,6 +114,17 @@ type securityEntity struct {
 	// event marks a non-retained event entity, which must carry no
 	// value template and no device class.
 	event bool
+	// topic overrides the derived state topic. Class and zone entities
+	// need it because their topics are nested (`security/class/<c>`)
+	// while their keys are flat (`class_<c>`) — deriving the topic from
+	// the key declared `security/class_smoke` while the publisher wrote
+	// `security/class/smoke`, so every one of those entities appeared in
+	// a consumer and stayed unavailable forever.
+	topic string
+	// options is the enum vocabulary. A sensor with device_class enum
+	// and no options is refused outright, per the rule this package
+	// already applies to CCU enum sensors.
+	options []string
 }
 
 // BuildSecurityDiscovery builds the discovery payload for one Security
@@ -126,7 +137,10 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 		return DiscoveryItem{}
 	}
 	uniqueID := "loom_security_" + e.key
-	stateTopic := securityStateTopic(base, e.key)
+	stateTopic := e.topic
+	if stateTopic == "" {
+		stateTopic = securityStateTopic(base, e.key)
+	}
 
 	body := map[string]any{
 		"name":              e.name,
@@ -147,6 +161,9 @@ func BuildSecurityDiscovery(base, deviceName, configURL string, e securityEntity
 	default:
 		if e.deviceClass != "" {
 			body["device_class"] = e.deviceClass
+		}
+		if len(e.options) > 0 {
+			body["options"] = e.options
 		}
 		if e.stateClass != "" {
 			body["state_class"] = e.stateClass
