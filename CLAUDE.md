@@ -262,12 +262,25 @@ call obliges you to add a pin under `tests/contract/wiring_pins/` that
 through `New` alone and touches only the surfaces the real daemon
 touches.
 
-Guard: **not yet built.** `TestEveryWiringSetterHasAPin` is planned as an
-AST walk over every exported `Set*` / `Attach*` on a service type, failing
-on those with no pin, with the present surface as a ratchet baseline.
-Until it lands this rule is reviewed, not enforced — and a measurement in
-2026-08 counted ~175 such setters against ~11 real pins, so treat the rule
-as load-bearing rather than satisfied.
+Guard: `TestEveryWiringSetterHasAProductionCaller` (`tests/contract/`).
+
+It checks the defect signature rather than the pin, because no test can
+verify that a pin asserts the right thing, while the signature is exact:
+in 0.52.12 `SetHubModel` had **no production caller at all**. The guard
+resolves every `Set*` / `Attach*` / `Register*` that injects a
+collaborator — interface, func value or pointer — and fails on those
+production never calls, through a direct call or an interface it
+dispatches on. Test files are excluded from the load, so a seam only its
+own tests call counts as unwired, which is the point.
+
+The pin half of this rule remains reviewed, not enforced. Both halves
+matter: a seam can have a caller and still be unpinned.
+
+Two ratchets carry the current surface: `wiringSettersWithoutCaller` for
+seams verified as deliberately silent, and `wiringSeamsUnderInvestigation`
+for seams nobody has classified. They are separate on purpose — merging
+them would let "we looked and it is fine" and "we have not looked" wear
+the same face.
 
 #### A lifecycle test uses the production order
 
