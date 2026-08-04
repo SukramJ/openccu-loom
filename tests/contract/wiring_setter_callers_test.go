@@ -26,6 +26,23 @@ import (
 // plainly; a seam kept for tests belongs deleted, because a setter only
 // tests call is a setter production does not need.
 var wiringSettersWithoutCaller = map[string]string{
+	"github.com/SukramJ/openccu-loom/internal/central.QueryFacade.SetInstallModeProvider":                "install-mode status is served straight from HubCoordinator.InstallModeDPs() by ws_adapters.go and handlers/system_hub.go; QueryFacade.GetInstallMode has no caller",
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.CacheCoordinator.SetPersister":        "the persistent values cache runs through store/sqlite/values_cache.go and adapter/values_cache_flush.go, wired in cmd/openccu-loom/values_cache_wiring.go; this interface is an unused parallel path",
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.HubCoordinator.SetProgramStateWriter": "program enable/disable runs through hub.Program.SetEnabled and its own per-instance writer wired in hub_wiring.go; SetProgramState has no caller",
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.HubCoordinator.SetSysvarGetter":       "sysvar reads use the cached hub.Sysvar.Value(), kept fresh by the periodic scan and push updates; GetSystemVariable has no caller",
+
+	// Verified: the surface around the seam has no caller either, so the
+	// seam is dead along with the feature it would have fed.
+	"github.com/SukramJ/openccu-loom/internal/central.QueryFacade.SetHubStatePathProvider":                         "GetStatePaths and GetStatePathEntries have no production caller; the combined state-path list is unbuilt",
+	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetAcceptInboxFn":                                       "reached only through ServiceRegistry.Invoke, which production never calls; the real accept-inbox path is DeviceAdminDomain.AcceptInboxDevice",
+	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetLoadAndRefreshForInterfaceFn":                        "the method it feeds has no callers at all",
+	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetSaveFilesFn":                                         "the method it feeds has no callers outside tests",
+	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetValidateConfigFn":                                    "the method it feeds has no callers outside tests",
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.CacheCoordinator.SetParamsetInvalidator":        "no type implements ParamsetInvalidator and InvalidateParamsetDescriptions has no caller; bulk per-interface eviction is unbuilt",
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetDeviceNameOverrideChecker": "RenameNewDeviceFromOverride has no production caller either; documented in by_design.md as not wired for 0.1.0",
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetRecorder":                  "its three consumers — InitialPull, RefreshAfterPair, RefreshAfterUnpair — have no production caller either, so the telemetry gap has no live effect",
+	"github.com/SukramJ/openccu-loom/internal/central/adapter.BackupAdapter.SetRestorer":                           "restore resolves per central via SetRestorerForCentral, and an ownerless archive now resolves to the sole configured central; this legacy field is only an explicit override",
+
 	// Verified: an alternative production path carries the same duty.
 	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetHubLogoutFn":                  "logout on Stop already runs through the closer WireHub returns (addCloser); this hook is a second, dead path",
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile.Profile.SetPublishHook":     "the profile-change push flows through Profile.OnChange, which the event bridge subscribes to; this is an unused parallel API",
@@ -54,33 +71,10 @@ var wiringSettersWithoutCaller = map[string]string{
 // This map exists to be emptied. Every entry is either wired, deleted, or
 // promoted to the verified map with a reason.
 var wiringSeamsUnderInvestigation = map[string]string{
-	// The central's own service hooks. The methods they feed
-	// (SaveFiles, ValidateConfigAndGetSystemInformation,
-	// LoadAndRefreshDataPointDataForInterface, AcceptDeviceInbox) have no
-	// production callers either, so each is a dead surface rather than a
-	// broken wire — but whether they should be built or removed is a
-	// product decision.
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetAcceptInboxFn":                "reached only through ServiceRegistry.Invoke, which production never calls",
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetLoadAndRefreshForInterfaceFn": "the method it feeds has no callers at all",
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetSaveFilesFn":                  "the method it feeds has no callers outside tests",
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetValidateConfigFn":             "the method it feeds has no callers outside tests",
-
-	// Coordinator and facade seams. SetRecorder is wired on the hub and
-	// recovery coordinators and not on the device one, which reads more
-	// like an omission than a decision.
-	"github.com/SukramJ/openccu-loom/internal/central.QueryFacade.SetHubStatePathProvider":                         "unclassified",
-	"github.com/SukramJ/openccu-loom/internal/central.QueryFacade.SetInstallModeProvider":                          "unclassified",
-	"github.com/SukramJ/openccu-loom/internal/central/adapter.BackupAdapter.SetRestorer":                           "unclassified",
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators.CacheCoordinator.SetParamsetInvalidator":        "unclassified",
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators.CacheCoordinator.SetPersister":                  "unclassified",
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetDeviceNameOverrideChecker": "unclassified",
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators.DeviceCoordinator.SetRecorder":                  "the sibling coordinators receive the recorder at central.go:213-214; this one does not",
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators.HubCoordinator.SetProgramStateWriter":           "unclassified",
-	"github.com/SukramJ/openccu-loom/internal/central/coordinators.HubCoordinator.SetSysvarGetter":                 "unclassified",
-
-	// A confirmed consequence, kept here because fixing it is feature
-	// work: nothing ever attaches a generic event to a channel, and
-	// nothing constructs the only attachable implementation either, so
+	// The one entry with a user-visible consequence, kept here because
+	// closing it is feature work rather than wiring: nothing attaches a
+	// generic event to a channel and nothing constructs the only
+	// attachable implementation, so
 	// GET /devices/{addr}/channels/{no}/event-groups can only ever answer
 	// with an empty list.
 	"github.com/SukramJ/openccu-loom/internal/model/device.Channel.AttachGenericEvent": "no producer exists, so the event-groups REST route always returns []",

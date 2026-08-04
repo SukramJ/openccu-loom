@@ -64,6 +64,20 @@ var (
 	// respond with HTTP 403 / WS code "parameter_hidden".
 	ErrParameterHidden = errors.New("parameter is hidden and may not be written")
 
+	// ErrRestoreTargetAmbiguous reports that a backup carries no owning
+	// central and more than one is configured, so the restore target
+	// cannot be derived.
+	//
+	// A hard stop by design: writing a backup onto the wrong CCU
+	// overwrites a live installation and cannot be undone, so guessing is
+	// worse than refusing.
+	ErrRestoreTargetAmbiguous = errors.New("restore target is ambiguous")
+
+	// ErrRestoreUnsupported reports that no restore path is configured,
+	// so nothing was sent to the CCU. Callers must not report it as an
+	// upstream failure: that blames the CCU for a request it never saw.
+	ErrRestoreUnsupported = errors.New("backup: restore not configured (wire a BackupRestorer)")
+
 	// ErrDescriptionNotFound signals that the requested device or channel
 	// description was not found in the registry. Callers can use this to
 	// distinguish "no such device" (404) from transport failures.

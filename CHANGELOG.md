@@ -8,6 +8,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Restoring an uploaded backup always failed.** An archive uploaded
+  through the web UI is stored under an id that names no CCU, so the
+  restore path could not work out where to send it and fell through to a
+  restorer nothing in the daemon ever installs. Every attempt answered
+  "Backup restore failed" — an error that blames the CCU for a request it
+  never received.
+
+  With one CCU configured, which is the ordinary installation, an
+  uploaded backup now restores to it. With several, the restore is
+  refused with the reason rather than guessed: writing a backup onto the
+  wrong CCU overwrites a live installation and cannot be undone.
+
+  The two failures are also told apart now. "No restore path configured"
+  answers 501 and says nothing was sent; only a CCU that was actually
+  asked and refused answers 502. Both were 502 before, which is why a
+  dead restore path looked like an unhappy CCU.
+
+### Fixed
+
 - **The alarm system's system-variable mirror never wrote anything, and
   said nothing about it.** An operator who configured a zone output of
   class `sysvar_mirror` — so that arming, disarming and triggering show up

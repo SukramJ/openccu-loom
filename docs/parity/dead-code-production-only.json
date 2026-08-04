@@ -1,6 +1,6 @@
 {
-  "generated": "95daeba7",
-  "head": "95daeba7",
+  "generated": "ac36ea86",
+  "head": "ac36ea86",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27647,
+    "total_exported": 27651,
     "reachable": 4721,
     "whitelisted": 19796,
-    "unreachable": 3130
+    "unreachable": 3134
   },
   "by_package": [
     {
@@ -50,7 +50,7 @@
       "package": "pkg/hmerr",
       "unreachable_funcs": 6,
       "unreachable_types": 5,
-      "unreachable_other": 28
+      "unreachable_other": 32
     },
     {
       "package": "internal/central/adapter",
@@ -2761,28 +2761,28 @@
       "package": "internal/central/adapter",
       "identifier": "BackupRestorer",
       "file": "internal/central/adapter/backup_storage.go",
-      "line": 45,
+      "line": 47,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "BackupRestorer",
       "file": "internal/central/adapter/backup_storage.go",
-      "line": 45,
+      "line": 47,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "BackupStorage",
       "file": "internal/central/adapter/backup_storage.go",
-      "line": 22,
+      "line": 24,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "BackupStorage",
       "file": "internal/central/adapter/backup_storage.go",
-      "line": 22,
+      "line": 24,
       "kind": "type"
     },
     {
@@ -3209,14 +3209,14 @@
       "package": "internal/central/adapter",
       "identifier": "ErrRestoreUnsupported",
       "file": "internal/central/adapter/backup_storage.go",
-      "line": 56,
+      "line": 58,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrRestoreUnsupported",
       "file": "internal/central/adapter/backup_storage.go",
-      "line": 56,
+      "line": 58,
       "kind": "var"
     },
     {
@@ -3300,7 +3300,7 @@
       "package": "internal/central/adapter",
       "identifier": "FilesystemBackupStorage",
       "file": "internal/central/adapter/backup_storage.go",
-      "line": 60,
+      "line": 62,
       "kind": "type"
     },
     {
@@ -20975,14 +20975,14 @@
       "package": "pkg/hmerr",
       "identifier": "Context",
       "file": "pkg/hmerr/errors.go",
-      "line": 109,
+      "line": 123,
       "kind": "type"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ContextualError",
       "file": "pkg/hmerr/errors.go",
-      "line": 148,
+      "line": 162,
       "kind": "type"
     },
     {
@@ -21031,42 +21031,42 @@
       "package": "pkg/hmerr",
       "identifier": "ErrCommandSuperseded",
       "file": "pkg/hmerr/errors.go",
-      "line": 81,
+      "line": 95,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrCommandSuperseded",
       "file": "pkg/hmerr/errors.go",
-      "line": 81,
+      "line": 95,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrDescriptionNotFound",
       "file": "pkg/hmerr/errors.go",
-      "line": 70,
+      "line": 84,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrDescriptionNotFound",
       "file": "pkg/hmerr/errors.go",
-      "line": 70,
+      "line": 84,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrGroupNotFound",
       "file": "pkg/hmerr/errors.go",
-      "line": 100,
+      "line": 114,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrGroupNotFound",
       "file": "pkg/hmerr/errors.go",
-      "line": 100,
+      "line": 114,
       "kind": "var"
     },
     {
@@ -21087,14 +21087,14 @@
       "package": "pkg/hmerr",
       "identifier": "ErrNoClients",
       "file": "pkg/hmerr/errors.go",
-      "line": 75,
+      "line": 89,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrNoClients",
       "file": "pkg/hmerr/errors.go",
-      "line": 75,
+      "line": 89,
       "kind": "var"
     },
     {
@@ -21141,16 +21141,44 @@
     },
     {
       "package": "pkg/hmerr",
-      "identifier": "ErrUnknownCentral",
+      "identifier": "ErrRestoreTargetAmbiguous",
       "file": "pkg/hmerr/errors.go",
-      "line": 96,
+      "line": 74,
+      "kind": "var"
+    },
+    {
+      "package": "pkg/hmerr",
+      "identifier": "ErrRestoreTargetAmbiguous",
+      "file": "pkg/hmerr/errors.go",
+      "line": 74,
+      "kind": "var"
+    },
+    {
+      "package": "pkg/hmerr",
+      "identifier": "ErrRestoreUnsupported",
+      "file": "pkg/hmerr/errors.go",
+      "line": 79,
+      "kind": "var"
+    },
+    {
+      "package": "pkg/hmerr",
+      "identifier": "ErrRestoreUnsupported",
+      "file": "pkg/hmerr/errors.go",
+      "line": 79,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrUnknownCentral",
       "file": "pkg/hmerr/errors.go",
-      "line": 96,
+      "line": 110,
+      "kind": "var"
+    },
+    {
+      "package": "pkg/hmerr",
+      "identifier": "ErrUnknownCentral",
+      "file": "pkg/hmerr/errors.go",
+      "line": 110,
       "kind": "var"
     },
     {
@@ -21171,49 +21199,49 @@
       "package": "pkg/hmerr",
       "identifier": "ErrValidation",
       "file": "pkg/hmerr/errors.go",
-      "line": 91,
+      "line": 105,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrValidation",
       "file": "pkg/hmerr/errors.go",
-      "line": 91,
+      "line": 105,
       "kind": "var"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrorContext",
       "file": "pkg/hmerr/errors.go",
-      "line": 171,
+      "line": 185,
       "kind": "func"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrorContext",
       "file": "pkg/hmerr/errors.go",
-      "line": 171,
+      "line": 185,
       "kind": "func"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ExceptionToFailureReason",
       "file": "pkg/hmerr/errors.go",
-      "line": 415,
+      "line": 429,
       "kind": "func"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ExceptionToFailureReason",
       "file": "pkg/hmerr/errors.go",
-      "line": 415,
+      "line": 429,
       "kind": "func"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "JSONRPCError",
       "file": "pkg/hmerr/errors.go",
-      "line": 440,
+      "line": 454,
       "kind": "type"
     },
     {
@@ -21234,14 +21262,14 @@
       "package": "pkg/hmerr",
       "identifier": "XMLRPCFault",
       "file": "pkg/hmerr/errors.go",
-      "line": 245,
+      "line": 259,
       "kind": "type"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "XMLRPCFaultCode",
       "file": "pkg/hmerr/errors.go",
-      "line": 183,
+      "line": 197,
       "kind": "type"
     },
     {
@@ -62663,7 +62691,7 @@
       "identifier": "TestHalfOpenBypassOpsIgnoreSingleProbeGate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/reliability/circuit_half_open_test.go",
-      "line": 208
+      "line": 226
     },
     {
       "package": "internal/client/reliability",
@@ -62691,7 +62719,7 @@
       "identifier": "TestHalfOpenResetClearsProbeSlot",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/reliability/circuit_half_open_test.go",
-      "line": 244
+      "line": 262
     },
     {
       "package": "internal/client/reliability",
@@ -122436,14 +122464,14 @@
       "identifier": "BackupUploader",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/backup.go",
-      "line": 140
+      "line": 159
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "BackupUploader",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/backup.go",
-      "line": 140
+      "line": 159
     },
     {
       "package": "internal/north/rest/handlers",
@@ -124354,14 +124382,14 @@
       "identifier": "DownloadBackup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/backup.go",
-      "line": 121
+      "line": 140
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DownloadBackup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/backup.go",
-      "line": 121
+      "line": 140
     },
     {
       "package": "internal/north/rest/handlers",
@@ -138795,14 +138823,14 @@
       "identifier": "UploadBackup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/backup.go",
-      "line": 166
+      "line": 185
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UploadBackup",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/backup.go",
-      "line": 166
+      "line": 185
     },
     {
       "package": "internal/north/rest/handlers",
@@ -159494,7 +159522,7 @@
       "identifier": "TestEveryWiringSetterHasAProductionCaller",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_setter_callers_test.go",
-      "line": 109
+      "line": 103
     },
     {
       "package": "tests/contract",
