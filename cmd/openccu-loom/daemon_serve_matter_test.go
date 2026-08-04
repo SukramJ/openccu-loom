@@ -18,6 +18,10 @@ func TestDaemonServe_WithMatterEnabled(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.REST.Enabled = new(false)
+	// The REST listener starts regardless of Enabled (ADR 0044 folds the
+	// bootstrap surface into it), so pin an ephemeral port — the fixed
+	// default makes parallel daemon tests race for :8119.
+	cfg.North.REST.Listen = "127.0.0.1:0"
 	cfg.North.UI.Enabled = new(false)
 	cfg.North.Matter.Enabled = true
 	cfg.North.Matter.MDNSAdvertise = "noop"
@@ -56,6 +60,10 @@ func TestDaemonServe_WithMQTTEnabled(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir() // isolate the SQLite DB from the shared "./var" so parallel daemon-serve tests don't contend on the DB / migration lock
 	cfg.North.REST.Enabled = new(false)
+	// The REST listener starts regardless of Enabled (ADR 0044 folds the
+	// bootstrap surface into it), so pin an ephemeral port — the fixed
+	// default makes parallel daemon tests race for :8119.
+	cfg.North.REST.Listen = "127.0.0.1:0"
 	cfg.North.UI.Enabled = new(false)
 	cfg.North.MQTT.Enabled = true
 	cfg.North.MQTT.BrokerURL = "" // no broker → noop client

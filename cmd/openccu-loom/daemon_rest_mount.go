@@ -265,7 +265,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		TokenAdmin:              d.tokenSvc,
 		CentralAdmin:            d.centSvc,
 		Discovery:               d.discovery,
-		MQTTReload:              newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
+		MQTTReload:              newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger),
 		OIDC:                    buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
 		SPAHandler:              ui.SPAHandler(),
 		Bootstrap:               d.bootstrap,

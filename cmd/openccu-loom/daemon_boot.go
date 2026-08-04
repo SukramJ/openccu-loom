@@ -48,6 +48,14 @@ type auditOverlay struct {
 	// (ADR 0027 resilient fallback); the daemon surfaces this on /health and
 	// as a metric. Only meaningful when db != nil.
 	secretsAvailable bool
+
+	// yamlBase is the config as loaded from YAML/env, captured before
+	// OverlayInto mutates it with the DB-tier sections. Re-assembling the
+	// effective config for a reload has to start here rather than from
+	// defaults: a section that exists only in the YAML has no DB row (the
+	// seed runs once, on a database with no sections at all), so an assembly
+	// starting from defaults would silently drop it.
+	yamlBase *config.Config
 }
 
 // openLoomDB opens the single shared <DataDir>/openccu-loom.db database used
@@ -153,6 +161,9 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		} else if n > 0 {
 			logger.Info("configstore.seed", slog.Int("sections", n))
 		}
+		// Capture the pre-overlay YAML/env tier so a later reload can replay
+		// exactly this assembly against the then-current DB rows.
+		ov.yamlBase = config.Clone(cfg)
 		if _, err := ov.configStore.OverlayInto(ctx, cfg); err != nil {
 			logger.Warn("configstore.overlay", slog.String("err", err.Error()))
 		} else if err := cfg.Validate(); err != nil {
@@ -165,6 +176,39 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		hydrateAuditBuffer(ctx, ov.buf, sqlitestore.NewAuditStore(ov.db), logger)
 	}
 	return ov, teardown
+}
+
+// wireConfigAssembler teaches the reload path how to re-derive the effective
+// config, replaying the boot assembly against the then-current database: the
+// captured YAML/env base with the DB-tier sections overlaid.
+//
+// Without this a reload triggered from the SPA rebuilds its subsystem from the
+// config snapshot the daemon booted with. A section the operator saved through
+// the UI lands in the database, which no config-file event follows, so the
+// snapshot never advances and the reload silently re-applies the old values.
+//
+// Starting from the YAML base rather than from defaults matters: the section
+// seed only runs on a database with no sections at all, so a section that
+// exists solely in the YAML has no row to overlay, and an assembly starting
+// from defaults would drop it.
+//
+// A no-op when the config store or the captured base is unavailable (no
+// database); reload consumers then fall back to the recorded snapshot.
+func wireConfigAssembler(deps *reloadDeps, ov *auditOverlay) {
+	if deps == nil || ov == nil || ov.configStore == nil || ov.yamlBase == nil {
+		return
+	}
+	store, base := ov.configStore, ov.yamlBase
+	deps.SetConfigAssembler(func(ctx context.Context) (*config.Config, error) {
+		next := config.Clone(base)
+		if _, err := store.OverlayInto(ctx, next); err != nil {
+			return nil, err
+		}
+		if err := next.Validate(); err != nil {
+			return nil, err
+		}
+		return next, nil
+	})
 }
 
 // hydrateAuditBuffer loads the most recent persisted audit entries into

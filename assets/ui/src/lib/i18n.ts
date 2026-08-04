@@ -1614,6 +1614,7 @@ const EN: Catalog = {
     "Override at runtime by setting the {name} environment variable. When set it wins over the value entered here.",
   "settings.secret_from_env":
     "Currently resolved at runtime from {name}; clear the env variable to use the value entered here.",
+  "settings.secret_not_set": "Not set — no value stored.",
   "connectivity.ccu": "CCU",
   "connectivity.mqtt": "MQTT",
   "connectivity.matter": "Matter",
@@ -5122,6 +5123,7 @@ const DE: Catalog = {
     "Zur Laufzeit per Env-Variable {name} überschreibbar. Wenn gesetzt, hat sie Vorrang vor dem hier eingegebenen Wert.",
   "settings.secret_from_env":
     "Aktuell aus der Env-Variable {name} aufgelöst; Env-Variable löschen, damit der hier eingegebene Wert greift.",
+  "settings.secret_not_set": "Nicht gesetzt — kein Wert hinterlegt.",
   "connectivity.ccu": "CCU",
   "connectivity.mqtt": "MQTT",
   "connectivity.matter": "Matter",
