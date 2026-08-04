@@ -97,3 +97,38 @@ func TestPin_WireServiceMessageSuppressor_CalledInCcuWiring(t *testing.T) {
 		"internal/central/adapter", "WireServiceMessageSuppressor",
 	)
 }
+
+// TestPin_SetSysvarValueWriter_WiredInHubWiring pins that hub_wiring.go
+// hands the JSON-RPC writer to HubCoordinator as the sysvar value path.
+//
+// It was missing for a whole release, and nothing noticed because the
+// coordinator's own setter returned success without a writer. An operator
+// who configured an alarm zone output of class `sysvar_mirror` got the
+// system variable created — that runs through a separately wired creator
+// — and never got its value written. The mirror's error branch never ran,
+// so no log line appeared either; a CCU program reading that variable
+// simply waited for a trigger that could not arrive.
+//
+// The sibling pin above (SetProgramExecutor) covers the same writer being
+// handed over for programs. The two calls sit on adjacent lines, which is
+// how the omission stayed plausible to a reader.
+func TestPin_SetSysvarValueWriter_WiredInHubWiring(t *testing.T) {
+	contract.MustFindCallerInFile(
+		t,
+		"internal/central/adapter/hub_wiring.go",
+		"internal/central/coordinators", "SetSysvarValueWriter",
+	)
+}
+
+// TestPin_SetSysvarValueWriter_WiredInHomegearHubWiring pins the same
+// seam on the Homegear path. Homegear wires no sysvar *creator* — its
+// backend models none of the ReGa metadata — but writing a value is the
+// actual parity surface, so the write path must be present or the alarm
+// mirror is inert there for the same reason.
+func TestPin_SetSysvarValueWriter_WiredInHomegearHubWiring(t *testing.T) {
+	contract.MustFindCallerInFile(
+		t,
+		"internal/central/adapter/homegear_hub_wiring.go",
+		"internal/central/coordinators", "SetSysvarValueWriter",
+	)
+}

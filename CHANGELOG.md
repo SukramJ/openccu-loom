@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.53.1]
 
+### Fixed
+
+- **The alarm system's system-variable mirror never wrote anything, and
+  said nothing about it.** An operator who configured a zone output of
+  class `sysvar_mirror` — so that arming, disarming and triggering show up
+  in a CCU system variable — got the variable created and its value never
+  written. A CCU program reading it waited for a trigger that could not
+  arrive.
+
+  Two faults met. The write path was never handed to the hub coordinator,
+  on the line next to the one that hands it over for programs. And the
+  coordinator answered a write attempt without a write path with success,
+  so the mirror's own error branch never ran and no log line appeared.
+  Both backends now wire the path, a missing one returns an error, and the
+  central reports it at start-up.
+
 ### Added
 
 - **`TestEveryWiringSetterHasAProductionCaller`** — a contract test that

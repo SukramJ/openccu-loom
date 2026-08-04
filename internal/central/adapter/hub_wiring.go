@@ -175,6 +175,12 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// delegates to the same session used for every other hub operation.
 	if unit.Hub != nil {
 		unit.Hub.SetProgramExecutor(writer)
+		// The same writer carries sysvar values. Wiring it here was
+		// missing, and the omission was invisible: HubCoordinator's
+		// setter returned success without a writer, so the alarm
+		// sysvar mirror wrote nothing and logged nothing. The value
+		// path now shares the session the rest of the hub already uses.
+		unit.Hub.SetSysvarValueWriter(writer)
 	}
 
 	// Wire the per-interface connectivity aggregate so the Reconciler's

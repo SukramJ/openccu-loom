@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 3fbffdb4
-HEAD: 3fbffdb4
+Generated: 95daeba7
+HEAD: 95daeba7
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27642 |
+| Total Exported | 27647 |
 | Reachable | 4886 |
-| Whitelisted | 19793 |
-| **Unreachable** | **2963** |
+| Whitelisted | 19796 |
+| **Unreachable** | **2965** |
 
 ## Top-20 Packages by Dead Code
 
@@ -129,7 +129,7 @@ HEAD: 3fbffdb4
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 24 | 2 |
 | internal/central/cachereset | 0 | 20 | 0 |
-| internal/central/coordinators | 0 | 121 | 4 |
+| internal/central/coordinators | 0 | 121 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 10 | 4 |
 | internal/channelflags | 0 | 2 | 0 |

@@ -1,6 +1,6 @@
 {
-  "generated": "3fbffdb4",
-  "head": "3fbffdb4",
+  "generated": "95daeba7",
+  "head": "95daeba7",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27642,
+    "total_exported": 27647,
     "reachable": 4721,
-    "whitelisted": 19793,
-    "unreachable": 3128
+    "whitelisted": 19796,
+    "unreachable": 3130
   },
   "by_package": [
     {
@@ -272,7 +272,7 @@
       "package": "internal/central/coordinators",
       "unreachable_funcs": 0,
       "unreachable_types": 125,
-      "unreachable_other": 4
+      "unreachable_other": 6
     },
     {
       "package": "internal/central/registry",
@@ -2740,14 +2740,14 @@
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 513,
+      "line": 519,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 513,
+      "line": 519,
       "kind": "type"
     },
     {
@@ -3251,28 +3251,28 @@
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2328,
+      "line": 2334,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2328,
+      "line": 2334,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2207,
+      "line": 2213,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2207,
+      "line": 2213,
       "kind": "var"
     },
     {
@@ -3398,14 +3398,14 @@
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 505,
+      "line": 511,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 505,
+      "line": 511,
       "kind": "type"
     },
     {
@@ -4180,6 +4180,20 @@
     },
     {
       "package": "internal/central/coordinators",
+      "identifier": "ErrNoSysvarWriter",
+      "file": "internal/central/coordinators/hub.go",
+      "line": 708,
+      "kind": "var"
+    },
+    {
+      "package": "internal/central/coordinators",
+      "identifier": "ErrNoSysvarWriter",
+      "file": "internal/central/coordinators/hub.go",
+      "line": 708,
+      "kind": "var"
+    },
+    {
+      "package": "internal/central/coordinators",
       "identifier": "EventCoordinator",
       "file": "internal/central/coordinators/event.go",
       "line": 27,
@@ -4623,14 +4637,14 @@
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageReader",
       "file": "internal/central/coordinators/hub.go",
-      "line": 721,
+      "line": 744,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageReader",
       "file": "internal/central/coordinators/hub.go",
-      "line": 721,
+      "line": 744,
       "kind": "type"
     },
     {
@@ -4679,28 +4693,28 @@
       "package": "internal/central/coordinators",
       "identifier": "SysvarCreator",
       "file": "internal/central/coordinators/hub.go",
-      "line": 840,
+      "line": 863,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarCreator",
       "file": "internal/central/coordinators/hub.go",
-      "line": 840,
+      "line": 863,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarGetter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 714,
+      "line": 737,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarGetter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 714,
+      "line": 737,
       "kind": "type"
     },
     {
@@ -50329,7 +50343,7 @@
       "identifier": "TestCacheClearAllResetsCache",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 612
+      "line": 632
     },
     {
       "package": "internal/central/coordinators",
@@ -50497,14 +50511,14 @@
       "identifier": "TestCacheLoadAllNilPersisterIsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 552
+      "line": 572
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "TestCacheLoadAllPopulatesEntries",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 529
+      "line": 549
     },
     {
       "package": "internal/central/coordinators",
@@ -50532,7 +50546,7 @@
       "identifier": "TestCacheSaveAllPersistsEntries",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 560
+      "line": 580
     },
     {
       "package": "internal/central/coordinators",
@@ -50553,14 +50567,14 @@
       "identifier": "TestCacheSaveIfChangedSavesWhenDirty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 595
+      "line": 615
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "TestCacheSaveIfChangedSkipsOnCleanCache",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 580
+      "line": 600
     },
     {
       "package": "internal/central/coordinators",
@@ -50595,21 +50609,21 @@
       "identifier": "TestCacheSubscribeToBusEvictsOnDeviceRemoved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 631
+      "line": 651
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "TestCacheSubscribeToBusMarkssDirtyOnDataFetchCompleted",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 662
+      "line": 682
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "TestCacheUnsubscribeAllStopsDelivery",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 693
+      "line": 713
     },
     {
       "package": "internal/central/coordinators",
@@ -52352,14 +52366,14 @@
       "identifier": "TestHubCoordinatorSetSystemVariableDelegatesToWriter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 500
+      "line": 520
     },
     {
       "package": "internal/central/coordinators",
-      "identifier": "TestHubCoordinatorSetSystemVariableNilWriterIsNoop",
+      "identifier": "TestHubCoordinatorSetSystemVariableWithoutWriterFails",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/client_hub_cache_lifecycle_test.go",
-      "line": 491
+      "line": 505
     },
     {
       "package": "internal/central/coordinators",
@@ -159477,6 +159491,13 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestEveryWiringSetterHasAProductionCaller",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_setter_callers_test.go",
+      "line": 109
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestFilenamePurity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/filename_purity_test.go",
@@ -161000,6 +161021,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/hub_wiring_test.go",
       "line": 68
+    },
+    {
+      "package": "tests/contract/wiring_pins",
+      "identifier": "TestPin_SetSysvarValueWriter_WiredInHomegearHubWiring",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_pins/hub_wiring_test.go",
+      "line": 128
+    },
+    {
+      "package": "tests/contract/wiring_pins",
+      "identifier": "TestPin_SetSysvarValueWriter_WiredInHubWiring",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_pins/hub_wiring_test.go",
+      "line": 115
     },
     {
       "package": "tests/contract/wiring_pins",

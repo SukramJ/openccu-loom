@@ -488,12 +488,32 @@ func TestHubCoordinatorSetProgramStateDelegatesToWriter(t *testing.T) {
 	}
 }
 
-func TestHubCoordinatorSetSystemVariableNilWriterIsNoop(t *testing.T) {
+// TestHubCoordinatorSetSystemVariableWithoutWriterFails replaces a test
+// that asserted the opposite.
+//
+// The old one — SetSystemVariableNilWriterIsNoop — required a missing
+// write path to report success, and that requirement is what let the
+// defect live. The alarm sysvar mirror creates its variable through a
+// separately wired creator, then writes the value through here; with the
+// write path unwired the variable existed, never changed, and the
+// caller's `if err != nil` branch never ran. An operator mirroring the
+// armed state into a CCU program had a trigger that could not fire and
+// nothing anywhere said so.
+//
+// A no-op that reports success is not a lenient API. It is a lie the
+// caller cannot detect.
+func TestHubCoordinatorSetSystemVariableWithoutWriterFails(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
 	h := NewHubCoordinator("c-svw", bus)
-	if err := h.SetSystemVariable(context.Background(), "Var1", 42); err != nil {
-		t.Fatalf("SetSystemVariable with nil writer must return nil: %v", err)
+	err := h.SetSystemVariable(context.Background(), "Var1", 42)
+	if !errors.Is(err, ErrNoSysvarWriter) {
+		t.Fatalf("SetSystemVariable without a writer returned %v, want ErrNoSysvarWriter — "+
+			"reporting success for a write that did not happen is what hid the alarm "+
+			"sysvar mirror being dead for a whole release", err)
+	}
+	if h.HasSysvarValueWriter() {
+		t.Error("HasSysvarValueWriter is true without a writer; the start-up check would stay quiet")
 	}
 }
 

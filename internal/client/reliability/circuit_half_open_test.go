@@ -182,8 +182,26 @@ func TestHalfOpenParallelContention(t *testing.T) {
 		}()
 	}
 
-	// Wait for probe goroutines to settle.
-	time.Sleep(20 * time.Millisecond)
+	// Wait until every goroutine has been decided — admitted as the probe
+	// or rejected — before opening the gate.
+	//
+	// A fixed sleep was not enough. It only guaranteed that *some*
+	// goroutines had reached the breaker; the rest were still unscheduled.
+	// Opening the gate let the probe succeed, which closes the breaker,
+	// and the stragglers then arrived at a CLOSED breaker and ran their
+	// function — correctly. The test read that as "8 probes" and blamed
+	// the breaker for behaving as designed. On a loaded macOS runner it
+	// failed roughly one run in two.
+	deadline := time.Now().Add(5 * time.Second)
+	for probeCount.Load()+rejectedCount.Load() < goroutines {
+		if time.Now().After(deadline) {
+			close(gate)
+			t.Fatalf("only %d of %d callers were decided within the deadline (probes=%d rejected=%d)",
+				probeCount.Load()+rejectedCount.Load(), goroutines,
+				probeCount.Load(), rejectedCount.Load())
+		}
+		time.Sleep(time.Millisecond)
+	}
 
 	// Exactly one probe should be in flight; all others rejected.
 	if n := probeCount.Load(); n != 1 {
