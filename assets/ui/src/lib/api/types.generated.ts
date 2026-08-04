@@ -12998,6 +12998,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The backup names no owning CCU and several are configured, so the restore target cannot be derived. Restore it from that CCU's own backup list instead. Nothing was sent to any CCU. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No restore path is configured, so nothing was sent to the CCU. Distinct from 502, which means a CCU was asked and refused. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
