@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures';
 import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
 // Security & Safety domain (#/security, docs/security-safety-concept.md §7.8).
@@ -257,6 +257,14 @@ test.describe('Security - visual light', () => {
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('security-faults-light.png');
   });
+
+  test('security sources light', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/security/sources');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(1500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('security-sources-light.png');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -294,5 +302,13 @@ test.describe('Security - visual dark', () => {
     await page.waitForTimeout(1500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('security-faults-dark.png');
+  });
+
+  test('security sources dark', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/security/sources');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(1500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('security-sources-dark.png');
   });
 });

@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "gen:types": "openapi-typescript ../openapi.yaml -o src/lib/api/types.generated.ts",
     "e2e": "playwright test",
-    "e2e:update": "playwright test --update-snapshots"
+    "e2e:update": "playwright test --update-snapshots=all"
   },
   "overrides": {
     "js-yaml": "^4.2.0",

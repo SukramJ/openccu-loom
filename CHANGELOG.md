@@ -119,6 +119,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Both backends now wire the path, a missing one returns an error, and the
   central reports it at start-up.
 
+- **Every screenshot baseline of the web UI showed a version of the UI that
+  no longer existed, and the test suite called that a match.** The
+  comparison allowed 2 % of the viewport to differ — 20 480 pixels, more
+  than a navigation sidebar costs when it gains an entry. Measured against
+  the code, all 35 committed baselines had drifted, by 2 600 to 12 100
+  pixels each, and every run was green.
+
+  The refresh command could not repair it either: `--update-snapshots`
+  without an explicit mode means `changed`, and `changed` rewrites a
+  baseline only when the comparison failed. Refreshing after a small edit
+  therefore reported success and kept the old image — which is
+  indistinguishable from "nothing changed".
+
+  Screenshots are now compared exactly (`maxDiffPixels: 0`), which the
+  container's rendering supports: two runs of all 37 screenshot tests
+  reported zero differing pixels. The refresh command passes
+  `--update-snapshots=all`, the wall clock is frozen so a rendered
+  timestamp cannot force tolerance back in, and every baseline — plus the
+  four screenshots in the user guide, stale for the same reason — has been
+  regenerated from the current UI.
+
+- **Three browser tests asserted a surface they never rendered.** The
+  system-variable list gained `page`/`per_page` query parameters, which the
+  mock's `**/api/v1/sysvars` pattern stopped matching (`*` does not cross a
+  slash). The request then reached the dev-server proxy and the page
+  rendered "API 502 Bad Gateway" — for both the empty-state and the
+  error-state test, whose baselines were byte-identical as a result. The
+  error-state guard had been asserting the empty state for as long as it
+  existed. Five further endpoints (`/areas`, and four device
+  sub-resources) were never mocked at all.
+
 ### Added
 
 - **`mqtt.connect.failed`** — a rejected broker CONNECT now logs the
@@ -127,6 +158,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   answers a missing credential and a wrong one with the same
   `Not authorized (0x87)`, so those flags are what separate "typed it
   wrong" from "sent none".
+
+- **A browser test now fails when one of its requests escapes the mock
+  layer.** The suite is meant to be hermetic, but an unmatched route did
+  not fail loudly — it fell through to the dev-server proxy, and the SPA
+  rendered its error surface instead of the state under test. A catch-all
+  registered ahead of every specific route records what escaped and fails
+  the test with the list. It is what would have named the system-variable
+  pagination break on the day it landed.
+
+- **`TestScreenshotComparisonBudgetIsTightEnoughToSeeDrift` and
+  `TestBaselineRefreshScriptRewritesEveryBaseline`** — contract tests that
+  pin the two settings deciding whether the visual suite can see drift at
+  all: an exact-match pixel budget, and a refresh command that rewrites
+  every baseline rather than only the ones that already failed. Both are
+  pinned outside the suite on purpose, because a test inside it would be
+  scored by the same budget it is meant to constrain — which is why a
+  green run could not report either fault.
 
 - **`TestEveryWiringSetterHasAProductionCaller`** — a contract test that
   resolves every method injecting a collaborator and fails on those

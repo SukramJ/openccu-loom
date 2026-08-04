@@ -11,6 +11,14 @@ function fixture(name: string): unknown {
 }
 
 export async function mockAllApis(page: Page): Promise<void> {
+  // Freeze the wall clock before the first navigation. Several views render
+  // a formatted timestamp into the page (the device list shows its last
+  // refresh via `toLocaleTimeString`), which otherwise differs on every run
+  // and forces the screenshot comparison to tolerate a moving region. A
+  // fixed clock makes those surfaces deterministic instead, so the pixel
+  // budget can stay tight enough to catch real drift.
+  await page.clock.setFixedTime(new Date('2026-01-01T09:00:00Z'));
+
   // Auth
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill({ json: fixture('auth-me.json') }),
@@ -50,13 +58,37 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: fixture('info.json') }),
   );
 
-  // Devices
+  // Devices. `*` does not cross a slash, so the list route below covers
+  // `/devices` and its query string but no sub-resource — those need their
+  // own routes, or they reach the dev-server proxy.
   await page.route('**/api/v1/devices*', (route) =>
     route.fulfill({ json: fixture('devices.json') }),
   );
+  // Single device, served from the same fixture so a detail view and the
+  // list cannot disagree about what exists.
+  await page.route('**/api/v1/devices/*', (route) => {
+    const address = decodeURIComponent(
+      new URL(route.request().url()).pathname.split('/').pop() ?? '',
+    );
+    const items = (fixture('devices.json') as { items: { address: string }[] }).items;
+    const device = items.find((d) => d.address === address);
+    return device
+      ? route.fulfill({ json: device })
+      : route.fulfill({ status: 404, json: { detail: `no device ${address}` } });
+  });
+  // Device icon. The daemon answers 404 for a device it has no image for,
+  // and the device card falls back to its category glyph on the img error —
+  // which is the state every baseline shows.
+  await page.route('**/api/v1/devices/*/icon', (route) =>
+    route.fulfill({ status: 404, json: { detail: 'no icon' } }),
+  );
+  await page.route('**/api/v1/devices/*/cdps', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/v1/devices/*/paramsets/**', (route) => route.fulfill({ json: {} }));
 
-  // Sysvars
-  await page.route('**/api/v1/sysvars', (route) =>
+  // Sysvars. The trailing `*` covers the `page`/`per_page` query the list
+  // call carries (api/client.ts listSysvars) — without it the request misses
+  // this route and reaches the dev-server proxy.
+  await page.route('**/api/v1/sysvars*', (route) =>
     route.fulfill({ json: fixture('sysvars.json') }),
   );
   await page.route('**/api/v1/sysvars/**', (route) =>
@@ -122,6 +154,9 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/diagnostics/logs', (route) =>
     route.fulfill({ json: { last_seq: 0, records: [] } }),
   );
+  await page.route('**/api/v1/diagnostics/reliability*', (route) =>
+    route.fulfill({ json: [] }),
+  );
   await page.route('**/api/v1/diagnostics/rssi', (route) =>
     route.fulfill({
       json: {
@@ -172,6 +207,11 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/config/**', (route) =>
     route.fulfill({ json: {} }),
   );
+
+  // Areas. Every view that resolves a device's area asks for this on boot,
+  // so it must answer even where no test cares about areas. An empty
+  // inventory is the hermetic default; a test that needs areas mocks them.
+  await page.route('**/api/v1/areas', (route) => route.fulfill({ json: [] }));
 
   // Rooms and functions
   await page.route('**/api/v1/rooms', (route) =>
@@ -829,7 +869,7 @@ export async function mockEnergyDisabled(page: Page): Promise<void> {
 }
 
 export async function mockEmptySysvars(page: Page): Promise<void> {
-  await page.route('**/api/v1/sysvars', (route) =>
+  await page.route('**/api/v1/sysvars*', (route) =>
     route.fulfill({ json: [] }),
   );
 }

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './helpers/fixtures';
 import { mockAllApis } from './helpers/mock-api';
 
 // A minimal HmIP switch actuator. Fixture shape mirrors

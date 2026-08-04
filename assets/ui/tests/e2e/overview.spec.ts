@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures';
 import { mockAllApis, mockOverviewFleet, addStylesForStableScreenshots } from './helpers/mock-api';
 
 // Fleet Overview route (roadmap B8). The mocked fleet (see

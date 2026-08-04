@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures';
 import { mockAllApis, mockAlarmTriggered, mockAlarmWizardDevices } from './helpers/mock-api';
 
 // Alarm section (#/alarm, docs/alarm-concept.md §12). mockAllApis now wires

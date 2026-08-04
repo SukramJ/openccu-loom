@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures';
 import { mockAllApis } from './helpers/mock-api';
 
 test.describe('App Shell', () => {

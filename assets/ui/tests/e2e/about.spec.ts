@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures';
 import { mockAllApis, mockFleet, addStylesForStableScreenshots } from './helpers/mock-api';
 
 // #/about surfaces daemon build info (fixtures/info.json: version "0.2.0",

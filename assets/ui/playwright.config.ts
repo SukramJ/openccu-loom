@@ -10,7 +10,20 @@ export default defineConfig({
   // off so genuine flakes surface immediately.
   retries: process.env.CI ? 1 : 0,
   expect: {
-    toHaveScreenshot: { maxDiffPixelRatio: 0.02 },
+    // No budget at all, and deliberately not a ratio. The previous
+    // `maxDiffPixelRatio: 0.02` meant 20 480 pixels of a 1280x800 viewport —
+    // more than a shifted navigation sidebar costs — so every committed
+    // baseline had drifted away from the code while the suite stayed green,
+    // and `npm run e2e:update` would not rewrite them because the
+    // comparisons never failed.
+    //
+    // Zero is not zeal, it is the only value that separates signal from
+    // noise here: this container renders bit-identically (two runs of all
+    // 37 screenshot tests, 0 differing pixels each), while renaming one
+    // table header costs 90 pixels. Any budget large enough to feel
+    // comfortable is already large enough to hide a changed label.
+    // Pinned by TestScreenshotComparisonBudgetIsTightEnoughToSeeDrift.
+    toHaveScreenshot: { maxDiffPixels: 0 },
   },
   use: {
     headless: true,
