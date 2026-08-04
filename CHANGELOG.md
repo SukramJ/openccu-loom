@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`TestEveryWiringSetterHasAProductionCaller`** — a contract test that
+  resolves every method injecting a collaborator and fails on those
+  production never calls. It is the mechanical half of the wiring rule:
+  in 0.52.12 the hub notifiers were dead because `SetHubModel` had no
+  production caller, and the coordinator tests called it themselves, so
+  they stayed green while every hub push was lost. Removing that call
+  today names the seam and fails the build.
+
+  The first clean run found 23 such seams. Most are dead surfaces or have
+  a second path that carries the same duty; one has a user-visible
+  consequence, recorded in the ratchet: nothing ever attaches a generic
+  event to a channel, so `GET /devices/{addr}/channels/{no}/event-groups`
+  can only ever answer with an empty list.
+
 - **A boot-order guard that runs against the real daemon.** It starts the
   built binary against a CCU that is still warming up, flips the CCU to
   ready, and only then asserts that the security inventory, the hazard
