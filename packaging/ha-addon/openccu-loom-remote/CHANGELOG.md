@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.53.1
+
+- Version bump in lockstep with the main add-on. No change to the proxy
+  itself.
+
 # 0.53.0
 
 - Version bump in lockstep with the main add-on. No change to the proxy

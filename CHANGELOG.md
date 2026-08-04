@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.53.0]
+## [0.53.1]
 
 ### Added
 
@@ -24,6 +24,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   counterpart. That comparison is what found the dead firmware-install
   button: the declaration side and the publish side each had passing
   tests, and nothing had ever compared them.
+
+### Fixed
+
+- **Every device's firmware "Install" button in Home Assistant did
+  nothing.** The per-device update entity declared a `command_topic` and
+  `payload_install`, so Home Assistant rendered an install control — but
+  no subscription has ever matched that topic shape, and the press went to
+  the broker and stopped there. The entity is now declared read-only,
+  matching the CCU-level update entity, which is read-only by design for
+  the reason that also applies here: flashing firmware from an
+  unconfirmed broker payload that a reconnect may replay is unsafe. The
+  install path is `POST /api/v1/devices/{addr}/firmware/update`.
+
+- **The duress help text promised a delivery path that does not exist.**
+  It told operators that visibility `hidden` "keeps it on the webhook and
+  the raw alarm topic". The alarm MQTT publisher does not subscribe to the
+  duress event at all — a duress disarm appears on that plane as an
+  ordinary disarm, which is correct for a screen an attacker can see, but
+  means `hidden` reaches the webhook and nothing else. An operator who
+  read that sentence and skipped the webhook was told nothing at all when
+  someone entered a code under coercion. Corrected in both locales, and
+  the concept's visibility matrix along with it.
+
+
+## [0.53.0]
+
+### Added
 
 - **The Security & Safety views in the config UI.** An overview that
   leads with the last report — subject and message, the thing an
@@ -158,26 +185,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command as the cause of a fire.
 
 ### Fixed
-
-- **Every device's firmware "Install" button in Home Assistant did
-  nothing.** The per-device update entity declared a `command_topic` and
-  `payload_install`, so Home Assistant rendered an install control — but
-  no subscription has ever matched that topic shape, and the press went to
-  the broker and stopped there. The entity is now declared read-only,
-  matching the CCU-level update entity, which is read-only by design for
-  the reason that also applies here: flashing firmware from an
-  unconfirmed broker payload that a reconnect may replay is unsafe. The
-  install path is `POST /api/v1/devices/{addr}/firmware/update`.
-
-- **The duress help text promised a delivery path that does not exist.**
-  It told operators that visibility `hidden` "keeps it on the webhook and
-  the raw alarm topic". The alarm MQTT publisher does not subscribe to the
-  duress event at all — a duress disarm appears on that plane as an
-  ordinary disarm, which is correct for a screen an attacker can see, but
-  means `hidden` reaches the webhook and nothing else. An operator who
-  read that sentence and skipped the webhook was told nothing at all when
-  someone entered a code under coercion. Corrected in both locales, and
-  the concept's visibility matrix along with it.
 
 - **A fault that arose while the daemon was down never entered the
   ledger.** The index seeded its in-memory activation from the device
