@@ -210,14 +210,14 @@ integration: ## run godevccu + Mosquitto integration tests (slow; Mosquitto need
 .PHONY: e2e
 e2e: build-all ## run black-box E2E tests against ./bin/openccu-loom + ./bin/hmcli (see docs/e2e-testplan.md)
 	@if [ -d tests/e2e ]; then \
-		$(GO) test -tags=e2e -timeout=180s ./tests/e2e/...; \
+		$(GO) test -tags=e2e -timeout=300s ./tests/e2e/...; \
 	else \
 		echo "e2e tests not implemented yet"; \
 	fi
 
 .PHONY: e2e-dist
 e2e-dist: ui-build build-all ## build SPA + binaries, then run E2E (CI uses this target)
-	$(GO) test -tags=e2e -timeout=180s ./tests/e2e/...
+	$(GO) test -tags=e2e -timeout=300s ./tests/e2e/...
 
 .PHONY: chiptool-test
 chiptool-test: build ## run the chip-tool capability suite against ./bin/openccu-loom + a local chip-tool (skip when chip-tool is not installed)

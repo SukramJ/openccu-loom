@@ -44,15 +44,14 @@ import (
 // the time AttachCentral runs, so the rebuild inside AttachCentral is
 // what populates the index.
 //
-// KNOWN GAP: the remaining production window — AttachCentral running
-// *before* the model loads, which is what
-// cmd/openccu-loom/central_adopt.go actually does — is not covered here.
-// Closing it needs a harness that can hand out a central whose model
-// arrives after registration; the godevccu harness loads eagerly. The
-// production fix for that window is the CentralSouthboundReadyEvent /
-// DeviceCreatedEvent subscription in internal/security/subscribe.go, and
-// it is currently unguarded. Do not read a green run of this file as
-// covering it.
+// The remaining production window — the central being attached *before*
+// its model loads — is covered by
+// TestE2EDaemonLevelSubsystemsReportNonEmptyStateAfterBoot in
+// tests/e2e/boot_order_test.go, which boots the real binary against a
+// CCU that is still warming up and therefore reproduces that order
+// exactly. That test fails when the rebuild subscription in
+// internal/security/subscribe.go is removed; this one does not, so read
+// a green run here as covering the adoption path only.
 func TestSecurityDomainBootsBeforeItsCentral(t *testing.T) {
 	h := newSPAHarness(t, securityModels)
 

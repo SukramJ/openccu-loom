@@ -278,14 +278,24 @@ Security & Safety integration test registered a fully loaded central
 *before* `Start`, so an index that is permanently empty in production
 looked correct for months.
 
-Every daemon-level subsystem carries a boot-order integration test:
-start the daemon, wait for readiness, assert the subsystem reports
-non-empty state.
+Every daemon-level subsystem carries a boot-order assertion: start the
+real daemon, let the model arrive **afterwards**, assert the subsystem
+reports non-empty state.
 
-Guard: `tests/integration/*_boot_order_test.go`. **One exists**
-(`security_boot_order_test.go`) against roughly a dozen daemon-level
-subsystems started by the composition root. The pattern is proven; the
-coverage is not there yet.
+The middle clause is the whole test. Against a CCU that answers
+instantly the daemon finishes the south-bound bring-up before the domain
+services start, so every subsystem reads a populated model and the test
+passes however broken the wiring is — measured, not assumed: the first
+version of this guard stayed green with the historical fix removed. Boot
+the simulated CCU **not ready** (`harness.Options{StartCCUNotReady:
+true}`), then flip it, and the real order is restored.
+
+Guard: `tests/e2e/boot_order_test.go`
+(`TestE2EDaemonLevelSubsystemsReportNonEmptyStateAfterBoot`) — black-box,
+against the built binary, one table entry per subsystem. It is black-box
+because boot order is a property of the composition root: any test that
+assembles the collaborators itself gets to choose the order, and will
+choose the working one.
 
 #### Declared and published must be the same set
 

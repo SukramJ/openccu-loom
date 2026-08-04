@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A boot-order guard that runs against the real daemon.** It starts the
+  built binary against a CCU that is still warming up, flips the CCU to
+  ready, and only then asserts that the security inventory, the hazard
+  classes, the hub model and the Home Assistant discovery plane hold
+  state.
+
+  The order is the test. Against a CCU that answers instantly the daemon
+  finishes loading before the domain services start, so every subsystem
+  reads a populated model however broken the wiring is — measured, not
+  assumed: the first version of this guard stayed green with the
+  0.53.0 defect put back. Gating the CCU restores the order a real
+  installation has.
+
 - **`TestEveryEventTypeHasASubscriber`** — a contract test that resolves
   every `events.Subscribe` call through the type checker and fails on any
   event type nothing consumes, unless the silence is declared with a
