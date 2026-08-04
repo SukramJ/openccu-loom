@@ -147,6 +147,16 @@ const (
 	// carries the program name and id.
 	ActionProgramDelete Action = "program_delete"
 
+	// ActionProgramExecute records a CCU program run the daemon triggered,
+	// whatever the route (REST, WebSocket, MQTT). The Note carries the
+	// central, the trigger kind, and whether the CCU accepted the run.
+	//
+	// A program that fires twice is otherwise unattributable: the CCU
+	// executes it either way, and without this entry there is no way to
+	// tell a duplicate the daemon sent from one the CCU produced on its
+	// own. That distinction decides which side to investigate.
+	ActionProgramExecute Action = "program_execute"
+
 	// ActionTLSCertUpload records a runtime replacement of the daemon's
 	// TLS server certificate.
 	ActionTLSCertUpload Action = "tls_cert_upload"

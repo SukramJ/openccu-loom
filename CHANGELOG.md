@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.53.1]
 
+### Added
+
+- **Program runs are recorded in the audit log** (`program_execute`, with
+  central, program, trigger and outcome). When a program is reported as
+  running twice, the CCU executes it either way and its own log does not
+  say who asked — without this entry there was no way to tell a run the
+  daemon triggered from one the CCU produced on its own, and those point
+  at different causes. The record hangs on the event bus, so every route
+  (REST, WebSocket, MQTT) is covered.
+
 ### Fixed
 
 - **Restoring an uploaded backup always failed.** An archive uploaded
