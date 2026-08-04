@@ -45,6 +45,10 @@ func wireSecurityService(cfg *config.Config, reg *central.Registry, db *gosql.DB
 			Locale:           cfg.Locale,
 			PublicURL:        cfg.North.REST.PublicURL,
 			DuressVisibility: hmenum.DuressVisibility(cfg.Alarm.DuressVisibility),
+			// The fault ledger answers the same question about the same
+			// installation as the alarm journal, so it shares its window
+			// rather than adding a second knob to get wrong.
+			RetentionDays: cfg.Alarm.JournalRetentionDays,
 		},
 		Registry: reg,
 		Stores: &security.Stores{

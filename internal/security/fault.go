@@ -6,6 +6,7 @@ package security
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
@@ -13,6 +14,11 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
+
+// faultWriteTimeout bounds a ledger write. It is generous relative to a
+// local SQLite write and short relative to a human noticing a stalled
+// event stream.
+const faultWriteTimeout = 5 * time.Second
 
 // applyFault raises or clears the fault of one diagnostic source.
 //
@@ -23,8 +29,13 @@ import (
 //
 // Reporting runs on the raise edge only. A fault clearing is a state
 // change worth publishing, but not worth waking anyone at night for.
-func (s *Service) applyFault(src *indexedSource, active bool) {
-	ctx := context.Background()
+func (s *Service) applyFault(parent context.Context, src *indexedSource, active bool) {
+	// A bus-dispatched call runs inline on the central's event-dispatch
+	// goroutine, so an unbounded write would stall every consumer behind
+	// it. WAL plus the busy timeout make the normal case cheap; the
+	// deadline is for the abnormal one.
+	ctx, cancel := context.WithTimeout(parent, faultWriteTimeout)
+	defer cancel()
 	reason := src.reason
 	if reason == "" {
 		return
@@ -124,18 +135,24 @@ func (s *Service) AcknowledgeFault(ctx context.Context, id, by string) (bool, er
 		return false, err
 	}
 	s.mu.Lock()
-	if f, found := s.agg.faults[id]; found {
-		f.AcknowledgedAtMS = nowMS(s.clk.Now())
-		f.AcknowledgedBy = by
+	f, found := s.agg.faults[id]
+	if !found {
 		s.mu.Unlock()
-		events.Publish(s.bus, hmevent.SecurityFaultChangedEvent{
-			Base: hmevent.NewBaseAt(s.clk.Now()), FaultID: id, Class: f.Class,
-			Reason: f.Reason, Severity: f.Severity, Source: f.Source,
-			Open: true, Acknowledged: true, SinceMS: f.SinceMS,
-		})
 		return true, nil
 	}
+	f.AcknowledgedAtMS = nowMS(s.clk.Now())
+	f.AcknowledgedBy = by
+	// The standing count is unchanged by an acknowledgement, but it has
+	// to be the real one: consumers of this event read OpenCount as the
+	// current total, and leaving it at the zero value announced "no fault
+	// stands" on the one transition that proves one does.
+	open := len(s.agg.faults)
 	s.mu.Unlock()
+	events.Publish(s.bus, hmevent.SecurityFaultChangedEvent{
+		Base: hmevent.NewBaseAt(s.clk.Now()), FaultID: id, Class: f.Class,
+		Reason: f.Reason, Severity: f.Severity, Source: f.Source,
+		Open: true, Acknowledged: true, SinceMS: f.SinceMS, OpenCount: open,
+	})
 	return true, nil
 }
 
@@ -174,6 +191,7 @@ func (s *Service) notify(in reportInput, isFault bool) {
 		Mode:       n.Mode,
 		IncidentID: n.IncidentID,
 		Link:       n.Link,
+		AtMS:       n.AtMS,
 		Fault:      isFault,
 		Retainable: in.Retainable,
 	})

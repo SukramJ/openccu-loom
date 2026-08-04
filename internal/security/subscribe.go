@@ -5,9 +5,11 @@ package security
 
 import (
 	"context"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -35,6 +37,7 @@ func (s *Service) subscribeAlarm() {
 		events.Subscribe(s.alarmBus, s.onAlarmStateChanged),
 		events.Subscribe(s.alarmBus, s.onAlarmHealthChanged),
 		events.Subscribe(s.alarmBus, s.onAlarmDuress),
+		events.Subscribe(s.alarmBus, s.onAlarmPanelChanged),
 	}
 	s.mu.Lock()
 	s.unsubs = append(s.unsubs, unsubs...)
@@ -167,7 +170,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 			Retainable: !src.silentPanic || vis.AllowsRetained(),
 		}, false)
 	} else {
-		s.applyFault(src, active)
+		s.applyFault(context.Background(), src, active)
 	}
 }
 
@@ -243,6 +246,71 @@ func containsString(list []string, want string) bool {
 	}
 	return false
 }
+
+// onAlarmPanelChanged keeps the zone set in step with the alarm
+// configuration.
+//
+// Zones entered the aggregate but never left it. A deleted zone kept its
+// entry, so the snapshot still carried it, so retractGone never saw it
+// disappear and its retained MQTT state and consumer entity survived the
+// deletion indefinitely. The mirror case is a zone created after boot:
+// the slug refresh runs on an index rebuild, which a configuration
+// change does not trigger, so a new zone would first surface under a
+// derived fallback slug and only settle on its real one at the next
+// restart.
+//
+// The master aggregate is not a zone and carries no zone view.
+//
+//nolint:contextcheck // bus dispatch has no caller ctx; the store read runs on the service lifetime
+func (s *Service) onAlarmPanelChanged(e hmevent.AlarmPanelChangedEvent) {
+	if e.ZoneID == "" || e.ZoneID == alarmpanel.MasterZoneID {
+		return
+	}
+	if e.Removed {
+		s.mu.Lock()
+		_, had := s.agg.zones[e.ZoneID]
+		delete(s.agg.zones, e.ZoneID)
+		snap := s.agg.snapshot()
+		s.mu.Unlock()
+		if had {
+			s.publishState(snap)
+		}
+		return
+	}
+
+	s.mu.Lock()
+	z, known := s.agg.zones[e.ZoneID]
+	s.mu.Unlock()
+	if known && z.Slug != "" && z.Name == e.Name {
+		return
+	}
+	// Read the slug from the store rather than deriving it: the slug is
+	// frozen at creation and a rename must not move the topic.
+	ctx, cancel := context.WithTimeout(context.Background(), zoneRefreshTimeout)
+	defer cancel()
+	s.refreshZoneSlugs(ctx)
+
+	s.mu.Lock()
+	z = s.agg.zones[e.ZoneID]
+	if z.ID == "" {
+		z.ID = e.ZoneID
+	}
+	if z.Slug == "" {
+		z.Slug = zoneSlugFallback(e.Name, e.ZoneID)
+	}
+	z.Name = e.Name
+	s.agg.zones[e.ZoneID] = z
+	snap := s.agg.snapshot()
+	s.mu.Unlock()
+
+	s.publishZone(z)
+	s.publishState(snap)
+}
+
+// zoneRefreshTimeout bounds the store read a configuration change
+// triggers. It runs on the alarm bus dispatch goroutine, so it must not
+// block the engine behind an unresponsive database.
+const zoneRefreshTimeout = 5 * time.Second
 
 // onAlarmTriggered folds an intrusion incident into the zone view.
 func (s *Service) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {

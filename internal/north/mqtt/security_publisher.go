@@ -141,6 +141,14 @@ func (p *SecurityMQTTPublisher) Stop() {
 	for _, u := range unsubs {
 		u()
 	}
+	// An orderly shutdown suppresses the broker's last-will, so without
+	// this both declared availability sources stay `online` and a
+	// consumer shows the card with frozen values as available — exactly
+	// the case the second source exists to distinguish.
+	if b := p.wiring.Bridge(); b != nil {
+		_ = b.client.Publish(context.Background(),
+			securityAvailabilityTopic(b.cfg.Base), []byte("offline"), b.cfg.QoS.State, true)
+	}
 	close(p.stopCh)
 	<-p.doneCh
 }
@@ -176,13 +184,29 @@ func (p *SecurityMQTTPublisher) publish(ctx context.Context, m securityMsg) {
 	}
 }
 
-// enqueue queues a publish, dropping the oldest rather than blocking
-// the domain's bus goroutine if the broker stalls.
+// enqueue queues a publish without blocking the domain's bus goroutine.
+//
+// On overflow it drops the *oldest* queued message and keeps the new
+// one. The previous version claimed that and did the opposite: it
+// discarded the newest, and since reconcile enqueues the per-class and
+// per-zone states last, a partial drop lost exactly those — leaving the
+// aggregate state on the broker disagreeing with the class states it
+// was folded from, which is the incoherence the reconcile path exists
+// to prevent.
 func (p *SecurityMQTTPublisher) enqueue(m securityMsg) {
-	select {
-	case p.msgCh <- m:
-	default:
-		p.logger.Warn("security mqtt queue full; dropping message", "topic", m.topic)
+	for {
+		select {
+		case p.msgCh <- m:
+			return
+		default:
+		}
+		select {
+		case dropped := <-p.msgCh:
+			p.logger.Warn("security mqtt queue full; dropped the oldest message",
+				"dropped_topic", dropped.topic, "for_topic", m.topic)
+		default:
+			// Drained by the worker in between; retry the send.
+		}
 	}
 }
 
@@ -194,22 +218,25 @@ func (p *SecurityMQTTPublisher) onClassChanged(hmevent.SecurityClassChangedEvent
 
 func (p *SecurityMQTTPublisher) onZoneChanged(hmevent.SecurityZoneChangedEvent) { p.reconcile() }
 
-func (p *SecurityMQTTPublisher) onFaultChanged(e hmevent.SecurityFaultChangedEvent) {
+// onFaultChanged republishes the retained half.
+//
+// It deliberately writes no event. The fault event topic has exactly one
+// producer — onNotification — because a consumer's event entity parses
+// one payload shape per topic, and this handler wrote a different one:
+// every raise and clear arrived twice, once as a ledger transition
+// (fault_id, open_count, no text) and once as a rendered report
+// (subject, message, sources, link, no id), so an automation reading
+// either field got it on half the messages.
+//
+// Nothing is lost by staying quiet. The ledger facts this used to carry
+// live in the retained `problem` attributes, which reconcile republishes
+// here with the full standing list, its ids, its count and its
+// acknowledgement flags.
+//
+// It also removes an acknowledgement announcing itself as `raised`,
+// which is what a consumer's automation would act on a second time.
+func (p *SecurityMQTTPublisher) onFaultChanged(hmevent.SecurityFaultChangedEvent) {
 	p.reconcile()
-	body, err := json.Marshal(map[string]any{
-		"event_type": verbForFault(e),
-		"fault_id":   e.FaultID,
-		"class":      string(e.Class),
-		"reason":     string(e.Reason),
-		"severity":   string(e.Severity),
-		"source":     securitySourcePayload(e.Source),
-		"since_ms":   e.SinceMS,
-		"open_count": e.OpenCount,
-	})
-	if err != nil {
-		return
-	}
-	p.enqueue(securityMsg{topic: securityStateTopic(p.base(), "fault"), payload: body})
 }
 
 // onNotification publishes the rendered report.
@@ -243,18 +270,6 @@ func (p *SecurityMQTTPublisher) onNotification(e hmevent.SecurityNotificationEve
 		key = "last_fault"
 	}
 	p.enqueue(securityMsg{topic: securityStateTopic(p.base(), key), payload: body, retained: true})
-}
-
-// verbForFault maps a fault transition onto an announced event type.
-func verbForFault(e hmevent.SecurityFaultChangedEvent) string {
-	switch {
-	case e.Acknowledged:
-		return string(hmenum.SecurityVerbRaised)
-	case e.Open:
-		return string(hmenum.SecurityVerbRaised)
-	default:
-		return string(hmenum.SecurityVerbCleared)
-	}
 }
 
 func (p *SecurityMQTTPublisher) base() string {

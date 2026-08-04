@@ -255,6 +255,12 @@ type SecurityNotificationEvent struct {
 	Mode       hmenum.AlarmMode
 	IncidentID int64
 	Link       string
+	// AtMS is when the report was produced.
+	//
+	// Both retained report entities declare device_class timestamp, so
+	// without it they stay permanently unknown and log a warning on
+	// every publish — the attributes arrive, the state never does.
+	AtMS int64
 	// Fault marks a fault report rather than a hazard report, so a
 	// consumer can route the two to different destinations without
 	// inspecting the class.

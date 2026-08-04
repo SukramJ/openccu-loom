@@ -142,6 +142,48 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A fault that arose while the daemon was down never entered the
+  ledger.** The index seeded its in-memory activation from the device
+  model at boot, so a device that went unreachable during a restart
+  showed as active in the class view — but no fault row was written, so
+  it had no `since`, produced no report, appeared in no fault list, and
+  could not clear afterwards either, because there was no row to close.
+  The ledger is now reconciled against the model whenever the index is
+  rebuilt, in both directions.
+
+- **The fault ledger grew without bound.** Each raise/clear cycle writes
+  a new permanent row and nothing ever reads a cleared one. Cleared
+  faults are now pruned daily on the alarm journal's retention window —
+  the two answer the same question about the same installation, and a
+  second knob would only be a second thing to get wrong.
+
+- **A deleted alarm zone kept its Security & Safety entity forever.**
+  Zones entered the aggregate but never left it, so the snapshot still
+  carried a deleted zone, so the retraction pass never saw it disappear
+  and its retained state and consumer entity survived the deletion
+  indefinitely. A zone created after boot also settled on a derived
+  fallback slug until the next restart; it now takes its real slug
+  immediately.
+
+- **The fault event topic had two producers writing two different payload
+  shapes.** Every fault transition arrived twice — once as a ledger
+  record with an id and a count and no text, once as a rendered report
+  with a subject and a message and no id — and a consumer's event entity
+  parses one shape per topic. Every automation reading either field got
+  it on half the messages. The rendered report is now the sole producer;
+  the ledger facts live in the retained fault-flag attributes, which
+  carry the full standing list with ids, counts and acknowledgements.
+
+  An acknowledgement also announced itself as `raised`, which is what an
+  automation would act on a second time, and reported a standing count of
+  zero on the one transition that proves a fault stands.
+
+- **An operator's class override made the fault it described unclearable.**
+  Overriding a data point's class dropped the classifier's reason facet,
+  and the clear path keys on that reason: the fault could open, dedupe
+  onto itself on every later raise, and never close. The same held for a
+  tamper-typed alarm enrollment.
+
 - **A smoke detector's two self-diagnosis faults had no data point.** A
   soiled smoke chamber and a failed self-test are the conditions that
   make a detector stop protecting without announcing it, and both were

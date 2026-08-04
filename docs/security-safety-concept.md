@@ -220,42 +220,84 @@ Kein `DataPointKey`, keine Zentrale, kein Kanal. Genau wie `alarmpanel.Panel` he
 
 Legende: `retained` = MQTT retained; State-Topic dient gleichzeitig als `json_attributes_topic` (bewährtes Muster, `internal/north/mqtt/hub_discovery.go:617-646`). **Attribut-Payloads sind immer Objekte**, nie nackte Listen — HA verwirft letztere mit „JSON result was not a dictionary".
 
-### 4.1 System-Ebene (9 Entitäten)
+### 4.1 System-Ebene (8 Entitäten)
 
-| Key | Kategorie / HA-Entity | Wertform | Zweck | Attribute |
+> **Stand: implementiert.** Die Tabelle beschreibt `securitySystemEntities`
+> in `internal/north/mqtt/security_entities.go` und die Attribut-Builder in
+> `security_reconcile.go`. Topic-Form ist `<base>/security/<key>` — ohne
+> `system/`-Segment, denn ein Segment, das jede Zeile trägt, unterscheidet
+> nichts. Die Klassen- und Zonentopics verschachteln (`class/<c>`,
+> `zone/<slug>`), die Entity-Keys bleiben flach (`class_<c>`, `zone_<slug>`);
+> die Discovery trägt das Topic deshalb explizit statt es aus dem Key
+> abzuleiten.
+
+| Key | HA-Entity | Wertform | Zweck | Attribute (tatsächlich) |
 |---|---|---|---|---|
-| `security/system/event` | `event` (`DataPointCategoryEvent`) · **nicht retained, QoS0** | JSON pro Auslösung; `event_type ∈ {triggered, pre_alarm, silenced, cleared, failed_to_arm, test}` | **Der** Automations-Primitive für Alarm-/Gefahrenfälle. Feuert auch bei zwei identischen Vorfällen (State = Feuerzeitstempel) | `class, severity, verb, subject, message, i18n_key, args, zone{id,slug,name}, mode, incident_id, sources[], source_names[], centrals[], count, truncated, total, link, ts` |
-| `security/system/fault` | `event` · **nicht retained, QoS0** · diagnostic | `event_type ∈ {raised, cleared}` | Der Störfall-Zwilling — eigene Entität, damit Störungen ohne Bedingung an ein anderes Ziel geroutet werden können | `class, reason, severity, subject, message, i18n_key, args, source{}, since, central, link, ts` |
-| `security/system/state` | `sensor`, `device_class: enum` · retained | `ok \| info \| warning \| alarm \| critical` | Ein-Blick-Zustand der Domäne. Präzedenz: `critical` (smoke/gas/co) > `alarm` (intrusion/panic/water) > `warning` (tamper, Engine ungesund) > `info` (technical/battery) > `ok` | `classes{<class>:{active,count}}, zones{<slug>:{state,mode,triggered}}, open_faults, armed_zones, last_alarm_ts, last_fault_ts` |
-| `security/system/alarm` | `binary_sensor`, `device_class: safety` · retained | bool | „Es liegt jetzt eine Gefahr an" = OR(smoke, water, gas, co, intrusion, panic-laut). Der eine HA-Trigger | `count, sources[], source_names[], by_class{}, by_zone{}, since, truncated, total` — **Achse „ausgelöste Sensoren pro System"** |
-| `security/system/problem` | `binary_sensor`, `device_class: problem` · retained · diagnostic | bool | „Der Sicherheitsbereich ist gestört" = OR(technical, battery, tamper), **nur sicherheitsrelevante Geräte** | `count, faults[]{id,class,reason,severity,subject,central,device,address,parameter,since,acknowledged}, truncated, total` |
-| `security/system/health` | `binary_sensor`, `device_class: problem` · retained · diagnostic | bool (ON = ungesund) | Macht `AlarmHealthChangedEvent` zur eigenen Entität, statt nur die Panel-Availability zu senken (heute in HA nicht von Broker-Ausfall unterscheidbar) | `note` (stabiler engl. Maschinenstring aus `internal/alarm/outputs/watchdog.go:121,129`), `since` |
-| `security/system/test_mode` | `binary_sensor` · retained · diagnostic, default off | bool | ON solange irgendeine Zone im Gehtest ist — verhindert, dass Automationen während des Tests Meldungen versenden | `zones[], seen, total, started_at` |
-| `security/system/last_alarm` | `sensor`, `device_class: timestamp` · retained | RFC3339 | Neustartfeste Dashboard-Hälfte des Ereignisses. HA-`event`-Entitäten sind nach Neustart `unknown` | vollständige letzte Alarm-Nutzlast (siehe `system/event`) — **Träger von Subject & Message** |
-| `security/system/last_fault` | `sensor`, `device_class: timestamp` · retained · diagnostic | RFC3339 | Symmetrisch; ein Störungssturm überschreibt so nie den Nachweis des Brandes | vollständige letzte Störungs-Nutzlast |
+| `security/event` | `event` · **nicht retained** | JSON pro Meldung; `event_type ∈ {triggered, cleared, raised}` | **Der** Automations-Primitive. Feuert auch bei zwei identischen Vorfällen | `event_type, class, severity, subject, message, i18n_key, args, zone_id, zone_slug, zone_name, mode, incident_id, sources[], source_names[], count, truncated, total, link, at` |
+| `security/fault` | `event` · **nicht retained** · diagnostic | dieselbe Nutzlast, `event_type ∈ {raised, cleared}` | Der Störfall-Zwilling — eigene Entität, damit Störungen anders geroutet werden können. **Genau ein Produzent** (`onNotification`); die Ledger-Transition selbst schreibt hier nicht, ihre Fakten stehen retained unter `problem` | wie `event` |
+| `security/state` | `sensor`, `device_class: enum` · retained | `ok \| info \| warning \| alarm \| critical` | Ein-Blick-Zustand. Die Vokabelliste wird als `options` mitangekündigt — ein Enum-Sensor ohne sie wird abgelehnt | `state, classes{<class>:{active,count,known}}, zones{<slug>:{state,mode,triggered}}, open_faults, engine_healthy` |
+| `security/alarm` | `binary_sensor`, `device_class: safety` · retained | `ON`/`OFF` | „Es liegt jetzt eine Gefahr an" = OR über die Gefahrenklassen (`SecurityClass.Hazard()`). Der eine HA-Trigger | `state, sources[], source_names[], by_class{}, count, truncated, total` |
+| `security/problem` | `binary_sensor`, `device_class: problem` · retained · diagnostic | `ON`/`OFF` | „Der Sicherheitsbereich ist gestört", **nur sicherheitsrelevante Geräte** | `state, faults[]{id,class,reason,severity,since_ms,acknowledged,source{}}, count, truncated, total` |
+| `security/health` | `binary_sensor`, `device_class: problem` · retained · diagnostic | `ON` = ungesund | Macht `AlarmHealthChangedEvent` zur eigenen Entität, statt nur die Panel-Availability zu senken | keine (nackter Zustand) |
+| `security/last_alarm` | `sensor`, `device_class: timestamp` · retained | RFC3339 aus `at` | Neustartfeste Dashboard-Hälfte. HA-`event`-Entitäten sind nach Neustart `unknown` | vollständige letzte Alarm-Nutzlast — **Träger von Subject & Message** |
+| `security/last_fault` | `sensor`, `device_class: timestamp` · retained · diagnostic | RFC3339 aus `at` | Symmetrisch; ein Störungssturm überschreibt nie den Nachweis des Brandes | vollständige letzte Störungs-Nutzlast |
+
+`at` ist bewusst RFC3339 und keine Epoche-Millisekunde: die Entität deklariert
+`device_class: timestamp`, das eine nackte Zahl zurückweist.
+
+Alle acht tragen eine zweiquellige `availability` (Bridge-LWT **und**
+`security/availability`) mit `availability_mode: all`, sodass ein laufender
+Daemon ohne Domäne von einem Broker-Ausfall unterscheidbar bleibt. `Stop()`
+schreibt `offline` retained.
+
+**Nicht gebaut:** `test_mode`. Es setzte einen Gehtest-Zustand voraus, den die
+Domäne nicht beobachtet. Eine Entität anzukündigen, die kein Produzent
+bedient, ist ein Versprechen, das der Plane nicht halten kann — sie kommt
+zusammen mit ihrem Produzenten. Aus demselben Grund fehlt `test` in der
+angekündigten `event_types`-Liste.
 
 ### 4.2 Klassen-Ebene (bis 9 Entitäten, bedingt publiziert)
 
-Discovery wird **nur** ausgeliefert, wenn der Klassifikator-Index mindestens eine Quelle dieser Klasse kennt. Keine dauerhaft OFF stehenden Geisterentitäten.
+Discovery wird **nur** ausgeliefert, wenn der Klassifikator-Index mindestens
+eine Quelle dieser Klasse kennt. Keine dauerhaft OFF stehenden
+Geisterentitäten. Verliert eine Klasse ihre letzte Quelle, räumt
+`retractGone` Discovery **und** retained State ab.
 
-| Key | Kategorie / HA-Entity | Wertform | Zweck | Attribute |
+Topic `<base>/security/class/<class>`, Entity-Key `class_<class>`, Wertform
+`ON`/`OFF`, Attribute einheitlich
+`state, sources[], source_names[], count, truncated, total, known, centrals[], since_ms`.
+
+| Klasse | `device_class` | diagnostic | Quellen |
+|---|---|---|---|
+| `smoke` | `smoke` | — | `SMOKE_DETECTOR`: `SMOKE_ALARM`, `STATE`, `SMOKE_DETECTOR_ALARM_STATUS ∈ {PRIMARY_ALARM, SECONDARY_ALARM}` |
+| `water` | `moisture` | — | HmIP-SWD (`ALARMSTATE`, `MOISTURE_DETECTED`, `WATERLEVEL_DETECTED`, ODER im Aggregat) und HM-Sec-WDS (`STATE ∈ {WET, WATER}`) |
+| `gas` | `gas` | — | Kein Producer im Homematic-Bestand → Entität wird nicht publiziert |
+| `co` | `carbon_monoxide` | — | getrennt von Gas, weil die Eskalation eine andere ist |
+| `tamper` | `tamper` | ✅ | `SABOTAGE*`-Familie (Präfixregel), tamper-typisierte Sensoren |
+| `battery` | `battery` | ✅ | `LOWBAT`, `LOWBAT_SENSOR` sicherheitsrelevanter Geräte |
+| `technical` | `problem` | ✅ | `UNREACH`, `STICKY_UNREACH`, `BLOCKED_*`, `ERROR_ALARM_TEST`, `ERROR_JAMMED`, `ERROR_SMOKE_CHAMBER`, `DUTYCYCLE`/`DUTY_CYCLE` |
+| `intrusion` | `safety` | — | Klassenprojektion der Engine |
+| `panic` | `safety` | — | Panik/Überfall (laut). Stille Auslösungen unterliegen §10.1 |
+
+`reason ∈ {unreachable, blocked, device_error, duty_cycle, low_battery, tamper}`.
+**`central_lost` ist definiert, wird aber von nichts erhoben** — ein
+Zentralenverlust räumt heute per `ClearByCentral` auf, statt einen Fault zu
+öffnen. Der Wert bleibt reserviert.
+
+### 4.3 Zonen-Ebene (1 Entität pro Zone, nur bei aktiver Engine)
+
+| Key | HA-Entity | Wertform | Zweck | Attribute |
 |---|---|---|---|---|
-| `security/class/smoke` | `binary_sensor`, `device_class: smoke` · retained | bool | Rauch/Feuer systemweit, **unabhängig vom ACP** | `count, sources[], source_names[], by_zone{}, centrals[], since` |
-| `security/class/water` | `binary_sensor`, `device_class: moisture` · retained | bool | Wasser/Leckage. Quellen: HmIP-SWD (`ALARMSTATE`, `MOISTURE_DETECTED`, `WATERLEVEL_DETECTED` — die ODER-Verknüpfung leistet das Aggregat selbst) und HM-Sec-WDS (`STATE ∈ {WET, WATER}` via ActiveValues) | wie oben, zusätzlich `severity_order` (moisture < waterlevel) |
-| `security/class/gas` | `binary_sensor`, `device_class: gas` · retained | bool | Brenngas. Heute ohne Producer im Homematic-Bestand → Entität wird nicht publiziert, bis eine Quelle klassifiziert ist | wie oben |
-| `security/class/co` | `binary_sensor`, `device_class: carbon_monoxide` · retained | bool | CO — getrennt von Gas, weil die Eskalation eine andere ist | wie oben |
-| `security/class/tamper` | `binary_sensor`, `device_class: tamper` · retained · diagnostic | bool | Sabotage: `SABOTAGE*`-Familie, `BLOCKED_TEMPORARY/PERMANENT`, tamper-typisierte Sensoren (heute nur eine Journalzeile `tamper_while_disarmed`) | wie oben, `reason` pro Quelle |
-| `security/class/battery` | `binary_sensor`, `device_class: battery` · retained · diagnostic | bool | Schwache Batterie **sicherheitsrelevanter** Geräte | wie oben |
-| `security/class/technical` | `binary_sensor`, `device_class: problem` · retained · diagnostic | bool | Technische Störung: unerreichbar, Keypad geblockt, Gerätefehler (`ERROR_SMOKE_CHAMBER`, `ERROR_ALARM_TEST`, `ERROR_CODE`, `ERROR_NON_FLAT_POSITIONING`), Zentralenverlust | wie oben, `reason ∈ {unreachable, blocked, device_error, central_lost, duty_cycle}` |
-| `security/class/intrusion` | `binary_sensor`, `device_class: safety` · retained | bool | Einbruch — die Klassenprojektion der Engine, damit ein Konsument über Klassen iterieren kann | wie oben, `zones[]{id,slug,name,state,mode,incident_id}` |
-| `security/class/panic` | `binary_sensor`, `device_class: safety` · retained | bool | Panik/Überfall (laut). Stille Auslösungen sind ausgenommen (§7.6) | wie oben |
+| `security/zone/<slug>` | `sensor`, `state_class: measurement` · retained | int = Anzahl aktiver Quellen der Zone | **Achsen „pro Zone" und „pro Typ" in einer Entität** | `state, by_class{}, sources[], source_names[], count, truncated, total, zone_id, zone_name, zone_state, mode, incident_id` |
 
-### 4.3 Zonen-Ebene (2 Entitäten pro Zone, nur bei aktiver Engine)
+Der Slug wird bei der Zonenanlage vergeben und **friert dort ein**: eine
+Umbenennung verschiebt weder Topic noch Entity-ID. Wird eine Zone gelöscht,
+entfernt `AlarmPanelChangedEvent{Removed:true}` sie aus dem Aggregat, was
+`retractGone` auslöst.
 
-| Key | Kategorie / HA-Entity | Wertform | Zweck | Attribute |
-|---|---|---|---|---|
-| `security/zone/<slug>` | `sensor`, `state_class: measurement` · retained | int = Anzahl gerade aktiver Quellen der Zone | **Achsen „pro Zone" und „pro Typ" in einer Entität** | `by_class{smoke:[names], water:[…], intrusion:[…], tamper:[…]}, sources[], source_names[], open_sensors[], bypassed[], zone_state, mode, incident_id, subject, message, since` |
-| `security/zone/<slug>/arm_blocked` | `binary_sensor`, `device_class: problem` · retained | bool | „Warum kann ich nicht scharfschalten" | `by_mode{full:{ready,blockers[]{sensor_id,name,ref,reason},warnings[]}, …}, blocker_names[], reasons[]` — die heute wegdeduplizierte Begründung (`internal/alarm/engine/readiness.go:44-65`) |
+**Nicht gebaut:** `security/zone/<slug>/arm_blocked`. Die Begründungsdaten
+liegen in `AlarmModeReadiness.BlockerDetails` und sind über REST erreichbar;
+die eigene Entität dafür hat noch keinen Produzenten.
 
 ### 4.4 Nicht-Entitäten (REST/WS/Persistenz)
 
@@ -407,52 +449,81 @@ Beide Rollen sind unabhängig: ein Rauchmelder kann beobachtet sein, ohne 24h-Au
 
 Neuer daemon-level Baum (dritter nach `bridge/*` und `alarm/*`; braucht eine kurze ADR als Erweiterung von ADR 0052):
 
+> **Stand: implementiert**, mit zwei Abweichungen gegenüber dem
+> ursprünglichen Entwurf — `test_mode` und der Zonen-Readiness-Zweig
+> existieren nicht (§4.1, §4.3).
+
 ```
-<base>/security/state                  retained  cfg.QoS.State
+<base>/security/state                  retained
 <base>/security/alarm                  retained
 <base>/security/problem                retained
 <base>/security/health                 retained
-<base>/security/test_mode              retained
 <base>/security/last_alarm             retained
 <base>/security/last_fault             retained
-<base>/security/event                  NICHT retained, QoS0
-<base>/security/fault                  NICHT retained, QoS0
+<base>/security/event                  NICHT retained
+<base>/security/fault                  NICHT retained
 <base>/security/class/<class>          retained
 <base>/security/zone/<slug>            retained
-<base>/security/zone/<slug>/readiness  retained
-<base>/security/availability           retained  QoS1
+<base>/security/availability           retained
 ```
+
+Jedes deklarierte Topic wird auch geschrieben — `TestSecurityPlaneTopicsRoundTrip`
+vergleicht beide Mengen, weil sie es einmal nicht taten und beide Hälften ihre
+eigenen Tests bestanden.
 
 * Discovery `node_id: "security"`, `object_id == unique_id`.
 * Zweistufige Availability (Bridge-LWT + `<base>/security/availability`, `availability_mode: all`) — dasselbe Muster wie die Alarmebene.
-* `internal/north/mqtt/retain_cleanup.go` bekommt Matcher für **beide** daemon-level Bäume (`security/` **und** `alarm/`) — die Datei enthält heute kein einziges `alarm`-Token (verifiziert), verwaiste retained Alarm-Topics sind also aktuell unerreichbar.
+* `internal/north/mqtt/retain_cleanup.go` kennt beide daemon-level Bäume
+  (`security/` **und** `alarm/`). Der Sweep läuft für einen daemon-level Knoten
+  erst an, nachdem dieser sich über `MarkPlaneDeclared` gemeldet hat — vorher
+  kann er eine Waise nicht von einer noch nicht publizierten Entität
+  unterscheiden und hätte die eigene Discovery beim Start wieder abgeräumt.
+* Die Bekanntheitsmengen für Klassen und Zonen werden auch dann geführt, wenn
+  HA-Discovery abgeschaltet ist: der rohe Plane publiziert dieselben retained
+  Topics, und ohne die Mengen wäre kein `retractGone` möglich.
 * Pro Zone ein `retractZone`-Pfad analog zu `retractPanel` (`internal/north/mqtt/alarm_publisher.go:411-417`), ausgelöst über `AlarmPanelChangedEvent.Removed`.
 * **Keine** MQTT-Device-Trigger (`device_automation`) in v1 — im Repo nirgends implementiert, und ohne Dashboard-Fläche kein Mehrwert gegenüber der `event`-Entität. Kandidat für v2.
 
 ### 7.2 REST (`internal/north/rest/router.go`, spec-first in `assets/openapi.yaml`)
 
+> **Stand: implementiert**, in reduziertem Umfang gegenüber dem Entwurf.
+
 | Route | Schutz | Zweck |
 |---|---|---|
-| `GET /api/v1/security` | viewer | Systemschnappschuss (Severity, Klassen, Zonen, Zähler) |
+| `GET /api/v1/security` | viewer | Systemschnappschuss (Severity, Klassen, Zonen, Störungen, Zähler) |
 | `GET /api/v1/security/classes/{class}` | viewer | Klassendetail mit vollständiger Quellenliste |
-| `GET /api/v1/security/zones/{zoneID}` | viewer | Zonendetail inkl. `by_class`, offen, gebypasst, Readiness mit Grund |
-| `GET /api/v1/security/sources` | viewer | klassifiziertes Inventar, Filter `class/zone/central/state/enrolled` — **zugleich Sensor-Kandidaten** |
+| `GET /api/v1/security/sources` | viewer | klassifiziertes Inventar — **zugleich Sensor-Kandidatenliste** |
 | `PUT /api/v1/security/sources/{ref}` | operator | Klassen-Override / Ein-/Ausschluss |
 | `GET /api/v1/security/faults` | viewer | offener Störungsbestand |
 | `POST /api/v1/security/faults/{id}/acknowledge` | operator | Quittierung |
-| `GET /api/v1/security/notifications?limit=` | viewer | Meldungsverlauf |
-| `POST /api/v1/security/notifications/test` | operator | Testmeldung durch alle Ebenen — rein daemon-intern, **kein** CCU-Write |
-| `GET /api/v1/alarm/incidents`, `GET /api/v1/alarm/incidents/{id}` | viewer | verdrahtet endlich `AlarmIncidentStore.ListByZone` (0 Produktionsaufrufer) inkl. `sources[]` |
-| `GET /api/v1/alarm/sensor-candidates` | viewer | Alias auf `/security/sources?enrollable=true` |
 
-`APIVersion` in `internal/north/rest/handlers/info.go`: **`3.14.0` → `3.15.0`** (rein additiv, verifiziert).
+`PUT .../sources/{ref}` unterscheidet die Fehlerarten: eine unbekannte Klasse
+ist `422`, alles andere `500` mit Logzeile — ein Speicherausfall als
+Eingabefehler auszugeben schickt den Operator auf die falsche Fährte.
+
+**Nicht gebaut** (bewusst offen, kein Versehen):
+
+* `GET /api/v1/security/zones/{zoneID}` — der Zonenschnitt liegt im
+  Systemschnappschuss; ein eigener Endpunkt lohnt erst mit der Readiness-Hälfte.
+* `GET /api/v1/security/notifications` und `POST .../notifications/test` — es
+  gibt keinen Meldungsverlauf-Speicher; die Meldungen sind Ereignisse, der
+  retained Nachweis steht unter `last_alarm`/`last_fault`.
+* `GET /api/v1/alarm/incidents` und `/alarm/sensor-candidates`.
 
 ### 7.3 WebSocket (`assets/wsapi.json`)
 
-* Broadcasts auf dem flachen Topic `security`: `security.state_changed`, `security.class_changed`, `security.zone_changed`, `security.fault_changed`, `security.notification`.
-* Commands (Kategorie `security`): `security.state`, `security.sources`, `security.faults`, `security.acknowledge_fault`, `security.notifications`.
-* **Einheitliches Vokabular:** hmevent-Tag **und** WS-Topic heißen beide `security.*`. Die bestehende Alarm-Divergenz (`alarm_panel.*` im hmevent vs. `alarm.*` auf WS) wird **nicht** angefasst — eine Vereinheitlichung würde jede konfigurierte `north.webhook.events`-Allow-List still entschärfen.
-* `tests/contract/alarm_ws_payload_parity_test.go` wird auf die Security-Payloads erweitert **und** um das heute ungeschützte `AlarmNotificationPayload` ergänzt.
+> **Stand: nicht gebaut.** Weder Broadcasts noch Commands existieren; die
+> Domäne ist über REST und MQTT erreichbar, nicht über WS.
+
+Der Entwurf sah `security.*`-Broadcasts und fünf Commands vor. Die Fläche
+bleibt vorgemerkt, weil sie die SPA-Hälfte trägt, die es ebenfalls noch nicht
+gibt — eine WS-Fläche ohne Konsument wäre eine zweite unbewiesene Verdrahtung
+derselben Art, die dieses Kapitel gerade korrigiert.
+
+Bei der Umsetzung gilt unverändert: hmevent-Tag **und** WS-Topic heißen beide
+`security.*`. Die bestehende Alarm-Divergenz (`alarm_panel.*` im hmevent vs.
+`alarm.*` auf WS) wird **nicht** angefasst — eine Vereinheitlichung würde jede
+konfigurierte `north.webhook.events`-Allow-List still entschärfen.
 
 ### 7.4 Webhook (`internal/north/webhook/outbound.go`)
 
@@ -460,13 +531,29 @@ Neue Tags `security.notification`, `security.state_changed`, `security.fault_cha
 
 ### 7.5 Metriken (`internal/metrics/security_collector.go`, NEU)
 
-`security_notifications_total{class,verb,severity}`, `security_faults_open{class,reason}`, `security_class_active{class}`, `security_sources_total{class}`. Die vier bestehenden ungelabelten Alarm-Zähler (`internal/metrics/alarm_collector.go:42-48`) bleiben unangetastet — ein Relabeling bräche jede vorhandene Grafana-Abfrage.
+Die Registry kennt **keine Label-Dimension**. Die Aufschlüsselung steht deshalb
+im Namen, nicht in einem Label — der Entwurf ging von `{class,reason}`-Labels
+aus, die es nicht gibt:
+
+* `security_notifications_<class>_total` — ein Zähler je Gefahrenklasse.
+* `security_faults_raised_total`, `security_faults_cleared_total`.
+* `security_faults_open` — stehender Bestand. Er wird **auch** aus dem
+  Zustandsereignis nachgeführt, nicht nur aus Störungsübergängen: ein Neustart
+  und ein Zentralen-Detach ändern den Bestand ohne Übergang, und die Registry
+  exportiert ein unberührtes Gauge als zuversichtliche `0` statt als fehlende
+  Reihe — ein ungesätes Gauge ist also nicht bloß abwesend, es ist falsch.
+* `security_severity` — die gefaltete Severity als Ordinalzahl (0 ok … 4
+  critical), damit ein Dashboard darauf schwellwerten kann, statt einen String
+  abbilden zu müssen.
+
+Die vier bestehenden ungelabelten Alarm-Zähler (`internal/metrics/alarm_collector.go`)
+bleiben unangetastet — ein Relabeling bräche jede vorhandene Grafana-Abfrage.
 
 ### 7.6 Duress und stille Panik
 
 `AlarmDuressEvent` wird heute bewusst nicht auf WebSocket gesendet (`pkg/hmevent/alarm.go:56-62`), und der Journaleintrag wird `Hidden` geschrieben (`internal/alarm/journal/journal.go:52-53`) — dokumentiertes Bedrohungsmodell: ein Bildschirmbeobachter darf nicht erfahren, dass verdeckt ausgelöst wurde.
 
-**Entschieden (§10.1):** Die Reichweite wird über `alarm.duress.visibility` konfigurierbar (`hidden` / **`notify_only`** / `full`, Default `notify_only`). Begründung und vollständige Matrix in §10.1.
+**Entschieden (§10.1):** Die Reichweite wird über `alarm.duress_visibility` konfigurierbar (`hidden` / **`notify_only`** / `full`, Default `notify_only`). Begründung und vollständige Matrix in §10.1.
 
 **Unverändert gilt:** Der Service abonniert eine **explizite Allow-Liste** von Ereignistypen, nie ein Pauschalabonnement — die Stufe entscheidet über die Fläche, nicht ein Zufall der Verdrahtung. Ein Contract-Test pro Stufe pinnt die Matrix; unterhalb von `full` trägt kein Security-Payload je ein Duress- oder Silent-Panic-Verb auf einer retained oder WS-Fläche.
 
@@ -587,14 +674,17 @@ Alle fünf offenen Punkte sind entschieden. Vier folgen der Empfehlung, einer we
 | 1 | **Name: „Security & Safety" (EN) · „Sicherheit & Gefahrenmelder" (DE)**, technisches Token durchgängig `security` | wie §2.4. „Alarm" bleibt für Zonen/ACP reserviert. |
 | 2 | **Zonen-Slug bei Anlage fixiert** — eine Umbenennung der Zone ändert ihn nicht | Migration 034 backfillt einmalig aus dem Zonennamen (`routingkey.HubSlug` + Kollisionssuffix), danach eingefroren. Eine explizite Operator-Aktion „technische ID ändern" mit Warndialog bleibt als Folge-Slice möglich. |
 | 3 | **Störungsachse nur für sicherheitsrelevante Geräte** (Gate in §3.4) | Flottenweite Gesundheit bleibt bei `internal/health` und der Fleet-Ansicht. |
-| 4 | **Duress/stille Panik: konfigurierbar über `alarm.duress.visibility`** — *abweichend von der Empfehlung „nur Webhook"* | siehe §10.1 |
+| 4 | **Duress/stille Panik: konfigurierbar über `alarm.duress_visibility`** — *abweichend von der Empfehlung „nur Webhook"* | siehe §10.1 |
 | 5 | **Safety-`ERROR_*` jetzt un-ignorieren** (Slice 7), als `entity_category: diagnostic` **und** `enabled_by_default: false` | Der Störungsplane konsumiert sie intern unabhängig vom HA-Enable-Status. Für Bestandsinstallationen unsichtbar. |
 
-### 10.1 `alarm.duress.visibility` — Begründung und Verhalten
+### 10.1 `alarm.duress_visibility` — Begründung und Verhalten
 
 **Warum die Abweichung richtig ist:** Die ursprüngliche Empfehlung „nur Webhook" hat einen blinden Fleck — in einer Installation ohne Webhook, die ausschließlich über Home Assistant benachrichtigt, bedeutet sie *gar keine* Duress-Benachrichtigung. Eine Sicherheitsfunktion, die stumm ins Leere läuft, ist schlechter als eine sichtbare. Das Bedrohungsmodell (ein Beobachter am Bildschirm darf die verdeckte Auslösung nicht bemerken) hängt an der Installation — Wandtablet im Flur gegenüber reiner Handy-Nutzung — und ist damit eine Betreiber-, keine Produktentscheidung.
 
-**Neues Config-Feld** `alarm.duress.visibility`, `cfg:"basic"`, Default **`notify_only`**:
+**Config-Feld** `alarm.duress_visibility` (`internal/config/config.go`),
+`cfg:"expert"`, Default **`notify_only`** — Expert und nicht Basic, weil eine
+Fehlbedienung hier die Bedrohungsmodell-Zusage aufhebt statt nur eine
+Anzeige zu ändern:
 
 | Stufe | Webhook + `<base>/alarm/<zone>/event` | HA-`event`-Entität | retained `last_alarm` | SPA / WebSocket |
 |---|---|---|---|---|
@@ -606,9 +696,37 @@ Alle fünf offenen Punkte sind entschieden. Vier folgen der Empfehlung, einer we
 
 Gilt gleichermaßen für den Duress-Code und für `SensorConfig.PanicSilent`.
 
+**Wo die Regel steht.** Die Politik wird **einmal** ausgewertet, in der
+Domäne: `notify` setzt `Retainable` gemäß der Stufe, und jede Nordfläche
+befolgt das Flag, statt die Politik erneut abzuleiten. Eine zweimal
+implementierte Regel ist eine Regel, die irgendwann mit sich selbst
+uneins wird. Ein verdeckt eröffneter Incident unterliegt derselben Politik
+wie ein Duress-Code — das Auslöseereignis trägt keine Stille-Markierung, das
+Flag wird aus den benannten Quellen aufgelöst.
+
 **Pflichten:**
-* Label + Hilfetext in **beiden** Locales (`config.field.alarm.duress.visibility`, `config.help.…`) — sonst schlägt `TestConfigFieldsHaveLabelsAndHelp` fehl.
-* Ein Contract-Test **pro Stufe**, der die Matrix oben pinnt — insbesondere, dass `notify_only` niemals ein retained Topic beschreibt und `hidden`/`notify_only` niemals auf WS senden.
+* Label + Hilfetext in **beiden** Locales (`config.field.alarm.duress_visibility`, `config.help.…`) — sonst schlägt `TestConfigFieldsHaveLabelsAndHelp` fehl.
+* Ein Test **pro Stufe**, der die Matrix oben pinnt — insbesondere, dass `notify_only` niemals ein retained Topic beschreibt. Eine konfigurierbare Sicherheitsgrenze ohne Test je Wert ist genau ein getesteter Wert und *n−1* Vermutungen.
 * Der Hilfetext benennt die Grenze ausdrücklich: **ob Home Assistant die Benachrichtigung als Banner auf dem Sperrbildschirm anzeigt, kann Loom nicht steuern.** Wer das absichern will, richtet in HA einen eigenen Notify-Kanal ohne Vorschau ein.
 * ADR-Notiz zur Erweiterung des dokumentierten Duress-Bedrohungsmodells (die bisherige Zusage „geht nie auf WebSocket" wird unter `full` aufgehoben) + CHANGELOG-Hinweis.
 * Aufwand: **+1 Tag** in Slice 4 (Kern + Config + Tests), zusätzlich zu den ≈ 25–30 Tagen.
+---
+
+## 11. Bewusst offen
+
+Der Bereich wurde nach der Umsetzung vollständig auditiert (Erreichbarkeit,
+Vollständigkeit, Korrektheit). Was dabei als Lücke bestätigt und **nicht**
+geschlossen wurde, steht hier — nicht in einer PR-Beschreibung, die niemand
+wiederfindet. Jeder Punkt ist eine Zusage, die die Domäne heute *nicht* macht.
+
+| Lücke | Wirkung heute | Warum offen |
+|---|---|---|
+| `central_lost` wird nie erhoben | Der Reason-Wert ist definiert, aber kein Pfad öffnet einen Fault dafür. Ein Zentralenverlust räumt per `ClearByCentral` auf, statt ihn als Störung zu führen — „CCU seit drei Tagen weg" ist damit keine Störung, sondern eine Abwesenheit. | Braucht eine Entscheidung, ab wann ein Verlust eine Störung *ist* (jeder Reconnect-Versuch? nach Karenz?). Ohne die Entscheidung wäre der Fault ein Flackern. |
+| Attribut-Nutzlasten ohne `link` | `sources[]` und `faults[]` kappen bei 30 Einträgen mit `truncated: true`, aber die REST-Route, auf die §4 verweist, steht nicht in der Nutzlast. Ein Konsument sieht, *dass* gekappt wurde, nicht *wo* der Rest liegt. | Braucht die öffentliche Basis-URL im Publisher; die trägt heute nur der Notification-Pfad. |
+| Keine WebSocket-Fläche | §7.3. Die Domäne ist über REST und MQTT erreichbar, nicht über WS. | Trägt die SPA-Hälfte, die es ebenfalls nicht gibt. |
+| Keine SPA-Ansicht | Ein Operator klassifiziert Quellen und quittiert Störungen über REST, nicht über die Oberfläche. | Eigener Slice; setzt die WS-Fläche voraus. |
+| `internal/security` bei ~22 % Zeilenabdeckung | Die Kernpfade (Fan-out, Ledger-Übergänge, Zonen-Lebenszyklus, Boot-Reihenfolge) sind gezielt gepinnt; die Fläche dazwischen nicht. | Abdeckung als Zahl ist nicht das Ziel; die Pins sind es. Ein Eintrag in `script/coverage_per_package.sh` würde eine Schwelle behaupten, die niemand verteidigt. |
+
+**Was ausdrücklich *keine* Lücke ist:** dass Gas und CO keine Entität
+publizieren. Es gibt im Homematic-Bestand keine Quelle dafür; eine dauerhaft
+OFF stehende Gasalarm-Entität wäre eine Zusage ohne Deckung.

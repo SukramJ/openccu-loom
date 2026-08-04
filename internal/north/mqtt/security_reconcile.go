@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/security"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -19,8 +20,13 @@ import (
 // A consumer's recorder discards state attributes past a size limit, so
 // an unbounded list on a fleet-wide fault would silently lose the whole
 // attribute set — worse than an explicitly truncated one. The list
-// therefore truncates and says so, and the full set stays one REST call
-// away via the link.
+// therefore truncates and says so.
+//
+// It says only that. The truncated payloads carry no route to the
+// remainder: `link` exists on the rendered report, not on the attribute
+// builders, so a consumer learns that a list was cut without learning
+// where the rest is. Stated here rather than left implied, because the
+// bound reads like a complete design otherwise.
 const maxAttributeSources = 30
 
 // reconcile republishes the retained half of the plane from a coherent
@@ -92,7 +98,23 @@ func (p *SecurityMQTTPublisher) enqueueJSON(topic, state string, attrs map[strin
 // gas alarm in its entity list.
 func (p *SecurityMQTTPublisher) publishDiscoveryOnce(snap security.Snapshot) {
 	b := p.wiring.Bridge()
-	if b == nil || !b.cfg.HADiscoveryEnabled {
+	if b == nil {
+		return
+	}
+	if !b.cfg.HADiscoveryEnabled {
+		// The raw plane still publishes retained class and zone states,
+		// so the known-sets have to be maintained regardless — they are
+		// what lets retractGone evacuate a topic later. Gating them
+		// behind discovery left un-evacuable retained topics piling up
+		// in the documented raw-only deployment.
+		p.mu.Lock()
+		for class := range snap.Classes {
+			p.knownClasses[class] = true
+		}
+		for slug := range snap.Zones {
+			p.knownZones[slug] = true
+		}
+		p.mu.Unlock()
 		return
 	}
 	base := b.cfg.Base
@@ -123,6 +145,10 @@ func (p *SecurityMQTTPublisher) publishDiscoveryOnce(snap security.Snapshot) {
 		}
 		p.publishDiscovery(ctx, base, device, securityZoneEntity(base, slug, snap.Zones[slug].Name, p.tr8))
 	}
+	// The plane has now declared, so its retained configs are eligible
+	// for the orphan sweep. Before this point the sweep cannot tell an
+	// orphan from an entity that has not been published yet.
+	b.MarkPlaneDeclared(securityDiscoveryNodeID)
 }
 
 func (p *SecurityMQTTPublisher) publishDiscovery(ctx context.Context, base, device string, e securityEntity) {
@@ -346,6 +372,11 @@ func securityNotificationPayload(e hmevent.SecurityNotificationEvent) map[string
 	attrs["mode"] = string(e.Mode)
 	attrs["incident_id"] = e.IncidentID
 	attrs["link"] = e.Link
+	// RFC3339, not epoch milliseconds: the entity declares
+	// device_class timestamp, which rejects a bare number.
+	if e.AtMS != 0 {
+		attrs["at"] = time.UnixMilli(e.AtMS).UTC().Format(time.RFC3339)
+	}
 	return attrs
 }
 

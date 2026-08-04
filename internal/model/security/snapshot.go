@@ -12,6 +12,8 @@
 package security
 
 import (
+	"errors"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -190,3 +192,15 @@ type SourceView struct {
 	// SinceMS is when it last became active; 0 while inactive.
 	SinceMS int64
 }
+
+// ErrInvalidClass rejects an override naming a class that does not
+// exist, rather than silently storing a value no aggregate will ever
+// match.
+//
+// Exported so the REST layer can tell a rejected request from a failed
+// write: the two need different status codes, and conflating them
+// reported persistence failures as validation errors with the raw
+// driver text.
+//
+// loom:reachable:reason="matched by the REST PUT /security/sources/{ref} handler (internal/north/rest/handlers/security.go) via errors.Is to map an unknown class to 422 instead of a 500 storage failure; the reachability heuristic does not follow sentinel-var references through errors.Is"
+var ErrInvalidClass = errors.New("security: unknown class")

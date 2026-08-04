@@ -68,3 +68,22 @@ all.
   the rule. A rule implemented in three planes is a rule that will
   eventually disagree with itself, and the plane that gets it wrong
   exposes the person the feature protects.
+
+## Corrections
+
+An ADR is immutable once landed, so two claims above that the shipped code
+does not (yet) keep are corrected here rather than edited away.
+
+- **"The full list stays one REST call away via `link`."** The attribute
+  payloads truncate and say so, but they carry no `link` field — that field
+  exists only on the rendered notification payload. A consumer sees *that* a
+  list was truncated, not *where* the rest is. Tracked in
+  `docs/security-safety-concept.md` §11.
+- **Naming both daemon-level node ids is necessary but not sufficient.** The
+  sweep also has to wait until a plane has declared itself. Naming the node
+  made its retained configs reachable — including at the moment before the
+  plane had published any of them, when every one of its configs looks like an
+  orphan. A daemon-level plane is therefore swept only after it calls
+  `MarkPlaneDeclared`. Without that gate the sweep deletes the plane's own
+  discovery on every start, which is the same end state the naming fix was
+  meant to prevent, reached from the other direction.

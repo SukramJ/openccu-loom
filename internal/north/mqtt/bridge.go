@@ -403,6 +403,10 @@ type Bridge struct {
 	client   Publisher
 	mu       sync.Mutex
 	declared map[string][]byte // discovery topic → last published payload
+	// planesDeclared marks the daemon-level planes that have completed a
+	// discovery pass, so the orphan sweep can tell an orphan from an
+	// entity that simply has not been published yet.
+	planesDeclared map[string]bool
 	// configCache diff-gates ADR 0011 `/config` companion publishes.
 	// Config payloads are static descriptor projections (min/max/
 	// value_list/unit for generic DPs; modes/preset_modes/min_temp/…

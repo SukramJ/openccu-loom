@@ -27,6 +27,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -59,6 +60,8 @@ type Settings struct {
 	PublicURL string
 	// DuressVisibility bounds where a covert trigger may appear.
 	DuressVisibility hmenum.DuressVisibility
+	// RetentionDays prunes cleared faults; 0 disables retention.
+	RetentionDays int
 }
 
 // Deps wires a Service.
@@ -96,6 +99,8 @@ type Service struct {
 	// centralUnsubs is keyed by central name so a detach can drop
 	// exactly that central's subscriptions.
 	centralUnsubs map[string][]func()
+	// retention cancels the pending fault-retention tick.
+	retention *time.Timer
 }
 
 // New builds the service. Construction is cheap and side-effect free;
@@ -164,6 +169,15 @@ func (s *Service) Start(ctx context.Context) error {
 	for _, u := range s.reg.List() {
 		s.attachUnit(u)
 	}
+	s.startRetention()
+	// Announce the restored state. Without this the MQTT plane — which
+	// starts earlier and only reconciles on a bus event — wrote an empty
+	// snapshot as retained truth: `state: ok`, `problem: OFF`, no class
+	// discovery at all, while REST reported the standing faults restored
+	// from SQLite in the same instant. A re-raise of an already standing
+	// fault is deliberately silent, so nothing corrected it afterwards
+	// and the wrong retained value could stand for months.
+	s.publishState(s.Snapshot())
 	s.log.Info("security service started",
 		"duress_visibility", s.settings.DuressVisibility.String())
 	return nil
@@ -181,7 +195,12 @@ func (s *Service) Stop(_ context.Context) error {
 	s.unsubs = nil
 	perCentral := s.centralUnsubs
 	s.centralUnsubs = map[string][]func(){}
+	retention := s.retention
+	s.retention = nil
 	s.mu.Unlock()
+	if retention != nil {
+		retention.Stop()
+	}
 
 	for _, u := range unsubs {
 		u()
@@ -246,6 +265,46 @@ func (s *Service) Snapshot() security.Snapshot {
 // north-bound adapter can honour it without re-reading config.
 func (s *Service) DuressVisibility() hmenum.DuressVisibility {
 	return s.settings.DuressVisibility
+}
+
+// startRetention prunes cleared faults on a daily cycle.
+//
+// The ledger had none, unlike every comparable table in the daemon.
+// faultID embeds the open time, so each raise/clear cycle writes a new
+// permanent row and nothing ever reads a cleared one — on an SD-card
+// deployment that grows without bound and without an operator switch.
+//
+// The window is the alarm journal's, because the two answer the same
+// question about the same installation and a second knob would only be
+// a second thing to get wrong.
+//
+//nolint:contextcheck // periodic retention has no caller ctx; it runs on the service lifetime
+func (s *Service) startRetention() {
+	if s.settings.RetentionDays <= 0 {
+		return
+	}
+	maxAge := time.Duration(s.settings.RetentionDays) * 24 * time.Hour
+	var chain func()
+	chain = func() {
+		t := time.AfterFunc(24*time.Hour, func() {
+			cutoff := s.clk.Now().Add(-maxAge).UnixMilli()
+			if n, err := s.stores.Faults.PurgeClearedBefore(context.Background(), cutoff); err != nil {
+				s.log.Error("security fault retention failed", "error", err)
+			} else if n > 0 {
+				s.log.Info("security fault retention", "deleted", n)
+			}
+			s.mu.Lock()
+			started := s.started
+			s.mu.Unlock()
+			if started {
+				chain()
+			}
+		})
+		s.mu.Lock()
+		s.retention = t
+		s.mu.Unlock()
+	}
+	chain()
 }
 
 // loadFaults restores the standing fault set.
