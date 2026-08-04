@@ -226,6 +226,90 @@ This is enforced by `TestConfigFieldsHaveLabelsAndHelp` (in `tests/contract/`),
 which fails the build listing every missing `EN`/`DE` × `field`/`help` entry —
 so `make test` is the safety net, not manual review.
 
+### A test that constructs the collaboration proves nothing about the wiring
+
+This is the failure mode that has cost this project the most, twice, in
+the same quarter: the hub notifiers in 0.52.12, then two critical and
+several high defects across the Security & Safety series. In every case
+the CI was green on every PR.
+
+The shape is always the same. A test constructs collaborator A, hands it
+collaborator B itself, and asserts they work together. That proves the
+collaboration **can** happen. It never proves that anything in a running
+daemon **makes** it happen. `hub_notifier_wiring_test.go` documents the
+canonical instance: the coordinator tests called `SetHubModel`
+themselves, so they stayed green while no production path ever called
+it and every hub push event was silently lost.
+
+Call it a **bracketing test** and treat it as a defect, not a style
+preference.
+
+The four rules below exist because of it. Each names the guard that
+enforces it — a rule without a guard becomes decoration within a
+release.
+
+#### Wiring is pinned through the composition root, never at the setter
+
+Adding a `Set*` / `Attach*` / `Register*` method that production **must**
+call obliges you to add a pin under `tests/contract/wiring_pins/` that
+
+- constructs through the real constructor (`New`, `wireXService`, the
+  daemon's composition root), and
+- asserts the **effect** — the event arrives, the state is populated —
+  never that the setter was called.
+
+`internal/central/hub_notifier_wiring_test.go` is the reference: it goes
+through `New` alone and touches only the surfaces the real daemon
+touches.
+
+Guard: `TestEveryWiringSetterHasAPin` walks every exported `Set*` /
+`Attach*` method on a service type and fails listing those with no pin.
+
+#### A lifecycle test uses the production order
+
+If production starts a service and *then* feeds it asynchronously, the
+test must do the same. Pre-seeding state that production populates later
+inverts the order and hides exactly the bug it should catch — a
+Security & Safety integration test registered a fully loaded central
+*before* `Start`, so an index that is permanently empty in production
+looked correct for months.
+
+Every daemon-level subsystem carries a boot-order integration test:
+start the daemon, wait for readiness, assert the subsystem reports
+non-empty state.
+
+Guard: `tests/integration/*_boot_order_test.go`, one per daemon-level
+subsystem.
+
+#### Declared and published must be the same set
+
+Any north-bound plane that declares entities (MQTT discovery above all)
+needs a round-trip test: collect every topic named in a discovery
+payload, collect every topic the publisher actually writes, assert the
+two sets match.
+
+Declaring `security/class_smoke` while publishing `security/class/smoke`
+produces entities that appear in Home Assistant and stay `unavailable`
+forever. Payload-shape tests and publish-call tests both passed; nothing
+compared them.
+
+Guard: one `Test*PlaneTopicsRoundTrip` per plane.
+
+#### A fan-out switch over a closed event set is exhaustive and proves it
+
+A sink or dispatcher that type-switches over a domain's events needs a
+table test that publishes **every** event type the domain defines and
+asserts each one arrives. The `default:` branch is a test failure, not a
+log line.
+
+`internal/alarm/service.go` logged `alarm sink dropped unknown event
+type` for `AlarmDuressEvent` — a duress code under coercion produced one
+hidden journal row and nothing else, on every surface, under every
+configured visibility level.
+
+Guard: one `Test*SinkFansOutEveryEventType` per fan-out, driven from the
+domain's `EventType*` constants.
+
 ### Interfaces in the consumer package, except for cross-cutting protocols
 
 Standard Go convention. The one exception: protocol interfaces used
@@ -781,6 +865,37 @@ name.
 
 Three mandatory test pillars:
 
+### Behaviour-governing config needs one end-to-end test per value
+
+A config field that changes what the daemon *does* — not merely a
+timeout or a size — needs one end-to-end test per value it accepts,
+driven through the real path the value governs.
+
+`alarm.duress_visibility` shipped with three levels, a validator, a
+localized help text and a documented threat model. None of the three was
+ever exercised through the sink that carries the event, and the sink
+dropped it. Everything around the feature was tested; the feature was
+not.
+
+### Never cite your own unverified wiring
+
+When work builds on a previous change's wiring, cross the dependency
+with a test. A comment asserting it — *"the alarm domain's own webhook
+path still carries it"* — is a hypothesis, and that particular one was
+false: the webhook hung off the same dead sink.
+
+This is the code-level twin of the rule that doc claims are verified
+against source. Your own earlier commit is a doc claim.
+
+Two habits follow from it:
+
+- When a slice depends on an earlier slice's seam, the first test of the
+  new slice crosses that seam.
+- A feature area that spans several PRs is audited **before** it is
+  called done. Seven green PRs let 72 verified defects through, two of
+  them critical; the audit that found them ran afterwards, when the
+  cost of every fix had already multiplied.
+
 ### Contract tests (`tests/contract/`)
 
 Protocol / capability invariants. Every test states a hard rule and
@@ -1211,6 +1326,11 @@ Non-negotiable rules for how the assistant works with the user:
 - ✅ Run `make lint && make test` before committing.
 - ✅ Add or update a contract test when touching protocols,
   capabilities, or state machines.
+- ✅ Pin every new wiring through the composition root, and assert the
+  effect rather than the call. A test that hands a collaborator to a
+  collaborator proves only that they *can* work together — see
+  §[A test that constructs the collaboration proves nothing about the
+  wiring](#a-test-that-constructs-the-collaboration-proves-nothing-about-the-wiring).
 - ✅ Update `docs/` when public APIs change; open an ADR for major
   decisions.
 - ✅ Use `sync.RWMutex` for read-heavy caches; benchmark before
