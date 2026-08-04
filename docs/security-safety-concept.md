@@ -735,8 +735,14 @@ wiederfindet. Jeder Punkt ist eine Zusage, die die Domäne heute *nicht* macht.
 | `central_lost` wird nie erhoben | Der Reason-Wert ist definiert, aber kein Pfad öffnet einen Fault dafür. Ein Zentralenverlust räumt per `ClearByCentral` auf, statt ihn als Störung zu führen — „CCU seit drei Tagen weg" ist damit keine Störung, sondern eine Abwesenheit. | Braucht eine Entscheidung, ab wann ein Verlust eine Störung *ist* (jeder Reconnect-Versuch? nach Karenz?). Ohne die Entscheidung wäre der Fault ein Flackern. |
 | Attribut-Nutzlasten ohne `link` | `sources[]` und `faults[]` kappen bei 30 Einträgen mit `truncated: true`, aber die REST-Route, auf die §4 verweist, steht nicht in der Nutzlast. Ein Konsument sieht, *dass* gekappt wurde, nicht *wo* der Rest liegt. | Braucht die öffentliche Basis-URL im Publisher; die trägt heute nur der Notification-Pfad. |
 | Keine WebSocket-Fläche | §7.3. Die Domäne ist über REST und MQTT erreichbar, nicht über WS. | Trägt die SPA-Hälfte, die es ebenfalls nicht gibt. |
-| Keine SPA-Ansicht | Ein Operator klassifiziert Quellen und quittiert Störungen über REST, nicht über die Oberfläche. | Eigener Slice; setzt die WS-Fläche voraus. |
 | `internal/security` bei ~22 % Zeilenabdeckung | Die Kernpfade (Fan-out, Ledger-Übergänge, Zonen-Lebenszyklus, Boot-Reihenfolge) sind gezielt gepinnt; die Fläche dazwischen nicht. | Abdeckung als Zahl ist nicht das Ziel; die Pins sind es. Ein Eintrag in `script/coverage_per_package.sh` würde eine Schwelle behaupten, die niemand verteidigt. |
+
+**Korrektur (0.53.1):** Diese Tabelle führte bis dahin „keine SPA-Ansicht"
+als offene Lücke. Das war falsch — die Ansichten für Überblick, Quellen und
+Störungen sind gebaut und in der Navigation verdrahtet. Die Zeile stammte aus
+der Planungsphase und wurde beim Schreiben von §11 nicht gegen den Code
+geprüft, in genau demselben Abschnitt, der festhalten soll, was *nicht*
+existiert.
 
 **Was ausdrücklich *keine* Lücke ist:** dass Gas und CO keine Entität
 publizieren. Es gibt im Homematic-Bestand keine Quelle dafür; eine dauerhaft

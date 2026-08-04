@@ -201,6 +201,31 @@
   ]);
 </script>
 
+<Card class="mb-4 p-4">
+  <h2 class="mb-1 text-sm font-semibold">{t("security.sources.intro.title")}</h2>
+  <p class="text-sm text-[var(--ha-secondary-text-color)]">
+    {t("security.sources.intro.body")}
+  </p>
+  <p class="mt-2 text-sm text-[var(--ha-secondary-text-color)]">
+    {t("security.sources.intro.when")}
+  </p>
+  <!--
+    Once, not per row: this text used to sit inside the override cell,
+    which repeated the same three lines for every source in the table.
+  -->
+  <p class="mt-2 text-sm text-[var(--ha-secondary-text-color)]">
+    {t("security.sources.override.help")}
+  </p>
+  <a
+    class="mt-2 inline-block text-sm underline"
+    href="https://github.com/SukramJ/openccu-loom/blob/main/docs/alarm-user-guide.md"
+    target="_blank"
+    rel="noreferrer noopener"
+  >
+    {t("security.sources.intro.docs")}
+  </a>
+</Card>
+
 <div class="mb-4 flex flex-wrap items-end gap-3">
   <div class="flex flex-col gap-1.5">
     <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">
@@ -323,10 +348,16 @@
           </Badge>
         {:else if col.key === "override"}
           {@const d = draftFor(s.ref)}
-          <div class="flex min-w-[240px] flex-col gap-1.5">
-            <div class="flex items-center gap-1.5">
+          <div class="flex min-w-[260px] flex-col gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <!--
+                No fixed width: the placeholder is a sentence ("Keep
+                classifier verdict" / "Klassifikator-Urteil beibehalten"),
+                and a w-36 box cut it off in both locales. The select sizes
+                itself and wraps instead of clipping.
+              -->
               <Select
-                class="w-36"
+                class="min-w-[14rem] flex-1"
                 value={d.class}
                 onValueChange={(v) => setDraft(s.ref, { class: v })}
                 placeholder={t("security.sources.override.keep")}

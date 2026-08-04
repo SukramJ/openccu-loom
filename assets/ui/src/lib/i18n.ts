@@ -3457,6 +3457,14 @@ const EN: Catalog = {
   "security.sources.badge.not_relevant": "Not relevant",
   "security.sources.badge.active": "Active",
   "security.sources.badge.inactive": "Inactive",
+  "security.sources.intro.title": "What this list is",
+  "security.sources.intro.body":
+    "Every data point the daemon has classified as security-relevant \u2014 smoke, water, tamper, low battery, unreachable and the rest. \u201cRelevant\u201d means it counts towards the class tiles and the fault list; everything else is listed so you can find it, not because it is being watched.",
+  "security.sources.intro.when":
+    "You only need this page when the classifier got something wrong: a detector filed under the wrong class, or a data point that should not raise anything. Overriding one changes what the aggregates report \u2014 it does not change the alarm system, which is configured separately per zone.",
+  "security.sources.intro.docs": "Read the Security and alarm guide",
+  "security.sources.override.help":
+    "Leave the class empty to keep the classifier\u2019s verdict. Turning off inclusion keeps the data point listed but takes it out of every aggregate. The note is for you \u2014 it records why, for whoever looks next.",
   "security.sources.override.keep": "Keep classifier verdict",
   "security.sources.override.included": "Included",
   "security.sources.override.note_placeholder": "Note (optional)",
@@ -3472,7 +3480,8 @@ const EN: Catalog = {
   "security.faults.hint":
     "Acknowledging a fault only records that you have seen it — the underlying condition remains until it clears on its own.",
   "security.faults.empty": "No standing faults",
-  "security.faults.empty.description": "Every classified source is currently healthy.",
+  "security.faults.empty.description":
+    "Every classified source is currently healthy.",
   "security.faults.col.class": "Class",
   "security.faults.col.reason": "Reason",
   "security.faults.col.source": "Source",
@@ -3485,7 +3494,8 @@ const EN: Catalog = {
   "security.faults.acknowledge_confirm.title": "Acknowledge this fault?",
   "security.faults.acknowledge_confirm.body":
     "This only records that you have seen it — the {reason} condition on {source} remains until it clears on its own.",
-  "security.faults.toast.acknowledged": "Fault acknowledged — condition still stands",
+  "security.faults.toast.acknowledged":
+    "Fault acknowledged — condition still stands",
   "security.faults.toast.acknowledge_failed": "Acknowledge failed",
   "security.faults.duration.days_hours": "{days}d {hours}h",
   "security.faults.duration.hours_minutes": "{hours}h {minutes}m",
@@ -6950,6 +6960,14 @@ const DE: Catalog = {
   "security.sources.badge.not_relevant": "Nicht relevant",
   "security.sources.badge.active": "Aktiv",
   "security.sources.badge.inactive": "Inaktiv",
+  "security.sources.intro.title": "Was diese Liste zeigt",
+  "security.sources.intro.body":
+    "Jeden Datenpunkt, den der Daemon als sicherheitsrelevant eingestuft hat \u2014 Rauch, Wasser, Sabotage, schwache Batterie, unerreichbar und die \u00fcbrigen. \u201eRelevant\u201c hei\u00dft: z\u00e4hlt in die Klassenkacheln und die St\u00f6rungsliste. Alles andere steht hier, damit Sie es finden \u2014 nicht, weil es \u00fcberwacht wird.",
+  "security.sources.intro.when":
+    "Diese Seite brauchen Sie nur, wenn die Einstufung danebenliegt: ein Melder in der falschen Klasse oder ein Datenpunkt, der gar nichts ausl\u00f6sen sollte. Eine \u00c4nderung wirkt auf das, was die Aggregate melden \u2014 nicht auf die Alarmanlage, die pro Bereich getrennt konfiguriert wird.",
+  "security.sources.intro.docs": "Zum Handbuch Sicherheit und Alarmanlage",
+  "security.sources.override.help":
+    "Klasse leer lassen hei\u00dft: Einstufung des Klassifikators behalten. Wird der Einschluss abgeschaltet, bleibt der Datenpunkt gelistet, z\u00e4hlt aber in kein Aggregat mehr. Die Notiz ist f\u00fcr Sie \u2014 sie h\u00e4lt fest, warum, f\u00fcr die n\u00e4chste Person.",
   "security.sources.override.keep": "Klassifikator-Urteil beibehalten",
   "security.sources.override.included": "Einbezogen",
   "security.sources.override.note_placeholder": "Notiz (optional)",
@@ -6960,12 +6978,14 @@ const DE: Catalog = {
   "security.sources.toast.saved": "Override gespeichert",
   "security.sources.toast.save_failed": "Speichern des Override fehlgeschlagen",
   "security.sources.toast.reset": "Override entfernt",
-  "security.sources.toast.reset_failed": "Entfernen des Override fehlgeschlagen",
+  "security.sources.toast.reset_failed":
+    "Entfernen des Override fehlgeschlagen",
   // Störungen.
   "security.faults.hint":
     "Das Quittieren einer Störung vermerkt nur, dass du sie gesehen hast — die zugrunde liegende Ursache bleibt bestehen, bis sie sich von selbst behebt.",
   "security.faults.empty": "Keine offenen Störungen",
-  "security.faults.empty.description": "Jede klassifizierte Quelle ist derzeit gesund.",
+  "security.faults.empty.description":
+    "Jede klassifizierte Quelle ist derzeit gesund.",
   "security.faults.col.class": "Klasse",
   "security.faults.col.reason": "Grund",
   "security.faults.col.source": "Quelle",
@@ -6978,7 +6998,8 @@ const DE: Catalog = {
   "security.faults.acknowledge_confirm.title": "Diese Störung quittieren?",
   "security.faults.acknowledge_confirm.body":
     "Das vermerkt nur, dass du es gesehen hast — die Ursache {reason} bei {source} bleibt bestehen, bis sie sich von selbst behebt.",
-  "security.faults.toast.acknowledged": "Störung quittiert — Ursache besteht weiterhin",
+  "security.faults.toast.acknowledged":
+    "Störung quittiert — Ursache besteht weiterhin",
   "security.faults.toast.acknowledge_failed": "Quittieren fehlgeschlagen",
   "security.faults.duration.days_hours": "{days}d {hours}h",
   "security.faults.duration.hours_minutes": "{hours}h {minutes}m",

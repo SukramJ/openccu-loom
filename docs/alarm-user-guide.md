@@ -1,15 +1,21 @@
-# Alarm System — Operator Guide
+# Alarm and Security & Safety — Operator Guide
 
-This guide explains how to set up and operate the built-in alarm system
-("Alarmanlage") from the Config UI. It describes what each page and each
-setting does, in operator terms. The design rationale, the full safety
-model, and the engineering constraints live in
-[`alarm-concept.md`](./alarm-concept.md); researched device behaviour is
-in [`alarm-assumptions.md`](./alarm-assumptions.md).
+This guide covers the two related daemon-level domains reachable from
+the Config UI: the built-in **alarm system** ("Alarmanlage") — zones,
+arming, sensors, sirens — and **Security & Safety** — the always-on
+hazard, tamper and fault reporting that runs whether or not the alarm
+system is configured. It describes what each page and each setting
+does, in operator terms; it does not repeat the design rationale. The
+full safety model and engineering constraints for the alarm system live
+in [`alarm-concept.md`](./alarm-concept.md) (researched device
+behaviour is in [`alarm-assumptions.md`](./alarm-assumptions.md)); the
+same for Security & Safety lives in
+[`security-safety-concept.md`](./security-safety-concept.md).
 
 The alarm section is reachable at `#/alarm` and has seven tabs —
 Overview, Sensors, Outputs, Policies, Codes, Journal, Walk test — plus
-the re-runnable Setup wizard.
+the re-runnable Setup wizard. Security & Safety is reachable at
+`#/security` and has three tabs — Overview, Sources, Faults.
 
 ---
 
@@ -26,6 +32,7 @@ the re-runnable Setup wizard.
 9. [Walk test](#9-walk-test)
 10. [Journal](#10-journal)
 11. [Integrations](#11-integrations)
+12. [Security & Safety](#12-security--safety)
 
 ---
 
@@ -33,16 +40,16 @@ the re-runnable Setup wizard.
 
 | Term | Meaning |
 |---|---|
-| **Area** | An independently armable partition ("Ground floor", "Garage") with its own sensors, outputs, delays and state. You can have one or many; an area may span multiple CCUs. |
-| **Arm mode** | A named protection level of an area: `perimeter` (shell only — doors and windows), `full` (everything, including motion), plus optional `night`, `vacation` and `custom`. Each mode selects a sensor subset and its own delays and output behaviour. |
+| **Zone** | An independently armable partition ("Ground floor", "Garage") with its own sensors, outputs, delays and state. You can have one or many; a zone may span multiple CCUs. |
+| **Arm mode** | A named protection level of a zone: `perimeter` (shell only — doors and windows), `full` (everything, including motion), plus optional `night`, `vacation` and `custom`. Each mode selects a sensor subset and its own delays and output behaviour. |
 | **Sensor** | A trigger source bound to a device data point — a window contact, a motion detector, a smoke detector, a panic button. Each sensor carries a mode assignment and behaviour flags. |
 | **Output** | An alarm consequence: a siren, an alarm light, a chirp tone, a notification event, or a CCU system variable mirror. |
 | **Incident** | One trigger episode: cause, timestamps, which outputs fired, whether it was silenced. Silence and acknowledge act on the incident. |
 | **Journal** | The persistent log of everything the alarm engine does or observes. |
 
-A typical flow: you arm an area into a mode → the exit delay counts down
-→ the area is armed. A sensor activation either triggers instantly or
-starts the entry delay (pending). If nobody disarms in time, the area
+A typical flow: you arm a zone into a mode → the exit delay counts down
+→ the zone is armed. A sensor activation either triggers instantly or
+starts the entry delay (pending). If nobody disarms in time, the zone
 triggers: outputs fire according to the mode's policy and an incident
 opens. You silence the sirens or disarm; the incident is recorded in the
 journal.
@@ -68,9 +75,9 @@ on top of these two invariants.
 
 Launch the wizard from the header of the alarm section (button "Setup
 wizard"). It walks through six steps, each skippable, and can be re-run
-per area at any time:
+per zone at any time:
 
-1. **Areas** — create at least one area. One per floor is a good start.
+1. **Zones** — create at least one zone. One per floor is a good start.
 2. **Sensors** — opens the sensor picker (see [Sensors](#5-sensors)).
 3. **Outputs** — opens the output picker (see [Outputs](#6-outputs)).
 4. **Delays & chirps** — per mode: exit delay (time to leave), entry
@@ -79,13 +86,13 @@ per area at any time:
 5. **Codes & users** — managed on the Codes tab.
 6. **Walk test** — verify every sensor before relying on the system.
 
-The area is created disarmed. Run a walk test before you trust it.
+The zone is created disarmed. Run a walk test before you trust it.
 
 ## 4. Overview — the panel
 
-One card per area:
+One card per zone:
 
-- **Mode buttons** arm the area into a mode or disarm it. Each button
+- **Mode buttons** arm the zone into a mode or disarm it. Each button
   carries a readiness dot: green = ready, amber = warnings (e.g. a low
   battery), red = blocked (e.g. an open window). Hovering shows the
   blockers.
@@ -98,20 +105,20 @@ One card per area:
 - **When triggered** the card switches to a red surface with two large
   actions and one small one:
   - **Silence** — stops all sounding outputs *now* and cancels every
-    remaining re-fire of this incident. The area stays in triggered
+    remaining re-fire of this incident. The zone stays in triggered
     state; notifications still go out. A genuinely new incident may
     sound again.
-  - **Disarm** — ends the alarm and returns the area to disarmed
+  - **Disarm** — ends the alarm and returns the zone to disarmed
     (implies silence). Shows the PIN pad if a code is required.
   - **Acknowledge** — marks the incident as seen in the journal. No
     state effect.
-- **Silence all** appears in the toolbar while any area is triggered.
+- **Silence all** appears in the toolbar while any zone is triggered.
 - The **health badge** in the toolbar summarizes alarm health (sirens
   reachable, pending faults). Details appear in the journal.
 
 ## 5. Sensors
 
-The sensor picker assigns sensors to an area and to arm modes. Loom
+The sensor picker assigns sensors to a zone and to arm modes. Loom
 knows the device model and channel type of every candidate, so new
 sensors arrive with a proposed type (door / window / motion / tamper /
 hazard / panic) and sensible default modes — review, don't build from
@@ -138,7 +145,7 @@ zero.
 | **Arm after closing** | Closing the sensor during the exit delay completes arming early, after a short settle time. |
 | **Auto-bypass** | If the sensor would block arming, it is bypassed automatically until the next disarm instead of failing the arm. |
 | **Trigger when unavailable** | Treats the sensor becoming unreachable while armed as an activation; off raises only a warning. |
-| **Door chime while disarmed** | Plays the door-chime tone on chirp outputs when the sensor activates while the area is disarmed. |
+| **Door chime while disarmed** | Plays the door-chime tone on chirp outputs when the sensor activates while the zone is disarmed. |
 | **Silent panic (duress)** | Panic sensors only: activations fire the panic policy with all acoustic outputs suppressed — notifications only. |
 | **Hold time (s)** | The activation must persist this long before it counts — filters twitchy motion sensors and doors rattling in wind. A cleared activation is discarded. Never applied to always-on sensors. |
 | **Cross-zoning group** | Sensors sharing a group name only trigger when a second member activates within 60 seconds; a lone activation is journaled but does not sound the alarm. Kills single-PIR false alarms. |
@@ -148,7 +155,7 @@ zero.
 Sensor health continuously feeds the per-mode *ready to arm* state shown
 on the Overview: open sensors, unreachable devices and sabotage block
 arming by default; a low battery warns. How each class behaves
-(block / warn / ignore) is an area-level setting.
+(block / warn / ignore) is a zone-level setting.
 
 ## 6. Outputs
 
@@ -182,7 +189,7 @@ Per output you can set the mode assignment, tone / light pattern
 (device value-list labels; empty = device default), duration (acoustic
 activations hard-capped at 600 s), an *Outdoor* marker (so policies can
 exclude outdoor sirens), and *Shared with CCU programs* (Loom then never
-auto-stops that output while the area is disarmed). Chirp outputs carry
+auto-stops that output while the zone is disarmed). Chirp outputs carry
 three tone labels — arm squawk, disarm squawk, and the tick tone used
 for countdown ticks, entry warnings and the door chime; an empty label
 skips that chirp kind on the output. Notification outputs instead carry
@@ -197,7 +204,7 @@ neighbours' sake. The test drives the real device.
 
 ## 7. Policies
 
-Per-area rules beyond plain arm/disarm. Select the area at the top;
+Per-zone rules beyond plain arm/disarm. Select the zone at the top;
 Save writes the whole set.
 
 ### Codes
@@ -210,7 +217,7 @@ path.
 - **Require code to arm** — off by default; arming is the safe
   direction.
 - **Require code to disarm** — *Automatic* (default) requires a code as
-  soon as the area has an enabled code; an area without codes never
+  soon as the zone has an enabled code; a zone without codes never
   demands one, so you cannot lock yourself out. *Always* / *Never*
   override in either direction.
 - **Require code to silence** — per source (MQTT / keypad / remote
@@ -245,18 +252,18 @@ pre-alarm cancels the escalation. `0` disables it.
 One trigger phase is always time-limited; sirens stop when it ends no
 matter what. *When the trigger phase ends* decides what happens next:
 
-- **Return to armed** (default) — the area stays armed in its previous
+- **Return to armed** (default) — the zone stays armed in its previous
   mode.
-- **Disarm** — the area disarms. With *Auto re-arm after (s)* it
+- **Disarm** — the zone disarms. With *Auto re-arm after (s)* it
   re-arms into the pre-incident mode after that many quiet seconds; any
   sensor activity restarts the countdown.
 
 ### Schedules
 
-Time-of-day entries per area, evaluated in the daemon's local time
+Time-of-day entries per zone, evaluated in the daemon's local time
 zone. Each entry has a time, optional weekdays (none selected = every
-day) and a target mode. With **Auto-arm** the area actually arms at
-that time; without it the entry only raises a reminder when the area is
+day) and a target mode. With **Auto-arm** the zone actually arms at
+that time; without it the entry only raises a reminder when the zone is
 not in the expected mode at that time.
 
 ## 8. Codes
@@ -269,8 +276,8 @@ salted hashes and never shown again.
   *Keypad slot* and *Remote key* (bind a hardware keypad user slot or a
   radio remote, so its actions are attributed to this name).
 - **Permissions**: what the code may do — arm, disarm, silence.
-- **Areas**: restrict a code to specific areas; nothing selected means
-  all areas.
+- **Zones**: restrict a code to specific zones; nothing selected means
+  all zones.
 - **Validity window**: optional from/until timestamps — guest codes.
 - **Duress code**: disarms exactly like a normal code but silently
   raises a duress event to the notification targets. Nothing appears in
@@ -283,7 +290,7 @@ buttons read straight from the live model; virtual remote channels are
 not listed here. Security keyfobs such as the HmIP-KRCA sort to the top
 with an *alarm keyfob* badge. Pick the key, then the trigger (short or
 long press), the action (an arm mode or disarm) and, optionally, the
-area it applies to. Raw JSON binding remains available as an expert
+zone it applies to. Raw JSON binding remains available as an expert
 fallback, and is the only way to bind a virtual remote channel.
 
 Wrong codes are rate-limited with escalating lockout per source;
@@ -292,7 +299,7 @@ wall keypad cannot lock you out of your own panel).
 
 ## 9. Walk test
 
-A walk test verifies sensors without arming the area and without firing
+A walk test verifies sensors without arming the zone and without firing
 any alarm: start a session, walk the house and trip each sensor — every
 activation turns its checklist row green with a timestamp. The progress
 line shows `n/total sensors verified`; untested sensors stand out. Stop
@@ -305,7 +312,7 @@ and periodically (battery-powered contacts fail silently).
 
 The persistent, filterable log of everything the alarm engine does or
 observes — arming and disarming (with identity), triggers, bypasses,
-silences, faults, tests and configuration changes. Filter by area,
+silences, faults, tests and configuration changes. Filter by zone,
 event class and time range; *Export CSV* downloads the current view.
 
 The journal is the anti-silent-failure surface: every degradation the
@@ -314,12 +321,12 @@ restart-restored incident) lands here instead of being swallowed.
 
 ## 11. Integrations
 
-- **MQTT / Home Assistant**: each area appears as an
+- **MQTT / Home Assistant**: each zone appears as an
   `alarm_control_panel` entity via MQTT discovery (plus an aggregate
   master panel). Arm modes map to the HA vocabulary
   (`armed_home` = perimeter, `armed_away` = full, `armed_night`,
   `armed_vacation`, `armed_custom_bypass`). Enrolled notification
-  outputs additionally publish a `NOTIFICATION` entry on the area's
+  outputs additionally publish a `NOTIFICATION` entry on the zone's
   event topic and forward to configured webhook receivers — toggle
   each plane per output on the Outputs tab.
 - **REST / WebSocket**: the full surface lives under `/api/v1/alarm`
@@ -332,3 +339,152 @@ restart-restored incident) lands here instead of being swallowed.
 For the CCU side (existing programs), use the *Sysvar mirror* output
 class and the sysvar-based arm intents described in
 [`alarm-concept.md`](./alarm-concept.md) §13.5.
+
+## 12. Security & Safety
+
+Security & Safety is a separate, always-on domain reachable at
+`#/security`. It answers three questions the alarm system alone does
+not: **what is wrong right now**, **what is broken and since when**,
+and **what should someone be told**. It runs independently of the
+alarm system — a house with nothing but a couple of smoke detectors
+and a water sensor, and no zones configured at all, still gets the
+full domain: classification, fault tracking and notifications. There
+is no separate enable switch and no configuration section; it starts
+with the daemon.
+
+### The classes
+
+Every data point the domain watches is classified into one of nine
+classes: **smoke**, **water**, **gas**, **co**, **tamper**,
+**battery**, **technical**, **intrusion**, **panic**. `smoke`,
+`water`, `gas`, `co`, `intrusion` and `panic` are hazard classes — an
+acute danger; `tamper`, `battery` and `technical` are fault classes —
+a degradation of the installation. `intrusion` and `panic` are
+projections of the alarm engine's own incidents and stay empty if no
+alarm system is configured; the others work off the device fleet
+directly.
+
+A class with no classified source in the fleet is **not published at
+all** — not shown, not permanently off. There is no producer for
+`gas` in the Homematic device family today, for example, so no `gas`
+entity exists anywhere until a source is classified into it (including
+by an operator override, see below). A class that appeared once and
+then lost its last source is retracted the same way.
+
+### The Sources page
+
+A **source** is one classified data point: a device channel and
+parameter the classifier has placed into one of the nine classes. The
+Sources page lists every source the daemon knows about, filterable by
+class, CCU and zone, with switches to narrow to only the relevant or
+only the currently active ones.
+
+**Relevant** means the source counts towards its class tile and the
+fault list. Hazard-class sources (smoke, water, gas, co, intrusion,
+panic) are always relevant. Fault-class sources (tamper, battery,
+technical) are relevant only when they sit on a device that also
+carries an alarm role — otherwise `technical`/`battery`/`tamper` would
+sit permanently lit across an entire fleet and stop meaning anything.
+A source that is not relevant is still listed, so you can find it, but
+it is not being watched.
+
+You only need to touch this page when the classifier got something
+wrong: a detector filed under the wrong class, or a data point that
+should not raise anything at all. Each row has an override: pick a
+class to correct the verdict, or turn off *Included* to drop the
+source out of every aggregate entirely while keeping it listed. An
+override changes what the aggregates report — it does **not** change
+the alarm system, which is configured separately per zone on the
+Sensors tab. Overriding a source out of the `water` class, say, stops
+it counting towards `security/class/water`; it has no effect on
+whether that same data point is enrolled as an alarm sensor.
+
+### Faults
+
+A fault opens when a fault-class source (tamper, battery, technical)
+becomes active on a relevant device — an unreachable device, a
+depleted battery, a sabotage contact, a jammed actuator. Its `since`
+timestamp is recorded when it opens and **survives a daemon restart**;
+a fault that was open before a restart is still shown with its
+original start time afterward, not reset to "just now".
+
+**Acknowledging** a fault only records that an operator has seen it.
+It does not clear the condition — the fault stays open, with its
+original `since`, until whatever caused it actually resolves.
+Acknowledging is for triage, not for making a problem go away.
+
+### Notifications
+
+Every alarm and fault event the domain renders carries a **subject**
+(one line, for a message title) and a **message** (a full sentence
+naming the cause, the place and the time) — ready to drop straight
+into a Home Assistant automation's notification title and body. Next
+to the rendered text, every notification also carries `i18n_key` and
+`args`: a machine-readable key plus its substitution values, so a
+consumer — the SPA, a REST/WS client, a third-party integration — can
+re-render the same notification in its own locale instead of only
+forwarding the daemon's configured language.
+
+### What reaches Home Assistant
+
+Beyond the alarm system's `alarm_control_panel` entities (§11), the
+Security & Safety device card publishes:
+
+- One **folded state** sensor — the single-glance severity (`ok` /
+  `info` / `warning` / `alarm` / `critical`) across the whole domain.
+- An **alarm** flag (`binary_sensor`) — a hazard class is active.
+- A **problem** flag (`binary_sensor`) — a fault-class condition is
+  open on a relevant device.
+- An **engine health** flag — the alarm engine reports itself
+  unhealthy (an unreachable siren, a failed stop verification).
+- Two **event entities** — one for alarms, one for faults — the
+  automation primitive: they fire on every occurrence, including a
+  second identical one, which a plain state sensor would not.
+- Two **retained last-report sensors** — the last alarm and the last
+  fault, each timestamped and carrying the full rendered report
+  (subject, message, sources) as an attribute, so a dashboard survives
+  a daemon restart even though the event entities themselves reset to
+  unknown.
+- One tile **per class** that currently has a classified source (see
+  above).
+- One sensor **per zone**, when the alarm engine is configured —
+  active-source count for that zone, broken down by class.
+
+### Duress and silent panic
+
+A duress code use, or a sensor marked *silent panic*, is deliberately
+covert: the person triggering it may be standing next to whoever is
+watching a screen, so nothing may appear where that observer could
+see it. How far the report is allowed to travel is the
+`alarm.duress_visibility` setting, with three levels:
+
+- **`hidden`** — the Security & Safety plane stays silent entirely.
+  Only a configured **webhook** is notified. An installation that
+  runs no webhook receiver is told **nothing** at this level — that is
+  the trade-off of choosing it.
+- **`notify_only`** (default) — additionally fires the non-retained
+  notification event, so a phone is reached, but never the retained
+  last-alarm sensor and never a local screen surface.
+- **`full`** — treated like any other alarm: reaches the retained
+  sensor, the SPA and REST/WS as well.
+
+Choose `hidden` only where you have a working webhook receiver and
+have deliberately decided that Home Assistant itself must never show
+the trigger.
+
+### What to expect elsewhere
+
+A few things an operator might otherwise wait for are deliberately not
+built:
+
+- **A lost CCU does not open a fault.** If one of several configured
+  centrals disappears, its sources are quietly dropped from the
+  aggregates instead of raising a `technical` fault for the outage
+  itself.
+- **Truncated lists carry no link to the rest.** The `sources`/`faults`
+  attribute on a class, zone, alarm or problem entity caps at 30
+  entries and reports `truncated: true` plus a total count when there
+  are more — but not where to find the remainder. Use the Sources or
+  Faults page for the complete list.
+- **No WebSocket surface.** The domain is reachable over REST and MQTT
+  only; there are no `security.*` WebSocket broadcasts or commands.
