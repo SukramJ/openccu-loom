@@ -1501,6 +1501,28 @@ func Default() *Config {
 	return cfg
 }
 
+// Clone returns an independent deep copy of c via a JSON round-trip, so a
+// caller can layer changes onto a snapshot without mutating the config the
+// running daemon holds. Callers that re-assemble the effective config (the
+// reload path overlays the DB-tier sections onto the YAML base) need this
+// because the overlay mutates its target in place. A nil receiver or a
+// marshalling failure yields [Default] rather than nil, keeping the result
+// safe to dereference.
+func Clone(c *Config) *Config {
+	if c == nil {
+		return Default()
+	}
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return Default()
+	}
+	out := &Config{}
+	if err := json.Unmarshal(raw, out); err != nil {
+		return Default()
+	}
+	return out
+}
+
 func (c *Config) applyDefaults() {
 	if c.Locale == "" {
 		c.Locale = "en"

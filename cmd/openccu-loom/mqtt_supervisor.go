@@ -389,6 +389,7 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 			sw.lifecycle.OnConnect(fn)
 		}
 		if err := sw.lifecycle.Start(ctx); err != nil {
+			logConnectFailure(s.logger, cfg.North.MQTT, err)
 			return nil, fmt.Errorf("lifecycle.Start: %w", err)
 		}
 	}
@@ -425,43 +426,70 @@ func (s *mqttSupervisor) teardown(ctx context.Context, sw *mqttSwap) {
 	}
 }
 
-// mqttReloadAdapter satisfies handlers.MQTTReloadService by reading
-// the current config from the reload-deps bag and calling
-// mqttSupervisor.Swap. The boot config is captured as a fallback so
-// the adapter still reloads correctly when no file-watcher is
-// running (the deps bag's curCfg slot stays at the boot value in
-// that case).
+// mqttReloadAdapter satisfies handlers.MQTTReloadService by re-assembling the
+// effective config and calling mqttSupervisor.Swap. The boot config is
+// captured as a last-resort fallback so the adapter still reloads when neither
+// an assembler nor a file-watcher is wired.
 type mqttReloadAdapter struct {
-	sup     *mqttSupervisor
+	sup     mqttSwapper
 	deps    *reloadDeps
 	bootCfg *config.Config
+	logger  *slog.Logger
+}
+
+// mqttSwapper is the one supervisor capability the reload adapter needs.
+// Naming it keeps the adapter's own logic — which config it hands over, and
+// what it records afterwards — testable without standing up a broker stack.
+type mqttSwapper interface {
+	Swap(ctx context.Context, newCfg *config.Config) error
 }
 
 // newMQTTReloadAdapter binds the supervisor + deps bag into a service
 // that the REST router can mount.
-func newMQTTReloadAdapter(sup *mqttSupervisor, deps *reloadDeps, bootCfg *config.Config) *mqttReloadAdapter {
-	return &mqttReloadAdapter{sup: sup, deps: deps, bootCfg: bootCfg}
+func newMQTTReloadAdapter(sup *mqttSupervisor, deps *reloadDeps, bootCfg *config.Config, logger *slog.Logger) *mqttReloadAdapter {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	a := &mqttReloadAdapter{deps: deps, bootCfg: bootCfg, logger: logger}
+	// Guard the typed-nil trap: assigning a nil *mqttSupervisor to the
+	// interface field would produce a non-nil interface holding a nil pointer,
+	// and the "supervisor unavailable" check in Reload would never fire.
+	if sup != nil {
+		a.sup = sup
+	}
+	return a
 }
 
-// Reload pulls the freshest [*config.Config] (file-watcher updates it
-// on each successful reload; falls back to the boot snapshot when
-// no watcher is wired) and asks the supervisor to swap. The wall-
-// clock duration of the swap is returned.
+// Reload re-derives the effective config and asks the supervisor to swap,
+// returning the wall-clock duration of the swap.
+//
+// The assembly must be fresh: an operator who edits north.mqtt in the SPA
+// writes the DB-tier section, which no file-watcher event follows, so reading
+// only the last recorded snapshot would rebuild the stack from the config the
+// daemon booted with — the reload would appear to succeed while the broker
+// link kept the previous credentials. On success the newly assembled config
+// becomes the recorded snapshot so subsequent readers agree with the running
+// stack.
 func (a *mqttReloadAdapter) Reload(ctx context.Context) (time.Duration, error) {
 	if a == nil || a.sup == nil {
 		return 0, errors.New("mqtt.reload: supervisor unavailable")
 	}
-	cfg := a.deps.CurrentConfig()
+	cfg, fresh := a.deps.AssembleConfig(ctx)
 	if cfg == nil {
 		cfg = a.bootCfg
 	}
 	if cfg == nil {
 		return 0, errors.New("mqtt.reload: no config snapshot available")
 	}
+	if !fresh {
+		a.logger.Warn("mqtt.reload.stale_config",
+			slog.String("effect", "reloading from the last recorded snapshot; section edits saved since boot may not be applied"))
+	}
 	start := time.Now()
 	if err := a.sup.Swap(ctx, cfg); err != nil {
 		return time.Since(start), err
 	}
+	a.deps.SetCurrentConfig(cfg)
 	return time.Since(start), nil
 }
 
@@ -566,6 +594,35 @@ func makeMQTTSubscriberBuilder(
 }
 
 // redactBrokerURL strips credentials before logging.
+// logConnectFailure records everything needed to place a rejected CONNECT
+// without touching the broker or the daemon's config: which broker was dialled,
+// under which identity and dialect, and — decisively — whether a username and
+// password were actually on the wire.
+//
+// A broker answers a missing credential and a wrong one with the same
+// "Not authorized (0x87)", so the error alone cannot distinguish "the operator
+// typed the wrong password" from "the daemon sent none". Only the presence
+// flags separate those, and they are what turns that ambiguity into a
+// one-line diagnosis. Presence and length only — never the secret itself,
+// since these lines end up in support logs and diagnostic bundles.
+func logConnectFailure(logger *slog.Logger, cfg config.NorthMQTT, err error) {
+	if logger == nil {
+		return
+	}
+	protocol := cfg.ProtocolVersion
+	if protocol == "" {
+		protocol = "5"
+	}
+	logger.Error("mqtt.connect.failed",
+		slog.String("err", err.Error()),
+		slog.String("broker", redactBrokerURL(cfg.BrokerURL)),
+		slog.String("client_id", cfg.ClientID),
+		slog.String("protocol_version", protocol),
+		slog.Bool("username_set", cfg.Username != ""),
+		slog.Bool("password_set", cfg.Password != ""),
+		slog.Int("password_len", len(cfg.Password)))
+}
+
 func redactBrokerURL(rawURL string) string {
 	// Naive but sufficient for log redaction: strip everything from
 	// "://" to the next "@", which is where userinfo lives in a

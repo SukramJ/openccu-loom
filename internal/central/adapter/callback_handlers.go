@@ -150,16 +150,16 @@ func (h *CallbackHandlers) incidentRecorder() reliability.IncidentRecorder {
 }
 
 // canonicalInterfaceID maps the interface_id the CCU echoes in a callback
-// envelope (the [InitInterfaceID] triple `<instance>-<central>-<iface>`) back
-// to the canonical host-independent [WireInterfaceID] (`<central>-<iface>`)
-// used by the stamped devices, the Clients registry, and DataPointKeys.
-// Every inbound callback entry runs this before touching the model so the
-// echoed id matches the internal id. Nil-safe.
+// envelope (the [InitInterfaceID] form `loom-<instance>-<central>-<iface>`)
+// back to the canonical host-independent [WireInterfaceID]
+// (`<central>-<iface>`) used by the stamped devices, the Clients registry, and
+// DataPointKeys. Every inbound callback entry runs this before touching the
+// model so the echoed id matches the internal id. Nil-safe.
 func (h *CallbackHandlers) canonicalInterfaceID(interfaceID string) string {
 	if h == nil || h.unit == nil {
 		return interfaceID
 	}
-	return StripInstance(h.unit.InstanceName(), interfaceID)
+	return CanonicalInterfaceID(h.unit.InstanceName(), h.unit.Name(), interfaceID)
 }
 
 // Stop cancels all in-flight background goroutines and waits for them to

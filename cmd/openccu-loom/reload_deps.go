@@ -27,6 +27,14 @@ type reloadDeps struct {
 	curCfg  atomic.Pointer[config.Config]
 	reseed  atomic.Pointer[mqttReseedHook]
 
+	// assemble re-derives the effective config the way boot does: the YAML
+	// base with the DB-tier sections overlaid on top. curCfg alone is not
+	// enough for a REST-triggered reload — it only advances on boot and on a
+	// YAML file change, so a section the operator saved through the SPA (which
+	// writes the DB, not the file) would be invisible and the reload would
+	// rebuild the subsystem from the stale snapshot.
+	assemble atomic.Pointer[configAssembler]
+
 	// mdnsTXTRefresh re-announces the daemon-discovery mDNS TXT bundle
 	// (ADR 0058: the ccus serial list and the centrals count resolve
 	// and change at runtime). Stored by the REST mount once the
@@ -43,6 +51,12 @@ type reloadDeps struct {
 	// in production (set only by the guard test). Read once on the boot
 	// goroutine, so it needs no atomic.
 	onNorthBridges func(*northbridge.Registry)
+}
+
+// configAssembler boxes the effective-config assembly function so it can live
+// in an [atomic.Pointer], which needs a pointer element type.
+type configAssembler struct {
+	fn func(context.Context) (*config.Config, error)
 }
 
 // mqttReseedHook re-publishes the full MQTT snapshot (Discovery
@@ -126,4 +140,33 @@ func (d *reloadDeps) CurrentConfig() *config.Config {
 		return nil
 	}
 	return d.curCfg.Load()
+}
+
+// SetConfigAssembler records the function that re-derives the effective
+// config (YAML base + DB-tier sections). The daemon wires it once the config
+// store exists; until then reload consumers fall back to [CurrentConfig].
+func (d *reloadDeps) SetConfigAssembler(fn func(context.Context) (*config.Config, error)) {
+	if d == nil || fn == nil {
+		return
+	}
+	d.assemble.Store(&configAssembler{fn: fn})
+}
+
+// AssembleConfig re-derives the effective config so a reload sees section
+// edits the SPA persisted to the database since boot. It falls back to the
+// last recorded snapshot when no assembler is wired (direct daemonServe
+// callers and tests) or when the assembly fails — a reload from a slightly
+// stale config beats refusing to reload at all. The bool reports whether the
+// returned config was freshly assembled, which the caller logs so a silent
+// fallback is never mistaken for a fresh read.
+func (d *reloadDeps) AssembleConfig(ctx context.Context) (*config.Config, bool) {
+	if d == nil {
+		return nil, false
+	}
+	if a := d.assemble.Load(); a != nil && a.fn != nil {
+		if cfg, err := a.fn(ctx); err == nil && cfg != nil {
+			return cfg, true
+		}
+	}
+	return d.curCfg.Load(), false
 }
