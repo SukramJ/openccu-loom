@@ -294,6 +294,32 @@ type retainCleanupError string
 
 func (e retainCleanupError) Error() string { return string(e) }
 
+// MarkPlaneDeclared records that a daemon-level plane has finished its
+// first discovery pass, making its retained configs eligible for the
+// orphan sweep.
+//
+// Until a plane says this, the sweep cannot distinguish its orphans from
+// its not-yet-published entities, and treating the two alike deletes
+// working entities on every restart.
+func (b *Bridge) MarkPlaneDeclared(nodeID string) {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	if b.planesDeclared == nil {
+		b.planesDeclared = map[string]bool{}
+	}
+	b.planesDeclared[strings.ToLower(nodeID)] = true
+	b.mu.Unlock()
+}
+
+// planeDeclared reports whether a daemon-level plane has declared.
+func (b *Bridge) planeDeclared(nodeID string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.planesDeclared[nodeID]
+}
+
 // daemonLevelNodeIDs are the discovery node ids of the planes that are
 // not scoped to a central: the alarm engine and the Security & Safety
 // domain.
@@ -366,7 +392,23 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 			return
 		}
 		nodeID := strings.ToLower(parts[1])
-		if !strings.HasPrefix(nodeID, nodePrefix) && !daemonLevelNodeIDs[nodeID] {
+		switch {
+		case strings.HasPrefix(nodeID, nodePrefix):
+		case daemonLevelNodeIDs[nodeID]:
+			// A daemon-level plane is only swept once it has declared.
+			//
+			// The sweep runs during southbound bring-up, hundreds of
+			// lines before these planes are even constructed, so at that
+			// moment nothing of theirs is in `declared` and every one of
+			// their retained configs looks like an orphan. Sweeping then
+			// deleted the security entities on every single restart, and
+			// with the domain not yet started nothing re-declared them —
+			// they vanished from the consumer along with every
+			// automation and dashboard card built on them.
+			if !b.planeDeclared(nodeID) {
+				return
+			}
+		default:
 			// Not our daemon's namespace — skip.
 			return
 		}

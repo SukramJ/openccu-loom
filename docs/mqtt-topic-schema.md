@@ -348,7 +348,7 @@ across every configured CCU.
 | `<base>/security/last_alarm` | yes | The last hazard report: `subject`, `message`, `i18n_key`, `args`, `sources[]` |
 | `<base>/security/last_fault` | yes | The last fault report, same shape |
 | `<base>/security/event` | **no** | One hazard report per occurrence, QoS 0 |
-| `<base>/security/fault` | **no** | One fault transition per occurrence, QoS 0 |
+| `<base>/security/fault` | **no** | One fault report per occurrence, QoS 0 — same payload shape as `event` |
 | `<base>/security/availability` | yes | `online` / `offline` |
 
 The two event topics are deliberately **not** retained and publish at
@@ -356,6 +356,28 @@ QoS 0: a consumer ignores retained payloads on an event topic, and a
 re-delivered alarm event re-fires every automation subscribed to it. The
 `last_alarm` / `last_fault` topics exist precisely because of that — a
 consumer that restarts has no way to replay an event.
+
+Each event topic has exactly **one** producer, and both carry the same
+rendered-report shape. `<base>/security/fault` briefly had two: the ledger
+transition wrote `fault_id` and `open_count` without any text, the rendered
+report wrote `subject` and `message` without an id, and a consumer parses one
+payload shape per topic — so every automation reading either field got it on
+half the messages. The ledger facts live in the retained `problem` attributes
+instead, which carry the full standing list with ids, count and
+acknowledgement flags.
+
+Every topic the discovery declares is a topic the plane writes.
+`TestSecurityPlaneTopicsRoundTrip` compares the two sets, because they once
+disagreed — discovery derived the state topic from the flat entity key
+(`security/class_smoke`) while the publisher wrote the nested one
+(`security/class/smoke`) — and each half passed its own tests while every
+class and zone entity stayed unavailable forever.
+
+Retained topics for a class that lost its last source, or a zone that was
+deleted, are evacuated together with their discovery config. The orphan sweep
+that removes stale retained configs waits until the plane has declared
+itself: before that it cannot tell an orphan from an entity that has not been
+published yet, and would delete the plane's own discovery at every start.
 
 Discovery uses node id `security` and the device card
 `openccu-loom_security`, deliberately separate from `openccu-loom_alarm`

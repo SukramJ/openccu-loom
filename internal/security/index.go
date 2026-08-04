@@ -5,7 +5,6 @@ package security
 
 import (
 	"context"
-	"errors"
 	"sort"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
@@ -18,11 +17,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
-
-// errInvalidClass rejects an override naming a class that does not
-// exist, rather than silently storing a value no aggregate will ever
-// match.
-var errInvalidClass = errors.New("security: unknown class")
 
 // RebuildIndex derives the classification index from the device model,
 // the alarm enrollment and the operator overrides.
@@ -74,9 +68,52 @@ func (s *Service) RebuildIndex(ctx context.Context) error {
 		}
 	}
 	s.agg.sources = index
+	// Sources whose ledger state disagrees with the model, decided under
+	// the same lock that just settled the activation set.
+	reconcileFaults := map[string]*indexedSource{}
+	for key, src := range index {
+		if src.reason == "" || !src.relevant {
+			continue
+		}
+		_, isActive := s.agg.active[key]
+		if isActive != s.faultStandsLocked(src) {
+			reconcileFaults[key] = src
+		}
+	}
+	snap := s.agg.snapshot()
 	s.mu.Unlock()
+
+	// A fault that arose or resolved while the daemon was down reaches
+	// the ledger here and nowhere else. The seeding above only sets the
+	// in-memory activation, so a device that went unreachable during a
+	// restart showed as active in the class view while the fault plane
+	// stayed empty: no row, no `since`, no report — and no clear event
+	// afterwards either, because Clear finds no row to close.
+	for key, src := range reconcileFaults {
+		s.mu.Lock()
+		_, isActive := s.agg.active[key]
+		s.mu.Unlock()
+		s.applyFault(ctx, src, isActive)
+	}
 	s.refreshZoneSlugs(ctx)
+	// A rebuild changes what is active, which class is known and which
+	// severity holds — the seeding above can turn a class on outright.
+	// Publishing the result is what keeps the retained plane from
+	// disagreeing with the in-memory state until some unrelated event
+	// happens to reconcile it, which for a latching sensor may be never.
+	s.publishState(snap)
 	return nil
+}
+
+// faultStandsLocked reports whether the ledger holds an open fault for
+// this source and reason. The caller holds s.mu.
+func (s *Service) faultStandsLocked(src *indexedSource) bool {
+	for _, f := range s.agg.faults {
+		if f.Source.Ref == src.ref.Ref && f.Reason == src.reason {
+			return true
+		}
+	}
+	return false
 }
 
 // refreshZoneSlugs loads the stable external identifier of every zone.
@@ -181,9 +218,25 @@ func (s *Service) classify(centralName, model, channelType, channelAddress, inte
 	case override.Class != "":
 		src.class = hmenum.SecurityClass(override.Class)
 		src.relevant = true
+		// Carry the classifier's reason facet even when the operator
+		// overrode the class. applyFault returns early on an empty
+		// reason, so dropping it here left an already-open fault with no
+		// path to ever close: the clear branch is unreachable, Raise
+		// deduplicates onto the standing row, Acknowledge does not
+		// close, and REST offers no clear route.
+		if cls, ok := safety.Classify(model, channelType, param); ok {
+			src.reason = cls.Reason
+			src.activeValues = cls.ActiveValues
+		}
 	case enrollment.ID != "":
 		if cls, ok := hmenum.SecurityClassForSensorType(enrollment.SensorType); ok {
 			src.class = cls
+			// A tamper-typed enrollment lands on a diagnostic class, so
+			// it needs a reason or its faults can never close.
+			if verdict, found := safety.Classify(model, channelType, param); found {
+				src.reason = verdict.Reason
+				src.activeValues = verdict.ActiveValues
+			}
 		} else if cls, ok := safety.Classify(model, channelType, param); ok {
 			src.class = cls.Class
 			src.reason = cls.Reason
@@ -353,7 +406,7 @@ func (s *Service) SetSourceOverride(ctx context.Context, centralName, interfaceI
 		return s.RebuildIndex(ctx)
 	}
 	if class != "" && !class.Valid() {
-		return errInvalidClass
+		return security.ErrInvalidClass
 	}
 	row := sqlitestore.SecuritySource{
 		CentralName: centralName, InterfaceID: interfaceID, ChannelAddress: channelAddress,

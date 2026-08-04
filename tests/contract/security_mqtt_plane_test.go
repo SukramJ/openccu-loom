@@ -135,6 +135,19 @@ func waitForSecurityTopic(t *testing.T, pub *securityPlanePublisher, topic strin
 	return securityPlaneRecord{}
 }
 
+// findSecurityTopic reports the most recent publish to topic, if any.
+// Unlike waitForSecurityTopic it never waits: it is used to assert an
+// absence, and waiting for something that must not happen only makes
+// the test slow.
+func findSecurityTopic(pub *securityPlanePublisher, topic string) (rec securityPlaneRecord, found bool) {
+	for _, r := range pub.records() {
+		if r.topic == topic {
+			rec, found = r, true
+		}
+	}
+	return rec, found
+}
+
 func securityPlaneJSONObject(t *testing.T, label string, payload []byte) map[string]any {
 	t.Helper()
 	var body map[string]any
@@ -236,6 +249,12 @@ func TestSecurityPlane_EventTopicsNeverRetained(t *testing.T) {
 	p.Start(bus)
 	t.Cleanup(p.Stop)
 
+	// A ledger transition alone must produce no event. The fault topic
+	// has exactly one producer — the rendered report below — because a
+	// consumer's event entity parses one payload shape per topic, and
+	// this event carried a different one: ids and counts, no text. While
+	// both wrote here, every automation reading `subject` or `fault_id`
+	// found its field on half the messages.
 	events.Publish(bus, hmevent.SecurityFaultChangedEvent{
 		Base:     hmevent.NewBase(),
 		FaultID:  "f1",
@@ -244,6 +263,29 @@ func TestSecurityPlane_EventTopicsNeverRetained(t *testing.T) {
 		Severity: hmenum.SecuritySeverityInfo,
 		Source:   hmevent.NewSecuritySourceRef("gh", "HmIP-RF", "ABCD0000001:1", "UNREACH"),
 		Open:     true,
+	})
+	// It does republish the retained half, which is where the ledger
+	// facts live now — so waiting on that proves the event was dispatched
+	// rather than merely slow, and makes the absence below meaningful.
+	waitForSecurityTopic(t, pub, securityPlaneBase+"/security/problem", func(r securityPlaneRecord) bool { return r.retain })
+	if rec, found := findSecurityTopic(pub, securityPlaneBase+"/security/fault"); found {
+		t.Errorf("a ledger transition published %q on the fault event topic: %s — "+
+			"the topic has one producer, and a second payload shape makes every "+
+			"consumer field intermittent", securityPlaneBase+"/security/fault", rec.payload)
+	}
+
+	events.Publish(bus, hmevent.SecurityNotificationEvent{
+		Base:     hmevent.NewBase(),
+		Class:    hmenum.SecurityClassTechnical,
+		Severity: hmenum.SecuritySeverityInfo,
+		Verb:     hmenum.SecurityVerbRaised,
+		Subject:  "Device unreachable",
+		Message:  "ABCD0000001:1 is unreachable",
+		Fault:    true,
+		// Not retainable: this asserts the event topic itself, and the
+		// retained last_fault half is covered by the last_alarm contrast
+		// below.
+		Retainable: false,
 	})
 	faultRec := waitForSecurityTopic(t, pub, securityPlaneBase+"/security/fault", nil)
 	if faultRec.retain {

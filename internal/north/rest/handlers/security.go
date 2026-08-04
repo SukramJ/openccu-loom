@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -316,9 +317,18 @@ func PutSecuritySourceOverride(d SecurityDomain, rec audit.Recorder) http.Handle
 		}
 		err = d.SetSourceOverride(r.Context(), parts[0], parts[1], parts[2], parts[3],
 			hmenum.SecurityClass(in.Class), included, in.Note)
-		if err != nil {
+		switch {
+		case err == nil:
+		case errors.Is(err, security.ErrInvalidClass):
 			problem.Write(w, http.StatusUnprocessableEntity,
 				problem.New(problem.TypeValidation, r, "Invalid source override", err.Error()))
+			return
+		default:
+			// A persistence failure is not a validation error. Reporting
+			// it as 422 with the raw driver text both misclassifies it
+			// and hides it: problem.Write logs nothing.
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal,
+				"Save source override failed", err)
 			return
 		}
 		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "security_source="+ref)

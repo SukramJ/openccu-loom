@@ -242,3 +242,31 @@ func TestDaemonLevelNodeIDs_CoversBothPlanes(t *testing.T) {
 		}
 	}
 }
+
+// TestDaemonLevelPlaneIsNotSweptBeforeItDeclares pins the gate that
+// keeps the orphan sweep from deleting a plane's entities before that
+// plane has published anything.
+//
+// The sweep runs during southbound bring-up, hundreds of lines before
+// the security plane is constructed and long before the domain starts.
+// At that moment none of its topics are in `declared`, so every one of
+// its retained configs looked like an orphan — and with the domain not
+// yet running, nothing re-declared them. The entities vanished from the
+// consumer on every restart, taking every automation and dashboard card
+// built on them.
+func TestDaemonLevelPlaneIsNotSweptBeforeItDeclares(t *testing.T) {
+	t.Parallel()
+	b := &Bridge{}
+
+	if b.planeDeclared(securityDiscoveryNodeID) {
+		t.Fatal("a plane counts as declared before it published anything; the sweep would delete its entities on every restart")
+	}
+	b.MarkPlaneDeclared(securityDiscoveryNodeID)
+	if !b.planeDeclared(securityDiscoveryNodeID) {
+		t.Fatal("MarkPlaneDeclared did not take effect; the plane's orphans could never be swept")
+	}
+	// Marking one plane must not enable the sweep for the other.
+	if b.planeDeclared(alarmDiscoveryNodeID) {
+		t.Error("marking the security plane also enabled the alarm plane")
+	}
+}

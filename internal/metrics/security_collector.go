@@ -80,4 +80,11 @@ func (c *SecurityCollector) onFaultChanged(e hmevent.SecurityFaultChangedEvent) 
 // to map.
 func (c *SecurityCollector) onStateChanged(e hmevent.SecurityStateChangedEvent) {
 	c.severity.Set(float64(e.To.Rank()))
+	// The state event carries the standing count, so the gauge tracks
+	// the domain even across a restart and a central detach — both of
+	// which change the ledger without emitting a fault transition. The
+	// registry exports an untouched gauge as a confident 0 rather than
+	// an absent series, so an unseeded gauge is not merely missing, it
+	// is wrong.
+	c.openFaults.Set(float64(e.OpenFaults))
 }

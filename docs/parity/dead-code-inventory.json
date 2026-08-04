@@ -1,6 +1,6 @@
 {
-  "generated": "7bb6c0ce",
-  "head": "7bb6c0ce",
+  "generated": "b2bae7d9",
+  "head": "b2bae7d9",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27628,
+    "total_exported": 27637,
     "reachable": 4886,
-    "whitelisted": 19779,
+    "whitelisted": 19788,
     "unreachable": 2963
   },
   "by_package": [
@@ -10449,35 +10449,35 @@
       "package": "internal/model/security",
       "identifier": "ClassState",
       "file": "internal/model/security/snapshot.go",
-      "line": 51,
+      "line": 53,
       "kind": "type"
     },
     {
       "package": "internal/model/security",
       "identifier": "Fault",
       "file": "internal/model/security/snapshot.go",
-      "line": 90,
+      "line": 92,
       "kind": "type"
     },
     {
       "package": "internal/model/security",
       "identifier": "Snapshot",
       "file": "internal/model/security/snapshot.go",
-      "line": 25,
+      "line": 27,
       "kind": "type"
     },
     {
       "package": "internal/model/security",
       "identifier": "SourceView",
       "file": "internal/model/security/snapshot.go",
-      "line": 168,
+      "line": 170,
       "kind": "type"
     },
     {
       "package": "internal/model/security",
       "identifier": "ZoneState",
       "file": "internal/model/security/snapshot.go",
-      "line": 68,
+      "line": 70,
       "kind": "type"
     },
     {
@@ -14446,14 +14446,14 @@
       "package": "internal/north/mqtt",
       "identifier": "ConnectivityPublisher",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 1170,
+      "line": 1174,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ConnectivityPublisher",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 1170,
+      "line": 1174,
       "kind": "type"
     },
     {
@@ -16861,49 +16861,49 @@
       "package": "internal/security",
       "identifier": "Deps",
       "file": "internal/security/service.go",
-      "line": 65,
+      "line": 68,
       "kind": "type"
     },
     {
       "package": "internal/security",
       "identifier": "Deps",
       "file": "internal/security/service.go",
-      "line": 65,
+      "line": 68,
       "kind": "type"
     },
     {
       "package": "internal/security",
       "identifier": "Service",
       "file": "internal/security/service.go",
-      "line": 79,
+      "line": 82,
       "kind": "type"
     },
     {
       "package": "internal/security",
       "identifier": "Settings",
       "file": "internal/security/service.go",
-      "line": 53,
+      "line": 54,
       "kind": "type"
     },
     {
       "package": "internal/security",
       "identifier": "Settings",
       "file": "internal/security/service.go",
-      "line": 53,
+      "line": 54,
       "kind": "type"
     },
     {
       "package": "internal/security",
       "identifier": "Stores",
       "file": "internal/security/service.go",
-      "line": 42,
+      "line": 43,
       "kind": "type"
     },
     {
       "package": "internal/security",
       "identifier": "Stores",
       "file": "internal/security/service.go",
-      "line": 42,
+      "line": 43,
       "kind": "type"
     },
     {
@@ -97402,6 +97402,13 @@
       "line": 33
     },
     {
+      "package": "internal/model/security",
+      "identifier": "ErrInvalidClass",
+      "reason": "matched by the REST PUT /security/sources/{ref} handler (internal/north/rest/handlers/security.go) via errors.Is to map an unknown class to 422 instead of a 500 storage failure; the reachability heuristic does not follow sentinel-var references through errors.Is",
+      "file": "internal/model/security/snapshot.go",
+      "line": 206
+    },
+    {
       "package": "internal/model/weekprofile",
       "identifier": "AllChannelKeys",
       "reason": "auto-whitelist:pattern=weekprofile-converter",
@@ -117689,6 +117696,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestDaemonLevelPlaneIsNotSweptBeforeItDeclares",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/retain_cleanup_test.go",
+      "line": 257
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestDeviceClassFor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
@@ -119334,6 +119348,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestSecurityFaultTopicHasExactlyOneProducer",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/security_fault_topic_test.go",
+      "line": 91
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestSecurityPlaneTopicsRoundTrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/security_topics_roundtrip_test.go",
@@ -120954,14 +120975,14 @@
       "identifier": "AcknowledgeSecurityFault",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 88
+      "line": 89
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AcknowledgeSecurityFault",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 88
+      "line": 89
     },
     {
       "package": "internal/north/rest/handlers",
@@ -124202,28 +124223,28 @@
       "identifier": "GetSecurityClass",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 45
+      "line": 46
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSecurityClass",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 45
+      "line": 46
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSecuritySnapshot",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 34
+      "line": 35
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSecuritySnapshot",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 34
+      "line": 35
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125490,28 +125511,28 @@
       "identifier": "ListSecurityFaults",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 70
+      "line": 71
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSecurityFaults",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 70
+      "line": 71
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSecuritySources",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 248
+      "line": 249
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSecuritySources",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 248
+      "line": 249
     },
     {
       "package": "internal/north/rest/handlers",
@@ -127254,14 +127275,14 @@
       "identifier": "PutSecuritySourceOverride",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 286
+      "line": 287
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutSecuritySourceOverride",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 286
+      "line": 287
     },
     {
       "package": "internal/north/rest/handlers",
@@ -127758,14 +127779,14 @@
       "identifier": "SecurityDomain",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 24
+      "line": 25
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SecurityDomain",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
-      "line": 24
+      "line": 25
     },
     {
       "package": "internal/north/rest/handlers",
@@ -146970,6 +146991,13 @@
     },
     {
       "package": "internal/security",
+      "identifier": "TestAcknowledgeFaultAnnouncesRealOpenCount",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/security/fault_ledger_test.go",
+      "line": 243
+    },
+    {
+      "package": "internal/security",
       "identifier": "TestAggregateClassStateCentralsDedupedAndSorted",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/security/aggregate_test.go",
@@ -147047,6 +147075,13 @@
     },
     {
       "package": "internal/security",
+      "identifier": "TestRebuildIndexRaisesLedgerFaultForAlreadyActiveSource",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/security/fault_ledger_test.go",
+      "line": 38
+    },
+    {
+      "package": "internal/security",
       "identifier": "TestRendererArgsAlwaysHasAllKeys",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/security/render_test.go",
@@ -147065,6 +147100,34 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/security/render_test.go",
       "line": 32
+    },
+    {
+      "package": "internal/security",
+      "identifier": "TestSecurityFaultRetentionPurgesOnlyFaultsPastTheWindow",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/security/fault_ledger_test.go",
+      "line": 140
+    },
+    {
+      "package": "internal/security",
+      "identifier": "TestServiceIgnoresMasterZoneRemoval",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/security/zone_lifecycle_test.go",
+      "line": 78
+    },
+    {
+      "package": "internal/security",
+      "identifier": "TestServiceRemovesZoneOnAlarmPanelChangedRemoved",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/security/zone_lifecycle_test.go",
+      "line": 38
+    },
+    {
+      "package": "internal/security",
+      "identifier": "TestServiceStopClearsRetentionTimerWhenRetentionEnabled",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/security/fault_ledger_test.go",
+      "line": 204
     },
     {
       "package": "internal/security",
@@ -158901,28 +158964,28 @@
       "identifier": "TestSecurityPlane_AnnouncedEventTypesCoverEmittedVerbs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/security_mqtt_plane_test.go",
-      "line": 176
+      "line": 189
     },
     {
       "package": "tests/contract",
       "identifier": "TestSecurityPlane_AttributePayloadsAreObjects",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/security_mqtt_plane_test.go",
-      "line": 294
+      "line": 336
     },
     {
       "package": "tests/contract",
       "identifier": "TestSecurityPlane_EventTopicsNeverRetained",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/security_mqtt_plane_test.go",
-      "line": 232
+      "line": 245
     },
     {
       "package": "tests/contract",
       "identifier": "TestSecurityPlane_TruncationIsAnnounced",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/security_mqtt_plane_test.go",
-      "line": 356
+      "line": 398
     },
     {
       "package": "tests/contract",
