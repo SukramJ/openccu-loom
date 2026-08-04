@@ -6,6 +6,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.53.1]
 
+### Changed
+
+- **The interface identifiers the daemon registers with a CCU now read
+  `loom-<central>-<interface>`.** They previously carried the daemon's
+  instance name and the central's name separately — both derived from the
+  host, so running as the CCU's own add-on repeated the same name twice
+  (`RM-Test-VM-96-RM-Test-VM-96-BidCos-RF`) while nothing in the string
+  said the registration belonged to Loom. The CCU prints this identifier
+  in its own logs, where that attribution is the whole point. The instance
+  name is kept whenever it differs from the central name, so two daemons
+  against one CCU stay distinct. See ADR 0060.
+
+  Internal identifiers are unaffected: MQTT topics, REST/WebSocket
+  payloads and the values cache continue to use `<central>-<interface>`.
+
+  On upgrade the CCU keeps the registration made by the previous version
+  and retries delivery to it until the CCU is restarted, logging a
+  transport error per attempt. Restart the CCU once after updating to
+  clear them.
+
 ### Fixed
 
 - **Restoring an uploaded backup always failed.** An archive uploaded
