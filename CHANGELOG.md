@@ -6,6 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.53.1]
 
+### Fixed
+
+- **After a CCU restart the daemon could end up registered twice, so every
+  event arrived twice.** A rebooting CCU serves XML-RPC before it has
+  finished starting. A reconnect landing in that window fails the `deinit`
+  that precedes the re-registration but lands the `init`, so the CCU keeps
+  the previous registration alongside the new one — it appends the second
+  under a suffixed interface id (`…-BidCos-RF#2`). It then pushes every
+  event once per registration, and anything reacting to those events runs
+  twice, which is how CCU programs came to be executed twice after a
+  restart.
+
+  The reconnect now waits for the same boot marker (`/ise/checkrega.cgi`)
+  that already gated the initial bring-up before it re-registers, bounded
+  at 30 s so the client's own backoff keeps driving. A restart of the CCU
+  clears an already-duplicated registration.
+
 ### Added
 
 - **Program runs are recorded in the audit log** (`program_execute`, with

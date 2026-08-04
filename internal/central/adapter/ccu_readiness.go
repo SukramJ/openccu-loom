@@ -147,3 +147,30 @@ func probeCCUReady(ctx context.Context, client *http.Client, url string) bool {
 	}
 	return strings.TrimSpace(string(body)) == checkRegaReadyBody
 }
+
+// reconnectReadinessTimeout bounds the readiness wait a reconnect performs.
+// Unlike the boot gate — which waits indefinitely rather than bring a central
+// up half-loaded — a reconnect must return to its caller: the client state
+// machine drives its own backoff loop, and blocking here would stall the
+// transitions that loop depends on. A CCU still booting after this long is
+// simply retried on the next cycle.
+const reconnectReadinessTimeout = 30 * time.Second
+
+// newReconnectReadinessGate returns the readiness gate the reconnect path
+// consults before re-registering its callback with the CCU, or nil when cc
+// carries no host to probe.
+//
+// It exists because a rebooting CCU serves XML-RPC before it is fully up. The
+// `deinit` that precedes a re-registration then fails while the `init`
+// succeeds, leaving the previous registration in place: the CCU keeps both and
+// pushes every event twice, once per registration. Anything reacting to those
+// events runs twice as well, which is what surfaced as CCU programs executing
+// twice after a restart.
+func newReconnectReadinessGate(cc config.CentralConfig, logger *slog.Logger) func(context.Context) bool {
+	if cc.Host == "" {
+		return nil
+	}
+	return func(ctx context.Context) bool {
+		return WaitForCCUReady(ctx, cc, CCUReadinessConfig{Timeout: reconnectReadinessTimeout}, logger)
+	}
+}
