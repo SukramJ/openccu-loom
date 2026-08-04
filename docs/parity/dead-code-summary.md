@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 09bf64c8
-HEAD: 09bf64c8
+Generated: 2c3681b0
+HEAD: 2c3681b0
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27621 |
+| Total Exported | 27630 |
 | Reachable | 4890 |
-| Whitelisted | 19773 |
-| **Unreachable** | **2958** |
+| Whitelisted | 19777 |
+| **Unreachable** | **2963** |
 
 ## Top-20 Packages by Dead Code
 
@@ -160,7 +160,7 @@ HEAD: 09bf64c8
 | internal/model/group | 0 | 14 | 0 |
 | internal/model/naming | 0 | 2 | 4 |
 | internal/model/safety | 0 | 2 | 0 |
-| internal/model/security | 0 | 4 | 0 |
+| internal/model/security | 0 | 5 | 0 |
 | internal/model/value | 0 | 0 | 1 |
 | internal/north/bridge | 0 | 7 | 0 |
 | internal/north/discovery | 0 | 1 | 0 |
@@ -200,7 +200,7 @@ HEAD: 09bf64c8
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 108 | 28 |
-| pkg/hmapi | 0 | 145 | 16 |
+| pkg/hmapi | 0 | 149 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |

@@ -35,6 +35,7 @@ export type RouteKind =
   | "signal"
   | "matter"
   | "alarm"
+  | "security"
   | "visibility"
   | "access"
   | "about"
@@ -101,6 +102,12 @@ export function navClusters(gates: NavGates): NavCluster[] {
           icon: "mdi:shield-home",
           label: t("nav.alarm"),
           matches: ["alarm"],
+        },
+        {
+          href: "#/security",
+          icon: "mdi:shield-alert",
+          label: t("nav.security"),
+          matches: ["security"],
         },
         {
           href: "#/inbox",

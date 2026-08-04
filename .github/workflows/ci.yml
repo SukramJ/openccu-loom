@@ -229,6 +229,18 @@ jobs:
       # JS supply-chain gate, mirroring govulncheck on the Go side.
       - name: npm audit
         run: npm audit --audit-level=high
+      # The generated API types are derived from assets/openapi.yaml, and
+      # nothing forced them to stay in step: they had silently drifted a
+      # whole feature behind, so the SPA compiled against types that no
+      # longer described the API it called.
+      - name: generated API types are fresh
+        run: |
+          npm run gen:types
+          if ! git diff --quiet -- src/lib/api/types.generated.ts; then
+            echo "::error::src/lib/api/types.generated.ts is stale — run 'make ui-types' and commit the result."
+            git --no-pager diff --stat -- src/lib/api/types.generated.ts
+            exit 1
+          fi
       - name: typecheck
         run: npm run typecheck
       # svelte-check compiles every component against the workspace

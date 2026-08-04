@@ -595,6 +595,41 @@ export type AlarmWalkTestProgressPayload =
 export type AlarmHealthChangedPayload =
   components["schemas"]["AlarmHealthChangedPayload"];
 
+// --- Security & Safety domain ---------------------------------------
+// The classifier-driven hazard/fault domain served under /api/v1/security/*.
+// Runs independently of the alarm engine above: an installation with smoke
+// and water detectors but no burglar alarm still gets classes + faults,
+// only `zones` stays empty. Re-exported from the generated contract.
+
+// One data point that contributed to an incident, a class or a fault.
+// Shared with the alarm panel's journal/incident surfaces.
+export type AlarmSource = components["schemas"]["AlarmSource"];
+// The whole domain at one instant (GET /security).
+export type SecuritySnapshot = components["schemas"]["SecuritySnapshot"];
+// One hazard/fault class aggregate, in escalation order on the snapshot.
+export type SecurityClassState = components["schemas"]["SecurityClassState"];
+// The security view of one alarm zone (empty list when the engine is off).
+export type SecurityZoneState = components["schemas"]["SecurityZoneState"];
+// One classified data point as the operator sees it in the inventory
+// (GET /security/sources).
+export type SecuritySourceView = components["schemas"]["SecuritySourceView"];
+// Operator override body (PUT /security/sources/{ref}). Empty class +
+// included:true + no note removes the override (the classifier's verdict
+// wins again).
+export type SecuritySourceOverride =
+  components["schemas"]["SecuritySourceOverride"];
+// One standing fault (GET /security/faults) — persistent because `since`
+// is the point: acknowledging never clears it.
+export type SecurityFault = components["schemas"]["SecurityFault"];
+// One rendered report (`last_alarm` / `last_fault` on the snapshot).
+export type SecurityNotification =
+  components["schemas"]["SecurityNotification"];
+
+// Convenience string unions extracted from the schemas above.
+export type SecurityClass = SecurityClassState["class"];
+export type SecuritySeverity = SecuritySnapshot["severity"];
+export type SecurityFaultReason = SecurityFault["reason"];
+
 // Self-update status of the daemon's CCU add-on package (ADR 0057),
 // served by GET /system/addon-update and pushed verbatim as the payload
 // of the `addon_update.state_changed` WS broadcast. `supported` is false

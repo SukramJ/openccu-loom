@@ -5209,6 +5209,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/security": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The Security & Safety domain state
+         * @description What is active per hazard class and per zone, what is broken and since when, and what was last reported. The domain runs independently of the alarm engine: an installation with smoke and water detectors but no burglar alarm still gets the hazard classes, the fault plane and the notifications — only `zones` stays empty.
+         *
+         *     A class the installation has no source for is omitted rather than reported inactive, so a home without gas detectors does not advertise a permanently-off gas alarm.
+         */
+        get: operations["getSecuritySnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/security/classes/{class}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                class: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            };
+            cookie?: never;
+        };
+        /** One hazard or fault class with its full source list */
+        get: operations["getSecurityClass"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/security/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The classified data-point inventory
+         * @description What the domain believes about every data point it knows: the class it was given, whether an operator overrode that, whether an alarm zone holds it, and whether it currently contributes to an aggregate.
+         *
+         *     The unfiltered list is deliberately available. A source the classifier got wrong is invisible in every aggregate, so listing everything is the only way to find it.
+         */
+        get: operations["listSecuritySources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/security/sources/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The routing key `<central>|<interface_id>|<channel_address>|<parameter>`, URL-encoded. */
+                ref: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Override the classification of one data point (operator)
+         * @description An empty class with `included: true` and no note removes the override, returning the data point to the classifier's verdict — the undo a wrong override needs.
+         */
+        put: operations["putSecuritySourceOverride"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/security/faults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The standing fault ledger
+         * @description Faults are persistent because `since` is the interesting part — "unreachable for three days" is a different fact from "unreachable", and a restart must not reset that clock.
+         */
+        get: operations["listSecurityFaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/security/faults/{id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a standing fault as seen (operator)
+         * @description Acknowledgement never clears the fault: the condition is still there, the operator has merely stopped needing to be told.
+         */
+        post: operations["acknowledgeSecurityFault"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/sensor-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the data points a zone can enrol as alarm sensors
+         * @description Sensor enrollment was the one alarm surface without a candidate list — outputs and remote keys had one, sensors were unvalidated free text over (central, interface, channel address, parameter), so a typo produced a sensor that silently never fired.
+         *
+         *     Each candidate carries the pre-fill an enrollment needs: the suggested alarm role, the hazard class, the parameter's value list, and `active_values` wherever the default "anything but index 0 is active" rule would be wrong. The clearest case is `SMOKE_DETECTOR_ALARM_STATUS`, whose value list contains `INTRUSION_ALARM` — the alarm system driving that detector as a siren, not a smoke detection.
+         */
+        get: operations["listAlarmSensorCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the incident history of one alarm zone
+         * @description Returns the zone's alarm episodes, newest first. Unlike the journal — which records individual events — an incident is the whole episode, and it carries the full source ledger: every data point that contributed, not only the one that opened it. A second detector firing while the siren already sounds appears in `sources` and nowhere else.
+         */
+        get: operations["listAlarmIncidents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/incidents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** Get one alarm incident with its full source ledger */
+        get: operations["getAlarmIncident"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alarm/zones/{id}/walktest/start": {
         parameters: {
             query?: never;
@@ -8780,6 +8969,209 @@ export interface components {
             bypassed?: string[];
             /** @description Exit delay in seconds the zone is now counting down; 0 when armed immediately. */
             exit_delay_s?: number;
+        };
+        /** @description The whole Security & Safety domain at one instant. */
+        SecuritySnapshot: {
+            /**
+             * @description The folded overall state.
+             * @enum {string}
+             */
+            severity: "ok" | "info" | "warning" | "alarm" | "critical";
+            /** @description One entry per class the installation has sources for, in escalation order. A class without sources is absent, not inactive. */
+            classes: components["schemas"]["SecurityClassState"][];
+            /** @description Empty when the alarm engine is disabled. */
+            zones?: components["schemas"]["SecurityZoneState"][];
+            faults?: components["schemas"]["SecurityFault"][];
+            /** @description The alarm engine's verdict about itself, distinct from a transport outage. */
+            engine_healthy: boolean;
+            last_alarm?: components["schemas"]["SecurityNotification"];
+            last_fault?: components["schemas"]["SecurityNotification"];
+        };
+        SecurityClassState: {
+            /** @enum {string} */
+            class: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            active: boolean;
+            sources?: components["schemas"]["AlarmSource"][];
+            /** @description Sources of this class the index knows, active or not. */
+            known: number;
+            centrals?: string[];
+            /** Format: date-time */
+            since?: string;
+        };
+        SecurityZoneState: {
+            id: string;
+            /** @description Stable, human-readable zone identifier. Frozen at creation — renaming a zone does not change it, so consumer entity ids survive. */
+            slug: string;
+            name: string;
+            state: string;
+            mode: string;
+            sources?: components["schemas"]["AlarmSource"][];
+            /** @description Active source names grouped per class — the "per zone and per type" axis in one object rather than a zone-by-class matrix of entities. */
+            by_class?: {
+                [key: string]: string[];
+            };
+            /** Format: int64 */
+            incident_id?: number;
+            /** Format: date-time */
+            since?: string;
+        };
+        SecuritySourceView: {
+            ref: string;
+            central: string;
+            interface_id: string;
+            channel_address: string;
+            device_address: string;
+            parameter: string;
+            name?: string;
+            class: string;
+            reason?: string;
+            active: boolean;
+            /** @description Whether the source contributes to an aggregate. A classifiable source on a device with no alarm role is indexed but not aggregated; that gate keeps the fault plane from standing permanently on across a whole fleet. */
+            relevant: boolean;
+            zone_id?: string;
+            /** @description An operator decision, not the classifier, produced this verdict. */
+            overridden?: boolean;
+            /** Format: date-time */
+            since?: string;
+        };
+        SecuritySourceOverride: {
+            /**
+             * @description Empty keeps the classifier verdict.
+             * @enum {string}
+             */
+            class?: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            /** @description false removes the source from every aggregate. Omitting the field leaves inclusion unchanged — a request that only names a class reclassifies and never excludes. */
+            included?: boolean;
+            note?: string;
+        };
+        SecurityFault: {
+            id: string;
+            class: string;
+            /** @enum {string} */
+            reason: "unreachable" | "blocked" | "device_error" | "central_lost" | "duty_cycle" | "low_battery" | "tamper";
+            severity: string;
+            source: components["schemas"]["AlarmSource"];
+            /** Format: date-time */
+            since: string;
+            /** Format: date-time */
+            acknowledged_at?: string;
+            acknowledged_by?: string;
+        };
+        /** @description One rendered report. It carries the sentence and the machine facets side by side: the text makes a three-line automation possible, the facets make a different wording possible without parsing prose. */
+        SecurityNotification: {
+            class: string;
+            severity: string;
+            /** @enum {string} */
+            verb: "triggered" | "pre_alarm" | "cleared" | "silenced" | "failed_to_arm" | "raised" | "test";
+            /** @description One line, at most 120 characters, suitable as a notification title. */
+            subject: string;
+            /** @description A full sentence naming cause, place and time. */
+            message: string;
+            /** @description Catalogue key of the message, so a consumer can re-render in its own locale instead of translating prose. */
+            i18n_key: string;
+            args?: {
+                [key: string]: string;
+            };
+            sources?: components["schemas"]["AlarmSource"][];
+            zone_id?: string;
+            zone_slug?: string;
+            zone_name?: string;
+            mode?: string;
+            /** Format: int64 */
+            incident_id?: number;
+            link?: string;
+            /** Format: date-time */
+            at: string;
+        };
+        /** @description One data point a zone can enrol as an alarm sensor. */
+        AlarmSensorCandidate: {
+            central: string;
+            interface_id: string;
+            device_address: string;
+            device_name?: string;
+            model?: string;
+            channel_address: string;
+            channel_no: number;
+            channel_name?: string;
+            channel_type?: string;
+            parameter: string;
+            rooms?: string[];
+            functions?: string[];
+            /**
+             * @description The suggested alarm role.
+             * @enum {string}
+             */
+            sensor_type?: "door" | "window" | "motion" | "tamper" | "hazard" | "panic";
+            /** @enum {string} */
+            security_class?: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            /** @description The parameter's enumeration vocabulary; absent for a boolean. */
+            value_list?: string[];
+            /** @description Localized renderings of value_list, in the same order. */
+            value_labels?: string[];
+            /** @description Recommended active-value selection. Present only where the default rule would be wrong. */
+            active_values?: string[];
+            /** @description Prefer this data point when a device offers several. */
+            recommended?: boolean;
+            /** @description Workable, but a better sibling exists; see reason. */
+            deprioritised?: boolean;
+            reason?: string;
+            enrolled?: boolean;
+            zone_id?: string;
+        };
+        /** @description One data point that contributed to an incident or blocked an arm. Carries the full identity, so a client can resolve the device behind an alarm instead of only its display name. */
+        AlarmSource: {
+            /** @description Stable routing key `<central>|<interface_id>|<channel_address>|<parameter>`. Deduplication key; two centrals with identical channel addresses never collide. */
+            ref: string;
+            central?: string;
+            interface_id?: string;
+            channel_address?: string;
+            /** @description channel_address without the channel suffix. */
+            device_address?: string;
+            parameter?: string;
+            /** @description Enrolled alarm-sensor row; empty for non-enrolled sources. */
+            sensor_id?: string;
+            name?: string;
+            /** @description Alarm role (motion, opening, hazard, panic, ...). */
+            sensor_type?: string;
+            /**
+             * @description Security & Safety hazard/fault class.
+             * @enum {string}
+             */
+            class?: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            /** @description Incident cause token the contribution arrived under. */
+            cause?: string;
+            /** Format: date-time */
+            at: string;
+        };
+        /** @description One alarm episode of a zone. */
+        AlarmIncident: {
+            /** Format: int64 */
+            id: number;
+            zone_id: string;
+            /** @enum {string} */
+            mode: "disarmed" | "perimeter" | "full" | "night" | "vacation" | "custom";
+            /** @description Machine-readable cause token that opened the incident. */
+            cause?: string;
+            cause_sensor_id?: string;
+            cause_sensor_name?: string;
+            /** @description Every contributing data point, oldest first. */
+            sources?: components["schemas"]["AlarmSource"][];
+            /** Format: date-time */
+            started_at: string;
+            /**
+             * Format: date-time
+             * @description Absent while the incident is still running.
+             */
+            closed_at?: string;
+            /** @enum {string} */
+            close_reason?: "disarm" | "post_trigger" | "incident_lost";
+            silenced: boolean;
+            /** Format: date-time */
+            silenced_at?: string;
+            silenced_by?: string;
+            retrigger_cycles: number;
+            acoustic_seconds: number;
+            open: boolean;
         };
         /** @description One entry in the alarm engine's append-only event journal (docs/alarm-concept.md §14), as returned by GET /alarm/journal. */
         AlarmJournalEntry: {
@@ -15217,6 +15609,231 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+        };
+    };
+    getSecuritySnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The domain snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecuritySnapshot"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getSecurityClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                class: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The class state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityClassState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description The class is defined but this installation has no source for it. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSecuritySources: {
+        parameters: {
+            query?: {
+                class?: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+                central?: string;
+                zone_id?: string;
+                /** @description Only sources that contribute to an aggregate. */
+                relevant?: "true";
+                active?: "true";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The inventory. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecuritySourceView"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    putSecuritySourceOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The routing key `<central>|<interface_id>|<channel_address>|<parameter>`, URL-encoded. */
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecuritySourceOverride"];
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSecurityFaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Standing faults, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityFault"][];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    acknowledgeSecurityFault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Acknowledged */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listAlarmSensorCandidates: {
+        parameters: {
+            query?: {
+                /** @description Pass `false` to hide data points a zone already holds. */
+                enrolled?: "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enrollable sensor data points. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmSensorCandidate"][];
+                };
+            };
+        };
+    };
+    listAlarmIncidents: {
+        parameters: {
+            query: {
+                /** @description The alarm zone whose incidents to return. */
+                zone_id: string;
+                /** @description Maximum incidents to return. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incidents of the zone (newest first). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmIncident"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    getAlarmIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The incident. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmIncident"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
         };
     };
     startAlarmWalkTest: {

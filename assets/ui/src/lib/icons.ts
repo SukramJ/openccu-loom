@@ -195,7 +195,10 @@ export type IconName =
   | "mdi:weather-windy"
   | "mdi:star"
   | "mdi:star-outline"
-  | "mdi:zap";
+  | "mdi:zap"
+  | "mdi:shield-alert"
+  | "mdi:gas-cylinder"
+  | "mdi:molecule-co";
 
 const REGISTRY: Record<IconName, Component> = {
   "mdi:alert": AlertCircle,
@@ -289,6 +292,12 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:smoke-detector-variant": AlertOctagonReplacement(),
   "mdi:water-alert": Droplets,
   "mdi:weather-windy": Wind,
+  // Security & Safety domain class glyphs (gas/CO have no dedicated Lucide
+  // pick, so they share the Cloud glyph already used for the loose-registry
+  // gas/vapor tokens above).
+  "mdi:shield-alert": ShieldAlert,
+  "mdi:gas-cylinder": Cloud,
+  "mdi:molecule-co": Cloud,
 };
 
 export function resolveIcon(name: IconName): Component {

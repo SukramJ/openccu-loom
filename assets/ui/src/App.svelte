@@ -43,6 +43,10 @@
   // journal + walk test + wizard); code-split so installs that never
   // open it don't pay for its JS.
   const loadAlarm = () => import("./routes/alarm/Alarm.svelte");
+  // Security & Safety runs independently of the alarm engine and is
+  // rarely opened relative to the device-control surface, so it is
+  // code-split the same way.
+  const loadSecurity = () => import("./routes/security/Security.svelte");
   // Diagnostics + Logs are infrequently visited and not part of the core
   // device-control surface, so they are code-split.
   const loadDiagnostics = () => import("./routes/Diagnostics.svelte");
@@ -208,6 +212,7 @@
     | { kind: "signal" }
     | { kind: "matter"; subpath: string }
     | { kind: "alarm"; subpath: string }
+    | { kind: "security"; subpath: string }
     | { kind: "visibility" }
     | { kind: "access" }
     | { kind: "about" }
@@ -248,6 +253,9 @@
     if (path === "/alarm" || path.startsWith("/alarm/")) {
       return { kind: "alarm", subpath: path.slice("/alarm".length) || "" };
     }
+    if (path === "/security" || path.startsWith("/security/")) {
+      return { kind: "security", subpath: path.slice("/security".length) || "" };
+    }
     const m = rawPath.match(
       /^\/devices\/([^/]+)(?:\/channels\/(\d+))?\/?$/,
     );
@@ -287,6 +295,7 @@
     route.kind === "settings" ? t("page.title.settings") :
     route.kind === "access" ? t("page.title.access") :
     route.kind === "alarm" ? t("page.title.alarm") :
+    route.kind === "security" ? t("page.title.security") :
     route.kind === "about" ? t("page.title.about") :
     t("page.title.default")
   }</title>
@@ -435,6 +444,12 @@
             <LoadingState />
           {:then { default: Alarm }}
             <Alarm subpath={route.subpath} />
+          {/await}
+        {:else if route.kind === "security"}
+          {#await loadSecurity()}
+            <LoadingState />
+          {:then { default: Security }}
+            <Security subpath={route.subpath} />
           {/await}
         {:else if route.kind === "visibility"}
           <UnIgnoreList />

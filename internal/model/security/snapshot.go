@@ -161,3 +161,32 @@ func (n Notification) SourceNames() []string {
 	}
 	return out
 }
+
+// SourceView is one classified data point as an operator sees it in the
+// inventory: what the classifier decided, whether an override changed
+// that, and whether an alarm zone holds it.
+type SourceView struct {
+	Ref            string
+	Central        string
+	InterfaceID    string
+	ChannelAddress string
+	DeviceAddress  string
+	Parameter      string
+	Name           string
+	Class          hmenum.SecurityClass
+	Reason         hmenum.SecurityFaultReason
+	// Active reports the current activation.
+	Active bool
+	// Relevant reports whether the source contributes to an aggregate.
+	// A classifiable source on a device with no alarm role is indexed
+	// but not aggregated — that gate is what keeps the fault plane from
+	// standing permanently on across a whole fleet.
+	Relevant bool
+	// ZoneID names the alarm zone holding it, empty when not enrolled.
+	ZoneID string
+	// Overridden reports that an operator decision, not the classifier,
+	// produced this verdict.
+	Overridden bool
+	// SinceMS is when it last became active; 0 while inactive.
+	SinceMS int64
+}

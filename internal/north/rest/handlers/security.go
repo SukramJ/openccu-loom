@@ -6,6 +6,8 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,6 +25,9 @@ type SecurityDomain interface {
 	Snapshot() security.Snapshot
 	Faults() []security.Fault
 	AcknowledgeFault(ctx context.Context, id, by string) (bool, error)
+	Sources(ctx context.Context) []security.SourceView
+	SetSourceOverride(ctx context.Context, central, interfaceID, channelAddress, parameter string,
+		class hmenum.SecurityClass, included bool, note string) error
 }
 
 // GetSecuritySnapshot serves the whole domain state.
@@ -231,5 +236,102 @@ func apiSecuritySource(r hmevent.SecuritySourceRef) hmapi.AlarmSource {
 		SensorType:     string(r.SensorType),
 		Class:          string(r.Class),
 		At:             msToTime(r.AtMS),
+	}
+}
+
+// ListSecuritySources serves the classified inventory.
+//
+// Filters narrow by class, central, zone and relevance. The unfiltered
+// list is deliberately available: a source the classifier got wrong is
+// invisible in every aggregate, so listing everything is the only way
+// to find it.
+func ListSecuritySources(d SecurityDomain) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d == nil {
+			writeSecurityUnavailable(w, r)
+			return
+		}
+		q := r.URL.Query()
+		class := q.Get("class")
+		if class != "" && !hmenum.SecurityClass(class).Valid() {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Unknown security class", class))
+			return
+		}
+		central := q.Get("central")
+		zone := q.Get("zone_id")
+		onlyRelevant := q.Get("relevant") == "true"
+		onlyActive := q.Get("active") == "true"
+
+		rows := d.Sources(r.Context())
+		out := make([]hmapi.SecuritySourceView, 0, len(rows))
+		for i := range rows {
+			s := &rows[i]
+			switch {
+			case class != "" && string(s.Class) != class,
+				central != "" && s.Central != central,
+				zone != "" && s.ZoneID != zone,
+				onlyRelevant && !s.Relevant,
+				onlyActive && !s.Active:
+				continue
+			}
+			out = append(out, apiSecuritySourceView(*s))
+		}
+		JSON(w, http.StatusOK, out)
+	}
+}
+
+// PutSecuritySourceOverride records an operator decision about one data
+// point. The ref is the routing key, URL-encoded.
+func PutSecuritySourceOverride(d SecurityDomain, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d == nil {
+			writeSecurityUnavailable(w, r)
+			return
+		}
+		ref, err := url.PathUnescape(chi.URLParam(r, "ref"))
+		if err != nil || ref == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid source reference", ""))
+			return
+		}
+		parts := strings.SplitN(ref, "|", 4)
+		if len(parts) != 4 {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid source reference",
+					"expected <central>|<interface_id>|<channel_address>|<parameter>"))
+			return
+		}
+		var in hmapi.SecuritySourceOverride
+		if err := DecodeJSON(r, &in); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
+			return
+		}
+		// An omitted `included` keeps the source included: the request
+		// that only names a class must reclassify, never exclude.
+		included := true
+		if in.Included != nil {
+			included = *in.Included
+		}
+		err = d.SetSourceOverride(r.Context(), parts[0], parts[1], parts[2], parts[3],
+			hmenum.SecurityClass(in.Class), included, in.Note)
+		if err != nil {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "Invalid source override", err.Error()))
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "security_source="+ref)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func apiSecuritySourceView(s security.SourceView) hmapi.SecuritySourceView {
+	return hmapi.SecuritySourceView{
+		Ref: s.Ref, Central: s.Central, InterfaceID: s.InterfaceID,
+		ChannelAddress: s.ChannelAddress, DeviceAddress: s.DeviceAddress,
+		Parameter: s.Parameter, Name: s.Name, Class: string(s.Class),
+		Reason: string(s.Reason), Active: s.Active, Relevant: s.Relevant,
+		ZoneID: s.ZoneID, Overridden: s.Overridden, Since: msToTime(s.SinceMS),
 	}
 }

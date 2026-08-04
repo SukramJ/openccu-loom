@@ -121,19 +121,46 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 // sourceActive maps a wire value onto the domain's activation
 // semantics, honouring the classifier's value narrowing.
 func sourceActive(src *indexedSource, v hmtypes.ParamValue) (active, known bool) {
-	raw := v.Unwrap()
-	if len(src.activeValues) == 0 {
+	return activeFromRaw(src.activeValues, v.Unwrap(), nil)
+}
+
+// activeFromRaw is the single activation rule of the domain, shared by
+// the event path and the index seeding.
+//
+// valueList is optional: with it, an enumeration arriving as an index is
+// narrowed properly; without it the rule falls back to the default. The
+// fallback keeps a source reporting rather than silently going dark —
+// for a hazard detector, over-reporting costs a false alarm and
+// under-reporting costs the alarm entirely.
+func activeFromRaw(activeValues []string, raw any, valueList []string) (active, known bool) {
+	if len(activeValues) == 0 {
 		return normalizeActive(raw)
 	}
 	if label, ok := raw.(string); ok {
-		return containsString(src.activeValues, label), true
+		return containsString(activeValues, label), true
 	}
-	// An enumeration arriving as an index cannot be narrowed without
-	// the value list, which the index does not carry per data point.
-	// Falling back keeps the source reporting rather than silently
-	// going dark; the alarm engine applies the narrowing on the path
-	// that owns the enrollment.
+	if idx, ok := rawIndex(raw); ok {
+		for i, label := range valueList {
+			if i == idx {
+				return containsString(activeValues, label), true
+			}
+		}
+	}
 	return normalizeActive(raw)
+}
+
+// rawIndex narrows the integer wire kinds onto an enumeration index.
+func rawIndex(raw any) (int, bool) {
+	switch v := raw.(type) {
+	case int:
+		return v, true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	default:
+		return 0, false
+	}
 }
 
 // normalizeActive is the domain's default activation rule: booleans map

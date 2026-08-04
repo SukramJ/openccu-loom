@@ -101,3 +101,49 @@ type SecurityNotification struct {
 	Link string    `json:"link,omitempty"`
 	At   time.Time `json:"at"`
 }
+
+// SecuritySourceView is one classified data point as the inventory
+// shows it: the classifier's verdict, whether an operator overrode it,
+// and whether an alarm zone holds it.
+type SecuritySourceView struct {
+	Ref            string `json:"ref"`
+	Central        string `json:"central"`
+	InterfaceID    string `json:"interface_id"`
+	ChannelAddress string `json:"channel_address"`
+	DeviceAddress  string `json:"device_address"`
+	Parameter      string `json:"parameter"`
+	Name           string `json:"name,omitempty"`
+	Class          string `json:"class"`
+	Reason         string `json:"reason,omitempty"`
+	Active         bool   `json:"active"`
+	// Relevant reports whether the source contributes to an aggregate.
+	// A classifiable source on a device with no alarm role is indexed
+	// but not aggregated; that gate keeps the fault plane from standing
+	// permanently on across a whole fleet.
+	Relevant bool `json:"relevant"`
+	// ZoneID names the alarm zone holding it, empty when not enrolled.
+	ZoneID string `json:"zone_id,omitempty"`
+	// Overridden reports that an operator decision, not the classifier,
+	// produced this verdict.
+	Overridden bool      `json:"overridden,omitempty"`
+	Since      time.Time `json:"since,omitzero"`
+}
+
+// SecuritySourceOverride is the operator decision about one data point.
+//
+// An empty class with included=true and no note removes the override,
+// returning the data point to the classifier's verdict — the undo a
+// wrong override needs.
+type SecuritySourceOverride struct {
+	Class string `json:"class,omitempty"`
+	// Included=false removes the source from every aggregate.
+	//
+	// It is a pointer so an omitted field is distinguishable from an
+	// explicit false. Omitting it means "leave inclusion as it is",
+	// which is what `{"class":"technical"}` — the natural way to just
+	// reclassify — has to mean. As a plain bool that request decoded to
+	// false and silently excluded the source instead, returning 204
+	// while doing the opposite of what was asked.
+	Included *bool  `json:"included,omitempty"`
+	Note     string `json:"note,omitempty"`
+}
