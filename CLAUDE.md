@@ -262,8 +262,12 @@ call obliges you to add a pin under `tests/contract/wiring_pins/` that
 through `New` alone and touches only the surfaces the real daemon
 touches.
 
-Guard: `TestEveryWiringSetterHasAPin` walks every exported `Set*` /
-`Attach*` method on a service type and fails listing those with no pin.
+Guard: **not yet built.** `TestEveryWiringSetterHasAPin` is planned as an
+AST walk over every exported `Set*` / `Attach*` on a service type, failing
+on those with no pin, with the present surface as a ratchet baseline.
+Until it lands this rule is reviewed, not enforced — and a measurement in
+2026-08 counted ~175 such setters against ~11 real pins, so treat the rule
+as load-bearing rather than satisfied.
 
 #### A lifecycle test uses the production order
 
@@ -278,8 +282,10 @@ Every daemon-level subsystem carries a boot-order integration test:
 start the daemon, wait for readiness, assert the subsystem reports
 non-empty state.
 
-Guard: `tests/integration/*_boot_order_test.go`, one per daemon-level
-subsystem.
+Guard: `tests/integration/*_boot_order_test.go`. **One exists**
+(`security_boot_order_test.go`) against roughly a dozen daemon-level
+subsystems started by the composition root. The pattern is proven; the
+coverage is not there yet.
 
 #### Declared and published must be the same set
 
@@ -293,22 +299,38 @@ produces entities that appear in Home Assistant and stay `unavailable`
 forever. Payload-shape tests and publish-call tests both passed; nothing
 compared them.
 
-Guard: one `Test*PlaneTopicsRoundTrip` per plane.
+Guard: one `Test*PlaneTopicsRoundTrip` per plane, in
+`internal/north/mqtt/`.
 
-#### A fan-out switch over a closed event set is exhaustive and proves it
+#### An event nobody consumes is a dead feature, and it looks identical to a live one
 
-A sink or dispatcher that type-switches over a domain's events needs a
-table test that publishes **every** event type the domain defines and
-asserts each one arrives. The `default:` branch is a test failure, not a
-log line.
+Two shapes of the same defect.
 
-`internal/alarm/service.go` logged `alarm sink dropped unknown event
-type` for `AlarmDuressEvent` — a duress code under coercion produced one
-hidden journal row and nothing else, on every surface, under every
-configured visibility level.
+**The switch that drops.** A sink or dispatcher that type-switches over a
+domain's events needs a table test that publishes **every** event type the
+domain defines and asserts each one arrives. The `default:` branch is a
+test failure, not a log line. `internal/alarm/service.go` logged `alarm
+sink dropped unknown event type` for `AlarmDuressEvent` — a duress code
+under coercion produced one hidden journal row and nothing else, on every
+surface, under every configured visibility level.
 
-Guard: one `Test*SinkFansOutEveryEventType` per fan-out, driven from the
-domain's `EventType*` constants.
+**The event with no subscriber at all.** The bus has no wildcard
+subscription, so an event nothing subscribes to reaches nothing — and
+every surrounding test still passes, because the producer's test asserts
+it published and the would-be consumer's test publishes onto its own bus.
+This shape reliably leaves a comment behind claiming consumers that do not
+exist: `engine.go` announced `AlarmDuressEvent` "for the MQTT/webhook
+consumers" when only the webhook subscribed, and `device_pipeline.go`
+announced `WeekProfileChangedEvent` "so MQTT/WS subscribers" receive it
+when neither did. **A comment naming a consumer is a hypothesis; write
+the check instead.**
+
+Guards: one `Test*SinkFansOutEveryEventType` per fan-out, driven from the
+domain's `EventType*` constants — and `TestEveryEventTypeHasASubscriber`
+(`tests/contract/`), which resolves every `events.Subscribe` through the
+type checker and fails on any event type that has no consumer and no
+declared reason in `eventsWithoutSubscriber`. Declaring the silence is
+allowed; leaving it undeclared is not.
 
 ### Interfaces in the consumer package, except for cross-cutting protocols
 

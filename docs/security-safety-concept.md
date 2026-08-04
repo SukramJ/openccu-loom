@@ -686,11 +686,22 @@ Alle fünf offenen Punkte sind entschieden. Vier folgen der Empfehlung, einer we
 Fehlbedienung hier die Bedrohungsmodell-Zusage aufhebt statt nur eine
 Anzeige zu ändern:
 
-| Stufe | Webhook + `<base>/alarm/<zone>/event` | HA-`event`-Entität | retained `last_alarm` | SPA / WebSocket |
+| Stufe | Webhook | HA-`event`-Entität (`<base>/security/event`) | retained `last_alarm` | SPA / WebSocket |
 |---|---|---|---|---|
 | `hidden` | ✅ | — | — | — |
 | **`notify_only`** (Default) | ✅ | ✅ | **—** | — |
 | `full` | ✅ | ✅ | ✅ | ✅ |
+
+**Korrektur gegenüber dem Entwurf.** Die erste Spalte nannte ursprünglich
+„Webhook + `<base>/alarm/<zone>/event`". Das war nie wahr: der Alarm-MQTT-Publisher
+abonniert `AlarmDuressEvent` nicht, eine Duress-Entschärfung erscheint auf der
+Alarm-Plane als gewöhnliche Entschärfung. Für den verdeckten Zweck ist das richtig —
+ein Bildschirm, den der Angreifer sieht, darf nichts verraten. Die Folge ist
+trotzdem festzuhalten: **auf Stufe `hidden` erreicht eine Duress-Auslösung
+ausschließlich den Webhook.** Eine Installation ohne Webhook wird auf dieser Stufe
+über gar nichts informiert — genau der blinde Fleck, dessentwegen die Stufe
+überhaupt konfigurierbar wurde. `notify_only` als Default vermeidet ihn; wer
+`hidden` wählt, wählt ihn bewusst mit, und der Hilfetext muss das sagen.
 
 `hidden` reproduziert das heutige Verhalten exakt. Der Kniff bei `notify_only` ist das Auslassen des **retained** `last_alarm`: die Meldung erreicht das Handy, bleibt aber flüchtig und steht nicht dauerhaft in einem Dashboard-Attribut. Nur `full` hebt zusätzlich die bestehende WebSocket-Unterdrückung (`pkg/hmevent/alarm.go:56-62`) und den `Hidden`-Journaleintrag (`internal/alarm/journal/journal.go:52-53`) auf.
 

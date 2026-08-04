@@ -1,6 +1,6 @@
 {
-  "generated": "b2bae7d9",
-  "head": "b2bae7d9",
+  "generated": "3fbffdb4",
+  "head": "3fbffdb4",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27637,
+    "total_exported": 27642,
     "reachable": 4886,
-    "whitelisted": 19788,
+    "whitelisted": 19793,
     "unreachable": 2963
   },
   "by_package": [
@@ -1356,7 +1356,7 @@
       "package": "internal/alarm/engine",
       "identifier": "SensorHealth",
       "file": "internal/alarm/engine/engine.go",
-      "line": 895,
+      "line": 903,
       "kind": "type"
     },
     {
@@ -86339,7 +86339,7 @@
       "identifier": "TestDeviceUpdateHADiscoveryPayloadShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/update_payload_test.go",
-      "line": 109
+      "line": 111
     },
     {
       "package": "internal/model/device",
@@ -116086,6 +116086,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestAddonUpdatePlaneTopicsRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/addon_update_topics_roundtrip_test.go",
+      "line": 33
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestAggregatorPassesThroughBuilderBody",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_source_mode_test.go",
@@ -116188,6 +116195,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_ha_schema_test.go",
       "line": 286
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestAlarmPlaneTopicsRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/alarm_topics_roundtrip_test.go",
+      "line": 34
     },
     {
       "package": "internal/north/mqtt",
@@ -117738,6 +117752,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestDevicePlaneTopicsRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/device_topics_roundtrip_test.go",
+      "line": 87
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestDiscoveryAddsValueTemplateInJSONMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/payload_format_test.go",
@@ -118302,6 +118323,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/hub_discovery_device_link_test.go",
       "line": 125
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestHubPlaneTopicsRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/hub_topics_roundtrip_test.go",
+      "line": 38
     },
     {
       "package": "internal/north/mqtt",
@@ -147113,7 +147141,7 @@
       "identifier": "TestServiceIgnoresMasterZoneRemoval",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/security/zone_lifecycle_test.go",
-      "line": 78
+      "line": 85
     },
     {
       "package": "internal/security",
@@ -158258,6 +158286,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/event_catalogue_test.go",
       "line": 14
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestEveryEventTypeHasASubscriber",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/event_subscriber_coverage_test.go",
+      "line": 75
     },
     {
       "package": "tests/contract",

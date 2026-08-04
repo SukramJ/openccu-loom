@@ -543,9 +543,17 @@ func (e *Engine) authorize(ctx context.Context, a *zone, verb, code, source stri
 
 // fireDuress emits the silent duress fan-out: a Hidden journal entry
 // (the journal facade suppresses the append event for hidden rows) plus
-// a dedicated AlarmDuressEvent on the bus for the MQTT/webhook
-// consumers. The verb itself proceeds normally. The caller holds the
-// lock.
+// a dedicated AlarmDuressEvent on the bus. The verb itself proceeds
+// normally. The caller holds the lock.
+//
+// Who receives it: the webhook, and the Security & Safety domain, which
+// applies alarm.duress_visibility and renders a report. The alarm MQTT
+// publisher does NOT subscribe — a duress disarm therefore appears on
+// the alarm plane as an ordinary disarm, which is what the covert design
+// intends for a screen an attacker can see, but also means that at
+// visibility `hidden` an installation without a webhook is told nothing
+// at all. Stated here because the surrounding code once claimed MQTT as
+// a consumer and no test disagreed.
 func (e *Engine) fireDuress(ctx context.Context, a *zone, verb, by, source string) {
 	incID := int64(0)
 	if a.incident != nil {

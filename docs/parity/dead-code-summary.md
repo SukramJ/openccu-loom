@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: b2bae7d9
-HEAD: b2bae7d9
+Generated: 3fbffdb4
+HEAD: 3fbffdb4
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27637 |
+| Total Exported | 27642 |
 | Reachable | 4886 |
-| Whitelisted | 19788 |
+| Whitelisted | 19793 |
 | **Unreachable** | **2963** |
 
 ## Top-20 Packages by Dead Code
