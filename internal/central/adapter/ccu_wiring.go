@@ -714,6 +714,13 @@ func wireInterface(
 		Enabled:             true,
 		Logger:              logger.With(slog.String("interface", wireID)),
 		SessionRecorderHook: sessionHook,
+		// Gate the reconnect re-registration on the same boot marker that
+		// gates the initial bring-up. Without it a reconnect racing a
+		// rebooting CCU registers a second time (see [client.Config]).
+		// Bounded, unlike the boot gate: the reconnect loop retries with
+		// backoff, so a long wait here would stall the client state machine
+		// instead of letting it cycle.
+		WaitCCUReady: newReconnectReadinessGate(cc, logger),
 	}
 	// Operator-supplied reliability overrides default to
 	// openccu-loom's Go-idiomatic values when zero; a positive

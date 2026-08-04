@@ -191,6 +191,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	incidentStore, incidentTeardown := wireIncidentRecorder(auditDB, reg, logger)
 	defer incidentTeardown()
 
+	// Audit every program run the daemon triggers, so a program reported as
+	// running twice can be attributed to the daemon or ruled out.
+	defer wireProgramExecuteAudit(reg, auditRec)()
+
 	// Seed every central's health tracker (synthetic "started" sample,
 	// primary-interface pin, event-bus / audit / scheduler gauges) and wire
 	// its metrics aggregator. Extracted into seedCentralHealthAndMetrics

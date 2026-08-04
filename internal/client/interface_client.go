@@ -139,6 +139,19 @@ type Config struct {
 	Capabilities backends.Capabilities
 	Logger       *slog.Logger
 
+	// WaitCCUReady blocks until the CCU has finished booting, reporting
+	// whether readiness was observed. Supplied by the wiring layer (which
+	// owns the readiness probe); nil disables the gate.
+	//
+	// The reconnect path needs it because a rebooting CCU serves XML-RPC
+	// before it is fully up: the `deinit` half of the re-registration then
+	// fails against a CCU that has not yet restored its callback registry,
+	// while the `init` that follows succeeds. The CCU keeps the previous
+	// registration and appends the new one under a suffixed interface id, so
+	// it pushes every event twice — once per registration — and anything
+	// downstream reacting to those events fires twice as well.
+	WaitCCUReady func(context.Context) bool
+
 	// Version is the software version string returned by the backend during
 	// detection (e.g. from the XML-RPC getVersion call). The coordinator
 	// populates this after [backends.DetectBackend] completes. Empty string

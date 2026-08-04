@@ -209,6 +209,30 @@ func (c *InterfaceClient) Reconnect( //nolint:funlen // composition/wiring: long
 	case <-time.After(delay):
 	}
 
+	// Wait for the CCU to finish booting before re-registering. A CCU that
+	// serves XML-RPC mid-boot accepts the `init` while failing the `deinit`
+	// that precedes it, so the previous registration survives and the CCU
+	// ends up delivering every event twice — once per registration.
+	if gate := c.cfg.WaitCCUReady; gate != nil {
+		if !gate(ctx) {
+			c.cfg.Logger.Warn(
+				"Reconnect: CCU not ready, deferring re-init",
+				slog.String("central", c.cfg.CentralName),
+				slog.String("interface", string(c.cfg.Interface)),
+			)
+			if reconnectAttempts != nil {
+				*reconnectAttempts++
+			}
+			_ = c.TransitionTo(
+				hmenum.ClientStateDisconnected,
+				"ccu not ready",
+				true,
+				hmenum.FailureReasonNetwork,
+			)
+			return false, nil
+		}
+	}
+
 	// Re-init the proxy.
 	if err := c.ReinitProxy(ctx, b, interfaceID, callbackURL); err != nil {
 		if reconnectAttempts != nil {
