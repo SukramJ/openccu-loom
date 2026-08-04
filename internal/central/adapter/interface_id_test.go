@@ -42,12 +42,15 @@ func TestInitInterfaceID(t *testing.T) {
 		iface        hmenum.Interface
 		want         string
 	}{
-		{"triple", "loomhost", "GoOtto", hmenum.InterfaceHmIPRF, "loomhost-GoOtto-HmIP-RF"},
-		{"triple bidcos", "loomhost", "Backup", hmenum.InterfaceBidCosRF, "loomhost-Backup-BidCos-RF"},
-		{"triple cuxd", "loomhost", "Primary", hmenum.InterfaceCUxD, "loomhost-Primary-CUxD"},
-		{"empty instance falls back to ccu-iface", "", "GoOtto", hmenum.InterfaceHmIPRF, "GoOtto-HmIP-RF"},
-		{"empty ccu yields instance-iface", "loomhost", "", hmenum.InterfaceHmIPRF, "loomhost-HmIP-RF"},
-		{"both empty falls back to bare iface", "", "", hmenum.InterfaceHmIPRF, "HmIP-RF"},
+		{"full form", "loomhost", "GoOtto", hmenum.InterfaceHmIPRF, "loom-loomhost-GoOtto-HmIP-RF"},
+		{"full form bidcos", "loomhost", "Backup", hmenum.InterfaceBidCosRF, "loom-loomhost-Backup-BidCos-RF"},
+		{"full form cuxd", "loomhost", "Primary", hmenum.InterfaceCUxD, "loom-loomhost-Primary-CUxD"},
+		{"empty instance", "", "GoOtto", hmenum.InterfaceHmIPRF, "loom-GoOtto-HmIP-RF"},
+		{"empty ccu", "loomhost", "", hmenum.InterfaceHmIPRF, "loom-loomhost-HmIP-RF"},
+		{"both empty yields bare iface", "", "", hmenum.InterfaceHmIPRF, "loom-HmIP-RF"},
+		// Running as the CCU's own add-on: instance and central both default to
+		// a host-derived name, and repeating it adds no uniqueness.
+		{"instance equals central collapses", "RM-Test-VM-96", "RM-Test-VM-96", hmenum.InterfaceBidCosRF, "loom-RM-Test-VM-96-BidCos-RF"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -87,10 +90,12 @@ func TestWireInterfaceIDIsCcuUniqueWithinDaemon(t *testing.T) {
 	}
 }
 
-// TestStripInstanceRoundtrip pins the inbound-callback contract: the CCU
-// echoes the [InitInterfaceID] triple, and [StripInstance] must map it back to
-// the canonical [WireInterfaceID] that stamps the devices + registries.
-func TestStripInstanceRoundtrip(t *testing.T) {
+// TestCanonicalInterfaceIDRoundtrip pins the inbound-callback contract: the
+// CCU echoes the [InitInterfaceID] form, and [CanonicalInterfaceID] must map
+// it back to the [WireInterfaceID] that stamps the devices + registries. A
+// mismatch drops every callback on the floor — the echoed id resolves to no
+// known client.
+func TestCanonicalInterfaceIDRoundtrip(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name         string
@@ -101,29 +106,40 @@ func TestStripInstanceRoundtrip(t *testing.T) {
 		{"with instance", "loomhost", "GoOtto", hmenum.InterfaceHmIPRF},
 		{"empty instance", "", "GoOtto", hmenum.InterfaceBidCosRF},
 		{"cuxd", "loomhost", "Primary", hmenum.InterfaceCUxD},
+		{"instance equals central", "RM-Test-VM-96", "RM-Test-VM-96", hmenum.InterfaceBidCosRF},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			initID := InitInterfaceID(tc.instanceName, tc.centralName, tc.iface)
 			wireID := WireInterfaceID(tc.centralName, tc.iface)
-			if got := StripInstance(tc.instanceName, initID); got != wireID {
-				t.Errorf("StripInstance(%q, %q) = %q, want %q (= WireInterfaceID)",
-					tc.instanceName, initID, got, wireID)
+			if got := CanonicalInterfaceID(tc.instanceName, tc.centralName, initID); got != wireID {
+				t.Errorf("CanonicalInterfaceID(%q, %q, %q) = %q, want %q (= WireInterfaceID)",
+					tc.instanceName, tc.centralName, initID, got, wireID)
 			}
 		})
 	}
 }
 
-// TestStripInstanceNoPrefix verifies StripInstance is a no-op when the id does
-// not carry the instance prefix (defensive: a two-part id arriving on the
-// inbound path must pass through unchanged).
-func TestStripInstanceNoPrefix(t *testing.T) {
+// TestCanonicalInterfaceIDAcceptsPrePrefixIDs covers the upgrade window: a
+// callback registered by an earlier release carries the un-prefixed
+// `<instance>-<central>-<iface>` form and is still in flight when the new
+// binary takes over. It must resolve to the same canonical id rather than
+// arriving under one no registry knows.
+func TestCanonicalInterfaceIDAcceptsPrePrefixIDs(t *testing.T) {
 	t.Parallel()
-	if got := StripInstance("loomhost", "GoOtto-HmIP-RF"); got != "GoOtto-HmIP-RF" {
-		t.Errorf("StripInstance no-prefix = %q, want unchanged", got)
+	legacy := "loomhost-GoOtto-HmIP-RF"
+	if got := CanonicalInterfaceID("loomhost", "GoOtto", legacy); got != "GoOtto-HmIP-RF" {
+		t.Errorf("pre-prefix id = %q, want %q", got, "GoOtto-HmIP-RF")
 	}
-	if got := StripInstance("", "GoOtto-HmIP-RF"); got != "GoOtto-HmIP-RF" {
-		t.Errorf("StripInstance empty-instance = %q, want unchanged", got)
+}
+
+// TestCanonicalInterfaceIDNoPrefix verifies the mapping is a no-op for an id
+// that carries neither shape (defensive: a bare two-part id arriving on the
+// inbound path must pass through unchanged).
+func TestCanonicalInterfaceIDNoPrefix(t *testing.T) {
+	t.Parallel()
+	if got := CanonicalInterfaceID("", "GoOtto", "GoOtto-HmIP-RF"); got != "GoOtto-HmIP-RF" {
+		t.Errorf("no-prefix id = %q, want unchanged", got)
 	}
 }

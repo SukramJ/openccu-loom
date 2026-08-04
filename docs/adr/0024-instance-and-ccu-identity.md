@@ -1,6 +1,9 @@
 # ADR 0024 — Daemon-instance vs CCU identity, and the two interface ids
 
-- **Status**: accepted
+- **Status**: accepted; the `InitInterfaceID` formula below is partially
+  superseded by [0060](./0060-loom-prefixed-interface-ids.md) (`loom` prefix,
+  instance name collapsed when it equals the central name). The two-part
+  canonical `InterfaceID` is unchanged.
 - **Date**: 2026-06-02
 - **Refines**: [0002](./0002-multi-ccu-first-class.md) (multi-CCU),
   [0020](./0020-external-client-wire-contract.md) (wire contract)
