@@ -89,6 +89,10 @@ func TestDaemonServeWithReload_EmptyConfigPath_CallsDaemonServe(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.REST.Enabled = new(false)
+	// The REST listener starts regardless of Enabled (ADR 0044 folds the
+	// bootstrap surface into it), so pin an ephemeral port — the fixed
+	// default makes parallel daemon tests race for :8119.
+	cfg.North.REST.Listen = "127.0.0.1:0"
 	cfg.North.UI.Enabled = new(false)
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
 	cfg.Callback.Port = 0
@@ -128,6 +132,10 @@ func TestDaemonServeWithReload_WithConfigPath_StartsWatcher(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.North.REST.Enabled = new(false)
+	// The REST listener starts regardless of Enabled (ADR 0044 folds the
+	// bootstrap surface into it), so pin an ephemeral port — the fixed
+	// default makes parallel daemon tests race for :8119.
+	cfg.North.REST.Listen = "127.0.0.1:0"
 	cfg.North.UI.Enabled = new(false)
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
 	cfg.Callback.Port = 0

@@ -428,3 +428,139 @@ func TestMaskSecrets_MasksTopLevelMapSecret(t *testing.T) {
 		t.Errorf("non-secret field must pass through unchanged, got %v", webhook["url"])
 	}
 }
+
+// mqttSectionConfig is the current config the placeholder tests reconcile a
+// north.mqtt PUT against: a fully configured broker link with a password.
+func mqttSectionConfig() *config.Config {
+	return &config.Config{
+		North: config.NorthConfig{
+			MQTT: config.NorthMQTT{
+				Enabled:   true,
+				BrokerURL: "tcp://broker.example:1883",
+				ClientID:  "loom",
+				Username:  "loom",
+				Password:  "real-broker-password",
+				TopicBase: "openccu-loom",
+			},
+		},
+	}
+}
+
+// TestPutConfigSection_NullSecretPlaceholderKeepsPassword reproduces the
+// reported broker rejection: the operator edits an unrelated MQTT field, the
+// editor serialises the untouched password as JSON null, and the save wipes
+// the credential. The daemon then sends a CONNECT with no password flag and
+// the broker answers "Not authorized (0x87)".
+func TestPutConfigSection_NullSecretPlaceholderKeepsPassword(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: mqttSectionConfig()}}
+	body := `{"enabled":true,"broker_url":"tcp://broker.example:1883","client_id":"loom","username":"loom","password":null,"topic_base":"homematic"}`
+	w := putSection(fake, "north.mqtt", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	var saved config.NorthMQTT
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON invalid: %v", err)
+	}
+	if saved.TopicBase != "homematic" {
+		t.Errorf("edited topic_base not persisted: %q", saved.TopicBase)
+	}
+	if saved.Password != "real-broker-password" {
+		t.Errorf("null placeholder wiped the broker password: %q", saved.Password)
+	}
+}
+
+// TestPutConfigSection_AbsentSecretKeepsPassword covers the shape the editor
+// sends after the fix and any REST client that simply omits the field: an
+// absent key means "unchanged", never "clear it".
+func TestPutConfigSection_AbsentSecretKeepsPassword(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: mqttSectionConfig()}}
+	body := `{"enabled":true,"broker_url":"tcp://broker.example:1883","client_id":"loom","username":"loom","topic_base":"homematic"}`
+	w := putSection(fake, "north.mqtt", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	var saved config.NorthMQTT
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON invalid: %v", err)
+	}
+	if saved.Password != "real-broker-password" {
+		t.Errorf("absent secret key wiped the broker password: %q", saved.Password)
+	}
+}
+
+// TestPutConfigSection_EmptyStringSecretClears verifies the operator can still
+// remove a credential: emptying a string secret's input persists the empty
+// value instead of being reconciled back to the stored one. Without this the
+// restore would make a configured password impossible to delete.
+func TestPutConfigSection_EmptyStringSecretClears(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: mqttSectionConfig()}}
+	body := `{"enabled":true,"broker_url":"tcp://broker.example:1883","client_id":"loom","username":"loom","password":"","topic_base":"openccu-loom"}`
+	w := putSection(fake, "north.mqtt", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	var saved config.NorthMQTT
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON invalid: %v", err)
+	}
+	if saved.Password != "" {
+		t.Errorf("deliberately cleared password was restored: %q", saved.Password)
+	}
+}
+
+// TestMaskSecrets_LeavesUnsetSecretEmpty pins the diagnostic half of the
+// contract: masking an unset secret to "***" makes a dropped credential look
+// configured in the UI, which is what hid the wiped MQTT password. An empty
+// secret must stay empty; a configured one must still be masked.
+func TestMaskSecrets_LeavesUnsetSecretEmpty(t *testing.T) {
+	t.Parallel()
+
+	cfg := mqttSectionConfig()
+	cfg.North.Webhook = config.NorthWebhook{Enabled: true, URL: "https://hook.example"} // secret unset
+	masked := maskSecrets(cfg)
+
+	north, _ := masked["north"].(map[string]any)
+	mqttSec, _ := north["mqtt"].(map[string]any)
+	if got := mqttSec["password"]; got != maskSentinel {
+		t.Errorf("configured secret must be masked, got %#v", got)
+	}
+	hook, _ := north["webhook"].(map[string]any)
+	if got := hook["secret"]; got != "" {
+		t.Errorf("unset secret must stay empty so the UI can show \"not set\", got %#v", got)
+	}
+}
+
+// TestGetConfigSection_LeavesUnsetSecretEmpty is the section-scoped
+// counterpart: a stored section whose secret is empty must not come back as
+// "***" either.
+func TestGetConfigSection_LeavesUnsetSecretEmpty(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeConfigAdminSvc{
+		getSectionRow: sqlitestore.SectionRow{
+			Section:   "north.mqtt",
+			ValueJSON: []byte(`{"enabled":true,"broker_url":"tcp://broker.example:1883","password":""}`),
+		},
+	}
+	w := getSection(fake, "north.mqtt")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response is not JSON: %v", err)
+	}
+	if v := got["password"]; v != "" {
+		t.Errorf("unset section secret must stay empty, got %#v", v)
+	}
+}

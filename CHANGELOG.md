@@ -45,7 +45,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   asked and refused answers 502. Both were 502 before, which is why a
   dead restore path looked like an unhappy CCU.
 
-### Fixed
+- **Saving a config section wiped every secret the operator did not
+  retype.** Editing any MQTT field and pressing Save dropped the broker
+  password: the daemon then sent a CONNECT with no password flag at all
+  and the broker answered `Not authorized (0x87)` — which reads like a
+  wrong credential, so the search went to the broker instead of the save
+  path. The first save after typing the password worked, every later one
+  destroyed it, and the UI kept showing `***` either way.
+
+  The two sides of the masked-secret round-trip had drifted apart. The
+  editor never receives a secret's cleartext, so it echoed a placeholder
+  for a field it had not changed; the handler only reconciled the string
+  forms of that placeholder and read the one the editor actually sent as
+  a deliberate value. The contract is now explicit and pinned by a
+  contract test: the editor omits an untouched secret entirely, an absent
+  key (and the legacy `null` / `***` forms) means "keep the stored value",
+  and an empty string on a string secret still clears the credential —
+  so a secret remains deletable.
+
+- **"Reload MQTT" reloaded the configuration the daemon had booted
+  with.** A section saved in the Config UI is written to the database, an
+  event no file-watcher follows, but the reload read only the snapshot
+  that boot and the YAML watcher maintain. The rebuilt broker link
+  therefore kept the previous settings while the action reported success,
+  and only a full restart applied the change. The reload now re-derives
+  the effective configuration the way boot does — the YAML base with the
+  current database sections overlaid — and says so in the log when it has
+  to fall back to the stale snapshot.
+
+- **An unset secret was masked to `***` like a configured one.** That
+  made a credential that had been dropped indistinguishable from one that
+  was set, which is what kept the wiped password invisible. Empty secrets
+  are now passed through unmasked and the editor marks them "not set".
 
 - **The alarm system's system-variable mirror never wrote anything, and
   said nothing about it.** An operator who configured a zone output of
@@ -62,6 +93,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   central reports it at start-up.
 
 ### Added
+
+- **`mqtt.connect.failed`** — a rejected broker CONNECT now logs the
+  broker, client ID, protocol version and whether a username and password
+  were actually sent (presence and length, never the value). A broker
+  answers a missing credential and a wrong one with the same
+  `Not authorized (0x87)`, so those flags are what separate "typed it
+  wrong" from "sent none".
 
 - **`TestEveryWiringSetterHasAProductionCaller`** — a contract test that
   resolves every method injecting a collaborator and fails on those
