@@ -281,9 +281,17 @@ func (p PathData) MQTTDeviceUpdateState(base, centralName string) string {
 	)
 }
 
-// MQTTDeviceUpdateCommand returns the subscribed install-command
-// topic `<base>/<central>/<iface>/<addr>/update/set`. Follows the
-// `/set` convention used everywhere else for inbound writes.
+// MQTTDeviceUpdateCommand builds the install-command topic
+// `<base>/<central>/<iface>/<addr>/update/set`, following the `/set`
+// convention used for inbound writes.
+//
+// Nothing subscribes to it. The command subscriber's wildcards are all
+// deeper or shallower than this shape, so the topic has never been
+// inbound, and the device update entity is declared read-only for the
+// separate reason that flashing firmware from an unconfirmed — possibly
+// retained and replayed — broker payload is unsafe. Kept as the
+// canonical spelling should the command path ever be wired; the doc
+// comment used to call it "subscribed", which no test contradicted.
 func (p PathData) MQTTDeviceUpdateCommand(base, centralName string) string {
 	state := p.MQTTDeviceUpdateState(base, centralName)
 	if state == "" {

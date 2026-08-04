@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package mqtt
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
+
+// TestAlarmPlaneTopicsRoundTrip asserts that every topic the alarm
+// plane declares in a panel's discovery payload is a topic the plane
+// actually writes to (state) or actually subscribes to (command).
+//
+// It exists for the same reason as [TestSecurityPlaneTopicsRoundTrip]:
+// the two halves of a plane can each pass their own tests while
+// disagreeing with each other. Here the risk is concrete —
+// [BuildAlarmPanelDiscovery] derives `state_topic`/`command_topic` from
+// [alarmStateTopic]/[alarmCommandTopic], while [AlarmMQTTPublisher.reconcile]
+// writes the state through the very same [alarmStateTopic] helper and
+// [CommandSubscriber.Start] subscribes the command plane through its own,
+// independently written wildcard (`<base>/alarm/+/set`). A future edit to
+// either helper's topic shape without a matching edit on the other side
+// would leave a panel's state forever unavailable, or its arm/disarm
+// button silently unheard by the daemon.
+//
+// The comparison is one-directional: a declared topic nobody
+// writes/subscribes is the defect. A topic written without a
+// declaration (the non-retained `<base>/alarm/<zone>/event` stream,
+// which HA reaches through the raw plane rather than through a
+// discovered entity) is reported via t.Logf only.
+func TestAlarmPlaneTopicsRoundTrip(t *testing.T) {
+	t.Parallel()
+	const base = "gh"
+	zones := []string{"eg", "og"}
+
+	declared := map[string]bool{}
+	for _, zone := range zones {
+		item := BuildAlarmPanelDiscovery(base, zone, "Zone "+zone,
+			[]hmenum.AlarmMode{hmenum.AlarmModeFull}, false, false, false)
+		collectAlarmDeclaredTopics(t, item, declared)
+	}
+	// The aggregate master panel — same builder, master=true.
+	masterItem := BuildAlarmPanelDiscovery(base, "ignored", "Alarm system",
+		[]hmenum.AlarmMode{hmenum.AlarmModeFull}, true, false, false)
+	collectAlarmDeclaredTopics(t, masterItem, declared)
+
+	if len(declared) == 0 {
+		t.Fatal("no topics declared; the walk found no discovery payloads and would pass vacuously")
+	}
+
+	published := alarmPublishedTopics(base, zones)
+	if len(published) == 0 {
+		t.Fatal("no topics published/subscribed; the walk found nothing and would pass vacuously")
+	}
+
+	for topic := range declared {
+		if !published[topic] {
+			t.Errorf("declared but never published/subscribed: %q — a consumer creates this entity "+
+				"and it either stays unavailable forever (state) or its commands vanish silently (command)", topic)
+		}
+	}
+	for topic := range published {
+		if !declared[topic] && !alarmUndeclaredByDesign[topic] {
+			t.Logf("published but not declared: %q (no entity is created for it)", topic)
+		}
+	}
+}
+
+// alarmUndeclaredByDesign lists topics that are published/wired but
+// intentionally carry no discovery declaration of their own: the
+// per-panel availability topic is referenced from the nested
+// `availability` list, not as a top-level `state_topic`/
+// `json_attributes_topic`/`command_topic` field, and the non-retained
+// event stream is consumed off the raw plane directly.
+var alarmUndeclaredByDesign = map[string]bool{
+	"gh/alarm/eg/availability":     true,
+	"gh/alarm/og/availability":     true,
+	"gh/alarm/master/availability": true,
+	"gh/alarm/eg/event":            true,
+	"gh/alarm/og/event":            true,
+	"gh/alarm/master/event":        true,
+}
+
+// collectAlarmDeclaredTopics extracts the top-level state_topic and
+// command_topic fields from one alarm-panel discovery payload into out.
+func collectAlarmDeclaredTopics(t *testing.T, item DiscoveryItem, out map[string]bool) {
+	t.Helper()
+	if !item.OK {
+		t.Fatalf("BuildAlarmPanelDiscovery returned OK=false for a valid panel")
+	}
+	var body map[string]any
+	if err := json.Unmarshal(item.Payload, &body); err != nil {
+		t.Fatalf("discovery payload for %q is not JSON: %v", item.ObjectID, err)
+	}
+	for _, field := range []string{"state_topic", "command_topic"} {
+		if v, ok := body[field].(string); ok && v != "" {
+			out[v] = true
+		}
+	}
+}
+
+// alarmPublishedTopics is the set of topics the alarm plane actually
+// writes to or subscribes on, for the given zones plus the reserved
+// master segment.
+//
+// The state half is derived from [alarmStateTopic] — the same helper
+// [AlarmMQTTPublisher.reconcile] calls at the real publish call site
+// (alarm_publisher.go). The command half is NOT derived by calling
+// [alarmCommandTopic] again (that would only prove the discovery
+// builder agrees with itself); it reproduces, independently,
+// [CommandSubscriber.Start]'s own literal wildcard registration
+// (`<base>/alarm/+/set`) with the wildcard segment substituted by the
+// concrete zone — so a drift in either helper's topic shape, without a
+// matching edit on the other side, is what makes this test fail.
+func alarmPublishedTopics(base string, zones []string) map[string]bool {
+	out := map[string]bool{
+		base + "/alarm/" + alarmMasterZone + "/state": true,
+		base + "/alarm/" + alarmMasterZone + "/set":   true,
+	}
+	for _, zone := range zones {
+		out[alarmStateTopic(base, zone)] = true
+		// Mirrors CommandSubscriber.Start's `base+"/alarm/+/set"` wildcard.
+		out[base+"/alarm/"+zone+"/set"] = true
+	}
+	return out
+}

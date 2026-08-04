@@ -105,7 +105,9 @@ func TestDeviceUpdateStatePayloadShape(t *testing.T) {
 
 // TestDeviceUpdateHADiscoveryPayloadShape verifies the HA-canonical fields
 // the broker must publish: device_class, entity_category, value_template,
-// latest_version_template, payload_install, command_topic, state_topic.
+// latest_version_template, state_topic, latest_version_topic — and that
+// the payload carries no command surface (see the doc comment on
+// [Update.HADiscoveryPayload]).
 func TestDeviceUpdateHADiscoveryPayloadShape(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice(t)
@@ -129,9 +131,7 @@ func TestDeviceUpdateHADiscoveryPayloadShape(t *testing.T) {
 		"entity_category":         "config",
 		"value_template":          "{{ value_json.firmware }}",
 		"latest_version_template": "{{ value_json.latest_firmware }}",
-		"payload_install":         "INSTALL",
 		"state_topic":             wantStateTopic,
-		"command_topic":           wantInstallTopic,
 		"latest_version_topic":    wantStateTopic,
 	}
 	for k, want := range checks {
@@ -142,6 +142,15 @@ func TestDeviceUpdateHADiscoveryPayloadShape(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("body[%q] = %v, want %v", k, got, want)
+		}
+	}
+	// No command_topic / payload_install: nothing in the daemon
+	// subscribes to a per-device firmware install command (see the
+	// [Update.HADiscoveryPayload] doc comment) — declaring one would
+	// leave HA's "Install" button a silent no-op.
+	for _, forbidden := range []string{"command_topic", "payload_install"} {
+		if v, present := body[forbidden]; present {
+			t.Errorf("body must not carry %q (no subscriber exists for it), got %v", forbidden, v)
 		}
 	}
 }

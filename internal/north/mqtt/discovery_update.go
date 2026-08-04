@@ -57,9 +57,11 @@ func (c updateDiscoveryCtx) CustomDPStateTopic() string {
 }
 
 func (c updateDiscoveryCtx) ServiceMethodCommandTopic(_ string) string {
-	// For the update entity there is exactly one service method: "install".
-	// The payload_install HA field triggers it; always return the install
-	// command topic regardless of the method name argument.
+	// The update entity is read-only: it declares no command_topic, so
+	// nothing calls this and the returned value reaches no payload. The
+	// method exists because HADiscoveryContext requires it. It still
+	// returns the canonical install topic rather than the empty string so
+	// the spelling has one home if the command path is ever wired.
 	return c.topics.DeviceUpdateCommand(c.centralName, c.iface, c.address)
 }
 

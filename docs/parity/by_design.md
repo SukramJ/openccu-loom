@@ -3459,6 +3459,16 @@ Go path: `internal/north/mqtt/hub_discovery.go::BuildHubUpdateDiscovery`.
 
 ---
 
+### BD-DeviceUpdateDiscoveryReadOnly — the per-device update entity omits `command_topic` intentionally
+
+The HA `update` entity for one device's firmware (`internal/model/device/update.go::Update.HADiscoveryPayload`) does not include a `command_topic` / `payload_install`. It used to: a plane-topic-roundtrip guard test driven over this entity found that no `CommandSubscriber` subscription — bucket-aware, schedule, week-profile, combined, custom-DP service-method, hub, alarm, or add-on-update — matches the topic shape the entity declared (`<base>/<central>/<iface>/<addr>/update/set`), so HA's "Install" button on a device's firmware card silently did nothing.
+
+Rather than wire a new, unguarded MQTT install path, the entity was made read-only, matching `BD-HubUpdateDiscoveryReadOnly` above for the same reason: an unconfirmed MQTT payload triggering a firmware flash is unsafe, and a broker replaying a stale retained command on reconnect would be worse. The install control for a device's firmware lives at `POST /devices/{addr}/firmware/update`; HA still shows the available-version state via `state_topic` + `latest_version_topic`.
+
+Go path: `internal/model/device/update.go::Update.HADiscoveryPayload`.
+
+---
+
 ### BD-MetricLastEventAgeUnwired — `MetricLastEventAgeSecs` observer — RESOLVED (observe path)
 
 `internal/model/hub/metrics.go` defines `MetricLastEventAgeSecs` and wires a `MetricHubSensor` for it in `NewMetricHubSensorPair`. The Observe call site is now wired: the `hub.last_event_age_refresh` scheduler job (registered in `internal/central/jobs.go`, closure built in `cmd/openccu-loom/daemon_jobs.go`) computes `time.Since(newest)` over the per-interface event clock and calls `Metrics.Observe(MetricLastEventAgeSecs, …)` on each tick (default 30 s). `newest` is the most recent stamp across all of the central's interfaces via `EventCoordinator.LastEventMonotonicForInterface` — the thread-safe sentinel the original deferral was waiting on. When no event has been observed yet the job reports nothing.

@@ -156,12 +156,24 @@ func (u *Update) Invoke(ctx context.Context, name string, params map[string]any,
 }
 
 // HADiscoveryPayload returns the HA Update-platform discovery payload.
+//
+// Deliberately read-only: no `command_topic` / `payload_install`. HA's
+// `update` entity would publish "INSTALL" straight to the broker on a
+// button press, and nothing in the daemon has ever subscribed to that
+// topic — the daemon-level add-on self-updater and the CCU's own
+// firmware update ([DefaultDiscoveryBuilder.BuildHubUpdateDiscovery])
+// both gate a firmware install behind an operator-confirmed REST
+// action for the same reason: an unconfirmed MQTT payload triggering a
+// device flash is unsafe, and a broker replaying a stale retained
+// command on reconnect would be worse. The install control for a
+// device's firmware lives at `POST /devices/{addr}/firmware/update`;
+// HA still shows the available-version state via `state_topic` +
+// `latest_version_topic`.
 func (u *Update) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
 	if u == nil || ctx == nil {
 		return "", nil
 	}
 	stateTopic := ctx.CustomDPStateTopic()
-	commandTopic := ctx.ServiceMethodCommandTopic("install")
 	model := ""
 	if u.device != nil {
 		model = u.device.Model
@@ -173,8 +185,6 @@ func (u *Update) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component s
 		"value_template":          "{{ value_json.firmware }}",
 		"latest_version_topic":    stateTopic,
 		"latest_version_template": "{{ value_json.latest_firmware }}",
-		"command_topic":           commandTopic,
-		"payload_install":         "INSTALL",
 		"title":                   model + " Firmware",
 		"display_precision":       0,
 		// json_attributes_topic mirrors the state so operators can
