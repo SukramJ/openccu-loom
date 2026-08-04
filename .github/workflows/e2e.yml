@@ -53,7 +53,13 @@ jobs:
         # `make e2e` would re-trigger build-all; we already built
         # both binaries above, so call go test directly to avoid
         # the redundant compile.
-        run: go test -tags=e2e -timeout=180s ./tests/e2e/...
+        #
+        # 300 s, not 180 s: the suite measured 163 s on a developer
+        # machine, which left 9 % headroom — enough for a slower runner to
+        # turn an ordinary run into a timeout that reads like a hang. The
+        # budget exists to catch a genuinely stuck daemon, not to cap
+        # legitimate growth; each test carries its own deadline.
+        run: go test -tags=e2e -timeout=300s ./tests/e2e/...
 
       - name: dump daemon stdout on failure
         if: failure()
