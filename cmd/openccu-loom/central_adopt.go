@@ -293,6 +293,12 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	}
 	// The security domain attaches after the alarm service so its index
 	// rebuild sees the enrollment the alarm service has already loaded.
+	//
+	// Its index build is intentionally NOT relied upon here: this runs
+	// before AddCentral starts the bring-up, so the device model is
+	// still empty and any index built now would be too. The domain
+	// rebuilds itself off the central's southbound-ready event, which is
+	// the only point at which the model exists.
 	if securityHook != nil {
 		if unwire := securityHook(unit); unwire != nil {
 			undo = append(undo, unwire)

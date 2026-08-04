@@ -90,6 +90,8 @@ type Service struct {
 	codeSource   CodeSource     // hardware-code identities; nil until wired
 	armFailure   ArmFailureHook // FAILED_TO_ARM notification hook; nil until wired
 	retention    func()         // retention chain cancel
+	// configChanged fires after a successful Reload; nil until wired.
+	configChanged func(context.Context)
 }
 
 // ArmFailureHook is a FAILED_TO_ARM notification callback. It mirrors
@@ -390,7 +392,29 @@ func (s *Service) Reload(ctx context.Context) error {
 	}
 	s.seedPanels(ctx)
 	s.schedules.start(ctx) // recompute every schedule's daily-time chain
+	// Enrollment decides which data points the Security & Safety domain
+	// treats as security-relevant and which zone owns them, so a config
+	// change has to reach its index too. Without this a newly enrolled
+	// sensor stays outside every aggregate until the next daemon restart.
+	if hook := s.configChangedHookRef(); hook != nil {
+		hook(ctx)
+	}
 	return nil
+}
+
+// SetConfigChangedHook installs a callback fired after every successful
+// Reload. The composition root uses it to rebuild the Security & Safety
+// classification index, which reads the alarm enrollment.
+func (s *Service) SetConfigChangedHook(fn func(context.Context)) {
+	s.mu.Lock()
+	s.configChanged = fn
+	s.mu.Unlock()
+}
+
+func (s *Service) configChangedHookRef() func(context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.configChanged
 }
 
 // Start loads configuration and persisted state, subscribes to every
@@ -578,8 +602,26 @@ func (s *Service) publish(e hmevent.Event) {
 		}
 	case hmevent.AlarmPanelChangedEvent:
 		events.Publish(s.bus, ev)
+	case hmevent.AlarmDuressEvent:
+		// Never omit this case again. A duress code entered under
+		// coercion reached the default branch and was logged instead of
+		// published, so the whole covert-trigger feature produced one
+		// hidden journal row and nothing else — on every surface, at
+		// every configured visibility level. The visibility policy sits
+		// downstream of here and could not compensate.
+		events.Publish(s.bus, ev)
+	case hmevent.AlarmReminderEvent:
+		// Same omission, second event: a schedule reminder never left
+		// the sink either.
+		events.Publish(s.bus, ev)
 	default:
-		s.log.Warn("alarm sink dropped unknown event type", "type", string(e.Type()))
+		// Reaching this branch means a producer emits an event type this
+		// fan-out does not know, and every consumer of it is silently
+		// dead. TestAlarmSinkFansOutEveryEventType pins the set; if that
+		// test is green and this line still fires in production, the
+		// producer is new and the test needs the case first.
+		s.log.Error("alarm sink dropped unknown event type; consumers of it are silently dead",
+			"type", string(e.Type()))
 	}
 }
 

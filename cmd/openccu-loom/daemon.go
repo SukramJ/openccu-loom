@@ -362,6 +362,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// outbound webhook. Set before the PhaseLate StartAll so the
 		// bridge subscribes on start, mirroring SetAlarmBus.
 		webhookOutbound.SetSecurityBus(securitySvc.Bus())
+		wireSecurityIndexRefresh(alarmSvc, securitySvc, logger)
 		_, stopSecurityCollector := metrics.NewSecurityCollector(metricsReg, securitySvc.Bus())
 		defer stopSecurityCollector()
 	}

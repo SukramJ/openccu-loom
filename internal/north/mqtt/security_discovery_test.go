@@ -217,7 +217,7 @@ func TestSecurityClassEntity_DeviceClassAndDiagnosticMapping(t *testing.T) {
 	for _, c := range cases {
 		t.Run(string(c.class), func(t *testing.T) {
 			t.Parallel()
-			e := securityClassEntity(c.class, securityTestTr)
+			e := securityClassEntity("gh", c.class, securityTestTr)
 			item := BuildSecurityDiscovery("gh", "Security & Safety", "", e)
 			body := securityDiscoveryBody(t, item)
 

@@ -6,6 +6,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -69,8 +71,18 @@ func CreateAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		now := time.Now().UnixMilli()
+		existing, err := p.Stores().Zones.GetAll(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal,
+				"List alarm zones failed", err)
+			return
+		}
 		row := sqlitestore.AlarmZoneRow{
-			ID:          uuid.NewString(),
+			ID: uuid.NewString(),
+			// The slug is assigned once, here, and never again: it ends
+			// up in consumer entity ids and MQTT topics, so a later
+			// rename must not move it.
+			Slug:        uniqueZoneSlug(in.Name, existing),
 			Name:        in.Name,
 			Position:    in.Position,
 			ConfigJSON:  cfgJSON,
@@ -480,4 +492,32 @@ func apiOutput(row sqlitestore.AlarmOutputRow) hmapi.AlarmOutput {
 		o.Config = json.RawMessage(row.ConfigJSON)
 	}
 	return o
+}
+
+// uniqueZoneSlug derives a stable external identifier from a zone name,
+// appending a numeric suffix on collision.
+//
+// It falls back to a fixed stem when the name yields nothing sluggable —
+// a zone named only with emoji still needs an identifier, and the UUID
+// is unusable in an entity id, which is the reason the slug exists.
+func uniqueZoneSlug(name string, existing []sqlitestore.AlarmZoneRow) string {
+	base := routingkey.HubSlug(name)
+	if base == "" {
+		base = "zone"
+	}
+	taken := make(map[string]bool, len(existing))
+	for i := range existing {
+		if existing[i].Slug != "" {
+			taken[existing[i].Slug] = true
+		}
+	}
+	if !taken[base] {
+		return base
+	}
+	for n := 2; ; n++ {
+		candidate := base + "-" + strconv.Itoa(n)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
 }

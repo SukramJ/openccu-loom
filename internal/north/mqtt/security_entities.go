@@ -29,8 +29,11 @@ func securitySystemEntities(tr func(key, fallback string) string) []securityEnti
 		},
 		{
 			component: HAComponentSensor, key: "state",
-			name:             tr("security.entity.state", "Security state"),
-			deviceClass:      "enum",
+			name:        tr("security.entity.state", "Security state"),
+			deviceClass: "enum",
+			// An enum sensor without options is refused; the vocabulary
+			// is the severity ladder, ascending.
+			options:          []string{"ok", "info", "warning", "alarm", "critical"},
 			valueTemplate:    stateValueTemplate,
 			jsonAttributes:   true,
 			enabledByDefault: true,
@@ -98,10 +101,11 @@ var securityClassDeviceClass = map[hmenum.SecurityClass]string{
 
 // securityClassEntity declares one class aggregate. It is only ever
 // called for a class the installation actually has a source for.
-func securityClassEntity(class hmenum.SecurityClass, tr func(key, fallback string) string) securityEntity {
+func securityClassEntity(base string, class hmenum.SecurityClass, tr func(key, fallback string) string) securityEntity {
 	return securityEntity{
 		component:        HAComponentBinarySensor,
 		key:              "class_" + string(class),
+		topic:            securityClassTopic(base, class),
 		name:             tr("security.entity.class."+string(class), string(class)),
 		deviceClass:      securityClassDeviceClass[class],
 		payloadOn:        "ON",
@@ -116,7 +120,7 @@ func securityClassEntity(class hmenum.SecurityClass, tr func(key, fallback strin
 // securityZoneEntity declares one zone aggregate. Its state is the
 // count of currently active sources, which makes it a measurement
 // rather than a status — the attributes carry the detail.
-func securityZoneEntity(slug, name string, tr func(key, fallback string) string) securityEntity {
+func securityZoneEntity(base, slug, name string, tr func(key, fallback string) string) securityEntity {
 	label := name
 	if label == "" {
 		label = slug
@@ -124,6 +128,7 @@ func securityZoneEntity(slug, name string, tr func(key, fallback string) string)
 	return securityEntity{
 		component:        HAComponentSensor,
 		key:              "zone_" + slug,
+		topic:            securityZoneTopic(base, slug),
 		name:             tr("security.entity.zone", "Zone") + " " + label,
 		stateClass:       "measurement",
 		valueTemplate:    stateValueTemplate,
