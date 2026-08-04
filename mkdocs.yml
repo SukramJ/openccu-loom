@@ -58,6 +58,7 @@ nav:
       - Concepts: user/concepts.md
       - Using the Web UI: user/web-ui.md
       - Matter in Apple, Google & Alexa Home: user/matter.md
+      - Alarm and Security & Safety: alarm-user-guide.md
   - Administration:
       - Installation & First Steps: user-guide.md
       - Configuration Reference: admin/configuration.md
