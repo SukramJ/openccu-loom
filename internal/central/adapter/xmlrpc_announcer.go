@@ -39,12 +39,19 @@ func (a *xmlrpcAnnouncer) Init(ctx context.Context, interfaceID, callbackURL str
 	return nil
 }
 
-// Deinit tells the CCU to stop sending callbacks to the previously
-// configured URL by sending an empty URL together with the interface id.
-func (a *xmlrpcAnnouncer) Deinit(ctx context.Context, interfaceID string) error {
+// Deinit tells the CCU to stop sending callbacks to callbackURL by calling
+// init with that URL and NO second parameter.
+//
+// The interface id must not be sent: the CCU keys the deregistration on the
+// URL alone, and `init("", interface_id)` — the inverse shape — is read as a
+// registration of the empty URL. rfd then keeps that entry and reports
+// `XmlRpcClient error calling event(...) on uds://:/RPC2` for every event it
+// tries to deliver to it, once per keepalive, until the CCU restarts.
+// Measured against a live rfd and a live CUxD: after the inverse shape the
+// keepalive PONGs kept arriving, after this one they stopped.
+func (a *xmlrpcAnnouncer) Deinit(ctx context.Context, callbackURL string) error {
 	_, err := a.client.Call(ctx, "init", []xmlrpc.Value{
-		xmlrpc.StringValue(""),
-		xmlrpc.StringValue(interfaceID),
+		xmlrpc.StringValue(callbackURL),
 	})
 	if err != nil {
 		return fmt.Errorf("xmlrpc deinit: %w", err)

@@ -18,6 +18,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/binrpc"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // BINRPCServer hosts the shared BIN-RPC TCP callback listener. Routing
@@ -219,9 +220,15 @@ func (s *BINRPCServer) handleConn(ctx context.Context, conn net.Conn) {
 	var buf bytes.Buffer
 	if dispatchErr != nil {
 		fault := asFault(dispatchErr)
-		s.logger.Debug(
+		// Warn, not Debug: every fault here is a callback the daemon
+		// received and threw away. A push channel that silently drops
+		// its payload looks identical to a quiet one, and that is how
+		// the missing system.multicall case stayed hidden — the CUxD
+		// events arrived, faulted, and left no trace above debug.
+		s.logger.Warn(
 			"binrpc callback: method returned fault",
 			slog.String("method", req.Method),
+			slog.String("remote", conn.RemoteAddr().String()),
 			slog.Int("code", fault.Code),
 			slog.String("message", fault.Message),
 		)
@@ -248,7 +255,118 @@ func (s *BINRPCServer) handleConn(ctx context.Context, conn net.Conn) {
 	}
 }
 
+// BINRPCSupportedMethods lists every callback method the BIN-RPC listener
+// dispatches. It is what `system.listMethods` answers, and the contract is
+// that each entry is genuinely routable — a peer that trusts the list and
+// then gets a fault has been misled. `TestBINRPCListedMethodsAreDispatchable`
+// holds the two sides together.
+func BINRPCSupportedMethods() []string {
+	return []string{
+		"event",
+		"newDevices",
+		"deleteDevices",
+		"listDevices",
+		"error",
+		"system.multicall",
+		"system.listMethods",
+	}
+}
+
+// binrpcSupportedMethods renders [BINRPCSupportedMethods] as a wire array.
+func binrpcSupportedMethods() xmlrpc.ArrayValue {
+	names := BINRPCSupportedMethods()
+	out := make(xmlrpc.ArrayValue, 0, len(names))
+	for _, n := range names {
+		out = append(out, xmlrpc.StringValue(n))
+	}
+	return out
+}
+
+// dispatchMulticall unwraps a system.multicall envelope and runs each
+// sub-call through [dispatch], returning one result per sub-call.
+//
+// CUxD batches its callbacks this way: even a single event arrives as
+// `system.multicall([{methodName: "event", params: [interface_id, address,
+// parameter, value]}])`, never as a bare `event` call. Without this case the
+// envelope reaches the interface_id lookup below, where params[0] is an array
+// rather than a string — so every CUxD push event was rejected as malformed.
+//
+// Per the XML-RPC multicall convention a successful sub-call contributes a
+// one-element array holding its result, and a failed one contributes a fault
+// struct, so that one broken sub-call cannot discard the whole batch. Mirrors
+// the XML-RPC side in [xmlrpc.Mux] (internal/client/transport/xmlrpc/mux.go).
+func (s *BINRPCServer) dispatchMulticall(ctx context.Context, params []xmlrpc.Value) (xmlrpc.Value, error) {
+	if len(params) != 1 {
+		return nil, fmt.Errorf("binrpc system.multicall: expected 1 param, got %d", len(params))
+	}
+	calls, err := xmlrpc.AsArray(params[0])
+	if err != nil {
+		return nil, fmt.Errorf("binrpc system.multicall: %w", err)
+	}
+	results := make(xmlrpc.ArrayValue, 0, len(calls))
+	for i, call := range calls {
+		st, err := xmlrpc.AsStruct(call)
+		if err != nil {
+			return nil, fmt.Errorf("binrpc system.multicall call %d: %w", i, err)
+		}
+		var (
+			method    string
+			subParams []xmlrpc.Value
+			haveName  bool
+		)
+		for _, m := range st.Members {
+			switch m.Name {
+			case "methodName":
+				name, err := xmlrpc.AsString(m.Value)
+				if err != nil {
+					return nil, fmt.Errorf("binrpc system.multicall call %d: methodName: %w", i, err)
+				}
+				method, haveName = name, true
+			case "params":
+				arr, err := xmlrpc.AsArray(m.Value)
+				if err != nil {
+					return nil, fmt.Errorf("binrpc system.multicall call %d: params: %w", i, err)
+				}
+				subParams = arr
+			}
+		}
+		if !haveName {
+			return nil, fmt.Errorf("binrpc system.multicall call %d: missing methodName", i)
+		}
+		res, err := s.dispatch(ctx, &binrpc.Request{Method: method, Params: subParams})
+		if err != nil {
+			s.logger.Warn("binrpc callback: multicall sub-call failed",
+				slog.String("method", method),
+				slog.Int("index", i),
+				slog.String("err", err.Error()))
+			results = append(results, faultStruct(asFault(err)))
+			continue
+		}
+		if res == nil {
+			res = xmlrpc.NilValue{}
+		}
+		results = append(results, xmlrpc.ArrayValue{res})
+	}
+	return results, nil
+}
+
+// faultStruct renders a fault as the struct the multicall convention places
+// in the result array in place of a successful sub-call's value.
+func faultStruct(f *hmerr.XMLRPCFault) xmlrpc.StructValue {
+	return xmlrpc.StructValue{Members: []xmlrpc.Member{
+		{Name: "faultCode", Value: xmlrpc.IntValue(f.Code)}, //nolint:gosec // fault codes are small constants
+
+		{Name: "faultString", Value: xmlrpc.StringValue(f.Message)},
+	}}
+}
+
 func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrpc.Value, error) {
+	// Unwrap batched callbacks before the interface_id lookup — a
+	// multicall envelope carries the id inside each sub-call, not in
+	// params[0].
+	if req.Method == "system.multicall" {
+		return s.dispatchMulticall(ctx, req.Params)
+	}
 	if len(req.Params) == 0 {
 		return nil, fmt.Errorf("binrpc %s: missing interface_id param", req.Method)
 	}
@@ -310,14 +428,7 @@ func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrp
 		_ = handlers.Error(ctx, ifaceID, code, msg)
 		return xmlrpc.NilValue{}, nil
 	case "system.listMethods":
-		return xmlrpc.ArrayValue{
-			xmlrpc.StringValue("event"),
-			xmlrpc.StringValue("newDevices"),
-			xmlrpc.StringValue("deleteDevices"),
-			xmlrpc.StringValue("listDevices"),
-			xmlrpc.StringValue("error"),
-			xmlrpc.StringValue("system.listMethods"),
-		}, nil
+		return binrpcSupportedMethods(), nil
 	default:
 		return nil, fmt.Errorf("binrpc: method not supported: %s", req.Method)
 	}

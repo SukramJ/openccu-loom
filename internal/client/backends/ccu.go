@@ -145,11 +145,11 @@ func (b *CcuBackend) Init(ctx context.Context, interfaceID, callbackURL string) 
 }
 
 // Deinit implements Operations.
-func (b *CcuBackend) Deinit(ctx context.Context, interfaceID string) error {
+func (b *CcuBackend) Deinit(ctx context.Context, callbackURL string) error {
 	if b.ann == nil {
 		return nil
 	}
-	return b.ann.Deinit(ctx, interfaceID)
+	return b.ann.Deinit(ctx, callbackURL)
 }
 
 // Ping implements Operations.

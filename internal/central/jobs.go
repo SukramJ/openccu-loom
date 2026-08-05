@@ -476,14 +476,6 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					// a stale OPEN state for minutes. `ping` is on
 					// the breaker's bypass list, so this is the one
 					// call that always reaches the CCU.
-					// CUxD speaks BIN-RPC and is push-only: its liveness is
-					// the BIN-RPC connection + inbound callbacks, not an
-					// XML-RPC-style ping. Probing it with `ping` (as the
-					// other interfaces use) is a false negative, so skip the
-					// ping check for CUxD and judge it by client state +
-					// callbacks — matching the per-interface checker, which is
-					// deliberately not started for CUxD.
-					pushOnly := entry.Interface == hmenum.InterfaceCUxD
 					// Probe with ping-pong tracking enabled: the periodic
 					// keepalive is exactly where outbound PINGs should be
 					// recorded so the matching PONG callbacks correlate and
@@ -491,7 +483,15 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					// client gates the tracking on its own ping-pong
 					// capability, so non-ping-pong backends fall through to a
 					// plain probe.
-					alive := pushOnly || entry.Client.CheckConnectionAvailability(ctx, true)
+					// Every MVP interface answers `ping` with a PONG on the
+					// callback channel, CUxD over BIN-RPC included (verified
+					// against a live CUxD; go-hmccu pings it the same way).
+					// The keepalive is what keeps the callback-liveness
+					// timestamp fresh on a quiet interface, so exempting one
+					// interface from the ping does not spare it the freshness
+					// verdict — it only guarantees the verdict goes negative
+					// after callbackFreshness, permanently.
+					alive := entry.Client.CheckConnectionAvailability(ctx, true)
 					connected := entry.Client.ClientState() == hmenum.ClientStateConnected
 					callbackAlive := entry.Client.IsCallbackAlive()
 					if alive && connected && callbackAlive {

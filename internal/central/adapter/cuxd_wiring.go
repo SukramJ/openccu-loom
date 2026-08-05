@@ -5,8 +5,10 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -171,9 +173,24 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		}
 		handlers.SetDelayNewDeviceCreation(cc.Behavior.DelayNewDeviceCreationEnabled())
 		binrpcCallbackServer.Register(initID, handlers)
-		callbackURL = "binary://" + binrpcCallbackAddr
+		// xmlrpc_bin:// is the scheme every CCU-side component uses for a
+		// BIN-RPC callback endpoint, and the one the CCU prints in its own
+		// handler lists. CUxD itself accepts anything here — it speaks no
+		// other protocol — but an unrecognised scheme makes the entry
+		// unreadable for an operator comparing handler lists.
+		callbackURL = "xmlrpc_bin://" + binrpcCallbackAddr
 		cbHandlers = handlers
 	}
+
+	wireCUxDRecovery(unit, cuxdRecoveryTarget{
+		ic:          ic,
+		backend:     backend,
+		cc:          cc,
+		wireID:      wireID,
+		initID:      initID,
+		callbackURL: callbackURL,
+		cuxdAddr:    addr,
+	}, logger)
 
 	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
 	if poller != nil {
@@ -226,7 +243,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 	seedReadableEvents(ctx, unit, iface, logger)
 
 	if callbackURL != "" {
-		if err := backend.Deinit(ctx, initID); err != nil {
+		if err := backend.Deinit(ctx, callbackURL); err != nil {
 			logger.Debug("wire.deinit.pre_init",
 				slog.String("central", cc.Name),
 				slog.String("interface", initID),
@@ -251,7 +268,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 
 	closer := func() {
 		if binrpcCallbackServer != nil {
-			if err := backend.Deinit(ctx, initID); err != nil {
+			if err := backend.Deinit(ctx, callbackURL); err != nil {
 				logger.Debug("wire.deinit.shutdown",
 					slog.String("interface", initID), slog.String("err", err.Error()))
 			}
@@ -268,4 +285,65 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		}
 	}
 	return closer, nil
+}
+
+// cuxdRecoveryTarget bundles what the recovery stages need to reach one
+// CUxD interface.
+type cuxdRecoveryTarget struct {
+	ic          *client.InterfaceClient
+	backend     backends.Operations
+	cc          config.CentralConfig
+	wireID      string
+	initID      string
+	callbackURL string
+	cuxdAddr    string
+}
+
+// wireCUxDRecovery installs the recovery pipeline for a CUxD interface.
+//
+// Without one the interface cannot repair itself: a ConnectionLostEvent
+// reaches the coordinator, finds no pipeline registered for this id, and is
+// dropped with `recovery.skip reason=no_pipeline_registered` at debug level.
+// Every other interface got its pipeline from the XML-RPC wiring path, which
+// CUxD returns before reaching — so CUxD was the one interface for which a
+// connection loss was terminal until the daemon restarted.
+//
+// Same stages as the XML-RPC path, with one difference: the TCP probe dials
+// CUxD's own BIN-RPC port instead of a CCU interface port, because that is
+// the socket whose loss this pipeline is recovering from.
+func wireCUxDRecovery(unit *central.Unit, t cuxdRecoveryTarget, logger *slog.Logger) {
+	if unit == nil || unit.Recovery == nil || t.callbackURL == "" {
+		return
+	}
+	unit.Recovery.WithPipelineFor(t.wireID, coordinators.DefaultRecoveryPipeline(coordinators.RecoveryStageDeps{
+		CooldownDuration: 3 * time.Second,
+		WarmupDuration:   1 * time.Second,
+		TCPProbe: func(ctx context.Context) error {
+			conn, dialErr := (&net.Dialer{}).DialContext(ctx, "tcp", t.cuxdAddr)
+			if dialErr != nil {
+				return fmt.Errorf("tcp probe %s: %w", t.cuxdAddr, dialErr)
+			}
+			_ = conn.Close()
+			return nil
+		},
+		RPCProbe:       func(ctx context.Context) error { return t.backend.Ping(ctx, t.initID) },
+		StabilityProbe: func(ctx context.Context) error { return t.backend.Ping(ctx, t.initID) },
+		Reconnect: func(rctx context.Context) error {
+			if !WaitForCCUReady(rctx, t.cc, CCUReadinessConfig{}, logger) {
+				return errors.New("reconnect: CCU not ready (checkrega.cgi != OK)")
+			}
+			attempts := 0
+			ok, err := t.ic.Reconnect(rctx, t.backend, t.initID, t.callbackURL, nil, &attempts)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return errors.New("reconnect: CanReconnect returned false")
+			}
+			return nil
+		},
+		LoadData: unit.Recovery.RefreshHubDataAfterRecovery(),
+	}))
+	unit.Recovery.SetLogger(logger)
+	unit.Recovery.Subscribe() //nolint:contextcheck // Subscribe starts a background goroutine; it has no ctx parameter by design
 }

@@ -76,11 +76,11 @@ func (b *HomegearBackend) Init(ctx context.Context, interfaceID, callbackURL str
 }
 
 // Deinit implements Operations.
-func (b *HomegearBackend) Deinit(ctx context.Context, interfaceID string) error {
+func (b *HomegearBackend) Deinit(ctx context.Context, callbackURL string) error {
 	if b.ann == nil {
 		return nil
 	}
-	return b.ann.Deinit(ctx, interfaceID)
+	return b.ann.Deinit(ctx, callbackURL)
 }
 
 // Ping implements Operations. Homegear answers `clientServerInitialized`

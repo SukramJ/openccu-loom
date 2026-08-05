@@ -42,8 +42,13 @@ type LifecycleOps interface {
 	// event push.
 	Init(ctx context.Context, interfaceID, callbackURL string) error
 
-	// Deinit severs the callback channel.
-	Deinit(ctx context.Context, interfaceID string) error
+	// Deinit severs the callback channel. It takes the callbackURL —
+	// not the interface id — because that is what the wire call keys on:
+	// `init(url)` with the second parameter omitted removes the
+	// registration made for url. Passing an interface id with an empty
+	// url instead registers a handler pointing nowhere, which the CCU
+	// then keeps forever and feeds every event to.
+	Deinit(ctx context.Context, callbackURL string) error
 
 	// Ping is the keepalive. Returns nil when the CCU responds with
 	// the matching PONG payload.

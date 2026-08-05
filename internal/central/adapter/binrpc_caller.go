@@ -60,11 +60,11 @@ func (a *binrpcAnnouncer) Init(ctx context.Context, interfaceID, callbackURL str
 	return nil
 }
 
-// Deinit deregisters the BIN-RPC callback URL with CUxD.
-func (a *binrpcAnnouncer) Deinit(ctx context.Context, interfaceID string) error {
+// Deinit deregisters callbackURL with CUxD. The second parameter is omitted
+// — see [xmlrpcAnnouncer.Deinit] for why the interface id must not be sent.
+func (a *binrpcAnnouncer) Deinit(ctx context.Context, callbackURL string) error {
 	_, err := a.client.Call(ctx, "init", []xmlrpc.Value{
-		xmlrpc.StringValue(""),
-		xmlrpc.StringValue(interfaceID),
+		xmlrpc.StringValue(callbackURL),
 	})
 	if err != nil {
 		return fmt.Errorf("binrpc deinit: %w", err)

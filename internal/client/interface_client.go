@@ -695,7 +695,10 @@ func (c *InterfaceClient) LastCallbackAt() time.Time {
 // Order of checks (gating before the freshness window matters — without
 // these guards a freshly initialised client or a reconnect in progress
 // would otherwise produce false negatives):
-//   - Backend without ping/pong (e.g. CUxD via BIN-RPC): always true.
+//   - Backend without ping/pong (Homegear): always true. Every backend that
+//     does declare ping/pong — CUxD over BIN-RPC included — is judged by the
+//     freshness window below, because its keepalive PONG is what refreshes
+//     the timestamp.
 //   - Client state FAILED or RECONNECTING: false (no reliable signal).
 //   - No callback observed yet (zero timestamp): true (the silence window
 //     starts only after the first event has been seen, otherwise every
@@ -821,7 +824,7 @@ func (c *InterfaceClient) ReinitProxy(ctx context.Context, b backends.Operations
 	if b == nil {
 		return errors.New("client.ReinitProxy: backend is nil")
 	}
-	if err := b.Deinit(ctx, interfaceID); err != nil {
+	if err := b.Deinit(ctx, callbackURL); err != nil {
 		// Log but do not abort — a deinit failure should not prevent
 		// the subsequent init from running (the CCU may already have
 		// timed out the old registration).
