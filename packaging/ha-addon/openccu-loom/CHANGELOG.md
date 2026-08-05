@@ -2,6 +2,27 @@
 
 ## 0.53.1
 
+- **Your service messages were missing entirely.** If any device channel
+  carried two or more subsections (Gewerke) — a common setup — the whole
+  service-message list arrived unreadable and was discarded, so the daemon
+  showed none of them at all rather than one incomplete entry. All of them
+  are back, together with the room, subsection and acknowledgeable
+  information that had never been carried through.
+- **"Which programs use this system variable?" answered nothing on some
+  CCUs.** The daemon asked the CCU's own usage index, which is empty on
+  some installations and reports that as "no program uses this variable"
+  instead of as an error. Before deleting a variable you were therefore
+  told it was unused, whether or not that was true. The programs are now
+  read from the program rules themselves. Two cases stay invisible:
+  references inside an else-if branch, and variables used inside a
+  program that runs a script.
+- **Alarm messages carry real timestamps now, and lost fields that were
+  always empty.** An alarm entry comes from an alarm system variable that
+  a program raises, never from a device, so its device name, address and
+  room were blank in every case — they are gone. In their place the entry
+  reports when the alarm occurred and when it last recurred. The device
+  column disappears from the alarm list; if you read these entries through
+  the API, the removed fields are a breaking change.
 - **CUxD devices now report changes as they happen.** Until now a CUxD
   device only ever updated when the daemon went and asked — so a value could
   sit unchanged for minutes and any automation reacting to it fired late or
