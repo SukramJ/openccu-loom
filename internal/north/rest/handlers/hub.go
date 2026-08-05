@@ -258,23 +258,24 @@ type InboxDeviceDTO struct {
 }
 
 // AlarmMessageDTO is one entry in the alarm-messages list.
+//
+// An alarm entry has no device, channel or room — the CCU backs it by an
+// alarm system variable, not a device datapoint — so this DTO carries
+// only the identity and timing fields the CCU actually reports. See
+// [hub.AlarmMessage].
 type AlarmMessageDTO struct {
 	// Central is the CCU this alarm message belongs to.
 	Central     string `json:"central,omitempty"`
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	DeviceName  string `json:"device_name,omitempty"`
-	// Address is the CCU channel address that generated the alarm.
-	// Omitted when unavailable (legacy CCUs). Closes H-034.
-	Address string `json:"address,omitempty"`
-	// StateValue is the raw alarm state string from the CCU Rega script.
-	// Closes H-034.
-	StateValue  string    `json:"state_value,omitempty"`
-	Timestamp   time.Time `json:"timestamp"`
-	Counter     int       `json:"counter"`
-	LastTrigger string    `json:"last_trigger,omitempty"`
-	Rooms       []string  `json:"rooms,omitempty"`
+	// Timestamp is when the alarm was raised. Omitted on the rare CCU
+	// report that carries no occurrence at all (see [hub.AlarmMessage]).
+	Timestamp time.Time `json:"timestamp,omitzero"`
+	// LastTimestamp is when the backing alarm variable last changed.
+	// Omitted when the CCU reports no such occurrence.
+	LastTimestamp time.Time `json:"last_timestamp,omitzero"`
+	Counter       int       `json:"counter"`
 }
 
 // ServiceMessageDTO is one entry in the service-messages list.
@@ -1077,18 +1078,13 @@ func ListAlarmMessages(idx HubIndex) http.HandlerFunc {
 			for i := range msgs {
 				m := &msgs[i]
 				out = append(out, AlarmMessageDTO{
-					Central:     nh.Central,
-					ID:          m.ID,
-					Name:        m.Name,
-					Description: m.Description,
-					DeviceName:  m.DeviceName,
-					// H-034: address and state_value from model.
-					Address:     m.Address,
-					StateValue:  m.StateValue,
-					Timestamp:   m.Timestamp,
-					Counter:     m.Counter,
-					LastTrigger: m.LastTrigger,
-					Rooms:       m.Rooms,
+					Central:       nh.Central,
+					ID:            m.ID,
+					Name:          m.Name,
+					Description:   m.Description,
+					Timestamp:     m.Timestamp,
+					LastTimestamp: m.LastTimestamp,
+					Counter:       m.Counter,
 				})
 			}
 		}

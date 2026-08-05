@@ -442,18 +442,23 @@ func TestListSysvars_NoMinMax_Omitted(t *testing.T) {
 	}
 }
 
-// ── H-034 AlarmMessageDTO.address / state_value ─────────────────────────────
+// ── AlarmMessageDTO timestamp / last_timestamp ───────────────────────────
 
-// TestListAlarmMessages_AddressAndStateValue pins H-034: alarm messages with
-// an address and state_value must expose those fields in the DTO.
-func TestListAlarmMessages_AddressAndStateValue(t *testing.T) {
+// TestListAlarmMessages_TimestampFromUnixSeconds verifies that a Unix-second
+// alarm timestamp (as produced by regaUnixTime from the
+// get_alarm_messages.fn script value) survives into the REST response as
+// an RFC3339 timestamp, and that a zero Timestamp / LastTimestamp — the
+// CCU's "no occurrence" sentinel — is omitted from the JSON rather than
+// rendered as the Go zero date "0001-01-01T00:00:00Z".
+func TestListAlarmMessages_TimestampFromUnixSeconds(t *testing.T) {
 	t.Parallel()
+	const rawTimestamp int64 = 1700000000 // 2023-11-14T22:13:20Z
+	raised := time.Unix(rawTimestamp, 0).UTC()
+
 	h := hub.NewHub("test-ccu")
 	h.Messages.Replace([]hub.AlarmMessage{
-		{
-			ID: "A1", Name: "Window open", Address: "ABC123:1",
-			StateValue: "OPEN", Timestamp: time.Now(), Counter: 1,
-		},
+		{ID: "A1", Name: "Window open", Timestamp: raised, Counter: 1},
+		{ID: "A2", Name: "Never raised", Counter: 0},
 	})
 	idx := &testHubIndex{h: h}
 
@@ -464,18 +469,38 @@ func TestListAlarmMessages_AddressAndStateValue(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
+
+	var raw []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(raw) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(raw))
+	}
+
 	var body []AlarmMessageDTO
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(body) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(body))
+	if !body[0].Timestamp.Equal(raised) {
+		t.Errorf("timestamp = %v, want %v", body[0].Timestamp, raised)
 	}
-	if body[0].Address != "ABC123:1" {
-		t.Errorf("address=%q want ABC123:1 (H-034)", body[0].Address)
+	if raw[0]["timestamp"] != raised.Format(time.RFC3339) {
+		t.Errorf("raw timestamp = %v, want %s", raw[0]["timestamp"], raised.Format(time.RFC3339))
 	}
-	if body[0].StateValue != "OPEN" {
-		t.Errorf("state_value=%q want OPEN (H-034)", body[0].StateValue)
+
+	// The never-raised entry's zero Timestamp / LastTimestamp must be
+	// omitted entirely, never rendered as the Go zero date.
+	if v, present := raw[1]["timestamp"]; present {
+		t.Errorf("timestamp must be omitted for a zero Timestamp, got %v", v)
+	}
+	if v, present := raw[1]["last_timestamp"]; present {
+		t.Errorf("last_timestamp must be omitted when LastTimestamp is zero, got %v", v)
+	}
+	for _, entry := range raw {
+		if s, ok := entry["timestamp"].(string); ok && strings.HasPrefix(s, "0001-01-01") {
+			t.Errorf("timestamp must never render the Go zero date, got %q", s)
+		}
 	}
 }
 

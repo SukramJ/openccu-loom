@@ -18,22 +18,22 @@ import (
 )
 
 // AlarmMessage is one CCU alarm entry. The ID is the CCU ISE ID.
+//
+// An alarm entry has no device, channel, room or trigger: it is backed
+// by an alarm system variable that programs raise, so the CCU reports
+// its trigger data point as the 65535 "unknown" sentinel. Device-bound
+// alerts arrive as [ServiceMessage] instead, which does carry them.
 type AlarmMessage struct {
 	ID          string
 	Name        string
 	Description string
-	DeviceName  string
-	// Address is the CCU device/channel address that generated the alarm. May be
-	// empty for legacy or synthesised alarms where the CCU does not report a
-	// channel address.
-	Address string
-	// StateValue is the raw alarm state string as reported by the CCU Rega
-	// script.
-	StateValue  string
-	Timestamp   time.Time
-	Counter     int
-	LastTrigger string
-	Rooms       []string
+	// Timestamp is when the alarm was raised, LastTimestamp when the
+	// backing variable last changed. Both are zero when the CCU reports
+	// no such occurrence — for a variable raised exactly once,
+	// LastTimestamp normally is.
+	Timestamp     time.Time
+	LastTimestamp time.Time
+	Counter       int
 	// DisplayName is the human-readable translation of the message code
 	// extracted from the raw CCU name (the part after the last dot).
 	DisplayName string
@@ -865,19 +865,16 @@ func (a *AlarmMessages) AdditionalInformation() []map[string]any {
 	out := make([]map[string]any, 0, len(msgs))
 	for i := range msgs {
 		entry := map[string]any{
-			"id":          msgs[i].ID,
-			"name":        msgs[i].Name,
-			"address":     msgs[i].Address,
-			"device_name": msgs[i].DeviceName,
-			"state_value": msgs[i].StateValue,
-			"counter":     msgs[i].Counter,
-			"timestamp":   msgs[i].Timestamp.Unix(),
+			"id":        msgs[i].ID,
+			"name":      msgs[i].Name,
+			"counter":   msgs[i].Counter,
+			"timestamp": msgs[i].Timestamp.Unix(),
 		}
 		if msgs[i].DisplayName != "" {
 			entry["display_name"] = msgs[i].DisplayName
 		}
-		if len(msgs[i].Rooms) > 0 {
-			entry["rooms"] = msgs[i].Rooms
+		if !msgs[i].LastTimestamp.IsZero() {
+			entry["last_timestamp"] = msgs[i].LastTimestamp.Unix()
 		}
 		out = append(out, entry)
 	}
@@ -886,19 +883,16 @@ func (a *AlarmMessages) AdditionalInformation() []map[string]any {
 
 // AdditionalInformationIndexed returns the indexed-dict form of the
 // alarm-messages list that HA's MQTT json_attributes_template expects:
-// keys "alarm_1" .. "alarm_n" mapped to "<device_name>: <name>"
-// strings. The first alarm's index is 1 to match the human-counted
-// reference; the dict is returned in deterministic ID order.
+// keys "alarm_1" .. "alarm_n" mapped to the alarm's Name (an alarm entry
+// has no device to prefix — see [AlarmMessage]). The first alarm's index
+// is 1 to match the human-counted reference; the dict follows the same
+// order as [AlarmMessages.List] (timestamp-desc).
 func (a *AlarmMessages) AdditionalInformationIndexed() map[string]string {
 	msgs := a.List()
 	out := make(map[string]string, len(msgs))
 	for i := range msgs {
 		key := fmt.Sprintf("alarm_%d", i+1)
-		dev := msgs[i].DeviceName
-		if dev == "" {
-			dev = msgs[i].Address
-		}
-		out[key] = fmt.Sprintf("%s: %s", dev, msgs[i].Name)
+		out[key] = msgs[i].Name
 	}
 	return out
 }

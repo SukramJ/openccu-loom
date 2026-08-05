@@ -326,16 +326,16 @@
       get: (a) => a.name,
     },
     {
-      key: "device",
-      label: t("messages.col.device"),
-      sortable: true,
-      get: (a) => a.device_name ?? "",
-    },
-    {
       key: "time",
       label: t("messages.col.time"),
       sortable: true,
-      get: (a) => a.timestamp,
+      get: (a) => a.timestamp ?? "",
+    },
+    {
+      key: "last_timestamp",
+      label: t("messages.col.last_timestamp"),
+      sortable: true,
+      get: (a) => a.last_timestamp ?? "",
     },
     {
       key: "actions",
@@ -516,23 +516,17 @@
             {#if alarmCentrals.length > 1 && a.central}
               <Badge variant="muted">{a.central}</Badge>
             {/if}
-            {#if a.last_trigger}
-              <span class="block text-xs italic text-slate-500 dark:text-slate-400">
-                {t("messages.last_trigger")} {a.last_trigger}
-              </span>
-            {/if}
             {#if a.description}
               <span class="block text-xs text-slate-600 dark:text-slate-300">{a.description}</span>
             {/if}
-          {:else if col.key === "device"}
-            {#if a.device_name}
-              <span class="text-sm">{a.device_name}</span>
-            {/if}
-            {#if a.rooms && a.rooms.length > 0}
-              <span class="block text-xs text-slate-500 dark:text-slate-400">{a.rooms.join(", ")}</span>
-            {/if}
           {:else if col.key === "time"}
-            <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(a.timestamp)}</span>
+            {#if a.timestamp}
+              <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(a.timestamp)}</span>
+            {/if}
+          {:else if col.key === "last_timestamp"}
+            {#if a.last_timestamp}
+              <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(a.last_timestamp)}</span>
+            {/if}
           {:else if col.key === "actions"}
             <Button
               type="button"

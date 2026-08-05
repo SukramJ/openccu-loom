@@ -363,15 +363,19 @@ func TestListServiceMessages_MultiCCU_SpansAll(t *testing.T) {
 
 // ─── list_alarm_messages ──────────────────────────────────────────────────────
 
+// TestListAlarmMessages_PopulatedHub verifies the MCP tool surfaces an
+// alarm's identity and timing fields. An alarm entry has no device,
+// channel or room — see [hub.AlarmMessage] — so the DTO carries neither.
 func TestListAlarmMessages_PopulatedHub(t *testing.T) {
 	h := hub.NewHub("alpha")
+	ts := time.Now().Truncate(time.Second)
+	last := ts.Add(-time.Hour)
 	h.Messages.Replace([]hub.AlarmMessage{
 		{
-			ID:         "alarm-1",
-			Name:       "Door Open",
-			DeviceName: "Front Door",
-			StateValue: "OPEN",
-			Timestamp:  time.Now(),
+			ID:            "alarm-1",
+			Name:          "Door Open",
+			Timestamp:     ts,
+			LastTimestamp: last,
 		},
 	})
 
@@ -389,11 +393,11 @@ func TestListAlarmMessages_PopulatedHub(t *testing.T) {
 
 	var out struct {
 		Messages []struct {
-			ID         string `json:"id"`
-			Name       string `json:"name"`
-			DeviceName string `json:"device_name"`
-			StateValue string `json:"state_value"`
-			Central    string `json:"central"`
+			ID            string `json:"id"`
+			Name          string `json:"name"`
+			Timestamp     string `json:"timestamp"`
+			LastTimestamp string `json:"last_timestamp"`
+			Central       string `json:"central"`
 		} `json:"messages"`
 	}
 	unmarshalStructured(t, res, &out)
@@ -405,8 +409,11 @@ func TestListAlarmMessages_PopulatedHub(t *testing.T) {
 	if m.ID != "alarm-1" {
 		t.Errorf("id: want alarm-1, got %q", m.ID)
 	}
-	if m.StateValue != "OPEN" {
-		t.Errorf("state_value: want OPEN, got %q", m.StateValue)
+	if m.Timestamp != ts.UTC().Format(time.RFC3339) {
+		t.Errorf("timestamp: want %s, got %q", ts.UTC().Format(time.RFC3339), m.Timestamp)
+	}
+	if m.LastTimestamp != last.UTC().Format(time.RFC3339) {
+		t.Errorf("last_timestamp: want %s, got %q", last.UTC().Format(time.RFC3339), m.LastTimestamp)
 	}
 	if m.Central != "alpha" {
 		t.Errorf("central: want alpha, got %q", m.Central)

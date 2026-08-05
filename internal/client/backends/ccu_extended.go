@@ -310,12 +310,9 @@ func (b *CcuBackend) GetAlarmMessages(ctx context.Context) ([]map[string]any, er
 		ID            string `json:"id"`
 		Name          string `json:"name"`
 		Description   string `json:"description"`
-		DeviceName    string `json:"device_name"`
-		Timestamp     string `json:"timestamp"`
-		LastTimestamp string `json:"last_timestamp"`
+		Timestamp     int64  `json:"timestamp"`
+		LastTimestamp int64  `json:"last_timestamp"`
 		Counter       int    `json:"counter"`
-		LastTrigger   string `json:"last_trigger"`
-		Rooms         string `json:"rooms"`
 	}
 	var msgs []alarmMsg
 	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptGetAlarmMessages, nil, &msgs); err != nil {
@@ -328,12 +325,9 @@ func (b *CcuBackend) GetAlarmMessages(ctx context.Context) ([]map[string]any, er
 			"id":             m.ID,
 			"name":           m.Name,
 			"description":    m.Description,
-			"device_name":    m.DeviceName,
 			"timestamp":      m.Timestamp,
 			"last_timestamp": m.LastTimestamp,
 			"counter":        m.Counter,
-			"last_trigger":   m.LastTrigger,
-			"rooms":          m.Rooms,
 		})
 	}
 	return out, nil

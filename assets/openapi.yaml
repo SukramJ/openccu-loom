@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.20.0
+  version: 4.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9059,7 +9059,12 @@ components:
               after: {}
     AlarmMessage:
       type: object
-      required: [id, name, timestamp, counter]
+      description: |
+        An alarm entry has no device, channel or room: it is backed by an
+        alarm system variable that a program raises, so the CCU reports its
+        trigger data point as the 65535 "unknown" sentinel. Device-bound
+        alerts arrive as ServiceMessage instead, which does carry them.
+      required: [id, name, counter]
       properties:
         central:
           type: string
@@ -9067,24 +9072,22 @@ components:
         id: { type: string }
         name: { type: string }
         description: { type: string }
-        device_name: { type: string }
-        address:
+        timestamp:
           type: string
+          format: date-time
           description: |
-            CCU channel address that generated the alarm. Omitted when
-            unavailable (legacy CCUs).
-        state_value:
+            When the alarm was raised. Omitted on the rare CCU report that
+            carries no occurrence at all.
+        last_timestamp:
           type: string
-          description: Raw alarm state string from the CCU Rega script.
-        timestamp: { type: string, format: date-time }
+          format: date-time
+          description: |
+            When the backing alarm variable last changed. Omitted when the
+            CCU reports no such occurrence.
         counter: { type: integer }
-        last_trigger: { type: string }
         display_name:
           type: string
           description: Human-readable translation of the message code.
-        rooms:
-          type: array
-          items: { type: string }
     ServiceMessage:
       type: object
       required: [id, name, timestamp, counter, quittable]

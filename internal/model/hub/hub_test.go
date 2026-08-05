@@ -317,22 +317,25 @@ func TestAlarmMessagesCounterAndLatestTimestamp(t *testing.T) {
 	}
 }
 
+// TestAlarmMessagesAdditionalInformationIndexed verifies the indexed-dict
+// form maps each key to the alarm's Name — an alarm entry has no device
+// to prefix it with (see [AlarmMessage]).
 func TestAlarmMessagesAdditionalInformationIndexed(t *testing.T) {
 	a := NewAlarmMessages(&stubAck{})
 	if got := a.AdditionalInformationIndexed(); len(got) != 0 {
 		t.Fatalf("empty alarm set must produce empty indexed map, got %v", got)
 	}
 	a.Replace([]AlarmMessage{
-		{ID: "smoke-1", Name: "Smoke", DeviceName: "Hallway"},
-		{ID: "low-bat", Name: "Low Battery", DeviceName: "Garage"},
+		{ID: "smoke-1", Name: "Smoke"},
+		{ID: "low-bat", Name: "Low Battery"},
 	})
 	got := a.AdditionalInformationIndexed()
 	if len(got) != 2 {
 		t.Fatalf("indexed map size = %d, want 2", len(got))
 	}
 	want := map[string]bool{
-		"Hallway: Smoke":      true,
-		"Garage: Low Battery": true,
+		"Smoke":       true,
+		"Low Battery": true,
 	}
 	for _, v := range got {
 		if !want[v] {

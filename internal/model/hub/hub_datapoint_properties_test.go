@@ -98,18 +98,17 @@ func TestAlarmMessagesAdditionalInformationEmpty(t *testing.T) {
 
 // TestAlarmMessagesAdditionalInformationContainsEntries verifies that
 // AdditionalInformation returns one entry per alarm with the expected keys.
+// An alarm entry has no device, channel or room (see [AlarmMessage]), so
+// the map carries only identity, counter and timing fields.
 func TestAlarmMessagesAdditionalInformationContainsEntries(t *testing.T) {
 	a := NewAlarmMessages(nil)
 	ts := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	a.Replace([]AlarmMessage{
 		{
-			ID:         "alarm-1",
-			Name:       "Fenster offen",
-			Address:    "HEQ0123456:1",
-			DeviceName: "Window Sensor",
-			StateValue: "OPEN",
-			Counter:    3,
-			Timestamp:  ts,
+			ID:        "alarm-1",
+			Name:      "Fenster offen",
+			Counter:   3,
+			Timestamp: ts,
 		},
 	})
 
@@ -124,40 +123,38 @@ func TestAlarmMessagesAdditionalInformationContainsEntries(t *testing.T) {
 	if entry["name"] != "Fenster offen" {
 		t.Errorf("entry[name]=%v, want Fenster offen", entry["name"])
 	}
-	if entry["address"] != "HEQ0123456:1" {
-		t.Errorf("entry[address]=%v, want HEQ0123456:1", entry["address"])
-	}
-	if entry["state_value"] != "OPEN" {
-		t.Errorf("entry[state_value]=%v, want OPEN", entry["state_value"])
-	}
 	if entry["counter"] != 3 {
 		t.Errorf("entry[counter]=%v, want 3", entry["counter"])
 	}
 	if entry["timestamp"] != ts.Unix() {
 		t.Errorf("entry[timestamp]=%v, want %d", entry["timestamp"], ts.Unix())
 	}
+	if _, ok := entry["last_timestamp"]; ok {
+		t.Error("entry must NOT contain 'last_timestamp' key when LastTimestamp is zero")
+	}
 }
 
-// TestAlarmMessagesAdditionalInformationRoomsIncluded verifies that
-// rooms are included in the entry when non-empty.
-func TestAlarmMessagesAdditionalInformationRoomsIncluded(t *testing.T) {
+// TestAlarmMessagesAdditionalInformationLastTimestampIncluded verifies
+// that last_timestamp is included (as Unix seconds) when non-zero.
+func TestAlarmMessagesAdditionalInformationLastTimestampIncluded(t *testing.T) {
 	a := NewAlarmMessages(nil)
+	last := time.Date(2026, 5, 2, 9, 0, 0, 0, time.UTC)
 	a.Replace([]AlarmMessage{
 		{
-			ID:    "alarm-2",
-			Rooms: []string{"Wohnzimmer", "Küche"},
+			ID:            "alarm-2",
+			LastTimestamp: last,
 		},
 	})
 	ai := a.AdditionalInformation()
 	if len(ai) != 1 {
 		t.Fatalf("AdditionalInformation() len=%d, want 1", len(ai))
 	}
-	rooms, ok := ai[0]["rooms"]
+	got, ok := ai[0]["last_timestamp"]
 	if !ok {
-		t.Fatal("entry must contain 'rooms' key when Rooms is non-empty")
+		t.Fatal("entry must contain 'last_timestamp' key when LastTimestamp is non-zero")
 	}
-	if len(rooms.([]string)) != 2 {
-		t.Errorf("entry[rooms] len=%d, want 2", len(rooms.([]string)))
+	if got != last.Unix() {
+		t.Errorf("entry[last_timestamp]=%v, want %d", got, last.Unix())
 	}
 }
 

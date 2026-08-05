@@ -1,15 +1,32 @@
 !# openccu-loom — get_alarm_messages
-!# Output: array of alarm-message records with trigger and location info
+!# Output: array of active alarm-message records
 !#
-!# Walks ID_SYSTEM_VARIABLES, emits one record per ALARMDP whose
-!# AlState == 1. Each record includes:
-!#   id, name, description, device_name, timestamp, last_timestamp,
-!#   counter, last_trigger, rooms
-!# Text fields go through UriEncode() because alarm and device names
-!# may contain arbitrary user input.
+!# Walks ID_SYSTEM_VARIABLES and emits one record per ALARMDP whose
+!# AlState() is 1 (raised and not yet acknowledged):
+!#   id, name, description, timestamp, last_timestamp, counter
 !#
-!# Service messages live in ID_SERVICES and are produced by the
-!# companion script get_service_messages.fn.
+!# Alarm system variables carry no device relation. They are created by
+!# the operator and raised from programs, so the CCU leaves their
+!# trigger data point at the 65535 "unknown" sentinel. An
+!# `if (trigger > 0)` guard does not catch 65535, so resolving a trigger
+!# channel here raised a ScriptRuntimeError. Device, room and trigger
+!# data belong to get_service_messages.fn, whose ID_SERVICES alarms do
+!# carry a real trigger data point.
+!#
+!# Timestamps are Unix seconds via the *Seconds() accessors rather than
+!# ToString(), which renders CCU local time with no offset and is not
+!# parsable on its own. 0 means the occurrence never happened, which is
+!# the normal state of last_timestamp for a variable raised once.
+!#
+!# Read every accessor into a typed local before building the record.
+!# Calling one inline inside a Write() concatenation chain makes ReGa
+!# drop the enclosing if-condition, so the script then emits a record
+!# for every system variable with an empty timestamp field. Verified
+!# against a live CCU: inline emits ~70 bogus records, the form below
+!# emits only genuine alarms.
+!#
+!# Name and description go through UriEncode() because both are
+!# free-form operator input and would otherwise break the JSON.
 
 string sVarId;
 boolean bFirst = true;
@@ -32,48 +49,9 @@ if (oSysvars) {
                 sDescription = oVar.DPInfo().UriEncode();
             }
 
-            string sTimestamp = "";
-            time tStamp = oVar.Timestamp();
-            if (tStamp) {
-                sTimestamp = tStamp.ToString();
-            }
-
-            !# Resolve optional trigger data point → device + rooms.
-            string sTriggerName = "";
-            string sDeviceName = "";
-            string sRooms = "";
-            integer iTriggerDP = oVar.AlTriggerDP();
-            if (iTriggerDP > 0) {
-                object oTrigger = dom.GetObject(iTriggerDP);
-                if (oTrigger) {
-                    if (oTrigger.Name()) {
-                        sTriggerName = oTrigger.Name().UriEncode();
-                    }
-
-                    integer iChnId = oTrigger.Channel();
-                    if (iChnId) {
-                        object oChannel = dom.GetObject(iChnId);
-                        if (oChannel) {
-                            if (oChannel.Name()) {
-                                sDeviceName = oChannel.Name().UriEncode();
-                            }
-                            boolean bFirstRoom = true;
-                            string sRoomId;
-                            foreach (sRoomId, oChannel.ChnRoom()) {
-                                object oRoom = dom.GetObject(sRoomId);
-                                if (oRoom) {
-                                    if (bFirstRoom) {
-                                        bFirstRoom = false;
-                                    } else {
-                                        sRooms = sRooms # "\t";
-                                    }
-                                    sRooms = sRooms # oRoom.Name().UriEncode();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            integer iOccurred = oVar.AlOccurrenceTimeSeconds();
+            integer iLast = oVar.LastTimestampSeconds();
+            integer iCounter = oVar.AlCounter();
 
             if (bFirst) {
                 bFirst = false;
@@ -84,12 +62,9 @@ if (oSysvars) {
             Write('{"id":"' # oVar.ID() # '",');
             Write('"name":"' # sName # '",');
             Write('"description":"' # sDescription # '",');
-            Write('"device_name":"' # sDeviceName # '",');
-            Write('"timestamp":"' # sTimestamp # '",');
-            Write('"last_timestamp":"' # sTimestamp # '",');
-            Write('"counter":0,');
-            Write('"last_trigger":"' # sTriggerName # '",');
-            Write('"rooms":"' # sRooms # '"}');
+            Write('"timestamp":' # iOccurred # ',');
+            Write('"last_timestamp":' # iLast # ',');
+            Write('"counter":' # iCounter # '}');
         }
     }
 }

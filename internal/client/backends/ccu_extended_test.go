@@ -337,9 +337,13 @@ func TestCcuGetAlarmMessagesNoRega(t *testing.T) {
 func TestCcuGetAlarmMessagesDispatch(t *testing.T) {
 	t.Parallel()
 	// GetAlarmMessages routes through the ReGa script engine; wire a
-	// ScriptRunner that returns a list of alarm messages in snake_case.
+	// ScriptRunner that returns a list of alarm messages in snake_case. An
+	// alarm entry has no device, channel or room — see
+	// get_alarm_messages.fn — so the raw fixture carries only identity,
+	// counter and Unix-second timing fields.
 	sr := &fakeScriptRunner{
-		rawJSON: `[{"id":"al1","name":"Smoke Alarm","description":"Kitchen","device_name":"Detector A","address":"ABC:1"}]`,
+		rawJSON: `[{"id":"al1","name":"Smoke Alarm","description":"Kitchen",` +
+			`"timestamp":1700000000,"last_timestamp":0,"counter":2}]`,
 	}
 	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
 	b.SetScriptRunner(sr)
@@ -352,6 +356,12 @@ func TestCcuGetAlarmMessagesDispatch(t *testing.T) {
 	}
 	if sr.called.Load() != 1 {
 		t.Fatalf("ScriptRunner.RunJSON call count = %d, want 1", sr.called.Load())
+	}
+	if out[0]["timestamp"] != int64(1700000000) {
+		t.Errorf("timestamp = %v, want 1700000000 (Unix seconds)", out[0]["timestamp"])
+	}
+	if out[0]["last_timestamp"] != int64(0) {
+		t.Errorf("last_timestamp = %v, want 0", out[0]["last_timestamp"])
 	}
 }
 

@@ -79,7 +79,7 @@ func TestAlarmMessagesAdditionalInformationDisplayName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCatalogs: %v", err)
 	}
-	r := newRegaRunnerFor(t, `[{"id":"a1","name":"AL-ABC:1.LOW_BAT","device_name":"Sensor","address":"ABC:1"}]`)
+	r := newRegaRunnerFor(t, `[{"id":"a1","name":"AL-ABC:1.LOW_BAT","timestamp":1700000000}]`)
 	h := hubmodel.NewHub("test-central")
 	if err := loadAlarmMessages(context.Background(), r, h, cats, "en"); err != nil {
 		t.Fatalf("loadAlarmMessages: %v", err)
