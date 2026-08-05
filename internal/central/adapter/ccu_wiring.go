@@ -1128,9 +1128,9 @@ func wireInterface(
 		// events. A non-callback-capable setup (no server, no URL) skips
 		// this step and leaves the daemon in read-through mode.
 		if callbackURL != "" {
-			// Pre-Init Deinit: tell the CCU to forget any callback URL
-			// previously registered for this interface_id before we
-			// install the fresh one. Mirrors the recovery pipeline's
+			// Pre-Init Deinit: tell the CCU to forget any registration
+			// previously made for this callback URL before we install
+			// the fresh one. Mirrors the recovery pipeline's
 			// ReinitProxy (interface_client.go:653) two-step sequence.
 			// A previous daemon-run that died without invoking the
 			// shutdown closer (SIGKILL, panic, host reboot, pair-test
@@ -1141,7 +1141,7 @@ func wireInterface(
 			// indefinitely. Best-effort: a Deinit failure does not abort
 			// the subsequent Init (the CCU may already have timed the
 			// old registration out, or this is a first-ever boot).
-			if err := backend.Deinit(activateCtx, initID); err != nil {
+			if err := backend.Deinit(activateCtx, callbackURL); err != nil {
 				logger.Debug("wire.deinit.pre_init",
 					slog.String("central", cc.Name),
 					slog.String("interface", initID),
@@ -1262,7 +1262,7 @@ ingestLoop:
 		if callbackURL != "" {
 			//nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx
 			deinitCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			if err := backend.Deinit(deinitCtx, deinitID); err != nil {
+			if err := backend.Deinit(deinitCtx, callbackURL); err != nil {
 				logger.Debug("wire.deinit",
 					slog.String("central", centralName),
 					slog.String("interface", deinitID),

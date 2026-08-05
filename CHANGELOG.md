@@ -21,12 +21,58 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Internal identifiers are unaffected: MQTT topics, REST/WebSocket
   payloads and the values cache continue to use `<central>-<interface>`.
 
-  On upgrade the CCU keeps the registration made by the previous version
-  and retries delivery to it until the CCU is restarted, logging a
-  transport error per attempt. Restart the CCU once after updating to
-  clear them.
+  A registration left behind by an earlier version is cleared on the next
+  start — see the deregistration fix below.
 
 ### Fixed
+
+- **No CUxD device has ever pushed an event.** CUxD does not call `event`
+  directly the way the other interfaces do — it wraps every callback,
+  a single value change included, in a `system.multicall` envelope. The
+  BIN-RPC callback listener had no case for that method: it read the first
+  argument of each call as the interface id, which is a string for a bare
+  call and an array for an envelope, so every CUxD push was rejected as
+  malformed and discarded. The daemon still read CUxD values, because
+  reading is a poll the daemon initiates, so a CUxD device showed a value
+  that only ever refreshed on a restart or a re-seed.
+
+  The listener now unwraps the envelope and dispatches each sub-call, and
+  reports one result per sub-call so a single unroutable member cannot
+  discard a whole batch.
+
+  Two things kept this invisible for as long as it existed. The rejection
+  was logged below the default level, so a CUxD that pushed constantly and
+  one that pushed nothing produced identical logs; those rejections are now
+  logged as warnings. And the interface was then declared dead for the right
+  reason by the wrong route: with no inbound callback ever arriving, the
+  keepalive verdict turned negative after three minutes and reported
+  `connection lost: timeout`, which read as a network problem rather than a
+  parser one.
+
+- **A CUxD interface reported `connection lost: timeout` on a healthy
+  connection, and could not recover from it.** Two defects behind the same
+  symptom. The keepalive skipped CUxD on the assumption that it cannot
+  answer `ping` — it can, over BIN-RPC, and that PONG is exactly what keeps
+  an interface's liveness fresh while its devices are quiet — so the
+  liveness verdict was guaranteed to go negative and stay there. And no
+  recovery pipeline was ever registered for CUxD, so the connection-loss
+  event that followed was discarded by the recovery coordinator: CUxD was
+  the one interface that could never reconnect itself. Each false loss also
+  marked every CUxD data point stale on REST and MQTT.
+
+- **Deregistering a callback registered an unreachable one instead.** The
+  daemon sent `init("", interface_id)` where the CCU expects `init(url)`
+  with the second parameter omitted — the CCU keys deregistration on the URL
+  alone. The old registration therefore survived every deinit, and the empty
+  URL was accepted as a *new* registration that the CCU then tried to
+  deliver to on every keepalive, logging
+  `XmlRpcClient error calling event(...) on uds://:/RPC2` in the CCU's own
+  log until it was restarted. Affected XML-RPC and BIN-RPC alike.
+
+  This also removes the upgrade caveat noted under *Changed* above: because
+  the pre-init deinit now names the callback URL, which does not change
+  across an upgrade, a registration left by an earlier version is cleared on
+  the next start without restarting the CCU.
 
 - **A device fault reported by a CCU reached nothing at all.** A device-error
   event (`ERROR_CODE`, `ERROR_OVERHEAT`, `SENSOR_ERROR…`) produced no

@@ -2,6 +2,23 @@
 
 ## 0.53.1
 
+- **CUxD devices now report changes as they happen.** Until now a CUxD
+  device only ever updated when the daemon went and asked — so a value could
+  sit unchanged for minutes and any automation reacting to it fired late or
+  not at all. CUxD announces its changes in a format the daemon did not
+  recognise and silently threw away. It is understood now, and CUxD devices
+  push like every other device.
+- **CUxD no longer shows up as faulty when it is fine.** The system status
+  reported CUxD as "connection lost: timeout" a few minutes after every
+  start, greyed out its values, and never recovered on its own. Both causes
+  are fixed: CUxD is now checked the same way as every other interface, and
+  it can reconnect itself if the connection really does drop.
+- **The daemon now cleans up after itself on the CCU.** When it disconnected
+  from an interface it left the old registration in place and added a broken
+  one, which made the CCU log a delivery error every 15 seconds until it was
+  restarted. If you saw `XmlRpcClient error calling event(...)` lines in your
+  CCU log, that was this. Restart the CCU once after updating to clear the
+  entries left behind by earlier versions.
 - **A fault reported by one of your devices never left the daemon.** When a
   smoke detector, water sensor or any other device reported an error, nothing
   arrived anywhere — no event, no message, nothing to automate on. A device

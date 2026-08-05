@@ -25,7 +25,8 @@ type Caller interface {
 // [Announcer] nil and short-circuit `Init`.
 type Announcer interface {
 	Init(ctx context.Context, interfaceID, callbackURL string) error
-	Deinit(ctx context.Context, interfaceID string) error
+	// Deinit takes the callbackURL — see [Operations.Deinit].
+	Deinit(ctx context.Context, callbackURL string) error
 }
 
 // ScriptRunner is the subset of rega.Runner that CcuBackend needs.
