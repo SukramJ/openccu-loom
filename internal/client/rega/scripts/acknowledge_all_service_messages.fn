@@ -7,22 +7,34 @@
 !# bit (bit 2 in .Operations()); non-writable messages are left
 !# untouched. Each acknowledged message is cleared via AlReceipt().
 !#
+!# Each object guard is a separate, nested if rather than
+!# `oAlarm && (...)`. The
+!# combined form was reported not to work as written on a CCU test
+!# system for the sibling get_alarm_messages.fn; the same shape is
+!# avoided here, without that report having been reproduced for this
+!# script.
+!#
 !# Mirrors the CCU WebUI ackAll() loop, which acknowledges only entries
 !# whose trigger is writable. The single-message counterpart is
 !# acknowledge_message.fn.
 
-integer iCount = 0;
 string sAlarmId;
+object oAlarm; object oTrigger;
+integer iCount = 0;
 
 object oServices = dom.GetObject(ID_SERVICES);
 if (oServices) {
     foreach (sAlarmId, oServices.EnumIDs()) {
-        object oAlarm = dom.GetObject(sAlarmId);
-        if (oAlarm && (oAlarm.AlState() == 1)) {
-            object oTrigger = dom.GetObject(oAlarm.AlTriggerDP());
-            if (oTrigger && (oTrigger.Operations() & 2)) {
-                oAlarm.AlReceipt();
-                iCount = iCount + 1;
+        oAlarm = dom.GetObject(sAlarmId);
+        if (oAlarm) {
+            if (oAlarm.AlState() == 1) {
+                oTrigger = dom.GetObject(oAlarm.AlTriggerDP());
+                if (oTrigger) {
+                    if (oTrigger.Operations() & 2) {
+                        oAlarm.AlReceipt();
+                        iCount = iCount + 1;
+                    }
+                }
             }
         }
     }

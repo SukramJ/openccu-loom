@@ -12,47 +12,55 @@
 !# else-if sub-rules are omitted. Every field is URL-encoded because
 !# names and info strings may contain quotes, backslashes, or newlines
 !# that would otherwise break the JSON framing.
+!#
+!# sName and oLV are shared between the condition and the activity pass.
+!# The two passes run in sequence, never nested, and each pass assigns
+!# both before reading them.
 
-string sProgramId;
+string sProgramId; string sDescription; string sCond; string sAct;
+string sCondIdx; string sSingleIdx; string sDestIdx; string sName;
+object oProgram; object oRule; object oC; object oSC; object oCC; object oLV;
+object oDest; object oSD; object oCH;
+integer iCondCount; integer iSingleCount; integer iLVT; integer iCT;
+integer iRV1; integer iRV2; integer iDestCount; integer iP; integer iV;
+boolean bValue;
 boolean bFirst = true;
 
 Write('[');
 foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
-    object oProgram = dom.GetObject(sProgramId);
+    oProgram = dom.GetObject(sProgramId);
     if (oProgram) {
-        string sDescription = oProgram.PrgInfo().UriEncode();
-        string sCond = "";
-        string sAct = "";
+        sDescription = oProgram.PrgInfo().UriEncode();
+        sCond = "";
+        sAct = "";
 
-        object oRule = oProgram.Rule();
+        oRule = oProgram.Rule();
         if (oRule) {
             ! --- trigger conditions ---
-            integer iCondCount = oRule.RuleConditions().Count();
+            iCondCount = oRule.RuleConditions().Count();
             if (iCondCount > 0) {
-                string sCondIdx;
                 foreach (sCondIdx, system.GenerateEnum(0, iCondCount - 1)) {
-                    object oC = oRule.RuleCondition(sCondIdx);
+                    oC = oRule.RuleCondition(sCondIdx);
                     if (oC) {
-                        integer iSingleCount = oC.CndSingleCount();
+                        iSingleCount = oC.CndSingleCount();
                         if (iSingleCount > 0) {
-                            string sSingleIdx;
                             foreach (sSingleIdx, system.GenerateEnum(0, iSingleCount - 1)) {
-                                object oSC = oC.CndSingleCondition(sSingleIdx);
+                                oSC = oC.CndSingleCondition(sSingleIdx);
                                 if (oSC) {
                                     if (sSingleIdx.ToInteger() > 0) {
                                         if (oSC.OperatorType() == 2) { sCond = sCond # " || "; }
                                         else { sCond = sCond # " && "; }
                                     }
-                                    integer iLVT = oSC.LeftValType();
-                                    string sName = "?";
-                                    boolean bValue = false;
+                                    iLVT = oSC.LeftValType();
+                                    sName = "?";
+                                    bValue = false;
                                     if (iLVT == ivtObjectId) {
-                                        object oCC = dom.GetObject(oSC.ConditionChannel());
+                                        oCC = dom.GetObject(oSC.ConditionChannel());
                                         if (oCC) { sName = oCC.Name(); }
                                         bValue = true;
                                     }
                                     if (iLVT == ivtSystemId) {
-                                        object oLV = dom.GetObject(oSC.LeftVal());
+                                        oLV = dom.GetObject(oSC.LeftVal());
                                         if (oLV) { sName = oLV.Name(); }
                                         bValue = true;
                                     }
@@ -61,9 +69,9 @@ foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
                                     }
                                     sCond = sCond # sName;
                                     if (bValue) {
-                                        integer iCT = oSC.ConditionType();
-                                        integer iRV1 = oSC.RightVal1();
-                                        integer iRV2 = oSC.RightVal2();
+                                        iCT = oSC.ConditionType();
+                                        iRV1 = oSC.RightVal1();
+                                        iRV2 = oSC.RightVal2();
                                         if (iCT == 5) { sCond = sCond # " == " # iRV1.ToString(2); }
                                         if ((iCT == 6) || (iCT == 7)) { sCond = sCond # " [" # iRV1.ToString(2) # ".." # iRV2.ToString(2) # "]"; }
                                         if (iCT == 8) { sCond = sCond # " > " # iRV1.ToString(2); }
@@ -83,30 +91,29 @@ foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
             }
 
             ! --- resulting activities ---
-            object oDest = oRule.RuleDestination();
+            oDest = oRule.RuleDestination();
             if (oDest) {
-                integer iDestCount = oDest.DestSingleCount();
+                iDestCount = oDest.DestSingleCount();
                 if (iDestCount > 0) {
-                    string sDestIdx;
                     foreach (sDestIdx, system.GenerateEnum(0, iDestCount - 1)) {
-                        object oSD = oDest.DestSingleDestination(sDestIdx);
+                        oSD = oDest.DestSingleDestination(sDestIdx);
                         if (oSD) {
                             if (sDestIdx.ToInteger() > 0) { sAct = sAct # "; "; }
-                            integer iP = oSD.DestinationParam();
+                            iP = oSD.DestinationParam();
                             if (iP == ivtString) {
                                 sAct = sAct # "@script";
                             }
                             else {
-                                string sName = "?";
+                                sName = "?";
                                 if (iP == ivtSystemId) {
-                                    object oLV = dom.GetObject(oSD.DestinationDP());
+                                    oLV = dom.GetObject(oSD.DestinationDP());
                                     if (oLV) { sName = oLV.Name(); }
                                 }
                                 if (iP == ivtObjectId) {
-                                    object oCH = dom.GetObject(oSD.DestinationChannel());
+                                    oCH = dom.GetObject(oSD.DestinationChannel());
                                     if (oCH) { sName = oCH.Name(); }
                                 }
-                                integer iV = oSD.DestinationValue();
+                                iV = oSD.DestinationValue();
                                 sAct = sAct # sName # " := " # iV.ToString(2);
                             }
                         }

@@ -13,31 +13,35 @@
 !# object's name still equals its address, so after a verify miss the
 !# script scans devices and channels by Address() — the same strategy the
 !# CCU's own Device.getReGaIDByAddress method uses.
+!#
+!# oFunc is shared between the clear pass and the assign pass; the two
+!# loops run in sequence and each assigns it before reading it.
 
 string sAddress = "##address##";
 string sFunctions = "##functions##";
-integer iCount = 0;
 string sTargetId = "";
+string sDevId; string sChnId; string sFuncId; string sFuncName;
+object oByName; object oDevices; object oDev; object oChn;
+object oFuncList; object oFunc;
+integer iCount = 0;
 
-object oByName = dom.GetObject(sAddress);
+oByName = dom.GetObject(sAddress);
 if (oByName) {
     if (oByName.Address() == sAddress) {
         sTargetId = oByName.ID();
     }
 }
 if (sTargetId == "") {
-    object oDevices = dom.GetObject(ID_DEVICES);
+    oDevices = dom.GetObject(ID_DEVICES);
     if (oDevices) {
-        string sDevId;
         foreach (sDevId, oDevices.EnumIDs()) {
-            object oDev = dom.GetObject(sDevId);
+            oDev = dom.GetObject(sDevId);
             if (oDev) {
                 if (oDev.Address() == sAddress) {
                     sTargetId = oDev.ID();
                 } else {
-                    string sChnId;
                     foreach (sChnId, oDev.Channels()) {
-                        object oChn = dom.GetObject(sChnId);
+                        oChn = dom.GetObject(sChnId);
                         if (oChn) {
                             if (oChn.Address() == sAddress) {
                                 sTargetId = oChn.ID();
@@ -50,18 +54,16 @@ if (sTargetId == "") {
     }
 }
 if (sTargetId != "") {
-    object oFuncList = dom.GetObject(ID_FUNCTIONS);
-    string sFuncId;
+    oFuncList = dom.GetObject(ID_FUNCTIONS);
     foreach (sFuncId, oFuncList.EnumIDs()) {
-        object oFunc = dom.GetObject(sFuncId);
+        oFunc = dom.GetObject(sFuncId);
         if (oFunc) {
             oFunc.Remove(sTargetId);
         }
     }
-    string sFuncName;
     foreach (sFuncName, sFunctions.Split("\n")) {
         if (sFuncName != "") {
-            object oFunc = oFuncList.Get(sFuncName);
+            oFunc = oFuncList.Get(sFuncName);
             if (oFunc) {
                 oFunc.Add(sTargetId);
                 iCount = iCount + 1;

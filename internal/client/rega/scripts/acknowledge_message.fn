@@ -7,19 +7,29 @@
 !# datapoint to have the OPERATION_WRITE bit set; alarm messages
 !# are acknowledged unconditionally.
 !#
+!# The trigger guard is resolved into bWritable before the branch
+!# rather than written as `oTrigger && (...)`. The combined form was
+!# reported not to
+!# work as written on a CCU test system for the sibling
+!# get_alarm_messages.fn, and the branch here needs an else. A missing
+!# trigger keeps bWritable false and therefore still reports the
+!# not-acknowledgeable error.
+!#
 !# Invariant: exactly one of (success:true) or (success:false + error)
 !# is produced.
 
 string sMessageId = "##message_id##";
+string sCandidate;
+object oTrigger; object oServices;
+boolean bIsService = false;
+boolean bWritable = false;
 boolean bSuccess = false;
 string sError = "";
 
 object oAlarm = dom.GetObject(sMessageId);
 if (oAlarm) {
-    boolean bIsService = false;
-    object oServices = dom.GetObject(ID_SERVICES);
+    oServices = dom.GetObject(ID_SERVICES);
     if (oServices) {
-        string sCandidate;
         foreach (sCandidate, oServices.EnumIDs()) {
             if (sCandidate == sMessageId) {
                 bIsService = true;
@@ -28,8 +38,14 @@ if (oAlarm) {
     }
 
     if (bIsService) {
-        object oTrigger = dom.GetObject(oAlarm.AlTriggerDP());
-        if (oTrigger && (oTrigger.Operations() & 2)) {
+        oTrigger = dom.GetObject(oAlarm.AlTriggerDP());
+        if (oTrigger) {
+            if (oTrigger.Operations() & 2) {
+                bWritable = true;
+            }
+        }
+
+        if (bWritable) {
             oAlarm.AlReceipt();
             bSuccess = true;
         } else {
