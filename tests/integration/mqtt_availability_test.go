@@ -34,10 +34,33 @@ import (
 //     "online" (none as "offline" — godevccu devices are all reachable);
 //   - registered data points publish a slot state carrying
 //     `"available":true`; and
-//   - not-yet-observed data points publish `{"value":null,"available":
-//     true}` rather than an empty eviction — the exact regression that
-//     left HA entities stuck on `unavailable` under
-//     `availability_mode: all`.
+//   - not-yet-observed VALUES data points publish
+//     `{"value":null,"available":false}` rather than an empty eviction.
+//
+// The last bullet pins a convention that was deliberately reversed, so it
+// says which side it holds and why. The original fix published unobserved
+// data points as `available:true`, because an empty retained payload left
+// the per-entity availability template with nothing to read and HA stuck
+// every entity on `unavailable` under `availability_mode: all`. Gating
+// availability on the full validity chain then reversed the `available`
+// half for reference parity: an unobserved point is not a confirmed
+// reading, so it publishes as unavailable with a `null` value (CHANGELOG
+// 0.5.x, `docs/parity/by_design.md`).
+//
+// What survived both is the part that actually caused the outage: the slot
+// topic must carry a JSON body. An unobserved point publishing
+// `{"value":null,"available":false}` is the decided behaviour; an
+// unobserved point publishing nothing at all is the regression.
+//
+// The bullet is scoped to the VALUES plane for a reason worth keeping.
+// When the reversal landed, this assertion still required
+// `available:true` — and stayed green for six weeks, because the
+// CALCULATED plane had not been gated yet and its unobserved points still
+// matched. The assertion was measuring a plane it did not name, and passed
+// for a reason unrelated to what it claimed. It only went red once
+// calculated validity was gated on source validity too, at which point the
+// last payload of the old shape disappeared. Naming the plane is what stops
+// that from recurring.
 func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 	mb := startMosquitto(t)
 
@@ -133,10 +156,11 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 
 	// --- classify the captured topics -------------------------------------
 	var (
-		online, offline               int
-		slotAvailableTrue             int
-		unobservedAvailable           int
-		emptyValueStateRetainedEvicts int
+		online, offline                  int
+		slotAvailableTrue                int
+		unobservedUnavailable            int
+		unobservedUnavailableOtherPlanes int
+		emptyValueStateRetainedEvicts    int
 	)
 	mu.Lock()
 	snapshot := make(map[string][]byte, len(captured))
@@ -156,8 +180,16 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 			}
 		case strings.Contains(string(payload), `"available":true`):
 			slotAvailableTrue++
-			if strings.Contains(string(payload), `"value":null`) {
-				unobservedAvailable++
+		case strings.Contains(string(payload), `"value":null,"available":false`):
+			// An unobserved data point: no confirmed reading, but a body
+			// the availability template can read. Counted per plane so the
+			// VALUES assertion cannot be satisfied by another plane, which
+			// is how the previous version of it stayed green after the
+			// behaviour it pinned had already changed.
+			if strings.Contains(topic, "/values/") {
+				unobservedUnavailable++
+			} else {
+				unobservedUnavailableOtherPlanes++
 			}
 		case len(payload) == 0 && strings.Contains(topic, "/values/"):
 			// A retained empty payload on a VALUES state topic is the old
@@ -166,8 +198,9 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 		}
 	}
 
-	t.Logf("availability: online=%d offline=%d | slotAvailableTrue=%d unobservedAvailable=%d emptyEvicts=%d | topics=%d",
-		online, offline, slotAvailableTrue, unobservedAvailable, emptyValueStateRetainedEvicts, len(snapshot))
+	t.Logf("availability: online=%d offline=%d | slotAvailableTrue=%d unobservedUnavailable=%d (values) %d (other planes) emptyEvicts=%d | topics=%d",
+		online, offline, slotAvailableTrue, unobservedUnavailable,
+		unobservedUnavailableOtherPlanes, emptyValueStateRetainedEvicts, len(snapshot))
 
 	if online == 0 {
 		t.Error("no device published availability=online — reachable devices must be online at boot")
@@ -178,8 +211,10 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 	if slotAvailableTrue == 0 {
 		t.Error("no slot state carried available:true — per-DP availability template would resolve to unavailable")
 	}
-	if unobservedAvailable == 0 {
-		t.Error("no unobserved DP published {value:null, available:true} — the fix should publish available state instead of evicting")
+	if unobservedUnavailable == 0 {
+		t.Error("no unobserved VALUES DP published {value:null, available:false} — an unobserved point " +
+			"must still publish a readable body; publishing nothing is what left HA entities " +
+			"stuck on unavailable")
 	}
 	if emptyValueStateRetainedEvicts != 0 {
 		t.Errorf("got %d empty retained VALUES-state evictions — unobserved DPs must publish available state, not evict", emptyValueStateRetainedEvicts)

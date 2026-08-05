@@ -28,6 +28,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The integration suite had been failing on `main` since 0.52.9.** Its MQTT
+  availability guard still required an unobserved data point to publish
+  `{"value":null,"available":true}` — the convention that gating availability
+  on the full validity chain deliberately reversed in 0.5.x. No daemon
+  behaviour changed here; the guard now pins the decided contract and states
+  which side it holds, so the next reversal has to touch it on purpose.
+
+  The guard had not merely gone stale. It stayed green for six weeks after
+  the reversal because the calculated plane was not gated yet and its
+  unobserved points still carried the old shape — so it passed on a plane it
+  never named, measuring something other than what it claimed. It went red
+  only when calculated validity was gated on source validity in 0.52.9. The
+  assertion now names the VALUES plane.
+
 - **`GET /devices/{addr}/channels/{no}/event-groups` answered with an empty
   list for every channel of every device.** The route reports which trigger
   kinds a channel offers — keypress, impulse, device error — so a client can
