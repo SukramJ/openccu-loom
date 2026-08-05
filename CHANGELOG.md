@@ -28,6 +28,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`GET /devices/{addr}/channels/{no}/event-groups` answered with an empty
+  list for every channel of every device.** The route reports which trigger
+  kinds a channel offers — keypress, impulse, device error — so a client can
+  build its event entities from it. Both ends of the model were complete: a
+  channel could hold event sources and grouped them by kind once hydrated.
+  Nothing in between ever attached one, so the answer was empty by
+  construction rather than because a device lacked buttons. Device ingestion
+  now attaches an event source for every VALUES parameter that carries the
+  EVENT operation and classifies as a trigger, which is where the reference
+  stack creates them too.
+
+  This affects the bootstrap shape only. Trigger delivery itself was never
+  broken — a keypress reaches subscribers as a device-trigger event on its
+  own path — and `last_triggered_event` in the response stays null until the
+  model sources are fed from that path, which is separate work.
+
 - **After a CCU restart the daemon could end up registered twice, so every
   event arrived twice.** A rebooting CCU serves XML-RPC before it has
   finished starting. A reconnect landing in that window fails the `deinit`
