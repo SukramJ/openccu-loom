@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures';
 import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
 test.describe('Visual regression - light mode', () => {
@@ -59,7 +59,7 @@ test.describe('Visual regression - light mode', () => {
   });
 
   test('Sysvars empty state light', async ({ page }) => {
-    await page.route('**/api/v1/sysvars', async (route) => {
+    await page.route('**/api/v1/sysvars*', async (route) => {
       await route.fulfill({ json: [] });
     });
     await page.goto('http://localhost:5173/app/#/sysvars');
@@ -70,7 +70,7 @@ test.describe('Visual regression - light mode', () => {
   });
 
   test('Sysvars error state light', async ({ page }) => {
-    await page.route('**/api/v1/sysvars', async (route) => {
+    await page.route('**/api/v1/sysvars*', async (route) => {
       await route.fulfill({ status: 500, body: JSON.stringify({ detail: 'server error' }) });
     });
     await page.goto('http://localhost:5173/app/#/sysvars');
@@ -147,7 +147,7 @@ test.describe('Visual regression - dark mode', () => {
   });
 
   test('Sysvars empty state dark', async ({ page }) => {
-    await page.route('**/api/v1/sysvars', async (route) => {
+    await page.route('**/api/v1/sysvars*', async (route) => {
       await route.fulfill({ json: [] });
     });
     await page.goto('http://localhost:5173/app/#/sysvars');

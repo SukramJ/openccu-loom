@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures';
 import { mockAllApis, mockVirtualRemoteDevice, VIRTUAL_REMOTE_ADDRESS } from './helpers/mock-api';
 
 // Functional coverage for the virtual-remote (HM-RCV-50) key-simulation

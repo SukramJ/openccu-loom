@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './helpers/fixtures';
 import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
 // The first-run onboarding wizard renders only when GET /setup/status reports

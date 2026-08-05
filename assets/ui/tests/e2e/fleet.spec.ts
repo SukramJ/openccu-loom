@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/fixtures';
 import { mockAllApis, mockFleet, addStylesForStableScreenshots } from './helpers/mock-api';
 
 // Read-only cross-CCU fleet overview (#/fleet). mockFleet serves two CCUs:

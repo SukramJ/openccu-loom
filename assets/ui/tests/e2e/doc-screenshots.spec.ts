@@ -1,4 +1,4 @@
-import { test, type Page } from '@playwright/test';
+import { test, type Page } from './helpers/fixtures';
 import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
 // Curated documentation screenshots for docs/user/. These are NOT
