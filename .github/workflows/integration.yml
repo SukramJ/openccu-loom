@@ -3,8 +3,12 @@ name: integration
 on:
   push:
     branches: [main]
+  # Every pull request, not only labelled ones. Running post-merge only is
+  # how this suite came to hold an assertion that had been wrong for six
+  # weeks: it was red on main for 27 consecutive pushes and blocked nothing,
+  # because by the time it ran the change was already in.
   pull_request:
-    types: [labeled, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 permissions:
@@ -22,10 +26,6 @@ env:
 jobs:
   integration:
     name: godevccu integration
-    if: |
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'needs-integration')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

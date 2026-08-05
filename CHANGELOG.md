@@ -28,6 +28,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A channel's event group never recorded the trigger that fired.**
+  `GET /devices/{addr}/channels/{no}/event-groups` reports which triggers a
+  channel offers and, per group, the last one that fired. The second half was
+  always absent: delivery of a keypress reaches the WebSocket and the
+  diagnostics stream directly off the event bus, but nothing fed it back into
+  the model, so `last_triggered_event` stayed null however often a button was
+  pressed. A client could enumerate its event entities and never learn that
+  one had been used. The model's sources are now fed from the same
+  device-trigger events the north-bound surfaces receive, including for a CCU
+  adopted while the daemon runs.
+
 - **The integration suite had been failing on `main` since 0.52.9.** Its MQTT
   availability guard still required an unobserved data point to publish
   `{"value":null,"available":true}` — the convention that gating availability
@@ -188,6 +199,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   answers a missing credential and a wrong one with the same
   `Not authorized (0x87)`, so those flags are what separate "typed it
   wrong" from "sent none".
+
+- **The integration suite runs on every pull request.** It previously ran on
+  pushes to `main` and on pull requests only when labelled, so it reported a
+  defect after the change was already in. That is how one of its assertions
+  came to be wrong for six weeks and red for 27 consecutive pushes without
+  blocking anything.
 
 - **A browser test now fails when one of its requests escapes the mock
   layer.** The suite is meant to be hermetic, but an unmatched route did

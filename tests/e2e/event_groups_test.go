@@ -23,7 +23,9 @@ package e2e
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/tests/e2e/harness"
 )
@@ -119,4 +121,120 @@ func sortedKinds(found map[string][]string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// TestE2EEventGroupRecordsTheTriggerThatFired pins the other half: a trigger
+// the CCU pushes must land on the channel's event group, which is what
+// `last_triggered_event` reports.
+//
+// The two halves fail independently and look alike from the route. Without
+// the producer every group is missing; without the feed every group is
+// present and permanently reports no trigger — a fleet whose buttons nobody
+// has pressed. Only pressing one tells them apart, so this test presses one.
+func TestE2EEventGroupRecordsTheTriggerThatFired(t *testing.T) {
+	t.Parallel()
+	h := harness.Start(t, harness.Options{})
+	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	devices := getJSONArray(t, h, "/api/v1/devices", "items")
+	address, channelNo, parameter, path := findKeypressSource(t, h, devices)
+
+	// Before: the group exists and has never fired. Asserting this is what
+	// keeps the check below from passing on a value that was already there.
+	if got := lastTriggeredParameter(t, h, path); got != "" {
+		t.Fatalf("%s already reports last_triggered_event %q before anything was pressed",
+			path, got)
+	}
+
+	channelAddress := fmt.Sprintf("%s:%d", address, channelNo)
+	if err := h.CCU().V().SimulateDeviceEvent(channelAddress, parameter, true); err != nil {
+		t.Fatalf("SimulateDeviceEvent %s %s: %v", channelAddress, parameter, err)
+	}
+
+	// The push travels CCU → callback server → event coordinator → bus →
+	// feed → model, so it is observed rather than awaited.
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		if got := lastTriggeredParameter(t, h, path); got != "" {
+			// The summary reports the lowercased event-type token, matching
+			// its `event_types` sibling, while `parameters` carries the
+			// upper-case CCU names — so the comparison is case-insensitive
+			// by design, not by convenience.
+			if !strings.EqualFold(got, parameter) {
+				t.Fatalf("%s recorded %q, want the parameter that fired (%q)", path, got, parameter)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s still reports no last_triggered_event after %s fired on %s — the trigger "+
+				"reaches every north-bound surface, but nothing feeds it back into the model, so "+
+				"a client can enumerate the event entities and never learn one was pressed",
+				path, parameter, channelAddress)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// findKeypressSource returns a device address, channel, keypress parameter
+// and the event-groups route of the first keypress group in the fleet.
+func findKeypressSource(
+	t *testing.T, h *harness.Harness, devices []any,
+) (address string, channelNo int, parameter, path string) {
+	t.Helper()
+	for _, raw := range devices {
+		dev, _ := raw.(map[string]any)
+		addr, _ := dev["address"].(string)
+		if addr == "" {
+			continue
+		}
+		for _, no := range channelNumbersOf(t, h, addr) {
+			p := fmt.Sprintf("/api/v1/devices/%s/channels/%d/event-groups", addr, no)
+			groups, err := fetchJSONArray(h, p, "")
+			if err != nil {
+				t.Fatalf("GET %s: %v", p, err)
+			}
+			for _, g := range groups {
+				group, _ := g.(map[string]any)
+				if kind, _ := group["kind"].(string); kind != "keypress" {
+					continue
+				}
+				params, _ := group["parameters"].([]any)
+				if len(params) == 0 {
+					continue
+				}
+				name, _ := params[0].(string)
+				if name == "" {
+					continue
+				}
+				return addr, no, name, p
+			}
+		}
+	}
+	t.Fatalf("no keypress event group in the fleet — the producer is gone, which "+
+		"TestE2EEventGroupsAreProducedDuringDeviceIngestion covers. Fleet: %v",
+		harness.DefaultDevices)
+	return "", 0, "", ""
+}
+
+// lastTriggeredParameter returns the parameter of the group's recorded
+// trigger, or "" when none has fired yet.
+func lastTriggeredParameter(t *testing.T, h *harness.Harness, path string) string {
+	t.Helper()
+	groups, err := fetchJSONArray(h, path, "")
+	if err != nil {
+		t.Fatalf("GET %s: %v", path, err)
+	}
+	for _, g := range groups {
+		group, _ := g.(map[string]any)
+		last, ok := group["last_triggered_event"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if p, _ := last["parameter"].(string); p != "" {
+			return p
+		}
+	}
+	return ""
 }

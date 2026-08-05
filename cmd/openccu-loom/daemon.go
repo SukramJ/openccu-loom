@@ -269,6 +269,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// teardown is owned by northBridges via the mqttService registered below.
 	bridge.Start(ctx)
 
+	// Feed the model's event sources from the same device-trigger events the
+	// north-bound surfaces already receive, so a channel's event group records
+	// the trigger that fired and not only the ones it offers. Starts alongside
+	// the bridge, before southbound hydration, so no trigger arrives ahead of
+	// the subscription.
+	eventSourceFeed := adapter.NewEventSourceFeed(reg)
+	eventSourceFeed.Start()
+	defer eventSourceFeed.Stop()
+
 	// Expose the snapshot re-seed to the config-watcher's reload
 	// handler. A runtime MQTT swap rebuilds the bridge from scratch
 	// (empty Discovery cache + slot state); the supervisor's OnConnect
@@ -702,6 +711,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// adoption is driven over REST, which is not listening yet, so no central
 	// can be adopted before this point.
 	centralOrch.setHubEventsCentralHook(hubEventsCentralHook)
+	centralOrch.setEventSourceCentralHook(func(u *central.Unit) func() {
+		return eventSourceFeed.StartCentral(u)
+	})
 
 	// --- REST --------------------------------------------------
 	// Build + mount the REST router/server (and optional mDNS advertiser).

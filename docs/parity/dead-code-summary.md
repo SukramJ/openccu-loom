@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: ac36ea86
-HEAD: ac36ea86
+Generated: 65293dc3
+HEAD: 65293dc3
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27651 |
-| Reachable | 4886 |
-| Whitelisted | 19796 |
+| Total Exported | 27678 |
+| Reachable | 4892 |
+| Whitelisted | 19817 |
 | **Unreachable** | **2969** |
 
 ## Top-20 Packages by Dead Code
