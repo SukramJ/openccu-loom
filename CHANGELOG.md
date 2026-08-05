@@ -37,6 +37,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   — previously a no-op because `quittable` was never populated — now
   actually filters.
 
+  `APIVersion` is `5.0.0` — a major bump, because `rooms` and `functions`
+  change from string to array, `description` and `priority` disappear, and
+  `timestamp` leaves the `required` set. Together with the alarm-message
+  change above, this release moves the REST contract from `3.20.0` to
+  `5.0.0` in two breaking steps.
+
 ### Fixed
 
 - **A service-message channel with two or more functions (Gewerke) made
