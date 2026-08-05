@@ -4,6 +4,24 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING: alarm messages dropped the device fields they never
+  legitimately had, and gained real timestamps.** An alarm entry is backed
+  by an alarm system variable that a program raises, not by a device — the
+  CCU reports its trigger data point as the 65535 "unknown" sentinel — so
+  `device_name`, `address`, `state_value`, `last_trigger` and `rooms` on
+  `AlarmMessage` (REST `GET /alarm-messages`, the `alarm_messages.list` WS
+  command, and the MCP `list_alarm_messages` tool) never carried real data
+  and are removed. In their place, `timestamp` and `last_timestamp` now
+  carry the CCU's actual Unix-second occurrence data (previously present in
+  the `get_alarm_messages.fn` ReGa script output but never read); both are
+  omitted from the response instead of the CCU's `0` becoming the
+  1970 epoch. The Config UI's alarm list drops its device column and shows
+  the new "last changed" timestamp instead. `APIVersion` bumped to `4.0.0`.
+
 ## [0.53.1]
 
 ### Changed

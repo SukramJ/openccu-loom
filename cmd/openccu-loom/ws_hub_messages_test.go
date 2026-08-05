@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
@@ -14,17 +15,20 @@ import (
 
 // ── wsHubQuery ListAlarmMessages with populated messages ────────────────────
 
+// TestWSHubQuery_ListAlarmMessages_WithMessage_ReturnsEntry verifies the WS
+// entry carries an alarm's identity, counter and Timestamp. An alarm entry
+// has no device, channel or room — see [hub.AlarmMessage] — so none of
+// those keys are present.
 func TestWSHubQuery_ListAlarmMessages_WithMessage_ReturnsEntry(t *testing.T) {
 	t.Parallel()
 	q, h := liveHubQuery(t)
+	ts := time.Unix(1700000000, 0).UTC()
 	h.Messages.Replace([]hub.AlarmMessage{
 		{
 			ID:          "alarm-1",
 			Name:        "Smoke Alarm",
 			Description: "Kitchen smoke detector",
-			DeviceName:  "Sensor Kitchen",
-			Address:     "DEV001:1",
-			StateValue:  "1",
+			Timestamp:   ts,
 			Counter:     3,
 		},
 	})
@@ -41,6 +45,35 @@ func TestWSHubQuery_ListAlarmMessages_WithMessage_ReturnsEntry(t *testing.T) {
 	}
 	if got[0]["name"] != "Smoke Alarm" {
 		t.Errorf("expected name=Smoke Alarm, got %v", got[0]["name"])
+	}
+	if !got[0]["timestamp"].(time.Time).Equal(ts) {
+		t.Errorf("expected timestamp=%v, got %v", ts, got[0]["timestamp"])
+	}
+	if _, present := got[0]["last_timestamp"]; present {
+		t.Error("last_timestamp must be omitted when LastTimestamp is zero")
+	}
+}
+
+// TestWSHubQuery_ListAlarmMessages_ZeroTimestamp_OmitsKey verifies that an
+// alarm whose Timestamp / LastTimestamp the CCU never reported (the Go
+// zero time) omits both keys rather than surfacing the zero time.
+func TestWSHubQuery_ListAlarmMessages_ZeroTimestamp_OmitsKey(t *testing.T) {
+	t.Parallel()
+	q, h := liveHubQuery(t)
+	h.Messages.Replace([]hub.AlarmMessage{{ID: "alarm-2", Name: "Never raised"}})
+
+	got, err := q.ListAlarmMessages(context.Background())
+	if err != nil {
+		t.Fatalf("ListAlarmMessages: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 alarm message, got %d", len(got))
+	}
+	if _, present := got[0]["timestamp"]; present {
+		t.Error("timestamp must be omitted for a zero Timestamp")
+	}
+	if _, present := got[0]["last_timestamp"]; present {
+		t.Error("last_timestamp must be omitted for a zero LastTimestamp")
 	}
 }
 

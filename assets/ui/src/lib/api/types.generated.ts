@@ -6952,27 +6952,33 @@ export interface components {
                 after?: unknown;
             }[];
         };
+        /**
+         * @description An alarm entry has no device, channel or room: it is backed by an
+         *     alarm system variable that a program raises, so the CCU reports its
+         *     trigger data point as the 65535 "unknown" sentinel. Device-bound
+         *     alerts arrive as ServiceMessage instead, which does carry them.
+         */
         AlarmMessage: {
             /** @description CCU this alarm message belongs to (multi-central grouping). */
             central?: string;
             id: string;
             name: string;
             description?: string;
-            device_name?: string;
             /**
-             * @description CCU channel address that generated the alarm. Omitted when
-             *     unavailable (legacy CCUs).
+             * Format: date-time
+             * @description When the alarm was raised. Omitted on the rare CCU report that
+             *     carries no occurrence at all.
              */
-            address?: string;
-            /** @description Raw alarm state string from the CCU Rega script. */
-            state_value?: string;
-            /** Format: date-time */
-            timestamp: string;
+            timestamp?: string;
+            /**
+             * Format: date-time
+             * @description When the backing alarm variable last changed. Omitted when the
+             *     CCU reports no such occurrence.
+             */
+            last_timestamp?: string;
             counter: number;
-            last_trigger?: string;
             /** @description Human-readable translation of the message code. */
             display_name?: string;
-            rooms?: string[];
         };
         ServiceMessage: {
             /** @description CCU this service message belongs to (multi-central grouping). */

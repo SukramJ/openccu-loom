@@ -246,17 +246,19 @@ type UpdateState struct {
 }
 
 // AlarmMessageRow is one entry inside the alarm-messages aggregate.
+//
+// An alarm entry has no device, channel or room — see [hub.AlarmMessage] —
+// so this row carries only the identity and timing fields the CCU
+// actually reports.
 type AlarmMessageRow struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	DeviceName  string   `json:"device_name"`
-	Address     string   `json:"address"`
-	StateValue  string   `json:"state_value"`
-	Timestamp   string   `json:"timestamp"`
-	Counter     int      `json:"counter"`
-	LastTrigger string   `json:"last_trigger"`
-	Rooms       []string `json:"rooms"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Timestamp   string `json:"timestamp"`
+	// LastTimestamp is when the backing alarm variable last changed.
+	// Empty when the CCU reports no such occurrence.
+	LastTimestamp string `json:"last_timestamp,omitempty"`
+	Counter       int    `json:"counter"`
 }
 
 // AlarmMessagesState is the live alarm-messages aggregate state.

@@ -1330,17 +1330,29 @@ func loadAlarmMessages(ctx context.Context, r *rega.Runner, h *hub.Hub, catalogs
 			continue
 		}
 		msgs = append(msgs, hub.AlarmMessage{
-			ID:          m.ID,
-			Name:        decodeRegaField(m.Name),
-			Description: decodeRegaField(m.Description),
-			DeviceName:  decodeRegaField(m.DeviceName),
-			Counter:     m.Counter,
-			LastTrigger: m.LastTrigger,
-			DisplayName: messageDisplayName(catalogs, locale, decodeRegaField(m.Name)),
+			ID:            m.ID,
+			Name:          decodeRegaField(m.Name),
+			Description:   decodeRegaField(m.Description),
+			Timestamp:     regaUnixTime(m.Timestamp),
+			LastTimestamp: regaUnixTime(m.LastTimestamp),
+			Counter:       m.Counter,
+			DisplayName:   messageDisplayName(catalogs, locale, decodeRegaField(m.Name)),
 		})
 	}
 	h.Messages.Replace(msgs)
 	return nil
+}
+
+// regaUnixTime converts a ReGa *Seconds() accessor result to a time.
+// The CCU reports 0 for an occurrence that never happened — a variable
+// raised exactly once has no previous timestamp — and 0 must stay the
+// zero time rather than becoming 1970, so that north-bound encoders
+// omit the field instead of publishing a date that never was.
+func regaUnixTime(sec int64) time.Time {
+	if sec <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(sec, 0).UTC()
 }
 
 // messageDisplayName extracts the message code from rawName (the segment after

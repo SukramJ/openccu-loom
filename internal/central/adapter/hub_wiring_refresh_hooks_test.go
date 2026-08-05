@@ -104,8 +104,8 @@ func TestLoadAlarmMessagesPopulatesHub(t *testing.T) {
 
 	r := newRegaRunnerFor(
 		t,
-		`[{"id":"a1","name":"Alarm One","device_name":"Dev A","address":"ABC:1"},`+
-			`{"id":"a2","name":"Alarm Two","device_name":"Dev B","address":"DEF:2"}]`,
+		`[{"id":"a1","name":"Alarm One","timestamp":1700000000},`+
+			`{"id":"a2","name":"Alarm Two","timestamp":1700003600}]`,
 	)
 	h := hubmodel.NewHub("test-central")
 
@@ -115,6 +115,40 @@ func TestLoadAlarmMessagesPopulatesHub(t *testing.T) {
 	got := h.Messages.List()
 	if len(got) != 2 {
 		t.Fatalf("alarm messages count = %d, want 2", len(got))
+	}
+}
+
+// TestLoadAlarmMessagesTimestampFromRegaUnixSeconds verifies that the
+// Unix-second timestamp / last_timestamp values the get_alarm_messages.fn
+// script reports (see internal/client/rega/scripts/get_alarm_messages.fn)
+// survive loadAlarmMessages into [hubmodel.AlarmMessage] as real
+// time.Time values, and that the CCU's 0 "never happened" sentinel (see
+// [regaUnixTime]) becomes the Go zero time rather than the 1970 Unix
+// epoch.
+func TestLoadAlarmMessagesTimestampFromRegaUnixSeconds(t *testing.T) {
+	t.Parallel()
+
+	const rawTimestamp int64 = 1700000000 // 2023-11-14T22:13:20Z
+	wantTimestamp := time.Unix(rawTimestamp, 0).UTC()
+
+	r := newRegaRunnerFor(
+		t,
+		`[{"id":"a1","name":"Alarm One","timestamp":1700000000,"last_timestamp":0}]`,
+	)
+	h := hubmodel.NewHub("test-central")
+
+	if err := loadAlarmMessages(context.Background(), r, h, nil, "en"); err != nil {
+		t.Fatalf("loadAlarmMessages: %v", err)
+	}
+	got := h.Messages.List()
+	if len(got) != 1 {
+		t.Fatalf("alarm messages count = %d, want 1", len(got))
+	}
+	if !got[0].Timestamp.Equal(wantTimestamp) {
+		t.Errorf("Timestamp = %v, want %v", got[0].Timestamp, wantTimestamp)
+	}
+	if !got[0].LastTimestamp.IsZero() {
+		t.Errorf("LastTimestamp = %v, want the zero time for a script-reported 0", got[0].LastTimestamp)
 	}
 }
 

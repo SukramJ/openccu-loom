@@ -222,13 +222,16 @@ func (a *AlarmMessages) State() payload.StatePayload {
 			ID:          items[i].ID,
 			Name:        items[i].Name,
 			Description: items[i].Description,
-			DeviceName:  items[i].DeviceName,
-			Address:     items[i].Address,
-			StateValue:  items[i].StateValue,
-			Timestamp:   items[i].Timestamp.Format("2006-01-02T15:04:05Z07:00"),
 			Counter:     items[i].Counter,
-			LastTrigger: items[i].LastTrigger,
-			Rooms:       items[i].Rooms,
+		}
+		// A zero time means the CCU reported no such occurrence. Emit an
+		// empty string rather than formatting it, so subscribers never
+		// see year 0001 presented as a real alarm date.
+		if !items[i].Timestamp.IsZero() {
+			rows[i].Timestamp = items[i].Timestamp.Format("2006-01-02T15:04:05Z07:00")
+		}
+		if !items[i].LastTimestamp.IsZero() {
+			rows[i].LastTimestamp = items[i].LastTimestamp.Format("2006-01-02T15:04:05Z07:00")
 		}
 	}
 	return &payload.AlarmMessagesState{

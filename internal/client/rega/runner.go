@@ -243,22 +243,29 @@ func (r *Runner) GetInboxDevices(ctx context.Context) ([]InboxDevice, error) {
 
 // AlarmMessage is one entry returned by [Runner.GetAlarmMessages].
 // Fields mirror the JSON emitted by get_alarm_messages.fn.
+//
+// There is deliberately no device, room or trigger field: an alarm
+// system variable is raised from a program rather than by a device, so
+// the CCU reports its trigger data point as the 65535 "unknown"
+// sentinel. Device-bound alerts are service messages — see
+// [ServiceMessage].
 type AlarmMessage struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	DeviceName    string `json:"device_name"`
-	Timestamp     string `json:"timestamp"`
-	LastTimestamp string `json:"last_timestamp"`
-	Counter       int    `json:"counter"`
-	LastTrigger   string `json:"last_trigger"`
-	Rooms         string `json:"rooms"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Timestamp and LastTimestamp are Unix seconds in UTC. 0 means the
+	// occurrence never happened, which is the normal state of
+	// LastTimestamp for a variable that has been raised exactly once.
+	// Unix seconds avoid the CCU's local-time rendering, which carries
+	// no zone offset and is therefore not parsable on its own.
+	Timestamp     int64 `json:"timestamp"`
+	LastTimestamp int64 `json:"last_timestamp"`
+	Counter       int   `json:"counter"`
 }
 
 // GetAlarmMessages returns all active alarm messages from the CCU by running
-// the get_alarm_messages.fn ReGa script. Name, Description, DeviceName,
-// LastTrigger and Rooms are URL-encoded; callers should apply
-// url.QueryUnescape before display.
+// the get_alarm_messages.fn ReGa script. Name and Description are
+// URL-encoded; callers should apply url.QueryUnescape before display.
 func (r *Runner) GetAlarmMessages(ctx context.Context) ([]AlarmMessage, error) {
 	var messages []AlarmMessage
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetAlarmMessages, nil, &messages); err != nil {

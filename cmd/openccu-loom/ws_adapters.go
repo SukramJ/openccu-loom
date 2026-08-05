@@ -583,6 +583,11 @@ func (w *wsHubQuery) SysvarUsagePrograms(ctx context.Context, centralName, name 
 	return out, nil
 }
 
+// ListAlarmMessages returns the active alarm set. An alarm entry has no
+// device, channel or room — the CCU backs it by an alarm system variable,
+// not a device datapoint — so the map carries only identity and timing
+// fields. See [hub.AlarmMessage]. A zero Timestamp / LastTimestamp is
+// omitted from the entry rather than serialised as the Go zero time.
 func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {
@@ -592,18 +597,19 @@ func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, err
 	out := make([]map[string]any, 0, len(msgs))
 	for i := range msgs {
 		m := &msgs[i]
-		out = append(out, map[string]any{
-			"id":           m.ID,
-			"name":         m.Name,
-			"description":  m.Description,
-			"device_name":  m.DeviceName,
-			"address":      m.Address,
-			"state_value":  m.StateValue,
-			"timestamp":    m.Timestamp,
-			"counter":      m.Counter,
-			"last_trigger": m.LastTrigger,
-			"rooms":        m.Rooms,
-		})
+		entry := map[string]any{
+			"id":          m.ID,
+			"name":        m.Name,
+			"description": m.Description,
+			"counter":     m.Counter,
+		}
+		if !m.Timestamp.IsZero() {
+			entry["timestamp"] = m.Timestamp
+		}
+		if !m.LastTimestamp.IsZero() {
+			entry["last_timestamp"] = m.LastTimestamp
+		}
+		out = append(out, entry)
 	}
 	return out, nil
 }

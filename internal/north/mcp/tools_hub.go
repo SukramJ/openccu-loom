@@ -195,15 +195,19 @@ func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
 
 // --- alarm messages ---------------------------------------------------
 
+// alarmMessageSummary describes one active alarm entry. An alarm entry
+// has no device, channel or room — the CCU backs it by an alarm system
+// variable, not a device datapoint — so this carries only identity and
+// timing fields. See [hub.AlarmMessage].
 type alarmMessageSummary struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	Address     string `json:"address,omitempty"`
-	DeviceName  string `json:"device_name,omitempty"`
-	StateValue  string `json:"state_value,omitempty"`
 	Timestamp   string `json:"timestamp,omitempty"`
-	Central     string `json:"central"`
+	// LastTimestamp is when the backing alarm variable last changed.
+	// Omitted when the CCU reports no such occurrence.
+	LastTimestamp string `json:"last_timestamp,omitempty"`
+	Central       string `json:"central"`
 }
 
 type listAlarmMessagesOut struct {
@@ -225,14 +229,12 @@ func registerListAlarmMessages(s *mcpsdk.Server, d Deps) {
 			for i := range msgs {
 				m := &msgs[i]
 				out.Messages = append(out.Messages, alarmMessageSummary{
-					ID:          m.ID,
-					Name:        m.Name,
-					Description: m.Description,
-					Address:     m.Address,
-					DeviceName:  m.DeviceName,
-					StateValue:  m.StateValue,
-					Timestamp:   rfc3339OrEmpty(m.Timestamp),
-					Central:     c,
+					ID:            m.ID,
+					Name:          m.Name,
+					Description:   m.Description,
+					Timestamp:     rfc3339OrEmpty(m.Timestamp),
+					LastTimestamp: rfc3339OrEmpty(m.LastTimestamp),
+					Central:       c,
 				})
 			}
 		}
