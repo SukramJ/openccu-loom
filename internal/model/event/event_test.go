@@ -95,22 +95,58 @@ func TestDeviceErrorTransitionGateBool(t *testing.T) {
 }
 
 func TestDeviceErrorTransitionGateInt(t *testing.T) {
-	s := NewSource("0001:1", hmenum.ParameterSensorError)
-	// Initial 0 → suppressed.
-	if s.Fire(int32(0)) {
-		t.Fatal("initial 0 must be suppressed")
+	// int is the type the production path delivers: a CCU fault value
+	// arrives as a ParamValue and Unwrap renders an integer kind as `int`.
+	// The int32/int64 branches below exist for robustness and are covered
+	// separately, so a test written only against those would be exercising
+	// a shape the daemon never produces.
+	for _, tc := range []struct {
+		name       string
+		zero, five any
+		three      any
+	}{
+		{name: "int", zero: 0, five: 5, three: 3},
+		{name: "int32", zero: int32(0), five: int32(5), three: int32(3)},
+		{name: "int64", zero: int64(0), five: int64(5), three: int64(3)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewSource("0001:1", hmenum.ParameterSensorError)
+			// Initial 0 → suppressed.
+			if s.Fire(tc.zero) {
+				t.Fatal("initial 0 must be suppressed")
+			}
+			// 5 → fires.
+			if !s.Fire(tc.five) {
+				t.Fatal("5 should fire")
+			}
+			// Same 5 → suppressed.
+			if s.Fire(tc.five) {
+				t.Fatal("duplicate 5 must be suppressed")
+			}
+			// Distinct 3 → fires.
+			if !s.Fire(tc.three) {
+				t.Fatal("3 should fire")
+			}
+			// Back to 0 → fires: the fault clearing is a change a consumer
+			// has to hear, or it shows the fault forever.
+			if !s.Fire(tc.zero) {
+				t.Fatal("clearing the fault should fire")
+			}
+		})
 	}
-	// 5 → fires.
-	if !s.Fire(int32(5)) {
-		t.Fatal("5 should fire")
-	}
-	// Same 5 → suppressed.
-	if s.Fire(int32(5)) {
-		t.Fatal("duplicate 5 must be suppressed")
-	}
-	// Distinct 3 → fires.
-	if !s.Fire(int32(3)) {
-		t.Fatal("3 should fire")
+}
+
+// TestDeviceErrorGateIgnoresNonNumericValues pins the deliberate silence for
+// a fault value that is neither bool nor integer. The reference draws the
+// same line, and no CCU fault parameter carries such a type — the case is
+// asserted so the silence stays a decision rather than becoming a surprise.
+func TestDeviceErrorGateIgnoresNonNumericValues(t *testing.T) {
+	for _, v := range []any{1.5, "ERROR", []string{"a"}, nil} {
+		s := NewSource("0001:1", hmenum.ParameterError)
+		if s.Fire(v) {
+			t.Errorf("Fire(%#v) fired; device-error values that are neither bool nor int "+
+				"must not be treated as a fault", v)
+		}
 	}
 }
 

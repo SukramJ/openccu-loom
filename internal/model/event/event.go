@@ -104,8 +104,10 @@ func Sources(k Kind) []hmenum.Parameter {
 // Source is one bound (channel, parameter) event emitter. It holds
 // the classification, timestamp of the last fire, and subscribers.
 //
-// [DeviceError] sources apply a value-change gate: events only fire
-// on transitions to an active state (true / > 0).
+// [KindDeviceError] sources apply a value-change gate: the first fault
+// reported has to be an active one (true / > 0), and after that every
+// change fires — including the one back to inactive, which is how a
+// consumer learns the fault cleared. See [deviceErrorActive].
 //
 // [enabledByChannelOperationMode] carries the tri-state gate set by the
 // device pipeline's `applyChannelOperationModeGating` pass. Nil means
@@ -226,9 +228,27 @@ func (s *Source) OnFire(fn func(Event)) func() {
 	}
 }
 
-// deviceErrorActive implements the transition gate: a device error
-// fires only on moves from "inactive" to "active" or between
-// distinct active values.
+// deviceErrorActive implements the transition gate for [KindDeviceError].
+//
+// Two rules, and the second is easy to misread from the first: with no
+// previous value the fault must be active to fire (true / > 0), so the
+// boot-time flood of "no error" reports stays silent. Once a value has been
+// seen, ANY change fires — including active → inactive. That direction is
+// not an oversight: a consumer that only ever heard about faults appearing
+// would show one forever after it cleared. Mirrors the reference
+// DeviceErrorEvent.event (`model/event.py`), whose publish condition is
+// likewise `old_value != new_value` once old_value exists.
+//
+// A value that is neither bool nor an integer never fires. The reference
+// draws the same line (`isinstance(new_value, int)`), and no CCU fault
+// parameter is float- or string-typed; the case is listed here so a future
+// reader knows the silence is a decision rather than a missing branch.
+//
+// The comparison is against the last value that FIRED, not the last one
+// observed, because [FireAt] only records on a successful fire. For the
+// bool/int transitions above the two are equivalent: a suppressed value is
+// either a repeat of the stored one or an inactive first report, and
+// neither changes the next verdict.
 func deviceErrorActive(s *Source, next any) bool {
 	s.mu.RLock()
 	prev := s.lastValue

@@ -238,3 +238,95 @@ func lastTriggeredParameter(t *testing.T, h *harness.Harness, path string) strin
 	}
 	return ""
 }
+
+// TestE2EDeviceErrorTriggerReachesItsEventGroup is the same check for the
+// device-error kind, which travels a different route than a keypress.
+//
+// A keypress parameter is writable, so device ingestion gives it a data
+// point. An ERROR* parameter deliberately gets none — the resolver drops it,
+// mirroring the reference, because it is an event and not a state. The
+// callback path then has to carry it anyway, and that is the part worth
+// pinning: everything else about the two kinds looks identical from the
+// model, so a delivery gap that affects only one of them is invisible unless
+// a test names it.
+func TestE2EDeviceErrorTriggerReachesItsEventGroup(t *testing.T) {
+	t.Parallel()
+	h := harness.Start(t, harness.Options{})
+	if err := h.REST().LoginSession(harness.AdminUser, harness.AdminPass); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	devices := getJSONArray(t, h, "/api/v1/devices", "items")
+	address, channelNo, path := findDeviceErrorSource(t, h, devices)
+
+	if got := lastTriggeredParameter(t, h, path); got != "" {
+		t.Fatalf("%s already reports last_triggered_event %q before any fault was reported",
+			path, got)
+	}
+
+	// ERROR_CODE is an INTEGER on every fleet device that has it; a non-zero
+	// value is an active fault, which is what the source's transition gate
+	// reacts to.
+	channelAddress := fmt.Sprintf("%s:%d", address, channelNo)
+	if err := h.CCU().V().SimulateDeviceEvent(channelAddress, deviceErrorParameter, 5); err != nil {
+		t.Fatalf("SimulateDeviceEvent %s %s: %v", channelAddress, deviceErrorParameter, err)
+	}
+
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		if got := lastTriggeredParameter(t, h, path); got != "" {
+			if !strings.EqualFold(got, deviceErrorParameter) {
+				t.Fatalf("%s recorded %q, want %q", path, got, deviceErrorParameter)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s reports no last_triggered_event after %s=5 on %s — a device fault "+
+				"reaches no north-bound surface at all: the parameter has no data point by "+
+				"design, and the callback path drops an event whose parameter has none",
+				path, deviceErrorParameter, channelAddress)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// deviceErrorParameter is the fault parameter the pin drives. Every
+// device-error group in the default fleet carries it.
+const deviceErrorParameter = "ERROR_CODE"
+
+// findDeviceErrorSource returns the first channel carrying a device-error
+// group that includes [deviceErrorParameter], plus its event-groups route.
+func findDeviceErrorSource(
+	t *testing.T, h *harness.Harness, devices []any,
+) (address string, channelNo int, path string) {
+	t.Helper()
+	for _, raw := range devices {
+		dev, _ := raw.(map[string]any)
+		addr, _ := dev["address"].(string)
+		if addr == "" {
+			continue
+		}
+		for _, no := range channelNumbersOf(t, h, addr) {
+			p := fmt.Sprintf("/api/v1/devices/%s/channels/%d/event-groups", addr, no)
+			groups, err := fetchJSONArray(h, p, "")
+			if err != nil {
+				t.Fatalf("GET %s: %v", p, err)
+			}
+			for _, g := range groups {
+				group, _ := g.(map[string]any)
+				if kind, _ := group["kind"].(string); kind != "device_error" {
+					continue
+				}
+				params, _ := group["parameters"].([]any)
+				for _, raw := range params {
+					if name, _ := raw.(string); name == deviceErrorParameter {
+						return addr, no, p
+					}
+				}
+			}
+		}
+	}
+	t.Fatalf("no device-error group carrying %s in the fleet: %v",
+		deviceErrorParameter, harness.DefaultDevices)
+	return "", 0, ""
+}
