@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	modevent "github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -269,6 +270,19 @@ func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddres
 	}
 	dp := ch.Parameter(hmenum.Parameter(parameter))
 	if dp == nil {
+		// A parameter with no data point is normally noise — an unknown name,
+		// or one this build does not model — and dropping it is right.
+		//
+		// Two event families are the exception, and they are not edge cases:
+		// the resolver deliberately creates no data point for an impulse
+		// (SEQUENCE_OK) or a device error (ERROR*, SENSOR_ERROR*), because
+		// they are events rather than state. Returning here dropped exactly
+		// those before they reached the coordinator, so a reported fault
+		// produced nothing anywhere — no device-trigger event, no WebSocket
+		// broadcast, and no record on the channel's event group. Only a
+		// keypress ever arrived, because a PRESS_* parameter is writable and
+		// therefore does have a data point.
+		h.forwardDataPointLessEvent(ctx, interfaceID, channelAddress, parameter, value)
 		return nil
 	}
 	goValue := xmlRPCValueToGo(value)
@@ -706,3 +720,35 @@ func (h *CallbackHandlers) Error(ctx context.Context, interfaceID string, errorC
 
 // Compile-time interface check.
 var _ rpcserver.Handlers = (*CallbackHandlers)(nil)
+
+// forwardDataPointLessEvent publishes the device-trigger event for a
+// parameter that has no data point but does classify as one of the CCU's
+// event families.
+//
+// It publishes the trigger alone rather than routing through the
+// coordinator's full raw-event path on purpose. That path also emits a
+// value-change event, which the north-bound planes turn into a per-parameter
+// state topic — and a parameter the resolver refused to model as a data
+// point should not acquire one through the back door. The trigger is the
+// whole content of these events.
+//
+// A parameter that classifies as nothing is dropped, exactly as before.
+func (h *CallbackHandlers) forwardDataPointLessEvent(
+	ctx context.Context,
+	interfaceID, channelAddress, parameter string,
+	value xmlrpc.Value,
+) {
+	if h.unit == nil || h.unit.Events == nil {
+		return
+	}
+	kind, isEvent := modevent.Classify(hmenum.Parameter(parameter))
+	if !isEvent {
+		return
+	}
+	deviceAddress, channelNo := deviceAddrAndChannel(channelAddress)
+	h.unit.Events.PublishDeviceTriggerEvent(
+		ctx,
+		interfaceID, deviceAddress, channelNo,
+		hmenum.DeviceTriggerEventType(kind), parameter, ParamValueFromWire(value),
+	)
+}

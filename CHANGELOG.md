@@ -28,6 +28,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A device fault reported by a CCU reached nothing at all.** A device-error
+  event (`ERROR_CODE`, `ERROR_OVERHEAT`, `SENSOR_ERROR…`) produced no
+  WebSocket `device.*.trigger` broadcast, no diagnostics entry and no record
+  on the channel's event group — the same for an impulse (`SEQUENCE_OK`). A
+  smoke detector reporting a fault was, to every north-bound consumer,
+  indistinguishable from one reporting nothing.
+
+  Both families deliberately have no data point: they are events, not state,
+  so the device pipeline creates none for them. The callback path then
+  dropped any event whose parameter had no data point, which is exactly and
+  only those two. A keypress was unaffected and hid the gap — a `PRESS_*`
+  parameter is writable, so it does get a data point and travelled the
+  ordinary path. The callback now forwards a data-point-less event when the
+  parameter classifies as one; anything unclassified stays dropped as before.
+
+  The event-group documentation already listed `device_error` as a kind a
+  channel can report, so the promise was in place and only the delivery was
+  missing.
+
 - **A channel's event group never recorded the trigger that fired.**
   `GET /devices/{addr}/channels/{no}/event-groups` reports which triggers a
   channel offers and, per group, the last one that fired. The second half was
