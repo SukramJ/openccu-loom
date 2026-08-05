@@ -270,18 +270,19 @@ type AlarmMessagesState struct {
 
 // ServiceMessageRow is one entry inside the service-messages aggregate.
 type ServiceMessageRow struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Address     string   `json:"address"`
-	DeviceName  string   `json:"device_name"`
-	Type        string   `json:"type"`
-	Description string   `json:"description"`
-	Priority    int      `json:"priority"`
-	Timestamp   string   `json:"timestamp"`
-	Counter     int      `json:"counter"`
-	Rooms       []string `json:"rooms"`
-	Functions   []string `json:"functions"`
-	Quittable   bool     `json:"quittable"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Address    string `json:"address"`
+	DeviceName string `json:"device_name"`
+	Type       string `json:"type"`
+	Timestamp  string `json:"timestamp"`
+	// LastTimestamp is when the message last recurred. Empty when the
+	// CCU reports no such occurrence.
+	LastTimestamp string   `json:"last_timestamp,omitempty"`
+	Counter       int      `json:"counter"`
+	Rooms         []string `json:"rooms"`
+	Functions     []string `json:"functions"`
+	Quittable     bool     `json:"quittable"`
 }
 
 // ServiceMessagesState is the live service-messages aggregate state.

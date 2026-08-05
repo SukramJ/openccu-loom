@@ -8,6 +8,16 @@
 !# quittable is true iff the alarm's trigger datapoint has the
 !# OPERATION_WRITE bit set (bit 2 in .Operations()).
 !#
+!# rooms and functions are JSON arrays. They used to be one string with
+!# the entries joined by a raw tab, which is a control character and
+!# therefore illegal inside a JSON string: a single channel carrying two
+!# functions made the whole document unparsable, so the daemon received
+!# no service messages at all rather than one incomplete record.
+!#
+!# Timestamps are Unix seconds via the *Seconds() accessors, matching
+!# get_alarm_messages. timestamp is when the message first appeared,
+!# last_timestamp when it last recurred — 0 when it never did.
+!#
 !# Inbox/onboarding devices are not included here — the coordinator
 !# uses get_inbox_devices for that flow (post-MVP).
 
@@ -29,18 +39,8 @@ if (oServices) {
                 sName = sRawName.UriEncode();
             }
 
-            string sTimestamp = "";
-            time tOccurrence = oAlarm.AlOccurrenceTime();
-            if (tOccurrence) {
-                sTimestamp = tOccurrence.ToString();
-            }
-
-            string sLastTimestamp = "";
-            time tLast = oAlarm.Timestamp();
-            if (tLast) {
-                sLastTimestamp = tLast.ToString();
-            }
-
+            integer iOccurred = oAlarm.AlOccurrenceTimeSeconds();
+            integer iLast = oAlarm.LastTimestampSeconds();
             integer iType = oAlarm.AlType();
             integer iCounter = oAlarm.AlCounter();
 
@@ -86,9 +86,9 @@ if (oServices) {
                                     if (bFirstRoom) {
                                         bFirstRoom = false;
                                     } else {
-                                        sRooms = sRooms # "\t";
+                                        sRooms = sRooms # ',';
                                     }
-                                    sRooms = sRooms # oRoom.Name().UriEncode();
+                                    sRooms = sRooms # '"' # oRoom.Name().UriEncode() # '"';
                                 }
                             }
 
@@ -100,9 +100,9 @@ if (oServices) {
                                     if (bFirstFunc) {
                                         bFirstFunc = false;
                                     } else {
-                                        sFunctions = sFunctions # "\t";
+                                        sFunctions = sFunctions # ',';
                                     }
-                                    sFunctions = sFunctions # oFunc.Name().UriEncode();
+                                    sFunctions = sFunctions # '"' # oFunc.Name().UriEncode() # '"';
                                 }
                             }
                         }
@@ -118,14 +118,14 @@ if (oServices) {
 
             Write('{"id":"' # oAlarm.ID() # '",');
             Write('"name":"' # sName # '",');
-            Write('"timestamp":"' # sTimestamp # '",');
+            Write('"timestamp":' # iOccurred # ',');
             Write('"type":' # iType # ',');
             Write('"address":"' # sAddress # '",');
             Write('"device_name":"' # sDeviceName # '",');
-            Write('"last_timestamp":"' # sLastTimestamp # '",');
+            Write('"last_timestamp":' # iLast # ',');
             Write('"counter":' # iCounter # ',');
-            Write('"rooms":"' # sRooms # '",');
-            Write('"functions":"' # sFunctions # '",');
+            Write('"rooms":[' # sRooms # '],');
+            Write('"functions":[' # sFunctions # '],');
             Write('"quittable":' # bQuittable # '}');
         }
     }

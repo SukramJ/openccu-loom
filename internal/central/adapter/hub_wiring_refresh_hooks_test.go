@@ -428,6 +428,98 @@ func TestLoadServiceMessagesDeduplicated(t *testing.T) {
 	}
 }
 
+// TestLoadServiceMessagesFullFieldPopulation pins the regression that
+// motivated the get_service_messages.fn rewrite: rooms and functions are
+// now real JSON arrays (previously a single string joined by a raw tab —
+// a control character illegal inside a JSON string — which made
+// json.Unmarshal fail on any channel with two or more functions and
+// silently dropped the whole list), and timestamp / last_timestamp are
+// Unix seconds like get_alarm_messages.fn, converted via [regaUnixTime].
+// The fixture is real CCU output: the first entry carries three functions
+// on an empty room set, the second carries neither but is quittable.
+func TestLoadServiceMessagesFullFieldPopulation(t *testing.T) {
+	t.Parallel()
+
+	r := newRegaRunnerFor(
+		t,
+		`[{"id":"2097","name":"AL%2DJEQ0702833%3A0%2ECONFIG%5FPENDING","timestamp":1785667096,`+
+			`"type":5,"address":"JEQ0702833","device_name":"HM%2DSen%2DMDIR%2DO%20JEQ0702833%3A0",`+
+			`"last_timestamp":1785923796,"counter":17,"rooms":[],`+
+			`"functions":["Licht","Sicherheit","Umwelt"],"quittable":false},`+
+			`{"id":"6893","name":"AL%2DKEQ0843929%3A0%2ESTICKY%5FUNREACH","timestamp":1785667096,`+
+			`"type":5,"address":"KEQ0843929","device_name":"HM%2DLC%2DSw4%2DDR%20KEQ0843929%3A0",`+
+			`"last_timestamp":1785862251,"counter":26,"rooms":[],"functions":[],"quittable":true}]`,
+	)
+	unit := newMinimalUnit(t, "HmIP-RF")
+
+	if err := loadServiceMessages(context.Background(), r, unit, nil, "en"); err != nil {
+		t.Fatalf("loadServiceMessages: %v", err)
+	}
+	msgs := unit.HubModel.ServiceMessages.List()
+	if len(msgs) != 2 {
+		t.Fatalf("service message count = %d, want 2 — a multi-function channel must not drop the list", len(msgs))
+	}
+
+	byID := make(map[string]hubmodel.ServiceMessage, 2)
+	for _, m := range msgs {
+		byID[m.ID] = m
+	}
+
+	first, ok := byID["2097"]
+	if !ok {
+		t.Fatal("entry 2097 missing")
+	}
+	if len(first.Functions) != 3 {
+		t.Errorf("Functions = %v, want 3 entries", first.Functions)
+	}
+	if !first.Timestamp.Equal(time.Unix(1785667096, 0).UTC()) {
+		t.Errorf("Timestamp = %v, want %v", first.Timestamp, time.Unix(1785667096, 0).UTC())
+	}
+	if !first.LastTimestamp.Equal(time.Unix(1785923796, 0).UTC()) {
+		t.Errorf("LastTimestamp = %v, want %v", first.LastTimestamp, time.Unix(1785923796, 0).UTC())
+	}
+	if first.Quittable {
+		t.Error("entry 2097 Quittable = true, want false")
+	}
+
+	second, ok := byID["6893"]
+	if !ok {
+		t.Fatal("entry 6893 missing")
+	}
+	if !second.Quittable {
+		t.Error("entry 6893 Quittable = false, want true")
+	}
+	if len(second.Rooms) != 0 || len(second.Functions) != 0 {
+		t.Errorf("entry 6893 Rooms=%v Functions=%v, want both empty", second.Rooms, second.Functions)
+	}
+}
+
+// TestLoadServiceMessagesZeroLastTimestampStaysZero verifies that a
+// script-reported last_timestamp of 0 — the CCU's "never recurred"
+// sentinel — becomes the Go zero time rather than the 1970 Unix epoch,
+// mirroring [TestLoadAlarmMessagesTimestampFromRegaUnixSeconds].
+func TestLoadServiceMessagesZeroLastTimestampStaysZero(t *testing.T) {
+	t.Parallel()
+
+	r := newRegaRunnerFor(
+		t,
+		`[{"id":"sm-1","name":"Low Battery","timestamp":1700000000,"last_timestamp":0,`+
+			`"rooms":[],"functions":[],"quittable":true}]`,
+	)
+	unit := newMinimalUnit(t, "HmIP-RF")
+
+	if err := loadServiceMessages(context.Background(), r, unit, nil, "en"); err != nil {
+		t.Fatalf("loadServiceMessages: %v", err)
+	}
+	msgs := unit.HubModel.ServiceMessages.List()
+	if len(msgs) != 1 {
+		t.Fatalf("service message count = %d, want 1", len(msgs))
+	}
+	if !msgs[0].LastTimestamp.IsZero() {
+		t.Errorf("LastTimestamp = %v, want the zero time for a script-reported 0", msgs[0].LastTimestamp)
+	}
+}
+
 func TestLoadServiceMessagesNilRunner(t *testing.T) {
 	t.Parallel()
 	unit := newMinimalUnit(t)

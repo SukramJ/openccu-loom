@@ -291,17 +291,15 @@ type ServiceMessage struct {
 	// the suppressor then re-resolves it from the channel address.
 	InterfaceID string
 	Type        hmenum.ServiceMessageType
-	// Description is the optional human-readable message text returned by
-	// the CCU Rega script.
-	Description string
-	// Priority is the integer priority level from the CCU (0 = normal, higher
-	// values = more critical).
-	Priority  int
-	Timestamp time.Time
-	Counter   int
-	Rooms     []string
-	Functions []string
-	Quittable bool
+	// Timestamp is when the message first appeared, LastTimestamp when it
+	// last recurred. Both are zero when the CCU reports no such
+	// occurrence, mirroring [AlarmMessage].
+	Timestamp     time.Time
+	LastTimestamp time.Time
+	Counter       int
+	Rooms         []string
+	Functions     []string
+	Quittable     bool
 	// DisplayName is the human-readable translation of the message code
 	// extracted from the raw CCU name (the part after the last dot).
 	DisplayName string
@@ -831,7 +829,6 @@ func (s *ServiceMessages) AdditionalInformation() []map[string]any {
 			"address":     msgs[i].Address,
 			"device_name": msgs[i].DeviceName,
 			"type":        msgs[i].Type.String(),
-			"priority":    msgs[i].Priority,
 			"quittable":   msgs[i].Quittable,
 			"counter":     msgs[i].Counter,
 			"timestamp":   msgs[i].Timestamp.Unix(),
@@ -839,14 +836,14 @@ func (s *ServiceMessages) AdditionalInformation() []map[string]any {
 		if msgs[i].DisplayName != "" {
 			entry["display_name"] = msgs[i].DisplayName
 		}
-		if msgs[i].Description != "" {
-			entry["description"] = msgs[i].Description
-		}
 		if len(msgs[i].Rooms) > 0 {
 			entry["rooms"] = msgs[i].Rooms
 		}
 		if len(msgs[i].Functions) > 0 {
 			entry["functions"] = msgs[i].Functions
+		}
+		if !msgs[i].LastTimestamp.IsZero() {
+			entry["last_timestamp"] = msgs[i].LastTimestamp.Unix()
 		}
 		out = append(out, entry)
 	}

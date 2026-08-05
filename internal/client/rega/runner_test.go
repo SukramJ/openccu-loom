@@ -525,6 +525,54 @@ func TestGetInboxDevicesEmpty(t *testing.T) {
 	}
 }
 
+// TestGetServiceMessagesParsesMultiFunctionChannel is a golden parse of
+// real get_service_messages.fn output. rooms and functions are JSON
+// arrays; before the script was fixed they were a single string joined
+// with a raw tab — a control character illegal inside a JSON string — so
+// a channel carrying two or more functions (the first entry below has
+// three) made json.Unmarshal fail on the whole document and the daemon
+// received zero service messages instead of the CCU's actual count.
+func TestGetServiceMessagesParsesMultiFunctionChannel(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	payload := `[{"id":"2097","name":"AL%2DJEQ0702833%3A0%2ECONFIG%5FPENDING","timestamp":1785667096,` +
+		`"type":5,"address":"JEQ0702833","device_name":"HM%2DSen%2DMDIR%2DO%20JEQ0702833%3A0",` +
+		`"last_timestamp":1785923796,"counter":17,"rooms":[],` +
+		`"functions":["Licht","Sicherheit","Umwelt"],"quittable":false},` +
+		`{"id":"6893","name":"AL%2DKEQ0843929%3A0%2ESTICKY%5FUNREACH","timestamp":1785667096,` +
+		`"type":5,"address":"KEQ0843929","device_name":"HM%2DLC%2DSw4%2DDR%20KEQ0843929%3A0",` +
+		`"last_timestamp":1785862251,"counter":26,"rooms":[],"functions":[],"quittable":true}]`
+	srv := newFakeCCU(t, capture, payload)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	msgs, err := r.GetServiceMessages(context.Background())
+	if err != nil {
+		t.Fatalf("GetServiceMessages: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("len(msgs)=%d, want 2 — a multi-function channel must not fail the whole parse", len(msgs))
+	}
+	if len(msgs[0].Functions) != 3 {
+		t.Errorf("msgs[0].Functions=%v, want 3 entries", msgs[0].Functions)
+	}
+	if msgs[0].Timestamp != 1785667096 {
+		t.Errorf("msgs[0].Timestamp=%d, want 1785667096", msgs[0].Timestamp)
+	}
+	if msgs[0].LastTimestamp != 1785923796 {
+		t.Errorf("msgs[0].LastTimestamp=%d, want 1785923796", msgs[0].LastTimestamp)
+	}
+	if msgs[0].Quittable {
+		t.Error("msgs[0].Quittable=true, want false")
+	}
+	if !msgs[1].Quittable {
+		t.Error("msgs[1].Quittable=false, want true")
+	}
+	if len(msgs[1].Rooms) != 0 || len(msgs[1].Functions) != 0 {
+		t.Errorf("msgs[1] Rooms=%v Functions=%v, want both empty", msgs[1].Rooms, msgs[1].Functions)
+	}
+}
+
 // TestGetProgramDescriptionsParsesRuleSummaries is a golden parse of the
 // get_program_descriptions.fn output: every string field (description,
 // condition_summary, activity_summary) is URL-encoded on the wire, and the

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 4.0.0
+  version: 5.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9090,7 +9090,7 @@ components:
           description: Human-readable translation of the message code.
     ServiceMessage:
       type: object
-      required: [id, name, timestamp, counter, quittable]
+      required: [id, name, counter, quittable]
       properties:
         central:
           type: string
@@ -9100,14 +9100,27 @@ components:
         address: { type: string }
         device_name: { type: string }
         type: { type: string }
-        description:
+        timestamp:
           type: string
-          description: Optional human-readable message text.
-        priority:
-          type: integer
-          description: Integer priority level (0 = normal).
-        timestamp: { type: string, format: date-time }
+          format: date-time
+          description: |
+            When the message first appeared. Omitted on the rare CCU report
+            that carries no occurrence at all.
+        last_timestamp:
+          type: string
+          format: date-time
+          description: |
+            When the message last recurred. Omitted when the CCU reports no
+            such occurrence.
         counter: { type: integer }
+        rooms:
+          type: array
+          items: { type: string }
+          description: Rooms assigned to the triggering channel.
+        functions:
+          type: array
+          items: { type: string }
+          description: Functions (Gewerke) assigned to the triggering channel.
         quittable: { type: boolean }
         display_name:
           type: string

@@ -287,13 +287,16 @@ type ServiceMessageDTO struct {
 	Address    string `json:"address,omitempty"`
 	DeviceName string `json:"device_name,omitempty"`
 	Type       string `json:"type,omitempty"`
-	// Description is the optional human-readable message text. Closes H-034.
-	Description string `json:"description,omitempty"`
-	// Priority is the integer priority level (0 = normal). Closes H-034.
-	Priority  int       `json:"priority,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
-	Counter   int       `json:"counter"`
-	Quittable bool      `json:"quittable"`
+	// Timestamp is when the message first appeared. Omitted on the rare
+	// CCU report that carries no occurrence at all.
+	Timestamp time.Time `json:"timestamp,omitzero"`
+	// LastTimestamp is when the message last recurred. Omitted when the
+	// CCU reports no such occurrence.
+	LastTimestamp time.Time `json:"last_timestamp,omitzero"`
+	Counter       int       `json:"counter"`
+	Rooms         []string  `json:"rooms,omitempty"`
+	Functions     []string  `json:"functions,omitempty"`
+	Quittable     bool      `json:"quittable"`
 }
 
 // applyHubPagination slices items according to optional `page` / `per_page`
@@ -1116,18 +1119,18 @@ func ListServiceMessages(idx HubIndex) http.HandlerFunc {
 			for i := range msgs {
 				m := &msgs[i]
 				out = append(out, ServiceMessageDTO{
-					Central:    nh.Central,
-					ID:         m.ID,
-					Name:       m.Name,
-					Address:    m.Address,
-					DeviceName: m.DeviceName,
-					Type:       m.Type.String(),
-					// H-034: description and priority from model.
-					Description: m.Description,
-					Priority:    m.Priority,
-					Timestamp:   m.Timestamp,
-					Counter:     m.Counter,
-					Quittable:   m.Quittable,
+					Central:       nh.Central,
+					ID:            m.ID,
+					Name:          m.Name,
+					Address:       m.Address,
+					DeviceName:    m.DeviceName,
+					Type:          m.Type.String(),
+					Timestamp:     m.Timestamp,
+					LastTimestamp: m.LastTimestamp,
+					Counter:       m.Counter,
+					Rooms:         m.Rooms,
+					Functions:     m.Functions,
+					Quittable:     m.Quittable,
 				})
 			}
 		}

@@ -277,23 +277,25 @@ func (r *Runner) GetAlarmMessages(ctx context.Context) ([]AlarmMessage, error) {
 // ServiceMessage is one entry returned by [Runner.GetServiceMessages].
 // Fields mirror the JSON emitted by get_service_messages.fn.
 type ServiceMessage struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Timestamp     string `json:"timestamp"`
-	Type          int    `json:"type"`
-	Address       string `json:"address"`
-	DeviceName    string `json:"device_name"`
-	LastTimestamp string `json:"last_timestamp"`
-	Counter       int    `json:"counter"`
-	Rooms         string `json:"rooms"`
-	Functions     string `json:"functions"`
-	Quittable     bool   `json:"quittable"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Timestamp and LastTimestamp are Unix seconds in UTC. 0 means the
+	// occurrence never happened, mirroring [AlarmMessage].
+	Timestamp     int64    `json:"timestamp"`
+	Type          int      `json:"type"`
+	Address       string   `json:"address"`
+	DeviceName    string   `json:"device_name"`
+	LastTimestamp int64    `json:"last_timestamp"`
+	Counter       int      `json:"counter"`
+	Rooms         []string `json:"rooms"`
+	Functions     []string `json:"functions"`
+	Quittable     bool     `json:"quittable"`
 }
 
 // GetServiceMessages returns all active service messages from the CCU by
-// running the get_service_messages.fn ReGa script. Name, DeviceName, Rooms
-// and Functions are URL-encoded; callers should apply url.QueryUnescape
-// before display.
+// running the get_service_messages.fn ReGa script. Name, DeviceName, and
+// each entry of Rooms and Functions are URL-encoded; callers should apply
+// url.QueryUnescape before display.
 func (r *Runner) GetServiceMessages(ctx context.Context) ([]ServiceMessage, error) {
 	var messages []ServiceMessage
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetServiceMessages, nil, &messages); err != nil {

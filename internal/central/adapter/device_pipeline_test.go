@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -869,5 +870,67 @@ func TestHydrateStoresParamsetDescriptionsInRegistry(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("VALUES description with STATE not found in registry for any hydrated channel")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DevicePipeline.seedValues — string data points must be UriEncode-decoded
+// ---------------------------------------------------------------------------
+
+// TestDevicePipeline_SeedValues_DecodesURLEncodedStringValue pins a defect
+// measured live against two HmIP access points: fetch_all_device_data.fn
+// (see internal/client/rega/scripts/fetch_all_device_data.fn) wraps every
+// STRING-typed data point's value in UriEncode() so an embedded quote or
+// control character cannot break the script's hand-rolled JSON envelope —
+// "172.18.4.40" is written as "172%2E18%2E4%2E40". seedValues already
+// url.QueryUnescape's the *key*; the value must go through the same
+// decoding, or the percent-encoded literal lands straight in the model. The
+// value below carries both a space and a dot, mirroring the class of value
+// (free-text / address-like strings) the script encodes.
+func TestDevicePipeline_SeedValues_DecodesURLEncodedStringValue(t *testing.T) {
+	t.Parallel()
+	f := buildBoost7Fixture(t)
+	p := NewDevicePipeline(f.unit)
+
+	ch := f.dev.Channel("DEV002:0")
+	if ch == nil {
+		t.Fatal("fixture channel DEV002:0 missing")
+	}
+	dp := generic.NewDataPoint[string](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: "DEV002:0",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "IP_ADDRESS",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeString,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	ch.Put(dp)
+
+	// UriEncode("172.18.4.40 room") — both the dots and the space are
+	// percent-escaped, matching the CCU-observed encoding of a live
+	// IP_ADDRESS data point ("172%2E18%2E4%2E40").
+	const encoded = "172%2E18%2E4%2E40%20room"
+	const want = "172.18.4.40 room"
+	payload := `{"HmIP-RF.DEV002%3A0.IP_ADDRESS": "` + encoded + `"}`
+
+	srv := newBoost6JSONRPCServerAlwaysOK(t, payload)
+	defer srv.Close()
+	jc := newBoost6JSONRPCClient(t, srv.URL)
+	r := newBoost6RegaRunner(t, jc)
+
+	if err := p.seedValues(context.Background(), "HmIP-RF", r, slog.Default()); err != nil {
+		t.Fatalf("seedValues: %v", err)
+	}
+
+	got, observed := dp.Value()
+	if !observed {
+		t.Fatal("IP_ADDRESS data point was never seeded — OnWireValue did not apply")
+	}
+	if got != want {
+		t.Fatalf("IP_ADDRESS = %q, want decoded value %q (URL-encoded literal must not reach the model)", got, want)
 	}
 }

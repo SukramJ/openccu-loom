@@ -1297,15 +1297,20 @@ func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit
 		seen[id] = struct{}{}
 		decodedName := decodeRegaField(m.Name)
 		all = append(all, hub.ServiceMessage{
-			ID:          id,
-			Name:        decodedName,
-			Address:     m.Address,
-			DeviceName:  decodeRegaField(m.DeviceName),
-			Parameter:   serviceMessageParameter(decodedName),
-			InterfaceID: interfaceForChannel(unit, m.Address),
-			Type:        hmenum.ServiceMessageType(m.Type),
-			Counter:     m.Counter,
-			DisplayName: messageDisplayName(catalogs, locale, decodedName),
+			ID:            id,
+			Name:          decodedName,
+			Address:       m.Address,
+			DeviceName:    decodeRegaField(m.DeviceName),
+			Parameter:     serviceMessageParameter(decodedName),
+			InterfaceID:   interfaceForChannel(unit, m.Address),
+			Type:          hmenum.ServiceMessageType(m.Type),
+			Timestamp:     regaUnixTime(m.Timestamp),
+			LastTimestamp: regaUnixTime(m.LastTimestamp),
+			Counter:       m.Counter,
+			Rooms:         decodeRegaFields(m.Rooms),
+			Functions:     decodeRegaFields(m.Functions),
+			Quittable:     m.Quittable,
+			DisplayName:   messageDisplayName(catalogs, locale, decodedName),
 		})
 	}
 	unit.HubModel.ServiceMessages.Replace(all)
@@ -1428,6 +1433,23 @@ func decodeRegaField(s string) string {
 		s = latin1ToUTF8String(s)
 	}
 	return s
+}
+
+// decodeRegaFields applies [decodeRegaField] to every entry of ss — the
+// get_service_messages script UriEncodes each room/function name
+// individually rather than the joined array, since a raw comma inside a
+// decoded name would otherwise be indistinguishable from the array's own
+// separator. Returns nil for an empty input so the JSON encoders that
+// omit empty slices keep doing so.
+func decodeRegaFields(ss []string) []string {
+	if len(ss) == 0 {
+		return nil
+	}
+	out := make([]string, len(ss))
+	for i, s := range ss {
+		out[i] = decodeRegaField(s)
+	}
+	return out
 }
 
 // latin1ToUTF8String reinterprets an ISO-8859-1 string's bytes as Unicode
@@ -2213,9 +2235,35 @@ func (w *hubJSONRPCWriter) AcceptDeviceInInbox(
 // TriggerFirmwareUpdate runs OpenCCU's `checkFirmwareUpdate.sh` with
 // `-a -r` (apply + reboot). The CCU stages the update and reboots
 // once it's downloaded.
+//
+// The script reports its outcome as a structured
+// {success, script_available, message} object (trigger_firmware_update.fn)
+// rather than through the transport itself: a CCU without
+// checkFirmwareUpdate.sh (i.e. not running OpenCCU) still answers the
+// ReGa.runScript call successfully, it just never starts an update. Reading
+// only the transport error — as the previous implementation did via
+// [rega.Runner.Run] — always returned nil on such a CCU, and
+// [hub.Update.Install] took that nil as license to flip in-progress and
+// declare success for an update that never started. RunJSON plus an
+// explicit success check turns that CCU-level decline into a real error, the
+// same way [backends.CcuBackend.TriggerFirmwareUpdate] already does.
 func (w *hubJSONRPCWriter) TriggerFirmwareUpdate(ctx context.Context) error {
-	_, err := w.rega.Run(ctx, hmenum.RegaScriptTriggerFirmwareUpdate, map[string]string{})
-	return err
+	var resp struct {
+		Success         bool   `json:"success"`
+		ScriptAvailable bool   `json:"script_available"`
+		Message         string `json:"message"`
+	}
+	if err := w.rega.RunJSON(ctx, hmenum.RegaScriptTriggerFirmwareUpdate, nil, &resp); err != nil {
+		return err
+	}
+	if !resp.Success {
+		detail := resp.Message
+		if detail == "" {
+			detail = "firmware update trigger declined"
+		}
+		return fmt.Errorf("rega.TriggerFirmwareUpdate: %s", detail)
+	}
+	return nil
 }
 
 // --- SysvarCreator adapter wiring --------------------------------

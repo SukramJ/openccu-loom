@@ -278,18 +278,27 @@ func TestListSysvars_MultiCCU_ScopedToOne(t *testing.T) {
 
 // ─── list_service_messages ────────────────────────────────────────────────────
 
+// TestListServiceMessages_PopulatedHub verifies the MCP tool surfaces a
+// service message's identity, timing and location fields — including
+// Rooms/Functions with more than one entry each, the shape that used to
+// break JSON deserialization further upstream when the ReGa script
+// joined them with a raw tab (see get_service_messages.fn).
 func TestListServiceMessages_PopulatedHub(t *testing.T) {
 	h := hub.NewHub("alpha")
+	ts := time.Now().Truncate(time.Second)
+	last := ts.Add(-time.Hour)
 	h.ServiceMessages.Replace([]hub.ServiceMessage{
 		{
-			ID:         "sm-1",
-			Name:       "Low Battery",
-			Address:    "ADDR001:0",
-			DeviceName: "My Device",
-			Type:       hmenum.ServiceMessageTypeGeneric,
-			Priority:   1,
-			Timestamp:  time.Now(),
-			Quittable:  true,
+			ID:            "sm-1",
+			Name:          "Low Battery",
+			Address:       "ADDR001:0",
+			DeviceName:    "My Device",
+			Type:          hmenum.ServiceMessageTypeGeneric,
+			Timestamp:     ts,
+			LastTimestamp: last,
+			Rooms:         []string{"Living Room", "Kitchen"},
+			Functions:     []string{"Licht", "Sicherheit", "Umwelt"},
+			Quittable:     true,
 		},
 	})
 
@@ -307,10 +316,14 @@ func TestListServiceMessages_PopulatedHub(t *testing.T) {
 
 	var out struct {
 		Messages []struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			Quittable bool   `json:"quittable"`
-			Central   string `json:"central"`
+			ID            string   `json:"id"`
+			Name          string   `json:"name"`
+			Timestamp     string   `json:"timestamp"`
+			LastTimestamp string   `json:"last_timestamp"`
+			Rooms         []string `json:"rooms"`
+			Functions     []string `json:"functions"`
+			Quittable     bool     `json:"quittable"`
+			Central       string   `json:"central"`
 		} `json:"messages"`
 	}
 	unmarshalStructured(t, res, &out)
@@ -324,6 +337,18 @@ func TestListServiceMessages_PopulatedHub(t *testing.T) {
 	}
 	if m.Name != "Low Battery" {
 		t.Errorf("name: want Low Battery, got %q", m.Name)
+	}
+	if m.Timestamp != ts.UTC().Format(time.RFC3339) {
+		t.Errorf("timestamp: want %s, got %q", ts.UTC().Format(time.RFC3339), m.Timestamp)
+	}
+	if m.LastTimestamp != last.UTC().Format(time.RFC3339) {
+		t.Errorf("last_timestamp: want %s, got %q", last.UTC().Format(time.RFC3339), m.LastTimestamp)
+	}
+	if len(m.Functions) != 3 {
+		t.Errorf("functions: want 3 entries, got %v", m.Functions)
+	}
+	if len(m.Rooms) != 2 {
+		t.Errorf("rooms: want 2 entries, got %v", m.Rooms)
 	}
 	if !m.Quittable {
 		t.Error("quittable: want true")

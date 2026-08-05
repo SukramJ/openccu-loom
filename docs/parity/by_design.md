@@ -2773,13 +2773,35 @@ Go path: `internal/client/interface_client.go::OnSystemStatusRestored`.
 
 ---
 
-### A4-P04 — 6 dead ReGa scripts: JSON-RPC equivalents preferred in Go
+### A4-P04 — WITHDRAWN: the "6 dead ReGa scripts" divergence never existed
 
-Python uses all 20 ReGa scripts directly. Six of Go's 20 scripts (`get_alarm_messages`, `get_backend_info`, `get_program_descriptions`, `get_serial`, `get_service_messages`, `get_system_variable_descriptions`) have no production callers because Go prefers the equivalent JSON-RPC methods (`Alarm.getAll`, `System.getSystemInformation`, `Interface.getServiceMessages`).
+This entry used to claim that six scripts (`get_alarm_messages`,
+`get_backend_info`, `get_program_descriptions`, `get_serial`,
+`get_service_messages`, `get_system_variable_descriptions`) had no production
+callers because Go preferred the JSON-RPC methods `Alarm.getAll`,
+`System.getSystemInformation` and `Interface.getServiceMessages`.
 
-The JSON-RPC preference is by design: JSON-RPC responses are strongly typed and do not require ReGa TCL script parsing. The scripts are retained as enum constants and embedded `.fn` files because the CCU falls back to them when the JSON-RPC method is not available (older CCU firmware). They serve as backup paths for firmware-compatibility layers and are referenced in integration test helpers.
+Every load-bearing claim in it was wrong, and it is retained here only so the
+correction is discoverable from the ID:
 
-Go path: `pkg/hmenum/rega_script.go`, `internal/client/rega/`.
+- **None of those three JSON-RPC methods exists.** The CCU's authoritative
+  method catalogue is `WebUI/www/api/methods.conf` in the firmware; it lists
+  183 methods and none of these. There is no CCU JSON-RPC endpoint for alarm
+  or service messages at all.
+- **All six scripts have production callers**, resolved through
+  `internal/central/adapter/hub_wiring.go`. `get_serial` is boot-blocking: a
+  central does not come up without it.
+- The described fallback ("the CCU falls back to them when the JSON-RPC method
+  is not available") is therefore not a mechanism that exists anywhere.
+
+Read this as a caution rather than a divergence: an entry in this catalogue is
+only as good as the source it was checked against. For the CCU's JSON-RPC
+surface that source is `methods.conf` plus the `.tcl` implementations beside
+it; for ReGa method and constant names it is the `ReGaHss` binary's own symbol
+table.
+
+Go path: `pkg/hmenum/rega_script.go`, `internal/client/rega/`,
+`internal/central/adapter/hub_wiring.go`.
 
 ---
 
