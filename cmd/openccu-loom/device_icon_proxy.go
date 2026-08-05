@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 )
 
 // ccuImagePath is the CCU web-server directory that serves the 250px
@@ -84,15 +85,25 @@ func newDeviceIconProxyWith(
 	return &deviceIconProxy{
 		locate:  locate,
 		resolve: resolve,
-		secure:  &http.Client{Timeout: 15 * time.Second},
+		secure:  httpx.NewClient(15 * time.Second),
 		insecure: &http.Client{
-			Timeout: 15 * time.Second,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // explicit per-central opt-in via TLSInsecureSkipVerify
-			},
+			Timeout:   15 * time.Second,
+			Transport: insecureIconTransport(),
 		},
 		cache: map[string]cachedIcon{},
 	}
+}
+
+// insecureIconTransport clones the stdlib default and only relaxes
+// certificate verification, so proxy handling, dial and TLS timeouts and
+// HTTP/2 survive. Building a bare &http.Transport{} instead would drop
+// all of them, and leaving Transport nil would put this opt-in-insecure
+// client on the process-wide default transport shared with every other
+// caller. See [httpx.NewTransport].
+func insecureIconTransport() *http.Transport {
+	t := httpx.NewTransport()
+	t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit per-central opt-in via TLSInsecureSkipVerify
+	return t
 }
 
 // Icon implements handlers.DeviceIconProxy. Cached results — including a

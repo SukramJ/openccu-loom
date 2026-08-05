@@ -14,6 +14,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 )
 
 // cmdExportDef downloads a device-definition zip from a running daemon's REST
@@ -64,10 +66,12 @@ func cmdExportDef(args []string, stdout, stderr io.Writer) error {
 		req.SetBasicAuth(authUser, authPassword)
 	}
 
-	client := &http.Client{Timeout: *timeout}
+	// Own transport, cloned so the stdlib defaults survive; see [httpx.NewTransport].
+	transport := httpx.NewTransport()
 	if tlsCfg != nil {
-		client.Transport = &http.Transport{TLSClientConfig: tlsCfg}
+		transport.TLSClientConfig = tlsCfg
 	}
+	client := &http.Client{Timeout: *timeout, Transport: transport}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("export-def: request failed: %w", err)

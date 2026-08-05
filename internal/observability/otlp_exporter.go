@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
 
@@ -79,7 +80,7 @@ func NewOTLPHTTPExporter(cfg OTLPHTTPConfig) *OTLPHTTPExporter {
 		cfg.BufferSize = 2048
 	}
 	if cfg.Client == nil {
-		cfg.Client = &http.Client{Timeout: 10 * time.Second}
+		cfg.Client = httpx.NewClient(10 * time.Second)
 	}
 
 	e := &OTLPHTTPExporter{

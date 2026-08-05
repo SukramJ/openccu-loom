@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
@@ -110,7 +111,7 @@ func (b *CcuBackend) jpagesClient() *http.Client {
 	if b.httpClient != nil {
 		return b.httpClient
 	}
-	return &http.Client{Timeout: jpagesReadTimeout}
+	return httpx.NewClient(jpagesReadTimeout)
 }
 
 // jpagesDo issues a jpages request. method GET carries no body; POST sends

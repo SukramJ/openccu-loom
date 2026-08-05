@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 )
 
 // daemonClient is a thin HTTP client for the openccu-loom REST API.
@@ -46,16 +48,9 @@ func newDaemonClient(cfg clientConfig) (*daemonClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Always give the client its own transport rather than falling back to
-	// the process-wide http.DefaultTransport. A CLI invocation has no use
-	// for a global connection pool, and sharing one couples independent
-	// callers through it: closing idle connections on the default transport
-	// tears down requests other callers have in flight ("transport
-	// connection broken: http: CloseIdleConnections called"), which is how
-	// this surfaced — as a flaky parallel test. Cloning keeps the stdlib
-	// defaults (proxy handling, dial and TLS timeouts, HTTP/2).
-	transport, _ := http.DefaultTransport.(*http.Transport)
-	ownTransport := transport.Clone()
+	// Own transport, never the process-wide http.DefaultTransport — see
+	// [httpx.NewTransport] for why that coupling matters.
+	ownTransport := httpx.NewTransport()
 	if tlsCfg != nil {
 		ownTransport.TLSClientConfig = tlsCfg
 	}

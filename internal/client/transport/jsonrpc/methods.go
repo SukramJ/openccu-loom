@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
@@ -861,7 +862,7 @@ func (c *Client) DownloadBackup(ctx context.Context) ([]byte, error) {
 
 	hc := c.httpClient
 	if hc == nil {
-		hc = &http.Client{Timeout: backupDownloadTimeout}
+		hc = httpx.NewClient(backupDownloadTimeout)
 	} else {
 		// Override timeout for this large download regardless of the shared client.
 		hc = &http.Client{
@@ -926,7 +927,7 @@ func (c *Client) DownloadFirmware(ctx context.Context, firmwareURL string) error
 
 	hc := c.httpClient
 	if hc == nil {
-		hc = &http.Client{Timeout: firmwareTransportDownloadTimeout}
+		hc = httpx.NewClient(firmwareTransportDownloadTimeout)
 	} else {
 		hc = &http.Client{
 			Transport: hc.Transport,

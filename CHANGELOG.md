@@ -26,6 +26,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Every HTTP client the daemon makes now owns its connection pool.**
+  Sixteen call sites left `http.Client.Transport` nil, which falls back to
+  the process-wide default transport — so the CCU readiness probe, SSDP
+  discovery, firmware downloads, the JSON-RPC client, webhook delivery and
+  the metric exporters all shared one pool, and whatever closed idle
+  connections on it could tear down a request another had in flight.
+
+  Two of them additionally built a transport from scratch when a custom
+  TLS configuration was supplied, which silently dropped proxy handling,
+  the dial and TLS timeouts and HTTP/2; those now clone the defaults and
+  adjust only the TLS field. An operator behind an HTTP proxy gets proxy
+  support back on the `hmcli` export and cache paths and on device-icon
+  fetches.
+
+  The insight was already in the tree — `hmcli`'s daemon client had cloned
+  its transport for exactly this reason, naming the flaky parallel test
+  that exposed it — but nothing carried it to the other callers. A
+  contract test now fails the build on any `http.Client` literal without
+  an explicit transport.
+
 - **No CUxD device has ever pushed an event.** CUxD does not call `event`
   directly the way the other interfaces do — it wraps every callback,
   a single value change included, in a `system.multicall` envelope. The

@@ -19,6 +19,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -166,10 +167,12 @@ func runCacheClearOnline(
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	client := &http.Client{}
+	// Own transport, cloned so the stdlib defaults survive; see [httpx.NewTransport].
+	transport := httpx.NewTransport()
 	if tlsCfg != nil {
-		client.Transport = &http.Transport{TLSClientConfig: tlsCfg}
+		transport.TLSClientConfig = tlsCfg
 	}
+	client := &http.Client{Transport: transport}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("cache clear: %w", err)

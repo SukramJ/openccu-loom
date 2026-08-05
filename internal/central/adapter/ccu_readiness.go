@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 )
 
 // checkRegaPath is the CCU's own readiness endpoint. The OCCU WebUI boot
@@ -73,7 +74,7 @@ func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadin
 	client := cfg.Client
 	if client == nil {
 		if client = jsonrpcHTTPClient(cc); client == nil {
-			client = &http.Client{Timeout: defaultCCUReadinessProbeTTL}
+			client = httpx.NewClient(defaultCCUReadinessProbeTTL)
 		}
 	}
 	url := ccuBaseURLFor(cc) + checkRegaPath
