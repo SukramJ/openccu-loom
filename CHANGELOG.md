@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.53.1]
 
 ### Changed
 
@@ -67,8 +67,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `json.Unmarshal` failed with `invalid character '\t' in string
   literal` and the daemon received zero service messages instead of the
   CCU's actual count. `rooms` and `functions` are now real JSON arrays.
-
-## [0.53.1]
 
 ### Changed
 
