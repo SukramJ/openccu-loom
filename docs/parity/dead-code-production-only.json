@@ -1,6 +1,6 @@
 {
-  "generated": "ac36ea86",
-  "head": "ac36ea86",
+  "generated": "65293dc3",
+  "head": "65293dc3",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27651,
-    "reachable": 4721,
-    "whitelisted": 19796,
+    "total_exported": 27678,
+    "reachable": 4727,
+    "whitelisted": 19817,
     "unreachable": 3134
   },
   "by_package": [
@@ -1669,21 +1669,21 @@
       "package": "internal/audit",
       "identifier": "Buffer",
       "file": "internal/audit/audit.go",
-      "line": 269,
+      "line": 279,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 254,
+      "line": 264,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 254,
+      "line": 264,
       "kind": "type"
     },
     {
@@ -1732,14 +1732,14 @@
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 223,
+      "line": 233,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 223,
+      "line": 233,
       "kind": "type"
     },
     {
@@ -1781,28 +1781,28 @@
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 245,
+      "line": 255,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 245,
+      "line": 255,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 262,
+      "line": 272,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 262,
+      "line": 272,
       "kind": "type"
     },
     {
@@ -2936,7 +2936,7 @@
       "package": "internal/central/adapter",
       "identifier": "DevicePipeline",
       "file": "internal/central/adapter/device_pipeline.go",
-      "line": 72,
+      "line": 73,
       "kind": "type"
     },
     {
@@ -5232,14 +5232,14 @@
       "package": "internal/client",
       "identifier": "DeviceDescriptionFinder",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 861,
+      "line": 885,
       "kind": "type"
     },
     {
       "package": "internal/client",
       "identifier": "DeviceDescriptionFinder",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 861,
+      "line": 885,
       "kind": "type"
     },
     {
@@ -5302,14 +5302,14 @@
       "package": "internal/client",
       "identifier": "ForcedAvailability",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 818,
+      "line": 842,
       "kind": "type"
     },
     {
       "package": "internal/client",
       "identifier": "ForcedAvailability",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 818,
+      "line": 842,
       "kind": "type"
     },
     {
@@ -5358,14 +5358,14 @@
       "package": "internal/client",
       "identifier": "ParamsetDescriptionPersister",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 867,
+      "line": 891,
       "kind": "type"
     },
     {
       "package": "internal/client",
       "identifier": "ParamsetDescriptionPersister",
       "file": "internal/client/interface_client_orchestration.go",
-      "line": 867,
+      "line": 891,
       "kind": "type"
     },
     {
@@ -24884,7 +24884,7 @@
       "identifier": "TestDaemonServeWithReload_InvalidConfigPath_ReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_serve_reload_test.go",
-      "line": 100
+      "line": 104
     },
     {
       "package": "cmd/openccu-loom",
@@ -24898,7 +24898,7 @@
       "identifier": "TestDaemonServeWithReload_WithConfigPath_StartsWatcher",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/reload_test.go",
-      "line": 119
+      "line": 123
     },
     {
       "package": "cmd/openccu-loom",
@@ -24940,7 +24940,7 @@
       "identifier": "TestDaemonServe_WithMQTTEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_serve_matter_test.go",
-      "line": 54
+      "line": 58
     },
     {
       "package": "cmd/openccu-loom",
@@ -25241,7 +25241,7 @@
       "identifier": "TestHotReloadHandler_AllRestartRequiredFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/reload_test.go",
-      "line": 159
+      "line": 167
     },
     {
       "package": "cmd/openccu-loom",
@@ -25826,6 +25826,20 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestLogConnectFailure_NeverLogsTheSecret",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/mqtt_reload_assembly_test.go",
+      "line": 182
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestLogConnectFailure_ReportsCredentialPresence",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/mqtt_reload_assembly_test.go",
+      "line": 153
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestLoginChainWithCCU_NoCCU_LocalChainOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/ccu_auth_wiring_test.go",
@@ -25907,6 +25921,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/reload_handler_test.go",
       "line": 350
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMQTTReloadAdapter_FallsBackAndWarnsWhenAssemblyFails",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/mqtt_reload_assembly_test.go",
+      "line": 84
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMQTTReloadAdapter_UsesFreshlyAssembledConfig",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/mqtt_reload_assembly_test.go",
+      "line": 47
     },
     {
       "package": "cmd/openccu-loom",
@@ -26677,6 +26705,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_jobs_test.go",
       "line": 188
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestReloadDeps_AssembleConfig_ReportsFreshness",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/mqtt_reload_assembly_test.go",
+      "line": 118
     },
     {
       "package": "cmd/openccu-loom",
@@ -28633,6 +28668,27 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestWireProgramExecuteAudit",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/program_execute_audit_test.go",
+      "line": 20
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestWireProgramExecuteAuditNilInputs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/program_execute_audit_test.go",
+      "line": 89
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestWireProgramExecuteAuditTeardownStops",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/program_execute_audit_test.go",
+      "line": 61
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestWireREST_SessionCookieSecureFlag",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_rest_test.go",
@@ -30022,14 +30078,14 @@
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 287
+      "line": 297
     },
     {
       "package": "internal/audit",
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 287
+      "line": 297
     },
     {
       "package": "internal/audit",
@@ -33750,6 +33806,20 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "EventSourceFeed",
+      "reason": "constructed by the daemon composition root (cmd/openccu-loom/daemon.go) and started per adopted central through the orchestrator hook; the reachability heuristic counts a type as unreachable when production never writes its name, and production only ever holds this one via := from NewEventSourceFeed",
+      "file": "internal/central/adapter/event_source_feed.go",
+      "line": 35
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "EventSourceFeed",
+      "reason": "constructed by the daemon composition root (cmd/openccu-loom/daemon.go) and started per adopted central through the orchestrator hook; the reachability heuristic counts a type as unreachable when production never writes its name, and production only ever holds this one via := from NewEventSourceFeed",
+      "file": "internal/central/adapter/event_source_feed.go",
+      "line": 35
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "SafeGo",
       "reason": "utility wrapper for panic-safe goroutines; callers in adapter background tasks are added incrementally",
       "file": "internal/central/adapter/safego.go",
@@ -35329,6 +35399,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/reconnector_callback_url_test.go",
       "line": 145
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCanonicalInterfaceIDAcceptsPrePrefixIDs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/interface_id_test.go",
+      "line": 129
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCanonicalInterfaceIDNoPrefix",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/interface_id_test.go",
+      "line": 140
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCanonicalInterfaceIDRoundtrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/interface_id_test.go",
+      "line": 98
     },
     {
       "package": "internal/central/adapter",
@@ -41481,7 +41572,7 @@
       "identifier": "TestInitInterfaceIDIsClientUniqueAcrossDaemons",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/interface_id_test.go",
-      "line": 68
+      "line": 71
     },
     {
       "package": "internal/central/adapter",
@@ -48415,20 +48506,6 @@
     },
     {
       "package": "internal/central/adapter",
-      "identifier": "TestStripInstanceNoPrefix",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/adapter/interface_id_test.go",
-      "line": 121
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "TestStripInstanceRoundtrip",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/adapter/interface_id_test.go",
-      "line": 93
-    },
-    {
-      "package": "internal/central/adapter",
       "identifier": "TestSubscribeProfilePointerSeedsCurrentProfile",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/week_profile_refine_test.go",
@@ -49881,7 +49958,7 @@
       "identifier": "TestWireInterfaceIDIsCcuUniqueWithinDaemon",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/interface_id_test.go",
-      "line": 81
+      "line": 84
     },
     {
       "package": "internal/central/adapter",
@@ -68008,6 +68085,20 @@
     },
     {
       "package": "internal/config",
+      "identifier": "Clone",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1511
+    },
+    {
+      "package": "internal/config",
+      "identifier": "Clone",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1511
+    },
+    {
+      "package": "internal/config",
       "identifier": "Config",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
@@ -68431,14 +68522,14 @@
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1598
+      "line": 1620
     },
     {
       "package": "internal/config",
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1598
+      "line": 1620
     },
     {
       "package": "internal/config",
@@ -123710,14 +123801,14 @@
       "identifier": "DeleteConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 591
+      "line": 663
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DeleteConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 591
+      "line": 663
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125110,14 +125201,14 @@
       "identifier": "GetConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 451
+      "line": 537
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 451
+      "line": 537
     },
     {
       "package": "internal/north/rest/handlers",
@@ -128372,14 +128463,14 @@
       "identifier": "PutConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 484
+      "line": 570
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 484
+      "line": 570
     },
     {
       "package": "internal/north/rest/handlers",
@@ -132135,6 +132226,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestGetConfigSection_LeavesUnsetSecretEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
+      "line": 546
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestGetConfigSection_MasksInboundWebhookToken",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
@@ -134396,6 +134494,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestMaskSecrets_LeavesUnsetSecretEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
+      "line": 525
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestMaskSecrets_MasksCentralsArrayPassword",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
@@ -136055,6 +136160,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestPutConfigSection_AbsentSecretKeepsPassword",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
+      "line": 479
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestPutConfigSection_EmptyComplexSecretPlaceholder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
@@ -136062,10 +136174,24 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestPutConfigSection_EmptyStringSecretClears",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
+      "line": 502
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestPutConfigSection_KeepsOperatorSuppliedSecret",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
       "line": 209
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutConfigSection_NullSecretPlaceholderKeepsPassword",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
+      "line": 454
     },
     {
       "package": "internal/north/rest/handlers",
@@ -159106,6 +159232,13 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestBaselineRefreshScriptRewritesEveryBaseline",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/spa_visual_regression_guard_test.go",
+      "line": 124
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestBitmaskZeroIsEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/hmenum_constants_test.go",
@@ -160156,6 +160289,13 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestSPASecretPlaceholderMatchesHandler",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/spa_secret_payload_contract_test.go",
+      "line": 39
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestSafetyActiveValuesArePinnedValueLists",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/safety_classifier_test.go",
@@ -160209,6 +160349,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/schema_digest_test.go",
       "line": 39
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestScreenshotComparisonBudgetIsTightEnoughToSeeDrift",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/spa_visual_regression_guard_test.go",
+      "line": 87
     },
     {
       "package": "tests/contract",

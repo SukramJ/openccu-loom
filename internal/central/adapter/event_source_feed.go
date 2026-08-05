@@ -30,6 +30,8 @@ import (
 // hooking the coordinator that publishes it: the coordinator holds no model
 // and would need one injected to resolve a channel, which is a collaborator
 // seam bought for nothing when the event already carries the address.
+//
+// loom:reachable:reason="constructed by the daemon composition root (cmd/openccu-loom/daemon.go) and started per adopted central through the orchestrator hook; the reachability heuristic counts a type as unreachable when production never writes its name, and production only ever holds this one via := from NewEventSourceFeed"
 type EventSourceFeed struct {
 	reg    *central.Registry
 	unsubs []func()
