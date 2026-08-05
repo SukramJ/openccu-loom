@@ -92,12 +92,94 @@ type centralOrchestrator struct {
 	// central would never push a hub change to any WS client, because the
 	// subscriber only walks the registry once at boot.
 	hubEventsHook func(u *central.Unit) (unwire func())
+	// eventSourceHook feeds an adopted central's model event sources from
+	// its device triggers. Set via
+	// [centralOrchestrator.setEventSourceCentralHook]. Without it the
+	// central's channels keep event groups that can never record a
+	// trigger — indistinguishable from a fleet whose buttons nobody has
+	// pressed, because the feed only walks the registry once at boot.
+	eventSourceHook func(u *central.Unit) (unwire func())
 	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
 	// serial resolves. Set via [centralOrchestrator.setHubReadyTrigger] from the
 	// southbound wiring result so a runtime-adopted central publishes its
 	// serial-gated hub discovery the same way a boot-time central does. Nil when
 	// MQTT is not configured.
 	hubReadyTrigger func()
+}
+
+// centralHooks is what [centralOrchestrator.attachCentralHooks] returns: the
+// rollback list for a failed adopt, plus the three unwires the handle keeps
+// past a successful one (the rollback list is discarded on success, and those
+// three must outlive it or a removed central keeps publishing).
+type centralHooks struct {
+	undo                     []func()
+	matter, alarm, hubEvents func()
+}
+
+// attachCentralHooks subscribes an adopted central onto every per-central
+// domain before its southbound bring-up starts, so the first event it reports
+// already has a listener. Each hook is nil while its subsystem is disabled.
+//
+// Order is load-bearing where noted; the block is extracted from adoptCentral
+// so the sequence reads as one thing and the caller stays inside its
+// statement budget.
+func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHooks {
+	o.mu.Lock()
+	matterHook := o.matterHook
+	alarmHook := o.alarmHook
+	securityHook := o.securityHook
+	hubEventsHook := o.hubEventsHook
+	eventSourceHook := o.eventSourceHook
+	hubReadyTrigger := o.hubReadyTrigger
+	o.mu.Unlock()
+
+	var h centralHooks
+	keep := func(unwire func()) {
+		if unwire != nil {
+			h.undo = append(h.undo, unwire)
+		}
+	}
+
+	if matterHook != nil {
+		h.matter = matterHook(unit)
+		keep(h.matter)
+	}
+	if alarmHook != nil {
+		h.alarm = alarmHook(unit)
+		keep(h.alarm)
+	}
+	// The security domain attaches after the alarm service so its index
+	// rebuild sees the enrollment the alarm service has already loaded.
+	//
+	// Its index build is intentionally NOT relied upon here: this runs
+	// before AddCentral starts the bring-up, so the device model is still
+	// empty and any index built now would be too. The domain rebuilds itself
+	// off the central's southbound-ready event, which is the only point at
+	// which the model exists.
+	if securityHook != nil {
+		keep(securityHook(unit))
+	}
+	// Attach the WebSocket hub-singleton broadcasts. Before the southbound
+	// bring-up starts, so the first message/inbox change the central reports
+	// already has a listener.
+	if hubEventsHook != nil {
+		h.hubEvents = hubEventsHook(unit)
+		keep(h.hubEvents)
+	}
+	// Feed the central's model event sources from its device triggers, so the
+	// first keypress it reports is recorded on the channel's event group.
+	if eventSourceHook != nil {
+		keep(eventSourceHook(unit))
+	}
+	// Subscribe onto the hub-discovery ready pipeline so the serial-gated hub
+	// discovery (named central device + sysvars) publishes once the
+	// readiness-gated bring-up resolves the serial — the same path a boot-time
+	// central takes. Subscribing BEFORE AddCentral launches the bring-up makes
+	// the ready event a non-race.
+	if hubReadyTrigger != nil {
+		keep(subscribeHubReadyTrigger(unit.EventBus, hubReadyTrigger))
+	}
+	return h
 }
 
 // setAlarmCentralHook installs the per-central alarm wiring hook.
@@ -130,6 +212,17 @@ func (o *centralOrchestrator) setHubEventsCentralHook(hook func(u *central.Unit)
 	}
 	o.mu.Lock()
 	o.hubEventsHook = hook
+	o.mu.Unlock()
+}
+
+// setEventSourceCentralHook installs the per-central event-source feed hook.
+// Nil-safe on both sides, mirroring setHubEventsCentralHook.
+func (o *centralOrchestrator) setEventSourceCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.eventSourceHook = hook
 	o.mu.Unlock()
 }
 
@@ -270,60 +363,8 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// seed from Unit.IsSouthboundReady would cover a late wiring too, but
 	// subscribing first makes the window a non-event.) Nil when the Matter
 	// bridge is disabled.
-	o.mu.Lock()
-	matterHook := o.matterHook
-	alarmHook := o.alarmHook
-	securityHook := o.securityHook
-	hubEventsHook := o.hubEventsHook
-	hubReadyTrigger := o.hubReadyTrigger
-	o.mu.Unlock()
-	var matterUnwire func()
-	if matterHook != nil {
-		matterUnwire = matterHook(unit)
-		if matterUnwire != nil {
-			undo = append(undo, matterUnwire)
-		}
-	}
-	var alarmUnwire func()
-	if alarmHook != nil {
-		alarmUnwire = alarmHook(unit)
-		if alarmUnwire != nil {
-			undo = append(undo, alarmUnwire)
-		}
-	}
-	// The security domain attaches after the alarm service so its index
-	// rebuild sees the enrollment the alarm service has already loaded.
-	//
-	// Its index build is intentionally NOT relied upon here: this runs
-	// before AddCentral starts the bring-up, so the device model is
-	// still empty and any index built now would be too. The domain
-	// rebuilds itself off the central's southbound-ready event, which is
-	// the only point at which the model exists.
-	if securityHook != nil {
-		if unwire := securityHook(unit); unwire != nil {
-			undo = append(undo, unwire)
-		}
-	}
-	// Attach the WebSocket hub-singleton broadcasts. Before the southbound
-	// bring-up starts, so the first message/inbox change the central reports
-	// already has a listener.
-	var hubEventsUnwire func()
-	if hubEventsHook != nil {
-		hubEventsUnwire = hubEventsHook(unit)
-		if hubEventsUnwire != nil {
-			undo = append(undo, hubEventsUnwire)
-		}
-	}
-	// Subscribe the adopted central onto the hub-discovery ready pipeline so its
-	// serial-gated hub discovery (named central device + sysvars) publishes once
-	// its readiness-gated bring-up resolves the serial — the same path a
-	// boot-time central takes. Subscribing BEFORE AddCentral launches the
-	// bring-up makes the ready event a non-race.
-	if hubReadyTrigger != nil {
-		if unsub := subscribeHubReadyTrigger(unit.EventBus, hubReadyTrigger); unsub != nil {
-			undo = append(undo, unsub)
-		}
-	}
+	hooks := o.attachCentralHooks(unit)
+	undo = append(undo, hooks.undo...)
 
 	// Southbound bring-up (callback routes + readiness-gated device pull) and
 	// the north-bound hooks run AFTER Start, matching wireSouthbound's
@@ -343,7 +384,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	o.mu.Lock()
 	o.handles[cc.Name] = &centralHandle{
 		cc: cc, avail: avail, climate: climate,
-		matter: matterUnwire, alarm: alarmUnwire, hubEvents: hubEventsUnwire,
+		matter: hooks.matter, alarm: hooks.alarm, hubEvents: hooks.hubEvents,
 	}
 	o.mu.Unlock()
 
