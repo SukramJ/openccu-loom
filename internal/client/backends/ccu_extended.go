@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -746,7 +747,7 @@ func (b *CcuBackend) downloadBackup(ctx context.Context) ([]byte, error) {
 
 	hc := b.httpClient
 	if hc == nil {
-		hc = &http.Client{Timeout: firmwareDownloadTimeout}
+		hc = httpx.NewClient(firmwareDownloadTimeout)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, http.NoBody)
@@ -1099,7 +1100,7 @@ func (b *CcuBackend) DownloadFirmware(ctx context.Context, firmwareURL string) e
 
 	hc := b.httpClient
 	if hc == nil {
-		hc = &http.Client{Timeout: firmwareDownloadTimeout}
+		hc = httpx.NewClient(firmwareDownloadTimeout)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, strings.NewReader(form.Encode()))

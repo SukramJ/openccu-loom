@@ -27,6 +27,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
@@ -771,7 +772,8 @@ func wireInterface(
 		}
 		hc := jsonrpcHTTPClient(cc)
 		if hc == nil {
-			hc = &http.Client{}
+			// No timeout here by design; the transport is ours either way.
+			hc = &http.Client{Transport: httpx.NewTransport()}
 		}
 		jc := runner
 		var sessionIDFn func() string

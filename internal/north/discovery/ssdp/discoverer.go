@@ -11,6 +11,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 )
 
 const (
@@ -49,7 +51,7 @@ func New(interval time.Duration, logger *slog.Logger) *Discoverer {
 	return &Discoverer{
 		interval: interval,
 		logger:   logger,
-		http:     &http.Client{Timeout: fetchTimeout},
+		http:     httpx.NewClient(fetchTimeout),
 		now:      time.Now,
 		found:    make(map[string]DiscoveredCCU),
 	}

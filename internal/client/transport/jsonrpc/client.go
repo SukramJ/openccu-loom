@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -152,7 +153,7 @@ func New(cfg Config) (*Client, error) {
 	}
 	hc := cfg.HTTPClient
 	if hc == nil {
-		hc = &http.Client{Timeout: DefaultTimeout}
+		hc = httpx.NewClient(DefaultTimeout)
 	}
 	maxConc := cfg.MaxConcurrent
 	if maxConc <= 0 {

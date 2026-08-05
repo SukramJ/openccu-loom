@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -78,7 +79,7 @@ func NewInfluxExporter(cfg InfluxConfig) *InfluxExporter {
 	}
 	client := cfg.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
+		client = httpx.NewClient(10 * time.Second)
 	}
 	logger := cfg.Logger
 	if logger == nil {

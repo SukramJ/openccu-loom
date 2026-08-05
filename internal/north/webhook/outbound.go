@@ -27,6 +27,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -108,7 +109,7 @@ func NewOutbound(reg *central.Registry, cfg config.NorthWebhook, logger *slog.Lo
 		reg:          reg,
 		cfg:          cfg,
 		logger:       logger,
-		client:       &http.Client{Timeout: cfg.Timeout()},
+		client:       httpx.NewClient(cfg.Timeout()),
 		now:          time.Now,
 		backoff:      defaultBackoff,
 		eventAllow:   toSet(cfg.Events),
