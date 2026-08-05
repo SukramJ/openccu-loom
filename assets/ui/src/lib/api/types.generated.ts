@@ -1284,9 +1284,11 @@ export interface paths {
         };
         /**
          * Programs referencing a system variable (read-only)
-         * @description Lists the CCU programs that reference a system variable, via the
-         *     variable object's native `DPEnumUsagePrograms()` — the same call
-         *     the CCU WebUI uses. Each program is enriched from the hub's
+         * @description Lists the CCU programs that reference a system variable, resolved
+         *     from the program rules themselves (trigger conditions and
+         *     activities of each program's root rule). References inside
+         *     else-if sub-rules or inside script-type activities are not
+         *     visible this way. Each program is enriched from the hub's
          *     program registry (localized name, canonical unique id, internal
          *     flag, observed active state) when known. Consumed as a warning in
          *     the SPA's delete-confirmation. 503 when no CCU-side reader is
