@@ -45,6 +45,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **"Which programs use this system variable?" returned nothing on CCUs
+  whose usage index is empty.** `usage_by_sysvar.fn` asked the variable
+  object's own `DPEnumUsagePrograms()`. Measured against two CCUs running
+  the same firmware: one reported every reference, the other reported none
+  of 29 references — 21 in program activities, 8 in trigger conditions —
+  that a walk over the program rules finds. The index reports an empty list
+  rather than an error, so REST `GET /sysvars/{name}/usage`, the WS command
+  and the SPA's delete-confirmation warning were silently blank on such an
+  installation. The script now resolves the references out of each
+  program's root rule instead. References inside else-if sub-rules or
+  inside script-type activities remain invisible — the root rule is the
+  only one reachable, and a script body is opaque; both limits are stated
+  in the script header and in the OpenAPI description. `APIVersion` bumped
+  to `5.0.1`.
+
 - **A service-message channel with two or more functions (Gewerke) made
   the whole service-messages list unparsable.** `get_service_messages.fn`
   joined `rooms` and `functions` with a raw tab character inside a JSON

@@ -10,13 +10,15 @@ string sName;
 string sAddress;
 string sType;
 string sInterface;
+object oDev;
+object oIf;
 
 Write('[');
 
 object oDevices = dom.GetObject(ID_DEVICES);
 if (oDevices) {
     foreach(sDevId, oDevices.EnumIDs()) {
-        object oDev = dom.GetObject(sDevId);
+        oDev = dom.GetObject(sDevId);
         if (oDev) {
             !# Check if device is not yet configured (in inbox)
             if ((!oDev.ReadyConfig()) && (oDev.Name() != "Gateway")) {
@@ -43,7 +45,7 @@ if (oDevices) {
                     sType = "";
                 }
 
-                object oIf = dom.GetObject(oDev.Interface());
+                oIf = dom.GetObject(oDev.Interface());
                 if (oIf) {
                     sInterface = oIf.Name();
                     if (!sInterface) {

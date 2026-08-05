@@ -13,6 +13,12 @@
 !# data belong to get_service_messages.fn, whose ID_SERVICES alarms do
 !# carry a real trigger data point.
 !#
+!# The object guard is a separate, nested if. The combined form
+!# `oVar && (...) && (...)` was reported not to work as written on a CCU
+!# test system, where the type and state test alone was verified to
+!# work; that report is not reproducible on every CCU. Splitting the
+!# guard keeps the check without relying on the combined expression.
+!#
 !# Timestamps are Unix seconds via the *Seconds() accessors rather than
 !# ToString(), which renders CCU local time with no offset and is not
 !# parsable on its own. 0 means the occurrence never happened, which is
@@ -28,7 +34,9 @@
 !# Name and description go through UriEncode() because both are
 !# free-form operator input and would otherwise break the JSON.
 
-string sVarId;
+string sVarId; string sName; string sDescription;
+object oVar;
+integer iOccurred; integer iLast; integer iCounter;
 boolean bFirst = true;
 
 Write('[');
@@ -36,35 +44,37 @@ Write('[');
 object oSysvars = dom.GetObject(ID_SYSTEM_VARIABLES);
 if (oSysvars) {
     foreach (sVarId, oSysvars.EnumIDs()) {
-        object oVar = dom.GetObject(sVarId);
-        if (oVar && (oVar.TypeName() == "ALARMDP") && (oVar.AlState() == 1)) {
+        oVar = dom.GetObject(sVarId);
+        sName = "";
+        sDescription = "";
+        iOccurred = 0;
+        iLast = 0;
+        iCounter = 0;
+        if (oVar) {
+            if ((oVar.TypeName() == "ALARMDP") && (oVar.AlState() == 1)) {
+                if (oVar.Name()) {
+                    sName = oVar.Name().UriEncode();
+                }
+                if (oVar.DPInfo()) {
+                    sDescription = oVar.DPInfo().UriEncode();
+                }
+                iOccurred = oVar.AlOccurrenceTimeSeconds();
+                iLast = oVar.LastTimestampSeconds();
+                iCounter = oVar.AlCounter();
 
-            string sName = "";
-            if (oVar.Name()) {
-                sName = oVar.Name().UriEncode();
+                if (bFirst) {
+                    bFirst = false;
+                } else {
+                    Write(',');
+                }
+
+                Write('{"id":"' # oVar.ID() # '",');
+                Write('"name":"' # sName # '",');
+                Write('"description":"' # sDescription # '",');
+                Write('"timestamp":' # iOccurred # ',');
+                Write('"last_timestamp":' # iLast # ',');
+                Write('"counter":' # iCounter # '}');
             }
-
-            string sDescription = "";
-            if (oVar.DPInfo()) {
-                sDescription = oVar.DPInfo().UriEncode();
-            }
-
-            integer iOccurred = oVar.AlOccurrenceTimeSeconds();
-            integer iLast = oVar.LastTimestampSeconds();
-            integer iCounter = oVar.AlCounter();
-
-            if (bFirst) {
-                bFirst = false;
-            } else {
-                Write(',');
-            }
-
-            Write('{"id":"' # oVar.ID() # '",');
-            Write('"name":"' # sName # '",');
-            Write('"description":"' # sDescription # '",');
-            Write('"timestamp":' # iOccurred # ',');
-            Write('"last_timestamp":' # iLast # ',');
-            Write('"counter":' # iCounter # '}');
         }
     }
 }

@@ -18,10 +18,21 @@
 !# get_alarm_messages. timestamp is when the message first appeared,
 !# last_timestamp when it last recurred — 0 when it never did.
 !#
+!# The object guard is a separate, nested if rather than
+!# `oAlarm && (...)`. The combined form was reported not to work as
+!# written on a CCU test system for the sibling get_alarm_messages.fn;
+!# the same shape is avoided here, without that report having been
+!# reproduced for this script.
+!#
 !# Inbox/onboarding devices are not included here — the coordinator
 !# uses get_inbox_devices for that flow (post-MVP).
 
-string sAlarmId;
+string sAlarmId; string sRawName; string sName; string sAddress; string sRest;
+string sDeviceName; string sRooms; string sFunctions; string sRoomId; string sFuncId;
+object oAlarm; object oTrigger; object oChannel; object oRoom; object oFunc;
+integer iOccurred; integer iLast; integer iType; integer iCounter; integer iColon;
+integer iTriggerDP; integer iOps; integer iChnId;
+boolean bQuittable; boolean bFirstRoom; boolean bFirstFunc;
 boolean bFirst = true;
 
 Write('[');
@@ -29,104 +40,107 @@ Write('[');
 object oServices = dom.GetObject(ID_SERVICES);
 if (oServices) {
     foreach (sAlarmId, oServices.EnumIDs()) {
-        object oAlarm = dom.GetObject(sAlarmId);
-        if (oAlarm && (oAlarm.AlState() == 1)) {
-
-            string sRawName = "";
-            string sName = "";
-            if (oAlarm.Name()) {
-                sRawName = oAlarm.Name();
-                sName = sRawName.UriEncode();
-            }
-
-            integer iOccurred = oAlarm.AlOccurrenceTimeSeconds();
-            integer iLast = oAlarm.LastTimestampSeconds();
-            integer iType = oAlarm.AlType();
-            integer iCounter = oAlarm.AlCounter();
-
-            !# Service-message name format is "AL-ADDRESS:CHANNEL.PARAM";
-            !# extract the address prefix if the pattern matches.
-            string sAddress = "";
-            if (sRawName.Find("AL-") == 0) {
-                string sRest = sRawName.Substr(3);
-                integer iColon = sRest.Find(":");
-                if (iColon > 0) {
-                    sAddress = sRest.Substr(0, iColon);
+        oAlarm = dom.GetObject(sAlarmId);
+        sRawName = "";
+        sName = "";
+        sAddress = "";
+        sDeviceName = "";
+        sRooms = "";
+        sFunctions = "";
+        iOccurred = 0;
+        iLast = 0;
+        iType = 0;
+        iCounter = 0;
+        bQuittable = false;
+        if (oAlarm) {
+            if (oAlarm.AlState() == 1) {
+                if (oAlarm.Name()) {
+                    sRawName = oAlarm.Name();
+                    sName = sRawName.UriEncode();
                 }
-            }
 
-            string sDeviceName = "";
-            string sRooms = "";
-            string sFunctions = "";
-            boolean bQuittable = false;
-            integer iTriggerDP = oAlarm.AlTriggerDP();
-            if (iTriggerDP) {
-                object oTrigger = dom.GetObject(iTriggerDP);
-                if (oTrigger) {
-                    integer iOps = oTrigger.Operations();
-                    if (iOps & 2) {
-                        bQuittable = true;
+                iOccurred = oAlarm.AlOccurrenceTimeSeconds();
+                iLast = oAlarm.LastTimestampSeconds();
+                iType = oAlarm.AlType();
+                iCounter = oAlarm.AlCounter();
+
+                !# Service-message name format is "AL-ADDRESS:CHANNEL.PARAM";
+                !# extract the address prefix if the pattern matches.
+                if (sRawName.Find("AL-") == 0) {
+                    sRest = sRawName.Substr(3);
+                    iColon = sRest.Find(":");
+                    if (iColon > 0) {
+                        sAddress = sRest.Substr(0, iColon);
                     }
-                    integer iChnId = oTrigger.Channel();
-                    if (iChnId) {
-                        object oChannel = dom.GetObject(iChnId);
-                        if (oChannel) {
-                            if (sAddress == "") {
-                                sAddress = oChannel.Address();
-                            }
-                            if (oChannel.Name()) {
-                                sDeviceName = oChannel.Name().UriEncode();
-                            }
+                }
 
-                            boolean bFirstRoom = true;
-                            string sRoomId;
-                            foreach (sRoomId, oChannel.ChnRoom()) {
-                                object oRoom = dom.GetObject(sRoomId);
-                                if (oRoom) {
-                                    if (bFirstRoom) {
-                                        bFirstRoom = false;
-                                    } else {
-                                        sRooms = sRooms # ',';
-                                    }
-                                    sRooms = sRooms # '"' # oRoom.Name().UriEncode() # '"';
+                iTriggerDP = oAlarm.AlTriggerDP();
+                if (iTriggerDP) {
+                    oTrigger = dom.GetObject(iTriggerDP);
+                    if (oTrigger) {
+                        iOps = oTrigger.Operations();
+                        if (iOps & 2) {
+                            bQuittable = true;
+                        }
+                        iChnId = oTrigger.Channel();
+                        if (iChnId) {
+                            oChannel = dom.GetObject(iChnId);
+                            if (oChannel) {
+                                if (sAddress == "") {
+                                    sAddress = oChannel.Address();
                                 }
-                            }
+                                if (oChannel.Name()) {
+                                    sDeviceName = oChannel.Name().UriEncode();
+                                }
 
-                            boolean bFirstFunc = true;
-                            string sFuncId;
-                            foreach (sFuncId, oChannel.ChnFunction()) {
-                                object oFunc = dom.GetObject(sFuncId);
-                                if (oFunc) {
-                                    if (bFirstFunc) {
-                                        bFirstFunc = false;
-                                    } else {
-                                        sFunctions = sFunctions # ',';
+                                bFirstRoom = true;
+                                foreach (sRoomId, oChannel.ChnRoom()) {
+                                    oRoom = dom.GetObject(sRoomId);
+                                    if (oRoom) {
+                                        if (bFirstRoom) {
+                                            bFirstRoom = false;
+                                        } else {
+                                            sRooms = sRooms # ',';
+                                        }
+                                        sRooms = sRooms # '"' # oRoom.Name().UriEncode() # '"';
                                     }
-                                    sFunctions = sFunctions # '"' # oFunc.Name().UriEncode() # '"';
+                                }
+
+                                bFirstFunc = true;
+                                foreach (sFuncId, oChannel.ChnFunction()) {
+                                    oFunc = dom.GetObject(sFuncId);
+                                    if (oFunc) {
+                                        if (bFirstFunc) {
+                                            bFirstFunc = false;
+                                        } else {
+                                            sFunctions = sFunctions # ',';
+                                        }
+                                        sFunctions = sFunctions # '"' # oFunc.Name().UriEncode() # '"';
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            if (bFirst) {
-                bFirst = false;
-            } else {
-                Write(',');
-            }
+                if (bFirst) {
+                    bFirst = false;
+                } else {
+                    Write(',');
+                }
 
-            Write('{"id":"' # oAlarm.ID() # '",');
-            Write('"name":"' # sName # '",');
-            Write('"timestamp":' # iOccurred # ',');
-            Write('"type":' # iType # ',');
-            Write('"address":"' # sAddress # '",');
-            Write('"device_name":"' # sDeviceName # '",');
-            Write('"last_timestamp":' # iLast # ',');
-            Write('"counter":' # iCounter # ',');
-            Write('"rooms":[' # sRooms # '],');
-            Write('"functions":[' # sFunctions # '],');
-            Write('"quittable":' # bQuittable # '}');
+                Write('{"id":"' # oAlarm.ID() # '",');
+                Write('"name":"' # sName # '",');
+                Write('"timestamp":' # iOccurred # ',');
+                Write('"type":' # iType # ',');
+                Write('"address":"' # sAddress # '",');
+                Write('"device_name":"' # sDeviceName # '",');
+                Write('"last_timestamp":' # iLast # ',');
+                Write('"counter":' # iCounter # ',');
+                Write('"rooms":[' # sRooms # '],');
+                Write('"functions":[' # sFunctions # '],');
+                Write('"quittable":' # bQuittable # '}');
+            }
         }
     }
 }
