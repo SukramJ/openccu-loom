@@ -897,7 +897,7 @@ type SysvarUsageResponse struct {
 }
 
 // GetSysvarUsage lists the CCU programs that reference a system variable
-// (native DPEnumUsagePrograms), enriched against the hub's program
+// (resolved from the program rules), enriched against the hub's program
 // registry. Read-only; a delete-confirmation warning consumes it.
 func GetSysvarUsage(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

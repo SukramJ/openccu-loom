@@ -6,22 +6,26 @@
 !# interface process sends a radio test frame to the device and awaits an
 !# ACK. Resolution is rename-proof (name lookup, then an address scan over
 !# devices), like set_device_rooms.fn.
+!#
+!# oDev is shared between the address scan and the test start; the two
+!# branches are mutually exclusive and each assigns it before reading it.
 
 string sAddress = "##address##";
 string sTargetId = "";
+string sDevId; string sStarted;
+object oByName; object oDevices; object oDev;
 
-object oByName = dom.GetObject(sAddress);
+oByName = dom.GetObject(sAddress);
 if (oByName) {
     if (oByName.Address() == sAddress) {
         sTargetId = oByName.ID();
     }
 }
 if (sTargetId == "") {
-    object oDevices = dom.GetObject(ID_DEVICES);
+    oDevices = dom.GetObject(ID_DEVICES);
     if (oDevices) {
-        string sDevId;
         foreach (sDevId, oDevices.EnumIDs()) {
-            object oDev = dom.GetObject(sDevId);
+            oDev = dom.GetObject(sDevId);
             if (oDev) {
                 if (oDev.Address() == sAddress) {
                     sTargetId = oDev.ID();
@@ -33,8 +37,8 @@ if (sTargetId == "") {
 if (sTargetId == "") {
     Write("{\"success\":false,\"error\":\"device not found\"}");
 } else {
-    object oDev = dom.GetObject(sTargetId);
-    string sStarted = system.Date("%Y-%m-%d %H:%M:%S");
+    oDev = dom.GetObject(sTargetId);
+    sStarted = system.Date("%Y-%m-%d %H:%M:%S");
     oDev.DevStartComTest();
     Write("{\"success\":true,\"started\":\"" # sStarted # "\"}");
 }

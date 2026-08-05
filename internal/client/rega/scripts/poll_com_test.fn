@@ -6,23 +6,27 @@
 !# Polls whether the device's last-completed-test time advanced past the
 !# start timestamp — the device answered the radio test frame. Same
 !# rename-proof resolution as start_com_test.fn.
+!#
+!# oDev is shared between the address scan and the read-back; the two
+!# branches are mutually exclusive and each assigns it before reading it.
 
 string sAddress = "##address##";
 string sStarted = "##started##";
 string sTargetId = "";
+string sDevId; string sCompleted;
+object oByName; object oDevices; object oDev;
 
-object oByName = dom.GetObject(sAddress);
+oByName = dom.GetObject(sAddress);
 if (oByName) {
     if (oByName.Address() == sAddress) {
         sTargetId = oByName.ID();
     }
 }
 if (sTargetId == "") {
-    object oDevices = dom.GetObject(ID_DEVICES);
+    oDevices = dom.GetObject(ID_DEVICES);
     if (oDevices) {
-        string sDevId;
         foreach (sDevId, oDevices.EnumIDs()) {
-            object oDev = dom.GetObject(sDevId);
+            oDev = dom.GetObject(sDevId);
             if (oDev) {
                 if (oDev.Address() == sAddress) {
                     sTargetId = oDev.ID();
@@ -34,8 +38,8 @@ if (sTargetId == "") {
 if (sTargetId == "") {
     Write("{\"passed\":false}");
 } else {
-    object oDev = dom.GetObject(sTargetId);
-    string sCompleted = oDev.LastTestCompletedTime();
+    oDev = dom.GetObject(sTargetId);
+    sCompleted = oDev.LastTestCompletedTime();
     if (sCompleted >= sStarted) {
         Write("{\"passed\":true,\"completed\":\"" # sCompleted # "\"}");
     } else {

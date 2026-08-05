@@ -7,19 +7,29 @@
 !# unconditionally via AlReceipt() (there is no writability gate for
 !# alarm messages, matching the single-message acknowledge_message.fn).
 !#
+!# The object guard is a separate, nested if rather than
+!# `oVar && (...) && (...)`. The
+!# combined form was reported not to work as written on a CCU test
+!# system for the sibling get_alarm_messages.fn; the same shape is
+!# avoided here, without that report having been reproduced for this
+!# script.
+!#
 !# Mirrors the CCU WebUI ackAll() ReceiptAlarm loop. The companion
 !# read script is get_alarm_messages.fn.
 
-integer iCount = 0;
 string sVarId;
+object oVar;
+integer iCount = 0;
 
 object oSysvars = dom.GetObject(ID_SYSTEM_VARIABLES);
 if (oSysvars) {
     foreach (sVarId, oSysvars.EnumIDs()) {
-        object oVar = dom.GetObject(sVarId);
-        if (oVar && (oVar.TypeName() == "ALARMDP") && (oVar.AlState() == 1)) {
-            oVar.AlReceipt();
-            iCount = iCount + 1;
+        oVar = dom.GetObject(sVarId);
+        if (oVar) {
+            if ((oVar.TypeName() == "ALARMDP") && (oVar.AlState() == 1)) {
+                oVar.AlReceipt();
+                iCount = iCount + 1;
+            }
         }
     }
 }

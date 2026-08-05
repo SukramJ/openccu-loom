@@ -143,7 +143,7 @@ type SysvarUsage struct {
 }
 
 // SysvarUsageReader is the optional CCU-side reader for the programs that
-// reference a sysvar (the variable object's native DPEnumUsagePrograms).
+// reference a sysvar (resolved from the CCU's program rules).
 // It is intentionally NOT part of [SysvarMutator] so in-memory Mutator
 // fakes keep compiling; SetMutator wires it opportunistically.
 type SysvarUsageReader interface {

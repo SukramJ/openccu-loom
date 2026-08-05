@@ -11,13 +11,14 @@ string sDeviceAddress = "##device_address##";
 boolean bSuccess = false;
 boolean bFound = false;
 string sError = "";
+string sDevId;
+object oDev;
 
 !# Find device by iterating through ID_DEVICES and matching address
 object oDevices = dom.GetObject(ID_DEVICES);
 if (oDevices) {
-    string sDevId;
     foreach(sDevId, oDevices.EnumIDs()) {
-        object oDev = dom.GetObject(sDevId);
+        oDev = dom.GetObject(sDevId);
         if (oDev) {
             if (oDev.Address() == sDeviceAddress) {
                 bFound = true;

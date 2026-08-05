@@ -13,18 +13,20 @@
 !# assignments emit an empty string. The address is URL-encoded
 !# defensively, matching the framing convention of the other fields.
 
-string sVarId;
+string sVarId; string sDescription; string sChannelAddress;
+object oVar; object oCh;
+integer iChn;
 boolean bFirst = true;
 
 Write('[');
 foreach (sVarId, dom.GetObject(ID_SYSTEM_VARIABLES).EnumIDs()) {
-    object oVar = dom.GetObject(sVarId);
+    oVar = dom.GetObject(sVarId);
     if (oVar) {
-        string sDescription = oVar.DPInfo().UriEncode();
-        string sChannelAddress = "";
-        integer iChn = oVar.Channel();
+        sDescription = oVar.DPInfo().UriEncode();
+        sChannelAddress = "";
+        iChn = oVar.Channel();
         if (iChn > 0) {
-            object oCh = dom.GetObject(iChn);
+            oCh = dom.GetObject(iChn);
             if (oCh) {
                 sChannelAddress = oCh.Address().UriEncode();
             }

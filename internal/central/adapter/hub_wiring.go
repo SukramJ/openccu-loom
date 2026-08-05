@@ -1986,7 +1986,7 @@ func (w *hubJSONRPCWriter) DeleteSysvar(ctx context.Context, name string) error 
 }
 
 // SysvarUsagePrograms lists the CCU programs that reference the named
-// sysvar via the variable's native DPEnumUsagePrograms (usage_by_sysvar.fn).
+// sysvar, resolved from the program rules (usage_by_sysvar.fn).
 // The ReGa-supplied program name is URL-encoded; it is decoded here.
 func (w *hubJSONRPCWriter) SysvarUsagePrograms(ctx context.Context, name string) ([]hub.SysvarUsage, error) {
 	raw, err := w.rega.SysvarUsagePrograms(ctx, name)

@@ -2,35 +2,114 @@
 !# Params: ##name##  (target sysvar name)
 !# Output: [{"id":"<program-id>","name":"<uri-encoded>","active":<true|false>}...]
 !#
-!# Lists the CCU programs that reference a system variable, using the
-!# variable object's native DPEnumUsagePrograms() — the same call the CCU
-!# WebUI's system-variable admin page uses for its "Programs" button. It
-!# captures every reference (trigger conditions AND activities), not just
-!# the root rule the program-descriptions summary covers. An unknown
-!# sysvar yields an empty array. The program name is URL-encoded because
-!# it may contain quotes, backslashes or newlines that would break the
-!# JSON framing; active is a bare JSON boolean.
+!# Lists the CCU programs that reference a system variable by walking
+!# ID_PROGRAMS and resolving each program's root rule: the trigger
+!# conditions (LeftValType ivtSystemId -> LeftVal) and the activities
+!# (DestinationParam ivtSystemId -> DestinationDP). A program is emitted
+!# once, however many times it references the variable. An unknown sysvar
+!# yields an empty array.
+!#
+!# The variable object's own DPEnumUsagePrograms() would be the shorter
+!# route and is what this script used before. It was measured against two
+!# CCUs of the same firmware: on one it reported every reference, on the
+!# other it reported none of 29 references that a DOM walk finds — 21 in
+!# activities, 8 in trigger conditions. That index is evidently not
+!# maintained on every installation, and its failure mode is an empty
+!# list rather than an error, so the feature dies silently. The DOM walk
+!# reads the rules themselves and cannot go stale that way.
+!#
+!# Two references it cannot see, both by construction:
+!#   - else-if sub-rules, since only the root rule is reachable from
+!#     Rule() (get_program_descriptions.fn has the same boundary);
+!#   - variables used inside a program whose activity is a script
+!#     (DestinationParam ivtString) — the body is opaque here.
+!#
+!# Matching is by name against the resolved reference object rather than
+!# by id, which keeps the comparison clear of the id type the accessors
+!# return. Within ID_SYSTEM_VARIABLES a name identifies one object, and
+!# an ivtSystemId reference always resolves into that collection.
+!#
+!# The program name is URL-encoded because it may contain quotes,
+!# backslashes or newlines that would break the JSON framing; active is a
+!# bare JSON boolean.
 
 string sName = "##name##";
+string sPrgId; string sCondIdx; string sSingleIdx; string sDestIdx; string sActive;
+object oVar; object oPrg; object oRule; object oC; object oSC;
+object oDest; object oSD; object oRef;
+integer iCondCount; integer iSingleCount; integer iDestCount;
+boolean bMatch;
 boolean bFirst = true;
 
 Write('[');
-object oVar = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
+oVar = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
 if (oVar) {
-    string sPrgId;
-    foreach (sPrgId, oVar.DPEnumUsagePrograms()) {
-        object oPrg = dom.GetObject(sPrgId);
+    foreach (sPrgId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
+        oPrg = dom.GetObject(sPrgId);
         if (oPrg) {
-            if (bFirst) {
-                bFirst = false;
-            } else {
-                WriteLine(',');
+            bMatch = false;
+            oRule = oPrg.Rule();
+            if (oRule) {
+                !# --- trigger conditions ---
+                iCondCount = oRule.RuleConditions().Count();
+                if (iCondCount > 0) {
+                    foreach (sCondIdx, system.GenerateEnum(0, iCondCount - 1)) {
+                        oC = oRule.RuleCondition(sCondIdx);
+                        if (oC) {
+                            iSingleCount = oC.CndSingleCount();
+                            if (iSingleCount > 0) {
+                                foreach (sSingleIdx, system.GenerateEnum(0, iSingleCount - 1)) {
+                                    oSC = oC.CndSingleCondition(sSingleIdx);
+                                    if (oSC) {
+                                        if (oSC.LeftValType() == ivtSystemId) {
+                                            oRef = dom.GetObject(oSC.LeftVal());
+                                            if (oRef) {
+                                                if (oRef.Name() == sName) {
+                                                    bMatch = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                !# --- resulting activities ---
+                oDest = oRule.RuleDestination();
+                if (oDest) {
+                    iDestCount = oDest.DestSingleCount();
+                    if (iDestCount > 0) {
+                        foreach (sDestIdx, system.GenerateEnum(0, iDestCount - 1)) {
+                            oSD = oDest.DestSingleDestination(sDestIdx);
+                            if (oSD) {
+                                if (oSD.DestinationParam() == ivtSystemId) {
+                                    oRef = dom.GetObject(oSD.DestinationDP());
+                                    if (oRef) {
+                                        if (oRef.Name() == sName) {
+                                            bMatch = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            string sActive = "false";
-            if (oPrg.Active()) {
-                sActive = "true";
+
+            if (bMatch) {
+                sActive = "false";
+                if (oPrg.Active()) {
+                    sActive = "true";
+                }
+                if (bFirst) {
+                    bFirst = false;
+                } else {
+                    WriteLine(',');
+                }
+                Write('{"id":"' # sPrgId # '","name":"' # oPrg.Name().UriEncode() # '","active":' # sActive # '}');
             }
-            Write('{"id":"' # sPrgId # '","name":"' # oPrg.Name().UriEncode() # '","active":' # sActive # '}');
         }
     }
 }

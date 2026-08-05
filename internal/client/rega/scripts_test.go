@@ -127,8 +127,11 @@ func TestScriptBodyContainsExpectedPlaceholders(t *testing.T) {
 			mustContain: []string{"##id##"},
 		},
 		{
-			script:      hmenum.RegaScriptUsageBySysvar,
-			mustContain: []string{"##name##", "DPEnumUsagePrograms"},
+			script: hmenum.RegaScriptUsageBySysvar,
+			// References are resolved out of the program rules; the CCU's
+			// own usage index is not consulted, because it is empty on
+			// some installations and reports no error when it is.
+			mustContain: []string{"##name##", "ID_PROGRAMS", "ivtSystemId"},
 		},
 		{
 			script: hmenum.RegaScriptSetCCUPosition,

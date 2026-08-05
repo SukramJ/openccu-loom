@@ -63,8 +63,8 @@ import (
 // liveCCUEnv holds the env-var gate values.
 type liveCCUEnv struct {
 	host string
-	user string //nolint:unused // reserved for JSON-RPC auth in future tests
-	pass string //nolint:unused // reserved for JSON-RPC auth in future tests
+	user string
+	pass string
 }
 
 // checkLiveCCU reads the required env vars and skips the test if any are
