@@ -2,6 +2,12 @@
 
 ## 0.53.1
 
+- **A fault reported by one of your devices never left the daemon.** When a
+  smoke detector, water sensor or any other device reported an error, nothing
+  arrived anywhere — no event, no message, nothing to automate on. A device
+  with a fault looked exactly like a device reporting nothing at all. Faults
+  now arrive like every other device event. Button presses were never
+  affected by this.
 - **The "Install" button on a device's firmware card did nothing.** Home
   Assistant showed it, and pressing it changed nothing at all — the
   command never reached the daemon. The card now shows the available
