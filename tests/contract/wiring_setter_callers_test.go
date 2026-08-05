@@ -70,15 +70,15 @@ var wiringSettersWithoutCaller = map[string]string{
 //
 // This map exists to be emptied. Every entry is either wired, deleted, or
 // promoted to the verified map with a reason.
-var wiringSeamsUnderInvestigation = map[string]string{
-	// The one entry with a user-visible consequence, kept here because
-	// closing it is feature work rather than wiring: nothing attaches a
-	// generic event to a channel and nothing constructs the only
-	// attachable implementation, so
-	// GET /devices/{addr}/channels/{no}/event-groups can only ever answer
-	// with an empty list.
-	"github.com/SukramJ/openccu-loom/internal/model/device.Channel.AttachGenericEvent": "no producer exists, so the event-groups REST route always returns []",
-}
+//
+// It is currently empty, which is the intended end state and not an
+// invitation to skip the classification: an unclassified seam belongs here
+// until someone establishes what it is for. The last entry — nothing
+// attached a generic event to a channel, so the event-groups route could
+// only ever answer `[]` — was closed by wiring the producer into device
+// ingestion, and is held by
+// TestE2EEventGroupsAreProducedDuringDeviceIngestion.
+var wiringSeamsUnderInvestigation = map[string]string{}
 
 // TestEveryWiringSetterHasAProductionCaller asserts that every method
 // which injects a collaborator is actually called by production code.

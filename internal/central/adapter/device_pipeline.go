@@ -35,6 +35,7 @@ import (
 	// used outside a `main` that imports the daemon ( E.13).
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	modevent "github.com/SukramJ/openccu-loom/internal/model/event"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -1614,6 +1615,26 @@ func (p *DevicePipeline) hydrateParamset(
 		// We apply the same fix here before building the data point.
 		if key == hmenum.ParamsetKeyMaster && pd.Operations == hmenum.OperationsNone {
 			pd.Operations = hmenum.OperationsRead | hmenum.OperationsWrite
+		}
+
+		// Attach an event source for every parameter that carries the EVENT
+		// operation and classifies as one (PRESS_*, SEQUENCE_OK, ERROR*).
+		// This runs before the data-point construction below and independently
+		// of it, because the two are separate surfaces: a parameter can be
+		// suppressed as a data point by a later visibility pass and still owe
+		// a keypress event. `finalizeChannelInit` groups whatever has been
+		// attached here once every channel is hydrated.
+		//
+		// Restricted to VALUES although the reference applies the same test to
+		// both paramsets: [modevent.Source] keys itself as VALUES, so a MASTER
+		// parameter would be attached under a key that names the wrong
+		// paramset. No MASTER parameter carries EVENT in practice — the
+		// OPERATIONS fix-up above grants read+write, never event — so the two
+		// readings select the same parameters.
+		if key == hmenum.ParamsetKeyValues && pd.Operations.IsEvent() {
+			if src := modevent.NewSource(ch.Address, hmenum.Parameter(name)); src != nil {
+				ch.AttachGenericEvent(src)
+			}
 		}
 
 		// Skip week-profile slot parameters (P1_*, P2_*, …, P6_*) on MASTER. They
