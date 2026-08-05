@@ -434,9 +434,13 @@ type SysvarUsageProgram struct {
 }
 
 // SysvarUsagePrograms lists the CCU programs that reference the named
-// system variable, via the variable object's native DPEnumUsagePrograms()
-// (usage_by_sysvar.fn). An unknown variable yields an empty slice. Each
-// program's Name is URL-encoded.
+// system variable (usage_by_sysvar.fn). The script walks the program
+// rules rather than the variable's own usage index, which is empty on
+// some CCU installations and reports no error when it is. An unknown
+// variable yields an empty slice. Each program's Name is URL-encoded.
+//
+// References inside else-if sub-rules and inside script-type activities
+// are not visible to that walk; see the script header.
 func (r *Runner) SysvarUsagePrograms(ctx context.Context, name string) ([]SysvarUsageProgram, error) {
 	var out []SysvarUsageProgram
 	if err := r.RunJSON(ctx, hmenum.RegaScriptUsageBySysvar, map[string]string{"name": name}, &out); err != nil {
