@@ -152,10 +152,14 @@ type serviceMessageSummary struct {
 	Address    string `json:"address,omitempty"`
 	DeviceName string `json:"device_name,omitempty"`
 	Type       string `json:"type"`
-	Priority   int    `json:"priority"`
 	Timestamp  string `json:"timestamp,omitempty"`
-	Quittable  bool   `json:"quittable"`
-	Central    string `json:"central"`
+	// LastTimestamp is when the message last recurred. Omitted when the
+	// CCU reports no such occurrence.
+	LastTimestamp string   `json:"last_timestamp,omitempty"`
+	Rooms         []string `json:"rooms,omitempty"`
+	Functions     []string `json:"functions,omitempty"`
+	Quittable     bool     `json:"quittable"`
+	Central       string   `json:"central"`
 }
 
 type listServiceMessagesOut struct {
@@ -177,15 +181,17 @@ func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
 			for i := range msgs {
 				m := &msgs[i]
 				out.Messages = append(out.Messages, serviceMessageSummary{
-					ID:         m.ID,
-					Name:       m.Name,
-					Address:    m.Address,
-					DeviceName: m.DeviceName,
-					Type:       m.Type.String(),
-					Priority:   m.Priority,
-					Timestamp:  rfc3339OrEmpty(m.Timestamp),
-					Quittable:  m.Quittable,
-					Central:    c,
+					ID:            m.ID,
+					Name:          m.Name,
+					Address:       m.Address,
+					DeviceName:    m.DeviceName,
+					Type:          m.Type.String(),
+					Timestamp:     rfc3339OrEmpty(m.Timestamp),
+					LastTimestamp: rfc3339OrEmpty(m.LastTimestamp),
+					Rooms:         m.Rooms,
+					Functions:     m.Functions,
+					Quittable:     m.Quittable,
+					Central:       c,
 				})
 			}
 		}

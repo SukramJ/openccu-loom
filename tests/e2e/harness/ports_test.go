@@ -89,3 +89,49 @@ func TestPickFreePortHandsOutUsablePorts(t *testing.T) {
 		}
 	}
 }
+
+// TestPickFreeListenerHoldsThePort is the whole point of the helper: the
+// returned listener is already bound, so nothing else on the machine can
+// take the port between handing it out and serving on it. That is the
+// window pickFreePort cannot close, and the one that produced
+// "mqtt: add listener: bind: address already in use" in parallel e2e runs.
+func TestPickFreeListenerHoldsThePort(t *testing.T) {
+	ln, port := pickFreeListener(t)
+	defer func() {
+		if err := ln.Close(); err != nil {
+			t.Errorf("close: %v", err)
+		}
+	}()
+	forgetPort(t, port)
+
+	// Binding the same port again must fail while the listener lives.
+	// If it succeeds, the helper handed out a port it does not hold.
+	second, err := net.Listen("tcp", loopbackAddr(port))
+	if err == nil {
+		_ = second.Close()
+		t.Fatalf("port %d was still free — the listener does not hold it", port)
+	}
+}
+
+// TestPickFreeListenerPortsAreDistinct pins that the listener helper
+// shares the same reservation bookkeeping as pickFreePort, so the two
+// can be mixed within one harness without colliding.
+func TestPickFreeListenerPortsAreDistinct(t *testing.T) {
+	seen := make(map[int]struct{}, 10)
+	for range 5 {
+		ln, port := pickFreeListener(t)
+		defer func() { _ = ln.Close() }()
+		forgetPort(t, port)
+		if _, dup := seen[port]; dup {
+			t.Fatalf("port %d handed out twice", port)
+		}
+		seen[port] = struct{}{}
+
+		p := pickFreePort(t)
+		forgetPort(t, p)
+		if _, dup := seen[p]; dup {
+			t.Fatalf("port %d handed out by both helpers", p)
+		}
+		seen[p] = struct{}{}
+	}
+}

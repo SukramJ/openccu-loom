@@ -79,20 +79,27 @@ func TestWSHubQuery_ListAlarmMessages_ZeroTimestamp_OmitsKey(t *testing.T) {
 
 // ── wsHubQuery ListServiceMessages with populated messages ───────────────────
 
+// TestWSHubQuery_ListServiceMessages_WithMessage_ReturnsEntry verifies the
+// WS entry carries a service message's identity, location, timing and
+// Rooms/Functions arrays. Functions holds more than one entry — the
+// shape that used to make get_service_messages.fn's tab-joined string
+// illegal JSON and silently drop the whole list.
 func TestWSHubQuery_ListServiceMessages_WithMessage_ReturnsEntry(t *testing.T) {
 	t.Parallel()
 	q, h := liveHubQuery(t)
+	ts := time.Unix(1700000000, 0).UTC()
 	h.ServiceMessages.Replace([]hub.ServiceMessage{
 		{
-			ID:          "svc-1",
-			Name:        "Low Battery",
-			Address:     "DEV002:0",
-			DeviceName:  "Motion Sensor",
-			Type:        hmenum.ServiceMessageTypeGeneric,
-			Description: "Battery level critical",
-			Priority:    1,
-			Counter:     2,
-			Quittable:   true,
+			ID:         "svc-1",
+			Name:       "Low Battery",
+			Address:    "DEV002:0",
+			DeviceName: "Motion Sensor",
+			Type:       hmenum.ServiceMessageTypeGeneric,
+			Timestamp:  ts,
+			Counter:    2,
+			Rooms:      []string{"Living Room"},
+			Functions:  []string{"Licht", "Sicherheit"},
+			Quittable:  true,
 		},
 	})
 
@@ -108,6 +115,40 @@ func TestWSHubQuery_ListServiceMessages_WithMessage_ReturnsEntry(t *testing.T) {
 	}
 	if got[0]["quittable"] != true {
 		t.Errorf("expected quittable=true, got %v", got[0]["quittable"])
+	}
+	if !got[0]["timestamp"].(time.Time).Equal(ts) {
+		t.Errorf("expected timestamp=%v, got %v", ts, got[0]["timestamp"])
+	}
+	fns, ok := got[0]["functions"].([]string)
+	if !ok || len(fns) != 2 {
+		t.Errorf("expected functions with 2 entries, got %v", got[0]["functions"])
+	}
+	if _, present := got[0]["last_timestamp"]; present {
+		t.Error("last_timestamp must be omitted when LastTimestamp is zero")
+	}
+}
+
+// TestWSHubQuery_ListServiceMessages_ZeroTimestamp_OmitsKey verifies that
+// a service message whose Timestamp / LastTimestamp the CCU never
+// reported omits both keys rather than surfacing the Go zero time,
+// mirroring [TestWSHubQuery_ListAlarmMessages_ZeroTimestamp_OmitsKey].
+func TestWSHubQuery_ListServiceMessages_ZeroTimestamp_OmitsKey(t *testing.T) {
+	t.Parallel()
+	q, h := liveHubQuery(t)
+	h.ServiceMessages.Replace([]hub.ServiceMessage{{ID: "svc-2", Name: "Never timestamped"}})
+
+	got, err := q.ListServiceMessages(context.Background())
+	if err != nil {
+		t.Fatalf("ListServiceMessages: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 service message, got %d", len(got))
+	}
+	if _, present := got[0]["timestamp"]; present {
+		t.Error("timestamp must be omitted for a zero Timestamp")
+	}
+	if _, present := got[0]["last_timestamp"]; present {
+		t.Error("last_timestamp must be omitted for a zero LastTimestamp")
 	}
 }
 

@@ -6988,13 +6988,23 @@ export interface components {
             address?: string;
             device_name?: string;
             type?: string;
-            /** @description Optional human-readable message text. */
-            description?: string;
-            /** @description Integer priority level (0 = normal). */
-            priority?: number;
-            /** Format: date-time */
-            timestamp: string;
+            /**
+             * Format: date-time
+             * @description When the message first appeared. Omitted on the rare CCU report
+             *     that carries no occurrence at all.
+             */
+            timestamp?: string;
+            /**
+             * Format: date-time
+             * @description When the message last recurred. Omitted when the CCU reports no
+             *     such occurrence.
+             */
+            last_timestamp?: string;
             counter: number;
+            /** @description Rooms assigned to the triggering channel. */
+            rooms?: string[];
+            /** @description Functions (Gewerke) assigned to the triggering channel. */
+            functions?: string[];
             quittable: boolean;
             /** @description Human-readable translation of the message code. */
             display_name?: string;

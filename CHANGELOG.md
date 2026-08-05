@@ -21,6 +21,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   omitted from the response instead of the CCU's `0` becoming the
   1970 epoch. The Config UI's alarm list drops its device column and shows
   the new "last changed" timestamp instead. `APIVersion` bumped to `4.0.0`.
+- **BREAKING: service messages gained real timestamps, real room/function
+  arrays, and dropped `description` / `priority`.** `timestamp` and the
+  new `last_timestamp` on `ServiceMessage` (REST `GET /service-messages`,
+  the `service_messages.list` WS command, and the MCP
+  `list_service_messages` tool) are now the CCU's Unix-second occurrence
+  data instead of a local-time string with no zone offset; both are
+  omitted from the response instead of the CCU's `0` becoming the 1970
+  epoch. `rooms` and `functions` — present in the model since `0.1.0` but
+  never populated by the loader — now reach every surface as proper
+  string arrays. `description` and `priority` are removed: the
+  `get_service_messages.fn` ReGa script never emitted either, so both
+  were always empty. The Config UI's service-message list shows rooms,
+  functions and a "last changed" column, and its "quittable only" filter
+  — previously a no-op because `quittable` was never populated — now
+  actually filters.
+
+### Fixed
+
+- **A service-message channel with two or more functions (Gewerke) made
+  the whole service-messages list unparsable.** `get_service_messages.fn`
+  joined `rooms` and `functions` with a raw tab character inside a JSON
+  string — a control character that is illegal there — so
+  `json.Unmarshal` failed with `invalid character '\t' in string
+  literal` and the daemon received zero service messages instead of the
+  CCU's actual count. `rooms` and `functions` are now real JSON arrays.
 
 ## [0.53.1]
 

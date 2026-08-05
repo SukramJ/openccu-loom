@@ -630,6 +630,9 @@ func (w *wsHubQuery) AcknowledgeAllAlarmMessages(ctx context.Context) (int, erro
 	return h.Messages.AcknowledgeAll(ctx)
 }
 
+// ListServiceMessages returns the active service-message set. A zero
+// Timestamp / LastTimestamp is omitted from the entry rather than
+// serialised as the Go zero time, mirroring [wsHubQuery.ListAlarmMessages].
 func (w *wsHubQuery) ListServiceMessages(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {
@@ -639,18 +642,28 @@ func (w *wsHubQuery) ListServiceMessages(_ context.Context) ([]map[string]any, e
 	out := make([]map[string]any, 0, len(msgs))
 	for i := range msgs {
 		m := &msgs[i]
-		out = append(out, map[string]any{
+		entry := map[string]any{
 			"id":          m.ID,
 			"name":        m.Name,
 			"address":     m.Address,
 			"device_name": m.DeviceName,
 			"type":        m.Type.String(),
-			"description": m.Description,
-			"priority":    m.Priority,
-			"timestamp":   m.Timestamp,
 			"counter":     m.Counter,
 			"quittable":   m.Quittable,
-		})
+		}
+		if len(m.Rooms) > 0 {
+			entry["rooms"] = m.Rooms
+		}
+		if len(m.Functions) > 0 {
+			entry["functions"] = m.Functions
+		}
+		if !m.Timestamp.IsZero() {
+			entry["timestamp"] = m.Timestamp
+		}
+		if !m.LastTimestamp.IsZero() {
+			entry["last_timestamp"] = m.LastTimestamp
+		}
+		out = append(out, entry)
 	}
 	return out, nil
 }

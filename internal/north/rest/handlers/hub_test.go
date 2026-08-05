@@ -504,19 +504,28 @@ func TestListAlarmMessages_TimestampFromUnixSeconds(t *testing.T) {
 	}
 }
 
-// ── H-034 ServiceMessageDTO.description / priority ──────────────────────────
+// ── ServiceMessageDTO.rooms / functions / last_timestamp ─────────────────────
 
-// TestListServiceMessages_DescriptionAndPriority pins H-034: service messages
-// with a description and priority must expose those in the DTO.
-func TestListServiceMessages_DescriptionAndPriority(t *testing.T) {
+// TestListServiceMessages_RoomsFunctionsAndLastTimestamp verifies that a
+// service message's Rooms and Functions survive into the DTO as JSON
+// arrays — the regression covered here is a channel carrying two or more
+// functions, the exact shape that made get_service_messages.fn's old
+// tab-joined string illegal JSON and dropped the whole list — and that
+// LastTimestamp round-trips like [hub.AlarmMessage.LastTimestamp].
+func TestListServiceMessages_RoomsFunctionsAndLastTimestamp(t *testing.T) {
 	t.Parallel()
+	last := time.Now().Add(-time.Hour)
 	h := hub.NewHub("test-ccu")
 	h.ServiceMessages.Replace([]hub.ServiceMessage{
 		{
 			ID: "S1", Name: "Low battery", Address: "XYZ456:0",
-			Type:        hmenum.ServiceMessageTypeGeneric,
-			Description: "Battery below 10 %", Priority: 2,
-			Timestamp: time.Now(), Counter: 1, Quittable: true,
+			Type:          hmenum.ServiceMessageTypeGeneric,
+			Timestamp:     time.Now(),
+			LastTimestamp: last,
+			Counter:       1,
+			Rooms:         []string{},
+			Functions:     []string{"Licht", "Sicherheit", "Umwelt"},
+			Quittable:     true,
 		},
 	})
 	idx := &testHubIndex{h: h}
@@ -535,11 +544,42 @@ func TestListServiceMessages_DescriptionAndPriority(t *testing.T) {
 	if len(body) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(body))
 	}
-	if body[0].Description != "Battery below 10 %" {
-		t.Errorf("description=%q want 'Battery below 10 %%' (H-034)", body[0].Description)
+	if len(body[0].Functions) != 3 {
+		t.Errorf("functions=%v want 3 entries", body[0].Functions)
 	}
-	if body[0].Priority != 2 {
-		t.Errorf("priority=%d want 2 (H-034)", body[0].Priority)
+	if !body[0].LastTimestamp.Equal(last) {
+		t.Errorf("last_timestamp=%v want %v", body[0].LastTimestamp, last)
+	}
+}
+
+// TestListServiceMessages_ZeroTimestamps_OmittedFromJSON verifies that a
+// service message the CCU never timestamped omits both `timestamp` and
+// `last_timestamp` from the JSON body instead of rendering the Go zero
+// date, mirroring [TestListAlarmMessages_TimestampFromUnixSeconds].
+func TestListServiceMessages_ZeroTimestamps_OmittedFromJSON(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages.Replace([]hub.ServiceMessage{
+		{ID: "S2", Name: "Never timestamped", Type: hmenum.ServiceMessageTypeGeneric},
+	})
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/service-messages", http.NoBody)
+	w := httptest.NewRecorder()
+	ListServiceMessages(idx).ServeHTTP(w, req)
+
+	var raw []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(raw))
+	}
+	if v, present := raw[0]["timestamp"]; present {
+		t.Errorf("timestamp must be omitted for a zero Timestamp, got %v", v)
+	}
+	if v, present := raw[0]["last_timestamp"]; present {
+		t.Errorf("last_timestamp must be omitted for a zero LastTimestamp, got %v", v)
 	}
 }
 

@@ -50,7 +50,12 @@ type MQTTHandler func(topic string, payload []byte, retain bool)
 func startMQTTBroker(t *testing.T) MQTTBroker {
 	t.Helper()
 
-	port := pickFreePort(t)
+	// Bind first and hand the live listener to the broker. Asking for a
+	// free port and letting the broker bind it again leaves a window in
+	// which a parallel e2e test takes the port, which is exactly how
+	// this harness used to fail ("mqtt: add listener: bind: address
+	// already in use").
+	ln, port := pickFreeListener(t)
 	srv := mqtt.New(&mqtt.Options{
 		// InlineClient enables in-process Subscribe/Publish so tests
 		// can observe and inject without a separate MQTT client lib.
@@ -59,11 +64,7 @@ func startMQTTBroker(t *testing.T) MQTTBroker {
 	if err := srv.AddHook(new(auth.AllowHook), nil); err != nil {
 		t.Fatalf("mqtt: add auth hook: %v", err)
 	}
-	tcp := listeners.NewTCP(listeners.Config{
-		ID:      "harness",
-		Address: loopbackAddr(port),
-	})
-	if err := srv.AddListener(tcp); err != nil {
+	if err := srv.AddListener(listeners.NewNet("harness", ln)); err != nil {
 		t.Fatalf("mqtt: add listener: %v", err)
 	}
 

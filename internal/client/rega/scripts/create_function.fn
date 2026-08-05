@@ -3,9 +3,13 @@
 !# Output: new object ID on success, -1 on failure, -2 if a function
 !#         with that name already exists.
 !#
-!# A function (Gewerk) is an OT_ENUM object of EnumType etSubsection,
+!# A function (Gewerk) is an OT_ENUM object of EnumType etFunction,
 !# registered in the ID_FUNCTIONS enum — the subsection counterpart to
-!# create_room.
+!# create_room. Real Gewerk objects on the CCU carry EnumType=4
+!# (etFunction); there is no etSubsection constant in the ReGa
+!# runtime — referencing an undefined identifier aborts the script
+!# with no output at all, which is why a missing return value here
+!# used to look like a transport failure rather than a typo.
 
 string sName = "##name##";
 integer iResult = -1;
@@ -17,7 +21,7 @@ if (sName != "") {
     } else {
         object o = dom.CreateObject(OT_ENUM, sName);
         if (o) {
-            o.EnumType(etSubsection);
+            o.EnumType(etFunction);
             boolean res = oList.Add(o);
             if (res) {
                 iResult = o.ID();

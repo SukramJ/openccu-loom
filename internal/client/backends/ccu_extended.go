@@ -224,17 +224,17 @@ func (b *CcuBackend) TestDevice(ctx context.Context, address string, maxWaitSecs
 func (b *CcuBackend) GetServiceMessages(ctx context.Context, messageType string) ([]map[string]any, error) {
 	if b.rega != nil {
 		type svcMsg struct {
-			ID            string `json:"id"`
-			Name          string `json:"name"`
-			Timestamp     string `json:"timestamp"`
-			Type          int    `json:"type"`
-			Address       string `json:"address"`
-			DeviceName    string `json:"device_name"`
-			LastTimestamp string `json:"last_timestamp"`
-			Counter       int    `json:"counter"`
-			Rooms         string `json:"rooms"`
-			Functions     string `json:"functions"`
-			Quittable     bool   `json:"quittable"`
+			ID            string   `json:"id"`
+			Name          string   `json:"name"`
+			Timestamp     int64    `json:"timestamp"`
+			Type          int      `json:"type"`
+			Address       string   `json:"address"`
+			DeviceName    string   `json:"device_name"`
+			LastTimestamp int64    `json:"last_timestamp"`
+			Counter       int      `json:"counter"`
+			Rooms         []string `json:"rooms"`
+			Functions     []string `json:"functions"`
+			Quittable     bool     `json:"quittable"`
 		}
 		var msgs []svcMsg
 		if err := b.rega.RunJSON(ctx, hmenum.RegaScriptGetServiceMessages, nil, &msgs); err != nil {

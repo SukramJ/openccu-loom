@@ -265,18 +265,25 @@ func (s *ServiceMessages) State() payload.StatePayload {
 	rows := make([]payload.ServiceMessageRow, len(items))
 	for i := range items {
 		rows[i] = payload.ServiceMessageRow{
-			ID:          items[i].ID,
-			Name:        items[i].Name,
-			Address:     items[i].Address,
-			DeviceName:  items[i].DeviceName,
-			Type:        items[i].Type.String(),
-			Description: items[i].Description,
-			Priority:    items[i].Priority,
-			Timestamp:   items[i].Timestamp.Format("2006-01-02T15:04:05Z07:00"),
-			Counter:     items[i].Counter,
-			Rooms:       items[i].Rooms,
-			Functions:   items[i].Functions,
-			Quittable:   items[i].Quittable,
+			ID:         items[i].ID,
+			Name:       items[i].Name,
+			Address:    items[i].Address,
+			DeviceName: items[i].DeviceName,
+			Type:       items[i].Type.String(),
+			Counter:    items[i].Counter,
+			Rooms:      items[i].Rooms,
+			Functions:  items[i].Functions,
+			Quittable:  items[i].Quittable,
+		}
+		// A zero time means the CCU reported no such occurrence. Emit an
+		// empty string rather than formatting it, so subscribers never
+		// see year 0001 presented as a real message date — mirrors
+		// AlarmMessages.State.
+		if !items[i].Timestamp.IsZero() {
+			rows[i].Timestamp = items[i].Timestamp.Format("2006-01-02T15:04:05Z07:00")
+		}
+		if !items[i].LastTimestamp.IsZero() {
+			rows[i].LastTimestamp = items[i].LastTimestamp.Format("2006-01-02T15:04:05Z07:00")
 		}
 	}
 	return &payload.ServiceMessagesState{

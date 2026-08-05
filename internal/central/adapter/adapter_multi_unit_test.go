@@ -12976,7 +12976,12 @@ func TestHubJSONRPCWriter_AcceptDeviceInInbox_NotFound(t *testing.T) {
 
 func TestHubJSONRPCWriter_TriggerFirmwareUpdate_Success(t *testing.T) {
 	t.Parallel()
-	srv := newBoost6JSONRPCServerAlwaysOK(t, "")
+	// trigger_firmware_update.fn reports its outcome as a structured
+	// {success, script_available, message} object — not through a bare
+	// transport ack — so the mock result must be that object, not an
+	// empty string. See TestHubJSONRPCWriter_TriggerFirmwareUpdate_ScriptUnavailable
+	// (hub_wiring_firmware_update_test.go) for the CCU-decline counterpart.
+	srv := newBoost6JSONRPCServerAlwaysOK(t, `{"success":true,"script_available":true,"message":"Firmware update triggered, system will reboot when ready"}`)
 	defer srv.Close()
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)

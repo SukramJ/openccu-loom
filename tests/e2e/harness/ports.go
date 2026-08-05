@@ -54,6 +54,38 @@ func pickFreePort(t *testing.T) int {
 	return 0
 }
 
+// pickFreeListener binds an ephemeral loopback port and returns the live
+// listener together with its port.
+//
+// Prefer this over [pickFreePort] whenever the server is in-process and
+// can accept a pre-bound net.Listener. [pickFreePort] has to close its
+// probe listener before returning, leaving a window in which anything on
+// the machine can take the port — that window is what makes a parallel
+// e2e run fail with "address already in use". Handing the bound listener
+// straight to the server removes the window instead of narrowing it,
+// because the port is never unbound in between.
+//
+// A separate process cannot use this: it needs a number, not a file
+// descriptor. Those callers keep [pickFreePort].
+func pickFreeListener(t *testing.T) (net.Listener, int) {
+	t.Helper()
+	for range portAttempts {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("pickFreeListener: listen: %v", err)
+		}
+		port := l.Addr().(*net.TCPAddr).Port
+		if reservePort(port) {
+			return l, port
+		}
+		if err := l.Close(); err != nil {
+			t.Fatalf("pickFreeListener: close: %v", err)
+		}
+	}
+	t.Fatalf("pickFreeListener: no unused port after %d attempts", portAttempts)
+	return nil, 0
+}
+
 // reservePort claims a port for this process, reporting false when it was
 // already handed out.
 func reservePort(port int) bool {

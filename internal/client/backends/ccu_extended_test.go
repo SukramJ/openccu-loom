@@ -290,6 +290,48 @@ func TestCcuGetServiceMessagesWithoutType(t *testing.T) {
 	}
 }
 
+// TestCcuGetServiceMessagesRegaDispatchWithMultipleFunctions pins the
+// regression: get_service_messages.fn emits rooms/functions as JSON
+// arrays now (see the script's own header comment), not a single string
+// joined by a raw tab — a control character that is illegal inside a
+// JSON string, which used to make json.Unmarshal fail on any channel
+// carrying two or more functions and silently drop the whole list. The
+// fixture below is real CCU output (two functions on the first entry).
+func TestCcuGetServiceMessagesRegaDispatchWithMultipleFunctions(t *testing.T) {
+	t.Parallel()
+	sr := &fakeScriptRunner{
+		rawJSON: `[{"id":"2097","name":"AL%2DJEQ0702833%3A0%2ECONFIG%5FPENDING","timestamp":1785667096,` +
+			`"type":5,"address":"JEQ0702833","device_name":"HM%2DSen%2DMDIR%2DO%20JEQ0702833%3A0",` +
+			`"last_timestamp":1785923796,"counter":17,"rooms":[],` +
+			`"functions":["Licht","Sicherheit","Umwelt"],"quittable":false},` +
+			`{"id":"6893","name":"AL%2DKEQ0843929%3A0%2ESTICKY%5FUNREACH","timestamp":1785667096,` +
+			`"type":5,"address":"KEQ0843929","device_name":"HM%2DLC%2DSw4%2DDR%20KEQ0843929%3A0",` +
+			`"last_timestamp":1785862251,"counter":26,"rooms":[],"functions":[],"quittable":true}]`,
+	}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(sr)
+	out, err := b.GetServiceMessages(context.Background(), "")
+	if err != nil {
+		t.Fatalf("GetServiceMessages: %v", err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("len=%d, want 2 — a multi-function channel must not drop the whole list", len(out))
+	}
+	fns, ok := out[0]["functions"].([]string)
+	if !ok || len(fns) != 3 {
+		t.Fatalf("functions=%v, want 3 entries", out[0]["functions"])
+	}
+	if out[0]["timestamp"] != int64(1785667096) {
+		t.Errorf("timestamp = %v, want 1785667096 (Unix seconds)", out[0]["timestamp"])
+	}
+	if out[0]["last_timestamp"] != int64(1785923796) {
+		t.Errorf("last_timestamp = %v, want 1785923796 (Unix seconds)", out[0]["last_timestamp"])
+	}
+	if out[1]["quittable"] != true {
+		t.Errorf("out[1][quittable] = %v, want true", out[1]["quittable"])
+	}
+}
+
 // ---------------------------------------------------------------------------
 // SuppressServiceMessage
 // ---------------------------------------------------------------------------

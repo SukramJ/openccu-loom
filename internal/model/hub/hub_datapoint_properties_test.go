@@ -176,22 +176,25 @@ func TestServiceMessagesAdditionalInformationEmpty(t *testing.T) {
 
 // TestServiceMessagesAdditionalInformationContainsEntries verifies
 // that AdditionalInformation returns one map per service message with
-// the expected fields.
+// the expected fields, including rooms/functions and last_timestamp
+// when the CCU reported them.
 func TestServiceMessagesAdditionalInformationContainsEntries(t *testing.T) {
 	s := NewServiceMessages(nil)
 	ts := time.Date(2026, 4, 15, 8, 30, 0, 0, time.UTC)
+	last := time.Date(2026, 4, 16, 9, 0, 0, 0, time.UTC)
 	s.Replace([]ServiceMessage{
 		{
-			ID:          "sm-1",
-			Name:        "Low Battery",
-			Address:     "HEQ0123456:0",
-			DeviceName:  "Motion Sensor",
-			Type:        hmenum.ServiceMessageTypeGeneric,
-			Priority:    0,
-			Quittable:   true,
-			Counter:     1,
-			Timestamp:   ts,
-			Description: "Battery level below threshold",
+			ID:            "sm-1",
+			Name:          "Low Battery",
+			Address:       "HEQ0123456:0",
+			DeviceName:    "Motion Sensor",
+			Type:          hmenum.ServiceMessageTypeGeneric,
+			Quittable:     true,
+			Counter:       1,
+			Timestamp:     ts,
+			LastTimestamp: last,
+			Rooms:         []string{"Living Room"},
+			Functions:     []string{"Light", "Security"},
 		},
 	})
 
@@ -209,26 +212,42 @@ func TestServiceMessagesAdditionalInformationContainsEntries(t *testing.T) {
 	if entry["timestamp"] != ts.Unix() {
 		t.Errorf("entry[timestamp]=%v, want %d", entry["timestamp"], ts.Unix())
 	}
-	desc, ok := entry["description"]
+	lastTS, ok := entry["last_timestamp"]
 	if !ok {
-		t.Fatal("entry must contain 'description' when description is non-empty")
+		t.Fatal("entry must contain 'last_timestamp' when LastTimestamp is non-zero")
 	}
-	if desc != "Battery level below threshold" {
-		t.Errorf("entry[description]=%v, want expected text", desc)
+	if lastTS != last.Unix() {
+		t.Errorf("entry[last_timestamp]=%v, want %d", lastTS, last.Unix())
+	}
+	rooms, ok := entry["rooms"].([]string)
+	if !ok || len(rooms) != 1 || rooms[0] != "Living Room" {
+		t.Errorf("entry[rooms]=%v, want [Living Room]", entry["rooms"])
+	}
+	fns, ok := entry["functions"].([]string)
+	if !ok || len(fns) != 2 {
+		t.Errorf("entry[functions]=%v, want 2 entries", entry["functions"])
 	}
 }
 
-// TestServiceMessagesAdditionalInformationDescriptionOmittedWhenEmpty
-// verifies that the description key is omitted when description is "".
-func TestServiceMessagesAdditionalInformationDescriptionOmittedWhenEmpty(t *testing.T) {
+// TestServiceMessagesAdditionalInformationLastTimestampOmittedWhenZero
+// verifies that the last_timestamp key is omitted when LastTimestamp is
+// the Go zero time — the CCU's "never recurred" state, mirroring
+// [AlarmMessages.AdditionalInformation].
+func TestServiceMessagesAdditionalInformationLastTimestampOmittedWhenZero(t *testing.T) {
 	s := NewServiceMessages(nil)
-	s.Replace([]ServiceMessage{{ID: "sm-2", Description: ""}})
+	s.Replace([]ServiceMessage{{ID: "sm-2"}})
 	ai := s.AdditionalInformation()
 	if len(ai) != 1 {
 		t.Fatalf("AdditionalInformation() len=%d, want 1", len(ai))
 	}
-	if _, ok := ai[0]["description"]; ok {
-		t.Error("entry must NOT contain 'description' key when description is empty")
+	if _, ok := ai[0]["last_timestamp"]; ok {
+		t.Error("entry must NOT contain 'last_timestamp' key when LastTimestamp is zero")
+	}
+	if _, ok := ai[0]["rooms"]; ok {
+		t.Error("entry must NOT contain 'rooms' key when Rooms is empty")
+	}
+	if _, ok := ai[0]["functions"]; ok {
+		t.Error("entry must NOT contain 'functions' key when Functions is empty")
 	}
 }
 

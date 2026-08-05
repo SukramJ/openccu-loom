@@ -1088,6 +1088,20 @@ func (p *DevicePipeline) seedValues(
 		if err := json.Unmarshal(raw, &v); err != nil {
 			continue
 		}
+		// String-valued data points are wrapped in UriEncode() by the
+		// script (fetch_all_device_data.fn) so an embedded quote or
+		// control character cannot break the surrounding JSON envelope —
+		// only booleans and numbers are emitted unencoded. That encoding
+		// survives json.Unmarshal untouched (it is just the string's
+		// content), so a string value must be decoded here the same way
+		// the key already is above; skipping it left values such as an
+		// IP_ADDRESS data point's "172.18.4.40" seeded into the model as
+		// the literal "172%2E18%2E4%2E40".
+		if s, ok := v.(string); ok {
+			if decoded, err := url.QueryUnescape(s); err == nil {
+				v = decoded
+			}
+		}
 		if setter, ok := dp.(interface{ OnWireValue(any) bool }); ok && setter.OnWireValue(v) {
 			applied++
 		}
