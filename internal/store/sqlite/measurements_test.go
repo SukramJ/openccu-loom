@@ -992,10 +992,15 @@ func TestMeasurement_DeleteHourlyOlderThan_RespectsCutoff(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
-	if _, err := s.RollupHourly(ctx, recent.Add(time.Hour)); err != nil {
+	// Fold the hourly tier past the day the daily fold will close: the
+	// daily fold reads hourly rows, so a day whose hours are not folded
+	// yet would be written partial and then skipped forever (the daily
+	// watermark advances across its whole window). Production keeps this
+	// ordering through the lag constants; the test states it explicitly.
+	if _, err := s.RollupHourly(ctx, recent.Add(48*time.Hour)); err != nil {
 		t.Fatalf("RollupHourly: %v", err)
 	}
-	if _, err := s.RollupDaily(ctx, recent.Add(24*time.Hour)); err != nil {
+	if _, err := s.RollupDaily(ctx, recent.Add(48*time.Hour)); err != nil {
 		t.Fatalf("RollupDaily: %v", err)
 	}
 
@@ -1040,10 +1045,12 @@ func TestMeasurement_DeleteDailyOlderThan_RespectsCutoff(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
-	if _, err := s.RollupHourly(ctx, recentDay.Add(time.Hour)); err != nil {
+	// See the note in the hourly-delete test: the hourly tier must cover
+	// the day the daily fold closes.
+	if _, err := s.RollupHourly(ctx, recentDay.Add(48*time.Hour)); err != nil {
 		t.Fatalf("RollupHourly: %v", err)
 	}
-	if _, err := s.RollupDaily(ctx, recentDay.Add(24*time.Hour)); err != nil {
+	if _, err := s.RollupDaily(ctx, recentDay.Add(48*time.Hour)); err != nil {
 		t.Fatalf("RollupDaily: %v", err)
 	}
 

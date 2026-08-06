@@ -248,6 +248,15 @@ func (r *Recorder) loop(ctx context.Context, done chan<- struct{}) {
 	rollupTicker := time.NewTicker(retentionInterval)
 	defer rollupTicker.Stop()
 
+	// One pass before the first tick. The ticker alone made both the
+	// rollup and the eviction conditional on the daemon staying up for a
+	// full hour: an operator changing config (which requires a restart) or
+	// a daemon crash-looping below the interval never folded a single row,
+	// so every tier query read empty rollups and the raw table grew without
+	// bound — with both watermarks at 0 the purge deleted nothing at all.
+	r.rollup(ctx)
+	r.purge(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -408,16 +417,26 @@ func (r *Recorder) flush(ctx context.Context) {
 func (r *Recorder) rollup(ctx context.Context) {
 	now := time.Now()
 
-	if n, err := r.store.RollupHourly(ctx, now.Add(-rollupHourlyLag)); err != nil {
-		r.logger.Warn("history.rollup_hourly_err", slog.String("err", err.Error()))
+	n, hourlyErr := r.store.RollupHourly(ctx, now.Add(-rollupHourlyLag))
+	if hourlyErr != nil {
+		r.logger.Warn("history.rollup_hourly_err", slog.String("err", hourlyErr.Error()))
 	} else if n > 0 {
 		r.logger.Debug("history.rolled_up_hourly", slog.Int64("rows", n))
 	}
 
-	if n, err := r.store.RollupDaily(ctx, now.Add(-rollupDailyLag)); err != nil {
-		r.logger.Warn("history.rollup_daily_err", slog.String("err", err.Error()))
-	} else if n > 0 {
-		r.logger.Debug("history.rolled_up_daily", slog.Int64("rows", n))
+	// The daily fold reads the hourly tier, so it must not run when the
+	// hourly fold failed: its window starts at the daily watermark and ends
+	// at the cutoff, and the watermark advances across the whole window
+	// whether or not rows were found. Folding an hour range the hourly tier
+	// has not been written yet therefore skips those days permanently — and
+	// the hourly purge, floored by that same watermark, is then free to
+	// delete the buckets that would have filled them.
+	if hourlyErr == nil {
+		if n, err := r.store.RollupDaily(ctx, now.Add(-rollupDailyLag)); err != nil {
+			r.logger.Warn("history.rollup_daily_err", slog.String("err", err.Error()))
+		} else if n > 0 {
+			r.logger.Debug("history.rolled_up_daily", slog.Int64("rows", n))
+		}
 	}
 
 	if r.retentionHourly > 0 {
