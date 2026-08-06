@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
+  import { subscribe } from "$lib/stores/events.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -27,8 +28,8 @@
   let loadError = $state<string | null>(null);
   let acking = $state<string | null>(null);
 
-  async function load() {
-    loading = true;
+  async function load(opts: { silent?: boolean } = {}) {
+    if (!opts.silent) loading = true;
     loadError = null;
     try {
       faults = await api.listSecurityFaults();
@@ -39,7 +40,33 @@
     }
   }
 
-  onMount(load);
+  let unsubEvents: (() => void) | null = null;
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // A fault change arrives as a push, but the ledger row carries more
+  // than the broadcast does (acknowledgement attribution above all), so
+  // the push is the trigger and the REST read stays the truth. One
+  // condition can raise faults on several sources at once; debouncing
+  // collapses that burst into a single silent refetch.
+  function scheduleReload(): void {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      reloadTimer = null;
+      void load({ silent: true });
+    }, 300);
+  }
+
+  onMount(() => {
+    void load();
+    unsubEvents = subscribe((ev) => {
+      if (ev.type === "security.fault_changed") scheduleReload();
+    });
+  });
+
+  onDestroy(() => {
+    unsubEvents?.();
+    if (reloadTimer) clearTimeout(reloadTimer);
+  });
 
   function fmtDateTime(iso: string | undefined): string {
     if (!iso) return "";

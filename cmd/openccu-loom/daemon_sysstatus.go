@@ -69,6 +69,18 @@ func wireSystemStatusSubscribers(
 		wsAlarm.Start()
 	}
 
+	// The security.* broadcast subscriber rides the Security & Safety bus,
+	// which is daemon-level like the alarm bus. It is wired independently
+	// of MQTT and of the alarm engine: the domain reports hazards and
+	// faults with or without either, and a WebSocket consumer that had to
+	// poll GET /security would learn about a smoke alarm on its own
+	// schedule rather than on the event's.
+	var wsSecurity *ws.SecuritySubscriber
+	if securitySvc != nil {
+		wsSecurity = ws.NewSecuritySubscriber(securitySvc.Bus(), wsHub)
+		wsSecurity.Start()
+	}
+
 	var mqttSysStatus *mqtt.SystemStatusPublisher
 	if mqttWiring != nil {
 		mqttSysStatus = mqtt.NewSystemStatusPublisher(reg, mqttWiring, logger)
@@ -122,6 +134,9 @@ func wireSystemStatusSubscribers(
 		}
 		if wsAlarm != nil {
 			wsAlarm.Stop()
+		}
+		if wsSecurity != nil {
+			wsSecurity.Stop()
 		}
 		wsOptimisticRollback.Stop()
 		wsDeviceTrigger.Stop()

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
+  import { subscribe } from "$lib/stores/events.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
   import { securityClassIcon } from "$lib/security/classes";
@@ -16,15 +17,18 @@
 
   // Security & Safety overview (docs/security-safety-concept.md §7.8). Read
   // model only — every mutation for this domain lives on the Sources/Faults
-  // tabs. No WS push exists for this domain yet, so this is a plain fetch +
-  // manual reload rather than a live store.
+  // tabs. The domain's broadcasts drive the refresh: the snapshot carries
+  // the folded severity, the escalation order and the per-class known
+  // counts that no single delta does, so a push is the trigger and this
+  // read stays the truth. A view that only refetched on reload would show
+  // an "ok" badge through a running smoke alarm.
 
   let snap = $state<SecuritySnapshot | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  async function load() {
-    loading = true;
+  async function load(opts: { silent?: boolean } = {}) {
+    if (!opts.silent) loading = true;
     error = null;
     try {
       snap = await api.getSecuritySnapshot();
@@ -35,7 +39,33 @@
     }
   }
 
-  onMount(load);
+  let unsubEvents: (() => void) | null = null;
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // One physical event moves several of these at once — a smoke alarm
+  // raises the class, folds the severity and reports a notification —
+  // so the burst collapses into a single silent refetch.
+  function scheduleReload(): void {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      reloadTimer = null;
+      void load({ silent: true });
+    }, 300);
+  }
+
+  onMount(() => {
+    void load();
+    unsubEvents = subscribe((ev) => {
+      if (typeof ev.type === "string" && ev.type.startsWith("security.")) {
+        scheduleReload();
+      }
+    });
+  });
+
+  onDestroy(() => {
+    unsubEvents?.();
+    if (reloadTimer) clearTimeout(reloadTimer);
+  });
 
   type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
 

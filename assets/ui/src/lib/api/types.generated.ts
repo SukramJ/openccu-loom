@@ -7893,6 +7893,154 @@ export interface components {
             /** @description Stable, English machine string describing the transition. */
             note: string;
         };
+        /**
+         * @description Payload of a `security.state_changed` broadcast. Topic
+         *     `security.state`. Fires when the folded severity of the
+         *     Security & Safety domain changes. It carries the fold only —
+         *     a consumer needing the detail reads GET /security.
+         */
+        SecurityStateChangedPayload: {
+            /** @enum {string} */
+            severity: "ok" | "info" | "warning" | "alarm" | "critical";
+            /**
+             * @description The severity the fold left. Omitted on the first report
+             *     after start-up, where there is no previous value.
+             * @enum {string}
+             */
+            previous_severity?: "ok" | "info" | "warning" | "alarm" | "critical";
+            /** @description The classes contributing to `severity`. */
+            active_classes?: ("smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic")[];
+            /** @description Standing faults behind the fold. */
+            open_faults: number;
+        };
+        /**
+         * @description Payload of a `security.class_changed` broadcast. Topic
+         *     `security.state`. Fires when one hazard or fault class goes
+         *     active or inactive — and also when its source set changes
+         *     while it stays active, because a second smoke detector
+         *     joining an existing fire is worth announcing.
+         */
+        SecurityClassChangedPayload: {
+            /** @enum {string} */
+            class: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            active: boolean;
+            sources?: components["schemas"]["AlarmSource"][];
+            /** @description The centrals contributing active sources. */
+            centrals?: string[];
+            /**
+             * Format: date-time
+             * @description When the class entered its current state. Omitted while the
+             *     class is inactive with no recorded transition.
+             */
+            since?: string;
+        };
+        /**
+         * @description Payload of a `security.zone_changed` broadcast. Topic
+         *     `security.state`. Fires when one alarm zone's security view
+         *     changes. Absent entirely on an installation without an alarm
+         *     engine, where the domain still reports classes and faults.
+         */
+        SecurityZoneChangedPayload: {
+            zone_id: string;
+            /**
+             * @description Frozen at zone creation, so consumer entity ids survive a
+             *     rename — unlike `zone_name`.
+             */
+            zone_slug: string;
+            zone_name?: string;
+            state: string;
+            mode?: string;
+            sources?: components["schemas"]["AlarmSource"][];
+            /**
+             * @description Active source names grouped per class — the per-zone and
+             *     per-class axis in one object rather than a zone-by-class
+             *     matrix of entities.
+             */
+            by_class?: {
+                [key: string]: string[];
+            };
+            /** Format: int64 */
+            incident_id?: number;
+        };
+        /**
+         * @description Payload of a `security.fault_changed` broadcast. Topic
+         *     `security.faults`. Fires when a fault opens, clears or is
+         *     acknowledged.
+         */
+        SecurityFaultChangedPayload: {
+            fault_id: string;
+            /** @enum {string} */
+            class: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            /** @enum {string} */
+            reason: "unreachable" | "blocked" | "device_error" | "central_lost" | "duty_cycle" | "low_battery" | "tamper";
+            /** @enum {string} */
+            severity: "ok" | "info" | "warning" | "alarm" | "critical";
+            source: components["schemas"]["AlarmSource"];
+            /** @description True when the fault was raised, false when it cleared. */
+            open: boolean;
+            /**
+             * @description Marks an acknowledgement rather than a state change: the
+             *     condition is unchanged, the operator has merely stopped
+             *     needing to be told.
+             */
+            acknowledged: boolean;
+            /**
+             * Format: date-time
+             * @description When the fault opened. Omitted when the ledger records no such occurrence.
+             */
+            since?: string;
+            /** @description Standing fault count after this change, so a count entity needs no second read. */
+            open_count: number;
+        };
+        /**
+         * @description Payload of a `security.notification` broadcast. Topic
+         *     `security.notifications`. One rendered report — the only
+         *     payload in the domain carrying prose, so a consumer can show a
+         *     sentence without inventing alarm wording, while `i18n_key` and
+         *     `args` let it re-render in its own locale instead.
+         *
+         *     A covert report (duress code, silent panic) reaches this
+         *     broadcast only under `alarm.duress_visibility: full`. The
+         *     WebSocket feeds the SPA and every dashboard a browser has open,
+         *     and a hallway tablet showing "duress code entered" while the
+         *     attacker stands next to you defeats the feature the covert
+         *     trigger exists for.
+         */
+        SecurityNotificationPayload: {
+            /** @enum {string} */
+            class: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
+            /** @enum {string} */
+            severity: "ok" | "info" | "warning" | "alarm" | "critical";
+            /** @enum {string} */
+            verb: "triggered" | "pre_alarm" | "cleared" | "silenced" | "failed_to_arm" | "raised" | "test";
+            /** @description One line, at most 120 characters, suitable as a notification title. */
+            subject: string;
+            /** @description A full sentence naming cause, place and time. */
+            message: string;
+            /**
+             * @description Catalogue key of the message, so a consumer can re-render in
+             *     its own locale instead of translating prose.
+             */
+            i18n_key: string;
+            args?: {
+                [key: string]: string;
+            };
+            sources?: components["schemas"]["AlarmSource"][];
+            zone_id?: string;
+            zone_slug?: string;
+            zone_name?: string;
+            mode?: string;
+            /** Format: int64 */
+            incident_id?: number;
+            link?: string;
+            /** Format: date-time */
+            at: string;
+            /**
+             * @description Marks a fault report rather than a hazard report, so a
+             *     consumer can route the two without inspecting the class.
+             */
+            fault: boolean;
+        };
         /** @description The most recent event fired within an event group. */
         TriggeredEventSummary: {
             /** @description Lowercased parameter name of the source that fired. */

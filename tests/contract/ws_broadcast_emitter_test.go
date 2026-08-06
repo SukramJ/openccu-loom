@@ -206,6 +206,35 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmReminder = "alarm.reminder"`},
 		WireValue: "alarm.reminder",
 	},
+	// security.* broadcasts: emitted by SecuritySubscriber off the
+	// daemon-level Security & Safety bus. Unlike the alarm family the wire
+	// names equal the hmevent tags, so WireValue resolves through
+	// hmevent rather than repeating a literal.
+	"security.state_changed": {
+		Files:     []string{"internal/north/rest/ws/security_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastSecurityStateChanged = "security.state_changed"`},
+		WireValue: string(hmevent.EventTypeSecurityStateChanged),
+	},
+	"security.class_changed": {
+		Files:     []string{"internal/north/rest/ws/security_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastSecurityClassChanged = "security.class_changed"`},
+		WireValue: string(hmevent.EventTypeSecurityClassChanged),
+	},
+	"security.zone_changed": {
+		Files:     []string{"internal/north/rest/ws/security_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastSecurityZoneChanged  = "security.zone_changed"`},
+		WireValue: string(hmevent.EventTypeSecurityZoneChanged),
+	},
+	"security.fault_changed": {
+		Files:     []string{"internal/north/rest/ws/security_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastSecurityFaultChanged = "security.fault_changed"`},
+		WireValue: string(hmevent.EventTypeSecurityFaultChanged),
+	},
+	"security.notification": {
+		Files:     []string{"internal/north/rest/ws/security_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastSecurityNotification = "security.notification"`},
+		WireValue: string(hmevent.EventTypeSecurityNotification),
+	},
 	"matter.exposable_changed": {
 		Files: []string{
 			"internal/north/rest/handlers/matter_events.go",

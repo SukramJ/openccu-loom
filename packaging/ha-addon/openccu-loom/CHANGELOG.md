@@ -1,5 +1,19 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.54.0
+
+- **The Security & Safety views now follow the installation live.** The
+  domain's hazard classes, zone states, faults and reports previously
+  reached MQTT and the webhook plane but never the WebSocket, so the
+  Security overview and the fault ledger showed whatever the state had
+  been when you opened the page — an "ok" badge could sit there right
+  through a running smoke alarm. Both surfaces now update the moment the
+  daemon reports a change.
+
+- A covert report (duress code, silent panic) reaches the new live plane
+  only when `alarm.duress_visibility` is set to `full`, so a wall tablet
+  cannot betray it. Notification via webhook and MQTT is unchanged.
+
 ## 0.53.1
 
 - **Your service messages were missing entirely.** If any device channel
