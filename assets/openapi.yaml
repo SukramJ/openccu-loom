@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.1.0
+  version: 5.2.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1640,6 +1640,42 @@ paths:
           description: Accepted
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /i18n/entities:
+    get:
+      operationId: getEntityNames
+      summary: The daemon's entity-name vocabulary
+      description: |
+        The names the daemon gives its own entities — the hub singletons
+        and derived data points under `discovery.*`, the Security &
+        Safety surfaces under `security.entity.*` — resolved for one
+        locale.
+
+        The daemon is the single naming authority (ADR 0046), but until
+        now these names only reached the MQTT discovery plane, where they
+        were resolved at publish time and never left. Every other
+        consumer therefore kept a second copy of the same words, and the
+        copies drift the moment either side is edited alone.
+
+        Values are templates as authored: `Connectivity {iface}` carries
+        a placeholder only the caller can fill, because the daemon does
+        not know which interface, channel or profile is being named.
+      tags: [System]
+      parameters:
+        - name: locale
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            Language tag (`de`, `en`). Defaults to the daemon's
+            configured locale; an unknown tag falls back to it as well.
+            The response echoes what actually answered.
+      responses:
+        '200':
+          description: The entity-name catalogue.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EntityNameCatalogue' }
 
   /system/ccu:
     get:
@@ -10253,6 +10289,25 @@ components:
         note:
           type: string
           description: Stable, English machine string describing the transition.
+
+    EntityNameCatalogue:
+      type: object
+      description: |
+        The daemon's entity-naming vocabulary for one locale.
+      required: [locale, entries]
+      properties:
+        locale:
+          type: string
+          description: |
+            The locale that actually answered — the requested one when a
+            catalogue exists for it, the daemon's default otherwise. A
+            consumer reads it to tell a translation from a fallback.
+        entries:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Catalogue key to name, as authored. A value may carry a
+            `{placeholder}` the caller fills.
 
     SecurityStateChangedPayload:
       type: object

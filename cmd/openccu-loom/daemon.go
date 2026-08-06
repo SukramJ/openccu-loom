@@ -789,6 +789,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		centSvc:                 centralAdminSvc,
 		discovery:               discoveryDeps,
 		translations:            translations,
+		catalogs:                catalogs,
 		mqttSup:                 mqttSup,
 		mqttAvailable:           mqttWiring != nil,
 		restResolve:             restResolve,

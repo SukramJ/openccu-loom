@@ -1840,6 +1840,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/i18n/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The daemon's entity-name vocabulary
+         * @description The names the daemon gives its own entities — the hub singletons
+         *     and derived data points under `discovery.*`, the Security &
+         *     Safety surfaces under `security.entity.*` — resolved for one
+         *     locale.
+         *
+         *     The daemon is the single naming authority (ADR 0046), but until
+         *     now these names only reached the MQTT discovery plane, where they
+         *     were resolved at publish time and never left. Every other
+         *     consumer therefore kept a second copy of the same words, and the
+         *     copies drift the moment either side is edited alone.
+         *
+         *     Values are templates as authored: `Connectivity {iface}` carries
+         *     a placeholder only the caller can fill, because the daemon does
+         *     not know which interface, channel or profile is being named.
+         */
+        get: operations["getEntityNames"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/ccu": {
         parameters: {
             query?: never;
@@ -7893,6 +7926,22 @@ export interface components {
             /** @description Stable, English machine string describing the transition. */
             note: string;
         };
+        /** @description The daemon's entity-naming vocabulary for one locale. */
+        EntityNameCatalogue: {
+            /**
+             * @description The locale that actually answered — the requested one when a
+             *     catalogue exists for it, the daemon's default otherwise. A
+             *     consumer reads it to tell a translation from a fallback.
+             */
+            locale: string;
+            /**
+             * @description Catalogue key to name, as authored. A value may carry a
+             *     `{placeholder}` the caller fills.
+             */
+            entries: {
+                [key: string]: string;
+            };
+        };
         /**
          * @description Payload of a `security.state_changed` broadcast. Topic
          *     `security.state`. Fires when the folded severity of the
@@ -10293,6 +10342,33 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getEntityNames: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Language tag (`de`, `en`). Defaults to the daemon's
+                 *     configured locale; an unknown tag falls back to it as well.
+                 *     The response echoes what actually answered.
+                 */
+                locale?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The entity-name catalogue. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityNameCatalogue"];
+                };
+            };
         };
     };
     listSystemCCU: {

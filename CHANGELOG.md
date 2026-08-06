@@ -8,6 +8,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The daemon's own entity names are now readable by any consumer —
+  `GET /i18n/entities`.** The daemon has been the single naming authority
+  since 0.45.0, and it already names its hub singletons and Security &
+  Safety surfaces in both locales — but only on the MQTT discovery plane,
+  where the names were resolved at publish time and never left. Every
+  other consumer kept a second copy of the same words, and the copies
+  drift the moment either side is edited alone: "Alarmmeldungen" lived in
+  this catalogue *and* in the Home Assistant integration's `strings.json`,
+  with nothing comparing them.
+
+  The endpoint serves the naming projection — the `discovery.*` and
+  `security.entity.*` namespaces — resolved for a requested `locale`,
+  falling back per key to the daemon's default and echoing the locale
+  that actually answered so a consumer can tell a translation from a
+  fallback. Values stay templates: `Connectivity {iface}` carries a
+  placeholder only the caller can fill, because the daemon does not know
+  which interface is being named. The Config UI's own strings
+  (`nav.`, `login.`, `setup.`) are deliberately outside the projection —
+  they are not a naming contract. `APIVersion` bumped to `5.2.0`.
+
+
 - **The Security & Safety domain now pushes.** Its five events — the
   folded severity, a hazard or fault class going active, a zone's
   security view, a fault opening or clearing, and a rendered report —

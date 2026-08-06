@@ -334,3 +334,23 @@ func (m *multiError) Error() string {
 }
 
 func (m *multiError) Unwrap() []error { return m.errs }
+
+// EntityNameCatalogue is the body of `GET /api/v1/i18n/entities`: the
+// daemon's own entity-naming vocabulary, resolved for one locale.
+//
+// It exists because the daemon is the single naming authority (ADR
+// 0046) but its entity names only ever reached the MQTT discovery
+// plane, where they were resolved at publish time and never left. Every
+// other consumer kept a second copy of the same words, which drifts the
+// moment either side is edited alone.
+type EntityNameCatalogue struct {
+	// Locale is the locale that actually answered — the requested one
+	// when a catalogue exists for it, the daemon's default otherwise.
+	// Echoed so a consumer can tell a translation from a fallback.
+	Locale string `json:"locale"`
+	// Entries maps catalogue key to name, as authored. A value may
+	// carry a placeholder (`Connectivity {iface}`) that only the caller
+	// can fill: the daemon does not know which interface, channel or
+	// profile the consumer is naming.
+	Entries map[string]string `json:"entries"`
+}
