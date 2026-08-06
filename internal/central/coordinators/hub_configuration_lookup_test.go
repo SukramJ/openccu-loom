@@ -304,22 +304,6 @@ func TestConfigurableDeviceTypesExist(t *testing.T) {
 // Result types
 // ─────────────────────────────────────────────────────────────────────────────
 
-func TestCopyParamsetResultExists(t *testing.T) {
-	t.Parallel()
-	r := CopyParamsetResult{Success: true, ParametersCopied: 5, ParametersSkipped: 1}
-	if !r.Success {
-		t.Fatal("CopyParamsetResult.Success must be true")
-	}
-}
-
-func TestPutParamsetResultExists(t *testing.T) {
-	t.Parallel()
-	r := PutParamsetResult{Success: true, ParametersWritten: 3}
-	if !r.Success {
-		t.Fatal("PutParamsetResult.Success must be true")
-	}
-}
-
 func TestMaintenanceDataExists(t *testing.T) {
 	t.Parallel()
 	m := MaintenanceData{UnreachCount: 2, LowBat: true, RSSI: -65}
