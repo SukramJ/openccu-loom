@@ -15,6 +15,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -493,6 +494,9 @@ func registerTriggerProgram(s *mcpsdk.Server, d Deps) {
 		if !ok {
 			return nil, triggerProgramOut{}, fmt.Errorf("program %q not found on central %q", programID, central)
 		}
+		// Stamp the surface so the program-execute audit/log subscriber
+		// can attribute the run to the MCP server.
+		ctx = reqctx.WithOperation(ctx, "mcp:program-trigger")
 		if err := prog.Execute(ctx); err != nil {
 			return nil, triggerProgramOut{}, fmt.Errorf("execute program: %w", err)
 		}

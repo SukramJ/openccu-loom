@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.54.3]
 
+### Added
+
+- **Every program run the daemon triggers is now visible in the daemon
+  log, with the surface that asked.** The audit database has recorded
+  daemon-triggered executions since 0.52.x, but nothing reached the log
+  operators actually read during an incident, and the record said only
+  `trigger=api` for every route. Each ingress now stamps its operation
+  (`mqtt:program-trigger`, `rest:program-execute`, `ws:program-execute`,
+  `mcp:program-trigger`, `service:program-trigger`) into the request
+  context; the execute event carries it as `Source`, the audit note
+  gains a `source=` tag, and an INFO line (`program.execute` with
+  central, program, source, success) lands in the daemon log. The #497
+  investigation would have taken minutes instead of days with this line
+  present.
+
 ### Fixed
 
 - **Every CCU program ran by itself — twice on every daemon start, once

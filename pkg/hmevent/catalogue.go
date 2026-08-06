@@ -454,6 +454,13 @@ type ProgramExecutedEvent struct {
 	ProgramID   string
 	Trigger     hmenum.ProgramTrigger
 	Success     bool
+	// Source names the surface that asked for the run — the
+	// request-context operation stamped by the ingress (e.g.
+	// "mqtt:program-trigger", "rest:program-execute"). Empty when the
+	// execution path carried no request context. Without it every
+	// daemon route reports the same generic trigger tag and a
+	// program-ran-twice report cannot be attributed to a surface.
+	Source string
 }
 
 // Type implements Event.

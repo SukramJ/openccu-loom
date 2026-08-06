@@ -140,6 +140,18 @@ func FromContext(ctx context.Context) (RequestContext, bool) {
 	return rc, ok
 }
 
+// WithOperation returns ctx with the request-context Operation set,
+// preserving every other field already stamped on ctx. Ingress code uses
+// it to name the surface a domain action came from (e.g.
+// "mqtt:program-trigger") so downstream audit/log subscribers can
+// attribute the action without threading an extra parameter through
+// every layer.
+func WithOperation(ctx context.Context, operation string) context.Context {
+	rc, _ := FromContext(ctx)
+	rc.Operation = operation
+	return WithRequestContext(ctx, rc)
+}
+
 // RequestIDFromContext is a convenience wrapper that returns the
 // [RequestContext.RequestID] from ctx, or "" when absent.
 func RequestIDFromContext(ctx context.Context) string {

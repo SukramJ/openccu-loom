@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/internal/restapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -744,8 +745,11 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
+		// Stamp the surface so the program-execute audit/log subscriber
+		// can attribute the run to the REST API.
+		ctx := reqctx.WithOperation(r.Context(), "rest:program-execute")
 		if req.CheckConditions {
-			executed, err := p.ExecuteWithConditionCheck(r.Context())
+			executed, err := p.ExecuteWithConditionCheck(ctx)
 			if err != nil {
 				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 				return
@@ -753,7 +757,7 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 			JSON(w, http.StatusAccepted, ProgramExecuteResponse{Executed: executed})
 			return
 		}
-		if err := p.Execute(r.Context()); err != nil {
+		if err := p.Execute(ctx); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 			return
 		}
