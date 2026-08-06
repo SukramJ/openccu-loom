@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 65293dc3
-HEAD: 65293dc3
+Generated: 9a0ca907
+HEAD: 9a0ca907
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27678 |
-| Reachable | 4892 |
-| Whitelisted | 19817 |
-| **Unreachable** | **2969** |
+| Total Exported | 27737 |
+| Reachable | 4896 |
+| Whitelisted | 19870 |
+| **Unreachable** | **2971** |
 
 ## Top-20 Packages by Dead Code
 
@@ -87,10 +87,10 @@ HEAD: 65293dc3
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 96 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 96 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 93 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 93 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 97 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 97 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 94 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 94 |
 
 ## Full By-Package Breakdown
 
@@ -200,7 +200,7 @@ HEAD: 65293dc3
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 108 | 28 |
-| pkg/hmapi | 0 | 149 | 16 |
+| pkg/hmapi | 0 | 151 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |
