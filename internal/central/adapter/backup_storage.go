@@ -156,8 +156,8 @@ func (s *FilesystemBackupStorage) pathForID(id string) (string, error) {
 }
 
 // SetStorage swaps the storage backend. Default is no storage (List
-// returns empty, Stream returns ErrUnimplemented). Returns the
-// receiver for chaining.
+// returns empty, Stream reports the storage as not configured).
+// Returns the receiver for chaining.
 func (a *BackupAdapter) SetStorage(s BackupStorage) *BackupAdapter {
 	a.storage = s
 	return a

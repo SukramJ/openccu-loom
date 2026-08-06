@@ -10587,10 +10587,10 @@ func TestBackupAdapter_TriggerBackup_EmptyRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	a := NewBackupAdapter(reg)
-	// No centrals → loop over empty list → returns ErrUnimplemented.
+	// No centrals → loop over empty list → returns ErrNoCentralRegistered.
 	_, err := a.TriggerBackup(context.Background())
 	if err == nil {
-		t.Error("expected ErrUnimplemented for empty registry")
+		t.Error("expected ErrNoCentralRegistered for empty registry")
 	}
 }
 
@@ -10611,7 +10611,7 @@ func TestBackupAdapter_Stream_NilStorage_ReturnsErr(t *testing.T) {
 	a := &BackupAdapter{storage: nil}
 	err := a.Stream(context.Background(), "backup1", nil)
 	if err == nil {
-		t.Error("expected ErrUnimplemented for nil storage in Stream")
+		t.Error("expected storage-not-configured error for nil storage in Stream")
 	}
 }
 
@@ -15483,7 +15483,7 @@ func TestBackupAdapterStreamNilStorage(t *testing.T) {
 	a := NewBackupAdapter(nil)
 	err := a.Stream(context.Background(), "backup1", nil)
 	if err == nil {
-		t.Fatal("Stream nil storage must return ErrUnimplemented")
+		t.Fatal("Stream nil storage must report the storage as not configured")
 	}
 }
 

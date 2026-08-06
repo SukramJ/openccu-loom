@@ -36,12 +36,13 @@ func (a auditReadService) Query(ctx context.Context, q audit.Query) ([]audit.Ent
 // backed BackupStorage. The directory lives under cfg.DataDir/backups
 // and is auto-created on first use. When the directory cannot be
 // created (read-only filesystem, missing permissions), the adapter
-// degrades to in-memory mode — List returns empty, Stream/Restore
-// return ErrUnimplemented / ErrRestoreUnsupported.
+// degrades to in-memory mode — List returns empty, Stream reports the
+// storage as not configured, Restore returns ErrRestoreUnsupported.
 //
-// The BackupRestorer (HTTP-multipart upload to the CCU's
-// `/config/cp_security.cgi`) is not wired yet; Restore therefore
-// surfaces ErrRestoreUnsupported until that path lands.
+// The per-central BackupRestorer (HTTP-multipart upload to the CCU) is
+// wired later, during southbound bring-up (see the
+// SetRestorerForCentral call in the adapter's CCU wiring); until a
+// central's restorer is up, Restore surfaces ErrRestoreUnsupported.
 func buildBackupAdapter(cfg *config.Config, reg *central.Registry, logger *slog.Logger) *adapter.BackupAdapter {
 	a := adapter.NewBackupAdapter(reg).SetLogger(logger)
 	if cfg == nil {

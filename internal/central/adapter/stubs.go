@@ -19,9 +19,18 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
-// ErrUnimplemented is returned by MVP stubs when a feature needs a
-// backing service that has not been wired yet.
-var ErrUnimplemented = errors.New("adapter: not implemented in MVP")
+// ErrNoCentralRegistered reports that a backup operation found no
+// central to act on: the adapter was constructed without a registry,
+// or the registry holds no centrals. That is a wiring / configuration
+// state of this daemon, not a missing feature — callers must not
+// present it as "not implemented".
+var ErrNoCentralRegistered = errors.New("backup: no central registered")
+
+// errStorageNotConfigured reports that no [BackupStorage] is wired, so
+// stored archives cannot be streamed. It wraps [hmerr.ErrUnsupported]
+// so callers can recognise "the daemon cannot do this" without
+// importing the adapter, mirroring [errUploadUnsupported].
+var errStorageNotConfigured = fmt.Errorf("backup: no storage configured: %w", hmerr.ErrUnsupported)
 
 // --- Backup adapter ---
 
@@ -109,7 +118,7 @@ func (a *BackupAdapter) log() *slog.Logger {
 // backup list simply does not show it yet.
 func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 	if a.registry == nil {
-		return "", ErrUnimplemented
+		return "", ErrNoCentralRegistered
 	}
 	for _, u := range a.registry.List() {
 		if u == nil {
@@ -122,7 +131,7 @@ func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 		go a.runBackup(u, id) //nolint:gosec,contextcheck // G118: detached on purpose; runBackup uses its own backupRunTimeout context so the 202 response cannot cancel the backup; see #20
 		return id, nil
 	}
-	return "", ErrUnimplemented
+	return "", ErrNoCentralRegistered
 }
 
 // TriggerBackupForCentral implements [interfaces.BackupService]. It backs up
@@ -130,7 +139,7 @@ func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 // the detached create-and-download flow like [BackupAdapter.TriggerBackup].
 func (a *BackupAdapter) TriggerBackupForCentral(_ context.Context, centralName string) (string, error) {
 	if a.registry == nil {
-		return "", ErrUnimplemented
+		return "", ErrNoCentralRegistered
 	}
 	u, ok := a.registry.Get(centralName)
 	if !ok || u == nil {
@@ -149,7 +158,7 @@ func (a *BackupAdapter) TriggerBackupForCentral(_ context.Context, centralName s
 // for the same central waits rather than racing the rotation.
 func (a *BackupAdapter) CreateBackupForCentral(ctx context.Context, centralName string) (string, error) {
 	if a.registry == nil {
-		return "", ErrUnimplemented
+		return "", ErrNoCentralRegistered
 	}
 	u, ok := a.registry.Get(centralName)
 	if !ok || u == nil {
@@ -390,7 +399,7 @@ func (a *BackupAdapter) List(ctx context.Context) ([]hmapi.BackupEntry, error) {
 // Stream implements handlers.BackupService.
 func (a *BackupAdapter) Stream(ctx context.Context, id string, w io.Writer) error {
 	if a.storage == nil {
-		return ErrUnimplemented
+		return errStorageNotConfigured
 	}
 	rc, err := a.storage.Open(ctx, id)
 	if err != nil {

@@ -365,7 +365,8 @@ func (c *ConfigurationCoordinator) GetParamset(
 // sending any values to the CCU.
 //
 // Pass validate=false to skip the bounds check (e.g. operator emergency
-// override). Pass a nil reader only when validate=false.
+// override). Validation reads only the registry's cached descriptions —
+// no live CCU round-trip happens before the write.
 func (c *ConfigurationCoordinator) PutParamset(
 	ctx context.Context,
 	iface hmenum.Interface,
@@ -373,7 +374,6 @@ func (c *ConfigurationCoordinator) PutParamset(
 	paramsetKey hmenum.ParamsetKey,
 	values map[string]any,
 	validate bool,
-	reader LiveParamsetReader,
 	writer LiveParamsetWriter,
 ) (PutParamsetResult, error) {
 	if writer == nil {

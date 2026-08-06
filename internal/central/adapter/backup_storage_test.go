@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // ---------------------------------------------------------------------------
@@ -440,15 +441,15 @@ func TestBackupAdapterListDelegatesToStorage(t *testing.T) {
 	}
 }
 
-func TestBackupAdapterStreamWithoutStorageReturnsErrUnimplemented(t *testing.T) {
+func TestBackupAdapterStreamWithoutStorageReportsUnsupported(t *testing.T) {
 	t.Parallel()
 
 	reg := newRegistryForBackupTest(t)
 	a := NewBackupAdapter(reg)
 
 	err := a.Stream(context.Background(), "any", &bytes.Buffer{})
-	if !errors.Is(err, ErrUnimplemented) {
-		t.Fatalf("want ErrUnimplemented, got %v", err)
+	if !errors.Is(err, hmerr.ErrUnsupported) {
+		t.Fatalf("want hmerr.ErrUnsupported, got %v", err)
 	}
 }
 

@@ -30,11 +30,12 @@ const (
 	// transition; consumers that care about freshness independent of
 	// value diffs subscribe to this. See ADR 0019.
 	EventTypeDataPointSourceChanged EventType = "datapoint.source_changed"
-	// EventTypeCustomDataPointStateChanged is emitted whenever a CCU
-	// data-point change observable to a Custom-DP would alter the
-	// CDP's aggregated state. SPA tiles subscribe to one CDP-scoped
-	// topic per tile instead of N per-DP topics; HA-Discovery /
-	// other adapters can use it as an aggregated state hook too.
+	// EventTypeCustomDataPointStateChanged labels the WebSocket push
+	// that carries a Custom-DP's aggregated state. It is NOT published
+	// on the event bus: the event bridge derives the aggregate from
+	// the underlying wire-DP change and emits it directly on the
+	// CDP-scoped WS topic, so a tile subscribes to one topic per CDP
+	// instead of N per-DP topics.
 	EventTypeCustomDataPointStateChanged EventType = "custom_data_point.state_changed"
 	EventTypeDeviceCreated               EventType = "device.created"
 	EventTypeDeviceRemoved               EventType = "device.removed"
@@ -85,7 +86,8 @@ const (
 
 	// EventTypeRPCParameterReceived fires when a raw RPC parameter value
 	// arrives via a CCU callback, before the value is written to the
-	// data-point cache. Allows subscribers to inspect the raw wire value.
+	// data-point cache. A diagnostic wire trace with no subscriber
+	// (declared in the subscriber-coverage guard).
 	EventTypeRPCParameterReceived EventType = "rpc.parameter_received"
 
 	// EventTypeDeviceLifecycle is the unified device lifecycle event
@@ -112,9 +114,10 @@ const (
 	EventTypeRecoveryAttempted EventType = "recovery.attempted"
 
 	// EventTypeWeekProfileChanged fires when a week-profile schedule is
-	// saved or loaded through [weekprofile.Profile.publish]. MQTT subscribers
-	// can listen on this bus event instead of registering per-profile
-	// OnChange callbacks.
+	// saved or loaded through [weekprofile.Profile.publish]. The
+	// north-bound schedule state travels through the profile's OnChange
+	// callbacks; nothing consumes this bus event (declared in the
+	// subscriber-coverage guard).
 	EventTypeWeekProfileChanged EventType = "weekprofile.changed"
 
 	// EventTypeCentralSouthboundReady fires once a central's southbound
@@ -391,10 +394,11 @@ func (RecoveryStageChangedEvent) Type() EventType { return EventTypeRecoveryStag
 
 // DataPointSourceChangedEvent fires when a wire data point's
 // lifecycle source token transitions between unobserved / cache /
-// live / stale without (necessarily) a value change. MQTT, REST-WS
-// and the SPA subscribe to this so consumers get a "freshness
-// flipped" signal even when the value itself stayed the same. See
-// ADR 0019.
+// live / stale without (necessarily) a value change. The event
+// bridge subscribes and re-emits the current value on both the WS
+// and the MQTT plane (envelope kind "refresh") so downstream
+// consumers get a "freshness flipped" signal even when the value
+// itself stayed the same. See ADR 0019.
 type DataPointSourceChangedEvent struct {
 	Base
 	CentralName    string
@@ -512,9 +516,9 @@ type InstallModeChangedEvent struct {
 func (InstallModeChangedEvent) Type() EventType { return EventTypeInstallModeChanged }
 
 // WeekProfileChangedEvent fires when a week-profile schedule is published
-// (via Load or Save on a [weekprofile.Profile]). MQTT subscribers listen to
-// this event to push updated schedule state without coupling to per-profile
-// OnChange callbacks.
+// (via Load or Save on a [weekprofile.Profile]). The north-bound schedule
+// state travels through the profile's OnChange callbacks; nothing consumes
+// this bus event (declared in the subscriber-coverage guard).
 type WeekProfileChangedEvent struct {
 	Base
 	// CentralName scopes the event to the originating central.
@@ -666,9 +670,10 @@ type DataFetchCompletedEvent struct {
 func (DataFetchCompletedEvent) Type() EventType { return EventTypeDataFetchCompleted }
 
 // RPCParameterReceivedEvent fires when a raw RPC parameter value arrives via
-// a CCU push callback, before it is written to the data-point cache.
-// Subscribers that need the raw wire form (e.g. audit loggers) consume this
-// event.
+// a CCU push callback, before it is written to the data-point cache. It is a
+// diagnostic wire trace with no subscriber (declared in the
+// subscriber-coverage guard); the coerced value change travels as
+// [DataPointValueChangedEvent].
 type RPCParameterReceivedEvent struct {
 	Base
 	CentralName    string
@@ -708,8 +713,9 @@ type DeviceLifecycleEvent struct {
 func (DeviceLifecycleEvent) Type() EventType { return EventTypeDeviceLifecycle }
 
 // DataRefreshTriggeredEvent fires just before a background scheduler job
-// begins its data-refresh pass. North-bound subscribers can use this to show
-// a "refreshing" indicator.
+// begins its data-refresh pass. It is a diagnostic trace with no subscriber
+// (declared in the subscriber-coverage guard); the completion event carries
+// the result.
 type DataRefreshTriggeredEvent struct {
 	Base
 	CentralName string
@@ -760,17 +766,17 @@ type DataRefreshCompletedEvent struct {
 func (DataRefreshCompletedEvent) Type() EventType { return EventTypeDataRefreshCompleted }
 
 // DataPointValueReceivedEvent fires when a raw data-point value arrives from
-// a CCU callback, before it is written to the cache. Subscribers that need
-// the pre-cache wire value (audit loggers, raw-value dashboards) consume this
-// event.
+// a CCU callback, before it is written to the cache. The health wiring
+// subscribes to it to record per-interface "last event received" activity
+// for the UI.
 type DataPointValueReceivedEvent struct {
 	Base
 	CentralName    string
 	InterfaceID    string
 	ChannelAddress string
 	Parameter      string
-	// Value is the already-coerced Go value; callers that need the raw
-	// string form should subscribe to [RPCParameterReceivedEvent] instead.
+	// Value is the already-coerced Go value; the raw string form
+	// travels as [RPCParameterReceivedEvent].
 	Value any
 }
 

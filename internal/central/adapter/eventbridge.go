@@ -292,14 +292,17 @@ func (b *EventBridge) detach() {
 	b.goroutineWG.Wait()
 }
 
-// onSourceChanged fans a lifecycle transition out to the same MQTT
-// publish path as a regular value change. It synthesises a
-// DataPointValueChangedEvent with OldValue == NoneValue so the
-// dedup gate downstream treats it as a fresh emission. The value
-// itself comes from the source-changed event's Value field, which
-// the DP layer fills with its current RawValue at transition time.
+// onSourceChanged fans a lifecycle transition out through the same
+// dispatch path as a regular value change — WS inline, MQTT via the
+// fan-out worker. It synthesises a DataPointValueChangedEvent with
+// OldValue == NoneValue so the dedup gate downstream treats it as a
+// fresh emission. The value itself comes from the source-changed
+// event's Value field, which the DP layer fills with its current
+// RawValue at transition time. The MQTT wiring may be nil (MQTT
+// disabled); dispatchLive gates only its MQTT arm on that, so the
+// WS freshness signal must not be guarded here.
 func (b *EventBridge) onSourceChanged(centralName string, e hmevent.DataPointSourceChangedEvent) {
-	if b == nil || b.mqtt == nil {
+	if b == nil {
 		return
 	}
 	if e.Value == nil {

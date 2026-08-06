@@ -289,16 +289,16 @@ func TestTriggerBackupForCentralKnownCentralReturnsID(t *testing.T) {
 	}
 }
 
-// TestTriggerBackupForCentralNilRegistryReturnsErrUnimplemented checks the
+// TestTriggerBackupForCentralNilRegistryReportsNoCentral checks the
 // nil-registry guard.
-func TestTriggerBackupForCentralNilRegistryReturnsErrUnimplemented(t *testing.T) {
+func TestTriggerBackupForCentralNilRegistryReportsNoCentral(t *testing.T) {
 	t.Parallel()
 
 	a := NewBackupAdapter(nil)
 
 	id, err := a.TriggerBackupForCentral(context.Background(), "alpha")
-	if !errors.Is(err, ErrUnimplemented) {
-		t.Fatalf("want ErrUnimplemented, got %v", err)
+	if !errors.Is(err, ErrNoCentralRegistered) {
+		t.Fatalf("want ErrNoCentralRegistered, got %v", err)
 	}
 	if id != "" {
 		t.Errorf("want empty id, got %q", id)

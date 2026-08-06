@@ -4,6 +4,75 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.4]
+
+### Fixed
+
+- **Without MQTT configured, the SPA never heard that a value's
+  freshness flipped.** A wire data point moving between cache / live /
+  stale re-publishes its current value with a `refresh` envelope so
+  consumers can tell a confirmed live reading from a restored one. The
+  handler behind it returned early when no MQTT wiring was present —
+  before the WebSocket dispatch, although the dispatch path gates only
+  its MQTT arm on the wiring being there. In an MQTT-less deployment
+  every freshness signal was silently dropped for the SPA and every
+  other WS consumer. The guard moved to where it belongs, and a new
+  delivery table drives every WS-emitting bridge subscription against a
+  bridge constructed without MQTT so the next optional plane cannot
+  gate a WebSocket emission either.
+
+- **Recovery progress was invisible while it happened.** The
+  connection-recovery pipeline published a per-stage and a per-attempt
+  event that nothing consumed — an operator tapping the diagnostics
+  event stream saw a recovery start and finish with a silent gap in
+  between, and the events' own documentation claimed consumers that
+  never existed. Both now stream through the diagnostics event-bus tap
+  (`GET /diagnostics/eventbus/tap`) as `RecoveryStageChanged` and
+  `RecoveryAttempted`, carrying the stage, the attempt count and the
+  last error.
+
+- **A backup error claimed a missing feature when the daemon meant a
+  missing configuration.** Backup triggers with no central registered,
+  and downloads with no backup storage configured, both answered
+  "adapter: not implemented in MVP". The errors now name what is
+  actually absent — "backup: no central registered" respectively
+  "backup: no storage configured" — so an operator debugs the
+  configuration instead of hunting a feature gap that is not there.
+
+- **The base temperature of a climate week profile could flip between
+  daemon runs.** When two temperatures occupied the same total minutes
+  in a weekday schedule, the winner came out of Go's randomized map
+  iteration — the same profile could show 18 °C today and 22 °C after a
+  restart. Ties now deterministically favour the temperature whose
+  period starts earliest, matching the reference implementation's
+  accumulation-order semantics, and the previously ineffective sort is
+  now load-bearing and pinned by a repeat-run test.
+
+- **A dozen comments described consumers, stubs and wirings that do not
+  exist.** An audit of comment claims against the code found: the event
+  catalogue asserting MQTT subscribers, audit loggers and refresh
+  indicators for events nothing consumes; an MQTT install-command topic
+  documented as "subscribed" that no command wildcard matches; WS
+  device triggers claimed to reach Home Assistant when they reach WS
+  clients only; a WS command file header still listing five "stubs"
+  that have long been wired to real handlers; a restore path documented
+  as "not wired yet" that has been wired per central for releases; and
+  a validation-reader parameter on the configuration coordinator's
+  paramset write that no code path ever read. Every claim now states
+  what the code does, and the dead parameter is gone.
+
+### Added
+
+- **Comment claims and ratchet rot now fail the build.** Three guards
+  institutionalize the audit that found the defects above. A
+  declared-consumerless event whose catalogue doc still claims
+  consumers fails `tests/contract` (the two truths contradicted each
+  other for three events). A ratchet justification that defers — "no
+  surface consumes it yet" — instead of deciding fails the build, which
+  the ratchet headers demanded in prose but nothing enforced. And the
+  WS-delivery-without-MQTT table pins that the optional MQTT plane
+  never gates a WebSocket emission.
+
 ## [0.54.3]
 
 ### Added

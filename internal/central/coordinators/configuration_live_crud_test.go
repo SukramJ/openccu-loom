@@ -89,7 +89,7 @@ func TestPutParamsetDelegatesToWriter(t *testing.T) {
 	values := map[string]any{"TRANSMIT_TRY_MAX": 10}
 
 	res, err := c.PutParamset(context.Background(), hmenum.InterfaceHmIPRF, "0001ABCD:1",
-		hmenum.ParamsetKeyMaster, values, false, nil, writer)
+		hmenum.ParamsetKeyMaster, values, false, writer)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestPutParamsetValidationRejectsOutOfBounds(t *testing.T) {
 	values := map[string]any{"TRANSMIT_TRY_MAX": 0}
 
 	res, err := c.PutParamset(context.Background(), hmenum.InterfaceHmIPRF, "0001ABCD:1",
-		hmenum.ParamsetKeyMaster, values, true, nil, writer)
+		hmenum.ParamsetKeyMaster, values, true, writer)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestPutParamsetValidationRejectsOutOfBounds(t *testing.T) {
 func TestPutParamsetNilWriterError(t *testing.T) {
 	c, _, _ := newCoord(t)
 	_, err := c.PutParamset(context.Background(), hmenum.InterfaceHmIPRF, "0001ABCD:1",
-		hmenum.ParamsetKeyMaster, map[string]any{}, false, nil, nil)
+		hmenum.ParamsetKeyMaster, map[string]any{}, false, nil)
 	if err == nil {
 		t.Fatal("expected error for nil writer")
 	}
