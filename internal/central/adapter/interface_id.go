@@ -75,6 +75,26 @@ func InitInterfaceID(instanceName, centralName string, iface hmenum.Interface) s
 	return strings.Join(append(parts, string(iface)), "-")
 }
 
+// LegacyInitInterfaceID returns the wire-boundary identifier releases before
+// the `loom-` prefix advertised: `<instance_name>-<central_name>-<interface>`,
+// with the instance name repeated when it equals the central name — the
+// doubled `RM-Test-VM-96-RM-Test-VM-96-CUxD` shape an operator sees in a CCU
+// handler list.
+//
+// It exists for BIN-RPC callback routing, not for registration. CUxD keys its
+// callback registrations in a way a URL-only deinit does not clear, so a
+// registration written by a pre-prefix release outlives the upgrade and CUxD
+// keeps delivering every event twice: once to the current id and once to the
+// orphan. Accepting the legacy id turns the orphan's copy from a rejected
+// callback — logged once per event, forever — into a duplicate the pipeline
+// already deduplicates.
+func LegacyInitInterfaceID(instanceName, centralName string, iface hmenum.Interface) string {
+	if instanceName == "" {
+		return WireInterfaceID(centralName, iface)
+	}
+	return instanceName + "-" + WireInterfaceID(centralName, iface)
+}
+
 // CanonicalInterfaceID maps an interface_id echoed by the CCU back to the
 // canonical host-independent [WireInterfaceID] (`<central>-<interface>`),
 // inverting [InitInterfaceID].

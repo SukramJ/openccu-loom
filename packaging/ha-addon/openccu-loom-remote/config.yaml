@@ -1,7 +1,7 @@
 # version MUST equal the release tag and is bumped in the release commit
 # (same rule as the main add-on; release.yml guards both).
 name: OpenCCU-Loom Remote
-version: "0.54.0"
+version: "0.54.1"
 slug: openccu-loom-remote
 description: >-
   Bring the Config UI of one or more remote OpenCCU-Loom instances into the

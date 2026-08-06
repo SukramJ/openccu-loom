@@ -153,15 +153,21 @@ func wireCentralNorthbound(d southboundWiringDeps, u *central.Unit) (availCloser
 	// the serial live from the registry on its ready-driven re-Start (see
 	// [adapter.HubMQTTPublisher] / hubInfoFromUnit); this stamp only fills what is
 	// already known and never gates anything. Multi-CCU: one entry per central.
+	// The nil check is on the BRIDGE, not just the Wiring: disabling MQTT at
+	// runtime keeps the Wiring alive and points its bridge nowhere. Unlike the
+	// hub-discovery re-Start, this call site runs without panic isolation, so
+	// an unguarded dereference here does not log — it takes the daemon down.
 	if d.mqttWiring != nil {
-		si := u.SystemInformation()
-		d.mqttWiring.Bridge().SetHubInfoFor(u.Name(), mqtt.HubInfo{
-			Name:    u.Name(),
-			Model:   si.Model,
-			Version: si.Version,
-			Serial:  si.Serial,
-			URL:     si.URL,
-		})
+		if bridge := d.mqttWiring.Bridge(); bridge != nil {
+			si := u.SystemInformation()
+			bridge.SetHubInfoFor(u.Name(), mqtt.HubInfo{
+				Name:    u.Name(),
+				Model:   si.Model,
+				Version: si.Version,
+				Serial:  si.Serial,
+				URL:     si.URL,
+			})
+		}
 	}
 	return availCloser, climateCloser
 }
