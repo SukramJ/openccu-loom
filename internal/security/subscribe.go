@@ -148,6 +148,26 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 	// diagnostic class is a fault, which the fault plane reports with
 	// its own debounce rather than as an alarm.
 	if src.class.Hazard() {
+		// An intrusion report belongs to the alarm engine, not to the
+		// classifier. Whether an active motion sensor means a break-in
+		// depends on the arm state, and only the engine knows it — this
+		// class is fed by every enrolled door, window and motion sensor,
+		// which report all day on a disarmed system.
+		//
+		// Reporting from here produced a second, degenerate report on
+		// every such activation: "In Zone  wurde um 15:43 Uhr ein
+		// Einbruchalarm ausgelöst (Modus )", the placeholders empty
+		// because this path carries neither zone nor mode, announcing a
+		// burglary that had not happened. The engine reports both verbs
+		// itself and carries what the message names — see
+		// onAlarmTriggered and onAlarmStateChanged.
+		//
+		// The class entity keeps flipping: that one reports a detection
+		// and is named for it. Panic is deliberately not excluded — a
+		// hold-up trigger must alert whether or not anything is armed.
+		if src.class == hmenum.SecurityClassIntrusion {
+			return
+		}
 		verb := hmenum.SecurityVerbTriggered
 		if !active {
 			verb = hmenum.SecurityVerbCleared
