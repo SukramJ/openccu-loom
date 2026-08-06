@@ -115,6 +115,10 @@ var knownWSCategories = map[string]bool{
 	"custom_data_point": true,
 	"datapoint":         true,
 	"hub":               true,
+	// The Security & Safety domain is its own namespace, separate from
+	// alarm_panel: it aggregates hazards and faults with or without an
+	// alarm engine, so its broadcasts must not read as panel events.
+	"security": true,
 }
 
 // loadWSSchema reads and decodes assets/wsapi.json relative to the

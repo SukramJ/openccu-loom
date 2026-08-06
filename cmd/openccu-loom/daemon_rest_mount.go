@@ -22,6 +22,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/history"
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
@@ -134,6 +135,10 @@ type restMountDeps struct {
 	discovery   *handlers.DiscoveryDeps
 
 	translations *ccudata.Translations
+	// catalogs is the daemon's own i18n catalogue, backing GET
+	// /i18n/entities. The MQTT discovery plane already resolves its entity
+	// names from it; this hands the same vocabulary to REST/WS consumers.
+	catalogs *i18n.Catalogs
 
 	mqttSup       *mqttSupervisor
 	mqttAvailable bool
@@ -241,6 +246,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		MasterProfiles:          d.masterProfiles,
 		SystemStatus:            d.sysStatusBuf,
 		Labels:                  adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
+		EntityNames:             entityNameCatalogueFrom(d.catalogs),
 		DataPointVis:            d.visFilter,
 		Metrics:                 d.metricsReg,
 		UISchema:                d.uiSchemaAdapter,
@@ -489,6 +495,16 @@ func alarmPanelFrom(s *alarm.Service) handlers.AlarmPanel {
 // facade, mapping a nil pointer to a genuinely nil interface so the
 // router leaves /security unmounted rather than dispatching into a nil
 // receiver.
+// entityNameCatalogueFrom converts *i18n.Catalogs into the handler port,
+// mapping a nil pointer to a genuinely nil interface so the handler's
+// nil check fires instead of a typed-nil method call.
+func entityNameCatalogueFrom(c *i18n.Catalogs) handlers.EntityNameCatalogue {
+	if c == nil {
+		return nil
+	}
+	return c
+}
+
 func securityDomainFrom(s *security.Service) handlers.SecurityDomain {
 	if s == nil {
 		return nil

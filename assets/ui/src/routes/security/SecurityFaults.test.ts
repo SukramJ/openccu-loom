@@ -26,6 +26,18 @@ vi.mock("$lib/api/client", () => ({
   friendlyError: (err: unknown) => (err instanceof Error ? err.message : "error"),
 }));
 
+// The ledger refreshes off the daemon's security.fault_changed broadcast,
+// so the shared pump is replaced by a hand-driven one.
+let emit: ((ev: { type: string }) => void) | null = null;
+vi.mock("$lib/stores/events.svelte", () => ({
+  subscribe: (handler: (ev: { type: string }) => void) => {
+    emit = handler;
+    return () => {
+      emit = null;
+    };
+  },
+}));
+
 vi.mock("$lib/stores/toast.svelte", () => ({
   toastStore: { success: mockToastSuccess, error: mockToastError },
 }));
@@ -145,5 +157,30 @@ describe("SecurityFaults — acknowledge flow", () => {
       ),
     );
     expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+});
+
+describe("SecurityFaults — live refresh off the daemon's push", () => {
+  it("re-reads the ledger when a fault broadcast arrives", async () => {
+    mockListSecurityFaults.mockResolvedValue([]);
+    const { findByText } = render(SecurityFaults);
+    await findByText("security.faults.empty");
+
+    // A detector going unreachable opens a fault. Without the push binding
+    // the ledger stays empty until the operator reloads the page.
+    mockListSecurityFaults.mockResolvedValue([fault()]);
+    emit?.({ type: "security.fault_changed" });
+
+    await findByText("Kitchen smoke");
+  });
+
+  it("ignores broadcasts from other domains", async () => {
+    mockListSecurityFaults.mockResolvedValue([fault()]);
+    render(SecurityFaults);
+    await waitFor(() => expect(mockListSecurityFaults).toHaveBeenCalledTimes(1));
+
+    emit?.({ type: "security.class_changed" });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(mockListSecurityFaults).toHaveBeenCalledTimes(1);
   });
 });

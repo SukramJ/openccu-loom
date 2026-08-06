@@ -11,4 +11,4 @@ package handlers
 // `GET /api/v1/info`; generated client type packages carry the
 // same value so clients can verify type/daemon parity at connect
 // time. See ADR 0028.
-const SchemaDigest = "sha256:1eb218a6136443a8c42f85763827e98fc1ce9f1f8d94b98291685ada81def94f"
+const SchemaDigest = "sha256:cff5111b4109355f3ac8a6a697c31691dd698481952d3aac84147c126e5e86b1"

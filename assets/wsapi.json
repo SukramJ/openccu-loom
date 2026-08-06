@@ -1387,6 +1387,46 @@
       "name": "alarm.reminder",
       "topic": "alarm.panel",
       "payload": "AlarmReminderPayload"
+    },
+    {
+      "category": "security",
+      "description": "Server-pushed: the folded severity of the Security & Safety domain changed. Carries the fold only; read GET /security for the detail.",
+      "kind": "broadcast",
+      "name": "security.state_changed",
+      "topic": "security.state",
+      "payload": "SecurityStateChangedPayload"
+    },
+    {
+      "category": "security",
+      "description": "Server-pushed: one hazard or fault class went active or inactive, or its source set changed while it stayed active.",
+      "kind": "broadcast",
+      "name": "security.class_changed",
+      "topic": "security.state",
+      "payload": "SecurityClassChangedPayload"
+    },
+    {
+      "category": "security",
+      "description": "Server-pushed: one alarm zone's security view changed. Never fires on an installation without an alarm engine, where the domain still reports classes and faults.",
+      "kind": "broadcast",
+      "name": "security.zone_changed",
+      "topic": "security.state",
+      "payload": "SecurityZoneChangedPayload"
+    },
+    {
+      "category": "security",
+      "description": "Server-pushed: a fault opened, cleared or was acknowledged. Carries the standing fault count after the change.",
+      "kind": "broadcast",
+      "name": "security.fault_changed",
+      "topic": "security.faults",
+      "payload": "SecurityFaultChangedPayload"
+    },
+    {
+      "category": "security",
+      "description": "Server-pushed: one rendered report, with prose plus the i18n key and args to re-render it. A covert report (duress code, silent panic) rides this broadcast only under alarm.duress_visibility: full — the WebSocket is a local screen surface.",
+      "kind": "broadcast",
+      "name": "security.notification",
+      "topic": "security.notifications",
+      "payload": "SecurityNotificationPayload"
     }
   ]
 }

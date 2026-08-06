@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.0.1
+  version: 5.2.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1640,6 +1640,42 @@ paths:
           description: Accepted
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /i18n/entities:
+    get:
+      operationId: getEntityNames
+      summary: The daemon's entity-name vocabulary
+      description: |
+        The names the daemon gives its own entities — the hub singletons
+        and derived data points under `discovery.*`, the Security &
+        Safety surfaces under `security.entity.*` — resolved for one
+        locale.
+
+        The daemon is the single naming authority (ADR 0046), but until
+        now these names only reached the MQTT discovery plane, where they
+        were resolved at publish time and never left. Every other
+        consumer therefore kept a second copy of the same words, and the
+        copies drift the moment either side is edited alone.
+
+        Values are templates as authored: `Connectivity {iface}` carries
+        a placeholder only the caller can fill, because the daemon does
+        not know which interface, channel or profile is being named.
+      tags: [System]
+      parameters:
+        - name: locale
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            Language tag (`de`, `en`). Defaults to the daemon's
+            configured locale; an unknown tag falls back to it as well.
+            The response echoes what actually answered.
+      responses:
+        '200':
+          description: The entity-name catalogue.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EntityNameCatalogue' }
 
   /system/ccu:
     get:
@@ -10253,6 +10289,211 @@ components:
         note:
           type: string
           description: Stable, English machine string describing the transition.
+
+    EntityNameCatalogue:
+      type: object
+      description: |
+        The daemon's entity-naming vocabulary for one locale.
+      required: [locale, entries]
+      properties:
+        locale:
+          type: string
+          description: |
+            The locale that actually answered — the requested one when a
+            catalogue exists for it, the daemon's default otherwise. A
+            consumer reads it to tell a translation from a fallback.
+        entries:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Catalogue key to name, as authored. A value may carry a
+            `{placeholder}` the caller fills.
+
+    SecurityStateChangedPayload:
+      type: object
+      description: |
+        Payload of a `security.state_changed` broadcast. Topic
+        `security.state`. Fires when the folded severity of the
+        Security & Safety domain changes. It carries the fold only —
+        a consumer needing the detail reads GET /security.
+      required: [severity, open_faults]
+      properties:
+        severity:
+          type: string
+          enum: [ok, info, warning, alarm, critical]
+        previous_severity:
+          type: string
+          enum: [ok, info, warning, alarm, critical]
+          description: |
+            The severity the fold left. Omitted on the first report
+            after start-up, where there is no previous value.
+        active_classes:
+          type: array
+          items:
+            type: string
+            enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+          description: The classes contributing to `severity`.
+        open_faults:
+          type: integer
+          description: Standing faults behind the fold.
+
+    SecurityClassChangedPayload:
+      type: object
+      description: |
+        Payload of a `security.class_changed` broadcast. Topic
+        `security.state`. Fires when one hazard or fault class goes
+        active or inactive — and also when its source set changes
+        while it stays active, because a second smoke detector
+        joining an existing fire is worth announcing.
+      required: [class, active]
+      properties:
+        class:
+          type: string
+          enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+        active: { type: boolean }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/AlarmSource' }
+        centrals:
+          type: array
+          items: { type: string }
+          description: The centrals contributing active sources.
+        since:
+          type: string
+          format: date-time
+          description: |
+            When the class entered its current state. Omitted while the
+            class is inactive with no recorded transition.
+
+    SecurityZoneChangedPayload:
+      type: object
+      description: |
+        Payload of a `security.zone_changed` broadcast. Topic
+        `security.state`. Fires when one alarm zone's security view
+        changes. Absent entirely on an installation without an alarm
+        engine, where the domain still reports classes and faults.
+      required: [zone_id, zone_slug, state]
+      properties:
+        zone_id: { type: string }
+        zone_slug:
+          type: string
+          description: |
+            Frozen at zone creation, so consumer entity ids survive a
+            rename — unlike `zone_name`.
+        zone_name: { type: string }
+        state: { type: string }
+        mode: { type: string }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/AlarmSource' }
+        by_class:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          description: |
+            Active source names grouped per class — the per-zone and
+            per-class axis in one object rather than a zone-by-class
+            matrix of entities.
+        incident_id:
+          type: integer
+          format: int64
+
+    SecurityFaultChangedPayload:
+      type: object
+      description: |
+        Payload of a `security.fault_changed` broadcast. Topic
+        `security.faults`. Fires when a fault opens, clears or is
+        acknowledged.
+      required: [fault_id, class, reason, severity, source, open, acknowledged, open_count]
+      properties:
+        fault_id: { type: string }
+        class:
+          type: string
+          enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+        reason:
+          type: string
+          enum: [unreachable, blocked, device_error, central_lost, duty_cycle, low_battery, tamper]
+        severity:
+          type: string
+          enum: [ok, info, warning, alarm, critical]
+        source: { $ref: '#/components/schemas/AlarmSource' }
+        open:
+          type: boolean
+          description: True when the fault was raised, false when it cleared.
+        acknowledged:
+          type: boolean
+          description: |
+            Marks an acknowledgement rather than a state change: the
+            condition is unchanged, the operator has merely stopped
+            needing to be told.
+        since:
+          type: string
+          format: date-time
+          description: When the fault opened. Omitted when the ledger records no such occurrence.
+        open_count:
+          type: integer
+          description: Standing fault count after this change, so a count entity needs no second read.
+
+    SecurityNotificationPayload:
+      type: object
+      description: |
+        Payload of a `security.notification` broadcast. Topic
+        `security.notifications`. One rendered report — the only
+        payload in the domain carrying prose, so a consumer can show a
+        sentence without inventing alarm wording, while `i18n_key` and
+        `args` let it re-render in its own locale instead.
+
+        A covert report (duress code, silent panic) reaches this
+        broadcast only under `alarm.duress_visibility: full`. The
+        WebSocket feeds the SPA and every dashboard a browser has open,
+        and a hallway tablet showing "duress code entered" while the
+        attacker stands next to you defeats the feature the covert
+        trigger exists for.
+      required: [class, severity, verb, subject, message, i18n_key, at, fault]
+      properties:
+        class:
+          type: string
+          enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
+        severity:
+          type: string
+          enum: [ok, info, warning, alarm, critical]
+        verb:
+          type: string
+          enum: [triggered, pre_alarm, cleared, silenced, failed_to_arm, raised, test]
+        subject:
+          type: string
+          description: One line, at most 120 characters, suitable as a notification title.
+        message:
+          type: string
+          description: A full sentence naming cause, place and time.
+        i18n_key:
+          type: string
+          description: |
+            Catalogue key of the message, so a consumer can re-render in
+            its own locale instead of translating prose.
+        args:
+          type: object
+          additionalProperties: { type: string }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/AlarmSource' }
+        zone_id: { type: string }
+        zone_slug: { type: string }
+        zone_name: { type: string }
+        mode: { type: string }
+        incident_id:
+          type: integer
+          format: int64
+        link: { type: string }
+        at:
+          type: string
+          format: date-time
+        fault:
+          type: boolean
+          description: |
+            Marks a fault report rather than a hazard report, so a
+            consumer can route the two without inspecting the class.
 
     TriggeredEventSummary:
       type: object

@@ -4,6 +4,67 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.0]
+
+### Added
+
+- **The daemon's own entity names are now readable by any consumer —
+  `GET /i18n/entities`.** The daemon has been the single naming authority
+  since 0.45.0, and it already names its hub singletons and Security &
+  Safety surfaces in both locales — but only on the MQTT discovery plane,
+  where the names were resolved at publish time and never left. Every
+  other consumer kept a second copy of the same words, and the copies
+  drift the moment either side is edited alone: "Alarmmeldungen" lived in
+  this catalogue *and* in the Home Assistant integration's `strings.json`,
+  with nothing comparing them.
+
+  The endpoint serves the naming projection — the `discovery.*` and
+  `security.entity.*` namespaces — resolved for a requested `locale`,
+  falling back per key to the daemon's default and echoing the locale
+  that actually answered so a consumer can tell a translation from a
+  fallback. Values stay templates: `Connectivity {iface}` carries a
+  placeholder only the caller can fill, because the daemon does not know
+  which interface is being named. The Config UI's own strings
+  (`nav.`, `login.`, `setup.`) are deliberately outside the projection —
+  they are not a naming contract. `APIVersion` bumped to `5.2.0`.
+
+
+- **The Security & Safety domain now pushes.** Its five events — the
+  folded severity, a hazard or fault class going active, a zone's
+  security view, a fault opening or clearing, and a rendered report —
+  reached MQTT, the webhook plane and the metrics collector since the
+  domain shipped, but no WebSocket consumer received any of them. Every
+  REST/WebSocket client therefore had to re-read `GET /security` on its
+  own schedule to learn that a smoke detector had fired, and the Config
+  UI's Security views showed whatever the state had been when the page
+  was opened: an `ok` badge could sit on the screen right through a
+  running alarm.
+
+  Five broadcasts close that: `security.state_changed`,
+  `security.class_changed` and `security.zone_changed` on topic
+  `security.state`, `security.fault_changed` on `security.faults`, and
+  `security.notification` on `security.notifications`. Three topics
+  rather than one flat family, so a messenger integration can take the
+  prose reports alone while a dashboard takes the state and never sees a
+  fault it does not render; `security.*` subscribes to all of them. The
+  broadcast names are the domain's own event tags — one vocabulary on
+  both sides, unlike the alarm family, where the internal tags read
+  `alarm_panel.` and the wire reads `alarm.`.
+
+  The Config UI's Security overview and fault ledger consume them and
+  re-read on the push, so both surfaces now follow the installation
+  instead of the page load. `APIVersion` bumped to `5.1.0`.
+
+  **A covert report stays off this plane.** A duress code or a silent
+  panic trigger reaches `security.notification` only under
+  `alarm.duress_visibility: full`. The WebSocket feeds the SPA and every
+  dashboard a browser has open — a hallway tablet showing "duress code
+  entered" while the attacker stands next to you defeats the trigger the
+  feature exists for. The domain already folds that policy into the
+  report's retainability, and this plane honours the flag rather than
+  re-deriving the rule; the webhook and the raw MQTT event topic are
+  unaffected and keep delivering under every level.
+
 ## [0.53.1]
 
 ### Changed

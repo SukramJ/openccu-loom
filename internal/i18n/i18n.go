@@ -114,6 +114,63 @@ func (c *Catalogs) TF(locale, key string, args map[string]string) string {
 	return b.String()
 }
 
+// ResolveLocale returns the locale that will actually answer lookups
+// for the requested tag: the tag itself when a catalogue is loaded for
+// it, [Catalogs.DefaultLocale] otherwise. Callers echo it back so a
+// consumer can tell "you got German" from "you got the fallback".
+func (c *Catalogs) ResolveLocale(locale string) string {
+	if locale == "" {
+		return c.DefaultLocale
+	}
+	c.PreloadLocale(locale)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if _, ok := c.catalogs[locale]; ok {
+		return locale
+	}
+	return c.DefaultLocale
+}
+
+// Prefixed returns every message whose key starts with one of prefixes,
+// resolved for locale with the same fallback chain as [Catalogs.T].
+//
+// The union of the requested and the default catalogue is returned, not
+// the intersection: a key present only in the fallback still answers,
+// which is what keeps a partially translated locale from silently
+// dropping entries a consumer depends on.
+//
+// Values are returned as authored, placeholders included — a name like
+// `Connectivity {iface}` is a template only the caller can complete.
+func (c *Catalogs) Prefixed(locale string, prefixes ...string) map[string]string {
+	if len(prefixes) == 0 {
+		return map[string]string{}
+	}
+	resolved := c.ResolveLocale(locale)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := map[string]string{}
+	collect := func(cat *Catalog) {
+		if cat == nil {
+			return
+		}
+		for key, msg := range cat.Messages {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(key, prefix) {
+					out[key] = msg
+					break
+				}
+			}
+		}
+	}
+	// Default first, requested second: the requested locale overwrites
+	// the fallback rather than the other way round.
+	if resolved != c.DefaultLocale {
+		collect(c.catalogs[c.DefaultLocale])
+	}
+	collect(c.catalogs[resolved])
+	return out
+}
+
 // Locales returns every loaded locale tag.
 func (c *Catalogs) Locales() []string {
 	c.mu.RLock()

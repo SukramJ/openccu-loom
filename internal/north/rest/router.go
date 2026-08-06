@@ -129,7 +129,13 @@ type Deps struct {
 	// contract is present even before the codes facade is wired.
 	AlarmCodes handlers.AlarmCodeAdmin
 	Labels     handlers.ParameterLabeler
-	Metrics    *metrics.Registry
+	// EntityNames backs GET /i18n/entities: the daemon's own entity-naming
+	// vocabulary, so a REST/WebSocket consumer renders the same words the
+	// MQTT discovery plane publishes instead of keeping its own copy.
+	// Nil serves an empty catalogue rather than a 404 — a consumer that
+	// finds no entry falls back to its own token either way.
+	EntityNames handlers.EntityNameCatalogue
+	Metrics     *metrics.Registry
 	// MasterProfiles backs the read-only master-profile discovery routes:
 	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles
 	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles/{id}
@@ -983,6 +989,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.SystemStatus != nil {
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))
 			}
+			// The entity-name catalogue is plain daemon vocabulary: no
+			// central, no device, nothing installation-specific, so it sits
+			// outside every domain group and needs no role beyond a session.
+			pr.Get("/i18n/entities", handlers.EntityNames(d.EntityNames))
 			pr.Get("/system/ccu", handlers.SystemCCU(d.SystemCCU))
 			// Reboot one CCU host. Admin-gated like DELETE /devices; the
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).

@@ -13,6 +13,19 @@ vi.mock("$lib/stores/preferences.svelte", () => ({
   prefs: { locale: "en" },
 }));
 
+// The view refreshes off the daemon's security.* broadcasts, so the shared
+// pump is replaced by a hand-driven one: `emit` plays the frame a real
+// daemon would send.
+let emit: ((ev: { type: string }) => void) | null = null;
+vi.mock("$lib/stores/events.svelte", () => ({
+  subscribe: (handler: (ev: { type: string }) => void) => {
+    emit = handler;
+    return () => {
+      emit = null;
+    };
+  },
+}));
+
 vi.mock("$lib/i18n", () => ({
   t: (key: string, vars?: Record<string, unknown>) =>
     vars ? `${key}:${JSON.stringify(vars)}` : key,
@@ -127,5 +140,59 @@ describe("SecurityOverview — load failure", () => {
 
     await waitFor(() => expect(mockGetSecuritySnapshot).toHaveBeenCalledTimes(2));
     await findByText("security.overview.empty");
+  });
+});
+
+describe("SecurityOverview — live refresh off the daemon's push", () => {
+  it("re-reads the snapshot when a security broadcast arrives", async () => {
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({ classes: [{ class: "smoke", active: false, known: 1, sources: [] }] }),
+    );
+    const { findByText } = render(SecurityOverview);
+    await findByText("security.severity.ok");
+
+    // What a running smoke alarm produces: the class goes active and the
+    // fold escalates. Without the push binding the badge stays "ok" until
+    // someone reloads the page by hand.
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({
+        severity: "alarm",
+        classes: [
+          {
+            class: "smoke",
+            active: true,
+            known: 1,
+            sources: [{ ref: "r1", name: "Kitchen smoke", at: "2026-08-01T00:00:00Z" }],
+          },
+        ],
+      }),
+    );
+    emit?.({ type: "security.class_changed" });
+
+    await findByText("security.severity.alarm");
+  });
+
+  it("collapses a burst of broadcasts into one refetch", async () => {
+    mockGetSecuritySnapshot.mockResolvedValue(snapshot());
+    render(SecurityOverview);
+    await waitFor(() => expect(mockGetSecuritySnapshot).toHaveBeenCalledTimes(1));
+
+    // One physical hazard moves class, fold and notification at once.
+    emit?.({ type: "security.class_changed" });
+    emit?.({ type: "security.state_changed" });
+    emit?.({ type: "security.notification" });
+
+    await waitFor(() => expect(mockGetSecuritySnapshot).toHaveBeenCalledTimes(2));
+    expect(mockGetSecuritySnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores broadcasts from other domains", async () => {
+    mockGetSecuritySnapshot.mockResolvedValue(snapshot());
+    render(SecurityOverview);
+    await waitFor(() => expect(mockGetSecuritySnapshot).toHaveBeenCalledTimes(1));
+
+    emit?.({ type: "datapoint.value_changed" });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(mockGetSecuritySnapshot).toHaveBeenCalledTimes(1);
   });
 });
