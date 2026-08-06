@@ -177,23 +177,30 @@ type Manager struct {
 // registry. Either may be nil — the manager then degrades gracefully
 // (no capture target, no override application) so the REST endpoints
 // can stay mounted without a wired stack.
-func NewManager(tee Tee, levels LevelRegistry) *Manager {
-	return &Manager{
+func NewManager(tee Tee, levels LevelRegistry, opts ...ManagerOption) *Manager {
+	m := &Manager{
 		tee:    tee,
 		levels: levels,
 		now:    time.Now,
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
-// SetClockForTesting injects a deterministic clock. Production code
-// uses time.Now via the default.
-func (m *Manager) SetClockForTesting(now func() time.Time) {
-	if now == nil {
-		now = time.Now
+// ManagerOption customises a Manager at construction time.
+type ManagerOption func(*Manager)
+
+// WithClock injects the time source. Tests pass a closure over a
+// mutable variable to advance time deterministically; the default is
+// time.Now. A nil clock keeps the default.
+func WithClock(now func() time.Time) ManagerOption {
+	return func(m *Manager) {
+		if now != nil {
+			m.now = now
+		}
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.now = now
 }
 
 // Start launches a new capture. Returns the summary so callers can

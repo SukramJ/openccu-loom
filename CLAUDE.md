@@ -1332,6 +1332,18 @@ version — this line no longer pins a number).
       lag the release. Bump them alongside `internal/build/version.go` and
       the `config.yaml` of **both** add-ons (release.yml guards both versions
       against the tag).
+- [ ] Before a release: run the **comment-claims sweep** — fan out
+      read-only agents that verify comment claims against the code:
+      comments naming consumers ("subscribers listen", "consumed by",
+      "so MQTT / HA / the SPA"), "stub" / "not wired yet" notes,
+      file-header inventories, and ratchet justifications in
+      `tests/contract/`. Fix or reword every refuted claim before
+      tagging. The mechanical guards
+      (`TestDeclaredSilentEventDocsClaimNoConsumers`,
+      `TestRatchetReasonsAreNotDeferrals`) cover only declared-silent
+      events and ratchet texts — prose everywhere else is caught by
+      this sweep alone. The 0.54.4 sweep found one live delivery bug
+      and a dozen refuted claims that seven green PRs had let through.
 - [ ] `SPECIFICATION.md` updated if the change touches a goal,
       non-goal, hard constraint, or resolved decision; ADR written
       for any architectural shift that future readers will need to

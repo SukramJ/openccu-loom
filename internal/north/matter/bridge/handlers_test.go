@@ -228,9 +228,9 @@ func paseHandshakeToPake3(t *testing.T, a *PaseAdapter) []byte {
 	//    can build a response. Wire up a deterministic random source
 	//    so the captured response bytes are stable across reruns.
 	a.SetPBKDFParams(uint32(iterations), salt, 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte {
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte {
 		return [spake2.PBKDFRandomSize]byte{0x11}
-	})
+	}
 
 	// 2. Build a synthetic PBKDFParamRequest and run it through the
 	//    adapter. Use a fixed initiator-random so the test stays
@@ -604,7 +604,7 @@ func buildBridgeRequestPayload(rand32 []byte, sessionID uint16, hasPBKDF bool) [
 	return buf
 }
 
-// fixedRandomSource returns a SetRandomSource-compatible function that
+// fixedRandomSource returns a randomSource-compatible function that
 // always yields the provided 32-byte value.
 func fixedRandomSource(val [spake2.PBKDFRandomSize]byte) func() [spake2.PBKDFRandomSize]byte {
 	return func() [spake2.PBKDFRandomSize]byte { return val }
@@ -643,7 +643,7 @@ func TestPaseAdapter_PBKDFRequestHappyPathWithoutParams(t *testing.T) {
 
 	a := NewPaseAdapter(nil)
 	a.SetPBKDFParams(iterations, salt, respSessID)
-	a.SetRandomSource(fixedRandomSource(fixed32))
+	a.randomSource = fixedRandomSource(fixed32)
 
 	payload := buildBridgeRequestPayload(initRand[:], initSessID, false)
 	opcode, respBytes, err := a.ProcessPBKDFParamRequest(payload)
@@ -692,7 +692,7 @@ func TestPaseAdapter_PBKDFRequestHappyPathWithParams(t *testing.T) {
 
 	a := NewPaseAdapter(nil)
 	a.SetPBKDFParams(1000, []byte("salt-16-bytes!!!"), 5)
-	a.SetRandomSource(fixedRandomSource(fixed32))
+	a.randomSource = fixedRandomSource(fixed32)
 
 	payload := buildBridgeRequestPayload(initRand[:], 99, true)
 	_, respBytes, err := a.ProcessPBKDFParamRequest(payload)
@@ -708,7 +708,7 @@ func TestPaseAdapter_PBKDFRequestHappyPathWithParams(t *testing.T) {
 	}
 }
 
-// TestPaseAdapter_PBKDFRandomSourceOverride — SetRandomSource injects a
+// TestPaseAdapter_PBKDFRandomSourceOverride — an injected randomSource is a
 // known pattern; decoded ResponderRandom must match it exactly.
 func TestPaseAdapter_PBKDFRandomSourceOverride(t *testing.T) {
 	t.Parallel()
@@ -723,7 +723,7 @@ func TestPaseAdapter_PBKDFRandomSourceOverride(t *testing.T) {
 
 	a := NewPaseAdapter(nil)
 	a.SetPBKDFParams(2000, []byte("another-16-byte!"), 9)
-	a.SetRandomSource(fixedRandomSource(known))
+	a.randomSource = fixedRandomSource(known)
 
 	payload := buildBridgeRequestPayload(initRand[:], 11, false)
 	_, respBytes, err := a.ProcessPBKDFParamRequest(payload)
@@ -757,7 +757,7 @@ func TestPaseAdapter_PBKDFSaltDefensiveCopy(t *testing.T) {
 
 	a := NewPaseAdapter(nil)
 	a.SetPBKDFParams(1000, salt, 2)
-	a.SetRandomSource(fixedRandomSource(fixed32))
+	a.randomSource = fixedRandomSource(fixed32)
 
 	// Mutate the original salt slice after SetPBKDFParams.
 	for i := range salt {
@@ -927,7 +927,7 @@ func TestPaseAdapter_Pake3FailureClearsVerifier(t *testing.T) {
 	// ProcessPake1 errors otherwise per Matter §4.13 (Pake1 must
 	// follow PBKDFParamRequest/Response).
 	a.SetPBKDFParams(1000, []byte("SPAKE2P Key Salt"), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x33} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x33} }
 	initRand := bytes.Repeat([]byte{0x44}, spake2.PBKDFRandomSize)
 	if _, _, err := a.ProcessPBKDFParamRequest(buildTestPBKDFParamRequest(t, initRand)); err != nil {
 		t.Fatalf("ProcessPBKDFParamRequest: %v", err)
@@ -991,7 +991,7 @@ func TestPaseAdapter_NewPaseAdapter_SingleShotBackcompat(t *testing.T) {
 
 	// Prime the PBKDF context (ProcessPake1 errors without it).
 	a.SetPBKDFParams(uint32(iterations), salt, 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x55} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x55} }
 	initRand := bytes.Repeat([]byte{0x66}, spake2.PBKDFRandomSize)
 	if _, _, err := a.ProcessPBKDFParamRequest(buildTestPBKDFParamRequest(t, initRand)); err != nil {
 		t.Fatalf("ProcessPBKDFParamRequest: %v", err)

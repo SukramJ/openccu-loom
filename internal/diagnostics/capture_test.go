@@ -223,8 +223,7 @@ func TestLogLevelOverrides_SetAndReset(t *testing.T) {
 func TestList_ActiveAndArchived(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	mgr := diagnostics.NewManager(nil, nil)
-	mgr.SetClockForTesting(func() time.Time { return now })
+	mgr := diagnostics.NewManager(nil, nil, diagnostics.WithClock(func() time.Time { return now }))
 
 	s1, err := mgr.Start(diagnostics.StartOptions{})
 	if err != nil {
@@ -235,7 +234,6 @@ func TestList_ActiveAndArchived(t *testing.T) {
 	}
 
 	now = now.Add(time.Minute)
-	mgr.SetClockForTesting(func() time.Time { return now })
 
 	if _, err := mgr.Start(diagnostics.StartOptions{}); err != nil {
 		t.Fatalf("Start 2: %v", err)
@@ -298,8 +296,7 @@ func TestOpenArchive_Stopped_ReturnsTarGz(t *testing.T) {
 func TestSweep_Expiry_SetsStatusExpired(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	mgr := diagnostics.NewManager(nil, nil)
-	mgr.SetClockForTesting(func() time.Time { return now })
+	mgr := diagnostics.NewManager(nil, nil, diagnostics.WithClock(func() time.Time { return now }))
 
 	sum, err := mgr.Start(diagnostics.StartOptions{Duration: time.Minute})
 	if err != nil {
@@ -311,7 +308,6 @@ func TestSweep_Expiry_SetsStatusExpired(t *testing.T) {
 
 	// Advance past EndsAt.
 	now = now.Add(2 * time.Minute)
-	mgr.SetClockForTesting(func() time.Time { return now })
 	mgr.Sweep()
 
 	list := mgr.List()
@@ -339,8 +335,7 @@ func TestSweep_Expiry_SetsStatusExpired(t *testing.T) {
 func TestSweep_ArchiveRetention_RemovesOldEntries(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	mgr := diagnostics.NewManager(nil, nil)
-	mgr.SetClockForTesting(func() time.Time { return now })
+	mgr := diagnostics.NewManager(nil, nil, diagnostics.WithClock(func() time.Time { return now }))
 
 	sum, err := mgr.Start(diagnostics.StartOptions{})
 	if err != nil {
@@ -352,7 +347,6 @@ func TestSweep_ArchiveRetention_RemovesOldEntries(t *testing.T) {
 
 	// Advance past ArchiveRetention.
 	now = now.Add(diagnostics.ArchiveRetention + time.Minute)
-	mgr.SetClockForTesting(func() time.Time { return now })
 	mgr.Sweep()
 
 	list := mgr.List()
@@ -370,8 +364,7 @@ func TestSweep_ArchiveRetention_RemovesOldEntries(t *testing.T) {
 func TestArchiveFIFO_OverMax_EvictsOldest(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	mgr := diagnostics.NewManager(nil, nil)
-	mgr.SetClockForTesting(func() time.Time { return now })
+	mgr := diagnostics.NewManager(nil, nil, diagnostics.WithClock(func() time.Time { return now }))
 
 	var firstID string
 	for i := 0; i <= diagnostics.MaxArchivedCaptures; i++ {
@@ -386,7 +379,6 @@ func TestArchiveFIFO_OverMax_EvictsOldest(t *testing.T) {
 			t.Fatalf("Stop %d: %v", i, err)
 		}
 		now = now.Add(time.Second)
-		mgr.SetClockForTesting(func() time.Time { return now })
 	}
 
 	list := mgr.List()

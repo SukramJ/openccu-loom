@@ -68,7 +68,7 @@ func primedPaseAdapter(t *testing.T) *PaseAdapter {
 	t.Helper()
 	a := NewPaseAdapterWithFactory(newVerifierFactory(t, nil))
 	a.SetPBKDFParams(failureCountTestIterations, failureCountTestSalt(), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 	initRand := bytes.Repeat([]byte{0x22}, spake2.PBKDFRandomSize)
 	if _, _, err := a.ProcessPBKDFParamRequest(buildTestPBKDFParamRequest(t, initRand)); err != nil {
 		t.Fatalf("ProcessPBKDFParamRequest (priming): %v", err)
@@ -85,7 +85,7 @@ func TestPaseAdapter_NonDefaultPasscodeID_Rejected(t *testing.T) {
 	t.Parallel()
 	a := NewPaseAdapterWithFactory(newVerifierFactory(t, nil))
 	a.SetPBKDFParams(failureCountTestIterations, failureCountTestSalt(), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 	initRand := bytes.Repeat([]byte{0x22}, spake2.PBKDFRandomSize)
 
 	opcode, body, err := a.ProcessPBKDFParamRequest(buildTestPBKDFParamRequestPasscodeID(t, initRand, 5))
@@ -115,7 +115,7 @@ func TestDispatchSecureChannel_NonDefaultPasscodeID_CountsPaseFailure(t *testing
 	b := newStartedBridge(t)
 	a := NewPaseAdapterWithFactory(newVerifierFactory(t, nil))
 	a.SetPBKDFParams(failureCountTestIterations, failureCountTestSalt(), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 	b.AttachPaseHandler(a)
 
 	reqBytes := buildTestPBKDFParamRequestPasscodeID(t, bytes.Repeat([]byte{0x22}, spake2.PBKDFRandomSize), 5)
@@ -180,7 +180,7 @@ func TestDispatchSecureChannel_Pake1Failure_CountsPaseFailure(t *testing.T) {
 	b := newStartedBridge(t)
 	a := NewPaseAdapterWithFactory(newVerifierFactory(t, nil))
 	a.SetPBKDFParams(failureCountTestIterations, failureCountTestSalt(), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 	b.AttachPaseHandler(a)
 
 	const exchangeID = uint16(7)
