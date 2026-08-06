@@ -60,6 +60,36 @@ func StateToken(state hmenum.AlarmZoneState, mode hmenum.AlarmMode) string {
 	}
 }
 
+// ZoneStateFromToken inverts [StateToken]: it maps an HA
+// alarm_control_panel state token back onto the engine's zone state.
+//
+// The inverse is lossy by construction — every `armed_*` token collapses
+// onto [hmenum.AlarmZoneStateArmed], because the protection mode it also
+// encodes travels in its own field. That is exactly what a consumer
+// needs when it holds the mode separately and only wants to know whether
+// the zone is armed.
+//
+// An unknown token reports false rather than guessing: a security
+// surface that renders a made-up state is worse than one that admits it
+// does not know.
+func ZoneStateFromToken(token string) (hmenum.AlarmZoneState, bool) {
+	switch token {
+	case HAAlarmStateDisarmed:
+		return hmenum.AlarmZoneStateDisarmed, true
+	case HAAlarmStateArming:
+		return hmenum.AlarmZoneStateArming, true
+	case HAAlarmStatePending:
+		return hmenum.AlarmZoneStatePending, true
+	case HAAlarmStateTriggered:
+		return hmenum.AlarmZoneStateTriggered, true
+	case HAAlarmStateArmedHome, HAAlarmStateArmedAway, HAAlarmStateArmedNight,
+		HAAlarmStateArmedVacation, HAAlarmStateArmedCustomBypass:
+		return hmenum.AlarmZoneStateArmed, true
+	default:
+		return "", false
+	}
+}
+
 // armedTokenForMode resolves the armed HA token for a protection mode.
 func armedTokenForMode(mode hmenum.AlarmMode) string {
 	switch mode {

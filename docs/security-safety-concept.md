@@ -276,13 +276,65 @@ Topic `<base>/security/class/<class>`, Entity-Key `class_<class>`, Wertform
 | `tamper` | `tamper` | ✅ | `SABOTAGE*`-Familie (Präfixregel), tamper-typisierte Sensoren |
 | `battery` | `battery` | ✅ | `LOWBAT`, `LOWBAT_SENSOR` sicherheitsrelevanter Geräte |
 | `technical` | `problem` | ✅ | `UNREACH`, `STICKY_UNREACH`, `BLOCKED_*`, `ERROR_ALARM_TEST`, `ERROR_JAMMED`, `ERROR_SMOKE_CHAMBER`, `DUTYCYCLE`/`DUTY_CYCLE` |
-| `intrusion` | `safety` | — | Klassenprojektion der Engine |
+| `intrusion` | `safety` | — | **Zwei Quellen:** die Klassenprojektion der Engine (Vorfall) **und** jeder zugeordnete Tür-, Fenster- oder Bewegungsmelder über `SecurityClassForSensorType` (`pkg/hmenum/alarm.go:323`) sowie jeder eingebuchte, nicht klassifizierbare Melder (`index.go:247`). Die Klasse ist damit **unabhängig vom Schärfungszustand** aktiv |
 | `panic` | `safety` | — | Panik/Überfall (laut). Stille Auslösungen unterliegen §10.1 |
 
 `reason ∈ {unreachable, blocked, device_error, duty_cycle, low_battery, tamper}`.
 **`central_lost` ist definiert, wird aber von nichts erhoben** — ein
 Zentralenverlust räumt heute per `ClearByCentral` auf, statt einen Fault zu
 öffnen. Der Wert bleibt reserviert.
+
+### 4.2.1 Was die Klassen-Entitäten behaupten — und wie sie heißen
+
+Die Klassen-Entitäten melden eine **Erkennung**, kein Urteil. Das Urteil
+(„es wird gerade eingebrochen") gehört dem `alarm_control_panel`, denn nur
+die Engine kennt den Schärfungszustand. Die Namen folgen deshalb einem
+Verb-Muster statt eines Substantivs: ein Substantiv liest sich als Befund,
+ein Verb als Beobachtung.
+
+Der schärfste Fall war `intrusion`. Als „Einbruch" gelesen behauptet die
+Entität eine Straftat; tatsächlich steht sie auf ON, sobald ein zugeordneter
+Melder meldet — ein gekipptes Fenster bei unscharfer Anlage genügt. Der Name
+sagt das jetzt.
+
+| Klasse | Name (de) | Name (en) | ON bedeutet |
+|---|---|---|---|
+| `smoke` | Rauch erkannt | Smoke detected | ein Rauchmelder meldet Rauch |
+| `water` | Wasser erkannt | Water detected | Leckage, Feuchte oder Wasserstand |
+| `gas` | Gas erkannt | Gas detected | brennbares Gas erkannt |
+| `co` | Kohlenmonoxid erkannt | Carbon monoxide detected | CO erkannt |
+| `tamper` | Sabotage erkannt | Tamper detected | Sabotagekontakt ausgelöst |
+| `battery` | Batterie schwach | Battery low | Batterie eines sicherheitsrelevanten Geräts schwach |
+| `technical` | Technische Störung | Technical fault | unerreichbar, blockiert, Gerätefehler, Duty-Cycle |
+| `intrusion` | Öffnung oder Bewegung erkannt | Opening or motion detected | ein zugeordneter Tür-, Fenster- oder Bewegungsmelder ist aktiv — **auch unscharf** |
+| `panic` | Panikruf ausgelöst | Panic triggered | Panik-/Überfallauslöser betätigt (laute Auslösung; stille siehe §10.1) |
+
+Die Namen liegen in `internal/i18n/catalogs/{de,en}.json` unter
+`security.entity.class.<klasse>` und wirken damit auf **beide** Nordbound-Wege
+gleichzeitig: MQTT-Discovery löst sie beim Publish auf, der
+openccu-loom-client liest sie über `GET /i18n/entities` in der UI-Sprache von
+Home Assistant. Eine Umbenennung findet also an genau einer Stelle statt.
+
+### 4.2.2 Herkunft: das `sources`-Attribut
+
+Jede Entität dieser Domäne, deren Zustand aus Datenpunkten stammt, trägt die
+Herkunft als Attribut mit — sonst ist „Öffnung oder Bewegung erkannt: An"
+nicht handhabbar, weil die Frage „welcher Melder?" offen bleibt. Die Form ist
+für alle gleich (`sourcesAttribute`, `security_reconcile.go`):
+
+| Attribut | Inhalt |
+|---|---|
+| `sources[]` | vollständige Quellenobjekte: `ref, central, interface_id, channel_address, device_address, parameter, name, sensor_type, class, at` |
+| `source_names[]` | nur die Anzeigenamen — das, was eine Automation in eine Nachricht schreibt |
+| `count` | Anzahl der ausgelieferten Quellen |
+| `total` | Anzahl der tatsächlich beteiligten Quellen |
+| `truncated` | `true`, wenn `total > count` — die Liste ist gedeckelt, und sie sagt es |
+
+`ref` ist der stabile Routing-Schlüssel
+`<central>|<interface_id>|<channel_address>|<parameter>` und damit der
+Schlüssel, über den REST (`GET /security/sources`, `PUT
+/security/sources/{ref}`) dieselbe Quelle wieder anfasst — etwa um eine
+Fehlklassifikation zu korrigieren.
 
 ### 4.3 Zonen-Ebene (1 Entität pro Zone, nur bei aktiver Engine)
 

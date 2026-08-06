@@ -67,6 +67,15 @@
     if (reloadTimer) clearTimeout(reloadTimer);
   });
 
+  // A zone the alarm engine has not reported a state for yet carries an
+  // empty string. Interpolating it produced the bare key `alarm.state.`
+  // on screen — a translation miss that looks like a broken build. Say
+  // "unknown" instead, and never guess "disarmed": on a security surface
+  // a wrong "all clear" is worse than an admitted gap.
+  function zoneStateLabel(state: string | undefined): string {
+    return state ? t(`alarm.state.${state}`) : t("security.overview.zone_state_unknown");
+  }
+
   type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
 
   function severityVariant(sev: string): BadgeVariant {
@@ -278,7 +287,7 @@
                 {/if}
               </div>
               <Badge variant={zone.state === "triggered" ? "danger" : "default"}>
-                {t(`alarm.state.${zone.state}`)}
+                {zoneStateLabel(zone.state)}
               </Badge>
             </Card>
           {/each}

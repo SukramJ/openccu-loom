@@ -299,6 +299,20 @@ func (s *Service) onAlarmPanelChanged(e hmevent.AlarmPanelChangedEvent) {
 		z.Slug = zoneSlugFallback(e.Name, e.ZoneID)
 	}
 	z.Name = e.Name
+	// Adopt the engine's arm state from the panel projection. Without
+	// this a zone carries an empty state until it first triggers or
+	// transitions: the seeding paths (store refresh, this handler) set
+	// identity only, and the state writers below fire on transitions
+	// alone. A daemon restarted next to a quiet alarm system therefore
+	// reported every zone with no state at all, which the SPA rendered
+	// as the bare translation key `alarm.state.`.
+	//
+	// The panel token collapses the protection mode into the armed
+	// variants, so the mode is left to its own writers; an unknown token
+	// leaves the state untouched rather than inventing one.
+	if st, ok := alarmpanel.ZoneStateFromToken(e.State); ok {
+		z.State = st
+	}
 	s.agg.zones[e.ZoneID] = z
 	snap := s.agg.snapshot()
 	s.mu.Unlock()
