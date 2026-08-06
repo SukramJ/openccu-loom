@@ -196,3 +196,45 @@ describe("SecurityOverview — live refresh off the daemon's push", () => {
     expect(mockGetSecuritySnapshot).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("SecurityOverview — a zone without a reported state", () => {
+  it("says unknown instead of leaking the translation key", async () => {
+    // The daemon reports an empty state for a zone the alarm engine has
+    // not spoken about yet. Interpolating it produced `alarm.state.` on
+    // screen, which reads as a broken build rather than a missing value.
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({
+        zones: [{ id: "z1", slug: "erdgeschoss", name: "Erdgeschoss", state: "", mode: "" }],
+      }),
+    );
+    const { findByText, queryByText } = render(SecurityOverview);
+
+    await findByText("Erdgeschoss");
+    expect(queryByText("alarm.state.")).toBeNull();
+    expect(queryByText("security.overview.zone_state_unknown")).toBeTruthy();
+  });
+
+  it("never substitutes a comforting default for a missing state", async () => {
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({
+        zones: [{ id: "z1", slug: "erdgeschoss", name: "Erdgeschoss", state: "", mode: "" }],
+      }),
+    );
+    const { findByText, queryByText } = render(SecurityOverview);
+
+    await findByText("Erdgeschoss");
+    // "disarmed" would be an all-clear the daemon never reported.
+    expect(queryByText("alarm.state.disarmed")).toBeNull();
+  });
+
+  it("renders a reported state normally", async () => {
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({
+        zones: [{ id: "z1", slug: "eg", name: "Erdgeschoss", state: "armed", mode: "full" }],
+      }),
+    );
+    const { findByText } = render(SecurityOverview);
+
+    await findByText("alarm.state.armed");
+  });
+});

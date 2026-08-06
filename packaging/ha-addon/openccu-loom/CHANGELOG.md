@@ -1,5 +1,19 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.54.2
+
+- **Fixed: alarm zones showed a blank state on the Security overview.** A
+  zone that had not changed its arm state since the daemon started
+  reported nothing at all, and the page showed a raw placeholder instead
+  of "Disarmed" or "Armed".
+
+- **The hazard entities are named after what they detected.** "Einbruch"
+  became "Öffnung oder Bewegung erkannt": that sensor stands ON as soon as
+  a monitored door, window or motion detector reports — including while
+  the alarm system is off. Whether that is a break-in is what the alarm
+  control panel says. The other classes were renamed to match ("Rauch
+  erkannt", "Batterie schwach", …). Names only; nothing else changed.
+
 ## 0.54.1
 
 - **Fixed: with MQTT switched off, the hub entities stopped appearing.**

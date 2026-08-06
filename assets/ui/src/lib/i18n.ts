@@ -3426,6 +3426,7 @@ const EN: Catalog = {
   "security.overview.class_since": "since {time}",
   "security.overview.sources_more": "+{count} more",
   "security.overview.zones_title": "Zones",
+  "security.overview.zone_state_unknown": "Unknown",
   "security.overview.zones_empty": "No alarm engine configured",
   "security.overview.zones_empty.description":
     "This domain works independently of the alarm engine — that's a feature, not an error. Set up zones in the alarm panel to see them here too.",
@@ -6930,6 +6931,7 @@ const DE: Catalog = {
   "security.overview.class_since": "seit {time}",
   "security.overview.sources_more": "+{count} weitere",
   "security.overview.zones_title": "Zonen",
+  "security.overview.zone_state_unknown": "Unbekannt",
   "security.overview.zones_empty": "Keine Alarmanlage eingerichtet",
   "security.overview.zones_empty.description":
     "Diese Domäne funktioniert unabhängig von der Alarmanlage — das ist ein Feature, kein Fehler. Richte Zonen im Alarm-Panel ein, damit sie auch hier erscheinen.",

@@ -4,6 +4,42 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.2]
+
+### Fixed
+
+- **An alarm zone reported no arm state at all until it first changed
+  one.** The Security & Safety domain seeds a zone from the zone store and
+  from the panel projection, and both paths set identity only — id, slug,
+  name. The state writers fire on a trigger or a transition. A daemon
+  restarted next to a quiet alarm system therefore held every zone with an
+  empty state, and the Config UI rendered the bare translation key
+  `alarm.state.` where the arm state belongs. The zone now adopts the
+  engine's state from the panel projection; an unrecognised token leaves
+  the previous state standing rather than inventing one, because on a
+  security surface a made-up "disarmed" is worse than an admitted gap. The
+  overview additionally says "unknown" instead of interpolating an empty
+  value into a key.
+
+### Changed
+
+- **The Security & Safety class entities say what they observed, not what
+  it means.** They report a detection; the verdict — "someone is breaking
+  in" — belongs to the alarm control panel, which is the only surface that
+  knows the arm state. `intrusion` was the sharp case: named "Einbruch" it
+  claimed a burglary, while it actually stands ON as soon as an enrolled
+  door, window or motion sensor reports — a tilted window on a disarmed
+  system is enough. It is now "Öffnung oder Bewegung erkannt" / "Opening or
+  motion detected", and the other classes follow the same verb pattern
+  (`Rauch erkannt`, `Batterie schwach`, `Panikruf ausgelöst`, …).
+
+  Names only: no behaviour changed, and no entity id, topic or unique_id
+  moved. They live in `internal/i18n/catalogs/{de,en}.json` and therefore
+  reach the MQTT discovery plane and the REST entity-name catalogue in one
+  step. `docs/security-safety-concept.md` §4.2.1 documents what each class
+  asserts, §4.2.2 the `sources` attribute that names the detector behind
+  it.
+
 ## [0.54.1]
 
 ### Fixed
