@@ -4,6 +4,48 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.1]
+
+### Fixed
+
+- **A disabled MQTT broker could take the daemon down, and did silence the
+  whole hub plane.** `Wiring.Bridge()` returns nil by design: switching
+  `north.mqtt.enabled` off at runtime keeps the Wiring alive and points its
+  bridge nowhere, so an in-flight publish becomes a no-op. Every method on
+  Wiring itself checks for that. Four call sites that reach *through* Wiring
+  for the bridge — to get at the discovery builder, the per-central HubInfo
+  stamp, the per-data-point discovery on the value-change path, and the
+  system-status publish — did not.
+
+  The failure was asymmetric, which is why it went unnoticed. The
+  hub-discovery re-Start runs under panic isolation, so it logged
+  `mqtt.hub_discovery.restart_on_ready.panic` and carried on — while the
+  entire hub plane (sysvars, programs, the named central device,
+  alarm/service messages, connectivity, install mode) silently never
+  published, because the pass that wires it died before publishing
+  anything. The other three have no recover at all: the HubInfo stamp runs
+  during per-central bring-up and the other two from event-bus handlers, so
+  each would have crashed the daemon outright.
+
+  All four now check, and a contract test fails the build on any new
+  reach-through that dereferences the bridge without one.
+
+- **CUxD delivered every event twice after an upgrade, and the second copy
+  was rejected forever.** The `loom-` interface-id rename in 0.54.0 assumed
+  the old registration would be cleared on the next start, which holds for
+  the CCU's own components: they key deregistration on the callback URL.
+  CUxD does not — a registration written by a pre-0.54.0 release survives
+  the upgrade, so CUxD announces each event to both ids. The current one is
+  handled; the orphan had no route and produced a
+  `binrpc callback: multicall sub-call failed` warning per event, for the
+  life of the daemon. An operator log showed 26 of them in two minutes.
+
+  The BIN-RPC callback server now also answers under the pre-prefix id, so
+  the orphan's copy becomes a duplicate the ingest pipeline collapses
+  instead of a rejected callback. No events were lost — both copies carry
+  the same payload — but the log noise was permanent and read like a
+  transport fault.
+
 ## [0.54.0]
 
 ### Added

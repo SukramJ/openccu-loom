@@ -977,7 +977,14 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 			// and reaches `classifyComponent` → standalone sensor.
 			perDP := ev
 			perDP.Source = nil
-			_ = b.mqtt.Bridge().PublishDiscoveryOnly(ctx, perDP)
+			// The bridge is nil while MQTT is disabled at runtime; the
+			// Wiring's own publish helpers treat that as a no-op and this
+			// reach-through has to do the same. It sits on the value-change
+			// path, so an unguarded dereference would crash the daemon on
+			// the first event after a config swap.
+			if bridge := b.mqtt.Bridge(); bridge != nil {
+				_ = bridge.PublishDiscoveryOnly(ctx, perDP)
+			}
 		} else {
 			// No Custom-DP on the channel → straight per-DP path.
 			b.mqtt.Publish(ctx, ev)

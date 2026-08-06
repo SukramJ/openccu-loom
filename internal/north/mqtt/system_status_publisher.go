@@ -86,7 +86,15 @@ func (p *SystemStatusPublisher) Start() {
 				return
 			}
 			ctx := context.Background()
-			if err := p.wiring.Bridge().PublishSystemStatus(ctx, centralName, b); err != nil {
+			// Nil while MQTT is disabled at runtime — the Wiring stays alive
+			// and points its bridge nowhere. This runs from an event-bus
+			// handler, so an unguarded dereference would crash the daemon on
+			// the next status change rather than merely dropping a publish.
+			bridge := p.wiring.Bridge()
+			if bridge == nil {
+				return
+			}
+			if err := bridge.PublishSystemStatus(ctx, centralName, b); err != nil {
 				p.logger.Warn("mqtt.system_status.publish",
 					slog.String("central", centralName),
 					slog.String("err", err.Error()))

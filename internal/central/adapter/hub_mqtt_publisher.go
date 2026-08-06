@@ -88,6 +88,20 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	centralName := u.Name()
 	w := p.wiring
 	b := w.Bridge()
+	if b == nil {
+		// A nil bridge is a designed state, not an anomaly: disabling MQTT
+		// at runtime keeps the Wiring alive and points its bridge nowhere
+		// (see the supervisor's config-swap path), so every Wiring method
+		// treats a publish as a no-op. This wiring pass reaches through to
+		// the bridge for the discovery builder, so it has to make the same
+		// check — without it the ready-driven re-Start dereferenced nil and
+		// took the hub-discovery goroutine down with it.
+		//
+		// Returning is complete, not a partial repair: the supervisor calls
+		// Start again on the next broker connect, and Start re-wires every
+		// central from scratch.
+		return
+	}
 	// Use the BRIDGE's discovery builder so the per-central HubInfo the
 	// daemon registers via [mqtt.Bridge.SetHubInfoFor] — most importantly
 	// the CCU serial that disambiguates hub unique_ids across centrals —

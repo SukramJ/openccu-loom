@@ -173,6 +173,16 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		}
 		handlers.SetDelayNewDeviceCreation(cc.Behavior.DelayNewDeviceCreationEnabled())
 		binrpcCallbackServer.Register(initID, handlers)
+		// Also answer under the id a pre-prefix release registered. CUxD
+		// keys its callback registrations in a way the URL-only deinit does
+		// not clear, so that registration survives the upgrade and CUxD
+		// delivers every event twice — once here, once to the orphan. Left
+		// unregistered the orphan's copy is rejected and logged for the life
+		// of the daemon; registered, it is a duplicate the ingest pipeline
+		// already collapses. Skipped when the two ids coincide.
+		if legacyID := LegacyInitInterfaceID(unit.InstanceName(), cc.Name, iface); legacyID != initID {
+			binrpcCallbackServer.Register(legacyID, handlers)
+		}
 		// xmlrpc_bin:// is the scheme every CCU-side component uses for a
 		// BIN-RPC callback endpoint, and the one the CCU prints in its own
 		// handler lists. CUxD itself accepts anything here — it speaks no
@@ -273,6 +283,9 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 					slog.String("interface", initID), slog.String("err", err.Error()))
 			}
 			binrpcCallbackServer.Deregister(initID)
+			if legacyID := LegacyInitInterfaceID(unit.InstanceName(), cc.Name, iface); legacyID != initID {
+				binrpcCallbackServer.Deregister(legacyID)
+			}
 		}
 		// Drain the callback handler's background goroutines (self-reload /
 		// device-refresh) after the route is deregistered, mirroring the

@@ -1,5 +1,19 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.54.1
+
+- **Fixed: with MQTT switched off, the hub entities stopped appearing.**
+  System variables, programs, the CCU device card, alarm and service
+  messages, connectivity and install mode were all silently skipped, and on
+  some paths the daemon could crash outright. Turning MQTT off is now
+  simply off again.
+
+- **Fixed: constant `binrpc callback` warnings in the log after updating.**
+  CUxD kept a callback registration from the previous version, so every
+  CUxD event arrived twice and the second copy was rejected and logged. The
+  daemon now accepts the old registration as well. No values were lost —
+  the log was just permanently noisy.
+
 ## 0.54.0
 
 - **The Security & Safety views now follow the installation live.** The
