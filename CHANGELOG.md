@@ -8,6 +8,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An intrusion alarm was reported while the alarm system was
+  disarmed.** The Security & Safety domain rendered a `triggered` report
+  for every hazard-class source going active — and the intrusion class is
+  fed by every enrolled door, window and motion sensor, which report all
+  day on a disarmed system. An operator saw:
+
+  > In Zone  wurde um 15:43 Uhr ein Einbruchalarm ausgelöst (Modus ):
+  > Bewegungsmelder WZ, Bewegungsmelder HAR, Bewegungsmelder FL.
+
+  Both halves of the defect are visible in that sentence: it claims a
+  break-in that did not happen, and the zone and mode placeholders are
+  empty because the source path carries neither.
+
+  Whether an active motion sensor means a break-in is the alarm engine's
+  verdict — it is the only party that knows the arm state — and the engine
+  already reports it, with the zone and mode filled in, on both the
+  triggered and the cleared side. The source path no longer reports the
+  intrusion class at all.
+
+  The class entity keeps flipping: it reports a detection, is named for
+  one ("Öffnung oder Bewegung erkannt"), and answers the "is anything
+  open?" question the arming flow needs. Panic is deliberately not
+  excluded — a hold-up trigger must alert precisely when nothing is armed.
+
 - **An alarm zone reported no arm state at all until it first changed
   one.** The Security & Safety domain seeds a zone from the zone store and
   from the panel projection, and both paths set identity only — id, slug,

@@ -2,6 +2,15 @@
 
 ## 0.54.2
 
+- **Fixed: "Einbruchalarm ausgelöst" appeared while the alarm system was
+  switched off.** Any monitored door, window or motion detector reporting
+  was enough to produce the message — including the one with the empty
+  zone and mode ("In Zone  wurde ... (Modus )"). Only the alarm system
+  itself reports a break-in now, and it knows the zone, the mode and
+  whether it was armed. The "Öffnung oder Bewegung erkannt" sensor keeps
+  working as before: it shows that a monitored detector is reporting,
+  which is what you need before arming.
+
 - **Fixed: alarm zones showed a blank state on the Security overview.** A
   zone that had not changed its arm state since the daemon started
   reported nothing at all, and the page showed a raw placeholder instead
