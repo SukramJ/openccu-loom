@@ -397,12 +397,19 @@ type ParameterLabeler interface {
 // Bridge orchestrates the raw + HA Discovery planes atop a shared
 // [Publisher].
 type Bridge struct {
-	cfg      BridgeConfig
-	topics   *TopicBuilder
-	legacy   *LegacyTopicBuilder // nil when LegacyAlias.Enabled = false
-	client   Publisher
-	mu       sync.Mutex
-	declared map[string][]byte // discovery topic → last published payload
+	cfg    BridgeConfig
+	topics *TopicBuilder
+	legacy *LegacyTopicBuilder // nil when LegacyAlias.Enabled = false
+	client Publisher
+	// subscriber is the subscribe-capable client the boot-time cleanup
+	// passes ride on. In production the publish path (`client`) is
+	// wrapped in a publish-only circuit breaker, so the raw client must
+	// be wired separately via [Bridge.WithSubscriber] — without it both
+	// cleanup passes fail their capability check on every boot and
+	// retained legacy topics are never evicted.
+	subscriber Subscriber
+	mu         sync.Mutex
+	declared   map[string][]byte // discovery topic → last published payload
 	// planesDeclared marks the daemon-level planes that have completed a
 	// discovery pass, so the orphan sweep can tell an orphan from an
 	// entity that simply has not been published yet.
@@ -459,6 +466,19 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 		rawTopics:   make(map[string][]byte),
 		collector:   cfg.Collector,
 	}
+}
+
+// WithSubscriber wires the subscribe-capable client the boot-time
+// cleanup passes need. Production must call this with the raw broker
+// client: the Publisher handed to [NewBridge] is a publish-only
+// circuit-breaker decorator there, so without this seam
+// [Bridge.RunRetainCleanupOnce] and
+// [Bridge.RunDiscoveryOrphanCleanupOnce] fail their capability check on
+// every boot and silently never clean anything. Returns the receiver
+// for call-site chaining.
+func (b *Bridge) WithSubscriber(s Subscriber) *Bridge {
+	b.subscriber = s
+	return b
 }
 
 // dispatchJob is one unit of deferred work handed to a
@@ -1077,10 +1097,16 @@ func (b *Bridge) PublishRoleAvailability(ctx context.Context, role *pload.MQTTRo
 	return b.client.Publish(ctx, role.Topics.Availability, body, b.cfg.QoS.State, true)
 }
 
-// PublishProgram emits the program state on the canonical ADR-0011
-// topics owned by the program model object. Active is mirrored to
-// both `…/state` and `…/trigger` so switch entities see it on either
-// reference.
+// PublishProgram emits the program's active flag on the canonical
+// ADR-0011 state topic owned by the program model object — and ONLY
+// there. The `…/set` and `…/trigger` topics are command topics this
+// daemon itself subscribes to, and a broker routes a publisher's own
+// messages back to its established subscriptions with Retain=false
+// (no No-Local option is used). An earlier state mirror onto
+// `…/trigger` therefore executed every program via the daemon's own
+// command handler on each state publish — twice per boot, once per
+// freshly discovered program, deactivated programs included. See
+// TestHubStatePublishesAreDisjointFromCommandSubscriptions.
 func (b *Bridge) PublishProgram(ctx context.Context, centralName string, prog pload.MQTTAddressable, active bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
@@ -1093,13 +1119,7 @@ func (b *Bridge) PublishProgram(ctx context.Context, centralName string, prog pl
 	if active {
 		body = []byte("true")
 	}
-	if err := b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true); err != nil {
-		return err
-	}
-	if topics.Trigger != "" {
-		_ = b.client.Publish(ctx, topics.Trigger, body, b.cfg.QoS.State, true)
-	}
-	return nil
+	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
 }
 
 // PublishInstallMode emits the per-interface install-mode countdown

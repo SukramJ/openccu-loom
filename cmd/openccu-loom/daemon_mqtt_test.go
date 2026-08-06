@@ -5,11 +5,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 )
 
 // ── buildMQTT ────────────────────────────────────────────────────────────────
@@ -56,6 +59,38 @@ func TestBuildMQTT_EnabledWithBroker_ReturnsStackWithLifecycle(t *testing.T) {
 	}
 	if got.lifecycle == nil {
 		t.Error("expected non-nil lifecycle when broker is configured")
+	}
+}
+
+// TestBuildMQTT_BrokerPath_CleanupPassesGetASubscriber pins that the
+// composition root hands the bridge a subscribe-capable client for the
+// boot-time cleanup passes. The bridge's publish path is wrapped in a
+// publish-only circuit breaker, so without the explicit WithSubscriber
+// wiring both RunRetainCleanupOnce and RunDiscoveryOrphanCleanupOnce
+// fail their capability check on every boot — a silent no-op that only
+// showed up as a WARN line in operator logs.
+func TestBuildMQTT_BrokerPath_CleanupPassesGetASubscriber(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.MQTT.Enabled = true
+	cfg.North.MQTT.BrokerURL = "tcp://192.0.2.1:1883" // unreachable but valid URL
+	cfg.North.MQTT.ClientID = "openccu-loom-test"
+	cfg.North.MQTT.RawEnabled = true
+	got := buildMQTT(cfg, slog.Default(), nil, nil)
+	if got == nil {
+		t.Fatal("expected non-nil stack")
+	}
+	bridge := got.wiring.Bridge()
+	if bridge == nil {
+		t.Fatal("expected non-nil bridge")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	// The broker is unreachable, so the pass fails at Subscribe — the
+	// assertion is only that it gets PAST the capability check.
+	_, err := bridge.RunRetainCleanupOnce(ctx, 50*time.Millisecond)
+	if errors.Is(err, mqtt.ErrCleanupNeedsSubscriber) {
+		t.Fatal("bridge has no subscribe-capable client wired — retain cleanup is a silent no-op in production")
 	}
 }
 

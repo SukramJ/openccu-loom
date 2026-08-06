@@ -99,9 +99,19 @@ Go builder method: `TopicBuilder.DiscoveryConfig`.
 | CCU info snapshot | `<base>/<central>/hub/info` |
 | System-variable state | `<base>/<central>/hub/sysvars/<name>/state` |
 | System-variable set | `<base>/<central>/hub/sysvars/<name>/set` |
-| Program trigger | `<base>/<central>/hub/programs/<id>/trigger` |
+| Program state (active flag, retained) | `<base>/<central>/hub/programs/<id>/state` |
+| Program activation set | `<base>/<central>/hub/programs/<id>/set` |
+| Program trigger (run once) | `<base>/<central>/hub/programs/<id>/trigger` |
+| Program execute availability | `<base>/<central>/hub/programs/<id>/execute_available` |
 | Interface connectivity | `<base>/<central>/hub/connectivity/<iface>` |
 | System status event | `<base>/<central>/system/status` |
+
+The program `set` and `trigger` topics are **command topics** — the
+daemon subscribes to them and never publishes there; only `state` and
+`execute_available` carry daemon-published (retained) content. A
+`trigger` message with a **non-empty** payload runs the program once
+(HA's discovery button publishes `true`); an empty payload is ignored —
+that is the shape of a retained-message eviction, not a command.
 
 Go builder methods: `TopicBuilder.BridgeStatus`, `TopicBuilder.BridgeHealth`,
 `TopicBuilder.HubStatus`, `TopicBuilder.HubInfo`, `TopicBuilder.SystemStatus`.

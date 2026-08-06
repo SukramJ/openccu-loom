@@ -67,6 +67,13 @@ func LegacyAggregateStateMatcher(topicBase, topic string) bool {
 	if len(parts) != 5 || parts[4] != "state" {
 		return false
 	}
+	// The reserved hub subtree (`<central>/hub/...`) is not a device
+	// channel: `hub/programs/<numeric-id>/state` and a numeric-named
+	// `hub/sysvars/<n>/state` would otherwise pass the numeric-channel
+	// check and get their live retained state wiped on every boot.
+	if parts[1] == "hub" {
+		return false
+	}
 	channel := parts[3]
 	if channel == "" || channel == "channels" {
 		return false
@@ -112,6 +119,11 @@ func LegacyDataPointStateMatcher(topicBase, topic string) bool {
 	// <address>/<channel>/<PARAM>`. The new shape adds a bucket
 	// segment and would have 6 parts.
 	if len(parts) != 5 {
+		return false
+	}
+	// Reserved hub subtree — never a device data point (see
+	// [LegacyAggregateStateMatcher]).
+	if parts[1] == "hub" {
 		return false
 	}
 	channel := parts[3]
@@ -196,19 +208,50 @@ func LegacySlotStateMatcher(topicBase, topic string) bool {
 	return true
 }
 
+// ProgramTriggerMirrorMatcher reports whether topic matches the program
+// trigger-command shape:
+//
+//	<topic_base>/<central>/hub/programs/<id>/trigger
+//
+// A retained message parked there can only be junk: the topic is a
+// command topic — the daemon is its sole intended consumer and drops
+// retained deliveries — and earlier builds mirrored the program's
+// active flag onto it retained ("true"/"false"), which is how the
+// state plane leaked into the command plane in the first place (see
+// [Bridge.PublishProgram]). Evicting the parked payload keeps foreign
+// tools and mis-flagging brokers from ever replaying it as a command.
+func ProgramTriggerMirrorMatcher(topicBase, topic string) bool {
+	if topicBase == "" {
+		return false
+	}
+	if !strings.HasPrefix(topic, topicBase+"/") {
+		return false
+	}
+	tail := strings.TrimPrefix(topic, topicBase+"/")
+	parts := strings.Split(tail, "/")
+	// `<central>/hub/programs/<id>/trigger` — 5 segments.
+	if len(parts) != 5 || parts[1] != "hub" || parts[2] != "programs" || parts[4] != "trigger" {
+		return false
+	}
+	return parts[0] != "" && parts[3] != ""
+}
+
 // collect inspects topic+payload pairs delivered by a retained-topic
 // snapshot subscription and accumulates eviction candidates. The
 // payload is unused here — we only care about the topic shape — but
 // kept on the signature so the call site matches the
 // [MessageHandler] contract.
 //
-// Matches three legacy shapes, all retired by the Option-B topology
+// Matches three legacy shapes retired by the Option-B topology
 // migration:
 //   - bucket-less DataPointState (`<addr>/<ch>/<PARAM>`)
 //   - verbose SlotState (`<addr>/channels/<ch>/<bucket>/<PARAM>/state`)
 //   - aggregated channel state where the StatePayload schema changed
 //     between builds (custom DP roll-ups; retain when JSON shape no
 //     longer parses)
+//
+// plus the retired program-trigger state mirror (see
+// [ProgramTriggerMirrorMatcher]).
 func (c *RetainCleanup) collect(topic string, _ []byte, _ bool) {
 	if c.bridge == nil {
 		return
@@ -216,7 +259,8 @@ func (c *RetainCleanup) collect(topic string, _ []byte, _ bool) {
 	base := c.bridge.cfg.Base
 	if LegacyDataPointStateMatcher(base, topic) ||
 		LegacySlotStateMatcher(base, topic) ||
-		LegacyAggregateStateMatcher(base, topic) {
+		LegacyAggregateStateMatcher(base, topic) ||
+		ProgramTriggerMirrorMatcher(base, topic) {
 		c.mu.Lock()
 		c.worklist = append(c.worklist, topic)
 		c.mu.Unlock()
@@ -258,7 +302,7 @@ func (b *Bridge) RunRetainCleanupOnce(ctx context.Context, snapshotWindow time.D
 	if snapshotWindow <= 0 {
 		snapshotWindow = 2 * time.Second
 	}
-	subClient, ok := b.client.(Client)
+	subClient, ok := b.cleanupSubscriber()
 	if !ok {
 		return 0, errCleanupClientLacksSubscribe
 	}
@@ -285,10 +329,31 @@ func (b *Bridge) RunRetainCleanupOnce(ctx context.Context, snapshotWindow time.D
 	return len(worklist), nil
 }
 
-// errCleanupClientLacksSubscribe surfaces when the bridge was wired
-// with a publish-only Publisher but the cleanup pass requires a
-// subscribe-capable Client.
-var errCleanupClientLacksSubscribe = retainCleanupError("bridge client must satisfy the Client interface (publish+subscribe) for retain cleanup")
+// cleanupSubscriber returns the subscribe-capable client the cleanup
+// passes ride on: the explicitly wired [Bridge.WithSubscriber] client
+// (production — the publish path is a publish-only circuit-breaker
+// decorator), or the publish client itself when it happens to satisfy
+// [Client] (tests and the no-broker NoopClient wiring).
+func (b *Bridge) cleanupSubscriber() (Subscriber, bool) {
+	if b.subscriber != nil {
+		return b.subscriber, true
+	}
+	if c, ok := b.client.(Client); ok {
+		return c, true
+	}
+	return nil, false
+}
+
+// ErrCleanupNeedsSubscriber surfaces when the bridge has neither a
+// [Bridge.WithSubscriber]-wired client nor a publish client that
+// satisfies the Client interface — the cleanup passes need subscribe
+// capability to snapshot the broker's retained store. Exported so the
+// composition root can pin that its wiring gets past this check.
+var ErrCleanupNeedsSubscriber = retainCleanupError("bridge client must satisfy the Client interface (publish+subscribe) for retain cleanup")
+
+// errCleanupClientLacksSubscribe is the internal alias the cleanup
+// passes return.
+var errCleanupClientLacksSubscribe = ErrCleanupNeedsSubscriber
 
 type retainCleanupError string
 
@@ -363,7 +428,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 	if snapshotWindow <= 0 {
 		snapshotWindow = 2 * time.Second
 	}
-	subClient, ok := b.client.(Client)
+	subClient, ok := b.cleanupSubscriber()
 	if !ok {
 		return 0, errCleanupClientLacksSubscribe
 	}
