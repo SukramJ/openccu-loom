@@ -37,14 +37,12 @@ type centralHandle struct {
 	cc      config.CentralConfig
 	avail   func()
 	climate func()
-	matter  func()
-	alarm   func()
-	// hubEvents detaches the WebSocket hub-singleton subscriptions. Held
-	// here and not only in the adopt-time rollback list because the
-	// rollback list is discarded once the adopt succeeds: without this the
-	// hub-model callbacks would outlive a removed central and keep
-	// publishing on its topics.
-	hubEvents func()
+	// unwires holds every per-central domain unwire from
+	// [centralOrchestrator.attachCentralHooks], in attach order. They are
+	// kept here and not only in the adopt-time rollback list because that
+	// list is discarded once the adopt succeeds: an unwire that lives only
+	// there lets a removed central keep publishing.
+	unwires []func()
 }
 
 // centralOrchestrator is the live-CCU-adopt composition seam: it drives one
@@ -107,13 +105,17 @@ type centralOrchestrator struct {
 	hubReadyTrigger func()
 }
 
-// centralHooks is what [centralOrchestrator.attachCentralHooks] returns: the
-// rollback list for a failed adopt, plus the three unwires the handle keeps
-// past a successful one (the rollback list is discarded on success, and those
-// three must outlive it or a removed central keeps publishing).
+// centralHooks is what [centralOrchestrator.attachCentralHooks] returns: one
+// ordered list holding EVERY per-central unwire, in attach order.
+//
+// The list is deliberately not a set of named fields. It used to be, and the
+// security domain's unwire was the one that reached only the rollback path —
+// so a removed central kept its hazard sources pinned active forever, exactly
+// the damage the hook's own comment warned about. A list cannot be
+// half-remembered: a hook that registers an unwire is torn down, or it is not
+// registered at all.
 type centralHooks struct {
-	undo                     []func()
-	matter, alarm, hubEvents func()
+	unwires []func()
 }
 
 // attachCentralHooks subscribes an adopted central onto every per-central
@@ -136,17 +138,24 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	var h centralHooks
 	keep := func(unwire func()) {
 		if unwire != nil {
-			h.undo = append(h.undo, unwire)
+			h.unwires = append(h.unwires, unwire)
 		}
 	}
 
+	// The north-bound event bridge first: Start snapshots the registry once
+	// at boot, so without this subscription the adopted central's bus reaches
+	// neither the MQTT fan-out nor the WebSocket live plane, and the CCU
+	// stays invisible to every north-bound consumer until a daemon restart.
+	if bridge := o.sbDeps.bridge; bridge != nil {
+		bridge.AttachCentral(unit)
+		name := unit.Name()
+		keep(func() { bridge.DetachCentral(name) })
+	}
 	if matterHook != nil {
-		h.matter = matterHook(unit)
-		keep(h.matter)
+		keep(matterHook(unit))
 	}
 	if alarmHook != nil {
-		h.alarm = alarmHook(unit)
-		keep(h.alarm)
+		keep(alarmHook(unit))
 	}
 	// The security domain attaches after the alarm service so its index
 	// rebuild sees the enrollment the alarm service has already loaded.
@@ -163,8 +172,7 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	// bring-up starts, so the first message/inbox change the central reports
 	// already has a listener.
 	if hubEventsHook != nil {
-		h.hubEvents = hubEventsHook(unit)
-		keep(h.hubEvents)
+		keep(hubEventsHook(unit))
 	}
 	// Feed the central's model event sources from its device triggers, so the
 	// first keypress it reports is recorded on the channel's event group.
@@ -364,7 +372,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// subscribing first makes the window a non-event.) Nil when the Matter
 	// bridge is disabled.
 	hooks := o.attachCentralHooks(unit)
-	undo = append(undo, hooks.undo...)
+	undo = append(undo, hooks.unwires...)
 
 	// Southbound bring-up (callback routes + readiness-gated device pull) and
 	// the north-bound hooks run AFTER Start, matching wireSouthbound's
@@ -383,8 +391,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 
 	o.mu.Lock()
 	o.handles[cc.Name] = &centralHandle{
-		cc: cc, avail: avail, climate: climate,
-		matter: hooks.matter, alarm: hooks.alarm, hubEvents: hooks.hubEvents,
+		cc: cc, avail: avail, climate: climate, unwires: hooks.unwires,
 	}
 	o.mu.Unlock()
 
@@ -421,19 +428,13 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 
 	o.bringUp.RemoveCentral(name)
 
-	// Drop the Matter per-central subscriptions first — no readiness /
-	// reassemble / reachable signal must be processed for a central whose
-	// teardown has begun.
-	if h.matter != nil {
-		h.matter()
-	}
-	if h.alarm != nil {
-		h.alarm()
-	}
-	// Before the model teardown below: a hub refresh still in flight must
-	// not land a broadcast on a central that is already going away.
-	if h.hubEvents != nil {
-		h.hubEvents()
+	// Every per-central domain unwire, in attach order: the event bridge and
+	// the Matter subscriptions go first — no value change, readiness,
+	// reassemble or hub broadcast must be processed for a central whose
+	// teardown has begun — and all of them run before the model teardown
+	// below.
+	for _, unwire := range h.unwires {
+		unwire()
 	}
 	// Climate before availability, mirroring wireSouthbound's teardown order
 	// (its LIFO defer runs climate closers before availability closers).
