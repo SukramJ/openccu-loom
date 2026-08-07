@@ -58,6 +58,7 @@ func WireValueSourceLifecycle(unit *central.Unit, logger *slog.Logger) func() {
 			CentralName:    centralName,
 			InterfaceID:    key.InterfaceID,
 			ChannelAddress: key.ChannelAddress,
+			ParamsetKey:    key.ParamsetKey,
 			Parameter:      key.Parameter,
 			OldSource:      oldSrc,
 			NewSource:      newSrc,

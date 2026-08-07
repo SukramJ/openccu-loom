@@ -13,7 +13,23 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
+// registryWithDevice models an operational central: its southbound bring-up
+// has completed, so the ready latch is set — matching the production order in
+// which every snapshot pass observes a central (gatedCentralBringUp latches
+// ready after finishIngest applied the visibility marks). Tests that exercise
+// the mid-bring-up window use [registryWithDeviceNotReady].
 func registryWithDevice(t *testing.T) (*central.Registry, *device.Device) {
+	t.Helper()
+	reg, d := registryWithDeviceNotReady(t)
+	if u, ok := reg.Get("ccu-01"); ok {
+		u.MarkSouthboundReady()
+	}
+	return reg, d
+}
+
+// registryWithDeviceNotReady is registryWithDevice without the ready latch —
+// the state a central is in while its readiness-gated bring-up still runs.
+func registryWithDeviceNotReady(t *testing.T) (*central.Registry, *device.Device) {
 	t.Helper()
 	c, err := central.New(central.Config{Name: "ccu-01"})
 	if err != nil {

@@ -15,13 +15,15 @@ import (
 )
 
 // newHotplugBridgeEnv wires an EventBridge against a registered central
-// (via registryWithDevice) and a NoopClient-backed MQTT wiring, mirroring
-// the setup TestCentralSouthboundReadyEventTriggersPerCentralSnapshot uses
-// for the sibling southbound-ready snapshot path.
+// (via registryWithDeviceNotReady — the ready latch stays with each test so
+// the not-ready guard below can exercise the mid-bring-up window) and a
+// NoopClient-backed MQTT wiring, mirroring the setup
+// TestCentralSouthboundReadyEventTriggersPerCentralSnapshot uses for the
+// sibling southbound-ready snapshot path.
 func newHotplugBridgeEnv(t *testing.T) (*EventBridge, *mqtt.NoopClient) {
 	t.Helper()
 
-	reg, _ := registryWithDevice(t)
+	reg, _ := registryWithDeviceNotReady(t)
 	pub := mqtt.NewNoopClient()
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base:        "openccu-loom",

@@ -36,6 +36,9 @@ func TestEventBridgePublishesUpdateForEveryDevice(t *testing.T) {
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("register: %v", err)
 	}
+	// Production order: the snapshot only observes a central after its
+	// bring-up latched ready.
+	c.MarkSouthboundReady()
 
 	dev1 := device.New(device.Config{
 		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF,

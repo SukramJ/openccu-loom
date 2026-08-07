@@ -63,6 +63,9 @@ func TestCentralSouthboundReadyEventTriggersPerCentralSnapshot(t *testing.T) {
 	if !ok {
 		t.Fatal("unit ccu-01 not registered")
 	}
+	// Production latches the ready flag BEFORE publishing the event
+	// (gatedCentralBringUp) — and the snapshot pass gates on it.
+	unit.MarkSouthboundReady()
 	events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-01",

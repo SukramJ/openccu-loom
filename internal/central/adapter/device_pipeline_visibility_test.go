@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -392,4 +393,91 @@ func TestClickEventMarksPreserveEventSuppression(t *testing.T) {
 			t.Errorf("PRESS_CONT: forced_usage=%v set=%v want Event (no button)", u, set)
 		}
 	})
+}
+
+// TestHydrateChannelMasterParamsDefaultDenied pins the MASTER default-deny
+// for the parameter families that flooded MQTT brokers: newer HmIP-PSM
+// firmware carries a 75-slot week-program table (`01_WP_*`…`75_WP_*`, channel
+// 8) and mesh-router tables (channel 0) — none of them whitelisted, so the
+// full pipeline must leave every one marked Ignored / invisible. Runs the
+// production ingest order (hydrate incl. seedMasterValues, then the
+// visibility passes) with the production required-parameters whitelist
+// installed.
+func TestHydrateChannelMasterParamsDefaultDenied(t *testing.T) {
+	t.Parallel()
+
+	c, _ := central.New(central.Config{Name: "ccu-psm"})
+	p := NewDevicePipeline(c)
+
+	gate := visibility.NewRegistry()
+	gate.SetRequiredParameters(custom.DefaultRegistry().RequiredParameters())
+	p.WithVisibility(gate)
+
+	devAddr := "0001PSMX"
+	b := &paramsetFakeOps{
+		listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
+			return []hmproto.DeviceDescription{
+				{Address: devAddr, Type: "HMIP-PSM"},
+				{Address: devAddr + ":0", Parent: devAddr, Type: "MAINTENANCE"},
+				{Address: devAddr + ":8", Parent: devAddr, Type: "SWITCH_WEEK_PROFILE"},
+			}, nil
+		},
+		getParamsetDescriptionFn: func(_ context.Context, addr string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			if key != hmenum.ParamsetKeyMaster {
+				return map[string]hmproto.ParameterData{}, nil
+			}
+			rw := hmenum.OperationsRead | hmenum.OperationsWrite
+			switch addr {
+			case devAddr + ":8":
+				return map[string]hmproto.ParameterData{
+					"01_WP_WEEKDAY": {Type: hmenum.ParameterTypeInteger, Operations: rw},
+				}, nil
+			case devAddr + ":0":
+				return map[string]hmproto.ParameterData{
+					"ARR_TIMEOUT":         {Type: hmenum.ParameterTypeInteger, Operations: rw},
+					"STATIC_ROUTE_HOST_1": {Type: hmenum.ParameterTypeInteger, Operations: rw},
+				}, nil
+			}
+			return nil, nil
+		},
+		getParamsetFn: func(_ context.Context, addr string, key hmenum.ParamsetKey) (map[string]any, error) {
+			if key == hmenum.ParamsetKeyMaster && addr == devAddr+":8" {
+				return map[string]any{"01_WP_WEEKDAY": 0}, nil
+			}
+			return map[string]any{}, nil
+		},
+	}
+
+	if err := p.IngestFromBackend(
+		context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF,
+		b, &fakeWriter{}, nil, slog.Default(),
+	); err != nil {
+		t.Fatalf("IngestFromBackend: %v", err)
+	}
+
+	dev, ok := c.ModelRegistry.Get(devAddr)
+	if !ok {
+		t.Fatal("device not in registry")
+	}
+	for _, tc := range []struct{ chAddr, param string }{
+		{devAddr + ":8", "01_WP_WEEKDAY"},
+		{devAddr + ":0", "ARR_TIMEOUT"},
+		{devAddr + ":0", "STATIC_ROUTE_HOST_1"},
+	} {
+		ch := dev.Channel(tc.chAddr)
+		if ch == nil {
+			t.Fatalf("channel %s missing", tc.chAddr)
+		}
+		dp := ch.MasterParameter(hmenum.Parameter(tc.param))
+		if dp == nil {
+			t.Fatalf("%s: master DP missing — every wire parameter becomes a DP", tc.param)
+		}
+		v, ok := dp.(interface{ Visible() bool })
+		if !ok {
+			t.Fatalf("%s: DP does not expose Visible()", tc.param)
+		}
+		if v.Visible() {
+			t.Errorf("%s %s: non-whitelisted MASTER DP is visible after the full pipeline", tc.chAddr, tc.param)
+		}
+	}
 }

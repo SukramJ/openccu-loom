@@ -520,3 +520,126 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 	_ = seen
 	return len(orphans), nil
 }
+
+// RawOrphanCandidateMatcher reports whether topic is a per-DP bucket topic
+// (state or its /config companion) of the given central under topicBase:
+//
+//	<topic_base>/<central>/<iface>/<address>/<channelNo>/<bucket>/<PARAM>
+//	<topic_base>/<central>/<iface>/<address>/<channelNo>/<bucket>/<PARAM>/config
+//
+// with `<bucket>` one of values / master / calculated / custom and a numeric
+// channel id. The reserved hub subtree (`<central>/hub/...`) never matches.
+// Exposed for unit testing — production consumes it via
+// [Bridge.RunRawOrphanCleanupOnce].
+func RawOrphanCandidateMatcher(topicBase, centralName, topic string) bool {
+	if topicBase == "" || centralName == "" {
+		return false
+	}
+	prefix := topicBase + "/" + centralName + "/"
+	if !strings.HasPrefix(topic, prefix) {
+		return false
+	}
+	parts := strings.Split(strings.TrimPrefix(topic, prefix), "/")
+	// `<iface>/<address>/<channel>/<bucket>/<PARAM>` — 5 segments for the
+	// state topic, 6 with the trailing `config` companion.
+	if len(parts) == 6 {
+		if parts[5] != "config" {
+			return false
+		}
+		parts = parts[:5]
+	}
+	if len(parts) != 5 {
+		return false
+	}
+	if parts[0] == "hub" {
+		return false
+	}
+	switch parts[3] {
+	case "values", "master", "calculated", "custom":
+	default:
+		return false
+	}
+	channel := parts[2]
+	if channel == "" {
+		return false
+	}
+	for _, r := range channel {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return parts[4] != ""
+}
+
+// RunRawOrphanCleanupOnce subscribes to the central's raw-plane subtree for a
+// short snapshot window, accumulates every retained per-DP bucket topic
+// (state + /config), then evicts the ones the current model did NOT
+// (re)publish during the central's snapshot — i.e. topics absent from the
+// bridge's rawTopics / configCache bookkeeping. Anything in that set is a
+// leftover from a previous build or boot: a MASTER paramset published before
+// the visibility passes gated it, a suppressed VALUES parameter, a retired
+// calculated DP.
+//
+// Must run AFTER the central's snapshot pass populated the bookkeeping —
+// the daemon drives it from the post-snapshot hook, never inline at boot.
+// Best-effort: returns the number of orphans evicted plus any subscribe
+// error.
+func (b *Bridge) RunRawOrphanCleanupOnce(ctx context.Context, centralName string, snapshotWindow time.Duration) (int, error) {
+	if !b.cfg.RawEnabled {
+		return 0, nil
+	}
+	if snapshotWindow <= 0 {
+		snapshotWindow = 2 * time.Second
+	}
+	centralName = b.resolvedCentral(centralName)
+	if centralName == "" {
+		return 0, nil
+	}
+	subClient, ok := b.cleanupSubscriber()
+	if !ok {
+		return 0, errCleanupClientLacksSubscribe
+	}
+
+	var (
+		mu      sync.Mutex
+		orphans []string
+	)
+	handler := func(topic string, payload []byte, _ bool) {
+		// A zero-length payload is an eviction in flight, not a retained value.
+		if len(payload) == 0 {
+			return
+		}
+		if !RawOrphanCandidateMatcher(b.cfg.Base, centralName, topic) {
+			return
+		}
+		b.mu.Lock()
+		_, isState := b.rawTopics[topic]
+		_, isConfig := b.configCache[topic]
+		b.mu.Unlock()
+		if isState || isConfig {
+			return
+		}
+		mu.Lock()
+		orphans = append(orphans, topic)
+		mu.Unlock()
+	}
+
+	filter := b.cfg.Base + "/" + centralName + "/#"
+	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.State, LegacyHandler(handler)); err != nil {
+		return 0, err
+	}
+	timer := time.NewTimer(snapshotWindow)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+	if err := subClient.Unsubscribe(ctx, filter); err != nil {
+		return 0, err
+	}
+	for _, topic := range orphans {
+		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true)
+	}
+	return len(orphans), nil
+}

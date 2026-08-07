@@ -404,9 +404,14 @@ type DataPointSourceChangedEvent struct {
 	CentralName    string
 	InterfaceID    string
 	ChannelAddress string
-	Parameter      string
-	OldSource      hmenum.ValueSource
-	NewSource      hmenum.ValueSource
+	// ParamsetKey identifies the paramset the data point lives in
+	// (VALUES / MASTER). Consumers republishing the DP's topic route
+	// visibility checks and bucket selection by it; an empty value is
+	// treated as VALUES for events from producers predating the field.
+	ParamsetKey hmenum.ParamsetKey
+	Parameter   string
+	OldSource   hmenum.ValueSource
+	NewSource   hmenum.ValueSource
 	// Value is the current data-point value at the moment the
 	// transition fired. Consumers that need to republish a topic
 	// without a separate fetch read it from here.
