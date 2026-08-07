@@ -211,9 +211,7 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 		unsubs = append(unsubs, unsub)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go r.loop(ctx, done)
+	stopLoop := r.startLoop()
 
 	var once sync.Once
 	return func() {
@@ -223,14 +221,49 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 			for _, u := range unsubs {
 				u()
 			}
-			cancel()
-			<-done
+			stopLoop()
 			if r.exporter != nil {
 				shutCtx, cancelShut := context.WithTimeout(context.Background(), 5*time.Second)
 				_ = r.exporter.Shutdown(shutCtx)
 				cancelShut()
 			}
 		})
+	}
+}
+
+// StartRetention starts the rollup + retention loop WITHOUT subscribing to
+// any central, so nothing is recorded and the stored series keep ageing
+// out. The returned closer stops the loop. Safe on a nil recorder or a nil
+// store (returns a no-op closer).
+//
+// Retention describes the data on disk, not the recorder: an operator who
+// switches recording off does so to reclaim space, and tying the purge to
+// the recorder froze history.db at its current size for as long as the
+// feature stayed off — the one moment it was certain to grow no smaller by
+// itself. The loop is kept (rather than a single pass at shutdown-of-the-
+// feature) because a purge cutoff moves with the wall clock: a daemon that
+// runs for months with recording off must keep evicting rows as they cross
+// the retention boundary, not only the ones already past it at boot. The
+// rollup runs first, exactly as in the recording case, so raw rows still
+// reach the hourly tier before the raw purge can delete them.
+func (r *Recorder) StartRetention() func() {
+	if r == nil || r.store == nil {
+		return func() {}
+	}
+	stopLoop := r.startLoop()
+	var once sync.Once
+	return func() { once.Do(stopLoop) }
+}
+
+// startLoop launches the periodic loop goroutine and returns a closer that
+// cancels it and waits for the final flush to land.
+func (r *Recorder) startLoop() func() {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go r.loop(ctx, done)
+	return func() {
+		cancel()
+		<-done
 	}
 }
 
@@ -247,6 +280,15 @@ func (r *Recorder) loop(ctx context.Context, done chan<- struct{}) {
 	defer flushTicker.Stop()
 	rollupTicker := time.NewTicker(retentionInterval)
 	defer rollupTicker.Stop()
+
+	// One pass before the first tick. The ticker alone made both the
+	// rollup and the eviction conditional on the daemon staying up for a
+	// full hour: an operator changing config (which requires a restart) or
+	// a daemon crash-looping below the interval never folded a single row,
+	// so every tier query read empty rollups and the raw table grew without
+	// bound — with both watermarks at 0 the purge deleted nothing at all.
+	r.rollup(ctx)
+	r.purge(ctx)
 
 	for {
 		select {
@@ -408,16 +450,26 @@ func (r *Recorder) flush(ctx context.Context) {
 func (r *Recorder) rollup(ctx context.Context) {
 	now := time.Now()
 
-	if n, err := r.store.RollupHourly(ctx, now.Add(-rollupHourlyLag)); err != nil {
-		r.logger.Warn("history.rollup_hourly_err", slog.String("err", err.Error()))
+	n, hourlyErr := r.store.RollupHourly(ctx, now.Add(-rollupHourlyLag))
+	if hourlyErr != nil {
+		r.logger.Warn("history.rollup_hourly_err", slog.String("err", hourlyErr.Error()))
 	} else if n > 0 {
 		r.logger.Debug("history.rolled_up_hourly", slog.Int64("rows", n))
 	}
 
-	if n, err := r.store.RollupDaily(ctx, now.Add(-rollupDailyLag)); err != nil {
-		r.logger.Warn("history.rollup_daily_err", slog.String("err", err.Error()))
-	} else if n > 0 {
-		r.logger.Debug("history.rolled_up_daily", slog.Int64("rows", n))
+	// The daily fold reads the hourly tier, so it must not run when the
+	// hourly fold failed: its window starts at the daily watermark and ends
+	// at the cutoff, and the watermark advances across the whole window
+	// whether or not rows were found. Folding an hour range the hourly tier
+	// has not been written yet therefore skips those days permanently — and
+	// the hourly purge, floored by that same watermark, is then free to
+	// delete the buckets that would have filled them.
+	if hourlyErr == nil {
+		if n, err := r.store.RollupDaily(ctx, now.Add(-rollupDailyLag)); err != nil {
+			r.logger.Warn("history.rollup_daily_err", slog.String("err", err.Error()))
+		} else if n > 0 {
+			r.logger.Debug("history.rolled_up_daily", slog.Int64("rows", n))
+		}
 	}
 
 	if r.retentionHourly > 0 {

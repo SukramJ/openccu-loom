@@ -1,24 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
-// commands_missing.go — the 9 previously-unimplemented WebSocket commands.
+// commands_missing.go — WebSocket commands added after the initial
+// command surface, registered through [RegisterMissingCommands].
 //
-// Commands that cannot yet be wired through the domain register with
-// a stub that returns errors.New("ws: feature not yet wired through
-// domain").
-//
-// Wired commands (full implementation):
-// - ccu.get_signal_quality — reads RSSI+reachability from DevicesProvider
-// - schedules.list_devices — lists devices with HasWeekProfile via DevicesProvider
-// - ccu.get_hub_data — reads service/alarm message counts from HubDataProvider
-// - system.user_permissions — reads auth.Identity from context via UserPermissionsProvider
-//
-// Stub commands (domain method missing):
-// - links.get_form_schema — needs GetLinkParamsetDescription on ParamsetsDomain
-// - links.get_profiles — needs link-profile store
-// - links.test_profile — needs link-profile store + put_link_paramset
-// - schedules.set_enabled — needs SetScheduleEnabled on SchedulesDomain
-// - paramset.determine — needs determine_parameter on InterfaceClient backend
+// Every command here dispatches to a real provider when the daemon
+// wires the dispatcher. [stubHandler] is only the fallback for a nil
+// provider: it returns the typed [CommandErrorNotImplemented] so a
+// client can distinguish "registered but unwired" from
+// "unknown_command". The authoritative command list is
+// assets/wsapi.json, not this comment.
 
 package ws
 
@@ -72,15 +63,14 @@ type HubDataProvider interface {
 
 // ScheduleEnabler is the mutating surface for `schedules.set_enabled`.
 // Mirrors Python `ws_set_schedule_enabled` (websocket_api.py:1698).
-// The implementation is a stub until SchedulesDomain exposes
-// SetScheduleEnabled.
+// Implemented by SchedulesDomain.SetScheduleEnabled.
 type ScheduleEnabler interface {
 	SetScheduleEnabled(ctx context.Context, deviceAddress string, enabled bool, channelKey string) error
 }
 
 // LinkFormSchemaProvider is the read surface for `links.get_form_schema`.
 // Mirrors Python `ws_get_link_form_schema` (websocket_api.py:1057).
-// Stub until GetLinkParamsetDescription is wired on ParamsetsDomain
+// Implemented by ParamsetsDomain.GetLinkFormSchema.
 type LinkFormSchemaProvider interface {
 	GetLinkFormSchema(ctx context.Context, interfaceID, receiverChannelAddr, senderChannelAddr string) (map[string]any, error)
 }
@@ -88,7 +78,7 @@ type LinkFormSchemaProvider interface {
 // LinkProfilesProvider is the read surface for `links.get_profiles` and
 // `links.test_profile`. Mirrors Python `ws_get_link_profiles`
 // (websocket_api.py:1123) and `ws_test_link_profile` (websocket_api.py:2643).
-// Stub until the link-profile store is implemented.
+// Implemented by LinkProfilesAdapter.
 type LinkProfilesProvider interface {
 	GetLinkProfiles(ctx context.Context, receiverChannelType, senderChannelType, locale string) ([]map[string]any, error)
 	TestLinkProfile(ctx context.Context, interfaceID, senderAddr, receiverAddr string, profileID int) (map[string]any, error)
@@ -472,9 +462,6 @@ func paramsetDetermineHandler(d ParameterDeterminer) CommandHandler {
 	}
 }
 
-// stubHandler returns a CommandHandler that always fails with the given
-// message. Used to register stub commands so they appear in
-// system.commands and return a useful error instead of "unknown_command".
 // stubHandler returns a handler that always reports the feature as
 // not yet implemented. Distinct from CommandErrorUnknownCommand —
 // the command IS registered, the wiring just isn't complete. SPA /

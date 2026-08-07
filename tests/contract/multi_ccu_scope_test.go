@@ -354,6 +354,7 @@ func TestNoPackageLevelMutableSingletons(t *testing.T) {
 		"sqlite:ErrMigrationFailed":    "reason: immutable sentinel error",
 		"sqlite:migrationsFS":          "reason: go:embed FS is read-only at runtime",
 		"sqlite:energyParameters":      "reason: immutable lookup table of energy parameter names (POWER/ENERGY_COUNTER/…), no CCU-scoped state",
+		"sqlite:measurementTables":     "reason: immutable lookup table of the three measurement tier table names; exists so a delete-by-central or -device cannot walk one tier and forget the rollups",
 	}
 
 	dirs := []struct {

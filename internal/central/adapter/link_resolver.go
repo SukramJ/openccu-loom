@@ -28,12 +28,11 @@ import (
 // `[]coordinators.LinkableChannel`. Same shape, different
 // namespace.
 //
-// SetLinkInfo / GetLinkInfo do not have a [LinksDomain] counterpart
-// in 0.1.0; the adapter returns [errLinkInfoUnsupported] for them. The
-// wiring closure is the LinkCoordinator entry
-// point being functional for the AddLink / RemoveLink / GetLinks
-// LinkableChannels paths — those are what HA / configui actually use
-// today.
+// SetLinkInfo / GetLinkInfo do not have a [LinksDomain] counterpart;
+// the adapter returns [errLinkInfoUnsupported] for them. The wiring
+// closure is the LinkCoordinator entry point being functional for the
+// AddLink / RemoveLink / GetLinks / LinkableChannels paths — those are
+// what the north-bound consumers actually use.
 type linkClientAdapter struct {
 	domain *LinksDomain
 }
@@ -133,8 +132,8 @@ func (a *linkClientAdapter) GetLinkInfo(ctx context.Context, sender, receiver st
 // CentralRegistry.
 //
 // Callers wire this once at daemon boot, after the LinksDomain has
-// been constructed. Returns an error when the central or domain is
-// nil.
+// been constructed. Returns an error when the central, the domain,
+// or the central's Link coordinator is nil.
 func WireLinkCoordinator(u *central.Unit, domain *LinksDomain) error {
 	if u == nil {
 		return errors.New("link: WireLinkCoordinator: central is nil")

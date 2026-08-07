@@ -213,7 +213,11 @@ func (b *TopicBuilder) DeviceUpdateState(centralName, iface, address string) str
 	return pd.MQTTDeviceUpdateState(b.Base, centralName)
 }
 
-// DeviceUpdateCommand is the subscribed install-command topic.
+// DeviceUpdateCommand is the canonical spelling of the install-command
+// topic (`.../update/set`). Nothing subscribes to it and the update
+// entity declares no command_topic — flashing firmware from a possibly
+// retained broker payload is unsafe. See
+// [naming.PathData.MQTTDeviceUpdateCommand] for the full rationale.
 func (b *TopicBuilder) DeviceUpdateCommand(centralName, iface, address string) string {
 	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
 	return pd.MQTTDeviceUpdateCommand(b.Base, centralName)

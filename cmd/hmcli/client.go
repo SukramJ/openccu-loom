@@ -37,14 +37,20 @@ type clientConfig struct {
 	cacert   string        // optional PEM CA bundle to trust
 	insecure bool          // skip TLS verification (explicit opt-out)
 	timeout  time.Duration // zero means no deadline
+	// stderr receives the --insecure warning (see warnInsecureTLS); nil is a
+	// valid no-op sink for callers (mainly tests) that do not care about it.
+	stderr io.Writer
 }
 
 // newDaemonClient constructs a daemonClient. baseURL trailing slashes are
-// stripped so path joins produce clean URLs. The caller owns the timeout
-// budget: a zero timeout means no deadline. It returns an error only when the
-// configured CA bundle cannot be loaded.
+// stripped so path joins produce clean URLs, and any embedded userinfo
+// (https://user:pass@host/) is stripped before the URL is stored — see
+// redactHostUserinfo — so a credential accidentally placed in --host never
+// resurfaces in an error message built from baseURL. The caller owns the
+// timeout budget: a zero timeout means no deadline. It returns an error only
+// when the configured CA bundle cannot be loaded.
 func newDaemonClient(cfg clientConfig) (*daemonClient, error) {
-	tlsCfg, err := buildTLSConfig(cfg.cacert, cfg.insecure)
+	tlsCfg, err := buildTLSConfig(cfg.cacert, cfg.insecure, cfg.stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +62,7 @@ func newDaemonClient(cfg clientConfig) (*daemonClient, error) {
 	}
 	httpClient := &http.Client{Timeout: cfg.timeout, Transport: ownTransport}
 	return &daemonClient{
-		baseURL:  strings.TrimRight(cfg.baseURL, "/"),
+		baseURL:  strings.TrimRight(redactHostUserinfo(cfg.baseURL), "/"),
 		token:    cfg.token,
 		user:     cfg.user,
 		password: cfg.password,
@@ -94,7 +100,7 @@ func (c *daemonClient) getJSON(ctx context.Context, path string, out any) error 
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("GET %s: HTTP %s: %s", target, resp.Status, strings.TrimSpace(string(body)))
+		return newHTTPStatusError(http.MethodGet, target, resp, body)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
@@ -140,7 +146,7 @@ func (c *daemonClient) sendJSONHeaders(ctx context.Context, method, path string,
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("%s %s: HTTP %s: %s", method, target, resp.Status, strings.TrimSpace(string(errBody)))
+		return newHTTPStatusError(method, target, resp, errBody)
 	}
 	if out != nil {
 		return json.NewDecoder(resp.Body).Decode(out)

@@ -41,7 +41,25 @@
   let copied = $state(false);
 
   const ROLES = ["viewer", "operator", "admin"] as const;
-  const roleOptions = $derived(ROLES.map((r) => ({ value: r, label: r })));
+
+  // `role` on the wire (UserSummaryV2/TokenSummaryV2) is a plain string, not
+  // a union — an unrecognized value (future role, or a stale badge while a
+  // role rename is mid-rollout) falls back to the raw string rather than
+  // rendering blank.
+  function roleLabel(role: string): string {
+    switch (role) {
+      case "viewer":
+        return t("role.viewer");
+      case "operator":
+        return t("role.operator");
+      case "admin":
+        return t("role.admin");
+      default:
+        return role;
+    }
+  }
+
+  const roleOptions = $derived(ROLES.map((r) => ({ value: r, label: roleLabel(r) })));
 
   function formatDate(iso: string | null | undefined): string {
     if (!iso) return "—";
@@ -353,7 +371,7 @@
             {#if col.key === "subject"}
               <span class="font-mono text-sm font-semibold">{u.subject}</span>
             {:else if col.key === "role"}
-              <Badge variant="muted">{u.role}</Badge>
+              <Badge variant="muted">{roleLabel(u.role)}</Badge>
             {:else if col.key === "created"}
               <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(u.created_at)}</span>
             {:else if col.key === "last_seen"}
@@ -429,7 +447,7 @@
             {#if col.key === "subject"}
               <span class="font-mono text-sm font-semibold">{tk.subject}</span>
             {:else if col.key === "role"}
-              <Badge variant="muted">{tk.role}</Badge>
+              <Badge variant="muted">{roleLabel(tk.role)}</Badge>
             {:else if col.key === "fingerprint"}
               <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{tk.fingerprint}</span>
             {:else if col.key === "created"}
@@ -471,7 +489,7 @@
           {t("access.edit_user_title")}
           <span class="font-mono text-sm text-slate-500 dark:text-slate-400">{editingUser.subject}</span>
         </h2>
-        <Badge variant="muted">{editingUser.role}</Badge>
+        <Badge variant="muted">{roleLabel(editingUser.role)}</Badge>
       </header>
       <div class="space-y-3">
         <label class="block text-sm">

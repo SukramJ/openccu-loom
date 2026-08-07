@@ -361,3 +361,69 @@ func TestStopIsIdempotent(t *testing.T) {
 	c.Stop()
 	c.Stop() // must not panic
 }
+
+// recoverySubscribedEventTypes are the bus event types [Subscribe]
+// installs a handler for.
+var recoverySubscribedEventTypes = []hmevent.EventType{
+	hmevent.EventTypeConnectionLost,
+	hmevent.EventTypeCircuitBreakerTripped,
+	hmevent.EventTypeCircuitBreakerStateChanged,
+}
+
+// TestSubscribeIsIdempotent pins that repeated Subscribe calls leave
+// exactly one handler set on the bus.
+//
+// The south-bound wiring calls Subscribe once per interface and again on
+// every bring-up generation, so a three-interface central that had been
+// re-inited twice ran six handler sets and six heartbeat loops. Each
+// heartbeat tick then re-armed the per-interface attempt cap once per
+// loop, defeating the exhaustion brake exactly when several CCUs were
+// flapping. Nothing failed visibly — recovery simply ran more often than
+// its own limits allowed, and every loop lived until Unit.Stop.
+func TestSubscribeIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	bus := events.NewBus()
+	c := NewConnectionRecoveryCoordinatorWithLimit("c1", bus, 0)
+
+	c.Subscribe()
+	t.Cleanup(c.Stop)
+
+	baseline := map[hmevent.EventType]int{}
+	for _, typ := range recoverySubscribedEventTypes {
+		baseline[typ] = bus.HandlerCount(typ)
+		if baseline[typ] == 0 {
+			t.Fatalf("no handler registered for %s; this test would pass vacuously", typ)
+		}
+	}
+
+	for range 3 {
+		c.Subscribe()
+	}
+
+	for _, typ := range recoverySubscribedEventTypes {
+		if got := bus.HandlerCount(typ); got != baseline[typ] {
+			t.Errorf("%s handlers = %d after four Subscribe calls, want %d", typ, got, baseline[typ])
+		}
+	}
+}
+
+// TestSubscribeAfterStopStaysStopped pins that a stopped coordinator
+// cannot be re-armed by a late Subscribe from a bring-up generation that
+// is already going away.
+func TestSubscribeAfterStopStaysStopped(t *testing.T) {
+	t.Parallel()
+
+	bus := events.NewBus()
+	c := NewConnectionRecoveryCoordinatorWithLimit("c1", bus, 0)
+	c.Subscribe()
+	c.Stop()
+
+	c.Subscribe()
+
+	for _, typ := range recoverySubscribedEventTypes {
+		if got := bus.HandlerCount(typ); got != 0 {
+			t.Errorf("%s handlers = %d after Subscribe on a stopped coordinator, want 0", typ, got)
+		}
+	}
+}

@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, screen } from "@testing-library/svelte";
+import {
+  render,
+  cleanup,
+  waitFor,
+  screen,
+  fireEvent,
+} from "@testing-library/svelte";
 
 // ---------------------------------------------------------------------------
 // Mutable mock fns
@@ -195,6 +201,50 @@ describe("Fleet — per-central device count", () => {
 
     const deviceLabel = screen.getByText("fleet.field.devices");
     expect(deviceLabel.nextElementSibling?.textContent?.trim()).toBe("0");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2b. deviceStore fetch failure must not read as "0 devices everywhere"
+// ---------------------------------------------------------------------------
+
+describe("Fleet — device fetch failure", () => {
+  it("renders the shared error state instead of a 0-device grid when the device fetch fails", async () => {
+    // deviceStore.refresh() swallows its own fetch errors into
+    // deviceStore.error rather than throwing (see devices.svelte.ts),
+    // so Promise.all([getSystemCCUs(), deviceStore.refresh()]) resolves
+    // normally even though the device list never loaded. Fleet must
+    // read deviceStore.error itself instead of rendering every CCU
+    // card with a device count of 0.
+    mockGetSystemCCUs.mockResolvedValue(CCUS);
+    mockListDevices.mockRejectedValue(new Error("network down"));
+
+    render(Fleet);
+
+    await waitFor(() => {
+      expect(screen.getByText(/fleet\.load_error/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText("ccu-online")).not.toBeInTheDocument();
+    expect(screen.queryByText("fleet.field.devices")).not.toBeInTheDocument();
+  });
+
+  it("retries both the CCU list and the device list on the error state's retry action", async () => {
+    mockGetSystemCCUs.mockResolvedValue(CCUS);
+    mockListDevices.mockRejectedValueOnce(new Error("network down"));
+    mockListDevices.mockResolvedValue(devicesPage(DEVICES));
+
+    render(Fleet);
+
+    await waitFor(() => {
+      expect(screen.getByText(/fleet\.load_error/)).toBeInTheDocument();
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "common.reload" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("ccu-online")).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/fleet\.load_error/)).not.toBeInTheDocument();
   });
 });
 

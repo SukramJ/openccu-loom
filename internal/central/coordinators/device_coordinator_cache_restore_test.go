@@ -6,8 +6,7 @@
 // DeviceCoordinator.RefreshDeviceDescriptionsAndCreateMissingDevices,
 // DeviceCoordinator.AddNewDevicesManually + StoreDelayedDeviceDescriptions,
 // DeviceCoordinator.CheckParamsetConsistency,
-// DeviceCoordinator.ScheduleParamsetConsistencyCheck, and
-// ConfigurationCoordinator.CopyParamset.
+// DeviceCoordinator.ScheduleParamsetConsistencyCheck.
 
 package coordinators
 
@@ -48,29 +47,6 @@ func (s *stubParamsetChecker) GetParamset(_ context.Context, channelAddress stri
 		return v, nil
 	}
 	return map[string]any{}, nil
-}
-
-// stubReader / stubWriter for CopyParamset.
-type stubReader struct {
-	values map[string]any
-	err    error
-}
-
-func (r *stubReader) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
-	return r.values, r.err
-}
-
-type stubWriter struct {
-	written map[string]any
-	err     error
-}
-
-func (w *stubWriter) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, values map[string]any) error {
-	if w.err != nil {
-		return w.err
-	}
-	w.written = values
-	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -536,154 +512,52 @@ func TestScheduleParamsetConsistencyCheckCallsCallback(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ConfigurationCoordinator.CopyParamset
-// ---------------------------------------------------------------------------
-
-func TestCopyParamsetCopiesWritableParameters(t *testing.T) {
+// TestAddNewDevicesManuallyPublishesOutsideTheCoordinatorLock pins that
+// DeviceCreatedEvent handlers do not run under the DeviceCoordinator's
+// mutex.
+//
+// The bus dispatches synchronously on the publishing goroutine, and this
+// event's real handlers do substantial work: the event bridge publishes
+// the device's whole MQTT snapshot, the security domain rebuilds its
+// index. Holding a non-reentrant coordinator lock across foreign handler
+// code means any handler that reaches back into the coordinator
+// deadlocks the daemon outright — and until one does, a slow broker
+// stalls every other caller of the coordinator.
+//
+// The handler here calls back into the coordinator, which is exactly
+// what the old code could not survive.
+func TestAddNewDevicesManuallyPublishesOutsideTheCoordinatorLock(t *testing.T) {
 	t.Parallel()
-	descs := registry.NewDeviceDescriptionRegistry()
-	psets := registry.NewParamsetRegistry()
-	devs := registry.NewDeviceRegistry()
 
-	// Register a target channel with MASTER description.
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "SRC:1", Parent: "SRC", Type: "SWITCH"})
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "DST:1", Parent: "DST", Type: "SWITCH"})
-	psets.Put(hmenum.InterfaceHmIPRF, "DST:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{
-		"WRITABLE": hmproto.ParameterData{Operations: hmenum.OperationsWrite},
-		"READONLY": hmproto.ParameterData{Operations: hmenum.OperationsRead},
+	dc, bus, _, _, _ := newDCFull(t)
+
+	var reentered atomic.Bool
+	unsub := events.Subscribe(bus, func(hmevent.DeviceCreatedEvent) {
+		// A read that takes the coordinator's own lock.
+		dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceHmIPRF, nil)
+		reentered.Store(true)
+	})
+	defer unsub()
+
+	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+		{Address: "REENT0001", Type: "HmIP-STH"},
 	})
 
-	cc := NewConfigurationCoordinator(descs, psets, devs)
+	done := make(chan error, 1)
+	go func() {
+		done <- dc.AddNewDevicesManually(context.Background(), hmenum.InterfaceHmIPRF,
+			map[string]string{"REENT0001": "Sensor"}, nil)
+	}()
 
-	reader := &stubReader{values: map[string]any{"WRITABLE": float64(1), "READONLY": float64(0)}}
-	writer := &stubWriter{}
-
-	result, _, _, err := cc.CopyParamset(
-		context.Background(),
-		hmenum.InterfaceHmIPRF, "SRC:1",
-		hmenum.InterfaceHmIPRF, "DST:1",
-		hmenum.ParamsetKeyMaster,
-		reader, writer,
-	)
-	if err != nil {
-		t.Fatal(err)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("AddNewDevicesManually: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("AddNewDevicesManually deadlocked: a DeviceCreatedEvent handler ran under the coordinator lock")
 	}
-	if !result.Success {
-		t.Fatal("CopyParamset must succeed")
-	}
-	if result.ParametersCopied != 1 {
-		t.Fatalf("ParametersCopied=%d, want 1", result.ParametersCopied)
-	}
-	if result.ParametersSkipped != 1 {
-		t.Fatalf("ParametersSkipped=%d, want 1", result.ParametersSkipped)
-	}
-	if _, ok := writer.written["WRITABLE"]; !ok {
-		t.Fatal("WRITABLE must have been written to target")
-	}
-	if _, ok := writer.written["READONLY"]; ok {
-		t.Fatal("READONLY must not have been written to target")
-	}
-}
-
-func TestCopyParamsetNilReaderErrors(t *testing.T) {
-	t.Parallel()
-	cc := NewConfigurationCoordinator(nil, nil, nil)
-	_, _, _, err := cc.CopyParamset(
-		context.Background(),
-		hmenum.InterfaceHmIPRF, "A:0",
-		hmenum.InterfaceHmIPRF, "B:0",
-		hmenum.ParamsetKeyMaster,
-		nil, &stubWriter{},
-	)
-	if err == nil {
-		t.Fatal("nil reader must return error")
-	}
-}
-
-func TestCopyParamsetNilWriterErrors(t *testing.T) {
-	t.Parallel()
-	cc := NewConfigurationCoordinator(nil, nil, nil)
-	_, _, _, err := cc.CopyParamset(
-		context.Background(),
-		hmenum.InterfaceHmIPRF, "A:0",
-		hmenum.InterfaceHmIPRF, "B:0",
-		hmenum.ParamsetKeyMaster,
-		&stubReader{}, nil,
-	)
-	if err == nil {
-		t.Fatal("nil writer must return error")
-	}
-}
-
-func TestCopyParamsetReaderErrorPropagates(t *testing.T) {
-	t.Parallel()
-	cc := NewConfigurationCoordinator(nil, nil, nil)
-	reader := &stubReader{err: errors.New("rpc fail")}
-	_, _, _, err := cc.CopyParamset(
-		context.Background(),
-		hmenum.InterfaceHmIPRF, "A:0",
-		hmenum.InterfaceHmIPRF, "B:0",
-		hmenum.ParamsetKeyMaster,
-		reader, &stubWriter{},
-	)
-	if err == nil {
-		t.Fatal("reader error must propagate")
-	}
-}
-
-func TestCopyParamsetNoTargetDescriptionReturnsSuccess(t *testing.T) {
-	t.Parallel()
-	cc := NewConfigurationCoordinator(
-		registry.NewDeviceDescriptionRegistry(),
-		registry.NewParamsetRegistry(),
-		registry.NewDeviceRegistry(),
-	)
-	reader := &stubReader{values: map[string]any{"P": float64(1)}}
-	writer := &stubWriter{}
-
-	result, _, _, err := cc.CopyParamset(
-		context.Background(),
-		hmenum.InterfaceHmIPRF, "A:0",
-		hmenum.InterfaceHmIPRF, "B:0",
-		hmenum.ParamsetKeyMaster,
-		reader, writer,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !result.Success {
-		t.Fatal("must succeed even when target has no description")
-	}
-	if result.ParametersCopied != 0 {
-		t.Fatalf("ParametersCopied=%d, want 0", result.ParametersCopied)
-	}
-}
-
-func TestCopyParamsetWriterErrorReturnsFailure(t *testing.T) {
-	t.Parallel()
-	descs := registry.NewDeviceDescriptionRegistry()
-	psets := registry.NewParamsetRegistry()
-	devs := registry.NewDeviceRegistry()
-	psets.Put(hmenum.InterfaceHmIPRF, "DST:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{
-		"PARAM": hmproto.ParameterData{Operations: hmenum.OperationsWrite},
-	})
-	cc := NewConfigurationCoordinator(descs, psets, devs)
-
-	reader := &stubReader{values: map[string]any{"PARAM": float64(5)}}
-	writer := &stubWriter{err: errors.New("ccu rejected")}
-
-	result, _, _, err := cc.CopyParamset(
-		context.Background(),
-		hmenum.InterfaceHmIPRF, "SRC:0",
-		hmenum.InterfaceHmIPRF, "DST:0",
-		hmenum.ParamsetKeyMaster,
-		reader, writer,
-	)
-	if err == nil {
-		t.Fatal("writer error must propagate as error")
-	}
-	if result.Success {
-		t.Fatal("result.Success must be false on writer error")
+	if !reentered.Load() {
+		t.Fatal("handler never ran; the test would pass vacuously")
 	}
 }

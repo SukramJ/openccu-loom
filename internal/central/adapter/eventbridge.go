@@ -72,6 +72,10 @@ type EventBridge struct {
 	startMu sync.Mutex
 	started bool
 	unsubs  []func()
+	// attached holds the subscriptions of centrals adopted after Start,
+	// keyed by central name so a removed central can be detached again.
+	// Start-time centrals live in unsubs; both are released by detach.
+	attached map[string][]func()
 
 	// fanout decouples the live value-change MQTT publish work from the bus
 	// dispatch goroutine (see mqtt_fanout.go). Created in Start, drained by a
@@ -189,54 +193,112 @@ func (b *EventBridge) Start(ctx context.Context) {
 	b.started = true
 
 	for _, u := range b.registry.List() {
-		bus := u.EventBus
-		b.unsubs = append(
-			b.unsubs,
-			events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
-				b.onValueChanged(u.Name(), e)
-			}),
-			events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) {
-				b.onCentralState(u.Name(), e)
-			}),
-			// Per-central southbound bring-up phase transitions so the UI can
-			// show "still initializing" vs "offline" while a co-booting CCU
-			// loads names then devices.
-			events.Subscribe(bus, func(e hmevent.CentralReadinessChangedEvent) {
-				b.onCentralReadiness(u.Name(), e)
-			}),
-			// Wire-DP source-token transitions (cache → live, live →
-			// stale, stale → live) republish the same topic even though
-			// the value did not change. Without this consumers that gate
-			// on value diff (HA without `force_update`) miss freshness
-			// flips. ADR 0019.
-			events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
-				b.onSourceChanged(u.Name(), e)
-			}),
-			// Prune the MQTT bridge's declared map when a device is removed so
-			// the dedup gate does not suppress subsequent orphan-cleanup evictions
-			// of the same topics, and so snapshot passes do not re-emit discovery
-			// configs for a device that no longer exists in the model.
-			events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
-				b.onDeviceRemoved(ctx, e)
-			}),
-			// Per-central southbound-ready: the readiness-gated bring-up loads each
-			// central's devices (with names) asynchronously, after this boot-time
-			// PublishInitialSnapshot would have run. Publish that central's snapshot
-			// when it signals ready so its devices reach the broker without waiting
-			// for a restart. Idempotent (the bridge diff-gates on its declared map),
-			// so it composes safely with the catch-up PublishInitialSnapshot call.
-			events.Subscribe(bus, func(e hmevent.CentralSouthboundReadyEvent) {
-				b.PublishCentralSnapshot(ctx, e.CentralName)
-			}),
-			// Hot-plug: a device materialised AFTER its central's bring-up
-			// (newDevices callback) never re-enters a snapshot pass on its
-			// own — publish its full per-device footprint when the model
-			// announces it, so discovery + state reach the broker without a
-			// daemon restart.
-			events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
-				b.onDeviceCreated(ctx, u, e)
-			}),
-		)
+		b.unsubs = append(b.unsubs, b.subscribeUnit(ctx, u)...)
+	}
+}
+
+// AttachCentral subscribes a central that joined the registry AFTER
+// [EventBridge.Start] — a live-adopted CCU. Start snapshots the registry
+// once, so without this call the new central's bus reaches no north-bound
+// surface at all: neither the MQTT fan-out nor the WebSocket live plane
+// sees a single value change until the daemon restarts.
+//
+// The subscriptions inherit the bridge's lifetime context, never the
+// caller's: an adopt runs on an HTTP request context that is cancelled the
+// moment the response is written.
+//
+// A bridge that was never started attaches nothing — Start covers the
+// central when it runs. Attaching the same central twice replaces the
+// previous subscription set rather than doubling it.
+func (b *EventBridge) AttachCentral(u *central.Unit) {
+	if b == nil || u == nil {
+		return
+	}
+	b.DetachCentral(u.Name())
+
+	b.startMu.Lock()
+	defer b.startMu.Unlock()
+	if !b.started {
+		return
+	}
+	if b.attached == nil {
+		b.attached = make(map[string][]func())
+	}
+	b.attached[u.Name()] = b.subscribeUnit(b.lifetimeCtx, u)
+}
+
+// DetachCentral releases the subscriptions [EventBridge.AttachCentral]
+// installed for one central, so a removed CCU stops reaching the
+// north-bound planes. Unknown names are a no-op.
+func (b *EventBridge) DetachCentral(centralName string) {
+	if b == nil {
+		return
+	}
+	b.startMu.Lock()
+	unsubs := b.attached[centralName]
+	delete(b.attached, centralName)
+	b.startMu.Unlock()
+
+	// Each unsub is a barrier that waits for an in-flight dispatch of that
+	// handler, so it runs without startMu held (same reasoning as detach).
+	for _, u := range unsubs {
+		if u != nil {
+			u()
+		}
+	}
+}
+
+// subscribeUnit installs the per-central bus subscriptions and returns
+// their unsubscribe funcs. Shared by [EventBridge.Start] (boot-time
+// centrals) and [EventBridge.AttachCentral] (live-adopted ones) so an
+// adopted central is wired exactly like a configured one.
+func (b *EventBridge) subscribeUnit(ctx context.Context, u *central.Unit) []func() {
+	bus := u.EventBus
+	return []func(){
+		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+			b.onValueChanged(u.Name(), e)
+		}),
+		events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) {
+			b.onCentralState(u.Name(), e)
+		}),
+		// Per-central southbound bring-up phase transitions so the UI can
+		// show "still initializing" vs "offline" while a co-booting CCU
+		// loads names then devices.
+		events.Subscribe(bus, func(e hmevent.CentralReadinessChangedEvent) {
+			b.onCentralReadiness(u.Name(), e)
+		}),
+		// Wire-DP source-token transitions (cache → live, live →
+		// stale, stale → live) republish the same topic even though
+		// the value did not change. Without this consumers that gate
+		// on value diff (HA without `force_update`) miss freshness
+		// flips. ADR 0019.
+		events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
+			b.onSourceChanged(u.Name(), e)
+		}),
+		// Prune the MQTT bridge's declared map when a device is removed so
+		// the dedup gate does not suppress subsequent orphan-cleanup evictions
+		// of the same topics, and so snapshot passes do not re-emit discovery
+		// configs for a device that no longer exists in the model.
+		events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+			b.onDeviceRemoved(ctx, e)
+		}),
+		// Per-central southbound-ready: the readiness-gated bring-up loads each
+		// central's devices (with names) asynchronously, after this boot-time
+		// PublishInitialSnapshot would have run. Publish that central's snapshot
+		// when it signals ready so its devices reach the broker without waiting
+		// for a restart. Idempotent (the bridge diff-gates on its declared map),
+		// so it composes safely with the catch-up PublishInitialSnapshot call.
+		events.Subscribe(bus, func(e hmevent.CentralSouthboundReadyEvent) {
+			b.PublishCentralSnapshot(ctx, e.CentralName)
+		}),
+		// Hot-plug: a device materialised AFTER its central's bring-up
+		// (newDevices callback) never re-enters a snapshot pass on its
+		// own — publish its full per-device footprint when the model
+		// announces it, so discovery + state reach the broker without a
+		// daemon restart.
+		events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
+			b.onDeviceCreated(ctx, u, e)
+		}),
 	}
 }
 
@@ -272,6 +334,10 @@ func (b *EventBridge) detach() {
 	b.startMu.Lock()
 	unsubs := b.unsubs
 	b.unsubs = nil
+	for name, subs := range b.attached {
+		unsubs = append(unsubs, subs...)
+		delete(b.attached, name)
+	}
 	stopCancel := b.stopCancel
 	b.started = false
 	b.startMu.Unlock()
@@ -292,14 +358,17 @@ func (b *EventBridge) detach() {
 	b.goroutineWG.Wait()
 }
 
-// onSourceChanged fans a lifecycle transition out to the same MQTT
-// publish path as a regular value change. It synthesises a
-// DataPointValueChangedEvent with OldValue == NoneValue so the
-// dedup gate downstream treats it as a fresh emission. The value
-// itself comes from the source-changed event's Value field, which
-// the DP layer fills with its current RawValue at transition time.
+// onSourceChanged fans a lifecycle transition out through the same
+// dispatch path as a regular value change — WS inline, MQTT via the
+// fan-out worker. It synthesises a DataPointValueChangedEvent with
+// OldValue == NoneValue so the dedup gate downstream treats it as a
+// fresh emission. The value itself comes from the source-changed
+// event's Value field, which the DP layer fills with its current
+// RawValue at transition time. The MQTT wiring may be nil (MQTT
+// disabled); dispatchLive gates only its MQTT arm on that, so the
+// WS freshness signal must not be guarded here.
 func (b *EventBridge) onSourceChanged(centralName string, e hmevent.DataPointSourceChangedEvent) {
-	if b == nil || b.mqtt == nil {
+	if b == nil {
 		return
 	}
 	if e.Value == nil {

@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 // Environment variables that supply credentials off the command line, so a
@@ -72,11 +74,25 @@ func isTerminal(in io.Reader) bool {
 }
 
 // promptLine writes prompt to stderr and reads a single line from in, trimming
-// the trailing newline. Input is read with echo on: without golang.org/x/term
-// in the dependency tree, a no-echo read is not available, so this is a plain
-// line read. It is only reached on an interactive terminal.
+// the trailing newline. When in is a terminal, the line is read with echo
+// suppressed via golang.org/x/term (BSD-3-Clause; already pulled into the
+// module graph transitively by golang.org/x/crypto and golang.org/x/net, so
+// depending on it directly adds no new module to the build, only a real use
+// of one already resolved) — a plaintext password otherwise stays in the
+// terminal scrollback for as long as the session's history is kept. Callers
+// that hand in a non-terminal reader (tests, or a redirected/piped stdin)
+// fall back to a plain buffered line read, which keeps promptLine testable
+// without a pty.
 func promptLine(in io.Reader, stderr io.Writer, prompt string) string {
 	_, _ = fmt.Fprint(stderr, prompt)
+	if f, ok := in.(*os.File); ok && isTerminal(f) {
+		if line, err := term.ReadPassword(int(f.Fd())); err == nil {
+			_, _ = fmt.Fprintln(stderr) // ReadPassword consumes the Enter key without echoing it.
+			return strings.TrimRight(string(line), "\r\n")
+		}
+		// Fall through to the plain reader — e.g. the terminal was detached
+		// between the isTerminal check and the read.
+	}
 	line, _ := bufio.NewReader(in).ReadString('\n')
 	return strings.TrimRight(line, "\r\n")
 }
@@ -102,6 +118,43 @@ func warnIfPlaintextCredentials(host, token, user string, stderr io.Writer) {
 	_, _ = fmt.Fprintf(stderr,
 		"warning: sending credentials over plaintext http:// to %s — use https:// or a loopback host to protect them\n",
 		u.Host)
+}
+
+// warnInsecureTLS prints a one-line warning to stderr when --insecure disables
+// TLS certificate verification. warnIfPlaintextCredentials only covers plain
+// http://; an https:// connection with verification turned off is silently
+// just as exposed — any certificate is accepted, so a machine-in-the-middle
+// can present its own and intercept everything, including the credentials
+// this CLI sends. A nil stderr is treated as a no-op sink so callers that do
+// not care about the message (unit tests) do not have to supply one.
+func warnInsecureTLS(stderr io.Writer) {
+	if stderr == nil {
+		return
+	}
+	_, _ = fmt.Fprintln(stderr,
+		"warning: TLS certificate verification is disabled (--insecure) — the connection is not authenticated and can be intercepted; use --cacert with a trusted CA bundle instead when possible")
+}
+
+// redactHostUserinfo strips a userinfo component (user:pass@ or user@) from a
+// --host value before it is stored as a client's base URL. Go's HTTP client
+// never applies destination-URL userinfo as Basic auth on its own — only a
+// proxy URL's userinfo is used, in net/http.Transport's CONNECT/proxy dial
+// path — so a value like https://user:pass@ccu/ authenticates nothing; it is
+// dead input that does nothing but resurface the password in every error
+// message built from the base URL (target := baseURL + path, then wrapped
+// verbatim into an *httpStatusError). Stripping it once here, before it is
+// stored, keeps it out of every message and log line derived from the base
+// URL afterward. A malformed or scheme-less host (e.g. a bare "host:port"
+// value, which net/url would otherwise misparse as scheme "host") is
+// returned unchanged so it still reaches the existing validation/error path
+// unmodified.
+func redactHostUserinfo(host string) string {
+	u, err := url.Parse(host)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User == nil {
+		return host
+	}
+	u.User = nil
+	return u.String()
 }
 
 // isLoopbackHost reports whether host names the local machine, so plaintext
@@ -139,7 +192,13 @@ func loadRootCAs(path string) (*x509.CertPool, error) {
 //
 // Certificate verification stays ON unless --insecure is explicitly passed;
 // --cacert only adds a custom root of trust, it does not weaken verification.
-func buildTLSConfig(cacert string, insecure bool) (*tls.Config, error) {
+// stderr receives a warning whenever insecure is set — see warnInsecureTLS —
+// so the opt-out is never silent; pass nil in a context that has no writer
+// to hand (the warning is then simply not printed, e.g. in unit tests).
+func buildTLSConfig(cacert string, insecure bool, stderr io.Writer) (*tls.Config, error) {
+	if insecure {
+		warnInsecureTLS(stderr)
+	}
 	if cacert == "" && !insecure {
 		return nil, nil
 	}

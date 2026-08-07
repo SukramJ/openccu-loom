@@ -49,7 +49,7 @@ func TestPaseAdapter_DecodesInitiatorMRPParams(t *testing.T) {
 	t.Parallel()
 	a := NewPaseAdapter(nil)
 	a.SetPBKDFParams(1000, []byte("SPAKE2P Key Salt"), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 
 	initRand := make([]byte, spake2.PBKDFRandomSize)
 	for i := range initRand {
@@ -79,7 +79,7 @@ func TestPaseAdapter_AbsentMRPParamsNil(t *testing.T) {
 	t.Parallel()
 	a := NewPaseAdapter(nil)
 	a.SetPBKDFParams(1000, []byte("SPAKE2P Key Salt"), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 
 	initRand := make([]byte, spake2.PBKDFRandomSize)
 	for i := range initRand {
@@ -100,7 +100,7 @@ func TestPaseAdapter_EmitsResponderMRPParams(t *testing.T) {
 	t.Parallel()
 	a := NewPaseAdapter(nil)
 	a.SetPBKDFParams(1000, []byte("SPAKE2P Key Salt"), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 	idle, active, thresh := uint16(500), uint16(300), uint16(4000)
 	a.SetResponderMRPParams(&spake2.MRPParameters{
 		IdleRetransTimeoutMs:   &idle,

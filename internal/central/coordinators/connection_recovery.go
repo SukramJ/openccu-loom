@@ -6,6 +6,7 @@ package coordinators
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -170,8 +171,12 @@ type ConnectionRecoveryCoordinator struct {
 	// cbResetter resets circuit breakers after a successful reconnect.
 	cbResetter CircuitBreakerResetter
 
-	// subMu guards unsubscribers and stopped.
-	subMu         syncx.Mutex
+	// subMu guards unsubscribers, subscribed and stopped.
+	subMu syncx.Mutex
+	// subscribed makes Subscribe idempotent: the south-bound wiring calls
+	// it per interface and per bring-up generation, and duplicate handler
+	// sets multiply every recovery trigger.
+	subscribed    bool
 	unsubscribers []func()
 	stopped       bool
 	// stopCh is closed by Stop to immediately unblock heartbeatLoop,
@@ -362,6 +367,23 @@ func (c *ConnectionRecoveryCoordinator) WithPipelineFor(interfaceID string, p []
 	return c
 }
 
+// PipelineFor returns the recovery pipeline registered for interfaceID,
+// or the default pipeline when the interface has none. The second result
+// is false when neither exists — a caller that would otherwise run an
+// empty pipeline must treat that as a failure, because an empty pipeline
+// "succeeds" without doing anything.
+func (c *ConnectionRecoveryCoordinator) PipelineFor(interfaceID string) ([]Pipeline, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if p := c.interfacePipelines[interfaceID]; len(p) > 0 {
+		return slices.Clone(p), true
+	}
+	if len(c.defaultPipeline) > 0 {
+		return slices.Clone(c.defaultPipeline), true
+	}
+	return nil, false
+}
+
 // InRecovery reports whether the given interface is currently undergoing
 // active recovery.
 // interfaceIDs returns the union of all interface IDs that are either
@@ -471,9 +493,23 @@ func (c *ConnectionRecoveryCoordinator) triggerRecovery(interfaceID string) {
 // - [hmevent.HeartbeatTimerFiredEvent]
 //
 // Only events whose CentralName matches the coordinator's own name are acted
-// upon. Call [Stop] to release the subscriptions. Calling Subscribe twice
-// registers duplicate handlers — call it once per coordinator lifetime.
+// upon. Call [Stop] to release the subscriptions.
+//
+// Subscribe is idempotent. It used to double every handler and start a
+// second heartbeat loop on each call — and the south-bound wiring calls it
+// once per interface AND once per bring-up generation, so a three-interface
+// central that had been re-inited twice ran six subscriber sets and six
+// heartbeat loops. Each loop tick then re-armed the attempt cap N times,
+// defeating the exhaustion brake exactly when several CCUs were flapping.
 func (c *ConnectionRecoveryCoordinator) Subscribe() {
+	c.subMu.Lock()
+	if c.stopped || c.subscribed {
+		c.subMu.Unlock()
+		return
+	}
+	c.subscribed = true
+	c.subMu.Unlock()
+
 	unsub1 := events.Subscribe(c.bus, func(e hmevent.ConnectionLostEvent) {
 		if e.CentralName != c.centralName {
 			return
@@ -579,6 +615,7 @@ func (c *ConnectionRecoveryCoordinator) Stop() {
 	}
 	unsubs := c.unsubscribers
 	c.unsubscribers = nil
+	c.subscribed = false
 	c.subMu.Unlock()
 
 	// Cancel any in-flight recovery run, drop subscriptions, then wait for

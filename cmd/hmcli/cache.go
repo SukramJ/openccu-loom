@@ -23,6 +23,12 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
+// maxCacheClearResponseBytes bounds how much of the daemon's cache-clear
+// response this CLI buffers in memory. A scope report is a small JSON
+// document, so the cap only guards against a malicious or misbehaving daemon
+// streaming an unbounded body.
+const maxCacheClearResponseBytes = 4 << 20 // 4 MiB
+
 // cmdCache dispatches the `cache` subcommand. Today the only operation is
 // `clear` (ADR 0042): drop the CCU-derivable caches for a scope and re-pull
 // them through the daemon, or (with --offline) delete the persisted rows
@@ -135,7 +141,7 @@ func runCacheClearOnline(
 	token, _, _ = resolveCredentials(token, "", "", os.Stdin, stderr)
 	warnIfPlaintextCredentials(baseURL, token, "", stderr)
 
-	tlsCfg, err := buildTLSConfig(cacert, insecure)
+	tlsCfg, err := buildTLSConfig(cacert, insecure, stderr)
 	if err != nil {
 		return fmt.Errorf("cache clear: %w", err)
 	}
@@ -156,9 +162,13 @@ func runCacheClearOnline(
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		strings.TrimRight(baseURL, "/")+"/api/v1/admin/cache/clear",
-		bytes.NewReader(raw))
+	// Strip any userinfo before the URL can reach an error message: the
+	// endpoint string is embedded verbatim in every failure below, and a
+	// credential typed into --host would ride along into stderr and any
+	// log that captures it. Go's HTTP client never authenticates with
+	// destination-URL userinfo anyway.
+	endpoint := strings.TrimRight(redactHostUserinfo(baseURL), "/") + "/api/v1/admin/cache/clear"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
 		return fmt.Errorf("cache clear: build request: %w", err)
 	}
@@ -179,10 +189,12 @@ func runCacheClearOnline(
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	// Bounded so a malicious or misbehaving daemon streaming an unbounded body
+	// cannot exhaust CLI memory; a scope report is a small JSON document, so
+	// the cap only ever bites a hostile response.
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxCacheClearResponseBytes))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_, _ = fmt.Fprintf(stderr, "%s\n", strings.TrimSpace(string(respBody)))
-		return fmt.Errorf("cache clear: HTTP %s", resp.Status)
+		return fmt.Errorf("cache clear: %w", newHTTPStatusError(http.MethodPost, endpoint, resp, respBody))
 	}
 
 	var report cachereset.Report

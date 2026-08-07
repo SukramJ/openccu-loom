@@ -8,6 +8,16 @@
 // command groups that carry their own `flag.FlagSet` (config, cache,
 // devices, export-def) run with Cobra flag-parsing disabled so their
 // existing flag surface is preserved verbatim.
+//
+// Exit codes: 0 on success. On failure the code distinguishes the failure
+// class so scripts do not have to parse the error text: exitAuthFailed (3)
+// when the daemon rejected the request with 401 Unauthorized or 403
+// Forbidden, exitNotFound (4) for 404 Not Found, exitServerFail (5) for any
+// 5xx response, and exitGeneral (1) for everything else — usage errors,
+// local I/O, config/offline-DB failures, network failures below the HTTP
+// layer, and REST failures with any other status. Only an error from a
+// completed HTTP round-trip carries a distinguishable code; see
+// exitCodeFor.
 package main
 
 import (
@@ -15,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -25,10 +36,54 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 )
 
+// Process exit codes. Documented in the package doc comment above; keep both
+// in sync when adding a new class.
+const (
+	exitGeneral    = 1
+	exitAuthFailed = 3
+	exitNotFound   = 4
+	exitServerFail = 5
+)
+
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	err := run(os.Args[1:], os.Stdout, os.Stderr)
+	os.Exit(reportError(err, os.Stderr))
+}
+
+// reportError is main's test seam for its error-reporting tail: given the
+// error run returned (nil on success), it writes a terminal-safe message to
+// stderr and returns the process exit code. A server-controlled string
+// (a device name, an error body relayed from the daemon, …) can otherwise
+// carry ANSI escapes or control bytes that rewrite the operator's terminal,
+// so the message is routed through sanitizeForTerminal before it is
+// printed — mirroring the sanitization already applied to every
+// human-readable table (see sanitize.go).
+func reportError(err error, stderr io.Writer) int {
+	if err == nil {
+		return 0
+	}
+	_, _ = fmt.Fprintln(stderr, sanitizeForTerminal(err.Error()))
+	return exitCodeFor(err)
+}
+
+// exitCodeFor maps err to a process exit code. Only an *httpStatusError
+// (a REST call that reached the daemon and got a non-2xx response) yields a
+// class distinct from exitGeneral, whether returned directly or wrapped
+// with %w — see the package doc comment for the code table.
+func exitCodeFor(err error) int {
+	var statusErr *httpStatusError
+	if !errors.As(err, &statusErr) {
+		return exitGeneral
+	}
+	switch {
+	case statusErr.StatusCode == http.StatusUnauthorized, statusErr.StatusCode == http.StatusForbidden:
+		return exitAuthFailed
+	case statusErr.StatusCode == http.StatusNotFound:
+		return exitNotFound
+	case statusErr.StatusCode >= 500:
+		return exitServerFail
+	default:
+		return exitGeneral
 	}
 }
 

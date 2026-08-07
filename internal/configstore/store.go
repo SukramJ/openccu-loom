@@ -99,18 +99,31 @@ func UnmanagedFieldPaths() map[string]struct{} {
 	return out
 }
 
-// StripUnmanagedSectionFields removes every unmanaged field that falls under
-// sec from a section PUT payload before it is validated and persisted. It is
-// the exported entry point the REST handler uses; the boot-time overlay uses
-// the same logic via applySection / marshalSection.
-func StripUnmanagedSectionFields(sec Section, raw []byte) []byte {
-	return stripUnmanagedFields(sec, raw)
+// StripForeignSectionFields removes everything sec must not carry from a
+// section payload before it is validated, persisted or applied. It is the
+// exported entry point the REST handler uses; the boot-time overlay uses the
+// same logic via applySection / marshalSection.
+func StripForeignSectionFields(sec Section, raw []byte) []byte {
+	return stripForeignFields(sec, raw)
 }
 
-// stripUnmanagedFields removes every unmanaged field that falls under sec from
-// a section's JSON payload, returning the payload unchanged when it carries
-// none (the common case) or is not a JSON object.
-func stripUnmanagedFields(sec Section, raw []byte) []byte {
+// foreignRelPaths returns the paths — relative to sec — that a sec row must
+// never carry. Two disjoint groups:
+//
+//   - the unmanaged fields listed in sectionUnmanagedPaths (bootstrap-tier
+//     listen, SQLite-managed auth credentials), and
+//   - the sub-tree of every *nested* section: a section whose name starts with
+//     sec's name owns that sub-tree exclusively. north.rest.auth.oidc /
+//     .ccu / .ha_ingress all live inside the config.NorthREST struct, so a
+//     naive marshal of north.rest would duplicate them into the REST row.
+//
+// The duplication is not cosmetic: applySection merges (json.Unmarshal into an
+// already-populated struct) and the parent section is layered before its nested
+// ones, so a value that survives only in the parent row silently reappears at
+// the next boot. Resetting north.rest.auth.ha_ingress.enabled or deleting the
+// whole nested section would then fail to disable an auth passthrough
+// (see docs/adr/0044-single-port-onboarding-and-ha-ingress-auth.md).
+func foreignRelPaths(sec Section) []string {
 	prefix := string(sec) + "."
 	var rels []string
 	for full := range sectionUnmanagedPaths {
@@ -118,6 +131,22 @@ func stripUnmanagedFields(sec Section, raw []byte) []byte {
 			rels = append(rels, rel)
 		}
 	}
+	for _, other := range AllSections() {
+		if other == sec {
+			continue
+		}
+		if rel, ok := strings.CutPrefix(string(other), prefix); ok {
+			rels = append(rels, rel)
+		}
+	}
+	return rels
+}
+
+// stripForeignFields removes every path foreignRelPaths reports for sec from a
+// section's JSON payload, returning the payload unchanged when it carries none
+// (the common case) or is not a JSON object.
+func stripForeignFields(sec Section, raw []byte) []byte {
+	rels := foreignRelPaths(sec)
 	if len(rels) == 0 {
 		return raw
 	}
@@ -388,18 +417,20 @@ func sectionFieldPaths() map[Section][]string {
 // ApplySectionToConfig overlays one section payload onto cfg, mirroring
 // the boot-time overlay so callers (e.g. the REST section-PUT handler)
 // can assemble the candidate effective config a save would produce and
-// validate it before persisting. Unmanaged fields are stripped exactly
+// validate it before persisting. Foreign fields are stripped exactly
 // as at boot, so the candidate reflects what actually lands on disk.
 func ApplySectionToConfig(sec Section, raw []byte, cfg *config.Config) error {
 	return applySection(sec, raw, cfg)
 }
 
 // applySection routes one section payload to the corresponding
-// [config.Config] sub-tree. Unmanaged fields (bootstrap-tier listen,
-// SQLite-managed auth credentials) are stripped first so a stored or
-// hand-crafted section row can neither pin nor wipe them.
+// [config.Config] sub-tree. Foreign fields — the unmanaged ones
+// (bootstrap-tier listen, SQLite-managed auth credentials) and every
+// nested section's sub-tree — are stripped first, so neither a stored
+// row written before that rule existed nor a hand-crafted one can pin
+// or wipe a value it does not own.
 func applySection(sec Section, raw []byte, cfg *config.Config) error {
-	raw = stripUnmanagedFields(sec, raw)
+	raw = stripForeignFields(sec, raw)
 	switch sec {
 	case SectionMQTT:
 		return json.Unmarshal(raw, &cfg.North.MQTT)
@@ -447,6 +478,18 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 	default:
 		return fmt.Errorf("configstore: unknown section %q", sec)
 	}
+}
+
+// MarshalSection serialises the section's sub-tree of cfg into the JSON
+// shape stored in config_sections — the inverse of [ApplySectionToConfig].
+// ok is false for sections that have no [config.Config] source (currently
+// only [SectionSecurity]); a caller must then persist its own payload.
+//
+// The REST section-PUT handler uses it to persist the very candidate it
+// validated, so the stored row always describes the whole section instead of
+// only the fragment the client happened to send.
+func MarshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err error) {
+	return marshalSection(sec, cfg)
 }
 
 // marshalSection is the inverse of [applySection]: it serialises the
@@ -498,11 +541,12 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 	if err != nil {
 		return nil, false, fmt.Errorf("configstore: marshal %s: %w", sec, err)
 	}
-	// Never persist unmanaged fields into a section row: north.rest.listen
-	// is bootstrap-tier and the auth credentials live only in the SQLite
-	// user/token stores. Stripping here keeps the seed and every save free
-	// of them.
-	return stripUnmanagedFields(sec, raw), true, nil
+	// Never persist foreign fields into a section row: north.rest.listen is
+	// bootstrap-tier, the auth credentials live only in the SQLite user/token
+	// stores, and every nested section (north.rest.auth.oidc / .ccu /
+	// .ha_ingress) owns its own row. Stripping here keeps the seed and every
+	// save free of them.
+	return stripForeignFields(sec, raw), true, nil
 }
 
 // SeedSectionsFromConfig performs a one-shot copy of the YAML-loaded

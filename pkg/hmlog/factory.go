@@ -51,7 +51,8 @@ func ParseFormat(raw string) Format {
 //
 //	reqctx.ContextHandler (adds request_id / operation / trace fields)
 //	  → RedactingHandler (masks sensitive attribute values)
-//	    → core handler (JSON or text, gated by a Leveler)
+//	    → TeeHandler (mirrors into the capture sink + live-log ring)
+//	      → core handler (JSON or text, gated by a Leveler)
 //
 // A nil [Sensitive] slice keeps the default redaction list; passing an
 // empty slice disables redaction entirely.
@@ -141,25 +142,28 @@ func loggerForLevelerWithTee(opts StackOptions, leveler slog.Leveler) (*slog.Log
 	default:
 		core = slog.NewJSONHandler(opts.Writer, hopts)
 	}
-	// Apply redaction first so that pre-bound attributes added via
-	// With(...) on the returned logger are masked too.
+	// TeeHandler sits BELOW the redactor, not above it. The capture
+	// archive and the live-log ring are operator-facing artefacts served
+	// over HTTP; they must carry the same masking stdout gets. Ordered the
+	// other way round the tee mirrors the record before redaction runs, so
+	// a secret masked on stdout is served in cleartext by the diagnostics
+	// endpoints — the shape this order exists to prevent.
+	tee := NewTeeHandler(core)
+	// Redaction wraps the tee so that pre-bound attributes added via
+	// With(...) on the returned logger are masked for both branches.
 	var redacted slog.Handler
 	switch {
 	case opts.Sensitive == nil:
-		redacted = NewRedactingHandler(core)
+		redacted = NewRedactingHandler(tee)
 	case len(opts.Sensitive) == 0:
-		redacted = core
+		redacted = tee
 	default:
-		redacted = NewRedactingHandlerWithKeys(core, opts.Sensitive)
+		redacted = NewRedactingHandlerWithKeys(tee, opts.Sensitive)
 	}
-	// TeeHandler sits between reqctx and redact so capture sees the
-	// already-redacted payload (capture archives are operator-facing
-	// artefacts and must respect the same redaction guarantees).
-	tee := NewTeeHandler(redacted)
 	// Reqctx filter sits outermost so the injected attributes (which
 	// include the W3C trace IDs) are visible to downstream handlers
 	// and themselves never trip the redaction patterns.
-	enriched := reqctx.NewContextHandler(tee)
+	enriched := reqctx.NewContextHandler(redacted)
 	return slog.New(enriched), tee
 }
 

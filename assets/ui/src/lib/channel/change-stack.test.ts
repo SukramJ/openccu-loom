@@ -179,6 +179,68 @@ describe("undo / redo", () => {
   });
 });
 
+describe("undo / redo restore the locked-parameter set", () => {
+  // ChannelPanel.applyProfilePatch records a before/after locked-set
+  // snapshot alongside the value changes so a profile apply's disabled
+  // fields roll back atomically with the values it staged (see
+  // ChannelPanel.svelte's applyProfilePatch/onUndo/onRedo).
+
+  it("restores the prior locked set when undoing a profile apply", () => {
+    let state = emptyStack();
+    let values: ParamValues = { LEVEL: 0, ON_TIME: 0 };
+    let locked = new Set<string>();
+
+    state = pushEntry(
+      state,
+      entryFromPatch({ LEVEL: 50, ON_TIME: 30 }, values, "profile.apply", {
+        before: [...locked],
+        after: ["LEVEL", "ON_TIME"],
+      }),
+    );
+    values = { ...values, LEVEL: 50, ON_TIME: 30 };
+    locked = new Set(["LEVEL", "ON_TIME"]);
+
+    const result = undo(state, values, locked);
+    expect(result.values).toEqual({ LEVEL: 0, ON_TIME: 0 });
+    expect(result.lockedParams).toEqual(new Set());
+  });
+
+  it("re-applies the locked set when redoing a profile apply", () => {
+    let state = emptyStack();
+    let values: ParamValues = { LEVEL: 0 };
+
+    state = pushEntry(
+      state,
+      entryFromPatch({ LEVEL: 50 }, values, "profile.apply", {
+        before: [],
+        after: ["LEVEL"],
+      }),
+    );
+    values = { ...values, LEVEL: 50 };
+
+    const undone = undo(state, values, new Set(["LEVEL"]));
+    expect(undone.lockedParams).toEqual(new Set());
+
+    const redone = redo(undone.state, undone.values, undone.lockedParams);
+    expect(redone.values).toEqual({ LEVEL: 50 });
+    expect(redone.lockedParams).toEqual(new Set(["LEVEL"]));
+  });
+
+  it("leaves the caller's locked set untouched when the entry carries none (a plain field edit)", () => {
+    const state = pushEntry(emptyStack(), {
+      changes: { LEVEL: { before: 0, after: 50 } },
+    });
+    const locked = new Set(["OTHER_PARAM"]);
+    const result = undo(state, { LEVEL: 50 }, locked);
+    expect(result.lockedParams).toEqual(new Set(["OTHER_PARAM"]));
+  });
+
+  it("defaults to an empty locked set when the caller passes none", () => {
+    const result = undo(emptyStack(), { LEVEL: 0 });
+    expect(result.lockedParams).toEqual(new Set());
+  });
+});
+
 describe("entryFromPatch", () => {
   it("snapshots the current value as `before` for every patched name", () => {
     const current: ParamValues = { LEVEL: 10, ON_TIME: 5 };
@@ -190,6 +252,16 @@ describe("entryFromPatch", () => {
   it("carries an optional label through for future history-list UI", () => {
     const entry = entryFromPatch({ LEVEL: 90 }, { LEVEL: 10 }, "profile.apply");
     expect(entry.label).toBe("profile.apply");
+  });
+
+  it("carries an optional locked-params before/after snapshot through", () => {
+    const entry = entryFromPatch(
+      { LEVEL: 90 },
+      { LEVEL: 10 },
+      "profile.apply",
+      { before: [], after: ["LEVEL"] },
+    );
+    expect(entry.lockedParams).toEqual({ before: [], after: ["LEVEL"] });
   });
 
   it("records `before: undefined` for a parameter absent from current values", () => {

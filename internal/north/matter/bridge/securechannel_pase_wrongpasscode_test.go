@@ -52,7 +52,7 @@ func primePaseAdapterToPake1(t *testing.T, a *PaseAdapter) {
 	t.Helper()
 	salt := wrongPasscodeTestSalt()
 	a.SetPBKDFParams(wrongPasscodeTestIterations, salt, 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 	initRand := bytes.Repeat([]byte{0x22}, spake2.PBKDFRandomSize)
 	if _, _, err := a.ProcessPBKDFParamRequest(buildTestPBKDFParamRequest(t, initRand)); err != nil {
 		t.Fatalf("ProcessPBKDFParamRequest: %v", err)
@@ -122,7 +122,7 @@ func TestDispatchSecureChannel_WrongPasscodePake3_CountsAndRevokesWindowAtCap(t 
 
 	a := NewPaseAdapterWithFactory(newVerifierFactory(t, nil))
 	a.SetPBKDFParams(wrongPasscodeTestIterations, wrongPasscodeTestSalt(), 1)
-	a.SetRandomSource(func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} })
+	a.randomSource = func() [spake2.PBKDFRandomSize]byte { return [spake2.PBKDFRandomSize]byte{0x11} }
 	b.AttachPaseHandler(a)
 
 	// Pre-built, reusable wire payloads for the three handshake steps.

@@ -245,44 +245,46 @@ const DefaultBaseTemperature = 18.0
 //
 // Algorithm: iterate the periods in time order (sorted by StartTime),
 // accumulate total minutes per unique temperature value, and return the
-// temperature with the highest total. Falls back to
-// [DefaultBaseTemperature] when the weekday has no periods.
+// temperature with the highest total. Ties break deterministically in
+// favour of the temperature whose first period starts earliest — the
+// reference helper's max() keeps the first key in accumulation order,
+// and a map-iteration tie-break would flip the result between runs.
+// Falls back to [DefaultBaseTemperature] when the weekday has no
+// periods, or when every period has a non-positive duration.
 func IdentifyBaseTemperature(day ClimateWeekday) float64 {
 	if len(day.Periods) == 0 {
 		return DefaultBaseTemperature
 	}
 
-	// Sort periods by start time for deterministic iteration.
+	// Time order is load-bearing: the accumulation order below fixes
+	// which temperature wins on equal totals.
 	sorted := make([]ClimatePeriod, len(day.Periods))
 	copy(sorted, day.Periods)
-	for i := range len(sorted) - 1 {
-		for j := i + 1; j < len(sorted); j++ {
-			if toMinutes(sorted[j].StartTime) < toMinutes(sorted[i].StartTime) {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return toMinutes(sorted[i].StartTime) < toMinutes(sorted[j].StartTime)
+	})
 
-	// Accumulate total minutes per temperature.
+	// Accumulate total minutes per temperature, remembering first-seen
+	// order so the winner selection stays deterministic.
 	tempMinutes := make(map[float64]int, len(sorted))
+	order := make([]float64, 0, len(sorted))
 	for _, p := range sorted {
 		dur := toMinutes(p.EndTime) - toMinutes(p.StartTime)
 		if dur <= 0 {
 			continue
 		}
+		if _, seen := tempMinutes[p.Temperature]; !seen {
+			order = append(order, p.Temperature)
+		}
 		tempMinutes[p.Temperature] += dur
 	}
-	if len(tempMinutes) == 0 {
+	if len(order) == 0 {
 		return DefaultBaseTemperature
 	}
 
-	// Return the temperature with the most minutes; tie-break by
-	// iteration order is arbitrary (map) — matches Python's max().
-	var best float64
-	bestMinutes := -1
-	for temp, mins := range tempMinutes {
-		if mins > bestMinutes {
-			bestMinutes = mins
+	best := order[0]
+	for _, temp := range order[1:] {
+		if tempMinutes[temp] > tempMinutes[best] {
 			best = temp
 		}
 	}

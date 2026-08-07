@@ -168,12 +168,15 @@ func cmdEventsTail(args []string, stdout, stderr io.Writer) error {
 	f.token, f.user, f.password = resolveCredentials(f.token, f.user, f.password, os.Stdin, stderr)
 	warnIfPlaintextCredentials(f.host, f.token, f.user, stderr)
 
-	target, err := wsURL(strings.TrimRight(f.host, "/"), "/api/v1/events")
+	// See the note in cache.go: userinfo is stripped so a credential in
+	// --host cannot resurface through the target embedded in errors and
+	// reconnect diagnostics.
+	target, err := wsURL(strings.TrimRight(redactHostUserinfo(f.host), "/"), "/api/v1/events")
 	if err != nil {
 		return err
 	}
 
-	tlsCfg, err := buildTLSConfig(f.cacert, f.insecure)
+	tlsCfg, err := buildTLSConfig(f.cacert, f.insecure, stderr)
 	if err != nil {
 		return err
 	}

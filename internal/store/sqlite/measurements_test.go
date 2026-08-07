@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -27,10 +28,14 @@ func openHistoryDB(t *testing.T, name string) *sql.DB {
 	return db
 }
 
-// freshMeasurementStore opens a fresh history DB and returns a ready store.
+// freshMeasurementStore opens a fresh history DB and returns a ready store
+// that folds day and month buckets on the UTC calendar. The zone is pinned
+// rather than inherited from the test machine so every bucket expectation
+// below stays a fixed number; the local-calendar behaviour production runs
+// with has its own tests in measurements_local_day_test.go.
 func freshMeasurementStore(t *testing.T) *MeasurementStore {
 	t.Helper()
-	return NewMeasurementStore(openHistoryDB(t, "hist.db"))
+	return NewMeasurementStoreIn(openHistoryDB(t, "hist.db"), time.UTC)
 }
 
 // msTime returns a time.Time truncated to millisecond precision to match
@@ -992,10 +997,15 @@ func TestMeasurement_DeleteHourlyOlderThan_RespectsCutoff(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
-	if _, err := s.RollupHourly(ctx, recent.Add(time.Hour)); err != nil {
+	// Fold the hourly tier past the day the daily fold will close: the
+	// daily fold reads hourly rows, so a day whose hours are not folded
+	// yet would be written partial and then skipped forever (the daily
+	// watermark advances across its whole window). Production keeps this
+	// ordering through the lag constants; the test states it explicitly.
+	if _, err := s.RollupHourly(ctx, recent.Add(48*time.Hour)); err != nil {
 		t.Fatalf("RollupHourly: %v", err)
 	}
-	if _, err := s.RollupDaily(ctx, recent.Add(24*time.Hour)); err != nil {
+	if _, err := s.RollupDaily(ctx, recent.Add(48*time.Hour)); err != nil {
 		t.Fatalf("RollupDaily: %v", err)
 	}
 
@@ -1040,10 +1050,12 @@ func TestMeasurement_DeleteDailyOlderThan_RespectsCutoff(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
-	if _, err := s.RollupHourly(ctx, recentDay.Add(time.Hour)); err != nil {
+	// See the note in the hourly-delete test: the hourly tier must cover
+	// the day the daily fold closes.
+	if _, err := s.RollupHourly(ctx, recentDay.Add(48*time.Hour)); err != nil {
 		t.Fatalf("RollupHourly: %v", err)
 	}
-	if _, err := s.RollupDaily(ctx, recentDay.Add(24*time.Hour)); err != nil {
+	if _, err := s.RollupDaily(ctx, recentDay.Add(48*time.Hour)); err != nil {
 		t.Fatalf("RollupDaily: %v", err)
 	}
 
@@ -1063,6 +1075,41 @@ func TestMeasurement_DeleteDailyOlderThan_RespectsCutoff(t *testing.T) {
 	hourly := queryHourly(t, s, central, iface, ch, param)
 	if len(hourly) != 2 {
 		t.Errorf("hourly rows = %d, want 2 (hourly tier untouched by daily delete)", len(hourly))
+	}
+}
+
+// TestMeasurement_DeleteDailyOlderThan_UsesTheBucketIndex pins the daily
+// tier's time-axis index. measurements_daily is keyed by central_name
+// first, so without a dedicated bucket_ts index the retention purge scans
+// the whole table on every tick, and the scan grows with every retained
+// day. The query planner is asked directly because a row-count assertion
+// cannot tell an index scan from a full one.
+func TestMeasurement_DeleteDailyOlderThan_UsesTheBucketIndex(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	var plan strings.Builder
+	rows, err := s.db.QueryContext(ctx,
+		`EXPLAIN QUERY PLAN DELETE FROM measurements_daily WHERE bucket_ts < ?`, int64(0))
+	if err != nil {
+		t.Fatalf("EXPLAIN QUERY PLAN: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, parent, notUsed int64
+		var detail string
+		if err := rows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+			t.Fatalf("scan plan row: %v", err)
+		}
+		plan.WriteString(detail)
+		plan.WriteByte('\n')
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("plan rows: %v", err)
+	}
+	if !strings.Contains(plan.String(), "idx_measurements_daily_bucket_ts") {
+		t.Errorf("daily retention purge does not use idx_measurements_daily_bucket_ts; plan:\n%s", plan.String())
 	}
 }
 
@@ -1175,9 +1222,13 @@ func TestMeasurement_QueryEnergy_DayGroupReadsDailyTier(t *testing.T) {
 }
 
 // TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily verifies that
-// group="month" folds every measurements_daily bucket within a UTC
-// calendar month into one row per (channel, parameter), exactly
-// reproducing sum/count and preserving the earliest first / latest last.
+// group="month" folds every measurements_daily bucket within one calendar
+// month into one row per (channel, parameter), exactly reproducing
+// sum/count and preserving the earliest first / latest last.
+//
+// The bucket month is read back in the store's own zone (UTC here). Reading
+// it in the process zone instead compares a bucket start against a calendar
+// the store never folded on, which flips the assertion west of Greenwich.
 func TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily(t *testing.T) {
 	t.Parallel()
 	s := freshMeasurementStore(t)
@@ -1220,7 +1271,7 @@ func TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily(t *testing.T) {
 	var march EnergyRow
 	var found bool
 	for _, r := range rows {
-		if r.BucketTS.Month() == time.March {
+		if r.BucketTS.UTC().Month() == time.March {
 			march, found = r, true
 		}
 	}
@@ -1231,7 +1282,7 @@ func TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily(t *testing.T) {
 		t.Errorf("March bucket = %+v, want first=100 last=300 sum=400 count=2", march)
 	}
 	for _, r := range rows {
-		if r.BucketTS.Month() == time.April {
+		if r.BucketTS.UTC().Month() == time.April {
 			if r.First != 500 || r.Last != 500 || r.Sum != 500 || r.Count != 1 {
 				t.Errorf("April bucket = %+v, want first=last=sum=500 count=1", r)
 			}
@@ -1706,7 +1757,7 @@ func TestPickHistoryTierSelectsByWidth(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := s.pickHistoryTier(ctx, key, tc.width, fromMs)
+			got, err := s.pickHistoryTier(ctx, key, tc.width, fromMs, fromMs+tc.width*60)
 			if err != nil {
 				t.Fatalf("pickHistoryTier: %v", err)
 			}
@@ -1772,6 +1823,65 @@ func TestQueryBucketsPromotesToHourlyWhenRawPurged(t *testing.T) {
 	}
 	if total != 2 {
 		t.Errorf("total sample count across buckets = %d, want 2", total)
+	}
+}
+
+// TestQueryBucketsKeepsRawForAYoungSeriesWithNarrowBuckets is the mirror
+// case of the promotion above: a device learned ten minutes ago also has a
+// raw floor inside the requested window, but for the innocent reason that
+// it did not exist earlier — nothing was purged and no rollup holds the
+// missing head. Promoting it folded a half-hour chart of 30-second buckets
+// onto hour buckets, so the SPA drew a single point for a series that has
+// ten real samples.
+func TestQueryBucketsKeepsRawForAYoungSeriesWithNarrowBuckets(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "NEW0001:1"
+		param   = "ACTUAL_TEMPERATURE"
+	)
+	now := time.Date(2026, 3, 1, 12, 35, 0, 0, time.UTC)
+	samples := make([]MeasurementSample, 0, 10)
+	for i := range 10 {
+		samples = append(samples, MeasurementSample{
+			CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param,
+			TS:    now.Add(-time.Duration(10-i) * time.Minute),
+			Value: float64(20 + i),
+		})
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	// The recorder's periodic fold has run; the running hour is not
+	// foldable yet, so the hourly tier holds nothing for this series.
+	if _, err := s.RollupHourly(ctx, now); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	// The SPA's default half-hour view: 60 buckets over 30 minutes.
+	from := now.Add(-30 * time.Minute)
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param, from, now, 60)
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierRaw {
+		t.Fatalf("tier = %q, want %q: a series younger than the window is not a purged one, "+
+			"and the hourly tier cannot represent 30-second buckets", tier, HistoryTierRaw)
+	}
+	if len(buckets) != 10 {
+		t.Fatalf("QueryBuckets returned %d buckets, want 10 (one per sample); "+
+			"a collapsed chart is the symptom of an unwarranted tier promotion", len(buckets))
+	}
+	var total int64
+	for _, b := range buckets {
+		total += b.Count
+	}
+	if total != 10 {
+		t.Errorf("total sample count across buckets = %d, want 10", total)
 	}
 }
 

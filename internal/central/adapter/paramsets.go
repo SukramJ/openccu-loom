@@ -179,18 +179,52 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 	return nil
 }
 
+// auditChanges renders a paramset write as audit rows, recording the
+// name of every written parameter and the value of every parameter whose
+// value is not itself a credential.
+//
+// The values matter: an audit row that says only "CODE_ID was written"
+// answers far less than "the heating curve went from 21 to 24". But a
+// write payload can carry a secret — CODE_ID is the access code of a
+// keypad or lock channel — and the audit log is append-only with a
+// 90-day retention, so persisting that value hands the code to every
+// operator dump. The sibling data-point write path already recorded
+// names only for exactly this reason; this keeps the useful half.
+func auditChanges(before, after map[string]any) []audit.Change {
+	changes := make([]audit.Change, 0, len(after))
+	for name, v := range after {
+		change := audit.Change{Parameter: name}
+		if hmenum.IsSecretBearingParameter(hmenum.Parameter(name)) {
+			change.Before = auditRedacted(before[name])
+			change.After = auditRedactedMask
+		} else {
+			change.Before = before[name]
+			change.After = v
+		}
+		changes = append(changes, change)
+	}
+	return changes
+}
+
+// auditRedactedMask replaces a credential value in an audit row. It is a
+// constant string rather than nil so a reader can tell "the value was
+// withheld" from "there was no previous value".
+const auditRedactedMask = "***"
+
+// auditRedacted masks a previous value, preserving the nil case so an
+// initial write still reads as "had no value before".
+func auditRedacted(before any) any {
+	if before == nil {
+		return nil
+	}
+	return auditRedactedMask
+}
+
 func (p *ParamsetsDomain) recordParamsetWrite(channelAddress, paramset string, before, after map[string]any) {
 	if p.audit == nil {
 		return
 	}
-	changes := make([]audit.Change, 0, len(after))
-	for name, v := range after {
-		changes = append(changes, audit.Change{
-			Parameter: name,
-			Before:    before[name],
-			After:     v,
-		})
-	}
+	changes := auditChanges(before, after)
 	p.audit.Record(audit.Entry{
 		Action:        audit.ActionParamsetWrite,
 		DeviceAddress: deviceAddressOf(channelAddress),
@@ -369,14 +403,7 @@ func (p *ParamsetsDomain) PutLinkParamset(
 	// be keeping; best effort.
 	_, _ = b.GetLinkParamset(ctx, channelAddress, peerAddress)
 	if p.audit != nil {
-		changes := make([]audit.Change, 0, len(values))
-		for name, v := range values {
-			changes = append(changes, audit.Change{
-				Parameter: name,
-				Before:    before[name],
-				After:     v,
-			})
-		}
+		changes := auditChanges(before, values)
 		p.audit.Record(audit.Entry{
 			Action:        audit.ActionLinkParamsetWrite,
 			DeviceAddress: deviceAddressOf(channelAddress),

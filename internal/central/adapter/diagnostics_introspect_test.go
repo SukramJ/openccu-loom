@@ -105,6 +105,67 @@ func TestIntrospectAdapter_TapEventBus_DeliversDataPointValueChanged(t *testing.
 }
 
 // --------------------------------------------------------------------------
+// TapEventBus — recovery progress detail passes through
+// --------------------------------------------------------------------------
+
+// TestIntrospectAdapter_TapEventBus_DeliversRecoveryProgress pins that the
+// tap carries the per-stage and per-attempt recovery events, not only the
+// Started/Completed endpoints. These two are the only bus surface for
+// recovery progress; dropping them here makes an in-flight recovery look
+// like a silent gap to the diagnostics stream.
+func TestIntrospectAdapter_TapEventBus_DeliversRecoveryProgress(t *testing.T) {
+	t.Parallel()
+	reg, unit := buildRecorderRegistry(t, "ccuR")
+	a := NewIntrospectAdapter(reg)
+
+	ch := make(chan hmapi.DiagnosticsEvent, 8)
+	emit := func(e hmapi.DiagnosticsEvent) { ch <- e }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		a.TapEventBus(ctx, "ccuR", nil, emit)
+	}()
+
+	// Give the goroutine time to subscribe before publishing.
+	time.Sleep(20 * time.Millisecond)
+
+	events.Publish(unit.EventBus, hmevent.RecoveryStageChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "ccuR",
+		InterfaceID: "HmIP-RF",
+	})
+	events.Publish(unit.EventBus, hmevent.RecoveryAttemptedEvent{
+		Base:          hmevent.NewBase(),
+		CentralName:   "ccuR",
+		InterfaceID:   "HmIP-RF",
+		AttemptNumber: 1,
+		MaxAttempts:   3,
+	})
+
+	want := map[string]bool{"RecoveryStageChanged": false, "RecoveryAttempted": false}
+	for range want {
+		select {
+		case e := <-ch:
+			if _, ok := want[e.Type]; !ok {
+				t.Fatalf("unexpected event type %q", e.Type)
+			}
+			want[e.Type] = true
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timeout; delivered so far: %v", want)
+		}
+	}
+	for typ, seen := range want {
+		if !seen {
+			t.Errorf("event %q never reached the tap", typ)
+		}
+	}
+
+	cancel()
+}
+
+// --------------------------------------------------------------------------
 // TapEventBus — type filter excludes non-matching events
 // --------------------------------------------------------------------------
 

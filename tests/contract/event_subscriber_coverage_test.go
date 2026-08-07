@@ -6,6 +6,7 @@ package contract
 import (
 	"go/ast"
 	"go/types"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -37,12 +38,12 @@ var eventsWithoutSubscriber = map[string]string{
 	"RPCParameterReceivedEvent": "per-parameter wire trace; the value change is carried by DataPointValueChangedEvent",
 
 	// Connection-recovery telemetry. The recovery coordinator drives the
-	// reconnect itself; these announce what it did. A north-bound
-	// surface for them is a real gap, tracked in docs/roadmap.md rather
-	// than papered over here.
+	// reconnect itself; this event announces what it did, and the health
+	// tracker reads the client state directly instead of consuming it.
+	// The per-stage/per-attempt progress events reach operators through
+	// the diagnostics event-bus tap (subscribeCuratedEvents) and are
+	// therefore no longer listed here.
 	"ConnectionHealthChangedEvent": "recovery telemetry; the health tracker derives its own verdict from the client state",
-	"RecoveryAttemptedEvent":       "recovery telemetry; no surface consumes it yet",
-	"RecoveryStageChangedEvent":    "recovery telemetry; no surface consumes it yet",
 
 	// The functional path is the data point's own change callback, which
 	// the event bridge subscribes to and which drives MQTT and the SPA.
@@ -240,4 +241,87 @@ func sortedKeys(m map[string]bool) []string {
 
 func sortedStrings(m map[string]bool) []string {
 	return sortedKeys(m)
+}
+
+// consumerClaimPattern matches doc prose that asserts consumers exist:
+// plural consumer nouns and "subscribes / listens to this" forms. The
+// negated singular forms the declarations use ("no subscriber",
+// "nothing consumes this bus event") deliberately do not match.
+var consumerClaimPattern = regexp.MustCompile(
+	`(?i)\b(subscribers|consumers|listeners)\b|\bconsumed by\b|\bsubscribes? to this\b|\blistens? to this\b`,
+)
+
+// TestDeclaredSilentEventDocsClaimNoConsumers cross-checks the two
+// truths this package keeps about an event: eventsWithoutSubscriber
+// declares that nothing consumes it, while the catalogue's doc comment
+// tells a reader what it is for. The two have contradicted each other
+// in practice — catalogue comments asserted "MQTT subscribers listen to
+// this", "audit loggers consume this event" and "North-bound
+// subscribers can use this" for events this very package declared
+// consumerless. A comment naming a consumer is a hypothesis, and for a
+// declared-silent event it is a refuted one.
+//
+// The doc of a declared-silent event (its struct and its EventType
+// constant) must not claim consumers. When the event gains a real
+// subscriber, the ratchet entry falls away and the claim becomes legal
+// — and is then checked by nothing weaker than the subscriber itself.
+func TestDeclaredSilentEventDocsClaimNoConsumers(t *testing.T) {
+	t.Parallel()
+	pkgs := loadProductionPackages(t)
+	docs := hmeventDeclDocs(pkgs)
+	if len(docs) == 0 {
+		t.Fatal("no doc comments collected from pkg/hmevent; the walk is broken and this test would pass vacuously")
+	}
+	for name, reason := range eventsWithoutSubscriber {
+		for _, ident := range []string{name, "EventType" + strings.TrimSuffix(name, "Event")} {
+			doc, ok := docs[ident]
+			if !ok {
+				continue
+			}
+			if m := consumerClaimPattern.FindString(doc); m != "" {
+				t.Errorf("%s is declared consumerless (%q) but the doc of %s claims consumers (matched %q) — "+
+					"wire the consumer and drop the ratchet entry, or state the silence in the doc",
+					name, reason, ident, m)
+			}
+		}
+	}
+}
+
+// hmeventDeclDocs collects the doc comment of every type and const
+// declaration in pkg/hmevent, keyed by declared identifier.
+func hmeventDeclDocs(pkgs []*packages.Package) map[string]string {
+	out := map[string]string{}
+	packages.Visit(pkgs, nil, func(p *packages.Package) {
+		if !strings.HasSuffix(p.PkgPath, "/pkg/hmevent") {
+			return
+		}
+		for _, f := range p.Syntax {
+			for _, decl := range f.Decls {
+				gd, ok := decl.(*ast.GenDecl)
+				if !ok {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					switch s := spec.(type) {
+					case *ast.TypeSpec:
+						doc := s.Doc
+						if doc == nil {
+							doc = gd.Doc
+						}
+						if doc != nil {
+							out[s.Name.Name] = doc.Text()
+						}
+					case *ast.ValueSpec:
+						if s.Doc == nil {
+							continue
+						}
+						for _, n := range s.Names {
+							out[n.Name] = s.Doc.Text()
+						}
+					}
+				}
+			}
+		}
+	})
+	return out
 }

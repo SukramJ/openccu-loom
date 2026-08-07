@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.2.0
+  version: 5.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4297,6 +4297,10 @@ paths:
       operationId: listBackups
       summary: Locally stored CCU backups
       tags: [backup]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: Backup list
@@ -4733,7 +4737,13 @@ paths:
         - in: query
           name: group
           schema: { type: string, enum: [hour, day, month], default: day }
-          description: Bucket granularity. Absent uses the default (day).
+          description: >
+            Bucket granularity. Absent uses the default (day). `day` and
+            `month` buckets are local calendar buckets in the daemon's own
+            timezone, so a bucket's `ts` is a local midnight respectively a
+            local first-of-month and covers 23, 24 or 25 hours across a
+            daylight-saving transition. `hour` buckets are aligned to the
+            hour on the UTC axis.
         - in: query
           name: device
           schema: { type: string }
@@ -8955,7 +8965,12 @@ components:
         ts:
           type: string
           format: date-time
-          description: Start of the bucket's time span (UTC).
+          description: >
+            Start of the bucket's time span, serialised as an RFC3339
+            instant. For `group=day` / `group=month` this instant is the
+            local midnight respectively local first-of-month of the
+            daemon's timezone, so rendering it with a local date format
+            names the calendar day or month the bucket covers.
         consumed_wh:
           type: number
           description: >

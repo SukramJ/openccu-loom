@@ -21,7 +21,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   investigation would have taken minutes instead of days with this line
   present.
 
+- **Comment claims and ratchet rot now fail the build.** Three guards
+  institutionalize the audit that found the defects above. A
+  declared-consumerless event whose catalogue doc still claims
+  consumers fails `tests/contract` (the two truths contradicted each
+  other for three events). A ratchet justification that defers — "no
+  surface consumes it yet" — instead of deciding fails the build, which
+  the ratchet headers demanded in prose but nothing enforced. And the
+  WS-delivery-without-MQTT table pins that the optional MQTT plane
+  never gates a WebSocket emission.
+
 ### Fixed
+
+- **Every energy day and month total was shifted by the timezone
+  offset.** Day and month buckets were folded on the UTC calendar while
+  the SPA labelled each one with a local date. In CEST a "day" therefore
+  ran from 02:00 to 02:00 local time under the label of the day before,
+  so a consumption at 00:30 on the 6th was counted — and shown — against
+  the 5th, and both edges of every day and month were off by the
+  offset's slice. Day and month buckets are now local calendar buckets
+  in the daemon's own timezone, folded with calendar arithmetic so a
+  23-hour and a 25-hour daylight-saving day each stay exactly one
+  bucket. The rollup, the un-rolled tail and the history-chart tiers all
+  derive the boundary the same way, so a bucket never moves when a
+  rollup runs. Hour buckets are unchanged. Existing daily rows cannot be
+  re-cut into local days, so a migration empties the daily tier and
+  rewinds its watermark; the next rollup rebuilds it from the untouched
+  hourly tier. Operators running the daemon in a container should make
+  sure it carries the household's timezone (`TZ` / `/etc/localtime`).
+  API 5.3.0 documents the bucket boundary on `GET /api/v1/energy`.
 
 - **Every CCU program ran by itself — twice on every daemon start, once
   more whenever a program was created or edited.** With the MQTT raw
@@ -67,6 +95,189 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   retained hub state on every boot. The reserved `hub` subtree is now
   excluded. Latent until this release because of the wiring defect
   above.
+
+- **Without MQTT configured, the SPA never heard that a value's
+  freshness flipped.** A wire data point moving between cache / live /
+  stale re-publishes its current value with a `refresh` envelope so
+  consumers can tell a confirmed live reading from a restored one. The
+  handler behind it returned early when no MQTT wiring was present —
+  before the WebSocket dispatch, although the dispatch path gates only
+  its MQTT arm on the wiring being there. In an MQTT-less deployment
+  every freshness signal was silently dropped for the SPA and every
+  other WS consumer. The guard moved to where it belongs, and a new
+  delivery table drives every WS-emitting bridge subscription against a
+  bridge constructed without MQTT so the next optional plane cannot
+  gate a WebSocket emission either.
+
+- **Recovery progress was invisible while it happened.** The
+  connection-recovery pipeline published a per-stage and a per-attempt
+  event that nothing consumed — an operator tapping the diagnostics
+  event stream saw a recovery start and finish with a silent gap in
+  between, and the events' own documentation claimed consumers that
+  never existed. Both now stream through the diagnostics event-bus tap
+  (`GET /diagnostics/eventbus/tap`) as `RecoveryStageChanged` and
+  `RecoveryAttempted`, carrying the stage, the attempt count and the
+  last error.
+
+- **A CCU added while the daemon was running never cached its device
+  descriptions.** The persistent device-description and paramset caches
+  were attached at the boot call site only, so a central adopted at
+  runtime ran without them: nothing it learned reached SQLite, and every
+  later daemon start re-inventoried the whole CCU over the radio as if
+  it had never been seen. The wiring moved into the bring-up path both
+  entry points share, so an adopted central hydrates from disk and
+  mirrors back exactly like a configured one. Pinned through the real
+  manager by asserting the effect on both sides — hydration and
+  persistence — rather than the call.
+
+- **Switching the measurement history off froze `history.db` at its
+  full size.** Retention hung off the recorder, the recorder off the
+  store, and the store off the enabled flag — so an operator disabling
+  history to reclaim disk got the one outcome the switch was meant to
+  prevent: nothing was recorded, and nothing was ever evicted either.
+  The rollup and retention pass now runs without a recorder whenever a
+  history database exists, so the file drains to the configured
+  retention and keeps draining as the cutoff moves. Recording stays off,
+  the `/history` REST surface and the `history` capability stay hidden,
+  and no database is created for a feature that is disabled.
+
+- **A chart of a freshly learned device collapsed to a single point.**
+  A history query whose window reaches back before the series' oldest
+  raw sample was promoted to the hourly tier — right for a series whose
+  older rows the recorder has already purged, wrong for one that simply
+  did not exist yet. A device learned ten minutes ago, charted over the
+  last half hour in 30-second buckets, had its raw tail folded onto hour
+  buckets and drew one point. The tier choice now weighs both tiers at
+  the *requested* bucket width, so a narrow-bucket window keeps its raw
+  resolution unless the hourly rollup genuinely reaches further back
+  than the raw table does.
+
+- **The daily history tier's retention purge scanned the whole table.**
+  `measurements_daily` is keyed by central name first, so
+  `DELETE … WHERE bucket_ts < ?` could not use the primary key and
+  full-scanned on every retention tick — a scan that grows with every
+  day retained. The raw and hourly tiers have had a time-axis index
+  since the bounded rollup landed; the daily tier now has one too.
+
+- **A backup error claimed a missing feature when the daemon meant a
+  missing configuration.** Backup triggers with no central registered,
+  and downloads with no backup storage configured, both answered
+  "adapter: not implemented in MVP". The errors now name what is
+  actually absent — "backup: no central registered" respectively
+  "backup: no storage configured" — so an operator debugs the
+  configuration instead of hunting a feature gap that is not there.
+
+- **The base temperature of a climate week profile could flip between
+  daemon runs.** When two temperatures occupied the same total minutes
+  in a weekday schedule, the winner came out of Go's randomized map
+  iteration — the same profile could show 18 °C today and 22 °C after a
+  restart. Ties now deterministically favour the temperature whose
+  period starts earliest, matching the reference implementation's
+  accumulation-order semantics, and the previously ineffective sort is
+  now load-bearing and pinned by a repeat-run test.
+
+- **A dozen comments described consumers, stubs and wirings that do not
+  exist.** An audit of comment claims against the code found: the event
+  catalogue asserting MQTT subscribers, audit loggers and refresh
+  indicators for events nothing consumes; an MQTT install-command topic
+  documented as "subscribed" that no command wildcard matches; WS
+  device triggers claimed to reach Home Assistant when they reach WS
+  clients only; a WS command file header still listing five "stubs"
+  that have long been wired to real handlers; a restore path documented
+  as "not wired yet" that has been wired per central for releases; and
+  a validation-reader parameter on the configuration coordinator's
+  paramset write that no code path ever read. Every claim now states
+  what the code does, and the dead parameter is gone.
+
+- **Turning off the Home Assistant Ingress auth passthrough did not turn
+  it off.** The `north.rest` config row was written from the whole REST
+  struct, which contains the three nested auth sections
+  (`north.rest.auth.oidc`, `.ccu`, `.ha_ingress`) — so every value was
+  stored twice, and the copy in `north.rest` was applied first at boot.
+  Resetting `north.rest.auth.ha_ingress.enabled`, or deleting the whole
+  section, removed it only from the section's own row; the next start read
+  the passthrough back out of `north.rest` and re-enabled it, while the
+  Config UI attributed the field to "default". The passthrough is a
+  deliberate auth bypass, so a reset that does not stick is a security
+  defect. A section row now never carries a nested section's sub-tree —
+  on save, on load, and when the editor reads a row written earlier.
+
+- **Saving one field of a config section cleared the rest of it.** A
+  section save replaces the stored row, but the daemon validated the
+  request merged onto the running config while persisting only the
+  request itself. A `PUT` of `{"enabled": true}` on `north.mqtt`
+  therefore passed validation against a config that still had a broker
+  URL and left behind a row describing an enabled MQTT bridge with no
+  broker. The row now stores the same configuration that was validated,
+  so it describes the whole section.
+
+- **Changes that need a restart reported that they did not.** The
+  restart-required marker in the Config UI and the pending-restart banner
+  were driven by two hand-maintained lists that disagreed: the whole
+  `alarm` section and the Basic/Bearer auth switches were marked in the
+  editor but never compared, so saving one answered "no restart needed"
+  and the banner stayed silent while the change sat inert until the next
+  start. Both are now derived from one table, and the Matter identity and
+  commissioning parameters (`vendor_id`, `product_id`, `discriminator`,
+  `commissioning.*`) — which are baked into the bridge at start-up — were
+  added to it.
+
+- **`hmcli`'s interactive password prompt echoed the password to the
+  terminal**, where it stayed readable in the scrollback for as long as
+  the session's history was kept. The prompt now suppresses echo via
+  `golang.org/x/term` (already resolved transitively through
+  `golang.org/x/crypto`/`golang.org/x/net`, so this only promotes an
+  existing dependency to direct rather than adding a new one) when reading
+  from a real terminal; piped or redirected input is unaffected.
+
+- **`hmcli --insecure` disabled TLS certificate verification silently.**
+  The existing plaintext-credential warning only fires for `http://`; an
+  `https://` connection with verification turned off is exposed to the
+  same interception risk (any certificate is accepted) but said nothing.
+  `--insecure` now prints an explicit stderr warning everywhere it can be
+  set (`devices`/`sysvar`/`program`/`paramset`/`alarm`, `export-def`,
+  `cache clear`, `events tail`).
+
+- **A password embedded in `hmcli --host` (`https://user:pass@ccu/`)
+  leaked into every error message the command printed** — the client
+  built its target URL, and therefore every wrapped request/response
+  error, straight from the raw `--host` value. Go's HTTP client never
+  actually authenticates with a destination URL's userinfo (only a proxy
+  URL's is used), so the credential did nothing but sit there waiting to
+  be printed. The userinfo is now stripped before the base URL is stored.
+
+- **A channel action's result (success or failure) rendered in the
+  header banner instead of a toast**, contrary to the SPA's own
+  operating concept — and unlike every other action in the same panel,
+  a failure there had no distinguishable error styling. `ChannelPanel`'s
+  action buttons now report through `toastStore`, like save, import and
+  the profile-take-over flow next to it.
+
+- **The channel-config profile picker kept showing the previous
+  channel's manually selected profile after switching channels.**
+  `ChannelPanel` reuses the same `ProfileSelector` instance across a
+  channel switch (it updates props rather than remounting), so once a
+  user picked a profile from the dropdown, the "don't override my pick"
+  guard latched permanently and never re-synced to the new channel's
+  detected profile. The selector is now keyed on the channel (and peer,
+  for LINK), so a genuine channel switch gets a fresh instance while an
+  in-place reload (e.g. after Save) still preserves an in-progress pick.
+
+- **The sidebar offered a "Backups" entry to every operator, including
+  ones the server rejects.** `GET/POST /api/v1/backups*` has been
+  admin-gated for a while; the navigation entry was not. It is now gated
+  the same way as the other admin-only entries (Logs, Access).
+
+- **Three i18n / locale gaps in the SPA:** the Energy view's four
+  time-range preset buttons (24h/7d/30d/12mo) were a plain `const`
+  evaluated once at component init, so they did not follow a runtime
+  locale switch like the rest of the toolbar; the energy table's kWh/W
+  columns used `toFixed()` (always a `.` separator) next to the
+  locale-aware cost column, producing mixed decimal separators in the
+  same row for German operators; and the access-control page's
+  viewer/operator/admin role labels (dropdown options and the three role
+  badges) rendered the raw English role token untranslated in both
+  locales instead of a localized label.
 
 ## [0.54.2]
 

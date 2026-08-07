@@ -476,6 +476,12 @@ func (b *Bus) EventStats() map[string]int {
 func (b *Bus) TotalSubscriptionCount() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	return b.subscriptionCountLocked()
+}
+
+// subscriptionCountLocked totals the registered handlers. Caller holds
+// b.mu.
+func (b *Bus) subscriptionCountLocked() int {
 	total := 0
 	for _, list := range b.handlers {
 		total += len(list)
@@ -487,17 +493,26 @@ func (b *Bus) TotalSubscriptionCount() int {
 // type. If no handlers were registered it is a no-op (idempotent). The
 // publish counters in [EventStats] are NOT reset — they survive a clear,
 func (b *Bus) ClearSubscriptions(typ hmevent.EventType) {
+	fromDispatch := b.clearFromDispatch()
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	retired := retireLocked(b.handlers[typ], fromDispatch)
 	delete(b.handlers, typ)
+	b.mu.Unlock()
+	b.awaitRetired(retired, fromDispatch)
 }
 
 // ClearAllSubscriptions removes every handler across all event types.
 // EventStats counters survive — only the subscriptions are cleared.
 func (b *Bus) ClearAllSubscriptions() {
+	fromDispatch := b.clearFromDispatch()
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	retired := make([]*registered, 0, b.subscriptionCountLocked())
+	for _, list := range b.handlers {
+		retired = append(retired, retireLocked(list, fromDispatch)...)
+	}
 	b.handlers = make(map[hmevent.EventType][]*registered)
+	b.mu.Unlock()
+	b.awaitRetired(retired, fromDispatch)
 }
 
 // ClearExternalSubscriptions removes all handlers that were registered
@@ -506,66 +521,120 @@ func (b *Bus) ClearAllSubscriptions() {
 // Returns the count of removed handlers. Internal subscriptions (those
 // without [WithExternal]) are never touched.
 func (b *Bus) ClearExternalSubscriptions(types ...hmevent.EventType) int {
+	fromDispatch := b.clearFromDispatch()
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	removed := 0
-	filter := func(list []*registered) ([]*registered, int) {
+	var retired []*registered
+	filter := func(list []*registered) []*registered {
 		kept := list[:0]
-		n := 0
 		for _, h := range list {
 			if h.external {
-				n++
+				retired = append(retired, h)
 			} else {
 				kept = append(kept, h)
 			}
 		}
-		return kept, n
+		return kept
 	}
 	if len(types) == 0 {
 		for typ, list := range b.handlers {
-			kept, n := filter(list)
-			removed += n
-			if len(kept) == 0 {
-				delete(b.handlers, typ)
-			} else {
-				b.handlers[typ] = kept
+			b.replaceOrDeleteLocked(typ, filter(list))
+		}
+	} else {
+		for _, typ := range types {
+			list, ok := b.handlers[typ]
+			if !ok {
+				continue
 			}
-		}
-		return removed
-	}
-	for _, typ := range types {
-		list, ok := b.handlers[typ]
-		if !ok {
-			continue
-		}
-		kept, n := filter(list)
-		removed += n
-		if len(kept) == 0 {
-			delete(b.handlers, typ)
-		} else {
-			b.handlers[typ] = kept
+			b.replaceOrDeleteLocked(typ, filter(list))
 		}
 	}
-	return removed
+	retireLocked(retired, fromDispatch)
+	b.mu.Unlock()
+	b.awaitRetired(retired, fromDispatch)
+	return len(retired)
 }
 
 // ClearSubscriptionsByKey removes all handlers whose key exactly matches the
 // provided key, across every event type. Idempotent when no handler carries
 // that key.
 func (b *Bus) ClearSubscriptionsByKey(key string) {
+	fromDispatch := b.clearFromDispatch()
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	var retired []*registered
 	for typ, list := range b.handlers {
-		filtered := list[:0]
+		kept := list[:0]
 		for _, h := range list {
-			if h.key != key {
-				filtered = append(filtered, h)
+			if h.key == key {
+				retired = append(retired, h)
+			} else {
+				kept = append(kept, h)
 			}
 		}
-		if len(filtered) == 0 {
-			delete(b.handlers, typ)
-		} else {
-			b.handlers[typ] = filtered
+		b.replaceOrDeleteLocked(typ, kept)
+	}
+	retireLocked(retired, fromDispatch)
+	b.mu.Unlock()
+	b.awaitRetired(retired, fromDispatch)
+}
+
+// replaceOrDeleteLocked stores kept under typ, or drops the map entry
+// when nothing is left. Caller holds b.mu.
+func (b *Bus) replaceOrDeleteLocked(typ hmevent.EventType, kept []*registered) {
+	if len(kept) == 0 {
+		delete(b.handlers, typ)
+		return
+	}
+	b.handlers[typ] = kept
+}
+
+// clearFromDispatch reports whether the caller is the goroutine currently
+// dispatching — i.e. a handler clearing subscriptions from its own frame.
+// That case keeps its historic semantics (see [retireLocked]).
+func (b *Bus) clearFromDispatch() bool {
+	return goid() == b.dispatchGID.Load()
+}
+
+// retireLocked flags every entry dead and returns the same slice, so a
+// dispatch pass that snapshotted these handlers before the clear skips
+// them instead of running them against torn-down state. Caller holds
+// b.mu — the same lock dispatchNow takes to snapshot, which is what
+// makes "snapshot taken before the flag" impossible to observe as
+// "handler still live".
+//
+// fromDispatch inverts that: a handler that clears from inside its own
+// dispatch does NOT cancel its siblings in the running snapshot. Nothing
+// is being torn down underneath them — the clearing code is on this very
+// stack — and cancelling them would change a long-pinned semantic
+// (TestClearDuringDispatchThenResubscribe).
+func retireLocked(entries []*registered, fromDispatch bool) []*registered {
+	if fromDispatch {
+		return nil
+	}
+	for _, h := range entries {
+		if h != nil {
+			h.dead.Store(true)
+		}
+	}
+	return entries
+}
+
+// awaitRetired blocks until no retired handler is still executing, giving
+// the Clear* family the same guarantee the unsubscribe closure documents:
+// once it returns, the caller may free what those handlers reference.
+//
+// Without it a Clear during an in-flight dispatch returned immediately
+// while the snapshot kept running — the central teardown then tore down
+// the adapters those handlers were still calling into.
+//
+// The dispatch goroutine itself never waits: it would block on its own
+// invocation, and its siblings keep running by design.
+func (b *Bus) awaitRetired(retired []*registered, fromDispatch bool) {
+	if fromDispatch || len(retired) == 0 {
+		return
+	}
+	for _, h := range retired {
+		if h != nil {
+			h.inflight.Wait()
 		}
 	}
 }

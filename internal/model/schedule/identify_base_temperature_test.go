@@ -117,3 +117,38 @@ func TestIdentifyBaseTemperatureDefaultValue(t *testing.T) {
 		t.Errorf("DefaultBaseTemperature=%g, want 18.0", DefaultBaseTemperature)
 	}
 }
+
+// TestIdentifyBaseTemperatureTieBreaksByEarliestPeriod pins the
+// deterministic tie-break: on equal total minutes the temperature whose
+// first period starts earliest wins, regardless of the input order.
+// The previous map-iteration winner selection flipped this result
+// between runs.
+func TestIdentifyBaseTemperatureTieBreaksByEarliestPeriod(t *testing.T) {
+	t.Parallel()
+	day := ClimateWeekday{
+		Periods: []ClimatePeriod{
+			{StartTime: "12:00", EndTime: "24:00", Temperature: 22}, // 12 h
+			{StartTime: "00:00", EndTime: "12:00", Temperature: 18}, // 12 h
+		},
+	}
+	for range 50 {
+		if got := IdentifyBaseTemperature(day); got != 18 {
+			t.Fatalf("IdentifyBaseTemperature(tie)=%g, want 18 (earliest period)", got)
+		}
+	}
+}
+
+// TestIdentifyBaseTemperatureAllZeroDurationFallsBack verifies the
+// fallback when periods exist but none has a positive duration.
+func TestIdentifyBaseTemperatureAllZeroDurationFallsBack(t *testing.T) {
+	t.Parallel()
+	day := ClimateWeekday{
+		Periods: []ClimatePeriod{
+			{StartTime: "08:00", EndTime: "08:00", Temperature: 22},
+			{StartTime: "12:00", EndTime: "10:00", Temperature: 25},
+		},
+	}
+	if got := IdentifyBaseTemperature(day); got != DefaultBaseTemperature {
+		t.Errorf("IdentifyBaseTemperature(zero durations)=%g, want %g", got, DefaultBaseTemperature)
+	}
+}

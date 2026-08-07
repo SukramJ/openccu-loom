@@ -15,8 +15,9 @@ import (
 // DeviceTriggerPayload is the WebSocket payload published on the
 // `device.<addr>.channels.<no>.trigger` topic when the CCU reports a
 // non-state device event (keypress, impulse, device error). Mirrors
-// [hmevent.DeviceTriggerEvent]. Home Assistant consumes these via its
-// device-trigger automation surface, distinct from value changes.
+// [hmevent.DeviceTriggerEvent]. It reaches WS hub clients (the SPA
+// and API consumers) only — no HA `device_automation` discovery is
+// published for triggers, so Home Assistant does not see them.
 type DeviceTriggerPayload struct {
 	Central       string `json:"central"`
 	InterfaceID   string `json:"interface_id"`

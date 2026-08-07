@@ -11,6 +11,24 @@
   mirrors are cleaned off the broker automatically, and triggering a
   program over MQTT keeps working as documented.
 
+- **Fixed: without an MQTT broker, the web UI missed value-freshness
+  updates.** Installations running the daemon without MQTT never
+  received the "value confirmed live / value went stale" refresh pushes
+  in the UI. They arrive now.
+
+- **Fixed: a heating schedule's base temperature could change between
+  restarts.** When two temperatures occupied the same total time in a
+  weekday schedule the daemon picked one at random; it now always picks
+  the one whose period starts earliest.
+
+- **Fixed: backup errors named the wrong cause.** "not implemented in
+  MVP" now reads "no central registered" or "no storage configured" —
+  the condition that actually holds.
+
+- **Added: recovery progress in the diagnostics event stream.**
+  Connection-recovery stage and attempt events now appear in the
+  event-bus tap, so a reconnect no longer looks like a silent gap.
+
 ## 0.54.2
 
 - **Fixed: "Einbruchalarm ausgelöst" appeared while the alarm system was

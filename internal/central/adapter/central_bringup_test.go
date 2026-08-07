@@ -7,12 +7,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -444,4 +446,124 @@ func TestBringUpManager_TeardownSnapshotsHandlesUnderLock(t *testing.T) {
 	}()
 
 	wg.Wait()
+}
+
+// TestCentralBringUp_ReinitAfterShutdownDoesNotRestart pins that a handle
+// retired by shutdown stays retired.
+//
+// RemoveCentral deletes the handle from the manager and calls shutdown;
+// ReinitCentral reads the handle under the lock and then releases it before
+// calling reinit. A cache clear (POST /admin/cache/clear) racing a central
+// removal therefore ran teardown — a no-op by then — followed by clearModel
+// and start, launching a fresh bring-up generation on the still-live parent
+// context for a central nothing manages any more. That generation re-announced
+// itself to the CCU and was unreachable from Teardown or a second
+// RemoveCentral: a goroutine plus a live CCU callback registration surviving
+// until the daemon exits.
+func TestCentralBringUp_ReinitAfterShutdownDoesNotRestart(t *testing.T) {
+	t.Parallel()
+
+	unit, err := central.New(central.Config{Name: "ccu-retired"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	// A live (uncancelled) parent context: a resurrected generation would
+	// keep running on it, which is exactly the leak under test.
+	b := &centralBringUp{logger: slog.Default(), unit: unit, parentCtx: context.Background()}
+
+	b.shutdown()
+	b.reinit(context.Background())
+
+	b.mu.Lock()
+	cancel := b.cancel
+	b.mu.Unlock()
+	if cancel != nil {
+		t.Fatal("reinit after shutdown started a new bring-up generation; " +
+			"it outlives every teardown path because the handle is no longer managed")
+	}
+}
+
+// TestBringUpManagerAddCentralWiresDescriptorPersistence pins the persistent
+// descriptor cache onto the runtime-adopt path. The manager is built through
+// [WireCentrals] — the real composition root — and the central is added the
+// way the REST adopt handler adds it, so nothing in the test attaches the
+// sinks itself. Both effects are asserted: the pre-existing rows reach the
+// fresh Unit's registries (hydration) and a later registry mutation reaches
+// SQLite (mirroring). Wiring this only at the boot call site left an adopted
+// central without a cache, so every daemon restart re-inventoried it over the
+// radio instead of reading the rows it should have written.
+func TestBringUpManagerAddCentralWiresDescriptorPersistence(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	db, err := sqlite.Open(ctx, sqlite.FileDSN(filepath.Join(t.TempDir(), "adopt-descriptors.db")))
+	if err != nil {
+		t.Fatalf("sqlite.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	stores := DescriptorStores{
+		Devices:   sqlite.NewDeviceStore(db),
+		Paramsets: sqlite.NewParamsetStore(db),
+	}
+
+	// A row written by an earlier daemon run of the same central. It is
+	// seeded through the sink so the record carries the production hash.
+	seed, err := central.New(central.Config{Name: "ccu-adopted"})
+	if err != nil {
+		t.Fatalf("central.New (seed): %v", err)
+	}
+	WireDescriptorPersistence(ctx, seed, stores, nil)
+	seed.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+		Address:  "VCU7",
+		Type:     "HmIP-PS",
+		Children: []string{"VCU7:1"},
+	})
+
+	// The manager the daemon hands to the adopt orchestrator: built by
+	// WireCentrals with no boot centrals, so only the adopt path can wire
+	// anything for "ccu-adopted".
+	reg := central.NewRegistry()
+	mgr, err := WireCentrals(ctx, &config.Config{}, reg, WireDeps{Descriptors: stores}, slog.Default())
+	if err != nil {
+		t.Fatalf("WireCentrals: %v", err)
+	}
+	t.Cleanup(mgr.Teardown)
+
+	unit, err := central.New(central.Config{Name: "ccu-adopted"})
+	if err != nil {
+		t.Fatalf("central.New (adopted): %v", err)
+	}
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("Registry.Register: %v", err)
+	}
+	cc := config.CentralConfig{
+		Name:       "ccu-adopted",
+		Host:       "127.0.0.1",
+		Username:   "Admin",
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}},
+	}
+	if !mgr.AddCentral(&cc, unit) {
+		t.Fatal("AddCentral returned false for a name the manager does not hold")
+	}
+
+	// Effect 1 — hydration: the adopted Unit starts warm.
+	if desc, ok := unit.DescRegistry.Get(hmenum.InterfaceHmIPRF, "VCU7"); !ok || desc.Type != "HmIP-PS" {
+		t.Fatalf("adopted central did not hydrate its description registry: got %+v ok=%v; "+
+			"it will re-inventory the whole CCU over the radio on every restart", desc, ok)
+	}
+
+	// Effect 2 — mirroring: what the adopted central learns is persisted.
+	unit.ParamsetReg.Add(hmenum.InterfaceHmIPRF, "VCU7:1", hmenum.ParamsetKeyValues, hmproto.Paramset{
+		"STATE": {
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	}, "HmIP-PS")
+	rec, err := stores.Paramsets.Get(ctx, "ccu-adopted", "HmIP-RF", "VCU7:1", hmenum.ParamsetKeyValues)
+	if err != nil {
+		t.Fatalf("adopted central's paramset never reached SQLite: %v", err)
+	}
+	if _, ok := rec.Paramset["STATE"]; !ok {
+		t.Errorf("persisted paramset missing STATE: %+v", rec.Paramset)
+	}
 }

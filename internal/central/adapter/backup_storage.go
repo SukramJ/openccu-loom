@@ -63,6 +63,13 @@ type FilesystemBackupStorage struct {
 	Dir string
 }
 
+// backupTempPattern names the scratch file a [FilesystemBackupStorage.Save]
+// writes before it publishes the finished archive under its real name. It
+// deliberately does not end in `.sbk`: a save that dies half-way (out of
+// disk, SIGKILL) then leaves a file that List skips and Open cannot resolve,
+// instead of a torso the SPA offers for download and Restore uploads to a CCU.
+const backupTempPattern = ".partial-*.tmp"
+
 // NewFilesystemBackupStorage constructs the storage and ensures the
 // directory exists.
 func NewFilesystemBackupStorage(dir string) (*FilesystemBackupStorage, error) {
@@ -94,6 +101,12 @@ func (s *FilesystemBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, 
 		if err != nil {
 			continue
 		}
+		if info.Size() == 0 {
+			// A zero-byte archive is not a backup: it is what an interrupted
+			// write left behind (or a hand-placed stub). Listing it offers an
+			// empty file for download and lets Restore push it to a CCU.
+			continue
+		}
 		out = append(out, hmapi.BackupEntry{
 			ID:        strings.TrimSuffix(name, ".sbk"),
 			Bytes:     info.Size(),
@@ -113,18 +126,73 @@ func (s *FilesystemBackupStorage) Open(_ context.Context, id string) (io.ReadClo
 	if err != nil {
 		return nil, fmt.Errorf("backup: open %s: %w", path, err)
 	}
+	// Refuse an empty archive here as well as in List: a restore addresses a
+	// backup by id, so hiding the torso from the listing alone would still
+	// leave it uploadable to a CCU.
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("backup: stat %s: %w", path, err)
+	}
+	if info.Size() == 0 {
+		_ = f.Close()
+		return nil, fmt.Errorf("backup: %s is empty (interrupted save)", path)
+	}
 	return f, nil
 }
 
 // Save implements [BackupStorage]. It writes data to `<id>.sbk` inside the
 // storage directory, replacing any existing file with the same id.
+//
+// The archive is published atomically: the payload goes to a scratch file in
+// the same directory, is flushed to disk, and only then renamed onto the
+// final name. A truncating write in place would expose every intermediate
+// state under the real name — a save killed by SIGKILL or a full disk would
+// leave a torso that List shows and Restore uploads to a CCU — and, on a
+// replace, would destroy the previous complete archive before the new one
+// exists.
 func (s *FilesystemBackupStorage) Save(_ context.Context, id string, data []byte) error {
 	path, err := s.pathForID(id)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, data, 0o640); err != nil { // #nosec G306 — backup archives are operator-readable, not world
-		return fmt.Errorf("backup: write %s: %w", path, err)
+	tmp, err := os.CreateTemp(s.Dir, backupTempPattern)
+	if err != nil {
+		return fmt.Errorf("backup: temp file in %s: %w", s.Dir, err)
+	}
+	tmpPath := tmp.Name()
+	abandon := func(cause error) error {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return cause
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return abandon(fmt.Errorf("backup: write %s: %w", tmpPath, err))
+	}
+	// CreateTemp makes the file 0600; widen it to the mode the storage has
+	// always used — operator-readable, never world-readable.
+	if err := tmp.Chmod(0o640); err != nil {
+		return abandon(fmt.Errorf("backup: chmod %s: %w", tmpPath, err))
+	}
+	// Flush before the rename. Without it a power loss can publish the final
+	// name over data the kernel has not written yet.
+	if err := tmp.Sync(); err != nil {
+		return abandon(fmt.Errorf("backup: sync %s: %w", tmpPath, err))
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("backup: close %s: %w", tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("backup: publish %s: %w", path, err)
+	}
+	// Best-effort: make the rename itself durable. A directory that cannot be
+	// synced (or a platform that does not support it) is not a reason to fail
+	// a save whose payload is already on disk.
+	if dir, err := os.Open(s.Dir); err == nil { // #nosec G304 — the configured storage directory
+		_ = dir.Sync()
+		_ = dir.Close()
 	}
 	return nil
 }
@@ -156,8 +224,8 @@ func (s *FilesystemBackupStorage) pathForID(id string) (string, error) {
 }
 
 // SetStorage swaps the storage backend. Default is no storage (List
-// returns empty, Stream returns ErrUnimplemented). Returns the
-// receiver for chaining.
+// returns empty, Stream reports the storage as not configured).
+// Returns the receiver for chaining.
 func (a *BackupAdapter) SetStorage(s BackupStorage) *BackupAdapter {
 	a.storage = s
 	return a

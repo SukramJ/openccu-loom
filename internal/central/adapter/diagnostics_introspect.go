@@ -98,7 +98,7 @@ func subscribeCuratedEvents(bus *events.Bus, typeFilter []string, emit func(hmap
 		emit(hmapi.DiagnosticsEvent{TS: time.Now().UTC().Format(time.RFC3339Nano), Type: name, Event: e})
 	}
 
-	unsubs := make([]func(), 0, 10)
+	unsubs := make([]func(), 0, 12)
 	unsubs = append(
 		unsubs,
 		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) { send("DataPointValueChanged", e) }),
@@ -109,6 +109,13 @@ func subscribeCuratedEvents(bus *events.Bus, typeFilter []string, emit func(hmap
 		events.Subscribe(bus, func(e hmevent.CircuitBreakerStateChangedEvent) { send("CircuitBreakerStateChanged", e) }),
 		events.Subscribe(bus, func(e hmevent.ConnectionLostEvent) { send("ConnectionLost", e) }),
 		events.Subscribe(bus, func(e hmevent.RecoveryStartedEvent) { send("RecoveryStarted", e) }),
+		// The per-stage and per-attempt events carry the operator-facing
+		// progress detail between Started and Completed/Failed: which
+		// stage the pipeline is in, how many attempts were burned, and
+		// the last error. Without them the tap shows a recovery as a
+		// silent gap between two endpoints.
+		events.Subscribe(bus, func(e hmevent.RecoveryStageChangedEvent) { send("RecoveryStageChanged", e) }),
+		events.Subscribe(bus, func(e hmevent.RecoveryAttemptedEvent) { send("RecoveryAttempted", e) }),
 		events.Subscribe(bus, func(e hmevent.RecoveryCompletedEvent) { send("RecoveryCompleted", e) }),
 		events.Subscribe(bus, func(e hmevent.RecoveryFailedEvent) { send("RecoveryFailed", e) }),
 	)

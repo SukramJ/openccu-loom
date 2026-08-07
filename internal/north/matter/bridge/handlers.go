@@ -80,7 +80,11 @@ type PaseAdapter struct {
 	pbkdfIterations    uint32
 	pbkdfSalt          []byte
 	responderSessionID uint16
-	randomSource       func() [spake2.PBKDFRandomSize]byte // overridable for tests
+	// randomSource feeds ResponderRandom in ProcessPBKDFParamRequest.
+	// Nil means crypto/rand. In-package tests assign a deterministic
+	// source directly, before the handshake starts (no concurrent
+	// reader exists until the first Process* call).
+	randomSource func() [spake2.PBKDFRandomSize]byte
 
 	// pbkdfReqBytes + pbkdfRespBytes are the wire-bytes of the most
 	// recent PBKDFParamRequest / PBKDFParamResponse exchange. Matter
@@ -189,16 +193,6 @@ func (a *PaseAdapter) SetPBKDFParams(iterations uint32, salt []byte, responderSe
 	a.pbkdfIterations = iterations
 	a.pbkdfSalt = append([]byte(nil), salt...) // defensive copy
 	a.responderSessionID = responderSessionID
-}
-
-// SetRandomSource overrides the random-byte source used for
-// ResponderRandom in [PaseAdapter.ProcessPBKDFParamRequest]. The
-// default reads from crypto/rand; tests substitute a deterministic
-// source so the encoded response is byte-stable.
-func (a *PaseAdapter) SetRandomSource(fn func() [spake2.PBKDFRandomSize]byte) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.randomSource = fn
 }
 
 // SetResponderMRPParams configures the MRP retransmit profile the

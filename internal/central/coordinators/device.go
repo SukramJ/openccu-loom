@@ -712,8 +712,15 @@ func (c *DeviceCoordinator) AddNewDevicesManually(
 	deviceAcceptor func(ctx context.Context, iface hmenum.Interface, address string) error,
 ) error {
 	ifaceID := string(iface)
+	// locked tracks whether the deferred unlock still owns the lock: the
+	// publish tail below releases it early so handlers never run under it.
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	locked := true
+	defer func() {
+		if locked {
+			c.mu.Unlock()
+		}
+	}()
 
 	ifaceDelayed, ok := c.delayedDescs[ifaceID]
 	if !ok || len(ifaceDelayed) == 0 {
@@ -752,26 +759,41 @@ func (c *DeviceCoordinator) AddNewDevicesManually(
 		return nil
 	}
 
-	// Register descriptions and emit events for top-level devices.
+	// Register descriptions, then publish OUTSIDE the coordinator lock.
+	//
+	// The bus dispatches synchronously on the caller's goroutine, and this
+	// event's handlers do real work — the event bridge publishes the
+	// device's whole MQTT snapshot to the broker, the security domain
+	// rebuilds its index. Publishing under c.mu therefore held a
+	// non-reentrant coordinator lock across foreign handler code including
+	// network I/O: any handler that reaches back into the DeviceCoordinator
+	// self-deadlocks the daemon, and until one does, a slow broker stalls
+	// every other caller of this coordinator.
+	created := make([]hmevent.DeviceCreatedEvent, 0, len(toProcess))
 	for i := range toProcess {
 		d := toProcess[i]
 		c.descs.Put(iface, d)
-		if d.IsDevice() {
-			entry := registry.DeviceEntry{
-				Interface: iface,
-				Address:   d.Address,
-				Model:     d.Type,
-			}
-			c.devices.Put(entry)
-			events.Publish(c.bus, hmevent.DeviceCreatedEvent{
-				Base:        hmevent.NewBase(),
-				CentralName: c.centralName,
-				InterfaceID: ifaceID,
-				Address:     d.Address,
-				Model:       d.Type,
-				Source:      hmenum.SourceOfDeviceCreationManual,
-			})
+		if !d.IsDevice() {
+			continue
 		}
+		c.devices.Put(registry.DeviceEntry{
+			Interface: iface,
+			Address:   d.Address,
+			Model:     d.Type,
+		})
+		created = append(created, hmevent.DeviceCreatedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: c.centralName,
+			InterfaceID: ifaceID,
+			Address:     d.Address,
+			Model:       d.Type,
+			Source:      hmenum.SourceOfDeviceCreationManual,
+		})
+	}
+	c.mu.Unlock()
+	locked = false
+	for _, e := range created {
+		events.Publish(c.bus, e)
 	}
 	return nil
 }

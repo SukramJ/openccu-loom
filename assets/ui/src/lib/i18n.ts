@@ -1738,6 +1738,10 @@ const EN: Catalog = {
   "settings.tristate.default": "Default",
   "settings.tristate.on": "On",
   "settings.tristate.off": "Off",
+  // --- Roles (shared by the users and tokens admin — AccessControl.svelte) ---
+  "role.viewer": "Viewer",
+  "role.operator": "Operator",
+  "role.admin": "Admin",
   // --- Users admin ---
   "users.empty": "No users configured.",
   "users.add_title": "Add user",
@@ -1982,6 +1986,7 @@ const EN: Catalog = {
   "channel.session_lock_other":
     "Another session currently holds the edit lock for this view. Saves may fail until the lock expires.",
   "channel.take_over": "Take over",
+  "channel.take_over_failed": "Take-over failed",
   "channel.lock_lost": "Edit lock lost",
   "channel.lock_lost_detail":
     "Another session took over the edit lock, or your lock expired. Re-open this editor before saving so you don't overwrite concurrent changes.",
@@ -2210,6 +2215,7 @@ const EN: Catalog = {
   "channel.import_done": "Imported {count} parameters.",
   "channel.kanal": "Channel {n}",
   "channel.action_triggered": "Action {name} triggered.",
+  "channel.action_failed": "Action {name} failed",
   "channel.profile_staged": "Profile staged — press Save to apply.",
   "channel.import_staged": "Import staged — press Save to apply.",
   "channel.import_paramset_mismatch":
@@ -5251,6 +5257,10 @@ const DE: Catalog = {
   "settings.tristate.default": "Standard",
   "settings.tristate.on": "An",
   "settings.tristate.off": "Aus",
+  // --- Rollen (gemeinsam für Benutzer- und Token-Verwaltung — AccessControl.svelte) ---
+  "role.viewer": "Betrachter",
+  "role.operator": "Bediener",
+  "role.admin": "Administrator",
   // --- Benutzer-Verwaltung ---
   "users.empty": "Keine Benutzer konfiguriert.",
   "users.add_title": "Benutzer hinzufügen",
@@ -5495,6 +5505,7 @@ const DE: Catalog = {
   "channel.session_lock_other":
     "Dieser Editor wird gerade von einer anderen Sitzung bearbeitet. Speichern kann scheitern, bis die Sperre abläuft.",
   "channel.take_over": "Bearbeitung übernehmen",
+  "channel.take_over_failed": "Übernahme fehlgeschlagen",
   "channel.lock_lost": "Bearbeitungssperre verloren",
   "channel.lock_lost_detail":
     "Eine andere Sitzung hat die Bearbeitungssperre übernommen oder deine Sperre ist abgelaufen. Öffne diesen Editor erneut, bevor du speicherst, um gleichzeitige Änderungen nicht zu überschreiben.",
@@ -5728,6 +5739,7 @@ const DE: Catalog = {
   "channel.import_done": "{count} Parameter importiert.",
   "channel.kanal": "Kanal {n}",
   "channel.action_triggered": "Aktion {name} ausgelöst.",
+  "channel.action_failed": "Aktion {name} fehlgeschlagen",
   "channel.profile_staged":
     "Profil vorgemerkt — zum Anwenden Speichern drücken.",
   "channel.import_staged":

@@ -233,6 +233,26 @@ var edgeTriggerParameters = map[Parameter]struct{}{
 	ParameterCodeState:        {},
 }
 
+// secretBearingParameters are the parameters whose VALUE is a credential
+// rather than a setting. Their names may be logged and audited freely;
+// their values must not be persisted anywhere an operator dump can reach.
+//
+// CODE_ID carries the access code of a keypad / lock channel. A paramset
+// write that sets it therefore puts the code itself into the write
+// payload — which is how it reached the append-only audit log in
+// cleartext.
+var secretBearingParameters = map[Parameter]struct{}{
+	ParameterCodeID: {},
+}
+
+// IsSecretBearingParameter reports whether p's value is a credential.
+// Callers that persist or forward parameter values (audit rows, change
+// logs, diagnostics dumps) must record the name and drop the value.
+func IsSecretBearingParameter(p Parameter) bool {
+	_, ok := secretBearingParameters[p]
+	return ok
+}
+
 // IsEdgeTriggerParameter reports whether p is an edge-trigger parameter:
 // one whose repeated identical emission must still be published as an
 // event rather than suppressed by value-unchanged deduplication.

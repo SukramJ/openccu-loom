@@ -53,11 +53,6 @@ var wiringSettersWithoutCaller = map[string]string{
 	// documented choice, so the seam is dead along with it.
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core.DiagnosticLogs.AttachProvider": "the DiagnosticLogs cluster is deliberately not mounted on the root endpoint; the dead-code inventory already exempts the file",
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/light.ColorControlServer.SetWriter": "colour-temperature lights are served by internal/model/custom/light, not by this standalone reference server, which nothing constructs",
-
-	// Verified: test-only seams. Listed rather than deleted because
-	// removing them is a separate change with its own review.
-	"github.com/SukramJ/openccu-loom/internal/diagnostics.Manager.SetClockForTesting":          "test seam; production takes the default clock",
-	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge.PaseAdapter.SetRandomSource": "test seam; production reads crypto/rand",
 }
 
 // wiringSeamsUnderInvestigation is the same shape and a different claim.

@@ -11,6 +11,15 @@ export type ChangeEntry = {
   changes: Record<string, { before: unknown; after: unknown }>;
   /** Optional label for debugging / future history-list UI. */
   label?: string;
+  /**
+   * Locked-parameter set before/after this entry, when the edit
+   * changes which fields a profile preset holds fixed (a profile
+   * apply). Undo/redo replay this alongside `changes` so the
+   * disabled-field state rolls back atomically with the values a
+   * preset staged, instead of the fields staying disabled (or
+   * becoming editable) after the values themselves were reverted.
+   */
+  lockedParams?: { before: string[]; after: string[] };
 };
 
 /** Stack state. Index −1 means "no entry active" (fresh/empty). */
@@ -57,36 +66,67 @@ export function canRedo(state: ChangeStackState): boolean {
 /**
  * Apply the current entry's reverse to `values`, returning the new
  * values map plus the decremented state. No-op when there is nothing
- * to undo.
+ * to undo. `lockedParams` is the caller's current locked-field set;
+ * it is only replaced when the entry being undone recorded a
+ * before/after locked-set snapshot (profile applies do; plain field
+ * edits don't), otherwise it passes through unchanged.
  */
 export function undo(
   state: ChangeStackState,
   values: ParamValues,
-): { values: ParamValues; state: ChangeStackState } {
-  if (!canUndo(state)) return { values, state };
+  lockedParams: ReadonlySet<string> = new Set(),
+): {
+  values: ParamValues;
+  state: ChangeStackState;
+  lockedParams: Set<string>;
+} {
+  if (!canUndo(state)) {
+    return { values, state, lockedParams: new Set(lockedParams) };
+  }
   const entry = state.entries[state.index];
   const next: ParamValues = { ...values };
   for (const [name, { before }] of Object.entries(entry.changes)) {
     next[name] = before;
   }
-  return { values: next, state: { ...state, index: state.index - 1 } };
+  const nextLocked = entry.lockedParams
+    ? new Set(entry.lockedParams.before)
+    : new Set(lockedParams);
+  return {
+    values: next,
+    state: { ...state, index: state.index - 1 },
+    lockedParams: nextLocked,
+  };
 }
 
 /**
  * Apply the next entry's forward patch. No-op when there is nothing
- * to redo.
+ * to redo. See `undo` for the `lockedParams` pass-through rule.
  */
 export function redo(
   state: ChangeStackState,
   values: ParamValues,
-): { values: ParamValues; state: ChangeStackState } {
-  if (!canRedo(state)) return { values, state };
+  lockedParams: ReadonlySet<string> = new Set(),
+): {
+  values: ParamValues;
+  state: ChangeStackState;
+  lockedParams: Set<string>;
+} {
+  if (!canRedo(state)) {
+    return { values, state, lockedParams: new Set(lockedParams) };
+  }
   const entry = state.entries[state.index + 1];
   const next: ParamValues = { ...values };
   for (const [name, { after }] of Object.entries(entry.changes)) {
     next[name] = after;
   }
-  return { values: next, state: { ...state, index: state.index + 1 } };
+  const nextLocked = entry.lockedParams
+    ? new Set(entry.lockedParams.after)
+    : new Set(lockedParams);
+  return {
+    values: next,
+    state: { ...state, index: state.index + 1 },
+    lockedParams: nextLocked,
+  };
 }
 
 /**
@@ -97,10 +137,11 @@ export function entryFromPatch(
   patch: Record<string, unknown>,
   current: ParamValues,
   label?: string,
+  lockedParams?: { before: string[]; after: string[] },
 ): ChangeEntry {
   const changes: ChangeEntry["changes"] = {};
   for (const [name, after] of Object.entries(patch)) {
     changes[name] = { before: current[name], after };
   }
-  return { changes, label };
+  return { changes, label, lockedParams };
 }

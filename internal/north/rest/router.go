@@ -1118,7 +1118,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/visibility/unignore/candidates", handlers.ListVisibilityUnIgnoreCandidates(d.VisibilityCentralLister, d.VisibilityCandidateProvider))
 			if d.Backup != nil {
 				pr.With(admin).Post("/backups", handlers.TriggerBackup(d.Backup))
-				pr.Get("/backups", handlers.ListBackups(d.Backup))
+				// The listing is admin-gated like every other backup route:
+				// it names each archive's id, size, timestamp and owning CCU,
+				// which enumerates the fleet's backup history and hands any
+				// authenticated user the id a download or restore addresses.
+				pr.With(admin).Get("/backups", handlers.ListBackups(d.Backup))
 				// Importing an operator-supplied archive. Admin-gated like
 				// the trigger: what is imported here can later overwrite a
 				// CCU's entire configuration.
