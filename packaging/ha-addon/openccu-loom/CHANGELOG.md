@@ -1,6 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## 0.54.4
+## 0.54.3
+
+- **Fixed: CCU programs executed on their own.** With the MQTT bridge
+  active, every WebUI program ran twice on each daemon (or CCU) restart
+  and once more whenever a program was created or edited — deactivated
+  programs included. The bridge mirrored program state onto its own
+  MQTT trigger command topic and then answered its own message with a
+  program execution. Program state now stays on the state topic, stale
+  mirrors are cleaned off the broker automatically, and triggering a
+  program over MQTT keeps working as documented.
 
 - **Fixed: without an MQTT broker, the web UI missed value-freshness
   updates.** Installations running the daemon without MQTT never
@@ -19,17 +28,6 @@
 - **Added: recovery progress in the diagnostics event stream.**
   Connection-recovery stage and attempt events now appear in the
   event-bus tap, so a reconnect no longer looks like a silent gap.
-
-## 0.54.3
-
-- **Fixed: CCU programs executed on their own.** With the MQTT bridge
-  active, every WebUI program ran twice on each daemon (or CCU) restart
-  and once more whenever a program was created or edited — deactivated
-  programs included. The bridge mirrored program state onto its own
-  MQTT trigger command topic and then answered its own message with a
-  program execution. Program state now stays on the state topic, stale
-  mirrors are cleaned off the broker automatically, and triggering a
-  program over MQTT keeps working as documented.
 
 ## 0.54.2
 
