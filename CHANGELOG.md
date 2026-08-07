@@ -49,6 +49,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A keypad or lock access code was stored in cleartext in the audit
+  log.** Every paramset write persisted its raw before/after values, and
+  `CODE_ID` carries the access code of a keypad or lock channel — so
+  setting one put the code itself into the append-only log, readable for
+  the full 90-day retention by anything that reads an audit row. The
+  sibling data-point write path had recorded parameter names only, for
+  exactly this reason, since it was written. Credential-bearing
+  parameters now record the name and withhold the value; ordinary
+  settings keep theirs, because "the heating curve went from 21 to 24"
+  is what makes an audit row useful. A first write still reads as "had
+  no value before" rather than as a withheld one.
+
+- **A panic while reading an event's type would have stopped every event
+  in the daemon, silently.** The bus resolved an event's identity
+  without recovery, and its dispatch lock is released by the queue drain
+  rather than by a deferred unlock — so the panic unwound past the
+  release and left the lock held for the life of the process. The daemon
+  kept running, every later publish queued into a backlog nothing would
+  drain, and every unsubscribe blocked forever. No event can trigger
+  this today (they return constants), but they are methods on ordinary
+  structs, one nil dereference away, and the failure is total and
+  produces no error. The identity is now read before any lock is taken
+  and under recovery.
+
 - **One slow broker could freeze every CCU's event delivery.** The
   internal event bus dispatches synchronously on the publishing
   goroutine, so anything a handler does happens on a goroutine shared by
