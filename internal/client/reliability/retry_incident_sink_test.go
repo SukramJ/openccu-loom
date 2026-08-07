@@ -7,7 +7,15 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
+
+// fastBackoff is the shortest backoff a RetryConfig can express: NewRetrier
+// normalises a non-positive Initial/Max back to the production 2s/30s
+// defaults, so a zero value does not mean "do not wait" — it means "wait the
+// full production interval". The sink tests below assert who is called and
+// how often, never how long the retrier slept in between.
+const fastBackoff = time.Microsecond
 
 // TestRetrier_IncidentSink_CalledOnExhaustion verifies that the configured
 // IncidentSink receives exactly one call when the retry chain exhausts all
@@ -22,7 +30,8 @@ func TestRetrier_IncidentSink_CalledOnExhaustion(t *testing.T) {
 
 	r := NewRetrier(RetryConfig{
 		MaxAttempts:  2,
-		Initial:      0,
+		Initial:      fastBackoff,
+		Max:          fastBackoff,
 		IncidentSink: sink,
 	})
 
@@ -49,7 +58,8 @@ func TestRetrier_IncidentSink_NotCalledOnSuccess(t *testing.T) {
 
 	r := NewRetrier(RetryConfig{
 		MaxAttempts:  3,
-		Initial:      0,
+		Initial:      fastBackoff,
+		Max:          fastBackoff,
 		IncidentSink: sink,
 	})
 
@@ -74,7 +84,8 @@ func TestRetrier_IncidentSink_NilSinkIsSafe(t *testing.T) {
 
 	r := NewRetrier(RetryConfig{
 		MaxAttempts: 2,
-		Initial:     0,
+		Initial:     fastBackoff,
+		Max:         fastBackoff,
 	})
 	err := r.Do(context.Background(), func(_ context.Context, _ int) error {
 		return errors.New("always fails")

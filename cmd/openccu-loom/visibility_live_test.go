@@ -13,21 +13,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 )
 
-// buildVisibilityStore opens a fresh migrated SQLite DB and returns a
-// *sqlite.VisibilityUnIgnoreStore backed by a temp-dir file. Serialised
-// via gooseMigrateMu to avoid goose race.
+// buildVisibilityStore returns a *sqlite.VisibilityUnIgnoreStore backed by a
+// private, already-migrated database file in the test's temp dir.
 func buildVisibilityStore(t *testing.T) *sqlitestore.VisibilityUnIgnoreStore {
 	t.Helper()
-	ctx := context.Background()
-	dsn := "file:" + t.TempDir() + "/vis_test.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("buildVisibilityStore: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return sqlitestore.NewVisibilityUnIgnoreStore(db)
+	return sqlitestore.NewVisibilityUnIgnoreStore(openMigratedTestDB(t, "vis_test.db"))
 }
 
 // ── LoadUnIgnore with real store ──────────────────────────────────────────────

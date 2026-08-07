@@ -313,24 +313,11 @@ func TestLoginChainWithCCU_Primary_NilCCUPureLoca(t *testing.T) {
 
 // ── newCCUAuthCentralResolver ─────────────────────────────────────────────────
 
-// buildCentralsTestStore opens a fresh migrated SQLite DB and returns its
-// *sqlitestore.CentralsStore, mirroring buildPurgeTestStores's
-// gooseMigrateMu-guarded open pattern (central_adopt_test.go) to avoid
-// goose's migration race when tests run in parallel across the package.
+// buildCentralsTestStore returns a *sqlitestore.CentralsStore backed by a
+// private, already-migrated database file in the test's temp dir.
 func buildCentralsTestStore(t *testing.T) *sqlitestore.CentralsStore {
 	t.Helper()
-	ctx := context.Background()
-
-	dsn := "file:" + t.TempDir() + "/ccu_auth_resolver_test.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("sqlitestore.Open: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-
-	return sqlitestore.NewCentralsStore(db)
+	return sqlitestore.NewCentralsStore(openMigratedTestDB(t, "ccu_auth_resolver_test.db"))
 }
 
 // TestCCUAuthCentralResolverNoStoreFallback verifies that with a nil

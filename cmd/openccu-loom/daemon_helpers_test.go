@@ -647,14 +647,7 @@ func TestCaseResumptionStoreAdapter_GetByID_MapsFabricPeerAndCATsThrough(t *test
 	// matter_resumption FOREIGN KEY on fabric_index requires the fabric
 	// row to live in the SAME database the manager persists into, so
 	// this test wires its own store+manager pair against one DSN.
-	dsn := "file:" + t.TempDir() + "/matter_resumption_adapter_test.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("sqlitestore.Open: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := openMigratedTestDB(t, "matter_resumption_adapter_test.db")
 	store := matterstore.New(db)
 	mgr := operational.NewManager(store)
 

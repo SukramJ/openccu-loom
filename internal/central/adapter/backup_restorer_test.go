@@ -210,7 +210,7 @@ func TestHTTPBackupRestorerHonorsContext(t *testing.T) {
 		select {
 		case <-r.Context().Done():
 			// server-side context cancelled by client disconnect
-		case <-time.After(2 * time.Second):
+		case <-time.After(500 * time.Millisecond):
 			w.WriteHeader(http.StatusOK)
 		}
 	}))

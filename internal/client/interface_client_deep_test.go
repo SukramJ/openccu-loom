@@ -220,7 +220,6 @@ func TestInterfaceClientCallInvokesCaller(t *testing.T) {
 func TestInterfaceClientCallReturnsErrorFromCaller(t *testing.T) {
 	t.Parallel()
 	wantErr := errors.New("transport failure")
-	// Use MaxAttempts=1 so no retry delays slow the test.
 	caller := CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) {
 		return nil, wantErr
 	})
@@ -228,6 +227,12 @@ func TestInterfaceClientCallReturnsErrorFromCaller(t *testing.T) {
 		CentralName: "test-central",
 		Interface:   hmenum.InterfaceHmIPRF,
 		Caller:      caller,
+		// What is asserted is that the caller's error survives the
+		// reliability stack — not how often it is retried on the way out.
+		// Without an explicit Retrier the default one applies and the
+		// always-failing caller is retried across the production 2s/4s
+		// backoff.
+		Retrier: reliability.NewRetrier(reliability.RetryConfig{MaxAttempts: 1}),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

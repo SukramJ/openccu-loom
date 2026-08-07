@@ -101,16 +101,114 @@ jobs:
       - name: gitleaks
         run: make secrets
 
-  test:
-    name: test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  # Linux is the shipped target (.goreleaser.yaml builds linux only), so it
+  # is the leg that carries the race detector. -race costs a factor of ~5.5
+  # in wall time, which made this the longest job in the pipeline by a wide
+  # margin; splitting the module across shards puts each runner on roughly a
+  # quarter of the packages. script/test_shard.sh owns the split and
+  # tests/contract pins that the shards together cover every package exactly
+  # once — a dropped package would otherwise show up as a green run for code
+  # nothing executed.
+  test-shard:
+    name: test shard ${{ matrix.shard }} (linux, race)
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # Windows is not a shipped target (.goreleaser.yaml builds linux
-        # only) and its runner is the slowest, flakiest leg — the Windows
-        # test run lives in nightly.yml as a non-gating canary instead.
-        os: [ubuntu-latest, macos-latest]
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: go test (race)
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          mapfile -t pkgs < <(script/test_shard.sh "${{ matrix.shard }}" 4)
+          if [ "${#pkgs[@]}" -eq 0 ]; then
+            echo "::error::shard ${{ matrix.shard }} resolved to no packages"
+            exit 1
+          fi
+          go test -race -count=1 -covermode=atomic \
+            -coverprofile="coverage-shard-${{ matrix.shard }}.out" "${pkgs[@]}"
+      - name: upload shard coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: coverage-shard-${{ matrix.shard }}.out
+          if-no-files-found: error
+
+  # Keeps the name `test (ubuntu-latest)` because that is a required status
+  # check on main; it is now the aggregate gate over the shards rather than a
+  # test run of its own. `if: always()` plus the explicit result check is
+  # load-bearing: a job skipped because a dependency failed reports as
+  # "skipped", and branch protection counts a skipped required check as
+  # satisfied — so without this the whole Linux leg could go red while the
+  # PR reported mergeable.
+  test:
+    name: test (ubuntu-latest)
+    needs: test-shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: shards must all be green
+        if: needs.test-shard.result != 'success'
+        run: |
+          echo "::error::linux test shards did not pass (result=${{ needs.test-shard.result }})"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: download shard coverage
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: coverage-shard-*
+          merge-multiple: true
+      # The shards test disjoint package sets, so their profiles concatenate
+      # into the same profile a single `go test ./... -coverprofile` would
+      # have produced — minus the extra `mode:` headers, which `go tool
+      # cover` refuses to read.
+      - name: merge shard coverage
+        run: ./script/merge_coverprofiles.sh coverage.out coverage-shard-*.out
+      - name: coverage threshold (total)
+        run: ./script/coverage_threshold.sh 65 coverage.out
+      # The per-package tier gate runs in the integration workflow, not
+      # here: its thresholds are calibrated against the integration-
+      # inclusive coverage profile (make coverage). This unit job runs
+      # without -tags=integration, so packages exercised mainly by the
+      # godevccu integration suite would fall short of their tiers.
+      - name: upload coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: error
+
+  # macOS is the development platform, not a shipped target, so this leg
+  # exists to catch what only a second OS can catch: path separators, file
+  # permissions, timezone and os.Rename semantics. It runs without -race —
+  # a data race is a property of the code, not of the operating system, so
+  # detecting it once on the shipped platform is enough, and paying the 5.5x
+  # race tax twice bought nothing. Same reasoning as the Windows leg below,
+  # one step further: Windows is not a shipped target *and* its runner is the
+  # slowest, flakiest leg, so its test run lives in nightly.yml as a
+  # non-gating canary instead of here.
+  #
+  # This job also owns the three whole-module compile checks. Each one builds
+  # the entire package graph, so running them on every shard would multiply
+  # the most expensive part of the job by four; hanging them on the leg that
+  # no longer pays the race tax keeps them free. `go vet ./...` in particular
+  # overlaps with the govet linter the `lint` job already runs on Linux —
+  # here it additionally covers the darwin build constraints, which a
+  # Linux-only vet never compiles.
+  test-macos:
+    name: test (macos-latest)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -133,24 +231,7 @@ jobs:
         run: go test -tags=integration_live -run '^$' -count=1 ./tests/integration/
       - name: go test
         shell: bash
-        env:
-          CGO_ENABLED: "1"
-        run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
-      - name: coverage threshold (total)
-        if: matrix.os == 'ubuntu-latest'
-        run: ./script/coverage_threshold.sh 65 coverage.out
-      # The per-package tier gate runs in the integration workflow, not
-      # here: its thresholds are calibrated against the integration-
-      # inclusive coverage profile (make coverage). This unit job runs
-      # without -tags=integration, so packages exercised mainly by the
-      # godevccu integration suite would fall short of their tiers.
-      - name: upload coverage
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage
-          path: coverage.out
-          if-no-files-found: ignore
+        run: go test -count=1 ./...
 
   bench:
     name: bench (smoke)

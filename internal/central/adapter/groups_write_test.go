@@ -38,9 +38,14 @@ import (
 // appears" failure path does not block the suite for the production 60s
 // timeout. Restoring the defaults afterward is unnecessary — no other test
 // in this package depends on their production values.
+//
+// The timeout only has to outlast a handful of poll rounds: what the failure
+// path asserts is that Create gives up and surfaces the save error, not how
+// long it waited first. At a 1ms interval this window still covers 200
+// rounds, an order of magnitude more than production's 30.
 func TestMain(m *testing.M) {
 	groupSavePollInterval = 1 * time.Millisecond
-	groupSavePollTimeout = 2 * time.Second
+	groupSavePollTimeout = 200 * time.Millisecond
 	os.Exit(m.Run())
 }
 
