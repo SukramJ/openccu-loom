@@ -6,6 +6,36 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.54.5]
 
+### Fixed
+
+- **The boot snapshot no longer races the CCU bring-up — and no longer
+  floods the MQTT broker with MASTER paramsets.** The boot-time
+  `PublishInitialSnapshot` ran on the daemon's main path while the
+  readiness-gated bring-up hydrated devices in the background. A device
+  that was already hydrated but whose visibility passes had not run yet
+  published its **entire** MASTER paramset — retained state + `/config`
+  companions + HA-Discovery configs. On HmIP-PSM devices with recent
+  firmware that meant ~1,100 parameters each (a 75-slot week-program
+  table on channel 8 plus the mesh-router tables on channel 0), and it
+  also leaked suppressed VALUES parameters (`BOOTED`, `INSTALL_TEST`,
+  `*_STATUS`, `UNREACH`, …). Home Assistant then showed thousands of
+  phantom config entities. Four changes close it for good:
+  - the snapshot (boot, broker-reconnect reseed, runtime MQTT swap)
+    skips every central whose southbound bring-up has not latched
+    ready; the `CentralSouthboundReadyEvent` path publishes it after
+    the visibility marks are in place,
+  - the unobserved-DP branch of the snapshot honours the same
+    visibility rule as the observed path instead of publishing raw
+    slot + `/config` unconditionally,
+  - every MQTT visibility gate now queries the registry with the
+    event's real paramset key — MASTER is a default-deny whitelist,
+    and asking with `VALUES` (the previous hard-coding) reported every
+    MASTER parameter as visible,
+  - a new raw-plane orphan sweep (plus the existing HA-Discovery
+    orphan sweep, now correctly ordered AFTER the central's snapshot)
+    evicts the retained leftovers earlier builds parked on the broker,
+    so existing installations come clean on the first restart.
+
 ### Changed
 
 - **User and API-token administration exists once, in Settings.** The

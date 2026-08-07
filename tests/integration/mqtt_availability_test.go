@@ -94,6 +94,10 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 	if len(c.ModelRegistry.List()) == 0 {
 		t.Fatal("ingest produced no devices")
 	}
+	// Production order: the bring-up latches southbound-ready AFTER the
+	// ingest (and its visibility passes) completed; the snapshot pass gates
+	// on the latch and skips a mid-bring-up central entirely.
+	c.MarkSouthboundReady()
 
 	// --- subscriber BEFORE publishing so retained messages are not missed -
 	subClient := mqtt.NewTCPClient(mqtt.TCPConfig{

@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
@@ -396,43 +397,17 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		}
 	}
 
+	wireRetainedOrphanSweeps(ctx, d, cfg, logger)
+
 	// Push the post-hydration snapshot of every observed VALUES data
 	// point through the EventBridge so the broker carries retained
 	// state (and HA Discovery configs) for every device immediately
-	// after start, not just after the first CCU-driven change.
-	//
-	// Ordering guarantee: PublishInitialSnapshot is fully synchronous —
-	// it iterates all centrals/devices/DPs and calls publishDiscovery
-	// inline without spawning goroutines. Bridge.declared is completely
-	// populated before this call returns, so the orphan-cleanup pass
-	// below sees the full set of currently-owned discovery topics.
+	// after start, not just after the first CCU-driven change. Centrals
+	// whose readiness-gated bring-up is still running are skipped — their
+	// snapshot (and orphan sweep) rides on CentralSouthboundReadyEvent,
+	// after finishIngest applied the visibility marks. Snapshotting a
+	// mid-ingest central published its entire MASTER paramsets retained.
 	d.bridge.PublishInitialSnapshot(ctx)
-
-	// Orphan HA-Discovery cleanup — after the initial snapshot has
-	// repopulated `Bridge.declared` with every HA-Discovery topic the
-	// daemon currently owns, evict every retained `homeassistant/...`
-	// config topic for our device-namespace that is *not* in
-	// `declared`. Catches entities that previous builds published
-	// (e.g. MASTER-paramset spam for unlisted models like
-	// HmIP-STE2-PCB / HmIP-SFD before the default-skip rule landed,
-	// or BOOST_TIME_PERIOD on HmIP-BWTH before the MASTER-lookup fix);
-	// without this pass the broker keeps the orphans retained
-	// indefinitely and HA shows phantom entities the daemon no longer
-	// drives. Best-effort — a broker that lacks subscribe support
-	// just skips.
-	if d.mqttWiring != nil {
-		if mqttBridge := d.mqttWiring.Bridge(); mqttBridge != nil {
-			cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
-			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, cleanupWindow+8*time.Second)
-			n, cleanupErr := mqttBridge.RunDiscoveryOrphanCleanupOnce(cleanupCtx, cleanupWindow)
-			cleanupCancel()
-			if cleanupErr != nil {
-				logger.Warn("mqtt.discovery_orphan_cleanup", slog.String("err", cleanupErr.Error()))
-			} else if n > 0 {
-				logger.Info("mqtt.discovery_orphan_cleanup", slog.Int("evicted", n))
-			}
-		}
-	}
 
 	// Periodic unobserved-DP sweep — retries LoadValue for the
 	// RELEVANT_INIT + readable-event whitelist on a slow cadence.
@@ -453,6 +428,76 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		hubReadyTrigger: hubReadyTriggerFn,
 	}
 	return result, teardown
+}
+
+// wireRetainedOrphanSweeps installs the EventBridge post-snapshot hook that
+// runs the retained-orphan sweeps. They are deferred until a central's
+// snapshot pass has actually published, because both compare the broker's
+// retained store against the bridge's bookkeeping (`declared` for
+// HA-Discovery configs, rawTopics/configCache for the raw plane) — running
+// them against a central the ready gate skipped would classify every
+// legitimate topic as an orphan and wipe it. The hook fires from whichever
+// path publishes the snapshot first: the boot-time catch-up for a central
+// that latched ready early, or the southbound-ready path for the common
+// readiness-gated case.
+//
+// The sweeps evict what previous builds/boots retained but the current model
+// no longer publishes: MASTER paramsets that escaped before the visibility
+// gate closed the mid-ingest window, suppressed VALUES parameters, retired
+// profiles, removed devices. Once per boot and per central; the HA-Discovery
+// sweep additionally only for the bridge's default central, whose node_id
+// namespace it is scoped to. Best-effort — a broker without subscribe
+// support just skips.
+func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *config.Config, logger *slog.Logger) {
+	if d.mqttWiring == nil || d.mqttWiring.Bridge() == nil {
+		return
+	}
+	defaultCentral := pickFirstCentral(cfg)
+	cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
+	var sweptCentrals sync.Map
+	d.bridge.SetPostCentralSnapshotHook(func(_ context.Context, centralName string) {
+		if _, already := sweptCentrals.LoadOrStore(centralName, struct{}{}); already {
+			return
+		}
+		mqttBridge := d.mqttWiring.Bridge()
+		if mqttBridge == nil {
+			return
+		}
+		// The sweeps block on a subscribe window; keep them off the
+		// snapshot caller (boot path / durable-job worker). The
+		// HA-Discovery sweep runs FIRST: its retained-snapshot subscribe
+		// must see a quiet broker, and the raw sweep can evict thousands
+		// of topics whose in-flight QoS deliveries would otherwise
+		// stretch the discovery snapshot past its window (measured: only
+		// half the orphaned discovery configs were seen when the raw
+		// sweep's evictions preceded the subscribe).
+		go func() {
+			// Generous budget: the subscribe windows are short, but the
+			// eviction bursts publish thousands of retained-clear
+			// messages each awaiting its PUBACK — a window-derived
+			// timeout expired mid-burst and silently dropped the tail
+			// (measured: ~200 orphans per boot survived). Bounded by the
+			// daemon ctx for shutdown.
+			sweepCtx, sweepCancel := context.WithTimeout(ctx, 5*time.Minute)
+			defer sweepCancel()
+			if centralName == defaultCentral {
+				n, err := mqttBridge.RunDiscoveryOrphanCleanupOnce(sweepCtx, cleanupWindow)
+				if err != nil {
+					logger.Warn("mqtt.discovery_orphan_cleanup", slog.String("err", err.Error()))
+				} else if n > 0 {
+					logger.Info("mqtt.discovery_orphan_cleanup", slog.Int("evicted", n))
+				}
+			}
+			n, err := mqttBridge.RunRawOrphanCleanupOnce(sweepCtx, centralName, cleanupWindow)
+			if err != nil {
+				logger.Warn("mqtt.raw_orphan_cleanup",
+					slog.String("central", centralName), slog.String("err", err.Error()))
+			} else if n > 0 {
+				logger.Info("mqtt.raw_orphan_cleanup",
+					slog.String("central", centralName), slog.Int("evicted", n))
+			}
+		}()
+	})
 }
 
 // wireHubReadyRestart subscribes every central's bus to the debounced

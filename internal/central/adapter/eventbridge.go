@@ -57,6 +57,11 @@ type EventBridge struct {
 	vis      filter.VisibilitySet
 	labels   mqtt.ParameterLabeler
 
+	// postSnapshotHook, when set, runs synchronously after a central's
+	// snapshot pass published (see [SetPostCentralSnapshotHook]). Installed
+	// once during daemon wiring, before Start — not guarded by a mutex.
+	postSnapshotHook func(ctx context.Context, centralName string)
+
 	// translations + locale localize the discovery entity names the bridge
 	// authors itself (schedule-switch, combined-sensor and combined-timer
 	// labels). Resolved via [EventBridge.tr]; the catalogues are auto-loaded in
@@ -413,12 +418,20 @@ func (b *EventBridge) onSourceChanged(centralName string, e hmevent.DataPointSou
 	if err != nil {
 		return
 	}
+	// Preserve the source event's paramset key so the downstream
+	// visibility gate and topic-bucket selection classify the refresh
+	// like the original value change; empty (pre-field producers)
+	// defaults to VALUES.
+	psKey := e.ParamsetKey
+	if psKey == "" {
+		psKey = hmenum.ParamsetKeyValues
+	}
 	b.dispatchLive(centralName, ws.KindRefresh, hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    e.InterfaceID,
 			ChannelAddress: e.ChannelAddress,
-			ParamsetKey:    hmenum.ParamsetKeyValues,
+			ParamsetKey:    psKey,
 			Parameter:      e.Parameter,
 		},
 		OldValue: hmtypes.NoneValue(),
@@ -474,6 +487,18 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 	}
 }
 
+// SetPostCentralSnapshotHook installs fn, invoked synchronously after a
+// central's device snapshot has actually been published — via the boot-time
+// [PublishInitialSnapshot], the southbound-ready path, or a broker-reconnect
+// reseed alike. A central the ready gate skipped does NOT fire the hook.
+//
+// The daemon uses it to defer the retained-orphan sweeps until the bridge's
+// declared / rawTopics bookkeeping reflects the current model; running them
+// earlier classifies every legitimate topic as an orphan.
+func (b *EventBridge) SetPostCentralSnapshotHook(fn func(ctx context.Context, centralName string)) {
+	b.postSnapshotHook = fn
+}
+
 // PublishCentralSnapshot publishes the device snapshot for a single central,
 // resolved by name. The per-central southbound-ready subscription uses it so a
 // readiness-gated central's devices reach the broker as soon as THAT central
@@ -493,9 +518,24 @@ func (b *EventBridge) PublishCentralSnapshot(ctx context.Context, centralName st
 // central — the per-unit body shared by the full boot snapshot
 // ([PublishInitialSnapshot]) and the per-central southbound-ready path.
 func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Unit) {
+	// A central whose readiness-gated bring-up has not latched ready is
+	// still hydrating: its devices already sit in the ModelRegistry with
+	// seeded values, but the visibility passes at the end of finishIngest
+	// have not run yet, so every suppressed parameter still reads
+	// Visible() == true. Snapshotting that window published entire
+	// MASTER paramsets (75-slot week programs, router tables) retained to
+	// the broker. Skip the central; the CentralSouthboundReadyEvent
+	// subscription publishes it the moment the bring-up completes — the
+	// ready latch is set before that event fires.
+	if !u.IsSouthboundReady() {
+		return
+	}
 	centralName := u.Name()
 	for _, d := range u.ModelRegistry.List() {
 		b.publishDeviceSnapshot(ctx, centralName, d)
+	}
+	if b.postSnapshotHook != nil {
+		b.postSnapshotHook(ctx, centralName)
 	}
 }
 
@@ -757,6 +797,20 @@ func (b *EventBridge) registerAndLoadDP(
 	// (NoneValue → JSON `null`, zero Base → no timestamps). This is what
 	// keeps the entity online under `availability_mode: all`; a future
 	// wire event replaces the `unknown` value with the real one.
+	//
+	// Visibility-gated by the same rule as the observed path
+	// (buildPublishEvent): a suppressed DP publishes neither slot state
+	// nor the /config companion — unless the channel hosts a custom DP
+	// whose discovery payload references the slot topic. Without this
+	// gate every ignored parameter (BOOTED, INSTALL_TEST, *_STATUS, …)
+	// landed retained on the broker with a null value.
+	chAddr, _ := parseChannel(ch.Address)
+	if _, _, ok, _ := b.buildPublishEvent(
+		centralName, ifaceID, d.Address, chAddr, channelNo,
+		d.Model, d.Name, dpk, nil, paramsetKey,
+	); !ok {
+		return
+	}
 	b.publishSlotState(ctx, centralName, ifaceID, d.Address, channelNo, hmevent.DataPointValueChangedEvent{
 		Key:      dpk,
 		OldValue: hmtypes.NoneValue(),
@@ -1205,8 +1259,17 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 		channelType = ch.Type
 	}
 	// Global visibility filter — operator's ignoredParameters
-	// hiddenParameters / un-ignore overrides. Skip everything.
-	if b.vis != nil && !b.vis.VisibleForChannel(model, channelType, channelNo, hmenum.ParamsetKeyValues, hmenum.Parameter(key.Parameter)) {
+	// hiddenParameters / un-ignore overrides. Skip everything. The query
+	// must carry the event's REAL paramset key: MASTER visibility is a
+	// default-deny whitelist, and asking with VALUES instead reported
+	// every week-program / router-table parameter as visible. An empty
+	// key (hand-built events) classifies as VALUES so the ignore lists
+	// keep applying.
+	visParamset := paramset
+	if visParamset == "" {
+		visParamset = hmenum.ParamsetKeyValues
+	}
+	if b.vis != nil && !b.vis.VisibleForChannel(model, channelType, channelNo, visParamset, hmenum.Parameter(key.Parameter)) {
 		return mqtt.Event{}, nil, false, false
 	}
 	// Per-DP runtime Visible() — set by SuppressUndefinedGenericDataPoints

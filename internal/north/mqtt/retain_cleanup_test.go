@@ -353,3 +353,102 @@ func TestDaemonLevelPlaneIsNotSweptBeforeItDeclares(t *testing.T) {
 		t.Error("marking the security plane also enabled the alarm plane")
 	}
 }
+
+// TestRawOrphanCandidateMatcher pins the sweep scope for the current per-DP
+// bucket shape: exactly `<central>/<iface>/<addr>/<ch>/<bucket>/<PARAM>`
+// (plus the `/config` companion), never the hub subtree, device-level topics,
+// or another central's namespace.
+func TestRawOrphanCandidateMatcher(t *testing.T) {
+	t.Parallel()
+	base, central := "openccu-loom", "GoOtto"
+	hits := []string{
+		base + "/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		base + "/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY/config",
+		base + "/GoOtto/HmIP-RF/0001ABCD/0/values/BOOTED",
+		base + "/GoOtto/HmIP-RF/0001ABCD/1/calculated/DEW_POINT",
+		base + "/GoOtto/HmIP-RF/0001ABCD/3/custom/switch",
+	}
+	for _, topic := range hits {
+		if !RawOrphanCandidateMatcher(base, central, topic) {
+			t.Errorf("expected match: %q", topic)
+		}
+	}
+	misses := []string{
+		// Device-level retained topics stay.
+		base + "/GoOtto/HmIP-RF/0001ABCD/availability",
+		base + "/GoOtto/HmIP-RF/0001ABCD/info",
+		// Hub subtree stays.
+		base + "/GoOtto/hub/sysvars/Anwesenheit/state",
+		// Another central's namespace stays.
+		base + "/Office/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		// Legacy shapes are the legacy pass's business.
+		base + "/GoOtto/HmIP-RF/0001ABCD/1/STATE",
+		base + "/GoOtto/HmIP-RF/0001ABCD/0/state",
+		// Non-numeric channel / unknown bucket.
+		base + "/GoOtto/HmIP-RF/0001ABCD/x/master/PARAM",
+		base + "/GoOtto/HmIP-RF/0001ABCD/1/paramset/PARAM",
+	}
+	for _, topic := range misses {
+		if RawOrphanCandidateMatcher(base, central, topic) {
+			t.Errorf("must not match: %q", topic)
+		}
+	}
+}
+
+// TestRunRawOrphanCleanupOnce_EvictsUnpublishedBucketTopics verifies the
+// raw-plane orphan sweep end to end: retained per-DP bucket topics the
+// current boot did not (re)publish are evicted; topics present in the
+// bridge's rawTopics / configCache bookkeeping survive.
+func TestRunRawOrphanCleanupOnce_EvictsUnpublishedBucketTopics(t *testing.T) {
+	t.Parallel()
+
+	const base = "openccu-loom"
+	keepState := base + "/GoOtto/HmIP-RF/0001ABCD/1/values/STATE"
+	keepConfig := base + "/GoOtto/HmIP-RF/0001ABCD/1/values/STATE/config"
+	orphans := []string{
+		base + "/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY",
+		base + "/GoOtto/HmIP-RF/0001ABCD/8/master/01_WP_WEEKDAY/config",
+		base + "/GoOtto/HmIP-RF/0001ABCD/0/values/BOOTED",
+	}
+	untouched := []string{
+		base + "/GoOtto/HmIP-RF/0001ABCD/availability",
+		base + "/GoOtto/hub/sysvars/Anwesenheit/state",
+	}
+
+	retained := make([]retainedMsg, 0, 2+len(orphans)+len(untouched))
+	for _, topic := range append(append([]string{keepState, keepConfig}, orphans...), untouched...) {
+		retained = append(retained, retainedMsg{topic: topic, payload: []byte(`{"value":1}`)})
+	}
+	mc := &mockRetainClient{retained: retained}
+	b := NewBridge(BridgeConfig{Base: base, CentralName: "GoOtto", RawEnabled: true}, mc)
+	// Simulate the snapshot pass's bookkeeping for the topics the current
+	// model still publishes.
+	b.rememberRawTopic(keepState)
+	b.mu.Lock()
+	b.configCache[keepConfig] = []byte(`{"unit":"x"}`)
+	b.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	n, err := b.RunRawOrphanCleanupOnce(ctx, "GoOtto", 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunRawOrphanCleanupOnce: %v", err)
+	}
+	if n != len(orphans) {
+		t.Errorf("evicted=%d want %d", n, len(orphans))
+	}
+	evictedSet := make(map[string]bool)
+	for _, e := range mc.evicted() {
+		evictedSet[e] = true
+	}
+	for _, topic := range orphans {
+		if !evictedSet[topic] {
+			t.Errorf("orphan %q was NOT evicted", topic)
+		}
+	}
+	for _, topic := range append([]string{keepState, keepConfig}, untouched...) {
+		if evictedSet[topic] {
+			t.Errorf("topic %q was incorrectly evicted", topic)
+		}
+	}
+}

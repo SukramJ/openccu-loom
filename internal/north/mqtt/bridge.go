@@ -284,6 +284,18 @@ func (e Event) descParamset() hmenum.ParamsetKey {
 	return ""
 }
 
+// visibilityParamset returns the paramset key the visibility gates must
+// query. Events without a generic descriptor (custom-DP aggregates,
+// press-event synthetics) classify as VALUES — the pre-descriptor
+// behaviour — so only descriptor-carrying MASTER events hit the
+// default-deny MASTER whitelist.
+func (e Event) visibilityParamset() hmenum.ParamsetKey {
+	if ps := e.descParamset(); ps != "" {
+		return ps
+	}
+	return hmenum.ParamsetKeyValues
+}
+
 // descLabel returns the localised parameter label.
 func (e Event) descLabel() string {
 	if d := e.genericDesc(); d != nil {
@@ -738,9 +750,11 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 	// Visibility gate: skip the entire publish (raw + discovery) when the
 	// parameter is not allowed. Returns nil — a not-visible parameter is not
-	// an error.
+	// an error. The query carries the event's real paramset key (MASTER
+	// visibility is a default-deny whitelist; asking with VALUES would
+	// report every MASTER parameter as visible).
 	if b.cfg.Visibility != nil {
-		if !b.cfg.Visibility.VisibleForChannel(ev.Model, ev.ChannelType, ev.ChannelNo, hmenum.ParamsetKeyValues, hmenum.Parameter(ev.Parameter)) {
+		if !b.cfg.Visibility.VisibleForChannel(ev.Model, ev.ChannelType, ev.ChannelNo, ev.visibilityParamset(), hmenum.Parameter(ev.Parameter)) {
 			return nil
 		}
 	}
@@ -790,7 +804,7 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 // when discovery is disabled or the builder declines the event.
 func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
 	if b.cfg.Visibility != nil {
-		if !b.cfg.Visibility.VisibleForChannel(ev.Model, ev.ChannelType, ev.ChannelNo, hmenum.ParamsetKeyValues, hmenum.Parameter(ev.Parameter)) {
+		if !b.cfg.Visibility.VisibleForChannel(ev.Model, ev.ChannelType, ev.ChannelNo, ev.visibilityParamset(), hmenum.Parameter(ev.Parameter)) {
 			return nil
 		}
 	}
