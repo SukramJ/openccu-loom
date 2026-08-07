@@ -6899,7 +6899,7 @@ export interface components {
         EnergyBucket: {
             /**
              * Format: date-time
-             * @description Start of the bucket's time span (UTC).
+             * @description Start of the bucket's time span, serialised as an RFC3339 instant. For `group=day` / `group=month` this instant is the local midnight respectively local first-of-month of the daemon's timezone, so rendering it with a local date format names the calendar day or month the bucket covers.
              */
             ts: string;
             /** @description ENERGY_COUNTER delta over the bucket, in Wh. Never negative — see `reset`. */
@@ -13518,7 +13518,7 @@ export interface operations {
                 from: string;
                 /** @description Exclusive upper bound (RFC3339). Must be after from. */
                 to: string;
-                /** @description Bucket granularity. Absent uses the default (day). */
+                /** @description Bucket granularity. Absent uses the default (day). `day` and `month` buckets are local calendar buckets in the daemon's own timezone, so a bucket's `ts` is a local midnight respectively a local first-of-month and covers 23, 24 or 25 hours across a daylight-saving transition. `hour` buckets are aligned to the hour on the UTC axis. */
                 group?: "hour" | "day" | "month";
                 /** @description Bare device address to scope the breakdown to one device. Omitted returns every energy device on the central. */
                 device?: string;
