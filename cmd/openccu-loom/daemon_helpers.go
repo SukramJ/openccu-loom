@@ -45,29 +45,40 @@ func bridgeHealthSupplier(cfg *config.Config, startedAt time.Time) func() map[st
 // behaviour) was wrong for any central reached over a different
 // interface than central[0].
 //
-// When cfg.Callback.Port is 0 and cfg.Callback.PortRange is set (e.g.
-// "30000-30099"), the server scans the range and binds on the first
-// available port. The effective port is always read from srv.Addr()
-// after construction, never from the configured value.
+// When cfg.Callback.PortRange is set (e.g. "30000-30099"), the server
+// scans the range and binds the first available port; the configured
+// Port is then not used. The range has to win rather than defer to
+// "Port == 0" because config.applyDefaults fills Port with 8120 on every
+// load — under the old rule the range branch was unreachable in every
+// installation, so an operator behind a narrow firewall got the default
+// port and no indication that the setting had been ignored.
+//
+// The effective port is always read from srv.Addr() after construction,
+// never from the configured value.
 func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*rpcserver.XMLRPCServer, int, error) {
 	host := cfg.Callback.Host
 	if host == "" {
 		host = "0.0.0.0"
 	}
-	addr := fmt.Sprintf("%s:%d", host, cfg.Callback.Port)
+	// A port of 0 in the address is what makes bindAddr consult the range.
+	bindPort := cfg.Callback.Port
+	var portRange *rpcserver.PortRange
+	if cfg.Callback.PortRange != "" {
+		lo, hi, err := config.ParsePortRange(cfg.Callback.PortRange)
+		if err != nil {
+			return nil, 0, fmt.Errorf("callback: %w", err)
+		}
+		portRange = rpcserver.NewPortRange(lo, hi)
+		bindPort = 0
+	}
+	addr := fmt.Sprintf("%s:%d", host, bindPort)
 
 	xcfg := rpcserver.XMLRPCConfig{
 		Addr:           addr,
 		Logger:         logger.With(slog.String("component", "callback.xmlrpc")),
 		MaxConnections: cfg.Callback.MaxConnections,
 		PeerAllowlist:  buildCallbackAllowlist(ctx, cfg, logger),
-	}
-	if cfg.Callback.Port == 0 && cfg.Callback.PortRange != "" {
-		lo, hi, err := config.ParsePortRange(cfg.Callback.PortRange)
-		if err != nil {
-			return nil, 0, fmt.Errorf("callback: %w", err)
-		}
-		xcfg.PortRange = rpcserver.NewPortRange(lo, hi)
+		PortRange:      portRange,
 	}
 
 	srv, err := rpcserver.NewXMLRPCServer(xcfg) //nolint:contextcheck // NewXMLRPCServer/bindAddr has no ctx parameter; bind is instantaneous

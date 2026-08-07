@@ -457,11 +457,20 @@ type LoggingConfig struct {
 }
 
 // CallbackConfig governs the XML-RPC + BIN-RPC callback servers.
+//
+// PortRange, when set, takes precedence over Port for the XML-RPC
+// listener. The precedence is what makes the range reachable at all:
+// [Config.applyDefaults] fills Port with 8120, so a rule of "range
+// applies only when Port is 0" could never fire once defaults had run —
+// which is on every boot, and again on every DB-tier overlay.
 type CallbackConfig struct {
-	Host              string `yaml:"host" json:"host" cfg:"expert"`
-	Port              int    `yaml:"port" json:"port" cfg:"expert"`                               // XML-RPC; 0 = dynamic
-	BinPort           int    `yaml:"bin_port" json:"bin_port" cfg:"expert"`                       // BIN-RPC; 0 = dynamic
-	PortRange         string `yaml:"port_range" json:"port_range" cfg:"expert"`                   // e.g. "30000-30099"
+	Host    string `yaml:"host" json:"host" cfg:"expert"`
+	Port    int    `yaml:"port" json:"port" cfg:"expert"`         // XML-RPC; ignored when PortRange is set
+	BinPort int    `yaml:"bin_port" json:"bin_port" cfg:"expert"` // BIN-RPC; 0 = dynamic
+	// PortRange bounds the XML-RPC listener to "<lo>-<hi>" (e.g.
+	// "30000-30099"); the server binds the first free port in it. Empty
+	// leaves Port in charge.
+	PortRange         string `yaml:"port_range" json:"port_range" cfg:"expert"`
 	PublicHost        string `yaml:"public_host" json:"public_host" cfg:"expert"`                 // optional NAT override
 	MaxConnections    int    `yaml:"max_connections" json:"max_connections" cfg:"expert"`         // per-listener concurrent-connection cap; 0 = default (64)
 	RestrictSourceIPs bool   `yaml:"restrict_source_ips" json:"restrict_source_ips" cfg:"expert"` // only accept callbacks from configured CCU IPs (+loopback)
@@ -514,8 +523,9 @@ type NorthWebhook struct {
 	// no parameter filter. Non-datapoint events are unaffected.
 	ParameterGlob string `yaml:"parameter_glob" json:"parameter_glob" cfg:"expert"`
 
-	// TimeoutMs is the per-delivery HTTP timeout in milliseconds. Zero or
-	// negative falls back to the 10s default.
+	// TimeoutMs is the per-delivery HTTP timeout in milliseconds. Zero
+	// selects the 10s default; a negative value is rejected by
+	// [Config.Validate] rather than silently falling back to it.
 	TimeoutMs int `yaml:"timeout_ms" json:"timeout_ms" cfg:"expert"`
 
 	// Inbound is the reverse direction: a REST surface external systems POST
@@ -1750,7 +1760,10 @@ func validateOperatorSurfaces(c *Config) error {
 	if err := validatePublicURL(c.North.REST.PublicURL); err != nil {
 		return err
 	}
-	return validateDuressVisibility(c.Alarm.DuressVisibility)
+	if err := validateDuressVisibility(c.Alarm.DuressVisibility); err != nil {
+		return err
+	}
+	return validateFieldRanges(c)
 }
 
 // validateDuressVisibility rejects an unrecognised covert-trigger level.

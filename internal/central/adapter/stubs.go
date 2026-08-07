@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/backup/sbk"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
@@ -45,7 +46,7 @@ const backupRunTimeout = 6 * time.Minute
 // the first registered central as the backup source — multi-CCU backup
 // support is a follow-up. TriggerBackupForCentral, CreateBackupForCentral,
 // and Restore are multi-CCU-correct: each backup id is minted from its
-// owning central's name (see [backupID]) and Restore resolves that owner
+// owning central's name (see [BackupAdapter.mintBackupID]) and Restore resolves that owner
 // back out of the id before picking a restorer, so a fleet with several
 // registered centrals never uploads a backup to the wrong CCU.
 //
@@ -73,6 +74,12 @@ type BackupAdapter struct {
 	// concurrently — the create-then-prune rotation must be serialized.
 	locksMu sync.Mutex
 	locks   map[string]*sync.Mutex
+
+	// mintMu guards lastMinted; lastMinted holds the timestamp of the most
+	// recent id minted per central's safe name so [BackupAdapter.mintBackupID]
+	// can keep ids strictly increasing. See that method for why.
+	mintMu     sync.Mutex
+	lastMinted map[string]time.Time
 }
 
 // NewBackupAdapter wires the live adapter.
@@ -124,7 +131,7 @@ func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 		if u == nil {
 			continue
 		}
-		id := backupID(u.Name())
+		id := a.mintBackupID(u.Name())
 		// The backup deliberately outlives the request context: the handler
 		// returns 202 immediately, which cancels the request ctx, so runBackup
 		// must use its own background context with [backupRunTimeout].
@@ -145,7 +152,7 @@ func (a *BackupAdapter) TriggerBackupForCentral(_ context.Context, centralName s
 	if !ok || u == nil {
 		return "", fmt.Errorf("backup: unknown central %q", centralName)
 	}
-	id := backupID(u.Name())
+	id := a.mintBackupID(u.Name())
 	go a.runBackup(u, id) //nolint:gosec,contextcheck // G118: detached on purpose; runBackup uses its own backupRunTimeout context so the trigger context cannot cancel the backup; see #20
 	return id, nil
 }
@@ -164,7 +171,7 @@ func (a *BackupAdapter) CreateBackupForCentral(ctx context.Context, centralName 
 	if !ok || u == nil {
 		return "", fmt.Errorf("backup: unknown central %q", centralName)
 	}
-	id := backupID(u.Name())
+	id := a.mintBackupID(u.Name())
 	if err := a.createAndSave(ctx, u, id); err != nil {
 		return "", err
 	}
@@ -286,11 +293,46 @@ func backupSafeName(centralName string) string {
 	return safe
 }
 
-// backupID derives a storage-safe id from the central name and the current
-// time: "<safe-name>-<timestamp>". A valid single-segment filename for
+// formatBackupID renders the id for a central and a mint time:
+// "<safe-name>-<timestamp>". A valid single-segment filename for
 // [BackupStorage].
-func backupID(centralName string) string {
-	return fmt.Sprintf("%s-%s", backupSafeName(centralName), time.Now().UTC().Format(backupTimestampLayout))
+func formatBackupID(centralName string, at time.Time) string {
+	return fmt.Sprintf("%s-%s", backupSafeName(centralName), at.UTC().Format(backupTimestampLayout))
+}
+
+// mintBackupID returns a fresh backup id for centralName, guaranteed not
+// to repeat an id this adapter has already handed out for that central.
+//
+// The timestamp resolves to one second, and [BackupStorage.Save]
+// overwrites an existing id, so two creates for the same central inside
+// the same second used to produce one archive where the operator had
+// asked for two — the scheduled rotation then pruned against a set that
+// was one backup shorter than it looked. When the clock has not moved on
+// far enough, the mint time is advanced to one second past the previous
+// one instead: ids stay strictly increasing, so they also keep sorting
+// in creation order.
+//
+// The rendered width is unchanged, which matters beyond cosmetics:
+// [backupBelongsTo] recovers the owning central by stripping exactly
+// backupIDSuffixLen characters, and every id ever minted — including
+// those already on disk from earlier releases — must keep satisfying it.
+func (a *BackupAdapter) mintBackupID(centralName string) string {
+	safe := backupSafeName(centralName)
+	at := time.Now().UTC()
+
+	a.mintMu.Lock()
+	defer a.mintMu.Unlock()
+	if a.lastMinted == nil {
+		a.lastMinted = make(map[string]time.Time)
+	}
+	// Truncate first: two mints inside the same second render identically,
+	// so the comparison has to happen at the resolution the id carries.
+	at = at.Truncate(time.Second)
+	if prev, ok := a.lastMinted[safe]; ok && !at.After(prev) {
+		at = prev.Add(time.Second)
+	}
+	a.lastMinted[safe] = at
+	return formatBackupID(centralName, at)
 }
 
 // backupBelongsTo reports whether a backup id was minted for the central
@@ -427,6 +469,13 @@ func (a *BackupAdapter) Stream(ctx context.Context, id string, w io.Writer) erro
 // wired, → the adapter surfaces [ErrRestoreUnsupported] rather than ever
 // falling back to a different central's restorer (which would upload
 // the archive to the wrong CCU — see ADR 0002).
+//
+// The archive is inspected before a single byte reaches the CCU. Upload
+// is not a reversible step: the CCU accepts the file, unpacks it and
+// reboots into the restored state, so an archive that was truncated by a
+// proxy, damaged on disk or never a system backup at all takes the CCU
+// down with it. The same structural check the upload endpoint runs is
+// the last point at which that can still be refused.
 func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) {
 	if a.storage == nil {
 		return "", ErrRestoreUnsupported
@@ -438,12 +487,35 @@ func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) 
 	if restorer == nil {
 		return "", ErrRestoreUnsupported
 	}
+	if err := a.inspectStored(ctx, id); err != nil {
+		return "", err
+	}
 	rc, err := a.storage.Open(ctx, id)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = rc.Close() }()
 	return restorer.Restore(ctx, id, rc)
+}
+
+// inspectStored streams the stored archive through [sbk.Inspect] and
+// reports what is wrong with it, if anything.
+//
+// It opens the archive a second time rather than buffering it: a .sbk
+// runs to tens of megabytes, and the restore has to hand the restorer a
+// reader from the first byte anyway. Two sequential reads of a local
+// file cost far less than holding the whole archive in memory for the
+// duration of an upload.
+func (a *BackupAdapter) inspectStored(ctx context.Context, id string) error {
+	rc, err := a.storage.Open(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rc.Close() }()
+	if _, err := sbk.Inspect(rc); err != nil {
+		return fmt.Errorf("backup: refusing to restore %s: %w", id, err)
+	}
+	return nil
 }
 
 // uploadedBackupSaver is the narrow capability a storage backend exposes

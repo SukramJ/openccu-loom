@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
@@ -61,11 +62,19 @@ func (s *stubBackupService) TriggerBackupForCentral(_ context.Context, centralNa
 
 func (s *stubBackupService) Prune(_ context.Context, _ string, _ int) error { return nil }
 
+// Stream writes streamData (if any) before evaluating streamErr, so a case
+// can exercise a failure that happens after payload bytes are already on
+// the wire — as opposed to a failure before any byte is written, which is
+// streamData left empty with streamErr set.
 func (s *stubBackupService) Stream(_ context.Context, _ string, w io.Writer) error {
+	if s.streamData != "" {
+		if _, err := w.Write([]byte(s.streamData)); err != nil {
+			return err
+		}
+	}
 	if s.streamErr != nil {
 		return s.streamErr
 	}
-	_, _ = w.Write([]byte(s.streamData))
 	return nil
 }
 
@@ -335,6 +344,121 @@ func TestDownloadBackup_ServiceNil_Returns503(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DownloadBackup — the 200 is deferred until the first payload byte
+// ---------------------------------------------------------------------------
+
+// TestDownloadBackupReportsAFailureBeforeTheFirstByteAsAnError verifies
+// that a stream failing before it writes anything is answered as an
+// ordinary problem+json error, not as a committed response with a broken
+// or empty body. Before [downloadBody] deferred the 200 and the download
+// headers until the first payload byte, DownloadBackup wrote them up
+// front, so this exact case — Stream failing before any byte — could not
+// be reported at all: the client already had a 200 on the wire.
+func TestDownloadBackupReportsAFailureBeforeTheFirstByteAsAnError(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{streamErr: errors.New("upstream unavailable")}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/b1/download", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "b1"}))
+	w := httptest.NewRecorder()
+	DownloadBackup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != problem.ContentType {
+		t.Fatalf("Content-Type = %q, want %q", ct, problem.ContentType)
+	}
+	var body problem.Details
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body does not parse as a problem document: %v (body=%s)", err, w.Body.String())
+	}
+	if body.Status != http.StatusBadGateway {
+		t.Errorf("problem status = %d, want %d", body.Status, http.StatusBadGateway)
+	}
+	if got := w.Body.Bytes(); len(got) == 0 || got[0] != '{' {
+		t.Fatalf("body must be the JSON problem document, not archive bytes, got %q", got)
+	}
+}
+
+// TestDownloadBackupDoesNotAppendAProblemDocumentToAPartialArchive covers
+// the failure mode adjacent to the one above: once the first payload byte
+// has committed the 200, a later Stream failure can no longer be turned
+// into a different status. The handler must abort the connection
+// (panic(http.ErrAbortHandler), which net/http itself recovers and
+// reports to the client as a truncated transfer) instead of appending a
+// JSON problem document to the tail of a partial .sbk — the old behaviour
+// turned a detectable truncation into a file that read as a complete,
+// valid archive an operator could then push at a CCU.
+func TestDownloadBackupDoesNotAppendAProblemDocumentToAPartialArchive(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{streamData: "PARTIALARCHIVEBYTES", streamErr: errors.New("connection reset mid-stream")}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/b1/download", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "b1"}))
+	w := httptest.NewRecorder()
+
+	recovered := func() (v any) {
+		defer func() { v = recover() }()
+		DownloadBackup(svc).ServeHTTP(w, req)
+		return nil
+	}()
+
+	if err, ok := recovered.(error); !ok || !errors.Is(err, http.ErrAbortHandler) {
+		t.Fatalf("expected panic(http.ErrAbortHandler), got %#v", recovered)
+	}
+	if w.Body.String() != "PARTIALARCHIVEBYTES" {
+		t.Fatalf("body must contain only the bytes the stream wrote, no appended problem document, got %q", w.Body.String())
+	}
+}
+
+// TestDownloadBackupSetsTheDownloadHeadersOnASuccessfulStream pins the
+// full happy-path contract in one assertion set: 200, the octet-stream
+// content type, an attachment disposition naming "<id>.sbk", and a body
+// equal to exactly what the stream wrote.
+func TestDownloadBackupSetsTheDownloadHeadersOnASuccessfulStream(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{streamData: "CCU-BACKUP-BYTES"}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/snap42/download", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "snap42"}))
+	w := httptest.NewRecorder()
+	DownloadBackup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/octet-stream" {
+		t.Fatalf("Content-Type = %q, want application/octet-stream", ct)
+	}
+	cd := w.Header().Get("Content-Disposition")
+	if !strings.Contains(cd, "attachment") || !strings.Contains(cd, "snap42.sbk") {
+		t.Fatalf("Content-Disposition = %q, want an attachment naming snap42.sbk", cd)
+	}
+	if w.Body.String() != "CCU-BACKUP-BYTES" {
+		t.Fatalf("body = %q, want the streamed bytes verbatim", w.Body.String())
+	}
+}
+
+// TestDownloadBackupRejectsAnEmptyStream verifies a Stream that returns
+// nil having written nothing is answered 502, not a 200 zero-byte
+// download. A zero-byte "download" reads to an operator as a complete,
+// if useless, backup — the distinction only becomes visible at restore
+// time, which is exactly the point at which a mistake is expensive.
+func TestDownloadBackupRejectsAnEmptyStream(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/b1/download", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "b1"}))
+	w := httptest.NewRecorder()
+	DownloadBackup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != problem.ContentType {
+		t.Fatalf("Content-Type = %q, want %q", ct, problem.ContentType)
 	}
 }
 

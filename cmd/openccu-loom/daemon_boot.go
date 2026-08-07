@@ -150,8 +150,14 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		ov.sqSections.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
 			return configstore.TransformSectionJSON(cipher, configstore.Section(section), value, seal)
 		})
+		// Capture the pre-overlay YAML/env tier so a later reload can replay
+		// exactly this assembly against the then-current DB rows — and hand the
+		// same base to the store, so Store.Effective assembles from where the
+		// daemon started rather than from the built-in defaults.
+		ov.yamlBase = config.Clone(cfg)
 		ov.configStore = configstore.New(bootstrapCfg, ov.sqSections, ov.sqCentrals,
-			configstore.WithEnvLookup(os.Getenv))
+			configstore.WithEnvLookup(os.Getenv),
+			configstore.WithBaseConfig(ov.yamlBase))
 		// First-run seed: copy the YAML-loaded config sections into the DB
 		// once (no-op when any section row exists). Secrets are sealed by the
 		// section store's transform hook. Runs before OverlayInto so the DB is
@@ -161,9 +167,6 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		} else if n > 0 {
 			logger.Info("configstore.seed", slog.Int("sections", n))
 		}
-		// Capture the pre-overlay YAML/env tier so a later reload can replay
-		// exactly this assembly against the then-current DB rows.
-		ov.yamlBase = config.Clone(cfg)
 		if _, err := ov.configStore.OverlayInto(ctx, cfg); err != nil {
 			logger.Warn("configstore.overlay", slog.String("err", err.Error()))
 		} else if err := cfg.Validate(); err != nil {

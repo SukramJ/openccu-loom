@@ -139,6 +139,35 @@ func TestRegisterStandardJobsForAppliesCheckConnectionOverride(t *testing.T) {
 	}
 }
 
+// TestRegisterStandardJobsForHonoursANegativeCheckConnectionInterval pins
+// the documented way to switch the poll off. The job builder skips
+// central.check_connection on a negative interval, but the override loop
+// here copied the value only when it was positive, so the setting reached
+// nothing: the poll kept running at its default cadence and the operator
+// had no way to tell that the value had been dropped.
+func TestRegisterStandardJobsForHonoursANegativeCheckConnectionInterval(t *testing.T) {
+	logger := slog.New(slog.DiscardHandler)
+
+	const name = "jobs-unit-disabled"
+	cfg := &config.Config{
+		Centrals: []config.CentralConfig{
+			{Name: name, CheckConnectionInterval: -1 * time.Second},
+		},
+	}
+
+	u, err := central.New(central.Config{Name: name})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	registerStandardJobsFor(u, cfg, logger)
+
+	// jobIntervalOf answers -1 for a job that is not registered at all,
+	// which is exactly the outcome a negative interval must produce.
+	if got := jobIntervalOf(u, "central.check_connection"); got != -1 {
+		t.Errorf("central.check_connection is registered at %v; a negative interval must leave it unregistered", got)
+	}
+}
+
 // TestRegisterStandardJobsForAppliesSysvarScanIntervalOverride verifies that
 // a per-central cfg.Centrals[].Behavior.SysvarScanInterval override for the
 // unit's own name is applied to the registered hub.sysvar_refresh job.
