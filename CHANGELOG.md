@@ -4,6 +4,55 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.4]
+
+### Fixed
+
+- **A motion detector on a disarmed system no longer reports "Alarm".**
+  Three separate defects made the Security overview claim a break-in
+  where a window had merely been tilted. The severity of an active
+  `intrusion` class was fixed at `alarm`, so a single detection folded
+  the whole domain onto "Alarm" whatever the alarm engine was doing —
+  which contradicts the principle the class rename established: the
+  class entities report a **detection**, never a verdict, because only
+  the engine knows the arm state. The severity is now derived per class
+  from the arm state of the zone each active source sits in
+  (`internal/security/severity.go`). An armed zone — `armed`, `arming`,
+  `pending` or `triggered`, i.e. anything but `disarmed` — still
+  escalates to `alarm`; a disarmed one grades `info`; an installation
+  without an alarm engine has no arm state at all and therefore stays
+  `info`; an arm state that cannot be resolved grades `warning` rather
+  than inventing a reassuring "disarmed". Smoke, gas, CO, water and
+  panic escalate unconditionally as before, tamper stays `warning`,
+  technical and battery stay `info`. **The class stays *active* on a
+  disarmed system — that is deliberate and unchanged; only what it
+  contributes to the folded severity changed.**
+
+- **The Config UI shows the class names the daemon uses.** The rename
+  from nouns to a verb pattern in 0.54.2 reached both north-bound paths
+  but not the SPA, which carries its own catalogue under its own keys —
+  so the overview kept rendering "Einbruch" ("Intrusion") over the same
+  data, the exact wording the rename existed to remove. All nine names
+  now match the daemon catalogues word for word in English and German,
+  and `TestSPASecurityClassLabelsMatchDaemonCatalogues` fails the build
+  on any future drift, per locale. The concept document claimed a
+  rename happens "in exactly one place"; it is two, and it now says so.
+
+- **A class tile no longer paints every detection red.** The overview
+  coloured any active class with the alarm variant and worded it
+  "1 active", so "Battery low" looked like a fire. Tiles now take their
+  colour from the severity the daemon delivers, and an active class that
+  is not escalating gets neutral wording ("Reporting: 1") instead of the
+  alarm phrasing.
+
+### Added
+
+- `SecurityClassState.severity` on `GET /security` and
+  `GET /security/classes/{class}`, plus a `severity` attribute on the
+  MQTT `security/class/<class>` topic. An automation can branch on the
+  graded verdict instead of re-deriving the arm state the daemon has
+  already resolved. REST API version `5.5.0`.
+
 ## [0.54.3]
 
 ### Added

@@ -57,10 +57,11 @@ describe("SecurityOverview — folded severity + classes", () => {
           {
             class: "smoke",
             active: true,
+            severity: "critical",
             known: 3,
             sources: [{ ref: "r1", name: "Kitchen smoke", at: "2026-07-01T00:00:00Z" }],
           },
-          { class: "water", active: false, known: 1, sources: [] },
+          { class: "water", active: false, severity: "ok", known: 1, sources: [] },
         ],
       }),
     );
@@ -105,11 +106,117 @@ describe("SecurityOverview — folded severity + classes", () => {
   });
 });
 
+describe("SecurityOverview — a class tile grades from the severity, not from active", () => {
+  // The reported defect: a motion detector reporting on a disarmed system
+  // painted the intrusion tile red and worded it "1 active", which reads as
+  // a break-in in progress. The daemon already grades the detection —
+  // `intrusion` is arm-aware and lands on `info` while its zone is disarmed
+  // — so the tile has to render that verdict instead of re-deriving one from
+  // `active`, which cannot tell an observation from an alarm.
+  function classTileBadge(container: HTMLElement): HTMLElement {
+    const badges = container.querySelectorAll("h3 ~ *, .flex > span");
+    const found = Array.from(badges).find((el) =>
+      /security\.overview\.class_(active|reporting|inactive)/.test(el.textContent ?? ""),
+    );
+    if (!found) throw new Error("class tile badge not found");
+    return found as HTMLElement;
+  }
+
+  it("words a non-escalating active class as an observation, not an alarm", async () => {
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({
+        severity: "info",
+        classes: [
+          {
+            class: "intrusion",
+            active: true,
+            severity: "info",
+            known: 4,
+            sources: [{ ref: "r1", name: "Living room motion", at: "2026-08-01T00:00:00Z" }],
+          },
+        ],
+      }),
+    );
+    const { findByText, queryByText } = render(SecurityOverview);
+
+    await findByText(/security\.overview\.class_reporting/);
+    // "1 active" is the alarm wording and must not appear for an observation.
+    expect(queryByText(/security\.overview\.class_active/)).toBeNull();
+  });
+
+  it("keeps the alarm wording when the class actually escalates", async () => {
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({
+        severity: "alarm",
+        classes: [
+          {
+            class: "intrusion",
+            active: true,
+            severity: "alarm",
+            known: 4,
+            sources: [{ ref: "r1", name: "Front door", at: "2026-08-01T00:00:00Z" }],
+          },
+        ],
+      }),
+    );
+    const { findByText, queryByText } = render(SecurityOverview);
+
+    await findByText(/security\.overview\.class_active/);
+    expect(queryByText(/security\.overview\.class_reporting/)).toBeNull();
+  });
+
+  it("paints the tile from the delivered severity", async () => {
+    // A low battery and a fire are both "active"; only the severity keeps
+    // them apart, so the badge colour has to follow it.
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({
+        severity: "info",
+        classes: [
+          {
+            class: "battery",
+            active: true,
+            severity: "info",
+            known: 2,
+            sources: [{ ref: "r1", name: "Hallway sensor", at: "2026-08-01T00:00:00Z" }],
+          },
+        ],
+      }),
+    );
+    const { container, findByText } = render(SecurityOverview);
+    await findByText(/security\.overview\.class_reporting/);
+
+    const badge = classTileBadge(container);
+    expect(badge.className).toContain("--ha-primary-color");
+    expect(badge.className).not.toContain("--ha-error-color");
+  });
+
+  it("still paints an escalating class in the error colour", async () => {
+    mockGetSecuritySnapshot.mockResolvedValue(
+      snapshot({
+        severity: "critical",
+        classes: [
+          {
+            class: "smoke",
+            active: true,
+            severity: "critical",
+            known: 2,
+            sources: [{ ref: "r1", name: "Kitchen smoke", at: "2026-08-01T00:00:00Z" }],
+          },
+        ],
+      }),
+    );
+    const { container, findByText } = render(SecurityOverview);
+    await findByText(/security\.overview\.class_active/);
+
+    expect(classTileBadge(container).className).toContain("--ha-error-color");
+  });
+});
+
 describe("SecurityOverview — zones absence is a feature, not an error", () => {
   it("shows a plain explanation instead of an error/empty-list treatment when there are no zones", async () => {
     mockGetSecuritySnapshot.mockResolvedValue(
       snapshot({
-        classes: [{ class: "smoke", active: false, known: 1, sources: [] }],
+        classes: [{ class: "smoke", active: false, severity: "ok", known: 1, sources: [] }],
       }),
     );
     const { findByText, getByText } = render(SecurityOverview);
@@ -146,7 +253,9 @@ describe("SecurityOverview — load failure", () => {
 describe("SecurityOverview — live refresh off the daemon's push", () => {
   it("re-reads the snapshot when a security broadcast arrives", async () => {
     mockGetSecuritySnapshot.mockResolvedValue(
-      snapshot({ classes: [{ class: "smoke", active: false, known: 1, sources: [] }] }),
+      snapshot({
+        classes: [{ class: "smoke", active: false, severity: "ok", known: 1, sources: [] }],
+      }),
     );
     const { findByText } = render(SecurityOverview);
     await findByText("security.severity.ok");
@@ -161,6 +270,7 @@ describe("SecurityOverview — live refresh off the daemon's push", () => {
           {
             class: "smoke",
             active: true,
+            severity: "critical",
             known: 1,
             sources: [{ ref: "r1", name: "Kitchen smoke", at: "2026-08-01T00:00:00Z" }],
           },

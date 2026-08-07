@@ -55,6 +55,12 @@ type ClassState struct {
 	// Active reports whether at least one source of this class is
 	// currently active.
 	Active bool
+	// Severity is what this class contributes to the folded overall
+	// state right now — a detection, not a name. It is not
+	// SeverityForClass(Class): an intrusion source that reports while
+	// its zone is disarmed is an observation, not an alarm, and only
+	// the arm state can tell the two apart. OK while inactive.
+	Severity hmenum.SecuritySeverity
 	// Sources lists the currently active sources, oldest first.
 	Sources []hmevent.SecuritySourceRef
 	// Known counts the sources of this class the index knows about,

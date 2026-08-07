@@ -1,5 +1,35 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.54.4
+
+- **Fixed: the Security overview said "Alarm" when nothing had
+  happened.** A door, window or motion detector reporting while the
+  alarm system was **disarmed** pushed the whole Security domain to
+  "Alarm" — a tilted window was enough. Whether a detection is an alarm
+  depends on whether you asked to be protected, so it is now judged
+  against the arm state of the zone the detector sits in: armed (also
+  during the entry/exit delay, or while an incident runs) still raises
+  the alarm, disarmed reports it as information. Smoke, gas, carbon
+  monoxide, water and panic escalate regardless, as before. If the arm
+  state cannot be determined, the overview says so with a warning
+  instead of claiming all-clear.
+
+- **Fixed: the Config UI used old names for the hazard classes.** It
+  still showed "Intrusion" where the rest of the system already said
+  "Opening or motion detected" — the old name claimed a burglary the
+  sensor never reported. All nine class names now read the same in the
+  Config UI, in Home Assistant and over MQTT, in English and German.
+
+- **Fixed: every active class looked like an emergency.** A class tile
+  was painted red and labelled "1 active" whatever it meant, so "Battery
+  low" looked like a fire. Tiles are now coloured by how serious the
+  detection actually is, and a harmless one reads "Reporting: 1" instead
+  of borrowing the alarm's words.
+
+- **New: each hazard class publishes its own severity** over MQTT and
+  the API, so an automation can act on "is this worth waking someone"
+  without rebuilding that judgement itself.
+
 ## 0.54.3
 
 - **Fixed: CCU programs executed on their own.** With the MQTT bridge

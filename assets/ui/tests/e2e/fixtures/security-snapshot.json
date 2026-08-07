@@ -4,6 +4,7 @@
     {
       "class": "water",
       "active": true,
+      "severity": "alarm",
       "known": 2,
       "sources": [
         { "ref": "ccu1|HmIP-RF|VEQ0000040:1|STATE", "name": "Küche Wasser", "at": "2026-07-30T08:00:00Z" },
@@ -11,7 +12,7 @@
       ],
       "since": "2026-07-30T08:00:00Z"
     },
-    { "class": "smoke", "active": false, "known": 1, "sources": [] }
+    { "class": "smoke", "active": false, "severity": "ok", "known": 1, "sources": [] }
   ],
   "zones": [
     {
