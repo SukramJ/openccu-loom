@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	gosql "database/sql"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -300,34 +301,75 @@ var gooseMigrateMu sync.Mutex
 // database a daemon boot opens.
 func openTestLoomDB(t *testing.T) *gosql.DB {
 	t.Helper()
-	dsn := sqlitestore.FileDSN(filepath.Join(t.TempDir(), "openccu-loom.db"))
+	return openMigratedTestDB(t, "openccu-loom.db")
+}
+
+// migratedSchemaTemplate applies the migration set once per test binary and
+// returns the path of a closed, fully migrated database file.
+//
+// A full goose run costs roughly a second, and goose cannot run concurrently
+// (see gooseMigrateMu), so every test that opened its own store queued that
+// second behind the same lock. With several dozen such tests in this package
+// that serialised minutes of work into the critical path — all of it
+// re-deriving a schema that never varies between tests. Deriving it once and
+// copying the file leaves each test with a private database and pays the
+// migration cost a single time.
+var migratedSchemaTemplate = sync.OnceValues(func() (string, error) {
+	dir, err := os.MkdirTemp("", "openccu-loom-schema-template")
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "template.db")
+	db, err := sqlitestore.Open(context.Background(), sqlitestore.FileDSN(path))
+	if err != nil {
+		return "", err
+	}
+	// Closing checkpoints the write-ahead log back into the main file, so
+	// the single file copied below carries the whole schema.
+	if err := db.Close(); err != nil {
+		return "", err
+	}
+	return path, nil
+})
+
+// openMigratedTestDB opens a throwaway SQLite database in a fresh temp
+// directory, seeded from the migrated template above so the schema is already
+// in place. Each call gets its own file: tests share the schema, never the
+// data.
+func openMigratedTestDB(t *testing.T, name string) *gosql.DB {
+	t.Helper()
+	templatePath, err := migratedSchemaTemplate()
+	if err != nil {
+		t.Fatalf("build migrated schema template: %v", err)
+	}
+	schema, err := os.ReadFile(templatePath)
+	if err != nil {
+		t.Fatalf("read schema template: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, schema, 0o600); err != nil {
+		t.Fatalf("seed test database: %v", err)
+	}
+	// Open still runs goose; it finds the version table already at the
+	// latest revision and applies nothing, which is what makes the seeded
+	// copy cheap. The lock stays because that check is goose-internal too.
 	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(context.Background(), dsn)
+	db, err := sqlitestore.Open(context.Background(), sqlitestore.FileDSN(path))
 	gooseMigrateMu.Unlock()
 	if err != nil {
-		t.Fatalf("openTestLoomDB: %v", err)
+		t.Fatalf("open test database %s: %v", name, err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 
 // buildTestOperationalManager constructs a minimal *operational.Manager backed
-// by an in-memory SQLite store for use in unit tests that exercise
-// buildPaseAdapter. The DB is migrated via sqlitestore.Open so the matter_*
-// tables exist before operational.NewManager accesses them.
+// by a migrated SQLite store, for unit tests that exercise buildPaseAdapter.
+// The schema has to exist before operational.NewManager touches the matter_*
+// tables.
 func buildTestOperationalManager(t *testing.T) *operational.Manager {
 	t.Helper()
-	ctx := context.Background()
-	dsn := "file:" + t.TempDir() + "/matter_test.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("sqlitestore.Open: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	store := matterstore.New(db)
-	return operational.NewManager(store)
+	return operational.NewManager(matterstore.New(openMigratedTestDB(t, "matter_test.db")))
 }
 
 // ─── CASE wiring tests (5) ───────────────────────────────────────────────────
@@ -561,14 +603,5 @@ func TestLoadPersistentCaseIdentity_PicksFabric(t *testing.T) {
 // because operational.Manager doesn't lock the schema.
 func matterStoreFromManager(t *testing.T, _ *operational.Manager) *matterstore.Store {
 	t.Helper()
-	ctx := context.Background()
-	dsn := "file:" + t.TempDir() + "/matter_persistent_test.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("matterStoreFromManager: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return matterstore.New(db)
+	return matterstore.New(openMigratedTestDB(t, "matter_persistent_test.db"))
 }

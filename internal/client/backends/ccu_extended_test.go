@@ -867,6 +867,13 @@ func (m *multiScriptRunner) RunJSON(ctx context.Context, script hmenum.RegaScrip
 	return jsonUnmarshal([]byte(raw), v)
 }
 
+// backupPollInterval is the poll cadence, in seconds, the backup tests hand
+// to CreateBackupAndDownload. It is a plain call argument in production, so
+// the tests can pick a value that keeps the status-poll loop honest without
+// waiting a real second per tick: what they assert is which status reply the
+// loop acts on, never how long it paused in between.
+const backupPollInterval = 0.02
+
 func TestCcuCreateBackupAndDownloadNoScriptRunner(t *testing.T) {
 	t.Parallel()
 	// No ScriptRunner wired → ErrUnsupported.
@@ -906,7 +913,7 @@ func TestCcuCreateBackupAndDownloadHappyPath(t *testing.T) {
 	b.SetScriptRunner(runner)
 	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
 
-	data, err := b.CreateBackupAndDownload(context.Background(), 10, 1)
+	data, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err != nil {
 		t.Fatalf("CreateBackupAndDownload: %v", err)
 	}
@@ -924,7 +931,7 @@ func TestCcuCreateBackupAndDownloadStartFailed(t *testing.T) {
 	b.SetScriptRunner(runner)
 	b.SetDownloadFirmwareTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
 
-	_, err := b.CreateBackupAndDownload(context.Background(), 10, 1)
+	_, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err == nil {
 		t.Fatal("expected error when start reports failure")
 	}
@@ -940,7 +947,7 @@ func TestCcuCreateBackupAndDownloadStatusFailed(t *testing.T) {
 	b.SetScriptRunner(runner)
 	b.SetDownloadFirmwareTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
 
-	_, err := b.CreateBackupAndDownload(context.Background(), 10, 1)
+	_, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err == nil {
 		t.Fatal("expected error when status reports failure")
 	}
@@ -970,7 +977,7 @@ func TestCcuCreateBackupAndDownloadRejectsOversizedResponse(t *testing.T) {
 	b.SetScriptRunner(runner)
 	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
 
-	_, err := b.CreateBackupAndDownload(context.Background(), 10, 1)
+	_, err := b.CreateBackupAndDownload(context.Background(), 10, backupPollInterval)
 	if err == nil {
 		t.Fatal("expected error for oversized backup archive, got nil")
 	}
@@ -987,9 +994,10 @@ func TestCcuCreateBackupAndDownloadTimeout(t *testing.T) {
 	b.SetScriptRunner(runner)
 	b.SetDownloadFirmwareTransport("http://ccu", http.DefaultClient, func() string { return "sid" })
 
-	// maxWaitTime=1s, pollInterval=1s: first poll tick arrives at 1s, then
-	// deadline check triggers immediately after.
-	_, err := b.CreateBackupAndDownload(context.Background(), 1, 1)
+	// maxWaitTime == pollInterval: the first poll tick arrives one interval
+	// in and the deadline check triggers immediately after, whatever the
+	// interval happens to be.
+	_, err := b.CreateBackupAndDownload(context.Background(), backupPollInterval, backupPollInterval)
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}

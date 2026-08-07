@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -24,12 +23,7 @@ import (
 // that could paper over it.
 func newAreaFixture(t *testing.T) *sqlitestore.AreaStore {
 	t.Helper()
-	ctx := context.Background()
-	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "areas.db")))
-	if err != nil {
-		t.Fatalf("open areas fixture db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := openMigratedTestDB(t, "areas.db")
 	return sqlitestore.NewAreaStore(db)
 }
 

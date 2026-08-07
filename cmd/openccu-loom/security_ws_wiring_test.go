@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -12,7 +11,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/security"
-	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -23,15 +21,7 @@ import (
 // composition root would never produce.
 func newSecurityServiceForWiring(t *testing.T, visibility hmenum.DuressVisibility) (*central.Registry, *security.Service) {
 	t.Helper()
-	ctx := context.Background()
-	dsn := "file:" + t.TempDir() + "/security_ws.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("sqlitestore.Open: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := openMigratedTestDB(t, "security_ws.db")
 
 	cfg := config.Default()
 	cfg.Alarm.DuressVisibility = string(visibility)

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -125,11 +124,7 @@ func (f *alarmVerbCodeFixture) SensorCandidates(context.Context) []alarm.SensorC
 func newAlarmVerbCodeFixture(t *testing.T, validator *fakeVerbCodeValidator) *alarmVerbCodeFixture {
 	t.Helper()
 	ctx := context.Background()
-	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "alarm-verb-code.db")))
-	if err != nil {
-		t.Fatalf("open alarm verb-code fixture db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := openMigratedTestDB(t, "alarm-verb-code.db")
 
 	stores := alarm.NewStores(db)
 	clk := clock.NewFake(alarmFixtureStart)

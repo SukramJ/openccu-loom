@@ -214,11 +214,13 @@ func TestDiscovererScanEvictsStaleEntries(t *testing.T) {
 		"stale": {Serial: "stale", Name: "Stale", LastSeen: base.Add(-staleAfter - time.Second)},
 	}
 
-	// scan() calls multicastSourceIPs()/searchFrom() first, which is a
-	// real (loopback-scoped) network operation in this environment;
-	// eviction runs unconditionally afterward regardless of what (if
-	// anything) those calls found, so we can assert on it directly.
-	d.scan(context.Background())
+	// scan() calls multicastSourceIPs()/searchFrom() first, which is a real
+	// network operation; eviction runs unconditionally afterward regardless
+	// of what (if anything) those calls found, so we can assert on it
+	// directly. An already-cancelled context makes searchFrom return without
+	// waiting out its M-SEARCH read deadline — that wait says nothing about
+	// eviction and costs several seconds per call.
+	d.scan(cancelledContext(t))
 
 	got := d.List()
 	if len(got) != 1 {
@@ -227,6 +229,16 @@ func TestDiscovererScanEvictsStaleEntries(t *testing.T) {
 	if got[0].Serial != "fresh" {
 		t.Errorf("List()[0].Serial = %q, want fresh", got[0].Serial)
 	}
+}
+
+// cancelledContext returns a context that is already done, so the M-SEARCH
+// read loop in searchFrom exits on its first check instead of blocking until
+// the SSDP read deadline expires.
+func cancelledContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
 }
 
 func TestDiscovererScanKeepsFreshEntries(t *testing.T) {
@@ -239,7 +251,7 @@ func TestDiscovererScanKeepsFreshEntries(t *testing.T) {
 		"fresh": {Serial: "fresh", Name: "Fresh", LastSeen: base.Add(-staleAfter + time.Second)},
 	}
 
-	d.scan(context.Background())
+	d.scan(cancelledContext(t))
 
 	got := d.List()
 	if len(got) != 1 {

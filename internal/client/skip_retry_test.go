@@ -14,6 +14,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
@@ -256,7 +257,12 @@ func newCountingIC(t *testing.T, setErr error) (*InterfaceClient, *countingBacke
 	t.Helper()
 	retrier := reliability.NewRetrier(reliability.RetryConfig{
 		MaxAttempts: 3,
-		Initial:     0, // no sleep — tests run deterministically
+		// NewRetrier normalises a non-positive Initial/Max back to the
+		// production 2s/30s backoff, so the shortest expressible delay is a
+		// positive one. These tests count backend calls; the wait between
+		// attempts is not part of any assertion.
+		Initial: time.Microsecond,
+		Max:     time.Microsecond,
 	})
 	ic, err := New(Config{
 		CentralName: "test-skip",

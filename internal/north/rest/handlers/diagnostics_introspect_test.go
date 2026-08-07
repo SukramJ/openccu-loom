@@ -154,7 +154,11 @@ func TestDiagnosticsEventBusTap_StreamsStartedAndTwoEvents(t *testing.T) {
 	srv := httptest.NewServer(handlers.DiagnosticsEventBusTap(svc))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "?seconds=2")
+	// The tap streams for the requested window and then closes, so the
+	// request blocks for its whole length. One second is the shortest window
+	// tapWindow accepts, and the assertions below are about which lines
+	// arrive, not how long the tap stayed open.
+	resp, err := http.Get(srv.URL + "?seconds=1")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}

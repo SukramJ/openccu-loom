@@ -10,7 +10,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -27,12 +26,7 @@ import (
 // rather than a hand-rolled stand-in.
 func newAlarmCodesFixture(t *testing.T) (*sqlitestore.AlarmCodeStore, *AlarmCodeStoreAdmin) {
 	t.Helper()
-	ctx := context.Background()
-	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "alarm-codes.db")))
-	if err != nil {
-		t.Fatalf("open alarm codes fixture db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := openMigratedTestDB(t, "alarm-codes.db")
 	store := sqlitestore.NewAlarmCodeStore(db)
 	return store, NewAlarmCodeStoreAdmin(store)
 }

@@ -149,8 +149,8 @@ func TestVisibilityAdapter_LoadUnIgnore_NilVisibilityRegistry_Errors(t *testing.
 
 func TestVisibilityAdapter_LoadUnIgnore_MissingCentral_Errors(t *testing.T) {
 	t.Parallel()
-	// Build a real visibility.Registry and a SQLite store via the
-	// test temp dir — reuse the gooseMigrateMu pattern already in this package.
+	// Build a real visibility.Registry and a SQLite store in the test's
+	// temp dir, via the shared openMigratedTestDB helper.
 	visReg := visibility.NewRegistry()
 	reg := buildTestRegistry(t, "ccu-one")
 

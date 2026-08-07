@@ -7,11 +7,13 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -89,11 +91,20 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 	bus := events.NewBus()
 	obs := metrics.NewObserver()
 
-	// Client provider.
+	// Client provider. The caller always fails, so every Call below runs the
+	// full retry chain; what this test asserts is the aggregator's rollup of
+	// the resulting counters, not how long the backoff between attempts is.
+	// An explicit Retrier with the same attempt count but a microsecond
+	// backoff keeps every counter identical while dropping the production
+	// 2s/4s waits that would otherwise dominate the whole package's runtime.
 	cp := client.NewMetricsClientProvider(centralName)
 	ic, err := client.New(client.Config{
 		CentralName: centralName, Interface: hmenum.InterfaceHmIPRF,
 		Caller: &wiringFakeCaller{err: errors.New("simulated")},
+		Retrier: reliability.NewRetrier(reliability.RetryConfig{
+			Initial: time.Microsecond,
+			Max:     time.Microsecond,
+		}),
 	})
 	if err != nil {
 		t.Fatalf("client.New: %v", err)
