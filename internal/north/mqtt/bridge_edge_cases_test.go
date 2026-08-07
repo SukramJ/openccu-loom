@@ -1147,7 +1147,7 @@ func TestCommandSubscriberProgramSinkError(t *testing.T) {
 	_ = sub.Start(context.Background())
 
 	noop.DeliverInbound("gh/+/hub/programs/+/trigger",
-		"gh/ccu/hub/programs/Morning/trigger", nil)
+		"gh/ccu/hub/programs/Morning/trigger", []byte("true"))
 	sub.dispatcher.flush()
 	if sink.programs.Load() != 1 {
 		t.Fatalf("expected 1 TriggerProgram call; got %d", sink.programs.Load())

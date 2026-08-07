@@ -30,7 +30,7 @@ func TestWireProgramExecuteAudit(t *testing.T) {
 	}
 	buf := audit.NewBuffer(10)
 
-	teardown := wireProgramExecuteAudit(reg, buf)
+	teardown := wireProgramExecuteAudit(reg, buf, nil)
 	defer teardown()
 
 	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
@@ -39,6 +39,7 @@ func TestWireProgramExecuteAudit(t *testing.T) {
 		ProgramID:   "4711",
 		Trigger:     hmenum.ProgramTriggerAPI,
 		Success:     true,
+		Source:      "mqtt:program-trigger",
 	})
 
 	entries := buf.List(10)
@@ -48,10 +49,28 @@ func TestWireProgramExecuteAudit(t *testing.T) {
 	if entries[0].Action != audit.ActionProgramExecute {
 		t.Errorf("action = %q, want %q", entries[0].Action, audit.ActionProgramExecute)
 	}
-	for _, want := range []string{"central=GoOtto", "program=4711", "success=true"} {
+	for _, want := range []string{"central=GoOtto", "program=4711", "success=true", "source=mqtt:program-trigger"} {
 		if !strings.Contains(entries[0].Note, want) {
 			t.Errorf("note %q must carry %q", entries[0].Note, want)
 		}
+	}
+
+	// An event without a stamped source must never render a blank —
+	// "unknown" is the honest answer and keeps the note grep-stable.
+	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "GoOtto",
+		ProgramID:   "4711",
+		Trigger:     hmenum.ProgramTriggerAPI,
+		Success:     true,
+	})
+	entries = buf.List(10)
+	if len(entries) != 2 {
+		t.Fatalf("expected two audit entries, got %d", len(entries))
+	}
+	// The buffer lists newest-first; the unstamped event is entries[0].
+	if !strings.Contains(entries[0].Note, "source=unknown") {
+		t.Errorf("note %q must carry source=unknown for an unstamped event", entries[0].Note)
 	}
 }
 
@@ -71,7 +90,7 @@ func TestWireProgramExecuteAuditTeardownStops(t *testing.T) {
 	}
 	buf := audit.NewBuffer(10)
 
-	wireProgramExecuteAudit(reg, buf)()
+	wireProgramExecuteAudit(reg, buf, nil)()
 
 	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
@@ -88,6 +107,6 @@ func TestWireProgramExecuteAuditTeardownStops(t *testing.T) {
 // no recorder yields a usable no-op teardown rather than a panic at boot.
 func TestWireProgramExecuteAuditNilInputs(t *testing.T) {
 	t.Parallel()
-	wireProgramExecuteAudit(nil, audit.NewBuffer(1))()
-	wireProgramExecuteAudit(central.NewRegistry(), nil)()
+	wireProgramExecuteAudit(nil, audit.NewBuffer(1), nil)()
+	wireProgramExecuteAudit(central.NewRegistry(), nil, nil)()
 }

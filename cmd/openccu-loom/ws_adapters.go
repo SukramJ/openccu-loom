@@ -30,6 +30,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -449,6 +450,9 @@ func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string, checkConditi
 	if !ok {
 		return false, fmt.Errorf("ws: program not found: %s", id)
 	}
+	// Stamp the surface so the program-execute audit/log subscriber can
+	// attribute the run to the WebSocket API.
+	ctx = reqctx.WithOperation(ctx, "ws:program-execute")
 	if checkConditions {
 		return p.ExecuteWithConditionCheck(ctx)
 	}

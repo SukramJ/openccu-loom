@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -758,9 +759,19 @@ func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained boo
 	})
 }
 
-func (c *CommandSubscriber) handleProgram(topic string, _ []byte, retained bool) {
+func (c *CommandSubscriber) handleProgram(topic string, body []byte, retained bool) {
 	if retained {
 		c.logger.Debug("mqtt.command.program.retained_drop", slog.String("topic", topic))
+		return
+	}
+	// An empty payload is not a command. It is what the retain-cleanup
+	// pass publishes to evict a parked retained message from the trigger
+	// topic — the broker forwards that eviction to this very
+	// subscription as a live (non-retained) message, and executing a CCU
+	// program because a topic was cleaned would repeat the state-mirror
+	// defect this guard exists to keep out.
+	if strings.TrimSpace(string(body)) == "" {
+		c.logger.Debug("mqtt.command.program.empty_drop", slog.String("topic", topic))
 		return
 	}
 	// Canonical ADR-0011: <base>/<central>/hub/programs/<id>/trigger
@@ -773,6 +784,9 @@ func (c *CommandSubscriber) handleProgram(topic string, _ []byte, retained bool)
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
 		defer cancel()
+		// Stamp the surface so the program-execute audit/log subscriber
+		// can attribute the run to the MQTT command plane.
+		ctx = reqctx.WithOperation(ctx, "mqtt:program-trigger")
 		if err := c.sink.TriggerProgram(ctx, centralName, id); err != nil {
 			c.logger.Warn("mqtt.command.program",
 				slog.String("topic", topic), slog.String("err", err.Error()))

@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -49,6 +50,10 @@ func TestLegacyAggregateStateMatcherNegativeCases(t *testing.T) {
 		// Hub-level.
 		"openccu-loom/GoOtto/sysvars/Anwesenheit",
 		"openccu-loom/GoOtto/sysvars/Anwesenheit/set",
+		// Reserved hub subtree with a numeric third segment — looks
+		// like `<iface>/<addr>/<channel>/state` but is live hub state.
+		"openccu-loom/GoOtto/hub/programs/12459/state",
+		"openccu-loom/GoOtto/hub/sysvars/123/state",
 		// Wrong base.
 		"otherbase/GoOtto/HmIP-RF/000C9709AEF157/0/state",
 		// Channel segment that's not numeric.
@@ -128,6 +133,44 @@ func (m *mockRetainClient) evicted() []string {
 // TestRunRetainCleanupOnce_EvictsLegacyTopics verifies the full end-to-end
 // cleanup flow: legacy retained topics are identified and cleared with
 // empty retain=true publishes; current-schema topics are left untouched.
+// TestProgramTriggerMirrorMatcher pins the eviction scope for the
+// retired program-trigger state mirror: exactly the command-topic
+// shape, never the program's state plane.
+func TestProgramTriggerMirrorMatcher(t *testing.T) {
+	t.Parallel()
+	base := "openccu-loom"
+	hits := []string{
+		"openccu-loom/GoOtto/hub/programs/12459/trigger",
+		"openccu-loom/ccu-01/hub/programs/prgEnergyCounter_1/trigger",
+	}
+	for _, topic := range hits {
+		if !ProgramTriggerMirrorMatcher(base, topic) {
+			t.Errorf("expected match: %q", topic)
+		}
+	}
+	misses := []string{
+		// The program state plane — wiping it would blank live state.
+		"openccu-loom/GoOtto/hub/programs/12459/state",
+		"openccu-loom/GoOtto/hub/programs/12459/execute_available",
+		// The activation command topic never carried a mirror.
+		"openccu-loom/GoOtto/hub/programs/12459/set",
+		// Wrong depth / wrong subtree.
+		"openccu-loom/GoOtto/hub/programs/trigger",
+		"openccu-loom/GoOtto/hub/sysvars/Anwesenheit/trigger",
+		"openccu-loom/GoOtto/programs/12459/trigger",
+		// Empty segments.
+		"openccu-loom/GoOtto/hub/programs//trigger",
+		"openccu-loom//hub/programs/12459/trigger",
+		// Wrong base.
+		"otherbase/GoOtto/hub/programs/12459/trigger",
+	}
+	for _, topic := range misses {
+		if ProgramTriggerMirrorMatcher(base, topic) {
+			t.Errorf("must not match: %q", topic)
+		}
+	}
+}
+
 func TestRunRetainCleanupOnce_EvictsLegacyTopics(t *testing.T) {
 	t.Parallel()
 
@@ -141,12 +184,17 @@ func TestRunRetainCleanupOnce_EvictsLegacyTopics(t *testing.T) {
 		base + "/GoOtto/HmIP-RF/0001ABCD/0/state",
 		// Legacy channels/-infix slot shape.
 		base + "/GoOtto/HmIP-RF/0001ABCD/channels/1/values/STATE/state",
+		// Retired program-trigger state mirror parked on the command topic.
+		base + "/GoOtto/hub/programs/12459/trigger",
 	}
 	currentTopics := [...]string{
 		// Current shape — must NOT be evicted.
 		base + "/GoOtto/HmIP-RF/0001ABCD/1/values/STATE",
 		base + "/GoOtto/HmIP-RF/0001ABCD/availability",
 		base + "/bridge/status",
+		// Program state plane — must NOT be evicted.
+		base + "/GoOtto/hub/programs/12459/state",
+		base + "/GoOtto/hub/programs/12459/execute_available",
 	}
 
 	allMessages := make([]retainedMsg, 0, len(legacyTopics)+len(currentTopics))
@@ -190,6 +238,41 @@ func TestRunRetainCleanupOnce_EvictsLegacyTopics(t *testing.T) {
 		if evictedSet[ct] {
 			t.Errorf("current-schema topic %q was incorrectly evicted", ct)
 		}
+	}
+}
+
+// TestRunRetainCleanupOnce_ProductionShape_BreakerWrappedPublisher pins
+// the composition-root wiring: production hands the bridge a
+// publish-only circuit-breaker decorator, so the subscribe capability
+// the cleanup passes need must arrive via [Bridge.WithSubscriber]. This
+// exact shape failed silently on every boot before the seam existed —
+// the type assertion on the breaker never succeeded and no retained
+// topic was ever evicted.
+func TestRunRetainCleanupOnce_ProductionShape_BreakerWrappedPublisher(t *testing.T) {
+	t.Parallel()
+
+	const base = "openccu-loom"
+	mc := &mockRetainClient{retained: []retainedMsg{
+		{topic: base + "/GoOtto/hub/programs/12459/trigger", payload: []byte("true")},
+	}}
+	pub := NewBreaker(mc, BreakerConfig{})
+	b := NewBridge(BridgeConfig{Base: base, RawEnabled: true}, pub).WithSubscriber(mc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	n, err := b.RunRetainCleanupOnce(ctx, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunRetainCleanupOnce with breaker-wrapped publisher: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("evicted=%d want 1", n)
+	}
+
+	// Without the wired subscriber the breaker-wrapped bridge must
+	// surface the capability error — the silent-no-op regression shape.
+	b2 := NewBridge(BridgeConfig{Base: base, RawEnabled: true}, pub)
+	if _, err := b2.RunRetainCleanupOnce(ctx, 50*time.Millisecond); !errors.Is(err, ErrCleanupNeedsSubscriber) {
+		t.Fatalf("expected ErrCleanupNeedsSubscriber, got %v", err)
 	}
 }
 

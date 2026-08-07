@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/observability"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -197,14 +198,22 @@ func (h *HubCoordinator) Sysvars() []SysvarSnapshot {
 	return out
 }
 
-// NotifyProgramExecuted publishes a [hmevent.ProgramExecutedEvent].
-func (h *HubCoordinator) NotifyProgramExecuted(_ context.Context, programID string, trigger hmenum.ProgramTrigger, success bool) {
+// NotifyProgramExecuted publishes a [hmevent.ProgramExecutedEvent]. The
+// event's Source is lifted from the request context's Operation — every
+// ingress that can run a program stamps one, so the audit trail and the
+// daemon log can name the surface that asked instead of a generic "api".
+func (h *HubCoordinator) NotifyProgramExecuted(ctx context.Context, programID string, trigger hmenum.ProgramTrigger, success bool) {
+	source := ""
+	if rc, ok := reqctx.FromContext(ctx); ok {
+		source = rc.Operation
+	}
 	events.Publish(h.bus, hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: h.centralName,
 		ProgramID:   programID,
 		Trigger:     trigger,
 		Success:     success,
+		Source:      source,
 	})
 }
 

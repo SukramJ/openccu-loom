@@ -513,7 +513,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		HealthSupplier:     bridgeHealthSupplier(cfg, startedAt),
 		Collector:          collector,
 		ChannelHidden:      channelHidden,
-	}, pub)
+	}, pub).WithSubscriber(client)
 	wiring := mqtt.NewWiring(bridge, logger)
 
 	stack := &mqttStack{wiring: wiring, client: client}

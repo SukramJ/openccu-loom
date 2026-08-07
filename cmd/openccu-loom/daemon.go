@@ -193,7 +193,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	// Audit every program run the daemon triggers, so a program reported as
 	// running twice can be attributed to the daemon or ruled out.
-	defer wireProgramExecuteAudit(reg, auditRec)()
+	defer wireProgramExecuteAudit(reg, auditRec, logger)()
 
 	// Seed every central's health tracker (synthetic "started" sample,
 	// primary-interface pin, event-bus / audit / scheduler gauges) and wire

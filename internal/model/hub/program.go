@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -97,6 +98,15 @@ func (p *Program) Switch() *ProgramDpSwitch {
 // registerProgramServices wires Program operations onto the embedded ServiceRegistry.
 func (p *Program) registerProgramServices() {
 	p.RegisterService("trigger", func(ctx context.Context, _ map[string]any, _ hmenum.CommandPriority) error {
+		// Fallback surface attribution: keep an ingress-stamped
+		// operation when one is present, otherwise name the generic
+		// service-invoke route so the execute audit never reads blank.
+		// A nil ctx (tolerated by the registry contract) skips the stamp.
+		if ctx != nil {
+			if rc, ok := reqctx.FromContext(ctx); !ok || rc.Operation == "" {
+				ctx = reqctx.WithOperation(ctx, "service:program-trigger")
+			}
+		}
 		return p.Execute(ctx)
 	})
 }

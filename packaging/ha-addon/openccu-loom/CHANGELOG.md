@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.54.3
+
+- **Fixed: CCU programs executed on their own.** With the MQTT bridge
+  active, every WebUI program ran twice on each daemon (or CCU) restart
+  and once more whenever a program was created or edited — deactivated
+  programs included. The bridge mirrored program state onto its own
+  MQTT trigger command topic and then answered its own message with a
+  program execution. Program state now stays on the state topic, stale
+  mirrors are cleaned off the broker automatically, and triggering a
+  program over MQTT keeps working as documented.
+
 ## 0.54.2
 
 - **Fixed: "Einbruchalarm ausgelöst" appeared while the alarm system was

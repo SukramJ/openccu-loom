@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -176,6 +177,37 @@ func TestHubNotifyProgramExecutedEmits(t *testing.T) {
 	}
 	if !e.Success {
 		t.Errorf("Success=false, want true")
+	}
+	if e.Source != "" {
+		t.Errorf("Source=%q, want empty for an unstamped context", e.Source)
+	}
+}
+
+// TestHubNotifyProgramExecutedLiftsRequestOperation verifies the event's
+// Source is taken from the request-context Operation the ingress stamped —
+// the channel that lets the audit trail name the surface a run came from.
+func TestHubNotifyProgramExecutedLiftsRequestOperation(t *testing.T) {
+	t.Parallel()
+	bus := events.NewBus()
+	var mu sync.Mutex
+	var got []hmevent.ProgramExecutedEvent
+	events.Subscribe(bus, func(e hmevent.ProgramExecutedEvent) {
+		mu.Lock()
+		got = append(got, e)
+		mu.Unlock()
+	})
+	h := NewHubCoordinator("c4", bus)
+
+	ctx := reqctx.WithOperation(context.Background(), "mqtt:program-trigger")
+	h.NotifyProgramExecuted(ctx, "prog-007", hmenum.ProgramTriggerAPI, true)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 {
+		t.Fatalf("expected 1 ProgramExecutedEvent, got %d", len(got))
+	}
+	if got[0].Source != "mqtt:program-trigger" {
+		t.Errorf("Source=%q, want %q", got[0].Source, "mqtt:program-trigger")
 	}
 }
 

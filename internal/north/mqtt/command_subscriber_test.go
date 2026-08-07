@@ -131,11 +131,33 @@ func TestCommandSubscriberProgramTopic(t *testing.T) {
 	sink := &fakeSink{}
 	sub := NewCommandSubscriber(noop, topics, sink, nil)
 	_ = sub.Start(context.Background())
+	// "true" is the payload_press the HA-Discovery button declares.
 	noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
-		"openccu-loom/ccu-01/hub/programs/Morning/trigger", nil)
+		"openccu-loom/ccu-01/hub/programs/Morning/trigger", []byte("true"))
 	sub.dispatcher.flush()
 	if sink.triggers.Load() != 1 || sink.lastProgram.id != "Morning" {
 		t.Fatalf("program: %+v", sink.lastProgram)
+	}
+}
+
+// An empty trigger payload is not a command: it is the shape of a
+// retained-topic eviction (retain-cleanup publishes zero bytes), and
+// the broker forwards that eviction to the daemon's own trigger
+// subscription as a live message. Executing a CCU program because a
+// topic was cleaned must never happen.
+func TestCommandSubscriberProgramEmptyPayloadDropped(t *testing.T) {
+	noop := NewNoopClient()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	sub := NewCommandSubscriber(noop, topics, sink, nil)
+	_ = sub.Start(context.Background())
+	for _, payload := range [][]byte{nil, []byte(""), []byte("  ")} {
+		noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
+			"openccu-loom/ccu-01/hub/programs/Morning/trigger", payload)
+	}
+	sub.dispatcher.flush()
+	if n := sink.triggers.Load(); n != 0 {
+		t.Fatalf("empty payloads must be dropped, got %d trigger call(s)", n)
 	}
 }
 

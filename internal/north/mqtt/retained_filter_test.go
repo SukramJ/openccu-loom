@@ -71,12 +71,12 @@ func TestHandleProgram_RetainedDropped(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	noop.DeliverInboundRetained("openccu-loom/+/hub/programs/+/trigger",
-		"openccu-loom/ccu-01/hub/programs/123/trigger", nil)
+		"openccu-loom/ccu-01/hub/programs/123/trigger", []byte("true"))
 	if got := sink.triggers.Load(); got != 0 {
 		t.Fatalf("retained program trigger fired sink: triggers=%d", got)
 	}
 	noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
-		"openccu-loom/ccu-01/hub/programs/123/trigger", nil)
+		"openccu-loom/ccu-01/hub/programs/123/trigger", []byte("true"))
 	sub.dispatcher.flush()
 	if got := sink.triggers.Load(); got != 1 {
 		t.Fatalf("non-retained trigger blocked: triggers=%d, want 1", got)
