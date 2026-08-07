@@ -4,6 +4,24 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.6]
+
+### Fixed
+
+- **Virtual-remote buttons pressed in Home Assistant now reach the CCU.**
+  The MQTT topic path upper-cases every device address (mirroring the
+  reference path rule), and the command subscriber fed that upper-cased
+  address straight back into the case-sensitive XML-RPC `setValue` — the
+  virtual remote (`HmIP-RCV-1`) is the one mixed-case address in a CCU's
+  inventory, so every HA button press on it faulted with
+  `-2 Invalid device` while every other device kept working. The MQTT
+  command sink now canonicalizes topic-derived addresses against the
+  model registry (values, MASTER, custom-DP invokes, schedule switches
+  and combined-timer writes alike); unknown addresses pass through
+  unchanged. Verified end to end against a live CCU: the press lands,
+  the CCU fires the key event, and the button's state topic carries the
+  echo.
+
 ## [0.54.5]
 
 ### Fixed

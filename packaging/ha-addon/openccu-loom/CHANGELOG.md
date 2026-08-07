@@ -1,5 +1,27 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.54.6
+
+- **Fixed: pressing a virtual-remote button in Home Assistant did
+  nothing on the CCU.** The virtual remote (HmIP-RCV-50) is the one
+  device whose CCU address is mixed-case, and the MQTT command path
+  sent the upper-cased spelling from the topic — the CCU rejected every
+  press as "Invalid device". The address is now resolved against the
+  device model before writing, so HA button presses trigger the CCU key
+  (and any programs bound to it) again.
+
+## 0.54.5
+
+- **Fixed: thousands of phantom configuration entities in Home
+  Assistant and a flooded MQTT broker.** A start-up race published
+  every device's entire MASTER configuration paramset (week-program
+  tables, router tables — ~1,100 entries per HmIP-PSM on recent
+  firmware) plus normally-suppressed parameters, retained, on every
+  boot. The snapshot now waits for each CCU connection to finish its
+  bring-up, and two clean-up sweeps evict everything earlier versions
+  left on the broker — existing installations come clean within one or
+  two restarts, no manual broker clean-up needed.
+
 ## 0.54.4
 
 - **Fixed: the Security overview said "Alarm" when nothing had

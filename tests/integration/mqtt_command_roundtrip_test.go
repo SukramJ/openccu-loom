@@ -178,6 +178,14 @@ func (r *commandChainRig) waitForStateValue(topicSubstr, payloadSubstr string, t
 // / state topics. Skips (via startMosquitto) when no broker is available.
 func setupCommandChain(t *testing.T) *commandChainRig {
 	t.Helper()
+	return setupCommandChainWithDevices(t, defaultMockDevices)
+}
+
+// setupCommandChainWithDevices is setupCommandChain with an explicit
+// godevccu device fleet, for tests that need a model outside the default
+// set (e.g. the HmIP-RCV-50 virtual remote).
+func setupCommandChainWithDevices(t *testing.T, devices []string) *commandChainRig {
+	t.Helper()
 	broker := startMosquitto(t) // skips the whole test when unavailable
 
 	rig := &commandChainRig{stateTopics: make(map[string][]byte)}
@@ -186,7 +194,7 @@ func setupCommandChain(t *testing.T) *commandChainRig {
 		rig.recordSet(address, valueKey, value)
 		rig.injectEcho(address, valueKey, value)
 	}
-	mock := startMockCCUWithOptions(t, defaultMockDevices, onSet)
+	mock := startMockCCUWithOptions(t, devices, onSet)
 
 	xmlClient := newXMLRPCClient(t, mock.URL())
 	caller := &xmlrpcBackendCaller{client: xmlClient}
@@ -442,4 +450,58 @@ func TestMQTTServiceMethodCommandReachesCustomDP(t *testing.T) {
 		t.Fatalf("turn_on service method never reached godevccu for %s (captured=%v)", channelAddress, rig.setCalls)
 	}
 	t.Logf("service-method turn_on applied on godevccu: addr=%s key=%s value=%v", got.address, got.valueKey, got.value)
+}
+
+// findVirtualRemotePressChannel returns the first channel of the virtual
+// remote (HmIP-RCV-50) that carries a PRESS_SHORT data point — the wire
+// target behind every HA `button` entity the discovery builder emits for
+// the virtual remote's key channels.
+func findVirtualRemotePressChannel(t *testing.T, c *central.Unit) (iface string, dev *device.Device, ch *device.Channel) {
+	t.Helper()
+	for _, d := range c.ModelRegistry.List() {
+		if d == nil || !strings.Contains(strings.ToUpper(d.Model), "RCV") {
+			continue
+		}
+		for _, cc := range d.Channels() {
+			if cc == nil {
+				continue
+			}
+			if dp := cc.Parameter(hmenum.Parameter("PRESS_SHORT")); dp != nil {
+				return d.InterfaceID, d, cc
+			}
+		}
+	}
+	t.Fatal("no virtual-remote channel with PRESS_SHORT in the godevccu fleet")
+	return "", nil, nil
+}
+
+// TestMQTTVirtualRemotePressButtonRoundTrip pins the HA `button` → CCU
+// path for the virtual remote: HA publishes the discovery payload's
+// `payload_press` token ("PRESS") on the button's bucket-aware command
+// topic `<base>/<central>/<iface>/<addr>/<ch>/values/PRESS_SHORT/set`;
+// the CommandSubscriber must coerce it to `true` and the write must land
+// as a SetValue on the CCU. This is the wire behaviour behind the
+// operator report "pressing the RCV button in Home Assistant does
+// nothing on the CCU".
+func TestMQTTVirtualRemotePressButtonRoundTrip(t *testing.T) {
+	rig := setupCommandChainWithDevices(t, []string{"HmIP-RCV-50"})
+
+	iface, dev, ch := findVirtualRemotePressChannel(t, rig.central)
+	channelAddress := ch.Address
+
+	cmdTopic := rig.topics.ParameterCommand(cmdRoundtripCentral, iface, dev.Address, ch.Number, "values", "PRESS_SHORT")
+	if err := rig.cmdPub.Publish(context.Background(), cmdTopic, []byte("PRESS"), mqtt.QoS1, false); err != nil {
+		t.Fatalf("publish PRESS command: %v", err)
+	}
+
+	got, ok := rig.waitForSet(func(c capturedSet) bool {
+		return strings.EqualFold(c.address, channelAddress) && strings.EqualFold(c.valueKey, "PRESS_SHORT")
+	}, 15*time.Second)
+	if !ok {
+		t.Fatalf("PRESS_SHORT write never reached godevccu for %s (captured=%v)", channelAddress, rig.setCalls)
+	}
+	if got.value != true {
+		t.Fatalf("PRESS payload must coerce to boolean true, godevccu saw %v (%T)", got.value, got.value)
+	}
+	t.Logf("virtual-remote press applied on godevccu: addr=%s key=%s value=%v", got.address, got.valueKey, got.value)
 }
