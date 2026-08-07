@@ -27,23 +27,15 @@ import (
 
 func discardTestLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
 
-// buildPurgeTestStores opens a fresh migrated main-schema SQLite DB (for
+// buildPurgeTestStores opens a private main-schema SQLite DB (for
 // ValuesCacheStore/MasterValuesStore) plus a fresh migrated history DB (for
-// MeasurementStore). Mirrors buildVisibilityStore's gooseMigrateMu-guarded
-// open pattern (visibility_live_test.go) to avoid goose's migration race
-// when tests run in parallel across the package.
+// MeasurementStore). The history schema is a separate migration set with no
+// template, so that open still runs goose under the lock.
 func buildPurgeTestStores(t *testing.T) (*sqlitestore.ValuesCacheStore, *sqlitestore.MasterValuesStore, *sqlitestore.MeasurementStore) {
 	t.Helper()
 	ctx := context.Background()
 
-	mainDSN := "file:" + t.TempDir() + "/purge_test.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	mainDB, err := sqlitestore.Open(ctx, mainDSN)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("sqlitestore.Open(main): %v", err)
-	}
-	t.Cleanup(func() { _ = mainDB.Close() })
+	mainDB := openMigratedTestDB(t, "purge_test.db")
 
 	histDSN := "file:" + t.TempDir() + "/purge_test_hist.db?_pragma=journal_mode(WAL)"
 	gooseMigrateMu.Lock()

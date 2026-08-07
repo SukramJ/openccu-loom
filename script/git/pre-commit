@@ -82,6 +82,32 @@ if [[ "$current_branch" == "main" && "${GOHM_PRECOMMIT_ALLOW_MAIN:-0}" != "1" ]]
 fi
 
 # ---------------------------------------------------------------------------
+# Stage 0a — refuse staged credential files.
+#
+# .gitignore already lists these, but an ignore rule only protects a file
+# that is untracked: once something puts one in the index, `git add -A`
+# keeps carrying it and the next commit ships the secret. That happened
+# once, and the file reached a remote branch before it was noticed.
+#
+# This check is deliberately not behind any GOHM_PRECOMMIT_SKIP_* switch:
+# the skips exist to trade thoroughness for speed, and a leaked credential
+# is not a speed trade. `git commit --no-verify` still bypasses it, which
+# is a conscious act rather than an accident.
+# ---------------------------------------------------------------------------
+mapfile -t STAGED_SECRETS < <(
+    git diff --cached --name-only --diff-filter=ACMR 2>/dev/null |
+        grep -E '(^|/)\.(ccu|mqtt)_cred$|(^|/)secret\.key$|(^|/)\.env$' || true
+)
+if [[ ${#STAGED_SECRETS[@]} -gt 0 ]]; then
+    fail "refusing to commit credential files:"
+    for f in "${STAGED_SECRETS[@]}"; do
+        printf '    %s\n' "$f" >&2
+    done
+    printf '  unstage them with: git rm --cached %s\n' "${STAGED_SECRETS[0]}" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
 # Stage 0 — collect staged Go files.
 # ---------------------------------------------------------------------------
 mapfile -t STAGED_GO < <(git diff --cached --name-only --diff-filter=ACMR -- '*.go' 2>/dev/null || true)

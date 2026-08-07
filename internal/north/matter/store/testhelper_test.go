@@ -6,6 +6,7 @@ package store_test
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -18,13 +19,55 @@ import (
 // helper in internal/store/sqlite/testhelper_test.go.
 var openMu sync.Mutex
 
-// openTestDB opens (and migrates) a fresh file-backed SQLite database
-// in t's temp directory and registers a cleanup to close it.
+// migratedSchemaTemplate applies the migration set once per test binary and
+// returns the path of a closed, fully migrated database file.
+//
+// A full goose run costs about a second and cannot run concurrently (see
+// openMu), so every test opening its own store queued that second behind the
+// same lock — with this package's test count that was the bulk of its
+// runtime, all of it re-deriving a schema that never varies. Deriving it once
+// and copying the file gives each test a private database for the price of a
+// file copy.
+var migratedSchemaTemplate = sync.OnceValues(func() (string, error) {
+	dir, err := os.MkdirTemp("", "matter-store-schema-template")
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "template.db")
+	db, err := storesqlite.Open(context.Background(), storesqlite.FileDSN(path))
+	if err != nil {
+		return "", err
+	}
+	// Closing checkpoints the write-ahead log back into the main file, so
+	// the single file copied below carries the whole schema.
+	if err := db.Close(); err != nil {
+		return "", err
+	}
+	return path, nil
+})
+
+// openTestDB opens a fresh file-backed SQLite database in t's temp directory,
+// seeded from the migrated template so the schema is already in place, and
+// registers a cleanup to close it. Tests share the schema, never the data.
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	dsn := storesqlite.FileDSN(filepath.Join(t.TempDir(), "matter.db"))
+	templatePath, err := migratedSchemaTemplate()
+	if err != nil {
+		t.Fatalf("build migrated schema template: %v", err)
+	}
+	schema, err := os.ReadFile(templatePath)
+	if err != nil {
+		t.Fatalf("read schema template: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "matter.db")
+	if err := os.WriteFile(path, schema, 0o600); err != nil {
+		t.Fatalf("seed test db: %v", err)
+	}
+	// Open still runs goose; it finds the version table already at the
+	// latest revision and applies nothing. The lock stays because that
+	// check is goose-internal too.
 	openMu.Lock()
-	db, err := storesqlite.Open(context.Background(), dsn)
+	db, err := storesqlite.Open(context.Background(), storesqlite.FileDSN(path))
 	openMu.Unlock()
 	if err != nil {
 		t.Fatalf("open test db: %v", err)

@@ -29,7 +29,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/operational"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -138,13 +137,7 @@ func TestLoadVendorAttestation_DACKeyError_ReturnsFalse(t *testing.T) {
 func TestLoadAdditionalFabricsForCase_ClosedDB_ListFabricsError(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dsn := "file:" + t.TempDir() + "/matter_add_closed.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	db := openMigratedTestDB(t, "matter_add_closed.db")
 	store := matterstore.New(db)
 	if err := db.Close(); err != nil {
 		t.Fatalf("db.Close: %v", err)

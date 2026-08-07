@@ -95,14 +95,7 @@ func TestDaemonServeWithReload_NonExistentConfig_ReturnsError(t *testing.T) {
 // building the store so the Patterns call fails.
 func TestVisibilityAdapter_LoadUnIgnore_ClosedDB_PatternsError(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	dsn := "file:" + t.TempDir() + "/vis_closed.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	db := openMigratedTestDB(t, "vis_closed.db")
 	store := sqlitestore.NewVisibilityUnIgnoreStore(db)
 	// Close the DB so subsequent Patterns calls fail.
 	if err := db.Close(); err != nil {
@@ -177,13 +170,7 @@ func TestWireVisibilityUnIgnoreStore_FileAsDataDir_ReturnsNil(t *testing.T) {
 func TestApplyVisibilityUnIgnore_ClosedDB_SeedAndPatternsErrors(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dsn := "file:" + t.TempDir() + "/vis_apply_closed.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	db := openMigratedTestDB(t, "vis_apply_closed.db")
 	store := sqlitestore.NewVisibilityUnIgnoreStore(db)
 	// Close the DB so seed + patterns fail.
 	if err := db.Close(); err != nil {
@@ -421,13 +408,7 @@ func TestBuildCaseAdapter_LoadIdentityError_ReturnsError(t *testing.T) {
 func TestLoadPersistentCaseIdentity_ClosedDB_ListFabricsError(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dsn := "file:" + t.TempDir() + "/matter_closed.db?_pragma=journal_mode(WAL)"
-	gooseMigrateMu.Lock()
-	db, err := sqlitestore.Open(ctx, dsn)
-	gooseMigrateMu.Unlock()
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	db := openMigratedTestDB(t, "matter_closed.db")
 	store := matterstore.New(db)
 	// Close the DB so ListFabrics fails.
 	if err := db.Close(); err != nil {

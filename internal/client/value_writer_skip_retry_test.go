@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -23,12 +24,16 @@ import (
 // and a countingBackend registered as backend.
 // - the counting backend so tests can inspect call counts.
 //
-// Uses [countingBackend] from wave2_skip_retry_test.go.
+// Uses [countingBackend] from skip_retry_test.go.
 func newWriterWithIC(t *testing.T, setErr error) (*ValueWriter, *countingBackend) {
 	t.Helper()
 	retrier := reliability.NewRetrier(reliability.RetryConfig{
 		MaxAttempts: 3,
-		Initial:     0, // deterministic, no sleep
+		// A non-positive Initial/Max is normalised back to the production
+		// 2s/30s backoff by NewRetrier, so "no sleep" has to be spelled as
+		// the shortest positive delay. These tests count backend calls.
+		Initial: time.Microsecond,
+		Max:     time.Microsecond,
 	})
 	ic, err := New(Config{
 		CentralName: "ccu-wr",
@@ -129,7 +134,8 @@ func TestPutParamsetWithOptions_SkipRetryRoutesThroughIC(t *testing.T) {
 	b := &countingBackend{setErr: nil}
 	retrier := reliability.NewRetrier(reliability.RetryConfig{
 		MaxAttempts: 3,
-		Initial:     0,
+		Initial:     time.Microsecond,
+		Max:         time.Microsecond,
 	})
 	ic, err := New(Config{
 		CentralName: "ccu-put",

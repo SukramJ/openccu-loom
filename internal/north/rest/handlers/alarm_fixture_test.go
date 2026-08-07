@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -87,11 +86,7 @@ func (f *alarmPanelFixture) Reload(ctx context.Context) error {
 func newAlarmPanelFixture(t *testing.T) *alarmPanelFixture {
 	t.Helper()
 	ctx := context.Background()
-	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "alarm.db")))
-	if err != nil {
-		t.Fatalf("open alarm fixture db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := openMigratedTestDB(t, "alarm.db")
 
 	stores := alarm.NewStores(db)
 	clk := clock.NewFake(alarmFixtureStart)

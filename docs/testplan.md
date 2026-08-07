@@ -120,8 +120,12 @@ Realistic with two parallel streams: ~6–8 weeks.
   The Go test is a fresh statement of the same spec in idiomatic Go.
 - **Add a contract test** when touching protocols, capability matrix,
   or state machines (`tests/contract/` is the catalogue).
-- **`go test -race`** is the default for CI on `main`; feature
-  branches run it on `needs-race` label.
+- **`go test -race`** runs on every push and pull request, on the
+  Linux leg of `ci.yml` — the shipped platform. A data race is a
+  property of the code rather than of the operating system, so the
+  macOS leg runs the same suite without it and exists to catch what
+  only a second OS can: path separators, file permissions, timezones,
+  `os.Rename` semantics.
 - **Clock abstraction** is a hard prerequisite for the Reliability
   and ConnectionRecovery clusters — do not start P1-2 until it lands.
 - **Golden sessions** for the integration suite live in
@@ -133,8 +137,12 @@ Realistic with two parallel streams: ~6–8 weeks.
 Three layers guard the goroutine and locking model. The first two run
 in CI; the third is an opt-in build for local investigation.
 
-- **`go test -race`** — the data-race detector, default on `main`
-  (the CI test job sets `CGO_ENABLED=1` for it).
+- **`go test -race`** — the data-race detector. It costs roughly a
+  factor of 5.5 in wall time, so `ci.yml` runs it once, on Linux, and
+  splits the module across four shards (`script/test_shard.sh`); the
+  shard jobs set `CGO_ENABLED=1` for it and their coverage profiles
+  are merged before the total threshold is applied. The Windows
+  canary in `nightly.yml` runs it too, non-gating.
 - **goleak** — goroutine-leak detection. `go.uber.org/goleak`'s
   `VerifyTestMain` is installed in the leak-prone core packages
   (`internal/client`, `internal/central`,
