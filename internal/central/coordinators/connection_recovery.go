@@ -6,6 +6,7 @@ package coordinators
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -364,6 +365,23 @@ func (c *ConnectionRecoveryCoordinator) WithPipelineFor(interfaceID string, p []
 	}
 	c.mu.Unlock()
 	return c
+}
+
+// PipelineFor returns the recovery pipeline registered for interfaceID,
+// or the default pipeline when the interface has none. The second result
+// is false when neither exists — a caller that would otherwise run an
+// empty pipeline must treat that as a failure, because an empty pipeline
+// "succeeds" without doing anything.
+func (c *ConnectionRecoveryCoordinator) PipelineFor(interfaceID string) ([]Pipeline, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if p := c.interfacePipelines[interfaceID]; len(p) > 0 {
+		return slices.Clone(p), true
+	}
+	if len(c.defaultPipeline) > 0 {
+		return slices.Clone(c.defaultPipeline), true
+	}
+	return nil, false
 }
 
 // InRecovery reports whether the given interface is currently undergoing

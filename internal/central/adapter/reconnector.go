@@ -38,11 +38,25 @@ func (rc *RecoveryReconnector) Reconnect(ctx context.Context, centralName, inter
 	if c.Recovery == nil {
 		return fmt.Errorf("reconnector: central %q has no recovery coordinator", centralName)
 	}
-	step := rc.step
-	if step == nil {
-		step = func(context.Context) error { return nil }
+	// Run the pipeline the south-bound wiring registered for this
+	// interface — the one that actually reconnects and re-announces the
+	// callback to the CCU. The endpoint used to build a synthetic
+	// single-stage pipeline instead, and production wires no step, so the
+	// stage was a func that returned nil: every reconnect request reported
+	// success, force-closed the circuit breaker and moved the central back
+	// to RUNNING without a single byte reaching the CCU. That is worse
+	// than doing nothing, because it masks the outage the operator was
+	// trying to clear.
+	pipeline, ok := c.Recovery.PipelineFor(interfaceID)
+	if rc.step != nil {
+		// An explicitly injected step wins — the seam exists so a caller
+		// can drive a specific stage.
+		pipeline, ok = []coordinators.Pipeline{{Stage: "reinit", Run: rc.step}}, true
 	}
-	result := c.Recovery.Run(ctx, interfaceID, []coordinators.Pipeline{{Stage: "reinit", Run: step}})
+	if !ok {
+		return fmt.Errorf("reconnector: no recovery pipeline registered for %q on central %q", interfaceID, centralName)
+	}
+	result := c.Recovery.Run(ctx, interfaceID, pipeline)
 	if result != "success" {
 		return fmt.Errorf("reconnector: recovery result %s", result)
 	}
