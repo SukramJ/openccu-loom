@@ -56,5 +56,6 @@ func (f *connFlags) client(stderr io.Writer) (*daemonClient, error) {
 		cacert:   f.cacert,
 		insecure: f.insecure,
 		timeout:  f.timeout,
+		stderr:   stderr,
 	})
 }

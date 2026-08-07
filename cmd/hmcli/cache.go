@@ -141,7 +141,7 @@ func runCacheClearOnline(
 	token, _, _ = resolveCredentials(token, "", "", os.Stdin, stderr)
 	warnIfPlaintextCredentials(baseURL, token, "", stderr)
 
-	tlsCfg, err := buildTLSConfig(cacert, insecure)
+	tlsCfg, err := buildTLSConfig(cacert, insecure, stderr)
 	if err != nil {
 		return fmt.Errorf("cache clear: %w", err)
 	}

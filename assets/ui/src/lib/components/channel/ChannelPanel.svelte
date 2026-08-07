@@ -589,14 +589,13 @@
 
   async function runAction(name: string) {
     saving = true;
-    banner = null;
     try {
       // ACTION parameters are write-only — the value is irrelevant
       // for most channel types; true mirrors the CCU WebUI.
       await api.setValue(address, channel, name, true);
-      banner = t("channel.action_triggered", { name });
+      toastStore.success(t("channel.action_triggered", { name }));
     } catch (err) {
-      banner = err instanceof Error ? err.message : String(err);
+      toastStore.error(t("channel.action_failed", { name }), friendlyError(err, t));
     } finally {
       saving = false;
     }
@@ -898,12 +897,25 @@
 
     {#if schema.profile}
       <div class="mb-4">
-        <ProfileSelector
-          profile={schema.profile}
-          locale={locale}
-          currentValues={values}
-          onApply={applyProfilePatch}
-        />
+        <!-- ChannelPanel itself can be reused across a channel switch (the
+             caller updates address/channel props rather than remounting —
+             see ChannelPanel.channel-switch-race.test.ts), so without a key
+             ProfileSelector's own component instance — and the `userTouched`
+             state that locks its dropdown to whatever the previous channel's
+             user selected — would survive the switch and keep showing the
+             old channel's profile forever. Keying on channelAddress (plus
+             peer, for LINK) forces a fresh instance, and therefore a fresh
+             `userTouched = false`, whenever the underlying channel changes;
+             a same-channel reload (e.g. after Save) keeps the same key and
+             so does not disturb an in-progress manual selection. -->
+        {#key `${channelAddress}:${peer ?? ""}`}
+          <ProfileSelector
+            profile={schema.profile}
+            locale={locale}
+            currentValues={values}
+            onApply={applyProfilePatch}
+          />
+        {/key}
         {#if lockedParams.size > 0}
           <p class="mt-2 flex items-center gap-2 text-xs text-[var(--ha-secondary-text-color)]">
             <span>{t("channel.lock_count", { count: lockedParams.size })}</span>

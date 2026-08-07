@@ -173,7 +173,7 @@ func cmdEventsTail(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	tlsCfg, err := buildTLSConfig(f.cacert, f.insecure)
+	tlsCfg, err := buildTLSConfig(f.cacert, f.insecure, stderr)
 	if err != nil {
 		return err
 	}

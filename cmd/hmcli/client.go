@@ -37,14 +37,20 @@ type clientConfig struct {
 	cacert   string        // optional PEM CA bundle to trust
 	insecure bool          // skip TLS verification (explicit opt-out)
 	timeout  time.Duration // zero means no deadline
+	// stderr receives the --insecure warning (see warnInsecureTLS); nil is a
+	// valid no-op sink for callers (mainly tests) that do not care about it.
+	stderr io.Writer
 }
 
 // newDaemonClient constructs a daemonClient. baseURL trailing slashes are
-// stripped so path joins produce clean URLs. The caller owns the timeout
-// budget: a zero timeout means no deadline. It returns an error only when the
-// configured CA bundle cannot be loaded.
+// stripped so path joins produce clean URLs, and any embedded userinfo
+// (https://user:pass@host/) is stripped before the URL is stored — see
+// redactHostUserinfo — so a credential accidentally placed in --host never
+// resurfaces in an error message built from baseURL. The caller owns the
+// timeout budget: a zero timeout means no deadline. It returns an error only
+// when the configured CA bundle cannot be loaded.
 func newDaemonClient(cfg clientConfig) (*daemonClient, error) {
-	tlsCfg, err := buildTLSConfig(cfg.cacert, cfg.insecure)
+	tlsCfg, err := buildTLSConfig(cfg.cacert, cfg.insecure, cfg.stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +62,7 @@ func newDaemonClient(cfg clientConfig) (*daemonClient, error) {
 	}
 	httpClient := &http.Client{Timeout: cfg.timeout, Transport: ownTransport}
 	return &daemonClient{
-		baseURL:  strings.TrimRight(cfg.baseURL, "/"),
+		baseURL:  strings.TrimRight(redactHostUserinfo(cfg.baseURL), "/"),
 		token:    cfg.token,
 		user:     cfg.user,
 		password: cfg.password,

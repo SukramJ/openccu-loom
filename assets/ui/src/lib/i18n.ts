@@ -1738,6 +1738,10 @@ const EN: Catalog = {
   "settings.tristate.default": "Default",
   "settings.tristate.on": "On",
   "settings.tristate.off": "Off",
+  // --- Roles (shared by the users and tokens admin — AccessControl.svelte) ---
+  "role.viewer": "Viewer",
+  "role.operator": "Operator",
+  "role.admin": "Admin",
   // --- Users admin ---
   "users.empty": "No users configured.",
   "users.add_title": "Add user",
@@ -2211,6 +2215,7 @@ const EN: Catalog = {
   "channel.import_done": "Imported {count} parameters.",
   "channel.kanal": "Channel {n}",
   "channel.action_triggered": "Action {name} triggered.",
+  "channel.action_failed": "Action {name} failed",
   "channel.profile_staged": "Profile staged — press Save to apply.",
   "channel.import_staged": "Import staged — press Save to apply.",
   "channel.import_paramset_mismatch":
@@ -5252,6 +5257,10 @@ const DE: Catalog = {
   "settings.tristate.default": "Standard",
   "settings.tristate.on": "An",
   "settings.tristate.off": "Aus",
+  // --- Rollen (gemeinsam für Benutzer- und Token-Verwaltung — AccessControl.svelte) ---
+  "role.viewer": "Betrachter",
+  "role.operator": "Bediener",
+  "role.admin": "Administrator",
   // --- Benutzer-Verwaltung ---
   "users.empty": "Keine Benutzer konfiguriert.",
   "users.add_title": "Benutzer hinzufügen",
@@ -5730,6 +5739,7 @@ const DE: Catalog = {
   "channel.import_done": "{count} Parameter importiert.",
   "channel.kanal": "Kanal {n}",
   "channel.action_triggered": "Aktion {name} ausgelöst.",
+  "channel.action_failed": "Aktion {name} fehlgeschlagen",
   "channel.profile_staged":
     "Profil vorgemerkt — zum Anwenden Speichern drücken.",
   "channel.import_staged":

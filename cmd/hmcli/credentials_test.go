@@ -174,37 +174,101 @@ func TestIsLoopbackHost(t *testing.T) {
 
 func TestBuildTLSConfigDefaults(t *testing.T) {
 	t.Parallel()
-	cfg, err := buildTLSConfig("", false)
+	var stderr bytes.Buffer
+	cfg, err := buildTLSConfig("", false, &stderr)
 	if err != nil {
 		t.Fatalf("buildTLSConfig: %v", err)
 	}
 	if cfg != nil {
 		t.Errorf("expected nil TLS config for defaults, got %+v", cfg)
 	}
+	if stderr.Len() != 0 {
+		t.Errorf("expected no warning without --insecure, got %q", stderr.String())
+	}
 }
 
 func TestBuildTLSConfigInsecure(t *testing.T) {
 	t.Parallel()
-	cfg, err := buildTLSConfig("", true)
+	var stderr bytes.Buffer
+	cfg, err := buildTLSConfig("", true, &stderr)
 	if err != nil {
 		t.Fatalf("buildTLSConfig: %v", err)
 	}
 	if cfg == nil || !cfg.InsecureSkipVerify {
 		t.Fatalf("expected InsecureSkipVerify=true, got %+v", cfg)
 	}
+	if !strings.Contains(stderr.String(), "warning") || !strings.Contains(stderr.String(), "insecure") {
+		t.Errorf("expected an --insecure warning on stderr, got %q", stderr.String())
+	}
+}
+
+func TestBuildTLSConfigInsecureNilStderrIsNoop(t *testing.T) {
+	t.Parallel()
+	// A nil stderr must not panic — callers that don't care about the warning
+	// (mainly tests) can omit it.
+	if _, err := buildTLSConfig("", true, nil); err != nil {
+		t.Fatalf("buildTLSConfig: %v", err)
+	}
 }
 
 func TestBuildTLSConfigCABundleErrors(t *testing.T) {
 	t.Parallel()
-	if _, err := buildTLSConfig(filepath.Join(t.TempDir(), "nope.pem"), false); err == nil {
+	if _, err := buildTLSConfig(filepath.Join(t.TempDir(), "nope.pem"), false, nil); err == nil {
 		t.Error("expected an error for a missing CA bundle")
 	}
 	bad := filepath.Join(t.TempDir(), "bad.pem")
 	if err := os.WriteFile(bad, []byte("not a pem"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := buildTLSConfig(bad, false); err == nil {
+	if _, err := buildTLSConfig(bad, false, nil); err == nil {
 		t.Error("expected an error for a CA bundle with no valid PEM")
+	}
+}
+
+// ─── redactHostUserinfo ──────────────────────────────────────────────────────
+
+func TestRedactHostUserinfo(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		host string
+		want string
+	}{
+		{"strips user and password", "https://user:pass@ccu.example.com/", "https://ccu.example.com/"},
+		{"strips user only", "https://user@ccu.example.com:8119", "https://ccu.example.com:8119"},
+		{"no userinfo unchanged", "https://ccu.example.com:8119", "https://ccu.example.com:8119"},
+		{"scheme-less host unchanged", "localhost:8119", "localhost:8119"},
+		{"empty unchanged", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := redactHostUserinfo(tc.host); got != tc.want {
+				t.Errorf("redactHostUserinfo(%q) = %q, want %q", tc.host, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewDaemonClientRedactsHostUserinfoFromErrors(t *testing.T) {
+	t.Parallel()
+	// A non-routable address so the request fails fast and the error message
+	// wraps the base URL the client built — that message must never contain
+	// the password embedded in --host.
+	c, err := newDaemonClient(clientConfig{baseURL: "http://user:s3cr3t@127.0.0.1:1/", timeout: time.Second})
+	if err != nil {
+		t.Fatalf("newDaemonClient: %v", err)
+	}
+	var out map[string]any
+	err = c.getJSON(context.Background(), "/x", &out)
+	if err == nil {
+		t.Fatal("expected a connection error")
+	}
+	if strings.Contains(err.Error(), "s3cr3t") {
+		t.Errorf("error leaked the --host password: %q", err.Error())
+	}
+	if strings.Contains(err.Error(), "user:") {
+		t.Errorf("error leaked --host userinfo: %q", err.Error())
 	}
 }
 
