@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -79,14 +80,15 @@ func cmdExportDef(args []string, stdout, stderr io.Writer) error {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("export-def: %s returned %s: %s", endpoint, resp.Status, strings.TrimSpace(string(body)))
+		return fmt.Errorf("export-def: %w", newHTTPStatusError(http.MethodGet, endpoint, resp, body))
 	}
 
 	// Resolve the output target: explicit -out, the filename advertised by the
-	// server's Content-Disposition, or "<address>.zip" as a last resort.
+	// server's Content-Disposition (reduced to a single safe path segment —
+	// see sanitizeDispositionFilename), or "<address>.zip" as a last resort.
 	target := *out
 	if target == "" {
-		target = filenameFromDisposition(resp.Header.Get("Content-Disposition"))
+		target = sanitizeDispositionFilename(filenameFromDisposition(resp.Header.Get("Content-Disposition")))
 		if target == "" {
 			target = *address + ".zip"
 		}
@@ -123,4 +125,28 @@ func filenameFromDisposition(header string) string {
 		return rest[:j]
 	}
 	return ""
+}
+
+// sanitizeDispositionFilename reduces a server-supplied Content-Disposition
+// filename to a single safe path segment before it ever reaches os.Create.
+// The value comes verbatim from the daemon's response header, so a
+// malicious or MITM'd daemon fully controls it; without this a value such as
+// "../../../.ssh/authorized_keys" would let a hostile server overwrite an
+// arbitrary file on the operator's machine. filepath.Base strips any
+// directory components (both "../" prefixes and an absolute path collapse
+// to their final segment); an empty result, ".", or ".." is rejected
+// outright, as is anything that still carries a path separator afterwards
+// (a base name built from a raw backslash sequence on a platform where
+// filepath.Base does not treat '\' as a separator). The caller falls back
+// to a default filename when this returns "".
+func sanitizeDispositionFilename(raw string) string {
+	name := filepath.Base(raw)
+	switch name {
+	case "", ".", "..":
+		return ""
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return ""
+	}
+	return name
 }

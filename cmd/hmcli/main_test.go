@@ -5,6 +5,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -245,5 +249,102 @@ func TestHelpTextMentionsAllSubcommands(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("help text missing %q: %q", want, out)
 		}
+	}
+}
+
+// ─── error reporting: sanitization + exit codes ───────────────────────────────
+
+// reportError is main's tail (write + exit code); errors must be sanitized
+// before they hit the terminal, the same way the human-readable tables
+// already are (hardening_test.go).
+func TestReportErrorSanitizesANSIEscapes(t *testing.T) {
+	t.Parallel()
+	err := errors.New("boom \x1b[31mALERT\x1b[0m\x07 done")
+	var stderr bytes.Buffer
+	if code := reportError(err, &stderr); code != exitGeneral {
+		t.Errorf("code = %d, want %d", code, exitGeneral)
+	}
+	assertSanitized(t, stderr.String(), "ALERT")
+	for _, want := range []string{"boom", "done"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("stderr missing visible text %q: %q", want, stderr.String())
+		}
+	}
+}
+
+func TestReportErrorNilIsSuccess(t *testing.T) {
+	t.Parallel()
+	var stderr bytes.Buffer
+	if code := reportError(nil, &stderr); code != 0 {
+		t.Errorf("code = %d, want 0", code)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr should stay empty on success, got %q", stderr.String())
+	}
+}
+
+// exitCodeFor classifies a *httpStatusError (directly or wrapped) by status;
+// every other error — including one that merely contains a status-looking
+// number in its text — stays exitGeneral.
+func TestExitCodeForClassifiesHTTPStatusError(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"plain error", errors.New("boom"), exitGeneral},
+		{"401", &httpStatusError{StatusCode: http.StatusUnauthorized}, exitAuthFailed},
+		{"403", &httpStatusError{StatusCode: http.StatusForbidden}, exitAuthFailed},
+		{"404", &httpStatusError{StatusCode: http.StatusNotFound}, exitNotFound},
+		{"500", &httpStatusError{StatusCode: http.StatusInternalServerError}, exitServerFail},
+		{"503", &httpStatusError{StatusCode: http.StatusServiceUnavailable}, exitServerFail},
+		{"400 stays general", &httpStatusError{StatusCode: http.StatusBadRequest}, exitGeneral},
+		{"wrapped 404", fmt.Errorf("export-def: %w", &httpStatusError{StatusCode: http.StatusNotFound}), exitNotFound},
+		{"text mentioning 404 but not typed", errors.New("saw HTTP 404 in a log line"), exitGeneral},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := exitCodeFor(tc.err); got != tc.want {
+				t.Errorf("exitCodeFor(%v) = %d, want %d", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// End-to-end: a real daemon response of each status class must classify the
+// same way through the full run() path, not just via a hand-built
+// httpStatusError.
+func TestExitCodeForClassifiesRealDaemonResponses(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		status int
+		want   int
+	}{
+		{"unauthorized", http.StatusUnauthorized, exitAuthFailed},
+		{"forbidden", http.StatusForbidden, exitAuthFailed},
+		{"not found", http.StatusNotFound, exitNotFound},
+		{"server error", http.StatusInternalServerError, exitServerFail},
+		{"bad request stays general", http.StatusBadRequest, exitGeneral},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "boom", tc.status)
+			}))
+			defer ts.Close()
+
+			var stdout, stderr bytes.Buffer
+			err := run([]string{"devices", "get", "--host", ts.URL, "X"}, &stdout, &stderr)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if got := exitCodeFor(err); got != tc.want {
+				t.Errorf("exitCodeFor(run(...)) = %d, want %d (err=%v)", got, tc.want, err)
+			}
+		})
 	}
 }
