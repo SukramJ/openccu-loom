@@ -40,6 +40,16 @@
         deviceStore.refresh(),
       ]);
       ccus = entries;
+      // deviceStore.refresh() never throws — it swallows its own
+      // fetch errors into deviceStore.error (see devices.svelte.ts) so
+      // other deviceStore consumers can keep rendering stale data.
+      // Fleet has no stale data of its own to fall back to: every
+      // card's device count reads straight off deviceStore.items, so a
+      // failed device fetch must not be allowed to render silently as
+      // "0 devices" on every CCU.
+      if (deviceStore.error) {
+        error = deviceStore.error;
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     } finally {

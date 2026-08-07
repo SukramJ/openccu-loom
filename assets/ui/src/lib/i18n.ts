@@ -1982,6 +1982,7 @@ const EN: Catalog = {
   "channel.session_lock_other":
     "Another session currently holds the edit lock for this view. Saves may fail until the lock expires.",
   "channel.take_over": "Take over",
+  "channel.take_over_failed": "Take-over failed",
   "channel.lock_lost": "Edit lock lost",
   "channel.lock_lost_detail":
     "Another session took over the edit lock, or your lock expired. Re-open this editor before saving so you don't overwrite concurrent changes.",
@@ -5495,6 +5496,7 @@ const DE: Catalog = {
   "channel.session_lock_other":
     "Dieser Editor wird gerade von einer anderen Sitzung bearbeitet. Speichern kann scheitern, bis die Sperre abläuft.",
   "channel.take_over": "Bearbeitung übernehmen",
+  "channel.take_over_failed": "Übernahme fehlgeschlagen",
   "channel.lock_lost": "Bearbeitungssperre verloren",
   "channel.lock_lost_detail":
     "Eine andere Sitzung hat die Bearbeitungssperre übernommen oder deine Sperre ist abgelaufen. Öffne diesen Editor erneut, bevor du speicherst, um gleichzeitige Änderungen nicht zu überschreiben.",

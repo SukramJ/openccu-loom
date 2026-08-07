@@ -123,6 +123,15 @@
     }
   }
 
+  // Monotonic generation counter guarding the async load path. Every
+  // call captures its own generation; a response that lands after a
+  // newer call has already started is discarded instead of applied,
+  // so a slow response for channel 1 can never overwrite the
+  // schema/values/serverValues the UI has since moved on to for
+  // channel 2. Mirrors the `cancelled` guard the brightness effect
+  // below already uses for its own async fetch.
+  let loadGeneration = 0;
+
   async function load(
     addr: string,
     ch: number,
@@ -131,10 +140,12 @@
     pr: string | undefined,
     exp: boolean,
   ) {
+    const generation = ++loadGeneration;
     loading = true;
     loadError = null;
     try {
       const next = await api.uiSchema(addr, ch, ps, loc, pr, exp);
+      if (generation !== loadGeneration) return;
       const seed: ParamValues = {};
       for (const p of next.parameters) {
         if (p.observed) seed[p.name] = p.value;
@@ -146,10 +157,11 @@
       lockedParams = new Set();
       onLoaded?.({ count: next.parameters.length, error: false });
     } catch (err) {
+      if (generation !== loadGeneration) return;
       loadError = friendlyError(err, t);
       onLoaded?.({ count: 0, error: true });
     } finally {
-      loading = false;
+      if (generation === loadGeneration) loading = false;
     }
   }
 
@@ -288,6 +300,13 @@
   $effect(() => {
     const key = `channel:${channelAddress}:${paramset}${peer ? `:${peer}` : ""}`;
     lockKey = key;
+    // A conflict/loss banner belongs to the channel that produced it.
+    // Clear both synchronously on every channel/paramset/peer switch so
+    // a still-in-flight open-session request for the *previous* key can
+    // never leave its stale banner showing on the new one while the new
+    // key's own request is still pending.
+    lockedByOther = null;
+    lockLost = false;
     let cancelled = false;
     let timer: ReturnType<typeof setInterval> | null = null;
     (async () => {
@@ -299,6 +318,7 @@
           lockLost = false;
         }
       } catch (err) {
+        if (cancelled) return;
         if (err instanceof ApiError && err.status === 423) {
           lockedByOther = err.message;
         }
@@ -339,16 +359,18 @@
   }
 
   function onUndo() {
-    const result = undo(stack, values);
+    const result = undo(stack, values, lockedParams);
     values = result.values;
     stack = result.state;
+    lockedParams = result.lockedParams;
     banner = null;
   }
 
   function onRedo() {
-    const result = redo(stack, values);
+    const result = redo(stack, values, lockedParams);
     values = result.values;
     stack = result.state;
+    lockedParams = result.lockedParams;
     banner = null;
   }
 
@@ -684,9 +706,13 @@
   ) {
     // Merge preset values into the working copy. Parameters the
     // preset doesn't touch stay as they were. Recorded as a single
-    // undo entry so the user can roll back an accidental profile
-    // apply in one step.
-    const entry = entryFromPatch(patch, values, "profile.apply");
+    // undo entry — together with the locked-field set transition —
+    // so the user can roll back an accidental profile apply in one
+    // step, including which fields go back to being editable.
+    const entry = entryFromPatch(patch, values, "profile.apply", {
+      before: [...lockedParams],
+      after: meta.fixed,
+    });
     stack = pushEntry(stack, entry);
     values = { ...values, ...patch };
     lockedParams = new Set(meta.fixed);
@@ -747,6 +773,12 @@
         } catch (err) {
           if (err instanceof ApiError && err.status === 423) {
             lockedByOther = err.message;
+          } else {
+            // A network error / 403 (viewer role) / 503 (sessions
+            // unwired) leaves the banner and button exactly as they
+            // were — without a toast the click reads as "did
+            // nothing", so surface it like every other action result.
+            toastStore.error(t("channel.take_over_failed"), friendlyError(err, t));
           }
         }
       }}
