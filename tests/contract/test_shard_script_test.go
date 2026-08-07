@@ -4,6 +4,9 @@
 package contract
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -143,4 +146,95 @@ func shardList(n int) string {
 		parts = append(parts, strconv.Itoa(i))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// TestRaceExemptPackagesHaveNoGoroutines is what makes the race exemption
+// safe to keep.
+//
+// A package is exempt from the race run only because the detector has
+// nothing to find in it: tests/contract is static analysis over the module
+// and spawns no goroutine, so instrumenting it bought nothing and cost
+// ~105 s — the floor of the whole Linux leg. That justification is a
+// property of the code, and code changes.
+//
+// So the property is re-checked rather than trusted. The moment an exempt
+// package spawns a goroutine, this fails and the exemption has to be argued
+// again — instead of silently leaving concurrent code unchecked, which is
+// the failure mode a performance shortcut earns if nobody watches it.
+func TestRaceExemptPackagesHaveNoGoroutines(t *testing.T) {
+	t.Parallel()
+
+	exempt := runTestShardExempt(t)
+	if len(exempt) == 0 {
+		t.Skip("no packages are exempt from the race run")
+	}
+
+	root := repoRoot(t)
+	for _, pkg := range exempt {
+		rel := strings.TrimPrefix(pkg, "github.com/SukramJ/openccu-loom/")
+		dir := filepath.Join(root, filepath.FromSlash(rel))
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("race-exempt package %s: %v", pkg, err)
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
+				continue
+			}
+			src, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			if err != nil {
+				t.Fatalf("read %s: %v", e.Name(), err)
+			}
+			if i := goroutineSpawnIndex(string(src)); i >= 0 {
+				t.Errorf("%s/%s spawns a goroutine, so %s is no longer safe to run without -race: "+
+					"either drop the RACE_EXEMPT entry in script/test_shard.sh, or explain in that "+
+					"list why the detector still has nothing to find",
+					rel, e.Name(), pkg)
+			}
+		}
+	}
+}
+
+// goroutineSpawnIndex reports where src spawns a goroutine, or -1. It
+// looks for the statement form only; the word "go" inside identifiers,
+// comments and strings is ignored by requiring the keyword to start a
+// statement.
+func goroutineSpawnIndex(src string) int {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", src, 0)
+	if err != nil {
+		// An unparseable file is not this test's business; the compiler
+		// will have said so first.
+		return -1
+	}
+	found := -1
+	ast.Inspect(file, func(n ast.Node) bool {
+		if g, ok := n.(*ast.GoStmt); ok && found < 0 {
+			found = int(g.Go)
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// runTestShardExempt returns the packages the shard script excludes from
+// the race run.
+func runTestShardExempt(t *testing.T) []string {
+	t.Helper()
+	scriptPath, err := filepath.Abs("../../script/test_shard.sh")
+	if err != nil {
+		t.Fatalf("resolve test_shard.sh: %v", err)
+	}
+	out, err := exec.Command(scriptPath, "--exempt").Output()
+	if err != nil {
+		t.Fatalf("test_shard.sh --exempt: %v", err)
+	}
+	var pkgs []string
+	for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			pkgs = append(pkgs, l)
+		}
+	}
+	return pkgs
 }

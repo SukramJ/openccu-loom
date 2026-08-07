@@ -141,6 +141,39 @@ jobs:
           path: coverage-shard-${{ matrix.shard }}.out
           if-no-files-found: error
 
+  # The packages the race detector has nothing to find in — see RACE_EXEMPT in
+  # script/test_shard.sh. tests/contract is static analysis over the module and
+  # spawns no goroutine, yet instrumenting it cost ~105 s and set the floor of
+  # the whole Linux leg, because a single package cannot be split across
+  # shards. It still runs, still reports coverage, just without the tax.
+  # A contract test re-checks the "no goroutines" premise on every run, so the
+  # exemption cannot quietly start covering concurrent code.
+  test-static:
+    name: test static (linux, no race)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: go test (no race)
+        shell: bash
+        run: |
+          mapfile -t pkgs < <(script/test_shard.sh --exempt)
+          if [ "${#pkgs[@]}" -eq 0 ]; then
+            echo "::error::no race-exempt packages resolved"
+            exit 1
+          fi
+          go test -count=1 -covermode=atomic \
+            -coverprofile=coverage-shard-static.out "${pkgs[@]}"
+      - name: upload static coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-shard-static
+          path: coverage-shard-static.out
+          if-no-files-found: error
+
   # Keeps the name `test (ubuntu-latest)` because that is a required status
   # check on main; it is now the aggregate gate over the shards rather than a
   # test run of its own. `if: always()` plus the explicit result check is
@@ -150,14 +183,14 @@ jobs:
   # PR reported mergeable.
   test:
     name: test (ubuntu-latest)
-    needs: test-shard
+    needs: [test-shard, test-static]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: shards must all be green
-        if: needs.test-shard.result != 'success'
+        if: needs.test-shard.result != 'success' || needs.test-static.result != 'success'
         run: |
-          echo "::error::linux test shards did not pass (result=${{ needs.test-shard.result }})"
+          echo "::error::linux tests did not pass (shards=${{ needs.test-shard.result }} static=${{ needs.test-static.result }})"
           exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

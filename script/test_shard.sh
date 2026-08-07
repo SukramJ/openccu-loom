@@ -5,6 +5,7 @@
 # test_shard.sh — print the Go packages that belong to one CI test shard.
 #
 #   script/test_shard.sh <index> <total> [package-list-file]
+#   script/test_shard.sh --exempt
 #
 # The race-detector test run is by far the longest job in CI, so ci.yml splits
 # it across several runners. This script owns the split so the partitioning
@@ -21,12 +22,45 @@
 # internal/north/matter/* alone is a third of the tree — onto one runner while
 # another idles.
 #
+# Race-exempt packages are subtracted from the shards and printed by
+# `--exempt` instead. They still run in CI, just without -race, because the
+# detector finds nothing there and costs a great deal: tests/contract is
+# static analysis over the module (type checker, repo walks) and spawns no
+# goroutine at all, yet it was the single most expensive package in the race
+# run at ~105 s — the floor of the whole Linux leg, and unsplittable because
+# it is one package.
+#
+# A package belongs here only with that evidence. TestRaceExemptPackagesHaveNoGoroutines
+# re-checks it on every run: the moment an exempt package spawns a goroutine,
+# the build fails and the exemption has to be argued again rather than
+# quietly covering concurrent code.
+#
 # The optional third argument names a file to read the package list from
 # ("-" for stdin) instead of shelling out to `go list`. CI does not pass it;
 # it exists so a caller that already has the list (the contract test that
 # checks this partitioning, for one) does not pay for a second module load.
 
 set -euo pipefail
+
+# Package suffixes exempt from the race run. Matched against the end of the
+# import path so the module prefix does not have to be repeated.
+RACE_EXEMPT=(
+    /tests/contract
+)
+
+exempt_pattern() {
+    local IFS='|'
+    printf '(%s)$' "${RACE_EXEMPT[*]}"
+}
+
+if [[ "${1:-}" == "--exempt" ]]; then
+    if [[ -n "${2:-}" ]]; then
+        cat -- "$2"
+    else
+        go list ./...
+    fi | grep -E "$(exempt_pattern)" || true
+    exit 0
+fi
 
 INDEX="${1:?usage: test_shard.sh <index> <total> [package-list-file]}"
 TOTAL="${2:?usage: test_shard.sh <index> <total> [package-list-file]}"
@@ -49,4 +83,4 @@ if [[ -n "$SOURCE" ]]; then
     cat -- "$SOURCE"
 else
     go list ./...
-fi | awk -v idx="$INDEX" -v total="$TOTAL" 'NF > 0 && NR % total == idx % total'
+fi | grep -Ev "$(exempt_pattern)" | awk -v idx="$INDEX" -v total="$TOTAL" 'NF > 0 && NR % total == idx % total'
