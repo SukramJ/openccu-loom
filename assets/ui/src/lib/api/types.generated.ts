@@ -9206,6 +9206,11 @@ export interface components {
             /** @enum {string} */
             class: "smoke" | "water" | "gas" | "co" | "tamper" | "battery" | "technical" | "intrusion" | "panic";
             active: boolean;
+            /**
+             * @description What this class contributes to the folded severity right now — not what its name implies. Colour the class from this, never from `active`: a low battery must not look like a fire. `intrusion` is arm-aware, so an active source whose zone is disarmed grades `info` rather than `alarm`; `warning` means the arm state behind at least one active source could not be resolved. `ok` while inactive.
+             * @enum {string}
+             */
+            severity: "ok" | "info" | "warning" | "alarm" | "critical";
             sources?: components["schemas"]["AlarmSource"][];
             /** @description Sources of this class the index knows, active or not. */
             known: number;

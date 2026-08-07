@@ -135,6 +135,11 @@ func (a *aggregate) classState(c hmenum.SecurityClass) security.ClassState {
 		st.SinceMS = a.classSince[c]
 		st.Centrals = sortedKeys(centrals)
 	}
+	// The grade travels with the state it was derived from. Deriving it
+	// here rather than at each consumer is what keeps the badge the
+	// Config UI paints, the MQTT class attribute and the folded
+	// `security/state` from disagreeing about the same detection.
+	st.Severity = a.classSeverity(st)
 	return st
 }
 
@@ -153,10 +158,13 @@ func (a *aggregate) severity() hmenum.SecuritySeverity {
 			worst = s
 		}
 	}
+	// Each class contributes the severity it derived for itself, not the
+	// static one its name implies. Folding SeverityForClass here instead
+	// collapsed the whole domain onto "alarm" whenever a motion detector
+	// reported on a disarmed system, which is a detection and not a
+	// break-in.
 	for _, c := range hmenum.SecurityClasses() {
-		if a.classState(c).Active {
-			raise(hmenum.SeverityForClass(c))
-		}
+		raise(a.classState(c).Severity)
 	}
 	for _, f := range a.faults {
 		if src, ok := a.sources[f.Source.Ref]; ok && !src.relevant {

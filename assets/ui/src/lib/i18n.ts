@@ -3392,16 +3392,21 @@ const EN: Catalog = {
     "Every classified data point the domain knows about — filter it, and correct a wrong classification.",
   "security.intro.faults":
     "Standing faults, oldest first. Acknowledging records that you have seen it — it does not clear the condition.",
-  // Hazard/fault classes, in escalation order.
-  "security.class.smoke": "Smoke",
-  "security.class.water": "Water",
-  "security.class.gas": "Gas",
-  "security.class.co": "Carbon monoxide",
-  "security.class.tamper": "Tamper",
-  "security.class.battery": "Battery",
+  // Hazard/fault classes, in escalation order. A class entity reports a
+  // detection, not a verdict, so the names follow a verb pattern: a noun
+  // reads as a finding ("Intrusion"), a verb as an observation. Kept
+  // word-identical to security.entity.class.* in internal/i18n/catalogs,
+  // which names the same classes on MQTT and for the client — pinned by
+  // TestSPASecurityClassLabelsMatchDaemonCatalogues.
+  "security.class.smoke": "Smoke detected",
+  "security.class.water": "Water detected",
+  "security.class.gas": "Gas detected",
+  "security.class.co": "Carbon monoxide detected",
+  "security.class.tamper": "Tamper detected",
+  "security.class.battery": "Battery low",
   "security.class.technical": "Technical fault",
-  "security.class.intrusion": "Intrusion",
-  "security.class.panic": "Panic",
+  "security.class.intrusion": "Opening or motion detected",
+  "security.class.panic": "Panic triggered",
   // Folded severity.
   "security.severity.ok": "OK",
   "security.severity.info": "Info",
@@ -3427,6 +3432,12 @@ const EN: Catalog = {
   "security.overview.no_classes.description":
     "Sources appear here once the classifier finds a smoke, water, gas, tamper or other security-relevant data point.",
   "security.overview.class_active": "{count} active",
+  // A class can be active without anything being wrong — an intrusion source
+  // reports on a disarmed system too. This is the wording for that case, so
+  // an observation never borrows an alarm's words. Colon form on purpose:
+  // t() has no plural machinery, and "Reporting: 1" / "Meldet: 3" is correct
+  // for every count in both locales where "{count} reporting" is not.
+  "security.overview.class_reporting": "Reporting: {count}",
   "security.overview.class_inactive": "No active sources",
   "security.overview.class_known": "{count} known",
   "security.overview.class_since": "since {time}",
@@ -6904,15 +6915,15 @@ const DE: Catalog = {
   "security.intro.faults":
     "Offene Störungen, älteste zuerst. Quittieren vermerkt nur, dass du es gesehen hast — es behebt die Störung nicht.",
   // Gefahren-/Störungsklassen, in Eskalationsreihenfolge.
-  "security.class.smoke": "Rauch",
-  "security.class.water": "Wasser",
-  "security.class.gas": "Gas",
-  "security.class.co": "Kohlenmonoxid",
-  "security.class.tamper": "Sabotage",
-  "security.class.battery": "Batterie",
+  "security.class.smoke": "Rauch erkannt",
+  "security.class.water": "Wasser erkannt",
+  "security.class.gas": "Gas erkannt",
+  "security.class.co": "Kohlenmonoxid erkannt",
+  "security.class.tamper": "Sabotage erkannt",
+  "security.class.battery": "Batterie schwach",
   "security.class.technical": "Technische Störung",
-  "security.class.intrusion": "Einbruch",
-  "security.class.panic": "Panik",
+  "security.class.intrusion": "Öffnung oder Bewegung erkannt",
+  "security.class.panic": "Panikruf ausgelöst",
   // Zusammengefasster Schweregrad.
   "security.severity.ok": "OK",
   "security.severity.info": "Info",
@@ -6938,6 +6949,7 @@ const DE: Catalog = {
   "security.overview.no_classes.description":
     "Quellen erscheinen hier, sobald der Klassifikator einen Rauch-, Wasser-, Gas-, Sabotage- oder anderen sicherheitsrelevanten Datenpunkt findet.",
   "security.overview.class_active": "{count} aktiv",
+  "security.overview.class_reporting": "Meldet: {count}",
   "security.overview.class_inactive": "Keine aktiven Quellen",
   "security.overview.class_known": "{count} bekannt",
   "security.overview.class_since": "seit {time}",

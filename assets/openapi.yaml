@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.4.0
+  version: 5.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -12070,12 +12070,22 @@ components:
 
     SecurityClassState:
       type: object
-      required: [class, active, known]
+      required: [class, active, severity, known]
       properties:
         class:
           type: string
           enum: [smoke, water, gas, co, tamper, battery, technical, intrusion, panic]
         active: { type: boolean }
+        severity:
+          type: string
+          enum: [ok, info, warning, alarm, critical]
+          description: >
+            What this class contributes to the folded severity right now — not
+            what its name implies. Colour the class from this, never from
+            `active`: a low battery must not look like a fire. `intrusion` is
+            arm-aware, so an active source whose zone is disarmed grades `info`
+            rather than `alarm`; `warning` means the arm state behind at least
+            one active source could not be resolved. `ok` while inactive.
         sources:
           type: array
           items: { $ref: "#/components/schemas/AlarmSource" }

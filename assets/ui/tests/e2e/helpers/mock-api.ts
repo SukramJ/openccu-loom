@@ -19,6 +19,25 @@ export async function mockAllApis(page: Page): Promise<void> {
   // budget can stay tight enough to catch real drift.
   await page.clock.setFixedTime(new Date('2026-01-01T09:00:00Z'));
 
+  // Accept the live-event WebSocket and hold it open without sending
+  // anything. It is the one call this suite did not mock, and leaving it
+  // unmocked made the connection badge the only non-deterministic pixel on
+  // every page: with no server behind the dev-server proxy the client
+  // cycles connecting → closed → connecting on its reconnect backoff, so a
+  // screenshot caught whichever state the cycle happened to be in. That
+  // surfaced as a visual failure wandering between specs — access-control
+  // in one run, energy or the HA-skin overview in the next — always in the
+  // same 90×20 region in the top-right corner.
+  //
+  // Holding the socket open is also the more faithful baseline: a real
+  // deployment has a live stream, so the badge belongs in the screenshot,
+  // just not flickering. No frames are sent, so no view receives an event
+  // and nothing else moves.
+  await page.routeWebSocket(/\/api\/v1\/events$/, () => {
+    // Accepting the route and doing nothing keeps the client's onopen
+    // handler satisfied and the socket alive for the page's lifetime.
+  });
+
   // Auth
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill({ json: fixture('auth-me.json') }),

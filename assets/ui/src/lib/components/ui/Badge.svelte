@@ -3,11 +3,14 @@
   import { cn } from "$lib/utils";
 
   type Variant = "default" | "success" | "warning" | "danger" | "muted";
-  type Props = { variant?: Variant; class?: string; children?: Snippet };
+  // title is a plain HTML passthrough: a badge that carries meaning in its
+  // colour needs a text equivalent, and colour alone is not one.
+  type Props = { variant?: Variant; class?: string; title?: string; children?: Snippet };
 
   let {
     variant = "default",
     class: className,
+    title,
     children,
   }: Props = $props();
 
@@ -34,6 +37,7 @@
     variants[variant],
     className,
   )}
+  {title}
 >
   {@render children?.()}
 </span>

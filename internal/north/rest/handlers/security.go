@@ -148,6 +148,7 @@ func apiSecurityClass(st security.ClassState) hmapi.SecurityClassState {
 	return hmapi.SecurityClassState{
 		Class:    string(st.Class),
 		Active:   st.Active,
+		Severity: string(st.Severity),
 		Sources:  apiSecuritySources(st.Sources),
 		Known:    st.Known,
 		Centrals: st.Centrals,

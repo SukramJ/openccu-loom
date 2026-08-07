@@ -35,6 +35,12 @@ type SecurityClassState struct {
 	Class string `json:"class"`
 	// Active reports whether at least one source is currently active.
 	Active bool `json:"active"`
+	// Severity is what this class contributes to the folded overall
+	// state right now, not what its name implies: an intrusion source
+	// reporting while its zone is disarmed is an observation, not an
+	// alarm. A consumer colours the class from this, never from Active
+	// — a low battery must not look like a fire. "ok" while inactive.
+	Severity string `json:"severity"`
 	// Sources lists the active sources, oldest first.
 	Sources []AlarmSource `json:"sources,omitempty"`
 	// Known counts the sources of this class the index knows — the

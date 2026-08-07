@@ -94,6 +94,25 @@
     }
   }
 
+  // A class carries the severity the daemon derived for it, which is not the
+  // one its name implies: `intrusion` grades `info` while its zone is
+  // disarmed, and `warning` when the arm state behind a source could not be
+  // resolved. Painting every active class red instead made "Battery low" look
+  // like a fire and folded a tilted window into "Alarm". The rule stays in the
+  // daemon so this view, MQTT and Home Assistant grade the same detection
+  // identically; the view only renders the verdict it is handed.
+  function classVariant(cls: { active: boolean; severity?: string }): BadgeVariant {
+    if (!cls.active) return "muted";
+    return severityVariant(cls.severity ?? "");
+  }
+
+  // Escalating means the domain wants someone to act now. Anything below that
+  // is an observation, and it must not borrow an alarm's words — "1 active" in
+  // red beside "Opening or motion detected" reads as a break-in in progress.
+  function classIsEscalating(cls: { severity?: string }): boolean {
+    return cls.severity === "alarm" || cls.severity === "critical";
+  }
+
   function fmtDateTime(iso: string | undefined): string {
     if (!iso) return "";
     try {
@@ -227,10 +246,17 @@
                   />
                   <h3 class="text-sm font-semibold">{t(`security.class.${cls.class}`)}</h3>
                 </div>
-                <Badge variant={cls.active ? "danger" : "muted"}>
-                  {cls.active
-                    ? t("security.overview.class_active", { count: sources.length })
-                    : t("security.overview.class_inactive")}
+                <Badge
+                  variant={classVariant(cls)}
+                  title={cls.severity ? t(`security.severity.${cls.severity}`) : undefined}
+                >
+                  {#if !cls.active}
+                    {t("security.overview.class_inactive")}
+                  {:else if classIsEscalating(cls)}
+                    {t("security.overview.class_active", { count: sources.length })}
+                  {:else}
+                    {t("security.overview.class_reporting", { count: sources.length })}
+                  {/if}
                 </Badge>
               </div>
               <p class="text-xs text-[var(--ha-secondary-text-color)]">

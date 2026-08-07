@@ -265,7 +265,13 @@ Geisterentitäten. Verliert eine Klasse ihre letzte Quelle, räumt
 
 Topic `<base>/security/class/<class>`, Entity-Key `class_<class>`, Wertform
 `ON`/`OFF`, Attribute einheitlich
-`state, sources[], source_names[], count, truncated, total, known, centrals[], since_ms`.
+`state, sources[], source_names[], count, truncated, total, known, centrals[], since_ms, severity`.
+
+`severity` ist die abgeleitete Bewertung dieser Erkennung (§4.2.1) und
+damit das Feld, auf das eine Automation verzweigt, statt den
+Schärfungszustand selbst nachzubauen. `ON` allein sagt nur, dass etwas
+gemeldet hat. Dasselbe Feld trägt REST als `severity` in
+`SecurityClassState`.
 
 | Klasse | `device_class` | diagnostic | Quellen |
 |---|---|---|---|
@@ -313,7 +319,63 @@ Die Namen liegen in `internal/i18n/catalogs/{de,en}.json` unter
 `security.entity.class.<klasse>` und wirken damit auf **beide** Nordbound-Wege
 gleichzeitig: MQTT-Discovery löst sie beim Publish auf, der
 openccu-loom-client liest sie über `GET /i18n/entities` in der UI-Sprache von
-Home Assistant. Eine Umbenennung findet also an genau einer Stelle statt.
+Home Assistant.
+
+**Die SPA ist eine dritte Oberfläche mit eigenem Katalog.** Sie liest die
+Daemon-Kataloge nicht, sondern führt eigene Schlüssel
+`security.class.<klasse>` in `assets/ui/src/lib/i18n.ts` (EN- und
+DE-Block). Eine Umbenennung findet also an **zwei** Stellen statt — die
+Behauptung „genau eine Stelle" war falsch und hat real gekostet: die
+Verb-Umstellung erreichte die Nordbound-Wege, die Config-UI zeigte
+weiterhin „Einbruch" über denselben Daten, also genau das Wort, das die
+Umbenennung entfernen sollte.
+
+Beide Stellen sind seit dieser Korrektur aneinander gebunden:
+`TestSPASecurityClassLabelsMatchDaemonCatalogues` (`tests/contract/`)
+vergleicht `security.class.*` gegen `security.entity.class.*` **pro
+Sprache** und schlägt bei jeder Abweichung fehl. Wortgleichheit ist der
+Vertrag: Operatoren wechseln zwischen Config-UI und Home Assistant und
+schauen dabei auf **eine** Installation; zwei Namen für eine Klasse lesen
+sich als zwei Dinge.
+
+#### Was eine aktive Klasse zur Gesamt-Severity beiträgt
+
+Der Name allein bestimmt die Severity nicht. Eine Klasse trägt die
+Severity bei, die die Domäne aus (Klasse, aktive Quellen, Zonenzuständen)
+ableitet — `classSeverity` in `internal/security/severity.go`, geschrieben
+nach `ClassState.Severity` und von derselben Ableitung in die
+Gesamt-Severity gefaltet. Es gibt bewusst nur **eine** Ableitung, damit
+das Kärtchen der Config-UI, das MQTT-Attribut `severity` unter
+`security/class/<class>` und `security/state` dieselbe Erkennung nie
+unterschiedlich bewerten.
+
+| Klasse | Severity bei aktiver Quelle |
+|---|---|
+| `smoke`, `gas`, `co` | `critical` — unabhängig vom Schärfungszustand |
+| `water`, `panic` | `alarm` — unabhängig vom Schärfungszustand |
+| `tamper` | `warning` |
+| `technical`, `battery` | `info` |
+| `intrusion` | **schärfungsabhängig**, siehe unten |
+
+`intrusion` ist die einzige schärfungsabhängige Klasse, und zwar aus dem
+Grund, aus dem sie umbenannt wurde: sie meldet eine Erkennung, kein
+Urteil. Ein gekipptes Fenster bei unscharfer Anlage setzt sie genauso wie
+ein Einbrecher. Als feste `alarm`-Klasse faltete sie damit die ganze
+Domäne auf „Alarm", sobald irgendjemand ein Fenster kippte — genau der
+Befund, den ein Operator gemeldet hat.
+
+| Lage | Severity | Warum |
+|---|---|---|
+| mindestens eine aktive Quelle liegt in einer **scharfen** Zone | `alarm` | „Scharf" ist jeder Zonenzustand außer `disarmed`: `armed`, `arming` (Ausgangsverzögerung), `pending` (Eingangsverzögerung) und `triggered` sind alle Zustände, in denen jemand um Schutz gebeten hat |
+| alle aktiven Quellen liegen in **unscharfen** Zonen | `info` | Beobachtung, kein Handlungsbedarf |
+| **gar keine Zonen** (Alarm-Engine deaktiviert) | `info` | ohne Engine existiert nirgends ein Schärfungszustand, `intrusion` kann folglich nie eskalieren — das ist eine vollständige Antwort, keine Lücke |
+| Schärfungszustand **nicht auflösbar** | `warning` | die Quelle ist in keiner Zone eingebucht, nennt eine Zone, die die Domäne nicht hält, oder die Zone hat ihren Zustand noch nicht gemeldet (die Identitäts-Seeding-Pfade füllen id/slug/name, der Zustand kommt erst mit der ersten Panel-Projektion). Ein unauflösbarer Zustand gilt **nicht** als scharf, wird aber auch nicht als „alles gut" ausgegeben — auf einer Sicherheitsoberfläche ist ein erfundenes „unscharf" schlimmer als eine eingestandene Lücke, dieselbe Regel, der die Zonenanzeige folgt |
+
+Die Config-UI färbt das Klassen-Kärtchen aus dieser Severity, nie aus
+`active`, und verwendet für eine aktive, nicht eskalierende Klasse eine
+neutrale Formulierung („Meldet: 1") statt der Alarm-Wortwahl („1 aktiv")
+in Rot. Ohne diese Trennung sah „Batterie schwach" aus wie ein
+Feueralarm.
 
 ### 4.2.2 Herkunft: das `sources`-Attribut
 

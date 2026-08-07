@@ -294,6 +294,10 @@ func classAttributes(st security.ClassState) map[string]any {
 	attrs["known"] = st.Known
 	attrs["centrals"] = st.Centrals
 	attrs["since_ms"] = st.SinceMS
+	// The grade the domain derived for this detection, so an automation
+	// can branch on "is this worth waking someone" without re-deriving
+	// the arm state the daemon already resolved.
+	attrs["severity"] = string(st.Severity)
 	return attrs
 }
 
