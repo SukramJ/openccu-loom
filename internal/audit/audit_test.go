@@ -115,3 +115,43 @@ func TestNoopRecorderDropsEverything(t *testing.T) {
 		t.Fatalf("noop returned %d entries", len(got))
 	}
 }
+
+func TestBufferStampsAUniqueIDPerEntry(t *testing.T) {
+	t.Parallel()
+	b := NewBuffer(10)
+	// Every field a client could key on is identical across these three:
+	// the same operator action emitting several rows in one second.
+	for range 3 {
+		b.Record(Entry{Action: ActionParamsetWrite, User: "markus", Timestamp: time.Unix(1, 0).UTC()})
+	}
+	seen := make(map[int64]int)
+	for _, e := range b.List(0) {
+		if e.ID == 0 {
+			t.Fatalf("entry recorded without an ID: %+v", e)
+		}
+		seen[e.ID]++
+	}
+	if len(seen) != 3 {
+		t.Fatalf("want 3 distinct IDs, got %d: %v", len(seen), seen)
+	}
+}
+
+func TestBufferKeepsAProvidedIDAndLiftsItsSequencePastIt(t *testing.T) {
+	t.Parallel()
+	b := NewBuffer(10)
+	// Replaying persisted history preserves the store's primary keys...
+	b.Record(Entry{ID: 42, Action: ActionParamsetWrite})
+	// ...and a later live entry must not reuse one of them.
+	b.Record(Entry{Action: ActionParamsetWrite})
+
+	got := b.List(0)
+	if len(got) != 2 {
+		t.Fatalf("want 2 entries, got %d", len(got))
+	}
+	if got[1].ID != 42 {
+		t.Fatalf("replayed ID not preserved: got %d, want 42", got[1].ID)
+	}
+	if got[0].ID <= 42 {
+		t.Fatalf("live entry reused a replayed ID: got %d, want > 42", got[0].ID)
+	}
+}

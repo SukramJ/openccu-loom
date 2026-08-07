@@ -20,9 +20,11 @@ import (
 type SinkFunc func(ctx context.Context, entry Entry) error
 
 // PersistedRecorder layers durable persistence on top of an in-memory
-// [Buffer]. Writes go to both: the buffer is the SPA's hot path
-// (sub-millisecond reads), the sink is the audit-trail of record
-// (`/api/v1/audit?persisted=true` queries the SQL store directly).
+// [Buffer]. Writes go to both: the sink is the audit-trail of record and
+// backs `GET /api/v1/audit` whenever a durable store is wired, while the
+// buffer serves that endpoint's fallback path and the MCP tool. The two
+// sides assign [Entry.ID] independently — the buffer receives a copy, so
+// its sequence never reaches the store's primary key.
 //
 // The persistence call runs synchronously by default; pass an
 // async-friendly Sink (e.g. one that goroutines its work) when
