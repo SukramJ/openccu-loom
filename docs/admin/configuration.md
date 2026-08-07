@@ -223,10 +223,14 @@ the CCU. The host/ports here must be reachable **from the CCU**.
 
 `port` is the XML-RPC callback (HmIP/BidCos); `bin_port` is the
 BIN-RPC callback (CUxD). A value of `0` means the OS assigns an
-ephemeral port. `port_range` (e.g. `"30000-30099"`) bounds dynamic
-assignment. `public_host` overrides the host advertised to the CCU
-when the daemon is behind NAT. The effective port is re-advertised to
-the CCU on every reconnect, so dynamic ports survive restarts.
+ephemeral port. `port_range` (e.g. `"30000-30099"`) applies to the
+XML-RPC listener and **takes precedence over `port`**: when it is set
+the listener binds the first free port inside the range and `port` is
+not used. A malformed range is rejected when the config is saved, not
+only at the next boot. `public_host` overrides the host advertised to
+the CCU when the daemon is behind NAT. The effective port is
+re-advertised to the CCU on every reconnect, so dynamic ports survive
+restarts.
 
 `max_connections` caps the number of concurrent connections each
 callback listener accepts (`0` uses the default of `64`) — a guard

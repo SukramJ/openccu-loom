@@ -69,6 +69,11 @@ CREATE TABLE config_sections (
 
 -- +goose StatementEnd
 
+-- Down is destructive: every user account and API token is deleted, along
+-- with every configured central and every saved config section.
+-- password_hash and token_hash are bcrypt hashes with no plaintext stored
+-- anywhere — by design they cannot be reconstructed, so this is not a
+-- reversible operation for accounts or tokens, only a data-loss event.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE IF EXISTS config_sections;

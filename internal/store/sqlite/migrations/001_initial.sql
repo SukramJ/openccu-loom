@@ -58,6 +58,10 @@ CREATE INDEX incidents_by_severity ON incidents(severity, last_seen);
 
 -- +goose StatementEnd
 
+-- Down is destructive: the device/paramset/interface inventory is a CCU-side
+-- cache and refills on the next boot, but the incidents table is the only
+-- record of every incident logged so far and has no other source — those
+-- rows do not come back.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE IF EXISTS incidents;

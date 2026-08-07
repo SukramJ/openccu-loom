@@ -88,6 +88,10 @@ CREATE UNIQUE INDEX matter_acl_position
 
 -- +goose StatementEnd
 
+-- Down is destructive: every paired Matter fabric is deleted, including the
+-- NOC, the operational private key, and the Identity Protection Key in
+-- matter_node_identities. None of those three are recoverable — the only
+-- way back is re-commissioning every fabric from scratch.
 -- +goose Down
 -- +goose StatementBegin
 

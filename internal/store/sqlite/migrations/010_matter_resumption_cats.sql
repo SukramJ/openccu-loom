@@ -16,6 +16,11 @@ ALTER TABLE matter_resumption
 
 -- +goose StatementEnd
 
+-- Down is destructive to the CATs specifically: the table rebuild below
+-- preserves every resumption secret (fabric_index, peer_node_id,
+-- resumption_id, shared_secret) but discards every case_authenticated_tags
+-- value already negotiated. Affected sessions lose their fabric-scoped extra
+-- privilege until it is renegotiated.
 -- +goose Down
 -- +goose StatementBegin
 

@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -542,15 +543,26 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		// user/token stores now — and keeps north.rest from shadowing the
 		// north.rest.auth.* rows.
 		raw = configstore.StripForeignSectionFields(section, raw)
+		// The effective config is a precondition for the save, not an
+		// optimisation: without it the masked-secret sentinels stay in the
+		// payload, semantic validation is skipped and the restart-required
+		// answer is a guess. Persisting anyway was the worst of the three
+		// outcomes — a "***" written over a real credential, reported as 200.
+		// Refusing keeps the stored section as it was.
+		cur, cerr := svc.Effective(r.Context())
+		if cur == nil || cur.Config == nil {
+			cerr = cmp.Or(cerr, errEffectiveConfigEmpty)
+		}
+		if cerr != nil {
+			writeServerError(w, r, http.StatusServiceUnavailable, problem.TypeServiceUnready,
+				"Effective config unavailable — section not saved", cerr)
+			return
+		}
 		// Turn any masked-secret sentinel the SPA echoed back into the real
 		// stored value before validation/persistence, so a round-tripped "***"
-		// neither fails type-validation nor overwrites the secret. Best-effort:
-		// if the current config is unavailable the raw payload validates as-is.
-		var current *config.Config
-		if cur, cerr := svc.Effective(r.Context()); cerr == nil && cur != nil {
-			current = cur.Config
-			raw = restoreMaskedSecrets(cur.Config, section, raw)
-		}
+		// neither fails type-validation nor overwrites the secret.
+		current := cur.Config
+		raw = restoreMaskedSecrets(current, section, raw)
 		if err := validateSection(section, raw); err != nil {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Section validation failed", err.Error()))
@@ -563,34 +575,31 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		// config.Validate so such a section is rejected with 400 instead of
 		// being persisted and only warned about at the next boot. The same
 		// candidate answers the restart-required question per changed field.
-		restartRequired := false
 		persist := []byte(raw)
-		if current != nil {
-			base := cloneConfig(current)
-			base.ApplyDefaults()
-			candidate := cloneConfig(current)
-			if err := configstore.ApplySectionToConfig(section, raw, candidate); err != nil {
-				problem.Write(w, http.StatusBadRequest,
-					problem.New(problem.TypeValidation, r, "Section validation failed", err.Error()))
-				return
-			}
-			candidate.ApplyDefaults()
-			if err := candidate.Validate(); err != nil {
-				problem.Write(w, http.StatusBadRequest,
-					problem.New(problem.TypeValidation, r, "Section validation failed", err.Error()))
-				return
-			}
-			restartRequired = len(config.RestartRequiredDiff(base, candidate)) > 0
-			// Persist what was validated. PutSection replaces the row, so
-			// storing the request fragment would silently drop every field the
-			// client did not resend — a PUT of {"enabled":true} on north.mqtt
-			// validated against the merged candidate (which still had
-			// broker_url) but left a row that no longer described a usable
-			// broker. Marshalling the candidate's section sub-tree keeps the
-			// row a complete description of the section.
-			if merged, ok, mErr := configstore.MarshalSection(section, candidate); mErr == nil && ok {
-				persist = merged
-			}
+		base := cloneConfig(current)
+		base.ApplyDefaults()
+		candidate := cloneConfig(current)
+		if err := configstore.ApplySectionToConfig(section, raw, candidate); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Section validation failed", err.Error()))
+			return
+		}
+		candidate.ApplyDefaults()
+		if err := candidate.Validate(); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Section validation failed", err.Error()))
+			return
+		}
+		restartRequired := len(config.RestartRequiredDiff(base, candidate)) > 0
+		// Persist what was validated. PutSection replaces the row, so
+		// storing the request fragment would silently drop every field the
+		// client did not resend — a PUT of {"enabled":true} on north.mqtt
+		// validated against the merged candidate (which still had
+		// broker_url) but left a row that no longer described a usable
+		// broker. Marshalling the candidate's section sub-tree keeps the
+		// row a complete description of the section.
+		if merged, ok, mErr := configstore.MarshalSection(section, candidate); mErr == nil && ok {
+			persist = merged
 		}
 		updatedBy := identityFromCtx(r.Context())
 		row, err := svc.PutSection(r.Context(), section, persist, updatedBy)
@@ -614,6 +623,11 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		})
 	}
 }
+
+// errEffectiveConfigEmpty stands in when the config service answers
+// without an error but with no config at all. A save cannot proceed on
+// either shape, and writeServerError needs something to log.
+var errEffectiveConfigEmpty = errors.New("config: effective config is empty")
 
 // cloneConfig returns an independent deep copy of c so the REST handler can
 // assemble a candidate effective config (current with a section overlaid)

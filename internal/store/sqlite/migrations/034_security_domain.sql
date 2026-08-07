@@ -72,6 +72,16 @@ CREATE UNIQUE INDEX security_faults_open_unique
 
 CREATE INDEX security_faults_by_state ON security_faults(cleared_at_ms, since_ms);
 
+-- Down is destructive on three counts: security_faults deletes the
+-- persistent "since" ledger described above (a restart must not reset how
+-- long a fault has been open, and dropping the table does exactly that);
+-- security_sources deletes every operator classification override and
+-- inclusion decision; and dropping the slug column loses the frozen,
+-- external-identifier-safe name every zone carries in Home Assistant entity
+-- ids and MQTT topics. The next Up re-derives slug from each zone's CURRENT
+-- name, which is a different value for any zone renamed since — orphaning
+-- every entity of that zone in a consumer's registry, the exact failure the
+-- freeze was built to prevent.
 -- +goose Down
 DROP INDEX security_faults_by_state;
 DROP INDEX security_faults_open_unique;

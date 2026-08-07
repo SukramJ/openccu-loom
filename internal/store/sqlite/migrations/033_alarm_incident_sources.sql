@@ -40,6 +40,9 @@ CREATE UNIQUE INDEX alarm_incident_sources_unique
 CREATE INDEX alarm_incident_sources_by_incident
     ON alarm_incident_sources(incident_id, at_ms);
 
+-- Down is destructive: the per-incident source ledger is deleted. The
+-- record of every detector that contributed to a past incident, beyond the
+-- one that opened it, is gone with no other source to rebuild it from.
 -- +goose Down
 DROP INDEX alarm_incident_sources_by_incident;
 DROP INDEX alarm_incident_sources_unique;

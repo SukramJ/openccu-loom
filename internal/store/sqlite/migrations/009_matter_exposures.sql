@@ -40,6 +40,11 @@ CREATE INDEX matter_exposures_central
 
 -- +goose StatementEnd
 
+-- Down is destructive: the operator-curated Matter exposure allowlist is
+-- deleted outright, including every enable/disable decision and every
+-- friendly name. Because the default is "nothing exposed", the bridge does
+-- not fail open — it silently goes back to exposing nothing until the
+-- operator recreates every entry.
 -- +goose Down
 -- +goose StatementBegin
 

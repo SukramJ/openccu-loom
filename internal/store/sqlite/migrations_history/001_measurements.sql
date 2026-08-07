@@ -17,5 +17,8 @@ CREATE TABLE IF NOT EXISTS measurements (
     PRIMARY KEY (central_name, interface_id, channel_address, parameter, ts)
 ) WITHOUT ROWID;
 
+-- Down is destructive: every raw measurement sample is deleted. The
+-- downsampled hourly/daily rollups derive from these rows; once the raw
+-- tier is gone the history behind them cannot be regenerated.
 -- +goose Down
 DROP TABLE IF EXISTS measurements;

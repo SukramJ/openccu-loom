@@ -26,6 +26,9 @@ INSERT INTO matter_diagnostics (id, reboot_count, base_operational_hours, update
 
 -- +goose StatementEnd
 
+-- Down is destructive: the persisted reboot count and accumulated
+-- operational-hours counter are deleted. GeneralDiagnostics reports reset to
+-- zero on the next boot instead of continuing the accumulated history.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE IF EXISTS matter_diagnostics;

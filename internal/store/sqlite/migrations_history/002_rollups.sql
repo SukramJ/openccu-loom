@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS measurements_daily (
     PRIMARY KEY (central_name, interface_id, channel_address, parameter, bucket_ts)
 ) WITHOUT ROWID;
 
+-- Down is destructive: every hourly and daily rollup bucket is deleted. They
+-- can in principle be refolded from the raw `measurements` tier, but only
+-- within its retention window (13 months by default) — any bucket whose
+-- source rows have already been purged past that window is gone for good,
+-- not just re-derivable on demand.
 -- +goose Down
 DROP TABLE IF EXISTS measurements_daily;
 DROP TABLE IF EXISTS measurements_hourly;

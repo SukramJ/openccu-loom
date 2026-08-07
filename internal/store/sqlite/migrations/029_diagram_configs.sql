@@ -24,6 +24,9 @@ CREATE INDEX diagram_configs_by_owner ON diagram_configs (owner_subject);
 
 -- +goose StatementEnd
 
+-- Down is destructive: every saved measurement-history diagram definition is
+-- deleted. An operator's chart layout and series selection cannot be
+-- reconstructed from anywhere else.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE IF EXISTS diagram_configs;

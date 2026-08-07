@@ -25,6 +25,46 @@
   MVP" now reads "no central registered" or "no storage configured" —
   the condition that actually holds.
 
+- **Fixed: a keypad or lock access code was written to the audit log in
+  cleartext.** Setting a code through the paramset editor stored the
+  code itself in the daemon's audit database for 90 days. Credential
+  parameters now record that they were changed, without the value;
+  ordinary settings keep showing their before/after values.
+
+- **Fixed: daily and monthly energy totals were shifted by your
+  timezone.** Buckets were cut on the UTC calendar but labelled with
+  local dates, so consumption just after midnight counted towards the
+  previous day. Days and months are now local calendar buckets, and a
+  daylight-saving day stays a single bucket. Existing daily figures are
+  rebuilt automatically from the hourly data. If you run the add-on in a
+  container, make sure it carries your timezone.
+
+- **Fixed: a CCU added while the daemon was running re-read its whole
+  device inventory over the radio after every restart**, because it was
+  never written to the local cache. Added CCUs now cache like configured
+  ones.
+
+- **Fixed: switching the measurement history off stopped the cleanup
+  too**, so the database stayed at its full size instead of shrinking.
+  Old data is now evicted whether or not recording is on.
+
+- **Fixed: a damaged backup could be uploaded to the CCU.** A truncated
+  or corrupt archive was sent to the CCU, which then started a restore
+  and rebooted. Archives are checked first. A failed download also no
+  longer lands as a normal-looking `.sbk` file.
+
+- **Fixed: a slow MQTT broker could freeze event delivery for every
+  CCU**, because the hub publishes ran on the same thread that
+  distributes events. They now run on their own worker.
+
+- **Fixed: the "restart required" banner could stay up forever**, or
+  appear without a reason, for settings that come from `config.yaml`.
+  The Config UI now reads the same configuration the daemon runs on.
+
+- **Fixed: the sidebar offered "Backups" to operators who are not
+  admins**, who then got a permission error. The entry is hidden for
+  them now.
+
 - **Added: recovery progress in the diagnostics event stream.**
   Connection-recovery stage and attempt events now appear in the
   event-bus tap, so a reconnect no longer looks like a silent gap.

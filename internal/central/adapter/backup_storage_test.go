@@ -4,6 +4,7 @@
 package adapter
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"errors"
@@ -13,11 +14,42 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/backup/sbk"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
+
+// validBackupArchive builds the tar a CCU system backup actually is, so a
+// restore test exercises the same bytes the adapter's pre-upload
+// inspection accepts. Restore refuses anything else, which is the point —
+// a test that hands it "payload" would be testing a path production must
+// never take.
+func validBackupArchive(t *testing.T) string {
+	t.Helper()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	members := []struct{ name, body string }{
+		{"usr_local.tar.gz", "config-archive-bytes"},
+		{"signature", "sig-bytes"},
+		{"firmware_version", "VERSION=3.89.8.20260719\nPRODUCT=HM-CCU3\n"},
+		{"key_index", "1"},
+	}
+	for _, m := range members {
+		if err := tw.WriteHeader(&tar.Header{Name: m.name, Mode: 0o644, Size: int64(len(m.body))}); err != nil {
+			t.Fatalf("write header %s: %v", m.name, err)
+		}
+		if _, err := tw.Write([]byte(m.body)); err != nil {
+			t.Fatalf("write body %s: %v", m.name, err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar writer: %v", err)
+	}
+	return buf.String()
+}
 
 // ---------------------------------------------------------------------------
 // Inline fakes
@@ -689,7 +721,7 @@ func TestBackupAdapterRestoreCallsRestorer(t *testing.T) {
 	reg := newRegistryForBackupTest(t)
 	a := NewBackupAdapter(reg)
 
-	const payload = "raw backup content"
+	payload := validBackupArchive(t)
 	st := &stubBackupStorage{content: map[string]string{"bk1": payload}}
 	re := &stubBackupRestorer{jobID: "job-42"}
 	a.SetStorage(st)
@@ -738,7 +770,7 @@ func TestBackupAdapterRestorePropagatesRestorerError(t *testing.T) {
 	a := NewBackupAdapter(reg)
 
 	restorerErr := errors.New("CCU rejected upload")
-	a.SetStorage(&stubBackupStorage{content: map[string]string{"bk1": "data"}})
+	a.SetStorage(&stubBackupStorage{content: map[string]string{"bk1": validBackupArchive(t)}})
 	a.SetRestorer(&stubBackupRestorer{err: restorerErr})
 
 	_, err := a.Restore(context.Background(), "bk1")
@@ -805,8 +837,9 @@ func TestBackupAdapterRestoreTargetsOwningCentralNotAnyOther(t *testing.T) {
 	reg := newMultiCentralRegistryForBackupTest(t, "alpha", "beta")
 	a := NewBackupAdapter(reg)
 
-	idBeta := backupID("beta")
-	a.SetStorage(&stubBackupStorage{content: map[string]string{idBeta: "beta payload"}})
+	idBeta := formatBackupID("beta", time.Now())
+	betaPayload := validBackupArchive(t)
+	a.SetStorage(&stubBackupStorage{content: map[string]string{idBeta: betaPayload}})
 
 	restorerAlpha := &stubBackupRestorer{jobID: "alpha-job"}
 	restorerBeta := &stubBackupRestorer{jobID: "beta-job"}
@@ -823,8 +856,8 @@ func TestBackupAdapterRestoreTargetsOwningCentralNotAnyOther(t *testing.T) {
 	if restorerBeta.capturedID != idBeta {
 		t.Errorf("beta restorer id: want %q, got %q", idBeta, restorerBeta.capturedID)
 	}
-	if string(restorerBeta.capturedPayload) != "beta payload" {
-		t.Errorf("beta restorer payload: want %q, got %q", "beta payload", restorerBeta.capturedPayload)
+	if string(restorerBeta.capturedPayload) != betaPayload {
+		t.Errorf("beta restorer payload: want the stored archive, got %d bytes", len(restorerBeta.capturedPayload))
 	}
 	if restorerAlpha.capturedID != "" {
 		t.Errorf("alpha restorer must not be invoked for a beta-owned backup, got id %q", restorerAlpha.capturedID)
@@ -842,7 +875,7 @@ func TestBackupAdapterRestoreUnknownOwnerNeverFallsBackToOtherCentral(t *testing
 	reg := newMultiCentralRegistryForBackupTest(t, "alpha", "beta")
 	a := NewBackupAdapter(reg)
 
-	idBeta := backupID("beta")
+	idBeta := formatBackupID("beta", time.Now())
 	a.SetStorage(&stubBackupStorage{content: map[string]string{idBeta: "beta payload"}})
 
 	restorerAlpha := &stubBackupRestorer{jobID: "alpha-job"}
@@ -871,7 +904,7 @@ func TestBackupAdapterRestoreForCentralWithNoOwnerFallsBackToLegacyRestorer(t *t
 	reg := newMultiCentralRegistryForBackupTest(t, "alpha", "beta")
 	a := NewBackupAdapter(reg)
 
-	a.SetStorage(&stubBackupStorage{content: map[string]string{"manually-imported": "data"}})
+	a.SetStorage(&stubBackupStorage{content: map[string]string{"manually-imported": validBackupArchive(t)}})
 	legacy := &stubBackupRestorer{jobID: "legacy-job"}
 	a.SetRestorer(legacy)
 
@@ -916,7 +949,7 @@ func TestBackupAdapterListPopulatesCentralFromID(t *testing.T) {
 	reg := newMultiCentralRegistryForBackupTest(t, "alpha", "beta")
 	a := NewBackupAdapter(reg)
 
-	idBeta := backupID("beta")
+	idBeta := formatBackupID("beta", time.Now())
 	a.SetStorage(&stubBackupStorage{entries: []hmapi.BackupEntry{
 		{ID: idBeta, Bytes: 42},
 		{ID: "unresolvable-id", Bytes: 7},
@@ -934,5 +967,265 @@ func TestBackupAdapterListPopulatesCentralFromID(t *testing.T) {
 	}
 	if list[1].Central != "" {
 		t.Errorf("entry 1 central: want empty (unresolvable id), got %q", list[1].Central)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BackupAdapter.Restore — inspecting the archive before it reaches the CCU
+// ---------------------------------------------------------------------------
+
+// archiveMissingMember builds the same tar [validBackupArchive] does, minus
+// the member named omit, so a case can pin exactly which missing member
+// sbk.Inspect refuses.
+func archiveMissingMember(t *testing.T, omit string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	members := []struct{ name, body string }{
+		{"usr_local.tar.gz", "config-archive-bytes"},
+		{"signature", "sig-bytes"},
+		{"firmware_version", "VERSION=3.89.8.20260719\nPRODUCT=HM-CCU3\n"},
+		{"key_index", "1"},
+	}
+	for _, m := range members {
+		if m.name == omit {
+			continue
+		}
+		if err := tw.WriteHeader(&tar.Header{Name: m.name, Mode: 0o644, Size: int64(len(m.body))}); err != nil {
+			t.Fatalf("write header %s: %v", m.name, err)
+		}
+		if _, err := tw.Write([]byte(m.body)); err != nil {
+			t.Fatalf("write body %s: %v", m.name, err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar writer: %v", err)
+	}
+	return buf.String()
+}
+
+// TestBackupAdapterRestoreRefusesAnArchiveThatIsNotACCUBackup is the
+// regression guard for the pre-upload inspection [BackupAdapter.Restore]
+// now runs via [BackupAdapter.inspectStored]. Uploading a CCU backup is not
+// reversible — the CCU unpacks the archive and reboots into the restored
+// state — so a corrupt, incomplete, or truncated stored archive must never
+// reach the restorer. Before this fix, Restore opened the stored archive
+// once and handed it straight to the restorer: structural validation only
+// ran on the operator-facing upload endpoint, so an archive damaged on
+// disk after being accepted, or a manually placed non-backup file, went
+// to the CCU untouched.
+func TestBackupAdapterRestoreRefusesAnArchiveThatIsNotACCUBackup(t *testing.T) {
+	t.Parallel()
+
+	validArchive := validBackupArchive(t)
+
+	cases := []struct {
+		name    string
+		content string
+		wantErr error
+	}{
+		{
+			name:    "random bytes are not a tar",
+			content: "this is definitely not a tar archive, just plain bytes",
+			wantErr: sbk.ErrNotAnArchive,
+		},
+		{
+			name:    "valid tar missing the configuration archive",
+			content: archiveMissingMember(t, "usr_local.tar.gz"),
+			wantErr: sbk.ErrIncomplete,
+		},
+		{
+			name:    "valid tar missing the signature",
+			content: archiveMissingMember(t, "signature"),
+			wantErr: sbk.ErrIncomplete,
+		},
+		{
+			// A truncated tar can fail either as an unreadable header or as
+			// a missing member depending on exactly where the cut lands;
+			// only "Restore must refuse it" is guaranteed, not which of
+			// the two sbk sentinels it wraps.
+			name:    "truncated archive",
+			content: validArchive[:len(validArchive)/2],
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			reg := newRegistryForBackupTest(t)
+			a := NewBackupAdapter(reg)
+			a.SetStorage(&stubBackupStorage{content: map[string]string{"bk1": tc.content}})
+			restorer := &stubBackupRestorer{jobID: "job-should-never-run"}
+			a.SetRestorer(restorer)
+
+			_, err := a.Restore(context.Background(), "bk1")
+			if err == nil {
+				t.Fatal("expected Restore to refuse the archive, got nil error")
+			}
+			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+				t.Errorf("error = %v, want wrapping %v", err, tc.wantErr)
+			}
+			if restorer.capturedID != "" {
+				t.Errorf("restorer must not be invoked when inspection refuses the archive, got capturedID %q", restorer.capturedID)
+			}
+		})
+	}
+}
+
+// TestBackupAdapterRestoreAcceptsAValidArchive guards the other side of the
+// same change: [BackupAdapter.inspectStored] reads the stored archive to
+// verify it, and Restore must still hand the restorer a fresh, complete
+// reader afterwards — not the one inspection already drained to EOF. A
+// valid archive has to arrive at the restorer byte-for-byte intact.
+func TestBackupAdapterRestoreAcceptsAValidArchive(t *testing.T) {
+	t.Parallel()
+
+	reg := newRegistryForBackupTest(t)
+	a := NewBackupAdapter(reg)
+	payload := validBackupArchive(t)
+	a.SetStorage(&stubBackupStorage{content: map[string]string{"bk1": payload}})
+	restorer := &stubBackupRestorer{jobID: "job-99"}
+	a.SetRestorer(restorer)
+
+	jobID, err := a.Restore(context.Background(), "bk1")
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if jobID != "job-99" {
+		t.Errorf("jobID: want %q, got %q", "job-99", jobID)
+	}
+	if restorer.capturedID != "bk1" {
+		t.Errorf("captured id: want %q, got %q", "bk1", restorer.capturedID)
+	}
+	if string(restorer.capturedPayload) != payload {
+		t.Errorf("captured payload: want the full stored archive (%d bytes), got %d bytes",
+			len(payload), len(restorer.capturedPayload))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BackupAdapter.mintBackupID — ids stay unique and sortable per central
+// ---------------------------------------------------------------------------
+
+// TestMintBackupIDNeverRepeatsForTheSameCentral is the regression guard for
+// the truncated-to-second collision: minting several ids for the same
+// central back-to-back used to render identically whenever the wall clock
+// had not ticked over to the next second between calls, and
+// [BackupStorage.Save] overwrites an existing id — a second backup
+// silently replaced the first instead of ever being created.
+// [BackupAdapter.mintBackupID] advances the mint time by one second when
+// the clock has not moved on, so ids stay both distinct and strictly
+// increasing (which matters because [backupBelongsTo] and any list sort
+// depend on the fixed-width timestamp suffix and on ids sorting in
+// creation order).
+func TestMintBackupIDNeverRepeatsForTheSameCentral(t *testing.T) {
+	t.Parallel()
+
+	a := NewBackupAdapter(nil)
+	safe := backupSafeName("ccu1")
+
+	const n = 5
+	ids := make([]string, n)
+	for i := range ids {
+		ids[i] = a.mintBackupID("ccu1")
+	}
+
+	seen := make(map[string]bool, n)
+	for i, id := range ids {
+		if seen[id] {
+			t.Fatalf("id %d (%q) repeats an earlier mint: %v", i, id, ids)
+		}
+		seen[id] = true
+		if !backupBelongsTo(id, safe) {
+			t.Errorf("id %d (%q) does not resolve back to central %q", i, id, "ccu1")
+		}
+		if len(id) != len(ids[0]) {
+			t.Errorf("id %d (%q) has length %d, want %d (backupBelongsTo assumes a fixed-width suffix)",
+				i, id, len(id), len(ids[0]))
+		}
+	}
+	for i := 1; i < n; i++ {
+		if ids[i-1] >= ids[i] {
+			t.Errorf("ids must sort in mint order: ids[%d]=%q is not < ids[%d]=%q", i-1, ids[i-1], i, ids[i])
+		}
+	}
+}
+
+// TestMintBackupIDIsPerCentral verifies the per-central id sequence stays
+// independent: minting for two different centrals never lets one resolve
+// to the other's owner, and a central named "ccu" is not confused with a
+// differently-named one that merely shares a prefix — [backupBelongsTo]
+// strips a fixed-width suffix and compares the remainder exactly, not as a
+// prefix match.
+func TestMintBackupIDIsPerCentral(t *testing.T) {
+	t.Parallel()
+
+	a := NewBackupAdapter(nil)
+
+	idAlpha := a.mintBackupID("alpha")
+	idBeta := a.mintBackupID("beta")
+
+	if !backupBelongsTo(idAlpha, backupSafeName("alpha")) {
+		t.Errorf("idAlpha %q does not resolve to alpha", idAlpha)
+	}
+	if backupBelongsTo(idAlpha, backupSafeName("beta")) {
+		t.Errorf("idAlpha %q must not resolve to beta", idAlpha)
+	}
+	if !backupBelongsTo(idBeta, backupSafeName("beta")) {
+		t.Errorf("idBeta %q does not resolve to beta", idBeta)
+	}
+	if backupBelongsTo(idBeta, backupSafeName("alpha")) {
+		t.Errorf("idBeta %q must not resolve to alpha", idBeta)
+	}
+
+	idCcu := a.mintBackupID("ccu")
+	idCcu01 := a.mintBackupID("ccu-01")
+	if backupBelongsTo(idCcu, backupSafeName("ccu-01")) {
+		t.Errorf("a backup minted for %q must not resolve to %q, got id %q", "ccu", "ccu-01", idCcu)
+	}
+	if backupBelongsTo(idCcu01, backupSafeName("ccu")) {
+		t.Errorf("a backup minted for %q must not resolve to %q, got id %q", "ccu-01", "ccu", idCcu01)
+	}
+	if !backupBelongsTo(idCcu, backupSafeName("ccu")) {
+		t.Errorf("idCcu %q does not resolve to its own central %q", idCcu, "ccu")
+	}
+	if !backupBelongsTo(idCcu01, backupSafeName("ccu-01")) {
+		t.Errorf("idCcu01 %q does not resolve to its own central %q", idCcu01, "ccu-01")
+	}
+}
+
+// TestMintBackupIDConcurrentMintsForTheSameCentralAreAllDistinct exercises
+// the mutex [BackupAdapter.mintBackupID] holds: 20 goroutines minting for
+// the same central concurrently must still hand out 20 distinct ids.
+// Without mintMu serializing the read-modify-write of lastMinted, two
+// goroutines racing the same truncated-to-second clock value could both
+// mint the id for that second — and, run under -race, an unguarded map
+// read/write from concurrent goroutines is its own separate failure.
+func TestMintBackupIDConcurrentMintsForTheSameCentralAreAllDistinct(t *testing.T) {
+	t.Parallel()
+
+	a := NewBackupAdapter(nil)
+
+	const n = 20
+	var (
+		wg  sync.WaitGroup
+		mu  sync.Mutex
+		ids = make(map[string]bool, n)
+	)
+	wg.Add(n)
+	for range n {
+		go func() {
+			defer wg.Done()
+			id := a.mintBackupID("concurrent")
+			mu.Lock()
+			ids[id] = true
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	if len(ids) != n {
+		t.Fatalf("expected %d distinct ids from %d concurrent mints, got %d: %v", n, n, len(ids), ids)
 	}
 }

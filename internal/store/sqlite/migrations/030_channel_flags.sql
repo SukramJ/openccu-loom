@@ -20,6 +20,9 @@ CREATE TABLE channel_flags (
 
 -- +goose StatementEnd
 
+-- Down is destructive: every hidden/locked channel override is deleted. A
+-- channel an operator deliberately hid from guest views or locked against
+-- writes reverts to fully visible and writable.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE IF EXISTS channel_flags;

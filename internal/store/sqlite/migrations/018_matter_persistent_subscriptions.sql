@@ -29,6 +29,10 @@ CREATE INDEX matter_persistent_subscriptions_fabric
 
 -- +goose StatementEnd
 
+-- Down is destructive: every persisted subscription is deleted. A controller
+-- with an active subscription before the restart stops receiving reports
+-- until it resubscribes, defeating the Matter 1.4 §10.6.9 restart-survival
+-- guarantee this table exists to satisfy.
 -- +goose Down
 -- +goose StatementBegin
 

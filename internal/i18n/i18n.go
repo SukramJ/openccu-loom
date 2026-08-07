@@ -6,6 +6,7 @@ package i18n
 import (
 	"embed"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -170,6 +171,31 @@ func (c *Catalogs) Prefixed(locale string, prefixes ...string) map[string]string
 	collect(c.catalogs[resolved])
 	return out
 }
+
+// AvailableLocales lists every locale tag the embedded catalogues ship,
+// sorted. It answers the question "is this a locale the daemon can
+// actually render?" without loading a [Catalogs] first, which is what
+// config validation needs: an unknown locale otherwise passes validation
+// and then silently renders every message in the fallback language.
+//
+// The result is computed once; the catalogue set is compiled in and
+// cannot change at runtime.
+var AvailableLocales = sync.OnceValue(func() []string {
+	entries, err := catalogFS.ReadDir("catalogs")
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		out = append(out, strings.TrimSuffix(name, ".json"))
+	}
+	slices.Sort(out)
+	return out
+})
 
 // Locales returns every loaded locale tag.
 func (c *Catalogs) Locales() []string {

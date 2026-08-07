@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
@@ -76,6 +77,29 @@ func wsPushCount(hub *ws.Hub, parameter string) int {
 	return n
 }
 
+// awaitWSPushCount waits for the hub to hold want pushes for parameter,
+// then keeps watching briefly to catch a duplicate.
+//
+// Publish is not always synchronous: the bus dispatches inline only when
+// it wins the dispatch lock, and a central's own bring-up publishes on
+// its bus concurrently. A losing Publish is queued and drained by
+// whichever goroutine holds the lock, so asserting the count on the next
+// line races the drain — which is what made the first version of this
+// test flake under -race.
+func awaitWSPushCount(t *testing.T, hub *ws.Hub, parameter string, want int) int {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if wsPushCount(hub, parameter) >= want {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	// A late duplicate must fail the test, not slip through the deadline.
+	time.Sleep(100 * time.Millisecond)
+	return wsPushCount(hub, parameter)
+}
+
 // TestAdoptedCentralReachesTheEventBridge pins that a central adopted at
 // runtime is wired into the north-bound event bridge, and unwired again when
 // it is removed.
@@ -104,7 +128,7 @@ func TestAdoptedCentralReachesTheEventBridge(t *testing.T) {
 	}
 
 	publishValueChange(t, reg, "adopted-live", "STATE")
-	if got := wsPushCount(hub, "STATE"); got != 1 {
+	if got := awaitWSPushCount(t, hub, "STATE", 1); got != 1 {
 		t.Fatalf("WS pushes from the adopted central = %d, want 1 — the central's bus reaches no north-bound surface", got)
 	}
 
@@ -117,7 +141,7 @@ func TestAdoptedCentralReachesTheEventBridge(t *testing.T) {
 		t.Fatalf("re-adoptCentral: %v", err)
 	}
 	publishValueChange(t, reg, "adopted-live", "LEVEL")
-	if got := wsPushCount(hub, "LEVEL"); got != 1 {
+	if got := awaitWSPushCount(t, hub, "LEVEL", 1); got != 1 {
 		t.Fatalf("WS pushes after remove+re-adopt = %d, want exactly 1 (0 = detached too much, 2 = subscription leaked)", got)
 	}
 }

@@ -84,6 +84,7 @@ func TestProgramUpdateReachesMQTT(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	// Initial-state publish should have fired.
 	if !containsTopic(pub, "programs/prog-1") {
@@ -95,6 +96,7 @@ func TestProgramUpdateReachesMQTT(t *testing.T) {
 	// Trigger an update.
 	prog.OnExecution(true, hmenum.ProgramTriggerUser)
 
+	publisher.Flush()
 	after := pub.Published()
 	if len(after) <= prevCount {
 		t.Fatalf("no additional publish after OnExecution; before=%d after=%d topics=%v",
@@ -118,6 +120,7 @@ func TestProgramInitialStatePushedAtStart(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	if !containsTopic(pub, "programs/prog-2") {
 		t.Fatalf("initial-state publish missing; topics=%v", publishedTopics(pub))
@@ -140,6 +143,7 @@ func TestSysvarUpdateReachesMQTT(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	// Initial push at Start.
 	if !containsTopic(pub, "sysvars/Anwesenheit") {
@@ -150,6 +154,7 @@ func TestSysvarUpdateReachesMQTT(t *testing.T) {
 	// Change the value.
 	sv.OnValue(hmtypes.BoolValue(false))
 
+	publisher.Flush()
 	after := pub.Published()
 	if len(after) <= prev {
 		t.Fatalf("no publish after sysvar change; before=%d after=%d topics=%v",
@@ -171,6 +176,7 @@ func TestSysvarInitialStateNotPushedWhenUnobserved(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	if containsTopic(pub, "sysvars/Unbeobachtet") {
 		t.Fatalf("unobserved sysvar must not be pushed; topics=%v", publishedTopics(pub))
@@ -194,6 +200,7 @@ func TestAlarmMessagesUpdateReachesMQTT(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	// Initial-state publish.
 	if !containsTopic(pub, "alarm_messages") {
@@ -207,6 +214,7 @@ func TestAlarmMessagesUpdateReachesMQTT(t *testing.T) {
 		{ID: "2", Name: "Wasserschaden", Timestamp: time.Now()},
 	})
 
+	publisher.Flush()
 	after := pub.Published()
 	if len(after) <= prev {
 		t.Fatalf("no publish after alarm message replace; before=%d after=%d topics=%v",
@@ -230,6 +238,7 @@ func TestServiceMessagesUpdateReachesMQTT(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	if !containsTopic(pub, "service_messages") {
 		t.Fatalf("initial-state service-messages publish missing; topics=%v", publishedTopics(pub))
@@ -237,6 +246,7 @@ func TestServiceMessagesUpdateReachesMQTT(t *testing.T) {
 
 	prev := len(pub.Published())
 	c.HubModel.ServiceMessages.Replace([]hub.ServiceMessage{})
+	publisher.Flush()
 	after := pub.Published()
 	if len(after) <= prev {
 		t.Fatalf("no publish after service-messages clear; before=%d after=%d topics=%v",
@@ -257,6 +267,7 @@ func TestInstallModeChangeReachesMQTT(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	// No initial push for install_mode (no prior observed value on HubModel).
 	prev := len(pub.Published())
@@ -269,6 +280,7 @@ func TestInstallModeChangeReachesMQTT(t *testing.T) {
 		RemainingS:  60,
 	})
 
+	publisher.Flush()
 	after := pub.Published()
 	if len(after) <= prev {
 		t.Fatalf("no publish after InstallModeChangedEvent; before=%d after=%d topics=%v",
@@ -287,6 +299,7 @@ func TestInstallModeEventForOtherCentralIgnored(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	prev := len(pub.Published())
 
@@ -297,6 +310,7 @@ func TestInstallModeEventForOtherCentralIgnored(t *testing.T) {
 		RemainingS:  30,
 	})
 
+	publisher.Flush()
 	if got := len(pub.Published()); got != prev {
 		t.Fatalf("expected no new publish for other-central event, got %d new", got-prev)
 	}
@@ -315,6 +329,7 @@ func TestConnectivityChangeReachesMQTT(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	prev := len(pub.Published())
 
@@ -325,6 +340,7 @@ func TestConnectivityChangeReachesMQTT(t *testing.T) {
 		Reachable:   false,
 	})
 
+	publisher.Flush()
 	after := pub.Published()
 	if len(after) <= prev {
 		t.Fatalf("no publish after ConnectivityChangedEvent; before=%d after=%d topics=%v",
@@ -343,6 +359,7 @@ func TestConnectivityEventForOtherCentralIgnored(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	prev := len(pub.Published())
 
@@ -353,6 +370,7 @@ func TestConnectivityEventForOtherCentralIgnored(t *testing.T) {
 		Reachable:   true,
 	})
 
+	publisher.Flush()
 	if got := len(pub.Published()); got != prev {
 		t.Fatalf("expected no new publish for other-central event, got %d new", got-prev)
 	}
@@ -374,6 +392,7 @@ func TestHubMQTTPublisherStopReleasesSubscriptions(t *testing.T) {
 	c.HubModel.PutSysvar(sv)
 
 	publisher.Start(context.Background())
+	publisher.Flush()
 	publisher.Stop() // release all subscriptions
 
 	prev := len(pub.Published())
@@ -381,6 +400,7 @@ func TestHubMQTTPublisherStopReleasesSubscriptions(t *testing.T) {
 	// Change after Stop — must not trigger a publish.
 	sv.OnValue(hmtypes.BoolValue(false))
 
+	publisher.Flush()
 	if got := len(pub.Published()); got != prev {
 		t.Fatalf("after Stop, change must not trigger publish; extra=%d", got-prev)
 	}
@@ -400,12 +420,16 @@ func TestHubMQTTPublisherStartIsIdempotent(t *testing.T) {
 	publisher.Start(context.Background())
 	publisher.Start(context.Background()) // second Start must release previous subs first
 	defer publisher.Stop()
+	// Drain the re-wire's own initial publishes before the baseline count, so
+	// only the value change below is measured.
+	publisher.Flush()
 
 	// Reset publication log by counting before the value change.
 	prev := len(pub.Published())
 
 	sv.OnValue(hmtypes.BoolValue(true))
 
+	publisher.Flush()
 	after := pub.Published()
 	// Default config publishes only the canonical ADR-0011 topic
 	// `<central>/hub/sysvars/<name>/state` — both legacy mirrors
@@ -444,6 +468,7 @@ func TestSysvarRegisteredAfterStartReachesMQTT(t *testing.T) {
 	// Start FIRST — Hub is still empty.
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	if containsTopic(pub, "sysvars/Presence") {
 		t.Fatalf("pre-registration leak; topics=%v", publishedTopics(pub))
@@ -453,6 +478,7 @@ func TestSysvarRegisteredAfterStartReachesMQTT(t *testing.T) {
 	sv := &hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "Presence"}, ValueType: hmenum.HubValueTypeLogic}
 	sv.OnValue(hmtypes.BoolValue(true))
 	c.HubModel.PutSysvar(sv)
+	publisher.Flush()
 
 	if !containsTopic(pub, "sysvars/Presence") {
 		t.Fatalf("late-registered sysvar missing from MQTT; topics=%v", publishedTopics(pub))
@@ -462,6 +488,7 @@ func TestSysvarRegisteredAfterStartReachesMQTT(t *testing.T) {
 	// when the observer fired).
 	prev := len(pub.Published())
 	sv.OnValue(hmtypes.BoolValue(false))
+	publisher.Flush()
 	if len(pub.Published()) <= prev {
 		t.Fatalf("value-change publish missing; topics=%v", publishedTopics(pub))
 	}
@@ -475,10 +502,12 @@ func TestProgramRegisteredAfterStartReachesMQTT(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "late-prg"}
 	prog.OnActive(false)
 	c.HubModel.PutProgram(prog)
+	publisher.Flush()
 
 	if !containsTopic(pub, "programs/late-prg") {
 		t.Fatalf("late-registered program missing from MQTT; topics=%v", publishedTopics(pub))
@@ -486,6 +515,7 @@ func TestProgramRegisteredAfterStartReachesMQTT(t *testing.T) {
 
 	prev := len(pub.Published())
 	prog.OnExecution(true, hmenum.ProgramTriggerUser)
+	publisher.Flush()
 	if len(pub.Published()) <= prev {
 		t.Fatalf("execution publish missing; topics=%v", publishedTopics(pub))
 	}
@@ -499,6 +529,7 @@ func TestStopReleasesObserver(t *testing.T) {
 	t.Parallel()
 	_, c, pub, publisher := hubMQTTFixture(t)
 	publisher.Start(context.Background())
+	publisher.Flush()
 	publisher.Stop()
 
 	preCount := len(pub.Published())
@@ -530,6 +561,7 @@ func TestMQTTDiscoveryFiltersInternalPrograms(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	if !containsTopic(pub, "programs/regular-prg") {
 		t.Errorf("regular program missing from discovery; topics=%v", publishedTopics(pub))
@@ -552,6 +584,7 @@ func TestMQTTDiscoveryFilterDoesNotSuppressUpdatesForInternalPrograms(t *testing
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	countBefore := len(pub.Published())
 

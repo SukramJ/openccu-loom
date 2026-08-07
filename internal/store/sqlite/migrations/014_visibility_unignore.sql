@@ -28,6 +28,9 @@ CREATE INDEX idx_visibility_unignore_central
 
 -- +goose StatementEnd
 
+-- Down is destructive: every operator-added un-ignore pattern is deleted.
+-- Parameters the operator explicitly promoted into visibility silently
+-- revert to the config.yaml seed or the built-in ignore list.
 -- +goose Down
 -- +goose StatementBegin
 

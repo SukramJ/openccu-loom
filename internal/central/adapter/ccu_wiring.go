@@ -1119,6 +1119,20 @@ func wireInterface(
 		// events. A non-callback-capable setup (no server, no URL) skips
 		// this step and leaves the daemon in read-through mode.
 		if callbackURL != "" {
+			// Re-confirm CCU readiness immediately before Deinit/Init. The
+			// outer gate (gatedCentralBringUp → WaitForCCUReady) only runs
+			// once, before this interface's ingest loop starts; activate()
+			// itself is retried across the ingestBackoff window below (up
+			// to ~33s). A CCU that reboots again inside that window is
+			// invisible to the one-time outer gate, and hitting Deinit/Init
+			// against it reproduces the exact "deinit fails, init succeeds"
+			// race documented on [newReconnectReadinessGate] — there for
+			// the reconnect path, here on first bring-up. The probe is
+			// short and bounded (unlike the outer gate's unbounded wait) so
+			// a genuinely-ready CCU pays only one fast HTTP round trip.
+			if !WaitForCCUReady(activateCtx, cc, CCUReadinessConfig{Timeout: activateReadinessProbeTimeout}, logger) {
+				return errors.New("ccu not ready for callback registration (checkrega.cgi != OK)")
+			}
 			// Pre-Init Deinit: tell the CCU to forget any registration
 			// previously made for this callback URL before we install
 			// the fresh one. Mirrors the recovery pipeline's

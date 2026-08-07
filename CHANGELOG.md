@@ -31,7 +31,76 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   WS-delivery-without-MQTT table pins that the optional MQTT plane
   never gates a WebSocket emission.
 
+- **The migration `Down` path is now documented as unsupported, not
+  silently risky.** An audit of every `goose` migration found that most
+  `-- +goose Down` blocks drop the table or column their `Up` added,
+  destroying data with no other copy — bcrypt password/token hashes,
+  Matter NOC private keys, the append-only alarm journal, argon2id PIN
+  hashes, and the frozen zone `slug` that Home Assistant entity ids and
+  MQTT topics depend on. Nothing in this project ever exposed `goose
+  down` to an operator, so the risk was latent, not exploited. Every
+  destructive `Down` block now carries a factual note above the marker
+  naming what is lost; `TestMigrationDownDropsHaveLossNotes`
+  (`tests/contract/`) enforces the note on every future migration; and
+  [ADR 0061](./docs/adr/0061-migration-down-path-unsupported.md) records
+  the decision that `goose down` is a development/test tool only, never
+  an operator rollback path.
+
+
 ### Fixed
+
+- **A keypad or lock access code was stored in cleartext in the audit
+  log.** Every paramset write persisted its raw before/after values, and
+  `CODE_ID` carries the access code of a keypad or lock channel — so
+  setting one put the code itself into the append-only log, readable for
+  the full 90-day retention by anything that reads an audit row. The
+  sibling data-point write path had recorded parameter names only, for
+  exactly this reason, since it was written. Credential-bearing
+  parameters now record the name and withhold the value; ordinary
+  settings keep theirs, because "the heating curve went from 21 to 24"
+  is what makes an audit row useful. A first write still reads as "had
+  no value before" rather than as a withheld one.
+
+- **A panic while reading an event's type would have stopped every event
+  in the daemon, silently.** The bus resolved an event's identity
+  without recovery, and its dispatch lock is released by the queue drain
+  rather than by a deferred unlock — so the panic unwound past the
+  release and left the lock held for the life of the process. The daemon
+  kept running, every later publish queued into a backlog nothing would
+  drain, and every unsubscribe blocked forever. No event can trigger
+  this today (they return constants), but they are methods on ordinary
+  structs, one nil dereference away, and the failure is total and
+  produces no error. The identity is now read before any lock is taken
+  and under recovery.
+
+- **One slow broker could freeze every CCU's event delivery.** The
+  internal event bus dispatches synchronously on the publishing
+  goroutine, so anything a handler does happens on a goroutine shared by
+  every central. The live value plane had been moved off it, but the hub
+  plane had not: connectivity changes, install-mode countdowns, sysvar
+  and program updates, alarm and service messages, the inbox, the
+  firmware-update entity and the device-link re-announcement all
+  published to the broker inline — as did the whole-device and
+  whole-central snapshots that a hot-plugged device or a completed CCU
+  bring-up triggers. A broker that stopped acknowledging (a half-open
+  connection waits out the transport's ack timeout) therefore stalled
+  dispatch for every central at once, and a removed device's retraction
+  could stall it too. All of these now hand their broker work to a
+  single fan-out worker per publisher, which keeps them serialised — so
+  discovery still precedes state and per-entity ordering is unchanged —
+  while the dispatch goroutine returns immediately. Shutdown cancels the
+  worker's in-flight publish instead of waiting it out.
+
+- **A flood of value changes could silently delete entities from Home
+  Assistant.** The fan-out queue drops its oldest entry when it
+  overflows, which is right for a state sample — the next one overwrites
+  the same retained topic — and wrong for anything declarative. Now that
+  snapshots and hub-plane payloads share that queue, discovery configs,
+  device snapshots and aggregate replacements are marked durable and are
+  never dropped; the queue grows past its soft bound instead, and only
+  self-healing state publishes are evicted. Losing one of the former
+  leaves an entity missing or frozen until the operator restarts the
+  daemon, because nothing re-sends it.
 
 - **Every energy day and month total was shifted by the timezone
   offset.** Day and month buckets were folded on the UTC calendar while
@@ -159,6 +228,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   day retained. The raw and hourly tiers have had a time-axis index
   since the bounded rollup landed; the daily tier now has one too.
 
+
 - **A backup error claimed a missing feature when the daemon meant a
   missing configuration.** Backup triggers with no central registered,
   and downloads with no backup storage configured, both answered
@@ -278,6 +348,104 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   viewer/operator/admin role labels (dropdown options and the three role
   badges) rendered the raw English role token untranslated in both
   locales instead of a localized label.
+
+- **A CCU that rebooted again while an interface was still activating
+  could end up registered twice.** The one-time boot readiness gate
+  (`gatedCentralBringUp`) waits for `checkrega.cgi` before southbound
+  bring-up starts, but the per-interface ingest retry that follows
+  (`wireInterface`'s `activate()`, up to six attempts over roughly 33
+  seconds to absorb residual per-interface RPC lag) never re-checked it —
+  so a CCU that dropped again inside that window could hit `Deinit`/`Init`
+  mid-boot, the same "deinit fails while init succeeds" race already
+  guarded against on the reconnect path. Every `activate()` attempt now
+  re-probes CCU readiness with a short, bounded timeout immediately before
+  touching `Deinit`/`Init`, reusing the existing retry/backoff on a miss
+  instead of registering against a CCU that is not actually ready yet.
+
+- **A forced value reload after a failed live-event coercion silently gave
+  up on BidCos-RF and VirtualDevices data points.** When the daemon
+  receives a push event it cannot coerce inline, it schedules a direct
+  `GetParamset` reload to resolve the type mismatch from the canonical
+  wire shape. That reload shared its skip with the unrelated
+  cost-saving guard that avoids speculative `VALUES` probes on
+  interfaces that can only return a placeholder (BidCos-RF's passive
+  devices, VirtualDevices' aggregated channels) — so the reload wrote a
+  sentinel instead of fetching the value the CCU had just sent, leaving
+  the data point permanently unobserved. The forced path is now exempt
+  from that skip: it only ever fires right after a live push, when the
+  CCU already has a fresh value to serve.
+
+- **A damaged backup archive was uploaded to the CCU without being
+  looked at.** An uploaded archive was inspected at import, but a
+  restore read the stored file and pushed it straight at
+  `cp_security.cgi`, which starts the restore and reboots the CCU. An
+  archive that a proxy had truncated, or that was never a system backup
+  at all, therefore took the CCU down with it. Every restore now runs
+  the same structural inspection first and refuses with `422` and the
+  reason (not a readable tar / missing a required member) before a
+  single byte reaches the CCU. API 5.4.0 documents the widened `422` on
+  `POST /api/v1/backups/{id}/restore`.
+
+- **A failed backup download saved as an ordinary `.sbk` file.** The
+  download response committed its `200 OK` and its attachment headers
+  before the archive was read, so any failure afterwards appended a
+  problem document to a half-written file and the browser stored the
+  result as a normal backup — one a later restore would push at a CCU.
+  The status is now committed by the first payload byte: a failure
+  before it arrives is answered as an error, and a failure part-way
+  through aborts the transfer so the client reports a broken download
+  instead of writing out a short file.
+
+- **Two backups of the same CCU in the same second became one.** Backup
+  ids carry a one-second timestamp and the storage overwrites an
+  existing id, so a manual backup that landed in the same second as the
+  scheduled one silently replaced it — and the rotation then pruned
+  against a set one archive shorter than it appeared. Ids are now minted
+  strictly increasing per CCU; the id format is unchanged.
+
+- **The Config UI reported settings that only exist in `config.yaml` as
+  unset — and asked for a restart that no action could clear.** The
+  effective configuration behind `GET /api/v1/config` was assembled from
+  the built-in defaults instead of the file the daemon booted from, so
+  every value set in YAML and never edited in the UI came back as its
+  default. Because the pending-restart banner compares the running
+  configuration against that assembly, a YAML-only `backup.schedule` —
+  restart-required, and carried by no editable section — kept the banner
+  lit permanently. Both assemblies now start from the same base, and a
+  value that came from the file is labelled as such instead of as a
+  default.
+
+- **A configuration section was saved even when it could not be
+  validated.** If the effective configuration was momentarily
+  unavailable, the section `PUT` skipped the masked-secret restore, the
+  semantic validation and the restart-required answer, then persisted
+  the request body anyway and reported success — so a form the UI had
+  re-sent with its `***` placeholders could overwrite a real credential
+  silently. The save is now refused with `503` and the stored section is
+  left untouched.
+
+- **`callback.port_range` was accepted and then ignored.** The range was
+  only consulted when `callback.port` was `0`, but that field is filled
+  with `8120` on every load, so no installation could reach it: an
+  operator behind a firewall that only opens `30000-30099` got port 8120
+  and no indication the setting had been dropped. A configured range now
+  takes precedence over `callback.port`, and a malformed range is
+  rejected at the save instead of at the next boot.
+
+- **Configuration values outside their documented range were accepted
+  and then quietly replaced.** `locale`, `north.webhook.url` and
+  `timeout_ms`, `north.mcp.path`, `north.matter.listen` and
+  `discriminator`, `north.matter.commissioning.iterations`, the REST
+  rate-limit and WebSocket replay sizes, and every duration setting are
+  now validated when they are saved, with a message naming the field and
+  the accepted range. Previously each of them fell back to a default at
+  the point of use, so the UI answered "saved" for a value the daemon
+  never used.
+
+- **Switching the per-CCU connection check off had no effect.** A
+  negative `centrals[].check_connection_interval` is the documented way
+  to disable the poll, but the daemon only copied the value when it was
+  positive, so the job kept running at its default cadence.
 
 ## [0.54.2]
 

@@ -32,6 +32,10 @@ CREATE UNIQUE INDEX matter_endpoints_id_unique
 
 -- +goose StatementEnd
 
+-- Down is destructive: every bridged DP loses its stable endpoint_id
+-- assignment. The next Up reassigns fresh IDs, which desyncs every
+-- commissioned controller's cached accessory list until each bridged device
+-- is removed and re-added on the controller side.
 -- +goose Down
 -- +goose StatementBegin
 

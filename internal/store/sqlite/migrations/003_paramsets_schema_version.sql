@@ -15,6 +15,10 @@ CREATE INDEX paramsets_by_schema_version ON paramsets(schema_version);
 
 -- +goose StatementEnd
 
+-- Down is destructive to the version marker, not to the paramset data
+-- itself: every row reverts to schema_version 0 (unknown), which forces the
+-- bootstrap wipe-and-refetch pass to re-fetch paramset descriptions from the
+-- CCU on the next start.
 -- +goose Down
 -- +goose StatementBegin
 

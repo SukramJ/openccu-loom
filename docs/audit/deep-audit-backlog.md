@@ -1,10 +1,12 @@
 # OpenCCU-Loom — Deep-Audit Backlog
 
 - **Created**: 2026-07-03
-- **Last sweep**: 2026-08-07 — every P1–P3 item below was audited in one
-  pass (ten parallel read-only audits, one per item). This document is
-  now the register of what those audits found: what was fixed, what is
-  still open, and what was examined and deliberately left alone.
+- **Last sweep**: 2026-08-07 — every P1–P3 item was audited in one pass
+  (ten parallel read-only audits, one per item) and every confirmed
+  finding was fixed in two waves. This document is now the register of
+  what those audits found: what was fixed, and — the part that decays
+  fastest if it is not written down — what was examined and deliberately
+  left alone.
 - **Purpose**: track which subsystems have had a dedicated deep audit,
   and carry the findings that outlive the release that produced them.
 - **Related audit-scope docs**: the Matter-side equivalent of this backlog is
@@ -53,8 +55,9 @@ Fixed in 0.54.3: adopted central never reached the event bridge
 (CRITICAL); a removed central resurrected by a concurrent cache clear
 (CRITICAL); DELETE during an in-flight adopt orphaning a live central
 (HIGH); the security domain's unwire running only on rollback (HIGH).
-Open: adopted centrals get no descriptor persistence, so they re-pull
-the whole inventory over the air after every restart (MEDIUM).
+Closed in the second wave: adopted centrals get descriptor persistence —
+the wiring moved to the fork boot and adopt share, so a third entry point
+cannot reintroduce it.
 Examined, no action: `AddCentral` check-then-act (transitively guarded
 by the registry's own duplicate check); north-bridge stop ordering
 (loses last publishes only, no crash).
@@ -65,9 +68,9 @@ Fixed in 0.54.3: rollup and eviction never ran below an hourly uptime
 permanent hole (HIGH); day and month buckets folded on the UTC calendar
 while the UI labelled them local (HIGH); rollup tiers surviving central
 and device removal (MEDIUM).
-Open: disabling history also disables eviction, so the database freezes
-at full size (MEDIUM); tier promotion collapses narrow charts for young
-series (MEDIUM); `measurements_daily.bucket_ts` has no index (LOW).
+Closed in the second wave: retention runs when recording is off; tier
+selection accounts for the requested bucket width; the daily bucket
+column is indexed.
 Examined, no action: purge/read TOCTOU — unreachable at any sane
 retention, since the delete cutoff sits ~30 days below the read window.
 
@@ -77,9 +80,9 @@ Fixed in 0.54.3: non-atomic save leaving restorable torsos (MEDIUM);
 backup in favour of an in-flight one (MEDIUM); the daemon tarball
 swallowing every CCU archive (MEDIUM); `GET /backups` not admin-gated
 (LOW).
-Open: no content check of the archive before it is uploaded to the CCU
-(MEDIUM); the download handler commits a 200 before streaming can fail
-(LOW); backup ids collide at one-second resolution (LOW).
+Closed in the second wave: the archive is inspected before a byte reaches
+the CCU; the download commits its status on the first payload byte; ids
+no longer collide within a second.
 Verified fixed earlier: the encryption master key is no longer inside
 the backup tarball — the previously confirmed HIGH from the security
 audit.
@@ -91,9 +94,10 @@ attempt cap (HIGH); ping-pong pending entries never swept, pinning the
 health component DEGRADED until restart and suppressing every mismatch
 incident (MEDIUM-HIGH); the reconnect endpoint running a no-op pipeline
 and reporting success (MEDIUM).
-Open: the readiness gate is not applied to the `activate()` retry loop
-(SUSPECTED); the BidCos-RF value-load skip also swallows forced reloads
-(LOW).
+Closed in the second wave: the `activate()` retry loop re-probes readiness
+before every attempt (the SUSPECTED finding was confirmed in code first);
+the BidCos-RF skip applies only to the opportunistic path, not to a forced
+reload.
 Examined, no action: callback routing, caller-id collisions, circuit
 breaker half-open transitions, per-interface recovery serialization —
 all correct.
@@ -109,9 +113,11 @@ Examined, no action: the dispatcher hand-off argument in `bus.go` holds
 — enqueue and take-over both run under `b.mu`, so the window the comment
 rules out genuinely does not exist. The documented `device.Channel` lock
 order is respected everywhere; no publish happens under a channel lock.
-Open: fan-out has no backpressure isolation — one slow handler stalls the
-dispatch and grows the deferred queue (MEDIUM, by design today, but the
-hub plane publishes inline).
+Closed in the second wave: the hub plane's broker I/O rides the value
+plane's fan-out worker, with state publishes evictable and discovery
+durable. Also closed: a panic reading an event's type wedged the bus
+permanently, because the dispatch lock is released by `flushDeferred`
+rather than by a defer — found while fixing, not by the audit.
 
 ### P2.6 Config / configui validation pipeline — audited 2026-08-07
 Fixed in 0.54.3: the `north.rest` row duplicating its nested auth
@@ -120,12 +126,11 @@ sub-trees, so resetting the HA-Ingress auth passthrough did not stick
 candidate while persisting the raw fragment (MEDIUM); the restart-flag
 lists disagreeing, so `alarm.*` and the auth switches reported "no
 restart needed" (MEDIUM).
-Open: `Effective()` bases on `Default()` while the daemon bases on YAML,
-producing phantom restart-pending states and a permanently stuck banner
-for YAML-only fields (MEDIUM-HIGH); `callback.port_range` is unreachable
-config (MEDIUM); several fields accept nonsense unvalidated — locale,
-webhook URL and timeout, MCP path, Matter listen/discriminator, negative
-durations (LOW-MEDIUM).
+Closed in the second wave: `Effective()` bases on the YAML tier the daemon
+uses, and YAML-carried fields report as `bootstrap`; `port_range` takes
+precedence over `port` instead of being unreachable; the listed fields are
+validated. A failed `Effective()` now refuses the save instead of
+persisting it unvalidated.
 Examined, no action: `strictUnmarshal` correctly rejects wrong types and
 unknown keys recursively; the masked-secret round-trip is intact.
 
@@ -134,9 +139,9 @@ Fixed in 0.54.3: path traversal through a server-supplied
 `Content-Disposition` filename (MEDIUM-HIGH); terminal-escape injection
 and an uncapped response body on error paths (MEDIUM); undifferentiated
 exit codes (LOW).
-Open: the password prompt does not suppress echo (LOW); `--insecure`
-warns about nothing (LOW); credentials embedded in `--host` appear in
-error messages (LOW).
+Closed in the second wave: the password prompt suppresses echo,
+`--insecure` warns, and `--host` credentials are redacted in all four
+entry points — the shared client was only one of them.
 Examined, no action: WebSocket auth travels in a header, not a query
 parameter; TLS verification is only ever disabled behind the explicit
 flag; every user argument is properly escaped into URLs.
@@ -156,9 +161,10 @@ values into another channel's MASTER paramset (HIGH); lock flags set
 without a cancel guard and never reset, poisoning a panel for its
 lifetime (HIGH); undo not restoring locked fields (MEDIUM); take-over
 errors and a failed device fetch failing silently (MEDIUM).
-Open: `runAction` reports through a banner instead of a toast (LOW);
-`ProfileSelector` may keep its selection across a channel switch
-(SUSPECTED); i18n and locale gaps in Energy and AccessControl (LOW).
+Closed in the second wave: `runAction` reports through a toast; the
+ProfileSelector finding was confirmed in code and fixed with a keyed
+remount; the i18n and locale gaps are closed, as is the raw role label in
+the Users and Tokens views that the audit had not named.
 Examined, no action: no WebSocket subscription leaks; client-side authz
 is backed by server-side gating everywhere it matters.
 
@@ -177,32 +183,52 @@ downs for a path nobody invokes, each destructive down states plainly
 what it destroys, the policy is documented, and a contract guard keeps
 new destructive downs from landing without that note.
 
-## Open items, by weight
+## What the second wave closed
 
-Everything above that is still open, ordered by what it costs an
-operator. This list is the input for the next pass.
+Everything the list above flagged as open was taken in a second pass and
+is now fixed. In order of what it cost an operator:
 
-**Data / correctness**
-1. Adopted central without descriptor persistence — full re-pull over
-   the air after every restart (P1.1).
-2. Disabling history freezes the database at full size (P1.2).
-3. No archive validation before a restore reaches the CCU (P1.3).
-4. `Effective()` vs YAML — phantom restart-pending and a stuck banner
-   (P2.6).
+**Data / correctness.** A runtime-adopted CCU now gets descriptor
+persistence — the wiring moved to the fork both boot and adopt pass
+through, rather than being repeated at the second call site, so a third
+entry point cannot reintroduce the gap. Retention keeps running when
+recording is off, as a loop rather than a boot-time pass, because the
+purge cutoff moves with the wall clock. A restore validates the archive
+before a byte reaches the CCU. `Effective()` bases on the YAML tier the
+daemon itself uses, and YAML-carried fields report as `bootstrap`
+instead of `default`.
 
-**Robustness**
-5. Readiness gate missing on the `activate()` retry loop (P2.4,
-   SUSPECTED — verify before fixing).
-6. Fan-out backpressure: the hub plane publishes inline (P2.5).
-7. Tier promotion collapses narrow charts for young series (P1.2).
+**Robustness.** The `activate()` retry loop re-probes CCU readiness
+before every attempt (the finding was SUSPECTED and confirmed in code
+first). The hub plane's broker I/O left the dispatch goroutine: it rides
+the same fan-out worker as the value plane, with two job classes —
+state publishes are evictable because the next sample overwrites them,
+discovery and snapshots never are because nothing re-sends them. Tier
+selection accounts for the requested bucket width, so a young series no
+longer collapses to one point.
 
-**Polish / hygiene**
-8. hmcli: password echo, `--insecure` silence, credentials in error text.
-9. SPA: banner-instead-of-toast, ProfileSelector selection, i18n gaps.
-10. Backup: download status committed early, second-resolution id
-    collisions.
-11. `callback.port_range` dead config; unvalidated config fields.
-12. Missing index on `measurements_daily.bucket_ts`.
+**Polish.** hmcli suppresses the password echo, warns on `--insecure`
+and redacts `--host` credentials in all four entry points. The SPA
+reports through toasts, resets the profile selection on a channel
+switch, hides Backups from non-admins and localizes role names and
+number formats. Backup download commits its status on the first payload
+byte and ids no longer collide within a second. `callback.port_range`
+takes precedence over `port` instead of being unreachable, and locale,
+webhook URL and timeout, MCP path, Matter parameters, rate limits and
+every duration are validated. `measurements_daily.bucket_ts` has an
+index.
+
+**Found while fixing, not by the audit.** Two defects surfaced only
+because someone was already in the file: a panic reading an event's type
+would have wedged the bus permanently (the dispatch lock is released by
+`flushDeferred`, not a defer), and the credential redaction in hmcli
+covered only the shared REST client while three other entry points build
+their own URL. Both are fixed. This is the argument for fixing in the
+same pass as the audit rather than filing tickets: the second defect is
+invisible from outside the file.
+
+**Still open.** Nothing from this register. The next sweep starts from a
+clean list.
 
 ## How to run the next sweep
 

@@ -376,11 +376,12 @@ interface set:
 - **BIN-RPC over raw TCP** on `:8129` (default). Routes by
   `interface_id` carried in the BIN-RPC envelope.
 
-Both listeners support **fixed**, **OS-assigned** (`port: 0`), or
-**range** (`port_range: [lo, hi]`) port modes. The **effective**
-port (after OS assignment) is re-advertised to the CCU on every
-`init()` call and every reconnect — a daemon restart that picks a
-different ephemeral port is transparent to the CCU.
+Both listeners support **fixed** and **OS-assigned** (`port: 0`) port
+modes; the XML-RPC listener additionally supports a **range**
+(`port_range: "<lo>-<hi>"`), which takes precedence over `port` when
+set. The **effective** port (after OS assignment) is re-advertised to
+the CCU on every `init()` call and every reconnect — a daemon restart
+that picks a different ephemeral port is transparent to the CCU.
 
 CUxD is a first-class push-capable interface — OpenCCU-Loom runs its
 own native BIN-RPC stack and a BIN-RPC callback server. There is no

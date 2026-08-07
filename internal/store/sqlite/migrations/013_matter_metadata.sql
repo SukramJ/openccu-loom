@@ -19,6 +19,9 @@ INSERT INTO matter_metadata (key, value) VALUES ('next_fabric_index', 1);
 
 -- +goose StatementEnd
 
+-- Down is destructive: the next-fabric-index counter is deleted. The next Up
+-- reseeds it at 1, which can reissue an index that a still-active fabric row
+-- already occupies instead of continuing the monotonic sequence.
 -- +goose Down
 -- +goose StatementBegin
 

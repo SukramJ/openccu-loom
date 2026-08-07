@@ -13240,7 +13240,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The backup names no owning CCU and several are configured, so the restore target cannot be derived. Restore it from that CCU's own backup list instead. Nothing was sent to any CCU. */
+            /** @description The restore was refused before anything was sent to any CCU. Either the backup names no owning CCU and several are configured, so the restore target cannot be derived (restore it from that CCU's own backup list instead) — or the stored archive did not survive the structural inspection that every restore runs first: it is not a readable tar, or it is missing `usr_local.tar.gz` or its `signature`. The problem detail names which. A damaged archive cannot be repaired; upload an intact one. */
             422: {
                 headers: {
                     [name: string]: unknown;

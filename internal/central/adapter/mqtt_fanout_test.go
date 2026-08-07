@@ -5,6 +5,8 @@ package adapter
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -141,5 +143,93 @@ func TestMQTTFanoutFlushBeforeStartIsNoop(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("flush() blocked before start")
+	}
+}
+
+// TestMQTTFanoutNeverDropsDurableJobs pins the backpressure policy: an
+// overflowing queue evicts the oldest EVICTABLE job and grows past its soft
+// bound rather than losing a durable one. Dropping a durable job means a
+// discovery config or a snapshot that nothing re-sends, so the entity stays
+// missing from Home Assistant until the daemon restarts.
+func TestMQTTFanoutNeverDropsDurableJobs(t *testing.T) {
+	t.Parallel()
+	f := newMQTTFanout()
+
+	const durables = 10
+	var mu sync.Mutex
+	var got []string
+	record := func(tag string) func() {
+		return func() {
+			mu.Lock()
+			got = append(got, tag)
+			mu.Unlock()
+		}
+	}
+	for i := range durables {
+		f.enqueueDurable(record("durable-" + strconv.Itoa(i)))
+	}
+	// Flood far past the soft bound with evictable work.
+	for i := range mqttFanoutQueueDepth * 2 {
+		f.enqueue(record("state-" + strconv.Itoa(i)))
+	}
+
+	if f.droppedCount() == 0 {
+		t.Fatal("flood did not overflow the queue, so the test proves nothing")
+	}
+	if depth := f.queueDepth(); depth < mqttFanoutQueueDepth {
+		t.Fatalf("queueDepth=%d, want at least the soft bound %d", depth, mqttFanoutQueueDepth)
+	}
+
+	f.start(context.Background())
+	defer f.stop()
+	f.flush()
+
+	mu.Lock()
+	defer mu.Unlock()
+	var durablesSeen int
+	for _, tag := range got {
+		if strings.HasPrefix(tag, "durable-") {
+			if want := "durable-" + strconv.Itoa(durablesSeen); tag != want {
+				t.Fatalf("durable jobs drained out of order: got %q, want %q", tag, want)
+			}
+			durablesSeen++
+		}
+	}
+	if durablesSeen != durables {
+		t.Fatalf("drained %d durable jobs, want all %d (drop-oldest evicted a durable job)", durablesSeen, durables)
+	}
+}
+
+// TestMQTTFanoutOverflowKeepsRelativeOrder verifies that evicting from the
+// middle of the queue does not reorder what stays: the survivors drain in the
+// order they were enqueued.
+func TestMQTTFanoutOverflowKeepsRelativeOrder(t *testing.T) {
+	t.Parallel()
+	f := newMQTTFanout()
+
+	// One durable head keeps the eviction scan off index 0, so every drop comes
+	// out of the middle of the backing slice.
+	var mu sync.Mutex
+	var got []int
+	f.enqueueDurable(func() {})
+	for i := range mqttFanoutQueueDepth + 200 {
+		idx := i
+		f.enqueue(func() {
+			mu.Lock()
+			got = append(got, idx)
+			mu.Unlock()
+		})
+	}
+
+	f.start(context.Background())
+	defer f.stop()
+	f.flush()
+
+	mu.Lock()
+	defer mu.Unlock()
+	for i := 1; i < len(got); i++ {
+		if got[i] <= got[i-1] {
+			t.Fatalf("survivors drained out of order at %d: %d after %d", i, got[i], got[i-1])
+		}
 	}
 }

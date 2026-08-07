@@ -157,6 +157,15 @@ func probeCCUReady(ctx context.Context, client *http.Client, url string) bool {
 // simply retried on the next cycle.
 const reconnectReadinessTimeout = 30 * time.Second
 
+// activateReadinessProbeTimeout bounds the readiness re-check
+// wireInterface's activate() performs immediately before Deinit/Init on
+// every ingest-loop attempt, not just the first. Deliberately short: the
+// one-time outer gate (gatedCentralBringUp) already waited out the CCU's
+// initial boot, so this probe only needs to catch a second drop inside the
+// activate retry window, not wait out a whole reboot — that is what the
+// retry loop's own backoff is for.
+const activateReadinessProbeTimeout = 5 * time.Second
+
 // newReconnectReadinessGate returns the readiness gate the reconnect path
 // consults before re-registering its callback with the CCU, or nil when cc
 // carries no host to probe.

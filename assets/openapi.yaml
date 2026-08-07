@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.3.0
+  version: 5.4.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4419,9 +4419,14 @@ paths:
         "202": { description: Restore dispatched asynchronously }
         "422":
           description: >
-            The backup names no owning CCU and several are configured, so the
-            restore target cannot be derived. Restore it from that CCU's own
-            backup list instead. Nothing was sent to any CCU.
+            The restore was refused before anything was sent to any CCU. Either
+            the backup names no owning CCU and several are configured, so the
+            restore target cannot be derived (restore it from that CCU's own
+            backup list instead) — or the stored archive did not survive the
+            structural inspection that every restore runs first: it is not a
+            readable tar, or it is missing `usr_local.tar.gz` or its
+            `signature`. The problem detail names which. A damaged archive
+            cannot be repaired; upload an intact one.
         "501":
           description: >
             No restore path is configured, so nothing was sent to the CCU.

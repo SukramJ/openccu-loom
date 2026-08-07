@@ -57,6 +57,10 @@ CREATE INDEX idx_values_cache_last_seen
 
 -- +goose StatementEnd
 
+-- Down is destructive: the cached VALUES snapshot is deleted. The daemon
+-- starts with no known data-point state until the CCU pushes every value
+-- again, so the UI/MQTT show unavailable/unknown for every data point until
+-- the first event arrives.
 -- +goose Down
 -- +goose StatementBegin
 

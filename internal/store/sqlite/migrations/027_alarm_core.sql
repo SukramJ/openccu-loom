@@ -145,6 +145,13 @@ INSERT INTO alarm_runtime (id, boot_count, updated_at_ms) VALUES (1, 0, 0);
 
 -- +goose StatementEnd
 
+-- Down is destructive: every alarm-domain table is deleted, including
+-- alarm_journal — documented above as the append-only event log, deletable
+-- only through the privileged retention path in normal operation — and
+-- alarm_incidents, the record of every past trigger episode with its
+-- silenced/re-trigger/acoustic-seconds history. Neither has any other
+-- source; the whole alarm configuration (areas, sensor and output
+-- enrolment) is lost alongside them.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE alarm_runtime;

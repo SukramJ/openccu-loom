@@ -173,3 +173,85 @@ func TestEventBridgeStartIsIdempotent(t *testing.T) {
 		t.Fatalf("double Start double-published: got %d publishes, want 1: %+v", len(got), got)
 	}
 }
+
+// TestEventBridgeSlowBrokerDoesNotStallSnapshotDispatch covers the snapshot
+// side of the same decoupling. A southbound-ready snapshot walks every device
+// of a central and publishes each data point; run inline on the bus dispatch
+// goroutine it froze event delivery for every central for the whole pass, and
+// indefinitely against a broker that stopped answering.
+//
+// The assertion is that the goroutine which dispatched the event has returned
+// while the broker publish is still hanging. It is deliberately not phrased as
+// "a second Publish still returns": a concurrent Publish lands on the bus's
+// deferred queue and returns either way.
+func TestEventBridgeSlowBrokerDoesNotStallSnapshotDispatch(t *testing.T) {
+	t.Parallel()
+	reg, _ := registryWithDevice(t)
+
+	slow := newSlowPublisher()
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{Base: "openccu-loom", CentralName: "ccu-01", RawEnabled: true}, slow)
+	eb := NewEventBridge(reg, nil, mqtt.NewWiring(bridge, nil))
+	eb.Start(context.Background())
+	defer eb.Stop()
+	// Runs first on teardown, so a regression surfaces as the assertion below
+	// rather than as a hung test.
+	defer close(slow.release)
+
+	bus := reg.List()[0].EventBus
+	dispatched := make(chan struct{})
+	go func() {
+		events.Publish(bus, hmevent.CentralSouthboundReadyEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: "ccu-01",
+		})
+		close(dispatched)
+	}()
+
+	select {
+	case <-slow.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("fan-out worker never reached the snapshot's broker publish")
+	}
+	select {
+	case <-dispatched:
+	case <-time.After(2 * time.Second):
+		t.Fatal("bus dispatch stalled inside the southbound-ready snapshot publish")
+	}
+}
+
+// TestEventBridgeSnapshotSurvivesValueChangeFlood pins the backpressure policy:
+// a snapshot pass is enqueued as durable, so a flood of live value changes that
+// overflows the fan-out queue evicts state publishes — never the snapshot. A
+// dropped snapshot would leave the device's discovery configs unpublished, and
+// nothing re-sends them.
+func TestEventBridgeSnapshotSurvivesValueChangeFlood(t *testing.T) {
+	t.Parallel()
+	reg, d := registryWithDevice(t)
+
+	pub := mqtt.NewNoopClient()
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{Base: "openccu-loom", CentralName: "ccu-01", RawEnabled: true}, pub)
+	eb := NewEventBridge(reg, nil, mqtt.NewWiring(bridge, nil))
+
+	// Queue against a worker that is not running yet so the fill is
+	// deterministic: the snapshot job is enqueued first, then buried under an
+	// overflowing flood of evictable state publishes.
+	f := newMQTTFanout()
+	eb.fanout.Store(f)
+	eb.enqueueDurable(func(ctx context.Context) {
+		eb.PublishCentralSnapshot(ctx, "ccu-01")
+	})
+	for range mqttFanoutQueueDepth + 100 {
+		f.enqueue(func() {})
+	}
+	if got := f.droppedCount(); got == 0 {
+		t.Fatal("the flood did not overflow the queue, so the test proves nothing")
+	}
+
+	f.start(context.Background())
+	defer f.stop()
+	f.flush()
+
+	if !publishedForDevice(pub, d.Address) {
+		t.Fatalf("durable snapshot was dropped by the value-change flood; published=%+v", pub.Published())
+	}
+}

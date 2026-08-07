@@ -9,5 +9,8 @@ CREATE TABLE matter_settings (
     value TEXT NOT NULL
 );
 
+-- Down is destructive: the persisted BasicInformation.NodeLabel/Location
+-- strings are deleted. Any naming or location edit a commissioner wrote back
+-- reverts to the firmware default on the next boot.
 -- +goose Down
 DROP TABLE IF EXISTS matter_settings;

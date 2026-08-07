@@ -37,6 +37,13 @@ type Store struct {
 	sections  SectionLoader
 	centrals  CentralLoader
 
+	// base is the YAML/env tier the daemon booted from — the same
+	// starting point [Store.OverlayInto] is handed at boot. [Store.Effective]
+	// layers the DB tier onto a clone of it. Nil falls back to
+	// [config.Default], which is only correct for a daemon that has no
+	// config file at all.
+	base *config.Config
+
 	// envLookup resolves env-var references for secret fields.
 	// Tests can swap this with a fake; production wires
 	// [os.Getenv].
@@ -49,6 +56,29 @@ type Option func(*Store)
 // WithEnvLookup overrides the env-var resolver. Default uses os.Getenv.
 func WithEnvLookup(f func(string) string) Option {
 	return func(s *Store) { s.envLookup = f }
+}
+
+// WithBaseConfig pins the YAML/env tier [Store.Effective] assembles on
+// top of. The daemon passes the config it loaded from disk, which is the
+// same base its own boot assembly ([Store.OverlayInto]) mutates in place.
+//
+// Without it Effective started from [config.Default], and the two
+// assemblies disagreed on every field an operator had set in YAML and
+// never touched in the SPA: GET /api/v1/config reported the built-in
+// default, and the restart-pending provider — which diffs the running
+// boot config against Effective — read that disagreement as a staged
+// change and lit the restart banner permanently. `backup.schedule` was
+// the reproducible case: it is restart-required, carried by no editable
+// section, so a YAML value could never appear on the Effective side.
+//
+// The store keeps a clone: a later in-place hot-reload of the daemon's
+// config must not move the base that Effective replays from.
+func WithBaseConfig(base *config.Config) Option {
+	return func(s *Store) {
+		if base != nil {
+			s.base = config.Clone(base)
+		}
+	}
 }
 
 // New returns a Store. bootstrap must be non-nil; sections and
@@ -252,24 +282,25 @@ func (s *Store) OverlayInto(ctx context.Context, cfg *config.Config) (map[string
 }
 
 // Effective assembles the daemon's runtime config by:
-//  1. starting from the bootstrap tier (data_dir, listen, logging),
-//  2. layering DB-tier section snapshots on top,
-//  3. resolving env-var references for secret fields,
-//  4. filling in defaults for anything still unset.
+//  1. starting from the YAML/env tier the daemon booted from (see
+//     [WithBaseConfig]; [config.Default] when none was pinned),
+//  2. applying the bootstrap tier (data_dir, listen, logging),
+//  3. layering DB-tier section snapshots on top,
+//  4. resolving env-var references for secret fields,
+//  5. filling in defaults for anything still unset.
+//
+// Step 1 must be the daemon's own starting point, not the built-in
+// defaults: the section seed only runs on a database with no sections at
+// all, so a field set solely in YAML has no row to overlay and an
+// assembly starting from defaults silently drops it. Everything that
+// compares this result against the running config — the restart-pending
+// provider above all — then reads that gap as a pending change.
 //
 // Returns an error only on JSON-decode failures of malformed
 // section rows; missing sections fall back to defaults silently.
 func (s *Store) Effective(ctx context.Context) (*EffectiveResult, error) {
-	cfg := config.Default()
-	srcs := make(map[string]FieldSource)
-
-	// Bootstrap-tier wins on the fields it owns.
-	cfg.DataDir = s.bootstrap.DataDir
-	srcs["data_dir"] = SourceBootstrap
-	cfg.Logging = s.bootstrap.Logging
-	srcs["logging"] = SourceBootstrap
-	cfg.North.REST.Listen = s.bootstrap.Listen.REST
-	srcs["north.rest.listen"] = SourceBootstrap
+	cfg := s.baseClone()
+	srcs := s.bootstrapTierSources(cfg)
 
 	if s.sections != nil {
 		if err := s.layerSections(ctx, cfg, srcs); err != nil {
@@ -284,6 +315,49 @@ func (s *Store) Effective(ctx context.Context) (*EffectiveResult, error) {
 	s.resolveEnvSecrets(cfg, srcs)
 	cfg.ApplyDefaults()
 	return &EffectiveResult{Config: cfg, Sources: srcs}, nil
+}
+
+// baseClone returns a fresh copy of the pinned YAML/env base, or the
+// built-in defaults when no base was pinned (a daemon booted without a
+// config file, and every test that constructs a bare Store).
+func (s *Store) baseClone() *config.Config {
+	if s.base == nil {
+		return config.Default()
+	}
+	return config.Clone(s.base)
+}
+
+// bootstrapTierSources applies the bootstrap-tier fields onto cfg and
+// seeds the source attribution. Every field the YAML base carries beyond
+// the built-in defaults is attributed to the bootstrap tier as well, so
+// the SPA's source pill says "bootstrap" for a value that came out of
+// the config file instead of mislabelling it "default". A DB row layered
+// afterwards overrides the attribution.
+func (s *Store) bootstrapTierSources(cfg *config.Config) map[string]FieldSource {
+	srcs := make(map[string]FieldSource)
+	for _, path := range config.ChangedFields(config.Default(), cfg) {
+		srcs[path] = SourceBootstrap
+	}
+
+	// Bootstrap-tier wins on the fields it owns.
+	cfg.DataDir = s.bootstrap.DataDir
+	cfg.Logging = s.bootstrap.Logging
+	cfg.North.REST.Listen = s.bootstrap.Listen.REST
+	for path := range bootstrapOwnedPaths {
+		srcs[path] = SourceBootstrap
+	}
+	return srcs
+}
+
+// bootstrapOwnedPaths are the config paths BootstrapConfig owns outright:
+// their value comes from the process environment / YAML bootstrap tier,
+// never from a config_sections row, so a stored row must not be able to
+// claim them — see [sectionUnmanagedPaths] for the persistence half of
+// the same rule.
+var bootstrapOwnedPaths = map[string]struct{}{
+	"data_dir":          {},
+	"logging":           {},
+	"north.rest.listen": {},
 }
 
 // layerSections walks every known section, reads its JSON row when
@@ -321,7 +395,13 @@ func (s *Store) layerSections(ctx context.Context, cfg *config.Config, srcs map[
 			if _, unmanaged := sectionUnmanagedPaths[path]; unmanaged {
 				continue
 			}
-			if existing, ok := srcs[path]; ok && existing == SourceBootstrap {
+			// Only the paths BootstrapConfig genuinely owns keep their
+			// bootstrap attribution here. A blanket "already bootstrap"
+			// guard would be wrong now that the YAML tier attributes every
+			// field it carries: a section the operator then saved in the SPA
+			// would keep rendering its source pill as the file it no longer
+			// comes from.
+			if _, owned := bootstrapOwnedPaths[path]; owned {
 				continue
 			}
 			if !pathPresent(tree, relativeFieldPath(sec, path)) {

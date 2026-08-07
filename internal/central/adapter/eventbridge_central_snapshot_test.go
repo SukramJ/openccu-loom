@@ -7,7 +7,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -68,8 +67,9 @@ func TestCentralSouthboundReadyEventTriggersPerCentralSnapshot(t *testing.T) {
 		Base:        hmevent.NewBase(),
 		CentralName: "ccu-01",
 	})
-	// Allow the synchronous bus delivery + any publish fan-out to settle.
-	time.Sleep(20 * time.Millisecond)
+	// Barrier: the snapshot runs on the fan-out worker, not inline on the bus
+	// dispatch goroutine.
+	eb.Flush()
 
 	var stateTopics, availability int
 	for _, p := range pub.Published() {
