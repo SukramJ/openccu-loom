@@ -342,9 +342,23 @@ func PublishSync[T hmevent.Event](b *Bus, e T) {
 // Handlers with a [WithKey] filter are skipped when the event's
 // [hmevent.Event.Key] does not match.
 func (b *Bus) dispatchNow(e hmevent.Event) {
+	// Resolve the event's identity before taking any lock, and with panic
+	// isolation. Type() and EventKey() are methods on caller-supplied
+	// types: a panic in either used to escape the whole dispatch, and the
+	// dispatch lock is released by flushDeferred rather than by a defer —
+	// so one panicking Type() left b.dispatch held forever, every
+	// in-flight mark undone, and the bus permanently wedged. Every later
+	// Publish would queue into the deferred backlog with nothing left to
+	// drain it, and every cross-goroutine unsubscribe would block on its
+	// barrier.
+	typ, key, ok := eventIdentity(e)
+	if !ok {
+		return
+	}
+
 	b.mu.Lock()
-	b.activeTyp = e.Type()
-	handlers := append([]*registered(nil), b.handlers[e.Type()]...)
+	b.activeTyp = typ
+	handlers := append([]*registered(nil), b.handlers[typ]...)
 	// Register in-flight interest under b.mu — the same lock the
 	// unsubscribe closure takes to detach a handler and flip its dead
 	// flag. Serialising "snapshot + mark in-flight" against "detach + mark
@@ -361,10 +375,23 @@ func (b *Bus) dispatchNow(e hmevent.Event) {
 	// The counter mirrors
 	// every published event, not every delivery.
 	b.statsMu.Lock()
-	b.published[e.Type()]++
+	b.published[typ]++
 	b.statsMu.Unlock()
 
-	key := e.EventKey()
+	// The in-flight marks are released through this cursor rather than at
+	// the end of each iteration, so a panic anywhere in the pass still
+	// drains them. A mark that is never released blocks its handler's
+	// unsubscribe barrier for the lifetime of the process.
+	next := 0
+	defer func() {
+		for ; next < len(handlers); next++ {
+			handlers[next].inflight.Done()
+		}
+		b.mu.Lock()
+		b.activeTyp = ""
+		b.mu.Unlock()
+	}()
+
 	for _, h := range handlers {
 		h.calls.Add(1)
 		// Skip a handler detached after the snapshot: dead is flipped under
@@ -372,16 +399,29 @@ func (b *Bus) dispatchNow(e hmevent.Event) {
 		// never fires. Also honour the per-handler key filter.
 		if h.dead.Load() || (h.key != "" && h.key != key) {
 			h.inflight.Done()
+			next++
 			continue
 		}
 		h.matches.Add(1)
 		b.callHandler(h, e)
 		h.inflight.Done()
+		next++
 	}
+}
 
-	b.mu.Lock()
-	b.activeTyp = ""
-	b.mu.Unlock()
+// eventIdentity reads an event's type and key under panic recovery. A
+// failure reports ok=false so the caller abandons the dispatch with no
+// lock held and no bookkeeping started, rather than unwinding through it.
+func eventIdentity(e hmevent.Event) (typ hmevent.EventType, key string, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			ok = false
+			slog.Error("event bus: panic reading event identity",
+				slog.Any("panic", r),
+				slog.String("go_type", fmt.Sprintf("%T", e)))
+		}
+	}()
+	return e.Type(), e.EventKey(), true
 }
 
 // callHandler invokes a single registered handler with panic recovery and
