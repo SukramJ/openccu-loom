@@ -1338,19 +1338,39 @@ func (s *MeasurementStore) DeleteDevice(
 		return nil
 	}
 	prefix := deviceAddress + ":"
-	for _, table := range measurementTables {
-		_, err := s.db.ExecContext(ctx, `
-        DELETE FROM `+table+`
-         WHERE central_name = ?
-           AND interface_id = ?
-           AND (channel_address = ? OR channel_address LIKE ? || '%' ESCAPE '\')
-    `, centralName, interfaceID, deviceAddress, prefix)
-		if err != nil {
-			return fmt.Errorf("measurements.DeleteDevice %s: %w", table, err)
+	// One statement per tier: the rollups outlive the raw rows, so an
+	// unpaired device would keep its aggregates for the tiers' whole
+	// retention if only `measurements` were cleared.
+	for _, stmt := range []string{
+		deleteDeviceRawSQL,
+		deleteDeviceHourlySQL,
+		deleteDeviceDailySQL,
+	} {
+		if _, err := s.db.ExecContext(ctx, stmt,
+			centralName, interfaceID, deviceAddress, prefix); err != nil {
+			return fmt.Errorf("measurements.DeleteDevice: %w", err)
 		}
 	}
 	return nil
 }
+
+// deleteDevice*SQL delete one device's rows from each measurement tier.
+// Written out per tier rather than assembled from a table name so each
+// statement stays a literal constant.
+const (
+	deleteDeviceRawSQL = `
+        DELETE FROM measurements
+         WHERE central_name = ? AND interface_id = ?
+           AND (channel_address = ? OR channel_address LIKE ? || '%' ESCAPE '\')`
+	deleteDeviceHourlySQL = `
+        DELETE FROM measurements_hourly
+         WHERE central_name = ? AND interface_id = ?
+           AND (channel_address = ? OR channel_address LIKE ? || '%' ESCAPE '\')`
+	deleteDeviceDailySQL = `
+        DELETE FROM measurements_daily
+         WHERE central_name = ? AND interface_id = ?
+           AND (channel_address = ? OR channel_address LIKE ? || '%' ESCAPE '\')`
+)
 
 // DeleteForCentral removes every measurement recorded for the given central,
 // across every interface and device. Used on live central removal so a
@@ -1365,19 +1385,17 @@ func (s *MeasurementStore) DeleteForCentral(ctx context.Context, centralName str
 	// deleting only `measurements` left a removed CCU's aggregates behind —
 	// and re-adopting the same central name resurfaced them in the energy
 	// views as if the CCU had never been away.
-	for _, table := range measurementTables {
-		if _, err := s.db.ExecContext(ctx,
-			`DELETE FROM `+table+` WHERE central_name = ?`, centralName); err != nil {
-			return fmt.Errorf("measurements.DeleteForCentral %s: %w", table, err)
+	for _, stmt := range []string{
+		`DELETE FROM measurements WHERE central_name = ?`,
+		`DELETE FROM measurements_hourly WHERE central_name = ?`,
+		`DELETE FROM measurements_daily WHERE central_name = ?`,
+	} {
+		if _, err := s.db.ExecContext(ctx, stmt, centralName); err != nil {
+			return fmt.Errorf("measurements.DeleteForCentral: %w", err)
 		}
 	}
 	return nil
 }
-
-// measurementTables lists every tier keyed by (central, device): the raw
-// table plus both rollups. Anything that deletes by central or device must
-// walk all three or the aggregates survive their source rows.
-var measurementTables = []string{"measurements", "measurements_hourly", "measurements_daily"}
 
 // DeleteAll empties the history. Used by the global reset endpoint and by
 // tests.
@@ -1385,9 +1403,13 @@ func (s *MeasurementStore) DeleteAll(ctx context.Context) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	for _, table := range measurementTables {
-		if _, err := s.db.ExecContext(ctx, `DELETE FROM `+table); err != nil {
-			return fmt.Errorf("measurements.DeleteAll %s: %w", table, err)
+	for _, stmt := range []string{
+		`DELETE FROM measurements`,
+		`DELETE FROM measurements_hourly`,
+		`DELETE FROM measurements_daily`,
+	} {
+		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("measurements.DeleteAll: %w", err)
 		}
 	}
 	return nil

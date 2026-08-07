@@ -476,6 +476,12 @@ func (b *Bus) EventStats() map[string]int {
 func (b *Bus) TotalSubscriptionCount() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	return b.subscriptionCountLocked()
+}
+
+// subscriptionCountLocked totals the registered handlers. Caller holds
+// b.mu.
+func (b *Bus) subscriptionCountLocked() int {
 	total := 0
 	for _, list := range b.handlers {
 		total += len(list)
@@ -500,7 +506,7 @@ func (b *Bus) ClearSubscriptions(typ hmevent.EventType) {
 func (b *Bus) ClearAllSubscriptions() {
 	fromDispatch := b.clearFromDispatch()
 	b.mu.Lock()
-	var retired []*registered
+	retired := make([]*registered, 0, b.subscriptionCountLocked())
 	for _, list := range b.handlers {
 		retired = append(retired, retireLocked(list, fromDispatch)...)
 	}

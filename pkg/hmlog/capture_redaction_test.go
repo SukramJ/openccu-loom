@@ -58,7 +58,7 @@ func TestCaptureAndLiveLogCarryRedaction(t *testing.T) {
 		live.WriteString(rec.Msg)
 		for k, v := range rec.Attrs {
 			live.WriteString(k)
-			live.WriteString(fmt.Sprint(v))
+			fmt.Fprint(&live, v)
 		}
 	}
 	if live.Len() == 0 {
