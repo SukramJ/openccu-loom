@@ -45,6 +45,54 @@ func wireHistoryStore(cfg *config.Config, logger *slog.Logger) *sqlite.Measureme
 	return sqlite.NewMeasurementStore(db)
 }
 
+// wireHistoryRetention keeps the retention purge alive while recording is
+// switched off. It opens the existing history database, starts the
+// rollup + retention loop with no recorder attached, and returns a closer
+// that stops the loop and closes the handle. Returns a no-op closer when
+// history is enabled (the recorder already runs the loop) or when no
+// history database exists — a disabled feature must not create one.
+//
+// The store handle deliberately stays local instead of landing in
+// [sharedInfra.historyStore]: that field is what advertises the /history
+// REST surface and the `history` runtime capability, and an operator who
+// turned recording off has not asked for either. Only the eviction runs.
+func wireHistoryRetention(cfg *config.Config, logger *slog.Logger) func() {
+	noop := func() {}
+	if cfg == nil || cfg.Persistence.History.HistoryFeatureEnabled() {
+		return noop
+	}
+	dataDir := cfg.DataDir
+	if dataDir == "" {
+		dataDir = "./var"
+	}
+	path := filepath.Join(dataDir, "history.db")
+	if _, err := os.Stat(path); err != nil {
+		return noop
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	db, err := sqlite.OpenHistory(ctx, sqlite.FileDSN(path))
+	if err != nil {
+		logger.Warn("history.retention_open_failed",
+			slog.String("db", path),
+			slog.String("err", err.Error()))
+		return noop
+	}
+	store := sqlite.NewMeasurementStore(db)
+	hc := cfg.Persistence.History
+	stop := history.New(store, history.Options{
+		Retention:       hc.Retention,
+		RetentionHourly: hc.RetentionHourlyOrDefault(),
+		RetentionDaily:  hc.RetentionDailyOrDefault(),
+		Logger:          logger,
+	}).StartRetention()
+	logger.Info("history.retention_only", slog.String("db", path))
+	return func() {
+		stop()
+		_ = db.Close()
+	}
+}
+
 // wireRecordingOverrides builds the per-datapoint recording overlay and
 // its store from the history DB handle, then loads the sparse override
 // set so the recorder hot path never touches disk. Returns (nil, nil)

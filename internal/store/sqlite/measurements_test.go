@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -1077,6 +1078,41 @@ func TestMeasurement_DeleteDailyOlderThan_RespectsCutoff(t *testing.T) {
 	}
 }
 
+// TestMeasurement_DeleteDailyOlderThan_UsesTheBucketIndex pins the daily
+// tier's time-axis index. measurements_daily is keyed by central_name
+// first, so without a dedicated bucket_ts index the retention purge scans
+// the whole table on every tick, and the scan grows with every retained
+// day. The query planner is asked directly because a row-count assertion
+// cannot tell an index scan from a full one.
+func TestMeasurement_DeleteDailyOlderThan_UsesTheBucketIndex(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	var plan strings.Builder
+	rows, err := s.db.QueryContext(ctx,
+		`EXPLAIN QUERY PLAN DELETE FROM measurements_daily WHERE bucket_ts < ?`, int64(0))
+	if err != nil {
+		t.Fatalf("EXPLAIN QUERY PLAN: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, parent, notUsed int64
+		var detail string
+		if err := rows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+			t.Fatalf("scan plan row: %v", err)
+		}
+		plan.WriteString(detail)
+		plan.WriteByte('\n')
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("plan rows: %v", err)
+	}
+	if !strings.Contains(plan.String(), "idx_measurements_daily_bucket_ts") {
+		t.Errorf("daily retention purge does not use idx_measurements_daily_bucket_ts; plan:\n%s", plan.String())
+	}
+}
+
 // Ensure errors package is used (satisfies golangci-lint if errors.New is referenced).
 var _ = errors.New
 
@@ -1721,7 +1757,7 @@ func TestPickHistoryTierSelectsByWidth(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := s.pickHistoryTier(ctx, key, tc.width, fromMs)
+			got, err := s.pickHistoryTier(ctx, key, tc.width, fromMs, fromMs+tc.width*60)
 			if err != nil {
 				t.Fatalf("pickHistoryTier: %v", err)
 			}
@@ -1787,6 +1823,65 @@ func TestQueryBucketsPromotesToHourlyWhenRawPurged(t *testing.T) {
 	}
 	if total != 2 {
 		t.Errorf("total sample count across buckets = %d, want 2", total)
+	}
+}
+
+// TestQueryBucketsKeepsRawForAYoungSeriesWithNarrowBuckets is the mirror
+// case of the promotion above: a device learned ten minutes ago also has a
+// raw floor inside the requested window, but for the innocent reason that
+// it did not exist earlier — nothing was purged and no rollup holds the
+// missing head. Promoting it folded a half-hour chart of 30-second buckets
+// onto hour buckets, so the SPA drew a single point for a series that has
+// ten real samples.
+func TestQueryBucketsKeepsRawForAYoungSeriesWithNarrowBuckets(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "NEW0001:1"
+		param   = "ACTUAL_TEMPERATURE"
+	)
+	now := time.Date(2026, 3, 1, 12, 35, 0, 0, time.UTC)
+	samples := make([]MeasurementSample, 0, 10)
+	for i := range 10 {
+		samples = append(samples, MeasurementSample{
+			CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param,
+			TS:    now.Add(-time.Duration(10-i) * time.Minute),
+			Value: float64(20 + i),
+		})
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	// The recorder's periodic fold has run; the running hour is not
+	// foldable yet, so the hourly tier holds nothing for this series.
+	if _, err := s.RollupHourly(ctx, now); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	// The SPA's default half-hour view: 60 buckets over 30 minutes.
+	from := now.Add(-30 * time.Minute)
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param, from, now, 60)
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierRaw {
+		t.Fatalf("tier = %q, want %q: a series younger than the window is not a purged one, "+
+			"and the hourly tier cannot represent 30-second buckets", tier, HistoryTierRaw)
+	}
+	if len(buckets) != 10 {
+		t.Fatalf("QueryBuckets returned %d buckets, want 10 (one per sample); "+
+			"a collapsed chart is the symptom of an unwarranted tier promotion", len(buckets))
+	}
+	var total int64
+	for _, b := range buckets {
+		total += b.Count
+	}
+	if total != 10 {
+		t.Errorf("total sample count across buckets = %d, want 10", total)
 	}
 }
 

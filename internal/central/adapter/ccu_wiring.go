@@ -213,17 +213,6 @@ func WireCentrals(
 			logger.Warn("wire.central.not_registered", slog.String("central", cc.Name))
 			continue
 		}
-		// Hydrate the descriptor registries from SQLite and attach the
-		// persistence sinks BEFORE the gated bring-up starts, so
-		// CheckAndCreateDevicesFromCache sees the cached descriptions
-		// and the live pull's registry writes are mirrored to disk.
-		if deps.Descriptors.enabled() {
-			devN, psN := WireDescriptorPersistence(ctx, unit, deps.Descriptors, logger)
-			logger.Info("wire.descriptors.hydrated",
-				slog.String("central", cc.Name),
-				slog.Int("devices", devN),
-				slog.Int("paramsets", psN))
-		}
 		//nolint:contextcheck // buildAndStart→start runs the gated bring-up on the handle's teardown-bounded parent ctx, not the short-lived wiring ctx
 		mgr.add(mgr.buildAndStart(cc, unit))
 	}

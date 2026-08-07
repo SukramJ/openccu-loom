@@ -125,12 +125,18 @@ func wireSharedInfrastructure(
 	// wire one when the store exists; the stop closer drains the WAL
 	// before Close at teardown.
 	si.historyStore = wireHistoryStore(cfg, logger) //nolint:contextcheck // wireHistoryStore creates its own bounded context internally
-	var stopHistoryWAL func()
+	var stopHistoryWAL, stopHistoryRetention func()
 	if si.historyStore != nil {
 		stopHistoryWAL = sqlite.StartWALCheckpointLoop(si.historyStore.DB(), 0, logger) //nolint:contextcheck // StartWALCheckpointLoop creates its own daemon-lifetime context internally
 		// Per-datapoint recording overrides live in the same history DB and
 		// steer the recorder's hot-path gate (SV10).
 		si.recordingStore, si.recordingOverrides = wireRecordingOverrides(si.historyStore, cfg, logger) //nolint:contextcheck // helper bounds its own context internally
+	} else {
+		// Recording is off, but an earlier run may have left a populated
+		// history.db behind. Keep evicting it so switching the feature off
+		// releases the disk it was taken for instead of freezing the file
+		// at its final size.
+		stopHistoryRetention = wireHistoryRetention(cfg, logger) //nolint:contextcheck // wireHistoryRetention bounds its own open context and runs the loop on a daemon-lifetime one
 	}
 
 	si.wsHub = ws.NewHub()
@@ -204,6 +210,9 @@ func wireSharedInfrastructure(
 		_ = si.valuesCacheStore.Close()
 		if stopHistoryWAL != nil {
 			stopHistoryWAL()
+		}
+		if stopHistoryRetention != nil {
+			stopHistoryRetention()
 		}
 		_ = si.historyStore.Close()
 		_ = si.masterValuesStore.Close()

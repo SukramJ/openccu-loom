@@ -119,6 +119,46 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `RecoveryAttempted`, carrying the stage, the attempt count and the
   last error.
 
+- **A CCU added while the daemon was running never cached its device
+  descriptions.** The persistent device-description and paramset caches
+  were attached at the boot call site only, so a central adopted at
+  runtime ran without them: nothing it learned reached SQLite, and every
+  later daemon start re-inventoried the whole CCU over the radio as if
+  it had never been seen. The wiring moved into the bring-up path both
+  entry points share, so an adopted central hydrates from disk and
+  mirrors back exactly like a configured one. Pinned through the real
+  manager by asserting the effect on both sides — hydration and
+  persistence — rather than the call.
+
+- **Switching the measurement history off froze `history.db` at its
+  full size.** Retention hung off the recorder, the recorder off the
+  store, and the store off the enabled flag — so an operator disabling
+  history to reclaim disk got the one outcome the switch was meant to
+  prevent: nothing was recorded, and nothing was ever evicted either.
+  The rollup and retention pass now runs without a recorder whenever a
+  history database exists, so the file drains to the configured
+  retention and keeps draining as the cutoff moves. Recording stays off,
+  the `/history` REST surface and the `history` capability stay hidden,
+  and no database is created for a feature that is disabled.
+
+- **A chart of a freshly learned device collapsed to a single point.**
+  A history query whose window reaches back before the series' oldest
+  raw sample was promoted to the hourly tier — right for a series whose
+  older rows the recorder has already purged, wrong for one that simply
+  did not exist yet. A device learned ten minutes ago, charted over the
+  last half hour in 30-second buckets, had its raw tail folded onto hour
+  buckets and drew one point. The tier choice now weighs both tiers at
+  the *requested* bucket width, so a narrow-bucket window keeps its raw
+  resolution unless the hourly rollup genuinely reaches further back
+  than the raw table does.
+
+- **The daily history tier's retention purge scanned the whole table.**
+  `measurements_daily` is keyed by central name first, so
+  `DELETE … WHERE bucket_ts < ?` could not use the primary key and
+  full-scanned on every retention tick — a scan that grows with every
+  day retained. The raw and hourly tiers have had a time-axis index
+  since the bounded rollup landed; the daily tier now has one too.
+
 - **A backup error claimed a missing feature when the daemon meant a
   missing configuration.** Backup triggers with no central registered,
   and downloads with no backup storage configured, both answered

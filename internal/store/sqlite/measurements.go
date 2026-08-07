@@ -314,7 +314,7 @@ func (s *MeasurementStore) QueryBuckets(
 	}
 	key := seriesKey{centralName, interfaceID, channelAddress, parameter}
 
-	tier, err := s.pickHistoryTier(ctx, key, width, fromMs)
+	tier, err := s.pickHistoryTier(ctx, key, width, fromMs, toMs)
 	if err != nil {
 		return nil, "", err
 	}
@@ -340,12 +340,20 @@ type seriesKey struct {
 
 // pickHistoryTier selects the source resolution for a bucket width. The
 // width decides the base choice; a raw choice is then promoted when the
-// series has no raw row old enough to cover the range, because the
-// recorder has already purged that far back and only the rollups still
-// hold it. Without the promotion a narrow-bucket query over an old range
-// silently renders empty.
+// hourly rollup can fill more of the requested chart than the raw table
+// can, because the recorder has already purged the older raw rows and
+// only the rollups still hold them. Without the promotion a narrow-bucket
+// query over an old range silently renders empty.
+//
+// The promotion weighs both tiers at the *requested* bucket width, not at
+// the window length alone. The hourly tier yields at most one point per
+// hour however narrow the buckets are, so promoting a sub-hour request
+// costs resolution and only pays off when raw genuinely cannot serve the
+// window. A series learned minutes ago has a raw floor inside the window
+// for the innocent reason that it did not exist earlier — folding its raw
+// tail onto hour buckets collapsed a 30-minute chart to a single point.
 func (s *MeasurementStore) pickHistoryTier(
-	ctx context.Context, key seriesKey, width, fromMs int64,
+	ctx context.Context, key seriesKey, width, fromMs, toMs int64,
 ) (HistoryTier, error) {
 	switch {
 	case width >= dayBucketMs:
@@ -357,10 +365,30 @@ func (s *MeasurementStore) pickHistoryTier(
 	if err != nil {
 		return "", err
 	}
-	if !ok || floor > fromMs {
+	if !ok {
 		return HistoryTierHour, nil
 	}
-	return HistoryTierRaw, nil
+	if floor <= fromMs {
+		return HistoryTierRaw, nil
+	}
+	// The raw table starts inside the window: whatever lies before `floor`
+	// can only come from the hourly rollup. Compare what each tier can
+	// actually fill — the raw tail at the requested width against the part
+	// of the window the hourly tier reaches, one point per hour. An hourly
+	// tier that starts no earlier than the raw floor adds nothing but
+	// coarseness, and scores zero here on its own.
+	hourFloor, hourOK, err := s.hourlyFloor(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	var hourPoints int64
+	if hourOK {
+		hourPoints = max(toMs-max(fromMs, hourFloor), 0) / hourBucketMs
+	}
+	if max(toMs-floor, 0)/width >= hourPoints {
+		return HistoryTierRaw, nil
+	}
+	return HistoryTierHour, nil
 }
 
 // rawFloor returns the oldest raw sample timestamp for one series and
@@ -375,6 +403,23 @@ func (s *MeasurementStore) rawFloor(ctx context.Context, key seriesKey) (oldestM
     `, key.central, key.iface, key.channel, key.parameter).Scan(&floor)
 	if err != nil {
 		return 0, false, fmt.Errorf("measurements.rawFloor: %w", err)
+	}
+	return floor.Int64, floor.Valid, nil
+}
+
+// hourlyFloor returns the oldest folded hourly bucket start for one series
+// and false when the series has no hourly rows at all. It bounds how far
+// back a promotion to the hourly tier could reach.
+func (s *MeasurementStore) hourlyFloor(ctx context.Context, key seriesKey) (oldestMs int64, ok bool, err error) { //nolint:gocritic // named results document which bool means "has rows"
+	var floor sql.NullInt64
+	err = s.db.QueryRowContext(ctx, `
+        SELECT MIN(bucket_ts)
+          FROM measurements_hourly
+         WHERE central_name = ? AND interface_id = ?
+           AND channel_address = ? AND parameter = ?
+    `, key.central, key.iface, key.channel, key.parameter).Scan(&floor)
+	if err != nil {
+		return 0, false, fmt.Errorf("measurements.hourlyFloor: %w", err)
 	}
 	return floor.Int64, floor.Valid, nil
 }

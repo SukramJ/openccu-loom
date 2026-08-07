@@ -251,13 +251,31 @@ func (m *BringUpManager) add(b *centralBringUp) {
 	m.order = append(m.order, b.cc.Name)
 }
 
-// buildAndStart constructs a single central's bring-up handle — registers the
-// (local, no-I/O) callback routes and launches the readiness-gated southbound
-// bring-up — and returns it WITHOUT adding it to the manager (the caller adds
-// it, so this never re-enters m.mu). Shared by WireCentrals (boot) and
-// AddCentral (runtime); uses the manager's captured parentCtx/cfg/deps/logger.
-// The Unit must already be registered in the shared registry.
+// buildAndStart constructs a single central's bring-up handle — hydrates the
+// descriptor caches, registers the (local, no-I/O) callback routes and
+// launches the readiness-gated southbound bring-up — and returns it WITHOUT
+// adding it to the manager (the caller adds it, so this never re-enters m.mu).
+// Shared by WireCentrals (boot) and AddCentral (runtime); uses the manager's
+// captured parentCtx/cfg/deps/logger. The Unit must already be registered in
+// the shared registry.
+//
+// The descriptor wiring lives here rather than at the boot call site because
+// both entry points need it: a central adopted at runtime that never attaches
+// the persistence sinks writes no device descriptions or paramsets to SQLite,
+// so every later daemon start re-inventories it over the radio as if it were
+// brand new.
 func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.Unit) *centralBringUp {
+	// Hydrate the descriptor registries from SQLite and attach the
+	// persistence sinks BEFORE the gated bring-up starts, so
+	// CheckAndCreateDevicesFromCache sees the cached descriptions and the
+	// live pull's registry writes are mirrored to disk.
+	if m.deps.Descriptors.enabled() {
+		devN, psN := WireDescriptorPersistence(m.parentCtx, unit, m.deps.Descriptors, m.logger)
+		m.logger.Info("wire.descriptors.hydrated",
+			slog.String("central", cc.Name),
+			slog.Int("devices", devN),
+			slog.Int("paramsets", psN))
+	}
 	callbackURL, binRPCCallbackAddr, cbHandlers, deregister := registerCentralCallbacks(m.deps, cc, unit, m.logger)
 	b := &centralBringUp{
 		cfg:                m.cfg,
