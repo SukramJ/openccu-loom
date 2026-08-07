@@ -511,3 +511,53 @@ func TestScheduleParamsetConsistencyCheckCallsCallback(t *testing.T) {
 		t.Fatalf("callback received=%+v, want single CC inconsistency", received)
 	}
 }
+
+// TestAddNewDevicesManuallyPublishesOutsideTheCoordinatorLock pins that
+// DeviceCreatedEvent handlers do not run under the DeviceCoordinator's
+// mutex.
+//
+// The bus dispatches synchronously on the publishing goroutine, and this
+// event's real handlers do substantial work: the event bridge publishes
+// the device's whole MQTT snapshot, the security domain rebuilds its
+// index. Holding a non-reentrant coordinator lock across foreign handler
+// code means any handler that reaches back into the coordinator
+// deadlocks the daemon outright — and until one does, a slow broker
+// stalls every other caller of the coordinator.
+//
+// The handler here calls back into the coordinator, which is exactly
+// what the old code could not survive.
+func TestAddNewDevicesManuallyPublishesOutsideTheCoordinatorLock(t *testing.T) {
+	t.Parallel()
+
+	dc, bus, _, _, _ := newDCFull(t)
+
+	var reentered atomic.Bool
+	unsub := events.Subscribe(bus, func(hmevent.DeviceCreatedEvent) {
+		// A read that takes the coordinator's own lock.
+		dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceHmIPRF, nil)
+		reentered.Store(true)
+	})
+	defer unsub()
+
+	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+		{Address: "REENT0001", Type: "HmIP-STH"},
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- dc.AddNewDevicesManually(context.Background(), hmenum.InterfaceHmIPRF,
+			map[string]string{"REENT0001": "Sensor"}, nil)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("AddNewDevicesManually: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("AddNewDevicesManually deadlocked: a DeviceCreatedEvent handler ran under the coordinator lock")
+	}
+	if !reentered.Load() {
+		t.Fatal("handler never ran; the test would pass vacuously")
+	}
+}
