@@ -105,6 +105,7 @@ func TestHubDiscoveryUsesSerialFromCentralSystemInfo(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	body := discoveryConfigFor(pub, "homeassistant/", "ccu-01_sysvars")
 	if body == nil {
@@ -153,6 +154,7 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 
 	// Boot-time Start with an unresolved serial: hub discovery is gated off.
 	publisher.Start(context.Background())
+	publisher.Flush()
 	if body := discoveryConfigFor(pub, "homeassistant/", "ccu-01_sysvars"); body != nil {
 		t.Fatalf("hub discovery published before the serial resolved: %v", body)
 	}
@@ -162,6 +164,7 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F5A4993D962"})
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	body := discoveryConfigFor(pub, "homeassistant/", "ccu-01_sysvars")
 	if body == nil {

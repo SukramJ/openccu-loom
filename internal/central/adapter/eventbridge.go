@@ -193,7 +193,7 @@ func (b *EventBridge) Start(ctx context.Context) {
 	b.started = true
 
 	for _, u := range b.registry.List() {
-		b.unsubs = append(b.unsubs, b.subscribeUnit(ctx, u)...)
+		b.unsubs = append(b.unsubs, b.subscribeUnit(u)...)
 	}
 }
 
@@ -224,7 +224,7 @@ func (b *EventBridge) AttachCentral(u *central.Unit) {
 	if b.attached == nil {
 		b.attached = make(map[string][]func())
 	}
-	b.attached[u.Name()] = b.subscribeUnit(b.lifetimeCtx, u)
+	b.attached[u.Name()] = b.subscribeUnit(u)
 }
 
 // DetachCentral releases the subscriptions [EventBridge.AttachCentral]
@@ -252,7 +252,11 @@ func (b *EventBridge) DetachCentral(centralName string) {
 // their unsubscribe funcs. Shared by [EventBridge.Start] (boot-time
 // centrals) and [EventBridge.AttachCentral] (live-adopted ones) so an
 // adopted central is wired exactly like a configured one.
-func (b *EventBridge) subscribeUnit(ctx context.Context, u *central.Unit) []func() {
+//
+// No handler takes a caller context: every publish a handler triggers runs on
+// the fan-out worker under the worker's own context, so the bridge lifetime —
+// not the goroutine that happened to wire the central — bounds the broker I/O.
+func (b *EventBridge) subscribeUnit(u *central.Unit) []func() {
 	bus := u.EventBus
 	return []func(){
 		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
@@ -280,7 +284,7 @@ func (b *EventBridge) subscribeUnit(ctx context.Context, u *central.Unit) []func
 		// of the same topics, and so snapshot passes do not re-emit discovery
 		// configs for a device that no longer exists in the model.
 		events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
-			b.onDeviceRemoved(ctx, e)
+			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceRemoved(jobCtx, e) })
 		}),
 		// Per-central southbound-ready: the readiness-gated bring-up loads each
 		// central's devices (with names) asynchronously, after this boot-time
@@ -289,7 +293,9 @@ func (b *EventBridge) subscribeUnit(ctx context.Context, u *central.Unit) []func
 		// for a restart. Idempotent (the bridge diff-gates on its declared map),
 		// so it composes safely with the catch-up PublishInitialSnapshot call.
 		events.Subscribe(bus, func(e hmevent.CentralSouthboundReadyEvent) {
-			b.PublishCentralSnapshot(ctx, e.CentralName)
+			b.enqueueDurable(func(jobCtx context.Context) {
+				b.PublishCentralSnapshot(jobCtx, e.CentralName)
+			})
 		}),
 		// Hot-plug: a device materialised AFTER its central's bring-up
 		// (newDevices callback) never re-enters a snapshot pass on its
@@ -297,9 +303,38 @@ func (b *EventBridge) subscribeUnit(ctx context.Context, u *central.Unit) []func
 		// announces it, so discovery + state reach the broker without a
 		// daemon restart.
 		events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
-			b.onDeviceCreated(ctx, u, e)
+			b.enqueueDurable(func(jobCtx context.Context) { b.onDeviceCreated(jobCtx, u, e) })
 		}),
 	}
+}
+
+// enqueueDurable hands a whole-device / whole-central publish pass to the
+// fan-out worker instead of running it on the bus dispatch goroutine. A
+// snapshot walks every data point of a device (or every device of a central)
+// and blocks in the broker for each one; run inline it froze dispatch for
+// every central sharing the bus, which is the defect this indirection exists
+// to remove.
+//
+// Durable, not evictable: these passes carry the discovery configs and
+// retracted topics that nothing re-sends. A dropped snapshot leaves a device
+// missing from Home Assistant, and a dropped retraction leaves a deleted
+// device lingering as a live entity — both until the next daemon restart. Only
+// live value-change state publishes, which the next sample overwrites, are
+// droppable. See [fanoutJob].
+//
+// Sharing the queue with the live value plane is deliberate: one FIFO drained
+// by one worker is what keeps a device's discovery ahead of its first state
+// and its retraction behind the publishes it retracts.
+//
+// With no worker running (a unit test driving a handler without Start) the job
+// runs inline under the bridge lifetime context, preserving the old behaviour.
+func (b *EventBridge) enqueueDurable(job func(context.Context)) {
+	f := b.fanout.Load()
+	if f == nil {
+		job(b.lifetimeCtx)
+		return
+	}
+	f.enqueueDurable(func() { job(f.ctx) })
 }
 
 // onDeviceCreated publishes the full MQTT snapshot of one freshly
