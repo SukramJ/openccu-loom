@@ -33,6 +33,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **One slow broker could freeze every CCU's event delivery.** The
+  internal event bus dispatches synchronously on the publishing
+  goroutine, so anything a handler does happens on a goroutine shared by
+  every central. The live value plane had been moved off it, but the hub
+  plane had not: connectivity changes, install-mode countdowns, sysvar
+  and program updates, alarm and service messages, the inbox, the
+  firmware-update entity and the device-link re-announcement all
+  published to the broker inline — as did the whole-device and
+  whole-central snapshots that a hot-plugged device or a completed CCU
+  bring-up triggers. A broker that stopped acknowledging (a half-open
+  connection waits out the transport's ack timeout) therefore stalled
+  dispatch for every central at once, and a removed device's retraction
+  could stall it too. All of these now hand their broker work to a
+  single fan-out worker per publisher, which keeps them serialised — so
+  discovery still precedes state and per-entity ordering is unchanged —
+  while the dispatch goroutine returns immediately. Shutdown cancels the
+  worker's in-flight publish instead of waiting it out.
+
+- **A flood of value changes could silently delete entities from Home
+  Assistant.** The fan-out queue drops its oldest entry when it
+  overflows, which is right for a state sample — the next one overwrites
+  the same retained topic — and wrong for anything declarative. Now that
+  snapshots and hub-plane payloads share that queue, discovery configs,
+  device snapshots and aggregate replacements are marked durable and are
+  never dropped; the queue grows past its soft bound instead, and only
+  self-healing state publishes are evicted. Losing one of the former
+  leaves an entity missing or frozen until the operator restarts the
+  daemon, because nothing re-sends it.
+
 - **Every energy day and month total was shifted by the timezone
   offset.** Day and month buckets were folded on the UTC calendar while
   the SPA labelled each one with a local date. In CEST a "day" therefore

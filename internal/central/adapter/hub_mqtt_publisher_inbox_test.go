@@ -19,6 +19,7 @@ func TestInboxUpdateReachesMQTT(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	prev := len(pub.Published())
 
@@ -27,6 +28,7 @@ func TestInboxUpdateReachesMQTT(t *testing.T) {
 		{Address: "AABBCC001122", Model: "HmIP-PS", Serial: "123456"},
 	})
 
+	publisher.Flush()
 	after := pub.Published()
 	if len(after) <= prev {
 		t.Fatalf("no publish after Inbox.Replace; before=%d after=%d topics=%v",
@@ -64,6 +66,7 @@ func TestInboxInitialStatePublishedAtStart(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	var found bool
 	for _, p := range pub.Published() {

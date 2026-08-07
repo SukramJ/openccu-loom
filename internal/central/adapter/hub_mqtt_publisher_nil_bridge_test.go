@@ -50,6 +50,7 @@ func TestHubMQTTPublisherStartSurvivesADisabledBroker(t *testing.T) {
 
 	publisher := NewHubMQTTPublisher(reg, wiring, nil)
 	publisher.Start(context.Background())
+	publisher.Flush()
 	t.Cleanup(publisher.Stop)
 }
 
@@ -70,6 +71,7 @@ func TestHubMQTTPublisherStartRecoversWhenTheBrokerReturns(t *testing.T) {
 	// Disabled: one pass that must publish nothing and not panic.
 	restore := wiring.SwapBridge(nil)
 	publisher.Start(context.Background())
+	publisher.Flush()
 	if got := len(pub.Published()); got != 0 {
 		t.Fatalf("published %d messages with no bridge, want none", got)
 	}
@@ -77,6 +79,7 @@ func TestHubMQTTPublisherStartRecoversWhenTheBrokerReturns(t *testing.T) {
 	// Re-enabled: the next Start must wire the central as if nothing happened.
 	wiring.SwapBridge(restore)
 	publisher.Start(context.Background())
+	publisher.Flush()
 	t.Cleanup(publisher.Stop)
 
 	if !containsTopic(pub, "programs/prog-1") {

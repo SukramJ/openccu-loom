@@ -10,30 +10,61 @@ import (
 	"sync/atomic"
 )
 
-// mqttFanoutQueueDepth bounds the per-broker publish queue. A slow or
-// half-open broker cannot grow it without limit: once full the oldest queued
-// publish is dropped (drop-oldest) and counted, mirroring the WebSocket hub's
-// drop-on-full backpressure in internal/north/rest/ws/client.go.
+// mqttFanoutQueueDepth is the soft bound on the per-broker publish queue. A
+// slow or half-open broker cannot grow it without limit as long as evictable
+// work is pending: once the depth is reached the oldest *evictable* publish is
+// dropped and counted, mirroring the WebSocket hub's drop-on-full backpressure
+// in internal/north/rest/ws/client.go.
 const mqttFanoutQueueDepth = 4096
 
-// mqttFanout decouples the north-bound MQTT publish work from the event-bus
-// dispatch goroutine. Live value-change fan-out is enqueued here — a
-// non-blocking, bounded, drop-oldest handoff — and drained by a single worker
-// goroutine. A broker that blocks (for example a QoS1 PUBACK wait up to the
-// transport's AckTimeout on a half-open connection) therefore can never stall
-// bus dispatch, and so can never freeze event delivery for the other centrals
-// that share the same broker.
+// fanoutJob is one queued broker interaction plus the drop policy that applies
+// to it when the queue overflows.
 //
-// The single worker per broker preserves the FIFO order in which publishes were
-// enqueued, which keeps per-data-point ordering intact.
-type mqttFanout struct {
-	queue chan func()
+// The two classes exist because losing a retained MQTT publish has two very
+// different consequences:
+//
+//   - A live value-change state publish is *self-healing*: the topic is
+//     retained and the next sample of the same data point overwrites it, so a
+//     dropped sample costs at most one stale reading for one refresh interval.
+//     Those jobs are evictable.
+//   - A discovery config, a device/central snapshot or a hub-plane aggregate
+//     replacement is *declarative*: nothing re-sends it. Dropping one makes an
+//     entity absent from Home Assistant — or frozen on a stale aggregate —
+//     until the operator restarts the daemon. Those jobs are durable and are
+//     never dropped; the queue is allowed to grow past the soft bound instead,
+//     because their arrival rate is bounded by CCU bring-up and hub-refresh
+//     cadence rather than by device event traffic.
+type fanoutJob struct {
+	run       func()
+	evictable bool
+}
 
-	// enqueueMu serialises producers so the drop-oldest eviction (a paired
-	// non-blocking receive + send) stays atomic against other producers. It is
-	// only ever held around bounded channel operations, never around broker
-	// I/O, so it cannot propagate broker latency back into bus dispatch.
-	enqueueMu sync.Mutex
+// mqttFanout decouples the north-bound MQTT publish work from the event-bus
+// dispatch goroutine. Publishes are enqueued here — a non-blocking handoff —
+// and drained by a single worker goroutine. A broker that blocks (for example
+// a QoS1 PUBACK wait up to the transport's AckTimeout on a half-open
+// connection) therefore can never stall bus dispatch, and so can never freeze
+// event delivery for the other centrals that share the same broker.
+//
+// The single worker preserves the FIFO order in which publishes were enqueued.
+// That is what keeps discovery ahead of state and per-data-point ordering
+// intact, and it is also why any state a handler owns (a discovery dedup map,
+// for instance) stays race-free once every access is enqueued: the worker is
+// the only goroutine that touches it.
+type mqttFanout struct {
+	// mu guards queue and evictableCount. It is only ever held around bounded
+	// slice bookkeeping, never around broker I/O, so it cannot propagate broker
+	// latency back into bus dispatch.
+	mu    sync.Mutex
+	queue []fanoutJob
+	// evictableCount tracks how many queued jobs may be dropped, so an
+	// overflowing queue that holds only durable work skips the eviction scan.
+	evictableCount int
+
+	// notify wakes the worker when work arrives. Buffered with depth one: the
+	// worker always drains the queue before it waits again, so a single pending
+	// wakeup is enough and a full buffer is not a lost signal.
+	notify chan struct{}
 
 	dropped atomic.Uint64
 	// warnedDrop fires a single slog.Warn the first time the queue overflows,
@@ -53,7 +84,7 @@ type mqttFanout struct {
 // enqueue.
 func newMQTTFanout() *mqttFanout {
 	return &mqttFanout{
-		queue:  make(chan func(), mqttFanoutQueueDepth),
+		notify: make(chan struct{}, 1),
 		logger: slog.Default(),
 	}
 }
@@ -76,42 +107,91 @@ func (f *mqttFanout) run() {
 		if f.ctx.Err() != nil {
 			return
 		}
+		if job, ok := f.pop(); ok {
+			job()
+			continue
+		}
 		select {
 		case <-f.ctx.Done():
 			return
-		case job := <-f.queue:
-			job()
+		case <-f.notify:
 		}
 	}
 }
 
-// enqueue hands job to the drain worker without ever blocking. When the queue
-// is full the oldest pending job is evicted to make room (drop-oldest) and the
-// drop is counted — the bus dispatch goroutine must never block here.
+// pop removes the head of the queue. Reports false when the queue is empty.
+func (f *mqttFanout) pop() (func(), bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.queue) == 0 {
+		return nil, false
+	}
+	job := f.queue[0]
+	// Clear the slot before re-slicing so the closure (and everything it
+	// captures) is not pinned by the backing array.
+	f.queue[0] = fanoutJob{}
+	f.queue = f.queue[1:]
+	if job.evictable {
+		f.evictableCount--
+	}
+	return job.run, true
+}
+
+// enqueue hands an evictable publish to the drain worker without ever blocking.
+// Use it for self-healing state publishes; see [fanoutJob].
 func (f *mqttFanout) enqueue(job func()) {
-	f.enqueueMu.Lock()
-	defer f.enqueueMu.Unlock()
-	select {
-	case f.queue <- job:
-		return
-	default:
+	f.push(fanoutJob{run: job, evictable: true})
+}
+
+// enqueueDurable hands a publish that must not be dropped to the drain worker,
+// again without ever blocking. Use it for discovery, snapshots and aggregate
+// replacements; see [fanoutJob].
+func (f *mqttFanout) enqueueDurable(job func()) {
+	f.push(fanoutJob{run: job, evictable: false})
+}
+
+// push appends job, evicting the oldest evictable entry first when the queue
+// has reached its soft bound. It never blocks the calling goroutine — the bus
+// dispatch goroutine must always return promptly.
+func (f *mqttFanout) push(job fanoutJob) {
+	f.mu.Lock()
+	evicted := false
+	if len(f.queue) >= mqttFanoutQueueDepth && f.evictableCount > 0 {
+		evicted = f.evictOldestEvictableLocked()
 	}
-	// Full: evict the oldest queued job, then enqueue. With enqueueMu held the
-	// only other actor on the queue is the worker (which only receives), so
-	// after one successful eviction the send below always has room.
-	select {
-	case <-f.queue:
+	f.queue = append(f.queue, job)
+	if job.evictable {
+		f.evictableCount++
+	}
+	f.mu.Unlock()
+
+	// Log outside the lock so a slow log handler cannot serialise producers.
+	if evicted {
 		f.recordDrop()
-	default:
 	}
 	select {
-	case f.queue <- job:
+	case f.notify <- struct{}{}:
 	default:
-		// Producers are serialised by enqueueMu and the worker never fills the
-		// queue, so this branch is unreachable in practice; drop defensively
-		// rather than block the bus dispatch goroutine.
-		f.recordDrop()
 	}
+}
+
+// evictOldestEvictableLocked drops the oldest evictable job, preserving the
+// relative order of everything that stays queued. Callers hold f.mu.
+func (f *mqttFanout) evictOldestEvictableLocked() bool {
+	for i := range f.queue {
+		if !f.queue[i].evictable {
+			continue
+		}
+		last := len(f.queue) - 1
+		copy(f.queue[i:], f.queue[i+1:])
+		// Clear the vacated tail slot so the evicted closure is not pinned by
+		// the backing array.
+		f.queue[last] = fanoutJob{}
+		f.queue = f.queue[:last]
+		f.evictableCount--
+		return true
+	}
+	return false
 }
 
 func (f *mqttFanout) recordDrop() {
@@ -122,7 +202,9 @@ func (f *mqttFanout) recordDrop() {
 }
 
 // stop cancels in-flight broker I/O and waits for the worker to exit. Safe to
-// call when start was never invoked.
+// call when start was never invoked. Whatever is still queued is discarded:
+// the context it would publish under is already cancelled, and every durable
+// job is re-issued from scratch by the next Start.
 func (f *mqttFanout) stop() {
 	if f.cancel != nil {
 		f.cancel()
@@ -131,14 +213,15 @@ func (f *mqttFanout) stop() {
 }
 
 // flush blocks until every job enqueued before this call has been drained by
-// the worker. It is a test barrier — production code never needs it. Returns
+// the worker. It is a test barrier — production code never needs it. The
+// barrier itself is durable so an overflowing queue cannot evict it. Returns
 // early if the worker is stopping.
 func (f *mqttFanout) flush() {
 	if f.ctx == nil {
 		return
 	}
 	done := make(chan struct{})
-	f.enqueue(func() { close(done) })
+	f.enqueueDurable(func() { close(done) })
 	select {
 	case <-done:
 	case <-f.ctx.Done():
@@ -150,4 +233,8 @@ func (f *mqttFanout) flush() {
 func (f *mqttFanout) droppedCount() uint64 { return f.dropped.Load() }
 
 // queueDepth reports the number of jobs currently waiting to be drained.
-func (f *mqttFanout) queueDepth() int { return len(f.queue) }
+func (f *mqttFanout) queueDepth() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.queue)
+}

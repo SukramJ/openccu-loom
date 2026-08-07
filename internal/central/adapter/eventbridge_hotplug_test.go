@@ -7,7 +7,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
@@ -71,8 +70,9 @@ func TestOnDeviceCreatedPublishesSnapshotWhenCentralReadyAndDeviceKnown(t *testi
 		Model:       "HmIP-STH",
 		Source:      hmenum.SourceOfDeviceCreationNew,
 	})
-	// Allow the synchronous bus delivery + any publish fan-out to settle.
-	time.Sleep(20 * time.Millisecond)
+	// Barrier: the snapshot runs on the fan-out worker, not inline on the bus
+	// dispatch goroutine.
+	eb.Flush()
 
 	var availability, info int
 	for _, p := range pub.Published() {
@@ -114,7 +114,7 @@ func TestOnDeviceCreatedSkipsPublishWhileCentralNotSouthboundReady(t *testing.T)
 		Model:       "HmIP-STH",
 		Source:      hmenum.SourceOfDeviceCreationNew,
 	})
-	time.Sleep(20 * time.Millisecond)
+	eb.Flush()
 
 	if publishedForDevice(pub, "0001ABCD") {
 		t.Fatalf("DeviceCreatedEvent published before southbound-ready; published=%+v", pub.Published())
@@ -143,7 +143,7 @@ func TestOnDeviceCreatedSkipsPublishForUnknownDevice(t *testing.T) {
 		Model:       "HmIP-STH",
 		Source:      hmenum.SourceOfDeviceCreationNew,
 	})
-	time.Sleep(20 * time.Millisecond)
+	eb.Flush()
 
 	if publishedForDevice(pub, "FFFFDEAD") {
 		t.Fatalf("DeviceCreatedEvent published for a device absent from ModelRegistry; published=%+v", pub.Published())

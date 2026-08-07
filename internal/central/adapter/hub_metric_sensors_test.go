@@ -59,6 +59,7 @@ func TestMetricHubSensors_SystemHealthDiscoveryPublished(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	var found bool
 	for _, p := range pub.Published() {
@@ -81,6 +82,7 @@ func TestMetricHubSensors_LastEventAgeDiscoveryPublished(t *testing.T) {
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	var found bool
 	for _, p := range pub.Published() {
@@ -103,6 +105,7 @@ func TestMetricHubSensors_LatencyDiscoveryPublishedOnConnectivity(t *testing.T) 
 
 	publisher.Start(context.Background())
 	defer publisher.Stop()
+	publisher.Flush()
 
 	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),

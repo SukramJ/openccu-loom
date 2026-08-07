@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -27,8 +28,17 @@ import (
 // Connectivity changes arrive as domain events on each central's
 // EventBus (InstallModeChangedEvent / ConnectivityChangedEvent).
 //
+// Every broker interaction the publisher performs — wiring-time discovery,
+// initial state, model callbacks and bus events alike — is handed to a single
+// fan-out worker instead of running inline. Both of the goroutines that drive
+// this publisher are shared: the event bus dispatches serially for ALL
+// centrals, and the hub model mutates on the refresh goroutine. A broker
+// publish that blocks on either of them stalls far more than the hub plane.
+// See [HubMQTTPublisher.publish].
+//
 // Lifecycle: NewHubMQTTPublisher → Start → Stop. Start is idempotent:
-// existing subscriptions are released before new ones are attached.
+// existing subscriptions are released and the previous worker is stopped
+// before new ones are attached.
 type HubMQTTPublisher struct {
 	registry *central.Registry
 	wiring   *mqtt.Wiring
@@ -36,6 +46,14 @@ type HubMQTTPublisher struct {
 
 	mu     sync.Mutex
 	unsubs []func()
+
+	// fanout drains every hub-plane publish on one worker goroutine. Created
+	// by Start, torn down by Stop, held behind an atomic pointer because the
+	// enqueue side runs on bus-dispatch and model-mutation goroutines. Nil
+	// before the first Start, which makes [HubMQTTPublisher.publish] fall back
+	// to an inline publish so a unit test can drive an internal wiring helper
+	// without a lifecycle.
+	fanout atomic.Pointer[mqttFanout]
 }
 
 // NewHubMQTTPublisher constructs the publisher. No subscriptions are
@@ -48,31 +66,84 @@ func NewHubMQTTPublisher(reg *central.Registry, w *mqtt.Wiring, logger *slog.Log
 }
 
 // Start attaches subscriptions to every hub entity of every central and
-// fires one immediate publish per entity so retained MQTT topics carry
+// queues one immediate publish per entity so retained MQTT topics carry
 // the current observed state, not just future changes. Idempotent:
-// existing subscriptions are released first.
+// existing subscriptions are released and the previous worker stopped first.
+//
+// The publishes are queued, not performed: Start returns once the wiring is in
+// place. That matters because Start also runs from the broker's on-connect
+// hook and from the ready-driven re-wire, neither of which should sit behind a
+// full hub-plane republish.
 func (p *HubMQTTPublisher) Start(ctx context.Context) {
 	p.Stop()
 	if p.registry == nil || p.wiring == nil {
 		return
 	}
+
+	f := newMQTTFanout()
+	f.start(ctx)
+	p.fanout.Store(f)
+
+	// Wire against the worker's context, not the caller's: it is the context
+	// every queued publish runs under, so Stop aborts in-flight broker I/O
+	// instead of waiting it out. It also survives a caller context that ends
+	// with the on-connect hook that triggered this Start. f.ctx IS a child of
+	// ctx — start derived it — so cancellation still propagates from the caller.
 	for _, u := range p.registry.List() {
-		p.wireOneCentral(ctx, u)
+		//nolint:contextcheck // f.ctx is the child of ctx that start derived; publishes must outlive the caller's
+		p.wireOneCentral(f.ctx, u)
 	}
 }
 
-// Stop releases every subscription registered by Start. Safe to call
-// before Start (no-op) or multiple times.
+// Stop releases every subscription registered by Start and stops the fan-out
+// worker, cancelling any publish it is blocked in. Safe to call before Start
+// (no-op) or multiple times; no goroutine outlives the call.
 func (p *HubMQTTPublisher) Stop() {
 	p.mu.Lock()
 	unsubs := p.unsubs
 	p.unsubs = nil
 	p.mu.Unlock()
+	// Unsubscribe before stopping the worker so no source can enqueue onto a
+	// queue nobody drains any more.
 	for _, u := range unsubs {
 		if u != nil {
 			u()
 		}
 	}
+	if f := p.fanout.Swap(nil); f != nil {
+		f.stop()
+	}
+}
+
+// Flush blocks until the fan-out worker has drained every publish queued
+// before the call. It is a test barrier — the publish path is intentionally
+// asynchronous — and a no-op before Start.
+func (p *HubMQTTPublisher) Flush() {
+	if f := p.fanout.Load(); f != nil {
+		f.flush()
+	}
+}
+
+// publish hands one hub-plane broker interaction to the fan-out worker.
+//
+// Every job is enqueued as durable: the hub plane carries discovery configs
+// and aggregate replacements (alarm/service messages, inbox, update info,
+// program and sysvar state) whose loss does not self-heal — nothing re-sends
+// them, so a dropped payload leaves an entity missing or frozen in Home
+// Assistant until the daemon restarts. Their arrival rate is bounded by the
+// CCU refresh cadence, not by device event traffic, so the queue has no
+// realistic way to grow without bound. See [fanoutJob].
+//
+// Because the worker is single and the queue is FIFO, every job also runs
+// serialised in enqueue order. Handler-owned state — the connectivity
+// discovery-dedup map above all — is therefore touched by exactly one
+// goroutine and needs no lock of its own.
+func (p *HubMQTTPublisher) publish(job func()) {
+	if f := p.fanout.Load(); f != nil {
+		f.enqueueDurable(job)
+		return
+	}
+	job()
 }
 
 func (p *HubMQTTPublisher) addUnsub(u func()) {
@@ -82,7 +153,8 @@ func (p *HubMQTTPublisher) addUnsub(u func()) {
 }
 
 // wireOneCentral attaches subscriptions for all hub entities belonging
-// to c and performs the initial-state publish.
+// to c and queues the initial-state publish. Nothing here touches the broker
+// directly; every payload goes through [HubMQTTPublisher.publish].
 func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) { //nolint:funlen // composition/wiring: long sequential setup
 	hubModel := u.HubModel
 	centralName := u.Name()
@@ -129,8 +201,13 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// each (re-)wire — including the ready-driven re-Start — publishes with the
 	// central's actual serial. Only stamp once the serial has resolved so we
 	// never clobber a serial another path already stamped with an empty one.
+	//
+	// The stamp is queued rather than applied here so it lands on the same
+	// goroutine as the discovery builds that read it back — the builder's
+	// per-central map is not synchronised, and every build below runs on the
+	// worker.
 	if hi := hubInfoFromUnit(u); hi.Serial != "" {
-		disco.SetHubInfoFor(centralName, hi)
+		p.publish(func() { disco.SetHubInfoFor(centralName, hi) })
 	}
 
 	// --- Programs ---
@@ -167,20 +244,26 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 		if e.CentralName != centralName {
 			return
 		}
-		p.republishHubEntityDiscovery(ctx, centralName, hubModel, disco, b)
+		p.publish(func() {
+			p.republishHubEntityDiscovery(ctx, centralName, hubModel, disco, b)
+		})
 	}))
 
 	// --- AlarmMessages ---
 	// PublishAlarmMessages is on the Bridge (the Wiring wrapper is not yet
 	// generated); call through w.Bridge() so we keep the same error-
 	// suppression contract as the other Wiring helpers.
-	_ = b.PublishHubDiscovery(ctx, disco.BuildAlarmMessagesDiscovery(centralName))
+	p.publish(func() {
+		_ = b.PublishHubDiscovery(ctx, disco.BuildAlarmMessagesDiscovery(centralName))
+	})
 	publishAlarm := func(msgs []hub.AlarmMessage) {
-		if err := b.PublishAlarmMessages(ctx, centralName, hubModel.Messages, msgs); err != nil {
-			p.logger.Warn("mqtt.publish_alarm_messages",
-				slog.String("central", centralName),
-				slog.String("err", err.Error()))
-		}
+		p.publish(func() {
+			if err := b.PublishAlarmMessages(ctx, centralName, hubModel.Messages, msgs); err != nil {
+				p.logger.Warn("mqtt.publish_alarm_messages",
+					slog.String("central", centralName),
+					slog.String("err", err.Error()))
+			}
+		})
 	}
 	if hubModel.Messages.Observed() {
 		publishAlarm(hubModel.Messages.List())
@@ -190,13 +273,17 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	}))
 
 	// --- ServiceMessages ---
-	_ = b.PublishHubDiscovery(ctx, disco.BuildServiceMessagesDiscovery(centralName))
+	p.publish(func() {
+		_ = b.PublishHubDiscovery(ctx, disco.BuildServiceMessagesDiscovery(centralName))
+	})
 	publishSvc := func(msgs []hub.ServiceMessage) {
-		if err := b.PublishServiceMessages(ctx, centralName, hubModel.ServiceMessages, msgs); err != nil {
-			p.logger.Warn("mqtt.publish_service_messages",
-				slog.String("central", centralName),
-				slog.String("err", err.Error()))
-		}
+		p.publish(func() {
+			if err := b.PublishServiceMessages(ctx, centralName, hubModel.ServiceMessages, msgs); err != nil {
+				p.logger.Warn("mqtt.publish_service_messages",
+					slog.String("central", centralName),
+					slog.String("err", err.Error()))
+			}
+		})
 	}
 	if hubModel.ServiceMessages.Observed() {
 		publishSvc(hubModel.ServiceMessages.List())
@@ -214,6 +301,13 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// connectivity binary_sensor stays per-interface (reference parity);
 	// connection-latency is aggregated central-wide and wired from the
 	// Metrics block below.
+	//
+	// connectivityDiscovered is owned by the fan-out worker: both the seed
+	// below and the event handler touch it from inside a queued job, so the
+	// single worker is the only goroutine that reads or writes it. Publishing
+	// inline from the event handler instead would put the map on the bus
+	// dispatch goroutine and the seed on the Start goroutine — a data race the
+	// serialised dispatch happens to hide today.
 	connectivityDiscovered := make(map[string]bool)
 	// Eagerly publish connectivity discovery for every registered
 	// interface at wiring time. The reference stack creates a
@@ -221,85 +315,103 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// first ConnectivityChangedEvent alone left these entities absent
 	// until a reachability change happened to fire post-boot. The state
 	// still rides the event path below; only the discovery is seeded here.
-	seedConnectivityDiscovery(ctx, u, centralName, disco, b, connectivityDiscovered)
+	// Queued before the subscription is attached, so FIFO order guarantees the
+	// seed runs before any event-driven state publish.
+	p.publish(func() {
+		seedConnectivityDiscovery(ctx, u, centralName, disco, b, connectivityDiscovered)
+	})
 	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.ConnectivityChangedEvent) {
 		if e.CentralName != centralName {
 			return
 		}
-		if !connectivityDiscovered[e.InterfaceID] {
-			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, e.InterfaceID))
-			connectivityDiscovered[e.InterfaceID] = true
-		}
-		if err := b.PublishConnectivity(ctx, centralName, hubConnectivityTopics, e.InterfaceID, e.Reachable); err != nil {
-			p.logger.Warn("mqtt.publish_connectivity",
-				slog.String("central", centralName),
-				slog.String("interface", e.InterfaceID),
-				slog.String("err", err.Error()))
-		}
+		p.publish(func() {
+			if !connectivityDiscovered[e.InterfaceID] {
+				_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, e.InterfaceID))
+				connectivityDiscovered[e.InterfaceID] = true
+			}
+			if err := b.PublishConnectivity(ctx, centralName, hubConnectivityTopics, e.InterfaceID, e.Reachable); err != nil {
+				p.logger.Warn("mqtt.publish_connectivity",
+					slog.String("central", centralName),
+					slog.String("interface", e.InterfaceID),
+					slog.String("err", err.Error()))
+			}
+		})
 	}))
 
 	// --- Metrics (System Health, Connection Latency) ---
 	// Discovery is published once at wiring time. State updates are
 	// forwarded to the retained metric topics whenever the Metrics
 	// aggregate observes a new sample.
-	_ = b.PublishHubDiscovery(ctx, disco.BuildSystemHealthDiscovery(centralName))
-	// Last-Event-Age: a central-wide liveness sensor (seconds since the
-	// newest backend event). Reference parity (hub_last-event-age). The
-	// discovery is published once at wiring time; state updates follow the
-	// MetricLastEventAgeSecs aggregate.
-	_ = b.PublishHubDiscovery(ctx, disco.BuildLastEventAgeDiscovery(centralName))
-	// Connection-Latency: ONE central-wide sensor (reference parity —
-	// hub_connection-latency) fed from the aggregated ping/pong metric,
-	// not per-interface samples. Discovery once at wiring time; state
-	// follows the MetricConnectionLatMs aggregate.
-	_ = b.PublishHubDiscovery(ctx, disco.BuildConnectionLatencyDiscovery(centralName))
+	p.publish(func() {
+		_ = b.PublishHubDiscovery(ctx, disco.BuildSystemHealthDiscovery(centralName))
+		// Last-Event-Age: a central-wide liveness sensor (seconds since the
+		// newest backend event). Reference parity (hub_last-event-age). The
+		// discovery is published once at wiring time; state updates follow the
+		// MetricLastEventAgeSecs aggregate.
+		_ = b.PublishHubDiscovery(ctx, disco.BuildLastEventAgeDiscovery(centralName))
+		// Connection-Latency: ONE central-wide sensor (reference parity —
+		// hub_connection-latency) fed from the aggregated ping/pong metric,
+		// not per-interface samples. Discovery once at wiring time; state
+		// follows the MetricConnectionLatMs aggregate.
+		_ = b.PublishHubDiscovery(ctx, disco.BuildConnectionLatencyDiscovery(centralName))
+	})
 	if hubModel.Metrics != nil {
 		// Publish any already-observed system-health value immediately.
 		if sample, ok := hubModel.Metrics.Value(hub.MetricSystemHealth); ok {
-			_ = b.PublishHubSystemHealthScore(ctx, centralName, sample.Value)
+			p.publish(func() { _ = b.PublishHubSystemHealthScore(ctx, centralName, sample.Value) })
 		}
 		p.addUnsub(hubModel.Metrics.OnUpdate(hub.MetricSystemHealth, func(s hub.MetricSample) {
-			if err := b.PublishHubSystemHealthScore(ctx, centralName, s.Value); err != nil {
-				p.logger.Warn("mqtt.publish_hub_health_score",
-					slog.String("central", centralName),
-					slog.String("err", err.Error()))
-			}
+			p.publish(func() {
+				if err := b.PublishHubSystemHealthScore(ctx, centralName, s.Value); err != nil {
+					p.logger.Warn("mqtt.publish_hub_health_score",
+						slog.String("central", centralName),
+						slog.String("err", err.Error()))
+				}
+			})
 		}))
 		// Last-Event-Age state — same observe-then-subscribe pattern as
 		// system-health.
 		if sample, ok := hubModel.Metrics.Value(hub.MetricLastEventAgeSecs); ok {
-			_ = b.PublishHubLastEventAge(ctx, centralName, sample.Value)
+			p.publish(func() { _ = b.PublishHubLastEventAge(ctx, centralName, sample.Value) })
 		}
 		p.addUnsub(hubModel.Metrics.OnUpdate(hub.MetricLastEventAgeSecs, func(s hub.MetricSample) {
-			if err := b.PublishHubLastEventAge(ctx, centralName, s.Value); err != nil {
-				p.logger.Warn("mqtt.publish_hub_last_event_age",
-					slog.String("central", centralName),
-					slog.String("err", err.Error()))
-			}
+			p.publish(func() {
+				if err := b.PublishHubLastEventAge(ctx, centralName, s.Value); err != nil {
+					p.logger.Warn("mqtt.publish_hub_last_event_age",
+						slog.String("central", centralName),
+						slog.String("err", err.Error()))
+				}
+			})
 		}))
 		// Connection-Latency state — same observe-then-subscribe pattern.
 		// The aggregated ping/pong latency lives on the MetricConnectionLatMs
 		// sample; the publisher pushes it to the single central-wide topic.
 		if sample, ok := hubModel.Metrics.Value(hub.MetricConnectionLatMs); ok {
-			_ = b.PublishHubConnectionLatency(ctx, centralName, sample.Value)
+			p.publish(func() { _ = b.PublishHubConnectionLatency(ctx, centralName, sample.Value) })
 		}
 		p.addUnsub(hubModel.Metrics.OnUpdate(hub.MetricConnectionLatMs, func(s hub.MetricSample) {
-			if err := b.PublishHubConnectionLatency(ctx, centralName, s.Value); err != nil {
-				p.logger.Warn("mqtt.publish_connection_latency",
-					slog.String("central", centralName),
-					slog.String("err", err.Error()))
-			}
+			p.publish(func() {
+				if err := b.PublishHubConnectionLatency(ctx, centralName, s.Value); err != nil {
+					p.logger.Warn("mqtt.publish_connection_latency",
+						slog.String("central", centralName),
+						slog.String("err", err.Error()))
+				}
+			})
 		}))
 	}
 
 	// --- Inbox ---
-	_ = b.PublishHubDiscovery(ctx, disco.BuildInboxDiscovery(centralName))
+	p.publish(func() {
+		_ = b.PublishHubDiscovery(ctx, disco.BuildInboxDiscovery(centralName))
+	})
 	publishInbox := func(devices []hub.InboxDevice) {
-		if err := b.PublishInbox(ctx, centralName, hubModel.Inbox, devices); err != nil {
-			p.logger.Warn("mqtt.publish_inbox",
-				slog.String("central", centralName),
-				slog.String("err", err.Error()))
-		}
+		p.publish(func() {
+			if err := b.PublishInbox(ctx, centralName, hubModel.Inbox, devices); err != nil {
+				p.logger.Warn("mqtt.publish_inbox",
+					slog.String("central", centralName),
+					slog.String("err", err.Error()))
+			}
+		})
 	}
 	if hubModel.Inbox.Observed() {
 		publishInbox(hubModel.Inbox.List())
@@ -309,14 +421,21 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	}))
 
 	// --- System Update ---
-	_ = b.PublishHubDiscovery(ctx, disco.BuildHubUpdateDiscovery(centralName))
+	p.publish(func() {
+		_ = b.PublishHubDiscovery(ctx, disco.BuildHubUpdateDiscovery(centralName))
+	})
 	publishUpdate := func(info hub.UpdateInfo) {
+		// Read the in-progress flag on the notifying goroutine, so the queued
+		// payload is the one the event described rather than whatever the
+		// aggregate holds when the worker gets round to it.
 		inProgress := hubModel.Update.InProgress()
-		if err := b.PublishHubUpdate(ctx, centralName, info.CurrentFirmware, info.AvailableFirmware, inProgress); err != nil {
-			p.logger.Warn("mqtt.publish_hub_update",
-				slog.String("central", centralName),
-				slog.String("err", err.Error()))
-		}
+		p.publish(func() {
+			if err := b.PublishHubUpdate(ctx, centralName, info.CurrentFirmware, info.AvailableFirmware, inProgress); err != nil {
+				p.logger.Warn("mqtt.publish_hub_update",
+					slog.String("central", centralName),
+					slog.String("err", err.Error()))
+			}
+		})
 	}
 	if info, ok := hubModel.Update.UpdateInfo(); ok {
 		publishUpdate(info)
@@ -360,36 +479,45 @@ func (p *HubMQTTPublisher) wireInstallMode(
 		if dp == nil || dp.InterfaceID == "" {
 			continue
 		}
-		_ = b.PublishHubDiscovery(ctx, disco.BuildInstallModeSensorDiscovery(centralName, dp.InterfaceID))
-		_ = b.PublishHubDiscovery(ctx, disco.BuildInstallModeButtonDiscovery(centralName, dp.InterfaceID))
-		// Publish the current observed countdown immediately so the
-		// retained sensor topic is seeded before the first event.
-		if _, remaining, observed := dp.InstallState(); observed {
-			if err := b.PublishInstallMode(ctx, centralName, dp.InterfaceID, int(remaining.Seconds())); err != nil {
+		iface := dp.InterfaceID
+		_, remaining, observed := dp.InstallState()
+		p.publish(func() {
+			_ = b.PublishHubDiscovery(ctx, disco.BuildInstallModeSensorDiscovery(centralName, iface))
+			_ = b.PublishHubDiscovery(ctx, disco.BuildInstallModeButtonDiscovery(centralName, iface))
+			// Publish the current observed countdown immediately so the
+			// retained sensor topic is seeded before the first event.
+			if !observed {
+				return
+			}
+			if err := b.PublishInstallMode(ctx, centralName, iface, int(remaining.Seconds())); err != nil {
 				p.logger.Warn("mqtt.publish_install_mode",
 					slog.String("central", centralName),
-					slog.String("interface", dp.InterfaceID),
+					slog.String("interface", iface),
 					slog.String("err", err.Error()))
 			}
-		}
+		})
 	}
 	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.InstallModeChangedEvent) {
 		if e.CentralName != centralName || e.InterfaceID == "" {
 			return
 		}
-		if err := b.PublishInstallMode(ctx, centralName, e.InterfaceID, e.RemainingS); err != nil {
-			p.logger.Warn("mqtt.publish_install_mode",
-				slog.String("central", centralName),
-				slog.String("interface", e.InterfaceID),
-				slog.String("err", err.Error()))
-		}
+		p.publish(func() {
+			if err := b.PublishInstallMode(ctx, centralName, e.InterfaceID, e.RemainingS); err != nil {
+				p.logger.Warn("mqtt.publish_install_mode",
+					slog.String("central", centralName),
+					slog.String("interface", e.InterfaceID),
+					slog.String("err", err.Error()))
+			}
+		})
 	}))
 }
 
 // seedConnectivityDiscovery publishes the connectivity binary_sensor
-// discovery for every registered interface of the central at wiring
-// time. The `connectivityDiscovered` map is shared with the live event
-// subscription so each interface is announced at most once. Reference
+// discovery for every registered interface of the central. It runs as the
+// first queued job of the wiring pass, on the fan-out worker — the
+// `connectivityDiscovered` map it fills is shared with the live event
+// subscription, which touches it from the same worker, so each interface is
+// announced at most once without a lock. Reference
 // parity: the connectivity binary_sensor exists per interface at setup,
 // not only after the first reachability change. Connection-latency is
 // aggregated central-wide and seeded from the Metrics block instead.
@@ -416,7 +544,7 @@ func seedConnectivityDiscovery(
 	}
 }
 
-// wireOneProgram publishes discovery + the current state, subscribes
+// wireOneProgram queues discovery + the current state, subscribes
 // to future executions, and is safe to call on the same program more
 // than once (the OnUpdate slot leaks but does not double-publish —
 // see comment in wireOneCentral on the snapshot+observer interleave).
@@ -440,18 +568,24 @@ func (p *HubMQTTPublisher) wireOneProgram(
 	// transcribes them (ADR 0011). Roles are resolved against the bridge's
 	// own topic base, which is runtime context the model does not hold.
 	roles := b.ProgramRoles(centralName, prog)
-	for _, item := range disco.BuildProgramDiscoveryRoles(centralName, programSpecFor(prog), roles) {
-		_ = b.PublishHubDiscovery(ctx, item)
-	}
-	w.PublishProgramState(ctx, centralName, prog, active)
-	p.publishProgramExecuteAvailability(ctx, b, roles, prog)
-	p.addUnsub(prog.OnUpdate(func(e hub.ProgramEvent) {
-		w.PublishProgramState(ctx, centralName, prog, e.Active)
+	// Discovery, state and availability travel as one queued job so the
+	// entity's config always precedes its first state on the wire.
+	p.publish(func() {
+		for _, item := range disco.BuildProgramDiscoveryRoles(centralName, programSpecFor(prog), roles) {
+			_ = b.PublishHubDiscovery(ctx, item)
+		}
+		w.PublishProgramState(ctx, centralName, prog, active)
 		p.publishProgramExecuteAvailability(ctx, b, roles, prog)
+	})
+	p.addUnsub(prog.OnUpdate(func(e hub.ProgramEvent) {
+		p.publish(func() {
+			w.PublishProgramState(ctx, centralName, prog, e.Active)
+			p.publishProgramExecuteAvailability(ctx, b, roles, prog)
+		})
 	}))
 }
 
-// wireOneSysvar publishes discovery + the current state if observed,
+// wireOneSysvar queues discovery + the current state if observed,
 // and subscribes to future value updates. Same idempotency caveat as
 // wireOneProgram.
 func (p *HubMQTTPublisher) wireOneSysvar(
@@ -465,12 +599,17 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 	if sv == nil {
 		return
 	}
-	_ = b.PublishHubDiscovery(ctx, disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv)))
-	if val, observed := sv.Value(); observed {
-		w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, val.Unwrap()))
-	}
+	val, observed := sv.Value()
+	p.publish(func() {
+		_ = b.PublishHubDiscovery(ctx, disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv)))
+		if observed {
+			w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, val.Unwrap()))
+		}
+	})
 	p.addUnsub(sv.OnUpdate(func(_, next hmtypes.ParamValue) {
-		w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, next.Unwrap()))
+		p.publish(func() {
+			w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, next.Unwrap()))
+		})
 	}))
 }
 
