@@ -55,7 +55,9 @@ func cmdExportDef(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("export-def: %w", err)
 	}
 
-	endpoint := strings.TrimRight(*host, "/") + "/api/v1/devices/" + url.PathEscape(*address) + "/export-definition"
+	// See the note in cache.go: userinfo is stripped so a credential in
+	// --host cannot resurface through the endpoint embedded in errors.
+	endpoint := strings.TrimRight(redactHostUserinfo(*host), "/") + "/api/v1/devices/" + url.PathEscape(*address) + "/export-definition"
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("export-def: build request: %w", err)

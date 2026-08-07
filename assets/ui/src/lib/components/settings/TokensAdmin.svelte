@@ -148,7 +148,7 @@
         {#if col.key === "subject"}
           <span>{tok.subject}</span>
         {:else if col.key === "role"}
-          <Badge variant={roleBadgeVariant(tok.role)}>{tok.role}</Badge>
+          <Badge variant={roleBadgeVariant(tok.role)}>{t(`role.${tok.role}`)}</Badge>
         {:else if col.key === "fingerprint"}
           <span class="font-mono text-xs">{tok.fingerprint}</span>
         {:else if col.key === "created"}
@@ -201,9 +201,9 @@
             class="h-10"
             bind:value={createRole}
             options={[
-              { value: "viewer", label: "viewer" },
-              { value: "operator", label: "operator" },
-              { value: "admin", label: "admin" },
+              { value: "viewer", label: t("role.viewer") },
+              { value: "operator", label: t("role.operator") },
+              { value: "admin", label: t("role.admin") },
             ]}
           />
         </label>

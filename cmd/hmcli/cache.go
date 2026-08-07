@@ -162,7 +162,12 @@ func runCacheClearOnline(
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	endpoint := strings.TrimRight(baseURL, "/") + "/api/v1/admin/cache/clear"
+	// Strip any userinfo before the URL can reach an error message: the
+	// endpoint string is embedded verbatim in every failure below, and a
+	// credential typed into --host would ride along into stderr and any
+	// log that captures it. Go's HTTP client never authenticates with
+	// destination-URL userinfo anyway.
+	endpoint := strings.TrimRight(redactHostUserinfo(baseURL), "/") + "/api/v1/admin/cache/clear"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
 		return fmt.Errorf("cache clear: build request: %w", err)

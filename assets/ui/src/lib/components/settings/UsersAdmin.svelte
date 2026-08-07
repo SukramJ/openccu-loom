@@ -171,12 +171,12 @@
               value={u.role}
               onValueChange={(v) => void changeRole(u.subject, v)}
               options={[
-                { value: "viewer", label: "viewer" },
-                { value: "operator", label: "operator" },
-                { value: "admin", label: "admin" },
+                { value: "viewer", label: t("role.viewer") },
+                { value: "operator", label: t("role.operator") },
+                { value: "admin", label: t("role.admin") },
               ]}
             />
-            <Badge variant={roleBadgeVariant(u.role)}>{u.role}</Badge>
+            <Badge variant={roleBadgeVariant(u.role)}>{t(`role.${u.role}`)}</Badge>
           </span>
         {:else if col.key === "created"}
           <span class="text-[var(--ha-secondary-text-color)]">{fmtDate(u.created_at)}</span>
@@ -250,9 +250,9 @@
             class="h-10"
             bind:value={addRole}
             options={[
-              { value: "viewer", label: "viewer" },
-              { value: "operator", label: "operator" },
-              { value: "admin", label: "admin" },
+              { value: "viewer", label: t("role.viewer") },
+              { value: "operator", label: t("role.operator") },
+              { value: "admin", label: t("role.admin") },
             ]}
           />
         </label>
