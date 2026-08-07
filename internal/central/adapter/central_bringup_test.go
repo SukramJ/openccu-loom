@@ -445,3 +445,38 @@ func TestBringUpManager_TeardownSnapshotsHandlesUnderLock(t *testing.T) {
 
 	wg.Wait()
 }
+
+// TestCentralBringUp_ReinitAfterShutdownDoesNotRestart pins that a handle
+// retired by shutdown stays retired.
+//
+// RemoveCentral deletes the handle from the manager and calls shutdown;
+// ReinitCentral reads the handle under the lock and then releases it before
+// calling reinit. A cache clear (POST /admin/cache/clear) racing a central
+// removal therefore ran teardown — a no-op by then — followed by clearModel
+// and start, launching a fresh bring-up generation on the still-live parent
+// context for a central nothing manages any more. That generation re-announced
+// itself to the CCU and was unreachable from Teardown or a second
+// RemoveCentral: a goroutine plus a live CCU callback registration surviving
+// until the daemon exits.
+func TestCentralBringUp_ReinitAfterShutdownDoesNotRestart(t *testing.T) {
+	t.Parallel()
+
+	unit, err := central.New(central.Config{Name: "ccu-retired"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	// A live (uncancelled) parent context: a resurrected generation would
+	// keep running on it, which is exactly the leak under test.
+	b := &centralBringUp{logger: slog.Default(), unit: unit, parentCtx: context.Background()}
+
+	b.shutdown()
+	b.reinit(context.Background())
+
+	b.mu.Lock()
+	cancel := b.cancel
+	b.mu.Unlock()
+	if cancel != nil {
+		t.Fatal("reinit after shutdown started a new bring-up generation; " +
+			"it outlives every teardown path because the handle is no longer managed")
+	}
+}

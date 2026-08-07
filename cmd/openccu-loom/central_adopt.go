@@ -68,6 +68,16 @@ type centralOrchestrator struct {
 
 	mu      sync.Mutex
 	handles map[string]*centralHandle
+	// lifecycleLocks serializes adopt and remove per central name.
+	//
+	// Without it removeCentral decided purely on the presence of a handle,
+	// which adoptCentral only publishes at its very end: a DELETE arriving
+	// while an adopt was still between reg.Register and that publish got
+	// errCentralNotLive, which the REST decorator tolerates — so the
+	// persisted row was deleted while the central stayed fully live
+	// (registry entry, bring-up goroutines, callback route). Every later
+	// DELETE then answered 404 and only a daemon restart removed it.
+	lifecycleLocks map[string]*sync.Mutex
 	// matterHook wires an adopted central into the running Matter bridge
 	// (readiness latch + reassemble-on-ready + reachable forward). Set via
 	// [centralOrchestrator.setMatterCentralHook] after the Matter runtime
@@ -316,6 +326,12 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	if cc.Name == "" {
 		return errors.New("central_adopt: central name required")
 	}
+	// Hold the per-name lifecycle lock for the whole adopt, so a remove
+	// either waits for a complete central or finds nothing at all — never
+	// the half-built state between Register and the handle publish.
+	lock := o.lifecycleLock(cc.Name)
+	lock.Lock()
+	defer lock.Unlock()
 
 	logger := o.logger.With(slog.String("central", cc.Name))
 	unit, err := central.New(central.Config{
@@ -416,6 +432,10 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 // orchestrator (or was already removed) — the caller decides whether that is
 // fatal.
 func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) error {
+	lock := o.lifecycleLock(name)
+	lock.Lock()
+	defer lock.Unlock()
+
 	o.mu.Lock()
 	h, ok := o.handles[name]
 	if ok {
@@ -453,6 +473,23 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore, h.cc, o.logger)
 	o.logger.Info("central.remove.live", slog.String("central", name))
 	return nil
+}
+
+// lifecycleLock returns the per-central adopt/remove serialization mutex,
+// creating it on first use. Keyed by name so two different CCUs stay
+// independent; the map itself is guarded by o.mu.
+func (o *centralOrchestrator) lifecycleLock(name string) *sync.Mutex {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.lifecycleLocks == nil {
+		o.lifecycleLocks = make(map[string]*sync.Mutex)
+	}
+	m, ok := o.lifecycleLocks[name]
+	if !ok {
+		m = &sync.Mutex{}
+		o.lifecycleLocks[name] = m
+	}
+	return m
 }
 
 // evictModel drops every device from unit's in-memory model, mirroring
