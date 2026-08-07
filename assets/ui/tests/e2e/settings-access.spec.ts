@@ -1,10 +1,18 @@
 import { test, expect } from './helpers/fixtures';
 import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
-test.describe('Access Control', () => {
+// User and API-token administration live in Settings, as the tabs
+// "Users" and "API Tokens". The standalone #/access view that used to
+// carry a second copy of both is gone; the route still resolves and is
+// rewritten here, which the first test pins.
+
+const USERS_TAB = 'http://localhost:5173/app/#/settings?tab=users';
+const TOKENS_TAB = 'http://localhost:5173/app/#/settings?tab=tokens';
+
+test.describe('Settings — access administration', () => {
   test.beforeEach(async ({ page }) => {
     await mockAllApis(page);
-    // Ensure the SPA treats the session as admin so the route renders.
+    // The tabs are admin-gated; the mocked identity is an admin.
     await page.addInitScript(() => {
       localStorage.setItem(
         'openccu-loom.prefs.v1',
@@ -13,12 +21,35 @@ test.describe('Access Control', () => {
     });
   });
 
-  test('renders user and token sections', async ({ page }) => {
+  test('the retired #/access route lands on the users tab', async ({ page }) => {
     await page.goto('http://localhost:5173/app/#/access');
     await page.waitForSelector('#main');
     await page.waitForTimeout(500);
-    await expect(page.getByRole('heading', { name: 'Users', level: 2 })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'API tokens', level: 2 })).toBeVisible();
+
+    await expect(page).toHaveURL(/#\/settings\?tab=users$/);
+    await expect(page.getByRole('heading', { name: 'Users', level: 3 })).toBeVisible();
+  });
+
+  test('the retired #/visibility route lands on the hidden-parameters tab', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/visibility');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+
+    await expect(page).toHaveURL(/#\/settings\?tab=visibility$/);
+    await expect(
+      page.getByRole('heading', { name: 'Hidden parameters', level: 3 }),
+    ).toBeVisible();
+  });
+
+  test('renders the user and token tabs', async ({ page }) => {
+    await page.goto(USERS_TAB);
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('heading', { name: 'Users', level: 3 })).toBeVisible();
+
+    await page.goto(TOKENS_TAB);
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('heading', { name: 'API tokens', level: 3 })).toBeVisible();
   });
 
   test('create user flow shows success toast', async ({ page }) => {
@@ -30,7 +61,7 @@ test.describe('Access Control', () => {
       return route.fulfill({ json: [{ subject: 'admin', role: 'admin' }] });
     });
 
-    await page.goto('http://localhost:5173/app/#/access');
+    await page.goto(USERS_TAB);
     await page.waitForSelector('#main');
     await page.waitForTimeout(500);
 
@@ -52,7 +83,7 @@ test.describe('Access Control', () => {
   });
 
   test('delete user opens confirm dialog', async ({ page }) => {
-    await page.goto('http://localhost:5173/app/#/access');
+    await page.goto(USERS_TAB);
     await page.waitForSelector('#main');
     await page.waitForTimeout(500);
 
@@ -77,7 +108,7 @@ test.describe('Access Control', () => {
       });
     });
 
-    await page.goto('http://localhost:5173/app/#/access');
+    await page.goto(TOKENS_TAB);
     await page.waitForSelector('#main');
     await page.waitForTimeout(500);
 
@@ -99,7 +130,7 @@ test.describe('Access Control', () => {
 // Visual regression — light mode
 // ---------------------------------------------------------------------------
 
-test.describe('Access Control - visual light', () => {
+test.describe('Settings access - visual light', () => {
   test.beforeEach(async ({ page }) => {
     await mockAllApis(page);
     await page.addInitScript(() => {
@@ -116,12 +147,12 @@ test.describe('Access Control - visual light', () => {
     });
   });
 
-  test('access control light', async ({ page }) => {
-    await page.goto('http://localhost:5173/app/#/access');
+  test('settings users light', async ({ page }) => {
+    await page.goto(USERS_TAB);
     await page.waitForSelector('#main');
     await page.waitForTimeout(1500);
     await addStylesForStableScreenshots(page);
-    await expect(page).toHaveScreenshot('access-control-light.png');
+    await expect(page).toHaveScreenshot('settings-users-light.png');
   });
 });
 
@@ -129,7 +160,7 @@ test.describe('Access Control - visual light', () => {
 // Visual regression — dark mode
 // ---------------------------------------------------------------------------
 
-test.describe('Access Control - visual dark', () => {
+test.describe('Settings access - visual dark', () => {
   test.beforeEach(async ({ page }) => {
     await mockAllApis(page);
     await page.addInitScript(() => {
@@ -146,11 +177,11 @@ test.describe('Access Control - visual dark', () => {
     });
   });
 
-  test('access control dark', async ({ page }) => {
-    await page.goto('http://localhost:5173/app/#/access');
+  test('settings users dark', async ({ page }) => {
+    await page.goto(USERS_TAB);
     await page.waitForSelector('#main');
     await page.waitForTimeout(1500);
     await addStylesForStableScreenshots(page);
-    await expect(page).toHaveScreenshot('access-control-dark.png');
+    await expect(page).toHaveScreenshot('settings-users-dark.png');
   });
 });

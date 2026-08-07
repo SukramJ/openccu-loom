@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { ConfigSchemaField, ConfigFieldSource } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
@@ -8,6 +8,7 @@
   import SectionEditor from "$lib/components/settings/SectionEditor.svelte";
   import UsersAdmin from "$lib/components/settings/UsersAdmin.svelte";
   import TokensAdmin from "$lib/components/settings/TokensAdmin.svelte";
+  import VisibilityAdmin from "$lib/components/settings/VisibilityAdmin.svelte";
   import ChangePasswordCard from "$lib/components/settings/ChangePasswordCard.svelte";
   import CentralsAdmin from "$lib/components/settings/CentralsAdmin.svelte";
   import RoomsFunctionsAdmin from "$lib/components/settings/RoomsFunctionsAdmin.svelte";
@@ -34,9 +35,13 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { startRouteStore } from "$lib/stores/startRoute.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
-  import { landingTargets } from "$lib/nav";
+  import { foldedRouteTarget, landingTargets } from "$lib/nav";
   import { matterStore } from "$lib/stores/matter.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
+
+  // The tab named by the URL (`#/settings?tab=users`). Deep links and the
+  // redirects from the views that were folded in here both arrive this way.
+  let { tab }: { tab?: string } = $props();
 
   // Schema loaded once; passed down to all SectionEditors.
   let schemaFields = $state<ConfigSchemaField[]>([]);
@@ -108,6 +113,16 @@
       isAdmin: authStore.identity?.role === "admin",
     }),
   );
+
+  // What the selector shows for the stored preference. A route whose view
+  // was folded into another one is displayed as its successor, so the
+  // selector never sits on a value that has no matching option; anything
+  // else unresolvable falls back to the default entry.
+  const startRouteValue = $derived.by(() => {
+    const stored = foldedRouteTarget(startRouteStore.route) ?? startRouteStore.route;
+    const [bare] = stored.split("?");
+    return startRouteOptions.some((opt) => opt.href === bare) ? bare : "";
+  });
 
   async function saveStartRoute(next: string) {
     try {
@@ -214,11 +229,15 @@
     }
   }
 
-  // Tab definitions. Expert-only tabs are hidden unless expertMode is on.
+  // Tab definitions. Expert-only tabs are hidden unless expertMode is on;
+  // admin-only tabs carry the gate the standalone access-control view had
+  // before it was folded in here, so a viewer is not offered a tab whose
+  // every request comes back 403.
   type Tab = {
     id: string;
     label: string;
     expertOnly?: boolean;
+    adminOnly?: boolean;
   };
 
   const ALL_TABS: Tab[] = [
@@ -235,13 +254,17 @@
     { id: "callback", label: t("settings.tab.callback"), expertOnly: true },
     { id: "reliability", label: t("settings.tab.reliability"), expertOnly: true },
     { id: "persistence", label: t("settings.tab.persistence"), expertOnly: true },
-    { id: "users", label: t("settings.tab.users") },
+    { id: "visibility", label: t("settings.tab.visibility") },
+    { id: "users", label: t("settings.tab.users"), adminOnly: true },
     { id: "groups", label: t("settings.tab.groups") },
-    { id: "tokens", label: t("settings.tab.tokens") },
+    { id: "tokens", label: t("settings.tab.tokens"), adminOnly: true },
     { id: "system", label: t("settings.tab.system") },
   ];
 
-  let activeTab = $state("general");
+  // Seeded from the URL so a deep link paints its tab directly; later
+  // changes to the prop are picked up by the effect below (untrack keeps
+  // this a one-time read).
+  let activeTab = $state(untrack(() => tab) ?? "general");
 
   // Sidebar grouping: the flat tab list is bucketed into a handful of
   // top-level categories so the navigation stays recognizable as the
@@ -255,16 +278,22 @@
     { id: "bridges", tabIds: ["mqtt", "matter", "mcp", "rest", "discovery"] },
     { id: "ccus", tabIds: ["ccus", "callback"] },
     { id: "security", tabIds: ["oidc", "ccu_auth", "users", "groups", "tokens"] },
-    { id: "advanced", tabIds: ["reliability", "persistence"] },
+    { id: "advanced", tabIds: ["visibility", "reliability", "persistence"] },
   ];
 
   // "changes" is rendered separately at the end of the nav (only when
   // there are changes), so it is excluded from the normal grouped/flat
   // flow here.
+  const isAdmin = $derived(authStore.identity?.role === "admin");
+
+  function isAvailable(candidate: Tab): boolean {
+    if (candidate.expertOnly && !prefs.expertMode) return false;
+    if (candidate.adminOnly && !isAdmin) return false;
+    return true;
+  }
+
   const visibleTabs = $derived(
-    ALL_TABS.filter((tab) => tab.id !== "changes").filter(
-      (tab) => !tab.expertOnly || prefs.expertMode,
-    ),
+    ALL_TABS.filter((candidate) => candidate.id !== "changes").filter(isAvailable),
   );
 
   const changesTab = ALL_TABS.find((tab) => tab.id === "changes");
@@ -277,9 +306,9 @@
     TAB_GROUPS.map((group) => ({
       id: group.id,
       tabs: group.tabIds
-        .map((id) => ALL_TABS.find((tab) => tab.id === id))
-        .filter((tab): tab is Tab => tab !== undefined)
-        .filter((tab) => !tab.expertOnly || prefs.expertMode),
+        .map((id) => ALL_TABS.find((candidate) => candidate.id === id))
+        .filter((candidate): candidate is Tab => candidate !== undefined)
+        .filter(isAvailable),
     })).filter((group) => group.tabs.length > 0),
   );
 
@@ -291,22 +320,30 @@
     collapsedGroups[id] = !collapsedGroups[id];
   }
 
-  // When expert mode is turned off, switch away from an expert-only tab.
+  // Follow the URL: a deep link, or a redirect from one of the views that
+  // were folded in here, selects its tab.
   $effect(() => {
-    if (!prefs.expertMode) {
-      const current = ALL_TABS.find((t) => t.id === activeTab);
-      if (current?.expertOnly) {
-        activeTab = "general";
-      }
-    }
+    if (tab) activeTab = tab;
   });
 
-  // The "Changed settings" tab only exists while there are changes; if it
-  // empties out while open, fall back so we don't sit on a hidden tab.
+  // Never sit on a tab that is not offered — expert-only with expert mode
+  // off, admin-only for a viewer, "Changed settings" once the changes are
+  // gone, or a tab id from a stale link that no longer exists. Each of
+  // those would render an empty panel with no way back.
   $effect(() => {
-    if (activeTab === "changes" && !hasChanges) {
-      activeTab = "general";
-    }
+    const reachable =
+      visibleTabs.some((candidate) => candidate.id === activeTab) ||
+      (activeTab === "changes" && hasChanges);
+    if (!reachable) activeTab = "general";
+  });
+
+  // Mirror the active tab into the URL so a tab is linkable and survives
+  // a reload. replaceState rather than assigning location.hash: this must
+  // not push a history entry per click, and must not re-enter the router
+  // (which would re-run the unsaved-changes prompt on every tab switch).
+  $effect(() => {
+    const want = activeTab === "general" ? "#/settings" : `#/settings?tab=${activeTab}`;
+    if (location.hash !== want) history.replaceState(null, "", want);
   });
 </script>
 
@@ -450,7 +487,7 @@
                 <span class="min-w-24">{t("settings.start_route")}</span>
                 <select
                   class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
-                  value={startRouteStore.route}
+                  value={startRouteValue}
                   onchange={(e) =>
                     void saveStartRoute((e.target as HTMLSelectElement).value)}
                 >
@@ -686,6 +723,9 @@
             />
           {/if}
         </ExpertGate>
+
+      {:else if activeTab === "visibility"}
+        <VisibilityAdmin />
 
       {:else if activeTab === "users"}
         <UsersAdmin />

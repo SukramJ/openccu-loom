@@ -763,14 +763,15 @@ const EN: Catalog = {
   "diagnostics.rssi.device_dbm": "Device (dBm)",
   "diagnostics.rssi.peer_dbm": "Peer (dBm)",
   "diagnostics.rssi.battery": "Battery",
-  "nav.signal": "Signal quality",
-  "signal.title": "Signal quality (RSSI)",
+  "nav.signal": "Radio & battery",
+  "page.title.signal": "Radio & battery — OpenCCU-Loom",
+  "signal.title": "Radio & battery",
   "signal.count": "{count} devices",
   "signal.hint":
     "Per-device RF reception strength and battery, read from each device's maintenance channel. Works for HmIP and BidCos.",
   "signal.empty": "No devices report RSSI.",
   "signal.empty.description":
-    "Signal quality appears here once a device has communicated with its CCU.",
+    "Radio and battery readings appear here once a device has communicated with its CCU.",
   "signal.low_battery": "Low",
   "diagnostics.incidents": "Incidents",
   "diagnostics.empty.components": "No components reported.",
@@ -958,7 +959,6 @@ const EN: Catalog = {
   "nav.programs": "Programs",
   "nav.settings": "Settings",
   "nav.sysvars": "Variables",
-  "nav.visibility": "Hidden parameters",
   "nav.about": "About",
   // --- About (#/about) ---
   "about.title": "About",
@@ -1018,7 +1018,6 @@ const EN: Catalog = {
   "overview.unassigned_central": "Unknown CCU",
   "overview.expand": "Expand group",
   "overview.collapse": "Collapse group",
-  "unignore.title": "Hidden parameters",
   "unignore.subtitle":
     "Hidden parameters promoted to first-class data points. Use at your own risk.",
   "unignore.warning":
@@ -1692,6 +1691,7 @@ const EN: Catalog = {
   "settings.tab.callback": "Callback Ports",
   "settings.tab.reliability": "Reliability",
   "settings.tab.persistence": "Persistence",
+  "settings.tab.visibility": "Hidden parameters",
   "settings.tab.groups": "Rooms & Functions",
   "settings.tab.users": "Users",
   "settings.tab.tokens": "API Tokens",
@@ -1738,13 +1738,18 @@ const EN: Catalog = {
   "settings.tristate.default": "Default",
   "settings.tristate.on": "On",
   "settings.tristate.off": "Off",
-  // --- Roles (shared by the users and tokens admin — AccessControl.svelte) ---
+  // --- Roles (shared by the users and tokens settings tabs) ---
   "role.viewer": "Viewer",
   "role.operator": "Operator",
   "role.admin": "Admin",
   // --- Users admin ---
   "users.empty": "No users configured.",
+  "users.add": "Add user",
   "users.add_title": "Add user",
+  "users.edit_title": "Edit user",
+  "users.password_leave_blank": "Leave blank to keep current",
+  "users.degraded_note":
+    "The live user store is not available. Users shown are from the bootstrap list and cannot be edited here. Manage users via config.yaml.",
   "users.created": "User created.",
   "users.deleted": "User removed.",
   "users.password_changed": "Password changed.",
@@ -3272,19 +3277,6 @@ const EN: Catalog = {
   "audit.col.user": "User",
   "audit.col.target": "Target",
   "audit.col.changes": "Changes",
-  // --- Access control view ---
-  "nav.access": "Access Control",
-  "page.title.access": "Access Control — OpenCCU-Loom",
-  "access.title": "Access Control",
-  "access.subtitle": "Manage users and API tokens.",
-  "access.users_title": "Users",
-  "access.tokens_title": "API tokens",
-  "access.add_user": "Add user",
-  "access.edit_user_title": "Edit user",
-  "access.password_leave_blank": "Leave blank to keep current",
-  "access.forbidden": "Admin access required.",
-  "access.degraded_note":
-    "The live user store is not available. Users shown are from the bootstrap list and cannot be edited here. Manage users via config.yaml.",
   // --- Fleet (read-only cross-CCU overview) ---
   "fleet.title": "Fleet",
   "fleet.subtitle":
@@ -4258,14 +4250,15 @@ const DE: Catalog = {
   "diagnostics.rssi.device_dbm": "Gerät (dBm)",
   "diagnostics.rssi.peer_dbm": "Gegenstelle (dBm)",
   "diagnostics.rssi.battery": "Batterie",
-  "nav.signal": "Signalqualität",
-  "signal.title": "Signalqualität (RSSI)",
+  "nav.signal": "Funk & Batterie",
+  "page.title.signal": "Funk & Batterie — OpenCCU-Loom",
+  "signal.title": "Funk & Batterie",
   "signal.count": "{count} Geräte",
   "signal.hint":
     "Empfangsfeldstärke und Batterie pro Gerät, aus dem Wartungskanal. Funktioniert für HmIP und BidCos.",
   "signal.empty": "Keine Geräte melden RSSI.",
   "signal.empty.description":
-    "Die Signalqualität erscheint hier, sobald ein Gerät mit seiner CCU kommuniziert hat.",
+    "Funk- und Batteriewerte erscheinen hier, sobald ein Gerät mit seiner CCU kommuniziert hat.",
   "signal.low_battery": "Schwach",
   "diagnostics.incidents": "Vorfälle",
   "diagnostics.empty.components": "Keine Komponenten registriert.",
@@ -4481,7 +4474,6 @@ const DE: Catalog = {
   "nav.programs": "Programme",
   "nav.settings": "Einstellungen",
   "nav.sysvars": "Variablen",
-  "nav.visibility": "Ausgeblendete Parameter",
   "nav.about": "Info",
   // --- Info (#/about) ---
   "about.title": "Info",
@@ -4539,7 +4531,6 @@ const DE: Catalog = {
   "overview.unassigned_central": "Unbekannte CCU",
   "overview.expand": "Gruppe aufklappen",
   "overview.collapse": "Gruppe einklappen",
-  "unignore.title": "Ausgeblendete Parameter",
   "unignore.subtitle":
     "Versteckte Parameter als reguläre Datenpunkte verfügbar machen. Verwendung auf eigene Gefahr.",
   "unignore.warning":
@@ -5221,6 +5212,7 @@ const DE: Catalog = {
   "settings.tab.callback": "Callback-Ports",
   "settings.tab.reliability": "Zuverlässigkeit",
   "settings.tab.persistence": "Persistenz",
+  "settings.tab.visibility": "Ausgeblendete Parameter",
   "settings.tab.groups": "Räume & Gewerke",
   "settings.tab.users": "Benutzer",
   "settings.tab.tokens": "API-Tokens",
@@ -5268,13 +5260,18 @@ const DE: Catalog = {
   "settings.tristate.default": "Standard",
   "settings.tristate.on": "An",
   "settings.tristate.off": "Aus",
-  // --- Rollen (gemeinsam für Benutzer- und Token-Verwaltung — AccessControl.svelte) ---
+  // --- Rollen (gemeinsam für die Einstellungs-Tabs Benutzer und Token) ---
   "role.viewer": "Betrachter",
   "role.operator": "Bediener",
   "role.admin": "Administrator",
   // --- Benutzer-Verwaltung ---
   "users.empty": "Keine Benutzer konfiguriert.",
+  "users.add": "Benutzer hinzufügen",
   "users.add_title": "Benutzer hinzufügen",
+  "users.edit_title": "Benutzer bearbeiten",
+  "users.password_leave_blank": "Leer lassen um beizubehalten",
+  "users.degraded_note":
+    "Der Live-Benutzerspeicher ist nicht verfügbar. Die angezeigten Benutzer stammen aus der Bootstrap-Liste und können hier nicht bearbeitet werden. Verwalten Sie Benutzer über die config.yaml.",
   "users.created": "Benutzer erstellt.",
   "users.deleted": "Benutzer entfernt.",
   "users.password_changed": "Passwort geändert.",
@@ -6792,19 +6789,6 @@ const DE: Catalog = {
   "audit.col.user": "Benutzer",
   "audit.col.target": "Ziel",
   "audit.col.changes": "Änderungen",
-  // --- Zugangskontrolle ---
-  "nav.access": "Zugangskontrolle",
-  "page.title.access": "Zugangskontrolle — OpenCCU-Loom",
-  "access.title": "Zugangskontrolle",
-  "access.subtitle": "Benutzer und API-Token verwalten.",
-  "access.users_title": "Benutzer",
-  "access.tokens_title": "API-Token",
-  "access.add_user": "Benutzer hinzufügen",
-  "access.edit_user_title": "Benutzer bearbeiten",
-  "access.password_leave_blank": "Leer lassen um beizubehalten",
-  "access.forbidden": "Administratorzugriff erforderlich.",
-  "access.degraded_note":
-    "Der Live-Benutzerspeicher ist nicht verfügbar. Die angezeigten Benutzer stammen aus der Bootstrap-Liste und können hier nicht bearbeitet werden. Benutzer über config.yaml verwalten.",
   // --- CCU-Flotte (schreibgeschützte CCU-übergreifende Übersicht) ---
   "fleet.title": "CCUs",
   "fleet.subtitle":

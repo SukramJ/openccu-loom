@@ -247,7 +247,7 @@ The `DeviceDetail → Overview`/`History` tabs stay; only the `Configure` tab is
 The first revision proposed blocking hidden routes "at the router". That is not
 implementable as written: the SPA is **hash-routed** (`location.hash`,
 `assets/ui/src/App.svelte:67-112`), and fragments are never transmitted to the server, so
-no HTTP handler can ever see `#/access`. The enforcement therefore splits into three
+no HTTP handler can ever see `#/settings?tab=users`. The enforcement therefore splits into three
 layers, with the real boundary at the API:
 
 1. **Posture transport**: surface the resolved `embedded` flag in the bootstrap payload the

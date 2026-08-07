@@ -1,5 +1,5 @@
 import { api } from "$lib/api/client";
-import { isKnownLandingRoute } from "$lib/nav";
+import { foldedRouteTarget, isKnownLandingRoute } from "$lib/nav";
 
 /**
  * The route the SPA opens after a login or a fresh page load (O03).
@@ -48,9 +48,16 @@ function createStartRouteStore() {
    * The hash to open on a fresh load, or "" to keep the router default.
    * Checks only that the view still exists - see isKnownLandingRoute for
    * why the capability gates deliberately do not apply here.
+   *
+   * A view that was folded into another one resolves to its successor,
+   * so an operator who picked it as their start page before the move
+   * keeps landing on the same surface rather than being bounced back to
+   * the default.
    */
   function resolve(): string {
     if (!route) return "";
+    const folded = foldedRouteTarget(route);
+    if (folded) return folded;
     return isKnownLandingRoute(route) ? route : "";
   }
 
