@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -496,6 +497,156 @@ func TestScheduledCreateThenPruneKeepsExactlyKeepLast(t *testing.T) {
 	}
 	if present[seeded[0]] {
 		t.Errorf("oldest backup %q should have been pruned", seeded[0])
+	}
+}
+
+// createObservingStorage records the ordering between a create's Save and the
+// List a concurrent Prune issues, so a test can assert that rotation never
+// inspects storage while a create for the same central is still running.
+type createObservingStorage struct {
+	entries []hmapi.BackupEntry
+
+	listCalls      atomic.Int32
+	saves          atomic.Int32
+	listedMidSave  atomic.Bool
+	deletedIDs     []string
+	deletedIDsLock sync.Mutex
+}
+
+func (s *createObservingStorage) List(context.Context) ([]hmapi.BackupEntry, error) {
+	if s.saves.Load() == 0 {
+		s.listedMidSave.Store(true)
+	}
+	s.listCalls.Add(1)
+	return s.entries, nil
+}
+
+func (s *createObservingStorage) Open(context.Context, string) (io.ReadCloser, error) {
+	return nil, errors.New("not used")
+}
+
+func (s *createObservingStorage) Save(context.Context, string, []byte) error {
+	s.saves.Add(1)
+	return nil
+}
+
+func (s *createObservingStorage) Delete(_ context.Context, id string) error {
+	s.deletedIDsLock.Lock()
+	defer s.deletedIDsLock.Unlock()
+	s.deletedIDs = append(s.deletedIDs, id)
+	return nil
+}
+
+// TestPruneWaitsForInFlightCreateOfSameCentral is the rotation-safety guard:
+// Prune must take the same per-central lock the create holds. Without it the
+// pruner reads the backup list while a create is still running, computes the
+// keep window from an incomplete picture, and can drop a finished archive in
+// favour of one that does not exist yet.
+func TestPruneWaitsForInFlightCreateOfSameCentral(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	reg := newRegistryWith(t, "alpha")
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	wireCreateBackup(t, reg, "alpha", func(context.Context) ([]byte, error) {
+		close(started)
+		<-release
+		return []byte("payload"), nil
+	})
+
+	st := &createObservingStorage{entries: makeAlphaEntries(3)}
+	a := NewBackupAdapter(reg).SetStorage(st)
+
+	createDone := make(chan error, 1)
+	go func() {
+		_, err := a.CreateBackupForCentral(ctx, "alpha")
+		createDone <- err
+	}()
+	<-started
+
+	pruneDone := make(chan error, 1)
+	go func() { pruneDone <- a.Prune(ctx, "alpha", 1) }()
+
+	// The create is parked inside its CCU call. Give the prune ample time to
+	// run: holding the per-central lock, it must not have touched storage yet.
+	time.Sleep(50 * time.Millisecond)
+	if n := st.listCalls.Load(); n != 0 {
+		t.Fatalf("Prune inspected storage %d time(s) while a create for the same central was in flight", n)
+	}
+
+	close(release)
+	if err := <-createDone; err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := <-pruneDone; err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if st.listedMidSave.Load() {
+		t.Fatal("Prune listed the backups before the in-flight create had saved its archive")
+	}
+}
+
+// TestConcurrentCreateAndPruneKeepsACompleteBackup drives the rotation the way
+// the scheduled job's worst case looks — a create and a prune with
+// keep_last: 1 racing over the same central — and asserts the outcome that
+// matters to an operator: a complete, readable archive survives, and no empty
+// one is ever kept.
+func TestConcurrentCreateAndPruneKeepsACompleteBackup(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	reg := newRegistryWith(t, "alpha")
+	payload := []byte("fresh backup payload")
+	wireCreateBackup(t, reg, "alpha", func(context.Context) ([]byte, error) {
+		return payload, nil
+	})
+
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	a := NewBackupAdapter(reg).SetStorage(storage)
+
+	seeded := "alpha-" + time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Format(backupTimestampLayout)
+	if err := storage.Save(ctx, seeded, []byte("older complete backup")); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if _, err := a.CreateBackupForCentral(ctx, "alpha"); err != nil {
+			t.Errorf("create: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := a.Prune(ctx, "alpha", 1); err != nil {
+			t.Errorf("prune: %v", err)
+		}
+	}()
+	wg.Wait()
+
+	list, err := storage.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) == 0 {
+		t.Fatal("create+prune left no backup at all")
+	}
+	for _, e := range list {
+		if e.Bytes == 0 {
+			t.Fatalf("rotation kept an empty archive %q", e.ID)
+		}
+		rc, err := storage.Open(ctx, e.ID)
+		if err != nil {
+			t.Fatalf("surviving backup %q is not readable: %v", e.ID, err)
+		}
+		_ = rc.Close()
 	}
 }
 

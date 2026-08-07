@@ -174,10 +174,20 @@ func (a *BackupAdapter) CreateBackupForCentral(ctx context.Context, centralName 
 // Prune implements [interfaces.BackupService]. It keeps the newest keepLast
 // backups for the named central and deletes the rest. keepLast <= 0 (or no
 // storage) is a no-op.
+//
+// It takes the same per-central lock [BackupAdapter.createAndSave] holds:
+// rotation reasons about the complete set of archives, and a create that is
+// still running has not published its archive yet. Running the two
+// concurrently lets the pruner compute its keep window from a set that is
+// about to change and delete a complete backup the new one has not replaced.
 func (a *BackupAdapter) Prune(ctx context.Context, centralName string, keepLast int) error {
 	if keepLast <= 0 || a.storage == nil {
 		return nil
 	}
+	lock := a.centralLock(centralName)
+	lock.Lock()
+	defer lock.Unlock()
+
 	entries, err := a.storage.List(ctx)
 	if err != nil {
 		return fmt.Errorf("backup: prune list: %w", err)

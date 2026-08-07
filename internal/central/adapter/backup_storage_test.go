@@ -304,6 +304,187 @@ func TestNewFilesystemBackupStorageCreatesDir(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// FilesystemBackupStorage — save atomicity / torso rejection
+// ---------------------------------------------------------------------------
+
+// TestFilesystemBackupStorageListSkipsTruncatedFile guards the visible half
+// of an interrupted save: a zero-byte ".sbk" is the residue a killed or
+// out-of-disk write leaves behind, never a backup. Listing it puts a torso in
+// the UI that an operator can then upload to a CCU.
+func TestFilesystemBackupStorageListSkipsTruncatedFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "alpha-20260701-100000.sbk"), nil, 0o640); err != nil {
+		t.Fatalf("write torso: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "alpha-20260701-110000.sbk"), []byte("complete"), 0o640); err != nil {
+		t.Fatalf("write complete: %v", err)
+	}
+
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	list, err := st.List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("want only the complete archive listed, got %d entries: %+v", len(list), list)
+	}
+	if list[0].ID != "alpha-20260701-110000" {
+		t.Errorf("listed the wrong archive: %q", list[0].ID)
+	}
+}
+
+// TestFilesystemBackupStorageOpenRefusesTruncatedFile covers the second half
+// of the same defect: List hiding the torso is not enough, because Restore
+// opens an id directly. An empty archive must never reach a CCU.
+func TestFilesystemBackupStorageOpenRefusesTruncatedFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "torso.sbk"), nil, 0o640); err != nil {
+		t.Fatalf("write torso: %v", err)
+	}
+
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	rc, err := st.Open(context.Background(), "torso")
+	if err == nil {
+		_ = rc.Close()
+		t.Fatal("expected Open to refuse an empty archive, got nil error")
+	}
+}
+
+// TestFilesystemBackupStorageSaveLeavesNoVisibleFileWhenWriteFails simulates a
+// failing save (the final publish cannot happen because the target name is
+// occupied by a non-empty directory) and asserts the invariant the atomic
+// write exists for: nothing new is visible, and no half-written scratch file
+// is left behind either.
+func TestFilesystemBackupStorageSaveLeavesNoVisibleFileWhenWriteFails(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	const id = "alpha-20260701-100000"
+	blocked := filepath.Join(dir, id+".sbk")
+	if err := os.Mkdir(blocked, 0o750); err != nil {
+		t.Fatalf("mkdir blocker: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(blocked, "keep"), []byte("x"), 0o640); err != nil {
+		t.Fatalf("fill blocker: %v", err)
+	}
+
+	if err := st.Save(context.Background(), id, []byte("payload")); err == nil {
+		t.Fatal("expected Save to fail when the archive cannot be published")
+	}
+
+	list, err := st.List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("a failed save must leave no listable backup, got %+v", list)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, e := range entries {
+		if e.Name() != id+".sbk" {
+			t.Errorf("failed save left %q behind in the storage directory", e.Name())
+		}
+	}
+}
+
+// TestFilesystemBackupStorageInterruptedSaveIsInvisible pins the shape of the
+// scratch file a save in progress uses: a process killed mid-write leaves
+// exactly that file, and it must be neither listable nor openable under the
+// backup's id.
+func TestFilesystemBackupStorageInterruptedSaveIsInvisible(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	partial, err := os.CreateTemp(dir, backupTempPattern)
+	if err != nil {
+		t.Fatalf("create partial: %v", err)
+	}
+	if _, err := partial.WriteString("half a backup"); err != nil {
+		t.Fatalf("write partial: %v", err)
+	}
+	if err := partial.Close(); err != nil {
+		t.Fatalf("close partial: %v", err)
+	}
+
+	list, err := st.List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("an interrupted save must not be listable, got %+v", list)
+	}
+	if rc, err := st.Open(context.Background(), "alpha-20260701-100000"); err == nil {
+		_ = rc.Close()
+		t.Fatal("an interrupted save must not be openable as a backup")
+	}
+}
+
+// TestFilesystemBackupStorageSaveOverwritesCompletely verifies that replacing
+// an existing backup lands the full new payload — the rename must publish the
+// finished file, not merge with what was there.
+func TestFilesystemBackupStorageSaveOverwritesCompletely(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	ctx := context.Background()
+	const id = "alpha-20260701-100000"
+	if err := st.Save(ctx, id, []byte("a much longer first payload")); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	want := []byte("second")
+	if err := st.Save(ctx, id, want); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(dir, id+".sbk"))
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("content after overwrite = %q, want %q", got, want)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("storage dir must hold only the archive, got %d entries", len(entries))
+	}
+}
+
+// ---------------------------------------------------------------------------
 // FilesystemBackupStorage.SaveUploaded
 // ---------------------------------------------------------------------------
 

@@ -1532,6 +1532,42 @@ func TestBackupEndpoints(t *testing.T) {
 	}
 }
 
+// TestRouter_ListBackups_RequiresAdmin locks the backup listing behind the
+// same admin role every other backup route uses. The list names each archive's
+// id, size, timestamp and owning CCU — enough to enumerate a fleet's backup
+// history and to address a download or a restore — so any-authenticated-user
+// access is a regression.
+func TestRouter_ListBackups_RequiresAdmin(t *testing.T) {
+	t.Parallel()
+	mw := auth.NewMiddleware(nil, nil)
+	build := func(role auth.Role) http.Handler {
+		return NewRouter(Deps{
+			StartedAt: time.Now(),
+			Backup:    &fakeBackup{jobs: []handlers.BackupEntry{{ID: "b1", Bytes: 7}}},
+			AuthResolve: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
+					next.ServeHTTP(w, r.WithContext(ctx))
+				})
+			},
+			AuthRequire:  mw.Require,
+			RequireAdmin: func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) },
+		})
+	}
+
+	rr := httptest.NewRecorder()
+	build(auth.RoleOperator).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/backups", http.NoBody))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("operator must be forbidden from GET /backups, got %d", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/backups", http.NoBody))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("admin must reach GET /backups, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestCORSPreflight(t *testing.T) {
 	r := NewRouter(Deps{
 		CORS: &middleware.CORSConfig{Origins: []string{"https://app.example.com"}},

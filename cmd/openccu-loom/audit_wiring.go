@@ -52,7 +52,7 @@ func buildBackupAdapter(cfg *config.Config, reg *central.Registry, logger *slog.
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	backupDir := filepath.Join(dataDir, "backups")
+	backupDir := filepath.Join(dataDir, ccuBackupsDirName)
 	storage, err := adapter.NewFilesystemBackupStorage(backupDir)
 	if err != nil {
 		logger.Warn(

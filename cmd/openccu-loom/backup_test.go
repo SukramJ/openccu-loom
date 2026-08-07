@@ -369,6 +369,63 @@ func TestBackupCreateExcludesSecretKey(t *testing.T) {
 	}
 }
 
+// TestBackupCreateExcludesCCUBackupDir pins the walk exclusion for the CCU
+// archives the daemon stores under <DataDir>/backups. They are complete
+// backups of a different system, sized keep_last × centrals × tens of
+// megabytes; reading, hashing and re-compressing them into every daemon
+// state archive costs a multiple of the archive's real content and restores
+// nothing the daemon needs.
+func TestBackupCreateExcludesCCUBackupDir(t *testing.T) {
+	useBackupTestKey(t)
+	srcDir := t.TempDir()
+	seedDB(t, filepath.Join(srcDir, "openccu-loom.db"))
+
+	// An ordinary state file that must survive the walk.
+	stateFile := filepath.Join(srcDir, "some-state.json")
+	if err := os.WriteFile(stateFile, []byte(`{"ok":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The CCU archive store, with a nested layout so a partial exclusion
+	// (skipping the directory entry but descending into it) is caught too.
+	ccuBackups := filepath.Join(srcDir, ccuBackupsDirName)
+	if err := os.MkdirAll(filepath.Join(ccuBackups, "nested"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{"ccu-20260701-100000.sbk", filepath.Join("nested", "ccu-20260701-110000.sbk")} {
+		if err := os.WriteFile(filepath.Join(ccuBackups, rel), bytes.Repeat([]byte{0x7f}, 4096), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	configFile := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configFile, []byte("data_dir: "+srcDir+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	archivePath := filepath.Join(t.TempDir(), "backup.tar.gz")
+	var stdout, stderr bytes.Buffer
+	if err := runBackup([]string{
+		"create", "--config", configFile, "--out", archivePath,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("backup create: %v\nstderr: %s", err, stderr.String())
+	}
+
+	names := archiveEntryNames(t, archivePath)
+	foundState := false
+	for _, n := range names {
+		if strings.Contains(n, "/"+ccuBackupsDirName+"/") || strings.HasSuffix(n, ".sbk") {
+			t.Errorf("archive contains a CCU backup entry %q; entries: %v", n, names)
+		}
+		if filepath.Base(n) == filepath.Base(stateFile) {
+			foundState = true
+		}
+	}
+	if !foundState {
+		t.Errorf("archive missing ordinary state file %q; entries: %v", filepath.Base(stateFile), names)
+	}
+}
+
 // archiveEntryNames returns the tar entry names (archive-internal paths)
 // contained in the archive at path, transparently decrypting an encrypted
 // container (keyed by the current OPENCCU_LOOM_SECRET_KEY).

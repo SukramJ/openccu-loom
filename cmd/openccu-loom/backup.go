@@ -59,6 +59,12 @@ var (
 // ceiling — the signature of a gzip/tar bomb.
 var errBackupTooLarge = errors.New("backup restore: decompressed size exceeds limit (possible archive bomb)")
 
+// ccuBackupsDirName is the sub-directory of DataDir that holds the CCU
+// archives the daemon downloads (see buildBackupAdapter). Both the storage
+// wiring and the daemon's own archive walk read it from here so the exclusion
+// below cannot drift away from where the archives actually land.
+const ccuBackupsDirName = "backups"
+
 // runBackup is the entry point for the `backup` subcommand family.
 func runBackup(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
@@ -169,6 +175,14 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:goco
 			rel, _ := filepath.Rel(dataDir, p)
 			if rel == "." {
 				return nil
+			}
+			// Never pull the CCU archive store into the daemon's own archive.
+			// Those files are finished backups of a different system —
+			// keep_last × centrals × tens of megabytes — so archiving them
+			// re-reads, re-hashes and re-compresses the whole rotation on
+			// every run while restoring nothing the daemon needs to operate.
+			if fi.IsDir() && rel == ccuBackupsDirName {
+				return filepath.SkipDir
 			}
 			// Skip the live DB, WAL, and SHM files — the VACUUMed copy is added separately.
 			base := filepath.Base(p)
