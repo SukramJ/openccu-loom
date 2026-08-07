@@ -1406,7 +1406,7 @@ const EN: Catalog = {
   "config.help.callback.bin_port":
     "BIN-RPC callback listener port (CUxD). Same dynamic-port semantics as the XML-RPC port.",
   "config.help.callback.port_range":
-    "Optional port range <lo>-<hi> for the dynamic-port policy. Use when the daemon sits behind a narrow firewall range.",
+    "Optional port range <lo>-<hi>; the callback listener binds the first free port in it. Takes precedence over the XML-RPC port above. Use when the daemon sits behind a narrow firewall range.",
   "config.help.callback.public_host":
     "Hostname the daemon announces to the CCU in every init() call. Set when running behind NAT.",
   "config.help.callback.max_connections":
@@ -4921,7 +4921,7 @@ const DE: Catalog = {
   "config.help.callback.bin_port":
     "Port des BIN-RPC-Callback-Listeners (CUxD). Gleiche Dynamic-Port-Semantik wie der XML-RPC-Port.",
   "config.help.callback.port_range":
-    "Optionaler Port-Bereich <lo>-<hi> für die Dynamic-Port-Policy. Wenn der Daemon hinter einer engen Firewall sitzt.",
+    "Optionaler Port-Bereich <lo>-<hi>; der Callback-Listener bindet den ersten freien Port darin. Hat Vorrang vor dem XML-RPC-Port oben. Wenn der Daemon hinter einer engen Firewall sitzt.",
   "config.help.callback.public_host":
     "Hostname, den der Daemon der CCU bei init() ansagt. Setzen wenn der Daemon hinter NAT läuft.",
   "config.help.callback.max_connections":

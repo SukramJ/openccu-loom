@@ -46,6 +46,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the decision that `goose down` is a development/test tool only, never
   an operator rollback path.
 
+
 ### Fixed
 
 - **Every energy day and month total was shifted by the timezone
@@ -173,6 +174,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   full-scanned on every retention tick — a scan that grows with every
   day retained. The raw and hourly tiers have had a time-axis index
   since the bounded rollup landed; the daily tier now has one too.
+
 
 - **A backup error claimed a missing feature when the daemon meant a
   missing configuration.** Backup triggers with no central registered,
@@ -319,6 +321,78 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the data point permanently unobserved. The forced path is now exempt
   from that skip: it only ever fires right after a live push, when the
   CCU already has a fresh value to serve.
+
+- **A damaged backup archive was uploaded to the CCU without being
+  looked at.** An uploaded archive was inspected at import, but a
+  restore read the stored file and pushed it straight at
+  `cp_security.cgi`, which starts the restore and reboots the CCU. An
+  archive that a proxy had truncated, or that was never a system backup
+  at all, therefore took the CCU down with it. Every restore now runs
+  the same structural inspection first and refuses with `422` and the
+  reason (not a readable tar / missing a required member) before a
+  single byte reaches the CCU. API 5.4.0 documents the widened `422` on
+  `POST /api/v1/backups/{id}/restore`.
+
+- **A failed backup download saved as an ordinary `.sbk` file.** The
+  download response committed its `200 OK` and its attachment headers
+  before the archive was read, so any failure afterwards appended a
+  problem document to a half-written file and the browser stored the
+  result as a normal backup — one a later restore would push at a CCU.
+  The status is now committed by the first payload byte: a failure
+  before it arrives is answered as an error, and a failure part-way
+  through aborts the transfer so the client reports a broken download
+  instead of writing out a short file.
+
+- **Two backups of the same CCU in the same second became one.** Backup
+  ids carry a one-second timestamp and the storage overwrites an
+  existing id, so a manual backup that landed in the same second as the
+  scheduled one silently replaced it — and the rotation then pruned
+  against a set one archive shorter than it appeared. Ids are now minted
+  strictly increasing per CCU; the id format is unchanged.
+
+- **The Config UI reported settings that only exist in `config.yaml` as
+  unset — and asked for a restart that no action could clear.** The
+  effective configuration behind `GET /api/v1/config` was assembled from
+  the built-in defaults instead of the file the daemon booted from, so
+  every value set in YAML and never edited in the UI came back as its
+  default. Because the pending-restart banner compares the running
+  configuration against that assembly, a YAML-only `backup.schedule` —
+  restart-required, and carried by no editable section — kept the banner
+  lit permanently. Both assemblies now start from the same base, and a
+  value that came from the file is labelled as such instead of as a
+  default.
+
+- **A configuration section was saved even when it could not be
+  validated.** If the effective configuration was momentarily
+  unavailable, the section `PUT` skipped the masked-secret restore, the
+  semantic validation and the restart-required answer, then persisted
+  the request body anyway and reported success — so a form the UI had
+  re-sent with its `***` placeholders could overwrite a real credential
+  silently. The save is now refused with `503` and the stored section is
+  left untouched.
+
+- **`callback.port_range` was accepted and then ignored.** The range was
+  only consulted when `callback.port` was `0`, but that field is filled
+  with `8120` on every load, so no installation could reach it: an
+  operator behind a firewall that only opens `30000-30099` got port 8120
+  and no indication the setting had been dropped. A configured range now
+  takes precedence over `callback.port`, and a malformed range is
+  rejected at the save instead of at the next boot.
+
+- **Configuration values outside their documented range were accepted
+  and then quietly replaced.** `locale`, `north.webhook.url` and
+  `timeout_ms`, `north.mcp.path`, `north.matter.listen` and
+  `discriminator`, `north.matter.commissioning.iterations`, the REST
+  rate-limit and WebSocket replay sizes, and every duration setting are
+  now validated when they are saved, with a message naming the field and
+  the accepted range. Previously each of them fell back to a default at
+  the point of use, so the UI answered "saved" for a value the daemon
+  never used.
+
+- **Switching the per-CCU connection check off had no effect.** A
+  negative `centrals[].check_connection_interval` is the documented way
+  to disable the poll, but the daemon only copied the value when it was
+  positive, so the job kept running at its default cadence.
 
 ## [0.54.2]
 

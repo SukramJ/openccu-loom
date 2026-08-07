@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -259,5 +260,67 @@ func TestPutConfigSection_RESTRowNeverCarriesNestedAuthSections(t *testing.T) {
 	}
 	if saved.PublicURL != "https://loom.example" {
 		t.Errorf("north.rest's own field was not persisted: %q", saved.PublicURL)
+	}
+}
+
+// TestPutConfigSectionRefusesToSaveWhenTheEffectiveConfigIsUnavailable is
+// the guard for a save that used to succeed by skipping everything that
+// makes it safe.
+//
+// The effective config was fetched best-effort. When the lookup failed
+// the handler dropped the masked-secret restore, the semantic validation
+// and the restart-required answer, then persisted the raw request body
+// anyway and reported 200 — so a section the SPA had re-sent with its
+// "***" placeholders overwrote the operator's real credentials, and
+// nothing in the response said so.
+func TestPutConfigSectionRefusesToSaveWhenTheEffectiveConfigIsUnavailable(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		fake *fakeConfigAdminSvc
+	}{
+		{
+			name: "lookup fails",
+			fake: &fakeConfigAdminSvc{effectiveErr: errors.New("database is locked")},
+		},
+		{
+			name: "lookup returns nothing",
+			fake: &fakeConfigAdminSvc{},
+		},
+		{
+			name: "lookup returns an empty result",
+			fake: &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			w := putSection(tc.fake, "north.mqtt", `{"enabled":true,"broker_url":"tcp://h:1883"}`)
+
+			if w.Code != http.StatusServiceUnavailable {
+				t.Fatalf("want 503 when the effective config is unavailable, got %d: %s", w.Code, w.Body.String())
+			}
+			if tc.fake.putCalled {
+				t.Fatal("a section must not be persisted when it could not be validated")
+			}
+		})
+	}
+}
+
+// TestPutConfigSectionStillSavesWhenTheEffectiveConfigIsAvailable keeps
+// the refusal above from swallowing the ordinary path.
+func TestPutConfigSectionStillSavesWhenTheEffectiveConfigIsAvailable(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeConfigAdminSvc{
+		effectiveResult: &configstore.EffectiveResult{Config: config.Default()},
+	}
+	w := putSection(fake, "north.mqtt", `{"enabled":true,"broker_url":"tcp://h:1883"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if !fake.putCalled {
+		t.Fatal("a valid section must be persisted")
 	}
 }

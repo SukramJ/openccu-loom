@@ -49,7 +49,10 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 		if cc.Name != u.Name() {
 			continue
 		}
-		if cc.CheckConnectionInterval > 0 {
+		// Not "> 0": a negative interval is the documented way to switch
+		// the check_connection poll off (the job builder skips it), and
+		// dropping it here left that setting silently without effect.
+		if cc.CheckConnectionInterval != 0 {
 			jobs.CheckConnectionInterval = cc.CheckConnectionInterval
 		}
 		if cc.Behavior.SysvarScanInterval > 0 {

@@ -198,7 +198,8 @@ the registry. Each central owns a separate interface-id namespace.
 
 When `callback.port: 0` or `callback.port_range: "30000-30099"` is
 set, the OS or the range allocator hands out fresh ports on every
-daemon restart. The **effective** port is announced to the CCU at
+daemon restart. A configured `port_range` wins over `callback.port`.
+The **effective** port is announced to the CCU at
 `init()` time — not the configured `0`. Multiple CCUs share the
 same listener; each CCU learns the new port at its first reconnect.
 

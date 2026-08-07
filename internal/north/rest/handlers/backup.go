@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -110,6 +111,19 @@ func RestoreBackup(svc BackupService) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		jobID, err := svc.Restore(r.Context(), id)
 		switch {
+		case errors.Is(err, sbk.ErrNotAnArchive), errors.Is(err, sbk.ErrIncomplete):
+			// The stored archive did not survive inspection, so nothing was
+			// uploaded. 422 with the reason, mirroring the upload endpoint:
+			// a 502 would blame the CCU for a file this daemon refused to
+			// send it, and would hide the one action that helps — replacing
+			// the archive.
+			title := "Stored backup is not a CCU system backup"
+			if errors.Is(err, sbk.ErrIncomplete) {
+				title = "Stored backup is incomplete"
+			}
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, title, err.Error()))
+			return
 		case errors.Is(err, hmerr.ErrRestoreTargetAmbiguous):
 			// Not an upstream failure: nothing was attempted. Saying so
 			// with 422 and the reason beats the 502 this used to return,
@@ -137,6 +151,13 @@ func RestoreBackup(svc BackupService) http.HandlerFunc {
 }
 
 // DownloadBackup streams one backup .sbk file.
+//
+// The 200 is committed by the first payload byte, not before it. Setting
+// the download headers up front made every failure after that point
+// unreportable: the status was already on the wire, so the error handler
+// appended a problem+json document to a half-written archive and the
+// operator's browser saved the result as a perfectly ordinary-looking
+// .sbk — one that a later restore would push at a CCU.
 func DownloadBackup(svc BackupService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
@@ -145,12 +166,62 @@ func DownloadBackup(svc BackupService) http.HandlerFunc {
 			return
 		}
 		id := chi.URLParam(r, "id")
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", ContentDispositionAttachment(id+".sbk"))
-		if err := svc.Stream(r.Context(), id, w); err != nil {
+		body := &downloadBody{w: w, filename: id + ".sbk"}
+		err := svc.Stream(r.Context(), id, body)
+		if err == nil && !body.started {
+			// A clean stream that produced nothing is not a download: it
+			// would save as a zero-byte .sbk. Say so instead.
+			err = errEmptyBackupStream
+		}
+		switch {
+		case err == nil:
+			return
+		case body.started:
+			// The payload is already streaming, so the status cannot be
+			// taken back. Abort the connection instead: the client then
+			// reports a truncated transfer rather than writing out a short
+			// file that looks complete. This is net/http's only mechanism
+			// for it — the server recovers the sentinel itself and logs
+			// nothing further.
+			slog.Default().ErrorContext(r.Context(), "Backup stream aborted mid-transfer",
+				"error", err, "method", r.Method, "path", r.URL.Path)
+			panic(http.ErrAbortHandler)
+		default:
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup stream failed", err)
 		}
 	}
+}
+
+// errEmptyBackupStream reports a stream that completed without writing a
+// byte. The filesystem storage already refuses a zero-length archive at
+// Open, so this covers the backends that do not.
+var errEmptyBackupStream = errors.New("backup: stream produced no data")
+
+// downloadBody defers the download headers and the 200 until the first
+// payload byte arrives, so a stream that fails before producing anything
+// can still be answered with a real error status.
+type downloadBody struct {
+	w        http.ResponseWriter
+	filename string
+	// started records whether any byte has been handed to the client. It
+	// is the difference between "still reportable as an error" and "the
+	// response is committed".
+	started bool
+}
+
+func (d *downloadBody) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		// Not a payload byte: writing headers here would commit the
+		// response for a stream that has produced nothing yet.
+		return 0, nil
+	}
+	if !d.started {
+		d.started = true
+		d.w.Header().Set("Content-Type", "application/octet-stream")
+		d.w.Header().Set("Content-Disposition", ContentDispositionAttachment(d.filename))
+		d.w.WriteHeader(http.StatusOK)
+	}
+	return d.w.Write(p)
 }
 
 // BackupUploader stores an externally-supplied CCU backup so it becomes
