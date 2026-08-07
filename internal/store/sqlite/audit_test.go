@@ -278,3 +278,47 @@ func TestAuditStoreQueryNilSafe(t *testing.T) {
 		t.Fatalf("nil store Query=%v err=%v", out, err)
 	}
 }
+
+func TestAuditStoreReadPathsCarryTheRowID(t *testing.T) {
+	t.Parallel()
+	s := freshAuditStore(t)
+	ctx := context.Background()
+
+	// Three rows that agree on every column a client renders — the same
+	// operator action emitting several entries within one second. Only the
+	// table's primary key tells them apart.
+	ts := time.Date(2026, 7, 28, 10, 40, 24, 0, time.UTC)
+	for _, note := range []string{"area_create", "sensors_replace", "outputs_replace"} {
+		if err := s.Append(ctx, audit.Entry{
+			Timestamp: ts,
+			User:      "markus",
+			Action:    audit.Action("alarm_config_change"),
+			Note:      note,
+		}); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+
+	for name, read := range map[string]func() ([]audit.Entry, error){
+		"Query": func() ([]audit.Entry, error) { return s.Query(ctx, audit.Query{Limit: 10}) },
+		"List":  func() ([]audit.Entry, error) { return s.List(ctx, "", 10) },
+	} {
+		got, err := read()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(got) != 3 {
+			t.Fatalf("%s: want 3 entries, got %d", name, len(got))
+		}
+		seen := make(map[int64]struct{}, len(got))
+		for _, e := range got {
+			if e.ID == 0 {
+				t.Fatalf("%s: entry served without an ID: %+v", name, e)
+			}
+			if _, dup := seen[e.ID]; dup {
+				t.Fatalf("%s: duplicate ID %d across entries", name, e.ID)
+			}
+			seen[e.ID] = struct{}{}
+		}
+	}
+}

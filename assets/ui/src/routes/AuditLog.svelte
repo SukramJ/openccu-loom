@@ -122,8 +122,14 @@
     }
   }
 
+  // Row identity for the table key and the expansion set. One operator
+  // action can emit several entries that agree on every rendered column —
+  // creating an alarm area writes area_create + sensors_replace +
+  // outputs_replace within the same second — so only the server-assigned
+  // id separates them. A key built from a field tuple collides there,
+  // which aborts the keyed {#each} and leaves the view stuck mid-render.
   function rowKey(e: AuditEntry): string {
-    return e.timestamp + "|" + e.action + "|" + (e.device_address ?? "") + "|" + (e.user ?? "");
+    return String(e.id);
   }
 
   function toggleExpand(e: AuditEntry) {

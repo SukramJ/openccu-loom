@@ -4,6 +4,26 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.7]
+
+### Fixed
+
+- **The Config-UI change-history page rendered nothing but its loading
+  state.** The audit table keyed its rows on a tuple of timestamp,
+  action, device address and user. A single operator action can emit
+  several entries that agree on all four — creating an alarm area writes
+  `area_create`, `sensors_replace` and `outputs_replace` within the same
+  second, none of them carrying a device address — so the keyed `{#each}`
+  aborted with `each_key_duplicate` and left the view frozen mid-render:
+  the header already showed the fetched entry count while the table below
+  it still displayed "loading" and `0 / 0`. The request and its response
+  were correct throughout. Audit entries now carry the identity they
+  always had in the database: `AuditEntry.id` is served on both read
+  paths (the durable store's primary key, or the in-memory buffer's own
+  sequence when no database is wired) and the table keys on it. This also
+  fixes the latent second half of the bug — colliding entries shared one
+  expand/collapse state.
+
 ## [0.54.6]
 
 ### Fixed

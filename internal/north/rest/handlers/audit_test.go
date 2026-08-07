@@ -580,3 +580,55 @@ func TestListAudit_InMemoryStubStillWorksWithoutQuerier(t *testing.T) {
 		t.Fatalf("in-memory path: expected 1 entry, got %d", len(body))
 	}
 }
+
+// sameSecondBurst are three entries a single operator action emits: they
+// agree on every field the SPA renders, so only the entry ID separates
+// them. A client that keys rows on a field tuple collides here.
+func sameSecondBurst() []audit.Entry {
+	ts := time.Date(2026, 7, 28, 10, 40, 24, 0, time.UTC)
+	return []audit.Entry{
+		{ID: 3, Timestamp: ts, User: "markus", Action: "alarm_config_change", Note: "outputs_replace"},
+		{ID: 2, Timestamp: ts, User: "markus", Action: "alarm_config_change", Note: "sensors_replace"},
+		{ID: 1, Timestamp: ts, User: "markus", Action: "alarm_config_change", Note: "area_create"},
+	}
+}
+
+func TestListAudit_EveryEntryCarriesAUniqueID(t *testing.T) {
+	t.Parallel()
+	// Both read paths must satisfy the contract: the durable one serves
+	// store primary keys, the buffer fallback its own sequence.
+	for name, svc := range map[string]AuditService{
+		"durable": &stubAuditQuerier{entries: sameSecondBurst()},
+		"buffer":  &stubAuditService{entries: sameSecondBurst()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/audit", http.NoBody)
+			w := httptest.NewRecorder()
+			ListAudit(svc, nil).ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+			}
+			var body []struct {
+				ID int64 `json:"id"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if len(body) != 3 {
+				t.Fatalf("expected 3 entries, got %d", len(body))
+			}
+			seen := make(map[int64]struct{}, len(body))
+			for _, e := range body {
+				if e.ID == 0 {
+					t.Fatal("entry serialised without an id")
+				}
+				if _, dup := seen[e.ID]; dup {
+					t.Fatalf("duplicate id %d in response", e.ID)
+				}
+				seen[e.ID] = struct{}{}
+			}
+		})
+	}
+}

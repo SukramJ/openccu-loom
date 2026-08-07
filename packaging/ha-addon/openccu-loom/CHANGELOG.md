@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.54.7
+
+- **Fixed: the "Change history" page in the configuration UI stayed
+  empty and stuck on "Loading…".** Several entries written in the same
+  second by one action collided with each other and stopped the page
+  from rendering; the data was there the whole time. The history now
+  lists every entry again, and expanding one no longer expands another.
+
 ## 0.54.6
 
 - **Fixed: pressing a virtual-remote button in Home Assistant did

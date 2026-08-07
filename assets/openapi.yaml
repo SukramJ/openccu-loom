@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.5.0
+  version: 5.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9067,9 +9067,19 @@ components:
             for conversion. Only present together with a non-zero tariff.
     AuditEntry:
       type: object
-      required: [timestamp, action]
+      required: [id, timestamp, action]
       description: One recorded user-initiated configuration change.
       properties:
+        id:
+          type: integer
+          format: int64
+          description: >
+            Stable identity of this entry within the responding list. A single
+            operator action can emit several entries that agree on every other
+            field, including the second-resolution timestamp, so this is the
+            only safe key for per-row client state. Values are assigned by the
+            durable store and are not comparable across daemon restarts when no
+            durable store is configured.
         central:
           type: string
           description: |

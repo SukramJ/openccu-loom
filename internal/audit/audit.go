@@ -231,6 +231,15 @@ const (
 // layer from the auth context; everything else by the producer
 // (adapter / handler).
 type Entry struct {
+	// ID identifies the entry within the source that served it. Producers
+	// leave it zero: the durable store's primary key fills it on the SQL
+	// read path, [Buffer] stamps its own sequence on the in-memory one. It
+	// is the only field guaranteed to differ between two entries — a single
+	// operator action can emit several rows that agree on every other
+	// column, including the second-resolution timestamp — so consumers that
+	// need a stable per-row identity (list keys, expansion state) must key
+	// on it rather than on a field tuple.
+	ID            int64     `json:"id"`
 	Timestamp     time.Time `json:"timestamp"`
 	User          string    `json:"user,omitempty"`
 	Action        Action    `json:"action"`
@@ -281,6 +290,10 @@ type Buffer struct {
 	entries []Entry
 	cap     int
 	clk     clock.Clock
+	// seq is the highest [Entry.ID] this buffer has handed out or seen.
+	// Guarded by mu — Record already takes the write lock to push, so no
+	// separate atomic is needed.
+	seq int64
 }
 
 // NewBuffer returns a buffer with the given capacity (>= 1) using the
@@ -306,12 +319,26 @@ func NewBufferWithClock(capacity int, clk clock.Clock) *Buffer {
 
 // Record stores e. The newest entry is at index 0; older entries are
 // pushed back; entries beyond capacity are dropped.
+//
+// An entry that arrives without an [Entry.ID] is stamped with the next
+// buffer sequence number, so the buffer read path can hand consumers a
+// unique per-entry identity even when no durable store is wired. An entry
+// that already carries an ID keeps it — replaying persisted history into
+// the buffer preserves the store's primary keys — and lifts the sequence
+// past it so a later live entry cannot reuse a replayed ID.
 func (b *Buffer) Record(e Entry) {
 	if e.Timestamp.IsZero() {
 		e.Timestamp = b.clk.Now().UTC()
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	switch {
+	case e.ID == 0:
+		b.seq++
+		e.ID = b.seq
+	case e.ID > b.seq:
+		b.seq = e.ID
+	}
 	b.entries = append([]Entry{e}, b.entries...)
 	if len(b.entries) > b.cap {
 		b.entries = b.entries[:b.cap]

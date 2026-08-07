@@ -66,7 +66,8 @@ func (s *AuditStore) Purge(ctx context.Context, retainDays int) (int64, error) {
 
 // Append inserts one audit entry. The caller is expected to have
 // stamped Entry.Timestamp; if zero, the SQL default (CURRENT_TIMESTAMP)
-// fills in.
+// fills in. Entry.ID is ignored on write — the table's AUTOINCREMENT
+// primary key owns it, and the read paths hand it back.
 func (s *AuditStore) Append(ctx context.Context, entry audit.Entry) error {
 	if s == nil || s.db == nil {
 		return nil
@@ -163,7 +164,7 @@ func (s *AuditStore) Query(ctx context.Context, q audit.Query) ([]audit.Entry, e
 		args = append(args, q.Until.UTC().Format("2006-01-02 15:04:05"))
 	}
 
-	sqlStr := `SELECT timestamp, COALESCE(user, ''), action, COALESCE(device_address, ''),
+	sqlStr := `SELECT id, timestamp, COALESCE(user, ''), action, COALESCE(device_address, ''),
             COALESCE(channel_no, 0), COALESCE(paramset, ''), COALESCE(peer, ''),
             COALESCE(parameter, ''), COALESCE(note, ''), COALESCE(changes_json, '')
           FROM audit_log`
@@ -201,7 +202,7 @@ func scanAuditRows(rows *sql.Rows) ([]audit.Entry, error) {
 			changes string
 		)
 		if err := rows.Scan(
-			&ts, &entry.User, &action, &entry.DeviceAddress,
+			&entry.ID, &ts, &entry.User, &action, &entry.DeviceAddress,
 			&entry.ChannelNo, &entry.Paramset, &entry.Peer,
 			&entry.Parameter, &entry.Note, &changes,
 		); err != nil {
@@ -237,7 +238,7 @@ func (s *AuditStore) List(ctx context.Context, deviceAddress string, limit int) 
 		limit = maxAuditListRows
 	}
 	args := []any{}
-	q := `SELECT timestamp, COALESCE(user, ''), action, COALESCE(device_address, ''),
+	q := `SELECT id, timestamp, COALESCE(user, ''), action, COALESCE(device_address, ''),
             COALESCE(channel_no, 0), COALESCE(paramset, ''), COALESCE(peer, ''),
             COALESCE(parameter, ''), COALESCE(note, ''), COALESCE(changes_json, '')
           FROM audit_log`
