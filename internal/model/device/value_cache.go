@@ -243,11 +243,11 @@ func singleflightKey(dpk hmtypes.DataPointKey) string {
 // called from inside singleflight.Do so concurrent invocations for the
 // same key are deduplicated. direct=true bypasses no-op short-circuits;
 // the cache is always written.
-func (d *Device) runLoad(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey, _ bool) error {
+func (d *Device) runLoad(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey, direct bool) error {
 	if dpk.ParamsetKey == hmenum.ParamsetKeyMaster {
 		return d.runLoadMaster(ctx, loader, cache, dpk)
 	}
-	return d.runLoadValuesParamset(ctx, loader, cache, dpk)
+	return d.runLoadValuesParamset(ctx, loader, cache, dpk, direct)
 }
 
 // runLoadMaster fetches the entire MASTER paramset for the channel and
@@ -304,7 +304,7 @@ func (d *Device) runLoadMaster(ctx context.Context, loader ValueLoader, cache *v
 //   - a sibling is only applied when it has not been observed yet, so a bulk
 //     fill can never overwrite a restored / already-known value with a fresh
 //     read that may be a not-yet-measured placeholder.
-func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey) error {
+func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey, direct bool) error {
 	// For some interfaces a per-parameter GetParamset/GetValue fallback during
 	// init cannot return a device-fresh reading — only a CCU-internal placeholder
 	// (reported with *_STATUS = NORMAL so the status cannot be used to reject it),
@@ -318,7 +318,15 @@ func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, 
 	// and is the only trustworthy source for these interfaces, so skip the
 	// per-parameter fallback entirely. The data point stays unobserved (sentinel)
 	// until a real value arrives via the event callback (#3228, #3260).
-	if d.Interface == hmenum.InterfaceVirtualDevices || d.Interface == hmenum.InterfaceBidCosRF {
+	//
+	// direct=true is excluded from the skip: it is only ever set by
+	// scheduleSelfReload (callback_handlers.go), which fires right after a
+	// live CCU push whose inline OnWireValue coercion failed — the CCU has
+	// just sent a fresh value for this exact channel, so the placeholder
+	// concern above does not apply. Applying the skip there silently wrote
+	// the sentinel instead of resolving the reload, leaving the data point
+	// permanently unobserved on every interface this skip covers.
+	if !direct && (d.Interface == hmenum.InterfaceVirtualDevices || d.Interface == hmenum.InterfaceBidCosRF) {
 		cache.put(dpk, nil, false)
 		return nil
 	}

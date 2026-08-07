@@ -17,6 +17,9 @@ CREATE TABLE user_preferences (
 
 -- +goose StatementEnd
 
+-- Down is destructive: every operator's saved UI preferences (e.g. pinned
+-- favorites) are deleted. The SPA falls back to its built-in defaults with
+-- no way to recover the prior selection.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE user_preferences;

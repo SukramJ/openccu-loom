@@ -31,6 +31,11 @@ ALTER TABLE matter_fabrics ADD COLUMN root_cert BLOB;
 
 -- +goose StatementEnd
 
+-- Down is destructive: the trusted-root certificate bytes for every
+-- already-paired fabric are deleted. Every commissioner that depends on
+-- TrustedRootCertificates carrying the full certificate (Apple Home, per the
+-- Bug I note above) must be removed and re-paired — the same impact the Up
+-- migration was written to fix in the first place.
 -- +goose Down
 -- +goose StatementBegin
 

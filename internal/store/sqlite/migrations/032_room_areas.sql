@@ -24,6 +24,9 @@ CREATE TABLE room_areas (
 
 CREATE INDEX room_areas_by_area ON room_areas(area_id);
 
+-- Down is destructive: every operator-defined area and its (central, room)
+-- membership is deleted. The room-grouping-above-CCU-rooms layout has to be
+-- rebuilt from scratch.
 -- +goose Down
 DROP INDEX room_areas_by_area;
 DROP TABLE room_areas;

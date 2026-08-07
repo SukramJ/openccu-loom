@@ -29,6 +29,10 @@ CREATE UNIQUE INDEX matter_resumption_id ON matter_resumption(resumption_id);
 
 -- +goose StatementEnd
 
+-- Down is destructive: every CASE-resumption secret is deleted. No session
+-- state is lost (sessions are volatile by Matter convention), but every
+-- paired controller falls back to a full CASE handshake on its next
+-- connection instead of the abbreviated resume path.
 -- +goose Down
 -- +goose StatementBegin
 

@@ -24,6 +24,9 @@ CREATE INDEX session_recorder_lookup
 
 -- +goose StatementEnd
 
+-- Down is destructive: every recorded diagnostic session is deleted; a
+-- session kept to reproduce a bug already under investigation becomes
+-- unavailable.
 -- +goose Down
 -- +goose StatementBegin
 

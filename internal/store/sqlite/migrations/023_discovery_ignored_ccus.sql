@@ -16,6 +16,8 @@ CREATE TABLE discovery_ignored_ccus (
 
 -- +goose StatementEnd
 
+-- Down is destructive: the discovery ignore-list is deleted. Every
+-- previously hidden CCU reappears in the next SSDP/UPnP scan.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE discovery_ignored_ccus;

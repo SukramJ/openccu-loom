@@ -22,5 +22,8 @@ CREATE TABLE IF NOT EXISTS measurement_recording_overrides (
     PRIMARY KEY (central_name, interface_id, channel_address, parameter)
 ) WITHOUT ROWID;
 
+-- Down is destructive: every per-data-point recording override is deleted. A
+-- data point an operator explicitly excluded from or forced into history
+-- recording reverts to the parameter-name glob policy.
 -- +goose Down
 DROP TABLE IF EXISTS measurement_recording_overrides;

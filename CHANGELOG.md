@@ -31,6 +31,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   WS-delivery-without-MQTT table pins that the optional MQTT plane
   never gates a WebSocket emission.
 
+- **The migration `Down` path is now documented as unsupported, not
+  silently risky.** An audit of every `goose` migration found that most
+  `-- +goose Down` blocks drop the table or column their `Up` added,
+  destroying data with no other copy — bcrypt password/token hashes,
+  Matter NOC private keys, the append-only alarm journal, argon2id PIN
+  hashes, and the frozen zone `slug` that Home Assistant entity ids and
+  MQTT topics depend on. Nothing in this project ever exposed `goose
+  down` to an operator, so the risk was latent, not exploited. Every
+  destructive `Down` block now carries a factual note above the marker
+  naming what is lost; `TestMigrationDownDropsHaveLossNotes`
+  (`tests/contract/`) enforces the note on every future migration; and
+  [ADR 0061](./docs/adr/0061-migration-down-path-unsupported.md) records
+  the decision that `goose down` is a development/test tool only, never
+  an operator rollback path.
+
 ### Fixed
 
 - **Every energy day and month total was shifted by the timezone
@@ -278,6 +293,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   viewer/operator/admin role labels (dropdown options and the three role
   badges) rendered the raw English role token untranslated in both
   locales instead of a localized label.
+
+- **A CCU that rebooted again while an interface was still activating
+  could end up registered twice.** The one-time boot readiness gate
+  (`gatedCentralBringUp`) waits for `checkrega.cgi` before southbound
+  bring-up starts, but the per-interface ingest retry that follows
+  (`wireInterface`'s `activate()`, up to six attempts over roughly 33
+  seconds to absorb residual per-interface RPC lag) never re-checked it —
+  so a CCU that dropped again inside that window could hit `Deinit`/`Init`
+  mid-boot, the same "deinit fails while init succeeds" race already
+  guarded against on the reconnect path. Every `activate()` attempt now
+  re-probes CCU readiness with a short, bounded timeout immediately before
+  touching `Deinit`/`Init`, reusing the existing retry/backoff on a miss
+  instead of registering against a CCU that is not actually ready yet.
+
+- **A forced value reload after a failed live-event coercion silently gave
+  up on BidCos-RF and VirtualDevices data points.** When the daemon
+  receives a push event it cannot coerce inline, it schedules a direct
+  `GetParamset` reload to resolve the type mismatch from the canonical
+  wire shape. That reload shared its skip with the unrelated
+  cost-saving guard that avoids speculative `VALUES` probes on
+  interfaces that can only return a placeholder (BidCos-RF's passive
+  devices, VirtualDevices' aggregated channels) — so the reload wrote a
+  sentinel instead of fetching the value the CCU had just sent, leaving
+  the data point permanently unobserved. The forced path is now exempt
+  from that skip: it only ever fires right after a live push, when the
+  CCU already has a fresh value to serve.
 
 ## [0.54.2]
 

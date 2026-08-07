@@ -21,6 +21,9 @@ CREATE INDEX idx_auth_sessions_expires ON auth_sessions(expires_unix);
 
 -- +goose StatementEnd
 
+-- Down is destructive: every stored session is deleted. Every operator
+-- currently logged in is signed out and must authenticate again on the
+-- daemon's next start.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE auth_sessions;

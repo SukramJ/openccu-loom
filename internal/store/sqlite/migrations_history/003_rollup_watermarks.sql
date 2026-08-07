@@ -42,6 +42,11 @@ VALUES ('daily', COALESCE((SELECT MAX(bucket_ts) + 86400000 FROM measurements_da
 CREATE INDEX IF NOT EXISTS idx_measurements_ts ON measurements (ts);
 CREATE INDEX IF NOT EXISTS idx_measurements_hourly_bucket_ts ON measurements_hourly (bucket_ts);
 
+-- Down is destructive: the per-tier fold watermark is deleted. It is not a
+-- silent no-op — the next Up reseeds it from whatever rollup rows still
+-- exist, so any raw row that was already purged past the old watermark
+-- before the round trip is skipped by the next fold instead of being folded
+-- in, leaving a gap in the affected tier with no error raised.
 -- +goose Down
 DROP INDEX IF EXISTS idx_measurements_hourly_bucket_ts;
 DROP INDEX IF EXISTS idx_measurements_ts;

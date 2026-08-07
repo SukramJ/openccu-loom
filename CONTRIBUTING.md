@@ -96,6 +96,38 @@ Two local-environment traps that look like real failures:
 - Interfaces live in the consumer package (Go convention). The only
   exception is `pkg/interfaces` for cross-cutting protocol contracts.
 
+## Database migrations
+
+New tables/columns go under `internal/store/sqlite/migrations/` (or
+`migrations_history/` for the history database), following goose's
+`<nnnn>_<name>.sql` naming with `-- +goose Up` / `-- +goose Down`.
+
+**`goose down` is not a supported operator path** — see
+[ADR 0061](./docs/adr/0061-migration-down-path-unsupported.md) for the full
+reasoning. In short: most Down blocks in this repo drop the table or
+column their Up added, which destroys the data it held, and several of
+those tables hold things with no other copy anywhere (password/token
+hashes, Matter node credentials, the alarm journal, argon2id PIN hashes).
+Nothing in this project exposes `goose down` to an operator — no Make
+target, no `hmcli` subcommand — it exists only so a migration's Up→Down→Up
+cycle can be exercised locally while you develop and test it.
+
+When your migration's Down block contains `DROP TABLE` or `DROP COLUMN`,
+add a short, factual comment directly above `-- +goose Down` naming what
+is destroyed and, if it matters, why it cannot be recovered:
+
+```sql
+-- Down is destructive: <what is lost, and why it cannot be reconstructed>.
+-- +goose Down
+DROP TABLE IF EXISTS example;
+```
+
+`TestMigrationDownDropsHaveLossNotes` (`tests/contract/`) fails the build
+if a destructive Down block has no note directly above the marker — this
+is the safety net, not manual review. A Down block that only renames or
+otherwise reverses its Up without dropping anything (see
+`migrations/031_alarm_zones_rename.sql`) needs no note.
+
 ## Pin tests for new wiring
 
 When you add a new exported method, constructor, or event subscriber that

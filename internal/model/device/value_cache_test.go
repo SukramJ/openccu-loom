@@ -950,3 +950,84 @@ func TestLoadValueValuesParamsetSkippedForUnqueryableInterfaces(t *testing.T) {
 		})
 	}
 }
+
+// TestLoadValueDirectBypassesUnqueryableInterfaceSkip pins that a direct=true
+// load is exempt from the VirtualDevices/BidCos-RF VALUES skip. direct=true is
+// only ever set by scheduleSelfReload (internal/central/adapter/callback_handlers.go)
+// right after a live CCU push whose inline OnWireValue coercion failed — the CCU
+// has just sent a fresh value for this exact channel, so the skip's placeholder
+// concern does not apply. Before this fix the skip fired unconditionally and the
+// self-reload silently wrote the sentinel instead of resolving the coercion
+// failure, leaving the data point permanently unobserved on these interfaces.
+func TestLoadValueDirectBypassesUnqueryableInterfaceSkip(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		interfaceID string
+		iface       hmenum.Interface
+		address     string
+		model       string
+	}{
+		{
+			name:        "VirtualDevices",
+			interfaceID: "VirtualDevices",
+			iface:       hmenum.InterfaceVirtualDevices,
+			address:     "INT0000002",
+			model:       "HmIP-HEATING",
+		},
+		{
+			name:        "BidCosRF",
+			interfaceID: "BidCos-RF",
+			iface:       hmenum.InterfaceBidCosRF,
+			address:     "LEQ0000002",
+			model:       "HM-CC-RT-DN",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			d := New(Config{
+				InterfaceID: tc.interfaceID,
+				Interface:   tc.iface,
+				Address:     tc.address,
+				Model:       tc.model,
+				Name:        tc.name,
+			})
+
+			channelAddr := tc.address + ":1"
+			ch := d.AddChannel(channelAddr, 1, "", hmenum.ParamsetKeyValues)
+			const actualTemp = hmenum.Parameter("ACTUAL_TEMPERATURE")
+			dp := makeFloatDP(channelAddr, actualTemp)
+			ch.Put(dp)
+
+			fake := newFakeLoader()
+			fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{
+				string(actualTemp): 21.5,
+			}, nil)
+			d.SetValueLoader(fake)
+
+			dpk := makeDPKey(tc.interfaceID, channelAddr, hmenum.ParamsetKeyValues, string(actualTemp))
+
+			_, obs, err := d.LoadValue(context.Background(), dpk, hmenum.CallSourceManualOrScheduled, true)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// (a) direct=true issues the fallback RPC despite the interface skip.
+			if calls := fake.getParamsetCalls.Load(); calls != 1 {
+				t.Fatalf("(a) expected 1 GetParamset call for direct=true on %s, got %d", tc.name, calls)
+			}
+			// (b) The CCU-supplied value is observed, not a sentinel.
+			if !obs {
+				t.Fatalf("(b) expected observed=true for direct=true VALUES fallback on %s", tc.name)
+			}
+			// (c) The data point receives the resolved value.
+			if v, dpObs := dp.RawValue(); !dpObs || v != 21.5 {
+				t.Fatalf("(c) expected ACTUAL_TEMPERATURE=21.5 observed=true for %s, got value=%v observed=%v", tc.name, v, dpObs)
+			}
+		})
+	}
+}

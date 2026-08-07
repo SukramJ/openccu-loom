@@ -44,6 +44,10 @@ CREATE INDEX idx_master_values_channel
 
 -- +goose StatementEnd
 
+-- Down is destructive: the cached MASTER paramset values are deleted. The
+-- daemon falls back to a full getParamset(MASTER) sweep against every
+-- channel on the next boot — exactly the CCU duty-cycle load this cache
+-- exists to avoid.
 -- +goose Down
 -- +goose StatementBegin
 

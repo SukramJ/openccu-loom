@@ -21,6 +21,8 @@ CREATE INDEX audit_log_by_action ON audit_log(action, timestamp DESC);
 
 -- +goose StatementEnd
 
+-- Down is destructive: the audit trail is deleted outright, with no other
+-- copy anywhere in the system.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE IF EXISTS audit_log;

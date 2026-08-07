@@ -11,6 +11,10 @@ ALTER TABLE centrals ADD COLUMN serial TEXT NOT NULL DEFAULT '';
 
 -- +goose StatementEnd
 
+-- Down is destructive: the persisted discovery serial for every adopted
+-- central is deleted. The "already configured" check falls back to
+-- host-only matching, so a central whose host later changes can be
+-- re-offered as a new discovery candidate.
 -- +goose Down
 -- +goose StatementBegin
 ALTER TABLE centrals DROP COLUMN serial;

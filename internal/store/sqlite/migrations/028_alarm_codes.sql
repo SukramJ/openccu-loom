@@ -33,6 +33,11 @@ CREATE INDEX alarm_codes_by_kind ON alarm_codes(kind);
 
 -- +goose StatementEnd
 
+-- Down is destructive: every alarm user code is deleted. hash holds
+-- argon2id-hashed PINs with no plaintext stored anywhere, so those cannot be
+-- reconstructed by design; the keypad_slot and remote_key hardware bindings
+-- carry no secret but are still lost operator configuration that has to be
+-- re-entered by hand.
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE alarm_codes;
