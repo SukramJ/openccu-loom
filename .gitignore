@@ -156,3 +156,4 @@ __pycache__/
 *-read-only.env
 test-results/
 .ccu_cred
+.mqtt_cred

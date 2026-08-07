@@ -4,11 +4,15 @@
 package contract
 
 import (
+	"fmt"
 	"go/ast"
 	"go/types"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/tools/go/packages"
@@ -115,24 +119,52 @@ func TestEveryEventTypeHasASubscriber(t *testing.T) {
 // a method name that several receivers in one package may share.
 func loadProductionPackages(t *testing.T) []*packages.Package {
 	t.Helper()
+	prodPackagesOnce.Do(func() {
+		prodPackages, prodPackagesErr = loadProductionPackagesUncached()
+	})
+	if prodPackagesErr != nil {
+		t.Fatalf("%v", prodPackagesErr)
+	}
+	return prodPackages
+}
+
+// prodPackages caches the load across the guards that need it. Three
+// separate tests each walked the whole module through the type checker,
+// and that walk is the most expensive thing this package does — under
+// -race it dominated the CI shard it lands in. The result is read-only
+// (every consumer walks ASTs and type info without mutating them), so
+// one load serves all of them, including the parallel ones.
+var (
+	prodPackagesOnce sync.Once
+	prodPackages     []*packages.Package
+	prodPackagesErr  error
+)
+
+func loadProductionPackagesUncached() ([]*packages.Package, error) {
+	root, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("getwd: %w", err)
+	}
+	// tests/contract → repo root.
+	root = filepath.Dir(filepath.Dir(root))
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedSyntax | packages.NeedTypes |
 			packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports,
-		Dir:   repoRoot(t),
+		Dir:   root,
 		Tests: false,
 	}
 	pkgs, err := packages.Load(cfg, "./internal/...", "./cmd/...", "./pkg/...")
 	if err != nil {
-		t.Fatalf("packages.Load: %v", err)
+		return nil, fmt.Errorf("packages.Load: %w", err)
 	}
 	var hard int
 	packages.Visit(pkgs, nil, func(p *packages.Package) {
 		hard += len(p.Errors)
 	})
 	if hard > 0 {
-		t.Fatalf("packages.Load reported %d type errors; resolution would be unreliable", hard)
+		return nil, fmt.Errorf("packages.Load reported %d type errors; resolution would be unreliable", hard)
 	}
-	return pkgs
+	return pkgs, nil
 }
 
 // definedEventTypes collects every named struct type in pkg/hmevent
