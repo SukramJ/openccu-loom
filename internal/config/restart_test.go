@@ -5,6 +5,7 @@ package config
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -373,5 +374,130 @@ func TestRestartRequiredDiff_CCUAuth_Identical(t *testing.T) {
 	got := RestartRequiredDiff(boot, eff)
 	if slices.Contains(got, "north.rest.auth.ccu") {
 		t.Errorf("unexpected \"north.rest.auth.ccu\" in diff %v for identical configs", got)
+	}
+}
+
+// TestRestartRequiredDiff_BootWiredSurfacesAreDiffed covers the surfaces that
+// carried the schema's restart-required badge while the diff ignored them: a
+// save answered restart_required:false and /restart-pending stayed empty, so an
+// operator who had just switched off Basic auth or retuned the alarm engine saw
+// no hint that the change was inert until the next boot. The Matter identity
+// and commissioning parameters are diffed for the same reason — the bridge and
+// its commissionable mDNS records are built once during bring-up.
+func TestRestartRequiredDiff_BootWiredSurfacesAreDiffed(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		path   string
+		mutate func(c *Config)
+	}{
+		{
+			path:   "north.rest.auth.basic_enabled",
+			mutate: func(c *Config) { off := false; c.North.REST.Auth.BasicEnabled = &off },
+		},
+		{
+			path:   "north.rest.auth.bearer_enabled",
+			mutate: func(c *Config) { off := false; c.North.REST.Auth.BearerEnabled = &off },
+		},
+		{
+			path:   "alarm.enabled",
+			mutate: func(c *Config) { off := false; c.Alarm.Enabled = &off },
+		},
+		{
+			path:   "alarm.default_siren_seconds",
+			mutate: func(c *Config) { c.Alarm.DefaultSirenSeconds = 42 },
+		},
+		{
+			path:   "alarm.max_acoustic_per_incident_seconds",
+			mutate: func(c *Config) { c.Alarm.MaxAcousticPerIncidentSeconds = 1234 },
+		},
+		{
+			path:   "alarm.stop_verify_seconds",
+			mutate: func(c *Config) { c.Alarm.StopVerifySeconds = 77 },
+		},
+		{
+			path:   "alarm.journal_retention_days",
+			mutate: func(c *Config) { c.Alarm.JournalRetentionDays = 7 },
+		},
+		{
+			path:   "alarm.restart_loop_breaker",
+			mutate: func(c *Config) { c.Alarm.RestartLoopBreaker = 9 },
+		},
+		{
+			path:   "alarm.duress_visibility",
+			mutate: func(c *Config) { c.Alarm.DuressVisibility = "hidden" },
+		},
+		{
+			path:   "north.matter.vendor_id",
+			mutate: func(c *Config) { c.North.Matter.VendorID = 0x1234 },
+		},
+		{
+			path:   "north.matter.product_id",
+			mutate: func(c *Config) { c.North.Matter.ProductID = 0x4321 },
+		},
+		{
+			path:   "north.matter.discriminator",
+			mutate: func(c *Config) { c.North.Matter.Discriminator = 0xABC },
+		},
+		{
+			path:   "north.matter.commissioning",
+			mutate: func(c *Config) { c.North.Matter.Commissioning.Passcode = 20202021 },
+		},
+		{
+			path:   "north.matter.commissioning",
+			mutate: func(c *Config) { c.North.Matter.Commissioning.Iterations = 5000 },
+		},
+		{
+			path:   "north.matter.commissioning",
+			mutate: func(c *Config) { c.North.Matter.Commissioning.EphemeralWindow = true },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			t.Parallel()
+			boot := baseConfig()
+			eff := clone(boot)
+			tc.mutate(eff)
+
+			got := RestartRequiredDiff(boot, eff)
+			if !slices.Contains(got, tc.path) {
+				t.Errorf("expected %q in diff, got %v", tc.path, got)
+			}
+		})
+	}
+}
+
+// TestRestartRequiredFieldPaths_DerivedFromRules pins the shape the schema
+// endpoint consumes: every rule contributes at least one annotated field, and
+// each annotated field belongs to the rule that reports it. Block-scoped rules
+// (the auth blocks, Matter commissioning) list their leaves explicitly because
+// the operator edits leaves, not blocks.
+func TestRestartRequiredFieldPaths_DerivedFromRules(t *testing.T) {
+	t.Parallel()
+
+	paths := RestartRequiredFieldPaths()
+	if len(paths) == 0 {
+		t.Fatal("no restart-required field paths")
+	}
+	for _, r := range RestartRules() {
+		if r.Path == "" {
+			t.Error("rule with an empty path")
+		}
+		if r.Differs == nil {
+			t.Errorf("rule %q has no comparison", r.Path)
+		}
+		fields := r.Fields
+		if len(fields) == 0 {
+			fields = []string{r.Path}
+		}
+		for _, f := range fields {
+			if f != r.Path && !strings.HasPrefix(f, r.Path+".") {
+				t.Errorf("rule %q annotates the unrelated field %q", r.Path, f)
+			}
+			if _, ok := paths[f]; !ok {
+				t.Errorf("field %q of rule %q missing from RestartRequiredFieldPaths", f, r.Path)
+			}
+		}
 	}
 }

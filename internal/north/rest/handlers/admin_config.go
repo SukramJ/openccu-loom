@@ -130,77 +130,15 @@ type SchemaResponse struct {
 	Fields   []SchemaField `json:"fields"`
 }
 
-// restartRequiredPaths enumerates fields whose change cannot be
-// hot-reloaded. Mirrors §7.1 Q12 of SPECIFICATION.md.
-var restartRequiredPaths = map[string]struct{}{
-	"data_dir":              {},
-	"north.rest.listen":     {},
-	"north.rest.public_url": {},
-	"callback.host":         {},
-	"callback.port":         {},
-	"callback.bin_port":     {},
-	"callback.port_range":   {},
-	"north.matter.enabled":  {},
-	"north.matter.listen":   {},
-	// MCP route is mounted once at boot (cmd/openccu-loom/daemon_rest_mount.go),
-	// so toggling any MCP field takes effect only after a restart.
-	"north.mcp.enabled":      {},
-	"north.mcp.allow_writes": {},
-	"north.mcp.path":         {},
-	// The outbound webhook bridge is wired once at boot, so every webhook
-	// field is restart-required.
-	"north.webhook.enabled":         {},
-	"north.webhook.url":             {},
-	"north.webhook.secret":          {},
-	"north.webhook.events":          {},
-	"north.webhook.centrals":        {},
-	"north.webhook.parameter_glob":  {},
-	"north.webhook.timeout_ms":      {},
-	"north.webhook.inbound.enabled": {},
-	"north.webhook.inbound.token":   {},
-	// The scheduled-backup job is wired once at boot.
-	"backup.schedule":  {},
-	"backup.keep_last": {},
-	// This is a static, non-diff-aware "this field can require a restart"
-	// annotation for the schema/field editor; centrals is not one of the
-	// generically-editable configstore.Section values (it has its own
-	// admin/centrals CRUD surface), so the badge here is never actually
-	// rendered against a live edit. The real, diff-aware gate is
-	// config.RestartRequiredDiff, which only flags "centrals" for an
-	// in-place modification of a central present before and after — adding
-	// or removing a central is a live orchestrator operation and does not
-	// require a restart.
-	"centrals": {},
-	// CCU-delegated login: the login chain (incl. the CCU auth provider)
-	// is wired once at boot, so any field in the block is restart-required.
-	// Mirrors config.RestartRequiredDiff's whole-block diff.
-	"north.rest.auth.ccu.enabled":        {},
-	"north.rest.auth.ccu.primary":        {},
-	"north.rest.auth.ccu.central":        {},
-	"north.rest.auth.ccu.min_user_level": {},
-	"north.rest.auth.ccu.role_mapping":   {},
-	// The Basic/Bearer scheme gates decide at boot which credential stores
-	// are wired into the auth middleware (cmd/openccu-loom/daemon_north.go
-	// only passes a store when its gate is on), so toggling either takes
-	// effect only after a restart. Without this flag the SPA saves the
-	// change with no hint and an operator who just enabled Bearer auth sees
-	// injected tokens still rejected until the daemon is restarted.
-	"north.rest.auth.basic_enabled":  {},
-	"north.rest.auth.bearer_enabled": {},
-	// HA Ingress auth passthrough: the auth middleware is wired once at
-	// boot (ADR 0044), so any field in the block is restart-required.
-	"north.rest.auth.ha_ingress.enabled":            {},
-	"north.rest.auth.ha_ingress.trusted_proxy_cidr": {},
-	"north.rest.auth.ha_ingress.role":               {},
-	// The alarm engine is wired once at boot, so every field in the
-	// section is restart-required.
-	"alarm.enabled":                           {},
-	"alarm.default_siren_seconds":             {},
-	"alarm.max_acoustic_per_incident_seconds": {},
-	"alarm.stop_verify_seconds":               {},
-	"alarm.journal_retention_days":            {},
-	"alarm.restart_loop_breaker":              {},
-}
+// restartRequiredPaths enumerates the fields whose change cannot be
+// hot-reloaded, so the schema editor can badge them. It is derived from
+// [config.RestartRules] — the same table [config.RestartRequiredDiff]
+// evaluates — rather than maintained here, because the two lists drifted
+// while they were independent: the alarm block and the Basic/Bearer auth
+// gates carried the badge but were never diffed, so the PUT response
+// answered restart_required:false and /restart-pending never flagged the
+// staged change. Mirrors §7.1 Q12 of SPECIFICATION.md.
+var restartRequiredPaths = config.RestartRequiredFieldPaths()
 
 // GetConfigSchema renders the typed schema for the SPA editor. No
 // secrets leave this endpoint — secret-classed fields are listed as
@@ -446,6 +384,11 @@ func restoreMaskedSecrets(current *config.Config, section configstore.Section, r
 		if _, skip := unmanaged[full]; skip {
 			continue
 		}
+		// Same for a secret a nested section owns — north.rest.auth.oidc's
+		// client_secret belongs to the OIDC row, not to north.rest.
+		if owningSection(full) != section {
+			continue
+		}
 		if !secretPayloadIsPlaceholder(payload, rel, goType) {
 			continue
 		}
@@ -559,10 +502,15 @@ func GetConfigSection(svc ConfigAdminService) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
+		// Drop anything the row must not carry before it reaches the editor. A
+		// row written before the nested sections owned their own sub-trees may
+		// still hold a stale copy of them; serving it would let the SPA display
+		// — and echo back — a value the section does not govern.
+		stored := configstore.StripForeignSectionFields(section, row.ValueJSON)
 		// Mask secrets before they reach the browser — the store opened them on
 		// read. The SPA round-trips the sentinel; restoreMaskedSecrets restores
 		// it on save.
-		_, _ = w.Write(maskSectionSecrets(section, row.ValueJSON))
+		_, _ = w.Write(maskSectionSecrets(section, stored))
 	}
 }
 
@@ -587,11 +535,13 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 			return
 		}
 		// Drop fields the section must never carry: bootstrap-tier
-		// north.rest.listen and the SQLite-managed auth credentials
-		// (north.rest.auth.users / .tokens). This is what makes a REST PUT
-		// that omits auth unable to wipe an operator's logins — the
-		// credentials live only in the user/token stores now.
-		raw = configstore.StripUnmanagedSectionFields(section, raw)
+		// north.rest.listen, the SQLite-managed auth credentials
+		// (north.rest.auth.users / .tokens) and every nested section's
+		// sub-tree. This is what makes a REST PUT that omits auth unable to
+		// wipe an operator's logins — the credentials live only in the
+		// user/token stores now — and keeps north.rest from shadowing the
+		// north.rest.auth.* rows.
+		raw = configstore.StripForeignSectionFields(section, raw)
 		// Turn any masked-secret sentinel the SPA echoed back into the real
 		// stored value before validation/persistence, so a round-tripped "***"
 		// neither fails type-validation nor overwrites the secret. Best-effort:
@@ -614,6 +564,7 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		// being persisted and only warned about at the next boot. The same
 		// candidate answers the restart-required question per changed field.
 		restartRequired := false
+		persist := []byte(raw)
 		if current != nil {
 			base := cloneConfig(current)
 			base.ApplyDefaults()
@@ -630,9 +581,19 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 				return
 			}
 			restartRequired = len(config.RestartRequiredDiff(base, candidate)) > 0
+			// Persist what was validated. PutSection replaces the row, so
+			// storing the request fragment would silently drop every field the
+			// client did not resend — a PUT of {"enabled":true} on north.mqtt
+			// validated against the merged candidate (which still had
+			// broker_url) but left a row that no longer described a usable
+			// broker. Marshalling the candidate's section sub-tree keeps the
+			// row a complete description of the section.
+			if merged, ok, mErr := configstore.MarshalSection(section, candidate); mErr == nil && ok {
+				persist = merged
+			}
 		}
 		updatedBy := identityFromCtx(r.Context())
-		row, err := svc.PutSection(r.Context(), section, raw, updatedBy)
+		row, err := svc.PutSection(r.Context(), section, persist, updatedBy)
 		if err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section save failed", err)
 			return

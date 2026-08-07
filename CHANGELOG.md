@@ -4,9 +4,97 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.54.4]
+## [0.54.3]
+
+### Added
+
+- **Every program run the daemon triggers is now visible in the daemon
+  log, with the surface that asked.** The audit database has recorded
+  daemon-triggered executions since 0.52.x, but nothing reached the log
+  operators actually read during an incident, and the record said only
+  `trigger=api` for every route. Each ingress now stamps its operation
+  (`mqtt:program-trigger`, `rest:program-execute`, `ws:program-execute`,
+  `mcp:program-trigger`, `service:program-trigger`) into the request
+  context; the execute event carries it as `Source`, the audit note
+  gains a `source=` tag, and an INFO line (`program.execute` with
+  central, program, source, success) lands in the daemon log. The #497
+  investigation would have taken minutes instead of days with this line
+  present.
+
+- **Comment claims and ratchet rot now fail the build.** Three guards
+  institutionalize the audit that found the defects above. A
+  declared-consumerless event whose catalogue doc still claims
+  consumers fails `tests/contract` (the two truths contradicted each
+  other for three events). A ratchet justification that defers — "no
+  surface consumes it yet" — instead of deciding fails the build, which
+  the ratchet headers demanded in prose but nothing enforced. And the
+  WS-delivery-without-MQTT table pins that the optional MQTT plane
+  never gates a WebSocket emission.
 
 ### Fixed
+
+- **Every energy day and month total was shifted by the timezone
+  offset.** Day and month buckets were folded on the UTC calendar while
+  the SPA labelled each one with a local date. In CEST a "day" therefore
+  ran from 02:00 to 02:00 local time under the label of the day before,
+  so a consumption at 00:30 on the 6th was counted — and shown — against
+  the 5th, and both edges of every day and month were off by the
+  offset's slice. Day and month buckets are now local calendar buckets
+  in the daemon's own timezone, folded with calendar arithmetic so a
+  23-hour and a 25-hour daylight-saving day each stay exactly one
+  bucket. The rollup, the un-rolled tail and the history-chart tiers all
+  derive the boundary the same way, so a bucket never moves when a
+  rollup runs. Hour buckets are unchanged. Existing daily rows cannot be
+  re-cut into local days, so a migration empties the daily tier and
+  rewinds its watermark; the next rollup rebuilds it from the untouched
+  hourly tier. Operators running the daemon in a container should make
+  sure it carries the household's timezone (`TZ` / `/etc/localtime`).
+  API 5.3.0 documents the bucket boundary on `GET /api/v1/energy`.
+
+- **Every CCU program ran by itself — twice on every daemon start, once
+  more whenever a program was created or edited.** With the MQTT raw
+  plane enabled, the bridge mirrored each program's active flag onto the
+  program's `…/hub/programs/<id>/trigger` topic. That topic is a
+  *command* topic: the daemon itself subscribes to it and answers every
+  live message with `Program.execute` on the CCU. A broker routes a
+  client's own publishes back to its established subscriptions (the
+  daemon does not use the MQTT 5.0 No-Local option), so each state
+  publish came back as a command and stumped the program's first "then"
+  branch — deactivated programs included, conditions never evaluated,
+  exactly like the WebUI's manual-execute button. Two publish rounds per
+  boot (initial hub load plus the CCU-ready re-publish) produced the
+  double execution; the hub scan discovering a WebUI edit's temporary
+  copy produced the ghost-copy executions. Reported with a
+  screencast-grade repro in discussion #497; reproduced and verified
+  fixed against a live CCU. The bridge now publishes program state only
+  to `…/state`; two new guards pin the invariant that no state-plane
+  topic may match any of the daemon's own command subscriptions.
+
+- **Retained state mirrors parked on the trigger topics are now evicted,
+  and an empty trigger payload is no longer a command.** Brokers that
+  ever saw a pre-0.54.3 daemon still hold retained `true`/`false`
+  payloads on every program's trigger topic. The boot-time retain
+  cleanup now clears them; the command handler additionally ignores
+  empty payloads (the shape of a retained-topic eviction), so the
+  cleanup can never re-trigger what it cleans. Triggering a program via
+  MQTT keeps working with any non-empty payload (Home Assistant's
+  discovery button publishes `true`).
+
+- **The boot-time MQTT retain-cleanup passes never ran in production.**
+  Both `RunRetainCleanupOnce` and the HA-Discovery orphan sweep need a
+  subscribe-capable broker client to snapshot the retained store, but
+  the bridge only held the publish-only circuit-breaker decorator — the
+  capability check failed on every boot with a WARN line and nothing was
+  ever cleaned. The composition root now wires the raw client into the
+  bridge for the cleanup passes; a composition-root test pins it.
+
+- **The retain cleanup treated hub state as legacy device state.** The
+  legacy-topic matchers saw `…/hub/programs/<id>/state` (and a
+  numeric-named `…/hub/sysvars/<n>/state`) as a retired
+  `<iface>/<addr>/<channel>/state` shape and would have evicted live,
+  retained hub state on every boot. The reserved `hub` subtree is now
+  excluded. Latent until this release because of the wiring defect
+  above.
 
 - **Without MQTT configured, the SPA never heard that a value's
   freshness flipped.** A wire data point moving between cache / live /
@@ -61,81 +149,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   paramset write that no code path ever read. Every claim now states
   what the code does, and the dead parameter is gone.
 
-### Added
+- **Turning off the Home Assistant Ingress auth passthrough did not turn
+  it off.** The `north.rest` config row was written from the whole REST
+  struct, which contains the three nested auth sections
+  (`north.rest.auth.oidc`, `.ccu`, `.ha_ingress`) — so every value was
+  stored twice, and the copy in `north.rest` was applied first at boot.
+  Resetting `north.rest.auth.ha_ingress.enabled`, or deleting the whole
+  section, removed it only from the section's own row; the next start read
+  the passthrough back out of `north.rest` and re-enabled it, while the
+  Config UI attributed the field to "default". The passthrough is a
+  deliberate auth bypass, so a reset that does not stick is a security
+  defect. A section row now never carries a nested section's sub-tree —
+  on save, on load, and when the editor reads a row written earlier.
 
-- **Comment claims and ratchet rot now fail the build.** Three guards
-  institutionalize the audit that found the defects above. A
-  declared-consumerless event whose catalogue doc still claims
-  consumers fails `tests/contract` (the two truths contradicted each
-  other for three events). A ratchet justification that defers — "no
-  surface consumes it yet" — instead of deciding fails the build, which
-  the ratchet headers demanded in prose but nothing enforced. And the
-  WS-delivery-without-MQTT table pins that the optional MQTT plane
-  never gates a WebSocket emission.
+- **Saving one field of a config section cleared the rest of it.** A
+  section save replaces the stored row, but the daemon validated the
+  request merged onto the running config while persisting only the
+  request itself. A `PUT` of `{"enabled": true}` on `north.mqtt`
+  therefore passed validation against a config that still had a broker
+  URL and left behind a row describing an enabled MQTT bridge with no
+  broker. The row now stores the same configuration that was validated,
+  so it describes the whole section.
 
-## [0.54.3]
-
-### Added
-
-- **Every program run the daemon triggers is now visible in the daemon
-  log, with the surface that asked.** The audit database has recorded
-  daemon-triggered executions since 0.52.x, but nothing reached the log
-  operators actually read during an incident, and the record said only
-  `trigger=api` for every route. Each ingress now stamps its operation
-  (`mqtt:program-trigger`, `rest:program-execute`, `ws:program-execute`,
-  `mcp:program-trigger`, `service:program-trigger`) into the request
-  context; the execute event carries it as `Source`, the audit note
-  gains a `source=` tag, and an INFO line (`program.execute` with
-  central, program, source, success) lands in the daemon log. The #497
-  investigation would have taken minutes instead of days with this line
-  present.
-
-### Fixed
-
-- **Every CCU program ran by itself — twice on every daemon start, once
-  more whenever a program was created or edited.** With the MQTT raw
-  plane enabled, the bridge mirrored each program's active flag onto the
-  program's `…/hub/programs/<id>/trigger` topic. That topic is a
-  *command* topic: the daemon itself subscribes to it and answers every
-  live message with `Program.execute` on the CCU. A broker routes a
-  client's own publishes back to its established subscriptions (the
-  daemon does not use the MQTT 5.0 No-Local option), so each state
-  publish came back as a command and stumped the program's first "then"
-  branch — deactivated programs included, conditions never evaluated,
-  exactly like the WebUI's manual-execute button. Two publish rounds per
-  boot (initial hub load plus the CCU-ready re-publish) produced the
-  double execution; the hub scan discovering a WebUI edit's temporary
-  copy produced the ghost-copy executions. Reported with a
-  screencast-grade repro in discussion #497; reproduced and verified
-  fixed against a live CCU. The bridge now publishes program state only
-  to `…/state`; two new guards pin the invariant that no state-plane
-  topic may match any of the daemon's own command subscriptions.
-
-- **Retained state mirrors parked on the trigger topics are now evicted,
-  and an empty trigger payload is no longer a command.** Brokers that
-  ever saw a pre-0.54.3 daemon still hold retained `true`/`false`
-  payloads on every program's trigger topic. The boot-time retain
-  cleanup now clears them; the command handler additionally ignores
-  empty payloads (the shape of a retained-topic eviction), so the
-  cleanup can never re-trigger what it cleans. Triggering a program via
-  MQTT keeps working with any non-empty payload (Home Assistant's
-  discovery button publishes `true`).
-
-- **The boot-time MQTT retain-cleanup passes never ran in production.**
-  Both `RunRetainCleanupOnce` and the HA-Discovery orphan sweep need a
-  subscribe-capable broker client to snapshot the retained store, but
-  the bridge only held the publish-only circuit-breaker decorator — the
-  capability check failed on every boot with a WARN line and nothing was
-  ever cleaned. The composition root now wires the raw client into the
-  bridge for the cleanup passes; a composition-root test pins it.
-
-- **The retain cleanup treated hub state as legacy device state.** The
-  legacy-topic matchers saw `…/hub/programs/<id>/state` (and a
-  numeric-named `…/hub/sysvars/<n>/state`) as a retired
-  `<iface>/<addr>/<channel>/state` shape and would have evicted live,
-  retained hub state on every boot. The reserved `hub` subtree is now
-  excluded. Latent until this release because of the wiring defect
-  above.
+- **Changes that need a restart reported that they did not.** The
+  restart-required marker in the Config UI and the pending-restart banner
+  were driven by two hand-maintained lists that disagreed: the whole
+  `alarm` section and the Basic/Bearer auth switches were marked in the
+  editor but never compared, so saving one answered "no restart needed"
+  and the banner stayed silent while the change sat inert until the next
+  start. Both are now derived from one table, and the Matter identity and
+  commissioning parameters (`vendor_id`, `product_id`, `discriminator`,
+  `commissioning.*`) — which are baked into the bridge at start-up — were
+  added to it.
 
 ## [0.54.2]
 
