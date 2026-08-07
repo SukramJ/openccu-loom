@@ -36,8 +36,6 @@ export type RouteKind =
   | "matter"
   | "alarm"
   | "security"
-  | "visibility"
-  | "access"
   | "about"
   | "unknown";
 
@@ -244,22 +242,6 @@ export function navClusters(gates: NavGates): NavCluster[] {
             ]
           : []),
         {
-          href: "#/visibility",
-          icon: "mdi:filter",
-          label: t("nav.visibility"),
-          matches: ["visibility"],
-        },
-        ...(gates.isAdmin
-          ? [
-              {
-                href: "#/access",
-                icon: "mdi:shield" as const,
-                label: t("nav.access"),
-                matches: ["access"] as RouteKind[],
-              },
-            ]
-          : []),
-        {
           href: "#/settings",
           icon: "mdi:settings",
           label: t("nav.settings"),
@@ -274,6 +256,31 @@ export function navClusters(gates: NavGates): NavCluster[] {
       ],
     },
   ];
+}
+
+/**
+ * Views that were folded into another view, mapped to what absorbed
+ * them. The keys stay resolvable for good: a bookmark, a shared link or
+ * a stored start route naming a folded view is rewritten to its
+ * successor instead of falling through to the not-found page.
+ */
+const FOLDED_ROUTES: Record<string, string> = {
+  "/access": "/settings?tab=users",
+  "/visibility": "/settings?tab=visibility",
+};
+
+/**
+ * The successor of a folded route, or null when the route was never
+ * folded. Accepts both the hash form used by navigation and stored
+ * preferences (`#/access`) and the bare path the router works on
+ * (`/access`), and answers in the same form it was asked in.
+ */
+export function foldedRouteTarget(route: string): string | null {
+  const hashed = route.startsWith("#");
+  const bare = hashed ? route.slice(1) : route;
+  const target = FOLDED_ROUTES[bare.split("?")[0]];
+  if (!target) return null;
+  return hashed ? `#${target}` : target;
 }
 
 /**

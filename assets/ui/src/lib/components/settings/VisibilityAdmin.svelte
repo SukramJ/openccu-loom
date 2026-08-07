@@ -8,7 +8,6 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
-  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
@@ -133,9 +132,24 @@
   ]);
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-  <PageHeader title={t("unignore.title")} subtitle={t("unignore.subtitle")} />
-  <p class="mb-4 text-sm text-amber-600 dark:text-amber-400">
+<div class="space-y-4">
+  <div class="flex items-center justify-between gap-2">
+    <h3 class="text-sm font-semibold tracking-wide text-[var(--ha-secondary-text-color)] uppercase">
+      {t("settings.tab.visibility")}
+    </h3>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onclick={() => void reloadCentrals()}
+      disabled={visibilityStore.centralsLoading || visibilityStore.candidatesLoading}
+    >
+      {t("common.reload")}
+    </Button>
+  </div>
+
+  <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("unignore.subtitle")}</p>
+  <p class="text-sm text-amber-600 dark:text-amber-400">
     ⚠ {t("unignore.warning")}
   </p>
 
@@ -253,4 +267,4 @@
       {/if}
     </Card>
   {/if}
-</section>
+</div>

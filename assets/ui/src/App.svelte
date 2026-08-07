@@ -26,8 +26,6 @@
   import Inbox from "./routes/Inbox.svelte";
   import FirmwareList from "./routes/FirmwareList.svelte";
   import SignalQualityList from "./routes/SignalQualityList.svelte";
-  import UnIgnoreList from "./routes/UnIgnoreList.svelte";
-  import AccessControl from "./routes/AccessControl.svelte";
   import Energy from "./routes/Energy.svelte";
   import Fleet from "./routes/Fleet.svelte";
   // Imported statically (not code-split): DeviceDetail's history tab
@@ -64,13 +62,23 @@
   import RestartBanner from "$lib/components/RestartBanner.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
   import { startRouteStore } from "$lib/stores/startRoute.svelte";
+  import { foldedRouteTarget } from "$lib/nav";
 
   // Minimal hash-based router. The Go handler serves the SPA under
   // /app/ and rewrites unknown paths to index.html, so client-side
   // routing is safe without full SSR.
-  let path = $state<string>(
-    location.hash.replace(/^#/, "") || "/devices",
-  );
+
+  /**
+   * The path the router should render for a hash. A view that was folded
+   * into another one resolves to its successor here, so an old bookmark
+   * reaches the surface it names instead of the not-found page.
+   */
+  function pathFromHash(hash: string): string {
+    const bare = hash.replace(/^#/, "") || "/devices";
+    return foldedRouteTarget(bare) ?? bare;
+  }
+
+  let path = $state<string>(pathFromHash(location.hash));
 
   // The raw hash we last committed to. Kept so a cancelled navigation
   // can roll the URL back — hashchange fires only AFTER location.hash
@@ -84,10 +92,18 @@
 
   async function onHash() {
     const nextHash = location.hash;
-    const next = nextHash.replace(/^#/, "") || "/devices";
+    const next = pathFromHash(nextHash);
     if (revertingHash) {
       revertingHash = false;
       committedHash = nextHash;
+      return;
+    }
+    // A folded route: put its successor in the address bar so the URL
+    // names the view being shown. The rewrite fires a second hashchange
+    // that lands the real route.
+    const folded = foldedRouteTarget(nextHash);
+    if (folded) {
+      location.hash = folded;
       return;
     }
     if (next === path) {
@@ -132,6 +148,10 @@
   }
 
   onMount(() => {
+    // The initial hash named a folded route: `path` was already resolved
+    // to its successor above, so this only corrects the address bar.
+    const foldedInitial = foldedRouteTarget(location.hash);
+    if (foldedInitial) location.hash = foldedInitial;
     authStore.probe();
     // Seeded before the route is applied; a failed load resolves to the
     // default rather than delaying the first paint.
@@ -206,22 +226,20 @@
     | { kind: "energy" }
     | { kind: "fleet" }
     | { kind: "logs" }
-    | { kind: "settings" }
+    | { kind: "settings"; tab?: string }
     | { kind: "inbox" }
     | { kind: "firmware" }
     | { kind: "signal" }
     | { kind: "matter"; subpath: string }
     | { kind: "alarm"; subpath: string }
     | { kind: "security"; subpath: string }
-    | { kind: "visibility" }
-    | { kind: "access" }
     | { kind: "about" }
     | { kind: "unknown" };
 
   const route = $derived.by<Route>(() => {
     // Split an optional query string (e.g. `/devices/ADDR?tab=links`) off the
-    // path so it never leaks into the address match. Only the device route
-    // reads a query today; the exact-match routes below are query-free.
+    // path so it never leaks into the address match. The device and the
+    // settings route read a query; the other exact matches are query-free.
     const qIdx = path.indexOf("?");
     const query = qIdx >= 0 ? path.slice(qIdx + 1) : "";
     const rawPath = qIdx >= 0 ? path.slice(0, qIdx) : path;
@@ -240,12 +258,12 @@
     if (path === "/energy") return { kind: "energy" };
     if (path === "/fleet") return { kind: "fleet" };
     if (path === "/logs") return { kind: "logs" };
-    if (path === "/settings") return { kind: "settings" };
+    if (rawPath === "/settings") {
+      return { kind: "settings", tab: new URLSearchParams(query).get("tab") ?? undefined };
+    }
     if (path === "/inbox") return { kind: "inbox" };
     if (path === "/firmware") return { kind: "firmware" };
     if (path === "/signal") return { kind: "signal" };
-    if (path === "/visibility") return { kind: "visibility" };
-    if (path === "/access") return { kind: "access" };
     if (path === "/about") return { kind: "about" };
     if (path === "/matter" || path.startsWith("/matter/")) {
       return { kind: "matter", subpath: path.slice("/matter".length) || "" };
@@ -293,7 +311,7 @@
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
     route.kind === "overview" ? t("page.title.overview") :
     route.kind === "settings" ? t("page.title.settings") :
-    route.kind === "access" ? t("page.title.access") :
+    route.kind === "signal" ? t("page.title.signal") :
     route.kind === "alarm" ? t("page.title.alarm") :
     route.kind === "security" ? t("page.title.security") :
     route.kind === "about" ? t("page.title.about") :
@@ -426,7 +444,7 @@
             </section>
           {/if}
         {:else if route.kind === "settings"}
-          <Settings />
+          <Settings tab={route.tab} />
         {:else if route.kind === "inbox"}
           <Inbox />
         {:else if route.kind === "firmware"}
@@ -451,20 +469,8 @@
           {:then { default: Security }}
             <Security subpath={route.subpath} />
           {/await}
-        {:else if route.kind === "visibility"}
-          <UnIgnoreList />
         {:else if route.kind === "about"}
           <About />
-        {:else if route.kind === "access"}
-          {#if authStore.identity?.role === "admin"}
-            <AccessControl />
-          {:else}
-            <section class="mx-auto max-w-6xl px-6 py-8">
-              <div class="rounded-lg border border-[var(--ha-divider-color)] bg-[var(--ha-secondary-background-color)] px-4 py-3 text-sm text-[var(--ha-secondary-text-color)]">
-                {t("access.forbidden")}
-              </div>
-            </section>
-          {/if}
         {:else}
           <section class="mx-auto max-w-6xl px-6 py-8">
             <h1 class="text-2xl font-semibold">{t("app.not_found")}</h1>

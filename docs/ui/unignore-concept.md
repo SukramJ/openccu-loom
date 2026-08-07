@@ -29,7 +29,7 @@ reachable from the SPA — all of it has since landed.
 | Config knob (YAML)                             | `config.CentralConfig.Visibility.UnIgnore []string` (`internal/config/config.go:1383`) | shipped |
 | SQLite persistence                             | `internal/store/sqlite/migrations/014_visibility_unignore.sql`   | shipped |
 | REST endpoints                                 | `internal/north/rest/handlers/visibility.go` (+ `_test.go`)      | shipped |
-| Svelte screen                                  | `assets/ui/src/routes/UnIgnoreList.svelte`                       | shipped |
+| Svelte screen                                  | `assets/ui/src/lib/components/settings/VisibilityAdmin.svelte`   | shipped |
 
 ## Inventory — Python reference
 
@@ -65,13 +65,14 @@ with `*` wildcards for `DEVICE_TYPE` and/or `CHANNEL`. Examples:
 
 ### Embedding
 
-Shipped as a standalone top-level route, `/visibility` (`App.svelte`:
-`if (path === "/visibility") return { kind: "visibility" };` renders
-`<UnIgnoreList />`) — not nested under Settings as the original
-concept proposed. It is reachable directly rather than as a Settings
-sub-page.
+Shipped as the **Hidden parameters** tab of Settings (group "Advanced"),
+reachable at `#/settings?tab=visibility`. It first shipped as a
+standalone top-level route `/visibility`, a sibling of Settings rather
+than a part of it; that route is now folded (`foldedRouteTarget` in
+`assets/ui/src/lib/nav.ts`) so old bookmarks and stored start routes
+still land on the tab.
 
-### View structure — `UnIgnoreList.svelte`
+### View structure — `VisibilityAdmin.svelte`
 
 Modeled on `assets/ui/src/routes/matter/MatterExposureList.svelte` —
 same shape: multi-select over the backend candidate list, bulk
@@ -152,7 +153,6 @@ blocks: `$lib/components/ui/{Button, Input}`, `$lib/i18n`,
 New keys in `internal/i18n/catalogs/{en,de}.json`:
 
 ```
-unignore.title                = Un-Ignore Parameters
 unignore.subtitle             = Hidden parameters that should be surfaced as data points.
 unignore.warning              = Use at your own risk — excessive writes to MASTER paramset values can damage devices.
 unignore.include_master       = Include MASTER parameters

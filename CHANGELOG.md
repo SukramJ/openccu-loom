@@ -4,6 +4,46 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.5]
+
+### Changed
+
+- **User and API-token administration exists once, in Settings.** The
+  same users and the same tokens were managed by two independent
+  implementations: the `#/access` menu entry and the Settings tabs
+  "Users" and "Token". They called the same endpoints but each carried
+  its own markup, forms, state and error paths — so the same defect
+  (raw role names `viewer` / `operator` / `admin` instead of translated
+  labels) sat in both and had to be found and fixed twice. Settings
+  keeps the surface; the implementation that survives is the one from
+  the deleted view, because it was the better of the two: shared
+  `LoadingState` / `ErrorState` / `Input` primitives instead of bare
+  `<p>` and raw `<input>`, a handled 404 from the user store instead of
+  a hard error, a clipboard failure that says so instead of a token
+  silently lost, and a role label that falls back to the raw value
+  instead of rendering a bare translation key. Two behaviours from the
+  Settings copy are folded in: the last-admin delete conflict is
+  reported in words, and roles keep their badge colours. The role
+  vocabulary now lives in one module, so the next role change is one
+  edit. The tabs carry the admin gate the standalone view had.
+
+- **"Hidden parameters" is a Settings tab, not a sibling of Settings.**
+  It sat in the "System" navigation cluster next to Settings while
+  being, in substance, a setting. It is now the "Hidden parameters" tab
+  in the Settings group "Advanced".
+
+- **"Signal quality" is now "Radio & battery" / "Funk & Batterie".** The
+  old name described a third of the view: it also reports battery level
+  and reachability. The route `#/signal` is unchanged, so existing
+  bookmarks keep working, and the view now sets a document title.
+
+- **Settings tabs are linkable.** `#/settings?tab=<id>` opens a tab
+  directly, and the active tab is mirrored into the address bar. Both
+  retired routes resolve rather than 404: `#/access` rewrites to
+  `#/settings?tab=users` and `#/visibility` to
+  `#/settings?tab=visibility`, for bookmarks, shared links and a stored
+  start page alike.
+
 ## [0.54.4]
 
 ### Fixed

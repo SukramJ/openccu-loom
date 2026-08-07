@@ -73,7 +73,7 @@ One device read from the CCU can appear on several of these bridges simultaneous
 
 A real CCU device can expose dozens of parameters, many of which are internal, expert-only, or rarely useful. To keep things readable, OpenCCU-Loom **hides** some parameters by default — they are "ignored" for everyday views and north-bound publishing.
 
-If you need a hidden parameter — for example, an expert tuning value or a diagnostic counter — you can **un-ignore** it. Once un-ignored, the parameter becomes visible in the UI and is published north-bound like any other data point. This is done from the web UI's un-ignore view (backed by the `/api/v1/visibility/unignore` endpoint); see [Using the Web UI](web-ui.md).
+If you need a hidden parameter — for example, an expert tuning value or a diagnostic counter — you can **un-ignore** it. Once un-ignored, the parameter becomes visible in the UI and is published north-bound like any other data point. This is done from the web UI's **Settings → Hidden parameters** tab (backed by the `/api/v1/visibility/unignore` endpoint); see [Using the Web UI](web-ui.md).
 
 ## Where to go next
 

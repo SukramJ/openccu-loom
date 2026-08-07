@@ -42,8 +42,7 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 | **Device detail** | Inspect one device, read and change its data points, and configure it. |
 | **Fleet** | Fleet-wide view across every configured CCU. |
 | **Energy** | Monitor power and energy readings from measuring devices. |
-| **Signal quality** | Review per-device radio signal strength (RSSI). |
-| **Un-ignore** | Reveal hidden / expert parameters so they appear and publish north-bound. |
+| **Radio & battery** | Review per-device radio signal strength (RSSI), battery level and reachability. |
 | **Matter** | Enable exposure of devices to Apple Home / Google Home / Alexa and pair. |
 | **Diagnostics** | Check health and troubleshooting information. |
 | **Backups** | Manage configuration backups. |
@@ -52,7 +51,7 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 | **Programs / System variables** | Browse CCU programs and system variables. |
 | **Audit log** | Review what changes were made and by whom. |
 | **Log viewer** | Follow the daemon's live log stream (see [Installation & First Steps](../user-guide.md#log-viewer-logs)). |
-| **Settings** | Adjust daemon and UI settings, including the interface theme (light / dark / system — the same preference the sidebar toggle cycles). |
+| **Settings** | Adjust daemon and UI settings, including the interface theme (light / dark / system — the same preference the sidebar toggle cycles), users and API tokens, and the hidden parameters to reveal. |
 
 ![The OpenCCU-Loom web UI: the navigation sidebar on the left and the Devices view listing discovered devices grouped by interface.](img/web-ui-device-list.png)
 
@@ -93,9 +92,9 @@ You can also **export** a channel's configuration and **import** it again, which
 
 ## Showing hidden parameters (un-ignore)
 
-Some parameters are hidden by default to keep views clean — see [parameter visibility](concepts.md#parameter-visibility-ignore-un-ignore). The **Un-ignore** view lists the parameters currently available to un-ignore, and lets you mark the ones you want.
+Some parameters are hidden by default to keep views clean — see [parameter visibility](concepts.md#parameter-visibility-ignore-un-ignore). **Settings → Advanced → Hidden parameters** lists the parameters currently available to un-ignore, and lets you mark the ones you want.
 
-1. Open the **Un-ignore** view.
+1. Open **Settings** and pick the **Hidden parameters** tab.
 2. Find the parameter you need (the view can suggest candidates).
 3. Mark it to un-ignore.
 
