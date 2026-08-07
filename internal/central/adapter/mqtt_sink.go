@@ -41,6 +41,46 @@ func NewMQTTCommandSink(r *central.Registry, w ValueWriter) *MQTTCommandSink {
 	}
 }
 
+// canonicalChannelAddress maps a topic-derived channel address onto the
+// model's canonical spelling. The naming layer upper-cases every address in
+// the MQTT topic path, but XML-RPC addresses are case-sensitive — the
+// virtual remote ("HmIP-RCV-1") is the one mixed-case address in a CCU's
+// inventory, and writing with the upper-cased form faults with
+// "Invalid device". Every entry point that receives a channel address
+// parsed out of an MQTT topic routes through this helper; addresses the
+// model does not know pass through unchanged.
+func (s *MQTTCommandSink) canonicalChannelAddress(centralName, channelAddress string) string {
+	if s.registry == nil {
+		return channelAddress
+	}
+	deviceAddr := channelAddress
+	suffix := ""
+	if i := strings.LastIndexByte(channelAddress, ':'); i > 0 {
+		deviceAddr, suffix = channelAddress[:i], channelAddress[i:]
+	}
+	units := s.registry.List()
+	if centralName != "" {
+		if c, ok := s.registry.Get(centralName); ok && c != nil {
+			units = []*central.Unit{c}
+		}
+	}
+	for _, c := range units {
+		if c == nil || c.ModelRegistry == nil {
+			continue
+		}
+		// Fast path: the address is already canonical.
+		if _, ok := c.ModelRegistry.Get(deviceAddr); ok {
+			return channelAddress
+		}
+		for _, d := range c.ModelRegistry.List() {
+			if d != nil && strings.EqualFold(d.Address, deviceAddr) {
+				return d.Address + suffix
+			}
+		}
+	}
+	return channelAddress
+}
+
 // SetValue routes the DP command to the configured writer.
 func (s *MQTTCommandSink) SetValue(
 	ctx context.Context, centralName, interfaceID, channelAddress string,
@@ -49,6 +89,7 @@ func (s *MQTTCommandSink) SetValue(
 	if s.writer == nil {
 		return ErrNoWriter
 	}
+	channelAddress = s.canonicalChannelAddress(centralName, channelAddress)
 	return s.writer.SetValue(ctx, centralName, interfaceID, channelAddress, parameter, value, priority)
 }
 
@@ -76,6 +117,7 @@ func (s *MQTTCommandSink) SetMasterValue(
 	if !ok {
 		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
 	}
+	channelAddress = s.canonicalChannelAddress(centralName, channelAddress)
 	deviceAddress := channelAddress
 	if i := strings.LastIndexByte(channelAddress, ':'); i > 0 {
 		deviceAddress = channelAddress[:i]
@@ -174,6 +216,7 @@ func (s *MQTTCommandSink) InvokeCustomDP(
 	if s.cdpDispatch == nil {
 		return errors.New("mqtt_sink: CDP dispatcher not wired")
 	}
+	deviceAddress = s.canonicalChannelAddress("", deviceAddress)
 	return s.cdpDispatch.InvokeCustomDP(ctx, deviceAddress, name, operation, params, priority, "mqtt:custom-dp:invoke")
 }
 
@@ -191,6 +234,7 @@ func (s *MQTTCommandSink) InvokeChannelService(
 	if !ok {
 		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
 	}
+	deviceAddress = s.canonicalChannelAddress(centralName, deviceAddress)
 	dev, ok := c.ModelRegistry.Get(deviceAddress)
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
@@ -229,6 +273,7 @@ func (s *MQTTCommandSink) SetScheduleSwitch(
 	if !ok {
 		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
 	}
+	deviceAddress = s.canonicalChannelAddress(centralName, deviceAddress)
 	dev, ok := c.ModelRegistry.Get(deviceAddress)
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
@@ -272,6 +317,7 @@ func (s *MQTTCommandSink) SetCombinedTimerSeconds(
 	if !ok {
 		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
 	}
+	deviceAddress = s.canonicalChannelAddress(centralName, deviceAddress)
 	dev, ok := c.ModelRegistry.Get(deviceAddress)
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
