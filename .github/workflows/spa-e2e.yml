@@ -8,7 +8,11 @@ name: SPA E2E (Playwright)
 # Running the workflow always and deciding per job keeps the `e2e` check
 # present on every pull request, which is what makes it requirable.
 on:
+  # Push only on main. Without the branch restriction every push to a pull
+  # request's branch ran this workflow a second time alongside the
+  # pull_request run — same jobs, same result, twice the runner minutes.
   push:
+    branches: [main]
     paths:
       - 'assets/ui/**'
       - '.github/workflows/spa-e2e.yml'
