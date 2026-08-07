@@ -110,16 +110,69 @@ type MeasurementMetrics struct {
 // the main config/session handle — keep the two apart so a wedged history
 // write cannot stall config persistence.
 type MeasurementStore struct {
-	db *sql.DB
+	db  *sql.DB
+	loc *time.Location
 
 	metricRowsWritten      atomic.Int64
 	metricBatches          atomic.Int64
 	metricRetentionDeleted atomic.Int64
 }
 
-// NewMeasurementStore returns a store backed by the history database.
+// NewMeasurementStore returns a store backed by the history database that
+// folds day and month buckets on the daemon process's own calendar
+// ([time.Local]).
+//
+// The timezone is deliberately the process local zone rather than a config
+// knob: the only consumer that reads a meaning into a day boundary is the
+// operator looking at a chart, and the SPA labels every bucket with the
+// browser's local calendar. Daemon and browser share a household, so the
+// process zone is the one that makes "yesterday" mean yesterday. Buckets
+// were previously folded on UTC while being labelled locally, which shifted
+// every day and month total by the zone's offset at both ends — in CEST a
+// "day" ran 02:00 to 02:00 local under the label of the day before.
+//
+// Operators who run the daemon in a container must therefore give it the
+// household's zone (TZ / /etc/localtime) — the same requirement every
+// scheduler and log timestamp in the daemon already carries.
 func NewMeasurementStore(db *sql.DB) *MeasurementStore {
-	return &MeasurementStore{db: db}
+	return NewMeasurementStoreIn(db, time.Local)
+}
+
+// NewMeasurementStoreIn returns a store that folds day and month buckets on
+// loc's calendar. Production uses [NewMeasurementStore]; this variant exists
+// so a test can pin a zone with a known offset and known DST transitions
+// instead of inheriting whatever zone the test machine happens to run in.
+// A nil loc falls back to UTC.
+func NewMeasurementStoreIn(db *sql.DB, loc *time.Location) *MeasurementStore {
+	if loc == nil {
+		loc = time.UTC
+	}
+	return &MeasurementStore{db: db, loc: loc}
+}
+
+// dayStartMs returns the start of the local calendar day containing ms, as
+// epoch ms. On a spring-forward day whose local midnight does not exist,
+// [time.Date] normalizes to the first instant that does, which is the day's
+// true start.
+func (s *MeasurementStore) dayStartMs(ms int64) int64 {
+	y, m, d := time.UnixMilli(ms).In(s.loc).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, s.loc).UnixMilli()
+}
+
+// nextDayStartMs returns the start of the local calendar day *after* the one
+// containing ms. Adding one to the day-of-month and letting [time.Date]
+// normalize is what makes a 23-hour and a 25-hour day each advance by
+// exactly one day: the arithmetic is calendar arithmetic, never a fixed
+// 86400000 ms step.
+func (s *MeasurementStore) nextDayStartMs(ms int64) int64 {
+	y, m, d := time.UnixMilli(ms).In(s.loc).Date()
+	return time.Date(y, m, d+1, 0, 0, 0, 0, s.loc).UnixMilli()
+}
+
+// monthStartMs returns the start of the local calendar month containing ms.
+func (s *MeasurementStore) monthStartMs(ms int64) int64 {
+	y, m, _ := time.UnixMilli(ms).In(s.loc).Date()
+	return time.Date(y, m, 1, 0, 0, 0, 0, s.loc).UnixMilli()
 }
 
 // Close releases the underlying history database handle. Safe on a nil
@@ -232,10 +285,10 @@ const (
 // carry sum+count, so the average stays exact across a re-fold (never an
 // average of averages) and min/max keep the peak contract.
 //
-// Source buckets are aligned to the hour or UTC day while output buckets
-// are aligned to `from`; a source bucket is attributed to the output bucket
-// that contains its start. At tier boundaries that shifts a value by at
-// most one source-bucket width, which is inherent to downsampling.
+// Source buckets start on an hour or on a local calendar day while output
+// buckets are aligned to `from`; a source bucket is attributed to the output
+// bucket that contains its start. At tier boundaries that shifts a value by
+// at most one source-bucket width, which is inherent to downsampling.
 //
 // buckets must be > 0 and to must be after from.
 func (s *MeasurementStore) QueryBuckets(
@@ -409,8 +462,9 @@ const (
            AND bucket_ts >= ? AND bucket_ts < ?
     `
 	// historyRawFoldSQL folds the un-rolled raw tail into fixed-width
-	// buckets; the width (hour or day) is a bind parameter so one statement
-	// serves both tiers.
+	// buckets; the width is a bind parameter, but only the hour width is
+	// used — day buckets are calendar buckets and are never expressible as
+	// a modulo (see [MeasurementStore.assembleTierBuckets]).
 	historyRawFoldSQL = `
         SELECT ts - (ts % ?) AS bucket_ts,
                SUM(value), MIN(value), MAX(value), COUNT(*)
@@ -420,24 +474,17 @@ const (
            AND ts >= ? AND ts < ?
          GROUP BY bucket_ts
     `
-	// historyHourlyToDayFoldSQL re-aggregates hourly rows into UTC-day
-	// buckets for the slice already folded to hourly but not yet to daily.
-	historyHourlyToDayFoldSQL = `
-        SELECT bucket_ts - (bucket_ts % 86400000) AS day_bucket,
-               SUM(sum), MIN(min), MAX(max), SUM(count)
-          FROM measurements_hourly
-         WHERE central_name = ? AND interface_id = ?
-           AND channel_address = ? AND parameter = ?
-           AND bucket_ts >= ? AND bucket_ts < ?
-         GROUP BY day_bucket
-    `
 )
 
 // assembleTierBuckets collects the source buckets for a tier over
 // [fromMs, toMs), completing the persisted rollup with the tails that are
-// not folded yet. The slices are disjoint by time except for the single
-// day bucket that can straddle the (hour-aligned) hourly frontier, which
-// foldTierBuckets merges by accumulating into the same output bucket.
+// not folded yet.
+//
+// The day tier's tails are gathered at hour granularity and folded to local
+// calendar days in Go, because a calendar day is not a modulo of the epoch:
+// it is 23, 24 or 25 hours long depending on the DST transition it spans.
+// Both tails go through one fold, so the single day that straddles the
+// (hour-aligned) hourly frontier is accumulated rather than emitted twice.
 func (s *MeasurementStore) assembleTierBuckets(
 	ctx context.Context, key seriesKey, tier HistoryTier, fromMs, toMs int64,
 ) ([]tierBucket, error) {
@@ -464,19 +511,16 @@ func (s *MeasurementStore) assembleTierBuckets(
 	if err != nil {
 		return nil, err
 	}
-	hourlyTail, err := s.readHistoryRange(ctx, historyHourlyToDayFoldSQL, key, max(fromMs, dailyWM), min(toMs, hourlyWM))
+	hourlyTail, err := s.readHistoryRange(ctx, historyTierHourlySelectSQL, key, max(fromMs, dailyWM), min(toMs, hourlyWM))
 	if err != nil {
 		return nil, err
 	}
-	rawTail, err := s.foldRawHistory(ctx, key, dayBucketMs, max(fromMs, hourlyWM), toMs)
+	rawTail, err := s.foldRawHistory(ctx, key, hourBucketMs, max(fromMs, hourlyWM), toMs)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]tierBucket, 0, len(tierRows)+len(hourlyTail)+len(rawTail))
-	out = append(out, tierRows...)
-	out = append(out, hourlyTail...)
-	out = append(out, rawTail...)
-	return out, nil
+	dayTail := foldTierBucketsBy(append(hourlyTail, rawTail...), s.dayStartMs)
+	return append(tierRows, dayTail...), nil
 }
 
 // readHistoryRange runs one of the fixed tier statements over [fromMs, toMs).
@@ -525,6 +569,45 @@ func scanTierBuckets(rows *sql.Rows) ([]tierBucket, error) {
 		return nil, fmt.Errorf("measurements.scanTierBuckets: %w", err)
 	}
 	return out, nil
+}
+
+// foldTierBucketsBy re-folds source buckets into the coarser buckets named
+// by bucketStart, which maps a source bucket's start to the start of the
+// bucket that contains it. sum/count are additive and min/max fold, so the
+// result carries the same fidelity as a fold performed in SQL — but the
+// bucket boundaries can be calendar boundaries, which SQL arithmetic on the
+// epoch axis cannot express.
+func foldTierBucketsBy(src []tierBucket, bucketStart func(ms int64) int64) []tierBucket {
+	if len(src) == 0 {
+		return nil
+	}
+	byStart := make(map[int64]int, len(src))
+	out := make([]tierBucket, 0, len(src))
+	for i := range src {
+		b := &src[i]
+		if b.count == 0 {
+			continue
+		}
+		start := bucketStart(b.bucketTS)
+		idx, ok := byStart[start]
+		if !ok {
+			byStart[start] = len(out)
+			out = append(out, tierBucket{
+				bucketTS: start,
+				sum:      b.sum,
+				minV:     b.minV,
+				maxV:     b.maxV,
+				count:    b.count,
+			})
+			continue
+		}
+		a := &out[idx]
+		a.sum += b.sum
+		a.count += b.count
+		a.minV = math.Min(a.minV, b.minV)
+		a.maxV = math.Max(a.maxV, b.maxV)
+	}
+	return out
 }
 
 // foldTierBuckets re-folds source buckets into the caller's evenly spaced
@@ -582,9 +665,13 @@ func foldTierBuckets(src []tierBucket, fromMs, width int64, buckets int) []Measu
 	return out
 }
 
-// Bucket widths on the shared epoch-ms axis. The hourly tier truncates raw
-// sample timestamps to the hour; the daily tier truncates hourly buckets to
-// the UTC day.
+// Bucket widths on the shared epoch-ms axis. hourBucketMs is a real
+// alignment: the hourly tier truncates raw sample timestamps to the hour,
+// which is timezone-independent for every whole-hour zone offset.
+//
+// dayBucketMs is only a *width*, used to pick a source tier for a requested
+// resolution. It is never an alignment: the daily tier folds on local
+// calendar days, whose length is 23, 24 or 25 hours across a DST transition.
 const (
 	hourBucketMs int64 = 3600000
 	dayBucketMs  int64 = 86400000
@@ -697,9 +784,11 @@ const energyTierDailySelectSQL = `
 // energyRawFoldSQL folds raw measurement rows into fixed-width buckets over
 // [from, to) — the un-rolled recent tail that the persisted tiers do not
 // yet cover, so "energy today" / the current hour is present. The bucket
-// width (hour or day) is a bind parameter, so one query serves both tails.
-// Same single-pass window-function shape as the hourly rollup: first/last
-// stay the value observed at the earliest/latest ts inside the bucket.
+// width is a bind parameter, but only the hour width is ever passed: a day
+// bucket is a calendar bucket and is folded from hour buckets in Go (see
+// [MeasurementStore.queryEnergyDay]). Same single-pass window-function shape
+// as the hourly rollup: first/last stay the value observed at the
+// earliest/latest ts inside the bucket.
 const energyRawFoldSQL = `
     SELECT DISTINCT
         channel_address, parameter, bucket_ts,
@@ -724,39 +813,6 @@ const energyRawFoldSQL = `
            AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
       )
     WINDOW w AS (PARTITION BY channel_address, parameter, bucket_ts)
-`
-
-// energyHourlyToDayFoldSQL re-aggregates hourly rollup rows into UTC-day
-// buckets over [from, to) — the slice of the day tail already folded into
-// the hourly tier but not yet into the daily tier (so the day tail stays
-// complete even when raw retention is short). sum/count stay additive;
-// min/max fold with MIN/MAX-of-MIN/MAX; first/last are the earliest hourly
-// bucket's first and the latest hourly bucket's last within the day.
-const energyHourlyToDayFoldSQL = `
-    SELECT DISTINCT
-        channel_address, parameter, day_bucket,
-        SUM(sum) OVER w,
-        MIN(min) OVER w,
-        MAX(max) OVER w,
-        FIRST_VALUE(first) OVER (
-            PARTITION BY channel_address, parameter, day_bucket ORDER BY bucket_ts
-        ),
-        LAST_VALUE(last) OVER (
-            PARTITION BY channel_address, parameter, day_bucket ORDER BY bucket_ts
-            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-        ),
-        SUM(count) OVER w
-      FROM (
-        SELECT channel_address, parameter, bucket_ts, sum, min, max, count, first, last,
-               bucket_ts - (bucket_ts % 86400000) AS day_bucket
-          FROM measurements_hourly
-         WHERE central_name = ?
-           AND parameter IN (?, ?, ?)
-           AND bucket_ts >= ?
-           AND bucket_ts < ?
-           AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
-      )
-    WINDOW w AS (PARTITION BY channel_address, parameter, day_bucket)
 `
 
 // scanEnergyRows drains an EnergyRow result set. All energy queries — the
@@ -823,23 +879,6 @@ func (s *MeasurementStore) foldRawEnergy(
 	return scanEnergyRows(rows)
 }
 
-// foldHourlyToDayEnergy folds hourly rows into day buckets over [fromMs, toMs).
-func (s *MeasurementStore) foldHourlyToDayEnergy(
-	ctx context.Context, central, deviceAddr string, fromMs, toMs int64,
-) ([]EnergyRow, error) {
-	if toMs <= fromMs {
-		return nil, nil
-	}
-	prefix := deviceAddr + ":%"
-	rows, err := s.db.QueryContext(ctx, energyHourlyToDayFoldSQL,
-		central, energyParameters[0], energyParameters[1], energyParameters[2],
-		fromMs, toMs, deviceAddr, deviceAddr, prefix)
-	if err != nil {
-		return nil, fmt.Errorf("measurements.foldHourlyToDayEnergy: %w", err)
-	}
-	return scanEnergyRows(rows)
-}
-
 // QueryEnergy returns per-(channel, parameter) energy aggregates for the
 // energy parameters (POWER, ENERGY_COUNTER, ENERGY_COUNTER_FEED_IN) in
 // [from, to), scoped to centralName and — when deviceAddr is non-empty — to
@@ -852,13 +891,17 @@ func (s *MeasurementStore) foldHourlyToDayEnergy(
 //     at or after it folded to hour buckets. The frontier is hour-aligned,
 //     so no hour bucket straddles the split — the two sets are disjoint.
 //   - "day": the daily tier below the daily frontier, plus the hourly tier
-//     between the daily and hourly frontiers folded to day, plus raw rows
-//     after the hourly frontier folded to day. The single day bucket that
-//     straddles the (hour-aligned, not day-aligned) hourly frontier is
-//     merged across the hourly and raw tails.
-//   - "month": the assembled day rows re-folded to UTC calendar months,
+//     between the daily and hourly frontiers, plus raw rows after the hourly
+//     frontier folded to hour buckets. Both tails go through one fold to
+//     local calendar days, so the single day that straddles the hourly
+//     frontier is accumulated rather than emitted twice.
+//   - "month": the assembled day rows re-folded to local calendar months,
 //     so the running month is present for the same reason the running day
 //     is.
+//
+// Day and month buckets are local calendar buckets (see
+// [NewMeasurementStore]); their bucket_ts is the local midnight / local
+// first-of-month, which is what the SPA renders with a local date format.
 //
 // Rows are unordered; the caller ([handlers.FoldEnergyRows]) sorts them and
 // applies the counter-reset rule for the cumulative parameters.
@@ -885,7 +928,7 @@ func (s *MeasurementStore) QueryEnergy(
 		if err != nil {
 			return nil, err
 		}
-		return foldEnergyRowsToMonth(days), nil
+		return foldEnergyRowsBy(days, s.monthStartMs), nil
 	default:
 		return nil, fmt.Errorf("measurements.QueryEnergy: unsupported group %q", group)
 	}
@@ -911,9 +954,13 @@ func (s *MeasurementStore) queryEnergyHour(
 	return append(tier, tail...), nil
 }
 
-// queryEnergyDay assembles day-granular rows from three disjoint-by-time
-// sources (daily tier, hourly tail folded to day, raw tail folded to day),
-// merging the one day bucket the hourly and raw tails can share.
+// queryEnergyDay assembles day-granular rows: the daily tier below the
+// daily frontier, plus the two hour-granular tails above it folded to local
+// calendar days.
+//
+// Folding both tails in one pass is what merges the single local day that
+// straddles the (hour-aligned, never day-aligned) hourly frontier — the fold
+// keys on the day, not on which tail a row came from.
 func (s *MeasurementStore) queryEnergyDay(
 	ctx context.Context, central, deviceAddr string, fromMs, toMs int64,
 ) ([]EnergyRow, error) {
@@ -929,106 +976,69 @@ func (s *MeasurementStore) queryEnergyDay(
 	if err != nil {
 		return nil, err
 	}
-	hourlyTail, err := s.foldHourlyToDayEnergy(ctx, central, deviceAddr, max(fromMs, dailyWM), min(toMs, hourlyWM))
+	hourlyTail, err := s.readEnergyTier(ctx, energyTierHourlySelectSQL, "measurements_hourly", central, deviceAddr, max(fromMs, dailyWM), min(toMs, hourlyWM))
 	if err != nil {
 		return nil, err
 	}
-	rawTail, err := s.foldRawEnergy(ctx, central, deviceAddr, dayBucketMs, max(fromMs, hourlyWM), toMs)
+	rawTail, err := s.foldRawEnergy(ctx, central, deviceAddr, hourBucketMs, max(fromMs, hourlyWM), toMs)
 	if err != nil {
 		return nil, err
 	}
-	return append(tier, mergeDayEnergyRows(hourlyTail, rawTail)...), nil
+	return append(tier, foldEnergyRowsBy(append(hourlyTail, rawTail...), s.dayStartMs)...), nil
 }
 
-// mergeDayEnergyRows merges two day-granular row sets that share at most the
-// single day bucket straddling the hourly frontier. earlier rows (from the
-// hourly tail) are always time-before later rows (from the raw tail) within
-// a shared bucket, so the merged bucket keeps the earlier `first` and the
-// later `last`.
-func mergeDayEnergyRows(earlier, later []EnergyRow) []EnergyRow {
+// foldEnergyRowsBy re-folds rows into the coarser buckets named by
+// bucketStart, which maps a source bucket's start to the start of the bucket
+// that contains it. sum/count are additive; min/max fold; first/last are the
+// value of the time-earliest / time-latest contributing source bucket, which
+// is what keeps the cumulative-counter delta (last-first) exact across the
+// fold.
+//
+// This is the only place day and month buckets are formed on a query, so a
+// calendar boundary is expressed exactly once — SQL arithmetic on the
+// epoch-ms axis cannot express one, since a local day spans 23, 24 or 25
+// hours and a month 28 to 31 days.
+func foldEnergyRowsBy(rows []EnergyRow, bucketStart func(ms int64) int64) []EnergyRow {
+	if len(rows) == 0 {
+		return nil
+	}
 	type key struct {
 		channel string
 		param   string
 		bucket  int64
 	}
-	idx := make(map[key]int, len(earlier)+len(later))
-	out := make([]EnergyRow, 0, len(earlier)+len(later))
-	add := func(r EnergyRow, isLater bool) {
-		k := key{r.ChannelAddress, r.Parameter, r.BucketTS.UnixMilli()}
-		i, ok := idx[k]
-		if !ok {
-			idx[k] = len(out)
-			out = append(out, r)
-			return
-		}
-		m := &out[i]
-		m.Sum += r.Sum
-		m.Count += r.Count
-		if r.Min < m.Min {
-			m.Min = r.Min
-		}
-		if r.Max > m.Max {
-			m.Max = r.Max
-		}
-		// earlier rows create the entry, so `first` already holds the
-		// time-earliest reading; a later row only advances `last`.
-		if isLater {
-			m.Last = r.Last
-		} else {
-			m.First = r.First
-		}
-	}
-	for i := range earlier {
-		add(earlier[i], false)
-	}
-	for i := range later {
-		add(later[i], true)
-	}
-	return out
-}
-
-// foldEnergyRowsToMonth re-folds day-granular rows into UTC calendar-month
-// buckets. sum/count are additive; min/max fold; first/last are the value
-// of the earliest/latest contributing day within the month.
-func foldEnergyRowsToMonth(days []EnergyRow) []EnergyRow {
-	type key struct {
-		channel string
-		param   string
-		month   int64
-	}
 	type acc struct {
-		row      EnergyRow
-		firstDay int64
-		lastDay  int64
+		row     EnergyRow
+		firstTS int64
+		lastTS  int64
 	}
-	accs := make(map[key]*acc, len(days))
-	order := make([]key, 0, len(days))
-	for _, d := range days {
-		t := d.BucketTS.UTC()
-		monthMs := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC).UnixMilli()
-		dayMs := d.BucketTS.UnixMilli()
-		k := key{d.ChannelAddress, d.Parameter, monthMs}
+	accs := make(map[key]*acc, len(rows))
+	order := make([]key, 0, len(rows))
+	for _, r := range rows {
+		srcMs := r.BucketTS.UnixMilli()
+		startMs := bucketStart(srcMs)
+		k := key{r.ChannelAddress, r.Parameter, startMs}
 		a, ok := accs[k]
 		if !ok {
-			row := d
-			row.BucketTS = time.UnixMilli(monthMs)
-			accs[k] = &acc{row: row, firstDay: dayMs, lastDay: dayMs}
+			folded := r
+			folded.BucketTS = time.UnixMilli(startMs)
+			accs[k] = &acc{row: folded, firstTS: srcMs, lastTS: srcMs}
 			order = append(order, k)
 			continue
 		}
-		a.row.Sum += d.Sum
-		a.row.Count += d.Count
-		if d.Min < a.row.Min {
-			a.row.Min = d.Min
+		a.row.Sum += r.Sum
+		a.row.Count += r.Count
+		if r.Min < a.row.Min {
+			a.row.Min = r.Min
 		}
-		if d.Max > a.row.Max {
-			a.row.Max = d.Max
+		if r.Max > a.row.Max {
+			a.row.Max = r.Max
 		}
-		if dayMs < a.firstDay {
-			a.firstDay, a.row.First = dayMs, d.First
+		if srcMs < a.firstTS {
+			a.firstTS, a.row.First = srcMs, r.First
 		}
-		if dayMs > a.lastDay {
-			a.lastDay, a.row.Last = dayMs, d.Last
+		if srcMs > a.lastTS {
+			a.lastTS, a.row.Last = srcMs, r.Last
 		}
 	}
 	out := make([]EnergyRow, 0, len(order))
@@ -1173,52 +1183,66 @@ func (s *MeasurementStore) RollupHourly(ctx context.Context, olderThan time.Time
 	return folded, nil
 }
 
-// rollupDailySelectSQL re-aggregates hourly rows into one row per (data
-// point, UTC day bucket): sum/count are additive (Σsum, Σcount) and remain
-// exact because the hourly tier already carries sum+count rather than an
-// average. min/max fold with MIN/MAX-of-MIN/MAX. first/last are the first
+// rollupDailySelectSQL re-aggregates the hourly rows of ONE local calendar
+// day into one row per data point: sum/count are additive (Σsum, Σcount) and
+// remain exact because the hourly tier already carries sum+count rather than
+// an average. min/max fold with MIN/MAX-of-MIN/MAX. first/last are the first
 // hourly bucket's `first` and the last hourly bucket's `last` in the day,
 // ordered by the hourly bucket_ts — the same window-function shape as
-// [rollupHourlySelectSQL]. The two binds are the fold window [watermark,
-// cutoff) over the hourly bucket_ts axis; only that slice is read.
+// [rollupHourlySelectSQL].
+//
+// The day is scoped by the bound range rather than computed from bucket_ts,
+// because a local calendar day is not a modulo of the epoch: it is 23, 24 or
+// 25 hours long depending on the DST transition it spans, so only Go's
+// calendar arithmetic can name its boundaries. The three binds are the day's
+// own bucket_ts (written verbatim into the daily tier) and the half-open
+// [dayStart, dayEnd) range over the hourly bucket_ts axis.
 const rollupDailySelectSQL = `
     SELECT DISTINCT
-        central_name, interface_id, channel_address, parameter, day_bucket,
+        central_name, interface_id, channel_address, parameter, ?,
         SUM(sum) OVER w,
         MIN(min) OVER w,
         MAX(max) OVER w,
         SUM(count) OVER w,
         FIRST_VALUE(first) OVER (
-            PARTITION BY central_name, interface_id, channel_address, parameter, day_bucket
+            PARTITION BY central_name, interface_id, channel_address, parameter
             ORDER BY bucket_ts
         ),
         LAST_VALUE(last) OVER (
-            PARTITION BY central_name, interface_id, channel_address, parameter, day_bucket
+            PARTITION BY central_name, interface_id, channel_address, parameter
             ORDER BY bucket_ts
             ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
         )
-      FROM (
-        SELECT central_name, interface_id, channel_address, parameter,
-               bucket_ts, sum, min, max, count, first, last,
-               bucket_ts - (bucket_ts % 86400000) AS day_bucket
-          FROM measurements_hourly
-         WHERE bucket_ts >= ? AND bucket_ts < ?
-      )
-    WINDOW w AS (PARTITION BY central_name, interface_id, channel_address, parameter, day_bucket)
+      FROM measurements_hourly
+     WHERE bucket_ts >= ? AND bucket_ts < ?
+    WINDOW w AS (PARTITION BY central_name, interface_id, channel_address, parameter)
 `
 
 // RollupDaily folds newly-eligible hourly rows into the daily rollup tier
-// (measurements_daily): day_bucket = bucket_ts - (bucket_ts % 86400000),
-// UTC day boundaries. Like [MeasurementStore.RollupHourly] it folds only
-// complete day buckets in [watermark, cutoff) — cutoff is olderThan aligned
-// down to a day boundary, watermark is the daily tier's frontier over the
-// hourly bucket_ts axis — and advances the daily watermark to cutoff.
-// Returns the number of hourly rows folded this run.
+// (measurements_daily), one row per (data point, local calendar day). Like
+// [MeasurementStore.RollupHourly] it folds only complete day buckets in
+// [watermark, cutoff) — cutoff is olderThan aligned down to a local day
+// start, watermark is the daily tier's frontier over the hourly bucket_ts
+// axis — and advances the daily watermark to cutoff. Returns the number of
+// hourly rows folded this run.
+//
+// The fold runs one statement per local day instead of one grouped statement
+// over the window: the day boundaries come from the calendar, so they cannot
+// be an expression over bucket_ts. The loop is bounded by the hourly rows
+// actually present in the window, so an empty or sparse history costs one
+// statement per day that holds data, not one per day since the epoch.
+//
+// The tier's resolution floor is the hour bucket it folds from. In a zone
+// whose offset is a whole number of hours the day boundary is exact; in one
+// that is not (+05:30, +05:45) it lands on the hour bucket containing local
+// midnight, so at most one hour sits on the wrong side of a day edge. Every
+// reader derives the boundary the same way, so the tiers stay consistent
+// with each other and with the un-rolled tails.
 func (s *MeasurementStore) RollupDaily(ctx context.Context, olderThan time.Time) (int64, error) {
 	if s == nil || s.db == nil {
 		return 0, nil
 	}
-	cutoff := alignDownMs(olderThan.UnixMilli(), dayBucketMs)
+	cutoff := s.dayStartMs(olderThan.UnixMilli())
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1241,7 +1265,7 @@ func (s *MeasurementStore) RollupDaily(ctx context.Context, olderThan time.Time)
 		return 0, err
 	}
 	if hourlyWM < cutoff {
-		cutoff = alignDownMs(hourlyWM, dayBucketMs)
+		cutoff = s.dayStartMs(hourlyWM)
 	}
 	if cutoff <= watermark {
 		// No newly-eligible complete day bucket since the last fold.
@@ -1251,27 +1275,20 @@ func (s *MeasurementStore) RollupDaily(ctx context.Context, olderThan time.Time)
 		return 0, nil
 	}
 
-	var folded int64
-	row := tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM measurements_hourly WHERE bucket_ts >= ? AND bucket_ts < ?`, watermark, cutoff)
-	if err := row.Scan(&folded); err != nil {
+	var (
+		folded   int64
+		oldest   sql.NullInt64
+		newest   sql.NullInt64
+		countSQL = `SELECT COUNT(*), MIN(bucket_ts), MAX(bucket_ts)
+                      FROM measurements_hourly WHERE bucket_ts >= ? AND bucket_ts < ?`
+	)
+	if err := tx.QueryRowContext(ctx, countSQL, watermark, cutoff).
+		Scan(&folded, &oldest, &newest); err != nil {
 		return 0, fmt.Errorf("measurements.RollupDaily count: %w", err)
 	}
 	if folded > 0 {
-		if _, err := tx.ExecContext(ctx, `
-        INSERT INTO measurements_daily
-            (central_name, interface_id, channel_address, parameter, bucket_ts,
-             sum, min, max, count, first, last)
-        `+rollupDailySelectSQL+`
-        ON CONFLICT (central_name, interface_id, channel_address, parameter, bucket_ts) DO UPDATE SET
-            sum   = excluded.sum,
-            min   = excluded.min,
-            max   = excluded.max,
-            count = excluded.count,
-            first = excluded.first,
-            last  = excluded.last
-    `, watermark, cutoff); err != nil {
-			return 0, fmt.Errorf("measurements.RollupDaily insert: %w", err)
+		if err := s.foldDaysIntoDailyTier(ctx, tx, watermark, cutoff, oldest.Int64, newest.Int64); err != nil {
+			return 0, err
 		}
 	}
 	if err := advanceWatermark(ctx, tx, rollupTierDaily, cutoff); err != nil {
@@ -1281,6 +1298,41 @@ func (s *MeasurementStore) RollupDaily(ctx context.Context, olderThan time.Time)
 		return 0, fmt.Errorf("measurements.RollupDaily commit: %w", err)
 	}
 	return folded, nil
+}
+
+// foldDaysIntoDailyTier writes one daily row per data point for every local
+// calendar day between the oldest and newest hourly bucket in the fold
+// window. Each day's range is clamped to [watermark, cutoff) so the fold
+// never reads an hourly bucket below the frontier — one a purge may already
+// have removed — which would otherwise overwrite a finalized daily row with
+// a partial one.
+func (s *MeasurementStore) foldDaysIntoDailyTier(
+	ctx context.Context, tx *sql.Tx, watermark, cutoff, oldestMs, newestMs int64,
+) error {
+	const insertSQL = `
+        INSERT INTO measurements_daily
+            (central_name, interface_id, channel_address, parameter, bucket_ts,
+             sum, min, max, count, first, last)
+        ` + rollupDailySelectSQL + `
+        ON CONFLICT (central_name, interface_id, channel_address, parameter, bucket_ts) DO UPDATE SET
+            sum   = excluded.sum,
+            min   = excluded.min,
+            max   = excluded.max,
+            count = excluded.count,
+            first = excluded.first,
+            last  = excluded.last
+    `
+	for dayStart := s.dayStartMs(oldestMs); dayStart <= newestMs && dayStart < cutoff; dayStart = s.nextDayStartMs(dayStart) {
+		lo := max(dayStart, watermark)
+		hi := min(s.nextDayStartMs(dayStart), cutoff)
+		if hi <= lo {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, insertSQL, dayStart, lo, hi); err != nil {
+			return fmt.Errorf("measurements.RollupDaily insert: %w", err)
+		}
+	}
+	return nil
 }
 
 // DeleteHourlyOlderThan drops measurements_hourly rows older than cutoff.
@@ -1309,14 +1361,14 @@ func (s *MeasurementStore) DeleteHourlyOlderThan(ctx context.Context, cutoff tim
 
 // DeleteDailyOlderThan drops measurements_daily rows older than cutoff. The
 // daily tier is terminal (nothing folds out of it), so the cutoff only
-// needs day-boundary alignment — no watermark floor. Callers should skip
-// this when the daily-retention config is 0 (keep daily rows forever — they
-// are tiny). Returns the number of rows removed.
+// needs local day-boundary alignment — no watermark floor. Callers should
+// skip this when the daily-retention config is 0 (keep daily rows forever —
+// they are tiny). Returns the number of rows removed.
 func (s *MeasurementStore) DeleteDailyOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
 	if s == nil || s.db == nil {
 		return 0, nil
 	}
-	eff := alignDownMs(cutoff.UnixMilli(), dayBucketMs)
+	eff := s.dayStartMs(cutoff.UnixMilli())
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM measurements_daily WHERE bucket_ts < ?`, eff)
 	if err != nil {

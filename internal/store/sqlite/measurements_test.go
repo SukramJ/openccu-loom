@@ -27,10 +27,14 @@ func openHistoryDB(t *testing.T, name string) *sql.DB {
 	return db
 }
 
-// freshMeasurementStore opens a fresh history DB and returns a ready store.
+// freshMeasurementStore opens a fresh history DB and returns a ready store
+// that folds day and month buckets on the UTC calendar. The zone is pinned
+// rather than inherited from the test machine so every bucket expectation
+// below stays a fixed number; the local-calendar behaviour production runs
+// with has its own tests in measurements_local_day_test.go.
 func freshMeasurementStore(t *testing.T) *MeasurementStore {
 	t.Helper()
-	return NewMeasurementStore(openHistoryDB(t, "hist.db"))
+	return NewMeasurementStoreIn(openHistoryDB(t, "hist.db"), time.UTC)
 }
 
 // msTime returns a time.Time truncated to millisecond precision to match
@@ -1182,9 +1186,13 @@ func TestMeasurement_QueryEnergy_DayGroupReadsDailyTier(t *testing.T) {
 }
 
 // TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily verifies that
-// group="month" folds every measurements_daily bucket within a UTC
-// calendar month into one row per (channel, parameter), exactly
-// reproducing sum/count and preserving the earliest first / latest last.
+// group="month" folds every measurements_daily bucket within one calendar
+// month into one row per (channel, parameter), exactly reproducing
+// sum/count and preserving the earliest first / latest last.
+//
+// The bucket month is read back in the store's own zone (UTC here). Reading
+// it in the process zone instead compares a bucket start against a calendar
+// the store never folded on, which flips the assertion west of Greenwich.
 func TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily(t *testing.T) {
 	t.Parallel()
 	s := freshMeasurementStore(t)
@@ -1227,7 +1235,7 @@ func TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily(t *testing.T) {
 	var march EnergyRow
 	var found bool
 	for _, r := range rows {
-		if r.BucketTS.Month() == time.March {
+		if r.BucketTS.UTC().Month() == time.March {
 			march, found = r, true
 		}
 	}
@@ -1238,7 +1246,7 @@ func TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily(t *testing.T) {
 		t.Errorf("March bucket = %+v, want first=100 last=300 sum=400 count=2", march)
 	}
 	for _, r := range rows {
-		if r.BucketTS.Month() == time.April {
+		if r.BucketTS.UTC().Month() == time.April {
 			if r.First != 500 || r.Last != 500 || r.Sum != 500 || r.Count != 1 {
 				t.Errorf("April bucket = %+v, want first=last=sum=500 count=1", r)
 			}

@@ -239,6 +239,11 @@
   function yOf(v: number, vMin: number, vRange: number): number {
     return PAD_TOP + PLOT_H - ((v - vMin) / vRange) * PLOT_H;
   }
+  // Bucket starts arrive as local calendar boundaries — the daemon folds day
+  // and month buckets on its own zone, which is the household's — so a local
+  // date format names exactly the day or month the bucket covers. Formatting
+  // in UTC here would undo that and print the previous day for every bucket
+  // east of Greenwich.
   function formatTick(d: Date, g: Group): string {
     if (g === "hour") return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     if (g === "month") return d.toLocaleDateString([], { month: "short", year: "2-digit" });
