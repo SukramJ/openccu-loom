@@ -222,6 +222,63 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `commissioning.*`) — which are baked into the bridge at start-up — were
   added to it.
 
+- **`hmcli`'s interactive password prompt echoed the password to the
+  terminal**, where it stayed readable in the scrollback for as long as
+  the session's history was kept. The prompt now suppresses echo via
+  `golang.org/x/term` (already resolved transitively through
+  `golang.org/x/crypto`/`golang.org/x/net`, so this only promotes an
+  existing dependency to direct rather than adding a new one) when reading
+  from a real terminal; piped or redirected input is unaffected.
+
+- **`hmcli --insecure` disabled TLS certificate verification silently.**
+  The existing plaintext-credential warning only fires for `http://`; an
+  `https://` connection with verification turned off is exposed to the
+  same interception risk (any certificate is accepted) but said nothing.
+  `--insecure` now prints an explicit stderr warning everywhere it can be
+  set (`devices`/`sysvar`/`program`/`paramset`/`alarm`, `export-def`,
+  `cache clear`, `events tail`).
+
+- **A password embedded in `hmcli --host` (`https://user:pass@ccu/`)
+  leaked into every error message the command printed** — the client
+  built its target URL, and therefore every wrapped request/response
+  error, straight from the raw `--host` value. Go's HTTP client never
+  actually authenticates with a destination URL's userinfo (only a proxy
+  URL's is used), so the credential did nothing but sit there waiting to
+  be printed. The userinfo is now stripped before the base URL is stored.
+
+- **A channel action's result (success or failure) rendered in the
+  header banner instead of a toast**, contrary to the SPA's own
+  operating concept — and unlike every other action in the same panel,
+  a failure there had no distinguishable error styling. `ChannelPanel`'s
+  action buttons now report through `toastStore`, like save, import and
+  the profile-take-over flow next to it.
+
+- **The channel-config profile picker kept showing the previous
+  channel's manually selected profile after switching channels.**
+  `ChannelPanel` reuses the same `ProfileSelector` instance across a
+  channel switch (it updates props rather than remounting), so once a
+  user picked a profile from the dropdown, the "don't override my pick"
+  guard latched permanently and never re-synced to the new channel's
+  detected profile. The selector is now keyed on the channel (and peer,
+  for LINK), so a genuine channel switch gets a fresh instance while an
+  in-place reload (e.g. after Save) still preserves an in-progress pick.
+
+- **The sidebar offered a "Backups" entry to every operator, including
+  ones the server rejects.** `GET/POST /api/v1/backups*` has been
+  admin-gated for a while; the navigation entry was not. It is now gated
+  the same way as the other admin-only entries (Logs, Access).
+
+- **Three i18n / locale gaps in the SPA:** the Energy view's four
+  time-range preset buttons (24h/7d/30d/12mo) were a plain `const`
+  evaluated once at component init, so they did not follow a runtime
+  locale switch like the rest of the toolbar; the energy table's kWh/W
+  columns used `toFixed()` (always a `.` separator) next to the
+  locale-aware cost column, producing mixed decimal separators in the
+  same row for German operators; and the access-control page's
+  viewer/operator/admin role labels (dropdown options and the three role
+  badges) rendered the raw English role token untranslated in both
+  locales instead of a localized label.
+
 ## [0.54.2]
 
 ### Fixed

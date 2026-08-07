@@ -50,7 +50,7 @@ func cmdExportDef(args []string, stdout, stderr io.Writer) error {
 	authToken, authUser, authPassword := resolveCredentials(*token, *user, *password, os.Stdin, stderr)
 	warnIfPlaintextCredentials(*host, authToken, authUser, stderr)
 
-	tlsCfg, err := buildTLSConfig(*cacert, *insecure)
+	tlsCfg, err := buildTLSConfig(*cacert, *insecure, stderr)
 	if err != nil {
 		return fmt.Errorf("export-def: %w", err)
 	}

@@ -233,12 +233,16 @@ export function navClusters(gates: NavGates): NavCluster[] {
           label: t("nav.firmware"),
           matches: ["firmware"],
         },
-        {
-          href: "#/backups",
-          icon: "mdi:server",
-          label: t("nav.backups"),
-          matches: ["backups"],
-        },
+        ...(gates.isAdmin
+          ? [
+              {
+                href: "#/backups",
+                icon: "mdi:server" as const,
+                label: t("nav.backups"),
+                matches: ["backups"] as RouteKind[],
+              },
+            ]
+          : []),
         {
           href: "#/visibility",
           icon: "mdi:filter",

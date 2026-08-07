@@ -32,13 +32,15 @@
   let group = $state<Group>("day");
 
   // Preset time ranges (hours back from now), mirroring the toolbar
-  // pattern in HistoryChart.svelte.
-  const RANGE_PRESETS: { label: string; hours: number }[] = [
+  // pattern in HistoryChart.svelte. $derived (not a plain const) so the
+  // four labels follow a runtime locale switch, matching groupOptions and
+  // deviceColumns below.
+  const RANGE_PRESETS = $derived([
     { label: t("energy.preset.24h"), hours: 24 },
     { label: t("energy.preset.7d"), hours: 24 * 7 },
     { label: t("energy.preset.30d"), hours: 24 * 30 },
     { label: t("energy.preset.12mo"), hours: 24 * 365 },
-  ];
+  ]);
   let selectedRangeHours = $state(24 * 30);
 
   // "" focuses the chart on the summed total across every device;
@@ -166,8 +168,10 @@
 
   // Amounts are formatted here, not by the daemon: the locale decides the
   // decimal separator and grouping, and the SPA already knows it.
+  const localeTag = $derived(prefs.locale === "de" ? "de-DE" : "en-US");
+
   function formatCost(kwh: number): string {
-    return `${(kwh * tariff).toLocaleString(prefs.locale === "de" ? "de-DE" : "en-US", {
+    return `${(kwh * tariff).toLocaleString(localeTag, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })} ${currency}`;
@@ -192,12 +196,20 @@
       : []),
   ]);
 
+  // Locale-aware like formatCost above — a plain toFixed() always renders a
+  // "." fraction digit and would mix decimal separators with the cost
+  // column (formatCost) in the very same table row for a de locale.
   function formatKwh(v: number): string {
-    return `${v.toFixed(2)} kWh`;
+    return `${v.toLocaleString(localeTag, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} kWh`;
   }
 
   function formatW(v: number): string {
-    return `${v.toFixed(0)} W`;
+    return `${v.toLocaleString(localeTag, {
+      maximumFractionDigits: 0,
+    })} W`;
   }
 
   // --- Consumption-over-time chart -------------------------------------
