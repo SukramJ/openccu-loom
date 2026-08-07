@@ -491,6 +491,15 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					// interface from the ping does not spare it the freshness
 					// verdict — it only guarantees the verdict goes negative
 					// after callbackFreshness, permanently.
+					// Drain expired ping-pong entries before the probe
+					// adds another one. Nothing else called Sweep, so a
+					// long outage parked the pending set near its cap:
+					// permanently above the mismatch threshold, which
+					// pinned the ping_pong health component DEGRADED
+					// until the daemon restarted — and the mismatch
+					// incidents Sweep reports were never recorded at all.
+					entry.Client.SweepPingPong()
+
 					alive := entry.Client.CheckConnectionAvailability(ctx, true)
 					connected := entry.Client.ClientState() == hmenum.ClientStateConnected
 					callbackAlive := entry.Client.IsCallbackAlive()
