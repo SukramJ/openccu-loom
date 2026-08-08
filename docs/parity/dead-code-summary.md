@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 9a0ca907
-HEAD: 9a0ca907
+Generated: b1bbcd4a
+HEAD: b1bbcd4a
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27737 |
-| Reachable | 4896 |
-| Whitelisted | 19870 |
-| **Unreachable** | **2971** |
+| Total Exported | 28008 |
+| Reachable | 4955 |
+| Whitelisted | 20091 |
+| **Unreachable** | **2962** |
 
 ## Top-20 Packages by Dead Code
 
@@ -41,8 +41,8 @@ HEAD: 9a0ca907
 
 | Package | Identifier | File | Line |
 |---|---|---|---|
-| internal/audit | AsyncSink | internal/audit/persist.go | 291 |
-| internal/audit | AsyncSink | internal/audit/persist.go | 291 |
+| internal/audit | AsyncSink | internal/audit/persist.go | 293 |
+| internal/audit | AsyncSink | internal/audit/persist.go | 293 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
 | internal/ccudata | SnapshotVersion | internal/ccudata/embed.go | 35 |
@@ -129,7 +129,7 @@ HEAD: 9a0ca907
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 24 | 2 |
 | internal/central/cachereset | 0 | 20 | 0 |
-| internal/central/coordinators | 0 | 121 | 6 |
+| internal/central/coordinators | 0 | 109 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 10 | 4 |
 | internal/channelflags | 0 | 2 | 0 |
@@ -139,10 +139,10 @@ HEAD: 9a0ca907
 | internal/clock | 0 | 5 | 0 |
 | internal/configstore | 0 | 17 | 0 |
 | internal/configui | 0 | 16 | 0 |
-| internal/diagnostics | 0 | 6 | 4 |
+| internal/diagnostics | 0 | 7 | 4 |
 | internal/health | 0 | 16 | 0 |
 | internal/history | 0 | 13 | 0 |
-| internal/i18n | 0 | 2 | 0 |
+| internal/i18n | 0 | 2 | 2 |
 | internal/metrics | 0 | 63 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
 | internal/model/alarmpanel | 0 | 1 | 0 |

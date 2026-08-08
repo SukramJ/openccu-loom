@@ -18,6 +18,8 @@ import (
 // Assistant keeps writing to a surface the operator just hid — and
 // re-deriving the effective config on every request would put a SQLite
 // read in front of every write endpoint.
+//
+// loom:reachable:reason="constructed in the daemon composition root and handed to rest.Deps.SurfacePolicy, which the write middleware calls per request; the analyzer's type heuristic cannot see a struct used only through its methods"
 type Policy struct {
 	cur atomic.Pointer[Resolution]
 }

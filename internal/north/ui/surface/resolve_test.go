@@ -122,7 +122,7 @@ func TestResolveRefusesFloorOverride(t *testing.T) {
 func TestFloorIsProfileScoped(t *testing.T) {
 	t.Parallel()
 
-	users, ok := Lookup("settings.users")
+	users, ok := byID["settings.users"]
 	if !ok {
 		t.Fatal("settings.users missing from the registry")
 	}

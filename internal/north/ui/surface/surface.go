@@ -16,10 +16,14 @@ import "github.com/SukramJ/openccu-loom/internal/config"
 // ID identifies one surface. The prefix names the surface kind:
 // "nav." for a navigation item, "settings." for a settings tab,
 // "device." for a device-detail tab.
+//
+// loom:reachable:reason="the identifier type the write middleware's SurfacePolicy interface returns and the REST handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used"
 type ID string
 
 // Group buckets surfaces for the editor and mirrors the navigation
 // clusters the SPA already renders.
+//
+// loom:reachable:reason="carried by Surface.Group into the REST payload the editor buckets by; a method-less string alias the analyzer's type heuristic cannot see used"
 type Group string
 
 const (
@@ -40,6 +44,8 @@ const (
 )
 
 // Floor says in which profiles a surface can never be hidden.
+//
+// loom:reachable:reason="carried by Surface.Floor and read by Surface.IsFloor on every resolve; a method-less string alias the analyzer's type heuristic cannot see used"
 type Floor string
 
 const (
@@ -57,6 +63,8 @@ const (
 // A gated surface stays absent while its feature is off, however the
 // profile is configured — making it visible can never conjure a view
 // whose feature is switched off.
+//
+// loom:reachable:reason="carried by Surface.Gate into the REST payload so the editor can name the capability a row waits on; a method-less string alias the analyzer's type heuristic cannot see used"
 type Gate string
 
 const (
@@ -72,6 +80,8 @@ const (
 // consequential enough to confirm. The condition itself is evaluated by
 // the client, which holds the live state; the registry only declares
 // that the confirmation exists and which condition it hangs on.
+//
+// loom:reachable:reason="carried by Surface.Warn into the REST payload so the editor knows which confirmation a hide needs; a method-less string alias the analyzer's type heuristic cannot see used"
 type Warn string
 
 const (
@@ -90,6 +100,8 @@ const (
 )
 
 // Surface describes one addressable entry point.
+//
+// loom:reachable:reason="returned by Registry() and ranged over by the REST /ui/surfaces handler on every request; a data struct whose fields production reads directly, which the analyzer's type heuristic cannot see used"
 type Surface struct {
 	// ID is the stable identifier stored in a profile.
 	ID ID
@@ -253,12 +265,6 @@ var byID = func() map[ID]Surface {
 	}
 	return m
 }()
-
-// Lookup returns the surface with the given id.
-func Lookup(id ID) (Surface, bool) {
-	s, ok := byID[id]
-	return s, ok
-}
 
 // DefaultFor reports the shipped visibility of s in the named profile.
 // An unknown profile reads as visible: the safe direction is to show a

@@ -31,6 +31,8 @@ import (
 // WriteRoute is one write endpoint a surface owns, matched by method
 // and path pattern. Patterns are written against the API path WITHOUT
 // the /api/v1 prefix; a `{}` segment matches exactly one path segment.
+//
+// loom:reachable:reason="the rule shape RefusedBy matches every gated request against; a data struct the analyzer's type heuristic cannot see used"
 type WriteRoute struct {
 	// Method is the uppercase HTTP method.
 	Method string
@@ -141,12 +143,16 @@ var writeRoutes = map[ID][]WriteRoute{
 }
 
 // WriteRoutes returns the endpoints owned by id.
+//
+// loom:reachable:reason="exported solely so TestSurfaceWriteRoutesExist and TestHAOwnedWriteSurfacesAreGated in package contract can compare this table against the router; production reaches the same rules through the unexported map in RefusedBy"
 func WriteRoutes(id ID) []WriteRoute {
 	return writeRoutes[id]
 }
 
 // AllWriteRoutes returns the full mapping, for the guards that compare
 // it against the router.
+//
+// loom:reachable:reason="exported solely so TestSurfaceWriteRoutesExist in package contract can walk every rule; production reaches the same map directly from RefusedBy"
 func AllWriteRoutes() map[ID][]WriteRoute {
 	out := make(map[ID][]WriteRoute, len(writeRoutes))
 	for id, rules := range writeRoutes {

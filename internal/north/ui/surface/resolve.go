@@ -7,6 +7,8 @@ import "github.com/SukramJ/openccu-loom/internal/config"
 
 // Resolution is the outcome of applying a configuration to the
 // registry: which profile is live and what it resolves to.
+//
+// loom:reachable:reason="returned by Resolve and held by Policy, which the write middleware consults on every request; a data struct the analyzer's type heuristic cannot see used"
 type Resolution struct {
 	// Profile names the live profile.
 	Profile string
@@ -131,17 +133,6 @@ func FloorViolations(profile string, overrides map[string]config.SurfaceState) [
 			continue
 		}
 		if state == config.SurfaceHidden && s.IsFloor(profile) {
-			out = append(out, id)
-		}
-	}
-	return out
-}
-
-// UnknownIDs lists ids in overrides the registry does not know.
-func UnknownIDs(overrides map[string]config.SurfaceState) []string {
-	var out []string
-	for id := range overrides {
-		if _, known := byID[ID(id)]; !known {
 			out = append(out, id)
 		}
 	}
