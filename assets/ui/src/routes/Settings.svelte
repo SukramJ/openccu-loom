@@ -38,6 +38,8 @@
   import { foldedRouteTarget, landingTargets } from "$lib/nav";
   import { matterStore } from "$lib/stores/matter.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
+  import { surfacesStore } from "$lib/stores/surfaces.svelte";
+  import NavViewsAdmin from "$lib/components/settings/NavViewsAdmin.svelte";
 
   // The tab named by the URL (`#/settings?tab=users`). Deep links and the
   // redirects from the views that were folded in here both arrive this way.
@@ -259,6 +261,7 @@
     { id: "groups", label: t("settings.tab.groups") },
     { id: "tokens", label: t("settings.tab.tokens"), adminOnly: true },
     { id: "system", label: t("settings.tab.system") },
+    { id: "navviews", label: t("settings.tab.navviews"), adminOnly: true },
   ];
 
   // Seeded from the URL so a deep link paints its tab directly; later
@@ -274,7 +277,7 @@
   type TabGroup = { id: string; tabIds: string[] };
 
   const TAB_GROUPS: TabGroup[] = [
-    { id: "general", tabIds: ["general", "system"] },
+    { id: "general", tabIds: ["general", "system", "navviews"] },
     { id: "bridges", tabIds: ["mqtt", "matter", "mcp", "rest", "discovery"] },
     { id: "ccus", tabIds: ["ccus", "callback"] },
     { id: "security", tabIds: ["oidc", "ccu_auth", "users", "groups", "tokens"] },
@@ -289,7 +292,10 @@
   function isAvailable(candidate: Tab): boolean {
     if (candidate.expertOnly && !prefs.expertMode) return false;
     if (candidate.adminOnly && !isAdmin) return false;
-    return true;
+    // The operator's surface profile is the last gate, ANDed with the
+    // two above: a profile that shows a tab still cannot override the
+    // expert or admin restriction on it.
+    return surfacesStore.visible(`settings.${candidate.id}`);
   }
 
   const visibleTabs = $derived(
@@ -735,6 +741,9 @@
 
       {:else if activeTab === "tokens"}
         <TokensAdmin />
+
+      {:else if activeTab === "navviews"}
+        <NavViewsAdmin />
 
       {:else if activeTab === "system"}
         <div class="space-y-3">

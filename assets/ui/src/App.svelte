@@ -62,7 +62,8 @@
   import RestartBanner from "$lib/components/RestartBanner.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
   import { startRouteStore } from "$lib/stores/startRoute.svelte";
-  import { foldedRouteTarget } from "$lib/nav";
+  import { surfacesStore } from "$lib/stores/surfaces.svelte";
+  import { foldedRouteTarget, navSurfaceID } from "$lib/nav";
 
   // Minimal hash-based router. The Go handler serves the SPA under
   // /app/ and rewrites unknown paths to index.html, so client-side
@@ -128,6 +129,7 @@
     }
     committedHash = nextHash;
     path = next;
+    redirectIfHidden();
     void refreshRestartPending();
   }
   window.addEventListener("hashchange", () => void onHash());
@@ -137,6 +139,26 @@
   // URL - a bookmark, a shared link, a reload of the view being worked on
   // - always wins over the preference.
   let startRouteApplied = false;
+
+  /**
+   * Send the operator somewhere they can actually reach when the current
+   * route names a view their surface profile hides.
+   *
+   * This closes deep links *within* the SPA — a bookmark, a shared link,
+   * a stored start route. It is a UX guarantee, not a security boundary:
+   * the boundary is the API (see docs/design/ui-surface-profiles.md §2.8),
+   * because a hash fragment never reaches the server in the first place.
+   */
+  function redirectIfHidden() {
+    const bare = location.hash.replace(/^#/, "") || "/devices";
+    const view = bare.split(/[/?]/).filter(Boolean)[0];
+    if (!view) return;
+    // Device detail lives under /devices/<address>; its tabs are gated
+    // inside the view, not by the router.
+    const id = navSurfaceID(`#/${view}`);
+    if (surfacesStore.visible(id)) return;
+    location.hash = "#/devices";
+  }
 
   function applyStartRoute() {
     if (startRouteApplied) return;
@@ -156,6 +178,10 @@
     // Seeded before the route is applied; a failed load resolves to the
     // default rather than delaying the first paint.
     void startRouteStore.load().then(applyStartRoute);
+    // The surface profile. Loaded here rather than lazily in the
+    // sidebar because the route guard below needs it too, and a view the
+    // operator hid must not render for the moment before it arrives.
+    void surfacesStore.load().then(redirectIfHidden);
     // First-run probe: when the daemon has no auth source yet, render the
     // onboarding wizard instead of the login screen.
     void setupStore.probe();

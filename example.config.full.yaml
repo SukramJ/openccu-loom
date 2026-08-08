@@ -273,6 +273,35 @@ north:
     # Pointer-bool: nil → true.  [default: true]
     # enabled: true
 
+    # Set this to true when Home Assistant owns this daemon's config
+    # surface — i.e. the Homematic(IP) Local integration is configured
+    # against THIS daemon. The Config UI then hides what HA already owns
+    # (login, CCU credentials, paramset/link/schedule editors) and the
+    # Ingress passthrough identity is refused writes on those surfaces.
+    #
+    # It is NOT derived from HA Ingress: running behind Ingress does not
+    # mean HA owns the config surface. The add-on is often used without
+    # the integration, and the remote-proxy add-on deliberately serves
+    # the full UI. Env override: OPENCCU_LOOM_UI_EMBEDDED.
+    # Pointer-bool: nil → false.  [default: false]
+    # embedded: false
+
+    # Per-profile navigation overrides, edited in the Config UI under
+    # Settings → Navigation & views. Stored SPARSE: list only the
+    # surfaces that deviate from the shipped default, so views added by
+    # a later release arrive with the default their own code assigns.
+    #
+    # Keys are surface ids (nav.<view>, settings.<tab>, device.<tab>),
+    # values are "visible" or "hidden". A handful of surfaces can never
+    # be hidden (the device list, Settings, this editor, About, and —
+    # in the standalone profile — user and token administration); such
+    # an entry is ignored rather than honoured.
+    # profiles:
+    #   standalone:
+    #     nav.alarm: hidden
+    #   embedded:
+    #     nav.matter: visible
+
 
   # =============================================================================
   # NORTH — MQTT bridge

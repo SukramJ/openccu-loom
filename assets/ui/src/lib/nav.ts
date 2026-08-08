@@ -63,6 +63,16 @@ export type NavGates = {
   matterEnabled: boolean;
   historyEnabled: boolean;
   isAdmin: boolean;
+  /**
+   * Whether the operator's surface profile serves a given view, keyed by
+   * surface id (`nav.<view>`). Omitted in contexts that have no profile
+   * to apply, where everything counts as visible.
+   *
+   * This gate is ANDed with the ones above and never replaces them: a
+   * profile that shows `nav.matter` still cannot conjure the view while
+   * the Matter bridge is off.
+   */
+  surfaceVisible?: (id: string) => boolean;
 };
 
 /**
@@ -73,7 +83,7 @@ export type NavGates = {
  * reactive context if they want it to follow a locale switch.
  */
 export function navClusters(gates: NavGates): NavCluster[] {
-  return [
+  const clusters: NavCluster[] = [
     {
       label: t("sidebar.cluster.overview"),
       items: [
@@ -256,6 +266,25 @@ export function navClusters(gates: NavGates): NavCluster[] {
       ],
     },
   ];
+  // The operator's surface profile is applied last, as a filter over the
+  // finished table rather than a condition on each entry: a view added
+  // later is then gated automatically instead of silently escaping the
+  // profile because someone forgot one more `...(gates.x ? [] : [])`.
+  const allows = gates.surfaceVisible;
+  if (!allows) return clusters;
+  return clusters
+    .map((c) => ({ ...c, items: c.items.filter((i) => allows(navSurfaceID(i.href))) }))
+    .filter((c) => c.items.length > 0);
+}
+
+/**
+ * The surface id of a navigation href: `#/devices` → `nav.devices`.
+ * Query strings and sub-paths resolve to the top-level view, which is
+ * the granularity the profile addresses.
+ */
+export function navSurfaceID(href: string): string {
+  const path = href.replace(/^#\//, "").split(/[/?]/)[0];
+  return `nav.${path}`;
 }
 
 /**

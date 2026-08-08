@@ -77,6 +77,16 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: fixture('info.json') }),
   );
 
+  // Surface profiles. The navigation, the settings tab list and the
+  // device-detail tabs all gate on this, so an unmocked route would let
+  // every view fall back to "visible" — which is the right production
+  // default but would hide a real regression here. The fixture is
+  // generated from the Go registry and pinned by
+  // TestE2ESurfaceFixtureMatchesRegistry.
+  await page.route('**/api/v1/ui/surfaces', (route) =>
+    route.fulfill({ json: fixture('ui-surfaces.json') }),
+  );
+
   // Devices. `*` does not cross a slash, so the list route below covers
   // `/devices` and its query string but no sub-resource — those need their
   // own routes, or they reach the dev-server proxy.

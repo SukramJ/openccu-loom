@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.55.0
+
+- Version bump in lockstep with the main add-on. No change to the proxy
+  itself. The remote instances it fronts may now hide views through
+  their own **Settings → Navigation & views**; the proxy passes whatever
+  they serve through untouched.
+
 # 0.54.7
 
 - Version bump in lockstep with the main add-on. No change to the proxy

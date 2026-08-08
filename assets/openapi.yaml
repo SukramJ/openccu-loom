@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.6.0
+  version: 5.7.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6043,6 +6043,83 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /ui/surfaces:
+    get:
+      operationId: getUISurfaces
+      summary: Config-UI surface registry and the live profile
+      description: |
+        Returns every addressable Config-UI surface (navigation items,
+        settings tabs, device-detail tabs) with its shipped default per
+        profile, plus the resolved visibility of the profile that is
+        currently live.
+
+        The navigation reads `effective`; the profile editor additionally
+        needs the per-surface metadata (`defaults`, `floor`, `gate`,
+        `write_gated`). Both come from this one payload so the two views
+        cannot drift apart.
+
+        Capability gates (Matter, measurement history) and role gates are
+        NOT folded into `effective` — the client applies those, and they
+        answer a different question than the operator's configuration.
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurfacesResponse" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putUISurfaces
+      summary: Update the surface profiles or the embedded master toggle (admin)
+      description: |
+        Both fields are optional: the row editor saves `profiles` without
+        touching the mode, and the master toggle flips `embedded` without
+        resending every row.
+
+        `profiles` is stored sparsely. Entries equal to the shipped
+        default, and ids this daemon does not know, are dropped rather
+        than persisted — a stored entry that merely repeats today's
+        default would pin it across upgrades.
+
+        In the embedded profile a hidden surface also refuses its writes
+        for the Home Assistant Ingress passthrough identity, so this
+        endpoint changes an authorization outcome and is audited. The
+        change takes effect immediately, without a restart.
+
+        Surfaces that can never be hidden (the device list, Settings, the
+        profile editor, About, and — in the standalone profile — user and
+        token administration) are rejected with 422 rather than silently
+        ignored.
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SurfacesRequest" }
+      responses:
+        "200":
+          description: Saved — the new state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurfacesResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422":
+          description: A surface that can never be hidden, or an invalid profile/state
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   # ---- User management (Wave-C) ----
   /users:
     get:
@@ -10818,6 +10895,109 @@ components:
         fields:
           type: array
           items: { $ref: "#/components/schemas/SchemaField" }
+
+    SurfaceInfo:
+      type: object
+      required: [id, group, defaults]
+      description: One addressable Config-UI surface.
+      properties:
+        id:
+          type: string
+          description: |
+            Stable identifier. The prefix names the kind: `nav.` for a
+            navigation item, `settings.` for a settings tab, `device.`
+            for a device-detail tab.
+          example: nav.alarm
+        group:
+          type: string
+          description: Editor bucket, mirroring the navigation clusters.
+          enum: [overview, automation, diagnose, bridges, system, settings, device]
+        defaults:
+          type: object
+          additionalProperties: { type: boolean }
+          description: Shipped visibility per profile name.
+          example: { standalone: true, embedded: false }
+        floor:
+          type: string
+          description: |
+            Where the surface can never be hidden. Absent when the
+            operator may hide it anywhere.
+          enum: [always, standalone]
+        gate:
+          type: string
+          description: Runtime capability the surface additionally needs.
+          enum: [matter, history]
+        warn:
+          type: string
+          description: |
+            Condition under which hiding asks for confirmation. The
+            client evaluates the condition; the daemon only declares it.
+          enum: [alarm_armed, security_faults, last_ccu_editor]
+        warn_profile:
+          type: string
+          description: Limits `warn` to a single profile when set.
+        parent:
+          type: string
+          description: |
+            Surface this one lives inside. A child is never more visible
+            than its parent.
+        role_admin:
+          type: boolean
+          description: Only ever shown to admins, independent of the profile.
+        write_gated:
+          type: boolean
+          description: |
+            In the embedded profile this surface's entry also decides
+            whether the Home Assistant Ingress passthrough identity may
+            write to it.
+        ha_owns:
+          type: boolean
+          description: Home Assistant provides this surface itself.
+
+    SurfacesResponse:
+      type: object
+      required: [embedded, profile, profiles, effective, surfaces]
+      properties:
+        embedded:
+          type: boolean
+          description: The master toggle — whether Home Assistant owns this daemon's config surface.
+        profile:
+          type: string
+          enum: [standalone, embedded]
+          description: The live profile.
+        profiles:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: { type: string, enum: [visible, hidden] }
+          description: Stored, sparse overrides per profile name.
+        effective:
+          type: object
+          additionalProperties: { type: boolean }
+          description: |
+            Resolved visibility of the live profile, per surface id.
+            Capability and role gates are not folded in.
+        surfaces:
+          type: array
+          items: { $ref: "#/components/schemas/SurfaceInfo" }
+
+    SurfacesRequest:
+      type: object
+      description: |
+        Both fields are optional. Omitting `profiles` leaves the stored
+        overrides untouched; omitting `embedded` leaves the mode as it is.
+      properties:
+        embedded:
+          type: boolean
+          description: Flip the master toggle.
+        profiles:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: { type: string, enum: [visible, hidden] }
+          description: |
+            Full desired override set per profile. The daemon reduces it
+            to the sparse form before persisting.
 
     ConfigSnapshotResponse:
       type: object

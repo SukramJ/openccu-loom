@@ -89,6 +89,7 @@ import type {
   UnIgnoreUpdateRequest,
   UnIgnoreUpdateResponse,
 } from "./visibility-types";
+import type { SurfacesRequest, SurfacesResponse } from "./surface-types";
 import { apiBase } from "./base";
 
 export type Identity = {
@@ -1643,6 +1644,22 @@ export const api = {
   },
   putVisibilityUnIgnore(req: UnIgnoreUpdateRequest) {
     return request<UnIgnoreUpdateResponse>(`/visibility/unignore`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  },
+  // --- Surface profiles ---------------------------------------
+  // The registry plus the resolved visibility of the live profile.
+  // Read by the navigation on boot and by the profile editor.
+  getUISurfaces() {
+    return request<SurfacesResponse>(`/ui/surfaces`);
+  },
+  // Admin-only. Returns the new state, so the caller never has to
+  // re-read to learn what the daemon actually stored (it drops
+  // redundant entries and unknown ids on the way in).
+  putUISurfaces(req: SurfacesRequest) {
+    return request<SurfacesResponse>(`/ui/surfaces`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),

@@ -31,6 +31,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
+  import { surfacesStore } from "$lib/stores/surfaces.svelte";
 
   type Props = {
     address: string;
@@ -207,6 +208,10 @@
   // requested tab instead of the default channels strip.
   onMount(() => {
     if (sub === "links" || sub === "schedule" || sub === "device-config") {
+      // A deep link must not land on a tab the surface profile hides —
+      // the row in the fleet-wide link list still offers "edit on
+      // device", and following it would open an empty Configure shell.
+      if (!surfacesStore.visible(`device.configure.${sub}`)) return;
       topTab = "configure";
       configSub = sub;
     }
@@ -583,11 +588,13 @@
   // Top-level tabs. Three tabs only — the previous Bedienen/Status
   // split was redundant (both sourced from VALUES) and confusing.
   type TabDef = { key: TopTab; label: string; icon: IconName };
-  const topTabs = $derived<TabDef[]>([
-    { key: "overview", label: t("device.toptab.overview"), icon: "mdi:home" },
-    { key: "configure", label: t("device.toptab.configure"), icon: "mdi:cog" },
-    { key: "history", label: t("device.toptab.history"), icon: "mdi:history" },
-  ]);
+  const topTabs = $derived<TabDef[]>(
+    [
+      { key: "overview" as const, label: t("device.toptab.overview"), icon: "mdi:home" as IconName },
+      { key: "configure" as const, label: t("device.toptab.configure"), icon: "mdi:cog" as IconName },
+      { key: "history" as const, label: t("device.toptab.history"), icon: "mdi:history" as IconName },
+    ].filter((tab) => surfacesStore.visible(`device.${tab.key}`)),
+  );
 
   type SubDef = { key: ConfigSub; label: string };
   const configSubs = $derived.by<SubDef[]>(() => {
@@ -605,7 +612,10 @@
     if (scheduleSupported) {
       out.push({ key: "schedule", label: t("device.subtab.schedule") });
     }
-    return out;
+    // The surface profile is applied last, over the finished list, so a
+    // sub-tab added later is gated automatically. In the embedded
+    // profile these are the editors Home Assistant owns.
+    return out.filter((sub) => surfacesStore.visible(`device.configure.${sub.key}`));
   });
 </script>
 

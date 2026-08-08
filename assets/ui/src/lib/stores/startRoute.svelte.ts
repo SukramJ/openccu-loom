@@ -1,5 +1,6 @@
 import { api } from "$lib/api/client";
-import { foldedRouteTarget, isKnownLandingRoute } from "$lib/nav";
+import { foldedRouteTarget, isKnownLandingRoute, navSurfaceID } from "$lib/nav";
+import { surfacesStore } from "./surfaces.svelte";
 
 /**
  * The route the SPA opens after a login or a fresh page load (O03).
@@ -57,8 +58,14 @@ function createStartRouteStore() {
   function resolve(): string {
     if (!route) return "";
     const folded = foldedRouteTarget(route);
-    if (folded) return folded;
-    return isKnownLandingRoute(route) ? route : "";
+    const target = folded ?? route;
+    if (!folded && !isKnownLandingRoute(route)) return "";
+    // A view the operator's surface profile hides is not a landing page,
+    // however valid the route is. The check runs on the resolved store
+    // only — while it is still loading it answers "visible", which is the
+    // same race the capability gates deliberately avoid here.
+    if (!surfacesStore.visible(navSurfaceID(target))) return "";
+    return target;
   }
 
   return {

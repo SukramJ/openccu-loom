@@ -1121,11 +1121,88 @@ type NorthUI struct {
 	// *bool so the YAML decoder can distinguish "not set" from
 	// "explicitly false".
 	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
+
+	// Embedded declares that Home Assistant owns this daemon's config
+	// surface — the Homematic(IP) Local integration runs against THIS
+	// daemon. It selects the `embedded` surface profile, which hides what
+	// HA already owns and scopes the writes the Ingress passthrough
+	// identity may perform.
+	//
+	// It is deliberately NOT derived from the Ingress signal. Being behind
+	// HA Ingress answers "am I proxied by HA?", not "does HA own my config
+	// surface?" — two propositions that come apart in both directions: the
+	// add-on runs in deployments that never configure the integration, and
+	// the remote proxy add-on forwards X-Ingress-Path while deliberately
+	// serving the full UI. Only the operator knows the answer, so it is
+	// declared. nil → false.
+	Embedded *bool `yaml:"embedded,omitempty" json:"embedded,omitempty" cfg:"basic"`
+
+	// Profiles carries per-profile surface overrides, keyed by profile
+	// name (see [ProfileStandalone] / [ProfileEmbedded]) and then by
+	// surface id. It is SPARSE by construction: only deviations from the
+	// shipped default are stored, so a view added in a later release
+	// arrives with the default its own code assigns instead of being
+	// invisible because it was missing from a frozen snapshot.
+	//
+	// Edited through the dedicated /api/v1/ui/surfaces endpoint rather
+	// than the generic section editor, which cannot render a nested map.
+	Profiles map[string]map[string]SurfaceState `yaml:"profiles,omitempty" json:"profiles,omitempty" cfg:"basic"`
 }
+
+// SurfaceState is the stored visibility of a single UI surface. The
+// string form keeps the YAML self-describing (`nav.alarm: hidden` reads
+// as what it does, `nav.alarm: false` does not).
+type SurfaceState string
+
+const (
+	// SurfaceVisible shows a surface that the shipped default hides.
+	SurfaceVisible SurfaceState = "visible"
+	// SurfaceHidden hides a surface that the shipped default shows.
+	SurfaceHidden SurfaceState = "hidden"
+)
+
+// Surface profile names. Two, fixed: "who owns the config surface" has
+// exactly two answers, and every further profile would double the
+// review surface of the shipped default table.
+const (
+	// ProfileStandalone is live unless Embedded is set. It ships with
+	// every surface visible.
+	ProfileStandalone = "standalone"
+	// ProfileEmbedded is live when Embedded is true.
+	ProfileEmbedded = "embedded"
+)
 
 // IsEnabled reports whether the bootstrap UI should run. nil → true.
 func (n NorthUI) IsEnabled() bool {
 	return orDefault(n.Enabled, true)
+}
+
+// IsEmbedded reports whether Home Assistant owns this daemon's config
+// surface. nil → false: a daemon that was never told so must serve
+// everything.
+func (n NorthUI) IsEmbedded() bool {
+	return orDefault(n.Embedded, false)
+}
+
+// ActiveProfile names the surface profile the daemon currently serves.
+func (n NorthUI) ActiveProfile() string {
+	if n.IsEmbedded() {
+		return ProfileEmbedded
+	}
+	return ProfileStandalone
+}
+
+// SurfaceOverrides returns the stored overrides of one profile. The
+// returned map is never nil, so callers can range over it directly.
+func (n NorthUI) SurfaceOverrides(profile string) map[string]SurfaceState {
+	if n.Profiles == nil {
+		return map[string]SurfaceState{}
+	}
+	out := make(map[string]SurfaceState, len(n.Profiles[profile]))
+	for id, state := range n.Profiles[profile] {
+		out[id] = state
+	}
+	return out
 }
 
 // NorthMQTT configures the MQTT bridge.
@@ -1763,7 +1840,34 @@ func validateOperatorSurfaces(c *Config) error {
 	if err := validateDuressVisibility(c.Alarm.DuressVisibility); err != nil {
 		return err
 	}
+	if err := validateSurfaceProfiles(&c.North.UI); err != nil {
+		return err
+	}
 	return validateFieldRanges(c)
+}
+
+// validateSurfaceProfiles rejects an unknown profile name or an
+// unrecognised state.
+//
+// Surface *ids* are deliberately not validated here: the registry lives
+// in the north-bound UI layer, and more importantly a downgrade must not
+// fail to boot because a profile stored by a newer release names a view
+// this binary does not have. Unknown ids are ignored at resolve time
+// instead, which keeps the config forward-compatible.
+func validateSurfaceProfiles(ui *NorthUI) error {
+	for profile, overrides := range ui.Profiles {
+		if profile != ProfileStandalone && profile != ProfileEmbedded {
+			return fmt.Errorf("config: north.ui.profiles: unknown profile %q (want %q or %q)",
+				profile, ProfileStandalone, ProfileEmbedded)
+		}
+		for id, state := range overrides {
+			if state != SurfaceVisible && state != SurfaceHidden {
+				return fmt.Errorf("config: north.ui.profiles.%s.%s: must be %q or %q: %q",
+					profile, id, SurfaceVisible, SurfaceHidden, state)
+			}
+		}
+	}
+	return nil
 }
 
 // validateDuressVisibility rejects an unrecognised covert-trigger level.

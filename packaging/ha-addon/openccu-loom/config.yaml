@@ -1,6 +1,6 @@
 # version MUST equal the release tag and is bumped in the release commit.
 name: OpenCCU-Loom
-version: "0.54.7"
+version: "0.55.0"
 slug: openccu-loom
 description: >-
   Standalone bridge that connects Homematic CCUs to MQTT, a REST + WebSocket
@@ -48,9 +48,17 @@ options:
   rest_port: 8119
   xmlrpc_callback_port: 8120
   binrpc_callback_port: 8129
+  # Turn on when the Homematic(IP) Local integration uses THIS daemon as
+  # its backend: the Config UI then hides what Home Assistant already
+  # owns (login, CCU credentials, paramset/link/schedule editors) and
+  # refuses the matching writes for the Ingress identity. Off by default
+  # because running this add-on does not imply the integration uses it —
+  # MQTT-only and REST-only setups need the full surface.
+  ui_embedded: false
 
 schema:
   log_level: "list(debug|info|warn|error)?"
   rest_port: int(1,65535)
   xmlrpc_callback_port: int(1,65535)
   binrpc_callback_port: int(1,65535)
+  ui_embedded: bool?

@@ -141,6 +141,20 @@ type SchemaResponse struct {
 // staged change. Mirrors §7.1 Q12 of SPECIFICATION.md.
 var restartRequiredPaths = config.RestartRequiredFieldPaths()
 
+// dedicatedEditorPaths lists config fields that a purpose-built editor
+// owns, so the generic section editor must not render them. Unlike
+// configstore.UnmanagedFieldPaths these ARE carried by their section and
+// persist through the normal section path — only the SPA form skips
+// them, because a nested map has no meaningful generic input.
+//
+//   - north.ui.profiles is edited under Settings → Navigation & views,
+//     which needs the shipped defaults, the floor and the capability
+//     gates alongside each value. None of that is expressible in the
+//     flat field schema.
+var dedicatedEditorPaths = map[string]struct{}{
+	"north.ui.profiles": {},
+}
+
 // GetConfigSchema renders the typed schema for the SPA editor. No
 // secrets leave this endpoint — secret-classed fields are listed as
 // `class: "secret"` so the SPA shows a placeholder + env-resolver
@@ -163,6 +177,9 @@ func GetConfigSchema() http.HandlerFunc {
 			// by BootstrapConfig and the dedicated user/token CRUD surfaces,
 			// so the SPA must not render them as REST-section fields.
 			if _, skip := unmanaged[f.Path]; skip {
+				continue
+			}
+			if _, skip := dedicatedEditorPaths[f.Path]; skip {
 				continue
 			}
 			_, restart := restartRequiredPaths[f.Path]

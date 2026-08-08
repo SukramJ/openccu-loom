@@ -25,6 +25,15 @@ if bashio::var.has_value "${binrpc_callback_port}"; then
     export OPENCCU_LOOM_CALLBACK_BIN_PORT="${binrpc_callback_port}"
 fi
 
-bashio::log.info "Starting OpenCCU-Loom (log_level=${OPENCCU_LOOM_LOG_LEVEL:-info}, rest=${rest_port:-8119}, xmlrpc_cb=${xmlrpc_callback_port:-8120}, binrpc_cb=${binrpc_callback_port:-8129})..."
+# Embedded mode: Home Assistant owns this daemon's config surface. It is an
+# explicit opt-in rather than something derived from running behind Ingress —
+# this add-on is also used without the Homematic(IP) Local integration, and
+# there the reduced surface would remove views HA cannot replace.
+ui_embedded="$(bashio::config 'ui_embedded')"
+if bashio::var.has_value "${ui_embedded}"; then
+    export OPENCCU_LOOM_UI_EMBEDDED="${ui_embedded}"
+fi
+
+bashio::log.info "Starting OpenCCU-Loom (log_level=${OPENCCU_LOOM_LOG_LEVEL:-info}, rest=${rest_port:-8119}, xmlrpc_cb=${xmlrpc_callback_port:-8120}, binrpc_cb=${binrpc_callback_port:-8129}, ui_embedded=${ui_embedded:-false})..."
 
 exec /usr/bin/openccu-loom run
