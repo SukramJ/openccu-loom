@@ -82,8 +82,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   conformance page pinned a spec version the schema snapshot has moved past,
   and the readme pinned a release and API version that had both moved on.
 
-  API version 5.8.0: several OpenAPI descriptions cite documents that moved,
-  which changes a contract asset. No endpoint, schema or field changed.
+  API version 5.8.0: seventeen OpenAPI descriptions pointed at internal
+  documents that are deliberately not published, so a reader of the public
+  contract could not follow them. The pointers are gone; the sentences around
+  them were self-contained. No endpoint, schema or field changed.
 
 ## [0.54.7]
 
