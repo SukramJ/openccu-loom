@@ -43,6 +43,13 @@ export type SurfaceInfo = {
    * the Home Assistant Ingress passthrough identity may write to it.
    */
   write_gated?: boolean;
+  /**
+   * The embedded default flips back to visible when the daemon serves
+   * more than one CCU: a Home Assistant config entry addresses one CCU,
+   * so HA cannot own the config surface of the ones it has no entry for.
+   * `defaults` already reflects the current fleet; this only explains it.
+   */
+  multi_central_visible?: boolean;
   ha_owns?: boolean;
 };
 
@@ -57,6 +64,8 @@ export type SurfacesResponse = {
    * are NOT folded in — the client applies those.
    */
   effective: Record<string, boolean>;
+  /** How many CCUs this daemon serves. Above one it moves two defaults. */
+  centrals: number;
   surfaces: SurfaceInfo[];
 };
 

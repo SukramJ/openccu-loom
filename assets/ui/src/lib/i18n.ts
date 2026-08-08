@@ -1736,6 +1736,8 @@ const EN: Catalog = {
   "navviews.group.show_all": "Show all",
   "navviews.group.hide_all": "Hide all",
   "navviews.row.ha_owns": "Home Assistant provides this.",
+  "navviews.row.multi_central":
+    "Visible by default because this daemon serves {count} CCUs: Home Assistant addresses one CCU per config entry, so for the others this is the only editor there is.",
   "navviews.row.locked": "Cannot be hidden — {why}",
   "navviews.row.unavailable": "Unavailable — {why}",
   "navviews.row.role_admin": "Only visible to admins.",
@@ -5500,6 +5502,8 @@ const DE: Catalog = {
   "navviews.group.show_all": "Alle einblenden",
   "navviews.group.hide_all": "Alle ausblenden",
   "navviews.row.ha_owns": "Home Assistant stellt das bereit.",
+  "navviews.row.multi_central":
+    "Standardmäßig sichtbar, weil dieser Daemon {count} CCUs bedient: Home Assistant spricht pro Config-Eintrag genau eine CCU an — für die übrigen ist dies der einzige Editor.",
   "navviews.row.locked": "Kann nicht ausgeblendet werden — {why}",
   "navviews.row.unavailable": "Nicht verfügbar — {why}",
   "navviews.row.role_admin": "Nur für Administratoren sichtbar.",

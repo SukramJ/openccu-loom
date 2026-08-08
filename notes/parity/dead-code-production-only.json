@@ -1,6 +1,6 @@
 {
-  "generated": "b1bbcd4a",
-  "head": "b1bbcd4a",
+  "generated": "6011aed4",
+  "head": "6011aed4",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28008,
+    "total_exported": 28019,
     "reachable": 4790,
-    "whitelisted": 20091,
+    "whitelisted": 20102,
     "unreachable": 3127
   },
   "by_package": [
@@ -123714,6 +123714,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "CentralCounter",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/ui_surfaces.go",
+      "line": 90
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CentralCounter",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/ui_surfaces.go",
+      "line": 90
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "CentralLinksReport",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/central_links.go",
@@ -126475,14 +126489,14 @@
       "identifier": "GetUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 77
+      "line": 101
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 77
+      "line": 101
     },
     {
       "package": "internal/north/rest/handlers",
@@ -129499,14 +129513,14 @@
       "identifier": "PutUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 97
+      "line": 121
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 97
+      "line": 121
     },
     {
       "package": "internal/north/rest/handlers",
@@ -130409,42 +130423,42 @@
       "identifier": "SurfacePolicyUpdater",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 92
+      "line": 116
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacePolicyUpdater",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 92
+      "line": 116
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 71
+      "line": 81
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 71
+      "line": 81
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 53
+      "line": 58
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 53
+      "line": 58
     },
     {
       "package": "internal/north/rest/handlers",
@@ -146730,6 +146744,20 @@
     },
     {
       "package": "internal/north/ui/surface",
+      "identifier": "Fleet",
+      "reason": "a field of Resolution, filled by the composition root's central counter and read by the REST payload; a method-less struct the analyzer's type heuristic cannot see used",
+      "file": "internal/north/ui/surface/resolve.go",
+      "line": 38
+    },
+    {
+      "package": "internal/north/ui/surface",
+      "identifier": "Fleet",
+      "reason": "a field of Resolution, filled by the composition root's central counter and read by the REST payload; a method-less struct the analyzer's type heuristic cannot see used",
+      "file": "internal/north/ui/surface/resolve.go",
+      "line": 38
+    },
+    {
+      "package": "internal/north/ui/surface",
       "identifier": "Floor",
       "reason": "carried by Surface.Floor and read by Surface.IsFloor on every resolve; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
@@ -146856,10 +146884,45 @@
     },
     {
       "package": "internal/north/ui/surface",
+      "identifier": "TestMultiCentralDefaultIsStillOverridable",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/ui/surface/resolve_test.go",
+      "line": 290
+    },
+    {
+      "package": "internal/north/ui/surface",
+      "identifier": "TestMultiCentralLeavesStandaloneAlone",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/ui/surface/resolve_test.go",
+      "line": 276
+    },
+    {
+      "package": "internal/north/ui/surface",
+      "identifier": "TestMultiCentralWidensTheEmbeddedDefaults",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/ui/surface/resolve_test.go",
+      "line": 241
+    },
+    {
+      "package": "internal/north/ui/surface",
       "identifier": "TestNormalizeDropsRedundantEntries",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/ui/surface/resolve_test.go",
       "line": 181
+    },
+    {
+      "package": "internal/north/ui/surface",
+      "identifier": "TestNormalizeFollowsTheFleetDefault",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/ui/surface/resolve_test.go",
+      "line": 306
+    },
+    {
+      "package": "internal/north/ui/surface",
+      "identifier": "TestPolicyFollowsARuntimeAdoptedCentral",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/ui/surface/resolve_test.go",
+      "line": 325
     },
     {
       "package": "internal/north/ui/surface",
@@ -161381,6 +161444,13 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestEveryPublishedDocIsInTheNav",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/published_docs_test.go",
+      "line": 145
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestEveryRegisteredProfileHasConstructor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/custom_profile_constructor_resolves_test.go",
@@ -161805,6 +161875,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/custom_profile_constructor_resolves_test.go",
       "line": 225
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestPublishedDocsLinksStayInsideDocsDir",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/published_docs_test.go",
+      "line": 52
     },
     {
       "package": "tests/contract",

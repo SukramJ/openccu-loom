@@ -45,6 +45,11 @@ type SurfaceInfo struct {
 	// WriteGated marks surfaces whose embedded-profile entry also
 	// decides whether the Ingress passthrough identity may write.
 	WriteGated bool `json:"write_gated,omitempty"`
+	// MultiCentralVisible marks surfaces whose embedded default flips
+	// back to visible when the daemon serves more than one CCU: Home
+	// Assistant addresses one CCU per config entry, so it cannot own the
+	// config surface of the CCUs it has no entry for.
+	MultiCentralVisible bool `json:"multi_central_visible,omitempty"`
 	// HAOwns marks surfaces Home Assistant provides itself.
 	HAOwns bool `json:"ha_owns,omitempty"`
 }
@@ -61,6 +66,11 @@ type SurfacesResponse struct {
 	// Capability and role gates are NOT folded in — the client applies
 	// those, and they answer a different question.
 	Effective map[string]bool `json:"effective"`
+	// Centrals is how many CCUs this daemon serves. It is not decoration:
+	// above one it moves the shipped default of the surfaces marked
+	// `multi_central_visible`, and the editor needs the number to explain
+	// why "Default: visible" reads differently here than in the docs.
+	Centrals int `json:"centrals"`
 	// Surfaces is the registry.
 	Surfaces []SurfaceInfo `json:"surfaces"`
 }
@@ -73,14 +83,28 @@ type SurfacesRequest struct {
 	Profiles map[string]map[string]string `json:"profiles,omitempty"`
 }
 
+// CentralCounter reports how many CCUs the daemon serves. Two shipped
+// defaults depend on it (see surface.Surface.MultiCentralVisible), and a
+// CCU can be adopted at runtime, so it is a live read rather than a
+// boot-time number. A nil counter reads as the single-CCU case.
+type CentralCounter func() int
+
+// count is the nil-safe read.
+func (c CentralCounter) count() int {
+	if c == nil {
+		return 0
+	}
+	return c()
+}
+
 // GetUISurfaces serves the registry plus the resolved live profile.
-func GetUISurfaces(svc ConfigAdminService) http.HandlerFunc {
+func GetUISurfaces(svc ConfigAdminService, centrals CentralCounter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ui, ok := effectiveUI(w, r, svc)
 		if !ok {
 			return
 		}
-		JSON(w, http.StatusOK, surfacesResponse(ui))
+		JSON(w, http.StatusOK, surfacesResponse(ui, centrals.count()))
 	}
 }
 
@@ -94,7 +118,12 @@ type SurfacePolicyUpdater interface {
 }
 
 // PutUISurfaces persists the master toggle and/or profile overrides.
-func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, policy SurfacePolicyUpdater) http.HandlerFunc {
+func PutUISurfaces(
+	svc ConfigAdminService,
+	rec audit.Recorder,
+	policy SurfacePolicyUpdater,
+	centrals CentralCounter,
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req SurfacesRequest
 		if err := DecodeJSON(r, &req); err != nil {
@@ -112,7 +141,7 @@ func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, policy SurfacePol
 			next.North.UI.Embedded = &v
 		}
 		if req.Profiles != nil {
-			profiles, perr := normalizeProfiles(req.Profiles)
+			profiles, perr := normalizeProfiles(req.Profiles, surface.Fleet{Centrals: centrals.count()})
 			if perr != nil {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Surface profile rejected", perr.Error()))
@@ -158,7 +187,7 @@ func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, policy SurfacePol
 				Note:      "section=" + string(configstore.SectionUI) + " surfaces profile=" + next.North.UI.ActiveProfile(),
 			})
 		}
-		JSON(w, http.StatusOK, surfacesResponse(next.North.UI))
+		JSON(w, http.StatusOK, surfacesResponse(next.North.UI, centrals.count()))
 	}
 }
 
@@ -171,7 +200,10 @@ func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, policy SurfacePol
 // entries, ids this binary does not know — is dropped silently, because
 // both are legitimate states for a client to send (a stale form, a
 // profile written by a newer release).
-func normalizeProfiles(in map[string]map[string]string) (map[string]map[string]config.SurfaceState, error) {
+func normalizeProfiles(
+	in map[string]map[string]string,
+	fleet surface.Fleet,
+) (map[string]map[string]config.SurfaceState, error) {
 	out := make(map[string]map[string]config.SurfaceState, len(in))
 	names := make([]string, 0, len(in))
 	for name := range in {
@@ -195,7 +227,7 @@ func normalizeProfiles(in map[string]map[string]string) (map[string]map[string]c
 			return nil, &surfaceError{msg: "these surfaces can never be hidden in profile " +
 				name + ": " + joinComma(bad)}
 		}
-		normalized := surface.Normalize(name, typed)
+		normalized := surface.Normalize(name, typed, fleet)
 		if len(normalized) > 0 {
 			out[name] = normalized
 		}
@@ -213,13 +245,15 @@ type surfaceError struct{ msg string }
 func (e *surfaceError) Error() string { return e.msg }
 
 // surfacesResponse renders the payload from a resolved NorthUI.
-func surfacesResponse(ui config.NorthUI) SurfacesResponse {
-	res := surface.Resolve(ui)
+func surfacesResponse(ui config.NorthUI, centrals int) SurfacesResponse {
+	fleet := surface.Fleet{Centrals: centrals}
+	res := surface.ResolveFleet(ui, fleet)
 	out := SurfacesResponse{
 		Embedded:  ui.IsEmbedded(),
 		Profile:   res.Profile,
 		Profiles:  map[string]map[string]string{},
 		Effective: make(map[string]bool, len(res.Visible)),
+		Centrals:  centrals,
 		Surfaces:  make([]SurfaceInfo, 0, len(surface.Registry())),
 	}
 	for _, name := range []string{config.ProfileStandalone, config.ProfileEmbedded} {
@@ -239,10 +273,17 @@ func surfacesResponse(ui config.NorthUI) SurfacesResponse {
 	reg := surface.Registry()
 	for i := range reg {
 		s := &reg[i]
+		// The shipped defaults are reported AS RESOLVED for this fleet, not
+		// as the static table: the editor's "Changed · default: hidden"
+		// line would otherwise contradict what the daemon actually applies.
+		defaults := map[string]bool{
+			config.ProfileStandalone: s.DefaultForFleet(config.ProfileStandalone, fleet),
+			config.ProfileEmbedded:   s.DefaultForFleet(config.ProfileEmbedded, fleet),
+		}
 		out.Surfaces = append(out.Surfaces, SurfaceInfo{
 			ID:          string(s.ID),
 			Group:       string(s.Group),
-			Defaults:    s.Defaults,
+			Defaults:    defaults,
 			Floor:       string(s.Floor),
 			Gate:        string(s.Gate),
 			Warn:        string(s.Warn),
@@ -251,6 +292,8 @@ func surfacesResponse(ui config.NorthUI) SurfacesResponse {
 			RoleAdmin:   s.RoleAdmin,
 			WriteGated:  s.WriteGated,
 			HAOwns:      s.HAOwns,
+
+			MultiCentralVisible: s.MultiCentralVisible,
 		})
 	}
 	return out

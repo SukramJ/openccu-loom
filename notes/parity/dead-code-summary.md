@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: b1bbcd4a
-HEAD: b1bbcd4a
+Generated: 6011aed4
+HEAD: 6011aed4
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28008 |
+| Total Exported | 28019 |
 | Reachable | 4955 |
-| Whitelisted | 20091 |
+| Whitelisted | 20102 |
 | **Unreachable** | **2962** |
 
 ## Top-20 Packages by Dead Code

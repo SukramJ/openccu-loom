@@ -199,6 +199,11 @@ type Deps struct {
 	// effect without a daemon restart. Nil leaves every write ungated,
 	// which is the standalone behaviour.
 	SurfacePolicy *surface.Policy
+	// CentralCounter reports how many CCUs the daemon serves. Two shipped
+	// surface defaults depend on it: Home Assistant addresses one CCU per
+	// config entry, so on a multi-CCU daemon it cannot own the config
+	// surface of the CCUs it has no entry for. Nil reads as one.
+	CentralCounter handlers.CentralCounter
 	// RestartPending backs GET /system/restart-pending — whether a saved
 	// restart-required config change is staged but not yet active.
 	RestartPending handlers.RestartPendingProvider
@@ -1221,9 +1226,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// Surface profiles. The GET is open to every authenticated
 				// identity because the navigation itself reads it; only the
 				// editor's write needs admin.
-				pr.Get("/ui/surfaces", handlers.GetUISurfaces(d.ConfigAdmin))
+				pr.Get("/ui/surfaces", handlers.GetUISurfaces(d.ConfigAdmin, d.CentralCounter))
 				pr.With(admin).Put("/ui/surfaces",
-					handlers.PutUISurfaces(d.ConfigAdmin, d.AuditRecorder, d.SurfacePolicy))
+					handlers.PutUISurfaces(d.ConfigAdmin, d.AuditRecorder, d.SurfacePolicy, d.CentralCounter))
 			}
 			if d.UserAdmin != nil {
 				pr.With(admin).Get("/users", handlers.ListUsersV2(d.UserAdmin))

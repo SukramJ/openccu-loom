@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.55.1
+
+- **Fixed: with more than one CCU, the embedded mode hid configuration
+  you could not reach anywhere else.** Home Assistant handles one CCU per
+  entry, so for the CCUs you did not add there, this add-on's own
+  interface is the only place to configure devices. Device configuration
+  and CCU management are therefore shown again by default as soon as
+  more than one CCU is connected — you can still hide them under
+  Settings → Navigation & views if you want to.
+
 ## 0.55.0
 
 - **New: you decide which views the configuration UI shows.** Under

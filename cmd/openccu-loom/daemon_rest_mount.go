@@ -206,7 +206,18 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	// database is in force from the first request after a restart, and
 	// updated in place by the surfaces write handler so a later change
 	// needs no restart at all.
-	surfacePolicy := surface.NewPolicy(bootBaseline.North.UI)
+	// How many CCUs this daemon serves, read live rather than captured:
+	// a CCU adopted at runtime widens two shipped surface defaults,
+	// because Home Assistant addresses one CCU per config entry and
+	// therefore cannot own the config surface of the ones it has no
+	// entry for.
+	centralCounter := func() int {
+		if d.visibilityAdapter == nil {
+			return 0
+		}
+		return len(d.visibilityAdapter.Names())
+	}
+	surfacePolicy := surface.NewPolicy(bootBaseline.North.UI, centralCounter)
 	// TLS: when cert+key are configured, build a hot-reloading cert
 	// provider. A load failure logs and falls back to plain HTTP rather
 	// than refusing to boot, so a bad cert never locks the operator out.
@@ -265,6 +276,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Auth:                    d.restAuth,
 		ConfigAdmin:             d.configSvc,
 		SurfacePolicy:           surfacePolicy,
+		CentralCounter:          centralCounter,
 		RestartPending:          restartState,
 		ConfigChanges:           restartState,
 		UserAdmin:               d.userSvc,

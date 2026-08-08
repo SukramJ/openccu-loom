@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.8.0
+  version: 5.9.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -10947,13 +10947,23 @@ components:
             In the embedded profile this surface's entry also decides
             whether the Home Assistant Ingress passthrough identity may
             write to it.
+        multi_central_visible:
+          type: boolean
+          description: |
+            The embedded default of this surface flips back to visible
+            when the daemon serves more than one CCU. A Home Assistant
+            config entry addresses one CCU, so on a multi-CCU daemon HA
+            cannot own the config surface of the CCUs it has no entry
+            for — hiding these would leave their devices without an
+            editor anywhere. The `defaults` above already reflect the
+            current fleet; this flag only explains why.
         ha_owns:
           type: boolean
           description: Home Assistant provides this surface itself.
 
     SurfacesResponse:
       type: object
-      required: [embedded, profile, profiles, effective, surfaces]
+      required: [embedded, profile, profiles, effective, centrals, surfaces]
       properties:
         embedded:
           type: boolean
@@ -10974,6 +10984,13 @@ components:
           description: |
             Resolved visibility of the live profile, per surface id.
             Capability and role gates are not folded in.
+        centrals:
+          type: integer
+          description: |
+            How many CCUs this daemon serves. Above one it moves the
+            shipped default of every surface marked
+            `multi_central_visible`, so the editor needs it to explain
+            why a default reads differently here than in the docs.
         surfaces:
           type: array
           items: { $ref: "#/components/schemas/SurfaceInfo" }

@@ -186,6 +186,35 @@ Everything else stays visible, including `nav.devices`, `nav.alarm`, `nav.securi
 > and merely renders without the marketing header. Hiding the version banner is a rendering
 > decision, not a surface decision.
 
+### 2.7a One shipped default depends on the fleet
+
+Two surfaces — `settings.ccus` and the `device.configure` sub-tree — flip back to
+**visible** in the embedded profile when the daemon serves more than one CCU.
+
+The reason is a mismatch the rest of this design assumes away. `north.ui.embedded` is
+daemon-wide, but a Home Assistant config entry addresses exactly **one** CCU: the loom
+backend passes a serial (`_create_loom_central` in `homematicip_local`). Bind one of three
+CCUs into Home Assistant and the single-CCU defaults hide the paramset editor for the other
+two in the only UI that offers one — HA has no entry for them, so its panel shows nothing,
+and in the add-on the Ingress identity's writes are refused on top. Same for CCU
+administration: the two unbound CCUs would no longer be editable anywhere.
+
+Three properties keep this from becoming magic:
+
+- **It moves the default, not the ceiling.** An operator who wants those surfaces hidden on
+  a multi-CCU daemon still sets it, and the override is stored as usual.
+- **It is read live.** A CCU adopted at runtime widens the default on the next request
+  rather than at the next config save — `Policy.Resolution()` compares the current count
+  against the one its cached resolution was built with. The write boundary follows, so the
+  re-shown editor works instead of failing on save.
+- **It is visible in the payload.** `GET /api/v1/ui/surfaces` reports `centrals` and marks
+  the affected rows `multi_central_visible`; `defaults` is already resolved for the current
+  fleet, and the editor prints the reason under the row. A default that silently disagrees
+  with the documentation is worse than no default.
+
+Nothing else follows the fleet. Identity, OIDC and the aggregated analytics belong to Home
+Assistant however many CCUs there are.
+
 ### 2.8 Write enforcement follows the profile, in `embedded` mode only
 
 The embedded design refuses writes on the surfaces Home Assistant owns (ADR 0051). That
@@ -421,6 +450,9 @@ worth exactly as much as its enforcement:
 | Floor surfaces cannot be hidden | `TestPutUISurfacesRejectsFloorHide` (handler, 422) **and** `TestResolveRefusesFloorOverride` (resolver), which ignores a hand-edited YAML override the API never saw |
 | Sparse storage: no entry that repeats today's default | `TestNormalizeDropsRedundantEntries` (resolver) and `TestPutUISurfacesStoresSparsely` (handler) |
 | A downgrade boots on a profile written by a newer release | `TestResolveIgnoresUnknownIDs` |
+| A multi-CCU daemon keeps the editors HA cannot replace | `TestMultiCentralWidensTheEmbeddedDefaults`, and `TestPolicyFollowsARuntimeAdoptedCentral` for the live read |
+| The fleet rule moves the default, not the ceiling | `TestMultiCentralDefaultIsStillOverridable`, `TestMultiCentralLeavesStandaloneAlone` |
+| Sparse storage follows the moved default | `TestNormalizeFollowsTheFleetDefault` — storing "visible" where the fleet already makes it the default would pin today's CCU count into the profile |
 | The write rules name routes the router actually serves | `TestSurfaceWriteRoutesExist` (`tests/contract/`) — the declared-vs-served shape from CLAUDE.md: a rule for a moved route is a refusal that silently stopped happening |
 | A surface hidden because HA owns it actually gates something | `TestHAOwnedWriteSurfacesAreGated` (`tests/contract/`) — the other direction, with an explicit no-write-path list rather than silence |
 | Every write-gated surface owns rules, and only those | `TestEveryWriteGatedSurfaceHasRoutes` (resolver) |

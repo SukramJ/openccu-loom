@@ -54,7 +54,7 @@ func TestGetUISurfacesServesRegistryAndResolution(t *testing.T) {
 
 	svc := surfaceSvc(config.NorthUI{})
 	rr := httptest.NewRecorder()
-	GetUISurfaces(svc)(rr, httptest.NewRequest(http.MethodGet, "/api/v1/ui/surfaces", http.NoBody))
+	GetUISurfaces(svc, nil)(rr, httptest.NewRequest(http.MethodGet, "/api/v1/ui/surfaces", http.NoBody))
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
@@ -105,7 +105,7 @@ func TestPutUISurfacesStoresSparsely(t *testing.T) {
 	}}}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces", strings.NewReader(body))
-	PutUISurfaces(svc, nil, policy)(rr, req)
+	PutUISurfaces(svc, nil, policy, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
@@ -133,7 +133,7 @@ func TestPutUISurfacesRejectsFloorHide(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"profiles":{"standalone":{"settings.navviews":"hidden"}}}`))
-	PutUISurfaces(svc, nil, policy)(rr, req)
+	PutUISurfaces(svc, nil, policy, nil)(rr, req)
 
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422: %s", rr.Code, rr.Body)
@@ -158,7 +158,7 @@ func TestPutUISurfacesRejectsUnknownState(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"profiles":{"standalone":{"nav.alarm":"off"}}}`))
-	PutUISurfaces(svc, nil, &recordingPolicy{})(rr, req)
+	PutUISurfaces(svc, nil, &recordingPolicy{}, nil)(rr, req)
 
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422: %s", rr.Code, rr.Body)
@@ -183,7 +183,7 @@ func TestPutUISurfacesTogglesModeWithoutTouchingProfiles(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"embedded":true}`))
-	PutUISurfaces(svc, nil, policy)(rr, req)
+	PutUISurfaces(svc, nil, policy, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
@@ -209,7 +209,7 @@ func TestPutUISurfacesRejectsUnknownProfile(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"profiles":{"kiosk":{"nav.alarm":"hidden"}}}`))
-	PutUISurfaces(svc, nil, &recordingPolicy{})(rr, req)
+	PutUISurfaces(svc, nil, &recordingPolicy{}, nil)(rr, req)
 
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422: %s", rr.Code, rr.Body)
@@ -222,14 +222,14 @@ func TestUISurfacesUnavailableWithoutService(t *testing.T) {
 	t.Parallel()
 
 	rr := httptest.NewRecorder()
-	GetUISurfaces(nil)(rr, httptest.NewRequest(http.MethodGet, "/api/v1/ui/surfaces", http.NoBody))
+	GetUISurfaces(nil, nil)(rr, httptest.NewRequest(http.MethodGet, "/api/v1/ui/surfaces", http.NoBody))
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Errorf("GET status = %d, want 503", rr.Code)
 	}
 
 	rr = httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces", strings.NewReader(`{}`))
-	PutUISurfaces(nil, nil, nil)(rr, req)
+	PutUISurfaces(nil, nil, nil, nil)(rr, req)
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Errorf("PUT status = %d, want 503", rr.Code)
 	}
@@ -250,7 +250,7 @@ func TestPutUISurfacesIsAudited(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"embedded":true}`))
-	PutUISurfaces(svc, rec, &recordingPolicy{})(rr, req)
+	PutUISurfaces(svc, rec, &recordingPolicy{}, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
@@ -281,7 +281,7 @@ func TestPutUISurfacesSurvivesNilRecorder(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"embedded":true}`))
-	PutUISurfaces(svc, nil, nil)(rr, req)
+	PutUISurfaces(svc, nil, nil, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)

@@ -135,6 +135,20 @@ type Surface struct {
 	// has to take its sub-tabs with it, or the write enforcement would
 	// keep honouring a sub-tab nobody can reach.
 	Parent ID
+	// MultiCentralVisible flips the embedded default back to visible on a
+	// daemon serving more than one CCU.
+	//
+	// The embedded profile assumes Home Assistant owns the config surface
+	// — but a Home Assistant config entry addresses ONE CCU (the loom
+	// backend passes a serial), while this switch is daemon-wide. Bind
+	// one of three CCUs into HA and the shipped default would hide the
+	// paramset editor for the other two in a UI that is their only
+	// editor: HA has no entry for them, and the panel therefore offers
+	// nothing. Same for CCU administration.
+	//
+	// So the default follows the fleet. An operator who genuinely wants
+	// them hidden still can — this moves the default, not the ceiling.
+	MultiCentralVisible bool
 }
 
 // visibility is a small constructor for the shipped default pair.
@@ -207,7 +221,7 @@ var registry = []Surface{
 	{
 		ID: "settings.ccus", Group: GroupSettings, Defaults: haOwned(),
 		Warn: WarnLastCCUEditor, WarnProfile: config.ProfileStandalone,
-		WriteGated: true, HAOwns: true,
+		WriteGated: true, HAOwns: true, MultiCentralVisible: true,
 	},
 	{ID: "settings.callback", Group: GroupSettings, Defaults: both()},
 	{ID: "settings.oidc", Group: GroupSettings, Defaults: haOwned(), WriteGated: true, HAOwns: true},
@@ -227,25 +241,32 @@ var registry = []Surface{
 
 	// --- device-detail tabs ---------------------------------------
 	{ID: "device.overview", Group: GroupDevice, Defaults: both()},
-	{ID: "device.configure", Group: GroupDevice, Defaults: haOwned(), WriteGated: true, HAOwns: true},
+	{
+		ID: "device.configure", Group: GroupDevice, Defaults: haOwned(),
+		WriteGated: true, HAOwns: true, MultiCentralVisible: true,
+	},
 	{
 		ID: "device.configure.device-config", Group: GroupDevice, Defaults: haOwned(),
-		Parent: "device.configure", WriteGated: true, HAOwns: true,
+		MultiCentralVisible: true,
+		Parent:              "device.configure", WriteGated: true, HAOwns: true,
 	},
 	// The channel strip is a selector, not an editor: every write it
 	// leads to belongs to the device-config sub-tab, so it carries no
 	// route set of its own and is not write-gated.
 	{
 		ID: "device.configure.channels", Group: GroupDevice, Defaults: haOwned(),
-		Parent: "device.configure", HAOwns: true,
+		MultiCentralVisible: true,
+		Parent:              "device.configure", HAOwns: true,
 	},
 	{
 		ID: "device.configure.links", Group: GroupDevice, Defaults: haOwned(),
-		Parent: "device.configure", WriteGated: true, HAOwns: true,
+		MultiCentralVisible: true,
+		Parent:              "device.configure", WriteGated: true, HAOwns: true,
 	},
 	{
 		ID: "device.configure.schedule", Group: GroupDevice, Defaults: haOwned(),
-		Parent: "device.configure", WriteGated: true, HAOwns: true,
+		MultiCentralVisible: true,
+		Parent:              "device.configure", WriteGated: true, HAOwns: true,
 	},
 	{ID: "device.history", Group: GroupDevice, Defaults: both(), Gate: GateHistory},
 }
@@ -266,12 +287,23 @@ var byID = func() map[ID]Surface {
 	return m
 }()
 
-// DefaultFor reports the shipped visibility of s in the named profile.
+// DefaultFor reports the shipped visibility of s in the named profile,
+// for a single-CCU daemon.
+func (s Surface) DefaultFor(profile string) bool {
+	return s.DefaultForFleet(profile, Fleet{})
+}
+
+// DefaultForFleet reports the shipped visibility of s in the named
+// profile for the given fleet.
+//
 // An unknown profile reads as visible: the safe direction is to show a
 // surface, never to hide one because of a typo.
-func (s Surface) DefaultFor(profile string) bool {
+func (s Surface) DefaultForFleet(profile string, fleet Fleet) bool {
 	v, ok := s.Defaults[profile]
 	if !ok {
+		return true
+	}
+	if !v && s.MultiCentralVisible && profile == config.ProfileEmbedded && fleet.MultiCentral() {
 		return true
 	}
 	return v

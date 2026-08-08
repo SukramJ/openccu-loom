@@ -132,6 +132,20 @@
     return t(`navviews.warn.${s.warn}`);
   }
 
+  /**
+   * Whether this row's embedded default was widened because the daemon
+   * serves more than one CCU.
+   *
+   * Without the line it renders, the row would read as an unexplained
+   * contradiction: the docs say Home Assistant owns the paramset editor,
+   * and here it is shown as visible by default. The reason is that a
+   * Home Assistant config entry addresses one CCU — for the others this
+   * UI is the only editor there is.
+   */
+  function multiCentralApplies(s: SurfaceInfo): boolean {
+    return editing === "embedded" && !!s.multi_central_visible && surfacesStore.centrals > 1;
+  }
+
   function floorReason(s: SurfaceInfo): string {
     switch (s.id) {
       case "nav.devices":
@@ -433,9 +447,16 @@
                   >
                     {description(s)}
                   </p>
-                  {#if editing === "embedded" && s.ha_owns}
+                  {#if editing === "embedded" && s.ha_owns && !multiCentralApplies(s)}
                     <p class="mt-1 text-xs italic text-slate-500 dark:text-slate-500">
                       {t("navviews.row.ha_owns")}
+                    </p>
+                  {/if}
+                  {#if multiCentralApplies(s)}
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {t("navviews.row.multi_central", {
+                        count: String(surfacesStore.centrals),
+                      })}
                     </p>
                   {/if}
                   {#if locked}
