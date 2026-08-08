@@ -8424,6 +8424,16 @@ export interface components {
              *     write to it.
              */
             write_gated?: boolean;
+            /**
+             * @description The embedded default of this surface flips back to visible
+             *     when the daemon serves more than one CCU. A Home Assistant
+             *     config entry addresses one CCU, so on a multi-CCU daemon HA
+             *     cannot own the config surface of the CCUs it has no entry
+             *     for — hiding these would leave their devices without an
+             *     editor anywhere. The `defaults` above already reflect the
+             *     current fleet; this flag only explains why.
+             */
+            multi_central_visible?: boolean;
             /** @description Home Assistant provides this surface itself. */
             ha_owns?: boolean;
         };
@@ -8448,6 +8458,13 @@ export interface components {
             effective: {
                 [key: string]: boolean;
             };
+            /**
+             * @description How many CCUs this daemon serves. Above one it moves the
+             *     shipped default of every surface marked
+             *     `multi_central_visible`, so the editor needs it to explain
+             *     why a default reads differently here than in the docs.
+             */
+            centrals: number;
             surfaces: components["schemas"]["SurfaceInfo"][];
         };
         /**

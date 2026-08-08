@@ -4,6 +4,32 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.1]
+
+### Fixed
+
+- **On a daemon serving several CCUs, embedded mode no longer hides the
+  editors Home Assistant cannot replace.** `north.ui.embedded` is
+  daemon-wide, but a Home Assistant config entry addresses exactly one
+  CCU. Binding one of three CCUs into Home Assistant and turning the
+  switch on therefore hid the paramset editor for the other two in the
+  only UI that offers one — Home Assistant has no config entry for them,
+  so its panel shows nothing, and in the add-on the Ingress identity's
+  writes were refused on top. CCU administration was in the same
+  position: the two unbound CCUs could not be edited anywhere.
+
+  `settings → ccus` and the device Configure tab (with its sub-tabs) now
+  default to **visible** in the embedded profile whenever the daemon
+  serves more than one CCU. This moves the default, not the ceiling: an
+  operator who wants them hidden still sets it. The count is read live,
+  so a CCU adopted while the daemon runs widens the default on the next
+  request rather than at the next config save, and the write boundary
+  follows it — the re-shown editor works instead of failing on save.
+
+  `GET /api/v1/ui/surfaces` reports `centrals` and marks the affected
+  rows `multi_central_visible`; Settings → Navigation & views prints the
+  reason under each one (API version 5.8.0).
+
 ## [0.55.0]
 
 ### Added

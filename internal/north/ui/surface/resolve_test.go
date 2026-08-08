@@ -187,7 +187,7 @@ func TestNormalizeDropsRedundantEntries(t *testing.T) {
 		"nav.alarm":        config.SurfaceHidden,  // real deviation → kept
 		"nav.unknown_view": config.SurfaceHidden,  // unknown → dropped
 	}
-	got := Normalize(config.ProfileStandalone, in)
+	got := Normalize(config.ProfileStandalone, in, Fleet{})
 	if len(got) != 1 || got["nav.alarm"] != config.SurfaceHidden {
 		t.Fatalf("Normalize = %v, want only nav.alarm:hidden", got)
 	}
@@ -228,5 +228,118 @@ func TestRegistryIDsAreUniqueAndPrefixed(t *testing.T) {
 		if s.Defaults == nil {
 			t.Errorf("surface %q has no shipped defaults", s.ID)
 		}
+	}
+}
+
+// TestMultiCentralWidensTheEmbeddedDefaults is the fleet rule.
+//
+// A Home Assistant config entry addresses ONE CCU — the loom backend
+// passes a serial — while the embedded switch is daemon-wide. Bind one
+// of three CCUs into HA and the single-CCU defaults would hide the
+// paramset editor for the other two in the only UI that offers one:
+// Home Assistant has no entry for them, so its panel shows nothing.
+func TestMultiCentralWidensTheEmbeddedDefaults(t *testing.T) {
+	t.Parallel()
+
+	single := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), Fleet{Centrals: 1})
+	fleet := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), Fleet{Centrals: 3})
+
+	widened := []ID{
+		"settings.ccus",
+		"device.configure",
+		"device.configure.device-config",
+		"device.configure.channels",
+		"device.configure.links",
+		"device.configure.schedule",
+	}
+	for _, id := range widened {
+		if single.IsVisible(id) {
+			t.Errorf("%s visible on a single-CCU daemon, want the shipped embedded default", id)
+		}
+		if !fleet.IsVisible(id) {
+			t.Errorf("%s hidden on a 3-CCU daemon — the CCUs Home Assistant has no entry for lose their only editor", id)
+		}
+	}
+
+	// Everything else keeps its default: identity and the aggregated
+	// analytics belong to Home Assistant however many CCUs there are.
+	for _, id := range []ID{"settings.users", "settings.oidc", "nav.energy", "nav.overview"} {
+		if fleet.IsVisible(id) {
+			t.Errorf("%s visible on a multi-CCU daemon — the fleet size says nothing about identity or analytics", id)
+		}
+	}
+}
+
+// TestMultiCentralLeavesStandaloneAlone pins that the rule is scoped to
+// the embedded profile. Standalone already shows everything; a fleet
+// rule there could only ever un-hide what an operator chose to hide.
+func TestMultiCentralLeavesStandaloneAlone(t *testing.T) {
+	t.Parallel()
+
+	res := ResolveFleet(uiWith(false, config.ProfileStandalone, map[string]config.SurfaceState{
+		"settings.ccus": config.SurfaceHidden,
+	}), Fleet{Centrals: 4})
+	if res.IsVisible("settings.ccus") {
+		t.Error("the fleet rule overrode an explicit standalone hide")
+	}
+}
+
+// TestMultiCentralDefaultIsStillOverridable pins that this moves the
+// default, not the ceiling: an operator who wants the surface hidden on
+// a multi-CCU daemon can still say so.
+func TestMultiCentralDefaultIsStillOverridable(t *testing.T) {
+	t.Parallel()
+
+	res := ResolveFleet(uiWith(true, config.ProfileEmbedded, map[string]config.SurfaceState{
+		"settings.ccus": config.SurfaceHidden,
+	}), Fleet{Centrals: 3})
+	if res.IsVisible("settings.ccus") {
+		t.Error("an explicit hide was ignored on a multi-CCU daemon")
+	}
+}
+
+// TestNormalizeFollowsTheFleetDefault pins the sparse-storage rule
+// against the moved default. On a multi-CCU daemon "visible" for
+// settings.ccus IS the default, so storing it would pin today's fleet
+// size into the profile — and keep the surface visible after the
+// operator removes the extra CCUs.
+func TestNormalizeFollowsTheFleetDefault(t *testing.T) {
+	t.Parallel()
+
+	in := map[string]config.SurfaceState{"settings.ccus": config.SurfaceVisible}
+
+	single := Normalize(config.ProfileEmbedded, in, Fleet{Centrals: 1})
+	if single["settings.ccus"] != config.SurfaceVisible {
+		t.Errorf("single-CCU: %v, want the deviation kept", single)
+	}
+
+	fleet := Normalize(config.ProfileEmbedded, in, Fleet{Centrals: 3})
+	if len(fleet) != 0 {
+		t.Errorf("multi-CCU: %v, want the entry dropped as redundant", fleet)
+	}
+}
+
+// TestPolicyFollowsARuntimeAdoptedCentral pins the live read. A CCU can
+// be adopted while the daemon runs; the surfaces that protect its
+// devices must widen then, not at the next config save.
+func TestPolicyFollowsARuntimeAdoptedCentral(t *testing.T) {
+	t.Parallel()
+
+	centrals := 1
+	on := true
+	policy := NewPolicy(config.NorthUI{Embedded: &on}, func() int { return centrals })
+
+	if policy.Resolution().IsVisible("device.configure") {
+		t.Fatal("precondition: device.configure visible on a single-CCU daemon")
+	}
+
+	centrals = 2
+	if !policy.Resolution().IsVisible("device.configure") {
+		t.Error("the adopted CCU did not widen the default — its devices have no editor anywhere")
+	}
+	// And the write boundary moves with it, or the editor would render
+	// and fail on save.
+	if got := policy.RefusedBy("PUT", "/devices/ABC/paramsets/MASTER"); got != "" {
+		t.Errorf("RefusedBy = %q after the second CCU appeared, want the write allowed", got)
 	}
 }

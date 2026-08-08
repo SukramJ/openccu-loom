@@ -19,6 +19,7 @@ function response(over: Partial<SurfacesResponse> = {}): SurfacesResponse {
     embedded: false,
     profile: "standalone",
     profiles: {},
+    centrals: 1,
     effective: {
       "nav.devices": true,
       "nav.alarm": true,

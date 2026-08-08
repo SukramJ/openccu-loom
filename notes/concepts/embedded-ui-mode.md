@@ -80,8 +80,7 @@ device/CCU concerns**. The concrete overlaps, and why each is harmful:
 Since 0.55.0 this repo carries the reduced mode: `north.ui.embedded` selects the
 `embedded` surface profile, the navigation gates on it through `NavGates.surfaceVisible`,
 and hidden write-gated surfaces refuse the Ingress passthrough identity. What remains open
-is everything on the Home Assistant side — the second panel registration and the #74
-revert (§5). See [UI surface profiles](./ui-surface-profiles.md) for the mechanism; this
+is everything on the Home Assistant side, which #87 / 2.9.1 now covers (§5). See [UI surface profiles](./ui-surface-profiles.md) for the mechanism; this
 document stays the record of *which* capability belongs to which surface, which is the
 input that mechanism configures.
 
@@ -102,7 +101,7 @@ input that mechanism configures.
    `["CCU", "openccu-loom"]` (`packages/config-panel/src/homematic-config.ts:32`, applied
    at `:278`), so the panel's CCU dashboard (`views/ccu-dashboard.ts`, sub-tabs
    `general | pairing | messages | signal | firmware`) is live for loom-backed entries and
-   has been for about a month. The decision to revert it stands (§5, step 5) — but it now
+   has been for about a month. The revert ships in #87 (§5, step 3) — but it
    removes a surface with an installed base, not a fresh change. The dashboard covers
    exactly the capability block this document assigns exclusively to the embedded Loom UI;
    the embedded ops UI is the surface that actually owns daemon-side state, and running
@@ -210,7 +209,8 @@ the Remote proxy add-on (ADR 0054), which serves the same full UI.
 | CCU connection / credentials | Loom SPA (`settings → ccus`) | **HA `config_flow` only** (Loom side hidden) | HA `config_flow` |
 | Login / users / groups / tokens / OIDC | Loom SPA (`settings → security` group) | **HA auth only** (Loom login hidden; add-ons: passthrough / token injection) | HA auth |
 | Setup wizard / first-run | Loom SPA (`Setup`) | **hidden** (HA `config_flow` is the entry point) | — |
-| HA runtime: health / throttle / incidents / cache | — | **HA panel (Integration tab)** | HA panel (Integration tab) |
+| HA runtime: entity/device statistics of a config entry, radio levels of its entities | — | **HA panel (Integration tab)** | HA panel (Integration tab) |
+| Health / throttle / incidents / cache | Loom SPA (`/diagnostics`) | **embedded Loom UI** — on loom these read `central.health` / `client.command_throttle` through the adapter, so the HA panel was showing daemon state at second hand, for one CCU instead of the fleet (corrected 2026-08-08, shipped in 2.9.1) | HA panel (Integration tab) |
 | HA entities / areas / permissions / dashboards | — | **HA core** | HA core |
 | Device control tiles / overview / favorites | Loom SPA | **HA dashboard** (Loom tiles hidden) | HA dashboard |
 | Rooms / functions | Loom SPA (`RoomsFunctionsAdmin`) | **HA areas** (Loom side hidden) | HA areas |
@@ -390,7 +390,7 @@ switch was replaced by a discovery-based gate (#1227) after the parity work in #
 the dual-backend surface contract, behavioural parity probes and parity ratchet from #1220
 guard the adapter. The duck-type remains incomplete in one documented place — orphan entity
 cleanup is skipped for loom (`control_unit.py:507-512`) — but that no longer blocks this
-design. What blocks it now is that step 1 is unstarted while step 5's duplication is live.
+design. Step 1 shipped in 0.55.0 and the duplicated tabs went in 2.9.1.
 
 1. **This repo — build `embedded` mode** (largest new work):
    - `internal/config`: add `north.ui.embedded` (`*bool`, nil → false), document it in
@@ -403,27 +403,33 @@ design. What blocks it now is that step 1 is unstarted while step 5's duplicatio
      the `/links` → `Configure` deep link.
    - ADR 0051 alignment: the passthrough identity is read-only on the hidden admin and
      editor APIs.
-2. **Integration — second panel registration** (`homematicip_local/panel.py`): for
-   loom-backed entries, register a sidebar panel that iframes the embedded Loom Ingress
-   URL. `panel.py` registers a single backend-agnostic panel today; the new one branches on
-   `CONF_BACKEND`.
-3. **Integration — leave `websocket_api.py` untouched.** The Devices/Integration tabs
-   already run on Loom via the `isawaitable` branches; that is the documented dual-backend
-   contract, guarded by the #1220 surface tests.
+2. **~~Integration — second panel registration~~ — dropped, it was never needed.**
+   The original plan had `homematicip_local/panel.py` register a second sidebar panel
+   iframing the Loom Ingress URL. Both add-ons already register one themselves
+   (`panel_admin: true` in each `config.yaml`), so an integration-registered panel would be
+   a **third** sidebar entry for the same surface. The only deployment without a Loom panel
+   is a bare daemon behind neither add-on — the same case §4.4 already marks as
+   best-effort. Removing the duplication where it exists (steps 3 and 4) is the smaller and
+   more honest change.
+3. **Frontend — remove the duplicated tabs for loom-backed entries.** Shipped in
+   `homematicip-local-frontend` #87 / `homematicip_local` 2.9.1:
+   - The **CCU dashboard** is re-gated to `backend === "CCU"` (the #74 revert). Its
+     capability block — inbox, firmware, signal quality, service messages, backups — is
+     exactly what the Loom UI owns, and the Loom UI covers **every** CCU the daemon serves
+     while the panel dashboard only ever showed the one behind the selected config entry.
+   - The **Integration tab** keeps only what HA itself knows: the config entry's device
+     statistics and the radio levels of its own entities. Health, command throttling and
+     incidents read `central.health` / `client.command_throttle`, which on loom is daemon
+     state fetched through the adapter — the Loom UI shows it under Diagnostics for the
+     whole fleet. A note in the tab names where the cards went.
 4. **Integration — document CCU-credential ownership.** `config_flow` is the single source
-   for the CCU connection when on Loom; `settings → ccus` is hidden in embedded mode. No
-   code change, but state the ownership.
-5. **Frontend — revert #74 and re-gate the CCU dashboard on `backend === "CCU"`**
-   (`homematic-config.ts:32`, applied at `:278`). Un-gating it for loom made the panel and
-   the Loom SPA both claim pairing, inbox, firmware, signal and service messages — the
-   exact duplication this design removes. The loom-backed replacement is the embedded ops
-   UI, so the revert must land **together with** step 2, never before it: between the two
-   commits a loom-backed entry would have no CCU dashboard at all.
+   for the CCU connection when on Loom; `settings → ccus` is hidden in embedded mode.
+   Recorded in `docs/architecture-comparison-aiohomematic-vs-loom.md` (2.9.1).
 
 ## 6. Consequences, risks, open questions
 
-- **The #74 revert has an installed base now.** It has been live since 2026-07-13 and the
-  loom backend shipped to users in the meantime, so step 5 removes a surface people use.
+- **The #74 revert had an installed base.** It was live from 2026-07-13, and the loom
+  backend shipped to users in between, so step 3 removes a surface people use.
   Ship it in the same release train as the embedded panel, and note it in the integration
   changelog as a move, not a removal.
 - **Explicit opt-in costs discoverability.** Nothing turns embedded mode on by itself, so an

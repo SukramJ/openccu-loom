@@ -45,6 +45,7 @@ function createSurfacesStore() {
   let profile = $state<ProfileName>("standalone");
   let surfaces = $state<SurfaceInfo[]>([]);
   let effective = $state<Record<string, boolean>>({});
+  let centrals = $state(0);
 
   // Saved state as the daemon reports it, and the working copy the
   // editor mutates. Keeping both is what makes Discard possible and
@@ -64,6 +65,7 @@ function createSurfacesStore() {
     profile = resp.profile;
     surfaces = resp.surfaces ?? [];
     effective = resp.effective ?? {};
+    centrals = resp.centrals ?? 0;
     saved = cloneProfiles(resp.profiles);
     draft = cloneProfiles(resp.profiles);
     editing = resp.profile;
@@ -228,6 +230,9 @@ function createSurfacesStore() {
     },
     get embedded() {
       return embedded;
+    },
+    get centrals() {
+      return centrals;
     },
     get profile() {
       return profile;

@@ -27,11 +27,36 @@ type Resolution struct {
 	// the floor: a hand-edited YAML must not be able to hide a surface
 	// the API refuses to hide.
 	Refused []ID
+	// Fleet carries the runtime facts that moved a shipped default.
+	Fleet Fleet
 }
 
-// Resolve applies ui's active profile to the registry.
+// Fleet describes how much of this daemon Home Assistant can possibly
+// own. It is the one runtime input a shipped default depends on.
+//
+// loom:reachable:reason="a field of Resolution, filled by the composition root's central counter and read by the REST payload; a method-less struct the analyzer's type heuristic cannot see used"
+type Fleet struct {
+	// Centrals is the number of CCUs this daemon serves. Zero means
+	// "unknown" — during boot, or in a caller that has no registry — and
+	// is treated as the single-CCU case, which is the shipped default.
+	Centrals int
+}
+
+// MultiCentral reports whether the daemon serves more than one CCU.
+func (f Fleet) MultiCentral() bool { return f.Centrals > 1 }
+
+// Resolve applies ui's active profile to the registry, for a daemon
+// serving a single CCU. Callers that know the fleet size use
+// [ResolveFleet]; this shorthand keeps the many call sites that do not
+// care (tests, previews of a single-CCU setup) readable.
 func Resolve(ui config.NorthUI) Resolution {
-	return ResolveProfile(ui, ui.ActiveProfile())
+	return ResolveFleet(ui, Fleet{})
+}
+
+// ResolveFleet applies ui's active profile with the fleet size that
+// decides two shipped defaults — see [Surface.MultiCentralVisible].
+func ResolveFleet(ui config.NorthUI, fleet Fleet) Resolution {
+	return resolveProfile(ui, ui.ActiveProfile(), fleet)
 }
 
 // ResolveProfile applies the named profile, which need not be the live
@@ -39,14 +64,26 @@ func Resolve(ui config.NorthUI) Resolution {
 // path that serves the live one, so the preview cannot drift from the
 // behaviour it promises.
 func ResolveProfile(ui config.NorthUI, profile string) Resolution {
+	return resolveProfile(ui, profile, Fleet{})
+}
+
+// ResolveProfileFleet is [ResolveProfile] with an explicit fleet size,
+// so the editor's preview of the inactive profile shows the same
+// defaults the daemon would apply if that profile went live.
+func ResolveProfileFleet(ui config.NorthUI, profile string, fleet Fleet) Resolution {
+	return resolveProfile(ui, profile, fleet)
+}
+
+func resolveProfile(ui config.NorthUI, profile string, fleet Fleet) Resolution {
 	overrides := ui.SurfaceOverrides(profile)
 	res := Resolution{
 		Profile: profile,
 		Visible: make(map[ID]bool, len(registry)),
+		Fleet:   fleet,
 	}
 	for i := range registry {
 		s := &registry[i]
-		visible := s.DefaultFor(profile)
+		visible := s.DefaultForFleet(profile, fleet)
 		if state, ok := overrides[string(s.ID)]; ok {
 			want := state == config.SurfaceVisible
 			if !want && s.IsFloor(profile) {
@@ -102,7 +139,7 @@ func (r Resolution) HiddenIDs() []ID {
 // default forever. An operator who "confirms" the shipped visible state
 // of a view would keep it visible even after a later release decides it
 // belongs to Home Assistant.
-func Normalize(profile string, overrides map[string]config.SurfaceState) map[string]config.SurfaceState {
+func Normalize(profile string, overrides map[string]config.SurfaceState, fleet Fleet) map[string]config.SurfaceState {
 	out := make(map[string]config.SurfaceState, len(overrides))
 	for id, state := range overrides {
 		s, known := byID[ID(id)]
@@ -113,7 +150,7 @@ func Normalize(profile string, overrides map[string]config.SurfaceState) map[str
 		if !want && s.IsFloor(profile) {
 			continue
 		}
-		if want == s.DefaultFor(profile) {
+		if want == s.DefaultForFleet(profile, fleet) {
 			continue
 		}
 		out[id] = state

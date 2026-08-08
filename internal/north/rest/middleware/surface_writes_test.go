@@ -22,7 +22,7 @@ func embeddedPolicy(overrides map[string]config.SurfaceState) *surface.Policy {
 	return surface.NewPolicy(config.NorthUI{
 		Embedded: &on,
 		Profiles: map[string]map[string]config.SurfaceState{config.ProfileEmbedded: overrides},
-	})
+	}, nil)
 }
 
 // serve runs one request through the middleware and reports the status
@@ -114,7 +114,7 @@ func TestSurfaceWritesLeavesStandaloneAlone(t *testing.T) {
 		Profiles: map[string]map[string]config.SurfaceState{
 			config.ProfileStandalone: {"device.configure": config.SurfaceHidden},
 		},
-	})
+	}, nil)
 	code, reached := serve(t, policy, &ingress, http.MethodPut, "/api/v1/devices/ABC/paramsets/MASTER")
 	if code != http.StatusOK || !reached {
 		t.Errorf("status = %d, reached = %v — standalone must not refuse anything", code, reached)

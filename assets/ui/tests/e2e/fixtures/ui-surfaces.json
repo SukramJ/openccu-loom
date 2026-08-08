@@ -53,6 +53,7 @@
     "settings.users": true,
     "settings.visibility": true
   },
+  "centrals": 1,
   "surfaces": [
     {
       "id": "nav.overview",
@@ -339,6 +340,7 @@
       "warn": "last_ccu_editor",
       "warn_profile": "standalone",
       "write_gated": true,
+      "multi_central_visible": true,
       "ha_owns": true
     },
     {
@@ -443,6 +445,7 @@
         "standalone": true
       },
       "write_gated": true,
+      "multi_central_visible": true,
       "ha_owns": true
     },
     {
@@ -454,6 +457,7 @@
       },
       "parent": "device.configure",
       "write_gated": true,
+      "multi_central_visible": true,
       "ha_owns": true
     },
     {
@@ -464,6 +468,7 @@
         "standalone": true
       },
       "parent": "device.configure",
+      "multi_central_visible": true,
       "ha_owns": true
     },
     {
@@ -475,6 +480,7 @@
       },
       "parent": "device.configure",
       "write_gated": true,
+      "multi_central_visible": true,
       "ha_owns": true
     },
     {
@@ -486,6 +492,7 @@
       },
       "parent": "device.configure",
       "write_gated": true,
+      "multi_central_visible": true,
       "ha_owns": true
     },
     {
