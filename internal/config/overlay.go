@@ -35,6 +35,7 @@ import (
 //   - OPENCCU_LOOM_REST_OPENAPI_VALIDATE     → c.North.REST.OpenAPIValidate (bool)
 //   - OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH    → c.North.REST.OpenAPISpecPath
 //   - OPENCCU_LOOM_MQTT_BROKER_URL           → c.North.MQTT.BrokerURL
+//   - OPENCCU_LOOM_UI_EMBEDDED               → c.North.UI.Embedded (bool)
 //
 // A recognised variable that is present but fails to parse (e.g.
 // OPENCCU_LOOM_CALLBACK_PORT=abc) is reported as an error naming the
@@ -61,6 +62,7 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) error {
 	overlayBoolPtr(getenv, "OPENCCU_LOOM_REST_OPENAPI_VALIDATE", &c.North.REST.OpenAPIValidate)
 	overlayString(getenv, "OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH", &c.North.REST.OpenAPISpecPath)
 	overlayString(getenv, "OPENCCU_LOOM_MQTT_BROKER_URL", &c.North.MQTT.BrokerURL)
+	overlayBoolPtr(getenv, "OPENCCU_LOOM_UI_EMBEDDED", &c.North.UI.Embedded)
 	return nil
 }
 

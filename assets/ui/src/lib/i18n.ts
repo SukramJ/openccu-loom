@@ -1132,6 +1132,8 @@ const EN: Catalog = {
     "Refill rate (req/s)",
   "config.field.north.rest.rate_limit.burst": "Burst capacity",
   "config.field.north.ui.enabled": "Bootstrap UI enabled",
+  "config.field.north.ui.embedded": "Embedded in Home Assistant",
+  "config.field.north.ui.profiles": "Navigation profiles",
   "config.field.callback.host": "Callback bind address",
   "config.field.callback.port": "XML-RPC callback port",
   "config.field.callback.bin_port": "BIN-RPC callback port",
@@ -1398,6 +1400,10 @@ const EN: Catalog = {
     "Token-bucket size — maximum concurrent requests per identity before the limiter gates.",
   "config.help.north.ui.enabled":
     "Bootstrap UI surface (login, /setup wizard, /health). The SPA itself lives on the REST listener.",
+  "config.help.north.ui.embedded":
+    "Turn on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration runs against this daemon. Hides what HA already owns and refuses the matching writes for the Ingress identity. Not derived from Ingress: the add-on is also used without the integration.",
+  "config.help.north.ui.profiles":
+    "Per-profile navigation overrides, edited under Settings → Navigation & views. Stored sparsely, so views added by a later release keep the default their own code assigns.",
   "config.help.callback.host":
     "Local interface the XML-RPC + BIN-RPC callback listeners bind to. Lock down via firewall, not via bind address.",
   "config.help.callback.port":
@@ -1697,6 +1703,243 @@ const EN: Catalog = {
   "settings.tab.tokens": "API Tokens",
   "settings.tab.system": "System",
   "settings.tab.changes": "Changed settings",
+  "settings.tab.navviews": "Navigation & views",
+
+  // --- Surface-profile editor ------------------------------------
+  "navviews.banner":
+    "Hiding a view removes it from the navigation for every user of this daemon. API tokens, Loom accounts and MQTT are unaffected — restrict those through roles and tokens. In embedded mode, rows marked ⇄ also decide whether Home Assistant may write to that surface.",
+  "navviews.mode.title": "Embedded in Home Assistant",
+  "navviews.mode.desc":
+    "Turn this on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration is configured against this daemon. Loom then hides what HA already owns (login, CCU credentials, paramset and link editors) and refuses the matching writes.",
+  "navviews.mode.live": "Live profile",
+  "navviews.mode.views_visible": "{visible} of {total} views visible",
+  "navviews.mode.deviations": "{count} deviations from defaults",
+  "navviews.profile.editing": "Editing profile",
+  "navviews.profile.standalone": "Standalone",
+  "navviews.profile.embedded": "Embedded",
+  "navviews.profile.live": "live",
+  "navviews.profile.reset": "Reset profile to defaults",
+  "navviews.search": "Find a view…",
+  "navviews.filter.label": "Filter views",
+  "navviews.filter.all": "All",
+  "navviews.filter.visible": "Visible",
+  "navviews.filter.hidden": "Hidden",
+  "navviews.filter.changed": "Changed from default",
+  "navviews.group.overview": "Overview",
+  "navviews.group.automation": "Automation",
+  "navviews.group.diagnose": "Diagnostics",
+  "navviews.group.bridges": "Bridges",
+  "navviews.group.system": "System",
+  "navviews.group.settings": "Settings tabs",
+  "navviews.group.device": "Device detail tabs",
+  "navviews.group.count": "{visible} of {total} visible",
+  "navviews.group.show_all": "Show all",
+  "navviews.group.hide_all": "Hide all",
+  "navviews.row.ha_owns": "Home Assistant provides this.",
+  "navviews.row.locked": "Cannot be hidden — {why}",
+  "navviews.row.unavailable": "Unavailable — {why}",
+  "navviews.row.role_admin": "Only visible to admins.",
+  "navviews.row.write_gated":
+    "Also decides whether Home Assistant may write here.",
+  "navviews.row.changed_from": "Changed · default: {default}",
+  "navviews.row.default_visible": "visible",
+  "navviews.row.default_hidden": "hidden",
+  "navviews.row.reset_one": "Reset to default",
+  "navviews.preview.title": "Preview",
+  "navviews.preview.sub_live": "How the navigation looks after saving.",
+  "navviews.preview.sub_other":
+    "Preview of the {profile} profile — not currently live.",
+  "navviews.preview.none": "Nothing visible in this section.",
+  "navviews.save.count": "{count} unsaved changes",
+  "navviews.save.discard": "Discard",
+  "navviews.save.save": "Save changes",
+  "navviews.toast.saved":
+    "Navigation saved. Every user sees the new layout on their next navigation.",
+  "navviews.toast.reset": "Profile reset to defaults — not saved yet.",
+  "navviews.toast.discarded": "Changes discarded.",
+  "navviews.toast.mode_on": "Embedded mode is on. The Embedded profile is now live.",
+  "navviews.toast.mode_off":
+    "Embedded mode is off. The Standalone profile is now live.",
+  "navviews.toast.error": "Could not save",
+  "navviews.dlg.hide_title": "Hide “{surface}”?",
+  "navviews.dlg.hide_ok": "Hide it",
+  "navviews.dlg.show_write_title": "Show “{surface}” again?",
+  "navviews.dlg.show_write_text":
+    "Home Assistant will be able to write to this surface again — in embedded mode this switch carries the write boundary.",
+  "navviews.dlg.show_write_warn":
+    "The duplicate-editor problem comes back with it: the same paramset is then editable in the Home Assistant panel and here, with different session assumptions.",
+  "navviews.dlg.show_write_ok": "Show and allow writes",
+  "navviews.dlg.mode_on_title": "Switch to embedded mode?",
+  "navviews.dlg.mode_on_text":
+    "Home Assistant becomes the owner of identity, CCU credentials and the device editors. This changes what every user of this daemon sees.",
+  "navviews.dlg.mode_on_ok": "Switch to embedded",
+  "navviews.dlg.mode_off_title": "Leave embedded mode?",
+  "navviews.dlg.mode_off_text":
+    "Loom serves its full config surface again and stops refusing the writes it currently rejects for the Home Assistant identity.",
+  "navviews.dlg.mode_off_ok": "Switch to standalone",
+  "navviews.dlg.will_hide": "{views} views and {tabs} settings tabs will be hidden.",
+  "navviews.dlg.will_show": "{views} views and {tabs} settings tabs come back.",
+  "navviews.dlg.editors_ro":
+    "Paramset, link and schedule editors become read-only for the Home Assistant identity.",
+  "navviews.dlg.reset_title": "Reset the {profile} profile?",
+  "navviews.dlg.reset_text":
+    "All {count} deviations in this profile go back to the shipped defaults. Nothing is written until you save.",
+  "navviews.dlg.reset_ok": "Reset profile",
+  "navviews.warn.alarm_armed":
+    "While the alarm system is armed, a hidden panel leaves no way to disarm it from this UI — MQTT, REST and the Home Assistant integration keep working.",
+  "navviews.warn.security_faults":
+    "Security & Safety faults can only be acknowledged on this view.",
+  "navviews.warn.last_ccu_editor":
+    "New CCUs can then only be added by editing the config file or calling the REST API.",
+  "navviews.why.core": "the device list is what this UI is for.",
+  "navviews.why.settings":
+    "hiding Settings removes every path back, including to this editor.",
+  "navviews.why.editor":
+    "this editor would only be repairable through YAML or the REST API.",
+  "navviews.why.about":
+    "the only in-app statement of version and build — every support request starts there.",
+  "navviews.why.identity":
+    "in standalone, this is the only place to rotate a password or a token.",
+  "navviews.gate.matter": "the Matter bridge is switched off.",
+  "navviews.gate.history": "measurement-history recording is switched off.",
+
+  // --- Surface profiles (Settings → Navigation & views) ----------
+  // One label + one description per addressable surface. The
+  // description says what the view does, not what hiding it means —
+  // an operator deciding what to switch off needs to recognise the
+  // view first. TestSurfaceCopyIsComplete requires both, in both
+  // locales, for every surface in the Go registry.
+  "surface.label.nav.overview": "Overview",
+  "surface.desc.nav.overview": "Tiles for every device, grouped by room.",
+  "surface.label.nav.devices": "Devices",
+  "surface.desc.nav.devices": "The device list and every device detail page.",
+  "surface.label.nav.favorites": "Favorites",
+  "surface.desc.nav.favorites": "Your starred devices and channels.",
+  "surface.label.nav.alarm": "Alarm system",
+  "surface.desc.nav.alarm": "Arming, zones, sensors and sirens.",
+  "surface.label.nav.security": "Security & Safety",
+  "surface.desc.nav.security":
+    "Smoke, water, tamper and power classes with their fault state.",
+  "surface.label.nav.inbox": "Inbox",
+  "surface.desc.nav.inbox": "Devices waiting to be taught in, plus install mode.",
+  "surface.label.nav.fleet": "Fleet",
+  "surface.desc.nav.fleet": "Every configured CCU with its connection state.",
+  "surface.label.nav.programs": "Programs",
+  "surface.desc.nav.programs":
+    "CCU programs — run them, enable them, see when they last fired.",
+  "surface.label.nav.sysvars": "System variables",
+  "surface.desc.nav.sysvars":
+    "Read and write CCU system variables, including channel assignment.",
+  "surface.label.nav.groups": "Device groups (HmIP)",
+  "surface.desc.nav.groups": "HmIP groups on the CCU and their member devices.",
+  "surface.label.nav.links": "Direct links",
+  "surface.desc.nav.links":
+    "Fleet-wide, read-only list of every direct link between channels.",
+  "surface.label.nav.messages": "Service messages",
+  "surface.desc.nav.messages":
+    "Low battery, unreachable, sabotage — with acknowledgement.",
+  "surface.label.nav.diagnostics": "Diagnostics",
+  "surface.desc.nav.diagnostics":
+    "Connection health, throttling, circuit breakers and the RPC recorder.",
+  "surface.label.nav.energy": "Energy",
+  "surface.desc.nav.energy": "Consumption and power across all metering devices.",
+  "surface.label.nav.diagrams": "Charts",
+  "surface.desc.nav.diagrams": "Recorded measurement curves for any data point.",
+  "surface.label.nav.signal": "Signal quality",
+  "surface.desc.nav.signal": "RSSI per device, with the weakest links first.",
+  "surface.label.nav.audit": "Change history",
+  "surface.desc.nav.audit":
+    "Who changed what, when — configuration and device writes.",
+  "surface.label.nav.logs": "Logs",
+  "surface.desc.nav.logs": "The daemon's live log stream with filters.",
+  "surface.label.nav.matter": "Matter",
+  "surface.desc.nav.matter":
+    "Bridge Homematic devices to Apple Home, Google Home or Alexa.",
+  "surface.label.nav.firmware": "Firmware",
+  "surface.desc.nav.firmware":
+    "Available device firmware updates and their rollout state.",
+  "surface.label.nav.backups": "Backups",
+  "surface.desc.nav.backups":
+    "CCU and daemon backups — create, download, restore.",
+  "surface.label.nav.settings": "Settings",
+  "surface.desc.nav.settings": "Everything in this section.",
+  "surface.label.nav.about": "About",
+  "surface.desc.nav.about": "Version, build, add-on stamp and licence information.",
+
+  "surface.label.settings.general": "General",
+  "surface.desc.settings.general":
+    "Locale, log level and the daemon's own identity.",
+  "surface.label.settings.system": "System",
+  "surface.desc.settings.system": "Restart, update and runtime information.",
+  "surface.label.settings.navviews": "Navigation & views",
+  "surface.desc.settings.navviews": "This editor.",
+  "surface.label.settings.changes": "Changed settings",
+  "surface.desc.settings.changes":
+    "Config fields that differ from the running boot configuration.",
+  "surface.label.settings.mqtt": "MQTT",
+  "surface.desc.settings.mqtt":
+    "Broker connection, topic layout and Home Assistant discovery.",
+  "surface.label.settings.matter": "Matter",
+  "surface.desc.settings.matter":
+    "Matter bridge, commissioning and paired controllers.",
+  "surface.label.settings.mcp": "MCP",
+  "surface.desc.settings.mcp":
+    "The Model Context Protocol server and its write tools.",
+  "surface.label.settings.rest": "REST & WebSocket",
+  "surface.desc.settings.rest": "Listener, TLS and CORS for the northbound API.",
+  "surface.label.settings.discovery": "Discovery (mDNS)",
+  "surface.desc.settings.discovery":
+    "How this daemon announces itself on the network.",
+  "surface.label.settings.ccus": "CCUs",
+  "surface.desc.settings.ccus":
+    "Add, edit and discover the CCUs this daemon talks to.",
+  "surface.label.settings.callback": "Callback servers",
+  "surface.desc.settings.callback": "XML-RPC and BIN-RPC callback ports.",
+  "surface.label.settings.oidc": "OIDC",
+  "surface.desc.settings.oidc":
+    "Single sign-on through an external identity provider.",
+  "surface.label.settings.ccu_auth": "CCU authentication",
+  "surface.desc.settings.ccu_auth":
+    "Credentials this daemon uses against the CCU.",
+  "surface.label.settings.users": "Users",
+  "surface.desc.settings.users": "Local user accounts and their roles.",
+  "surface.label.settings.groups": "Rooms & Functions",
+  "surface.desc.settings.groups":
+    "The CCU's rooms and functions, and which channels belong to them.",
+  "surface.label.settings.tokens": "API tokens",
+  "surface.desc.settings.tokens": "Long-lived tokens for machine clients.",
+  "surface.label.settings.visibility": "Hidden parameters",
+  "surface.desc.settings.visibility":
+    "Which data points are suppressed on the northbound planes.",
+  "surface.label.settings.reliability": "Reliability",
+  "surface.desc.settings.reliability":
+    "Retry, throttle and circuit-breaker tuning.",
+  "surface.label.settings.persistence": "Persistence",
+  "surface.desc.settings.persistence":
+    "Database location, retention and vacuum schedule.",
+
+  "surface.label.device.overview": "Overview tab",
+  "surface.desc.device.overview":
+    "Live values and controls for the selected device.",
+  "surface.label.device.configure": "Configure tab",
+  "surface.desc.device.configure":
+    "The whole configuration tab, including its sub-tabs.",
+  "surface.label.device.configure.device-config": "· Parameters",
+  "surface.desc.device.configure.device-config":
+    "MASTER and VALUES paramsets with edit sessions and undo.",
+  "surface.label.device.configure.channels": "· Channels",
+  "surface.desc.device.configure.channels":
+    "The channel strip that selects which channel the editor shows.",
+  "surface.label.device.configure.links": "· Direct links",
+  "surface.desc.device.configure.links":
+    "Create and delete links between this device and others.",
+  "surface.label.device.configure.schedule": "· Schedules",
+  "surface.desc.device.configure.schedule":
+    "Weekly climate and switching programs.",
+  "surface.label.device.history": "History tab",
+  "surface.desc.device.history":
+    "The recorded curve of any parameter of this device.",
+
   "groups.add_function": "Add function",
   "groups.add_room": "Add room",
   "groups.central_label": "Central",
@@ -4646,6 +4889,8 @@ const DE: Catalog = {
     "Refill-Rate (Req/s)",
   "config.field.north.rest.rate_limit.burst": "Burst-Kapazität",
   "config.field.north.ui.enabled": "Bootstrap-UI aktiv",
+  "config.field.north.ui.embedded": "In Home Assistant eingebettet",
+  "config.field.north.ui.profiles": "Navigationsprofile",
   "config.field.callback.host": "Callback-Bind-Adresse",
   "config.field.callback.port": "XML-RPC-Callback-Port",
   "config.field.callback.bin_port": "BIN-RPC-Callback-Port",
@@ -4916,6 +5161,10 @@ const DE: Catalog = {
     "Token-Bucket-Größe — maximale gleichzeitige Requests pro Identity vor Drosselung.",
   "config.help.north.ui.enabled":
     "Bootstrap-UI-Oberfläche (Login, /setup-Wizard, /health). Die SPA selbst läuft auf dem REST-Listener.",
+  "config.help.north.ui.embedded":
+    "Aktivieren, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon läuft. Blendet aus, was HA bereits besitzt, und weist die zugehörigen Schreibzugriffe der Ingress-Identität ab. Wird nicht aus Ingress abgeleitet: das Add-on wird auch ohne die Integration betrieben.",
+  "config.help.north.ui.profiles":
+    "Navigationsabweichungen je Profil, bearbeitet unter Einstellungen → Navigation & Ansichten. Wird sparsam gespeichert, damit später ergänzte Ansichten den Standard behalten, den ihr eigener Code vergibt.",
   "config.help.callback.host":
     "Lokales Interface, auf dem die XML-RPC- + BIN-RPC-Callback-Listener binden. Einschränken via Firewall, nicht via Bind-Adresse.",
   "config.help.callback.port":
@@ -5218,6 +5467,247 @@ const DE: Catalog = {
   "settings.tab.tokens": "API-Tokens",
   "settings.tab.system": "System",
   "settings.tab.changes": "Geänderte Einstellungen",
+  "settings.tab.navviews": "Navigation & Ansichten",
+
+  // --- Editor für Oberflächenprofile -----------------------------
+  "navviews.banner":
+    "Eine ausgeblendete Ansicht verschwindet aus der Navigation — für alle Benutzer dieses Daemons. API-Token, Loom-Konten und MQTT bleiben unberührt; die regeln Sie über Rollen und Token. Im eingebetteten Modus entscheiden die mit ⇄ markierten Zeilen zugleich, ob Home Assistant auf diese Fläche schreiben darf.",
+  "navviews.mode.title": "In Home Assistant eingebettet",
+  "navviews.mode.desc":
+    "Aktivieren Sie das, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon konfiguriert ist. Loom blendet dann aus, was HA bereits besitzt (Anmeldung, CCU-Zugangsdaten, Paramset- und Verknüpfungs-Editoren), und weist die zugehörigen Schreibzugriffe ab.",
+  "navviews.mode.live": "Aktives Profil",
+  "navviews.mode.views_visible": "{visible} von {total} Ansichten sichtbar",
+  "navviews.mode.deviations": "{count} Abweichungen vom Standard",
+  "navviews.profile.editing": "Bearbeitetes Profil",
+  "navviews.profile.standalone": "Eigenständig",
+  "navviews.profile.embedded": "Eingebettet",
+  "navviews.profile.live": "aktiv",
+  "navviews.profile.reset": "Profil auf Standardwerte zurücksetzen",
+  "navviews.search": "Ansicht suchen…",
+  "navviews.filter.label": "Ansichten filtern",
+  "navviews.filter.all": "Alle",
+  "navviews.filter.visible": "Sichtbar",
+  "navviews.filter.hidden": "Ausgeblendet",
+  "navviews.filter.changed": "Vom Standard abweichend",
+  "navviews.group.overview": "Übersicht",
+  "navviews.group.automation": "Automatisierung",
+  "navviews.group.diagnose": "Diagnose",
+  "navviews.group.bridges": "Bridges",
+  "navviews.group.system": "System",
+  "navviews.group.settings": "Einstellungs-Tabs",
+  "navviews.group.device": "Gerätedetail-Tabs",
+  "navviews.group.count": "{visible} von {total} sichtbar",
+  "navviews.group.show_all": "Alle einblenden",
+  "navviews.group.hide_all": "Alle ausblenden",
+  "navviews.row.ha_owns": "Home Assistant stellt das bereit.",
+  "navviews.row.locked": "Kann nicht ausgeblendet werden — {why}",
+  "navviews.row.unavailable": "Nicht verfügbar — {why}",
+  "navviews.row.role_admin": "Nur für Administratoren sichtbar.",
+  "navviews.row.write_gated":
+    "Entscheidet zugleich, ob Home Assistant hier schreiben darf.",
+  "navviews.row.changed_from": "Geändert · Standard: {default}",
+  "navviews.row.default_visible": "sichtbar",
+  "navviews.row.default_hidden": "ausgeblendet",
+  "navviews.row.reset_one": "Auf Standard zurücksetzen",
+  "navviews.preview.title": "Vorschau",
+  "navviews.preview.sub_live": "So sieht die Navigation nach dem Speichern aus.",
+  "navviews.preview.sub_other":
+    "Vorschau des Profils {profile} — derzeit nicht aktiv.",
+  "navviews.preview.none": "In diesem Bereich ist nichts sichtbar.",
+  "navviews.save.count": "{count} ungespeicherte Änderungen",
+  "navviews.save.discard": "Verwerfen",
+  "navviews.save.save": "Änderungen speichern",
+  "navviews.toast.saved":
+    "Navigation gespeichert. Alle Benutzer sehen das neue Layout beim nächsten Seitenwechsel.",
+  "navviews.toast.reset":
+    "Profil auf Standardwerte zurückgesetzt — noch nicht gespeichert.",
+  "navviews.toast.discarded": "Änderungen verworfen.",
+  "navviews.toast.mode_on":
+    "Eingebetteter Modus ist aktiv. Das Profil „Eingebettet“ ist jetzt aktiv.",
+  "navviews.toast.mode_off":
+    "Eingebetteter Modus ist aus. Das Profil „Eigenständig“ ist jetzt aktiv.",
+  "navviews.toast.error": "Speichern fehlgeschlagen",
+  "navviews.dlg.hide_title": "„{surface}“ ausblenden?",
+  "navviews.dlg.hide_ok": "Ausblenden",
+  "navviews.dlg.show_write_title": "„{surface}“ wieder einblenden?",
+  "navviews.dlg.show_write_text":
+    "Home Assistant darf dann wieder auf diese Fläche schreiben — im eingebetteten Modus trägt dieser Schalter die Schreibgrenze.",
+  "navviews.dlg.show_write_warn":
+    "Damit kehrt das Doppel-Editor-Problem zurück: dasselbe Paramset ist dann im Home-Assistant-Panel und hier bearbeitbar, mit unterschiedlichen Sitzungsannahmen.",
+  "navviews.dlg.show_write_ok": "Einblenden und Schreiben erlauben",
+  "navviews.dlg.mode_on_title": "In den eingebetteten Modus wechseln?",
+  "navviews.dlg.mode_on_text":
+    "Home Assistant übernimmt Identität, CCU-Zugangsdaten und die Geräte-Editoren. Das ändert, was jeder Benutzer dieses Daemons sieht.",
+  "navviews.dlg.mode_on_ok": "Zu eingebettet wechseln",
+  "navviews.dlg.mode_off_title": "Eingebetteten Modus verlassen?",
+  "navviews.dlg.mode_off_text":
+    "Loom liefert wieder die vollständige Oberfläche aus und weist die Schreibzugriffe der Home-Assistant-Identität nicht mehr ab.",
+  "navviews.dlg.mode_off_ok": "Zu eigenständig wechseln",
+  "navviews.dlg.will_hide":
+    "{views} Ansichten und {tabs} Einstellungs-Tabs werden ausgeblendet.",
+  "navviews.dlg.will_show":
+    "{views} Ansichten und {tabs} Einstellungs-Tabs kommen zurück.",
+  "navviews.dlg.editors_ro":
+    "Paramset-, Verknüpfungs- und Zeitprogramm-Editoren werden für die Home-Assistant-Identität schreibgeschützt.",
+  "navviews.dlg.reset_title": "Profil {profile} zurücksetzen?",
+  "navviews.dlg.reset_text":
+    "Alle {count} Abweichungen dieses Profils gehen auf die Standardwerte zurück. Geschrieben wird erst beim Speichern.",
+  "navviews.dlg.reset_ok": "Profil zurücksetzen",
+  "navviews.warn.alarm_armed":
+    "Solange das Alarmsystem scharf ist, gibt es mit ausgeblendetem Panel keinen Weg mehr, es in dieser Oberfläche zu entschärfen — MQTT, REST und die Home-Assistant-Integration funktionieren weiter.",
+  "navviews.warn.security_faults":
+    "Meldungen aus Sicherheit & Gefahrenmelder können nur in dieser Ansicht quittiert werden.",
+  "navviews.warn.last_ccu_editor":
+    "Neue CCUs lassen sich dann nur noch über die Konfigurationsdatei oder die REST-API hinzufügen.",
+  "navviews.why.core": "die Geräteliste ist der Zweck dieser Oberfläche.",
+  "navviews.why.settings":
+    "ohne Einstellungen gibt es keinen Weg zurück — auch nicht zu diesem Editor.",
+  "navviews.why.editor":
+    "dieser Editor wäre dann nur noch per YAML oder REST-API reparierbar.",
+  "navviews.why.about":
+    "die einzige Stelle in der App, die Version und Build nennt — dort beginnt jede Support-Anfrage.",
+  "navviews.why.identity":
+    "im eigenständigen Betrieb ist das die einzige Stelle, um Passwort oder Token zu wechseln.",
+  "navviews.gate.matter": "die Matter-Bridge ist ausgeschaltet.",
+  "navviews.gate.history": "die Messwert-Historie ist ausgeschaltet.",
+
+  // --- Oberflächenprofile (Einstellungen → Navigation & Ansichten) ---
+  "surface.label.nav.overview": "Übersicht",
+  "surface.desc.nav.overview": "Kacheln für alle Geräte, nach Raum gruppiert.",
+  "surface.label.nav.devices": "Geräte",
+  "surface.desc.nav.devices": "Die Geräteliste und alle Gerätedetailseiten.",
+  "surface.label.nav.favorites": "Favoriten",
+  "surface.desc.nav.favorites": "Ihre markierten Geräte und Kanäle.",
+  "surface.label.nav.alarm": "Alarmsystem",
+  "surface.desc.nav.alarm": "Scharfschaltung, Zonen, Sensoren und Sirenen.",
+  "surface.label.nav.security": "Sicherheit & Gefahrenmelder",
+  "surface.desc.nav.security":
+    "Rauch, Wasser, Sabotage und Stromversorgung mit ihrem Störungszustand.",
+  "surface.label.nav.inbox": "Posteingang",
+  "surface.desc.nav.inbox": "Anlernbereite Geräte und der Anlernmodus.",
+  "surface.label.nav.fleet": "Fleet",
+  "surface.desc.nav.fleet":
+    "Alle konfigurierten CCUs mit ihrem Verbindungszustand.",
+  "surface.label.nav.programs": "Programme",
+  "surface.desc.nav.programs":
+    "CCU-Programme ausführen, aktivieren und den letzten Lauf sehen.",
+  "surface.label.nav.sysvars": "Systemvariablen",
+  "surface.desc.nav.sysvars":
+    "CCU-Systemvariablen lesen und schreiben, inklusive Kanalzuordnung.",
+  "surface.label.nav.groups": "Gerätegruppen (HmIP)",
+  "surface.desc.nav.groups": "HmIP-Gruppen auf der CCU und ihre Mitglieder.",
+  "surface.label.nav.links": "Direktverknüpfungen",
+  "surface.desc.nav.links":
+    "Fleet-weite, schreibgeschützte Liste aller Direktverknüpfungen.",
+  "surface.label.nav.messages": "Servicemeldungen",
+  "surface.desc.nav.messages":
+    "Batterie schwach, nicht erreichbar, Sabotage — mit Quittierung.",
+  "surface.label.nav.diagnostics": "Diagnose",
+  "surface.desc.nav.diagnostics":
+    "Verbindungszustand, Drosselung, Circuit-Breaker und der RPC-Rekorder.",
+  "surface.label.nav.energy": "Energie",
+  "surface.desc.nav.energy": "Verbrauch und Leistung aller Messgeräte.",
+  "surface.label.nav.diagrams": "Diagramme",
+  "surface.desc.nav.diagrams":
+    "Aufgezeichnete Messkurven für beliebige Datenpunkte.",
+  "surface.label.nav.signal": "Signalqualität",
+  "surface.desc.nav.signal": "RSSI je Gerät, die schwächsten Strecken zuerst.",
+  "surface.label.nav.audit": "Änderungsverlauf",
+  "surface.desc.nav.audit":
+    "Wer hat wann was geändert — Konfiguration und Geräteschreibzugriffe.",
+  "surface.label.nav.logs": "Protokolle",
+  "surface.desc.nav.logs": "Der Live-Logstream des Daemons mit Filtern.",
+  "surface.label.nav.matter": "Matter",
+  "surface.desc.nav.matter":
+    "Homematic-Geräte an Apple Home, Google Home oder Alexa bridgen.",
+  "surface.label.nav.firmware": "Firmware",
+  "surface.desc.nav.firmware":
+    "Verfügbare Geräte-Firmware-Updates und ihr Rollout-Zustand.",
+  "surface.label.nav.backups": "Sicherungen",
+  "surface.desc.nav.backups":
+    "CCU- und Daemon-Sicherungen erstellen, herunterladen, zurückspielen.",
+  "surface.label.nav.settings": "Einstellungen",
+  "surface.desc.nav.settings": "Alles in diesem Bereich.",
+  "surface.label.nav.about": "Über",
+  "surface.desc.nav.about":
+    "Version, Build, Add-on-Stempel und Lizenzangaben.",
+
+  "surface.label.settings.general": "Allgemein",
+  "surface.desc.settings.general":
+    "Sprache, Loglevel und die Identität des Daemons.",
+  "surface.label.settings.system": "System",
+  "surface.desc.settings.system":
+    "Neustart, Update und Laufzeitinformationen.",
+  "surface.label.settings.navviews": "Navigation & Ansichten",
+  "surface.desc.settings.navviews": "Dieser Editor.",
+  "surface.label.settings.changes": "Geänderte Einstellungen",
+  "surface.desc.settings.changes":
+    "Konfigurationsfelder, die von der laufenden Boot-Konfiguration abweichen.",
+  "surface.label.settings.mqtt": "MQTT",
+  "surface.desc.settings.mqtt":
+    "Broker-Verbindung, Topic-Aufbau und Home-Assistant-Discovery.",
+  "surface.label.settings.matter": "Matter",
+  "surface.desc.settings.matter":
+    "Matter-Bridge, Inbetriebnahme und gekoppelte Controller.",
+  "surface.label.settings.mcp": "MCP",
+  "surface.desc.settings.mcp":
+    "Der Model-Context-Protocol-Server und seine Schreibwerkzeuge.",
+  "surface.label.settings.rest": "REST & WebSocket",
+  "surface.desc.settings.rest":
+    "Listener, TLS und CORS für die Northbound-API.",
+  "surface.label.settings.discovery": "Erkennung (mDNS)",
+  "surface.desc.settings.discovery":
+    "Wie sich dieser Daemon im Netzwerk bekannt macht.",
+  "surface.label.settings.ccus": "CCUs",
+  "surface.desc.settings.ccus":
+    "CCUs hinzufügen, bearbeiten und finden, mit denen dieser Daemon spricht.",
+  "surface.label.settings.callback": "Callback-Server",
+  "surface.desc.settings.callback": "XML-RPC- und BIN-RPC-Callback-Ports.",
+  "surface.label.settings.oidc": "OIDC",
+  "surface.desc.settings.oidc":
+    "Single Sign-on über einen externen Identitätsanbieter.",
+  "surface.label.settings.ccu_auth": "CCU-Authentifizierung",
+  "surface.desc.settings.ccu_auth":
+    "Zugangsdaten, mit denen sich dieser Daemon an der CCU anmeldet.",
+  "surface.label.settings.users": "Benutzer",
+  "surface.desc.settings.users": "Lokale Benutzerkonten und ihre Rollen.",
+  "surface.label.settings.groups": "Räume & Gewerke",
+  "surface.desc.settings.groups":
+    "Die Räume und Gewerke der CCU und die Kanäle, die dazugehören.",
+  "surface.label.settings.tokens": "API-Token",
+  "surface.desc.settings.tokens": "Langlebige Token für Maschinen-Clients.",
+  "surface.label.settings.visibility": "Ausgeblendete Parameter",
+  "surface.desc.settings.visibility":
+    "Welche Datenpunkte auf den Northbound-Ebenen unterdrückt werden.",
+  "surface.label.settings.reliability": "Zuverlässigkeit",
+  "surface.desc.settings.reliability":
+    "Retry-, Drossel- und Circuit-Breaker-Einstellungen.",
+  "surface.label.settings.persistence": "Persistenz",
+  "surface.desc.settings.persistence":
+    "Datenbankort, Aufbewahrung und Vacuum-Zeitplan.",
+
+  "surface.label.device.overview": "Tab „Überblick“",
+  "surface.desc.device.overview":
+    "Live-Werte und Bedienelemente des gewählten Geräts.",
+  "surface.label.device.configure": "Tab „Konfigurieren“",
+  "surface.desc.device.configure":
+    "Der gesamte Konfigurationstab inklusive seiner Untertabs.",
+  "surface.label.device.configure.device-config": "· Parameter",
+  "surface.desc.device.configure.device-config":
+    "MASTER- und VALUES-Paramsets mit Bearbeitungssitzung und Undo.",
+  "surface.label.device.configure.channels": "· Kanäle",
+  "surface.desc.device.configure.channels":
+    "Die Kanalleiste, mit der ausgewählt wird, welchen Kanal der Editor zeigt.",
+  "surface.label.device.configure.links": "· Direktverknüpfungen",
+  "surface.desc.device.configure.links":
+    "Verknüpfungen dieses Geräts anlegen und löschen.",
+  "surface.label.device.configure.schedule": "· Zeitprogramme",
+  "surface.desc.device.configure.schedule":
+    "Wochenprogramme für Heizung und Schaltvorgänge.",
+  "surface.label.device.history": "Tab „Verlauf“",
+  "surface.desc.device.history":
+    "Die aufgezeichnete Kurve eines beliebigen Parameters dieses Geräts.",
+
   "groups.add_function": "Gewerk hinzufügen",
   "groups.add_room": "Raum hinzufügen",
   "groups.central_label": "Zentrale",

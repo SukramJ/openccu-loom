@@ -1,0 +1,501 @@
+{
+  "embedded": false,
+  "profile": "standalone",
+  "profiles": {},
+  "effective": {
+    "device.configure": true,
+    "device.configure.channels": true,
+    "device.configure.device-config": true,
+    "device.configure.links": true,
+    "device.configure.schedule": true,
+    "device.history": true,
+    "device.overview": true,
+    "nav.about": true,
+    "nav.alarm": true,
+    "nav.audit": true,
+    "nav.backups": true,
+    "nav.devices": true,
+    "nav.diagnostics": true,
+    "nav.diagrams": true,
+    "nav.energy": true,
+    "nav.favorites": true,
+    "nav.firmware": true,
+    "nav.fleet": true,
+    "nav.groups": true,
+    "nav.inbox": true,
+    "nav.links": true,
+    "nav.logs": true,
+    "nav.matter": true,
+    "nav.messages": true,
+    "nav.overview": true,
+    "nav.programs": true,
+    "nav.security": true,
+    "nav.settings": true,
+    "nav.signal": true,
+    "nav.sysvars": true,
+    "settings.callback": true,
+    "settings.ccu_auth": true,
+    "settings.ccus": true,
+    "settings.changes": true,
+    "settings.discovery": true,
+    "settings.general": true,
+    "settings.groups": true,
+    "settings.matter": true,
+    "settings.mcp": true,
+    "settings.mqtt": true,
+    "settings.navviews": true,
+    "settings.oidc": true,
+    "settings.persistence": true,
+    "settings.reliability": true,
+    "settings.rest": true,
+    "settings.system": true,
+    "settings.tokens": true,
+    "settings.users": true,
+    "settings.visibility": true
+  },
+  "surfaces": [
+    {
+      "id": "nav.overview",
+      "group": "overview",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "ha_owns": true
+    },
+    {
+      "id": "nav.devices",
+      "group": "overview",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "floor": "always"
+    },
+    {
+      "id": "nav.favorites",
+      "group": "overview",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "ha_owns": true
+    },
+    {
+      "id": "nav.alarm",
+      "group": "overview",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "warn": "alarm_armed"
+    },
+    {
+      "id": "nav.security",
+      "group": "overview",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "warn": "security_faults"
+    },
+    {
+      "id": "nav.inbox",
+      "group": "overview",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.fleet",
+      "group": "overview",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.programs",
+      "group": "automation",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.sysvars",
+      "group": "automation",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.groups",
+      "group": "automation",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.links",
+      "group": "automation",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.messages",
+      "group": "diagnose",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.diagnostics",
+      "group": "diagnose",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.energy",
+      "group": "diagnose",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "gate": "history",
+      "ha_owns": true
+    },
+    {
+      "id": "nav.diagrams",
+      "group": "diagnose",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "gate": "history",
+      "ha_owns": true
+    },
+    {
+      "id": "nav.signal",
+      "group": "diagnose",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.audit",
+      "group": "diagnose",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.logs",
+      "group": "diagnose",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "role_admin": true
+    },
+    {
+      "id": "nav.matter",
+      "group": "bridges",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "gate": "matter",
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "nav.firmware",
+      "group": "system",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.backups",
+      "group": "system",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "role_admin": true
+    },
+    {
+      "id": "nav.settings",
+      "group": "system",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "floor": "always"
+    },
+    {
+      "id": "nav.about",
+      "group": "system",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "floor": "always"
+    },
+    {
+      "id": "settings.general",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.system",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.navviews",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "floor": "always"
+    },
+    {
+      "id": "settings.changes",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.mqtt",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.matter",
+      "group": "settings",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "settings.mcp",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.rest",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.discovery",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.ccus",
+      "group": "settings",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "warn": "last_ccu_editor",
+      "warn_profile": "standalone",
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "settings.callback",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.oidc",
+      "group": "settings",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "settings.ccu_auth",
+      "group": "settings",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "settings.users",
+      "group": "settings",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "floor": "standalone",
+      "role_admin": true,
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "settings.groups",
+      "group": "settings",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "settings.tokens",
+      "group": "settings",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "floor": "standalone",
+      "role_admin": true,
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "settings.visibility",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.reliability",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "settings.persistence",
+      "group": "settings",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "device.overview",
+      "group": "device",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "device.configure",
+      "group": "device",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "device.configure.device-config",
+      "group": "device",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "parent": "device.configure",
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "device.configure.channels",
+      "group": "device",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "parent": "device.configure",
+      "ha_owns": true
+    },
+    {
+      "id": "device.configure.links",
+      "group": "device",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "parent": "device.configure",
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "device.configure.schedule",
+      "group": "device",
+      "defaults": {
+        "embedded": false,
+        "standalone": true
+      },
+      "parent": "device.configure",
+      "write_gated": true,
+      "ha_owns": true
+    },
+    {
+      "id": "device.history",
+      "group": "device",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      },
+      "gate": "history"
+    }
+  ]
+}

@@ -1,5 +1,23 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.55.0
+
+- **New: you decide which views the configuration UI shows.** Under
+  **Settings → Navigation & views** an administrator can switch off any
+  view, settings tab or device tab that this installation does not need —
+  the alarm panel in a household that never uses it, the charts when
+  history recording is off, and so on. Every row shows the default it
+  deviates from, and a single button puts everything back.
+- **New add-on option `ui_embedded`.** Turn it on when the
+  Homematic(IP) Local integration uses *this* add-on as its backend: the
+  configuration UI then stops offering a second copy of what Home
+  Assistant already provides — its own login and user administration, the
+  CCU connection, the device parameter and link editors, Matter, and the
+  energy charts — and it refuses those changes coming from Home Assistant
+  rather than letting two panels edit the same thing. Off by default,
+  because running this add-on does not necessarily mean the integration
+  uses it.
+
 ## 0.54.7
 
 - **Fixed: the "Change history" page in the configuration UI stayed

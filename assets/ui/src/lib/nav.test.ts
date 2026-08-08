@@ -11,6 +11,7 @@ import {
   isValidLandingRoute,
   landingTargets,
   navClusters,
+  navSurfaceID,
 } from "./nav";
 
 const ALL_GATES = { matterEnabled: true, historyEnabled: true, isAdmin: true };
@@ -67,5 +68,60 @@ describe("nav — landing page candidates", () => {
     const targets = landingTargets(ALL_GATES).map((target) => target.href);
     expect(targets).toEqual(allHrefs());
     expect(targets).toContain("#/settings");
+  });
+});
+
+describe("nav — surface profile", () => {
+  it("drops the views the operator's profile hides", () => {
+    const hrefs = navClusters({
+      ...ALL_GATES,
+      surfaceVisible: (id) => id !== "nav.alarm" && id !== "nav.favorites",
+    }).flatMap((c) => c.items.map((i) => i.href));
+
+    expect(hrefs).not.toContain("#/alarm");
+    expect(hrefs).not.toContain("#/favorites");
+    expect(hrefs).toContain("#/devices");
+  });
+
+  it("drops a cluster once its last item is hidden", () => {
+    // Bridges holds Matter alone. An empty labelled group would read as
+    // a broken feature rather than a configured-away one.
+    const labels = navClusters({
+      ...ALL_GATES,
+      surfaceVisible: (id) => id !== "nav.matter",
+    }).map((c) => c.label);
+    const withMatter = navClusters(ALL_GATES).map((c) => c.label);
+
+    expect(withMatter.length - labels.length).toBe(1);
+  });
+
+  it("is ANDed with the capability gates, never a replacement", () => {
+    // Showing a surface cannot conjure a view whose feature is off.
+    const hrefs = navClusters({
+      matterEnabled: false,
+      historyEnabled: true,
+      isAdmin: true,
+      surfaceVisible: () => true,
+    }).flatMap((c) => c.items.map((i) => i.href));
+
+    expect(hrefs).not.toContain("#/matter");
+  });
+
+  it("offers only profile-visible views as landing pages", () => {
+    const gates = { ...ALL_GATES, surfaceVisible: (id: string) => id !== "nav.alarm" };
+    expect(isValidLandingRoute("#/alarm", gates)).toBe(false);
+    expect(isValidLandingRoute("#/devices", gates)).toBe(true);
+  });
+});
+
+describe("navSurfaceID", () => {
+  it("maps a navigation href onto its surface id", () => {
+    expect(navSurfaceID("#/devices")).toBe("nav.devices");
+    expect(navSurfaceID("#/settings")).toBe("nav.settings");
+  });
+
+  it("resolves a sub-path or query to its top-level view", () => {
+    expect(navSurfaceID("#/alarm/zones/3")).toBe("nav.alarm");
+    expect(navSurfaceID("#/settings?tab=users")).toBe("nav.settings");
   });
 });

@@ -42,6 +42,8 @@ import (
 //
 //   - `node_modules/` and `spa_dist/` — vendored assets.
 //   - `.git/` — out of scope.
+//   - `.claude/` — agent worktrees are checkouts of other branches; their
+//     links are that branch's problem, not this commit's.
 //
 // Rationale for the broader Markdown rule set being smaller than
 // [TestDocPurity]:
@@ -87,7 +89,13 @@ func TestMarkdownLinksValid(t *testing.T) {
 		// Directory exclusions.
 		if info.IsDir() {
 			base := info.Name()
-			if base == "node_modules" || base == "spa_dist" || base == ".git" {
+			// `.claude` holds agent worktrees: full checkouts of other
+			// branches, whose broken links belong to those branches. Walking
+			// into them turns somebody else's work-in-progress into a
+			// blocking finding on an unrelated commit, which is exactly what
+			// happened when a docs-restructure worktree contributed 60
+			// failures to a change that touched none of them.
+			if base == "node_modules" || base == "spa_dist" || base == ".git" || base == ".claude" {
 				return filepath.SkipDir
 			}
 			return nil

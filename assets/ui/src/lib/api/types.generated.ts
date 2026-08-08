@@ -4804,6 +4804,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ui/surfaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Config-UI surface registry and the live profile
+         * @description Returns every addressable Config-UI surface (navigation items,
+         *     settings tabs, device-detail tabs) with its shipped default per
+         *     profile, plus the resolved visibility of the profile that is
+         *     currently live.
+         *
+         *     The navigation reads `effective`; the profile editor additionally
+         *     needs the per-surface metadata (`defaults`, `floor`, `gate`,
+         *     `write_gated`). Both come from this one payload so the two views
+         *     cannot drift apart.
+         *
+         *     Capability gates (Matter, measurement history) and role gates are
+         *     NOT folded into `effective` — the client applies those, and they
+         *     answer a different question than the operator's configuration.
+         */
+        get: operations["getUISurfaces"];
+        /**
+         * Update the surface profiles or the embedded master toggle (admin)
+         * @description Both fields are optional: the row editor saves `profiles` without
+         *     touching the mode, and the master toggle flips `embedded` without
+         *     resending every row.
+         *
+         *     `profiles` is stored sparsely. Entries equal to the shipped
+         *     default, and ids this daemon does not know, are dropped rather
+         *     than persisted — a stored entry that merely repeats today's
+         *     default would pin it across upgrades.
+         *
+         *     In the embedded profile a hidden surface also refuses its writes
+         *     for the Home Assistant Ingress passthrough identity, so this
+         *     endpoint changes an authorization outcome and is audited. The
+         *     change takes effect immediately, without a restart.
+         *
+         *     Surfaces that can never be hidden (the device list, Settings, the
+         *     profile editor, About, and — in the standalone profile — user and
+         *     token administration) are rejected with 422 rather than silently
+         *     ignored.
+         */
+        put: operations["putUISurfaces"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -8315,6 +8368,105 @@ export interface components {
             /** @description Top-level config section names (e.g. ["logging", "north", "centrals"]). */
             sections: string[];
             fields: components["schemas"]["SchemaField"][];
+        };
+        /** @description One addressable Config-UI surface. */
+        SurfaceInfo: {
+            /**
+             * @description Stable identifier. The prefix names the kind: `nav.` for a
+             *     navigation item, `settings.` for a settings tab, `device.`
+             *     for a device-detail tab.
+             * @example nav.alarm
+             */
+            id: string;
+            /**
+             * @description Editor bucket, mirroring the navigation clusters.
+             * @enum {string}
+             */
+            group: "overview" | "automation" | "diagnose" | "bridges" | "system" | "settings" | "device";
+            /**
+             * @description Shipped visibility per profile name.
+             * @example {
+             *       "standalone": true,
+             *       "embedded": false
+             *     }
+             */
+            defaults: {
+                [key: string]: boolean;
+            };
+            /**
+             * @description Where the surface can never be hidden. Absent when the
+             *     operator may hide it anywhere.
+             * @enum {string}
+             */
+            floor?: "always" | "standalone";
+            /**
+             * @description Runtime capability the surface additionally needs.
+             * @enum {string}
+             */
+            gate?: "matter" | "history";
+            /**
+             * @description Condition under which hiding asks for confirmation. The
+             *     client evaluates the condition; the daemon only declares it.
+             * @enum {string}
+             */
+            warn?: "alarm_armed" | "security_faults" | "last_ccu_editor";
+            /** @description Limits `warn` to a single profile when set. */
+            warn_profile?: string;
+            /**
+             * @description Surface this one lives inside. A child is never more visible
+             *     than its parent.
+             */
+            parent?: string;
+            /** @description Only ever shown to admins, independent of the profile. */
+            role_admin?: boolean;
+            /**
+             * @description In the embedded profile this surface's entry also decides
+             *     whether the Home Assistant Ingress passthrough identity may
+             *     write to it.
+             */
+            write_gated?: boolean;
+            /** @description Home Assistant provides this surface itself. */
+            ha_owns?: boolean;
+        };
+        SurfacesResponse: {
+            /** @description The master toggle — whether Home Assistant owns this daemon's config surface. */
+            embedded: boolean;
+            /**
+             * @description The live profile.
+             * @enum {string}
+             */
+            profile: "standalone" | "embedded";
+            /** @description Stored, sparse overrides per profile name. */
+            profiles: {
+                [key: string]: {
+                    [key: string]: "visible" | "hidden";
+                };
+            };
+            /**
+             * @description Resolved visibility of the live profile, per surface id.
+             *     Capability and role gates are not folded in.
+             */
+            effective: {
+                [key: string]: boolean;
+            };
+            surfaces: components["schemas"]["SurfaceInfo"][];
+        };
+        /**
+         * @description Both fields are optional. Omitting `profiles` leaves the stored
+         *     overrides untouched; omitting `embedded` leaves the mode as it is.
+         */
+        SurfacesRequest: {
+            /** @description Flip the master toggle. */
+            embedded?: boolean;
+            /**
+             * @description Full desired override set per profile. The daemon reduces it
+             *     to the sparse form before persisting.
+             */
+            profiles?: {
+                [key: string]: {
+                    [key: string]: "visible" | "hidden";
+                };
+            };
         };
         /**
          * @description Effective merged configuration with secret fields redacted and
@@ -15004,6 +15156,63 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getUISurfaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfacesResponse"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    putUISurfaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurfacesRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved — the new state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfacesResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description A surface that can never be hidden, or an invalid profile/state */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
         };

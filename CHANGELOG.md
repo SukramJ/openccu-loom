@@ -4,6 +4,51 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.0]
+
+### Added
+
+- **The Config UI's navigation is configurable, per operating mode.** A new
+  admin-only editor under **Settings → Navigation & views** decides which
+  views, settings tabs and device-detail tabs this daemon serves. It carries
+  two profiles — `standalone` and `embedded` — and a master toggle
+  (`north.ui.embedded`, add-on option `ui_embedded`, env
+  `OPENCCU_LOOM_UI_EMBEDDED`) that selects which one is live.
+
+  Turn the master toggle on when Home Assistant owns this daemon's config
+  surface, i.e. the Homematic(IP) Local integration runs against *this*
+  daemon: the UI then hides what HA already provides (login and OIDC, user
+  and token administration, CCU credentials, the paramset/link/schedule
+  editors, Matter, the device tiles and the aggregated analytics) instead of
+  offering a second, competing copy of it. It is deliberately **not** derived
+  from running behind HA Ingress — the add-on is also used without the
+  integration, and the remote-proxy add-on forwards the same Ingress signal
+  while serving the full UI on purpose.
+
+  Each profile stores only its deviations from the shipped default, so views
+  added by a later release arrive with the default their own code assigns
+  rather than being invisible because they were missing from a frozen
+  snapshot. Every row shows the default it deviates from, and reset is
+  available per row and per profile.
+
+  A small set of surfaces can never be hidden, enforced on the server rather
+  than by a disabled switch: the device list, Settings, this editor, the
+  About page, and — in the standalone profile — user and token
+  administration, which is the only place to rotate a credential when Loom
+  owns identity.
+
+  In the **embedded** profile a hidden surface additionally refuses its
+  writes for the Home Assistant Ingress passthrough identity, and showing it
+  again hands the write back — so an operator who prefers Loom's paramset
+  editor gets a working one instead of an editor that fails on save. That
+  scoping applies to the passthrough identity only: an API token, a Loom
+  account and MQTT are untouched, reads are never refused, and outside the
+  embedded profile the navigation setting is exactly that. Profile changes
+  take effect immediately, without a restart, and are audited.
+
+  New REST endpoints `GET`/`PUT /api/v1/ui/surfaces` (API version 5.7.0).
+  Design: `docs/design/ui-surface-profiles.md`.
+
 ## [0.54.7]
 
 ### Fixed

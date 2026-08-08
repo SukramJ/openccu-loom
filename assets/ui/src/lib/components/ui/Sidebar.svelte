@@ -9,6 +9,7 @@
   import { messagesStore } from "$lib/stores/messages.svelte";
   import { matterStore } from "$lib/stores/matter.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
+  import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
   import {
     prefs,
@@ -99,6 +100,10 @@
       matterEnabled,
       historyEnabled,
       isAdmin: authStore.identity?.role === "admin",
+      // The operator's surface profile. Until it has loaded the store
+      // answers "visible" for everything, so the sidebar never blanks
+      // during the first paint.
+      surfaceVisible: (id) => surfacesStore.visible(id),
     }),
   );
 

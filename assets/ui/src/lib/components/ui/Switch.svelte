@@ -8,6 +8,14 @@
     onCheckedChange?: (checked: boolean) => void;
     class?: string;
     id?: string;
+    /**
+     * Accessible name, for switches that carry no adjacent <label>.
+     * A switch whose only label is a heading three elements away is
+     * announced as "switch" and nothing else.
+     */
+    ariaLabel?: string;
+    /** Element that describes the switch, e.g. its help text. */
+    ariaDescribedby?: string;
   };
 
   let {
@@ -16,6 +24,8 @@
     onCheckedChange,
     class: className,
     id,
+    ariaLabel,
+    ariaDescribedby,
   }: Props = $props();
 </script>
 
@@ -23,6 +33,8 @@
   bind:checked
   {disabled}
   {id}
+  aria-label={ariaLabel}
+  aria-describedby={ariaDescribedby}
   onCheckedChange={(v) => onCheckedChange?.(v)}
   class={cn(
     "peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors",
