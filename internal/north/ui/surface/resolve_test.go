@@ -162,7 +162,7 @@ func TestResolveProfilePreviewsInactiveProfile(t *testing.T) {
 	t.Parallel()
 
 	live := config.NorthUI{} // standalone
-	preview := ResolveProfile(live, config.ProfileEmbedded)
+	preview := resolveProfile(live, config.ProfileEmbedded, Fleet{})
 	if preview.Profile != config.ProfileEmbedded {
 		t.Fatalf("profile = %q, want embedded", preview.Profile)
 	}

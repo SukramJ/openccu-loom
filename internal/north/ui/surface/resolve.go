@@ -59,21 +59,10 @@ func ResolveFleet(ui config.NorthUI, fleet Fleet) Resolution {
 	return resolveProfile(ui, ui.ActiveProfile(), fleet)
 }
 
-// ResolveProfile applies the named profile, which need not be the live
-// one — the editor previews the inactive profile with the same code
-// path that serves the live one, so the preview cannot drift from the
-// behaviour it promises.
-func ResolveProfile(ui config.NorthUI, profile string) Resolution {
-	return resolveProfile(ui, profile, Fleet{})
-}
-
-// ResolveProfileFleet is [ResolveProfile] with an explicit fleet size,
-// so the editor's preview of the inactive profile shows the same
-// defaults the daemon would apply if that profile went live.
-func ResolveProfileFleet(ui config.NorthUI, profile string, fleet Fleet) Resolution {
-	return resolveProfile(ui, profile, fleet)
-}
-
+// resolveProfile applies the named profile, which need not be the live
+// one. The editor previews the inactive profile client-side from the
+// same payload, so nothing outside this package needs to ask for a
+// profile by name.
 func resolveProfile(ui config.NorthUI, profile string, fleet Fleet) Resolution {
 	overrides := ui.SurfaceOverrides(profile)
 	res := Resolution{
