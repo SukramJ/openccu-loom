@@ -1,5 +1,5 @@
 // Surface-profile REST DTOs. Hand-written mirror of the openapi.yaml
-// shapes for /ui/surfaces. See docs/design/ui-surface-profiles.md.
+// shapes for /ui/surfaces. See notes/concepts/ui-surface-profiles.md.
 
 /** Stored visibility of one surface. */
 export type SurfaceState = "visible" | "hidden";

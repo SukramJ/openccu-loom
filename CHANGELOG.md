@@ -47,7 +47,43 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   take effect immediately, without a restart, and are audited.
 
   New REST endpoints `GET`/`PUT /api/v1/ui/surfaces` (API version 5.7.0).
-  Design: `docs/design/ui-surface-profiles.md`.
+  Design: `notes/concepts/ui-surface-profiles.md`.
+
+### Changed
+
+- **The published documentation is separated from the working documents.**
+  Both used to live in `docs/`, told apart only by an exclude list in
+  `mkdocs.yml`. That list rotted the way allowlists do: pages were added
+  without being listed, and published pages accumulated links into excluded
+  trees — links that resolve in the repository and 404 on the site. Anyone
+  browsing the documentation could land on a dead link; anyone adding a
+  document had to guess which category it fell into.
+
+  The boundary is now the directory. Everything under `docs/` is published,
+  and the engineering working set — audits, design concepts, contributor
+  procedures, parity fixtures, plans, references — lives under `notes/`,
+  which the site never sees. `notes/README.md` states the rule and says
+  which tree a new document belongs in.
+
+  The **architecture decision records are now on the site**, under
+  *Developer → Architecture Decisions*. They were previously excluded, which
+  left fifteen dead links pointing at them from pages that are published,
+  and their index — now complete through ADR 0061, having stopped at 0054 —
+  linked out to GitHub instead of navigating the site.
+
+  Nine superseded or fully executed documents were removed. Their still-open
+  remnants moved into the roadmap first: the two competing pagination
+  envelopes, the deliberately reverted path-naming rename, and five deferred
+  feature ideas.
+
+  Documentation that had drifted from the code was corrected — the roadmap
+  still described the `openccu-data` embed that ADR 0053 replaced, the
+  specification pointed at a June scorecard as the "recent" audit, the Matter
+  conformance page pinned a spec version the schema snapshot has moved past,
+  and the readme pinned a release and API version that had both moved on.
+
+  API version 5.8.0: several OpenAPI descriptions cite documents that moved,
+  which changes a contract asset. No endpoint, schema or field changed.
 
 ## [0.54.7]
 

@@ -6,7 +6,7 @@ import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 // The value of driving it in a browser rather than in a component test
 // is the wiring: that the tab is reachable, that the registry the daemon
 // serves becomes rows, and that the profile switcher moves the editor
-// without moving the live profile. See docs/design/ui-surface-profiles.md.
+// without moving the live profile. See notes/concepts/ui-surface-profiles.md.
 
 const TAB = 'http://localhost:5173/app/#/settings?tab=navviews';
 

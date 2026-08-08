@@ -4,7 +4,7 @@
 // One store backs both consumers on purpose. The navigation needs the
 // resolved map, the editor needs the registry metadata, and deriving
 // either of them twice is how "what is hidden" and "what is explained
-// as hidden" drift apart. See docs/design/ui-surface-profiles.md.
+// as hidden" drift apart. See notes/concepts/ui-surface-profiles.md.
 
 import { api } from "$lib/api/client";
 import type {
