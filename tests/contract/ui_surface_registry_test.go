@@ -63,7 +63,7 @@ var (
 // spaSurfaceIDs collects the surface ids the SPA actually renders.
 func spaSurfaceIDs(t *testing.T) []surface.ID {
 	t.Helper()
-	var out []surface.ID
+	out := make([]surface.ID, 0, len(surface.Registry()))
 
 	nav := spaFile(t, "lib", "nav.ts")
 	navBody := sliceBetween(t, nav, "export function navClusters", "\n}\n")
