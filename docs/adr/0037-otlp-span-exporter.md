@@ -6,7 +6,7 @@
   `internal/observability/tracing.go`,
   `internal/config/config.go` (`NorthREST`),
   the analysis item Area 9 [W7]/[P3] in
-  `docs/audit/architecture-analysis-2026-06-15.md`
+  `notes/audits/architecture-analysis-2026-06-15.md`
 
 ## Context
 

@@ -313,7 +313,7 @@ func TestAlarmPanelSubscriberHealthChanged(t *testing.T) {
 // TestAlarmPanelSubscriberPanelChanged verifies an
 // AlarmPanelChangedEvent fans out as alarm.panel_changed carrying the
 // entity's effective code-policy flags through to the broadcast
-// payload, so a live policy edit (docs/alarm-concept.md §11) propagates
+// payload, so a live policy edit (notes/concepts/alarm-concept.md §11) propagates
 // to WebSocket clients the same way it does to REST and MQTT.
 func TestAlarmPanelSubscriberPanelChanged(t *testing.T) {
 	t.Parallel()

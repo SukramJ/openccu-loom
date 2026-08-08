@@ -1717,7 +1717,7 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 	// Apple's HAP mapper may reject the extra cluster on RootNode. It is
 	// mounted only behind the explicit, default-off operator opt-in
 	// (north.matter.enable_time_sync) for controllers that genuinely need a
-	// time-sync surface — see docs/parity/by_design.md (BD-Matter-TimeSync-NotMounted).
+	// time-sync surface — see notes/parity/by_design.md (BD-Matter-TimeSync-NotMounted).
 	if mc.TimeSyncEnabled() {
 		out = append(out, mattercore.NewTimeSynchronization())
 		logger.Warn("matter.bridge.time_sync.mounted — TimeSynchronization (0x0038) advertised on RootNode by operator opt-in; some controllers (e.g. Apple Home) may reject pairing")

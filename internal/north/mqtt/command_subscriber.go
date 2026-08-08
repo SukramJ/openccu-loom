@@ -101,18 +101,18 @@ type InstallModeSink interface {
 // engine (source "mqtt"); when nil the subscriber drops alarm commands
 // with a debug breadcrumb. Zones are daemon-level, so the command topic
 // omits the <central> segment every other command topic carries — a
-// deliberate extension of the raw command plane (docs/alarm-concept.md
+// deliberate extension of the raw command plane (notes/concepts/alarm-concept.md
 // §13.3). The reserved zone segment "master" routes to the aggregate
 // arm/disarm verbs.
 type AlarmSink interface {
 	// Arm / Disarm / Silence carry the optional code parsed from the JSON
-	// command envelope (docs/alarm-concept.md §11). The sink validates it
+	// command envelope (notes/concepts/alarm-concept.md §11). The sink validates it
 	// through the engine's code policy; an empty code is code-free.
 	Arm(ctx context.Context, zoneID string, mode hmenum.AlarmMode, code string) error
 	Disarm(ctx context.Context, zoneID, code string) error
 	Silence(ctx context.Context, zoneID, code string) error
 	// Panic fires the engine's loud panic path for an zone (the HA
-	// TRIGGER command, docs/alarm-concept.md §7).
+	// TRIGGER command, notes/concepts/alarm-concept.md §7).
 	Panic(ctx context.Context, zoneID string) error
 	// Master verbs act on every zone at once and stay code-free — a single
 	// code cannot express the union of per-zone policies (the individual
@@ -925,7 +925,7 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 }
 
 // alarmCommandTrigger is the HA panic command routed onto the engine's
-// loud panic path (docs/alarm-concept.md §7). It has no master form.
+// loud panic path (notes/concepts/alarm-concept.md §7). It has no master form.
 const alarmCommandTrigger = "TRIGGER"
 
 // dispatchAlarm resolves the HA command string onto the alarm verb and

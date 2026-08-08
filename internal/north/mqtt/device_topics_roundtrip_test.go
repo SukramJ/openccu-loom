@@ -57,7 +57,7 @@ import (
 // payload_install), matching the CCU-level update entity
 // ([DefaultDiscoveryBuilder.BuildHubUpdateDiscovery]), which was
 // already deliberately command-less for the same reason (see
-// docs/parity/by_design.md): an unconfirmed MQTT payload triggering a
+// notes/parity/by_design.md): an unconfirmed MQTT payload triggering a
 // firmware flash is unsafe, and the REST path
 // (`POST /devices/{addr}/firmware/update`) already carries the
 // operator-confirm guard.

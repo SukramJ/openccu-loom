@@ -521,7 +521,7 @@ func TestAlarmMQTTPublisher_MasterAggregationAcrossTwoZones(t *testing.T) {
 		t.Errorf("master discovery name = %v, want localized fallback %q", discBody["name"], "Alarm system")
 	}
 
-	// Arm one zone only -> mixed set -> away (docs/alarm-concept.md §13.3).
+	// Arm one zone only -> mixed set -> away (notes/concepts/alarm-concept.md §13.3).
 	if _, err := f.eng.Arm(context.Background(), "eg", engine.ArmRequest{
 		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
 	}); err != nil {

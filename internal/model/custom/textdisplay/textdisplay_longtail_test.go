@@ -82,7 +82,7 @@ func TestBurstLimitWarning_TrueWhenDPAsserted(t *testing.T) {
 
 // TestTextDisplayAvailabilityGatesOnBurstLimitWarning pins the availability
 // gate to its primary state carrier (BURST_LIMIT_WARNING); see
-// docs/parity/by_design.md.
+// notes/parity/by_design.md.
 func TestTextDisplayAvailabilityGatesOnBurstLimitWarning(t *testing.T) {
 	td := New("ADDR:1", &stubTDWriter{})
 	dp := newBurstSensor()

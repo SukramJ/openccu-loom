@@ -6,8 +6,8 @@
   [ADR 0012 — Matter pure-Go implementation](./0012-matter-pure-go-implementation.md),
   [ADR 0013 — Matter commissioning bring-up](./0013-matter-commissioning-bring-up.md),
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),
-  Matrix: [`docs/matter/chiptool-send-receive-matrix.md`](../matter/chiptool-send-receive-matrix.md),
-  Apple pairing: [`docs/matter/apple-pair-test-guide.md`](../matter/apple-pair-test-guide.md)
+  Matrix: [`notes/contributor/chiptool-send-receive-matrix.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/contributor/chiptool-send-receive-matrix.md),
+  Apple pairing: [`notes/contributor/apple-pair-test-guide.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/contributor/apple-pair-test-guide.md)
 
 ## Context
 
@@ -57,7 +57,7 @@ both directions:
 
 The authoritative coverage matrix (one row per cluster, with the exact commands,
 CCU params, encodings and known gaps) lives in
-[`docs/matter/chiptool-send-receive-matrix.md`](../matter/chiptool-send-receive-matrix.md),
+[`notes/contributor/chiptool-send-receive-matrix.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/contributor/chiptool-send-receive-matrix.md),
 implemented as one test file per cluster family under `tests/chiptool/`.
 
 **godevccu gains the primitives this needs** (released as a new pinned version):
@@ -98,7 +98,7 @@ closing the gap flips a red assertion instead of adding a new one.
 - **The Apple/Google black boxes stay for interop only.** Post-CASE functional
   correctness is now proven hermetically; the real-controller guides remain for
   the commissioning quirks they alone exhibit
-  ([`apple-pair-test-guide.md`](../matter/apple-pair-test-guide.md)).
+  ([`apple-pair-test-guide.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/contributor/apple-pair-test-guide.md)).
 - **The "setpoint revert" is reframed.** The hermetic invariant (a temperature
   push must not change the reported setpoint) holds with a well-behaved
   simulated thermostat; the field symptom is most likely device-mode behaviour

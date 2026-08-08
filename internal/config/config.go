@@ -173,7 +173,7 @@ type BackupConfig struct {
 	KeepLast int `yaml:"keep_last,omitempty" json:"keep_last,omitzero" cfg:"expert"`
 }
 
-// AlarmConfig configures the alarm engine (docs/alarm-concept.md §14).
+// AlarmConfig configures the alarm engine (notes/concepts/alarm-concept.md §14).
 // Relational alarm data (areas, sensors, outputs) is first-class
 // domain data managed via REST/UI, not config material — this section
 // carries only the global engine settings.
@@ -780,7 +780,7 @@ type NorthMatter struct {
 	// on the RootNode and Apple Home's HAP service mapper may reject an
 	// unexpected RootNode cluster at pairing. Set true only when a controller
 	// genuinely needs the bridge to expose a time-sync surface (re-pair
-	// afterwards). See docs/parity/by_design.md (BD-Matter-TimeSync-NotMounted).
+	// afterwards). See notes/parity/by_design.md (BD-Matter-TimeSync-NotMounted).
 	EnableTimeSync *bool `yaml:"enable_time_sync,omitempty" json:"enable_time_sync,omitempty" cfg:"expert"`
 }
 
@@ -1485,7 +1485,7 @@ type CentralBehavior struct {
 	// EnableDeviceFirmwareCheck (default true) gates the per-device
 	// firmware-update entity surface. Reference stack key:
 	// enable_device_firmware_check (which defaults false there; see
-	// docs/parity/by_design.md for the divergence rationale).
+	// notes/parity/by_design.md for the divergence rationale).
 	EnableDeviceFirmwareCheck *bool `yaml:"enable_device_firmware_check,omitempty" json:"enable_device_firmware_check,omitempty" cfg:"expert"`
 
 	// DelayNewDeviceCreation (default false) defers creation of a
@@ -1530,7 +1530,7 @@ func (b CentralBehavior) IncludeInternalProgramsEnabled() bool {
 // EnableDeviceFirmwareCheckEnabled reports the resolved toggle. Default
 // true: openccu-loom surfaces per-device firmware-update entities out
 // of the box (a deliberate divergence from the reference stack's
-// false default — see docs/parity/by_design.md).
+// false default — see notes/parity/by_design.md).
 func (b CentralBehavior) EnableDeviceFirmwareCheckEnabled() bool {
 	return orDefault(b.EnableDeviceFirmwareCheck, true)
 }

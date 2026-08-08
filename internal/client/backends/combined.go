@@ -179,7 +179,7 @@ func convertCpvLevelHm(value string) any {
 //
 // Note: cover/blind.go carries a parallel inline implementation (hmLevelCombined).
 // No production caller of this exported function exists; it is kept here for
-// backend-level unit tests. See docs/parity/by_design.md BD-A3-CombinedUnused.
+// backend-level unit tests. See notes/parity/by_design.md BD-A3-CombinedUnused.
 func EncodeHMLevel(value float64) string {
 	switch {
 	case value < 0:

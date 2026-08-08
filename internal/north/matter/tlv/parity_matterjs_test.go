@@ -23,10 +23,10 @@ import (
 //
 // Fixture regeneration: run
 // `npx ts-node /tmp/matter-spike/tlv_fixtures.ts >
-// docs/parity/matter/tlv-wire-fixtures.json` against an
+// notes/parity/matter/tlv-wire-fixtures.json` against an
 // `@matter/types` install, then `cp` the file into `testdata/`.
 // Producer script lives under
-// `docs/parity/matter/generate-tlv-wire-fixtures.ts`.
+// `notes/parity/matter/generate-tlv-wire-fixtures.ts`.
 
 //go:embed testdata/tlv-wire-fixtures.json
 var tlvFixturesJSON []byte
@@ -179,7 +179,7 @@ func encode(t *testing.T, label string) []byte {
 		enc.PutUint(FullyQualifiedTag(0x5678, 0x1234, 0xDEADBEEF), 42)
 
 	// ImplicitProfile tags — encoder paths matter.js does not own.
-	// See `docs/parity/matter/tlv-wire-fixtures.json` for the
+	// See `notes/parity/matter/tlv-wire-fixtures.json` for the
 	// matter-spec derivation; matter.js's TlvCodec.writeTag intentionally
 	// omits ImplicitProfile branches (use-case is "implicit profile is
 	// the current message context" which the matter.js Behaviors layer

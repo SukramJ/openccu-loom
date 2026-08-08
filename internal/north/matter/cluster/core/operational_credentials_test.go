@@ -848,7 +848,7 @@ func TestOpcreds_MatterAttributes_IncludesGlobals(t *testing.T) {
 }
 
 // --- GroupTable empty (by-design) ---
-// No code test needed — the by-design entry is in docs/parity/by_design.md.
+// No code test needed — the by-design entry is in notes/parity/by_design.md.
 
 // --- UpdateNOC fires onFabricUpdated hook ---
 

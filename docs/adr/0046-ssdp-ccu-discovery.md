@@ -5,7 +5,7 @@
 - **Related**:
   [ADR 0021 — mDNS self-advertisement](./0021-mdns-self-advertisement.md),
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),
-  [SPECIFICATION.md](../../SPECIFICATION.md) §4.1
+  [SPECIFICATION.md](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md) §4.1
 
 ## Context
 

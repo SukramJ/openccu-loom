@@ -81,7 +81,7 @@ The seed pass overwrites a restored value only where the CCU returns a fresh,
 non-empty value. It deliberately does **not** coerce an empty (not-yet-measured)
 value into `0`: doing so used to clobber the restored last-known reading with an
 implausible placeholder (e.g. `0 °C` right after a CCU restart). See
-`docs/parity/by_design.md` (BD-CCU-StatusUncertainViaTracker).
+`notes/parity/by_design.md` (BD-CCU-StatusUncertainViaTracker).
 
 `available` means "we have a value", not "it is fresh". How old the value is
 travels separately — `refreshed_at` / `modified_at` on the REST/WS payload, and

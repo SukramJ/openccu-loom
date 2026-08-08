@@ -13,7 +13,7 @@
 // implementation possible and invisible to CI. Centralising them here
 // lets the [TestRecordedReliabilityDefaults] snapshot lock the
 // values; any drift triggers a CI failure that demands an explicit
-// by-design entry (docs/parity/by_design.md) before the change lands.
+// by-design entry (notes/parity/by_design.md) before the change lands.
 //
 // Drift policy: when the Python reference implementation advances and
 // a default genuinely changes upstream, update the constant *and* the

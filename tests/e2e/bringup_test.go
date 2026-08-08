@@ -17,7 +17,7 @@ import (
 // TestBringUpSmoke verifies that the harness can actually start the
 // openccu-loom daemon as a sub-process, that /api/v1/health returns
 // 200, and that /api/v1/info returns a JSON envelope. It is the
-// minimum viable proof that step 2 of docs/e2e-testplan.md works
+// minimum viable proof that step 2 of notes/testplans/e2e-testplan.md works
 // end-to-end before any walker is built on top.
 func TestBringUpSmoke(t *testing.T) {
 	t.Parallel()

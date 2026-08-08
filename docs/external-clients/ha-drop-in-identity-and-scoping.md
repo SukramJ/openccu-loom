@@ -185,7 +185,7 @@ discovered entities and WS-client entities are ever expected to share a
 
 **Resolution (taken):** option 2. The daemon's three id namespaces are
 deliberately distinct and are now catalogued in
-[`by_design.md` → BD-Identity-RoutingKeyNamespaces](https://github.com/SukramJ/openccu-loom/blob/main/docs/parity/by_design.md):
+[`by_design.md` → BD-Identity-RoutingKeyNamespaces](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md):
 the MQTT-discovery `unique_id` stays daemon-namespaced and pinned (changing
 it would orphan existing MQTT entities); the daemon's internal data-point
 identity stays opaque to clients; and the cross-backend HA routing key is now mirrored

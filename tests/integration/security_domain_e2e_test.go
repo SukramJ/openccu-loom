@@ -4,7 +4,7 @@
 //go:build integration
 
 // End-to-end integration tests for the Security & Safety domain
-// (internal/security; docs/security-safety-concept.md) against the
+// (internal/security; notes/concepts/security-safety-concept.md) against the
 // in-process godevccu simulator. The harness mirrors
 // alarm_engine_e2e_test.go / alarm_rest_e2e_test.go: the full central →
 // device-pipeline stack comes from newSPAHarness (tests/integration/

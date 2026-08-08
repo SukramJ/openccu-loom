@@ -125,7 +125,7 @@ type Deps struct {
 	// surface; the domain needs persistence for its fault ledger.
 	Security handlers.SecurityDomain
 	// AlarmCodes backs the /alarm/codes CRUD surface (the argon2id-hashed
-	// alarm-code store, docs/alarm-concept.md §11). The routes mount
+	// alarm-code store, notes/concepts/alarm-concept.md §11). The routes mount
 	// whenever Alarm is set; a nil AlarmCodes serves them as 503 so the
 	// contract is present even before the codes facade is wired.
 	AlarmCodes handlers.AlarmCodeAdmin
@@ -422,12 +422,12 @@ type Deps struct {
 	MatterTopologyReassembler handlers.MatterTopologyReassembler
 	// MatterAuditRecorder is the write side of the audit ledger the
 	// Matter mutation handlers append to (per
-	// `docs/matter-ui-concept.md` §6). Same buffer as the read-side
+	// `notes/concepts/matter-ui-concept.md` §6). Same buffer as the read-side
 	// [Deps.Audit] in production; nil = audit-disabled (test).
 	MatterAuditRecorder audit.Recorder
 
 	// VisibilityUnIgnoreStore backs the `/visibility/unignore*` REST
-	// surface (see docs/ui/unignore-concept.md). Nil disables the
+	// surface (see notes/concepts/ui/unignore-concept.md). Nil disables the
 	// endpoints with 503 service_unready.
 	VisibilityUnIgnoreStore handlers.VisibilityUnIgnoreStore
 	// VisibilityCentralLister returns the names of every central the
@@ -980,7 +980,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/alarm/outputs/{id}/test", handlers.TestAlarmOutput(d.Alarm, d.AuditRecorder))
 				// Alarm codes: reads and writes both require the operator
 				// role — codes are security material, so even the list is
-				// not viewer-open (docs/alarm-concept.md §11/§16). A nil
+				// not viewer-open (notes/concepts/alarm-concept.md §11/§16). A nil
 				// AlarmCodes serves these as 503.
 				pr.With(op).Get("/alarm/codes", handlers.ListAlarmCodes(d.AlarmCodes))
 				pr.With(op).Post("/alarm/codes", handlers.CreateAlarmCode(d.AlarmCodes, d.AuditRecorder))
@@ -1127,7 +1127,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 
 			// Visibility / un-ignore endpoints — power-user surface that
 			// promotes otherwise-hidden parameters to first-class data
-			// points. See docs/ui/unignore-concept.md.
+			// points. See notes/concepts/ui/unignore-concept.md.
 			pr.Get("/visibility/unignore", handlers.ListVisibilityUnIgnore(d.VisibilityCentralLister, d.VisibilityUnIgnoreStore))
 			pr.With(admin).Put("/visibility/unignore", handlers.UpdateVisibilityUnIgnore(d.VisibilityUnIgnoreStore, d.VisibilityRegistryLoader, d.MatterAuditRecorder))
 			pr.Get("/visibility/unignore/candidates", handlers.ListVisibilityUnIgnoreCandidates(d.VisibilityCentralLister, d.VisibilityCandidateProvider))

@@ -47,7 +47,7 @@ type CombinedDataPoint interface {
 // does not exist in device_pipeline.go (contrast with the analogous
 // materialiseCalculatedDataPoints at device_pipeline.go:783). BridgeCombined-
 // DataPoint is retained as the correct generic bridge for when combined-DP
-// materialisation is added; see docs/parity/by_design.md BD-A3-CombinedUnused.
+// materialisation is added; see notes/parity/by_design.md BD-A3-CombinedUnused.
 func BridgeCombinedDataPoint(
 	bus *events.Bus,
 	dp CombinedDataPoint,

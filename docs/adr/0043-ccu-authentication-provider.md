@@ -5,7 +5,7 @@
 - **Related**:
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),
   [ADR 0041 — persist auth sessions](./0041-persist-auth-sessions.md),
-  [SPECIFICATION.md](../../SPECIFICATION.md) §auth
+  [SPECIFICATION.md](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md) §auth
 
 ## Context
 

@@ -544,7 +544,7 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"MeasurementStore:DeleteHourlyOlderThan": "reason: rollup retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
 		"MeasurementStore:DeleteDailyOlderThan":  "reason: rollup retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
 		// Alarm zones are daemon-level partitions that may span
-		// multiple centrals (docs/alarm-concept.md §13.1, §14): the
+		// multiple centrals (notes/concepts/alarm-concept.md §13.1, §14): the
 		// zone/incident/journal keys are zone-scoped by design, and the
 		// central reference lives inside each sensor/output row
 		// (CentralName column) instead of on the store surface. Scoping

@@ -4,14 +4,14 @@
 // Package parity provides the matter.js HEAD schema snapshot to all
 // matter-side parity tests in one embed location. Mirrors matter.js
 // HEAD `packages/model/src/standard/elements/*.element.ts`; regenerable
-// via `docs/parity/matter/extract-from-matter-js.ts` (pipe stdout to
-// docs/parity/matter/matter-schema-snapshot.json, then copy here).
+// via `notes/parity/matter/extract-from-matter-js.ts` (pipe stdout to
+// notes/parity/matter/matter-schema-snapshot.json, then copy here).
 //
 // Sync note: internal/north/matter/parity/schema.json must be kept in
-// sync with docs/parity/matter/matter-schema-snapshot.json. After
+// sync with notes/parity/matter/matter-schema-snapshot.json. After
 // regenerating the master file, copy it:
 //
-//	cp docs/parity/matter/matter-schema-snapshot.json internal/north/matter/parity/schema.json
+//	cp notes/parity/matter/matter-schema-snapshot.json internal/north/matter/parity/schema.json
 package parity
 
 import _ "embed"

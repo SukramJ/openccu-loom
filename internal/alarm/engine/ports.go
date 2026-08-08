@@ -74,7 +74,7 @@ type FireOptions struct {
 }
 
 // ChirpKind names the confirmation/feedback chirp classes
-// (docs/alarm-concept.md §7). Chirps are best-effort and degrade
+// (notes/concepts/alarm-concept.md §7). Chirps are best-effort and degrade
 // first under duty-cycle pressure (S5).
 type ChirpKind string
 
@@ -121,7 +121,7 @@ type OutputPort interface {
 }
 
 // CodeValidator authenticates an alarm code for one verb on one zone
-// (docs/alarm-concept.md §11). It is satisfied by the codes facade,
+// (notes/concepts/alarm-concept.md §11). It is satisfied by the codes facade,
 // which owns the code store; the engine only knows this port.
 //
 // Contract:

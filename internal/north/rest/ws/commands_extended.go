@@ -23,7 +23,7 @@ import (
 // Note: `devices.copy` and `devices.export` were removed in favour of
 // the REST equivalents `/devices/{addr}/channels/{no}/config/export`
 // and the channel-level paramset-copy flow — see
-// docs/parity/by_design.md (entry "ws-rest-split").
+// notes/parity/by_design.md (entry "ws-rest-split").
 type DeviceWriter interface {
 	// Rename renames the device (CCU JSON-RPC `Device.setName`). When
 	// includeChannels is true every channel is renamed along with the

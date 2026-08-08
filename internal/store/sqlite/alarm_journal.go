@@ -13,7 +13,7 @@ import (
 )
 
 // AlarmJournalEntry is one row of the persistent, filterable alarm-journal
-// log (docs/alarm-concept.md §14). The journal is append-only from the
+// log (notes/concepts/alarm-concept.md §14). The journal is append-only from the
 // engine's perspective; deletion happens only through the privileged
 // retention path (PurgeBefore). Hidden entries exist for duress events —
 // they stay out of user-visible surfaces until resolved but are fully

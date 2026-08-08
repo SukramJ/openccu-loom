@@ -5,8 +5,7 @@
 - **Related**:
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),
   [ADR 0025 — MCP north-bound adapter](./0025-mcp-northbound-adapter.md),
-  [ADR 0044 — single-port onboarding and HA Ingress auth](./0044-single-port-onboarding-and-ha-ingress-auth.md),
-  Plan: [`docs/plans/bridge-registry-migration.md`](../plans/bridge-registry-migration.md)
+  [ADR 0044 — single-port onboarding and HA Ingress auth](./0044-single-port-onboarding-and-ha-ingress-auth.md)
 
 ## Context
 

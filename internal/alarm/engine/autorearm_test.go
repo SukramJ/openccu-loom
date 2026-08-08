@@ -11,7 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// This file covers auto-rearm (docs/alarm-concept.md §15 row 22): after
+// This file covers auto-rearm (notes/concepts/alarm-concept.md §15 row 22): after
 // a post-trigger disarm, the zone re-arms to its pre-incident mode
 // after a quiet period; member-sensor activity resets the countdown; a
 // blocked rearm attempt stays disarmed with a fail-visible journal

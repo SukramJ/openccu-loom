@@ -182,7 +182,7 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 // a non-conformant addition that strict controllers may reject as
 // UnsupportedCluster. The "alarm active" state is surfaced only via the
 // OnOff attribute, which is sufficient for the on/off alarm role.
-// See docs/parity/by_design.md for the by-design rationale.
+// See notes/parity/by_design.md for the by-design rationale.
 //
 // Tone / optical selection lives outside Matter — see ADR 0012 §5
 // "out of Matter scope" table.

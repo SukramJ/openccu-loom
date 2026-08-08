@@ -9,7 +9,7 @@
   `snapshot-diff`), `script/model_snapshot_diff.py`,
   `script/model_snapshot_drift_check.py`,
   the analysis item Area 9 [W6]/[P2] in
-  `docs/audit/architecture-analysis-2026-06-15.md`
+  `notes/audits/architecture-analysis-2026-06-15.md`
 
 ## Context
 

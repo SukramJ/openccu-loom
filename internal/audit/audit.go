@@ -133,7 +133,7 @@ const (
 	// operator-defined area (a room grouping such as a floor or a shed)
 	// and full-set replacement of an area's room assignment. Distinct
 	// from ActionAlarmConfigChange, which covers the alarm engine's own
-	// "area" partitions (docs/alarm-concept.md §14) — a different
+	// "area" partitions (notes/concepts/alarm-concept.md §14) — a different
 	// concept despite the shared word. The Note carries the operation
 	// and the area id.
 	ActionAreaChange Action = "area_change"
@@ -161,14 +161,14 @@ const (
 	// TLS server certificate.
 	ActionTLSCertUpload Action = "tls_cert_upload"
 
-	// Matter bridge mutations (per docs/matter-ui-concept.md §6).
+	// Matter bridge mutations (per notes/concepts/matter-ui-concept.md §6).
 	ActionMatterExposureUpdate Action = "matter_exposure_update"
 	ActionMatterExposureBulk   Action = "matter_exposure_bulk"
 	ActionMatterFabricRevoke   Action = "matter_fabric_revoke"
 	ActionMatterCommissioning  Action = "matter_commissioning"
 	ActionMatterShare          Action = "matter_share"
 
-	// Visibility surface mutations (docs/ui/unignore-concept.md).
+	// Visibility surface mutations (notes/concepts/ui/unignore-concept.md).
 	ActionUnIgnoreUpdate Action = "un_ignore_update"
 
 	// Auth-token lifecycle. The Entry's Note carries

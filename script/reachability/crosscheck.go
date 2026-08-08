@@ -47,7 +47,7 @@ type CrossCheckResult struct {
 func main() {
 	repoRoot, _ := os.Getwd()
 
-	raw, err := os.ReadFile(filepath.Join(repoRoot, "docs/parity/dead-code-inventory.json"))
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "notes/parity/dead-code-inventory.json"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load inventory: %v\n", err)
 		os.Exit(1)
@@ -88,7 +88,7 @@ func main() {
 		Genuine:         genuine,
 	}
 	enc, _ := json.MarshalIndent(out, "", "  ")
-	outPath := filepath.Join(repoRoot, "docs/parity/dead-code-genuine.json")
+	outPath := filepath.Join(repoRoot, "notes/parity/dead-code-genuine.json")
 	if err := os.WriteFile(outPath, enc, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write output: %v\n", err)
 		os.Exit(1)

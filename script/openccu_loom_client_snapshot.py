@@ -27,7 +27,7 @@ The output JSON shape currently mirrors `GET /snapshot` directly. When
 `py-openccu-loom-client` ships, the script should be re-pointed at the
 client's higher-level dumper so the three-way diff input matches
 aiohomematic / loom-go on the exact field-by-field schema documented in
-`docs/parity/model_snapshot_schema.md`.
+`notes/parity/model_snapshot_schema.md`.
 """
 
 from __future__ import annotations

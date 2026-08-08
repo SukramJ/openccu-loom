@@ -4,20 +4,20 @@
 // Parity test: verifies that each Go MarshalTLV encoder produces the same wire
 // bytes as the matter.js HEAD reference encoder for the same logical input.
 //
-// Fixture source: docs/parity/matter/im-wire-fixtures.json
-// Generator:      docs/parity/matter/generate-im-wire-fixtures.ts
+// Fixture source: notes/parity/matter/im-wire-fixtures.json
+// Generator:      notes/parity/matter/generate-im-wire-fixtures.ts
 //
 // Regen command (run from inside the matter.js checkout):
-//   node /Users/markus/Documents/GitHub/openccu-loom/docs/parity/matter/generate-im-wire-fixtures.ts \
-//       > /Users/markus/Documents/GitHub/openccu-loom/docs/parity/matter/im-wire-fixtures.json
-//   cp /Users/markus/Documents/GitHub/openccu-loom/docs/parity/matter/im-wire-fixtures.json \
+//   node /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/generate-im-wire-fixtures.ts \
+//       > /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/im-wire-fixtures.json
+//   cp /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/im-wire-fixtures.json \
 //       /Users/markus/Documents/GitHub/openccu-loom/internal/north/matter/im/testdata/im-wire-fixtures.json
 //
 // Fixtures with byDesignDivergence=true are skipped in the byte-equality
 // assertion. These document cases where the Go encoder intentionally diverges
 // from matter.js (e.g. fixed-width SubscriptionId encoding required by chip-tool
 // and Apple Home, empty-array vs omitted optional fields). See the byDesignNote
-// in each fixture and docs/parity/by_design.md for the rationale.
+// in each fixture and notes/parity/by_design.md for the rationale.
 
 package im
 
@@ -44,9 +44,9 @@ type fixtureRecord struct {
 }
 
 // fixtureFile is the path to the JSON fixture relative to the repo root.
-const fixtureFile = "../../../../docs/parity/matter/im-wire-fixtures.json"
+const fixtureFile = "../../../../notes/parity/matter/im-wire-fixtures.json"
 
-// loadFixtures reads im-wire-fixtures.json from the docs/parity/matter/
+// loadFixtures reads im-wire-fixtures.json from the notes/parity/matter/
 // directory (relative to this test file's package).
 func loadFixtures(t *testing.T) []fixtureRecord {
 	t.Helper()
@@ -54,8 +54,8 @@ func loadFixtures(t *testing.T) []fixtureRecord {
 	if err != nil {
 		t.Fatalf("load im-wire-fixtures.json: %v\n"+
 			"Regen: cd /Users/markus/Documents/GitHub/matter.js && "+
-			"node /Users/markus/Documents/GitHub/openccu-loom/docs/parity/matter/generate-im-wire-fixtures.ts "+
-			"> /Users/markus/Documents/GitHub/openccu-loom/docs/parity/matter/im-wire-fixtures.json", err)
+			"node /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/generate-im-wire-fixtures.ts "+
+			"> /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/im-wire-fixtures.json", err)
 	}
 	var records []fixtureRecord
 	if err := json.Unmarshal(b, &records); err != nil {
@@ -346,8 +346,8 @@ func TestIMWireFixtures_MarshalParity(t *testing.T) {
 					"Description: %s\n"+
 					"%s\n"+
 					"Regen fixtures: cd /Users/markus/Documents/GitHub/matter.js && "+
-					"node /Users/markus/Documents/GitHub/openccu-loom/docs/parity/matter/generate-im-wire-fixtures.ts "+
-					"> /Users/markus/Documents/GitHub/openccu-loom/docs/parity/matter/im-wire-fixtures.json",
+					"node /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/generate-im-wire-fixtures.ts "+
+					"> /Users/markus/Documents/GitHub/openccu-loom/notes/parity/matter/im-wire-fixtures.json",
 					rec.Type, rec.Label, rec.Description, diff)
 			}
 		})

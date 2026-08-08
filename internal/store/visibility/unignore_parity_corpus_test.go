@@ -26,7 +26,7 @@ import (
 // against that parser; it now pins the corrected grammar.
 //
 // Where OpenCCU-Loom deliberately diverges from the reference (documented in
-// docs/parity/by_design.md BD-Visibility-UnIgnoreMatchingEdges) the expected
+// notes/parity/by_design.md BD-Visibility-UnIgnoreMatchingEdges) the expected
 // value encodes the divergence and the case comment says so.
 
 // loadUnIgnoreLines parses raw un_ignore lines and loads the resulting entries

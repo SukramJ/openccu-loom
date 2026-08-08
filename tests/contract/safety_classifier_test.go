@@ -32,7 +32,7 @@ import (
 // cannot depend on its presence. The fleet table below is therefore
 // hand-curated from the real device models and channel types already
 // documented on the classifier itself and in
-// docs/parity/by_design.md.
+// notes/parity/by_design.md.
 var safetyFleet = []struct {
 	model          string
 	channelType    string
@@ -86,7 +86,7 @@ var safetyFleet = []struct {
 	{"HmIP-BROLL", "", "LEVEL", false},
 	{"HmIP-STH", "", "ACTUAL_TEMPERATURE", false},
 
-	// Rain is weather, not a leak (docs/security-safety-concept.md
+	// Rain is weather, not a leak (notes/concepts/security-safety-concept.md
 	// §6.1) — both real rain-sensor channel types must stay unclassified.
 	{"HM-Sen-RD-O", "RAINDETECTOR", hmenum.ParameterState, false},
 	{"HM-Sen-RD-O", "RAIN_DETECTION_TRANSMITTER", hmenum.ParameterRaining, false},

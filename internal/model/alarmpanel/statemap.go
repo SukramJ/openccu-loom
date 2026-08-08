@@ -33,7 +33,7 @@ const (
 	HAAlarmCommandArmCustomBypass = "ARM_CUSTOM_BYPASS"
 	HAAlarmCommandDisarm          = "DISARM"
 	// HAAlarmCommandSilence is a deliberate OpenCCU-Loom extension of the
-	// HA vocabulary (docs/alarm-concept.md §13.3): the raw command plane
+	// HA vocabulary (notes/concepts/alarm-concept.md §13.3): the raw command plane
 	// accepts SILENCE to stop sounding outputs without a state change.
 	HAAlarmCommandSilence = "SILENCE"
 )
@@ -130,7 +130,7 @@ func ArmModeForCommand(cmd string) (mode hmenum.AlarmMode, ok bool) {
 }
 
 // MasterStateToken aggregates the per-zone HA state tokens onto the
-// single master-panel token (docs/alarm-concept.md §13.3 decision): any
+// single master-panel token (notes/concepts/alarm-concept.md §13.3 decision): any
 // triggered wins, then pending, then arming; a set that is entirely one
 // token collapses to that token (all disarmed → disarmed, all armed in
 // the same mode → that armed token); every other mix reports away.

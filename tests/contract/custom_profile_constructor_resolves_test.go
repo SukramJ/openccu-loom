@@ -302,7 +302,7 @@ func boolPtrValue(b *bool) string {
 // entries (IP_COVER_CONFIG, IP_SWITCH_CONFIG, IP_LOCK_CONFIG,
 // IP_THERMOSTAT_CONFIG). The wrapped-DP set was previously only exercised
 // by the cross-stack model-snapshot pipeline, which tolerates it as an
-// unchecked field (docs/parity/by_design.md); this test cross-checks the
+// unchecked field (notes/parity/by_design.md); this test cross-checks the
 // composition directly, at contract-test speed, without needing a live CCU
 // or the model-snapshot pipeline's ~70 MB fixtures.
 func TestProfileFieldMappingsMatchAiohomematicSource(t *testing.T) {

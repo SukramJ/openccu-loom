@@ -48,8 +48,8 @@ import (
 // Rationale for the broader Markdown rule set being smaller than
 // [TestDocPurity]:
 //
-// `docs/parity/by_design.md` and `docs/parity/master_tracker.md` are
-// the audit-trail itself — Drift-IDs, audit dates, "parity sweep"
+// `notes/parity/by_design.md` is the audit-trail itself — Drift-IDs,
+// audit dates, "parity sweep"
 // references all belong there. Banning them in Markdown would break
 // the documents they are designed to populate. The one rule that
 // transfers cleanly is link integrity: a broken `[text](path.md)`

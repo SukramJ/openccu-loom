@@ -106,7 +106,7 @@ const (
 
 	// Cluster revisions: Thermostat 11, ThermostatUI 2,
 	// TemperatureMeasurement 6, RelativeHumidityMeasurement 5.
-	// Pinned via docs/parity/matter/matter-schema-snapshot.json.
+	// Pinned via notes/parity/matter/matter-schema-snapshot.json.
 	matterThermClusterRevision    uint16 = 11
 	matterThermUIClusterRevision  uint16 = 2
 	matterTempMeasClusterRevision uint16 = 6

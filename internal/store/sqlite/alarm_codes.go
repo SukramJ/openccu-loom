@@ -11,7 +11,7 @@ import (
 )
 
 // AlarmCodeRow is one alarm-system user code or hardware-identity
-// binding (docs/alarm-concept.md §11, migration 028). Kind is one of
+// binding (notes/concepts/alarm-concept.md §11, migration 028). Kind is one of
 // "pin" (argon2id-hashed in Hash), "keypad_slot" or "remote_key" (Hash
 // empty; the binding lives in BindingJSON). PermsJSON, ZonesJSON and
 // BindingJSON are always loaded and saved as a whole and never queried

@@ -14,7 +14,7 @@ package integration
 // assert both the daemon path (no 502) and the device-state
 // outcome.
 //
-// See `docs/testing/spa-e2e-against-godevccu.go` for the
+// See `notes/contributor/spa-e2e-against-godevccu.md` for the
 // architecture overview.
 
 import (

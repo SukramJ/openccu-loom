@@ -65,7 +65,7 @@ func newAlarmRestCodesHarness(t *testing.T) *alarmRestHarness {
 // supplying the correct code (204, zone actually disarms). It then
 // re-arms and disarms again supplying a code the store does not
 // recognize — this also succeeds, pinning the S6 break-glass rule
-// (docs/alarm-concept.md §11) at the full-stack level: every REST write
+// (notes/concepts/alarm-concept.md §11) at the full-stack level: every REST write
 // is attributed the "rest-operator" source, which the engine's
 // CodePolicy always treats as a strongly-authenticated bypass. A wrong
 // or missing code therefore never yields the REST 403 invalid_code

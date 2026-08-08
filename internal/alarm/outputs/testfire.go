@@ -13,7 +13,7 @@ import (
 )
 
 // testFireDuration bounds one test activation (short and reduced per
-// docs/alarm-concept.md §7 — the HmIP "Test-Alarm" parity).
+// notes/concepts/alarm-concept.md §7 — the HmIP "Test-Alarm" parity).
 const testFireDuration = 3 * time.Second
 
 // Test-fire refusal errors surfaced to the management API.

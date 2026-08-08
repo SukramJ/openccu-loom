@@ -10,7 +10,7 @@ import (
 	"fmt"
 )
 
-// AlarmZoneRow is one independently armable partition (docs/alarm-concept.md
+// AlarmZoneRow is one independently armable partition (notes/concepts/alarm-concept.md
 // §14). ConfigJSON carries the bounded per-mode configuration document
 // (delays, output policy, post-trigger policy, central-loss policy, blocker
 // policies); it is always loaded and saved as a whole and never queried

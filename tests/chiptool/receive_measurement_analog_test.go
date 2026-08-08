@@ -145,7 +145,7 @@ func TestReceive_MeasurementAnalog(t *testing.T) {
 	// PressureMeasurement (0x0403) and PM2.5/PM10 (0x042A / 0x042D) have
 	// no godevccu fixture exposing AIR_PRESSURE or
 	// MASS_CONCENTRATION_PM_{2_5,10}_24H — see
-	// docs/parity/by_design.md / matrix gap G8. Deferred until a fixture
+	// notes/parity/by_design.md / matrix gap G8. Deferred until a fixture
 	// lands rather than silently omitted.
 	t.Run("pressure", func(t *testing.T) {
 		t.Skip("no godevccu fixture exposes AIR_PRESSURE — deferred pending PressureMeasurement fixture (matrix gap G8)")

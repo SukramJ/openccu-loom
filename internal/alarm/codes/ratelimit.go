@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Rate-limit parameters (docs/alarm-concept.md §11 / slice-6 design):
+// Rate-limit parameters (notes/concepts/alarm-concept.md §11 / slice-6 design):
 // five wrong attempts are tolerated before a source is locked out; the
 // lockout duration starts at rateLimitBaseLockout and doubles on every
 // further violation, capped at rateLimitMaxLockout. State is held

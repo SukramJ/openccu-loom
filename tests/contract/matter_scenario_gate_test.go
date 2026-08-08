@@ -16,7 +16,7 @@ import (
 // TestScenarioCoverage enforces that every custom-DP type with a
 // Matter-side integration (a `<type>/matter.go` under
 // internal/model/custom/) has at least one scenario tagged with its
-// type name in docs/parity/matter/scenarios. New Matter-mappable
+// type name in notes/parity/matter/scenarios. New Matter-mappable
 // custom DPs cannot land without scenario coverage — the
 // behavior-scenario harness is the regression net for the very class
 // of cross-layer bug single-package unit tests cannot catch (see F4).
@@ -29,7 +29,7 @@ func TestScenarioCoverage(t *testing.T) {
 	t.Parallel()
 
 	customDPRoot := scenarioRepoPath(t, "internal/model/custom")
-	scenarioDir := scenarioRepoPath(t, "docs/parity/matter/scenarios")
+	scenarioDir := scenarioRepoPath(t, "notes/parity/matter/scenarios")
 
 	withMatter, err := customDPsWithMatterIntegration(customDPRoot)
 	if err != nil {
@@ -55,7 +55,7 @@ func TestScenarioCoverage(t *testing.T) {
 		t.Errorf(`%d custom-DP type(s) with Matter integration have NO scenario tagged with their name:
   %s
 
-Add a scenario under docs/parity/matter/scenarios/ tagged with each missing type.
+Add a scenario under notes/parity/matter/scenarios/ tagged with each missing type.
 A minimal template:
 
   {

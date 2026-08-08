@@ -352,7 +352,7 @@ func (s *alarmMQTTSink) Silence(ctx context.Context, zoneID, code string) error 
 }
 
 // Panic fires the engine's loud panic path (silent=false) for the zone —
-// the HA TRIGGER command routes here (docs/alarm-concept.md §7).
+// the HA TRIGGER command routes here (notes/concepts/alarm-concept.md §7).
 func (s *alarmMQTTSink) Panic(ctx context.Context, zoneID string) error {
 	return s.svc.Engine().PanicTrigger(ctx, zoneID, false, "", alarmSourceMQTT)
 }

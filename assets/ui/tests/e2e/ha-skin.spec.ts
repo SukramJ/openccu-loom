@@ -14,7 +14,7 @@ import {
 // baselines lock the native-HA look. When embedded via Ingress the same skin
 // additionally mirrors the operator's live HA theme through the bridge; that
 // path is not exercised here because the hermetic e2e has no HA parent
-// document. See app.css html[data-skin="ha"] and docs/design/ha-theme-bridge.md.
+// document. See app.css html[data-skin="ha"] and notes/concepts/ha-theme-bridge.md.
 //
 // The skin is selected the same way the SPA persists it: prefs.skin = "ha" in
 // localStorage. applyTheme() then stamps data-skin="ha" on <html> (standalone,

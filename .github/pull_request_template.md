@@ -33,7 +33,7 @@ test cases, manual verification. -->
 - [ ] Read the corresponding matter.js HEAD source first and cited the
       `path:function` in the Go comment.
 - [ ] Added/updated the matter.js parity test; deliberate divergences
-      recorded in `docs/parity/by_design.md`.
+      recorded in `notes/parity/by_design.md`.
 
 ### Live-CCU writes only
 

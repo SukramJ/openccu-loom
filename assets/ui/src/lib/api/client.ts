@@ -1832,7 +1832,7 @@ export const api = {
     );
   },
   // --- Alarm panel (native intrusion-alarm engine) --------------
-  // docs/alarm-concept.md §13. Zones are daemon-level (no central
+  // notes/concepts/alarm-concept.md §13. Zones are daemon-level (no central
   // scoping in the path); sensors/outputs reference (central,
   // channel_address) inside their bodies. Control verbs
   // (arm/disarm/silence/…) are the safety surface — the alarm store
@@ -1933,7 +1933,7 @@ export const api = {
     );
   },
   // Alarm codes (operator-gated; hash + cleartext PIN never returned —
-  // docs/alarm-concept.md §11/§16). The write body's `pin` is
+  // notes/concepts/alarm-concept.md §11/§16). The write body's `pin` is
   // write-only: omit it on update to keep the stored hash.
   listAlarmCodes() {
     return request<AlarmCode[]>(`/alarm/codes`);

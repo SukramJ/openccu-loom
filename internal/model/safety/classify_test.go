@@ -289,7 +289,7 @@ func TestClassifyUnclassifiedParameters(t *testing.T) {
 
 // TestClassifyRainIsNotWater verifies that rain sensors do not classify as
 // the water security class: precipitation is weather, not a leak
-// (docs/security-safety-concept.md §6.1), so RAINDETECTOR / RAIN_DETECTION_
+// (notes/concepts/security-safety-concept.md §6.1), so RAINDETECTOR / RAIN_DETECTION_
 // TRANSMITTER data points must fall through unclassified rather than
 // triggering the water fault plane.
 func TestClassifyRainIsNotWater(t *testing.T) {

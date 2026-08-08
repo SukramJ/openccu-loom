@@ -37,7 +37,7 @@ type WalkTestProgress = { seen: number; total: number };
 // per-zone status snapshot. `note` is a stable English machine string.
 type AlarmHealth = { healthy: boolean; note: string };
 
-// Newest-first journal ring buffer size (docs/alarm-concept.md §12.5 —
+// Newest-first journal ring buffer size (notes/concepts/alarm-concept.md §12.5 —
 // the panel keeps a short live tail; the Journal view re-fetches for
 // the full, filterable history).
 const JOURNAL_MAX = 200;

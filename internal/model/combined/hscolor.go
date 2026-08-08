@@ -72,7 +72,7 @@ type HSColor struct {
 // handling inline via its own HSColor struct. This constructor is kept
 // so the combined package remains a coherent, testable unit; a future
 // refactor may wire it once materialiseCombinedDataPoints is added.
-// See docs/parity/by_design.md BD-A3-CombinedUnused.
+// See notes/parity/by_design.md BD-A3-CombinedUnused.
 func NewHSColor(address string, w Writer, hueParam, satParam hmenum.Parameter) *HSColor {
 	return NewHSColorWithCentral("", address, w, hueParam, satParam)
 }

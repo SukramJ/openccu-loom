@@ -4,7 +4,7 @@
 - **Date**: 2026-04-24
 - **Supersedes**: original revision from 2026-04-23 (wrongly assumed
   GPL-2.0-or-later for the upstream data)
-- **Related**: `internal/ccudata/embedded/NOTICE`, `docs/roadmap.md`,
+- **Related**: `internal/ccudata/embedded/NOTICE`, `notes/plans/roadmap.md`,
   [ADR 0001 — License: MIT](./0001-license-mit.md)
 
 ## Context
@@ -129,4 +129,4 @@ simpler.
 - Commercial redistribution story is explicit: operators must
   override the embedded archives with their own licensed data.
 - The originally planned "native Go extractor" (Phase 2 in the old
-  roadmap) is dropped; see `docs/roadmap.md`.
+  roadmap) is dropped; see `notes/plans/roadmap.md`.

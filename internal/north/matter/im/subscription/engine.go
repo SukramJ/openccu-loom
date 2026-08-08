@@ -32,7 +32,7 @@ import (
 // ticker is the idiomatic Go approach: per-subscription goroutines would create
 // O(N_subscriptions) timers and goroutines for a problem that is trivially
 // solved by a single shared poller. Documented in
-// `docs/parity/by_design.md` §"Systematic Parity Run #02".
+// `notes/parity/by_design.md` §"Systematic Parity Run #02".
 func (m *Manager) run(ctx context.Context) {
 	defer m.wg.Done()
 	ticker := time.NewTicker(m.cfg.TickInterval)

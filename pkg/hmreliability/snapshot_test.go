@@ -43,7 +43,7 @@ func TestRecordedReliabilityDefaults(t *testing.T) {
 	}
 	for _, c := range cases {
 		if c.got != c.want {
-			t.Errorf("hmreliability.%s drifted: got %v, want %v — update the reference pin and docs/parity/by_design.md if intentional",
+			t.Errorf("hmreliability.%s drifted: got %v, want %v — update the reference pin and notes/parity/by_design.md if intentional",
 				c.name, c.got, c.want)
 		}
 	}

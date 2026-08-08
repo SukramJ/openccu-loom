@@ -74,7 +74,7 @@ the spec; when in doubt about *implementation*, read the code.
    locked in by a committed Playwright browser-e2e + visual-regression
    layer (`assets/ui/tests/e2e/`). Open work is driven by
    OpenCCU-Loom's own product needs; aiohomematic remains a reference
-   implementation and its knowledge is preserved in `docs/parity/`.
+   implementation and its knowledge is preserved in `notes/parity/`.
    Standing build- and test-time parity guards remain regression
    detectors, not the roadmap; for the Matter side the binding contract
    is [`docs/matter-parity-contract.md`](./docs/matter-parity-contract.md).
@@ -380,7 +380,7 @@ any of these from the Matter PDF is forbidden — drift creeps in
 within days. Every Matter-side fix or feature reads matter.js
 first, cites the matter.js path + function in the Go comment, and
 adds a parity test. Deliberate divergences land in
-`docs/parity/by_design.md`. See the
+`notes/parity/by_design.md`. See the
 [matter.js as the Matter Gold Standard](#matterjs-as-the-matter-gold-standard)
 section for the full workflow.
 
@@ -394,7 +394,7 @@ specific target device.** Self-chosen test devices are unsafe — what
 looks like "just another HMIP-PSM" can be a `Weinkühlschrank` that
 shouldn't be cycled on/off six times per chip-tool run.
 
-The brief (`docs/matter/chip-tool-test-brief.md` §T6) directs a real
+The brief (`notes/contributor/chip-tool-test-brief.md` §T6) directs a real
 on/off/toggle cycle through the bridge → CCU → device chain — that
 authorization covers the test type, NOT the device. The device choice
 is a separate decision the user owns.
@@ -507,17 +507,23 @@ openccu-loom/
 │   │                          (mocked API; light/dark screenshot baselines)
 │   ├── openapi.yaml         — REST spec
 │   └── wsapi.json           — WebSocket command schema
-├── docs/
-│   ├── adr/                 — architecture decisions
-│   ├── audit/
-│   ├── contributor/
-│   ├── parity/              — model_snapshot_schema, by_design, …
+├── docs/                    — PUBLISHED site only (mkdocs docs_dir)
+│   ├── adr/                 — architecture decisions (published)
+│   ├── user/ admin/         — end-user + administrator guides
+│   ├── integrations/ external-clients/ developer/
 │   ├── caching.md           — every cache layer + boot-time radio cost
 │   ├── mqtt-topic-schema.md — MQTT topic reference
-│   ├── roadmap.md
-│   ├── testplan.md
 │   ├── user-guide.md
 │   └── SECURITY.md
+├── notes/                   — engineering working docs, NEVER published
+│   ├── README.md            — which tree a document belongs in
+│   ├── audits/              — deep-audit backlog, architecture analyses
+│   ├── concepts/            — alarm, security & safety, SPA tile concepts
+│   ├── contributor/         — debugging, matter smoke, chip-tool briefs
+│   ├── parity/              — by_design, snapshot schemas, matter.js fixtures
+│   ├── plans/               — roadmap.md + per-item implementation plans
+│   ├── reference/           — CCU jpages contract, CONTROL inventory, …
+│   └── testplans/           — e2e-testplan, testplan
 ├── script/
 │   ├── generate_profiles.py — auto-generates profile registry from aiohomematic
 │   ├── aiohomematic_snapshot.py
@@ -539,6 +545,14 @@ openccu-loom/
 The `internal/north/ui/spa_dist/` directory is populated by `vite build`
 out of `assets/ui/` and embedded into the binary at compile time (it is
 gitignored — regenerated in CI, not committed).
+
+**`docs/` vs `notes/` is a hard boundary.** Everything under `docs/` is
+published to <https://sukramj.github.io/openccu-loom/> and needs a nav entry
+in `mkdocs.yml`; nothing under `notes/` ever is. Before adding a document,
+read [`notes/README.md`](./notes/README.md) — it states the rule, the four
+guards that enforce it, and how a published page cites a working document
+(an absolute repo URL, never a relative link out of `docs_dir`). Published
+documents are English-only.
 
 ---
 
@@ -677,13 +691,13 @@ rules mechanically.
 
 - ✅ Permanent docs: `CLAUDE.md`, `SPECIFICATION.md`,
   `docs/adr/*.md` (ADRs are immutable once landed),
-  `docs/parity/by_design.md`, `docs/matter-conformance.md`,
-  `docs/matter-ui-concept.md`, and the matter.js / chip source-file
+  `notes/parity/by_design.md`, `notes/reference/matter-conformance.md`,
+  `notes/concepts/matter-ui-concept.md`, and the matter.js / chip source-file
   references (`packages/.../X.ts:line`, `src/.../Y.cpp:line`).
 
 Do NOT cite transient audit-trail files in code comments: audit-run
 reports, hand-off memories, todo files, ad-hoc parity sweeps. The
-audit-trail lives in Git history + `docs/parity/by_design.md` (the
+audit-trail lives in Git history + `notes/parity/by_design.md` (the
 living catalogue of intentional divergences); code comments should
 reference neither.
 
@@ -1029,7 +1043,7 @@ python3 script/aiohomematic_snapshot.py
 python3 script/model_snapshot_diff.py
 ```
 
-Common-schema definition: `docs/parity/model_snapshot_schema.md`.
+Common-schema definition: `notes/parity/model_snapshot_schema.md`.
 
 The two snapshot JSON files (`tests/integration/testdata/model_snapshot_*.json`,
 total ~70 MB) are gitignored — they are produced on demand and live
@@ -1041,7 +1055,7 @@ When you change model code (DataPoint creation, visibility marks,
 custom-DP composition, channel methods), rerun (2) and (4) and verify
 the drift score has not regressed in your area. The current baseline
 sits at ~270 architecturally-accepted drifts; growth beyond that
-without a corresponding entry in `docs/parity/by_design.md` is a regression.
+without a corresponding entry in `notes/parity/by_design.md` is a regression.
 
 ---
 
@@ -1058,10 +1072,10 @@ make generate-matter-schema
 
 This runs four steps:
 1. Extract the schema from the built matter.js checkout by running the
-   TypeScript extractor `docs/parity/matter/extract-from-matter-js.ts`
+   TypeScript extractor `notes/parity/matter/extract-from-matter-js.ts`
    with `node` inside `../matter.js` (it is copied in so the
    `@matter/model` import resolves), writing
-   `docs/parity/matter/matter-schema-snapshot.json`. (matter.js's
+   `notes/parity/matter/matter-schema-snapshot.json`. (matter.js's
    `packages/model` must be built first — `npm run build`.)
 2. Copy the snapshot to the parity embed at
    `internal/north/matter/parity/schema.json` (kept in sync with the
@@ -1277,14 +1291,14 @@ function it mirrors in a comment + the contract it enforces.
 3. **Every Matter-side change updates the parity tests** under
    `internal/north/matter/.../parity_matterjs_test.go`. The
    schema snapshot at
-   `docs/parity/matter/matter-schema-snapshot.json` is the
+   `notes/parity/matter/matter-schema-snapshot.json` is the
    matter.js HEAD pin (regen via
-   `docs/parity/matter/extract-from-matter-js.ts`); the wire-byte
-   fixtures at `docs/parity/matter/tlv-wire-fixtures.json` lock the
+   `notes/parity/matter/extract-from-matter-js.ts`); the wire-byte
+   fixtures at `notes/parity/matter/tlv-wire-fixtures.json` lock the
    TlvCodec wire shape. New cluster-server tests add a parity case;
    PRs without parity coverage are rejected.
 4. **Deliberate divergences are documented in
-   `docs/parity/by_design.md` (matter.js section)** — and the same
+   `notes/parity/by_design.md` (matter.js section)** — and the same
    divergence on a non-trivial scale gets an ADR. Examples of valid
    divergences: a TypeScript-only optimisation that would fight Go's
    GC, a Decorator pattern that has no Go equivalent. Examples of

@@ -438,7 +438,7 @@ func TestMatterBridgeSmoke_ServerListContainsBDBI(t *testing.T) {
 // (0x0039) is present on every bridged endpoint, NodeLabel (attr 0x0005) is
 // non-nil, UniqueID (attr 0x000F) is non-empty, and UniqueIDs are distinct
 // across endpoints (duplicate fingerprints cause Apple Home pair-abort; the
-// distinctness invariant is catalogued in docs/parity/by_design.md, matter.js
+// distinctness invariant is catalogued in notes/parity/by_design.md, matter.js
 // section).
 //
 // Mirrors matter.js packages/node/test/endpoints/BridgeTest.ts:18
@@ -626,7 +626,7 @@ func TestMatterBridgeSmoke_BridgedNodeDeviceTypeInClusterSurface(t *testing.T) {
 //
 // Source-Origin: derived from chip bridge-app main.cpp:261-276 and matter.js
 // aggregator.ts. The ParentEndpointID field mirrors the chip bridge-app
-// parentEndpointId pattern documented in docs/parity/.
+// parentEndpointId pattern documented in notes/parity/.
 func TestMatterBridgeSmoke_BridgedEndpointParentEndpointID(t *testing.T) {
 	t.Parallel()
 

@@ -398,7 +398,7 @@ func TestDeleteAlarmCode_HappyPath_Returns204AndRemovesRow(t *testing.T) {
 
 // TestListAlarmCodes_ReturnsSeeded covers the list surface end to end
 // through the real store, ordered by name (AlarmCodeStore.GetAll).
-// --- Write-time validation (S7 fail-visible: docs/alarm-concept.md §11) ---
+// --- Write-time validation (S7 fail-visible: notes/concepts/alarm-concept.md §11) ---
 
 // TestAlarmCodeRowFromReq_Validation is a table of every accepted and
 // rejected shape validateAlarmCodeWrite enforces: a pin code must carry

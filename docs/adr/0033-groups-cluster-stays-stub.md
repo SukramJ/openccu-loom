@@ -3,11 +3,11 @@
 - **Status**: rejected
 - **Date**: 2026-06-15
 - **Related**:
-  `docs/parity/by_design.md` (BD-Matter-P2-D19, L00-BD-Groups),
+  `notes/parity/by_design.md` (BD-Matter-P2-D19, L00-BD-Groups),
   `internal/north/matter/cluster/wire/groups.go`,
   the analysis item Area 7 [W3]/[P2] in
-  `docs/audit/architecture-analysis-2026-06-15.md`,
-  [matter.js as the Matter gold standard](../../CLAUDE.md)
+  `notes/audits/architecture-analysis-2026-06-15.md`,
+  [matter.js as the Matter gold standard](https://github.com/SukramJ/openccu-loom/blob/main/CLAUDE.md)
 
 ## Context
 

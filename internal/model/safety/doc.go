@@ -25,5 +25,5 @@
 //     back as a cause, or the domain reports its own siren as the
 //     origin of the fire.
 //
-// See docs/security-safety-concept.md §3.5 and §6.1.
+// See notes/concepts/security-safety-concept.md §3.5 and §6.1.
 package safety

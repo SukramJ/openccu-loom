@@ -27,7 +27,7 @@ import (
 // commands are operator-gated in Dispatch — which the engine's code
 // policy recognises as a break-glass surface that bypasses a required
 // arm/disarm/silence code while still surfacing duress
-// (docs/alarm-concept.md §11, S6).
+// (notes/concepts/alarm-concept.md §11, S6).
 const alarmSourceWS = "ws-operator"
 
 // AlarmPanelQuery is the narrow facade the alarm_panel.* command family
@@ -45,7 +45,7 @@ type AlarmPanelQuery interface {
 }
 
 // AlarmCodeAdmin is the alarm-code CRUD facade the codes_* commands
-// drive (docs/alarm-concept.md §11). It mirrors the REST handler facade
+// drive (notes/concepts/alarm-concept.md §11). It mirrors the REST handler facade
 // and is satisfied structurally by the codes facade; a nil value serves
 // the codes_* commands as an "unavailable" command error. The hash and
 // cleartext PIN are never returned on the [hmapi.AlarmCode] projection.
@@ -108,7 +108,7 @@ func alarmActor(ctx context.Context) string {
 
 // alarmZoneArgs is the shared shape for the per-zone verbs and reads. The
 // optional code carries an alarm code for the code-gated verbs
-// (docs/alarm-concept.md §11); it is ignored by the reads.
+// (notes/concepts/alarm-concept.md §11); it is ignored by the reads.
 type alarmZoneArgs struct {
 	ZoneID string `json:"zone_id"`
 	Code   string `json:"code,omitempty"`

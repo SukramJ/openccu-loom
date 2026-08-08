@@ -120,7 +120,7 @@ the matter.js `path:function` they mirror.
 - No matter.js source is reproduced verbatim. The canonical upstream `NOTICE`
   (if present at the pinned HEAD) travels with the matter.js repository; the
   matter.js schema pin used for parity lives at
-  `docs/parity/matter/matter-schema-snapshot.json`.
+  `notes/parity/matter/matter-schema-snapshot.json`.
 
 ### home-assistant-matter-bridge — Apache-2.0
 

@@ -5596,7 +5596,7 @@ export interface paths {
         put?: never;
         /**
          * Fire an alarm output briefly for a walk test (operator)
-         * @description Refused with 409 for outputs of class `smoke_sounder` — smoke-detector sounders are excluded from live output tests (see docs/alarm-concept.md §7).
+         * @description Refused with 409 for outputs of class `smoke_sounder` — smoke-detector sounders are excluded from live output tests (see notes/concepts/alarm-concept.md §7).
          */
         post: operations["testAlarmOutput"];
         delete?: never;
@@ -5614,7 +5614,7 @@ export interface paths {
         };
         /**
          * List alarm codes (operator)
-         * @description Codes are security material, so even the list is operator-gated, never viewer-open (docs/alarm-concept.md §11/§16). The argon2id hash and cleartext PIN are never returned. 503 when the alarm-code subsystem is not wired.
+         * @description Codes are security material, so even the list is operator-gated, never viewer-open (notes/concepts/alarm-concept.md §11/§16). The argon2id hash and cleartext PIN are never returned. 503 when the alarm-code subsystem is not wired.
          */
         get: operations["listAlarmCodes"];
         put?: never;
@@ -6589,7 +6589,7 @@ export interface components {
              * @description CCU paramset descriptor's CONTROL attribute of the form
              *     WIDGET_FAMILY.SLOT (e.g. "HEATING_CONTROL_HMIP.SETPOINT").
              *     Drives the SPA's CONTROL-aware widget resolver. See
-             *     docs/ui/control-widget-concept.md. Empty when the
+             *     notes/concepts/ui/control-widget-concept.md. Empty when the
              *     descriptor carries no CONTROL.
              */
             control?: string;
@@ -6627,7 +6627,7 @@ export interface components {
             /**
              * @description Daemon-computed UI classification envelope. The SPA's
              *     AutoTile composer reads the fields verbatim — no JS-side
-             *     classification runs. See docs/ui/auto-tile-concept.md.
+             *     classification runs. See notes/concepts/ui/auto-tile-concept.md.
              *     Resolution order in the backend: parameter substring →
              *     ENUM-shape rules → unit table → type fallback. Never
              *     empty.
@@ -7526,7 +7526,7 @@ export interface components {
             /**
              * @description Prior value. Omitted when no prior value was tracked (initial
              *     push). Future revisions may surface a `kind: "initial"|"change"|"refresh"`
-             *     discriminator on the envelope; see docs/external-clients/asks.md (B2).
+             *     discriminator on the envelope; see notes/reference/external-client-asks.md (B2).
              */
             previous?: unknown;
             /**
@@ -7790,7 +7790,7 @@ export interface components {
         /**
          * @description Payload of an `alarm.state_changed` broadcast. Topic
          *     `alarm.panel`. Fires on every arm-state-machine transition of
-         *     an alarm zone (docs/alarm-concept.md §5).
+         *     an alarm zone (notes/concepts/alarm-concept.md §5).
          */
         AlarmStateChangedPayload: {
             zone_id: string;
@@ -7833,7 +7833,7 @@ export interface components {
         /**
          * @description Payload of an `alarm.readiness_changed` broadcast. Topic
          *     `alarm.panel`. Fires when the ready-to-arm computation of an
-         *     zone changes for at least one mode (docs/alarm-concept.md
+         *     zone changes for at least one mode (notes/concepts/alarm-concept.md
          *     §6.3). Carries the full per-mode map, not a delta.
          */
         AlarmReadinessChangedPayload: {
@@ -7929,7 +7929,7 @@ export interface components {
          * @description Payload of an `alarm.reminder` broadcast. Topic `alarm.panel`.
          *     Fires when an arm schedule elapses with auto-arm off while the
          *     zone is not in the scheduled mode — the engine notifies rather
-         *     than arming (docs/alarm-concept.md §15 row 19).
+         *     than arming (notes/concepts/alarm-concept.md §15 row 19).
          */
         AlarmReminderPayload: {
             zone_id: string;
@@ -9117,11 +9117,11 @@ export interface components {
             /** @description CCU room name on that central. */
             room: string;
         };
-        /** @description Free-form, engine-owned document describing an alarm zone's arming modes and per-mode policy (entry/exit delays, output policy, post-trigger policy, central-loss policy, blocker policies — see docs/alarm-concept.md §14). The REST and WebSocket layers pass this document through unvalidated; the alarm engine is the sole owner of its schema and versioning. */
+        /** @description Free-form, engine-owned document describing an alarm zone's arming modes and per-mode policy (entry/exit delays, output policy, post-trigger policy, central-loss policy, blocker policies — see notes/concepts/alarm-concept.md §14). The REST and WebSocket layers pass this document through unvalidated; the alarm engine is the sole owner of its schema and versioning. */
         AlarmZoneConfig: {
             [key: string]: unknown;
         };
-        /** @description One alarm zone — an independently armable partition with its own arm state, sensor set, and output set (docs/alarm-concept.md §14). */
+        /** @description One alarm zone — an independently armable partition with its own arm state, sensor set, and output set (notes/concepts/alarm-concept.md §14). */
         AlarmZone: {
             id: string;
             name: string;
@@ -9129,7 +9129,7 @@ export interface components {
             position?: number;
             config?: components["schemas"]["AlarmZoneConfig"];
         };
-        /** @description One CCU data point enrolled into an alarm zone as a sensor input (door/window contact, motion, tamper, hazard, panic — docs/alarm-concept.md §6.1). */
+        /** @description One CCU data point enrolled into an alarm zone as a sensor input (door/window contact, motion, tamper, hazard, panic — notes/concepts/alarm-concept.md §6.1). */
         AlarmSensor: {
             id: string;
             /** @description Owning CCU (central name). */
@@ -9148,7 +9148,7 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** @description One CCU actuator enrolled into an alarm zone as an alarm consequence — siren, switched siren, smoke-detector sounder, alarm light, chirp emitter, notification target, or sysvar mirror (docs/alarm-concept.md §7). */
+        /** @description One CCU actuator enrolled into an alarm zone as an alarm consequence — siren, switched siren, smoke-detector sounder, alarm light, chirp emitter, notification target, or sysvar mirror (notes/concepts/alarm-concept.md §7). */
         AlarmOutput: {
             id: string;
             /**
@@ -9225,7 +9225,7 @@ export interface components {
             id: string;
             name: string;
             /**
-             * @description Arm-state-machine state (docs/alarm-concept.md §5).
+             * @description Arm-state-machine state (notes/concepts/alarm-concept.md §5).
              * @enum {string}
              */
             state: "disarmed" | "arming" | "armed" | "pending" | "triggered";
@@ -9281,7 +9281,7 @@ export interface components {
             disarm: boolean;
             silence: boolean;
         };
-        /** @description One alarm code. The argon2id hash and the cleartext PIN are NEVER serialized onto this surface (docs/alarm-concept.md §11, §16). */
+        /** @description One alarm code. The argon2id hash and the cleartext PIN are NEVER serialized onto this surface (notes/concepts/alarm-concept.md §11, §16). */
         AlarmCode: {
             id: string;
             name: string;
@@ -9550,7 +9550,7 @@ export interface components {
             acoustic_seconds: number;
             open: boolean;
         };
-        /** @description One entry in the alarm engine's append-only event journal (docs/alarm-concept.md §14), as returned by GET /alarm/journal. */
+        /** @description One entry in the alarm engine's append-only event journal (notes/concepts/alarm-concept.md §14), as returned by GET /alarm/journal. */
         AlarmJournalEntry: {
             /** Format: int64 */
             id: number;
@@ -9635,7 +9635,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description The zone's code policy requires a code and the supplied `code` is missing or wrong. The detail stays opaque (`invalid_code`) so a prober learns nothing about which codes exist (docs/alarm-concept.md §16). */
+        /** @description The zone's code policy requires a code and the supplied `code` is missing or wrong. The detail stays opaque (`invalid_code`) so a prober learns nothing about which codes exist (notes/concepts/alarm-concept.md §16). */
         AlarmInvalidCode: {
             headers: {
                 [name: string]: unknown;
@@ -15916,7 +15916,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description Optional disarm code. An absent body disarms code-free; an operator-session surface is permitted to do so even when a code policy is set (break-glass, docs/alarm-concept.md §11 S6). */
+        /** @description Optional disarm code. An absent body disarms code-free; an operator-session surface is permitted to do so even when a code policy is set (break-glass, notes/concepts/alarm-concept.md §11 S6). */
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["AlarmVerbRequest"];

@@ -17,7 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// This file covers the docs/alarm-concept.md §13.4 forwarding gap:
+// This file covers the notes/concepts/alarm-concept.md §13.4 forwarding gap:
 // Outbound.SetAlarmBus wires the daemon-level alarm event bus so state
 // changes, triggers, journal entries, health transitions, reminders and
 // the silent duress fan-out reach the webhook endpoint under their own
@@ -179,7 +179,7 @@ func TestOutboundForwardsAlarmReminder(t *testing.T) {
 }
 
 // TestOutboundForwardsAlarmNotification covers the notification plane
-// (docs/alarm-concept.md §7): an enrolled notification output firing
+// (notes/concepts/alarm-concept.md §7): an enrolled notification output firing
 // with Webhook=true forwards under alarm_panel.notification, carrying
 // the output identity in the nested detail.
 func TestOutboundForwardsAlarmNotification(t *testing.T) {

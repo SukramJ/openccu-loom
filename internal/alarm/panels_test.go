@@ -26,7 +26,7 @@ import (
 // (panels.go) through a real alarm.Service — a real engine, a real
 // codes facade, real SQLite stores — so the tests exercise the exact
 // EffectiveCodePolicy resolution production wires seedPanels and
-// refreshPanelCodePolicies through (docs/alarm-concept.md §11/§13.3).
+// refreshPanelCodePolicies through (notes/concepts/alarm-concept.md §11/§13.3).
 
 // panelsTestStart is the harness wall-clock origin, kept after the
 // engine's clock-plausibility epoch, mirroring intents_test.go's
@@ -165,7 +165,7 @@ func boolPtr(b bool) *bool { return &b }
 // flags from both halves of EffectiveCodePolicy: the zone's CodePolicy
 // AND whether an applicable enabled PIN code currently exists. A policy
 // requiring a code with no PIN code enrolled advertises no requirement
-// at all (docs/alarm-concept.md §11/§13.3), so a client never prompts
+// at all (notes/concepts/alarm-concept.md §11/§13.3), so a client never prompts
 // for a code the engine cannot ask for.
 func TestSeedPanels_CodePolicyFlagsFollowPINCodeExistence(t *testing.T) {
 	t.Parallel()

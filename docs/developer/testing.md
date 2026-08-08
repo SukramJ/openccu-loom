@@ -15,7 +15,7 @@ The test pillars OpenCCU-Loom is held to, the make target behind each, what the 
 | Integration | `tests/integration/` | `make integration` | Daemon run against the in-process `godevccu` simulator plus Mosquitto (Docker); end-to-end behavior. |
 | End-to-end | `tests/e2e/` | `make e2e` | Full black-box end-to-end flows against the built binary (REST, WS, MQTT, SPA, Prometheus, CLI). |
 | Chip-tool commissioner | `tests/chiptool/` (`//go:build chiptool`) | `make chiptool-test`, `make matter-smoke` | Real `chip-tool` commissioner runs against the Matter bridge — the only guard that exercises a real Matter controller, not just parity fixtures. CI-only; cannot run on macOS. |
-| Load test | `tests/loadtest/` | `go test -tags=loadtest ./tests/loadtest/...` | Production-shaped load harness (documented in [`docs/testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/testplan.md)). |
+| Load test | `tests/loadtest/` | `go test -tags=loadtest ./tests/loadtest/...` | Production-shaped load harness (documented in [`notes/testplans/testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/testplans/testplan.md)). |
 | Benchmarks | `tests/bench/` | `make bench` | Performance; regressions > 20 % block release. |
 | Fuzz | per package | `make fuzz` | XML-RPC / BIN-RPC / JSON-RPC parsers and paramset normalization. |
 | SPA unit (vitest) | `assets/ui/src/**/*.test.ts` | `cd assets/ui && npm run test` | Component-level Svelte tests. Not covered by `make test`. |
@@ -46,7 +46,7 @@ The release-gate parity check compares OpenCCU-Loom's domain model against aioho
 make snapshot
 ```
 
-This runs the datasource diff, dumps both stack snapshots, and diffs them per field (`make snapshot-go`, `make snapshot-py`, `make snapshot-diff`). Exit 0 means full intersection parity. The snapshot JSON files are large and gitignored — produced on demand, kept locally. The common-schema definition lives in [`docs/parity/model_snapshot_schema.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/parity/model_snapshot_schema.md).
+This runs the datasource diff, dumps both stack snapshots, and diffs them per field (`make snapshot-go`, `make snapshot-py`, `make snapshot-diff`). Exit 0 means full intersection parity. The snapshot JSON files are large and gitignored — produced on demand, kept locally. The common-schema definition lives in [`notes/parity/model_snapshot_schema.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/model_snapshot_schema.md).
 
 When you change model code (data-point creation, visibility marks, custom-DP composition, channel methods), rerun the snapshot and verify the drift score has not regressed in your area.
 
@@ -87,5 +87,5 @@ See the [Security guide](../SECURITY.md) for the wider security review expectati
 
 Not part of the published site nav, but worth reading in the checkout:
 
-- [`docs/testing/spa-e2e-against-godevccu.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/testing/spa-e2e-against-godevccu.md) — SPA end-to-end validation against the embedded `godevccu` simulator, without a physical CCU.
-- [`docs/testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/testplan.md) and [`docs/e2e-testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/e2e-testplan.md) — the fuller test-debt dashboard and the E2E suite's design plan / as-built log.
+- [`notes/contributor/spa-e2e-against-godevccu.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/contributor/spa-e2e-against-godevccu.md) — SPA end-to-end validation against the embedded `godevccu` simulator, without a physical CCU.
+- [`notes/testplans/testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/testplans/testplan.md) and [`notes/testplans/e2e-testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/testplans/e2e-testplan.md) — the fuller test-debt dashboard and the E2E suite's design plan / as-built log.

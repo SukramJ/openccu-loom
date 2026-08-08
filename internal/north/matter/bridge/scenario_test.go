@@ -13,9 +13,9 @@ import (
 // scenarioDir is the directory the harness scans for *.json scenario
 // files. Resolved relative to the repo root via the bridge test's CWD
 // (internal/north/matter/bridge/).
-const scenarioDir = "../../../../docs/parity/matter/scenarios"
+const scenarioDir = "../../../../notes/parity/matter/scenarios"
 
-// TestScenarios walks every *.json file under docs/parity/matter/scenarios
+// TestScenarios walks every *.json file under notes/parity/matter/scenarios
 // and replays it through the harness. New scenarios drop in as
 // data files — no code change required. Failed scenarios surface as
 // individual subtest failures so CI attribution stays tight.

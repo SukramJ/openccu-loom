@@ -9,7 +9,7 @@
 // Spins up the shared bridge + chip-tool fabric, then for every
 // mandatory Root-endpoint cluster reads back its ClusterRevision
 // (0xFFFD) and asserts the value matches the revision recorded in
-// docs/parity/matter/matter-schema-snapshot.json. The point of the
+// notes/parity/matter/matter-schema-snapshot.json. The point of the
 // test is not to exercise every cluster comprehensively — the
 // per-cluster parity_matterjs_test.go files cover that statically —
 // but to prove the actual on-the-wire bytes a chip-tool peer sees
@@ -57,7 +57,7 @@ func loadSchemaSnapshot(t *testing.T) matterSchemaSnapshot {
 	t.Helper()
 	_, thisFile, _, _ := runtime.Caller(0)
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
-	path := filepath.Join(repoRoot, "docs", "parity", "matter", "matter-schema-snapshot.json")
+	path := filepath.Join(repoRoot, "notes", "parity", "matter", "matter-schema-snapshot.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("schema snapshot %s: %v", path, err)
@@ -208,7 +208,7 @@ func TestMatterWireTruth_BridgedNodeDeviceTypeRevision(t *testing.T) {
 	// re-decode raw because matterSchemaSnapshot only carries clusters
 	_, thisFile, _, _ := runtime.Caller(0)
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
-	path := filepath.Join(repoRoot, "docs", "parity", "matter", "matter-schema-snapshot.json")
+	path := filepath.Join(repoRoot, "notes", "parity", "matter", "matter-schema-snapshot.json")
 	rawBytes, _ := os.ReadFile(path)
 	_ = json.Unmarshal(rawBytes, &raw)
 	_ = snap

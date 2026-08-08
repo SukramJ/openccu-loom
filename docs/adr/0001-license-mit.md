@@ -7,7 +7,7 @@
 ## Decision
 
 The OpenCCU-Loom **source tree** is licensed under the MIT License
-(see [`LICENSE`](../../LICENSE)).
+(see [`LICENSE`](https://github.com/SukramJ/openccu-loom/blob/main/LICENSE)).
 
 The binary additionally ships CCU metadata archives under the
 eQ-3 HomeMatic Software License (non-commercial). That aggregation

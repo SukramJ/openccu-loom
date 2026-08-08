@@ -30,7 +30,7 @@ var (
 	errPanicUnsupported = errors.New("alarm: engine has no panic path")
 )
 
-// CodeKind classifies an alarm-code row (docs/alarm-concept.md §11).
+// CodeKind classifies an alarm-code row (notes/concepts/alarm-concept.md §11).
 type CodeKind string
 
 // CodeKind values.
@@ -92,7 +92,7 @@ type CodeSource interface {
 }
 
 // panicTriggerer is the optional engine panic port. The always-on
-// hazard/panic path (docs/alarm-concept.md §6.1/§7) owns PanicTrigger;
+// hazard/panic path (notes/concepts/alarm-concept.md §6.1/§7) owns PanicTrigger;
 // the intent router discovers it by interface assertion so a remote
 // panic key degrades to a visible fault rather than a compile
 // dependency when the panic path is not yet present.
@@ -102,7 +102,7 @@ type panicTriggerer interface {
 
 // wkpCorrelationWindow bounds how long a WKP CODE_ID/CODE_STATE scan
 // stays valid for correlation with a following PRESS_LOCK/PRESS_UNLOCK
-// (docs/alarm-assumptions.md Q4).
+// (notes/reference/alarm-assumptions.md Q4).
 const wkpCorrelationWindow = 2 * time.Second
 
 // wkpCodeStateKnownIndex is the VALUE_LIST index of
@@ -306,7 +306,7 @@ func (r *intentRouter) dispatchRemoteAction(ctx context.Context, row *CodeRow) {
 }
 
 // dispatchArm arms the code's bound zone in the requested mode. An empty
-// mode defaults to full protection (docs/alarm-concept.md §11).
+// mode defaults to full protection (notes/concepts/alarm-concept.md §11).
 func (r *intentRouter) dispatchArm(ctx context.Context, row *CodeRow, mode, source string) {
 	zoneID := row.Binding.ZoneID
 	if zoneID == "" {
@@ -368,7 +368,7 @@ func (r *intentRouter) lookupKeypadRow(ctx context.Context, centralName, dev str
 }
 
 // journalKeypadUnmatched records an uncorrelated or unbound keypad press
-// as a fault (docs/alarm-concept.md §11 wrong-code handling).
+// as a fault (notes/concepts/alarm-concept.md §11 wrong-code handling).
 func (r *intentRouter) journalKeypadUnmatched(ctx context.Context, centralName, dev string, lock bool, codeID, pairIdx int) {
 	r.append(ctx, engine.JournalEntry{
 		Class:  hmenum.AlarmJournalClassFault,

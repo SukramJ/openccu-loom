@@ -35,7 +35,7 @@ constant recording the upstream release.
   the module only as its byte source. The module deliberately stays a
   data artifact, not a lookup framework.
 - Module tags are independent SemVer (`v0.x`) — the upstream CalVer
-  (`2026.7.0`) cannot be a Go major version — and the data stand is
+  (`2026.7.0`) cannot be a Go major version — and the data revision is
   identified by `SnapshotVersion`, surfaced through
   `ccudata.SnapshotVersion()`.
 - `internal/ccudata/embedded/`, `MANIFEST.json`, `make

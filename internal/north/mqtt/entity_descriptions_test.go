@@ -90,7 +90,7 @@ func TestLookupBinarySensorRuleSabotageDisabledDiagnostic(t *testing.T) {
 }
 
 // TestLookupBinarySensorRuleWindowContacts pins the window-contact family and
-// the deliberate exclusion of HmIP-SWD from it (docs/parity/by_design.md,
+// the deliberate exclusion of HmIP-SWD from it (notes/parity/by_design.md,
 // BD-Safety-SWDWindowRuleDropped).
 //
 // HmIP-SWD is the water sensor: it carries no STATE parameter, so the rule was

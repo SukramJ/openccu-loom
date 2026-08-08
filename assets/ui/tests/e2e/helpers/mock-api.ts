@@ -276,7 +276,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
-  // Alarm panel (native intrusion-alarm engine, docs/alarm-concept.md §13) —
+  // Alarm panel (native intrusion-alarm engine, notes/concepts/alarm-concept.md §13) —
   // distinct from the legacy CCU alarm-messages/service-messages surface
   // above. Defaults: two zones — "Erdgeschoss" (armed, full protection,
   // steady state with no running countdown) and "Dachgeschoss" (disarmed) —
@@ -348,7 +348,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
-  // Alarm codes (docs/alarm-concept.md §11) — operator-gated, hash/PIN
+  // Alarm codes (notes/concepts/alarm-concept.md §11) — operator-gated, hash/PIN
   // never round-tripped. Default fixture: three enabled pin/keypad_slot
   // codes plus one duress-marked pin. Single-code route (GET/PUT/DELETE)
   // is registered before the bare collection route, mirroring the
@@ -918,7 +918,7 @@ export async function mockAlarmTriggered(page: Page): Promise<void> {
 
 /**
  * Single security-relevant device (a door/window contact) for the alarm
- * setup wizard's step-2 sensor picker (docs/alarm-concept.md §12.3). The
+ * setup wizard's step-2 sensor picker (notes/concepts/alarm-concept.md §12.3). The
  * wizard reads the device inventory straight from GET /api/v1/devices
  * rather than the alarm-sensors fixture, so it needs a DeviceSummary-shaped
  * candidate whose model/name trip the security filter — the wizard's

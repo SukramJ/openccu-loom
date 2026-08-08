@@ -125,7 +125,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 	case hmenum.ParameterBlockedTemporary, hmenum.ParameterBlockedPermanent:
 		// Keypad lockout after repeated wrong on-device codes. The device
 		// self-locks; loom surfaces the onset as a fault so the operator
-		// sees the tamper-adjacent signal (docs/alarm-concept.md §11).
+		// sees the tamper-adjacent signal (notes/concepts/alarm-concept.md §11).
 		if blocked, ok := paramValueBool(e.NewValue); ok && blocked {
 			s.journalDeviceBlocked(ctx, centralName, e.Key)
 		}

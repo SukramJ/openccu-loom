@@ -1,7 +1,7 @@
 import { test, expect } from './helpers/fixtures';
 import { mockAllApis, mockAlarmTriggered, mockAlarmWizardDevices } from './helpers/mock-api';
 
-// Alarm section (#/alarm, docs/alarm-concept.md §12). mockAllApis now wires
+// Alarm section (#/alarm, notes/concepts/alarm-concept.md §12). mockAllApis now wires
 // sane defaults for every /api/v1/alarm/* route: two zones — "Erdgeschoss"
 // (armed, full protection, steady state) and "Dachgeschoss" (disarmed) —
 // three sensors, two outputs (one acoustic siren, one smoke-detector
@@ -135,7 +135,7 @@ test.describe('Alarm', () => {
     // "Duress" badge renders exactly once on the list view.
     await expect(page.getByText('Duress', { exact: true })).toBeVisible();
 
-    // Hash/PIN never round-trip onto this surface (docs/alarm-concept.md
+    // Hash/PIN never round-trip onto this surface (notes/concepts/alarm-concept.md
     // §11/§16) — the fixture does not carry one, so this also guards
     // against a future fixture regression accidentally leaking one.
     await expect(page.getByText(/argon2/)).toHaveCount(0);
@@ -225,7 +225,7 @@ test.describe('Alarm', () => {
 
     await expect(page.getByText('ALARM — Intrusion')).toBeVisible();
 
-    // Safety invariants S3/S6 (docs/alarm-concept.md §2): silence acts on
+    // Safety invariants S3/S6 (notes/concepts/alarm-concept.md §2): silence acts on
     // the first tap, no confirm dialog is allowed to intercept it.
     await page.getByRole('button', { name: 'Silence sirens' }).click();
 
@@ -234,7 +234,7 @@ test.describe('Alarm', () => {
   });
 });
 
-// Setup wizard (docs/alarm-concept.md §12.3). Steps ②/③ used to be bare
+// Setup wizard (notes/concepts/alarm-concept.md §12.3). Steps ②/③ used to be bare
 // links out into the zone-less sensor/output picker tabs — a dead end,
 // since those tabs need an existing zone and the zone itself is only
 // created on Finish. Both steps now embed a simplified inline picker

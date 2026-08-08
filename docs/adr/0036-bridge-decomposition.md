@@ -5,8 +5,8 @@
 - **Related**:
   `internal/north/matter/bridge/bridge.go`,
   the analysis item Area 7 [W2]/[P2] in
-  `docs/audit/architecture-analysis-2026-06-15.md`,
-  [matter.js as the Matter gold standard](../../CLAUDE.md)
+  `notes/audits/architecture-analysis-2026-06-15.md`,
+  [matter.js as the Matter gold standard](https://github.com/SukramJ/openccu-loom/blob/main/CLAUDE.md)
 
 ## Context
 
@@ -72,7 +72,7 @@ the matter.js cross-check + a chip-tool sweep between steps:
    — a pure grouping with no behaviour change — and land it on its own.
 2. Migrate methods onto the sub-structs one cluster at a time (PASE/CASE,
    then subscriptions, then timed gates), running the chip-tool brief
-   (`docs/matter/chip-tool-test-brief.md`) after each.
+   (`notes/contributor/chip-tool-test-brief.md`) after each.
 3. Only then narrow `Bridge` to a composing coordinator.
 
 ## Alternatives considered

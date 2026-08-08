@@ -196,7 +196,7 @@ func TestParityMatterJS_AccessControl_CapacityAttributes(t *testing.T) {
 // attribute is served. This is a documented by-design divergence from
 // the matter.js element definition default (FeatureMap=0): openccu-loom
 // opts in to the EXTS feature for Apple Home compatibility — see
-// docs/parity/by_design.md.
+// notes/parity/by_design.md.
 func TestParityMatterJS_AccessControl_FeatureMapExtsSet(t *testing.T) {
 	t.Parallel()
 	ac := newAccessControl(t)

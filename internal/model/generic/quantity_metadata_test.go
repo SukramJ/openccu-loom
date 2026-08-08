@@ -159,7 +159,7 @@ func TestDeviceParamBinarySensorOverrides(t *testing.T) {
 }
 
 // TestDeviceParamBinarySensorOverridesExcludesHmIPSWD pins
-// BD-Safety-SWDWindowRuleDropped (docs/parity/by_design.md):
+// BD-Safety-SWDWindowRuleDropped (notes/parity/by_design.md):
 // HmIP-SWD is the water sensor, not a window contact. Its ported
 // grouping with the window-contact family assigned STATE the window
 // quantity, but HmIP-SWD carries no STATE parameter and the mapping

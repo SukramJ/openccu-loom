@@ -1,6 +1,6 @@
 // Visibility / un_ignore REST DTOs. Hand-written mirror of the
 // openapi.yaml shapes for the /visibility/unignore* endpoints.
-// See docs/ui/unignore-concept.md.
+// See notes/concepts/ui/unignore-concept.md.
 
 export type UnIgnoreEntry = {
   pattern: string;

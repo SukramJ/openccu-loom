@@ -81,5 +81,5 @@ jobs:
       # cross-stack MODEL parity (openccu-loom vs aiohomematic) runs in two
       # dedicated workflows — a SCOPED subset on every PR (model-parity.yml)
       # and the FULL fleet nightly (cross-stack-parity.yml). See
-      # docs/parity/model_snapshot_schema.md + CLAUDE.md
+      # notes/parity/model_snapshot_schema.md + CLAUDE.md
       # "Cross-stack model-snapshot verification".

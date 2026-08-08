@@ -9,7 +9,7 @@
 // same file outside the symbol's own declaration) or MASKED (zero production
 // callers — the annotation hides genuine dead code).
 //
-// Output: docs/parity/loom-reachable-audit.md
+// Output: notes/parity/loom-reachable-audit.md
 //
 // Run: go run ./script/reachability/whitelist_audit.go
 package main
@@ -80,7 +80,7 @@ func main() {
 		return results[i].Line < results[j].Line
 	})
 
-	outPath := filepath.Join(repoRoot, "docs", "parity", "loom-reachable-audit.md")
+	outPath := filepath.Join(repoRoot, "notes", "parity", "loom-reachable-audit.md")
 	if err := writeReport(outPath, results); err != nil {
 		fmt.Fprintf(os.Stderr, "write report: %v\n", err)
 		os.Exit(1)
@@ -306,7 +306,7 @@ func writeReport(path string, results []classifiedItem) error {
 	fmt.Fprintf(f, "These items have zero production call sites (cross-file, or same-file\n")
 	fmt.Fprintf(f, "outside the symbol's own declaration).\n")
 	fmt.Fprintf(f, "**Action required:** either wire them into a real production call site, or\n")
-	fmt.Fprintf(f, "document them as intentional dead code in `docs/parity/by_design.md`.\n")
+	fmt.Fprintf(f, "document them as intentional dead code in `notes/parity/by_design.md`.\n")
 	fmt.Fprintf(f, "A `loom:reachable` annotation alone is not sufficient justification.\n\n")
 
 	if len(masked) == 0 {

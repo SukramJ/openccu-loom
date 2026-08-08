@@ -8,7 +8,7 @@
 # `script/aiohomematic_snapshot.py` respectively) and report any
 # attribute-level drift per (device, channel, data point).
 #
-# Both inputs follow `docs/parity/model_snapshot_schema.md`. This
+# Both inputs follow `notes/parity/model_snapshot_schema.md`. This
 # script focuses on per-field comparison and ignores the metadata
 # block (stack / stack_version / devccu / devccu_version /
 # captured_at). Anything else must match bit-exact.
@@ -112,7 +112,7 @@ def index_dps(ch: dict, key: str) -> dict[tuple, dict]:
 # un-ignore feature (ADR 0015) — a capability aiohomematic does not have;
 # aiohomematic emits `no_create`. The Ignored marker is OpenCCU-Loom-internal
 # metadata for that extra feature, behaviourally equivalent to no_create at
-# the model level. See docs/parity/by_design.md.
+# the model level. See notes/parity/by_design.md.
 _HIDDEN_USAGES = frozenset({"ignored", "no_create"})
 
 
@@ -137,7 +137,7 @@ def canon_hidden_usage(dp: dict) -> dict:
 # hiding real extra sensors. Both are visible constituents behaviourally
 # identical to `ce_visible` for HA / MQTT / REST; the reference model has only
 # `ce_visible`, so canonicalise `ce_state` back to it (both sides) before the
-# diff. See docs/parity/by_design.md.
+# diff. See notes/parity/by_design.md.
 def canon_state_usage(dp: dict) -> dict:
     """Canonicalise the OpenCCU-Loom-only `ce_state` usage (and matching
     forced_usage) back to `ce_visible` so the split does not register as drift.
@@ -158,7 +158,7 @@ def canon_state_usage(dp: dict) -> dict:
 # DPs (usage=no_create, enabled_default=false) so Home Assistant does not show
 # redundant bitfield/select/number entities alongside the switches. aiohomematic
 # builds the SAME switch surface but ALSO leaves the raw DPs visible
-# (usage=data_point, enabled_default=true). See docs/parity/by_design.md
+# (usage=data_point, enabled_default=true). See notes/parity/by_design.md
 # (BD-Visibility-ScheduleChannelLocks).
 _SCHEDULE_LOCK_PARAMS = frozenset({
     "WEEK_PROGRAM_CHANNEL_LOCKS",
@@ -200,7 +200,7 @@ def is_reference_only_visibility(go: dict, py: dict) -> bool:
     """True when OpenCCU-Loom hides one of the variant-model parameters
     (`usage=no_create`) while aiohomematic surfaces it (`data_point` /
     `ce_visible`). The usage/forced_usage/enabled_default flip is the entire
-    (deliberate) signature — see docs/parity/by_design.md
+    (deliberate) signature — see notes/parity/by_design.md
     (BD-Visibility-VariantModelHiddenParams). Any other usage combination on
     these parameters still surfaces."""
     return (
@@ -218,7 +218,7 @@ def is_local_button_event_suppression(go: dict, py: dict) -> bool:
 
     OpenCCU-Loom deliberately exposes these local presses as event sources so
     automations can react to a wall-button press; aiohomematic suppresses them.
-    A deliberate, more-capable surface — see docs/parity/by_design.md
+    A deliberate, more-capable surface — see notes/parity/by_design.md
     (BD-Visibility-ActuatorLocalButtonEvents). Any OTHER usage combination on a
     press parameter still surfaces."""
     return (
@@ -285,7 +285,7 @@ def diff_dp(go_dp: dict, py_dp: dict) -> dict:
         # leaves it unset, the field carries no behavioural information — the
         # observable surface is identical. A force that CHANGES the outcome
         # still surfaces as a `usage` drift, which is NOT tolerated. See
-        # docs/parity/by_design.md (BD-Visibility-RedundantForcedUsage).
+        # notes/parity/by_design.md (BD-Visibility-RedundantForcedUsage).
         drift.pop("forced_usage", None)
     return drift
 
@@ -379,7 +379,7 @@ def _canon_firmware(value: Any) -> Any:
 # both stacks read the same value, so these fields agree in production; against
 # the two simulators they diverge with no model-fidelity meaning. Tolerating
 # them keeps device_fields sensitive to a genuine model / firmware / version
-# regression. See docs/parity/by_design.md.
+# regression. See notes/parity/by_design.md.
 _TOLERATED_DEVICE_FIELDS = frozenset({"interface_id", "product_group"})
 
 

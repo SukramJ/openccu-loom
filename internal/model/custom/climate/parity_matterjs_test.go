@@ -118,7 +118,7 @@ func TestParityMatterJS_ThermostatFeatureMapBits(t *testing.T) {
 // The heat-only default profile advertises HEAT alone (COOL follows
 // SupportsCool; AUTO is never advertised — see featureMap), so
 // COOL/AUTO-conditional attrs are excluded; this is documented in
-// docs/parity/by_design.md.
+// notes/parity/by_design.md.
 func TestParityMatterJS_ThermostatMandatoryAttributeIDs(t *testing.T) {
 	t.Parallel()
 

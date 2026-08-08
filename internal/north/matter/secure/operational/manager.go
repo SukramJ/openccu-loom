@@ -426,7 +426,7 @@ func randomInitialSessionID() uint16 {
 // same-peer sessions on establishment: SessionManager.ts createSecureSession
 // (:396) retains concurrent (fabric, peer) sessions and reclaims an id only
 // on exhaustion (getNextAvailableSessionId -> findOldestInactiveSession,
-// :455-476). See docs/parity/by_design.md BD-Matter-CASE-StalePeerEviction.
+// :455-476). See notes/parity/by_design.md BD-Matter-CASE-StalePeerEviction.
 func (m *Manager) OpenFromSigma(fabricIndex uint8, localNodeID, peerNodeID uint64, keys sigma.SessionKeys) (*Entry, error) {
 	sess, err := channel.New(channel.Config{
 		EncryptKey:  keys.R2IKey[:], // bridge → peer
@@ -818,7 +818,7 @@ func (m *Manager) ClosePASESessions() int {
 // invalidate a stale session table on demand. matter.js has no direct
 // per-peer equivalent (it drops sessions per fabric on fabric teardown,
 // not per peer); this backs the bridge's stale-session invalidation path.
-// See docs/parity/by_design.md BD-Matter-CASE-StalePeerEviction.
+// See notes/parity/by_design.md BD-Matter-CASE-StalePeerEviction.
 func (m *Manager) ClosePeer(fabricIndex uint8, peerNodeID uint64) int {
 	m.mu.Lock()
 	victims := make([]*Entry, 0)

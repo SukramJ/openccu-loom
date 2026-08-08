@@ -32,7 +32,7 @@ const alarmMasterZone = "master"
 // alarm topic builders. Zones are daemon-level, so the alarm plane omits
 // the `<central>` segment every per-device topic carries — a deliberate
 // extension of the topic schema precedented only by `<base>/bridge/*`
-// (docs/mqtt-topic-schema.md, docs/alarm-concept.md §13.3).
+// (docs/mqtt-topic-schema.md, notes/concepts/alarm-concept.md §13.3).
 func alarmStateTopic(base, zone string) string { return base + "/alarm/" + zone + "/state" }
 
 func alarmAvailabilityTopic(base, zone string) string {
@@ -58,7 +58,7 @@ func alarmDeviceBlock() map[string]any {
 // alarmAvailability is the two-source availability list every alarm panel
 // carries: the bridge LWT plus the per-zone alarm availability topic. With
 // availability_mode "all" HA marks the panel available only when both are
-// online (docs/alarm-concept.md §13.3).
+// online (notes/concepts/alarm-concept.md §13.3).
 func alarmAvailability(base, zone string) []map[string]string {
 	return []map[string]string{
 		{
@@ -78,7 +78,7 @@ func alarmAvailability(base, zone string) []map[string]string {
 // requires a code: it wraps the plain HA action and the entered code into
 // the JSON envelope the raw command plane parses
 // (`{"action":"ARM_AWAY","code":"1234"}`). Verified against the HA
-// alarm_control_panel.mqtt docs (docs/alarm-assumptions.md, Alarmo/HA-app
+// alarm_control_panel.mqtt docs (notes/reference/alarm-assumptions.md, Alarmo/HA-app
 // section). Paired with code:"REMOTE_CODE" so HA prompts for a free-form
 // code rather than a fixed on-device PIN.
 const alarmCommandTemplate = `{"action":"{{ action }}","code":"{{ code }}"}`
@@ -90,7 +90,7 @@ const alarmRemoteCode = "REMOTE_CODE"
 // alarmFeatureTrigger advertises the HA TRIGGER capability so the panel
 // exposes a panic/trigger affordance; the raw command plane routes a
 // TRIGGER payload onto the engine's loud panic path
-// (docs/alarm-concept.md §7).
+// (notes/concepts/alarm-concept.md §7).
 const alarmFeatureTrigger = "trigger"
 
 // BuildAlarmPanelDiscovery builds the HA Discovery payload for one alarm
@@ -101,7 +101,7 @@ const alarmFeatureTrigger = "trigger"
 // is forced to the reserved master token regardless of zoneID.
 //
 // codeArmRequired / codeDisarmRequired reflect the zone's per-verb code
-// policy (docs/alarm-concept.md §11). When either is set the panel
+// policy (notes/concepts/alarm-concept.md §11). When either is set the panel
 // advertises code:"REMOTE_CODE" and a command template that folds the
 // entered code into the raw command JSON, so HA prompts for the code and
 // loom validates it.

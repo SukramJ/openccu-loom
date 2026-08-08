@@ -7,7 +7,7 @@
 #
 # The chip-tool image is the official CSA build that publishes
 # `connectedhomeip/chip-cert-bins` on Docker Hub. Pin is the master
-# commit hash that produced the binary (see docs/contributor/matter-smoke.md
+# commit hash that produced the binary (see notes/contributor/matter-smoke.md
 # for the bump procedure). It tracks the upstream Matter spec; pinning
 # stops drift between local + CI smoke.
 

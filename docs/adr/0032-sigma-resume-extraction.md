@@ -7,7 +7,7 @@
   (`ProcessSigma1WithResume`, `tryResume`, `processSigma1Locked`),
   `internal/north/matter/secure/sigma/resume_test.go`,
   the analysis items Area 7 [W6]/[P3] in
-  `docs/audit/architecture-analysis-2026-06-15.md`
+  `notes/audits/architecture-analysis-2026-06-15.md`
 
 ## Context
 

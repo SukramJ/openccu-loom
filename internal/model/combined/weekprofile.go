@@ -80,7 +80,7 @@ type WeekProfile struct {
 //
 // No production caller exists today: weekprofile.NewProfileDataPoint is
 // used directly by custom climate. This constructor is retained so the
-// combined package remains testable; see docs/parity/by_design.md
+// combined package remains testable; see notes/parity/by_design.md
 // BD-A3-CombinedUnused.
 func NewWeekProfile(
 	address string,

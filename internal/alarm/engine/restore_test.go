@@ -12,7 +12,7 @@ import (
 )
 
 // The tests in this file pin the complete restart-restore table of
-// docs/alarm-concept.md §10.2, including the restart-loop breaker and
+// notes/concepts/alarm-concept.md §10.2, including the restart-loop breaker and
 // the clock-plausibility rule.
 
 func TestRestore_DisarmedStaysDisarmed(t *testing.T) {

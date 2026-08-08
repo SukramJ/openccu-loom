@@ -78,7 +78,7 @@
 //	read  p99 < 750ms,  write p99 < 1500ms,
 //	dropped-request rate ≤ 2%, goroutine delta ≤ 50, heap ratio ≤ 8.0.
 //
-// STRICT (pre-release, LOADTEST_STRICT=1) — the docs/testplan.md gate:
+// STRICT (pre-release, LOADTEST_STRICT=1) — the notes/testplans/testplan.md gate:
 //
 //	read  p99 < 50ms,   write p99 < 200ms,
 //	zero dropped rows, no goroutine leak (delta 0), heap ratio ≤ 1.5.

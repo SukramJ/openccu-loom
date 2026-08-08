@@ -8,7 +8,7 @@
   [ADR 0015 — DataPointUsage `Ignored` split](./0015-datapoint-usage-ignored.md)
   (the usage taxonomy this extends),
   By-design catalogue:
-  [`docs/parity/by_design.md`](../parity/by_design.md) (`BD-Visibility-CDPStateGroupStatus`)
+  [`notes/parity/by_design.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md) (`BD-Visibility-CDPStateGroupStatus`)
 
 ## Context
 
@@ -97,7 +97,7 @@ constituents (and whole secondary channels) unless the flag is set.
   group-STATE DP as drift. `script/model_snapshot_diff.py` canonicalises
   `ce_state` → `ce_visible` on both sides (`canon_state_usage`), matching the
   behavioural equivalence HA/MQTT/REST already honour. Documented as
-  `BD-Visibility-CDPStateGroupStatus` in `docs/parity/by_design.md`.
+  `BD-Visibility-CDPStateGroupStatus` in `notes/parity/by_design.md`.
 - **Standing guards.** `TestHideFromMatter`
   (`internal/north/matter/eligibility`) pins the full usage × flag ×
   channel-owns-custom matrix the filter applies; the chiptool

@@ -20,7 +20,7 @@ import (
 // see an explicit toggle before bridging the source. An empty
 // `matter_exposures` table therefore yields an empty topology except
 // for the root endpoint — the §1 "Allowlist instead of Denylist"
-// guarantee from `docs/matter-ui-concept.md`.
+// guarantee from `notes/concepts/matter-ui-concept.md`.
 type ExposureRecord struct {
 	Key          EndpointKey
 	Enabled      bool

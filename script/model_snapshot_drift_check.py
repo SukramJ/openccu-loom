@@ -7,13 +7,13 @@
 # drift counts stay at or below documented baselines. The release
 # pipeline (`make snapshot-diff`) uses this to detect regressions
 # without failing on the architecturally-accepted residue catalogued
-# in `docs/parity/by_design.md`.
+# in `notes/parity/by_design.md`.
 #
 # The per-bucket defaults below sum to the cross-stack drift baseline
 # referenced in CLAUDE.md ("Cross-stack model-snapshot verification").
 # Ratchet a baseline DOWN when a fix closes drift; only raise one when
 # a genuinely new architectural divergence has a matching entry in
-# `docs/parity/by_design.md`. Never raise a baseline merely to silence
+# `notes/parity/by_design.md`. Never raise a baseline merely to silence
 # a regression.
 #
 # Override a baseline via its env var (handy for ratcheting in one run
@@ -41,7 +41,7 @@ import sys
 # bucket -> (env override var, default baseline).
 #
 # Defaults are the architecturally-accepted residue catalogued in
-# `docs/parity/by_design.md`. The env var names are spelled out here
+# `notes/parity/by_design.md`. The env var names are spelled out here
 # verbatim — no string munging — so the documented overrides above
 # actually resolve to these keys.
 _BASELINES: dict[str, tuple[str, int]] = {
@@ -126,7 +126,7 @@ def main() -> int:
             file=sys.stderr,
         )
         print(
-            "entry to docs/parity/by_design.md and bump the matching baseline",
+            "entry to notes/parity/by_design.md and bump the matching baseline",
             file=sys.stderr,
         )
         print("in this script. Otherwise, fix the drift.", file=sys.stderr)

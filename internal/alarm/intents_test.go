@@ -25,7 +25,7 @@ import (
 // with only the CodeSource faked, so the tests exercise the same
 // wiring intents_test's sibling production code runs on (WKP
 // CODE_ID/CODE_STATE correlation and remote-key bindings,
-// docs/alarm-concept.md §11 and docs/alarm-assumptions.md Q4).
+// notes/concepts/alarm-concept.md §11 and notes/reference/alarm-assumptions.md Q4).
 
 // intentsTestStart is the harness wall-clock origin (after the engine's
 // plausibility epoch).
@@ -264,7 +264,7 @@ func TestIntentsWKP_OutOfRangeCodeIDNeverCorrelates(t *testing.T) {
 	h.seedZone("eg", "Erdgeschoss")
 	h.start()
 
-	// The documented idle-sentinel CODE_ID value (docs/alarm-assumptions.md
+	// The documented idle-sentinel CODE_ID value (notes/reference/alarm-assumptions.md
 	// Q4): a "known" scan reporting a slot outside the declared 1..8
 	// range must never correlate, however coincidental the timing.
 	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(32)))

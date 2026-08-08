@@ -45,7 +45,7 @@ import (
 // availability on the full validity chain then reversed the `available`
 // half for reference parity: an unobserved point is not a confirmed
 // reading, so it publishes as unavailable with a `null` value (CHANGELOG
-// 0.5.x, `docs/parity/by_design.md`).
+// 0.5.x, `notes/parity/by_design.md`).
 //
 // What survived both is the part that actually caused the outage: the slot
 // topic must carry a JSON body. An unobserved point publishing

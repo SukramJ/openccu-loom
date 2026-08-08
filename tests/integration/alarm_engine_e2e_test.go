@@ -4,7 +4,7 @@
 //go:build integration
 
 // End-to-end integration tests for the alarm engine
-// (docs/alarm-concept.md §17 "Integration") against the in-process
+// (notes/concepts/alarm-concept.md §17 "Integration") against the in-process
 // godevccu simulator. The full central → device-pipeline stack is
 // built via newSPAHarness (a HmIP-ASIR siren + a HMIP-SWDO window
 // contact), a migrated daemon SQLite database backs the alarm stores,

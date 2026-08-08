@@ -29,7 +29,7 @@ package schema
 // ColorControl/Groups, WindowCovering, DoorLock, Thermostat, GenericSwitch,
 // and the measurement clusters) so it stays bounded. Every entry is derived
 // from the per-attribute `access` strings in
-// docs/parity/matter/matter-schema-snapshot.json (the matter.js HEAD pin);
+// notes/parity/matter/matter-schema-snapshot.json (the matter.js HEAD pin);
 // TestReadOnlyAttributeParity reloads that snapshot and fails if any entry
 // drifts from matter.js, so the table cannot silently diverge.
 //

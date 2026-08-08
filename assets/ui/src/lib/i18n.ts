@@ -38,7 +38,7 @@ type Catalog = Record<string, string>;
 // English catalogue — canonical keys. Keep sorted alphabetically so
 // the migration progress is easy to audit.
 const EN: Catalog = {
-  // --- Alarm panel (docs/alarm-concept.md §12). Distinct from the CCU
+  // --- Alarm panel (notes/concepts/alarm-concept.md §12). Distinct from the CCU
   //     alarm-messages surface (see "messages.*"): this is loom's own
   //     intrusion-alarm engine ("Alarm system" / "Alarmanlage"). ---
   "alarm.title": "Alarm system",
@@ -430,7 +430,7 @@ const EN: Catalog = {
   "alarm.wizard.sort.model": "Model",
   "alarm.wizard.summary.delay_line": "{mode} {exit}/{entry}/{trigger}s",
   "alarm.wizard.summary.delays": "Delays",
-  // Alarm codes (docs/alarm-concept.md §11).
+  // Alarm codes (notes/concepts/alarm-concept.md §11).
   "alarm.codes.add": "Add code",
   "alarm.codes.zones": "Zones",
   "alarm.codes.zones.all": "All zones",
@@ -506,7 +506,7 @@ const EN: Catalog = {
   "alarm.codes.unavailable.description":
     "The alarm-code subsystem is not configured on this daemon.",
   "alarm.codes.validity.open": "No limit",
-  // Chirp tone labels (docs/alarm-concept.md §15 row 23). The driver
+  // Chirp tone labels (notes/concepts/alarm-concept.md §15 row 23). The driver
   // reads three tone labels: arm squawk, disarm squawk, and the tick
   // tone (countdown ticks, entry warning, and the door chime).
   "alarm.outputs.chirp_arm_tone": "Arm chirp tone",
@@ -514,7 +514,7 @@ const EN: Catalog = {
   "alarm.outputs.chirp_tick_tone": "Tick & chime tone",
   "alarm.outputs.chirp_tick_tone.hint":
     "Used for countdown ticks, entry warnings and the door chime. An empty tone label skips that chirp kind on this output.",
-  // PIN pad (docs/alarm-concept.md §12.1).
+  // PIN pad (notes/concepts/alarm-concept.md §12.1).
   "alarm.pinpad.arm_title": "Enter code to arm — {mode}",
   "alarm.pinpad.backspace": "Backspace",
   "alarm.pinpad.clear": "Clear",
@@ -523,7 +523,7 @@ const EN: Catalog = {
   "alarm.pinpad.entered": "{count} digits entered",
   "alarm.pinpad.placeholder": "Enter code",
   "alarm.pinpad.title": "Enter code",
-  // Policy editor (docs/alarm-concept.md §11, §15 rows 19/21/22).
+  // Policy editor (notes/concepts/alarm-concept.md §11, §15 rows 19/21/22).
   "alarm.policies.code.hint":
     "Operator sessions (REST, WebSocket, hmcli) always bypass these checks — the documented break-glass path — but a duress code they enter still fires a silent alarm.",
   "alarm.policies.code.require_arm": "Require code to arm",
@@ -3610,7 +3610,7 @@ const EN: Catalog = {
   "areas.rooms_dialog.empty":
     "No rooms known yet — assign a room to a device first.",
   "areas.rooms_dialog.current_area": "currently: {name}",
-  // --- Security & Safety domain (docs/security-safety-concept.md §7.8).
+  // --- Security & Safety domain (notes/concepts/security-safety-concept.md §7.8).
   //     Classifier-driven hazard/fault classes, a fault ledger and the
   //     classified data-point inventory. Runs independently of the alarm
   //     engine above ("alarm.*") — a smoke/water/gas-only installation
@@ -3757,7 +3757,7 @@ const EN: Catalog = {
 };
 
 const DE: Catalog = {
-  // --- Alarmanlage (docs/alarm-concept.md §12). Abzugrenzen von den
+  // --- Alarmanlage (notes/concepts/alarm-concept.md §12). Abzugrenzen von den
   //     CCU-Alarmmeldungen (siehe "messages.*"): dies ist looms eigene
   //     Einbruchmelde-Engine ("Alarmanlage"). ---
   "alarm.title": "Alarmanlage",
@@ -4155,7 +4155,7 @@ const DE: Catalog = {
   "alarm.wizard.sort.model": "Modell",
   "alarm.wizard.summary.delay_line": "{mode} {exit}/{entry}/{trigger}s",
   "alarm.wizard.summary.delays": "Verzögerungen",
-  // Alarm codes (docs/alarm-concept.md §11).
+  // Alarm codes (notes/concepts/alarm-concept.md §11).
   "alarm.codes.add": "Code hinzufügen",
   "alarm.codes.zones": "Zonen",
   "alarm.codes.zones.all": "Alle Zonen",
@@ -4233,7 +4233,7 @@ const DE: Catalog = {
   "alarm.codes.unavailable.description":
     "Das Alarm-Code-Subsystem ist auf diesem Daemon nicht eingerichtet.",
   "alarm.codes.validity.open": "Unbegrenzt",
-  // Chirp tone labels (docs/alarm-concept.md §15 row 23). The driver
+  // Chirp tone labels (notes/concepts/alarm-concept.md §15 row 23). The driver
   // reads three tone labels: arm squawk, disarm squawk, and the tick
   // tone (countdown ticks, entry warning, and the door chime).
   "alarm.outputs.chirp_arm_tone": "Quittungston Scharf",
@@ -4241,7 +4241,7 @@ const DE: Catalog = {
   "alarm.outputs.chirp_tick_tone": "Tick- & Türgong-Ton",
   "alarm.outputs.chirp_tick_tone.hint":
     "Für Countdown-Ticks, Eintrittswarnung und Türgong. Ein leerer Ton-Bezeichner überspringt diese Ton-Art auf diesem Ausgang.",
-  // PIN pad (docs/alarm-concept.md §12.1).
+  // PIN pad (notes/concepts/alarm-concept.md §12.1).
   "alarm.pinpad.arm_title": "Code zum Scharfschalten eingeben — {mode}",
   "alarm.pinpad.backspace": "Rücktaste",
   "alarm.pinpad.clear": "Löschen",
@@ -4250,7 +4250,7 @@ const DE: Catalog = {
   "alarm.pinpad.entered": "{count} Ziffern eingegeben",
   "alarm.pinpad.placeholder": "Code eingeben",
   "alarm.pinpad.title": "Code eingeben",
-  // Policy editor (docs/alarm-concept.md §11, §15 rows 19/21/22).
+  // Policy editor (notes/concepts/alarm-concept.md §11, §15 rows 19/21/22).
   "alarm.policies.code.hint":
     "Operator-Sitzungen (REST, WebSocket, hmcli) umgehen diese Prüfungen immer — der dokumentierte Break-Glass-Pfad. Ein dabei eingegebener Zwangs-Code löst aber trotzdem einen stillen Alarm aus.",
   "alarm.policies.code.require_arm": "Code zum Scharfschalten erforderlich",
@@ -7370,7 +7370,7 @@ const DE: Catalog = {
   "areas.rooms_dialog.empty":
     "Noch keine Räume bekannt — weise zunächst einem Gerät einen Raum zu.",
   "areas.rooms_dialog.current_area": "aktuell: {name}",
-  // --- Sicherheit & Sicherheitstechnik (docs/security-safety-concept.md
+  // --- Sicherheit & Sicherheitstechnik (notes/concepts/security-safety-concept.md
   //     §7.8). Klassifikator-gesteuerte Gefahren-/Störungsklassen, ein
   //     Störungs-Ledger und das klassifizierte Datenpunkt-Inventar. Läuft
   //     unabhängig von der Alarmanlage oben ("alarm.*") — eine reine

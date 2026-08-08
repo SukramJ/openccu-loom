@@ -21,7 +21,7 @@ var allAlarmModes = []hmenum.AlarmMode{
 }
 
 // TestStateToken_FullStateModeGrid walks the full (state, mode)
-// cross-product docs/alarm-concept.md §13.3 defines and asserts the exact
+// cross-product notes/concepts/alarm-concept.md §13.3 defines and asserts the exact
 // HA alarm_control_panel token. Non-armed states ignore mode entirely;
 // the armed state resolves through the active mode.
 func TestStateToken_FullStateModeGrid(t *testing.T) {
@@ -172,7 +172,7 @@ func TestArmModeForCommand_UnknownTokenHandling(t *testing.T) {
 }
 
 // TestMasterStateToken_Aggregation locks the master-panel
-// aggregation precedence documented in docs/alarm-concept.md §13.3:
+// aggregation precedence documented in notes/concepts/alarm-concept.md §13.3:
 // triggered beats pending beats arming; a uniform token set collapses
 // to that token (including the empty set, which reports disarmed); any
 // other mix reports the away token.

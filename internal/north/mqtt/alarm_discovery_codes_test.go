@@ -12,7 +12,7 @@ import (
 )
 
 // TestBuildAlarmPanelDiscovery_CodePolicyFlipsREMOTECODE covers the
-// docs/alarm-concept.md §11 discovery flip: whenever an zone's code
+// notes/concepts/alarm-concept.md §11 discovery flip: whenever an zone's code
 // policy requires a code for arm and/or disarm, the panel must
 // advertise code:"REMOTE_CODE" plus the command_template that folds
 // the entered code into the raw command JSON — otherwise HA never
@@ -101,7 +101,7 @@ func boolPtr(b bool) *bool { return &b }
 // Advertising the policy half without an existing code would leave HA
 // prompting for a code the engine can never demand; the reverse
 // leaves an existing code unadvertised and HA sends a bare,
-// code-less command the engine refuses (docs/alarm-concept.md
+// code-less command the engine refuses (notes/concepts/alarm-concept.md
 // §11/§13.3).
 func TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement(t *testing.T) {
 	t.Parallel()

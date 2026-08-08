@@ -8,7 +8,7 @@
 
 ## Context
 
-The alarm engine's areas (`docs/alarm-concept.md` §14) are daemon-level
+The alarm engine's areas (`notes/concepts/alarm-concept.md` §14) are daemon-level
 objects: an area's sensors and outputs reference `(central_name,
 DataPointKey)` pairs, and an area routinely spans more than one
 configured CCU — the common case for anything beyond a single-CCU
@@ -23,7 +23,7 @@ span two CCUs.
 The only existing precedent for a topic without `<central>` is the
 read-only `<base>/bridge/status` / `<base>/bridge/health` pair (ADR
 0011, topic hierarchy) — genuinely daemon-level facts that predate any
-CCU connection. The alarm subtree (`docs/alarm-concept.md` §13.3) is
+CCU connection. The alarm subtree (`notes/concepts/alarm-concept.md` §13.3) is
 the first **writable**, domain-carrying use of that same exception.
 
 ## Decision
@@ -42,7 +42,7 @@ else any `arming`, else all-`disarmed`, else the shared mode token if
 every armed area agrees, or `armed_away` when mixed. Master **arm** is
 best-effort — each area arms independently and a failure surfaces as a
 per-area `FAILED_TO_ARM` detail rather than failing the whole request,
-per the lean recorded in `docs/alarm-concept.md` §18 item 5 ("matches
+per the lean recorded in `notes/concepts/alarm-concept.md` §18 item 5 ("matches
 G5"). Master **disarm** disarms every area unconditionally.
 
 HA MQTT Discovery still advertises one `alarm_control_panel` entity

@@ -15,7 +15,7 @@ import (
 )
 
 // TestMatterSchemaSnapshotHashMatchesEmbedded recomputes the SHA-256 of
-// docs/parity/matter/matter-schema-snapshot.json at test time and asserts
+// notes/parity/matter/matter-schema-snapshot.json at test time and asserts
 // it equals schema.SchemaSnapshotSHA256 — the constant emitted by the
 // generator. A divergence means either:
 //   - a generated constant was hand-edited without re-running the generator,
@@ -33,7 +33,7 @@ func TestMatterSchemaSnapshotHashMatchesEmbedded(t *testing.T) {
 		t.Fatal("runtime.Caller(0) failed")
 	}
 	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
-	snapshotPath := filepath.Join(repoRoot, "docs", "parity", "matter", "matter-schema-snapshot.json")
+	snapshotPath := filepath.Join(repoRoot, "notes", "parity", "matter", "matter-schema-snapshot.json")
 
 	raw, err := os.ReadFile(snapshotPath)
 	if err != nil {

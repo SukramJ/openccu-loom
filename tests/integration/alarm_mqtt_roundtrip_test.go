@@ -4,7 +4,7 @@
 //go:build integration
 
 // Package integration — MQTT alarm_control_panel round-trip
-// (docs/alarm-concept.md §13.3, docs/mqtt-topic-schema.md).
+// (notes/concepts/alarm-concept.md §13.3, docs/mqtt-topic-schema.md).
 //
 // Exercises the daemon-level alarm MQTT plane against a real Mosquitto
 // broker end to end:
@@ -75,7 +75,7 @@ func (s testAlarmSink) Silence(ctx context.Context, zoneID, code string) error {
 
 // Panic implements mqtt.AlarmSink, mirroring daemon_north.go's
 // alarmMQTTSink.Panic: the HA TRIGGER command routes onto the engine's
-// loud (non-silent) panic path (docs/alarm-concept.md §7).
+// loud (non-silent) panic path (notes/concepts/alarm-concept.md §7).
 func (s testAlarmSink) Panic(ctx context.Context, zoneID string) error {
 	return s.ah.svc.Engine().PanicTrigger(ctx, zoneID, false, "", alarmMqttSource)
 }
@@ -264,7 +264,7 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 // `<base>/alarm/<zone>/set` reaches the real CommandSubscriber, flows
 // through the AlarmSink into the engine, and the resulting armed/full
 // state republishes as `armed_away` on the retained
-// `<base>/alarm/<zone>/state` topic (docs/alarm-concept.md §13.3 state
+// `<base>/alarm/<zone>/state` topic (notes/concepts/alarm-concept.md §13.3 state
 // mapping); DISARM reverses both sides.
 func TestAlarmMqttArmDisarmRoundtrip(t *testing.T) {
 	rig := setupAlarmMqttRig(t)

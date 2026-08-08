@@ -5,7 +5,7 @@
 - **Related**:
   [ADR 0041 — persist auth sessions](./0041-persist-auth-sessions.md),
   [ADR 0043 — CCU authentication provider](./0043-ccu-authentication-provider.md),
-  [SPECIFICATION.md](../../SPECIFICATION.md) §4.1
+  [SPECIFICATION.md](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md) §4.1
 
 ## Context
 

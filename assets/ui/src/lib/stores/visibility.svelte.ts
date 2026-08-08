@@ -4,7 +4,7 @@
 //
 // REST surface: /api/v1/visibility/unignore (GET, PUT) and
 // /api/v1/visibility/unignore/candidates (GET). See
-// docs/ui/unignore-concept.md.
+// notes/concepts/ui/unignore-concept.md.
 
 import { api } from "$lib/api/client";
 import { dirty } from "./dirty.svelte";

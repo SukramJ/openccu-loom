@@ -511,14 +511,14 @@ export type InstallModeInterfaceEntry =
 export type LogRecord = components["schemas"]["LogRecord"];
 
 // Energy aggregation types (GET /api/v1/energy), re-exported from the
-// generated schema — see docs/plans/A2-timeseries-energy.md. Values are
-// Wh on the wire; the SPA divides by 1000 to render kWh.
+// generated schema. Values are Wh on the wire; the SPA divides by 1000
+// to render kWh.
 export type EnergyBucket = components["schemas"]["EnergyBucket"];
 export type EnergyDevice = components["schemas"]["EnergyDevice"];
 export type EnergyResponse = components["schemas"]["EnergyResponse"];
 
 // --- Alarm panel --------------------------------------------------
-// The native intrusion-alarm engine (docs/alarm-concept.md). Distinct
+// The native intrusion-alarm engine (notes/concepts/alarm-concept.md). Distinct
 // from the CCU alarm-messages surface above (AlarmMessage) — these are
 // the alarm-panel schemas served under /api/v1/alarm/*. All re-exported
 // from the generated contract so the SPA tracks the spec automatically.
@@ -545,7 +545,7 @@ export type AlarmRemoteKeyCandidate =
 // Whether a zone is ready to arm into one specific mode + blocker list.
 export type AlarmModeReadiness = components["schemas"]["AlarmModeReadiness"];
 // Arm request body (POST /alarm/zones/{id}/arm) and its accepted reply.
-// AlarmArmRequest carries an optional `code` (docs/alarm-concept.md §11).
+// AlarmArmRequest carries an optional `code` (notes/concepts/alarm-concept.md §11).
 export type AlarmArmRequest = components["schemas"]["AlarmArmRequest"];
 export type AlarmArmAccepted = components["schemas"]["AlarmArmAccepted"];
 // Optional { code? } body of the code-carrying verbs (disarm / silence /

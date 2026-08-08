@@ -147,4 +147,4 @@ Adopt **option 3**: multi-CCU is a first-class v1.0 feature.
 ## Follow-ups
 
 The follow-up backlog from this decision has shipped; any further
-multi-CCU work would land as a new ADR or a `docs/roadmap.md` entry.
+multi-CCU work would land as a new ADR or a `notes/plans/roadmap.md` entry.

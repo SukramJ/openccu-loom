@@ -6,7 +6,7 @@
 // generated files clusters.go and devicetypes.go (maps keyed by uint32 ID);
 // this file adds the hand-written lookup helpers that wrap the maps.
 //
-// Source of truth: docs/parity/matter/matter-schema-snapshot.json,
+// Source of truth: notes/parity/matter/matter-schema-snapshot.json,
 // itself regenerable from matter.js HEAD via:
 //
 //	python3 script/extract_matterjs_head.py

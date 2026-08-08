@@ -43,7 +43,7 @@ func snapshotLocale() string {
 
 // TestModelSnapshotDumpAgainstGodevccu produces the openccu-loom side
 // of the cross-stack model-snapshot diff described in
-// `docs/parity/model_snapshot_schema.md`. The test boots godevccu in
+// `notes/parity/model_snapshot_schema.md`. The test boots godevccu in
 // HOMEGEAR mode with [defaultMockDevices], hydrates the openccu-loom
 // device pipeline against it, walks every Device → Channel → DataPoint
 // produced and writes a sorted JSON snapshot to
@@ -160,7 +160,7 @@ func splitCommas(s string) []string {
 }
 
 // ---------------------------------------------------------------------------
-// Snapshot shapes — keep in sync with docs/parity/model_snapshot_schema.md
+// Snapshot shapes — keep in sync with notes/parity/model_snapshot_schema.md
 // and with script/aiohomematic_snapshot.py.
 // ---------------------------------------------------------------------------
 
@@ -429,7 +429,7 @@ func (s *snapshotDumper) dumpGenericDP(channelType, paramsetKey string, raw devi
 		// emits 1/86400). The snapshot is the apples-to-apples wire-attribution
 		// view, so prefer the unit-based multiplier here. The HA-friendly per-param
 		// override stays available via `dp.Multiplier()` for north-bound consumers
-		// and is documented in `docs/parity/by_design.md` (/HA-multiplier).
+		// and is documented in `notes/parity/by_design.md` (/HA-multiplier).
 		g.Multiplier = generic.MultiplierForUnit(desc.Unit)
 		g.Category = string(dp.Category())
 		g.Usage = string(dp.Usage())

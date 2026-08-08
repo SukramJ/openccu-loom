@@ -1,5 +1,5 @@
 // CCU CONTROL widget-family registry. The 84-family inventory lives in
-// docs/ui/control-inventory.md; this file types the family names so
+// notes/reference/control-inventory.md; this file types the family names so
 // per-family widgets can switch exhaustively without typos.
 
 export type ControlFamily =

@@ -4,7 +4,7 @@
 - **Date**: 2026-05-24
 - **Related**:
   [ADR 0020 — external-client wire contract](./0020-external-client-wire-contract.md),
-  [`docs/external-clients/asks.md`](../external-clients/asks.md) (closes E1),
+  [`notes/reference/external-client-asks.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/reference/external-client-asks.md) (closes E1),
   `internal/north/discovery/mdns/`,
   `internal/north/matter/mdns/` (Matter-side mDNS — different consumer, same library)
 
@@ -57,7 +57,7 @@ Default is **on** — opt-out via `North.Discovery.MDNS.Enabled: false`.
 
 ## Context
 
-`docs/external-clients/asks.md` E1 captured the request from the
+`notes/reference/external-client-asks.md` E1 captured the request from the
 `py-openccu-loom-client` / `homematicip_local` migration: the HA
 config flow currently asks the user for host + port + interface list
 on every install. Once the daemon advertises itself, HA's
@@ -92,7 +92,7 @@ PR rather than getting bundled into a contract-surface change.
   Start/Stop wiring inside the REST-enabled branch. Failure to
   register is logged at WARN and does not abort daemon startup —
   mDNS is convenience, not a hard dependency.
-- `docs/external-clients/asks.md` — E1 marked closed.
+- `notes/reference/external-client-asks.md` — E1 marked closed.
 
 ### Default-on rationale
 

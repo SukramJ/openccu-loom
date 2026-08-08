@@ -7,10 +7,10 @@ hazard, tamper and fault reporting that runs whether or not the alarm
 system is configured. It describes what each page and each setting
 does, in operator terms; it does not repeat the design rationale. The
 full safety model and engineering constraints for the alarm system live
-in [`alarm-concept.md`](./alarm-concept.md) (researched device
-behaviour is in [`alarm-assumptions.md`](./alarm-assumptions.md)); the
+in [`alarm-concept.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/concepts/alarm-concept.md) (researched device
+behaviour is in [`alarm-assumptions.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/reference/alarm-assumptions.md)); the
 same for Security & Safety lives in
-[`security-safety-concept.md`](./security-safety-concept.md).
+[`security-safety-concept.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/concepts/security-safety-concept.md).
 
 The alarm section is reachable at `#/alarm` and has seven tabs —
 Overview, Sensors, Outputs, Policies, Codes, Journal, Walk test — plus
@@ -24,7 +24,7 @@ the re-runnable Setup wizard. Security & Safety is reachable at
 1. [Concepts in two minutes](#1-concepts-in-two-minutes)
 2. [The safety promise](#2-the-safety-promise)
 3. [Getting started: the Setup wizard](#3-getting-started-the-setup-wizard)
-4. [Overview — the panel](#4-overview--the-panel)
+4. [Overview — the panel](#4-overview-the-panel)
 5. [Sensors](#5-sensors)
 6. [Outputs](#6-outputs)
 7. [Policies](#7-policies)
@@ -32,7 +32,7 @@ the re-runnable Setup wizard. Security & Safety is reachable at
 9. [Walk test](#9-walk-test)
 10. [Journal](#10-journal)
 11. [Integrations](#11-integrations)
-12. [Security & Safety](#12-security--safety)
+12. [Security & Safety](#12-security-safety)
 
 ---
 
@@ -338,7 +338,7 @@ restart-restored incident) lands here instead of being swallowed.
 
 For the CCU side (existing programs), use the *Sysvar mirror* output
 class and the sysvar-based arm intents described in
-[`alarm-concept.md`](./alarm-concept.md) §13.5.
+[`alarm-concept.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/concepts/alarm-concept.md) §13.5.
 
 ## 12. Security & Safety
 

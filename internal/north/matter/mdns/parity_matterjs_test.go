@@ -86,7 +86,7 @@ func TestParityMatterJS_Goodbye_WithdrawUnknownReturnsError(t *testing.T) {
 // (TTL=0) for all active records via grandcat/zeroconf's Shutdown path,
 // which clears the active set. The [Noop] advertiser is test / boot-phase
 // only and does not perform multicast — the no-TTL-0 divergence is
-// documented in docs/parity/by_design.md.
+// documented in notes/parity/by_design.md.
 func TestParityMatterJS_Goodbye_CloseDoesNotError(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
