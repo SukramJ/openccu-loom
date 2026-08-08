@@ -9,9 +9,9 @@
 // erreichbar sind.
 //
 // Output (default run, both modes):
-//   - docs/parity/dead-code-inventory.json       — vollständiges Inventory (inkl. Test-Roots)
-//   - docs/parity/dead-code-summary.md           — menschenlesbares Summary (Top-20 Packages, Top-50 Funcs)
-//   - docs/parity/dead-code-production-only.json — Inventory ohne Test-Roots als Entry-Points
+//   - notes/parity/dead-code-inventory.json       — vollständiges Inventory (inkl. Test-Roots)
+//   - notes/parity/dead-code-summary.md           — menschenlesbares Summary (Top-20 Packages, Top-50 Funcs)
+//   - notes/parity/dead-code-production-only.json — Inventory ohne Test-Roots als Entry-Points
 //
 // Flags:
 //   - -production-only: nur production-only Inventory erzeugen (kein combined run)
@@ -79,7 +79,7 @@ type Summary struct {
 	Unreachable   int `json:"unreachable"`
 }
 
-// Inventory ist das Output-Format für docs/parity/dead-code-inventory.json.
+// Inventory ist das Output-Format für notes/parity/dead-code-inventory.json.
 type Inventory struct {
 	Generated   string             `json:"generated"`
 	Head        string             `json:"head"`
@@ -122,9 +122,9 @@ const (
 )
 
 func main() {
-	outPath := flag.String("out", "docs/parity/dead-code-inventory.json", "Output-Pfad für das Inventory (combined)")
-	summaryPath := flag.String("summary", "docs/parity/dead-code-summary.md", "Output-Pfad für das Markdown-Summary")
-	prodOutPath := flag.String("prod-out", "docs/parity/dead-code-production-only.json", "Output-Pfad für das production-only Inventory")
+	outPath := flag.String("out", "notes/parity/dead-code-inventory.json", "Output-Pfad für das Inventory (combined)")
+	summaryPath := flag.String("summary", "notes/parity/dead-code-summary.md", "Output-Pfad für das Markdown-Summary")
+	prodOutPath := flag.String("prod-out", "notes/parity/dead-code-production-only.json", "Output-Pfad für das production-only Inventory")
 	repoRoot := flag.String("root", ".", "Repo-Root (default: cwd)")
 	verbose := flag.Bool("verbose", false, "Verbose-Logging")
 	productionOnly := flag.Bool("production-only", false, "Nur production-only Inventory erzeugen (Test-Roots werden nicht als Entry-Points behandelt)")

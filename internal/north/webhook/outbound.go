@@ -124,7 +124,7 @@ func NewOutbound(reg *central.Registry, cfg config.NorthWebhook, logger *slog.Lo
 // SetAlarmBus wires the daemon-level alarm event bus so the bridge also
 // forwards alarm-panel events (state, trigger, journal, health,
 // reminder, duress) under their EventType strings through the existing
-// allow-list (docs/alarm-concept.md §13.4). Must be called before Start;
+// allow-list (notes/concepts/alarm-concept.md §13.4). Must be called before Start;
 // a nil bus leaves the alarm plane unwired.
 func (o *Outbound) SetAlarmBus(bus *events.Bus) {
 	o.mu.Lock()
@@ -212,7 +212,7 @@ func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
 // per-central fan-out). Hidden journal entries (duress) never emit an
 // AlarmJournalAppendedEvent — the journal facade suppresses it — so the
 // journal handler forwards only visible entries; the silent duress
-// alarm rides its own AlarmDuressEvent (docs/alarm-concept.md §11, §13.4).
+// alarm rides its own AlarmDuressEvent (notes/concepts/alarm-concept.md §11, §13.4).
 func (o *Outbound) subscribeAlarm(bus *events.Bus) {
 	o.unsubs = append(
 		o.unsubs,
@@ -645,7 +645,7 @@ type envelope struct {
 // alarmPayload is the nested detail of an alarm-plane webhook event. Each
 // alarm event populates the subset it carries; omitempty keeps the object
 // tight. A duress code's secret is never present — only its identity and
-// the verb it accompanied (docs/alarm-concept.md §16).
+// the verb it accompanied (notes/concepts/alarm-concept.md §16).
 type alarmPayload struct {
 	ZoneID       string `json:"zone_id,omitempty"`
 	ZoneName     string `json:"zone_name,omitempty"`

@@ -237,7 +237,7 @@ func (c *Controller) RunWithTimeout(parent context.Context, t *testing.T, timeou
 //     builds reject IPv4 literals)
 //   - port  → bridge UDP port (read out of /api/v1/matter/status)
 //
-// The flow used here matches docs/contributor/matter-smoke.md §3
+// The flow used here matches notes/contributor/matter-smoke.md §3
 // (and the v9 capability report's T2): PASE-only,
 // `--bypass-attestation-verifier true` because the dev DAC is
 // ephemeral.

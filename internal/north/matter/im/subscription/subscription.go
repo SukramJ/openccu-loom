@@ -129,7 +129,7 @@ func (s *Subscription) heartbeatIntervalElapsed(now time.Time) bool {
 // their lastReport stamps diverge organically). Per-subscription
 // randomisation is therefore unnecessary and its omission is
 // unobservable by any Matter commissioner. Documented in
-// `docs/parity/by_design.md` §"Systematic Parity Run #02".
+// `notes/parity/by_design.md` §"Systematic Parity Run #02".
 func (s *Subscription) sendIntervalLocked() time.Duration {
 	maxInt := time.Duration(s.MaxIntervalCeiling) * time.Second
 	if maxInt <= 0 {

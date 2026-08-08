@@ -21,7 +21,7 @@ import (
 // [TestSendReceive_WindowCovering_Tilt] and
 // [TestSendReceive_WindowCovering_Garage]; both currently skip because
 // godevccu's DefaultDevices fleet does not yet embed those fixtures
-// (see docs/matter/chiptool-send-receive-matrix.md WindowCovering
+// (see notes/contributor/chiptool-send-receive-matrix.md WindowCovering
 // godevccu_gap).
 func TestSendReceive_WindowCovering(t *testing.T) {
 	b := requireBridge(t)
@@ -203,7 +203,7 @@ func windowcoveringFindByKind(ctx context.Context, t *testing.T, b *harness.Brid
 // correct and servable on demand via a plain read.
 //
 // HmIP-FBL is not yet part of godevccu's DefaultDevices fleet (see
-// docs/matter/chiptool-send-receive-matrix.md WindowCovering
+// notes/contributor/chiptool-send-receive-matrix.md WindowCovering
 // godevccu_gap), so this currently skips; it is written to run
 // unattended the moment the fixture lands.
 func TestSendReceive_WindowCovering_Tilt(t *testing.T) {
@@ -280,7 +280,7 @@ func TestSendReceive_WindowCovering_Tilt(t *testing.T) {
 // Subscribe.
 //
 // HmIP-MOD-HO is not yet part of godevccu's DefaultDevices fleet (see
-// docs/matter/chiptool-send-receive-matrix.md WindowCovering
+// notes/contributor/chiptool-send-receive-matrix.md WindowCovering
 // godevccu_gap), so this currently skips; it is written to run
 // unattended the moment the fixture lands.
 func TestSendReceive_WindowCovering_Garage(t *testing.T) {

@@ -15,7 +15,7 @@ import (
 // AlarmSensor.Config, AlarmOutput.Config) are opaque
 // json.RawMessage passthroughs — the alarm engine owns their schema
 // and versioning, so this layer neither validates nor reshapes them
-// (docs/alarm-concept.md §14).
+// (notes/concepts/alarm-concept.md §14).
 
 // AlarmZone is one alarm zone — an independently armable partition
 // with its own arm state, sensor set, and output set.
@@ -188,7 +188,7 @@ type AlarmArmRequest struct {
 // (POST /alarm/zones/{id}/disarm | silence | acknowledge). The body is
 // optional — an absent body disarms/silences without a code, honoring
 // the zone's code policy and the S3/S6 operator-bypass rules
-// (docs/alarm-concept.md §11). Code is never logged or persisted in
+// (notes/concepts/alarm-concept.md §11). Code is never logged or persisted in
 // cleartext.
 type AlarmVerbRequest struct {
 	Code string `json:"code,omitempty"`
@@ -287,7 +287,7 @@ type AlarmCodePerms struct {
 
 // AlarmCode is one alarm code as returned by GET /alarm/codes. The
 // argon2id hash and the cleartext PIN are NEVER serialized onto this
-// surface (docs/alarm-concept.md §11, §16): a code projection carries
+// surface (notes/concepts/alarm-concept.md §11, §16): a code projection carries
 // only identity, permissions, scope, validity, and lifecycle metadata.
 type AlarmCode struct {
 	ID   string `json:"id"`

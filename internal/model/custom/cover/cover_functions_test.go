@@ -56,7 +56,7 @@ func TestCoverSubDataPointKeys(t *testing.T) {
 }
 
 // TestCoverIsRefreshed also pins the availability gate to its primary state
-// carrier (LEVEL); see docs/parity/by_design.md.
+// carrier (LEVEL); see notes/parity/by_design.md.
 func TestCoverIsRefreshed(t *testing.T) {
 	c, _, level := newRig(t, "x:1", &stubWriter{}, custom.CoverCapabilities{})
 	if c.IsRefreshed() {
@@ -559,7 +559,7 @@ func TestGarageSubscribeWiresDoorStateAndSection(t *testing.T) {
 }
 
 // TestGarageAvailabilityGatesOnDoorState pins the observed-state gate to its
-// primary state carrier (DOOR_STATE); see docs/parity/by_design.md. Garage
+// primary state carrier (DOOR_STATE); see notes/parity/by_design.md. Garage
 // has no IsRefreshed method — DoorState's ok return is the observed-flag
 // accessor the north-bound surface relies on.
 func TestGarageAvailabilityGatesOnDoorState(t *testing.T) {

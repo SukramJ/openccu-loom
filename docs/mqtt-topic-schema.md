@@ -122,7 +122,7 @@ free functions rather than `TopicBuilder` methods: `naming.MQTTHubSysvarState`,
 
 ### Alarm topics (daemon-level, no `<central>`)
 
-Alarm zones (`docs/alarm-concept.md` §14) are daemon-level objects: an
+Alarm zones (`notes/concepts/alarm-concept.md` §14) are daemon-level objects: an
 zone's sensors and outputs are `(central_name, DataPointKey)` pairs and
 routinely span more than one configured CCU, so a zone has no single
 owning central to place in the `<central>` segment. The alarm subtree
@@ -148,7 +148,7 @@ all-`disarmed`, else the shared mode token when every armed zone
 agrees, otherwise `armed_away` for a mixed set. Master **arm** is
 best-effort — each zone arms independently and a failure surfaces as
 a per-zone `FAILED_TO_ARM` detail rather than failing the whole
-request (`docs/alarm-concept.md` §18 item 5, "matches G5"); master
+request (`notes/concepts/alarm-concept.md` §18 item 5, "matches G5"); master
 **disarm** disarms every zone unconditionally.
 
 #### `<base>/alarm/<zone>/state` (retained)
@@ -189,7 +189,7 @@ Follows the general event-topic policy below. Payload shape:
 and `delay_s` are present only where meaningful (e.g. `FAILED_TO_ARM`
 carries `open_sensors`; a `pending`→`triggered` transition may carry
 `delay_s`). `INVALID_CODE` and `DURESS` extend this vocabulary once
-per-zone codes ship (`docs/alarm-concept.md` §13.3, §15 item 6).
+per-zone codes ship (`notes/concepts/alarm-concept.md` §13.3, §15 item 6).
 
 `NOTIFICATION` (0.43.1) is published once per enrolled notification
 output at incident-fire time — for every mode the output is enrolled
@@ -228,7 +228,7 @@ Two accepted payload forms:
 siren/output on a `triggered` zone without disarming it. This is not
 part of HA's own `alarm_control_panel` command vocabulary — it is
 documented here as a raw-plane-only extension
-(`docs/alarm-concept.md` §13.3).
+(`notes/concepts/alarm-concept.md` §13.3).
 
 ---
 

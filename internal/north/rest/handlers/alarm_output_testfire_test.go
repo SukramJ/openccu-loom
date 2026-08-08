@@ -80,7 +80,7 @@ func TestTestAlarmOutput_SwitchedSirenActuator_Returns204(t *testing.T) {
 // TestTestAlarmOutput_SmokeSounder_Returns409 verifies smoke-detector
 // sounders are refused a live test fire: each activation costs
 // irreplaceable battery life and likely fans out to the whole
-// smoke-detector group (docs/alarm-concept.md §7).
+// smoke-detector group (notes/concepts/alarm-concept.md §7).
 func TestTestAlarmOutput_SmokeSounder_Returns409(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)

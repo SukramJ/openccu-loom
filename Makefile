@@ -192,12 +192,12 @@ wire-compare: ## compare Go wire calls against aiohomematic reference (fails for
 	$(GO) test -tags=wire_reference ./tests/contract/wire_snapshots/ -run TestReferenceCompare -v
 
 .PHONY: scenarios
-scenarios: ## run behavior scenarios (docs/parity/matter/scenarios/*.json against the bridge harness)
+scenarios: ## run behavior scenarios (notes/parity/matter/scenarios/*.json against the bridge harness)
 	$(GO) test ./internal/north/matter/bridge/ -run TestScenarios -count=1 -race -timeout=60s
 
 .PHONY: scenarios-regen-sidecars
 scenarios-regen-sidecars: ## regenerate matter.js-canonical reference sidecars for every scenario (needs ../matter.js npm-installed)
-	node docs/parity/matter/scenarios/_record.ts
+	node notes/parity/matter/scenarios/_record.ts
 
 .PHONY: integration
 integration: ## run godevccu + Mosquitto integration tests (slow; Mosquitto needs Docker)
@@ -208,7 +208,7 @@ integration: ## run godevccu + Mosquitto integration tests (slow; Mosquitto need
 	fi
 
 .PHONY: e2e
-e2e: build-all ## run black-box E2E tests against ./bin/openccu-loom + ./bin/hmcli (see docs/e2e-testplan.md)
+e2e: build-all ## run black-box E2E tests against ./bin/openccu-loom + ./bin/hmcli (see notes/testplans/e2e-testplan.md)
 	@if [ -d tests/e2e ]; then \
 		$(GO) test -tags=e2e -timeout=300s ./tests/e2e/...; \
 	else \
@@ -234,7 +234,7 @@ MATTER_SMOKE_LOG     := tmp/matter-smoke.log
 matter-smoke: ## run chip-tool PASE smoke against the Matter bridge (Linux host only; ~2.5 GiB image pull on first run)
 	@if [ "$$(uname -s)" != "Linux" ]; then \
 		echo "matter-smoke requires a Linux host (Docker Desktop does not bridge multicast)."; \
-		echo "See docs/contributor/matter-smoke.md for VM/CI alternatives."; \
+		echo "See notes/contributor/matter-smoke.md for VM/CI alternatives."; \
 		exit 1; \
 	fi
 	@mkdir -p tmp
@@ -451,7 +451,7 @@ tidy: ## sync go.mod / go.sum
 	$(GO) mod tidy
 
 .PHONY: reachability
-reachability: ## run dead-code reachability analysis → docs/parity/dead-code-inventory.json
+reachability: ## run dead-code reachability analysis → notes/parity/dead-code-inventory.json
 	$(GO) run ./script/reachability
 
 .PHONY: qa-pillars
@@ -481,12 +481,12 @@ generate-matter-schema: ## regenerate matter schema snapshot + internal/north/ma
 	# resolves type-inheritance, so type-referencing clusters keep their
 	# inherited revision + members. Node >= 23 runs the .ts directly; it is
 	# copied into the matter.js tree so the bare `@matter/model` import resolves.
-	cp docs/parity/matter/extract-from-matter-js.ts $(MATTERJS_DIR)/.occu-extract.mts
+	cp notes/parity/matter/extract-from-matter-js.ts $(MATTERJS_DIR)/.occu-extract.mts
 	cd $(MATTERJS_DIR) && node .occu-extract.mts \
-		> $(CURDIR)/docs/parity/matter/matter-schema-snapshot.json; \
+		> $(CURDIR)/notes/parity/matter/matter-schema-snapshot.json; \
 		rc=$$?; rm -f .occu-extract.mts; exit $$rc
 	# Step 2: keep the parity embed copy in sync (see internal/north/matter/parity/parity.go).
-	cp docs/parity/matter/matter-schema-snapshot.json internal/north/matter/parity/schema.json
+	cp notes/parity/matter/matter-schema-snapshot.json internal/north/matter/parity/schema.json
 	# Step 3: regenerate the typed Go revision/name maps from the snapshot.
 	$(GO) run ./script/generate_matter_schema.go
 	@if command -v $(GOFUMPT) >/dev/null 2>&1; then \

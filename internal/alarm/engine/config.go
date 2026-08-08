@@ -12,7 +12,7 @@ import (
 )
 
 // Engine-level defaults. The trigger-time default and ceiling mirror
-// the bounded-activation rule of docs/alarm-concept.md §2 (S1): the
+// the bounded-activation rule of notes/concepts/alarm-concept.md §2 (S1): the
 // engine never runs an unbounded triggered phase; long alarm phases
 // are bounded re-trigger cycles.
 const (
@@ -39,7 +39,7 @@ type ZoneConfig struct {
 	// PostTrigger decides what happens when the trigger time elapses.
 	PostTrigger hmenum.AlarmPostTriggerPolicy `json:"post_trigger,omitempty"`
 	// AutoRearmSeconds re-arms the zone to its pre-incident mode this
-	// many quiet seconds after a post-trigger disarm (docs/alarm-concept.md
+	// many quiet seconds after a post-trigger disarm (notes/concepts/alarm-concept.md
 	// §15 row 22). 0 disables; only meaningful with PostTrigger==disarm.
 	// The countdown resets on any member-sensor activity.
 	AutoRearmSeconds int `json:"auto_rearm_s,omitempty"`
@@ -49,23 +49,23 @@ type ZoneConfig struct {
 	// Blockers maps sensor-health classes onto arming policies.
 	Blockers BlockerPolicies `json:"blockers"`
 	// CodePolicy decides when arm/disarm/silence require an alarm code
-	// (docs/alarm-concept.md §11).
+	// (notes/concepts/alarm-concept.md §11).
 	CodePolicy CodePolicy `json:"code_policy,omitempty"`
 	// HazardOutputs is the always-on hazard-class output policy
-	// (docs/alarm-concept.md §6.1/§7). The zero value is loud.
+	// (notes/concepts/alarm-concept.md §6.1/§7). The zero value is loud.
 	HazardOutputs OutputPolicy `json:"hazard_outputs,omitempty"`
 	// PanicOutputs is the always-on panic-class output policy. The zero
 	// value is loud; a silent panic (per-sensor PanicSilent or an
 	// explicit silent PanicTrigger) forces Silent for that activation.
 	PanicOutputs OutputPolicy `json:"panic_outputs,omitempty"`
 	// Schedules lists daily arm schedules and reminders for the zone
-	// (docs/alarm-concept.md §15 row 19). The schedule service computes
+	// (notes/concepts/alarm-concept.md §15 row 19). The schedule service computes
 	// each entry's next fire time and recomputes every chain on Reload.
 	Schedules []AlarmSchedule `json:"schedules,omitempty"`
 }
 
 // AlarmSchedule is one per-zone arm schedule / reminder entry
-// (docs/alarm-concept.md §15 row 19).
+// (notes/concepts/alarm-concept.md §15 row 19).
 type AlarmSchedule struct {
 	// Time is the fire time of day, 24h "HH:MM", evaluated in the
 	// daemon's local time zone.
@@ -79,12 +79,12 @@ type AlarmSchedule struct {
 	Mode hmenum.AlarmMode `json:"mode"`
 	// AutoArm arms the zone into Mode when the schedule fires and the
 	// zone is not already in it; false raises a reminder instead of
-	// arming (docs/alarm-concept.md §15 row 19).
+	// arming (notes/concepts/alarm-concept.md §15 row 19).
 	AutoArm bool `json:"auto_arm,omitempty"`
 }
 
 // CodePolicy decides per verb whether an alarm code is required to act
-// on an zone (docs/alarm-concept.md §11). The engine consults a
+// on an zone (notes/concepts/alarm-concept.md §11). The engine consults a
 // CodeValidator to resolve the code; a nil validator makes every policy
 // inert (codes disabled). Strongly-authenticated operator sources
 // (rest-operator, ws-operator, hmcli) bypass the requirement but still
@@ -132,7 +132,7 @@ type ModeConfig struct {
 	// DefaultTriggerSeconds. Clamped to MaxTriggerSeconds.
 	TriggerSeconds int `json:"trigger_time_s,omitempty"`
 	// PreAlarmSeconds runs a pre-alarm phase before the full trigger
-	// (docs/alarm-concept.md §15 row 21): the incident opens and only
+	// (notes/concepts/alarm-concept.md §15 row 21): the incident opens and only
 	// the pre-alarm output classes (chirp / notification / light) fire
 	// for this long, then the full policy escalates. 0 disables. A
 	// silence during the pre-alarm phase cancels the full escalation.
@@ -140,13 +140,13 @@ type ModeConfig struct {
 	// MaxRetriggerCycles is the number of additional output cycles
 	// per incident after the initial one (0 = fire once).
 	MaxRetriggerCycles int `json:"max_retrigger_cycles,omitempty"`
-	// Outputs is the mode's output policy (docs/alarm-concept.md §7):
+	// Outputs is the mode's output policy (notes/concepts/alarm-concept.md §7):
 	// loud/silent, indoor/outdoor split, smoke sounders, chirps.
 	Outputs OutputPolicy `json:"outputs,omitempty"`
 }
 
 // OutputPolicy selects which output classes a mode drives
-// (docs/alarm-concept.md §7). The zero value is the loud default:
+// (notes/concepts/alarm-concept.md §7). The zero value is the loud default:
 // every enrolled output fires, no chirps.
 type OutputPolicy struct {
 	// Silent suppresses every acoustic output class — notifications,
@@ -168,7 +168,7 @@ type OutputPolicy struct {
 }
 
 // BlockerPolicies maps each sensor-health class onto an arming policy
-// (docs/alarm-concept.md §5). Empty values fall back to the defaults:
+// (notes/concepts/alarm-concept.md §5). Empty values fall back to the defaults:
 // open/unreachable/sabotage block, low battery warns.
 type BlockerPolicies struct {
 	Open        hmenum.AlarmBlockerPolicy `json:"open,omitempty"`
@@ -194,7 +194,7 @@ func (p BlockerPolicies) normalized() BlockerPolicies {
 }
 
 // SensorConfig is the per-sensor configuration document stored in
-// alarm_sensors.config_json (docs/alarm-concept.md §6.2).
+// alarm_sensors.config_json (notes/concepts/alarm-concept.md §6.2).
 type SensorConfig struct {
 	// Modes lists the protection levels the sensor participates in.
 	Modes []hmenum.AlarmMode `json:"modes"`
@@ -240,18 +240,18 @@ type SensorConfig struct {
 	// activation (default: warn only).
 	TriggerWhenUnavailable bool `json:"trigger_when_unavailable,omitempty"`
 	// Chime plays the door-chime tone on activation while the zone is
-	// disarmed (docs/alarm-concept.md §15 row 23); never during a walk
+	// disarmed (notes/concepts/alarm-concept.md §15 row 23); never during a walk
 	// test.
 	Chime bool `json:"chime,omitempty"`
 	// HoldTimeSeconds requires an activation to persist this long
-	// before it counts (docs/alarm-concept.md §6.2) — the debounce for
+	// before it counts (notes/concepts/alarm-concept.md §6.2) — the debounce for
 	// twitchy PIRs and doors rattling in wind. 0 counts instantly.
 	// Applies to the arm-state path only, never to always-on
 	// hazard/panic sensors.
 	HoldTimeSeconds int `json:"hold_time,omitempty"`
 	// Group names an optional cross-zoning group: a grouped sensor only
 	// triggers when a second distinct member of the same group
-	// activates within the cross-zone window (docs/alarm-concept.md
+	// activates within the cross-zone window (notes/concepts/alarm-concept.md
 	// §6.2). Empty disables grouping.
 	Group string `json:"group,omitempty"`
 	// PanicSilent marks a panic-class always-on sensor whose activation

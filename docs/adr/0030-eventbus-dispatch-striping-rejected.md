@@ -7,7 +7,7 @@
   `internal/central/events/bus.go`,
   `internal/central/central.go` (`New`),
   the analysis item Area 3 [W5]/[P2] in
-  `docs/audit/architecture-analysis-2026-06-15.md`
+  `notes/audits/architecture-analysis-2026-06-15.md`
 
 ## Context
 

@@ -17,6 +17,14 @@
   rather than letting two panels edit the same thing. Off by default,
   because running this add-on does not necessarily mean the integration
   uses it.
+- **The online documentation is easier to navigate.** The architecture
+  decision records are now part of the published site instead of being
+  linked out to GitHub, the pages that referred to them no longer lead to
+  dead links, and the internal engineering notes have moved out of the
+  published tree so what you find on the documentation site is written for
+  you rather than for contributors. Several pages that had fallen behind
+  the software — the readme's version, the Matter conformance page, the
+  roadmap — were corrected.
 
 ## 0.54.7
 

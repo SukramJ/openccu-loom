@@ -2,7 +2,7 @@
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
 // Package codes is the domain facade over the alarm_codes store
-// (docs/alarm-concept.md §11, migration 028): argon2id PIN hashing,
+// (notes/concepts/alarm-concept.md §11, migration 028): argon2id PIN hashing,
 // code authentication with per-source rate limiting, and the parsed
 // row projection consumed by keypad/remote intent routing. Facade
 // implements the engine's CodeValidator port directly; it deliberately
@@ -25,7 +25,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// Kind classifies an alarm-code row (docs/alarm-concept.md §11).
+// Kind classifies an alarm-code row (notes/concepts/alarm-concept.md §11).
 // Mirrors alarm.CodeKind field-for-field so the service-layer adapter
 // can convert without ambiguity.
 type Kind string
@@ -45,7 +45,7 @@ type Perms struct {
 }
 
 // Binding is the parsed binding_json union for the hardware code
-// kinds (docs/alarm-concept.md §11). keypad_slot uses
+// kinds (notes/concepts/alarm-concept.md §11). keypad_slot uses
 // Central/DeviceAddress/Slot plus the arm target (ArmMode/ZoneID);
 // remote_key uses Central/ChannelAddress/Parameter plus the action
 // target (Action/ZoneID).
@@ -132,7 +132,7 @@ type pinCandidate struct {
 	validUntilMS   int64
 }
 
-// Validate implements engine.CodeValidator (docs/alarm-concept.md
+// Validate implements engine.CodeValidator (notes/concepts/alarm-concept.md
 // §11). See the engine.CodeValidator doc comment for the full
 // contract; in short: a correct code returns its identity + duress
 // flag with a nil error, a wrong or missing-but-required code returns
@@ -146,7 +146,7 @@ func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string
 	// session is already the authenticated factor, so a lockout protects
 	// nothing — and short-circuiting here would silently suppress duress
 	// detection on a valid duress code entered under coercion, exactly
-	// when it matters most (docs/alarm-concept.md §11/§16).
+	// when it matters most (notes/concepts/alarm-concept.md §11/§16).
 	opSource := engine.IsOperatorSource(source)
 	if !opSource {
 		if allowed, remaining := f.limiter.allow(source, now); !allowed {
@@ -193,7 +193,7 @@ func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string
 
 // HasPINCodes reports whether any enabled, in-validity pin code applies
 // to zoneID — the "codes exist" half of the effective code requirement
-// (docs/alarm-concept.md §11). MQTT discovery uses it to advertise
+// (notes/concepts/alarm-concept.md §11). MQTT discovery uses it to advertise
 // code_arm_required / code_disarm_required exactly as the engine will
 // enforce them: a policy default resolves to required only while such a
 // code exists, so HA prompts for a code precisely when one is needed.

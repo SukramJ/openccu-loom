@@ -15,7 +15,7 @@ import (
 )
 
 // sysvarStates is the fixed value list of the mirror sysvar
-// (docs/alarm-concept.md §13.5). Order is part of the persisted enum;
+// (notes/concepts/alarm-concept.md §13.5). Order is part of the persisted enum;
 // keep it stable. The German labels follow the CCU convention so
 // existing programs read naturally.
 var sysvarStates = []string{

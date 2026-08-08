@@ -2,7 +2,7 @@
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
 // Package outputs implements the alarm output-driver layer
-// (docs/alarm-concept.md §7/§8): it turns the engine's abstract
+// (notes/concepts/alarm-concept.md §7/§8): it turns the engine's abstract
 // FireCycle/StopAll/Chirp port calls into bounded device commands on
 // the enrolled sirens, switch actuators, smoke-detector sounders,
 // alarm lights, and chirp emitters.

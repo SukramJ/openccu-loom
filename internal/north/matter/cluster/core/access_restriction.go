@@ -17,7 +17,7 @@ package core
 // cluster on the Root endpoint and wire the CommitRestrictionEntries /
 // ReviewFabricRestrictions commands to the daemon's fabric-store.
 //
-// By-design entry: see docs/parity/by_design.md §ARL (C-P2-3).
+// By-design entry: see notes/parity/by_design.md §ARL (C-P2-3).
 //
 // TODO: implement full ARL cluster when Managed Aggregator is in scope.
 // At minimum: Cluster 0x002B, attrs CommissioningARLEntries (0x0000),

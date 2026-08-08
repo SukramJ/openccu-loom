@@ -98,7 +98,7 @@ func wireSharedInfrastructure(
 	// Visibility / un_ignore — SQLite-backed store, bootstrap-seed from
 	// config.yaml on first start, then wired into the REST surface via
 	// the visibilityAdapter (see cmd/openccu-loom/visibility_adapter.go +
-	// visibility_wiring.go + docs/ui/unignore-concept.md). The patterns
+	// visibility_wiring.go + notes/concepts/ui/unignore-concept.md). The patterns
 	// are applied to visReg after WireCentrals so the suppression marks
 	// land on materialised devices.
 	si.visibilityStore = wireVisibilityUnIgnoreStore(cfg, logger) //nolint:contextcheck // wireVisibilityUnIgnoreStore has no ctx parameter

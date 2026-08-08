@@ -158,7 +158,7 @@ func TestAccessPermissionKeyAndCategory(t *testing.T) {
 }
 
 // TestAccessPermissionAvailabilityGatesOnState pins the availability gate to
-// its primary state carrier (STATE); see docs/parity/by_design.md.
+// its primary state carrier (STATE); see notes/parity/by_design.md.
 func TestAccessPermissionAvailabilityGatesOnState(t *testing.T) {
 	ap, state, _ := newTestAccessPermission(t, "VCU0002:10", &stubWriter{})
 	if ap.IsRefreshed() {

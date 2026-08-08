@@ -231,7 +231,7 @@ func (c *CircuitBreaker) Do(ctx context.Context, operationID string, fn func(ctx
 // a [hmenum.CommandPriorityCritical] call may attempt a single probe
 // through an OPEN circuit. Stop/silence commands of the alarm engine
 // must be attempted even when the interface breaker is open
-// (docs/alarm-concept.md §2, S5) — a siren stop that is rejected
+// (notes/concepts/alarm-concept.md §2, S5) — a siren stop that is rejected
 // unsent is worse than one wasted probe on a dead wire. The probe
 // shares the single-concurrent-probe slot with HALF_OPEN (concurrent
 // critical callers get [hmerr.ErrCircuitBreakerOpen]), its outcome is

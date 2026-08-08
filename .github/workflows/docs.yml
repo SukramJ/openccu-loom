@@ -56,8 +56,13 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements_docs.txt
 
+      # --strict turns mkdocs warnings into failures. It is what keeps the
+      # published/internal split honest: a page under docs/ that is missing
+      # from the nav, or a link that leaves docs_dir, fails the build here
+      # instead of shipping as a dead link. Documents that should not be
+      # published belong under notes/, which mkdocs never sees.
       - name: Build documentation
-        run: mkdocs build
+        run: mkdocs build --strict
 
       - name: Upload artifact
         if: github.event_name != 'pull_request'

@@ -466,7 +466,7 @@ func MatterMeasurementClassDeviceType(class MatterMeasurementClass) uint16 {
 		// packages/model/src/standard/resources/boolean-state.resource.ts)
 		// and dry reports StateValue=false ("open/no contact").
 		// Divergence from matter.js device-type selection is recorded
-		// in docs/parity/by_design.md.
+		// in notes/parity/by_design.md.
 		return 0x0015 // ContactSensor
 	case MatterMeasurementMomentarySwitch:
 		return 0x000F // GenericSwitch

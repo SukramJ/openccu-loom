@@ -5,7 +5,7 @@
 // No DOM, no Svelte — everything is plain TypeScript so the
 // composition logic is unit-testable in Vitest without a browser.
 //
-// Concept doc: docs/ui/auto-tile-concept.md.
+// Concept doc: notes/concepts/ui/auto-tile-concept.md.
 //
 // Resolution order:
 //   1. Find the primary DP (channel-type → parameter table from

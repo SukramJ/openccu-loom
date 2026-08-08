@@ -18,7 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
-// This file pins the siren-safety invariants of docs/alarm-concept.md
+// This file pins the siren-safety invariants of notes/concepts/alarm-concept.md
 // §2 at the contract level. It grows with the output-driver layer;
 // every S-invariant behaviour lands here with the code that carries it.
 

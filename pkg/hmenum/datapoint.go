@@ -159,7 +159,7 @@ const (
 	// the two identically), but distinct so the Matter projection can drop
 	// this redundant status channel by default while keeping genuine extra
 	// CDPVisible sensors (HUMIDITY, a contact STATE). The Python reference
-	// model has no equivalent usage — see docs/parity/by_design.md.
+	// model has no equivalent usage — see notes/parity/by_design.md.
 	DataPointUsageCDPState  DataPointUsage = "ce_state"
 	DataPointUsageDataPoint DataPointUsage = "data_point"
 	DataPointUsageEvent     DataPointUsage = "event"

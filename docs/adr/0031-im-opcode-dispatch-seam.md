@@ -6,8 +6,8 @@
   `internal/north/matter/bridge/receive.go` (`handleIMOpcode`),
   `internal/north/matter/bridge/receive_test.go`,
   the analysis item Area 7 [W4]/[P1] in
-  `docs/audit/architecture-analysis-2026-06-15.md`,
-  [matter.js as the Matter gold standard](../../CLAUDE.md)
+  `notes/audits/architecture-analysis-2026-06-15.md`,
+  [matter.js as the Matter gold standard](https://github.com/SukramJ/openccu-loom/blob/main/CLAUDE.md)
 
 ## Context
 

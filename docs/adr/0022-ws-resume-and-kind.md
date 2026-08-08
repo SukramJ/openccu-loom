@@ -4,7 +4,7 @@
 - **Date**: 2026-05-24
 - **Related**:
   [ADR 0020 — external-client wire contract](./0020-external-client-wire-contract.md),
-  [`docs/external-clients/asks.md`](../external-clients/asks.md) (closes B1, B2),
+  [`notes/reference/external-client-asks.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/reference/external-client-asks.md) (closes B1, B2),
   [`docs/external-clients/topic-hierarchy.md`](../external-clients/topic-hierarchy.md),
   `internal/north/rest/ws/hub.go`,
   `internal/north/rest/ws/client.go`
@@ -41,8 +41,8 @@ completes with one of two control frames:
 
 ## Context
 
-`docs/external-clients/asks.md` listed B1 ("Sequence/Replay-Semantik
-nach WS-Reconnect") in the TL;DR Top-3 — the existing WS surface
+The external-client ask list carried B1 ("sequence/replay semantics
+after a WS reconnect") in its top three — the existing WS surface
 had no way for a client to know whether it had missed events across
 a reconnect, NAT-timeout, or network blip. The only recovery path was
 a full `/snapshot` re-load, which:
@@ -52,9 +52,9 @@ a full `/snapshot` re-load, which:
 - Forced clients to implement a homegrown ordering inference based
   on `ts` (timestamps) — fragile under clock skew.
 
-B2 ("`previous` ist `omitempty` — Frame-Klassifikation fehlt") was a
-related concern: clients had no way to tell whether an event with a
-missing `previous` was an initial push or a delta. The asks.md
+B2 ("`previous` is `omitempty` — frame classification is missing") was
+a related concern: clients had no way to tell whether an event with a
+missing `previous` was an initial push or a delta. The ask list's
 primary recommendation was a `kind` discriminator on the envelope.
 
 Both gaps land in this ADR because they share the envelope-extension

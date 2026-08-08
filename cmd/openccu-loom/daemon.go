@@ -364,7 +364,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// Forward alarm-panel events (state, trigger, journal, health,
 		// reminder, duress) through the outbound webhook. Set before the
 		// PhaseLate StartAll so the bridge subscribes the alarm bus on
-		// start (docs/alarm-concept.md §13.4).
+		// start (notes/concepts/alarm-concept.md §13.4).
 		webhookOutbound.SetAlarmBus(alarmSvc.Bus())
 	}
 

@@ -11,7 +11,7 @@ package hmenum
 // The taxonomy is orthogonal to the alarm engine's sensor types: a
 // data point carries a SecurityClass because of what it *measures*,
 // independent of whether it is enrolled as an alarm trigger. See
-// docs/security-safety-concept.md §3.5.
+// notes/concepts/security-safety-concept.md §3.5.
 type SecurityClass string
 
 // SecurityClass values.
@@ -20,7 +20,7 @@ const (
 	SecurityClassSmoke SecurityClass = "smoke"
 	// SecurityClassWater covers leakage, moisture and water level.
 	// Rain is deliberately not part of this class — precipitation is
-	// weather, not a leak (docs/security-safety-concept.md §6.1).
+	// weather, not a leak (notes/concepts/security-safety-concept.md §6.1).
 	SecurityClassWater SecurityClass = "water"
 	// SecurityClassGas covers combustible gas detection.
 	SecurityClassGas SecurityClass = "gas"
@@ -141,7 +141,7 @@ func (s SecuritySeverity) Rank() int {
 // SeverityForClass returns the severity an active source of class c
 // contributes. The precedence encoded here is the one the aggregate
 // `security/system/state` entity applies
-// (docs/security-safety-concept.md §4.1).
+// (notes/concepts/security-safety-concept.md §4.1).
 func SeverityForClass(c SecurityClass) SecuritySeverity {
 	switch c {
 	case SecurityClassSmoke, SecurityClassGas, SecurityClassCO:

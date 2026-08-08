@@ -36,7 +36,7 @@ type Panel struct {
 	// Master marks the aggregate panel.
 	Master bool
 	// CodeArmRequired / CodeDisarmRequired carry the zone's effective
-	// per-verb code policy (docs/alarm-concept.md §11/§13.3): the
+	// per-verb code policy (notes/concepts/alarm-concept.md §11/§13.3): the
 	// zone-config policy half AND the "an applicable enabled pin code
 	// exists" half, exactly as the engine will enforce them — so a
 	// client prompts for a code precisely when one is needed. The

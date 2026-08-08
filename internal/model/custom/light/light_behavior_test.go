@@ -96,7 +96,7 @@ func TestLightNamePostfix(t *testing.T) {
 // true after one.
 //
 // Pins the availability gate to its primary state carrier (LEVEL); see
-// docs/parity/by_design.md.
+// notes/parity/by_design.md.
 func TestLightIsRefreshed(t *testing.T) {
 	w := &stubWriter{}
 	l, level := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})

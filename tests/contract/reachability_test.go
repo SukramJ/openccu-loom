@@ -73,11 +73,11 @@ func repoRootFromTestFile(t *testing.T) string {
 	return abs
 }
 
-// loadDeadCodeInventory liest und deserialisiert docs/parity/dead-code-inventory.json.
+// loadDeadCodeInventory liest und deserialisiert notes/parity/dead-code-inventory.json.
 func loadDeadCodeInventory(t *testing.T) deadCodeInventory {
 	t.Helper()
 	root := repoRootFromTestFile(t)
-	path := filepath.Join(root, "docs", "parity", "dead-code-inventory.json")
+	path := filepath.Join(root, "notes", "parity", "dead-code-inventory.json")
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -97,10 +97,10 @@ func loadDeadCodeInventory(t *testing.T) deadCodeInventory {
 // Inventory-Run manuell reviewed und committed wurde.
 func TestReachabilityInventoryExists(t *testing.T) {
 	root := repoRootFromTestFile(t)
-	path := filepath.Join(root, "docs", "parity", "dead-code-inventory.json")
+	path := filepath.Join(root, "notes", "parity", "dead-code-inventory.json")
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Fatalf("docs/parity/dead-code-inventory.json fehlt.\n" +
+		t.Fatalf("notes/parity/dead-code-inventory.json fehlt.\n" +
 			"Ausführen: go run ./script/reachability\n" +
 			"Danach das Inventory prüfen und committen.")
 	}
@@ -187,7 +187,7 @@ func TestReachabilityUnreachableFormat(t *testing.T) {
 	}
 
 	if t.Failed() {
-		t.Logf("Unreachable-Format-Fehler: prüfe docs/parity/dead-code-inventory.json")
+		t.Logf("Unreachable-Format-Fehler: prüfe notes/parity/dead-code-inventory.json")
 	} else {
 		t.Logf("Unreachable-Format OK: %d Einträge geprüft", len(inv.Unreachable))
 	}
@@ -269,10 +269,10 @@ func TestReachabilityByPackageConsistency(t *testing.T) {
 // test-only callers hide real dead-code in the combined run.
 func TestReachabilityProductionOnlyExists(t *testing.T) {
 	root := repoRootFromTestFile(t)
-	path := filepath.Join(root, "docs", "parity", "dead-code-production-only.json")
+	path := filepath.Join(root, "notes", "parity", "dead-code-production-only.json")
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Fatalf("docs/parity/dead-code-production-only.json fehlt.\n" +
+		t.Fatalf("notes/parity/dead-code-production-only.json fehlt.\n" +
 			"Ausführen: go run ./script/reachability -production-only\n" +
 			"Danach das Inventory prüfen und committen.")
 	}

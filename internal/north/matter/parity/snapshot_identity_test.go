@@ -18,7 +18,7 @@ import (
 // TestEmbeddedSchemaMatchesMasterSnapshot asserts the go:embed source consumed
 // by every matter-side parity test (internal/north/matter/parity/schema.json,
 // returned by parity.SchemaJSON) is byte-identical to the master snapshot the
-// extractor writes (docs/parity/matter/matter-schema-snapshot.json).
+// extractor writes (notes/parity/matter/matter-schema-snapshot.json).
 //
 // The two files are kept in sync by a manual copy step (see the sync note in
 // parity.go). If the master is refreshed but the embed copy is not, the parity
@@ -35,7 +35,7 @@ func TestEmbeddedSchemaMatchesMasterSnapshot(t *testing.T) {
 	// This file lives at internal/north/matter/parity/snapshot_identity_test.go,
 	// so the repo root is four directories up.
 	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
-	masterPath := filepath.Join(repoRoot, "docs", "parity", "matter", "matter-schema-snapshot.json")
+	masterPath := filepath.Join(repoRoot, "notes", "parity", "matter", "matter-schema-snapshot.json")
 
 	master, err := os.ReadFile(masterPath)
 	if err != nil {
@@ -50,7 +50,7 @@ func TestEmbeddedSchemaMatchesMasterSnapshot(t *testing.T) {
 	embedSum := sha256.Sum256(embedded)
 	masterSum := sha256.Sum256(master)
 	t.Errorf("embedded schema.json diverged from the master snapshot — run\n"+
-		"  cp docs/parity/matter/matter-schema-snapshot.json internal/north/matter/parity/schema.json\n"+
+		"  cp notes/parity/matter/matter-schema-snapshot.json internal/north/matter/parity/schema.json\n"+
 		"  embedded: %d bytes, sha256 %s\n"+
 		"  master:   %d bytes, sha256 %s",
 		len(embedded), hex.EncodeToString(embedSum[:]),

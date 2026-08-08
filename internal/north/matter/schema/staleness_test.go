@@ -71,7 +71,7 @@ var loomUsedClusters = map[uint32]string{
 
 // matterJSElementsDir returns the standard-elements directory of a sibling
 // matter.js checkout (../matter.js relative to the repo root) and whether it
-// exists. The extractor at docs/parity/matter/extract-from-matter-js.ts walks
+// exists. The extractor at notes/parity/matter/extract-from-matter-js.ts walks
 // the same MatterDefinition tree these files build.
 func matterJSElementsDir() (string, bool) {
 	_, thisFile, _, ok := runtime.Caller(0)
@@ -146,7 +146,7 @@ func pinnedSnapshotProvenance() (revision, commit string) {
 		return revision, commit
 	}
 	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
-	raw, err := os.ReadFile(filepath.Join(repoRoot, "docs", "parity", "matter", "matter-schema-snapshot.json"))
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "notes", "parity", "matter", "matter-schema-snapshot.json"))
 	if err != nil {
 		return revision, commit
 	}
@@ -187,7 +187,7 @@ func shortCommit(c string) string {
 // TestMatterJSSchemaStalenessAgainstLiveCheckout makes upstream schema
 // staleness visible. It compares the pinned per-cluster ClusterRevision
 // (schema.ClusterRevisions, generated from
-// docs/parity/matter/matter-schema-snapshot.json) against a live ../matter.js
+// notes/parity/matter/matter-schema-snapshot.json) against a live ../matter.js
 // checkout's element sources and reports every loom-used cluster whose
 // revision has increased upstream — the drift the pin would otherwise hide.
 //
@@ -205,7 +205,7 @@ func shortCommit(c string) string {
 //     that checks out matter.js HEAD would run to raise a signal.
 //
 // Mirrors the extraction the parity snapshot performs in
-// docs/parity/matter/extract-from-matter-js.ts: the ClusterRevision (attribute
+// notes/parity/matter/extract-from-matter-js.ts: the ClusterRevision (attribute
 // 0xFFFD) default in
 // ../matter.js/packages/model/src/standard/elements/*.element.ts.
 func TestMatterJSSchemaStalenessAgainstLiveCheckout(t *testing.T) {

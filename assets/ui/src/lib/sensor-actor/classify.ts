@@ -4,7 +4,7 @@
 // Pure functions; the tile component consumes the outputs and renders
 // each role with the matching primitive (icon, pill, button, …).
 //
-// Role rules — see docs/ui/sensor-actor-tile-concept.md §"DP classification roles":
+// Role rules — see notes/concepts/ui/auto-tile-concept.md §"DP roles":
 //
 //   primary           — first read+event DP, selected by primary.ts
 //   secondary         — read+event only, not the primary

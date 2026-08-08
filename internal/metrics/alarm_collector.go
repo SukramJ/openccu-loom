@@ -22,7 +22,7 @@ import (
 //     ([hmevent.AlarmHealthChangedEvent]).
 //
 // Unlike [MqttCollector], the alarm system is a single daemon-level
-// service (docs/alarm-concept.md §14: areas span centrals, not the
+// service (notes/concepts/alarm-concept.md §14: areas span centrals, not the
 // other way around), so metric names carry no per-central segment.
 type AlarmCollector struct {
 	Triggered         *Counter

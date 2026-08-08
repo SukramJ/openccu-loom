@@ -30,7 +30,7 @@ import (
 
 // TestDiscoverySnapshotDumpAgainstGodevccu produces the openccu-loom
 // side of the cross-stack HA-Discovery snapshot diff described in
-// `docs/parity/discovery_snapshot_schema.md`. It boots godevccu in
+// `notes/parity/discovery_snapshot_schema.md`. It boots godevccu in
 // HOMEGEAR mode, hydrates the openccu-loom device pipeline, walks every
 // Generic-DP (VALUES + MASTER paramsets) on every channel, drives each
 // through the MQTT bridge with HA-Discovery enabled, captures the
@@ -370,7 +370,7 @@ func sortValue(v any) any {
 }
 
 // ---------------------------------------------------------------------------
-// Snapshot shapes — keep in sync with docs/parity/discovery_snapshot_schema.md
+// Snapshot shapes — keep in sync with notes/parity/discovery_snapshot_schema.md
 // and with script/aiohomematic2mqtt_discovery_snapshot.py.
 // ---------------------------------------------------------------------------
 

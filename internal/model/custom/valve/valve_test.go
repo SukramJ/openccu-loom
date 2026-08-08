@@ -792,7 +792,7 @@ func TestIrrigationIsRefreshedFalseWhenUnobserved(t *testing.T) {
 // returns true once the underlying Switch receives a CCU push.
 //
 // Pins the availability gate to its primary state carrier (STATE); see
-// docs/parity/by_design.md.
+// notes/parity/by_design.md.
 func TestIrrigationIsRefreshedTrueAfterObservation(t *testing.T) {
 	v := newTestIrrigation(t, "VCU0001:1", &stubWriter{})
 	v.OnEvent(false)
@@ -814,7 +814,7 @@ func TestModulatingIsRefreshedFalseWhenUnobserved(t *testing.T) {
 // after the underlying Float receives a CCU push.
 //
 // Pins the availability gate to its primary state carrier (LEVEL); see
-// docs/parity/by_design.md.
+// notes/parity/by_design.md.
 func TestModulatingIsRefreshedTrueAfterObservation(t *testing.T) {
 	v := newTestModulating(t, "VCU0001:1", &stubWriter{})
 	v.OnEvent(0.5)

@@ -45,8 +45,8 @@ const (
 )
 
 // scenario is the decoded form of one JSON scenario file under
-// docs/parity/matter/scenarios/. The schema is documented in
-// docs/parity/matter/scenarios/README.md.
+// notes/parity/matter/scenarios/. The schema is documented in
+// notes/parity/matter/scenarios/README.md.
 type scenario struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`

@@ -14,7 +14,7 @@ import (
 // MatterEvent is the type the REST + bridge layers publish through
 // the daemon's WebSocket hub for SPA-side reactive updates. Topic
 // strings match the catalogue documented in
-// `docs/matter-ui-concept.md` §3.
+// `notes/concepts/matter-ui-concept.md` §3.
 type MatterEvent struct {
 	// Topic is the WS hub topic the event is published under. Use
 	// the `MatterTopic*` constants below.
@@ -50,7 +50,7 @@ type MatterTopologyReassembler interface {
 }
 
 // MatterEventTopic constants documented in
-// `docs/matter-ui-concept.md` §3. Adding a new topic here requires
+// `notes/concepts/matter-ui-concept.md` §3. Adding a new topic here requires
 // matching SPA-side wiring + (typically) one publisher call site.
 const (
 	// MatterTopicExposableChanged fires when an allowlist row is
@@ -103,7 +103,7 @@ func typeFromTopic(topic string) string {
 // recordMatterAudit is a thin nil-safe wrapper around
 // [audit.Recorder.Record]. The Matter mutation handlers call this
 // after a successful database write so the change-history view
-// reflects the mutation per `docs/matter-ui-concept.md` §6.
+// reflects the mutation per `notes/concepts/matter-ui-concept.md` §6.
 //
 // The actor is read from the request context via
 // [actorFromRequest]; pairing codes / passcodes are NEVER recorded

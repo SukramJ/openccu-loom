@@ -187,7 +187,7 @@ describe("AlarmOverview — countdown ring", () => {
   });
 });
 
-// docs/alarm-concept.md §11: the PIN pad gates a verb only when the zone's
+// notes/concepts/alarm-concept.md §11: the PIN pad gates a verb only when the zone's
 // own code policy explicitly opts it in (codeRequired() reads
 // config.code_policy.require_arm / require_disarm from zonesConfig, not
 // from the live status snapshot). Silence is deliberately wired past this

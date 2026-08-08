@@ -10,8 +10,8 @@ external counterpart so the lineage stays auditable.
 
 The license obligations and verbatim copyright notices for every upstream
 project — plus the Go module dependencies — live in
-[`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md); full license texts are
-under [`licenses/`](../licenses/). This page is the narrative companion to that
+[`THIRD-PARTY-NOTICES.md`](https://github.com/SukramJ/openccu-loom/blob/main/THIRD-PARTY-NOTICES.md); full license texts are
+under [`licenses/`](https://github.com/SukramJ/openccu-loom/blob/main/licenses). This page is the narrative companion to that
 machine-oriented list.
 
 ## aiohomematic — MIT
@@ -94,7 +94,7 @@ primitive is implemented from scratch in Svelte 5 + Tailwind 4.
 - Used as: factual API-inventory source for the CCU `CONTROL` attribute.
   The 84 family names and their slot suffixes are interface metadata
   the CCU XML-RPC API speaks; documenting them in
-  `docs/ui/control-inventory.md` is no different from documenting
+  `notes/reference/control-inventory.md` is no different from documenting
   HTTP-method names.
 - Specifically: `occu/firmware/rftypes/*.xml` (`grep`ed for `control="…"`
   attributes) and the existence of `occu/WebUI/www/rega/esp/controls/*.fn`
@@ -129,9 +129,9 @@ binary are addressed separately by ADR 0003 + `internal/ccudata/embedded/NOTICE`
 
 Compliance: Apache-2.0 is MIT-compatible. No matter.js source is reproduced
 verbatim; the Go code is written from scratch. The Apache-2.0 license text is
-kept at [`licenses/Apache-2.0.txt`](../licenses/Apache-2.0.txt) and the
+kept at [`licenses/Apache-2.0.txt`](https://github.com/SukramJ/openccu-loom/blob/main/licenses/Apache-2.0.txt) and the
 matter.js schema pin used for parity at
-`docs/parity/matter/matter-schema-snapshot.json`.
+`notes/parity/matter/matter-schema-snapshot.json`.
 
 ## home-assistant-matter-bridge — Apache-2.0
 
@@ -142,7 +142,7 @@ matter.js schema pin used for parity at
   (Aggregator + bridged devices). Not a gold standard — it carries
   Home-Assistant-specific shims — but useful when wiring the bridge.
 
-Compliance: Apache-2.0, see [`licenses/Apache-2.0.txt`](../licenses/Apache-2.0.txt).
+Compliance: Apache-2.0, see [`licenses/Apache-2.0.txt`](https://github.com/SukramJ/openccu-loom/blob/main/licenses/Apache-2.0.txt).
 No source is reproduced verbatim.
 
 ## Reverse direction

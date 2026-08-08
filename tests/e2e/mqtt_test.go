@@ -88,7 +88,7 @@ func TestMQTTHomeAssistantDiscovery(t *testing.T) {
 // TestMQTTSetCommandIngested asserts that the daemon's MQTT command
 // subscriber actually consumes inbound `/set` frames. We publish on
 // a canonical raw-plane SET topic (no real device behind it — see
-// docs/e2e-testplan.md §11.5 for why a true echo roundtrip cannot
+// notes/testplans/e2e-testplan.md §11.5 for why a true echo roundtrip cannot
 // run against godevccu) and verify via the broker's $SYS counters
 // that the message was received and routed.
 //

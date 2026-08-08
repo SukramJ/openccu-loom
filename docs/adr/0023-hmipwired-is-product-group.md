@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-05-26
-- **Related**: ADR 0002 (multi-CCU), [SPECIFICATION.md](../../SPECIFICATION.md) §2.1 / §5
+- **Related**: ADR 0002 (multi-CCU), [SPECIFICATION.md](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md) §2.1 / §5
 
 ## Context
 

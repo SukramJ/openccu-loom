@@ -4,7 +4,7 @@
 // Package hmui carries the data-point UI classification catalogue
 // the daemon serves through `DataPointSummary.UIHint`. The SPA's
 // AutoTile composer reads the hint verbatim — there is no parallel
-// classifier on the JS side. See docs/ui/auto-tile-concept.md §7.
+// classifier on the JS side. See notes/concepts/ui/auto-tile-concept.md §7.
 //
 // Resolution order in [HintFor]:
 //

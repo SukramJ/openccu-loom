@@ -21,7 +21,7 @@ import (
 )
 
 // alarmSourceSchedule tags journal entries and Arm calls the schedule
-// chain issues (docs/alarm-concept.md §15 row 19).
+// chain issues (notes/concepts/alarm-concept.md §15 row 19).
 const alarmSourceSchedule = "schedule"
 
 // scheduleEngine is the narrow slice of the engine the schedule
@@ -44,7 +44,7 @@ type scheduleEntry struct {
 // scheduleRunnerDeps wires a scheduleRunner.
 type scheduleRunnerDeps struct {
 	// Zones loads every zone's persisted config, which carries the
-	// per-zone Schedules list (docs/alarm-concept.md §15 row 19).
+	// per-zone Schedules list (notes/concepts/alarm-concept.md §15 row 19).
 	Zones engine.ZoneStore
 	// Engine resolves the current zone state and drives the AutoArm
 	// verb.
@@ -70,7 +70,7 @@ type scheduleRunnerDeps struct {
 }
 
 // scheduleRunner drives the per-zone daily-time chains that back
-// arm schedules and reminders (docs/alarm-concept.md §15 row 19). One
+// arm schedules and reminders (notes/concepts/alarm-concept.md §15 row 19). One
 // chain per configured schedule entry: it fires at the next matching
 // HH:MM/weekday, dispatches, and re-chains itself for the following
 // occurrence — the same self-rechaining TimerScheduler pattern as the

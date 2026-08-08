@@ -167,7 +167,7 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		FirmwareRefresher: adapter.NewFirmwareDomain(w.registry, w.valueWriter),
 		// ChangeHistory, ThrottleStats, DeviceStatistics, IncidentClearer,
 		// ChangeHistoryClearer, ExtendedHub, Central, ParamsetReader: all nil —
-		// see docs/parity/by_design.md "ws-rest-split". The in-tree Svelte SPA
+		// see notes/parity/by_design.md "ws-rest-split". The in-tree Svelte SPA
 		// uses REST + WS event-stream; these families remain dormant until an
 		// external WS bridge wires them.
 	})
@@ -222,7 +222,7 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 }
 
 // wsAlarmCodeAdminFrom yields the codes_* WS command facade — the same
-// store-backed adapter the REST surface drives (docs/alarm-concept.md
+// store-backed adapter the REST surface drives (notes/concepts/alarm-concept.md
 // §11). A nil service or store yields a genuinely nil interface so the
 // codes_* commands answer "unavailable" instead of panicking.
 func wsAlarmCodeAdminFrom(s *alarm.Service) ws.AlarmCodeAdmin {

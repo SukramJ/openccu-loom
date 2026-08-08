@@ -25,7 +25,7 @@ import (
 )
 
 // This file covers the arm/disarm/silence verb handlers' `code` body
-// field (docs/alarm-concept.md §11) against a real *engine.Engine wired
+// field (notes/concepts/alarm-concept.md §11) against a real *engine.Engine wired
 // with a stub CodeValidator — the codes facade itself is exercised by
 // internal/alarm/codes's own test suite. Every /alarm write route
 // attributes the fixed alarmSourceREST ("rest-operator") source, which
@@ -61,7 +61,7 @@ func (f *fakeVerbCodeValidator) Validate(_ context.Context, _, verb, code, _ str
 
 // recordingSink is a minimal engine.EventSink double that records every
 // published event so tests can assert on the silent AlarmDuressEvent
-// fan-out (docs/alarm-concept.md §11: never broadcast over WS, but
+// fan-out (notes/concepts/alarm-concept.md §11: never broadcast over WS, but
 // always published to the bus for the MQTT/webhook consumers).
 type recordingSink struct {
 	mu     sync.Mutex
@@ -226,7 +226,7 @@ func TestDisarmAlarmZone_UnrecognizedCode_StillSucceeds_OperatorBypass(t *testin
 // covers the meaningful code behaviour REST cannot bypass: a duress
 // code disarms normally (204, zone disarmed) while silently firing
 // AlarmDuressEvent on the bus and a Hidden journal row — never a
-// visible journal entry, never a WS broadcast (docs/alarm-concept.md
+// visible journal entry, never a WS broadcast (notes/concepts/alarm-concept.md
 // §11).
 func TestDisarmAlarmZone_DuressCode_FiresDuressEventAndHiddenJournalEntry(t *testing.T) {
 	t.Parallel()

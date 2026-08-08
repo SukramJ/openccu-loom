@@ -8,7 +8,7 @@ package hmapi
 // Wire DTOs for the /api/v1/areas REST surface. Areas are
 // operator-defined room groupings above the CCU's flat, per-central
 // room list (a floor, a shed, a terrace roof) — distinct from alarm
-// zones (docs/alarm-concept.md §14), which are independently armable
+// zones (notes/concepts/alarm-concept.md §14), which are independently armable
 // partitions.
 
 // Area is one operator-defined room grouping.

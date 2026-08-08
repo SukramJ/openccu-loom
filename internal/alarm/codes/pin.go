@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// argon2id parameters (docs/alarm-concept.md §11 / slice-6 design):
+// argon2id parameters (notes/concepts/alarm-concept.md §11 / slice-6 design):
 // time=1, memory=64 MiB, 4 threads, a 16-byte salt and a 32-byte
 // derived key. VerifyPIN re-derives with the parameters embedded in
 // the stored hash rather than these constants, so a future parameter

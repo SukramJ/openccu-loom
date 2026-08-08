@@ -7,7 +7,7 @@ package hmenum
 // form is wire-stable: it appears in the REST/WS API, MQTT payloads,
 // and the persisted alarm state. "disarmed" doubles as the active mode
 // of a disarmed zone so every surface can render mode without a
-// nullable field. See docs/alarm-concept.md §4 for the mode-naming
+// nullable field. See notes/concepts/alarm-concept.md §4 for the mode-naming
 // mapping (UI localization, HA vocabulary).
 type AlarmMode string
 
@@ -48,7 +48,7 @@ func (m AlarmMode) Armed() bool { return m.Valid() && m != AlarmModeDisarmed }
 
 // AlarmZoneState is the arm-state-machine state of one alarm zone.
 // The vocabulary follows the HA alarm_control_panel model so every
-// integration maps 1:1 (docs/alarm-concept.md §5).
+// integration maps 1:1 (notes/concepts/alarm-concept.md §5).
 type AlarmZoneState string
 
 // AlarmZoneState values.
@@ -82,7 +82,7 @@ func (s AlarmZoneState) Valid() bool {
 // AlarmSensorType classifies an enrolled alarm sensor. Types are
 // derived from the device model / channel type and preset the mode
 // matrix and behaviour flags; every assignment stays overridable per
-// sensor (docs/alarm-concept.md §6.1).
+// sensor (notes/concepts/alarm-concept.md §6.1).
 type AlarmSensorType string
 
 // AlarmSensorType values.
@@ -122,7 +122,7 @@ func (t AlarmSensorType) Valid() bool {
 // class — not the backing device type — decides which safety
 // invariants apply: acoustic classes get the full bounded-duration
 // siren treatment, visual classes follow the alarm-light lifecycle
-// (docs/alarm-concept.md §7).
+// (notes/concepts/alarm-concept.md §7).
 type AlarmOutputClass string
 
 // AlarmOutputClass values.
@@ -184,7 +184,7 @@ func (c AlarmOutputClass) Acoustic() bool {
 
 // AlarmBlockerPolicy decides how a sensor-health class (open,
 // unreachable, sabotage, low battery) affects arming readiness
-// (docs/alarm-concept.md §5, §6.3).
+// (notes/concepts/alarm-concept.md §5, §6.3).
 type AlarmBlockerPolicy string
 
 // AlarmBlockerPolicy values.
@@ -211,7 +211,7 @@ func (p AlarmBlockerPolicy) Valid() bool {
 }
 
 // AlarmJournalClass buckets alarm-journal entries for filtering
-// (docs/alarm-concept.md §12.5).
+// (notes/concepts/alarm-concept.md §12.5).
 type AlarmJournalClass string
 
 // AlarmJournalClass values.
@@ -251,7 +251,7 @@ func (c AlarmJournalClass) Valid() bool {
 }
 
 // AlarmPostTriggerPolicy decides what happens when the trigger time
-// of an incident elapses (docs/alarm-concept.md §5).
+// of an incident elapses (notes/concepts/alarm-concept.md §5).
 type AlarmPostTriggerPolicy string
 
 // AlarmPostTriggerPolicy values.
@@ -278,7 +278,7 @@ func (p AlarmPostTriggerPolicy) Valid() bool {
 }
 
 // AlarmCentralLossPolicy decides how an armed zone reacts when a
-// whole central is lost (docs/alarm-concept.md §10.1) — never
+// whole central is lost (notes/concepts/alarm-concept.md §10.1) — never
 // silently.
 type AlarmCentralLossPolicy string
 

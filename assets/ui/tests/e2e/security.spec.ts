@@ -1,7 +1,7 @@
 import { test, expect } from './helpers/fixtures';
 import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
 
-// Security & Safety domain (#/security, docs/security-safety-concept.md §7.8).
+// Security & Safety domain (#/security, notes/concepts/security-safety-concept.md §7.8).
 // Runs independently of the alarm engine — a smoke/water/gas-only install
 // still gets the hazard classes and the fault ledger. mockAllApis wires sane
 // defaults for GET /api/v1/security (severity "warning", an active "water"

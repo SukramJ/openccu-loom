@@ -62,7 +62,7 @@ var _ AlarmPanel = (*alarm.Service)(nil)
 // marks it as a strongly-authenticated operator session, which the
 // engine's code policy recognises as a break-glass surface that bypasses
 // a required arm/disarm/silence code while still surfacing duress
-// (docs/alarm-concept.md §11, S6). Every /alarm write route is
+// (notes/concepts/alarm-concept.md §11, S6). Every /alarm write route is
 // operator-gated, so a reaching call is always an operator session.
 const alarmSourceREST = "rest-operator"
 
@@ -174,7 +174,7 @@ func ArmAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 }
 
 // DisarmAlarmZone returns an zone to disarmed. The optional body carries
-// a disarm code (docs/alarm-concept.md §11); an absent body disarms
+// a disarm code (notes/concepts/alarm-concept.md §11); an absent body disarms
 // code-free, which the operator-session source is permitted to do (S6).
 func DisarmAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -558,7 +558,7 @@ func writeAlarmVerbError(w http.ResponseWriter, r *http.Request, err error, titl
 
 // writeAlarmInvalidCode writes the 403 for a missing or wrong alarm code.
 // The detail stays deliberately opaque ("invalid_code") so a probing
-// caller learns nothing about which codes exist (docs/alarm-concept.md
+// caller learns nothing about which codes exist (notes/concepts/alarm-concept.md
 // §16).
 func writeAlarmInvalidCode(w http.ResponseWriter, r *http.Request) {
 	problem.Write(w, http.StatusForbidden,

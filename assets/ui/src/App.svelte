@@ -146,7 +146,7 @@
    *
    * This closes deep links *within* the SPA — a bookmark, a shared link,
    * a stored start route. It is a UX guarantee, not a security boundary:
-   * the boundary is the API (see docs/design/ui-surface-profiles.md §2.8),
+   * the boundary is the API (see notes/concepts/ui-surface-profiles.md §2.8),
    * because a hash fragment never reaches the server in the first place.
    */
   function redirectIfHidden() {

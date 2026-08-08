@@ -11,7 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// This file covers the always-on hazard/panic class (docs/alarm-concept.md
+// This file covers the always-on hazard/panic class (notes/concepts/alarm-concept.md
 // §6.1/§7): sensors flagged AlwaysOn bypass the arm-state machine
 // entirely, drive the panel to triggered from any state, and return to
 // the state they interrupted (preTriggerState) once the trigger window

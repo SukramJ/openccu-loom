@@ -294,7 +294,7 @@ type DataPointSummary struct {
 	// Control is the CCU paramset descriptor's CONTROL attribute,
 	// of the form WIDGET_FAMILY.SLOT (e.g. "HEATING_CONTROL_HMIP.SETPOINT",
 	// "DIMMER.LEVEL"). Drives the SPA's CONTROL-aware widget resolver
-	// under assets/ui/src/lib/control/ — see docs/ui/control-widget-concept.md.
+	// under assets/ui/src/lib/control/ — see notes/concepts/ui/control-widget-concept.md.
 	// Empty when the descriptor carries no CONTROL.
 	Control string `json:"control,omitempty"`
 	// Type is the CCU descriptor TYPE (BOOL, INTEGER, FLOAT, ENUM, ...).
@@ -329,7 +329,7 @@ type DataPointSummary struct {
 	// AutoTile composer (icon, semantic, optional state-color rule).
 	// Computed once at serialise-time via [hmui.HintFor]; the SPA
 	// renders the values verbatim without re-classifying client-side.
-	// See docs/ui/auto-tile-concept.md.
+	// See notes/concepts/ui/auto-tile-concept.md.
 	UIHint *hmui.Hint `json:"ui_hint,omitempty"`
 	// AdditionalInformation carries enriched model metadata (e.g. battery
 	// type / quantity / low-voltage limits for a battery-backed device)

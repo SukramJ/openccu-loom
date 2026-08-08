@@ -57,7 +57,7 @@ func buildConfigYAML(in configInputs) string {
 	if in.MQTTBroker != "" {
 		// raw_enabled / discovery_enabled MUST be set explicitly: the
 		// Go zero-value is false, and `internal/config.applyDefaults`
-		// does not flip them — see docs/e2e-testplan.md §11.5 for the
+		// does not flip them — see notes/testplans/e2e-testplan.md §11.5 for the
 		// doc/code drift this works around.
 		mqttBlock = fmt.Sprintf(""+
 			"  mqtt:\n"+

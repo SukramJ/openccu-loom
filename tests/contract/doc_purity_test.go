@@ -259,7 +259,7 @@ func TestDocPurity(t *testing.T) {
 // Rationale: references to transient audit-trail docs (audit_runs/*,
 // memory hand-offs, todo lists) age into stale pointers within weeks.
 // References to permanent documents (ADRs, SPECIFICATION.md,
-// docs/parity/by_design.md, architecture concepts) stay useful for
+// notes/parity/by_design.md, architecture concepts) stay useful for
 // years. The test enforces the boundary mechanically: if you cite a
 // .md file in a code comment, that file has to be checked in.
 //

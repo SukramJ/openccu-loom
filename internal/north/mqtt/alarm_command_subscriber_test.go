@@ -108,7 +108,7 @@ func newAlarmCommandSubscriber(t *testing.T, sink AlarmSink) *CommandSubscriber 
 // --- TRIGGER -> panic ---
 
 // TestHandleAlarmCommand_Trigger_RoutesToPanic is the HA TRIGGER
-// affordance (docs/alarm-concept.md §7): a bare "TRIGGER" payload on an
+// affordance (notes/concepts/alarm-concept.md §7): a bare "TRIGGER" payload on an
 // area's command topic must route to the sink's loud panic path, not
 // any of the arm/disarm/silence verbs.
 func TestHandleAlarmCommand_Trigger_RoutesToPanic(t *testing.T) {

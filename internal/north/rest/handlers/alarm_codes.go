@@ -26,7 +26,7 @@ import (
 )
 
 // ErrInvalidAlarmCode is the sentinel every alarm-code write-time
-// validation failure wraps (docs/alarm-concept.md §11, S7
+// validation failure wraps (notes/concepts/alarm-concept.md §11, S7
 // fail-visible): a binding or PIN that could never authenticate or
 // never fire must be rejected at write time rather than stored and
 // silently inert. Both the REST handlers and the WS codes_* commands
@@ -39,7 +39,7 @@ var errUnexpectedBindingTrailer = errors.New("unexpected trailing data after bin
 
 // AlarmCodeAdmin is the narrow facade the /alarm/codes handlers drive: a
 // CRUD surface over the alarm-code store that owns the argon2id hashing
-// (docs/alarm-concept.md §11). It is satisfied structurally by the codes
+// (notes/concepts/alarm-concept.md §11). It is satisfied structurally by the codes
 // facade — the composition root wires the concrete value, or leaves the
 // router dependency nil to serve the routes as 503 (the alarm-code
 // subsystem is not available). The facade NEVER returns a cleartext PIN
@@ -226,7 +226,7 @@ func writeAlarmCodeAdminError(w http.ResponseWriter, r *http.Request, title stri
 // AlarmCodeStoreAdmin implements AlarmCodeAdmin (and the identical WS
 // facade) over the alarm-code store, mapping the wire DTOs onto stored
 // rows and hashing the write-only PIN through the codes domain helper
-// (docs/alarm-concept.md §11). The argon2id hash never leaves this
+// (notes/concepts/alarm-concept.md §11). The argon2id hash never leaves this
 // adapter — it is read from the store to preserve on a PIN-less update,
 // and written on hash, but never surfaced onto an [hmapi.AlarmCode].
 type AlarmCodeStoreAdmin struct {
@@ -393,7 +393,7 @@ var validRemoteKeyParameters = map[string]struct{}{
 }
 
 // validateAlarmCodeWrite enforces the write-time invariants a stored
-// code needs to ever authenticate or fire (docs/alarm-concept.md §11,
+// code needs to ever authenticate or fire (notes/concepts/alarm-concept.md §11,
 // S7 fail-visible): a pin code must carry a PIN on creation, and a
 // hardware binding must be well-formed JSON targeting only the fields
 // and edges the intent router (internal/alarm/intents.go) and codes

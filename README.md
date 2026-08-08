@@ -145,10 +145,12 @@ re-runnable setup wizard. Surfaces as a Home Assistant
 
 ## Status
 
-**0.51.0** (latest tag `v0.51.0`, REST `APIVersion` 3.4.0). All
-north-bound bridges work end-to-end against a real CCU and against the
-`godevccu` simulator. [`CHANGELOG.md`](./CHANGELOG.md) is the
-authoritative release history; [`docs/roadmap.md`](./docs/roadmap.md)
+All north-bound bridges work end-to-end against a real CCU and against
+the `godevccu` simulator. [`CHANGELOG.md`](./CHANGELOG.md) is the
+authoritative release history — it carries the current version rather
+than this page, which would re-drift every release; the shipped build
+reports its own version and REST `APIVersion` on `/about` and
+`GET /api/v1/info`. [`notes/plans/roadmap.md`](./notes/plans/roadmap.md)
 covers what is next.
 
 **Maturity: beta** — the feature set is complete and in daily productive
@@ -327,8 +329,7 @@ a pure-Go CCU simulator consumed as a regular module dependency — no
 Python toolchain required. Four structural pillars guard against
 architecture drift — reachability (`make reachability`), wiring pin
 tests, wire snapshots (`make wire-snapshots`) and E2E smoke
-(`make e2e`); see
-[`docs/parity/structural-approach.md`](docs/parity/structural-approach.md).
+(`make e2e`).
 
 ## Documentation
 

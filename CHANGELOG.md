@@ -47,7 +47,45 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   take effect immediately, without a restart, and are audited.
 
   New REST endpoints `GET`/`PUT /api/v1/ui/surfaces` (API version 5.7.0).
-  Design: `docs/design/ui-surface-profiles.md`.
+  Design: `notes/concepts/ui-surface-profiles.md`.
+
+### Changed
+
+- **The published documentation is separated from the working documents.**
+  Both used to live in `docs/`, told apart only by an exclude list in
+  `mkdocs.yml`. That list rotted the way allowlists do: pages were added
+  without being listed, and published pages accumulated links into excluded
+  trees — links that resolve in the repository and 404 on the site. Anyone
+  browsing the documentation could land on a dead link; anyone adding a
+  document had to guess which category it fell into.
+
+  The boundary is now the directory. Everything under `docs/` is published,
+  and the engineering working set — audits, design concepts, contributor
+  procedures, parity fixtures, plans, references — lives under `notes/`,
+  which the site never sees. `notes/README.md` states the rule and says
+  which tree a new document belongs in.
+
+  The **architecture decision records are now on the site**, under
+  *Developer → Architecture Decisions*. They were previously excluded, which
+  left fifteen dead links pointing at them from pages that are published,
+  and their index — now complete through ADR 0061, having stopped at 0054 —
+  linked out to GitHub instead of navigating the site.
+
+  Nine superseded or fully executed documents were removed. Their still-open
+  remnants moved into the roadmap first: the two competing pagination
+  envelopes, the deliberately reverted path-naming rename, and five deferred
+  feature ideas.
+
+  Documentation that had drifted from the code was corrected — the roadmap
+  still described the `openccu-data` embed that ADR 0053 replaced, the
+  specification pointed at a June scorecard as the "recent" audit, the Matter
+  conformance page pinned a spec version the schema snapshot has moved past,
+  and the readme pinned a release and API version that had both moved on.
+
+  API version 5.8.0: seventeen OpenAPI descriptions pointed at internal
+  documents that are deliberately not published, so a reader of the public
+  contract could not follow them. The pointers are gone; the sentences around
+  them were self-contained. No endpoint, schema or field changed.
 
 ## [0.54.7]
 
@@ -705,7 +743,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Names only: no behaviour changed, and no entity id, topic or unique_id
   moved. They live in `internal/i18n/catalogs/{de,en}.json` and therefore
   reach the MQTT discovery plane and the REST entity-name catalogue in one
-  step. `docs/security-safety-concept.md` §4.2.1 documents what each class
+  step. `notes/concepts/security-safety-concept.md` §4.2.1 documents what each class
   asserts, §4.2.2 the `sources` attribute that names the detector behind
   it.
 
@@ -1370,7 +1408,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   keyed on the triple (model, channel type, parameter) rather than on the
   parameter alone, because the same parameter means different things on
   different channels. This is the foundation of the Security & Safety
-  domain described in `docs/security-safety-concept.md`; on its own it
+  domain described in `notes/concepts/security-safety-concept.md`; on its own it
   changes no north-bound surface.
 
   The classifier refuses to read back anything the alarm engine writes.
@@ -1530,7 +1568,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unreachable — and had it ever matched, it would have labelled a leak
   detector a window contact. Window contacts (`HmIP-SWDO`, `HmIP-SWDM`,
   `HM-Sec-SC` and their variants) are unaffected. Recorded as a deliberate
-  divergence in `docs/parity/by_design.md`.
+  divergence in `notes/parity/by_design.md`.
 
 ## [0.52.12]
 
@@ -3599,7 +3637,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Native alarm system ("Alarmanlage")** — a complete, local-first
   intrusion-alarm engine inside the daemon, spanning six increments
-  (#344–#349) on the concept in `docs/alarm-concept.md` (#343):
+  (#344–#349) on the concept in `notes/concepts/alarm-concept.md` (#343):
   - **Engine & safety core**: per-area arm-state machines (perimeter /
     full / night / vacation / custom) with real entry delays,
     force/bypass arming, bounded re-trigger cycles, and the full
@@ -3617,7 +3655,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     battery/group-fan-out caveats), alarm lights, chirps/countdown
     ticks, and an optional CCU sysvar mirror (inbound intents arm-only
     by default). Researched device assumptions in
-    `docs/alarm-assumptions.md`.
+    `notes/reference/alarm-assumptions.md`.
   - **Surfaces**: REST namespace `/api/v1/alarm` and WebSocket category
     `alarm_panel` (APIVersion 2.22.0), a full SPA section (panel with
     single-tap silence, sensor picker with mode matrix, output
@@ -3687,7 +3725,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `home-assistant/frontend` design tokens (primary `#009ac7`, flat
   shadow-less cards, Roboto body font, refreshed neutral/semantic ramps).
   `data-skin="loom"` (the standalone default) is unaffected. See
-  [`docs/design/ha-theme-bridge.md`](docs/design/ha-theme-bridge.md) §
+  [`notes/concepts/ha-theme-bridge.md`](notes/concepts/ha-theme-bridge.md) §
   "Complete theme coverage via palette remap".
 
 ### Fixed
@@ -3738,7 +3776,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   whenever they change. The sidebar, header, and navigation are identical in
   every context; only the color palette adapts, and the browser tab title is
   left to Home Assistant while embedded. See
-  [`docs/design/ha-theme-bridge.md`](docs/design/ha-theme-bridge.md) for the
+  [`notes/concepts/ha-theme-bridge.md`](notes/concepts/ha-theme-bridge.md) for the
   design. The shared UI primitives and the highest-traffic views carry the
   new skin now; a handful of less-visited views are a documented follow-up.
 
@@ -4920,7 +4958,7 @@ project's field experience, with every mechanism mirrored from matter.js HEAD
   production-unreachable exports grows past the checked-in baseline.
   `loom:reachable` whitelist claims are now audited mechanically
   (`script/reachability/whitelist_audit.go` →
-  `docs/parity/loom-reachable-audit.md`) — several annotations claimed
+  `notes/parity/loom-reachable-audit.md`) — several annotations claimed
   wiring that never existed. The generic SQLite `PersistentCache`
   wrapper (superseded by the direct descriptor-persistence sinks) was
   removed, and the historical dead-code classification carries an
@@ -4935,7 +4973,7 @@ project's field experience, with every mechanism mirrored from matter.js HEAD
   measurement package's server), the schedule facade layer, the event
   bus batching helper, the untyped CentralRegistry and the model-less
   query-facade constructor are gone. Rationale and pointers to the
-  live twins are catalogued in `docs/parity/by_design.md` ("Removed
+  live twins are catalogued in `notes/parity/by_design.md` ("Removed
   Unwired Subsystems").
 
 ### Fixed
@@ -5259,7 +5297,7 @@ project's field experience, with every mechanism mirrored from matter.js HEAD
   return the correct Interaction-Model status codes for malformed
   `OperationalCredentials` commands; and set the mDNS default pairing hint to
   power-cycle + manual. Every change mirrors matter.js HEAD; intentional and
-  deferred divergences are catalogued in `docs/parity/by_design.md`.
+  deferred divergences are catalogued in `notes/parity/by_design.md`.
 
 ## [0.23.1]
 
@@ -5664,7 +5702,7 @@ project's field experience, with every mechanism mirrored from matter.js HEAD
   property (`assets/openapi.yaml`); REST `APIVersion` → **2.10.0**. Documented
   in `docs/mqtt-topic-schema.md`. (Exposing the same metadata on the hub
   service-/alarm-message aggregates remains a planned follow-up — see
-  `docs/parity/by_design.md` §A1-BD01.)
+  `notes/parity/by_design.md` §A1-BD01.)
 - **MCP `list_incidents` tool.** The Model Context Protocol bridge gains a
   read-only `list_incidents` tool that projects the reliability incident
   journal (circuit-breaker trips, ping/pong mismatches, retry exhaustion) to
@@ -5938,7 +5976,7 @@ Bundles the work developed as 0.18.1–0.18.5 (none were tagged individually).
   `SubscribeToHealthEvents` / `RestartClients` methods, and the never-published
   `DeviceStateChangedEvent`. None were part of the REST/WebSocket contract, so
   there is no API change and downstream clients are unaffected; the concept each
-  embodied is recorded in `docs/parity/by_design.md`.
+  embodied is recorded in `notes/parity/by_design.md`.
 
 ## [0.18.0]
 
@@ -6165,7 +6203,7 @@ Bundles the work developed as 0.18.1–0.18.5 (none were tagged individually).
   (e.g. Apple Home) may reject the bridge at pairing when it appears; enable
   only when a controller needs a time-sync surface. ARL (0x002B) and Actions
   (0x0025) remain intentionally deferred (no current use-case) — see
-  `docs/parity/by_design.md`.
+  `notes/parity/by_design.md`.
 - **Matter cluster-revision parity tests** added for previously-untested
   clusters, closing the documented behavioural-parity test gaps against the
   matter.js schema snapshot.
@@ -6552,7 +6590,7 @@ revert the flawed `#149` interim fix.
 
 Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
 (CCU-domain derivation into the daemon, "dumber client") from
-`docs/external-clients/asks.md`. Together they let the Loom path in
+`notes/reference/external-client-asks.md`. Together they let the Loom path in
 `py-openccu-loom-client` drop its `aiohomematic` runtime coupling. APIVersion →
 1.20.0.
 
@@ -6600,7 +6638,7 @@ Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
   (single source). Custom-DP channel composition (`channels`) and the per-device
   available subset (`config.hvac_modes` / `preset_modes`) were already on the
   wire. The finer field→parameter composition map is a **deliberate non-goal**
-  (`docs/parity/by_design.md` → `BD-North-CustomDPCompositionMap`): it would
+  (`notes/parity/by_design.md` → `BD-North-CustomDPCompositionMap`): it would
   contradict the K2 state normalisation and leak the internal profile graph onto
   the wire without unblocking any client.
 
@@ -6685,7 +6723,7 @@ Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
 ### Added
 
 - **Close the HA-client wire gaps G2/G4/G5/G6** (see
-  `docs/parity/ha-client-wire-gaps.md`). These unblock the
+  `notes/parity/ha-client-wire-gaps.md`). These unblock the
   `openccu-loom-client` / Home-Assistant *Homematic(IP) Local* drop-in by
   serializing already-modelled data into the north-bound contract. APIVersion
   → 1.18.0.
@@ -6718,13 +6756,13 @@ Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
   batching the channel's `VALUES` paramset warms every still-unloaded sibling at
   once. The singleflight key stays per-parameter and sibling fills are gated on
   not-yet-observed, so a bulk read never clobbers a restored / already-known
-  value (restore-first / reference #3228). See `docs/parity/by_design.md`
+  value (restore-first / reference #3228). See `notes/parity/by_design.md`
   (BD-CCU-ValuesBulkParamsetLoad). No API change.
 
 ### Notes
 
 - Verification of the original gap catalogue reclassified three items (now
-  documented in `docs/parity/ha-client-wire-gaps.md`): **G1** is an HS-colour
+  documented in `notes/parity/ha-client-wire-gaps.md`): **G1** is an HS-colour
   shape mismatch fixable client-side (colour-temp/effect read-back already
   works), **G3** (sysvar `extended` marker) is already implemented end-to-end,
   and **G7** (generic `set_on_time`) is reachable through the existing generic
@@ -6806,7 +6844,7 @@ Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
   order the export reads descriptions over a new order-preserving RPC path
   (`InterfaceClient.CallOrdered`) on the XML-RPC and BIN-RPC transports —
   descriptions never travel over JSON-RPC, so that transport is intentionally
-  not wired (see `docs/parity/by_design.md`).
+  not wired (see `notes/parity/by_design.md`).
 
 - **Persistent login sessions — a daemon restart no longer logs everyone out.**
   Browser auth sessions are now SQLite-backed via a save-through cache: the
@@ -6999,7 +7037,7 @@ Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
   (no measured-vs-control discriminator), so a control actuator such as `LEVEL`
   reporting `UNKNOWN` during the init-phase grace period stays available
   (upstream #2630). MQTT device-level reachability and the `MASTER`/`CALCULATED`
-  planes are unchanged. See `docs/parity/by_design.md`
+  planes are unchanged. See `notes/parity/by_design.md`
   (BD-CCU-StatusUncertainViaTracker).
 
 ## [0.5.0]
@@ -7324,7 +7362,7 @@ Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
     sysvar-refresh cadence.
   - `enable_device_firmware_check` (default true) — gate the per-device
     firmware-update entity surface. Defaults true (a deliberate divergence
-    from the reference stack's false default; see `docs/parity/by_design.md`)
+    from the reference stack's false default; see `notes/parity/by_design.md`)
     so 0.2.0's firmware-update entities are preserved on upgrade.
   - `delay_new_device_creation` (default false) — defer ingest of a
     newly-paired device until it is accepted from the inbox.

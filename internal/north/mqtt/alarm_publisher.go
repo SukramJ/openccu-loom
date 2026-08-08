@@ -18,7 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// Non-retained alarm event-topic types (docs/alarm-concept.md §13.3).
+// Non-retained alarm event-topic types (notes/concepts/alarm-concept.md §13.3).
 const (
 	alarmEventTypeTrigger      = "TRIGGER"
 	alarmEventTypeSilenced     = "SILENCED"
@@ -36,7 +36,7 @@ const (
 )
 
 // alarmEventPayload is the JSON body published on the non-retained
-// `<base>/alarm/<zone>/event` topic (docs/alarm-concept.md §13.3).
+// `<base>/alarm/<zone>/event` topic (notes/concepts/alarm-concept.md §13.3).
 type alarmEventPayload struct {
 	Type        string   `json:"type"`
 	ZoneID      string   `json:"zone_id"`
@@ -567,7 +567,7 @@ func (p *AlarmMQTTPublisher) masterName() string {
 
 // zoneCodePolicy resolves the per-zone arm/disarm code requirement for
 // the discovery flags. The derivation (zone-config policy half AND the
-// "an applicable enabled pin code exists" half, docs/alarm-concept.md
+// "an applicable enabled pin code exists" half, notes/concepts/alarm-concept.md
 // §11/§13.3) is the service's — the REST/WS panel entities carry the
 // same flags, so the two surfaces can never diverge.
 func (p *AlarmMQTTPublisher) zoneCodePolicy(ctx context.Context, zoneID string) (armReq, disarmReq bool) {

@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-05-20
-- **Related**: `docs/ui/control-widget-concept.md`,
+- **Related**: `notes/concepts/ui/control-widget-concept.md`,
   `internal/model/custom/`, `internal/north/rest/handlers/custom_data_points.go`,
   `assets/ui/src/lib/control/`
 
@@ -53,8 +53,8 @@ aiohomematic resolves this by treating the CDP as the entity
 boundary: `aiohomematic2mqtt` publishes one HA Discovery entity per
 CDP, `homematicip_local` builds one HA entity per CDP, and the
 HmIP-Config UI groups its channel pickers around CDPs. The CCU's
-WebUI also groups by CDP-equivalent ("Geräteeinstellungen pro
-Aktor", not "pro Kanal"). The CCU-channel granularity is internal
+WebUI also groups by CDP-equivalent ("device settings per
+actuator", not "per channel"). The CCU-channel granularity is internal
 plumbing rather than a user-facing concept.
 
 The REST API has had `GET /devices/{addr}/cdps` and friends since
@@ -64,7 +64,7 @@ them.
 ### Why this surfaced now
 
 The CONTROL-aware widget system (see
-`docs/ui/control-widget-concept.md`) raised the per-channel
+`notes/concepts/ui/control-widget-concept.md`) raised the per-channel
 fidelity dramatically — every channel now gets an HA-style tile
 instead of a parameter list. That made the channel duplication
 visible: a user who used to see "ein Block mit Parametern" pro
@@ -106,10 +106,10 @@ the tile's controls to the CDP's REST surface
 (`POST /cdps/{name}/{operation}`). The remaining channels (those
 without an attached CDP — typically maintenance channels, sensors
 that the model didn't promote to a CDP) render as a secondary
-"Sonstige Kanäle" section using the existing per-channel widgets.
+"Other channels" section using the existing per-channel widgets.
 
 **Pros**
-- "Lampe = ein Tile" matches user mental model.
+- "one lamp = one tile" matches the user’s mental model.
 - Pulls the SPA onto the same semantic surface as MQTT discovery
   and HA frontend, completing the aiohomematic-parity story.
 - The widget catalogue becomes simpler: per-CDP-kind widgets
@@ -140,11 +140,11 @@ that the model didn't promote to a CDP) render as a secondary
 
 Default rendering is CDP-first (option 2): one tile per Custom-DP,
 non-CDP channels grouped at the bottom. The device detail surface
-gains an explicit affordance ("Kanäle anzeigen" toggle, or a
-secondary tab "Kanäle") that switches into the channel-loop view
+gains an explicit affordance (a "Show channels" toggle, or a
+secondary "Channels" tab) that switches into the channel-loop view
 (option 1) for users who want raw channel access. The setting is
 per-user, stored in localStorage like the existing
-"Neue Bedienelemente" toggle.
+"New controls" toggle.
 
 **Pros**
 - Matches the user mental model by default (option 2 strengths).
@@ -225,17 +225,17 @@ channel view ignores it.
 
 `DeviceDetail.svelte` gains a tab pair / segmented control:
 
-- **Übersicht** (default): renders CDPs as tiles (CDP-first). Below
-  the CDP grid, a collapsed "Sonstige Kanäle" section lists
+- **Overview** (default): renders CDPs as tiles (CDP-first). Below
+  the CDP grid, a collapsed "Other channels" section lists
   channels without a CDP binding (rendered through the existing
   CONTROL-aware widget tree). Maintenance-style channels remain
-  hidden behind a "Wartung" expander.
-- **Kanäle**: renders one tile per CCU channel via the existing
+  hidden behind a "Maintenance" expander.
+- **Channels**: renders one tile per CCU channel via the existing
   `ControlTilesPanel`. No semantic aggregation. Power-user mode.
 
 The selector state lives in `localStorage` per device-detail page,
-default "Übersicht". A small banner on first use ("Tipp: Kanal-
-Ansicht verfügbar") points at the toggle once.
+default "Overview". A small banner on first use ("Tip: a channel
+view is available") points at the toggle once.
 
 ### SPA — CDP widget tree
 
@@ -256,15 +256,15 @@ Each widget consumes the CDP DTO instead of a `ResolvedChannel`:
 - A `dispatch.ts` chooses the widget by `cdp.kind`.
 
 The CONTROL-aware widget tree under `lib/control/` is unchanged
-and continues to back the Kanäle view + orphan-channel section.
+and continues to back the Channels view + orphan-channel section.
 
 ### Documentation
 
-`docs/ui/control-widget-concept.md` gains a sister document
-`docs/ui/cdp-widget-concept.md` that documents the CDP-side view.
+`notes/concepts/ui/control-widget-concept.md` gains a sister document
+`notes/concepts/ui/cdp-widget-concept.md` that documents the CDP-side view.
 The CONTROL doc gets a short pointer in its intro: "the
-CONTROL-aware widget tree backs the Kanäle view; the default
-Übersicht view consumes CDPs — see ADR 0016 and the CDP doc."
+CONTROL-aware widget tree backs the Channels view; the default
+Overview view consumes CDPs — see ADR 0016 and the CDP doc."
 
 ## Consequences
 
@@ -298,7 +298,7 @@ CONTROL-aware widget tree backs the Kanäle view; the default
 
 - Land the migration in slices: CDP-side tiles for the most-used
   category first (light), measure, then cover / climate / lock /
-  siren. The Kanäle view stays the default during each migration
+  siren. The Channels view stays the default during each migration
   slice; the user opts in to the CDP view per category until all
   categories are covered, then the default flips.
 - Contract tests in `tests/contract/` enforce: every Custom-DP kind
@@ -316,8 +316,8 @@ CONTROL-aware widget tree backs the Kanäle view; the default
   ADR 0011 chose the latter (per-DP topics, aggregated derived
   view). Apply the same here unless WS-channel bookkeeping turns
   out to be the bottleneck.
-- **Orphan-channel rendering location.** Inline in Übersicht under
-  the CDP grid, or a separate "Sonstige" tab. UX call, defer.
+- **Orphan-channel rendering location.** Inline in Overview under
+  the CDP grid, or a separate "Other" tab. UX call, defer.
 - **Capability extension mechanism.** When a future device adds a
   new capability flag, do we ship widget changes + DTO changes in
   lockstep, or does the SPA degrade gracefully on unknown flags?
@@ -329,7 +329,7 @@ All originally-listed follow-ups shipped during the CDP rollout:
 `CustomDPSummary` carries `kind` / `channels` / `capabilities`,
 `ChannelSummary.custom_dp_name` drives the orphan filter, the
 LightTile + every other kind landed in `assets/ui/src/lib/cdp/widgets/`,
-the concept lives in [`../ui/cdp-widget-concept.md`](../ui/cdp-widget-concept.md),
+the concept lives in [`../ui/cdp-widget-concept.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/concepts/ui/cdp-widget-concept.md),
 and `DeviceDetail.svelte` exposes the view selector. The WS
 aggregation shape settled on the per-CDP `CustomDataPointStateEvent`
 envelope.

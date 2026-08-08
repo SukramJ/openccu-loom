@@ -78,7 +78,7 @@ func TestMatterMeasurementClassDeviceType(t *testing.T) {
 // Controllers whose bridge support predates the Matter-1.3 detector
 // device types (Amazon Alexa) drop the ENTIRE bridged node when a
 // single endpoint advertises 0x0043. Recorded in
-// docs/parity/by_design.md.
+// notes/parity/by_design.md.
 func TestLeakClassMapsToContactSensorDeviceType(t *testing.T) {
 	t.Parallel()
 	got := interfaces.MatterMeasurementClassDeviceType(interfaces.MatterMeasurementLeak)

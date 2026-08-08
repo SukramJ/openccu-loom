@@ -262,7 +262,7 @@ func TestProductionLoad(t *testing.T) {
 }
 
 // thresholdSet is the pass/fail gate. The strict set mirrors the
-// pre-release numbers in docs/testplan.md; the loose set keeps the
+// pre-release numbers in notes/testplans/testplan.md; the loose set keeps the
 // smoke run green on shared CI hardware.
 type thresholdSet struct {
 	readP99           time.Duration
@@ -281,7 +281,7 @@ const optimisticRollbackWindow = 30 * time.Second
 
 func thresholds(cfg config) thresholdSet {
 	if cfg.strict {
-		// Pre-release gate (operator soak). These are the docs/testplan.md
+		// Pre-release gate (operator soak). These are the notes/testplans/testplan.md
 		// numbers: p99 reads < 50ms, writes < 200ms, zero dropped rows,
 		// no goroutine leak (a small base tolerance covers transport /
 		// GC-worker variance after the rollback window has drained), stable

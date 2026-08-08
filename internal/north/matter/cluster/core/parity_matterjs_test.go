@@ -23,7 +23,7 @@ import (
 // attribute set.
 //
 // Snapshot regeneration: run the producer at
-// `docs/parity/matter/extract-from-matter-js.ts` against an `@matter/model`
+// `notes/parity/matter/extract-from-matter-js.ts` against an `@matter/model`
 // install and copy the JSON output into `testdata/`. The snapshot is
 // checked in so the tests run offline and lock the matter.js baseline
 // for code review.

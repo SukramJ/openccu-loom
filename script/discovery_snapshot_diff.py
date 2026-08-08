@@ -16,7 +16,7 @@
 # differs between the two MQTT bridges; the homematicip_local
 # comparison ignores that plumbing entirely).
 #
-# Both inputs follow `docs/parity/discovery_snapshot_schema.md`. The
+# Both inputs follow `notes/parity/discovery_snapshot_schema.md`. The
 # diff joins by `join_key`. Stack-specific MQTT plumbing (topic /
 # template strings) is dropped in primary mode and presence-checked
 # in secondary mode.

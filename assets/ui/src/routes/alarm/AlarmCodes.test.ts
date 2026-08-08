@@ -85,7 +85,7 @@ describe("AlarmCodes — list", () => {
         id: "c1",
         name: "Alice",
         // A response carrying `hash`/`pin`-shaped fields would be a
-        // contract violation (docs/alarm-concept.md §11/§16) — the view
+        // contract violation (notes/concepts/alarm-concept.md §11/§16) — the view
         // must not surface them even if a buggy backend sent them.
         // @ts-expect-error -- deliberately shaped like a leaking response
         hash: "$argon2id$v=19$m=65536,t=1,p=4$deadbeef",

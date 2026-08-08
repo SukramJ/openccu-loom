@@ -6,7 +6,7 @@
   // edited, then the rows. The preview answers the question every
   // toggle raises without needing a save.
   //
-  // See docs/design/ui-surface-profiles.md.
+  // See notes/concepts/ui-surface-profiles.md.
   import { onMount } from "svelte";
   import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import { infoStore } from "$lib/stores/info.svelte";

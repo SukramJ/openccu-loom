@@ -22,7 +22,7 @@ jobs:
   # grow past the checked-in baseline. New dead exports either get a
   # loom:reachable:reason annotation (with a TRUE reason), get wired,
   # or get removed — then `make reachability` refreshes the baseline
-  # in docs/parity/ as part of the same PR.
+  # in notes/parity/ as part of the same PR.
   ratchet:
     runs-on: ubuntu-latest
     steps:
@@ -32,17 +32,17 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Read checked-in baseline
         run: |
-          BASE=$(python3 -c "import json; print(json.load(open('docs/parity/dead-code-production-only.json'))['summary']['unreachable'])")
+          BASE=$(python3 -c "import json; print(json.load(open('notes/parity/dead-code-production-only.json'))['summary']['unreachable'])")
           echo "BASELINE=$BASE" >> "$GITHUB_ENV"
           echo "baseline: $BASE production-unreachable exports"
       - name: Regenerate inventory
         run: go run ./script/reachability
       - name: Compare against baseline
         run: |
-          CUR=$(python3 -c "import json; print(json.load(open('docs/parity/dead-code-production-only.json'))['summary']['unreachable'])")
+          CUR=$(python3 -c "import json; print(json.load(open('notes/parity/dead-code-production-only.json'))['summary']['unreachable'])")
           echo "current: $CUR production-unreachable exports (baseline: $BASELINE)"
           if [ "$CUR" -gt "$BASELINE" ]; then
             echo "::error::Dead-code ratchet violated: $CUR production-unreachable exports exceed the checked-in baseline of $BASELINE."
-            echo "::error::Wire, remove, or annotate (loom:reachable:reason=\"...\" — with a reason that is actually true) the new exports, then refresh the baseline via 'make reachability' and commit docs/parity/dead-code-*."
+            echo "::error::Wire, remove, or annotate (loom:reachable:reason=\"...\" — with a reason that is actually true) the new exports, then refresh the baseline via 'make reachability' and commit notes/parity/dead-code-*."
             exit 1
           fi

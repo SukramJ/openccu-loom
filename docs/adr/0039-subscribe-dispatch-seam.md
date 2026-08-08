@@ -7,8 +7,8 @@
   `internal/north/matter/bridge/subscribe_dispatch.go`,
   `docs/adr/0031-im-opcode-dispatch-seam.md` (style template),
   the analysis item Area 7 in
-  `docs/audit/architecture-reassessment-2026-06-15.md`,
-  [matter.js as the Matter gold standard](../../CLAUDE.md)
+  `notes/audits/architecture-reassessment-2026-06-15.md`,
+  [matter.js as the Matter gold standard](https://github.com/SukramJ/openccu-loom/blob/main/CLAUDE.md)
 
 ## Context
 

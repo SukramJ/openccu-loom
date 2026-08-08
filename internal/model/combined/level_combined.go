@@ -70,7 +70,7 @@ type LevelCombined struct {
 // No production caller exists today: custom/cover implements level
 // encoding inline via hmLevelCombined. This constructor is kept so
 // the combined package remains a coherent, testable unit; see
-// docs/parity/by_design.md BD-A3-CombinedUnused.
+// notes/parity/by_design.md BD-A3-CombinedUnused.
 //
 // levelParam / slatsParam are the per-channel reading parameters
 // (LEVEL and LEVEL_2). combinedParam is the write-only paramset entry

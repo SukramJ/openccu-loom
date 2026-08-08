@@ -13,7 +13,7 @@ import (
 // AreaRow is one operator-defined room grouping (a floor, a shed, a
 // terrace roof) sitting one level above the CCU's flat, per-central
 // room list. Distinct from alarm zones (the armable alarm partitions,
-// docs/alarm-concept.md §14) — same "area" word, unrelated concept.
+// notes/concepts/alarm-concept.md §14) — same "area" word, unrelated concept.
 type AreaRow struct {
 	ID          string
 	Name        string

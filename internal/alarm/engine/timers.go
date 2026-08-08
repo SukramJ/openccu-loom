@@ -22,7 +22,7 @@ const (
 )
 
 // persistedTimer is the redundant countdown tuple stored per active
-// timer (docs/alarm-concept.md §5): the wall-clock deadline for
+// timer (notes/concepts/alarm-concept.md §5): the wall-clock deadline for
 // plausible-clock restores, the remaining duration for conservative
 // restores under an implausible clock, the persist-time timestamp and
 // boot counter to detect both.
@@ -61,7 +61,7 @@ func decodeTimers(raw string) []persistedTimer {
 	return ts
 }
 
-// Clock-plausibility bounds (docs/alarm-concept.md §10.2). A restore
+// Clock-plausibility bounds (notes/concepts/alarm-concept.md §10.2). A restore
 // only trusts wall-clock elapsed-time arithmetic when the current
 // clock is not before the persisted timestamps (beyond a small skew
 // tolerance) and not before the project epoch — the RTC-less-host

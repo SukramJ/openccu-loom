@@ -12,7 +12,7 @@ import (
 )
 
 // This file covers the per-sensor noise filters ahead of the arm-state
-// machine (docs/alarm-concept.md §6.2): the hold-time debounce and the
+// machine (notes/concepts/alarm-concept.md §6.2): the hold-time debounce and the
 // cross-zoning group rule, plus how the two compose.
 
 // seedHoldSensor seeds zone "eg" with one instant motion sensor carrying

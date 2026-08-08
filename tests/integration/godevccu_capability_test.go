@@ -6,7 +6,7 @@
 // Package integration — godevccu capability tripwire tests.
 //
 // This file probes every XML-RPC method in the godevccu capability matrix
-// (docs/audit/godevccu-capability.md) via openccu-loom's XML-RPC client.
+// (notes/audits/godevccu-capability.md) via openccu-loom's XML-RPC client.
 // Methods marked ✓ in the matrix assert a non-error response.
 // Methods marked ✗ (gap) carry a t.Skip so the test suite stays green
 // while making the gap visible in the output.

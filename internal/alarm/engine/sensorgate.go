@@ -10,7 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// Cross-zoning group rule (docs/alarm-concept.md §6.2): a grouped
+// Cross-zoning group rule (notes/concepts/alarm-concept.md §6.2): a grouped
 // sensor only triggers when a second distinct member of the same
 // group activates within the window. Kills single-PIR false alarms.
 const (

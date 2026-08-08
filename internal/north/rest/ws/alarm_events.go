@@ -305,7 +305,7 @@ type AlarmPanelChangedPayload struct {
 // AlarmReminderPayload is the broadcast payload for an arm-schedule
 // reminder (alarm.reminder): a schedule elapsed with AutoArm off while
 // the zone was not in the scheduled mode, so the engine notifies rather
-// than arming (docs/alarm-concept.md §15 row 19).
+// than arming (notes/concepts/alarm-concept.md §15 row 19).
 type AlarmReminderPayload struct {
 	ZoneID   string `json:"zone_id"`
 	ZoneName string `json:"zone_name,omitempty"`

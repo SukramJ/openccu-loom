@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// AlarmOutputRow is one enrolled alarm consequence (docs/alarm-concept.md
+// AlarmOutputRow is one enrolled alarm consequence (notes/concepts/alarm-concept.md
 // §14). Class is the user-declared output class (acoustic_siren,
 // switched_siren, smoke_sounder, optical_siren, alarm_light, chirp,
 // notification, sysvar_mirror) — the class, not the device type, decides

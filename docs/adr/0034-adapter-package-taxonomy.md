@@ -5,7 +5,7 @@
 - **Related**:
   `internal/central/adapter/doc.go`,
   the analysis item Area 1 in
-  `docs/audit/architecture-analysis-2026-06-15.md`
+  `notes/audits/architecture-analysis-2026-06-15.md`
 
 ## Context
 

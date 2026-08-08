@@ -198,7 +198,7 @@ func UpdateVisibilityUnIgnore( //nolint:funlen // single-purpose visibility upda
 		}
 		parseErrors = append(parseErrors, loaderErrs...)
 
-		// Audit log — per docs/ui/unignore-concept.md (resolved Q3).
+		// Audit log — per notes/concepts/ui/unignore-concept.md (resolved Q3).
 		// Only emit when at least one of (added, removed) is non-empty
 		// so a no-op save does not pollute the log.
 		if auditRec != nil && (len(added) > 0 || len(removed) > 0) {

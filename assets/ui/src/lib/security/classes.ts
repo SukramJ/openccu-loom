@@ -1,4 +1,4 @@
-// Shared Security & Safety domain constants (docs/security-safety-concept.md
+// Shared Security & Safety domain constants (notes/concepts/security-safety-concept.md
 // §4). The hazard/fault class taxonomy, kept in the exact escalation order
 // `hmenum.SecurityClasses()` returns (pkg/hmenum/security.go) — GET /security
 // emits `classes` in that order, so a dropdown built from any other order

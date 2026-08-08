@@ -18,7 +18,7 @@ import (
 // explicit `north.matter.enabled: true` in the config, the daemon's REST
 // surface reports Matter as disabled rather than panicking or returning
 // 5xx. This is the minimal boot-time smoke — a full Matter commissioning
-// round-trip is in docs/matter/chip-tool-test-brief.md and gated behind
+// round-trip is in notes/contributor/chip-tool-test-brief.md and gated behind
 // the `chiptool` build tag.
 //
 // What is verified:

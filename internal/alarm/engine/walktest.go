@@ -16,7 +16,7 @@ import (
 // ErrWalkTestActive reports a walk-test start while one is running.
 var ErrWalkTestActive = errors.New("engine: walk test already active")
 
-// walkSession is one arm-less walk-test session (docs/alarm-concept.md
+// walkSession is one arm-less walk-test session (notes/concepts/alarm-concept.md
 // §12.4). Sessions are in-memory only: a daemon restart ends them.
 type walkSession struct {
 	startedAt time.Time

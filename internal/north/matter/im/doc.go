@@ -35,7 +35,7 @@
 //     internal/north/matter/cluster/*.
 //   - Subscription state across a daemon restart — the SQLite store
 //     lives in internal/north/matter/store; cross-restart resumption is
-//     deferred by design (docs/parity/by_design.md).
+//     deferred by design (notes/parity/by_design.md).
 //
 // This package DOES own the Timed Request / Timed Action handshake
 // (timed.go: TimedRequest, UnmarshalTimedRequestTLV, StatusResponse per

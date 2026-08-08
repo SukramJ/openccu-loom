@@ -32,7 +32,7 @@ var (
 	// ErrNoIncident reports an acknowledge without an open incident.
 	ErrNoIncident = errors.New("engine: no open incident")
 	// ErrInvalidCode reports a verb refused because a required alarm
-	// code was missing or did not authenticate (docs/alarm-concept.md
+	// code was missing or did not authenticate (notes/concepts/alarm-concept.md
 	// §11). The CodeValidator returns it; the engine surfaces it.
 	ErrInvalidCode = errors.New("engine: invalid alarm code")
 )
@@ -46,7 +46,7 @@ const (
 )
 
 // Strongly-authenticated sources that bypass a code requirement
-// (docs/alarm-concept.md §11 degradation). They still surface duress
+// (notes/concepts/alarm-concept.md §11 degradation). They still surface duress
 // when a code is supplied. These tokens are the operator-session /
 // break-glass surfaces; anonymous MQTT / sysvar paths are not listed
 // and stay code-gated.
@@ -72,7 +72,7 @@ const (
 // break-glass surface that bypasses code requirements. Exported so the
 // codes facade can exempt the same sources from rate limiting — a
 // lockout on an already-authenticated surface protects nothing and
-// would suppress duress detection (docs/alarm-concept.md §11).
+// would suppress duress detection (notes/concepts/alarm-concept.md §11).
 func IsOperatorSource(source string) bool {
 	switch source {
 	case codeSourceRESTOperator, codeSourceWSOperator, codeSourceHmcli:
@@ -592,7 +592,7 @@ func (e *Engine) Disarm(ctx context.Context, zoneID, by, source string) error {
 }
 
 // DisarmWithCode is Disarm with an alarm code, honoring the zone's
-// CodePolicy (docs/alarm-concept.md §11). An already-disarmed zone
+// CodePolicy (notes/concepts/alarm-concept.md §11). An already-disarmed zone
 // short-circuits before the code check: disarming a disarmed zone is an
 // idempotent no-op and needs no security decision.
 func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code string) error {
@@ -647,7 +647,7 @@ func (e *Engine) Silence(ctx context.Context, zoneID, by, source string) error {
 
 // SilenceWithCode is Silence with an alarm code. Silence defaults to
 // code-free (S3); a per-source RequireSilence policy or a supplied code
-// engages the CodeValidator (docs/alarm-concept.md §11).
+// engages the CodeValidator (notes/concepts/alarm-concept.md §11).
 func (e *Engine) SilenceWithCode(ctx context.Context, zoneID, by, source, code string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -1041,7 +1041,7 @@ func (e *Engine) trigger(ctx context.Context, a *zone, cause incidentCause, opts
 		a.incident = &inc
 	}
 
-	// Two-phase pre-alarm (docs/alarm-concept.md §15 row 21): a fresh,
+	// Two-phase pre-alarm (notes/concepts/alarm-concept.md §15 row 21): a fresh,
 	// live (not restored) intrusion trigger with PreAlarmSeconds first
 	// runs a pre-alarm phase — only the pre-alarm output classes fire —
 	// then escalates to the full policy on elapse. A restore treats a
@@ -1195,7 +1195,7 @@ func (e *Engine) finishTriggered(ctx context.Context, a *zone, journalEvent stri
 		a.mode = hmenum.AlarmModeDisarmed
 		a.bypassed = map[string]bool{}
 		a.openAtArm = map[string]bool{}
-		// Auto-rearm (docs/alarm-concept.md §15 row 22): schedule a
+		// Auto-rearm (notes/concepts/alarm-concept.md §15 row 22): schedule a
 		// return to the pre-incident mode after a quiet period. Set
 		// before persist so the timer lands in timers_json.
 		e.scheduleAutoRearmIfConfigured(ctx, a, rearmMode, "engine")
@@ -1438,7 +1438,7 @@ func (e *Engine) AdoptSounding(ctx context.Context, zoneID string, outputIDs []s
 
 // ReevaluateSensors refreshes every armed zone's sensor values from
 // the SensorReader and routes activations that happened during a
-// blind window (docs/alarm-concept.md §10.1, CCU-reconnect row) —
+// blind window (notes/concepts/alarm-concept.md §10.1, CCU-reconnect row) —
 // the same comparison against the open-at-arm baseline a restore
 // runs. Safe to call repeatedly; disarmed zones are untouched.
 func (e *Engine) ReevaluateSensors(ctx context.Context) {
@@ -1458,7 +1458,7 @@ func (e *Engine) ReevaluateSensors(ctx context.Context) {
 }
 
 // PanicTrigger fires a panic incident on zoneID independent of its arm
-// state (docs/alarm-concept.md §7). silent suppresses acoustic outputs
+// state (notes/concepts/alarm-concept.md §7). silent suppresses acoustic outputs
 // (silent panic / duress panic). by/source attribute the trigger. It is
 // the verb behind keypad/remote panic keys and the MQTT TRIGGER payload.
 func (e *Engine) PanicTrigger(ctx context.Context, zoneID string, silent bool, by, source string) error {
@@ -1694,7 +1694,7 @@ func (e *Engine) onAutoRearmFired(zoneID string, seq uint64) {
 
 // onAutoRearmElapsed attempts the quiet-period rearm. It arms with
 // force=false: any remaining blocker journals a fail-visible
-// failed-to-arm fault and leaves the zone disarmed (docs/alarm-concept.md
+// failed-to-arm fault and leaves the zone disarmed (notes/concepts/alarm-concept.md
 // §15 row 22). The caller holds the lock.
 func (e *Engine) onAutoRearmElapsed(ctx context.Context, a *zone) {
 	mode := a.autoRearmMode

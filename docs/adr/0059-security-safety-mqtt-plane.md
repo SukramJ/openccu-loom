@@ -10,7 +10,7 @@ ADR 0052 established that alarm zones are daemon-level and therefore
 carry no `<central>` segment in their topics, making `<base>/alarm/**`
 the second daemon-level tree beside `<base>/bridge/**`.
 
-The Security & Safety domain (`docs/security-safety-concept.md`) has the
+The Security & Safety domain (`notes/concepts/security-safety-concept.md`) has the
 same property for the same reason: a hazard class aggregates across
 every configured CCU, so scoping its topics to one central would be a
 lie. It needs a third tree.
@@ -78,7 +78,7 @@ does not (yet) keep are corrected here rather than edited away.
   payloads truncate and say so, but they carry no `link` field — that field
   exists only on the rendered notification payload. A consumer sees *that* a
   list was truncated, not *where* the rest is. Tracked in
-  `docs/security-safety-concept.md` §11.
+  `notes/concepts/security-safety-concept.md` §11.
 - **Naming both daemon-level node ids is necessary but not sufficient.** The
   sweep also has to wait until a plane has declared itself. Naming the node
   made its retained configs reachable — including at the moment before the

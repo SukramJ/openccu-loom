@@ -598,7 +598,7 @@ func (l *Lock) observeCommand(cmd command) {
 	// optimistic path here improves responsiveness for callers (e.g. the
 	// MQTT bridge) that poll State right after a write command; it is
 	// harmless because the next CCU push overwrites the synthesised value.
-	// Documented as a deliberate divergence in docs/parity/by_design.md.
+	// Documented as a deliberate divergence in notes/parity/by_design.md.
 	if l.stateDp != nil {
 		var label string
 		switch cmd {

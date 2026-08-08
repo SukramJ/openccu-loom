@@ -49,8 +49,14 @@ theme:
 
 # Published surface, organised by audience: End-user (User Guide),
 # Administrator (Administration), Integrator (Integrations), and
-# Developer. Internal engineering / audit / parity docs stay in the
-# repo but are excluded from the published site via exclude_docs below.
+# Developer.
+#
+# Everything under docs/ is published. Engineering working documents —
+# audits, concepts, parity fixtures, plans, contributor procedures —
+# live outside this tree under `notes/` and never reach the site; see
+# `notes/README.md` for which tree a new document belongs in. Keeping
+# the split at the directory level rather than in an exclude list is
+# deliberate: an exclude list silently rots as files are added.
 nav:
   - Home: index.md
   - User Guide:
@@ -84,39 +90,76 @@ nav:
       - Testing: developer/testing.md
       - Matter Parity Workflow: matter-parity-contract.md
       - Writing a Source: contributor/source-interface.md
-      - Architecture Decisions (ADRs): developer/adr-index.md
+      - Architecture Decisions:
+          - Overview: developer/adr-index.md
+          - ADR 0001 — MIT license: adr/0001-license-mit.md
+          - ADR 0002 — Multi-CCU first class: adr/0002-multi-ccu-first-class.md
+          - ADR 0003 — Embed OCCU extracts: adr/0003-embed-occu-extracts.md
+          - ADR 0004 — Decorators vs cross-cutting: adr/0004-decorators-vs-cross-cutting.md
+          - ADR 0005 — Visibility as outbound filter: adr/0005-visibility-as-outbound-filter.md
+          - ADR 0006 — Naming conventions: adr/0006-naming-conventions.md
+          - ADR 0007 — Strong model source interface: adr/0007-strong-model-source-interface.md
+          - ADR 0008 — Aggregated state default flip: adr/0008-aggregated-state-default-flip.md
+          - ADR 0009 — Service-method command topics: adr/0009-service-method-command-topics.md
+          - ADR 0010 — Discovery payload from model: adr/0010-discovery-payload-from-model.md
+          - ADR 0011 — MQTT topic and payload architecture: adr/0011-mqtt-topic-and-payload-architecture.md
+          - ADR 0012 — Matter pure-Go implementation: adr/0012-matter-pure-go-implementation.md
+          - ADR 0013 — Matter commissioning bring-up: adr/0013-matter-commissioning-bring-up.md
+          - ADR 0014 — Parameter ignore/unignore mechanics: adr/0014-parameter-ignore-unignore-mechanics.md
+          - ADR 0015 — Data-point usage ignored: adr/0015-datapoint-usage-ignored.md
+          - ADR 0016 — Custom-DP-aware UI rendering: adr/0016-custom-dp-aware-ui-rendering.md
+          - ADR 0017 — Logging and diagnostics: adr/0017-logging-and-diagnostics.md
+          - ADR 0018 — Health parity: adr/0018-health-parity-with-aiohomematic.md
+          - ADR 0019 — Persistent values cache: adr/0019-persistent-values-cache.md
+          - ADR 0020 — External client wire contract: adr/0020-external-client-wire-contract.md
+          - ADR 0021 — mDNS self-advertisement: adr/0021-mdns-self-advertisement.md
+          - ADR 0022 — WS resume and kind: adr/0022-ws-resume-and-kind.md
+          - ADR 0023 — HmIP-Wired is a product group: adr/0023-hmipwired-is-product-group.md
+          - ADR 0024 — Instance and CCU identity: adr/0024-instance-and-ccu-identity.md
+          - ADR 0025 — MCP north-bound adapter: adr/0025-mcp-northbound-adapter.md
+          - ADR 0026 — MCP dev mode: adr/0026-mcp-dev-mode.md
+          - ADR 0027 — Encrypt config secrets at rest: adr/0027-encrypt-config-secrets-at-rest.md
+          - ADR 0028 — Contract digest and version guard: adr/0028-contract-digest-and-version-guard.md
+          - ADR 0029 — Tier-model stop teardown: adr/0029-tier-model-stop-teardown.md
+          - ADR 0030 — Event-bus dispatch striping rejected: adr/0030-eventbus-dispatch-striping-rejected.md
+          - ADR 0031 — IM opcode dispatch seam: adr/0031-im-opcode-dispatch-seam.md
+          - ADR 0032 — Sigma resume extraction: adr/0032-sigma-resume-extraction.md
+          - ADR 0033 — Groups cluster stays a stub: adr/0033-groups-cluster-stays-stub.md
+          - ADR 0034 — Adapter package taxonomy: adr/0034-adapter-package-taxonomy.md
+          - ADR 0035 — Hub refresh-set extraction: adr/0035-hub-refresh-set-extraction.md
+          - ADR 0036 — Bridge decomposition: adr/0036-bridge-decomposition.md
+          - ADR 0037 — OTLP span exporter: adr/0037-otlp-span-exporter.md
+          - ADR 0038 — Cross-stack CI gate: adr/0038-cross-stack-ci-gate.md
+          - ADR 0039 — Subscribe dispatch seam: adr/0039-subscribe-dispatch-seam.md
+          - ADR 0040 — Measurement history: adr/0040-measurement-history.md
+          - ADR 0041 — Persist auth sessions: adr/0041-persist-auth-sessions.md
+          - ADR 0042 — Clear CCU cache and re-pull: adr/0042-clear-ccu-cache-and-repull.md
+          - ADR 0043 — CCU authentication provider: adr/0043-ccu-authentication-provider.md
+          - ADR 0044 — Single-port onboarding and HA Ingress auth: adr/0044-single-port-onboarding-and-ha-ingress-auth.md
+          - ADR 0045 — Login and onboarding into the SPA: adr/0045-login-and-onboarding-into-spa.md
+          - ADR 0046 — SSDP CCU discovery: adr/0046-ssdp-ccu-discovery.md
+          - ADR 0047 — North-bound bridge registry: adr/0047-northbound-bridge-registry.md
+          - ADR 0048 — chip-tool/godevccu send-receive matrix: adr/0048-chiptool-godevccu-send-receive-matrix.md
+          - ADR 0049 — Matter one endpoint per device: adr/0049-matter-one-endpoint-per-device.md
+          - ADR 0050 — MQTT transport shared module: adr/0050-mqtt-transport-shared-module.md
+          - ADR 0051 — North-bound authorization model: adr/0051-northbound-authorization-model.md
+          - ADR 0052 — Daemon-level alarm MQTT topics: adr/0052-daemon-level-alarm-mqtt-topics.md
+          - ADR 0053 — go-openccu-data module: adr/0053-go-openccu-data-module.md
+          - ADR 0054 — Remote ingress proxy add-on: adr/0054-remote-ingress-proxy-addon.md
+          - ADR 0055 — Groups jpages proxy: adr/0055-groups-jpages-proxy.md
+          - ADR 0056 — Room areas and zone naming: adr/0056-room-areas-and-zone-naming.md
+          - ADR 0057 — Add-on self-update: adr/0057-addon-self-update.md
+          - ADR 0058 — mDNS CCU serials: adr/0058-mdns-ccu-serials.md
+          - ADR 0059 — Security & Safety MQTT plane: adr/0059-security-safety-mqtt-plane.md
+          - ADR 0060 — loom-prefixed interface IDs: adr/0060-loom-prefixed-interface-ids.md
+          - ADR 0061 — Migration down-path unsupported: adr/0061-migration-down-path-unsupported.md
   - Credits: attribution.md
 
-# Everything not in the nav above is kept out of the build so the
-# published site stays focused. Add a path back here (remove it from
-# the globs) when a doc is ready for a public audience. The audit /
-# parity / concept trees are intentionally repo-only (engineering
-# trail, not user documentation).
+# Only the mkdocs machinery itself is excluded. Everything else under
+# docs/ is a published page — if a document should not be published,
+# it belongs under `notes/`, not in an exclude list here.
 exclude_docs: |
   hooks/
-  adr/
-  audit/
-  design/
-  matter/
-  parity/
-  plans/
-  testing/
-  ui/
-  contributor/goland-debugging.md
-  contributor/matter-mdns-test-setup.md
-  contributor/matter-smoke.md
-  ccu-webui-gap-analysis.md
-  ccu-jpages-groups-reference.md
-  e2e-testplan.md
-  testplan.md
-  roadmap.md
-  alarm-concept.md
-  external-sources-concept.md
-  matter-conformance.md
-  matter-ui-concept.md
-  TODO.md
-  external-clients/asks.md
-  external-clients/ha-parity-plan.md
 
 markdown_extensions:
   - abbr

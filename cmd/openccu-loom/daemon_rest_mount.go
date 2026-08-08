@@ -374,7 +374,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		MatterEventPublisher:      d.matter.pub,
 		MatterTopologyReassembler: d.matter.reassembler,
 		MatterAuditRecorder:       d.auditRec,
-		// Visibility / un-ignore surface — docs/ui/unignore-concept.md.
+		// Visibility / un-ignore surface — notes/concepts/ui/unignore-concept.md.
 		VisibilityUnIgnoreStore:     d.visibilityUnIgnoreStore,
 		VisibilityCentralLister:     d.visibilityAdapter,
 		VisibilityCandidateProvider: d.visibilityAdapter,
@@ -535,7 +535,7 @@ func addonUpdateServiceFrom(u *addonupdate.Updater) handlers.AddonUpdateService 
 
 // alarmCodeAdminFrom converts the alarm service into the /alarm/codes CRUD
 // facade: a store-backed adapter that maps the wire DTOs onto the
-// argon2id-hashed alarm-code store (docs/alarm-concept.md §11). A nil
+// argon2id-hashed alarm-code store (notes/concepts/alarm-concept.md §11). A nil
 // service or store yields a genuinely nil interface so the codes routes
 // serve 503 rather than panicking.
 func alarmCodeAdminFrom(s *alarm.Service) handlers.AlarmCodeAdmin {

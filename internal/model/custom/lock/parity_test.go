@@ -190,7 +190,7 @@ func TestParityLockIsJammed(t *testing.T) {
 // true after a wire event.
 //
 // Pins the availability gate to its primary state carrier (LOCK_STATE for
-// the IP variant); see docs/parity/by_design.md.
+// the IP variant); see notes/parity/by_design.md.
 func TestParityLockIsRefreshed(t *testing.T) {
 	t.Parallel()
 

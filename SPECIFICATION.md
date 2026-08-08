@@ -26,15 +26,15 @@ For implementation truth, consult the authoritative sources:
 | WebSocket command contract | `assets/wsapi.json` |
 | MQTT topic + payload structure | ADR 0011 (`mqtt-topic-and-payload-architecture`), extended for alarm topics by ADR 0052 |
 | Matter cluster + device-type surface | `docs/matter-parity-contract.md` (binding), `internal/north/matter/schema/` (generated) |
-| Alarm system design + safety model | `docs/alarm-concept.md`; operator view in `docs/alarm-user-guide.md` |
+| Alarm system design + safety model | `notes/concepts/alarm-concept.md`; operator view in `docs/alarm-user-guide.md` |
 | Configuration knobs | `example.config.yaml` (annotated) + `GET /api/v1/config/schema` (complete, live) |
 | Operator-facing behaviour | `docs/user-guide.md`, `docs/user/` |
 | Coding conventions, AI-assistant guide, repo norms | `CLAUDE.md` |
 | Build, packaging, release | `Makefile`, `.goreleaser.yaml`, `Dockerfile`, `CONTRIBUTING.md` |
-| Test strategy | `CLAUDE.md`, `docs/testplan.md` |
+| Test strategy | `CLAUDE.md`, `notes/testplans/testplan.md` |
 | Release history | `CHANGELOG.md` |
-| Recent architecture audit + risk follow-ups | `docs/audit/architecture-reassessment-2026-06-16.md` |
-| Regression gate against the aiohomematic reference model | `docs/parity/by_design.md` + the cross-stack model-snapshot pipeline (`script/model_snapshot_diff.py`) |
+| Architecture audit findings + risk follow-ups | `notes/audits/deep-audit-backlog.md` |
+| Regression gate against the aiohomematic reference model | `notes/parity/by_design.md` + the cross-stack model-snapshot pipeline (`script/model_snapshot_diff.py`) |
 
 If a topic is not in the table above and not in this document, the
 code is the answer.
@@ -89,7 +89,7 @@ paramset normalization, device-profile shape — and that agreement is
 held by a scoped model-snapshot regression gate, **not** by a parity
 mandate. Where the daemon's needs and the reference diverge, the
 daemon's needs win and the divergence is recorded in
-`docs/parity/by_design.md`. The north-bound side never had a parity
+`notes/parity/by_design.md`. The north-bound side never had a parity
 target: there is no Home Assistant integration shim.
 
 The south-bound XML-RPC, BIN-RPC, and JSON-RPC transports are native
@@ -463,7 +463,7 @@ The same reasoning as §4.6: an operator without Home Assistant has no
 place to run alarm logic, and expressing it as CCU programs is fragile
 and unauditable. The daemon therefore ships an **opt-in, local-first
 alarm system** (`internal/alarm/`, default off). Design rationale and
-the full safety model live in `docs/alarm-concept.md`; the operator
+the full safety model live in `notes/concepts/alarm-concept.md`; the operator
 view is `docs/alarm-user-guide.md`.
 
 The architectural commitments:
@@ -490,7 +490,7 @@ The architectural commitments:
   gated by the `alarm.v1` capability token.
 - **Safety posture**: the engine fails towards *not silently
   disarmed*. Where a device's real-world behaviour is uncertain, the
-  assumption is written down in `docs/alarm-assumptions.md` rather
+  assumption is written down in `notes/reference/alarm-assumptions.md` rather
   than encoded silently.
 
 ---
@@ -573,7 +573,7 @@ emits **one Matter endpoint per physical device**
 GenericSwitch/button state machine, WindowCovering EndProductType +
 target, Thermostat SystemMode/RunningMode conformance), and the schema
 snapshot now pins **matter.js v0.17.7 / Matter 1.6.0**
-(`docs/parity/matter/matter-schema-snapshot.json` carries the exact
+(`notes/parity/matter/matter-schema-snapshot.json` carries the exact
 source commit). Later releases hardened the secure-channel layer —
 notably MRP reception-window replay handling, which follows matter.js's
 per-variant semantics rather than one rule for all session types.
@@ -759,7 +759,7 @@ Decisions settled later, each with a full ADR:
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Device-profile edge cases differ between aiohomematic and OpenCCU-Loom | Medium | High | Generated parity tests block drift; golden-file replay of real-device sessions; cross-stack model-snapshot diff. The gate is *no growth in unexplained drift*, not zero drift — accepted divergences are enumerated in `docs/parity/by_design.md`, and a new one must land there in the same change |
+| Device-profile edge cases differ between aiohomematic and OpenCCU-Loom | Medium | High | Generated parity tests block drift; golden-file replay of real-device sessions; cross-stack model-snapshot diff. The gate is *no growth in unexplained drift*, not zero drift — accepted divergences are enumerated in `notes/parity/by_design.md`, and a new one must land there in the same change |
 | XML-RPC callback race on startup | Medium | Medium | Shared callback server starts before any `initProxy()`; contract test |
 | SQLite corruption under power loss | Low | High | WAL mode + `synchronous=NORMAL`; `PRAGMA integrity_check` at startup; documented backup guidance |
 | Pure-Go SQLite performance regression | Low | Medium | Benchmark in dev; build-tag fallback path documented but unused |
@@ -776,7 +776,7 @@ Decisions settled later, each with a full ADR:
 | CCU `jpages` surface changes under us (heating groups) | Medium | Medium | The surface is undocumented by construction (ADR 0055); wire shapes are verified against a live CCU, not against a reconstructed schema, and the write path degrades to a clear error rather than a silent no-op |
 | Matter schema drifts from matter.js HEAD | Medium | High | Regeneration is a single `make generate-matter-schema`; parity tests fail the build when a hand-coded revision constant no longer matches the generated schema. Hand-coding cluster IDs / revisions / defaults is forbidden |
 | Add-on self-update bricks an installation | Low | High | Capability-gated to firmware that ships `/bin/install_addon`; SHA256 verified against the release checksums before staging, and again by the firmware installer; the daemon restarts rather than the CCU (ADR 0057) |
-| Alarm system misses a trigger or disarms silently | Low | Very high | Engine fails towards *not silently disarmed*; append-only journal for every state change; walk test as an operator-verifiable rehearsal; device-behaviour assumptions written down in `docs/alarm-assumptions.md` instead of encoded silently |
+| Alarm system misses a trigger or disarms silently | Low | Very high | Engine fails towards *not silently disarmed*; append-only journal for every state change; walk test as an operator-verifiable rehearsal; device-behaviour assumptions written down in `notes/reference/alarm-assumptions.md` instead of encoded silently |
 | A north-bound surface skips the authorization chain | Low | High | Role checks are structural (ADR 0051), mounts outside the REST router must resolve *and* require identity explicitly, and identity resolvers are first-wins so a later one cannot overwrite an established caller |
 
 ---

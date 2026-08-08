@@ -11,7 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// This file covers the two-phase pre-alarm (docs/alarm-concept.md §15
+// This file covers the two-phase pre-alarm (notes/concepts/alarm-concept.md §15
 // row 21): a fresh, live trigger with PreAlarmSeconds configured first
 // runs a pre-alarm-only output cycle, then escalates to the full policy
 // on elapse; a silence during the pre-alarm phase cancels the

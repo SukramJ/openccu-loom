@@ -133,7 +133,7 @@ func TestSendReceive_ColorControl(t *testing.T) {
 	// COLOR_TEMPERATURE push produces no proactive ColorTemperatureMireds
 	// report. AwaitProactiveReport must time out here — a green result
 	// would mean the notifier gap silently closed and this test should
-	// be promoted to a positive assertion (see docs/parity/by_design.md
+	// be promoted to a positive assertion (see notes/parity/by_design.md
 	// for the model-layer notifier-gap catalogue).
 	t.Run("receive/color-temperature-only-no-proactive-report", func(t *testing.T) {
 		const gapTimeout = 12 * time.Second

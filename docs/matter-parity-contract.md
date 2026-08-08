@@ -15,7 +15,7 @@ from the gold standard cannot land unnoticed.
 OpenCCU-Loom. This is a standing contract, not an audit you run once. Read it
 before your first Matter change and treat it as binding.
 
-It complements the [`matter.js as the Matter Gold Standard`](../CLAUDE.md#matterjs-as-the-matter-gold-standard)
+It complements the [`matter.js as the Matter Gold Standard`](https://github.com/SukramJ/openccu-loom/blob/main/CLAUDE.md#matterjs-as-the-matter-gold-standard)
 section of `CLAUDE.md`: that section tells you matter.js HEAD is the gold
 standard; this document tells you what *parity* means, why **behaviour** parity
 (not just schema parity) is the bar, and which standing guards enforce it.
@@ -89,7 +89,7 @@ have waved through.
    row to the negative-write parity table (§4). A new cluster server adds a
    schema parity case. A wire change adds / updates a TLV fixture. PRs without
    parity coverage are rejected.
-5. **Record deliberate divergences** in [`docs/parity/by_design.md`](./parity/by_design.md)
+5. **Record deliberate divergences** in [`notes/parity/by_design.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md)
    (the living catalogue). A non-trivial divergence also gets an ADR. Valid
    divergences are TypeScript-only optimisations that fight Go's GC, or
    decorator patterns with no Go equivalent. Invalid divergences are
@@ -104,12 +104,12 @@ them with every change:
 
 | Guard | Location | Locks |
 | --- | --- | --- |
-| **Schema parity** | `internal/north/matter/**/parity_matterjs_test.go`; pin `docs/parity/matter/matter-schema-snapshot.json` (regen via `docs/parity/matter/extract-from-matter-js.ts`) | cluster / device-type IDs, revisions, attribute / command / event IDs vs matter.js HEAD |
+| **Schema parity** | `internal/north/matter/**/parity_matterjs_test.go`; pin `notes/parity/matter/matter-schema-snapshot.json` (regen via `notes/parity/matter/extract-from-matter-js.ts`) | cluster / device-type IDs, revisions, attribute / command / event IDs vs matter.js HEAD |
 | **Behavioural negative-write parity** | `internal/north/matter/cluster/matter_negative_write_parity_test.go` | a write/invoke matter.js *rejects* is rejected by Loom with the matching IM status (ConstraintError 0x87 / InvalidCommand 0x85), plus boundary positive controls against over-rejection. Add one row per new constraint. |
-| **Wire-codec parity** | `internal/north/matter/tlv/parity_matterjs_test.go`; fixtures `docs/parity/matter/tlv-wire-fixtures.json` | byte-level TLV / IM shape |
+| **Wire-codec parity** | `internal/north/matter/tlv/parity_matterjs_test.go`; fixtures `notes/parity/matter/tlv-wire-fixtures.json` | byte-level TLV / IM shape |
 | **Wiring-capability pins** | `tests/contract/wiring_pins/dormant_capability_wiring_test.go` | every capability gate / setter is actually wired on the production path — fails the build the moment a wiring is removed, even though the capability keeps passing its own unit test (the "implemented but never wired" bug class) |
 | **Reference-controller validation** | `tests/chiptool/` (`//go:build chiptool`), `internal/north/matter/conformance/` | end-to-end behaviour against the real `chip-tool` commissioner |
-| **Divergence catalogue** | [`docs/parity/by_design.md`](./parity/by_design.md) | every intentional deviation, with rationale |
+| **Divergence catalogue** | [`notes/parity/by_design.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/parity/by_design.md) | every intentional deviation, with rationale |
 
 When a parity sweep is genuinely warranted, prefer extending these guards over
 producing a throw-away report: a guard catches the *next* regression, a report

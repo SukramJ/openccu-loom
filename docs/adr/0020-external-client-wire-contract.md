@@ -5,10 +5,10 @@
 - **Related**:
   [ADR 0009 — service / method / command topics](./0009-service-method-command-topics.md),
   [ADR 0011 — MQTT topic and payload architecture](./0011-mqtt-topic-and-payload-architecture.md),
-  [`assets/openapi.yaml`](../../assets/openapi.yaml),
-  [`assets/wsapi.json`](../../assets/wsapi.json),
+  [`assets/openapi.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml),
+  [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json),
   [`docs/external-clients/topic-hierarchy.md`](../external-clients/topic-hierarchy.md),
-  [`docs/external-clients/asks.md`](../external-clients/asks.md)
+  [`notes/reference/external-client-asks.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/reference/external-client-asks.md)
 
 ## Decision
 
@@ -84,7 +84,7 @@ source:
   list it could feature-detect on.
 
 The backlog at
-[`docs/external-clients/asks.md`](../external-clients/asks.md)
+[`notes/reference/external-client-asks.md`](https://github.com/SukramJ/openccu-loom/blob/main/notes/reference/external-client-asks.md)
 catalogues each gap with source-line citations. This ADR records
 the architectural decisions that close the foundation gaps and
 explicitly defers the rest.

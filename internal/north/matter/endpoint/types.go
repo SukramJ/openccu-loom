@@ -39,7 +39,7 @@ type Snapshot struct {
 	// only on explicit endpoint deletion
 	// (packages/node/src/node/server/ServerEndpointInitializer.ts,
 	// eraseDescendant) — never because state has not been populated yet.
-	// See BD-Matter-EndpointID-Persistent in docs/parity/by_design.md.
+	// See BD-Matter-EndpointID-Persistent in notes/parity/by_design.md.
 	ModelComplete bool
 }
 

@@ -10,7 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// This file covers the door-chime output (docs/alarm-concept.md §15 row
+// This file covers the door-chime output (notes/concepts/alarm-concept.md §15 row
 // 23): a Chime-flagged sensor sounds only on its opening edge, only
 // while the zone is disarmed, and never while a walk test is running.
 

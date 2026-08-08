@@ -3,7 +3,8 @@
 // Primary-DP lookup table for the sensor + actor tile. For every CCU
 // channel type that has a well-known "headline" parameter, the table
 // names that parameter so the tile can render it as the big top-row
-// value. Tile composition rules live in docs/ui/sensor-actor-tile-concept.md.
+// value. Tile composition rules live in
+// notes/concepts/ui/auto-tile-concept.md.
 //
 // The table is small on purpose. Adding a row when the upstream
 // device-profile registry adds a new sensor channel type is a one-line

@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// AlarmSensorRow is one enrolled binary trigger source (docs/alarm-concept.md
+// AlarmSensorRow is one enrolled binary trigger source (notes/concepts/alarm-concept.md
 // §14). The data point identity is stored as discrete columns
 // (CentralName + interface/channel/parameter) so enrolment lookups by data
 // point stay indexable; the mode matrix and behaviour flags live in

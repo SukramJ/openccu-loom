@@ -3,7 +3,7 @@
 
 // Package alarm wires the alarm engine, its output-driver layer, and
 // the per-central event subscriptions into one daemon-level service
-// (docs/alarm-concept.md §14). The service owns a dedicated alarm
+// (notes/concepts/alarm-concept.md §14). The service owns a dedicated alarm
 // event bus: zones are daemon-level while every central owns its own
 // bus, so north-bound surfaces subscribe to the alarm bus instead of
 // fanning across centrals.
@@ -99,7 +99,7 @@ type Service struct {
 // (cmd/openccu-loom/daemon_north.go) so the daemon composition root
 // can wire that publisher in one line via SetArmFailureHook. A nil
 // hook (the default) means the schedule chain's AutoArm failures stay
-// journal-only (docs/alarm-concept.md §15 row 19).
+// journal-only (notes/concepts/alarm-concept.md §15 row 19).
 type ArmFailureHook func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail)
 
 // NewService builds the alarm service. Construction is cheap and
@@ -219,7 +219,7 @@ func NewService(deps Deps) (*Service, error) {
 }
 
 // SetArmFailureHook installs the FAILED_TO_ARM notification hook
-// consumed by the schedule chain's AutoArm path (docs/alarm-concept.md
+// consumed by the schedule chain's AutoArm path (notes/concepts/alarm-concept.md
 // §15 row 19). Wiring is optional and mirrors SetCodeSource: a nil
 // hook (the default) keeps the schedule chain journal-only.
 func (s *Service) SetArmFailureHook(fn ArmFailureHook) {
@@ -253,7 +253,7 @@ func (s *Service) NotifyCodesChanged() {
 }
 
 // EffectiveCodePolicy resolves the per-zone arm/disarm code requirement
-// exactly as the engine will enforce it (docs/alarm-concept.md
+// exactly as the engine will enforce it (notes/concepts/alarm-concept.md
 // §11/§13.3): the policy half comes from the zone config (RequireDisarm
 // defaults to required when nil), and the "codes exist" half from the
 // codes facade — an zone without an applicable enabled pin code
@@ -336,7 +336,7 @@ func (a codeSourceAdapter) Rows(ctx context.Context) ([]CodeRow, error) {
 
 // SetCodeSource wires the parsed-code source consumed by keypad and
 // remote intent routing. The codes facade injects it once built; a nil
-// source keeps hardware-code routing inert (docs/alarm-concept.md §11).
+// source keeps hardware-code routing inert (notes/concepts/alarm-concept.md §11).
 func (s *Service) SetCodeSource(src CodeSource) {
 	s.mu.Lock()
 	s.codeSource = src

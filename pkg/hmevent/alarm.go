@@ -9,7 +9,7 @@ import (
 
 // Alarm-engine event tags. The `alarm_panel.` namespace is deliberately
 // distinct from the CCU alarm-message surface (`hub.alarm_message`) —
-// see docs/alarm-concept.md §4 (naming note). Keep the string form
+// see notes/concepts/alarm-concept.md §4 (naming note). Keep the string form
 // stable: metrics and north-bound subscriptions reference it.
 const (
 	EventTypeAlarmStateChanged     EventType = "alarm_panel.state_changed"
@@ -27,7 +27,7 @@ const (
 )
 
 // AlarmNotificationEvent is one enrolled notification output firing
-// for an alarm (docs/alarm-concept.md §7): a deliberate, per-zone,
+// for an alarm (notes/concepts/alarm-concept.md §7): a deliberate, per-zone,
 // mode-filtered notification signal — distinct from the raw state
 // events every north-bound plane already receives. It is one-shot at
 // fire time and never cancelled by a later silence.
@@ -65,7 +65,7 @@ type AlarmNotificationEvent struct {
 func (AlarmNotificationEvent) Type() EventType { return EventTypeAlarmNotification }
 
 // AlarmDuressEvent is the silent fan-out of a duress-code use
-// (docs/alarm-concept.md §11). A duress code disarms (or arms /
+// (notes/concepts/alarm-concept.md §11). A duress code disarms (or arms /
 // silences) normally with no visible UI difference; this event carries
 // the alarm to notification targets (MQTT event topic + webhook) out of
 // band. The WebSocket surface deliberately does NOT broadcast it — a
@@ -94,7 +94,7 @@ func (AlarmDuressEvent) Type() EventType { return EventTypeAlarmDuress }
 
 // AlarmReminderEvent fires when an arm schedule elapses and the zone is
 // not in the scheduled mode while the schedule is a reminder (AutoArm
-// off): the engine notifies rather than arming (docs/alarm-concept.md
+// off): the engine notifies rather than arming (notes/concepts/alarm-concept.md
 // §15 row 19). The actual reminder emission is wired by the schedule
 // service; this type defines the bus contract.
 type AlarmReminderEvent struct {
@@ -142,7 +142,7 @@ type AlarmPanelChangedEvent struct {
 	// Available reports the alarm-health verdict.
 	Available bool
 	// CodeArmRequired / CodeDisarmRequired carry the zone's effective
-	// per-verb code policy (docs/alarm-concept.md §11): the zone-config
+	// per-verb code policy (notes/concepts/alarm-concept.md §11): the zone-config
 	// policy half AND the "an applicable enabled pin code exists" half.
 	// The master aggregate carries the any-zone-requires union.
 	CodeArmRequired    bool
@@ -204,7 +204,7 @@ type AlarmCountdownEvent struct {
 func (AlarmCountdownEvent) Type() EventType { return EventTypeAlarmCountdown }
 
 // AlarmStateChangedEvent fires on every arm-state-machine transition
-// of an alarm zone (docs/alarm-concept.md §5). Silence is not a state
+// of an alarm zone (notes/concepts/alarm-concept.md §5). Silence is not a state
 // transition; it surfaces via the journal event instead.
 type AlarmStateChangedEvent struct {
 	Base
@@ -290,7 +290,7 @@ type AlarmModeReadiness struct {
 }
 
 // AlarmReadinessChangedEvent fires when the ready-to-arm computation
-// of an zone changes for at least one mode (docs/alarm-concept.md
+// of an zone changes for at least one mode (notes/concepts/alarm-concept.md
 // §6.3). Consumers get the full per-mode map, not a delta.
 type AlarmReadinessChangedEvent struct {
 	Base

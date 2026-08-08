@@ -14,5 +14,5 @@
 //
 // Every test file in this package must set the `e2e` build
 // constraint so that `make test` skips them; run them explicitly
-// with `make e2e`. See docs/e2e-testplan.md for the full plan.
+// with `make e2e`. See notes/testplans/e2e-testplan.md for the full plan.
 package e2e

@@ -29,7 +29,7 @@ type SurfacePolicy interface {
 // operator decides through the profile which surfaces that assertion
 // may write to — hiding the Configure tab stops Home Assistant writing
 // paramsets, showing it hands the write back (ADR 0051, and
-// docs/design/ui-surface-profiles.md §2.8).
+// notes/concepts/ui-surface-profiles.md §2.8).
 //
 // Everything else passes untouched, and that is the point: a Bearer
 // token and a Loom account carry the rights they were granted, so a

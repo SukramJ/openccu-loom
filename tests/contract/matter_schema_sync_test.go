@@ -12,7 +12,7 @@ import (
 
 // TestMatterSchemaSnapshotInSync asserts the two copies of the matter.js HEAD
 // schema snapshot are byte-identical: the master at
-// docs/parity/matter/matter-schema-snapshot.json (re-extracted by
+// notes/parity/matter/matter-schema-snapshot.json (re-extracted by
 // `make generate-matter-schema`) and the embedded copy at
 // internal/north/matter/parity/schema.json that every matter parity test runs
 // against.
@@ -24,7 +24,7 @@ import (
 // guard closes that window (architecture analysis, Matter W1).
 func TestMatterSchemaSnapshotInSync(t *testing.T) {
 	root := contractRepoRoot(t)
-	master := filepath.Join(root, "docs", "parity", "matter", "matter-schema-snapshot.json")
+	master := filepath.Join(root, "notes", "parity", "matter", "matter-schema-snapshot.json")
 	embedded := filepath.Join(root, "internal", "north", "matter", "parity", "schema.json")
 
 	sum := func(path string) [32]byte {

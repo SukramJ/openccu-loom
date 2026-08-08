@@ -16,7 +16,7 @@ import (
 
 // Start loads the configured zones and sensors, bumps the boot
 // counter, and restores every persisted zone state per the restart
-// table of docs/alarm-concept.md §10.2. It is not idempotent — call
+// table of notes/concepts/alarm-concept.md §10.2. It is not idempotent — call
 // once per engine lifetime.
 func (e *Engine) Start(ctx context.Context) error {
 	e.mu.Lock()

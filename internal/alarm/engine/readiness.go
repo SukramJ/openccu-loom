@@ -12,7 +12,7 @@ import (
 )
 
 // computeReadiness evaluates the ready-to-arm verdict of one mode
-// (docs/alarm-concept.md §6.3). Sensors that would auto-bypass and
+// (notes/concepts/alarm-concept.md §6.3). Sensors that would auto-bypass and
 // sensors that are already bypassed appear as warnings, not blockers —
 // they cannot fail an arm. The caller holds the engine lock.
 func (a *zone) computeReadiness(mode hmenum.AlarmMode) hmevent.AlarmModeReadiness {

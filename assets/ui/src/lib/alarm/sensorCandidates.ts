@@ -167,7 +167,7 @@ export type OutputCandidateFilterOptions = {
 
 /**
  * Free-text search + room/function/area narrowing over the alarm output-
- * candidate list (docs/alarm-concept.md §12.3 step 3). Search matches the
+ * candidate list (notes/concepts/alarm-concept.md §12.3 step 3). Search matches the
  * channel/device name, both addresses, the raw model, and any room or
  * function assignment — the output-candidate mirror of buildCandidates'
  * device search.

@@ -37,7 +37,7 @@ Every WebSocket frame the daemon emits follows the same shape:
   field of the corresponding `broadcast` entry in `wsapi.json`.
 - `ts` — RFC3339Nano UTC timestamp of when the event was emitted.
 - `payload` — see the schema referenced under
-  [`components.schemas`](../../assets/openapi.yaml) by the broadcast
+  [`components.schemas`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) by the broadcast
   entry's `payload` field.
 
 ## Subscription operations
@@ -231,7 +231,7 @@ configured name or subscribe via wildcard.
 ## Broadcast catalogue
 
 The full broadcast catalogue is machine-readable in
-[`assets/wsapi.json`](../../assets/wsapi.json) — every entry with
+[`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) — every entry with
 `"kind": "broadcast"` carries `topic` (pattern) and `payload` (schema
 name in `openapi.yaml`). `assets/wsapi.json` holds 23 broadcast
 entries (17 non-Matter + 6 Matter); the table below is the
@@ -244,34 +244,34 @@ list does not drift from reality.
 
 | Type (`name`) | Topic pattern | Payload schema |
 |---|---|---|
-| `datapoint.value_changed` | `device.{address}.channels.{channel}.data_points.{parameter}` | [`DataPointValueChangedPayload`](../../assets/openapi.yaml) |
-| `datapoint.optimistic_rolled_back` | `device.{address}.channels.{channel}.data_points.{parameter}` | [`OptimisticRollbackPayload`](../../assets/openapi.yaml) |
-| `custom_data_point.state_changed` | `device.{address}.cdps.{name}` | [`CustomDataPointStateChangedPayload`](../../assets/openapi.yaml) |
-| `device.trigger` | `device.{address}.channels.{channel}.trigger` | [`DeviceTriggerPayload`](../../assets/openapi.yaml) |
-| `device.created` | `device.{address}.lifecycle` | [`DeviceCreatedPayload`](../../assets/openapi.yaml) |
-| `device.removed` | `device.{address}.lifecycle` | [`DeviceRemovedPayload`](../../assets/openapi.yaml) |
-| `central.state_changed` | `central.{name}.state` | [`CentralStateChangedPayload`](../../assets/openapi.yaml) |
-| `system.status_changed` | `system.{central}.status` | [`SystemStatusChangedPayload`](../../assets/openapi.yaml) |
-| `hub.sysvar_changed` | `hub.{central}.sysvars.{name}` | [`SysvarChangedPayload`](../../assets/openapi.yaml) |
-| `hub.program_executed` | `hub.{central}.programs.{id}` | [`ProgramExecutedPayload`](../../assets/openapi.yaml) |
-| `hub.install_mode_changed` | `hub.{central}.install_mode` | [`InstallModeChangedPayload`](../../assets/openapi.yaml) |
-| `hub.alarm_message` | `hub.{central}.alarm_messages` | [`HubCountChangedPayload`](../../assets/openapi.yaml) |
-| `hub.service_message` | `hub.{central}.service_messages` | [`HubCountChangedPayload`](../../assets/openapi.yaml) |
-| `hub.inbox_changed` | `hub.{central}.inbox` | [`HubCountChangedPayload`](../../assets/openapi.yaml) |
-| `hub.metrics_changed` | `hub.{central}.metrics` | [`HubMetricChangedPayload`](../../assets/openapi.yaml) |
-| `connectivity.changed` | `hub.{central}.connectivity.{interface_id}` | [`HubConnectivityChangedPayload`](../../assets/openapi.yaml) |
-| `hub.system_update_changed` | `hub.{central}.system_update` | [`HubSystemUpdateChangedPayload`](../../assets/openapi.yaml) |
+| `datapoint.value_changed` | `device.{address}.channels.{channel}.data_points.{parameter}` | [`DataPointValueChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `datapoint.optimistic_rolled_back` | `device.{address}.channels.{channel}.data_points.{parameter}` | [`OptimisticRollbackPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `custom_data_point.state_changed` | `device.{address}.cdps.{name}` | [`CustomDataPointStateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `device.trigger` | `device.{address}.channels.{channel}.trigger` | [`DeviceTriggerPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `device.created` | `device.{address}.lifecycle` | [`DeviceCreatedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `device.removed` | `device.{address}.lifecycle` | [`DeviceRemovedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `central.state_changed` | `central.{name}.state` | [`CentralStateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `system.status_changed` | `system.{central}.status` | [`SystemStatusChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `hub.sysvar_changed` | `hub.{central}.sysvars.{name}` | [`SysvarChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `hub.program_executed` | `hub.{central}.programs.{id}` | [`ProgramExecutedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `hub.install_mode_changed` | `hub.{central}.install_mode` | [`InstallModeChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `hub.alarm_message` | `hub.{central}.alarm_messages` | [`HubCountChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `hub.service_message` | `hub.{central}.service_messages` | [`HubCountChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `hub.inbox_changed` | `hub.{central}.inbox` | [`HubCountChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `hub.metrics_changed` | `hub.{central}.metrics` | [`HubMetricChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `connectivity.changed` | `hub.{central}.connectivity.{interface_id}` | [`HubConnectivityChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `hub.system_update_changed` | `hub.{central}.system_update` | [`HubSystemUpdateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 
 ### Matter broadcasts
 
 | Topic (also used as `type` in the envelope) | Payload schema |
 |---|---|
-| `matter.exposable_changed` | [`MatterExposureUpdate`](../../assets/openapi.yaml) |
-| `matter.commissioning_window_opened` | [`MatterCommissioningWindowResponse`](../../assets/openapi.yaml) |
-| `matter.commissioning_progress` | [`MatterCommissioningProgressPayload`](../../assets/openapi.yaml) |
-| `matter.fabric_added` | [`MatterFabric`](../../assets/openapi.yaml) |
-| `matter.fabric_removed` | [`MatterFabricRemovedPayload`](../../assets/openapi.yaml) |
-| `matter.endpoint_assembled` | [`MatterEndpointAssembledPayload`](../../assets/openapi.yaml) |
+| `matter.exposable_changed` | [`MatterExposureUpdate`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `matter.commissioning_window_opened` | [`MatterCommissioningWindowResponse`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `matter.commissioning_progress` | [`MatterCommissioningProgressPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `matter.fabric_added` | [`MatterFabric`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `matter.fabric_removed` | [`MatterFabricRemovedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `matter.endpoint_assembled` | [`MatterEndpointAssembledPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 
 **Known divergence:** Matter broadcast frames currently set `type` to
 the *trailing segment* after `matter.` (e.g. `type: "exposable_changed"`

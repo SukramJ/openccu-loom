@@ -26,6 +26,6 @@
 //
 // The HA Matter Server / Apple Home / Google Home smoke tests are
 // manual — they require dedicated hardware (an iOS / Android device,
-// a Home Hub) and live in [docs/matter-conformance.md] as a release
+// a Home Hub) and live in [notes/reference/matter-conformance.md] as a release
 // checklist rather than executable Go tests.
 package conformance

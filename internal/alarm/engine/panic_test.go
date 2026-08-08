@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// This file covers the PanicTrigger verb (docs/alarm-concept.md §7): a
+// This file covers the PanicTrigger verb (notes/concepts/alarm-concept.md §7): a
 // panic input chooses loud or silent independent of arm state, and a
 // configured silent policy can never be forced loud by the caller.
 

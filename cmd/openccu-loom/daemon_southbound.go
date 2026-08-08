@@ -351,7 +351,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// config.yaml when the table is empty) onto the shared visibility
 	// registry. Runs after WireCentrals so every central's
 	// ModelRegistry is populated with materialised devices that the
-	// suppression-mark pass can flip. See docs/ui/unignore-concept.md
+	// suppression-mark pass can flip. See notes/concepts/ui/unignore-concept.md
 	// and visibility_wiring.go.
 	applyVisibilityUnIgnore(ctx, cfg, reg, d.visibilityUnIgnoreStore, d.visReg, logger)
 

@@ -15,7 +15,7 @@ import (
 
 // TestMigrationDownDropsHaveLossNotes enforces the documented policy that
 // `goose down` is not a supported operator path (see CONTRIBUTING.md and
-// docs/adr/0054-migration-down-path-unsupported.md): every migration keeps a
+// docs/adr/0061-migration-down-path-unsupported.md): every migration keeps a
 // syntactically valid `-- +goose Down` block for development/test convenience
 // (e.g. schema-diff tooling that walks up and back down), but a Down block
 // that drops a table or column must say so in plain language directly above

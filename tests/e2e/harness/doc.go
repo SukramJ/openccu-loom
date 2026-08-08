@@ -22,6 +22,6 @@
 // because it leaks state through SQLite, the audit log, and the
 // MQTT broker's retained-message store.
 //
-// See docs/e2e-testplan.md §4.1 for the design and §6 for the file
+// See notes/testplans/e2e-testplan.md §4.1 for the design and §6 for the file
 // layout this package supports.
 package harness

@@ -48,7 +48,7 @@ const reportValueUsageValueID = "PRESS_SHORT"
 // CCU WebUI removeCentralLink zeroes PRESS_SHORT and PRESS_LONG, while
 // its createCentralLink only ever raises PRESS_SHORT — this deactivate
 // asymmetry is a deliberate divergence from the reference (which only
-// touches PRESS_SHORT on both paths); see docs/parity/by_design.md.
+// touches PRESS_SHORT on both paths); see notes/parity/by_design.md.
 const reportValueUsageLongValueID = "PRESS_LONG"
 
 // CreateCentralLinks enables click-event routing. When channelAddress
@@ -202,7 +202,7 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress, chann
 		// Activation raises only PRESS_SHORT (matching both the CCU WebUI
 		// createCentralLink and the reference). Teardown zeroes PRESS_SHORT
 		// and PRESS_LONG per channel so the device-internal direct link is
-		// fully removed; see docs/parity/by_design.md.
+		// fully removed; see notes/parity/by_design.md.
 		valueIDs := []string{reportValueUsageValueID}
 		if refCounter == 0 {
 			valueIDs = append(valueIDs, reportValueUsageLongValueID)
