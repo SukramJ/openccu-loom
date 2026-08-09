@@ -31,7 +31,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
-	"github.com/SukramJ/openccu-loom/internal/north/ui/surface"
 	"github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -217,7 +216,6 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		}
 		return len(d.visibilityAdapter.Names())
 	}
-	surfacePolicy := surface.NewPolicy(bootBaseline.North.UI, centralCounter)
 	// TLS: when cert+key are configured, build a hot-reloading cert
 	// provider. A load failure logs and falls back to plain HTTP rather
 	// than refusing to boot, so a bad cert never locks the operator out.
@@ -275,7 +273,6 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Audit:                   d.auditRead,
 		Auth:                    d.restAuth,
 		ConfigAdmin:             d.configSvc,
-		SurfacePolicy:           surfacePolicy,
 		CentralCounter:          centralCounter,
 		RestartPending:          restartState,
 		ConfigChanges:           restartState,

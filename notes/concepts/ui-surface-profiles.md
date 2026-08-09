@@ -29,11 +29,10 @@
 >   device list, Settings, this editor, the About page, and (in `standalone` only) user and
 >   token administration. Without that floor an admin can hide the way back to the switch
 >   they just flipped.
-> - **In `embedded` mode the profile also carries the write boundary.** A surface hidden
->   there is refused for the Home Assistant passthrough identity as well, and one the admin
->   deliberately shows becomes writable again — so an operator who prefers Loom's paramset
->   editor to the HA panel gets a working editor, not a dead one. Everywhere else hiding is
->   pure navigation: it never restricts an API token, a Loom account, or MQTT.
+> - **Hiding is navigation, never permission.** It removes a door from this daemon's Config
+>   UI for every user of it. The REST, WebSocket and MQTT surfaces are untouched, and so is
+>   the Home Assistant integration — which authenticates with its own bearer token and was
+>   never affected by the profile. Access is a matter for roles and tokens.
 
 ---
 
@@ -233,37 +232,28 @@ Three properties keep this from becoming magic:
 Nothing else follows the fleet. Identity, OIDC and the aggregated analytics belong to Home
 Assistant however many CCUs there are.
 
-### 2.8 Write enforcement follows the profile, in `embedded` mode only
+### 2.8 Why there is no write enforcement here
 
-The embedded design refuses writes on the surfaces Home Assistant owns (ADR 0051). That
-refusal is **bound to the profile entry, not to the mode**: a surface hidden in the live
-`embedded` profile refuses its writes, and a surface the admin deliberately shows accepts
-them again.
+An earlier revision made a hidden surface refuse its writes for the Home Assistant Ingress
+passthrough identity, on the reasoning that hiding should not be "merely cosmetic" and that
+it would stop two editors writing the same CCU. Both halves were wrong, and the reason is
+worth keeping so nobody rebuilds it:
 
-The reason is that "HA owns the paramset editor" is a *duplication* statement, not a safety
-one. An operator who prefers Loom's editor — export/import, copy-to-channel, the fleet-wide
-link list — should get a working one rather than an editor that renders and then fails on
-save. Tying both to one switch keeps the two answers from contradicting each other.
+- **It never touched the Home Assistant integration.** `openccu-loom-client` authenticates
+  with a bearer token (`CONF_LOOM_TOKEN`), and `ingressTrusted` bails out the moment a
+  request already carries an identity — *"a real Bearer/session/basic identity wins"*. The
+  passthrough identity only ever appears when a **browser** opens this daemon's own UI
+  through the add-on's Ingress panel without signing in to Loom.
+- **So it prevented no duplicate editor.** The duplication would be between the HA panel
+  and this UI, and the HA side was exempt by construction.
+- **And it was no security boundary.** Whoever reaches Ingress is an HA admin, who can sign
+  in to Loom with their own account and write anyway.
 
-Four boundaries keep that from becoming a hole:
+What remained was a rule that cost a middleware, a route table, two contract guards and —
+the decisive part — three attempts to explain to the person who commissioned it. A
+mechanism that defends nothing and needs explaining is worse than none.
 
-1. **It applies to the Home Assistant passthrough identity only** — the identity minted by
-   the Ingress auth passthrough (ADR 0044). A Loom account, an API token and the Remote
-   add-on's injected per-instance token (ADR 0054) carry the rights they were granted; a
-   navigation switch never widens or narrows those. Otherwise an admin could grant a
-   machine client rights by un-hiding a sidebar entry.
-2. **It applies in `embedded` mode only.** In `standalone` the profile is purely
-   navigational. There is no passthrough identity there to scope.
-3. **Not every surface carries writes.** Only surfaces with a declared write-route set
-   participate: the device configure tab and its sub-tabs, CCU administration, the identity
-   tabs, and Matter. Hiding `nav.energy` gates nothing — it has no write path.
-4. **Every change is audited.** Because the table now decides an authorization outcome, the
-   audit row for a profile change is load-bearing, not cosmetic: "who re-enabled paramset
-   writes for the HA identity, and when" has to be answerable.
-
-The consequence to state plainly, in this document and in the UI: **in `embedded` mode a
-visibility switch is also an authorization switch.** The editor marks exactly those rows
-(§3.3) instead of relying on the operator to remember which ones they are.
+The profile is navigation. Authorization is ADR 0051, and it stays there.
 
 ## 3. The editor
 
@@ -471,14 +461,7 @@ worth exactly as much as its enforcement:
 | A multi-CCU daemon keeps the editors HA cannot replace | `TestMultiCentralWidensTheEmbeddedDefaults`, and `TestPolicyFollowsARuntimeAdoptedCentral` for the live read |
 | The fleet rule moves the default, not the ceiling | `TestMultiCentralDefaultIsStillOverridable`, `TestMultiCentralLeavesStandaloneAlone` |
 | Sparse storage follows the moved default | `TestNormalizeFollowsTheFleetDefault` — storing "visible" where the fleet already makes it the default would pin today's CCU count into the profile |
-| The write rules name routes the router actually serves | `TestSurfaceWriteRoutesExist` (`tests/contract/`) — the declared-vs-served shape from CLAUDE.md: a rule for a moved route is a refusal that silently stopped happening |
 | A surface hidden because HA owns it actually gates something | `TestHAOwnedWriteSurfacesAreGated` (`tests/contract/`) — the other direction, with an explicit no-write-path list rather than silence |
-| Every write-gated surface owns rules, and only those | `TestEveryWriteGatedSurfaceHasRoutes` (resolver) |
-| Only the passthrough identity is scoped by the profile | `TestSurfaceWritesScopesOnlyTheIngressIdentity` — the same write with a bearer token, a session and no identity passes untouched |
-| Reads are never refused | `TestSurfaceWritesNeverGatesReads` |
-| Standalone refuses nothing | `TestSurfaceWritesLeavesStandaloneAlone` |
-| A saved profile is in force immediately | `TestSurfacePolicyUpdateTakesEffectImmediately` (middleware) plus the `policy.Set` wiring pin |
-| The policy reaches the middleware through the composition root | `tests/contract/wiring_pins/surface_policy_wiring_test.go` — four pins: constructed, handed to the router, mounted, refreshed on save |
 | The e2e fixture still describes the registry | `TestE2ESurfaceFixtureMatchesRegistry` (`tests/contract/`) — a stale fixture would lock every visual baseline onto a navigation nobody sees |
 | The navigation, the settings tabs and the editor behave | `surfaces.test.ts` + `nav.test.ts` (vitest) and `settings-navviews.spec.ts` (Playwright) |
 | Changing a profile is audited, naming the resulting profile | `TestPutUISurfacesIsAudited` (handler) — an entry that only said "north.ui changed" could not answer who handed a write back |

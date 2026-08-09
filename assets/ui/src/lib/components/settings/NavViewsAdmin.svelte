@@ -183,18 +183,6 @@
 
   async function onToggle(s: SurfaceInfo) {
     const on = surfacesStore.draftVisible(s.id);
-
-    // Showing a write-gated surface widens what Home Assistant may
-    // write, so it asks. Hiding one only narrows.
-    if (!on && editing === "embedded" && s.write_gated) {
-      const ok = await confirmStore.ask({
-        title: t("navviews.dlg.show_write_title", { surface: label(s) }),
-        body: `${t("navviews.dlg.show_write_text")}\n\n${t("navviews.dlg.show_write_warn")}`,
-        confirmLabel: t("navviews.dlg.show_write_ok"),
-      });
-      if (!ok) return;
-    }
-
     if (on) {
       const warn = warnBody(s);
       if (warn) {
@@ -221,7 +209,7 @@
       ? `${t("navviews.dlg.mode_on_text")}\n\n${t("navviews.dlg.will_hide", {
           views: String(hiddenNav),
           tabs: String(hiddenTabs),
-        })}\n${t("navviews.dlg.editors_ro")}`
+        })}`
       : `${t("navviews.dlg.mode_off_text")}\n\n${t("navviews.dlg.will_show", {
           views: String(hiddenNav),
           tabs: String(hiddenTabs),
@@ -435,7 +423,6 @@
               {@const locked = surfacesStore.isFloor(s.id)}
               {@const changed = surfacesStore.isChanged(s.id)}
               {@const available = gateAvailable(s)}
-              {@const writeGated = editing === "embedded" && s.write_gated}
               <div
                 class="flex items-start justify-between gap-4 border-b border-slate-200 py-3 pr-4 last:border-b-0 dark:border-slate-800 {s.parent
                   ? 'border-l-2 border-l-slate-200 pl-8 dark:border-l-slate-700'
@@ -453,14 +440,6 @@
                     >
                       {label(s)}
                     </span>
-                    {#if writeGated}
-                      <span
-                        title={t("navviews.row.write_gated")}
-                        class="inline-flex items-center rounded border border-sky-400/40 bg-sky-50 px-1.5 text-[11px] font-bold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"
-                      >
-                        ⇄
-                      </span>
-                    {/if}
                     <code class="text-[11px] text-slate-400 dark:text-slate-500">{s.id}</code>
                   </div>
                   <p
@@ -496,11 +475,6 @@
                   {#if s.role_admin}
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {t("navviews.row.role_admin")}
-                    </p>
-                  {/if}
-                  {#if writeGated}
-                    <p class="mt-1 text-xs text-sky-700 dark:text-sky-400">
-                      {t("navviews.row.write_gated")}
                     </p>
                   {/if}
                   {#if changed}

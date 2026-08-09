@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.9.0
+  version: 5.10.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6086,10 +6086,10 @@ paths:
         than persisted — a stored entry that merely repeats today's
         default would pin it across upgrades.
 
-        In the embedded profile a hidden surface also refuses its writes
-        for the Home Assistant Ingress passthrough identity, so this
-        endpoint changes an authorization outcome and is audited. The
-        change takes effect immediately, without a restart.
+        Purely navigational: hiding a surface removes it from this
+        daemon's Config UI for every user and changes no permission. The
+        REST, WebSocket and MQTT surfaces are unaffected — restrict those
+        through roles and tokens. Audited like every other config write.
 
         Surfaces that can never be hidden (the device list, Settings, the
         profile editor, About, and — in the standalone profile — user and
@@ -10941,12 +10941,6 @@ components:
         role_admin:
           type: boolean
           description: Only ever shown to admins, independent of the profile.
-        write_gated:
-          type: boolean
-          description: |
-            In the embedded profile this surface's entry also decides
-            whether the Home Assistant Ingress passthrough identity may
-            write to it.
         multi_central_visible:
           type: boolean
           description: |

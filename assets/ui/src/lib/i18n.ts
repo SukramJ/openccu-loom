@@ -1710,7 +1710,7 @@ const EN: Catalog = {
     "Hiding a view removes it from the navigation for every user of this daemon. API tokens, Loom accounts and MQTT are unaffected — restrict those through roles and tokens. In embedded mode, rows marked ⇄ also decide whether Home Assistant may write to that surface.",
   "navviews.mode.title": "Embedded in Home Assistant",
   "navviews.mode.desc":
-    "Turn this on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration is configured against this daemon. Loom then hides what HA already owns (login, CCU credentials, paramset and link editors) and refuses the matching writes.",
+    "Turn this on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration is configured against this daemon. Loom then hides what Home Assistant already provides: its own login, user and token administration, the CCU connection, the device editors, Matter and the aggregated charts.",
   "navviews.mode.live": "Live profile",
   "navviews.mode.views_visible": "{visible} of {total} views visible",
   "navviews.mode.deviations": "{count} deviations from defaults",
@@ -1741,8 +1741,6 @@ const EN: Catalog = {
   "navviews.row.locked": "Cannot be hidden — {why}",
   "navviews.row.unavailable": "Unavailable — {why}",
   "navviews.row.role_admin": "Only visible to admins.",
-  "navviews.row.write_gated":
-    "Also decides whether Home Assistant may write here.",
   "navviews.row.changed_from": "Changed · default: {default}",
   "navviews.row.default_visible": "visible",
   "navviews.row.default_hidden": "hidden",
@@ -1765,24 +1763,16 @@ const EN: Catalog = {
   "navviews.toast.error": "Could not save",
   "navviews.dlg.hide_title": "Hide “{surface}”?",
   "navviews.dlg.hide_ok": "Hide it",
-  "navviews.dlg.show_write_title": "Show “{surface}” again?",
-  "navviews.dlg.show_write_text":
-    "Home Assistant will be able to write to this surface again — in embedded mode this switch carries the write boundary.",
-  "navviews.dlg.show_write_warn":
-    "The duplicate-editor problem comes back with it: the same paramset is then editable in the Home Assistant panel and here, with different session assumptions.",
-  "navviews.dlg.show_write_ok": "Show and allow writes",
   "navviews.dlg.mode_on_title": "Switch to embedded mode?",
   "navviews.dlg.mode_on_text":
-    "Home Assistant becomes the owner of identity, CCU credentials and the device editors. This changes what every user of this daemon sees.",
+    "Home Assistant becomes the place for identity, the CCU connection and the device editors, so this Config UI stops offering them. It changes what every user of this daemon sees here; nothing about what Home Assistant or the APIs may do.",
   "navviews.dlg.mode_on_ok": "Switch to embedded",
   "navviews.dlg.mode_off_title": "Leave embedded mode?",
   "navviews.dlg.mode_off_text":
-    "Loom serves its full config surface again and stops refusing the writes it currently rejects for the Home Assistant identity.",
+    "This Config UI serves its full surface again — including the views Home Assistant also provides.",
   "navviews.dlg.mode_off_ok": "Switch to standalone",
   "navviews.dlg.will_hide": "{views} views and {tabs} settings tabs will be hidden.",
   "navviews.dlg.will_show": "{views} views and {tabs} settings tabs come back.",
-  "navviews.dlg.editors_ro":
-    "Paramset, link and schedule editors become read-only for the Home Assistant identity.",
   "navviews.dlg.reset_title": "Reset the {profile} profile?",
   "navviews.dlg.reset_text":
     "All {count} deviations in this profile go back to the shipped defaults. Nothing is written until you save.",
@@ -5427,7 +5417,7 @@ const DE: Catalog = {
     "Eine ausgeblendete Ansicht verschwindet aus der Navigation — für alle Benutzer dieses Daemons. API-Token, Loom-Konten und MQTT bleiben unberührt; die regeln Sie über Rollen und Token. Im eingebetteten Modus entscheiden die mit ⇄ markierten Zeilen zugleich, ob Home Assistant auf diese Fläche schreiben darf.",
   "navviews.mode.title": "In Home Assistant eingebettet",
   "navviews.mode.desc":
-    "Aktivieren Sie das, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon konfiguriert ist. Loom blendet dann aus, was HA bereits besitzt (Anmeldung, CCU-Zugangsdaten, Paramset- und Verknüpfungs-Editoren), und weist die zugehörigen Schreibzugriffe ab.",
+    "Aktivieren Sie das, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon konfiguriert ist. Loom blendet dann aus, was Home Assistant selbst bereitstellt: eigene Anmeldung, Benutzer- und Token-Verwaltung, die CCU-Verbindung, die Geräte-Editoren, Matter und die Auswertungs-Diagramme.",
   "navviews.mode.live": "Aktives Profil",
   "navviews.mode.views_visible": "{visible} von {total} Ansichten sichtbar",
   "navviews.mode.deviations": "{count} Abweichungen vom Standard",
@@ -5458,8 +5448,6 @@ const DE: Catalog = {
   "navviews.row.locked": "Kann nicht ausgeblendet werden — {why}",
   "navviews.row.unavailable": "Nicht verfügbar — {why}",
   "navviews.row.role_admin": "Nur für Administratoren sichtbar.",
-  "navviews.row.write_gated":
-    "Entscheidet zugleich, ob Home Assistant hier schreiben darf.",
   "navviews.row.changed_from": "Geändert · Standard: {default}",
   "navviews.row.default_visible": "sichtbar",
   "navviews.row.default_hidden": "ausgeblendet",
@@ -5484,26 +5472,18 @@ const DE: Catalog = {
   "navviews.toast.error": "Speichern fehlgeschlagen",
   "navviews.dlg.hide_title": "„{surface}“ ausblenden?",
   "navviews.dlg.hide_ok": "Ausblenden",
-  "navviews.dlg.show_write_title": "„{surface}“ wieder einblenden?",
-  "navviews.dlg.show_write_text":
-    "Home Assistant darf dann wieder auf diese Fläche schreiben — im eingebetteten Modus trägt dieser Schalter die Schreibgrenze.",
-  "navviews.dlg.show_write_warn":
-    "Damit kehrt das Doppel-Editor-Problem zurück: dasselbe Paramset ist dann im Home-Assistant-Panel und hier bearbeitbar, mit unterschiedlichen Sitzungsannahmen.",
-  "navviews.dlg.show_write_ok": "Einblenden und Schreiben erlauben",
   "navviews.dlg.mode_on_title": "In den eingebetteten Modus wechseln?",
   "navviews.dlg.mode_on_text":
-    "Home Assistant übernimmt Identität, CCU-Zugangsdaten und die Geräte-Editoren. Das ändert, was jeder Benutzer dieses Daemons sieht.",
+    "Home Assistant wird der Ort für Identität, CCU-Verbindung und Geräte-Editoren, diese Oberfläche bietet sie dann nicht mehr an. Das ändert, was jeder Benutzer hier sieht — nichts daran, was Home Assistant oder die APIs dürfen.",
   "navviews.dlg.mode_on_ok": "Zu eingebettet wechseln",
   "navviews.dlg.mode_off_title": "Eingebetteten Modus verlassen?",
   "navviews.dlg.mode_off_text":
-    "Loom liefert wieder die vollständige Oberfläche aus und weist die Schreibzugriffe der Home-Assistant-Identität nicht mehr ab.",
+    "Diese Oberfläche liefert wieder ihren vollen Umfang aus — auch die Ansichten, die Home Assistant ebenfalls bereitstellt.",
   "navviews.dlg.mode_off_ok": "Zu eigenständig wechseln",
   "navviews.dlg.will_hide":
     "{views} Ansichten und {tabs} Einstellungs-Tabs werden ausgeblendet.",
   "navviews.dlg.will_show":
     "{views} Ansichten und {tabs} Einstellungs-Tabs kommen zurück.",
-  "navviews.dlg.editors_ro":
-    "Paramset-, Verknüpfungs- und Zeitprogramm-Editoren werden für die Home-Assistant-Identität schreibgeschützt.",
   "navviews.dlg.reset_title": "Profil {profile} zurücksetzen?",
   "navviews.dlg.reset_text":
     "Alle {count} Abweichungen dieses Profils gehen auf die Standardwerte zurück. Geschrieben wird erst beim Speichern.",

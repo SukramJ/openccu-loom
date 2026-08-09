@@ -20,7 +20,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
-	"github.com/SukramJ/openccu-loom/internal/north/ui/surface"
 )
 
 // Deps bundles every collaborator the REST router needs.
@@ -198,7 +197,6 @@ type Deps struct {
 	// updated in place when the profile is saved, so a change takes
 	// effect without a daemon restart. Nil leaves every write ungated,
 	// which is the standalone behaviour.
-	SurfacePolicy *surface.Policy
 	// CentralCounter reports how many CCUs the daemon serves. Two shipped
 	// surface defaults depend on it: Home Assistant addresses one CCU per
 	// config entry, so on a multi-CCU daemon it cannot own the config
@@ -716,14 +714,6 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.AuthRequire != nil {
 				pr.Use(d.AuthRequire)
 			}
-			// In the embedded profile a hidden surface also refuses its
-			// writes for the HA Ingress passthrough identity. Mounted
-			// after AuthRequire so the identity is already resolved, and
-			// before every write route so no endpoint can be added
-			// outside the gate by accident.
-			if d.SurfacePolicy != nil {
-				pr.Use(middleware.SurfaceWrites(d.SurfacePolicy, "/api/v1"))
-			}
 			if d.Config != nil {
 				pr.Get("/config", handlers.Config(d.Config))
 			}
@@ -1228,7 +1218,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// editor's write needs admin.
 				pr.Get("/ui/surfaces", handlers.GetUISurfaces(d.ConfigAdmin, d.CentralCounter))
 				pr.With(admin).Put("/ui/surfaces",
-					handlers.PutUISurfaces(d.ConfigAdmin, d.AuditRecorder, d.SurfacePolicy, d.CentralCounter))
+					handlers.PutUISurfaces(d.ConfigAdmin, d.AuditRecorder, d.CentralCounter))
 			}
 			if d.UserAdmin != nil {
 				pr.With(admin).Get("/users", handlers.ListUsersV2(d.UserAdmin))

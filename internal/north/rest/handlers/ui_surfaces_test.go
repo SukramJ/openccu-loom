@@ -26,17 +26,6 @@ func surfaceSvc(ui config.NorthUI) *fakeConfigAdminSvc {
 	}
 }
 
-// recordingPolicy captures the config a save pushed into the live policy.
-type recordingPolicy struct {
-	got    config.NorthUI
-	called bool
-}
-
-func (p *recordingPolicy) Set(ui config.NorthUI) {
-	p.got = ui
-	p.called = true
-}
-
 func decodeSurfaces(t *testing.T, body []byte) SurfacesResponse {
 	t.Helper()
 	var out SurfacesResponse
@@ -97,7 +86,6 @@ func TestPutUISurfacesStoresSparsely(t *testing.T) {
 	t.Parallel()
 
 	svc := surfaceSvc(config.NorthUI{})
-	policy := &recordingPolicy{}
 	body := `{"profiles":{"standalone":{
 		"nav.alarm":"hidden",
 		"nav.inbox":"visible",
@@ -105,7 +93,7 @@ func TestPutUISurfacesStoresSparsely(t *testing.T) {
 	}}}`
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces", strings.NewReader(body))
-	PutUISurfaces(svc, nil, policy, nil)(rr, req)
+	PutUISurfaces(svc, nil, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
@@ -118,9 +106,6 @@ func TestPutUISurfacesStoresSparsely(t *testing.T) {
 	if len(stored) != 1 || stored["nav.alarm"] != string(config.SurfaceHidden) {
 		t.Errorf("stored profile = %v, want only nav.alarm:hidden", stored)
 	}
-	if !policy.called {
-		t.Error("the live policy was not updated — the save would only take effect after a restart")
-	}
 }
 
 // TestPutUISurfacesRejectsFloorHide pins the server half of the floor.
@@ -129,11 +114,10 @@ func TestPutUISurfacesRejectsFloorHide(t *testing.T) {
 	t.Parallel()
 
 	svc := surfaceSvc(config.NorthUI{})
-	policy := &recordingPolicy{}
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"profiles":{"standalone":{"settings.navviews":"hidden"}}}`))
-	PutUISurfaces(svc, nil, policy, nil)(rr, req)
+	PutUISurfaces(svc, nil, nil)(rr, req)
 
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422: %s", rr.Code, rr.Body)
@@ -143,9 +127,6 @@ func TestPutUISurfacesRejectsFloorHide(t *testing.T) {
 	}
 	if svc.putCalled {
 		t.Error("a rejected profile was persisted anyway")
-	}
-	if policy.called {
-		t.Error("a rejected profile reached the live policy")
 	}
 }
 
@@ -158,7 +139,7 @@ func TestPutUISurfacesRejectsUnknownState(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"profiles":{"standalone":{"nav.alarm":"off"}}}`))
-	PutUISurfaces(svc, nil, &recordingPolicy{}, nil)(rr, req)
+	PutUISurfaces(svc, nil, nil)(rr, req)
 
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422: %s", rr.Code, rr.Body)
@@ -179,11 +160,10 @@ func TestPutUISurfacesTogglesModeWithoutTouchingProfiles(t *testing.T) {
 			config.ProfileEmbedded: {"nav.matter": config.SurfaceVisible},
 		},
 	})
-	policy := &recordingPolicy{}
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"embedded":true}`))
-	PutUISurfaces(svc, nil, policy, nil)(rr, req)
+	PutUISurfaces(svc, nil, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
@@ -194,9 +174,6 @@ func TestPutUISurfacesTogglesModeWithoutTouchingProfiles(t *testing.T) {
 	}
 	if got.Profiles[config.ProfileEmbedded]["nav.matter"] != string(config.SurfaceVisible) {
 		t.Errorf("the prepared embedded override was lost: %v", got.Profiles)
-	}
-	if !policy.got.IsEmbedded() {
-		t.Error("the live policy did not learn about the new mode")
 	}
 }
 
@@ -209,7 +186,7 @@ func TestPutUISurfacesRejectsUnknownProfile(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"profiles":{"kiosk":{"nav.alarm":"hidden"}}}`))
-	PutUISurfaces(svc, nil, &recordingPolicy{}, nil)(rr, req)
+	PutUISurfaces(svc, nil, nil)(rr, req)
 
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422: %s", rr.Code, rr.Body)
@@ -229,7 +206,7 @@ func TestUISurfacesUnavailableWithoutService(t *testing.T) {
 
 	rr = httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces", strings.NewReader(`{}`))
-	PutUISurfaces(nil, nil, nil, nil)(rr, req)
+	PutUISurfaces(nil, nil, nil)(rr, req)
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Errorf("PUT status = %d, want 503", rr.Code)
 	}
@@ -250,7 +227,7 @@ func TestPutUISurfacesIsAudited(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"embedded":true}`))
-	PutUISurfaces(svc, rec, &recordingPolicy{}, nil)(rr, req)
+	PutUISurfaces(svc, rec, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
@@ -281,7 +258,7 @@ func TestPutUISurfacesSurvivesNilRecorder(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"embedded":true}`))
-	PutUISurfaces(svc, nil, nil, nil)(rr, req)
+	PutUISurfaces(svc, nil, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
