@@ -115,10 +115,11 @@ surfaces, only cheaper to hit.
 ```yaml
 north:
   ui:
-    embedded: false          # master toggle — which profile is live
+    embedded: false            # does Home Assistant own the config surface?
+    embedded_scope: inside_ha  # where that declaration applies (default)
     profiles:
       standalone:
-        nav.alarm: hidden    # sparse: only deviations from the shipped default
+        nav.alarm: hidden      # sparse: only deviations from the shipped default
       embedded:
         nav.matter: visible
 ```
@@ -126,6 +127,37 @@ north:
 Two profiles, fixed names, no user-defined profiles. A third mode has no meaning today —
 "who owns the config surface" has exactly two answers — and every additional profile
 doubles the review surface of the default table.
+
+### 2.3a The declaration and its reach are two questions
+
+`embedded` says Home Assistant owns the config surface. `embedded_scope` says whether that
+ownership should also shape the UI of someone who opened this daemon's **own** address.
+
+They come apart because the reason for hiding is specific: *Home Assistant already shows
+this editor, and two doors to one paramset confuse.* That holds inside the HA panel. It
+does not hold for a browser deliberately pointed at Loom — that person chose this UI over
+the panel, and handing them a trimmed one serves nothing.
+
+So `inside_ha` is the default: the embedded profile applies to requests that arrive
+through Home Assistant, and a direct visit gets `standalone`. `always` restores the
+daemon-wide behaviour of 0.55.x for operators who want one reduced UI everywhere.
+
+**The signal is `X-Ingress-Path`, not the auth scheme.** The scheme cannot answer the
+question: signing in to Loom from inside the Ingress panel produces a `session` identity
+indistinguishable from a direct visit (`IngressPassthrough` stands down the moment real
+credentials resolve), and `bearer` covers both the remote proxy panel and the Home
+Assistant integration — which never requests this payload at all. The header is set by the
+Supervisor on every Ingress request and forwarded by the remote proxy add-on (ADR 0054 §4).
+
+**This is not an authorization boundary and must never become one.** A client on the
+directly-exposed port can send the header; all it buys them is a shorter menu. That is
+acceptable precisely because hiding is navigation — §2.8. If anything is ever gated on
+this signal beyond navigation, the header stops being a sound input.
+
+A closely related idea was rejected and stays rejected: deriving `embedded` **itself** from
+the Ingress signal. Being proxied by HA answers "am I behind HA?", not "does HA own my
+config surface?" — the add-on runs in deployments that never configure the integration.
+The declaration stays the operator's; only its reach is scoped.
 
 **Sparse by construction.** An absent key means "shipped default", so a new view in 0.56
 appears with the default its PR chose, in both profiles, without touching anyone's stored
@@ -135,6 +167,9 @@ edit and every later view would be invisible until an admin noticed.
 ### 2.4 Resolution order
 
 ```
+profile := embedded && (scope == always || requestCameThroughHA)
+             ? "embedded" : "standalone"
+
 visible := shippedDefault(surface, profile)
            |> override(profile)          // operator's stored deviation
            |> floor(surface, profile)    // forced visible, never overridable

@@ -59,7 +59,16 @@ type SurfaceInfo struct {
 type SurfacesResponse struct {
 	// Embedded reports the master toggle.
 	Embedded bool `json:"embedded"`
-	// Profile names the live profile.
+	// EmbeddedScope reports where that toggle applies: "inside_ha"
+	// (default) or "always".
+	EmbeddedScope string `json:"embedded_scope"`
+	// InsideHA reports whether THIS request reached the daemon through
+	// Home Assistant. With the default scope it is what decides Profile,
+	// so the editor needs it to explain why the live profile reads the
+	// way it does — the same config answers differently on the other
+	// door.
+	InsideHA bool `json:"inside_ha"`
+	// Profile names the profile served to this request.
 	Profile string `json:"profile"`
 	// Profiles carries the stored, sparse overrides per profile.
 	Profiles map[string]map[string]string `json:"profiles"`
@@ -80,8 +89,27 @@ type SurfacesResponse struct {
 // optional: the editor saves rows without touching the mode, and the
 // master toggle flips the mode without resending every row.
 type SurfacesRequest struct {
-	Embedded *bool                        `json:"embedded,omitempty"`
-	Profiles map[string]map[string]string `json:"profiles,omitempty"`
+	Embedded      *bool                        `json:"embedded,omitempty"`
+	EmbeddedScope *string                      `json:"embedded_scope,omitempty"`
+	Profiles      map[string]map[string]string `json:"profiles,omitempty"`
+}
+
+// insideHomeAssistant reports whether a request reached the daemon
+// through Home Assistant: the Supervisor sets X-Ingress-Path on every
+// Ingress request, and the remote proxy add-on forwards it (ADR 0054).
+//
+// Deliberately not the auth scheme. Signing in to Loom from inside the
+// Ingress panel produces a session identity indistinguishable from a
+// direct visit — `IngressPassthrough` stands down the moment real
+// credentials resolve — and the bearer scheme covers both the remote
+// panel and the Home Assistant integration, which never asks for this
+// payload at all.
+//
+// The header is forgeable on the directly-exposed port. That is
+// acceptable only because the answer shapes navigation and nothing
+// else: forging it shortens the forger's own menu.
+func insideHomeAssistant(r *http.Request) bool {
+	return r.Header.Get("X-Ingress-Path") != ""
 }
 
 // CentralCounter reports how many CCUs the daemon serves. Two shipped
@@ -105,7 +133,12 @@ func GetUISurfaces(svc ConfigAdminService, centrals CentralCounter) http.Handler
 		if !ok {
 			return
 		}
-		JSON(w, http.StatusOK, surfacesResponse(ui, centrals.count()))
+		// The answer depends on the door the request came through, so a
+		// cache that served one door's copy to the other would hand an
+		// operator the wrong navigation.
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Vary", "X-Ingress-Path")
+		JSON(w, http.StatusOK, surfacesResponse(ui, centrals.count(), insideHomeAssistant(r)))
 	}
 }
 
@@ -126,6 +159,9 @@ func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, centrals CentralC
 		if req.Embedded != nil {
 			v := *req.Embedded
 			next.North.UI.Embedded = &v
+		}
+		if req.EmbeddedScope != nil {
+			next.North.UI.EmbeddedScope = config.EmbeddedScope(*req.EmbeddedScope)
 		}
 		if req.Profiles != nil {
 			profiles, perr := normalizeProfiles(req.Profiles, surface.Fleet{Centrals: centrals.count()})
@@ -166,7 +202,7 @@ func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, centrals CentralC
 				Note:      "section=" + string(configstore.SectionUI) + " surfaces profile=" + next.North.UI.ActiveProfile(),
 			})
 		}
-		JSON(w, http.StatusOK, surfacesResponse(next.North.UI, centrals.count()))
+		JSON(w, http.StatusOK, surfacesResponse(next.North.UI, centrals.count(), insideHomeAssistant(r)))
 	}
 }
 
@@ -224,16 +260,18 @@ type surfaceError struct{ msg string }
 func (e *surfaceError) Error() string { return e.msg }
 
 // surfacesResponse renders the payload from a resolved NorthUI.
-func surfacesResponse(ui config.NorthUI, centrals int) SurfacesResponse {
+func surfacesResponse(ui config.NorthUI, centrals int, insideHA bool) SurfacesResponse {
 	fleet := surface.Fleet{Centrals: centrals}
-	res := surface.ResolveFleet(ui, fleet)
+	res := surface.ResolveFleet(ui, insideHA, fleet)
 	out := SurfacesResponse{
-		Embedded:  ui.IsEmbedded(),
-		Profile:   res.Profile,
-		Profiles:  map[string]map[string]string{},
-		Effective: make(map[string]bool, len(res.Visible)),
-		Centrals:  centrals,
-		Surfaces:  make([]SurfaceInfo, 0, len(surface.Registry())),
+		Embedded:      ui.IsEmbedded(),
+		EmbeddedScope: string(ui.EmbeddedScopeOrDefault()),
+		InsideHA:      insideHA,
+		Profile:       res.Profile,
+		Profiles:      map[string]map[string]string{},
+		Effective:     make(map[string]bool, len(res.Visible)),
+		Centrals:      centrals,
+		Surfaces:      make([]SurfaceInfo, 0, len(surface.Registry())),
 	}
 	for _, name := range []string{config.ProfileStandalone, config.ProfileEmbedded} {
 		stored := ui.SurfaceOverrides(name)

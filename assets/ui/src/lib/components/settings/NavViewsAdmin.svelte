@@ -14,7 +14,7 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
-  import type { ProfileName, SurfaceInfo } from "$lib/api/surface-types";
+  import type { EmbeddedScope, ProfileName, SurfaceInfo } from "$lib/api/surface-types";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -247,6 +247,18 @@
     }
   }
 
+  async function onScopeChange(next: EmbeddedScope) {
+    if (next === surfacesStore.embeddedScope) return;
+    try {
+      await surfacesStore.setEmbeddedScope(next);
+      toastStore.success(t("navviews.toast.scope_saved"));
+    } catch (e) {
+      toastStore.error(
+        `${t("navviews.toast.error")}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
   async function onResetProfile() {
     const ok = await confirmStore.ask({
       title: t("navviews.dlg.reset_title", { profile: profileLabel(editing) }),
@@ -323,6 +335,39 @@
           onCheckedChange={(v) => void onMasterToggle(v)}
         />
       </div>
+
+      {#if surfacesStore.embedded}
+        <!-- Where the declaration applies. Only shown while it is on:
+             the question is meaningless otherwise, and an inert control
+             in a settings card reads as a control that does nothing. -->
+        <div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+          <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {t("navviews.scope.title")}
+          </h4>
+          <div class="mt-2 flex flex-col gap-2">
+            {#each ["inside_ha", "always"] as const as opt (opt)}
+              <label class="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="radio"
+                  name="embedded-scope"
+                  class="mt-1 accent-brand-600"
+                  checked={surfacesStore.embeddedScope === opt}
+                  onchange={() => void onScopeChange(opt)}
+                />
+                <span class="min-w-0">
+                  <span class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {t(`navviews.scope.${opt}`)}
+                  </span>
+                  <span class="block max-w-prose text-xs text-slate-600 dark:text-slate-400">
+                    {t(`navviews.scope.${opt}.desc`)}
+                  </span>
+                </span>
+              </label>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
       <div
         class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-200 pt-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400"
       >
@@ -331,6 +376,16 @@
           <strong class="text-slate-900 dark:text-slate-100">
             {profileLabel(surfacesStore.profile)}
           </strong>
+          <!-- Without this the live profile reads as a contradiction on a
+               direct visit: the toggle says embedded, the profile says
+               standalone, and nothing on screen connects the two. -->
+          {#if surfacesStore.embedded && surfacesStore.embeddedScope === "inside_ha"}
+            <span class="text-xs">
+              ({surfacesStore.insideHA
+                ? t("navviews.scope.here.inside")
+                : t("navviews.scope.here.direct")})
+            </span>
+          {/if}
         </span>
         <span class="tabular-nums">
           {t("navviews.mode.views_visible", {

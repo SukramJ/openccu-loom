@@ -17,6 +17,8 @@ const { surfacesStore } = await import("./surfaces.svelte");
 function response(over: Partial<SurfacesResponse> = {}): SurfacesResponse {
   return {
     embedded: false,
+    embedded_scope: "inside_ha",
+    inside_ha: false,
     profile: "standalone",
     profiles: {},
     centrals: 1,
@@ -204,6 +206,26 @@ describe("surfacesStore editing", () => {
     expect(putUISurfaces).toHaveBeenCalledWith({ embedded: true });
     expect(surfacesStore.embedded).toBe(true);
     expect(surfacesStore.profile).toBe("embedded");
+  });
+
+  it("adopts the profile the daemon serves this browser, not the toggle", async () => {
+    // Embedded is on, the scope is the default, and this browser did not
+    // come through Home Assistant — so the live profile is standalone
+    // while the toggle stays on. The editor has to show both, or the
+    // operator cannot find the switch they set.
+    putUISurfaces.mockResolvedValue(
+      response({
+        embedded: true,
+        embedded_scope: "inside_ha",
+        inside_ha: false,
+        profile: "standalone",
+      }),
+    );
+    await surfacesStore.setEmbeddedScope("inside_ha");
+    expect(putUISurfaces).toHaveBeenCalledWith({ embedded_scope: "inside_ha" });
+    expect(surfacesStore.embedded).toBe(true);
+    expect(surfacesStore.insideHA).toBe(false);
+    expect(surfacesStore.profile).toBe("standalone");
   });
 });
 

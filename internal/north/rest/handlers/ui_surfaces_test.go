@@ -79,6 +79,133 @@ func TestGetUISurfacesServesRegistryAndResolution(t *testing.T) {
 	}
 }
 
+// TestEmbeddedScopeDecidesPerRequest is the whole point of the scope
+// setting: ONE config, two doors, two answers.
+//
+// It goes through the handler rather than the resolver because the
+// resolver takes `insideHA` as an argument — a test that passes it
+// itself proves only that the resolver honours what it is told, never
+// that a request's own headers decide it. The header is the production
+// input, so the request has to carry it.
+func TestEmbeddedScopeDecidesPerRequest(t *testing.T) {
+	t.Parallel()
+
+	embedded := true
+	cases := []struct {
+		name      string
+		scope     config.EmbeddedScope
+		header    string
+		want      string
+		wantInHA  bool
+		wantScope config.EmbeddedScope
+	}{
+		{
+			name: "default scope, through Home Assistant", scope: "",
+			header: "/api/hassio_ingress/tok", want: config.ProfileEmbedded,
+			wantInHA: true, wantScope: config.EmbeddedScopeInsideHA,
+		},
+		{
+			// The case the setting exists for: someone opened this daemon's
+			// own URL, so the duplicate-editor argument does not apply.
+			name: "default scope, direct visit", scope: "",
+			header: "", want: config.ProfileStandalone,
+			wantInHA: false, wantScope: config.EmbeddedScopeInsideHA,
+		},
+		{
+			name: "always, through Home Assistant", scope: config.EmbeddedScopeAlways,
+			header: "/api/hassio_ingress/tok", want: config.ProfileEmbedded,
+			wantInHA: true, wantScope: config.EmbeddedScopeAlways,
+		},
+		{
+			name: "always, direct visit", scope: config.EmbeddedScopeAlways,
+			header: "", want: config.ProfileEmbedded,
+			wantInHA: false, wantScope: config.EmbeddedScopeAlways,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := surfaceSvc(config.NorthUI{Embedded: &embedded, EmbeddedScope: tc.scope})
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/ui/surfaces", http.NoBody)
+			if tc.header != "" {
+				req.Header.Set("X-Ingress-Path", tc.header)
+			}
+			rr := httptest.NewRecorder()
+			GetUISurfaces(svc, nil)(rr, req)
+
+			got := decodeSurfaces(t, rr.Body.Bytes())
+			if got.Profile != tc.want {
+				t.Errorf("profile = %q, want %q", got.Profile, tc.want)
+			}
+			if got.InsideHA != tc.wantInHA {
+				t.Errorf("inside_ha = %v, want %v", got.InsideHA, tc.wantInHA)
+			}
+			if got.EmbeddedScope != string(tc.wantScope) {
+				t.Errorf("embedded_scope = %q, want %q", got.EmbeddedScope, tc.wantScope)
+			}
+			// The master toggle reports the declaration, not the outcome —
+			// the editor must still show "embedded is on" on a direct visit,
+			// or the operator cannot find the switch they set.
+			if !got.Embedded {
+				t.Error("embedded reported false while the toggle is on")
+			}
+			// A cache that served one door's copy to the other would hand an
+			// operator the wrong navigation.
+			if cc := rr.Header().Get("Cache-Control"); cc != "no-store" {
+				t.Errorf("Cache-Control = %q, want no-store", cc)
+			}
+		})
+	}
+}
+
+// TestPutUISurfacesPersistsEmbeddedScope pins the write half: the editor
+// can move the scope, and the answer it gets back reflects the new value
+// rather than the one it sent.
+func TestPutUISurfacesPersistsEmbeddedScope(t *testing.T) {
+	t.Parallel()
+
+	svc := surfaceSvc(config.NorthUI{})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
+		strings.NewReader(`{"embedded":true,"embedded_scope":"always"}`))
+	rr := httptest.NewRecorder()
+	PutUISurfaces(svc, nil, nil)(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body)
+	}
+	got := decodeSurfaces(t, rr.Body.Bytes())
+	if got.EmbeddedScope != string(config.EmbeddedScopeAlways) {
+		t.Errorf("embedded_scope = %q, want always", got.EmbeddedScope)
+	}
+	// No Ingress header on this request, so "always" is the only reason
+	// the embedded profile can come back.
+	if got.Profile != config.ProfileEmbedded {
+		t.Errorf("profile = %q, want embedded", got.Profile)
+	}
+}
+
+// TestPutUISurfacesRejectsUnknownEmbeddedScope pins that a typo fails
+// loudly. Falling back to the default would keep hiding views on direct
+// access — exactly what the operator was switching off.
+func TestPutUISurfacesRejectsUnknownEmbeddedScope(t *testing.T) {
+	t.Parallel()
+
+	svc := surfaceSvc(config.NorthUI{})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
+		strings.NewReader(`{"embedded":true,"embedded_scope":"allways"}`))
+	rr := httptest.NewRecorder()
+	PutUISurfaces(svc, nil, nil)(rr, req)
+
+	if rr.Code == http.StatusOK {
+		t.Fatalf("a misspelled scope was accepted: %s", rr.Body)
+	}
+	if !strings.Contains(rr.Body.String(), "embedded_scope") {
+		t.Errorf("the rejection does not name the offending field: %s", rr.Body)
+	}
+}
+
 // TestPutUISurfacesStoresSparsely pins that a client may send its whole
 // form while the daemon stores only real deviations. A stored entry that
 // repeats today's default would pin it forever.
@@ -163,6 +290,11 @@ func TestPutUISurfacesTogglesModeWithoutTouchingProfiles(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/ui/surfaces",
 		strings.NewReader(`{"embedded":true}`))
+	// Saved from inside the Home Assistant panel, which is where an
+	// operator turning this on normally sits. Without the header the
+	// default scope would answer "standalone" for this very request — see
+	// TestEmbeddedScopeDecidesPerRequest.
+	req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/tok")
 	PutUISurfaces(svc, nil, nil)(rr, req)
 
 	if rr.Code != http.StatusOK {

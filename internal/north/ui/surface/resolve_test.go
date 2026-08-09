@@ -241,8 +241,8 @@ func TestRegistryIDsAreUniqueAndPrefixed(t *testing.T) {
 func TestMultiCentralWidensTheEmbeddedDefaults(t *testing.T) {
 	t.Parallel()
 
-	single := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), Fleet{Centrals: 1})
-	fleet := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), Fleet{Centrals: 3})
+	single := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), true, Fleet{Centrals: 1})
+	fleet := ResolveFleet(uiWith(true, config.ProfileEmbedded, nil), true, Fleet{Centrals: 3})
 
 	widened := []ID{
 		"settings.ccus",
@@ -278,7 +278,7 @@ func TestMultiCentralLeavesStandaloneAlone(t *testing.T) {
 
 	res := ResolveFleet(uiWith(false, config.ProfileStandalone, map[string]config.SurfaceState{
 		"settings.ccus": config.SurfaceHidden,
-	}), Fleet{Centrals: 4})
+	}), true, Fleet{Centrals: 4})
 	if res.IsVisible("settings.ccus") {
 		t.Error("the fleet rule overrode an explicit standalone hide")
 	}
@@ -292,7 +292,7 @@ func TestMultiCentralDefaultIsStillOverridable(t *testing.T) {
 
 	res := ResolveFleet(uiWith(true, config.ProfileEmbedded, map[string]config.SurfaceState{
 		"settings.ccus": config.SurfaceHidden,
-	}), Fleet{Centrals: 3})
+	}), true, Fleet{Centrals: 3})
 	if res.IsVisible("settings.ccus") {
 		t.Error("an explicit hide was ignored on a multi-CCU daemon")
 	}
@@ -323,5 +323,5 @@ func TestNormalizeFollowsTheFleetDefault(t *testing.T) {
 // Production always knows its fleet size and calls ResolveFleet, so the
 // shorthand lives here rather than in the package's surface.
 func resolveSingle(ui config.NorthUI) Resolution {
-	return ResolveFleet(ui, Fleet{})
+	return ResolveFleet(ui, true, Fleet{})
 }

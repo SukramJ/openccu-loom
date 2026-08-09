@@ -1080,6 +1080,28 @@ export async function mockHiddenSurfaces(page: Page, ids: string[]): Promise<voi
   await page.route('**/api/v1/ui/surfaces', (route) => route.fulfill({ json: body }));
 }
 
+/**
+ * Serves the surface registry with the embedded mode on.
+ *
+ * `insideHA` is the daemon's own answer for the request, not something
+ * the browser can decide: it comes from the Supervisor's X-Ingress-Path
+ * header, which a test cannot set on the SPA's own fetches. Mocking the
+ * resolved payload is therefore the only way to drive the direct-visit
+ * state from a browser test; the header→profile step is pinned in Go by
+ * TestEmbeddedScopeDecidesPerRequest.
+ */
+export async function mockEmbeddedMode(
+  page: Page,
+  opts: { scope: 'inside_ha' | 'always'; insideHA: boolean },
+): Promise<void> {
+  const body = fixture('ui-surfaces.json') as Record<string, unknown>;
+  body.embedded = true;
+  body.embedded_scope = opts.scope;
+  body.inside_ha = opts.insideHA;
+  body.profile = opts.scope === 'always' || opts.insideHA ? 'embedded' : 'standalone';
+  await page.route('**/api/v1/ui/surfaces', (route) => route.fulfill({ json: body }));
+}
+
 export async function addStylesForStableScreenshots(page: Page): Promise<void> {
   await page.addStyleTag({
     content: `

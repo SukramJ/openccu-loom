@@ -1,5 +1,19 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.56.0
+
+- **New: the reduced view is now limited to Home Assistant.** If you
+  turned on "Embedded in Home Assistant", the trimmed menu used to apply
+  everywhere — including when you opened OpenCCU-Loom's own address in a
+  browser. It now applies where Home Assistant shows the interface, and
+  a direct visit gets the full menu back. The point of hiding is that
+  Home Assistant already offers the same editor; if you deliberately
+  open Loom itself, that reason does not apply.
+
+  You can change this under **Settings → Navigation & views** →
+  "Where does the embedded mode apply?". Pick "Everywhere" for the
+  previous behaviour.
+
 ## 0.55.3
 
 - **Fixed: the "Schedules" and "Direct links" lists no longer offer a

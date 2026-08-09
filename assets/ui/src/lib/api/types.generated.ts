@@ -8474,7 +8474,25 @@ export interface components {
             /** @description The master toggle — whether Home Assistant owns this daemon's config surface. */
             embedded: boolean;
             /**
-             * @description The live profile.
+             * @description Where the master toggle applies. `inside_ha` (the default)
+             *     limits the embedded profile to requests that arrive through
+             *     Home Assistant, so a browser pointed straight at this daemon
+             *     keeps the full UI — the duplicate-editor argument that
+             *     motivates hiding does not apply to it. `always` restores the
+             *     daemon-wide behaviour.
+             * @enum {string}
+             */
+            embedded_scope: "inside_ha" | "always";
+            /**
+             * @description Whether THIS request reached the daemon through Home
+             *     Assistant, decided by the Supervisor's `X-Ingress-Path`
+             *     header (the remote proxy add-on forwards it). With the
+             *     default scope it is what selects `profile`, so the same
+             *     configuration answers differently on the other door.
+             */
+            inside_ha: boolean;
+            /**
+             * @description The profile served to this request.
              * @enum {string}
              */
             profile: "standalone" | "embedded";
@@ -8501,12 +8519,21 @@ export interface components {
             surfaces: components["schemas"]["SurfaceInfo"][];
         };
         /**
-         * @description Both fields are optional. Omitting `profiles` leaves the stored
-         *     overrides untouched; omitting `embedded` leaves the mode as it is.
+         * @description Every field is optional. Omitting `profiles` leaves the stored
+         *     overrides untouched; omitting `embedded` or `embedded_scope`
+         *     leaves the mode as it is.
          */
         SurfacesRequest: {
             /** @description Flip the master toggle. */
             embedded?: boolean;
+            /**
+             * @description Move where the master toggle applies. An unrecognised value
+             *     is rejected rather than falling back to the default — a typo
+             *     would otherwise keep hiding views on direct access, which is
+             *     what the operator was switching off.
+             * @enum {string}
+             */
+            embedded_scope?: "inside_ha" | "always";
             /**
              * @description Full desired override set per profile. The daemon reduces it
              *     to the sparse form before persisting.
