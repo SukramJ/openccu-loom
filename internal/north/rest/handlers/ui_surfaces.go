@@ -40,6 +40,10 @@ type SurfaceInfo struct {
 	WarnProfile string `json:"warn_profile,omitempty"`
 	// Parent names the surface this one lives inside.
 	Parent string `json:"parent,omitempty"`
+	// Opens names the editor this read-only overview hands off to. While
+	// that editor is hidden the overview stays, but its rows stop linking
+	// into a tab that is not there.
+	Opens string `json:"opens,omitempty"`
 	// RoleAdmin marks surfaces only admins ever see.
 	RoleAdmin bool `json:"role_admin,omitempty"`
 	// MultiCentralVisible marks surfaces whose embedded default flips
@@ -264,6 +268,7 @@ func surfacesResponse(ui config.NorthUI, centrals int) SurfacesResponse {
 			Warn:        string(s.Warn),
 			WarnProfile: s.WarnProfile,
 			Parent:      string(s.Parent),
+			Opens:       string(s.Opens),
 			RoleAdmin:   s.RoleAdmin,
 			HAOwns:      s.HAOwns,
 

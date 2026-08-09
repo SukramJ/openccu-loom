@@ -64,6 +64,12 @@ function response(over: Partial<SurfacesResponse> = {}): SurfacesResponse {
         defaults: { standalone: true, embedded: false },
         parent: "device.configure",
       },
+      {
+        id: "nav.links",
+        group: "automation",
+        defaults: { standalone: true, embedded: true },
+        opens: "device.configure.links",
+      },
     ],
     ...over,
   };
@@ -88,6 +94,34 @@ describe("surfacesStore.visible", () => {
     // A view this build knows but the daemon does not (a downgrade, or a
     // newer SPA against an older daemon) must render, not vanish.
     expect(surfacesStore.visible("nav.from_the_future")).toBe(true);
+  });
+});
+
+describe("surfacesStore.opensVisible", () => {
+  it("follows the editor a read-only overview hands off to", async () => {
+    // The list itself stays visible either way — what the answer decides
+    // is whether its rows may link into a tab that is not there.
+    expect(surfacesStore.visible("nav.links")).toBe(true);
+    expect(surfacesStore.opensVisible("nav.links")).toBe(true);
+
+    getUISurfaces.mockResolvedValue(
+      response({
+        effective: {
+          "nav.links": true,
+          "device.configure": false,
+          "device.configure.links": false,
+        },
+      }),
+    );
+    await surfacesStore.load();
+
+    expect(surfacesStore.visible("nav.links")).toBe(true);
+    expect(surfacesStore.opensVisible("nav.links")).toBe(false);
+  });
+
+  it("lets a view without a declared editor link freely", () => {
+    expect(surfacesStore.opens("nav.devices")).toBeUndefined();
+    expect(surfacesStore.opensVisible("nav.devices")).toBe(true);
   });
 });
 

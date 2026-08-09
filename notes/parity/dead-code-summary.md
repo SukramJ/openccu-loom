@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: e766f15e
-HEAD: e766f15e
+Generated: 9944174a
+HEAD: 9944174a
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27997 |
+| Total Exported | 27998 |
 | Reachable | 4951 |
-| Whitelisted | 20082 |
+| Whitelisted | 20083 |
 | **Unreachable** | **2964** |
 
 ## Top-20 Packages by Dead Code

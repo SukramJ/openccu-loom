@@ -7,11 +7,16 @@
   which is where a program is changed. The daemon derives this list from
   channel types alone, so opening it costs no CCU traffic even on a
   large fleet.
+
+  When the surface profile hides that editor the catalogue stays and the
+  rows stop linking — see the `opens` relation in
+  notes/concepts/ui-surface-profiles.md.
 -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { ScheduleDeviceSummary } from "$lib/api/types";
+  import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
@@ -72,6 +77,10 @@
   function href(item: ScheduleDeviceSummary): string {
     return `#/devices/${encodeURIComponent(item.address)}?tab=schedule`;
   }
+
+  // Whether that tab exists in this profile at all. Hidden means the
+  // rows lose their link, not that the list loses its rows.
+  const linkable = $derived(surfacesStore.opensVisible("nav.schedules"));
 </script>
 
 <section class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -79,6 +88,15 @@
 
   {#if loadError}
     <ErrorState message={loadError} onRetry={load} class="mb-4" />
+  {/if}
+
+  {#if !linkable}
+    <p
+      class="mb-4 flex items-start gap-2 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-2 text-sm text-[var(--ha-secondary-text-color)]"
+    >
+      <Icon name="mdi:information-outline" class="mt-0.5 shrink-0" />
+      <span>{t("schedules.editor_hidden")}</span>
+    </p>
   {/if}
 
   {#if loading}
@@ -105,8 +123,15 @@
       <ul class="flex flex-col gap-3">
         {#each filtered as item (item.central + "|" + item.address)}
           <li>
-            <a href={href(item)} class="block no-underline">
-              <Card class="flex flex-wrap items-center gap-2 p-4 hover:border-brand-500">
+            <svelte:element
+              this={linkable ? "a" : "div"}
+              href={linkable ? href(item) : undefined}
+              class="block no-underline"
+            >
+              <Card
+                class={"flex flex-wrap items-center gap-2 p-4" +
+                  (linkable ? " hover:border-brand-500" : "")}
+              >
                 <Icon
                   name="mdi:calendar-clock"
                   class="shrink-0 text-[var(--ha-secondary-text-color)]"
@@ -128,7 +153,7 @@
                   <Badge variant="muted">{item.central}</Badge>
                 {/if}
               </Card>
-            </a>
+            </svelte:element>
           </li>
         {/each}
       </ul>

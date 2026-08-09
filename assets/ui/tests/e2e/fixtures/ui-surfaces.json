@@ -147,7 +147,8 @@
       "defaults": {
         "embedded": true,
         "standalone": true
-      }
+      },
+      "opens": "device.configure.links"
     },
     {
       "id": "nav.schedules",
@@ -155,7 +156,8 @@
       "defaults": {
         "embedded": true,
         "standalone": true
-      }
+      },
+      "opens": "device.configure.schedule"
     },
     {
       "id": "nav.messages",

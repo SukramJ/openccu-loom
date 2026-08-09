@@ -1,5 +1,24 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.55.3
+
+- **Fixed: the "Schedules" and "Direct links" lists no longer offer a
+  jump that leads nowhere.** If you switched off "Configure → Schedule"
+  (or "→ Links") under **Settings → Navigation & views**, the entries in
+  those lists still linked to the device — and landed on a page where
+  that tab was gone. The lists themselves stay: they answer *which*
+  devices have a program, which you cannot see anywhere else. Their
+  entries simply stop linking, and a line above the list tells you why
+  and where to change it.
+
+  The editor now says so on both sides too, so you can see the effect
+  where you make the change.
+
+- **Fixed: a note in the view editor described a rule that no longer
+  exists.** The text still claimed that certain rows also control
+  whether Home Assistant may make changes. That rule was removed in
+  0.55.2; the sentence is now gone as well.
+
 ## 0.55.2
 
 - **New: a "Schedules" list.** It shows every device that has a week

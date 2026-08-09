@@ -147,8 +147,8 @@ never conjure a view whose feature is switched off: `nav.matter` set to `visible
 Matter bridge is disabled stays absent. The editor shows that as its own row state
 (§3.3) rather than silently ignoring the operator.
 
-The same resolved value drives the write boundary in `embedded` mode — see §2.8. One
-resolution, two consumers; never two tables.
+One resolution, two consumers — the navigation and the editor that explains it; never two
+tables.
 
 ### 2.5 The floor — surfaces that can never be hidden
 
@@ -212,18 +212,16 @@ The reason is a mismatch the rest of this design assumes away. `north.ui.embedde
 daemon-wide, but a Home Assistant config entry addresses exactly **one** CCU: the loom
 backend passes a serial (`_create_loom_central` in `homematicip_local`). Bind one of three
 CCUs into Home Assistant and the single-CCU defaults hide the paramset editor for the other
-two in the only UI that offers one — HA has no entry for them, so its panel shows nothing,
-and in the add-on the Ingress identity's writes are refused on top. Same for CCU
-administration: the two unbound CCUs would no longer be editable anywhere.
+two in the only UI that offers one — HA has no entry for them, so its panel shows nothing.
+Same for CCU administration: the two unbound CCUs would no longer be editable anywhere.
 
 Three properties keep this from becoming magic:
 
 - **It moves the default, not the ceiling.** An operator who wants those surfaces hidden on
   a multi-CCU daemon still sets it, and the override is stored as usual.
 - **It is read live.** A CCU adopted at runtime widens the default on the next request
-  rather than at the next config save — `Policy.Resolution()` compares the current count
-  against the one its cached resolution was built with. The write boundary follows, so the
-  re-shown editor works instead of failing on save.
+  rather than at the next config save — the resolution is rebuilt against the current count
+  instead of a cached one.
 - **It is visible in the payload.** `GET /api/v1/ui/surfaces` reports `centrals` and marks
   the affected rows `multi_central_visible`; `defaults` is already resolved for the current
   fleet, and the editor prints the reason under the row. A default that silently disagrees
@@ -254,6 +252,45 @@ the decisive part — three attempts to explain to the person who commissioned i
 mechanism that defends nothing and needs explaining is worse than none.
 
 The profile is navigation. Authorization is ADR 0051, and it stays there.
+
+### 2.9 One surface may depend on another: the `opens` relation
+
+Containment (`Parent`) is not the only way two surfaces relate. Two navigation views are
+fleet-wide **catalogues** that hand off to a per-device editor:
+
+| Overview | hands off to |
+|---|---|
+| `nav.schedules` | `device.configure.schedule` |
+| `nav.links` | `device.configure.links` |
+
+Hide the editor and the row's deep link lands on a device whose tab is not there. The
+question is what the catalogue should then do, and there are two defensible answers.
+
+**Hiding the catalogue too** is the tempting one — without an editor to reach, what is it
+for? It was rejected: the catalogues answer a question the device detail cannot answer at
+all ("*which* devices run a program"), so they keep their value read-only. And an answer
+that hides a row the editor lists as visible makes the profile table lie — the operator
+reads `nav.schedules: visible` and does not find it.
+
+**So the listing stays and the jump goes.** Rows render un-linked, and a line above the
+list names the reason and where to change it. Nothing disappears that the editor claims is
+there, and nothing links into a tab that is not.
+
+Three properties keep it from becoming a hidden coupling of its own:
+
+- **It is declared, not inferred.** `Surface.Opens` names the target in the registry — the
+  same place the visibility is configured, rather than only inside the view.
+- **The editor says it in both directions.** The catalogue's row reports that its target is
+  hidden; the target's row reports that hiding it drops the jump out of the catalogue and
+  that the catalogue itself stays. The operator hiding the editor is standing on the second
+  one.
+- **Both ends are guarded.** `TestDeclaredOpensRelationsAreLive` fails when a declared
+  target is not in the registry, and when no view calls
+  `surfacesStore.opensVisible("<id>")` for a surface that declares one — a relation nobody
+  consults is exactly the dead-link state it exists to prevent.
+
+Every other cross-view link in the SPA points at a floor surface (`nav.devices`,
+`nav.settings`) or at a device without naming a tab, so these two are the whole set.
 
 ## 3. The editor
 
@@ -348,19 +385,13 @@ everything:
 | Floor | 🔒 before the label | disabled, forced on | "Cannot be hidden — *reason*" |
 | Unavailable | ⚑ dimmed row | live (pre-configuration is allowed) | "Unavailable — *the gate*" + a link to the switch that enables it |
 | Role-gated | dimmed label | live | "Only visible to admins" |
-| Write-gated (`embedded` profile only) | `⇄` badge after the label | live | "Also decides whether Home Assistant may write here" |
+| Depends on another surface | none | live | the `opens` line, from whichever side applies (§2.9) |
 
 Two decisions inside that table are worth naming. **Unavailable rows stay editable**: an
 operator setting up a profile for a bridge they are about to enable should not have to
 enable it first, and the resolution order (§2.4) guarantees the setting cannot leak a view.
 **Floor rows are shown, not omitted** — a row that silently disappears teaches nothing,
 while a locked row with a reason teaches the model.
-
-The `⇄` badge is not decoration: in the `embedded` profile those rows change an
-authorization outcome (§2.8), so showing one costs a confirm — "Home Assistant will be able
-to write to this surface again. The duplicate editor problem comes back with it: the same
-paramset is then editable in two panels with different session assumptions." Hiding one
-needs no confirm; it only narrows.
 
 Two labels need disambiguation, because the same word means two things:
 
@@ -471,16 +502,9 @@ worth exactly as much as its enforcement:
 - **The support trap.** An operator hides a view, forgets, and reports the feature missing.
   Mitigation: active overrides are listed in `/about` and included in the diagnostics
   bundle, so the first support question answers itself.
-- **Visibility read as permission — and in one mode it *is* one.** The banner has to carry a
-  nuance rather than a slogan: everywhere except the write-gated rows of the embedded
-  profile, hiding is pure navigation. That nuance is the price of §2.8, and the `⇄` badge is
-  what keeps it teachable. If operators still conflate the two, the fallback is to show the
-  write-gated rows in a separate section of the embedded profile rather than inline.
-- **The embedded profile is now security-relevant configuration.** A profile that once only
-  shaped a sidebar can widen what Home Assistant may write. Two consequences follow: the
-  audit row for a profile change matters (§2.8), and a restore of an old profile from a
-  backup restores an authorization decision with it — worth calling out in the backup
-  documentation.
+- **Visibility read as permission.** Hiding is pure navigation everywhere — the banner can
+  therefore be a slogan rather than a nuance, which is exactly what removing the write
+  enforcement (§2.8) bought.
 - **Two admins, two browsers.** Concurrent edits to the same profile last-write-wins today.
   A version field on the payload with a 409 is the cheap fix, matching how config sections
   behave.

@@ -1708,7 +1708,7 @@ const EN: Catalog = {
 
   // --- Surface-profile editor ------------------------------------
   "navviews.banner":
-    "Hiding a view removes it from the navigation for every user of this daemon. API tokens, Loom accounts and MQTT are unaffected — restrict those through roles and tokens. In embedded mode, rows marked ⇄ also decide whether Home Assistant may write to that surface.",
+    "Hiding a view removes it from the navigation for every user of this daemon. API tokens, Loom accounts and MQTT are unaffected — restrict those through roles and tokens.",
   "navviews.mode.title": "Embedded in Home Assistant",
   "navviews.mode.desc":
     "Turn this on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration is configured against this daemon. Loom then hides what Home Assistant already provides: its own login, user and token administration, the CCU connection, the device editors, Matter and the aggregated charts.",
@@ -1742,6 +1742,10 @@ const EN: Catalog = {
   "navviews.row.locked": "Cannot be hidden — {why}",
   "navviews.row.unavailable": "Unavailable — {why}",
   "navviews.row.role_admin": "Only visible to admins.",
+  "navviews.row.opens_hidden":
+    "“{target}” is hidden, so the entries of this overview do not link. The list itself stays.",
+  "navviews.row.opened_by_hidden":
+    "Hidden here also drops the jump out of “{source}”. That overview keeps its list.",
   "navviews.row.changed_from": "Changed · default: {default}",
   "navviews.row.default_visible": "visible",
   "navviews.row.default_hidden": "hidden",
@@ -2234,6 +2238,8 @@ const EN: Catalog = {
   "schedules.search": "Search by name, address or model…",
   "schedules.kind.climate": "Thermostat",
   "schedules.kind.week_profile": "Week profile",
+  "schedules.editor_hidden":
+    "The schedule editor is hidden in this profile (Settings → Navigation & views). The overview stays; its entries do not link.",
   "surface.desc.nav.schedules":
     "Every device that has a week schedule, with a link to its editor.",
   "links.title": "Direct links",
@@ -2256,6 +2262,8 @@ const EN: Catalog = {
   "links.no_matches": "No links match the search.",
   "links.central": "CCU",
   "links.edit_on_device": "Edit on device",
+  "links.editor_hidden":
+    "The link editor is hidden in this profile (Settings → Navigation & views). The overview stays; its entries do not link.",
   "profile.test.short": "Test (short press)",
   "profile.test.long": "Test (long press)",
   "links.test.ok": "Link triggered on the device.",
@@ -5428,7 +5436,7 @@ const DE: Catalog = {
 
   // --- Editor für Oberflächenprofile -----------------------------
   "navviews.banner":
-    "Eine ausgeblendete Ansicht verschwindet aus der Navigation — für alle Benutzer dieses Daemons. API-Token, Loom-Konten und MQTT bleiben unberührt; die regeln Sie über Rollen und Token. Im eingebetteten Modus entscheiden die mit ⇄ markierten Zeilen zugleich, ob Home Assistant auf diese Fläche schreiben darf.",
+    "Eine ausgeblendete Ansicht verschwindet aus der Navigation — für alle Benutzer dieses Daemons. API-Token, Loom-Konten und MQTT bleiben unberührt; die regeln Sie über Rollen und Token.",
   "navviews.mode.title": "In Home Assistant eingebettet",
   "navviews.mode.desc":
     "Aktivieren Sie das, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon konfiguriert ist. Loom blendet dann aus, was Home Assistant selbst bereitstellt: eigene Anmeldung, Benutzer- und Token-Verwaltung, die CCU-Verbindung, die Geräte-Editoren, Matter und die Auswertungs-Diagramme.",
@@ -5462,6 +5470,10 @@ const DE: Catalog = {
   "navviews.row.locked": "Kann nicht ausgeblendet werden — {why}",
   "navviews.row.unavailable": "Nicht verfügbar — {why}",
   "navviews.row.role_admin": "Nur für Administratoren sichtbar.",
+  "navviews.row.opens_hidden":
+    "„{target}“ ist ausgeblendet, daher verlinken die Einträge dieser Übersicht nicht. Die Liste selbst bleibt.",
+  "navviews.row.opened_by_hidden":
+    "Hier ausgeblendet entfällt auch der Sprung aus „{source}“. Diese Übersicht behält ihre Liste.",
   "navviews.row.changed_from": "Geändert · Standard: {default}",
   "navviews.row.default_visible": "sichtbar",
   "navviews.row.default_hidden": "ausgeblendet",
@@ -5959,6 +5971,8 @@ const DE: Catalog = {
   "schedules.search": "Suche nach Name, Adresse oder Typ…",
   "schedules.kind.climate": "Thermostat",
   "schedules.kind.week_profile": "Wochenprofil",
+  "schedules.editor_hidden":
+    "Der Zeitplan-Editor ist in diesem Profil ausgeblendet (Einstellungen → Navigation & Ansichten). Die Übersicht bleibt, ihre Einträge verlinken nicht.",
   "surface.desc.nav.schedules":
     "Alle Geräte mit Wochenprogramm, mit Link zum jeweiligen Editor.",
   "links.title": "Direktverknüpfungen",
@@ -5982,6 +5996,8 @@ const DE: Catalog = {
   "links.no_matches": "Keine Verknüpfung passt zur Suche.",
   "links.central": "CCU",
   "links.edit_on_device": "Am Gerät bearbeiten",
+  "links.editor_hidden":
+    "Der Verknüpfungs-Editor ist in diesem Profil ausgeblendet (Einstellungen → Navigation & Ansichten). Die Übersicht bleibt, ihre Einträge verlinken nicht.",
   "profile.test.short": "Test (kurzer Tastendruck)",
   "profile.test.long": "Test (langer Tastendruck)",
   "links.test.ok": "Verknüpfung am Gerät ausgelöst.",

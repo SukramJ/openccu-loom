@@ -78,8 +78,10 @@ device/CCU concerns**. The concrete overlaps, and why each is harmful:
 | **Aggregated analytics** | HA Energy dashboard + History | Loom `/energy`, `/diagrams` | Same question answered from two datasets |
 
 Since 0.55.0 this repo carries the reduced mode: `north.ui.embedded` selects the
-`embedded` surface profile, the navigation gates on it through `NavGates.surfaceVisible`,
-and hidden write-gated surfaces refuse the Ingress passthrough identity. What remains open
+`embedded` surface profile, and the navigation gates on it through
+`NavGates.surfaceVisible`. The two fleet-wide catalogues that hand off to a per-device
+editor (`/schedules`, `/links`) follow the editor's visibility for their deep links — see
+the `opens` relation in [UI surface profiles](./ui-surface-profiles.md) §2.9. What remains open
 is everything on the Home Assistant side, which #87 / 2.9.1 now covers (§5). See [UI surface profiles](./ui-surface-profiles.md) for the mechanism; this
 document stays the record of *which* capability belongs to which surface, which is the
 input that mechanism configures.

@@ -5,11 +5,16 @@
   is read-only; creating, editing and deleting a link happens on the
   owning device's detail page (its Links section), which each row links
   to.
+
+  When the surface profile hides that editor the listing stays and the
+  rows stop linking — see the `opens` relation in
+  notes/concepts/ui-surface-profiles.md.
 -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { Link } from "$lib/api/types";
+  import { surfacesStore } from "$lib/stores/surfaces.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
@@ -94,6 +99,11 @@
       .some((v) => (v as string).toLowerCase().includes(needle));
   }
 
+  // Whether the device's own link editor exists in this profile. Hidden
+  // means the rows lose their "edit on device" action, not that the
+  // cross-device listing loses its value.
+  const linkable = $derived(surfacesStore.opensVisible("nav.links"));
+
   const filtered = $derived(
     links
       .filter((l) => !centralFilter || l.central_name === centralFilter)
@@ -138,6 +148,15 @@
 
   {#if loadError}
     <ErrorState message={loadError} onRetry={load} class="mb-4" />
+  {/if}
+
+  {#if !linkable}
+    <p
+      class="mb-4 flex items-start gap-2 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-2 text-sm text-[var(--ha-secondary-text-color)]"
+    >
+      <Icon name="mdi:information-outline" class="mt-0.5 shrink-0" />
+      <span>{t("links.editor_hidden")}</span>
+    </p>
   {/if}
 
   {#if loading}
@@ -199,15 +218,17 @@
               <p class="text-xs text-[var(--ha-secondary-text-color)]">{link.description}</p>
             {/if}
 
-            <div>
-              <a
-                href={`#/devices/${encodeURIComponent(deviceOf(link.sender_address))}?tab=links`}
-                class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
-              >
-                <Icon name="mdi:pencil" />
-                {t("links.edit_on_device")}
-              </a>
-            </div>
+            {#if linkable}
+              <div>
+                <a
+                  href={`#/devices/${encodeURIComponent(deviceOf(link.sender_address))}?tab=links`}
+                  class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                >
+                  <Icon name="mdi:pencil" />
+                  {t("links.edit_on_device")}
+                </a>
+              </div>
+            {/if}
           </Card>
         {/each}
       </ul>

@@ -1065,6 +1065,21 @@ export async function mockVirtualRemoteDevice(page: Page): Promise<void> {
   );
 }
 
+/**
+ * Serves the surface registry with some surfaces hidden.
+ *
+ * Register after `mockAllApis` — the later route wins. Only `effective`
+ * is touched, which is what the SPA gates on; the registry metadata
+ * stays the one the Go table pins, so a test cannot invent a surface.
+ */
+export async function mockHiddenSurfaces(page: Page, ids: string[]): Promise<void> {
+  const body = fixture('ui-surfaces.json') as { effective: Record<string, boolean> };
+  for (const id of ids) {
+    body.effective[id] = false;
+  }
+  await page.route('**/api/v1/ui/surfaces', (route) => route.fulfill({ json: body }));
+}
+
 export async function addStylesForStableScreenshots(page: Page): Promise<void> {
   await page.addStyleTag({
     content: `

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.11.0
+  version: 5.12.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6087,7 +6087,7 @@ paths:
 
         The navigation reads `effective`; the profile editor additionally
         needs the per-surface metadata (`defaults`, `floor`, `gate`,
-        `write_gated`). Both come from this one payload so the two views
+        `opens`). Both come from this one payload so the two views
         cannot drift apart.
 
         Capability gates (Matter, measurement history) and role gates are
@@ -10970,6 +10970,14 @@ components:
           description: |
             Surface this one lives inside. A child is never more visible
             than its parent.
+        opens:
+          type: string
+          description: |
+            Editor this read-only overview hands off to. While that
+            editor is hidden the overview stays — a fleet-wide catalogue
+            answers a question the device detail cannot — but its rows
+            stop linking into a tab that is not there.
+          example: device.configure.schedule
         role_admin:
           type: boolean
           description: Only ever shown to admins, independent of the profile.
