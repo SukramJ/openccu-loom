@@ -28,7 +28,7 @@ require (
 	modernc.org/sqlite v1.55.0
 )
 
-require github.com/rogpeppe/go-internal v1.15.0
+require github.com/rogpeppe/go-internal v1.16.0
 
 require github.com/SukramJ/go-openccu-data v0.1.3
 
