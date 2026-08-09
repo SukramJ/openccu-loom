@@ -101,8 +101,15 @@ export async function mockAllApis(page: Page): Promise<void> {
     );
     const items = (fixture('devices.json') as { items: { address: string }[] }).items;
     const device = items.find((d) => d.address === address);
+    // The detail response is a superset of the list entry: DeviceDetail
+    // adds `channels`, which the list shape does not carry. Serving the
+    // bare list entry left `detail.channels` undefined, and ChannelTiles
+    // — which reasonably trusts a required field — threw on every
+    // Overview render. The tests still passed (the card just stayed
+    // empty), so the only trace was an unhandled TypeError in the Vite
+    // console. Fill the field the detail contract promises.
     return device
-      ? route.fulfill({ json: device })
+      ? route.fulfill({ json: { channels: [], ...device } })
       : route.fulfill({ status: 404, json: { detail: `no device ${address}` } });
   });
   // Device icon. The daemon answers 404 for a device it has no image for,
@@ -131,6 +138,10 @@ export async function mockAllApis(page: Page): Promise<void> {
 
   await page.route('**/api/v1/links*', (route) =>
     route.fulfill({ json: fixture('links.json') }),
+  );
+
+  await page.route('**/api/v1/schedules', (route) =>
+    route.fulfill({ json: fixture('schedules.json') }),
   );
 
   await page.route('**/api/v1/programs', (route) =>

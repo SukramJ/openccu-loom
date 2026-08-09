@@ -32,6 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
@@ -161,6 +162,10 @@ func (fakeScheduleService) CopySchedule(_ context.Context, _, _ string) error { 
 
 func (fakeScheduleService) CopyClimateProfile(_ context.Context, _ string, _ int, _ string, _ int) error {
 	return nil
+}
+
+func (fakeScheduleService) ListScheduleDevices(context.Context) ([]hmapi.ScheduleDeviceSummary, error) {
+	return nil, nil
 }
 
 type fakeCentralLinksService struct{}

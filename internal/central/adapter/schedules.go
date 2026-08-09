@@ -317,6 +317,66 @@ func (s *SchedulesDomain) CopyClimateProfile(
 	return nil
 }
 
+// ListScheduleDevices returns every device that carries a week schedule,
+// across every central, sorted by central then address.
+//
+// Type-derived on purpose. FindScheduleChannel resolves the same question
+// exactly for one device and pays a MASTER read for the climate case; run
+// that over a fleet and opening an overview would cost one CCU round-trip
+// per thermostat. The channel types are a reliable proxy — a
+// CLIMATECONTROL_RT_TRANSCEIVER without a week profile is a device that
+// does not exist — and the detail view resolves the truth on click.
+func (s *SchedulesDomain) ListScheduleDevices(_ context.Context) ([]hmapi.ScheduleDeviceSummary, error) {
+	if s.registry == nil {
+		return nil, ErrNoScheduleBackend
+	}
+	var out []hmapi.ScheduleDeviceSummary
+	for _, u := range s.registry.List() {
+		for _, dev := range u.ModelRegistry.List() {
+			ch, kind, ok := scheduleChannelByType(dev)
+			if !ok {
+				continue
+			}
+			out = append(out, hmapi.ScheduleDeviceSummary{
+				Central: u.Name(),
+				Address: dev.Address,
+				Name:    dev.Name,
+				Model:   dev.Model,
+				Channel: hmapi.ScheduleChannelRef{
+					Address: ch.Address,
+					Number:  ch.Number,
+					Device:  dev.Address,
+				},
+				Kind: kind,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Central != out[j].Central {
+			return out[i].Central < out[j].Central
+		}
+		return out[i].Address < out[j].Address
+	})
+	return out, nil
+}
+
+// scheduleChannelByType picks the schedule-carrying channel from the
+// device's channel types, mirroring the two paths of FindScheduleChannel
+// minus its MASTER probe. A dedicated WEEK_PROFILE channel wins, as there.
+func scheduleChannelByType(dev *device.Device) (*device.Channel, string, bool) {
+	for _, ch := range dev.Channels() {
+		if isWeekProfileChannel(ch.Type) {
+			return ch, "week_profile", true
+		}
+	}
+	for _, ch := range dev.Channels() {
+		if _, isClimate := climateScheduleChannelTypes[ch.Type]; isClimate {
+			return ch, "climate", true
+		}
+	}
+	return nil, "", false
+}
+
 // CopySchedule copies the entire week schedule of the source device to
 // the destination device. The schedule channel is auto-resolved on both
 // sides (mirrors the device-level get/put convenience path), so the

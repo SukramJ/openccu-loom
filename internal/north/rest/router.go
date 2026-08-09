@@ -849,6 +849,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					handlers.PostActiveProfileAuto(d.Schedules))
 				// Copy the whole device schedule to another device
 				// (channels auto-resolved on both sides).
+				// Fleet-wide schedule overview — the counterpart to
+				// GET /links. Read-only, so no operator gate.
+				pr.Get("/schedules", handlers.ListSchedules(d.Schedules))
 				pr.With(op).Post("/devices/{addr}/schedules/copy",
 					handlers.PostCopySchedule(d.Schedules))
 				// Copy a single climate profile from the source channel /

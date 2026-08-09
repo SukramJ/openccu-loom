@@ -62,6 +62,38 @@ type CopyProfileRequest struct {
 
 // --- HTTP handlers ------------------------------------------------
 
+// ScheduleDeviceSummary is an alias for the canonical DTO in pkg/hmapi.
+type ScheduleDeviceSummary = hmapi.ScheduleDeviceSummary
+
+// ListSchedulesResponse is `GET /api/v1/schedules`.
+type ListSchedulesResponse struct {
+	Items []ScheduleDeviceSummary `json:"items"`
+}
+
+// ListSchedules serves the fleet-wide overview of devices that carry a
+// week schedule — the counterpart to the direct-links list, and the one
+// way to answer "which devices have a schedule at all" without opening
+// every device in turn.
+func ListSchedules(svc ScheduleService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Schedule service unavailable", ""))
+			return
+		}
+		items, err := svc.ListScheduleDevices(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal,
+				"Schedule list failed", err)
+			return
+		}
+		if items == nil {
+			items = []ScheduleDeviceSummary{}
+		}
+		JSON(w, http.StatusOK, ListSchedulesResponse{Items: items})
+	}
+}
+
 // GetSchedule returns the full climate schedule for one channel.
 func GetSchedule(svc ScheduleService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

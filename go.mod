@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/SukramJ/godevccu v0.1.10
-	github.com/getkin/kin-openapi v0.145.0
+	github.com/getkin/kin-openapi v0.146.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
@@ -25,10 +25,10 @@ require (
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.48.0
 	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.55.0
+	modernc.org/sqlite v1.56.0
 )
 
-require github.com/rogpeppe/go-internal v1.15.0
+require github.com/rogpeppe/go-internal v1.16.0
 
 require github.com/SukramJ/go-openccu-data v0.1.3
 

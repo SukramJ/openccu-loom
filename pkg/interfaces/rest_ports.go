@@ -300,6 +300,12 @@ type ScheduleService interface {
 	SetActiveProfileAuto(ctx context.Context, deviceAddress, profile string) error
 	FindScheduleChannel(ctx context.Context, deviceAddress string) (int, error)
 
+	// ListScheduleDevices returns every device that carries a week
+	// schedule, for the fleet-wide overview. Type-derived and free of CCU
+	// traffic — see hmapi.ScheduleDeviceSummary for why it does not
+	// confirm against MASTER.
+	ListScheduleDevices(ctx context.Context) ([]hmapi.ScheduleDeviceSummary, error)
+
 	// CopySchedule copies the whole week schedule from one device to
 	// another (channels auto-resolved on both sides).
 	CopySchedule(ctx context.Context, srcDeviceAddress, dstDeviceAddress string) error
