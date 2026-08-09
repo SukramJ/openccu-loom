@@ -1,6 +1,6 @@
 {
-  "generated": "6011aed4",
-  "head": "6011aed4",
+  "generated": "bb1e56e5",
+  "head": "bb1e56e5",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28019,
-    "reachable": 4790,
-    "whitelisted": 20102,
+    "total_exported": 27987,
+    "reachable": 4786,
+    "whitelisted": 20074,
     "unreachable": 3127
   },
   "by_package": [
@@ -15403,7 +15403,7 @@
       "package": "internal/north/rest",
       "identifier": "Deps",
       "file": "internal/north/rest/router.go",
-      "line": 49,
+      "line": 48,
       "kind": "type"
     },
     {
@@ -123717,14 +123717,14 @@
       "identifier": "CentralCounter",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 90
+      "line": 87
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CentralCounter",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 90
+      "line": 87
     },
     {
       "package": "internal/north/rest/handlers",
@@ -126489,14 +126489,14 @@
       "identifier": "GetUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 101
+      "line": 98
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 101
+      "line": 98
     },
     {
       "package": "internal/north/rest/handlers",
@@ -129513,14 +129513,14 @@
       "identifier": "PutUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 121
+      "line": 109
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 121
+      "line": 109
     },
     {
       "package": "internal/north/rest/handlers",
@@ -130420,45 +130420,31 @@
     },
     {
       "package": "internal/north/rest/handlers",
-      "identifier": "SurfacePolicyUpdater",
+      "identifier": "SurfacesRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 116
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "SurfacePolicyUpdater",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 116
+      "line": 78
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 81
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "SurfacesRequest",
-      "reason": "auto-whitelist:pattern=rest-handler-pkg",
-      "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 81
+      "line": 78
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 58
+      "line": 55
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 58
+      "line": 55
     },
     {
       "package": "internal/north/rest/handlers",
@@ -133909,7 +133895,7 @@
       "identifier": "TestGetUISurfacesServesRegistryAndResolution",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 52
+      "line": 41
     },
     {
       "package": "internal/north/rest/handlers",
@@ -137668,49 +137654,49 @@
       "identifier": "TestPutUISurfacesIsAudited",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 245
+      "line": 222
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesRejectsFloorHide",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 128
+      "line": 113
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesRejectsUnknownProfile",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 205
+      "line": 182
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesRejectsUnknownState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 154
+      "line": 135
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesStoresSparsely",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 96
+      "line": 85
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesSurvivesNilRecorder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 277
+      "line": 254
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesTogglesModeWithoutTouchingProfiles",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 174
+      "line": 155
     },
     {
       "package": "internal/north/rest/handlers",
@@ -138949,7 +138935,7 @@
       "identifier": "TestUISurfacesUnavailableWithoutService",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 221
+      "line": 198
     },
     {
       "package": "internal/north/rest/handlers",
@@ -140679,34 +140665,6 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/north/rest/middleware/status_metrics.go",
       "line": 21
-    },
-    {
-      "package": "internal/north/rest/middleware",
-      "identifier": "SurfacePolicy",
-      "reason": "auto-whitelist:pattern=generic-model-helper",
-      "file": "internal/north/rest/middleware/surface_writes.go",
-      "line": 18
-    },
-    {
-      "package": "internal/north/rest/middleware",
-      "identifier": "SurfacePolicy",
-      "reason": "auto-whitelist:pattern=generic-model-helper",
-      "file": "internal/north/rest/middleware/surface_writes.go",
-      "line": 18
-    },
-    {
-      "package": "internal/north/rest/middleware",
-      "identifier": "SurfaceWrites",
-      "reason": "auto-whitelist:pattern=generic-model-helper",
-      "file": "internal/north/rest/middleware/surface_writes.go",
-      "line": 38
-    },
-    {
-      "package": "internal/north/rest/middleware",
-      "identifier": "SurfaceWrites",
-      "reason": "auto-whitelist:pattern=generic-model-helper",
-      "file": "internal/north/rest/middleware/surface_writes.go",
-      "line": 38
     },
     {
       "package": "internal/north/rest/middleware",
@@ -146730,20 +146688,6 @@
     },
     {
       "package": "internal/north/ui/surface",
-      "identifier": "AllWriteRoutes",
-      "reason": "exported solely so TestSurfaceWriteRoutesExist in package contract can walk every rule; production reaches the same map directly from RefusedBy",
-      "file": "internal/north/ui/surface/enforce.go",
-      "line": 156
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "AllWriteRoutes",
-      "reason": "exported solely so TestSurfaceWriteRoutesExist in package contract can walk every rule; production reaches the same map directly from RefusedBy",
-      "file": "internal/north/ui/surface/enforce.go",
-      "line": 156
-    },
-    {
-      "package": "internal/north/ui/surface",
       "identifier": "Fleet",
       "reason": "a field of Resolution, filled by the composition root's central counter and read by the REST payload; a method-less struct the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/resolve.go",
@@ -146761,70 +146705,56 @@
       "identifier": "Floor",
       "reason": "carried by Surface.Floor and read by Surface.IsFloor on every resolve; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 49
+      "line": 48
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "Floor",
       "reason": "carried by Surface.Floor and read by Surface.IsFloor on every resolve; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 49
+      "line": 48
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "Gate",
       "reason": "carried by Surface.Gate into the REST payload so the editor can name the capability a row waits on; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 68
+      "line": 67
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "Gate",
       "reason": "carried by Surface.Gate into the REST payload so the editor can name the capability a row waits on; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 68
+      "line": 67
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "Group",
       "reason": "carried by Surface.Group into the REST payload the editor buckets by; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 27
+      "line": 26
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "Group",
       "reason": "carried by Surface.Group into the REST payload the editor buckets by; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 27
+      "line": 26
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "ID",
       "reason": "the identifier type the write middleware's SurfacePolicy interface returns and the REST handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 21
+      "line": 20
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "ID",
       "reason": "the identifier type the write middleware's SurfacePolicy interface returns and the REST handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 21
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "Policy",
-      "reason": "constructed in the daemon composition root and handed to rest.Deps.SurfacePolicy, which the write middleware calls per request; the analyzer's type heuristic cannot see a struct used only through its methods",
-      "file": "internal/north/ui/surface/policy.go",
-      "line": 23
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "Policy",
-      "reason": "constructed in the daemon composition root and handed to rest.Deps.SurfacePolicy, which the write middleware calls per request; the analyzer's type heuristic cannot see a struct used only through its methods",
-      "file": "internal/north/ui/surface/policy.go",
-      "line": 23
+      "line": 20
     },
     {
       "package": "internal/north/ui/surface",
@@ -146845,21 +146775,14 @@
       "identifier": "Surface",
       "reason": "returned by Registry() and ranged over by the REST /ui/surfaces handler on every request; a data struct whose fields production reads directly, which the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 105
+      "line": 104
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "Surface",
       "reason": "returned by Registry() and ranged over by the REST /ui/surfaces handler on every request; a data struct whose fields production reads directly, which the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 105
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "TestEveryWriteGatedSurfaceHasRoutes",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/ui/surface/enforce_test.go",
-      "line": 141
+      "line": 104
     },
     {
       "package": "internal/north/ui/surface",
@@ -146874,13 +146797,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/ui/surface/resolve_test.go",
       "line": 198
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "TestHidingTheParentGatesTheChildren",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/ui/surface/enforce_test.go",
-      "line": 62
     },
     {
       "package": "internal/north/ui/surface",
@@ -146916,34 +146832,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/ui/surface/resolve_test.go",
       "line": 306
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "TestPolicyFollowsARuntimeAdoptedCentral",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/ui/surface/resolve_test.go",
-      "line": 325
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "TestRefusedByFollowsTheProfile",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/ui/surface/enforce_test.go",
-      "line": 14
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "TestRefusedByIsEmbeddedOnly",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/ui/surface/enforce_test.go",
-      "line": 42
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "TestRefusedByReadsAreNeverGated",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/ui/surface/enforce_test.go",
-      "line": 81
     },
     {
       "package": "internal/north/ui/surface",
@@ -146989,59 +146877,17 @@
     },
     {
       "package": "internal/north/ui/surface",
-      "identifier": "TestSectionRouteMatchesOnlyItsOwnSection",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/ui/surface/enforce_test.go",
-      "line": 101
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "TestWriteRouteMatching",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/ui/surface/enforce_test.go",
-      "line": 115
+      "identifier": "Warn",
+      "reason": "carried by Surface.Warn into the REST payload so the editor knows which confirmation a hide needs; a method-less string alias the analyzer's type heuristic cannot see used",
+      "file": "internal/north/ui/surface/surface.go",
+      "line": 84
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "Warn",
       "reason": "carried by Surface.Warn into the REST payload so the editor knows which confirmation a hide needs; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
-      "line": 85
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "Warn",
-      "reason": "carried by Surface.Warn into the REST payload so the editor knows which confirmation a hide needs; a method-less string alias the analyzer's type heuristic cannot see used",
-      "file": "internal/north/ui/surface/surface.go",
-      "line": 85
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "WriteRoute",
-      "reason": "the rule shape RefusedBy matches every gated request against; a data struct the analyzer's type heuristic cannot see used",
-      "file": "internal/north/ui/surface/enforce.go",
-      "line": 36
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "WriteRoute",
-      "reason": "the rule shape RefusedBy matches every gated request against; a data struct the analyzer's type heuristic cannot see used",
-      "file": "internal/north/ui/surface/enforce.go",
-      "line": 36
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "WriteRoutes",
-      "reason": "exported solely so TestSurfaceWriteRoutesExist and TestHAOwnedWriteSurfacesAreGated in package contract can compare this table against the router; production reaches the same rules through the unexported map in RefusedBy",
-      "file": "internal/north/ui/surface/enforce.go",
-      "line": 148
-    },
-    {
-      "package": "internal/north/ui/surface",
-      "identifier": "WriteRoutes",
-      "reason": "exported solely so TestSurfaceWriteRoutesExist and TestHAOwnedWriteSurfacesAreGated in package contract can compare this table against the router; production reaches the same rules through the unexported map in RefusedBy",
-      "file": "internal/north/ui/surface/enforce.go",
-      "line": 148
+      "line": 84
     },
     {
       "package": "internal/north/webhook",
@@ -161398,7 +161244,7 @@
       "identifier": "TestE2ESurfaceFixtureMatchesRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ui_surface_registry_test.go",
-      "line": 225
+      "line": 257
     },
     {
       "package": "tests/contract",
@@ -161496,7 +161342,7 @@
       "identifier": "TestFloorSurfacesAreTheDocumentedSet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ui_surface_registry_test.go",
-      "line": 189
+      "line": 221
     },
     {
       "package": "tests/contract",
@@ -161504,13 +161350,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/source_completeness_test.go",
       "line": 140
-    },
-    {
-      "package": "tests/contract",
-      "identifier": "TestHAOwnedWriteSurfacesAreGated",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "tests/contract/ui_surface_write_routes_test.go",
-      "line": 92
     },
     {
       "package": "tests/contract",
@@ -162448,14 +162287,7 @@
       "identifier": "TestSurfaceCopyIsComplete",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ui_surface_registry_test.go",
-      "line": 142
-    },
-    {
-      "package": "tests/contract",
-      "identifier": "TestSurfaceWriteRoutesExist",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "tests/contract/ui_surface_write_routes_test.go",
-      "line": 59
+      "line": 152
     },
     {
       "package": "tests/contract",
@@ -163142,34 +162974,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/chip_session_reaper_test.go",
       "line": 16
-    },
-    {
-      "package": "tests/contract/wiring_pins",
-      "identifier": "TestPin_SurfacePolicy_ConstructedInDaemon",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "tests/contract/wiring_pins/surface_policy_wiring_test.go",
-      "line": 25
-    },
-    {
-      "package": "tests/contract/wiring_pins",
-      "identifier": "TestPin_SurfacePolicy_HandedToTheRouter",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "tests/contract/wiring_pins/surface_policy_wiring_test.go",
-      "line": 34
-    },
-    {
-      "package": "tests/contract/wiring_pins",
-      "identifier": "TestPin_SurfacePolicy_RefreshedOnSave",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "tests/contract/wiring_pins/surface_policy_wiring_test.go",
-      "line": 53
-    },
-    {
-      "package": "tests/contract/wiring_pins",
-      "identifier": "TestPin_SurfaceWrites_MountedOnProtectedRoutes",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "tests/contract/wiring_pins/surface_policy_wiring_test.go",
-      "line": 44
     },
     {
       "package": "tests/contract/wiring_pins",

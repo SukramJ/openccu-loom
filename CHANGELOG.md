@@ -6,6 +6,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.55.2]
 
+### Removed
+
+- **The write enforcement behind the embedded profile — it defended
+  nothing.** A hidden surface used to refuse its writes for the Home
+  Assistant Ingress passthrough identity, on the reasoning that hiding
+  should not be merely cosmetic and that it would stop two editors
+  writing the same CCU. Neither held: `openccu-loom-client`
+  authenticates with a bearer token, and the passthrough resolver bails
+  out as soon as a request carries any identity of its own — so the Home
+  Assistant integration was never subject to it, and the duplication it
+  claimed to prevent was between the HA panel and this UI, with the HA
+  side exempt by construction. As a security boundary it was empty too:
+  whoever reaches Ingress is an HA admin who can sign in here and write
+  anyway.
+
+  What it did reach was a browser opening this daemon's own UI through
+  the add-on panel. Gone, with its middleware, its route table and two
+  contract guards. **Settings → Navigation & views is navigation now,
+  and says so**: the banner no longer claims a permission effect, the
+  ⇄ badge and its confirmation are removed, and the mode dialog no
+  longer promises read-only editors. Authorization stays where it
+  belongs — roles, tokens and ADR 0051 — and nothing about what Home
+  Assistant may do has ever depended on this setting.
+
+  `GET /api/v1/ui/surfaces` drops `write_gated` (API version 5.10.0).
+
 ### Fixed
 
 - **Settings → Navigation & views called some views by a different name

@@ -26,7 +26,7 @@ func uiWith(embedded bool, profile string, overrides map[string]config.SurfaceSt
 func TestResolveDefaultsPerProfile(t *testing.T) {
 	t.Parallel()
 
-	standalone := Resolve(config.NorthUI{})
+	standalone := resolveSingle(config.NorthUI{})
 	if standalone.Profile != config.ProfileStandalone {
 		t.Fatalf("profile = %q, want %q", standalone.Profile, config.ProfileStandalone)
 	}
@@ -36,7 +36,7 @@ func TestResolveDefaultsPerProfile(t *testing.T) {
 		}
 	}
 
-	embedded := Resolve(uiWith(true, config.ProfileEmbedded, nil))
+	embedded := resolveSingle(uiWith(true, config.ProfileEmbedded, nil))
 	if embedded.Profile != config.ProfileEmbedded {
 		t.Fatalf("profile = %q, want %q", embedded.Profile, config.ProfileEmbedded)
 	}
@@ -63,7 +63,7 @@ func TestResolveHonoursOverrides(t *testing.T) {
 	t.Parallel()
 
 	// Hide a view the standalone default shows.
-	hidden := Resolve(uiWith(false, config.ProfileStandalone, map[string]config.SurfaceState{
+	hidden := resolveSingle(uiWith(false, config.ProfileStandalone, map[string]config.SurfaceState{
 		"nav.alarm": config.SurfaceHidden,
 	}))
 	if hidden.IsVisible("nav.alarm") {
@@ -72,7 +72,7 @@ func TestResolveHonoursOverrides(t *testing.T) {
 
 	// Show one the embedded default hides — the case that also hands the
 	// write back (see enforce_test.go).
-	shown := Resolve(uiWith(true, config.ProfileEmbedded, map[string]config.SurfaceState{
+	shown := resolveSingle(uiWith(true, config.ProfileEmbedded, map[string]config.SurfaceState{
 		"device.configure": config.SurfaceVisible,
 	}))
 	if !shown.IsVisible("device.configure") {
@@ -103,7 +103,7 @@ func TestResolveRefusesFloorOverride(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			res := Resolve(uiWith(tc.embedded, tc.profile, map[string]config.SurfaceState{
+			res := resolveSingle(uiWith(tc.embedded, tc.profile, map[string]config.SurfaceState{
 				string(tc.id): config.SurfaceHidden,
 			}))
 			if !res.IsVisible(tc.id) {
@@ -140,7 +140,7 @@ func TestFloorIsProfileScoped(t *testing.T) {
 func TestResolveIgnoresUnknownIDs(t *testing.T) {
 	t.Parallel()
 
-	res := Resolve(uiWith(false, config.ProfileStandalone, map[string]config.SurfaceState{
+	res := resolveSingle(uiWith(false, config.ProfileStandalone, map[string]config.SurfaceState{
 		"nav.from_the_future": config.SurfaceHidden,
 	}))
 	if !slices.Contains(res.Ignored, "nav.from_the_future") {
@@ -169,7 +169,7 @@ func TestResolveProfilePreviewsInactiveProfile(t *testing.T) {
 	if preview.IsVisible("device.configure") {
 		t.Error("embedded preview shows device.configure, want the embedded default")
 	}
-	if !Resolve(live).IsVisible("device.configure") {
+	if !resolveSingle(live).IsVisible("device.configure") {
 		t.Error("previewing embedded must not change the live standalone resolution")
 	}
 }
@@ -319,27 +319,9 @@ func TestNormalizeFollowsTheFleetDefault(t *testing.T) {
 	}
 }
 
-// TestPolicyFollowsARuntimeAdoptedCentral pins the live read. A CCU can
-// be adopted while the daemon runs; the surfaces that protect its
-// devices must widen then, not at the next config save.
-func TestPolicyFollowsARuntimeAdoptedCentral(t *testing.T) {
-	t.Parallel()
-
-	centrals := 1
-	on := true
-	policy := NewPolicy(config.NorthUI{Embedded: &on}, func() int { return centrals })
-
-	if policy.Resolution().IsVisible("device.configure") {
-		t.Fatal("precondition: device.configure visible on a single-CCU daemon")
-	}
-
-	centrals = 2
-	if !policy.Resolution().IsVisible("device.configure") {
-		t.Error("the adopted CCU did not widen the default — its devices have no editor anywhere")
-	}
-	// And the write boundary moves with it, or the editor would render
-	// and fail on save.
-	if got := policy.RefusedBy("PUT", "/devices/ABC/paramsets/MASTER"); got != "" {
-		t.Errorf("RefusedBy = %q after the second CCU appeared, want the write allowed", got)
-	}
+// resolveSingle is the single-CCU shorthand these tests read best with.
+// Production always knows its fleet size and calls ResolveFleet, so the
+// shorthand lives here rather than in the package's surface.
+func resolveSingle(ui config.NorthUI) Resolution {
+	return ResolveFleet(ui, Fleet{})
 }
