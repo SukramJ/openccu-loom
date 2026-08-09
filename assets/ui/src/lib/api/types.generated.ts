@@ -897,6 +897,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fleet-wide overview of devices carrying a week schedule
+         * @description Returns every device that carries a week schedule, across all
+         *     configured centrals, with the channel expected to hold it. The
+         *     counterpart to `/links`: the one way to answer "which devices
+         *     have a schedule at all" without opening each device in turn.
+         *
+         *     The list is derived from channel **types** — a `*_WEEK_PROFILE`
+         *     channel, or one of the climate channel types that carry the
+         *     profile in their MASTER paramset. It deliberately does not read
+         *     MASTER to confirm: confirming costs one CCU round-trip per
+         *     thermostat, so opening the overview on a fleet of forty would
+         *     pay for a question the detail view answers exactly once, on
+         *     click. `kind` says which of the two paths matched.
+         */
+        get: operations["listSchedules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/links": {
         parameters: {
             query?: never;
@@ -8678,6 +8709,24 @@ export interface components {
             /** @description Defer ingest of a newly-paired device to the inbox/manual-accept flow (default false). */
             delay_new_device_creation?: boolean;
         };
+        /** @description One device that carries a week schedule. */
+        ScheduleDeviceSummary: {
+            /** @description The CCU this device belongs to. */
+            central: string;
+            /** @description Device address. */
+            address: string;
+            /** @description Display name. */
+            name: string;
+            /** @description Device type, e.g. "HmIP-eTRV-2". */
+            model?: string;
+            channel: components["schemas"]["ScheduleChannelRef"];
+            /**
+             * @description `week_profile` when a dedicated channel carries the profile,
+             *     `climate` when a thermostat carries it in MASTER.
+             * @enum {string}
+             */
+            kind: "week_profile" | "climate";
+        };
         /** @description Identifies the channel a schedule belongs to. */
         ScheduleChannelRef: {
             address: string;
@@ -10224,6 +10273,29 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ScheduleDeviceSummary"][];
+                    };
+                };
+            };
             503: components["responses"]["ServiceUnavailable"];
         };
     };

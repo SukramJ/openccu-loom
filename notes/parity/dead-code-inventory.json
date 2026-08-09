@@ -1,6 +1,6 @@
 {
-  "generated": "bb1e56e5",
-  "head": "bb1e56e5",
+  "generated": "e766f15e",
+  "head": "e766f15e",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27987,
+    "total_exported": 27997,
     "reachable": 4951,
-    "whitelisted": 20074,
-    "unreachable": 2962
+    "whitelisted": 20082,
+    "unreachable": 2964
   },
   "by_package": [
     {
@@ -643,7 +643,7 @@
     {
       "package": "pkg/hmapi",
       "unreachable_funcs": 0,
-      "unreachable_types": 151,
+      "unreachable_types": 153,
       "unreachable_other": 16
     },
     {
@@ -18429,28 +18429,28 @@
       "package": "pkg/hmapi",
       "identifier": "ClimatePeriod",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 389,
+      "line": 414,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimatePeriod",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 389,
+      "line": 414,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 376,
+      "line": 401,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 376,
+      "line": 401,
       "kind": "type"
     },
     {
@@ -18471,28 +18471,28 @@
       "package": "pkg/hmapi",
       "identifier": "ClimateWeekday",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 383,
+      "line": 408,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateWeekday",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 383,
+      "line": 408,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "CommunicationTestResult",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 635,
+      "line": 660,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "CommunicationTestResult",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 635,
+      "line": 660,
       "kind": "type"
     },
     {
@@ -18653,14 +18653,14 @@
       "package": "pkg/hmapi",
       "identifier": "ErrUISchemaNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 398,
+      "line": 423,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrUISchemaNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 398,
+      "line": 423,
       "kind": "var"
     },
     {
@@ -18772,14 +18772,14 @@
       "package": "pkg/hmapi",
       "identifier": "ReplaceCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 619,
+      "line": 644,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ReplaceCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 619,
+      "line": 644,
       "kind": "type"
     },
     {
@@ -18794,6 +18794,20 @@
       "identifier": "ScheduleChannelRef",
       "file": "pkg/hmapi/rest_contract.go",
       "line": 367,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "ScheduleDeviceSummary",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 382,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "ScheduleDeviceSummary",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 382,
       "kind": "type"
     },
     {
@@ -18912,224 +18926,224 @@
       "package": "pkg/hmapi",
       "identifier": "TeamCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 649,
+      "line": 674,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "TeamCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 649,
+      "line": 674,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchema",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 417,
+      "line": 442,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchema",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 417,
+      "line": 442,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 459,
+      "line": 484,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 459,
+      "line": 484,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaCrossValidation",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 583,
+      "line": 608,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaCrossValidation",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 583,
+      "line": 608,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 470,
+      "line": 495,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 470,
+      "line": 495,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameter",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 485,
+      "line": 510,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameter",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 485,
+      "line": 510,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameterFlags",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 560,
+      "line": 585,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameterFlags",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 560,
+      "line": 585,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameterOps",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 548,
+      "line": 573,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameterOps",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 548,
+      "line": 573,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaPreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 526,
+      "line": 551,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaPreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 526,
+      "line": 551,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 604,
+      "line": 629,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 604,
+      "line": 629,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaRequest",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 404,
+      "line": 429,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaRequest",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 404,
+      "line": 429,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 442,
+      "line": 467,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 442,
+      "line": 467,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetOpt",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 451,
+      "line": 476,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetOpt",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 451,
+      "line": 476,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaTimePreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 533,
+      "line": 558,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaTimePreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 533,
+      "line": 558,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaValueListEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 541,
+      "line": 566,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaValueListEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 541,
+      "line": 566,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaVisibility",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 569,
+      "line": 594,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaVisibility",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 569,
+      "line": 594,
       "kind": "type"
     },
     {
@@ -21390,14 +21404,14 @@
       "package": "pkg/interfaces",
       "identifier": "UISchemaService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 321,
+      "line": 327,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "UISchemaService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 321,
+      "line": 327,
       "kind": "type"
     }
   ],
@@ -42093,6 +42107,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/adapter_multi_unit_test.go",
       "line": 6095
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestListScheduleDevicesIsTypeDerived",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/schedules_test.go",
+      "line": 858
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestListScheduleDevicesPrefersTheDedicatedChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/schedules_test.go",
+      "line": 898
     },
     {
       "package": "internal/central/adapter",
@@ -121080,7 +121108,7 @@
       "identifier": "TestAcceptInboxDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1468
+      "line": 1473
     },
     {
       "package": "internal/north/rest",
@@ -121101,7 +121129,7 @@
       "identifier": "TestBackupEndpoints",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1504
+      "line": 1509
     },
     {
       "package": "internal/north/rest",
@@ -121129,14 +121157,14 @@
       "identifier": "TestCORSPreflight",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1571
+      "line": 1576
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestConfigEndpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 491
+      "line": 496
     },
     {
       "package": "internal/north/rest",
@@ -121150,7 +121178,7 @@
       "identifier": "TestDeleteDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1433
+      "line": 1438
     },
     {
       "package": "internal/north/rest",
@@ -121220,28 +121248,28 @@
       "identifier": "TestHealthEndpointHealthy",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 440
+      "line": 445
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestHealthUnhealthyReturns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 456
+      "line": 461
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestIdempotencyReplays",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1588
+      "line": 1593
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestInfoEndpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 422
+      "line": 427
     },
     {
       "package": "internal/north/rest",
@@ -121269,7 +121297,7 @@
       "identifier": "TestListIncidents",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1479
+      "line": 1484
     },
     {
       "package": "internal/north/rest",
@@ -121290,7 +121318,7 @@
       "identifier": "TestMetricsEndpointRenders",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1492
+      "line": 1497
     },
     {
       "package": "internal/north/rest",
@@ -121318,21 +121346,21 @@
       "identifier": "TestOpenAPIValidatorScopedToAPI",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 509
+      "line": 514
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestPatchDeviceChannelRename",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1456
+      "line": 1461
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestPatchDeviceRename",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1444
+      "line": 1449
     },
     {
       "package": "internal/north/rest",
@@ -121388,7 +121416,7 @@
       "identifier": "TestRESTResponsesMatchOpenAPISchema",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1688
+      "line": 1693
     },
     {
       "package": "internal/north/rest",
@@ -121409,14 +121437,14 @@
       "identifier": "TestRootHasNoRedirectWithoutSPA",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 620
+      "line": 625
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRootRedirectsToSPA",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 580
+      "line": 585
     },
     {
       "package": "internal/north/rest",
@@ -121430,280 +121458,280 @@
       "identifier": "TestRouterMethodNotAllowed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 483
+      "line": 488
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouterUnknownEndpointProblemJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 469
+      "line": 474
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Audit_RequiresAdmin",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 797
+      "line": 802
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Audit_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 779
+      "line": 784
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_AuthResolve",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 666
+      "line": 671
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_AuthTokensCreate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1360
+      "line": 1365
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_AuthTokensDelete",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1388
+      "line": 1393
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_CCUReboot_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1235
+      "line": 1240
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_CORS",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 647
+      "line": 652
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Capture_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 999
+      "line": 1004
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_CentralLinks_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 847
+      "line": 852
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_ConfigExport_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 721
+      "line": 726
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_DeviceAdmin_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1143
+      "line": 1148
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_DeviceLookup_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1031
+      "line": 1036
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_EditSessions_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1096
+      "line": 1101
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_EnableRestartEndpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 981
+      "line": 986
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_FirmwareDownload_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1303
+      "line": 1308
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Idempotent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 657
+      "line": 662
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_IncidentsAdmin_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 880
+      "line": 885
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Incidents_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 865
+      "line": 870
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Links_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 743
+      "line": 748
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_ListBackups_RequiresAdmin",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1540
+      "line": 1545
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_LogLevels_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 949
+      "line": 954
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_MasterProfiles_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 905
+      "line": 910
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_OIDC_branch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 686
+      "line": 691
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_ParameterDetermine_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1074
+      "line": 1079
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Paramsets_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1053
+      "line": 1058
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_RateLimit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 675
+      "line": 680
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_RefreshDevices_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 829
+      "line": 834
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_RequireAdmin_fallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1180
+      "line": 1185
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_RequireOperator_fallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1165
+      "line": 1170
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Schedules_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 761
+      "line": 766
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_SnapshotNDJSON_ContentType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1405
+      "line": 1410
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_StartupCapture_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 963
+      "line": 968
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_StatusMetrics",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 634
+      "line": 639
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_SystemCCU",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1198
+      "line": 1203
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_SystemStatus_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 935
+      "line": 940
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_UISchema_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 700
+      "line": 705
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_ValuesCache_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1017
+      "line": 1022
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_WSHandler_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1117
+      "line": 1122
     },
     {
       "package": "internal/north/rest",
@@ -124482,14 +124510,14 @@
       "identifier": "ErrNoSchedule",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 288
+      "line": 320
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ErrNoSchedule",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 288
+      "line": 320
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125210,28 +125238,28 @@
       "identifier": "GetSchedule",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 66
+      "line": 98
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSchedule",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 66
+      "line": 98
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetScheduleAuto",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 121
+      "line": 153
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetScheduleAuto",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 121
+      "line": 153
     },
     {
       "package": "internal/north/rest/handlers",
@@ -126537,6 +126565,34 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "ListSchedules",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/schedules.go",
+      "line": 77
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListSchedules",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/schedules.go",
+      "line": 77
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListSchedulesResponse",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/schedules.go",
+      "line": 69
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListSchedulesResponse",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/schedules.go",
+      "line": 69
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "ListSecurityFaults",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/security.go",
@@ -127744,28 +127800,28 @@
       "identifier": "PostActiveProfile",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 186
+      "line": 218
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PostActiveProfile",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 186
+      "line": 218
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PostActiveProfileAuto",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 162
+      "line": 194
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PostActiveProfileAuto",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 162
+      "line": 194
     },
     {
       "package": "internal/north/rest/handlers",
@@ -127856,28 +127912,28 @@
       "identifier": "PostCopyProfile",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 247
+      "line": 279
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PostCopyProfile",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 247
+      "line": 279
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PostCopySchedule",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 217
+      "line": 249
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PostCopySchedule",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 217
+      "line": 249
     },
     {
       "package": "internal/north/rest/handlers",
@@ -128276,28 +128332,28 @@
       "identifier": "PutSchedule",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 90
+      "line": 122
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutSchedule",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 90
+      "line": 122
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutScheduleAuto",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 139
+      "line": 171
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutScheduleAuto",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
-      "line": 139
+      "line": 171
     },
     {
       "package": "internal/north/rest/handlers",
@@ -128760,6 +128816,20 @@
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/schedules.go",
       "line": 28
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ScheduleDeviceSummary",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/rest/handlers/schedules.go",
+      "line": 66
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ScheduleDeviceSummary",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/rest/handlers/schedules.go",
+      "line": 66
     },
     {
       "package": "internal/north/rest/handlers",
@@ -132595,49 +132665,49 @@
       "identifier": "TestGetScheduleAuto_DeviceNotFound_Returns404",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 285
+      "line": 293
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetScheduleAuto_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 145
+      "line": 153
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetScheduleAuto_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 260
+      "line": 268
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetScheduleAuto_ServiceError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 272
+      "line": 280
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetSchedule_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 78
+      "line": 86
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetSchedule_InvalidChannelNo_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 105
+      "line": 113
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetSchedule_ServiceNil_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 93
+      "line": 101
     },
     {
       "package": "internal/north/rest/handlers",
@@ -135185,63 +135255,63 @@
       "identifier": "TestPostActiveProfileAuto_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 188
+      "line": 196
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostActiveProfileAuto_InvalidJSON_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 313
+      "line": 321
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostActiveProfileAuto_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 300
+      "line": 308
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostActiveProfileAuto_ServiceError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 326
+      "line": 334
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostActiveProfile_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 160
+      "line": 168
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostActiveProfile_InvalidChannelNo_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 355
+      "line": 363
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostActiveProfile_InvalidJSON_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 369
+      "line": 377
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostActiveProfile_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 342
+      "line": 350
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostActiveProfile_ServiceError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 174
+      "line": 182
     },
     {
       "package": "internal/north/rest/handlers",
@@ -135283,42 +135353,42 @@
       "identifier": "TestPostCopyProfile_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 500
+      "line": 508
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostCopyProfile_InvalidSourceProfile_Returns422",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 522
+      "line": 530
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostCopyProfile_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 538
+      "line": 546
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostCopySchedule_EmptyTarget_Returns422",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 481
+      "line": 489
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostCopySchedule_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 449
+      "line": 457
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPostCopySchedule_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 467
+      "line": 475
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136347,56 +136417,56 @@
       "identifier": "TestPutScheduleAuto_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 204
+      "line": 212
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutScheduleAuto_InvalidJSON_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 231
+      "line": 239
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutScheduleAuto_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 218
+      "line": 226
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutScheduleAuto_ServiceError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 244
+      "line": 252
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutSchedule_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 118
+      "line": 126
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutSchedule_InvalidJSON_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 132
+      "line": 140
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutSchedule_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 384
+      "line": 392
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutSchedule_ServiceError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 397
+      "line": 405
     },
     {
       "package": "internal/north/rest/handlers",
@@ -138244,21 +138314,21 @@
       "identifier": "TestWriteScheduleError_DeviceNotFound_Returns404",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 413
+      "line": 421
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestWriteScheduleError_GenericError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 433
+      "line": 441
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestWriteScheduleError_NoScheduleParams_Returns404",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/schedules_test.go",
-      "line": 423
+      "line": 431
     },
     {
       "package": "internal/north/rest/handlers",
@@ -160560,7 +160630,7 @@
       "identifier": "TestRESTRouterMatchesOpenAPISpec",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/rest_router_openapi_walk_test.go",
-      "line": 767
+      "line": 771
     },
     {
       "package": "tests/contract",

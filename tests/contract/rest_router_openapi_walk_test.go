@@ -182,6 +182,10 @@ func (fakeScheduleService) CopyClimateProfile(context.Context, string, int, stri
 	return nil
 }
 
+func (fakeScheduleService) ListScheduleDevices(context.Context) ([]hmapi.ScheduleDeviceSummary, error) {
+	return nil, nil
+}
+
 type fakeAuditService struct{}
 
 func (fakeAuditService) List(int) []audit.Entry { return nil }

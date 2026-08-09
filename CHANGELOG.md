@@ -6,6 +6,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.55.2]
 
+### Added
+
+- **A fleet-wide schedule overview at `/schedules`.** Until now the only
+  way to learn whether a device has a week program was to open it: the
+  Config UI had a per-device editor and no list. The new view answers
+  "which devices have a schedule at all" across every CCU, and each row
+  opens that device's editor — the counterpart to the existing
+  direct-links overview.
+
+  The list is derived from channel **types** — a `*_WEEK_PROFILE`
+  channel, or one of the climate channel types that carry the profile in
+  their MASTER paramset. It deliberately does not confirm against
+  MASTER: confirming costs one CCU round-trip per thermostat, so opening
+  the overview on a fleet of forty would pay radio budget for a question
+  the detail view answers exactly once, on click. The badge on each row
+  says which of the two paths matched.
+
+  New endpoint `GET /api/v1/schedules` (API version 5.11.0).
+
+### Changed
+
+- Dependency refresh: `kin-openapi` 0.146.0, `go-internal` 1.16.0,
+  `modernc.org/sqlite` 1.56.0, and the SPA's in-range npm updates
+  (`vite` 8.2.1, `@lucide/svelte` 1.30.0, `svelte-check` 4.7.5,
+  `happy-dom`, `@internationalized/date`, `@sveltejs/vite-plugin-svelte`).
+  The icon set moved a few pixels, so every screenshot baseline is
+  regenerated. TypeScript stays on 6.x and Playwright on 1.62.0: the
+  first is a major with a known svelte-check interaction, the second is
+  pinned to the container that renders the committed Linux baselines —
+  both are their own change, not a side effect of this one.
+
 ### Removed
 
 - **The write enforcement behind the embedded profile — it defended

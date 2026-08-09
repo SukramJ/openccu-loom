@@ -1,4 +1,5 @@
 import type {
+  ScheduleDeviceSummary,
   Area,
   AreaRoomRef,
   AddonUpdateStatus,
@@ -1648,6 +1649,13 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),
     });
+  },
+  // --- Schedules ----------------------------------------------
+  // Fleet-wide overview of devices that carry a week schedule. The
+  // counterpart to listAllLinks; type-derived server-side, so it costs
+  // no CCU traffic.
+  listSchedules() {
+    return request<{ items: ScheduleDeviceSummary[] }>(`/schedules`);
   },
   // --- Surface profiles ---------------------------------------
   // The registry plus the resolved visibility of the live profile.
