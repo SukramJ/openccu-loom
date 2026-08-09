@@ -18,9 +18,8 @@ import (
 
 // The Config UI's navigable entry points live in three SPA tables. The
 // Go registry in internal/north/ui/surface must carry exactly the same
-// set, because three consumers read it and none of them can notice a
-// gap on its own: the navigation gate, the profile editor, and the
-// write enforcement that scopes the Home Assistant passthrough identity.
+// set, because two consumers read it and neither can notice a gap on
+// its own: the navigation gate and the profile editor that explains it.
 //
 // A view that lands without a registry entry is not a cosmetic omission.
 // In the embedded profile it is either a leaked duplicate of something
@@ -244,6 +243,57 @@ func TestFloorSurfacesAreTheDocumentedSet(t *testing.T) {
 	}
 	if !slices.Equal(gotStandalone, wantStandalone) {
 		t.Errorf("standalone-floor surfaces = %v, want %v", gotStandalone, wantStandalone)
+	}
+}
+
+// TestDeclaredOpensRelationsAreLive pins the `opens` relation at both
+// ends: the editor a read-only overview hands off to must exist, and the
+// overview must actually ask whether it does.
+//
+// A dangling target would answer "hidden" for a surface nobody resolves,
+// which reads as a working gate and never fires. A declared relation the
+// SPA never consults is worse: the overview keeps deep-linking into a tab
+// the profile removed, which is the state this relation was introduced to
+// end — the rows looked live and landed on a device without the tab.
+//
+// The source side is checked by looking for the store call rather than
+// the URL, because the call is what makes the link conditional; a view
+// can build the href however it likes.
+func TestDeclaredOpensRelationsAreLive(t *testing.T) {
+	t.Parallel()
+
+	known := map[surface.ID]bool{}
+	for _, s := range surface.Registry() {
+		known[s.ID] = true
+	}
+
+	// Every view that consults the relation, in one string — which view
+	// owns which surface is the SPA's business, not this test's.
+	spa := spaFile(t, "routes", "ScheduleList.svelte") +
+		spaFile(t, "routes", "LinkList.svelte")
+
+	declared := 0
+	for _, s := range surface.Registry() {
+		if s.Opens == "" {
+			continue
+		}
+		declared++
+		if s.Opens == s.ID {
+			t.Errorf("surface %s declares itself as its own editor", s.ID)
+		}
+		if !known[s.Opens] {
+			t.Errorf("surface %s opens %q, which is not in the registry", s.ID, s.Opens)
+		}
+		call := `opensVisible("` + string(s.ID) + `")`
+		if !strings.Contains(spa, call) {
+			t.Errorf("surface %s declares opens=%q but no view calls surfacesStore.%s — "+
+				"its rows would keep linking into a tab the profile hides",
+				s.ID, s.Opens, call)
+		}
+	}
+	if declared == 0 {
+		t.Fatal("no surface declares `opens` — the relation lost its last user, " +
+			"so this guard is measuring nothing")
 	}
 }
 

@@ -37,6 +37,13 @@ export type SurfaceInfo = {
   warn?: SurfaceWarn;
   warn_profile?: ProfileName;
   parent?: string;
+  /**
+   * The editor this read-only overview hands off to. While that editor
+   * is hidden the overview stays — it answers a fleet-wide question the
+   * device detail cannot — but its rows stop linking into a tab that is
+   * not there.
+   */
+  opens?: string;
   role_admin?: boolean;
   /**
    * The embedded default flips back to visible when the daemon serves

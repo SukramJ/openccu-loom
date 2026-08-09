@@ -192,11 +192,6 @@ type Deps struct {
 	// (`GET /config/schema`, `GET|PUT|DELETE /config/{section}`).
 	// Nil disables all of them with 503.
 	ConfigAdmin handlers.ConfigAdminService
-	// SurfacePolicy is the live surface profile. It gates the writes of
-	// the HA Ingress passthrough identity in the embedded profile and is
-	// updated in place when the profile is saved, so a change takes
-	// effect without a daemon restart. Nil leaves every write ungated,
-	// which is the standalone behaviour.
 	// CentralCounter reports how many CCUs the daemon serves. Two shipped
 	// surface defaults depend on it: Home Assistant addresses one CCU per
 	// config entry, so on a multi-CCU daemon it cannot own the config

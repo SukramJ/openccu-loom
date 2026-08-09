@@ -1,6 +1,6 @@
 {
-  "generated": "e766f15e",
-  "head": "e766f15e",
+  "generated": "9944174a",
+  "head": "9944174a",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27997,
+    "total_exported": 27998,
     "reachable": 4951,
-    "whitelisted": 20082,
+    "whitelisted": 20083,
     "unreachable": 2964
   },
   "by_package": [
@@ -122578,14 +122578,14 @@
       "identifier": "CentralCounter",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 87
+      "line": 91
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CentralCounter",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 87
+      "line": 91
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125350,14 +125350,14 @@
       "identifier": "GetUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 98
+      "line": 102
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 98
+      "line": 102
     },
     {
       "package": "internal/north/rest/handlers",
@@ -128402,14 +128402,14 @@
       "identifier": "PutUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 109
+      "line": 113
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 109
+      "line": 113
     },
     {
       "package": "internal/north/rest/handlers",
@@ -129326,28 +129326,28 @@
       "identifier": "SurfacesRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 78
+      "line": 82
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 78
+      "line": 82
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 55
+      "line": 59
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 55
+      "line": 59
     },
     {
       "package": "internal/north/rest/handlers",
@@ -145648,14 +145648,14 @@
     {
       "package": "internal/north/ui/surface",
       "identifier": "ID",
-      "reason": "the identifier type the write middleware's SurfacePolicy interface returns and the REST handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used",
+      "reason": "the identifier type the registry is keyed by and the REST /ui/surfaces handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used",
       "file": "internal/north/ui/surface/surface.go",
       "line": 20
     },
     {
       "package": "internal/north/ui/surface",
       "identifier": "ID",
-      "reason": "the identifier type the write middleware's SurfacePolicy interface returns and the REST handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used",
+      "reason": "the identifier type the registry is keyed by and the REST /ui/surfaces handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used",
       "file": "internal/north/ui/surface/surface.go",
       "line": 20
     },
@@ -159976,6 +159976,13 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestDeclaredOpensRelationsAreLive",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/ui_surface_registry_test.go",
+      "line": 262
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestDeclaredSilentEventDocsClaimNoConsumers",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/event_subscriber_coverage_test.go",
@@ -160147,7 +160154,7 @@
       "identifier": "TestE2ESurfaceFixtureMatchesRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ui_surface_registry_test.go",
-      "line": 257
+      "line": 307
     },
     {
       "package": "tests/contract",
@@ -160224,7 +160231,7 @@
       "identifier": "TestEverySurfaceIsRegistered",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ui_surface_registry_test.go",
-      "line": 94
+      "line": 93
     },
     {
       "package": "tests/contract",
@@ -160245,7 +160252,7 @@
       "identifier": "TestFloorSurfacesAreTheDocumentedSet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ui_surface_registry_test.go",
-      "line": 221
+      "line": 220
     },
     {
       "package": "tests/contract",
@@ -161190,7 +161197,7 @@
       "identifier": "TestSurfaceCopyIsComplete",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ui_surface_registry_test.go",
-      "line": 152
+      "line": 151
     },
     {
       "package": "tests/contract",

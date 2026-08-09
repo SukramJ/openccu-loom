@@ -4851,7 +4851,7 @@ export interface paths {
          *
          *     The navigation reads `effective`; the profile editor additionally
          *     needs the per-surface metadata (`defaults`, `floor`, `gate`,
-         *     `write_gated`). Both come from this one payload so the two views
+         *     `opens`). Both come from this one payload so the two views
          *     cannot drift apart.
          *
          *     Capability gates (Matter, measurement history) and role gates are
@@ -8447,6 +8447,14 @@ export interface components {
              *     than its parent.
              */
             parent?: string;
+            /**
+             * @description Editor this read-only overview hands off to. While that
+             *     editor is hidden the overview stays — a fleet-wide catalogue
+             *     answers a question the device detail cannot — but its rows
+             *     stop linking into a tab that is not there.
+             * @example device.configure.schedule
+             */
+            opens?: string;
             /** @description Only ever shown to admins, independent of the profile. */
             role_admin?: boolean;
             /**

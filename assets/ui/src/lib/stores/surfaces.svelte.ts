@@ -118,6 +118,24 @@ function createSurfacesStore() {
     return v === undefined ? true : v;
   }
 
+  /** The editor a read-only overview hands off to, when it declares one. */
+  function opens(id: string): string | undefined {
+    return byId.get(id)?.opens;
+  }
+
+  /**
+   * Whether a view's rows may link into the editor they belong to.
+   *
+   * A view without a declared target always may. One whose target the
+   * live profile hides keeps its listing — a fleet-wide catalogue
+   * answers a question the device detail cannot — but the jump has to
+   * go, because following it would open a device whose tab is not there.
+   */
+  function opensVisible(id: string): boolean {
+    const target = opens(id);
+    return target === undefined || visible(target);
+  }
+
   /** The shipped default of a surface in the edited profile. */
   function defaultOf(id: string, forProfile: ProfileName = editing): boolean {
     const s = byId.get(id);
@@ -245,6 +263,8 @@ function createSurfacesStore() {
     },
     load,
     visible,
+    opens,
+    opensVisible,
     defaultOf,
     isFloor,
     isChanged,

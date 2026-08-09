@@ -166,6 +166,19 @@
     return editing === "embedded" && !!s.multi_central_visible && surfacesStore.centrals > 1;
   }
 
+  /**
+   * The read-only overview that hands off to this row's editor, if any.
+   *
+   * The `opens` relation is declared on the overview; reading it in
+   * reverse is what lets the row an operator is actually clicking — the
+   * editor — say what else changes. Without it the coupling is only
+   * discoverable by visiting the other view and noticing the links are
+   * gone.
+   */
+  function openedBy(s: SurfaceInfo): SurfaceInfo | undefined {
+    return surfaces.find((x) => x.opens === s.id);
+  }
+
   function floorReason(s: SurfaceInfo): string {
     switch (s.id) {
       case "nav.devices":
@@ -423,6 +436,7 @@
               {@const locked = surfacesStore.isFloor(s.id)}
               {@const changed = surfacesStore.isChanged(s.id)}
               {@const available = gateAvailable(s)}
+              {@const openedFrom = openedBy(s)}
               <div
                 class="flex items-start justify-between gap-4 border-b border-slate-200 py-3 pr-4 last:border-b-0 dark:border-slate-800 {s.parent
                   ? 'border-l-2 border-l-slate-200 pl-8 dark:border-l-slate-700'
@@ -475,6 +489,16 @@
                   {#if s.role_admin}
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {t("navviews.row.role_admin")}
+                    </p>
+                  {/if}
+                  {#if s.opens && !surfacesStore.draftVisible(s.opens)}
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {t("navviews.row.opens_hidden", { target: t(labelKey(s.opens)) })}
+                    </p>
+                  {/if}
+                  {#if openedFrom && !surfacesStore.draftVisible(s.id)}
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {t("navviews.row.opened_by_hidden", { source: label(openedFrom) })}
                     </p>
                   {/if}
                   {#if changed}

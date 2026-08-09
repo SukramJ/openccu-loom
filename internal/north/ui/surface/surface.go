@@ -16,7 +16,7 @@ import "github.com/SukramJ/openccu-loom/internal/config"
 // "nav." for a navigation item, "settings." for a settings tab,
 // "device." for a device-detail tab.
 //
-// loom:reachable:reason="the identifier type the write middleware's SurfacePolicy interface returns and the REST handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used"
+// loom:reachable:reason="the identifier type the registry is keyed by and the REST /ui/surfaces handler ranges over; a method-less string alias, which the analyzer's type heuristic (reachable only via its methods) cannot see used"
 type ID string
 
 // Group buckets surfaces for the editor and mirrors the navigation
@@ -127,9 +127,24 @@ type Surface struct {
 	HAOwns bool
 	// Parent, when set, names the surface this one lives inside. A child
 	// is only ever as visible as its parent — hiding the Configure tab
-	// has to take its sub-tabs with it, or the write enforcement would
-	// keep honouring a sub-tab nobody can reach.
+	// has to take its sub-tabs with it, or the resolved map would promise
+	// a sub-tab nobody can reach.
 	Parent ID
+	// Opens names the editor a read-only overview hands off to. The two
+	// fleet-wide lists are catalogues: they answer "which devices have a
+	// program at all", a question the device detail can only answer one
+	// device at a time, and a row then jumps into the device's own editor.
+	//
+	// Hiding that editor does not hide the catalogue — the listing keeps
+	// its diagnostic value without it. It costs the jump: the rows stop
+	// linking, because following one would land on a device whose tab is
+	// not there.
+	//
+	// Declared here rather than only in the view, so the coupling is
+	// visible where it is configured. An operator who hides the schedule
+	// editor should not have to discover in the fleet list that something
+	// changed there too.
+	Opens ID
 	// MultiCentralVisible flips the embedded default back to visible on a
 	// daemon serving more than one CCU.
 	//
@@ -183,8 +198,8 @@ var registry = []Surface{
 	{ID: "nav.programs", Group: GroupAutomation, Defaults: both()},
 	{ID: "nav.sysvars", Group: GroupAutomation, Defaults: both()},
 	{ID: "nav.groups", Group: GroupAutomation, Defaults: both()},
-	{ID: "nav.links", Group: GroupAutomation, Defaults: both()},
-	{ID: "nav.schedules", Group: GroupAutomation, Defaults: both()},
+	{ID: "nav.links", Group: GroupAutomation, Defaults: both(), Opens: "device.configure.links"},
+	{ID: "nav.schedules", Group: GroupAutomation, Defaults: both(), Opens: "device.configure.schedule"},
 
 	// --- navigation: diagnostics ----------------------------------
 	{ID: "nav.messages", Group: GroupDiagnose, Defaults: both()},
@@ -247,8 +262,7 @@ var registry = []Surface{
 		Parent:              "device.configure", HAOwns: true,
 	},
 	// The channel strip is a selector, not an editor: every write it
-	// leads to belongs to the device-config sub-tab, so it carries no
-	// route set of its own and is not write-gated.
+	// leads to belongs to the device-config sub-tab.
 	{
 		ID: "device.configure.channels", Group: GroupDevice, Defaults: haOwned(),
 		MultiCentralVisible: true,

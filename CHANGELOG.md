@@ -4,6 +4,38 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.3]
+
+### Fixed
+
+- **The two fleet-wide overviews no longer deep-link into a tab the
+  surface profile hides.** `/schedules` and `/links` are catalogues that
+  hand off to a per-device editor. With "Configure → Schedule" (or
+  "→ Links") switched off in **Settings → Navigation & views**, every row
+  still offered the jump and landed on a device where that tab was gone.
+
+  The listings stay — they answer "*which* devices run a program", which
+  the device detail cannot answer at all — but their rows render
+  un-linked, with a line above the list naming the reason and where to
+  change it. Hiding the catalogue instead was rejected: it would make the
+  editor's own table lie, showing a view as visible that nobody finds.
+
+  The dependency is now declared in the registry (`opens`) rather than
+  living only inside a view, so the editor states it from both sides:
+  the catalogue's row reports that its editor is hidden, and the editor's
+  row reports that hiding it drops the jump but keeps the list. Both ends
+  are guarded — a declared target that is not in the registry, or a
+  declared relation no view consults, fails the build (API version
+  5.12.0).
+
+- **Removed the last traces of the write enforcement dropped in 0.55.2.**
+  The editor's banner still told operators that rows marked `⇄` decide
+  whether Home Assistant may write to a surface. There are no such rows
+  and no such rule — the sentence described a mechanism that no longer
+  exists, in both locales. Same for the `write_gated` field named in the
+  `/ui/surfaces` API description and four stale references in the design
+  notes.
+
 ## [0.55.2]
 
 ### Added
