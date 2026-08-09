@@ -2128,6 +2128,13 @@ export type DaemonInfo = {
   addon_build: boolean;
   uptime: string;
   started_at: string;
+  /**
+   * Externally-reachable address of this daemon's Config UI, from
+   * `north.rest.public_url`. Empty when unconfigured. Present for
+   * clients that link a person here from elsewhere; the SPA is already
+   * running at it and has no use for it.
+   */
+  config_ui_url?: string;
   api_version: string;
   capabilities: string[];
 };

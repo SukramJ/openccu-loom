@@ -274,24 +274,29 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Auth:                    d.restAuth,
 		ConfigAdmin:             d.configSvc,
 		CentralCounter:          centralCounter,
-		RestartPending:          restartState,
-		ConfigChanges:           restartState,
-		UserAdmin:               d.userSvc,
-		SelfPassword:            d.passwordSvc,
-		SessionRevoker:          d.sessions,
-		TokenPurger:             d.sqTokens,
-		Preferences:             d.prefSvc,
-		Diagrams:                d.diagramSvc,
-		Areas:                   d.areaSvc,
-		RoomFunctionAdmin:       d.roomFunctionAdmin,
-		TLSCert:                 tlsCertSvc,
-		TokenAdmin:              d.tokenSvc,
-		CentralAdmin:            d.centSvc,
-		Discovery:               d.discovery,
-		MQTTReload:              newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger),
-		OIDC:                    buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
-		SPAHandler:              ui.SPAHandler(),
-		Bootstrap:               d.bootstrap,
+		// Where a browser can reach this daemon's Config UI, for clients
+		// that want to link a person there. Same source and same
+		// restart-required reasoning as the config.cgi hint file written
+		// in daemon.go, so the two can never name different addresses.
+		ConfigUIURL:       cfg.North.REST.ConfigUIURL(),
+		RestartPending:    restartState,
+		ConfigChanges:     restartState,
+		UserAdmin:         d.userSvc,
+		SelfPassword:      d.passwordSvc,
+		SessionRevoker:    d.sessions,
+		TokenPurger:       d.sqTokens,
+		Preferences:       d.prefSvc,
+		Diagrams:          d.diagramSvc,
+		Areas:             d.areaSvc,
+		RoomFunctionAdmin: d.roomFunctionAdmin,
+		TLSCert:           tlsCertSvc,
+		TokenAdmin:        d.tokenSvc,
+		CentralAdmin:      d.centSvc,
+		Discovery:         d.discovery,
+		MQTTReload:        newMQTTReloadAdapter(d.mqttSup, d.reload, cfg, logger),
+		OIDC:              buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
+		SPAHandler:        ui.SPAHandler(),
+		Bootstrap:         d.bootstrap,
 		Setup: &handlers.SetupService{
 			Users: d.sqUsers,
 			// The live-adopt decorator, not the raw store: the wizard's CCU

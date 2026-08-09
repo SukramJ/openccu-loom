@@ -31,6 +31,9 @@ type configInputs struct {
 	// Zero uses the compiled-in default. Use a short value (e.g. 5 s) in tests
 	// that need fast degraded-state detection.
 	CheckConnectionInterval time.Duration
+	// PublicURL sets north.rest.public_url. Empty omits the key, which is
+	// the default deployment.
+	PublicURL string
 }
 
 // buildConfigYAML returns a complete openccu-loom config that wires
@@ -99,6 +102,9 @@ func buildConfigYAML(in configInputs) string {
 	fmt.Fprintf(&b, "  rest:\n")
 	fmt.Fprintf(&b, "    enabled: true\n")
 	fmt.Fprintf(&b, "    listen: %q\n", in.RESTListen)
+	if in.PublicURL != "" {
+		fmt.Fprintf(&b, "    public_url: %q\n", in.PublicURL)
+	}
 	// CSRF protection is on by default in production; the smoke clients
 	// here exchange JSON over loopback without a browser session, so we
 	// pin it off explicitly. CSRF behaviour is covered by unit tests

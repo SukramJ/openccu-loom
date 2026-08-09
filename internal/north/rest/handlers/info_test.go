@@ -20,7 +20,7 @@ func TestInfo_HappyPath(t *testing.T) {
 	startedAt := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(startedAt, nil).ServeHTTP(w, req)
+	Info(startedAt, nil, "").ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -37,12 +37,41 @@ func TestInfo_HappyPath(t *testing.T) {
 	}
 }
 
+// TestInfoServesTheConfigUIURL pins the field a client reads to link a
+// person at this daemon's UI. Empty stays empty rather than becoming a
+// guess: the client's fallback is its own connection address, and a
+// daemon inventing one here would override a fallback it knows less
+// about than the client does.
+func TestInfoServesTheConfigUIURL(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct{ name, in, want string }{
+		{"configured", "https://loom.example.de/app/", "https://loom.example.de/app/"},
+		{"not configured", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
+			Info(time.Now(), nil, tc.in).ServeHTTP(w, req)
+
+			var body InfoResponse
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if body.ConfigUIURL != tc.want {
+				t.Errorf("config_ui_url = %q, want %q", body.ConfigUIURL, tc.want)
+			}
+		})
+	}
+}
+
 func TestInfo_StartedAtIsRFC3339(t *testing.T) {
 	t.Parallel()
 	startedAt := time.Date(2026, 4, 27, 8, 30, 0, 0, time.UTC)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(startedAt, nil).ServeHTTP(w, req)
+	Info(startedAt, nil, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
@@ -55,7 +84,7 @@ func TestInfo_ContentTypeIsJSON(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil).ServeHTTP(w, req)
+	Info(time.Now(), nil, "").ServeHTTP(w, req)
 
 	ct := w.Header().Get("Content-Type")
 	if ct == "" {
@@ -82,7 +111,7 @@ func TestInfo_APIVersionAndAlwaysOnCapabilities(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil).ServeHTTP(w, req)
+	Info(time.Now(), nil, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -108,7 +137,7 @@ func TestInfo_ConditionalCapabilities(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), fakeCapDetector{mqtt: true, matter: true, oidc: false}).ServeHTTP(w, req)
+	Info(time.Now(), fakeCapDetector{mqtt: true, matter: true, oidc: false}, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -135,7 +164,7 @@ func TestInfo_AlarmCapability(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), fakeCapDetector{alarm: true}).ServeHTTP(w, req)
+	Info(time.Now(), fakeCapDetector{alarm: true}, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -150,7 +179,7 @@ func TestInfo_SchemaDigestIsServed(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil).ServeHTTP(w, req)
+	Info(time.Now(), nil, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -167,7 +196,7 @@ func TestInfo_SchemaDigestIsServed(t *testing.T) {
 func TestInfo_AddonBuild(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w := httptest.NewRecorder()
-	Info(time.Now(), nil).ServeHTTP(w, req)
+	Info(time.Now(), nil, "").ServeHTTP(w, req)
 
 	var body InfoResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -186,7 +215,7 @@ func TestInfo_AddonBuild(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 	w = httptest.NewRecorder()
-	Info(time.Now(), nil).ServeHTTP(w, req)
+	Info(time.Now(), nil, "").ServeHTTP(w, req)
 
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)

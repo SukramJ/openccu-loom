@@ -82,6 +82,11 @@ type Options struct {
 	// north-bound surface still comes up immediately, so Start's
 	// /api/v1/health wait is unaffected.
 	StartCCUNotReady bool
+
+	// PublicURL sets north.rest.public_url — the externally-reachable
+	// address an operator configures behind a reverse proxy. Empty is the
+	// default deployment, where the daemon reports no Config-UI URL.
+	PublicURL string
 }
 
 // Harness is the test-owned facade over a running daemon sub-process.
@@ -177,6 +182,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		CCUXMLRPC:               h.ccu.v.XMLRPCAddr().(*net.TCPAddr).Port,
 		CCUJSONRPC:              jsonrpcPort(h.ccu),
 		CheckConnectionInterval: opts.CheckConnectionInterval,
+		PublicURL:               opts.PublicURL,
 	})
 	if err := os.WriteFile(h.cfgPath, []byte(cfgYAML), 0o600); err != nil {
 		t.Fatalf("write config.yaml: %v", err)
