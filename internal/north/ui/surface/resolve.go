@@ -45,14 +45,6 @@ type Fleet struct {
 // MultiCentral reports whether the daemon serves more than one CCU.
 func (f Fleet) MultiCentral() bool { return f.Centrals > 1 }
 
-// Resolve applies ui's active profile to the registry, for a daemon
-// serving a single CCU. Callers that know the fleet size use
-// [ResolveFleet]; this shorthand keeps the many call sites that do not
-// care (tests, previews of a single-CCU setup) readable.
-func Resolve(ui config.NorthUI) Resolution {
-	return ResolveFleet(ui, Fleet{})
-}
-
 // ResolveFleet applies ui's active profile with the fleet size that
 // decides two shipped defaults — see [Surface.MultiCentralVisible].
 func ResolveFleet(ui config.NorthUI, fleet Fleet) Resolution {

@@ -45,7 +45,6 @@ function response(over: Partial<SurfacesResponse> = {}): SurfacesResponse {
         group: "bridges",
         defaults: { standalone: true, embedded: false },
         gate: "matter",
-        write_gated: true,
         ha_owns: true,
       },
       {
@@ -53,20 +52,17 @@ function response(over: Partial<SurfacesResponse> = {}): SurfacesResponse {
         group: "settings",
         defaults: { standalone: true, embedded: false },
         floor: "standalone",
-        write_gated: true,
       },
       {
         id: "device.configure",
         group: "device",
         defaults: { standalone: true, embedded: false },
-        write_gated: true,
       },
       {
         id: "device.configure.links",
         group: "device",
         defaults: { standalone: true, embedded: false },
         parent: "device.configure",
-        write_gated: true,
       },
     ],
     ...over,

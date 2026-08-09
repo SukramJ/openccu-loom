@@ -6,9 +6,8 @@
 //
 // A surface is an entry point the operator can switch off: a navigation
 // item, a settings tab, a device-detail tab. The registry is the single
-// source for three consumers that must never disagree — the SPA's
-// navigation, the profile editor, and the write enforcement that scopes
-// the Home Assistant passthrough identity.
+// source for the two consumers that must never disagree — the SPA's
+// navigation and the profile editor that explains it.
 package surface
 
 import "github.com/SukramJ/openccu-loom/internal/config"
@@ -122,10 +121,6 @@ type Surface struct {
 	// Independent of the profile: role gating and surface visibility
 	// answer different questions and are ANDed, never merged.
 	RoleAdmin bool
-	// WriteGated marks a surface whose entry additionally decides
-	// whether the Ingress passthrough identity may write there — in the
-	// embedded profile only. See enforce.go for the route mapping.
-	WriteGated bool
 	// HAOwns marks surfaces Home Assistant provides itself. Purely
 	// informational: the editor renders it as the reason a surface is
 	// hidden by default in the embedded profile.
@@ -200,7 +195,7 @@ var registry = []Surface{
 	{ID: "nav.logs", Group: GroupDiagnose, Defaults: both(), RoleAdmin: true},
 
 	// --- navigation: bridges --------------------------------------
-	{ID: "nav.matter", Group: GroupBridges, Defaults: haOwned(), Gate: GateMatter, WriteGated: true, HAOwns: true},
+	{ID: "nav.matter", Group: GroupBridges, Defaults: haOwned(), Gate: GateMatter, HAOwns: true},
 
 	// --- navigation: system ---------------------------------------
 	{ID: "nav.firmware", Group: GroupSystem, Defaults: both()},
@@ -214,26 +209,26 @@ var registry = []Surface{
 	{ID: "settings.navviews", Group: GroupSettings, Defaults: both(), Floor: FloorAlways},
 	{ID: "settings.changes", Group: GroupSettings, Defaults: both()},
 	{ID: "settings.mqtt", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.matter", Group: GroupSettings, Defaults: haOwned(), WriteGated: true, HAOwns: true},
+	{ID: "settings.matter", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
 	{ID: "settings.mcp", Group: GroupSettings, Defaults: both()},
 	{ID: "settings.rest", Group: GroupSettings, Defaults: both()},
 	{ID: "settings.discovery", Group: GroupSettings, Defaults: both()},
 	{
 		ID: "settings.ccus", Group: GroupSettings, Defaults: haOwned(),
 		Warn: WarnLastCCUEditor, WarnProfile: config.ProfileStandalone,
-		WriteGated: true, HAOwns: true, MultiCentralVisible: true,
+		HAOwns: true, MultiCentralVisible: true,
 	},
 	{ID: "settings.callback", Group: GroupSettings, Defaults: both()},
-	{ID: "settings.oidc", Group: GroupSettings, Defaults: haOwned(), WriteGated: true, HAOwns: true},
-	{ID: "settings.ccu_auth", Group: GroupSettings, Defaults: haOwned(), WriteGated: true, HAOwns: true},
+	{ID: "settings.oidc", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
+	{ID: "settings.ccu_auth", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
 	{
 		ID: "settings.users", Group: GroupSettings, Defaults: haOwned(),
-		Floor: FloorStandalone, WriteGated: true, HAOwns: true, RoleAdmin: true,
+		Floor: FloorStandalone, HAOwns: true, RoleAdmin: true,
 	},
-	{ID: "settings.groups", Group: GroupSettings, Defaults: haOwned(), WriteGated: true, HAOwns: true},
+	{ID: "settings.groups", Group: GroupSettings, Defaults: haOwned(), HAOwns: true},
 	{
 		ID: "settings.tokens", Group: GroupSettings, Defaults: haOwned(),
-		Floor: FloorStandalone, WriteGated: true, HAOwns: true, RoleAdmin: true,
+		Floor: FloorStandalone, HAOwns: true, RoleAdmin: true,
 	},
 	{ID: "settings.visibility", Group: GroupSettings, Defaults: both()},
 	{ID: "settings.reliability", Group: GroupSettings, Defaults: both()},
@@ -243,12 +238,12 @@ var registry = []Surface{
 	{ID: "device.overview", Group: GroupDevice, Defaults: both()},
 	{
 		ID: "device.configure", Group: GroupDevice, Defaults: haOwned(),
-		WriteGated: true, HAOwns: true, MultiCentralVisible: true,
+		HAOwns: true, MultiCentralVisible: true,
 	},
 	{
 		ID: "device.configure.device-config", Group: GroupDevice, Defaults: haOwned(),
 		MultiCentralVisible: true,
-		Parent:              "device.configure", WriteGated: true, HAOwns: true,
+		Parent:              "device.configure", HAOwns: true,
 	},
 	// The channel strip is a selector, not an editor: every write it
 	// leads to belongs to the device-config sub-tab, so it carries no
@@ -261,12 +256,12 @@ var registry = []Surface{
 	{
 		ID: "device.configure.links", Group: GroupDevice, Defaults: haOwned(),
 		MultiCentralVisible: true,
-		Parent:              "device.configure", WriteGated: true, HAOwns: true,
+		Parent:              "device.configure", HAOwns: true,
 	},
 	{
 		ID: "device.configure.schedule", Group: GroupDevice, Defaults: haOwned(),
 		MultiCentralVisible: true,
-		Parent:              "device.configure", WriteGated: true, HAOwns: true,
+		Parent:              "device.configure", HAOwns: true,
 	},
 	{ID: "device.history", Group: GroupDevice, Defaults: both(), Gate: GateHistory},
 }

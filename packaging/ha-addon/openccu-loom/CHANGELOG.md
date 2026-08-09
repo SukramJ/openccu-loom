@@ -2,6 +2,12 @@
 
 ## 0.55.2
 
+- **Changed: hiding a view is only about the menu.** An earlier build
+  also blocked changes from Home Assistant on hidden views. That never
+  applied to the Home Assistant integration itself, blocked nothing an
+  administrator could not do anyway, and mainly caused confusion — so it
+  is gone. Hiding a view now does exactly what it says: it removes it
+  from this add-on's own interface.
 - **Fixed: in Settings → Navigation & views, some entries were named
   differently than in the navigation itself** — the CCU list appeared as
   "Fleet", variables as "System variables", and a dozen more. The editor
