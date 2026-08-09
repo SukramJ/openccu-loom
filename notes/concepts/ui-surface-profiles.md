@@ -93,6 +93,24 @@ filtering. Field-level control already exists (`cfg:"expert"` + expert mode), an
 data-point filtering is `settings → visibility` ("Hidden parameters") — a different
 mechanism for a different object. This feature only ever hides *navigation*.
 
+### 2.2a A surface borrows its label, and owns only its description
+
+The editor shows two strings per row. They come from different places on
+purpose:
+
+- **The label** is the navigation's own — `nav.<view>`, `settings.tab.<tab>`,
+  `device.{top,sub}tab.<tab>`. A row must be called what the thing it switches
+  off is called, and the only way to guarantee that is to read the same key.
+- **The description** (`surface.desc.<id>`) exists only here. Nothing else needs
+  a sentence explaining what a view does, so there is no second source to drift
+  against.
+
+The first design gave the editor its own `surface.label.*` catalogue. It had
+drifted in **26 of 48 rows before it ever shipped** — most visibly the fleet
+view, which the editor called "Fleet" while the German sidebar said "CCUs". Two
+catalogues for one name is the same defect class as two tables for one set of
+surfaces, only cheaper to hit.
+
 ### 2.3 Profiles
 
 ```yaml
@@ -445,7 +463,7 @@ worth exactly as much as its enforcement:
 | Rule | Guard |
 |---|---|
 | Every nav item, settings tab and device tab has a surface entry with both defaults | `TestEverySurfaceIsRegistered` (`tests/contract/`) — parses `nav.ts`, `Settings.svelte` and `DeviceDetail.svelte` and fails in both directions, so a new view fails the build until classified and a removed one cannot leave a dead id behind |
-| Every surface has EN + DE label *and* description | `TestSurfaceCopyIsComplete` (`tests/contract/`), modelled on `TestConfigFieldsHaveLabelsAndHelp` |
+| A surface's label IS the navigation's label, and every surface has an EN + DE description | `TestSurfaceCopyIsComplete` (`tests/contract/`). The editor resolves `nav.*` / `settings.tab.*` / `device.{top,sub}tab.*` rather than carrying its own copy — the first design did carry one, and it had drifted in 26 of 48 rows before shipping (the editor said "Fleet", the sidebar said "CCUs") |
 | The floor is the documented set | `TestFloorSurfacesAreTheDocumentedSet` (`tests/contract/`) — changing it is a decision, so it changes there too |
 | Floor surfaces cannot be hidden | `TestPutUISurfacesRejectsFloorHide` (handler, 422) **and** `TestResolveRefusesFloorOverride` (resolver), which ignores a hand-edited YAML override the API never saw |
 | Sparse storage: no entry that repeats today's default | `TestNormalizeDropsRedundantEntries` (resolver) and `TestPutUISurfacesStoresSparsely` (handler) |

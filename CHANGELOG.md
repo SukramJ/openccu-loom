@@ -4,6 +4,28 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.2]
+
+### Fixed
+
+- **Settings → Navigation & views called some views by a different name
+  than the navigation does.** The editor carried its own label
+  catalogue, and it had drifted in 26 of 48 rows: the fleet view was
+  "Fleet" in the editor and "CCUs" in the German sidebar, "Variablen"
+  appeared as "Systemvariablen", "Meldungen" as "Servicemeldungen", and
+  ten more in each locale. A row that names a view differently than the
+  view names itself is worse than useless in an editor whose whole job is
+  deciding which views to keep.
+
+  The editor now resolves the navigation's own keys — `nav.*`,
+  `settings.tab.*`, `device.{top,sub}tab.*` — instead of a copy, and the
+  98 duplicated label strings are gone. Only the per-row description
+  remains editor-owned, because nothing else needs it.
+  `TestSurfaceCopyIsComplete` now fails when a surface's *navigation*
+  label is missing, so the two cannot drift apart again. Sub-tabs are
+  indented in the list rather than prefixed with "·", which is where the
+  hierarchy used to live.
+
 ## [0.55.1]
 
 ### Fixed

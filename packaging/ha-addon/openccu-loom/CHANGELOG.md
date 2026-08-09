@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.55.2
+
+- **Fixed: in Settings → Navigation & views, some entries were named
+  differently than in the navigation itself** — the CCU list appeared as
+  "Fleet", variables as "System variables", and a dozen more. The editor
+  now uses exactly the names the navigation uses.
+
 ## 0.55.1
 
 - **Fixed: with more than one CCU, the embedded mode hid configuration

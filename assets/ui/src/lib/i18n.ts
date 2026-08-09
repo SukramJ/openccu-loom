@@ -1811,134 +1811,85 @@ const EN: Catalog = {
   // an operator deciding what to switch off needs to recognise the
   // view first. TestSurfaceCopyIsComplete requires both, in both
   // locales, for every surface in the Go registry.
-  "surface.label.nav.overview": "Overview",
   "surface.desc.nav.overview": "Tiles for every device, grouped by room.",
-  "surface.label.nav.devices": "Devices",
   "surface.desc.nav.devices": "The device list and every device detail page.",
-  "surface.label.nav.favorites": "Favorites",
   "surface.desc.nav.favorites": "Your starred devices and channels.",
-  "surface.label.nav.alarm": "Alarm system",
   "surface.desc.nav.alarm": "Arming, zones, sensors and sirens.",
-  "surface.label.nav.security": "Security & Safety",
   "surface.desc.nav.security":
     "Smoke, water, tamper and power classes with their fault state.",
-  "surface.label.nav.inbox": "Inbox",
   "surface.desc.nav.inbox": "Devices waiting to be taught in, plus install mode.",
-  "surface.label.nav.fleet": "Fleet",
   "surface.desc.nav.fleet": "Every configured CCU with its connection state.",
-  "surface.label.nav.programs": "Programs",
   "surface.desc.nav.programs":
     "CCU programs — run them, enable them, see when they last fired.",
-  "surface.label.nav.sysvars": "System variables",
   "surface.desc.nav.sysvars":
     "Read and write CCU system variables, including channel assignment.",
-  "surface.label.nav.groups": "Device groups (HmIP)",
   "surface.desc.nav.groups": "HmIP groups on the CCU and their member devices.",
-  "surface.label.nav.links": "Direct links",
   "surface.desc.nav.links":
     "Fleet-wide, read-only list of every direct link between channels.",
-  "surface.label.nav.messages": "Service messages",
   "surface.desc.nav.messages":
     "Low battery, unreachable, sabotage — with acknowledgement.",
-  "surface.label.nav.diagnostics": "Diagnostics",
   "surface.desc.nav.diagnostics":
     "Connection health, throttling, circuit breakers and the RPC recorder.",
-  "surface.label.nav.energy": "Energy",
   "surface.desc.nav.energy": "Consumption and power across all metering devices.",
-  "surface.label.nav.diagrams": "Charts",
   "surface.desc.nav.diagrams": "Recorded measurement curves for any data point.",
-  "surface.label.nav.signal": "Signal quality",
   "surface.desc.nav.signal": "RSSI per device, with the weakest links first.",
-  "surface.label.nav.audit": "Change history",
   "surface.desc.nav.audit":
     "Who changed what, when — configuration and device writes.",
-  "surface.label.nav.logs": "Logs",
   "surface.desc.nav.logs": "The daemon's live log stream with filters.",
-  "surface.label.nav.matter": "Matter",
   "surface.desc.nav.matter":
     "Bridge Homematic devices to Apple Home, Google Home or Alexa.",
-  "surface.label.nav.firmware": "Firmware",
   "surface.desc.nav.firmware":
     "Available device firmware updates and their rollout state.",
-  "surface.label.nav.backups": "Backups",
   "surface.desc.nav.backups":
     "CCU and daemon backups — create, download, restore.",
-  "surface.label.nav.settings": "Settings",
   "surface.desc.nav.settings": "Everything in this section.",
-  "surface.label.nav.about": "About",
   "surface.desc.nav.about": "Version, build, add-on stamp and licence information.",
 
-  "surface.label.settings.general": "General",
   "surface.desc.settings.general":
     "Locale, log level and the daemon's own identity.",
-  "surface.label.settings.system": "System",
   "surface.desc.settings.system": "Restart, update and runtime information.",
-  "surface.label.settings.navviews": "Navigation & views",
   "surface.desc.settings.navviews": "This editor.",
-  "surface.label.settings.changes": "Changed settings",
   "surface.desc.settings.changes":
     "Config fields that differ from the running boot configuration.",
-  "surface.label.settings.mqtt": "MQTT",
   "surface.desc.settings.mqtt":
     "Broker connection, topic layout and Home Assistant discovery.",
-  "surface.label.settings.matter": "Matter",
   "surface.desc.settings.matter":
     "Matter bridge, commissioning and paired controllers.",
-  "surface.label.settings.mcp": "MCP",
   "surface.desc.settings.mcp":
     "The Model Context Protocol server and its write tools.",
-  "surface.label.settings.rest": "REST & WebSocket",
   "surface.desc.settings.rest": "Listener, TLS and CORS for the northbound API.",
-  "surface.label.settings.discovery": "Discovery (mDNS)",
   "surface.desc.settings.discovery":
     "How this daemon announces itself on the network.",
-  "surface.label.settings.ccus": "CCUs",
   "surface.desc.settings.ccus":
     "Add, edit and discover the CCUs this daemon talks to.",
-  "surface.label.settings.callback": "Callback servers",
   "surface.desc.settings.callback": "XML-RPC and BIN-RPC callback ports.",
-  "surface.label.settings.oidc": "OIDC",
   "surface.desc.settings.oidc":
     "Single sign-on through an external identity provider.",
-  "surface.label.settings.ccu_auth": "CCU authentication",
   "surface.desc.settings.ccu_auth":
     "Credentials this daemon uses against the CCU.",
-  "surface.label.settings.users": "Users",
   "surface.desc.settings.users": "Local user accounts and their roles.",
-  "surface.label.settings.groups": "Rooms & Functions",
   "surface.desc.settings.groups":
     "The CCU's rooms and functions, and which channels belong to them.",
-  "surface.label.settings.tokens": "API tokens",
   "surface.desc.settings.tokens": "Long-lived tokens for machine clients.",
-  "surface.label.settings.visibility": "Hidden parameters",
   "surface.desc.settings.visibility":
     "Which data points are suppressed on the northbound planes.",
-  "surface.label.settings.reliability": "Reliability",
   "surface.desc.settings.reliability":
     "Retry, throttle and circuit-breaker tuning.",
-  "surface.label.settings.persistence": "Persistence",
   "surface.desc.settings.persistence":
     "Database location, retention and vacuum schedule.",
 
-  "surface.label.device.overview": "Overview tab",
   "surface.desc.device.overview":
     "Live values and controls for the selected device.",
-  "surface.label.device.configure": "Configure tab",
   "surface.desc.device.configure":
     "The whole configuration tab, including its sub-tabs.",
-  "surface.label.device.configure.device-config": "· Parameters",
   "surface.desc.device.configure.device-config":
     "MASTER and VALUES paramsets with edit sessions and undo.",
-  "surface.label.device.configure.channels": "· Channels",
   "surface.desc.device.configure.channels":
     "The channel strip that selects which channel the editor shows.",
-  "surface.label.device.configure.links": "· Direct links",
   "surface.desc.device.configure.links":
     "Create and delete links between this device and others.",
-  "surface.label.device.configure.schedule": "· Schedules",
   "surface.desc.device.configure.schedule":
     "Weekly climate and switching programs.",
-  "surface.label.device.history": "History tab",
   "surface.desc.device.history":
     "The recorded curve of any parameter of this device.",
 
@@ -5576,139 +5527,90 @@ const DE: Catalog = {
   "navviews.gate.history": "die Messwert-Historie ist ausgeschaltet.",
 
   // --- Oberflächenprofile (Einstellungen → Navigation & Ansichten) ---
-  "surface.label.nav.overview": "Übersicht",
   "surface.desc.nav.overview": "Kacheln für alle Geräte, nach Raum gruppiert.",
-  "surface.label.nav.devices": "Geräte",
   "surface.desc.nav.devices": "Die Geräteliste und alle Gerätedetailseiten.",
-  "surface.label.nav.favorites": "Favoriten",
   "surface.desc.nav.favorites": "Ihre markierten Geräte und Kanäle.",
-  "surface.label.nav.alarm": "Alarmsystem",
   "surface.desc.nav.alarm": "Scharfschaltung, Zonen, Sensoren und Sirenen.",
-  "surface.label.nav.security": "Sicherheit & Gefahrenmelder",
   "surface.desc.nav.security":
     "Rauch, Wasser, Sabotage und Stromversorgung mit ihrem Störungszustand.",
-  "surface.label.nav.inbox": "Posteingang",
   "surface.desc.nav.inbox": "Anlernbereite Geräte und der Anlernmodus.",
-  "surface.label.nav.fleet": "Fleet",
   "surface.desc.nav.fleet":
     "Alle konfigurierten CCUs mit ihrem Verbindungszustand.",
-  "surface.label.nav.programs": "Programme",
   "surface.desc.nav.programs":
     "CCU-Programme ausführen, aktivieren und den letzten Lauf sehen.",
-  "surface.label.nav.sysvars": "Systemvariablen",
   "surface.desc.nav.sysvars":
     "CCU-Systemvariablen lesen und schreiben, inklusive Kanalzuordnung.",
-  "surface.label.nav.groups": "Gerätegruppen (HmIP)",
   "surface.desc.nav.groups": "HmIP-Gruppen auf der CCU und ihre Mitglieder.",
-  "surface.label.nav.links": "Direktverknüpfungen",
   "surface.desc.nav.links":
     "Fleet-weite, schreibgeschützte Liste aller Direktverknüpfungen.",
-  "surface.label.nav.messages": "Servicemeldungen",
   "surface.desc.nav.messages":
     "Batterie schwach, nicht erreichbar, Sabotage — mit Quittierung.",
-  "surface.label.nav.diagnostics": "Diagnose",
   "surface.desc.nav.diagnostics":
     "Verbindungszustand, Drosselung, Circuit-Breaker und der RPC-Rekorder.",
-  "surface.label.nav.energy": "Energie",
   "surface.desc.nav.energy": "Verbrauch und Leistung aller Messgeräte.",
-  "surface.label.nav.diagrams": "Diagramme",
   "surface.desc.nav.diagrams":
     "Aufgezeichnete Messkurven für beliebige Datenpunkte.",
-  "surface.label.nav.signal": "Signalqualität",
   "surface.desc.nav.signal": "RSSI je Gerät, die schwächsten Strecken zuerst.",
-  "surface.label.nav.audit": "Änderungsverlauf",
   "surface.desc.nav.audit":
     "Wer hat wann was geändert — Konfiguration und Geräteschreibzugriffe.",
-  "surface.label.nav.logs": "Protokolle",
   "surface.desc.nav.logs": "Der Live-Logstream des Daemons mit Filtern.",
-  "surface.label.nav.matter": "Matter",
   "surface.desc.nav.matter":
     "Homematic-Geräte an Apple Home, Google Home oder Alexa bridgen.",
-  "surface.label.nav.firmware": "Firmware",
   "surface.desc.nav.firmware":
     "Verfügbare Geräte-Firmware-Updates und ihr Rollout-Zustand.",
-  "surface.label.nav.backups": "Sicherungen",
   "surface.desc.nav.backups":
     "CCU- und Daemon-Sicherungen erstellen, herunterladen, zurückspielen.",
-  "surface.label.nav.settings": "Einstellungen",
   "surface.desc.nav.settings": "Alles in diesem Bereich.",
-  "surface.label.nav.about": "Über",
   "surface.desc.nav.about":
     "Version, Build, Add-on-Stempel und Lizenzangaben.",
 
-  "surface.label.settings.general": "Allgemein",
   "surface.desc.settings.general":
     "Sprache, Loglevel und die Identität des Daemons.",
-  "surface.label.settings.system": "System",
   "surface.desc.settings.system":
     "Neustart, Update und Laufzeitinformationen.",
-  "surface.label.settings.navviews": "Navigation & Ansichten",
   "surface.desc.settings.navviews": "Dieser Editor.",
-  "surface.label.settings.changes": "Geänderte Einstellungen",
   "surface.desc.settings.changes":
     "Konfigurationsfelder, die von der laufenden Boot-Konfiguration abweichen.",
-  "surface.label.settings.mqtt": "MQTT",
   "surface.desc.settings.mqtt":
     "Broker-Verbindung, Topic-Aufbau und Home-Assistant-Discovery.",
-  "surface.label.settings.matter": "Matter",
   "surface.desc.settings.matter":
     "Matter-Bridge, Inbetriebnahme und gekoppelte Controller.",
-  "surface.label.settings.mcp": "MCP",
   "surface.desc.settings.mcp":
     "Der Model-Context-Protocol-Server und seine Schreibwerkzeuge.",
-  "surface.label.settings.rest": "REST & WebSocket",
   "surface.desc.settings.rest":
     "Listener, TLS und CORS für die Northbound-API.",
-  "surface.label.settings.discovery": "Erkennung (mDNS)",
   "surface.desc.settings.discovery":
     "Wie sich dieser Daemon im Netzwerk bekannt macht.",
-  "surface.label.settings.ccus": "CCUs",
   "surface.desc.settings.ccus":
     "CCUs hinzufügen, bearbeiten und finden, mit denen dieser Daemon spricht.",
-  "surface.label.settings.callback": "Callback-Server",
   "surface.desc.settings.callback": "XML-RPC- und BIN-RPC-Callback-Ports.",
-  "surface.label.settings.oidc": "OIDC",
   "surface.desc.settings.oidc":
     "Single Sign-on über einen externen Identitätsanbieter.",
-  "surface.label.settings.ccu_auth": "CCU-Authentifizierung",
   "surface.desc.settings.ccu_auth":
     "Zugangsdaten, mit denen sich dieser Daemon an der CCU anmeldet.",
-  "surface.label.settings.users": "Benutzer",
   "surface.desc.settings.users": "Lokale Benutzerkonten und ihre Rollen.",
-  "surface.label.settings.groups": "Räume & Gewerke",
   "surface.desc.settings.groups":
     "Die Räume und Gewerke der CCU und die Kanäle, die dazugehören.",
-  "surface.label.settings.tokens": "API-Token",
   "surface.desc.settings.tokens": "Langlebige Token für Maschinen-Clients.",
-  "surface.label.settings.visibility": "Ausgeblendete Parameter",
   "surface.desc.settings.visibility":
     "Welche Datenpunkte auf den Northbound-Ebenen unterdrückt werden.",
-  "surface.label.settings.reliability": "Zuverlässigkeit",
   "surface.desc.settings.reliability":
     "Retry-, Drossel- und Circuit-Breaker-Einstellungen.",
-  "surface.label.settings.persistence": "Persistenz",
   "surface.desc.settings.persistence":
     "Datenbankort, Aufbewahrung und Vacuum-Zeitplan.",
 
-  "surface.label.device.overview": "Tab „Überblick“",
   "surface.desc.device.overview":
     "Live-Werte und Bedienelemente des gewählten Geräts.",
-  "surface.label.device.configure": "Tab „Konfigurieren“",
   "surface.desc.device.configure":
     "Der gesamte Konfigurationstab inklusive seiner Untertabs.",
-  "surface.label.device.configure.device-config": "· Parameter",
   "surface.desc.device.configure.device-config":
     "MASTER- und VALUES-Paramsets mit Bearbeitungssitzung und Undo.",
-  "surface.label.device.configure.channels": "· Kanäle",
   "surface.desc.device.configure.channels":
     "Die Kanalleiste, mit der ausgewählt wird, welchen Kanal der Editor zeigt.",
-  "surface.label.device.configure.links": "· Direktverknüpfungen",
   "surface.desc.device.configure.links":
     "Verknüpfungen dieses Geräts anlegen und löschen.",
-  "surface.label.device.configure.schedule": "· Zeitprogramme",
   "surface.desc.device.configure.schedule":
     "Wochenprogramme für Heizung und Schaltvorgänge.",
-  "surface.label.device.history": "Tab „Verlauf“",
   "surface.desc.device.history":
     "Die aufgezeichnete Kurve eines beliebigen Parameters dieses Geräts.",
 
