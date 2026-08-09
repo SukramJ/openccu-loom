@@ -42,9 +42,6 @@ type SurfaceInfo struct {
 	Parent string `json:"parent,omitempty"`
 	// RoleAdmin marks surfaces only admins ever see.
 	RoleAdmin bool `json:"role_admin,omitempty"`
-	// WriteGated marks surfaces whose embedded-profile entry also
-	// decides whether the Ingress passthrough identity may write.
-	WriteGated bool `json:"write_gated,omitempty"`
 	// MultiCentralVisible marks surfaces whose embedded default flips
 	// back to visible when the daemon serves more than one CCU: Home
 	// Assistant addresses one CCU per config entry, so it cannot own the
@@ -108,22 +105,8 @@ func GetUISurfaces(svc ConfigAdminService, centrals CentralCounter) http.Handler
 	}
 }
 
-// SurfacePolicyUpdater refreshes the live surface policy the write
-// middleware consults. Without this the write boundary would only move
-// on the next daemon start, and the editor would report a save that has
-// not taken effect — the exact gap between "declared" and "in force"
-// that makes a security-relevant setting untrustworthy.
-type SurfacePolicyUpdater interface {
-	Set(ui config.NorthUI)
-}
-
 // PutUISurfaces persists the master toggle and/or profile overrides.
-func PutUISurfaces(
-	svc ConfigAdminService,
-	rec audit.Recorder,
-	policy SurfacePolicyUpdater,
-	centrals CentralCounter,
-) http.HandlerFunc {
+func PutUISurfaces(svc ConfigAdminService, rec audit.Recorder, centrals CentralCounter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req SurfacesRequest
 		if err := DecodeJSON(r, &req); err != nil {
@@ -168,17 +151,9 @@ func PutUISurfaces(
 				"Surface profile save failed", err)
 			return
 		}
-		// Move the live boundary in the same request that persisted it.
-		// A save that only took effect on the next restart would leave
-		// Home Assistant writing to a surface the operator just hid,
-		// while the UI reported success.
-		if policy != nil {
-			policy.Set(next.North.UI)
-		}
-		// The profile decides an authorization outcome in the embedded
-		// profile, so the audit row is load-bearing rather than tidy:
-		// "who handed Home Assistant paramset writes back, and when" has
-		// to stay answerable.
+		// Audited like every other config write: "who hid the alarm panel
+		// for everyone, and when" is a question a shared daemon has to be
+		// able to answer.
 		if rec != nil {
 			rec.Record(audit.Entry{
 				Timestamp: row.UpdatedAt,
@@ -290,7 +265,6 @@ func surfacesResponse(ui config.NorthUI, centrals int) SurfacesResponse {
 			WarnProfile: s.WarnProfile,
 			Parent:      string(s.Parent),
 			RoleAdmin:   s.RoleAdmin,
-			WriteGated:  s.WriteGated,
 			HAOwns:      s.HAOwns,
 
 			MultiCentralVisible: s.MultiCentralVisible,

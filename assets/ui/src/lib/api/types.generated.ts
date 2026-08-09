@@ -4839,10 +4839,10 @@ export interface paths {
          *     than persisted — a stored entry that merely repeats today's
          *     default would pin it across upgrades.
          *
-         *     In the embedded profile a hidden surface also refuses its writes
-         *     for the Home Assistant Ingress passthrough identity, so this
-         *     endpoint changes an authorization outcome and is audited. The
-         *     change takes effect immediately, without a restart.
+         *     Purely navigational: hiding a surface removes it from this
+         *     daemon's Config UI for every user and changes no permission. The
+         *     REST, WebSocket and MQTT surfaces are unaffected — restrict those
+         *     through roles and tokens. Audited like every other config write.
          *
          *     Surfaces that can never be hidden (the device list, Settings, the
          *     profile editor, About, and — in the standalone profile — user and
@@ -8418,12 +8418,6 @@ export interface components {
             parent?: string;
             /** @description Only ever shown to admins, independent of the profile. */
             role_admin?: boolean;
-            /**
-             * @description In the embedded profile this surface's entry also decides
-             *     whether the Home Assistant Ingress passthrough identity may
-             *     write to it.
-             */
-            write_gated?: boolean;
             /**
              * @description The embedded default of this surface flips back to visible
              *     when the daemon serves more than one CCU. A Home Assistant

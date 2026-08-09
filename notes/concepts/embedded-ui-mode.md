@@ -360,12 +360,12 @@ three layers, with the real boundary at the API:
    northbound authorization model (ADR 0051), so a hidden UI cannot be bypassed by
    hand-editing the hash or calling the API directly. Reads stay open — the HA panel needs
    them.
-   **The refusal follows the profile entry, not the mode**: an admin who deliberately
-   re-shows a surface in the live embedded profile gets a working editor rather than one
-   that fails on save, and the same switch hands the write back. Scope and guards are in
-   [UI surface profiles](./ui-surface-profiles.md) §2.8 — it binds only the Ingress
-   passthrough identity, never an API token or a Loom account, and it is the one place
-   where a visibility switch is also an authorization switch.
+   **This is the one part of the design that did not survive contact with the code.**
+   The integration authenticates with a bearer token, so it was never subject to the
+   passthrough scoping — the enforcement only ever reached a browser opening this daemon's
+   UI through the Ingress panel, defended nothing, and shipped removed. See
+   [UI surface profiles](./ui-surface-profiles.md) §2.8. Hiding is navigation; ADR 0051
+   remains the authorization model, unchanged by any profile.
 
 ### 4.4 Auth — SSO in both add-ons, not for a bare daemon
 

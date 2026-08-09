@@ -39,11 +39,6 @@ export type SurfaceInfo = {
   parent?: string;
   role_admin?: boolean;
   /**
-   * In the embedded profile this surface's entry also decides whether
-   * the Home Assistant Ingress passthrough identity may write to it.
-   */
-  write_gated?: boolean;
-  /**
    * The embedded default flips back to visible when the daemon serves
    * more than one CCU: a Home Assistant config entry addresses one CCU,
    * so HA cannot own the config surface of the ones it has no entry for.
