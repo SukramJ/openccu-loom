@@ -29,6 +29,7 @@
     "nav.messages": true,
     "nav.overview": true,
     "nav.programs": true,
+    "nav.schedules": true,
     "nav.security": true,
     "nav.settings": true,
     "nav.signal": true,
@@ -142,6 +143,14 @@
     },
     {
       "id": "nav.links",
+      "group": "automation",
+      "defaults": {
+        "embedded": true,
+        "standalone": true
+      }
+    },
+    {
+      "id": "nav.schedules",
       "group": "automation",
       "defaults": {
         "embedded": true,

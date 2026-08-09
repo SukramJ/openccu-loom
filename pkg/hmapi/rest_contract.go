@@ -370,6 +370,31 @@ type ScheduleChannelRef struct {
 	Device  string `json:"device_address"`
 }
 
+// ScheduleDeviceSummary is one row of `GET /api/v1/schedules`: a device
+// that carries a week schedule, with the channel that holds it.
+//
+// The list is derived from channel TYPES alone — a `*_WEEK_PROFILE`
+// channel, or one of the climate channel types that carry the profile in
+// their MASTER paramset. It deliberately does not read MASTER to confirm,
+// because confirming would mean one CCU round-trip per thermostat every
+// time the overview is opened; a fleet of forty would pay for a question
+// the detail view answers exactly once, on click.
+type ScheduleDeviceSummary struct {
+	// Central is the CCU this device belongs to.
+	Central string `json:"central"`
+	// Address is the device address.
+	Address string `json:"address"`
+	// Name is the device's display name.
+	Name string `json:"name"`
+	// Model is the device type (e.g. "HmIP-eTRV-2").
+	Model string `json:"model,omitempty"`
+	// Channel is the channel expected to carry the schedule.
+	Channel ScheduleChannelRef `json:"channel"`
+	// Kind is "week_profile" for a dedicated channel, "climate" for a
+	// thermostat carrying the profile in MASTER. The SPA groups on it.
+	Kind string `json:"kind"`
+}
+
 // ClimateProfile is one named profile (P1..P6) with the seven
 // weekday slots. Missing weekdays are valid — the thermostat falls
 // back to its base temperature.

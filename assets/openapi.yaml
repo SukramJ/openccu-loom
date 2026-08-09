@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.10.0
+  version: 5.11.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -887,6 +887,38 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /schedules:
+    get:
+      operationId: listSchedules
+      summary: Fleet-wide overview of devices carrying a week schedule
+      description: |
+        Returns every device that carries a week schedule, across all
+        configured centrals, with the channel expected to hold it. The
+        counterpart to `/links`: the one way to answer "which devices
+        have a schedule at all" without opening each device in turn.
+
+        The list is derived from channel **types** — a `*_WEEK_PROFILE`
+        channel, or one of the climate channel types that carry the
+        profile in their MASTER paramset. It deliberately does not read
+        MASTER to confirm: confirming costs one CCU round-trip per
+        thermostat, so opening the overview on a fleet of forty would
+        pay for a question the detail view answers exactly once, on
+        click. `kind` says which of the two paths matched.
+      tags: [core]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ScheduleDeviceSummary" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   /links:
     get:
       operationId: listAllLinks
@@ -11285,6 +11317,32 @@ components:
           description: "Defer ingest of a newly-paired device to the inbox/manual-accept flow (default false)."
 
     # ---- Schedules / week profiles ----
+    ScheduleDeviceSummary:
+      type: object
+      required: [central, address, name, channel, kind]
+      description: One device that carries a week schedule.
+      properties:
+        central:
+          type: string
+          description: The CCU this device belongs to.
+        address:
+          type: string
+          description: Device address.
+        name:
+          type: string
+          description: Display name.
+        model:
+          type: string
+          description: Device type, e.g. "HmIP-eTRV-2".
+        channel:
+          $ref: "#/components/schemas/ScheduleChannelRef"
+        kind:
+          type: string
+          enum: [week_profile, climate]
+          description: |
+            `week_profile` when a dedicated channel carries the profile,
+            `climate` when a thermostat carries it in MASTER.
+
     ScheduleChannelRef:
       type: object
       required: [address, number, device_address]

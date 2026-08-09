@@ -851,3 +851,87 @@ func TestFindScheduleChannelDeviceNotFound(t *testing.T) {
 		t.Error("FindScheduleChannel with unknown device must return error")
 	}
 }
+
+// TestListScheduleDevicesIsTypeDerived pins the two paths and, more
+// importantly, that the overview costs no CCU traffic: the domain is
+// built without a writer, so any MASTER probe would panic or error.
+func TestListScheduleDevicesIsTypeDerived(t *testing.T) {
+	t.Parallel()
+
+	reg, unit := scheduleTestRegistry(t)
+
+	// A switch with a dedicated week-profile channel.
+	sw := scheduleTestDevice(unit, "ABC001", "HmIP-BSM", "Kitchen light")
+	sw.AddChannel("ABC001:1", 1, "SWITCH_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	sw.AddChannel("ABC001:3", 3, "SWITCH_WEEK_PROFILE", hmenum.ParamsetKeyMaster)
+
+	// A thermostat carrying the profile in MASTER.
+	trv := scheduleTestDevice(unit, "ABC002", "HmIP-eTRV-2", "Bath radiator")
+	trv.AddChannel("ABC002:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyMaster)
+
+	// A device with neither.
+	plug := scheduleTestDevice(unit, "ABC003", "HmIP-PS", "Bookshelf")
+	plug.AddChannel("ABC003:3", 3, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+
+	// No writer: a MASTER probe would have nowhere to go.
+	got, err := NewSchedulesDomain(reg, nil).ListScheduleDevices(context.Background())
+	if err != nil {
+		t.Fatalf("ListScheduleDevices: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("listed %d devices, want the switch and the thermostat: %+v", len(got), got)
+	}
+	if got[0].Address != "ABC001" || got[0].Kind != "week_profile" || got[0].Channel.Number != 3 {
+		t.Errorf("first entry = %+v, want ABC001 week_profile on channel 3", got[0])
+	}
+	if got[1].Address != "ABC002" || got[1].Kind != "climate" || got[1].Channel.Number != 1 {
+		t.Errorf("second entry = %+v, want ABC002 climate on channel 1", got[1])
+	}
+	if got[0].Central != "ccu1" || got[0].Name != "Kitchen light" || got[0].Model != "HmIP-BSM" {
+		t.Errorf("entry lacks its identity: %+v", got[0])
+	}
+}
+
+// TestListScheduleDevicesPrefersTheDedicatedChannel pins the ordering of
+// the two paths: a thermostat that also has a week-profile channel is
+// reported through that channel, mirroring FindScheduleChannel.
+func TestListScheduleDevicesPrefersTheDedicatedChannel(t *testing.T) {
+	t.Parallel()
+
+	reg, unit := scheduleTestRegistry(t)
+	dev := scheduleTestDevice(unit, "ABC010", "HmIP-Hybrid", "Hybrid")
+	dev.AddChannel("ABC010:1", 1, "CLIMATECONTROL_RT_TRANSCEIVER", hmenum.ParamsetKeyMaster)
+	dev.AddChannel("ABC010:5", 5, "HEATING_WEEK_PROFILE", hmenum.ParamsetKeyMaster)
+
+	got, err := NewSchedulesDomain(reg, nil).ListScheduleDevices(context.Background())
+	if err != nil {
+		t.Fatalf("ListScheduleDevices: %v", err)
+	}
+	if len(got) != 1 || got[0].Kind != "week_profile" || got[0].Channel.Number != 5 {
+		t.Fatalf("got %+v, want the dedicated week-profile channel", got)
+	}
+}
+
+// scheduleTestRegistry builds a one-central registry for the overview tests.
+func scheduleTestRegistry(t *testing.T) (*central.Registry, *central.Unit) {
+	t.Helper()
+	c, err := central.New(central.Config{Name: "ccu1"})
+	if err != nil {
+		t.Fatalf("central: %v", err)
+	}
+	reg := central.NewRegistry()
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	return reg, c
+}
+
+// scheduleTestDevice registers a device with the given identity.
+func scheduleTestDevice(c *central.Unit, address, model, name string) *device.Device {
+	d := device.New(device.Config{
+		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
+		Address: address, Model: model, Name: name,
+	})
+	c.ModelRegistry.Put(d)
+	return d
+}

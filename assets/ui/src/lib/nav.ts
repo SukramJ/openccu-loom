@@ -22,6 +22,7 @@ export type RouteKind =
   | "programs"
   | "groups"
   | "links"
+  | "schedules"
   | "diagrams"
   | "messages"
   | "audit"
@@ -157,6 +158,12 @@ export function navClusters(gates: NavGates): NavCluster[] {
           icon: "mdi:link",
           label: t("nav.links"),
           matches: ["links"],
+        },
+        {
+          href: "#/schedules",
+          icon: "mdi:calendar-clock",
+          label: t("nav.schedules"),
+          matches: ["schedules"],
         },
       ],
     },

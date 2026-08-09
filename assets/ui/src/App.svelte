@@ -20,6 +20,7 @@
   import ProgramList from "./routes/ProgramList.svelte";
   import GroupList from "./routes/GroupList.svelte";
   import LinkList from "./routes/LinkList.svelte";
+  import ScheduleList from "./routes/ScheduleList.svelte";
   import Diagrams from "./routes/Diagrams.svelte";
   import MessageList from "./routes/MessageList.svelte";
   import Settings from "./routes/Settings.svelte";
@@ -245,6 +246,7 @@
     | { kind: "programs" }
     | { kind: "groups" }
     | { kind: "links" }
+    | { kind: "schedules" }
     | { kind: "diagrams" }
     | { kind: "messages" }
     | { kind: "audit" }
@@ -277,6 +279,7 @@
     if (path === "/programs") return { kind: "programs" };
     if (path === "/groups") return { kind: "groups" };
     if (path === "/links") return { kind: "links" };
+    if (path === "/schedules") return { kind: "schedules" };
     if (path === "/diagrams") return { kind: "diagrams" };
     if (path === "/messages") return { kind: "messages" };
     if (path === "/audit") return { kind: "audit" };
@@ -332,6 +335,7 @@
     route.kind === "fleet" ? t("page.title.fleet") :
     route.kind === "groups" ? t("page.title.groups") :
     route.kind === "links" ? t("page.title.links") :
+    route.kind === "schedules" ? t("page.title.schedules") :
     route.kind === "diagrams" ? t("page.title.diagrams") :
     route.kind === "logs" ? t("page.title.logs") :
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
@@ -439,6 +443,8 @@
           <GroupList />
         {:else if route.kind === "links"}
           <LinkList {locale} />
+        {:else if route.kind === "schedules"}
+          <ScheduleList />
         {:else if route.kind === "diagrams"}
           <Diagrams />
         {:else if route.kind === "messages"}

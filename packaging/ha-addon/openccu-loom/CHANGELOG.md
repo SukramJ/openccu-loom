@@ -2,6 +2,12 @@
 
 ## 0.55.2
 
+- **New: a "Schedules" list.** It shows every device that has a week
+  program — thermostats as well as switches and covers with a week
+  profile — across all connected CCUs, and takes you straight to the
+  device's own editor. Until now you had to open each device to find
+  out whether it had a program at all.
+
 - **Changed: hiding a view is only about the menu.** An earlier build
   also blocked changes from Home Assistant on hidden views. That never
   applied to the Home Assistant integration itself, blocked nothing an

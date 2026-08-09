@@ -11,11 +11,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // stubScheduleService is an inline stub for ScheduleService.
 type stubScheduleService struct {
+	listDevices    []hmapi.ScheduleDeviceSummary
+	listErr        error
 	getResult      *ClimateSchedule
 	getErr         error
 	putErr         error
@@ -60,6 +64,10 @@ func (s *stubScheduleService) SetActiveProfileAuto(_ context.Context, _, _ strin
 
 func (s *stubScheduleService) FindScheduleChannel(_ context.Context, _ string) (int, error) {
 	return 1, nil
+}
+
+func (s *stubScheduleService) ListScheduleDevices(_ context.Context) ([]hmapi.ScheduleDeviceSummary, error) {
+	return s.listDevices, s.listErr
 }
 
 func (s *stubScheduleService) CopySchedule(_ context.Context, _, dst string) error {

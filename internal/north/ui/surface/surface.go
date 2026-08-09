@@ -184,6 +184,7 @@ var registry = []Surface{
 	{ID: "nav.sysvars", Group: GroupAutomation, Defaults: both()},
 	{ID: "nav.groups", Group: GroupAutomation, Defaults: both()},
 	{ID: "nav.links", Group: GroupAutomation, Defaults: both()},
+	{ID: "nav.schedules", Group: GroupAutomation, Defaults: both()},
 
 	// --- navigation: diagnostics ----------------------------------
 	{ID: "nav.messages", Group: GroupDiagnose, Defaults: both()},

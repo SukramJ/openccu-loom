@@ -258,6 +258,9 @@ export type SimpleScheduleEntry = components["schemas"]["SimpleScheduleEntry"];
 // (active_profile_index) are safe to ignore in existing SPA callers.
 export type ClimateSchedule = components["schemas"]["Schedule"];
 
+// One row of the fleet-wide schedule overview (GET /schedules).
+export type ScheduleDeviceSummary = components["schemas"]["ScheduleDeviceSummary"];
+
 // BackupEntry re-exported from generated schema.
 export type BackupEntry = components["schemas"]["BackupEntry"];
 
