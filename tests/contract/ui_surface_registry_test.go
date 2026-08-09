@@ -54,10 +54,10 @@ func sliceBetween(t *testing.T, src, start, end string) string {
 }
 
 var (
-	navHrefRe   = regexp.MustCompile(`href:\s*"#/([a-z-]+)"`)
-	tabIDRe     = regexp.MustCompile(`\{\s*id:\s*"([a-z_]+)"`)
-	tsUnionRe   = regexp.MustCompile(`"([a-z-]+)"`)
-	surfaceKeyE = regexp.MustCompile(`"(surface\.(?:label|desc)\.[^"]+)"\s*:`)
+	navHrefRe = regexp.MustCompile(`href:\s*"#/([a-z-]+)"`)
+	tabIDRe   = regexp.MustCompile(`\{\s*id:\s*"([a-z_]+)"`)
+	tsUnionRe = regexp.MustCompile(`"([a-z-]+)"`)
+	anyKeyRe  = regexp.MustCompile(`"([a-z][a-zA-Z0-9_.-]*)"\s*:`)
 )
 
 // spaSurfaceIDs collects the surface ids the SPA actually renders.
@@ -134,11 +134,21 @@ func TestEverySurfaceIsRegistered(t *testing.T) {
 	}
 }
 
-// TestSurfaceCopyIsComplete requires a label and a description for every
-// surface, in both locales. The description is not decoration: it is the
-// only thing that tells an operator what they are about to switch off,
-// and in the embedded profile the difference between "Device groups
-// (HmIP)" and "User groups" decides whether they hide the right one.
+// TestSurfaceCopyIsComplete requires a description for every surface, in
+// both locales, AND that the surface's label resolves to the key the
+// navigation itself uses.
+//
+// The second half is the load-bearing one. The first design gave the
+// editor its own `surface.label.*` catalogue, and it had drifted in 26
+// of 48 rows before shipping — the editor called the fleet view "Fleet"
+// while the sidebar said "CCUs". Labels now come from `nav.*`,
+// `settings.tab.*` and `device.{top,sub}tab.*`; this test fails if one of
+// those keys is missing, which is the only way the editor can now show a
+// name the navigation does not.
+//
+// The description has no second source: it exists only for this editor,
+// and it is the sentence that tells an operator what they are switching
+// off.
 func TestSurfaceCopyIsComplete(t *testing.T) {
 	t.Parallel()
 
@@ -154,7 +164,7 @@ func TestSurfaceCopyIsComplete(t *testing.T) {
 	}
 	collect := func(block string) map[string]bool {
 		out := map[string]bool{}
-		for _, m := range surfaceKeyE.FindAllStringSubmatch(block, -1) {
+		for _, m := range anyKeyRe.FindAllStringSubmatch(block, -1) {
 			out[m[1]] = true
 		}
 		return out
@@ -163,8 +173,10 @@ func TestSurfaceCopyIsComplete(t *testing.T) {
 
 	var missing []string
 	for _, s := range surface.Registry() {
-		for _, kind := range []string{"label", "desc"} {
-			key := "surface." + kind + "." + string(s.ID)
+		for _, key := range []string{
+			surfaceLabelKey(s.ID),
+			"surface.desc." + string(s.ID),
+		} {
 			if !en[key] {
 				missing = append(missing, "EN "+key)
 			}
@@ -176,8 +188,28 @@ func TestSurfaceCopyIsComplete(t *testing.T) {
 	if len(missing) > 0 {
 		sort.Strings(missing)
 		t.Fatalf("%d surface i18n entries missing in assets/ui/src/lib/i18n.ts "+
-			"(every surface needs surface.label.<id> AND surface.desc.<id> in EN and DE):\n%s",
+			"(every surface needs its navigation label AND surface.desc.<id>, in EN and DE):\n%s",
 			len(missing), strings.Join(missing, "\n"))
+	}
+}
+
+// surfaceLabelKey mirrors labelKey() in NavViewsAdmin.svelte: a surface
+// borrows the label of the thing it addresses instead of carrying a copy.
+// The two must agree, so a change here is a change there.
+func surfaceLabelKey(id surface.ID) string {
+	s := string(id)
+	switch {
+	case strings.HasPrefix(s, "nav."):
+		return "nav." + strings.TrimPrefix(s, "nav.")
+	case strings.HasPrefix(s, "settings."):
+		return "settings.tab." + strings.TrimPrefix(s, "settings.")
+	case strings.HasPrefix(s, "device.configure."):
+		sub := strings.TrimPrefix(s, "device.configure.")
+		return "device.subtab." + strings.ReplaceAll(sub, "-", "_")
+	case strings.HasPrefix(s, "device."):
+		return "device.toptab." + strings.TrimPrefix(s, "device.")
+	default:
+		return s
 	}
 }
 

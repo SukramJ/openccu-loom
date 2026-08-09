@@ -47,8 +47,28 @@
   const editing = $derived(surfacesStore.editing);
   const surfaces = $derived(surfacesStore.surfaces);
 
+  /**
+   * The i18n key of a surface's label — the one the navigation itself
+   * uses, not a copy.
+   *
+   * A second set of labels under `surface.label.*` was the first design,
+   * and it had drifted in 26 of 48 rows before it ever shipped: the
+   * editor called the fleet view "Fleet" while the sidebar said "CCUs".
+   * A label is a name, and a name needs one source.
+   */
+  function labelKey(id: string): string {
+    if (id.startsWith("nav.")) return `nav.${id.slice(4)}`;
+    if (id.startsWith("settings.")) return `settings.tab.${id.slice(9)}`;
+    if (id.startsWith("device.configure.")) {
+      // Sub-tab keys use underscores where the surface id uses hyphens.
+      return `device.subtab.${id.slice("device.configure.".length).replace(/-/g, "_")}`;
+    }
+    if (id.startsWith("device.")) return `device.toptab.${id.slice(7)}`;
+    return id;
+  }
+
   function label(s: SurfaceInfo): string {
-    return t(`surface.label.${s.id}`);
+    return t(labelKey(s.id));
   }
 
   function description(s: SurfaceInfo): string {
@@ -417,7 +437,9 @@
               {@const available = gateAvailable(s)}
               {@const writeGated = editing === "embedded" && s.write_gated}
               <div
-                class="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 last:border-b-0 dark:border-slate-800"
+                class="flex items-start justify-between gap-4 border-b border-slate-200 py-3 pr-4 last:border-b-0 dark:border-slate-800 {s.parent
+                  ? 'border-l-2 border-l-slate-200 pl-8 dark:border-l-slate-700'
+                  : 'pl-4'}"
               >
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
