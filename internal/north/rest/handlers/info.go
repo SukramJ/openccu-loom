@@ -16,7 +16,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "5.13.0"
+const APIVersion = "5.14.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -79,9 +79,26 @@ type InfoResponse struct {
 	// CCU/RaspberryMatic add-on. Support surfaces (the SPA About
 	// page) show it so "where does the daemon run?" is answerable
 	// from a screenshot.
-	AddonBuild   bool     `json:"addon_build"`
-	Uptime       string   `json:"uptime"`
-	StartedAt    string   `json:"started_at"`
+	AddonBuild bool   `json:"addon_build"`
+	Uptime     string `json:"uptime"`
+	StartedAt  string `json:"started_at"`
+	// ConfigUIURL is the externally-reachable address of this daemon's
+	// Config UI, derived from `north.rest.public_url`. Empty when no
+	// public URL is configured.
+	//
+	// It exists because a client's own connection address is not
+	// necessarily one a browser can follow: an integration reaching the
+	// daemon over a container network, or on a LAN address behind a
+	// reverse proxy, knows how to TALK to it but not where to SEND a
+	// person. Only the operator knows that, which is what public_url
+	// records. A client that wants to link a human at the Config UI
+	// reads this and falls back to guessing from its own address.
+	//
+	// Captured at construction rather than read live: the field is
+	// restart-required (restart.go), so the boot value is the one this
+	// process actually serves under. A live read would report an address
+	// the running daemon is not reachable at yet.
+	ConfigUIURL  string   `json:"config_ui_url"`
 	APIVersion   string   `json:"api_version"`
 	SchemaDigest string   `json:"schema_digest"`
 	Capabilities []string `json:"capabilities"`
@@ -118,7 +135,7 @@ type CapabilityDetector interface {
 // captured once at router construction. The optional detector
 // surfaces feature capabilities the daemon was started with;
 // passing nil emits only the always-on capabilities.
-func Info(startedAt time.Time, detector CapabilityDetector) http.HandlerFunc {
+func Info(startedAt time.Time, detector CapabilityDetector, configUIURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		JSON(w, http.StatusOK, InfoResponse{
 			Version:      build.Version,
@@ -127,6 +144,7 @@ func Info(startedAt time.Time, detector CapabilityDetector) http.HandlerFunc {
 			AddonBuild:   build.IsAddon(),
 			Uptime:       time.Since(startedAt).Truncate(time.Second).String(),
 			StartedAt:    startedAt.UTC().Format(time.RFC3339),
+			ConfigUIURL:  configUIURL,
 			APIVersion:   APIVersion,
 			SchemaDigest: SchemaDigest,
 			Capabilities: capabilities(detector),

@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.57.0
+
+- **Groundwork: Loom now tells clients where its own interface can be
+  reached.** If you set a public address under Settings (for a reverse
+  proxy), other software can ask Loom for it instead of guessing. The
+  Home Assistant integration will use this to link its device pages
+  straight to Loom. Nothing changes for you in this add-on.
+
 ## 0.56.0
 
 - **New: the reduced view is now limited to Home Assistant.** If you

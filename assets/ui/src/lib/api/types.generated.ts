@@ -5886,6 +5886,25 @@ export interface components {
             /** Format: date-time */
             started_at: string;
             /**
+             * @description Externally-reachable address of this daemon's Config UI,
+             *     derived from `north.rest.public_url` with the SPA mount
+             *     appended. Empty when no public URL is configured.
+             *
+             *     It answers a question a client cannot answer for itself: the
+             *     address a client uses to TALK to the daemon (a container
+             *     network, a LAN address behind a reverse proxy) is not
+             *     necessarily one a browser can follow. Only the operator knows
+             *     that, and `public_url` is where they record it. A client that
+             *     wants to link a person at the Config UI reads this and falls
+             *     back to guessing from its own connection address when empty.
+             *
+             *     The mount path is appended by the daemon on purpose — a
+             *     client that had to know where the SPA is mounted would break
+             *     on the next mount change.
+             * @example https://loom.example.de/app/
+             */
+            config_ui_url: string;
+            /**
              * @description North-bound contract version (semver). Bumps independently
              *     of `version`. Minor bumps add backwards-compatible
              *     capabilities; major bumps remove or rename existing

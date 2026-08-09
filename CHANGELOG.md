@@ -4,6 +4,32 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.57.0]
+
+### Added
+
+- **`GET /api/v1/info` now reports `config_ui_url`** — the
+  externally-reachable address of this daemon's Config UI, derived from
+  `north.rest.public_url` with the SPA mount appended. Empty when no
+  public URL is configured.
+
+  It answers a question a client cannot answer for itself. The address a
+  client uses to *talk* to the daemon — a container network, a LAN
+  address behind a reverse proxy — is not necessarily one a browser can
+  follow. Only the operator knows that, and `public_url` is where they
+  already record it; until now the value only reached the CCU add-on's
+  `config.cgi` through a hint file.
+
+  The first consumer is the Home Assistant integration, which will point
+  its device pages at Loom's own device view instead of a config panel it
+  no longer registers for loom-backed entries.
+
+  The mount path is appended by the daemon on purpose: a client that had
+  to know where the SPA lives would break on the next mount change. Empty
+  stays empty rather than becoming a guess — the client's fallback is its
+  own connection address, which it knows and the daemon does not (API
+  version 5.14.0).
+
 ## [0.56.0]
 
 ### Added

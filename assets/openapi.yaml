@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.13.0
+  version: 5.14.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -7774,7 +7774,9 @@ components:
               max: {}
     Info:
       type: object
-      required: [version, commit, build_date, addon_build, uptime, started_at, api_version, schema_digest, capabilities]
+      required:
+        [version, commit, build_date, addon_build, uptime, started_at, config_ui_url,
+         api_version, schema_digest, capabilities]
       description: |
         Daemon build + runtime info plus a wire-contract version and a
         capability list. External clients should switch on
@@ -7793,6 +7795,25 @@ components:
             standalone binary, Docker image, and HA add-on builds.
         uptime: { type: string }
         started_at: { type: string, format: date-time }
+        config_ui_url:
+          type: string
+          description: |
+            Externally-reachable address of this daemon's Config UI,
+            derived from `north.rest.public_url` with the SPA mount
+            appended. Empty when no public URL is configured.
+
+            It answers a question a client cannot answer for itself: the
+            address a client uses to TALK to the daemon (a container
+            network, a LAN address behind a reverse proxy) is not
+            necessarily one a browser can follow. Only the operator knows
+            that, and `public_url` is where they record it. A client that
+            wants to link a person at the Config UI reads this and falls
+            back to guessing from its own connection address when empty.
+
+            The mount path is appended by the daemon on purpose — a
+            client that had to know where the SPA is mounted would break
+            on the next mount change.
+          example: https://loom.example.de/app/
         api_version:
           type: string
           description: |

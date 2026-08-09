@@ -197,6 +197,13 @@ type Deps struct {
 	// config entry, so on a multi-CCU daemon it cannot own the config
 	// surface of the CCUs it has no entry for. Nil reads as one.
 	CentralCounter handlers.CentralCounter
+	// ConfigUIURL is the externally-reachable Config-UI address
+	// (`north.rest.public_url` + the SPA mount) served by `GET /info`, so
+	// a client can link a human at a UI it may not be able to address
+	// itself. Empty when no public URL is configured. Captured at boot:
+	// the field is restart-required, so this process serves under the
+	// boot value whatever the database says later.
+	ConfigUIURL string
 	// RestartPending backs GET /system/restart-pending — whether a saved
 	// restart-required config change is staged but not yet active.
 	RestartPending handlers.RestartPendingProvider
@@ -628,7 +635,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		if d.OpenAPIValidator != nil {
 			r.Use(d.OpenAPIValidator.Middleware())
 		}
-		r.Get("/info", handlers.Info(d.StartedAt, d.Capabilities))
+		r.Get("/info", handlers.Info(d.StartedAt, d.Capabilities, d.ConfigUIURL))
 		r.Get("/health", handlers.Health(d.Health))
 
 		// Device-type icon proxy. Unauthenticated like /health: it
