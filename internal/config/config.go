@@ -1130,12 +1130,37 @@ type NorthUI struct {
 	//
 	// It is deliberately NOT derived from the Ingress signal. Being behind
 	// HA Ingress answers "am I proxied by HA?", not "does HA own my config
-	// surface?" — two propositions that come apart in both directions: the
-	// add-on runs in deployments that never configure the integration, and
-	// the remote proxy add-on forwards X-Ingress-Path while deliberately
-	// serving the full UI. Only the operator knows the answer, so it is
-	// declared. nil → false.
+	// surface?" — two propositions that come apart: the add-on runs in
+	// deployments that never configure the integration, and the remote
+	// proxy add-on forwards X-Ingress-Path without any say over the
+	// profile the remote daemon serves. Only the operator knows the
+	// answer, so it is declared. nil → false.
+	//
+	// Where that declaration APPLIES is a separate question — see
+	// [NorthUI.EmbeddedScope].
 	Embedded *bool `yaml:"embedded,omitempty" json:"embedded,omitempty" cfg:"basic"`
+
+	// EmbeddedScope limits where the Embedded declaration takes effect.
+	//
+	// The two questions are genuinely different. Embedded says Home
+	// Assistant owns the config surface; this says whether that ownership
+	// should also shape the UI of someone who opened this daemon's own
+	// URL directly. The reason for hiding is that Home Assistant already
+	// shows the same editor and two doors confuse — an argument that
+	// holds inside the HA panel and does not hold for a browser that was
+	// deliberately pointed at Loom.
+	//
+	// [EmbeddedScopeInsideHA] (the default) applies the embedded profile
+	// only to requests that arrive through Home Assistant, which the
+	// Supervisor's X-Ingress-Path header marks (the remote proxy add-on
+	// forwards it). [EmbeddedScopeAlways] restores the daemon-wide
+	// behaviour for operators who want one reduced UI everywhere.
+	//
+	// Scoping on a header is sound here ONLY because hiding is navigation
+	// and nothing else: a client on the directly-exposed port can send
+	// the header, and all it buys them is a shorter menu. It would not be
+	// sound if this gated authorization. "" → [EmbeddedScopeInsideHA].
+	EmbeddedScope EmbeddedScope `yaml:"embedded_scope,omitempty" json:"embedded_scope,omitempty" cfg:"basic"`
 
 	// Profiles carries per-profile surface overrides, keyed by profile
 	// name (see [ProfileStandalone] / [ProfileEmbedded]) and then by
@@ -1161,6 +1186,22 @@ const (
 	SurfaceHidden SurfaceState = "hidden"
 )
 
+// EmbeddedScope names where the embedded declaration applies.
+//
+// loom:reachable:reason="carried by NorthUI.EmbeddedScope and read by ActiveProfileFor on every /ui/surfaces request; a method-less string alias the analyzer's type heuristic cannot see used"
+type EmbeddedScope string
+
+const (
+	// EmbeddedScopeInsideHA applies the embedded profile only to requests
+	// that arrive through Home Assistant. The default: the reason for
+	// hiding is that HA shows the same editor, which is not true for a
+	// browser pointed straight at this daemon.
+	EmbeddedScopeInsideHA EmbeddedScope = "inside_ha"
+	// EmbeddedScopeAlways applies it to every request, however the UI was
+	// reached — the daemon-wide behaviour of 0.55.x and earlier.
+	EmbeddedScopeAlways EmbeddedScope = "always"
+)
+
 // Surface profile names. Two, fixed: "who owns the config surface" has
 // exactly two answers, and every further profile would double the
 // review surface of the shipped default table.
@@ -1184,9 +1225,37 @@ func (n NorthUI) IsEmbedded() bool {
 	return orDefault(n.Embedded, false)
 }
 
-// ActiveProfile names the surface profile the daemon currently serves.
+// EmbeddedScopeOrDefault returns the effective scope. "" → inside_ha.
+func (n NorthUI) EmbeddedScopeOrDefault() EmbeddedScope {
+	if n.EmbeddedScope == EmbeddedScopeAlways {
+		return EmbeddedScopeAlways
+	}
+	return EmbeddedScopeInsideHA
+}
+
+// ActiveProfile names the profile the operator's declaration selects,
+// ignoring where it applies. It answers "what did the operator ask
+// for?" — the right question for an audit entry, and the wrong one for
+// serving a request. Use [NorthUI.ActiveProfileFor] for the latter.
 func (n NorthUI) ActiveProfile() string {
 	if n.IsEmbedded() {
+		return ProfileEmbedded
+	}
+	return ProfileStandalone
+}
+
+// ActiveProfileFor names the profile to serve one request, given
+// whether it arrived through Home Assistant.
+//
+// With the default scope an embedded daemon still serves the full UI to
+// someone who opened its own URL: they chose this UI over the Home
+// Assistant panel, and the duplicate-editor argument that motivates
+// hiding does not apply to them.
+func (n NorthUI) ActiveProfileFor(insideHA bool) string {
+	if !n.IsEmbedded() {
+		return ProfileStandalone
+	}
+	if n.EmbeddedScopeOrDefault() == EmbeddedScopeAlways || insideHA {
 		return ProfileEmbedded
 	}
 	return ProfileStandalone
@@ -1855,6 +1924,16 @@ func validateOperatorSurfaces(c *Config) error {
 // this binary does not have. Unknown ids are ignored at resolve time
 // instead, which keeps the config forward-compatible.
 func validateSurfaceProfiles(ui *NorthUI) error {
+	// A typo here fails loudly rather than falling back to the default:
+	// "embedded_scope: allways" would otherwise silently keep hiding
+	// views on direct access, which is precisely what the operator was
+	// switching off.
+	switch ui.EmbeddedScope {
+	case "", EmbeddedScopeInsideHA, EmbeddedScopeAlways:
+	default:
+		return fmt.Errorf("config: north.ui.embedded_scope: must be %q or %q: %q",
+			EmbeddedScopeInsideHA, EmbeddedScopeAlways, ui.EmbeddedScope)
+	}
 	for profile, overrides := range ui.Profiles {
 		if profile != ProfileStandalone && profile != ProfileEmbedded {
 			return fmt.Errorf("config: north.ui.profiles: unknown profile %q (want %q or %q)",

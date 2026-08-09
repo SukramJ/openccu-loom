@@ -55,9 +55,21 @@ export type SurfaceInfo = {
   ha_owns?: boolean;
 };
 
+/** Where the embedded declaration applies. */
+export type EmbeddedScope = "inside_ha" | "always";
+
 /** `GET|PUT /api/v1/ui/surfaces`. */
 export type SurfacesResponse = {
   embedded: boolean;
+  /** Where the master toggle applies. `inside_ha` is the default. */
+  embedded_scope: EmbeddedScope;
+  /**
+   * Whether THIS request reached the daemon through Home Assistant.
+   * With the default scope it is what selects `profile`, so the same
+   * configuration answers differently on the other door.
+   */
+  inside_ha: boolean;
+  /** The profile served to this request. */
   profile: ProfileName;
   /** Stored, sparse overrides per profile name. */
   profiles: Partial<Record<ProfileName, Record<string, SurfaceState>>>;
@@ -71,8 +83,9 @@ export type SurfacesResponse = {
   surfaces: SurfaceInfo[];
 };
 
-/** `PUT /api/v1/ui/surfaces`. Both fields are optional. */
+/** `PUT /api/v1/ui/surfaces`. Every field is optional. */
 export type SurfacesRequest = {
   embedded?: boolean;
+  embedded_scope?: EmbeddedScope;
   profiles?: Partial<Record<ProfileName, Record<string, SurfaceState>>>;
 };

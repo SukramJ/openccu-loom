@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.12.0
+  version: 5.13.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -10997,15 +10997,34 @@ components:
 
     SurfacesResponse:
       type: object
-      required: [embedded, profile, profiles, effective, centrals, surfaces]
+      required:
+        [embedded, embedded_scope, inside_ha, profile, profiles, effective, centrals, surfaces]
       properties:
         embedded:
           type: boolean
           description: The master toggle — whether Home Assistant owns this daemon's config surface.
+        embedded_scope:
+          type: string
+          enum: [inside_ha, always]
+          description: |
+            Where the master toggle applies. `inside_ha` (the default)
+            limits the embedded profile to requests that arrive through
+            Home Assistant, so a browser pointed straight at this daemon
+            keeps the full UI — the duplicate-editor argument that
+            motivates hiding does not apply to it. `always` restores the
+            daemon-wide behaviour.
+        inside_ha:
+          type: boolean
+          description: |
+            Whether THIS request reached the daemon through Home
+            Assistant, decided by the Supervisor's `X-Ingress-Path`
+            header (the remote proxy add-on forwards it). With the
+            default scope it is what selects `profile`, so the same
+            configuration answers differently on the other door.
         profile:
           type: string
           enum: [standalone, embedded]
-          description: The live profile.
+          description: The profile served to this request.
         profiles:
           type: object
           additionalProperties:
@@ -11032,12 +11051,21 @@ components:
     SurfacesRequest:
       type: object
       description: |
-        Both fields are optional. Omitting `profiles` leaves the stored
-        overrides untouched; omitting `embedded` leaves the mode as it is.
+        Every field is optional. Omitting `profiles` leaves the stored
+        overrides untouched; omitting `embedded` or `embedded_scope`
+        leaves the mode as it is.
       properties:
         embedded:
           type: boolean
           description: Flip the master toggle.
+        embedded_scope:
+          type: string
+          enum: [inside_ha, always]
+          description: |
+            Move where the master toggle applies. An unrecognised value
+            is rejected rather than falling back to the default — a typo
+            would otherwise keep hiding views on direct access, which is
+            what the operator was switching off.
         profiles:
           type: object
           additionalProperties:

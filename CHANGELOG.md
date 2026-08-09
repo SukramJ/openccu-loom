@@ -4,6 +4,40 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.56.0]
+
+### Added
+
+- **The embedded mode now applies only where Home Assistant actually
+  shows the UI** — new setting `north.ui.embedded_scope`, in the editor
+  as "Where does the embedded mode apply?".
+
+  The reason for hiding a view is specific: Home Assistant already shows
+  the same editor, and two doors to one paramset confuse. That holds
+  inside the HA panel. It does not hold for someone who opened this
+  daemon's own address — they chose Loom over the panel, and until now
+  they got the trimmed UI anyway, with a daemon-wide switch as the only
+  way out.
+
+  `inside_ha` (the **new default**) applies the embedded profile to
+  requests that arrive through Home Assistant, including the remote proxy
+  add-on; a direct visit keeps the full UI. `always` restores the
+  daemon-wide behaviour of 0.55.x. Also available as
+  `OPENCCU_LOOM_UI_EMBEDDED_SCOPE`.
+
+  **This changes behaviour on upgrade**: a daemon with `embedded: true`
+  that you open directly now shows the full navigation. If you want the
+  reduced UI on every path, set the scope to `always`.
+
+  The signal is the Supervisor's `X-Ingress-Path` header, not the auth
+  scheme — the scheme cannot answer the question, since signing in to
+  Loom from inside the panel is indistinguishable from a direct visit,
+  and the bearer scheme covers both the remote panel and the integration.
+  It is deliberately not an authorization boundary: the header is
+  forgeable on the direct port, and all a forger gains is a shorter menu.
+  That is only sound because hiding is navigation and nothing else, which
+  is why the write enforcement had to go first (API version 5.13.0).
+
 ## [0.55.3]
 
 ### Fixed

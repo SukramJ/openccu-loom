@@ -36,6 +36,7 @@ import (
 //   - OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH    → c.North.REST.OpenAPISpecPath
 //   - OPENCCU_LOOM_MQTT_BROKER_URL           → c.North.MQTT.BrokerURL
 //   - OPENCCU_LOOM_UI_EMBEDDED               → c.North.UI.Embedded (bool)
+//   - OPENCCU_LOOM_UI_EMBEDDED_SCOPE         → c.North.UI.EmbeddedScope
 //
 // A recognised variable that is present but fails to parse (e.g.
 // OPENCCU_LOOM_CALLBACK_PORT=abc) is reported as an error naming the
@@ -63,6 +64,11 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) error {
 	overlayString(getenv, "OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH", &c.North.REST.OpenAPISpecPath)
 	overlayString(getenv, "OPENCCU_LOOM_MQTT_BROKER_URL", &c.North.MQTT.BrokerURL)
 	overlayBoolPtr(getenv, "OPENCCU_LOOM_UI_EMBEDDED", &c.North.UI.Embedded)
+	// Validation rejects an unrecognised value at boot, so a typo here
+	// surfaces rather than silently reading as the default.
+	if v := strings.TrimSpace(getenv("OPENCCU_LOOM_UI_EMBEDDED_SCOPE")); v != "" {
+		c.North.UI.EmbeddedScope = EmbeddedScope(v)
+	}
 	return nil
 }
 

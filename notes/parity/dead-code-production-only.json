@@ -1,6 +1,6 @@
 {
-  "generated": "9944174a",
-  "head": "9944174a",
+  "generated": "e2f72d0d",
+  "head": "e2f72d0d",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27998,
+    "total_exported": 28007,
     "reachable": 4786,
-    "whitelisted": 20083,
+    "whitelisted": 20092,
     "unreachable": 3129
   },
   "by_package": [
@@ -68291,14 +68291,14 @@
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1285
+      "line": 1354
     },
     {
       "package": "internal/config",
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1285
+      "line": 1354
     },
     {
       "package": "internal/config",
@@ -68361,14 +68361,14 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1344
+      "line": 1413
     },
     {
       "package": "internal/config",
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1344
+      "line": 1413
     },
     {
       "package": "internal/config",
@@ -68403,28 +68403,28 @@
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1441
+      "line": 1510
     },
     {
       "package": "internal/config",
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1441
+      "line": 1510
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1392
+      "line": 1461
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1392
+      "line": 1461
     },
     {
       "package": "internal/config",
@@ -68473,14 +68473,14 @@
       "identifier": "Clone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1598
+      "line": 1667
     },
     {
       "package": "internal/config",
       "identifier": "Clone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1598
+      "line": 1667
     },
     {
       "package": "internal/config",
@@ -68515,14 +68515,14 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1585
+      "line": 1654
     },
     {
       "package": "internal/config",
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1585
+      "line": 1654
     },
     {
       "package": "internal/config",
@@ -68599,14 +68599,14 @@
       "identifier": "DefaultWithEnv",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/overlay.go",
-      "line": 87
+      "line": 93
     },
     {
       "package": "internal/config",
       "identifier": "DefaultWithEnv",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/overlay.go",
-      "line": 87
+      "line": 93
     },
     {
       "package": "internal/config",
@@ -68621,6 +68621,48 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/discovery.go",
       "line": 49
+    },
+    {
+      "package": "internal/config",
+      "identifier": "EmbeddedScope",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1192
+    },
+    {
+      "package": "internal/config",
+      "identifier": "EmbeddedScope",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1192
+    },
+    {
+      "package": "internal/config",
+      "identifier": "EmbeddedScopeAlways",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1202
+    },
+    {
+      "package": "internal/config",
+      "identifier": "EmbeddedScopeAlways",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1202
+    },
+    {
+      "package": "internal/config",
+      "identifier": "EmbeddedScopeInsideHA",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1199
+    },
+    {
+      "package": "internal/config",
+      "identifier": "EmbeddedScopeInsideHA",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1199
     },
     {
       "package": "internal/config",
@@ -68669,14 +68711,14 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1556
+      "line": 1625
     },
     {
       "package": "internal/config",
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1556
+      "line": 1625
     },
     {
       "package": "internal/config",
@@ -68767,14 +68809,14 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1322
+      "line": 1391
     },
     {
       "package": "internal/config",
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1322
+      "line": 1391
     },
     {
       "package": "internal/config",
@@ -68837,14 +68879,14 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1560
+      "line": 1629
     },
     {
       "package": "internal/config",
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1560
+      "line": 1629
     },
     {
       "package": "internal/config",
@@ -68879,14 +68921,14 @@
       "identifier": "LoadWithEnv",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/overlay.go",
-      "line": 101
+      "line": 107
     },
     {
       "package": "internal/config",
       "identifier": "LoadWithEnv",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/overlay.go",
-      "line": 101
+      "line": 107
     },
     {
       "package": "internal/config",
@@ -68907,14 +68949,14 @@
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1707
+      "line": 1776
     },
     {
       "package": "internal/config",
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1707
+      "line": 1776
     },
     {
       "package": "internal/config",
@@ -69005,14 +69047,14 @@
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1209
+      "line": 1278
     },
     {
       "package": "internal/config",
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1209
+      "line": 1278
     },
     {
       "package": "internal/config",
@@ -69159,28 +69201,28 @@
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1372
+      "line": 1441
     },
     {
       "package": "internal/config",
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1372
+      "line": 1441
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1572
+      "line": 1641
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1572
+      "line": 1641
     },
     {
       "package": "internal/config",
@@ -69229,28 +69271,28 @@
       "identifier": "ProfileEmbedded",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1172
+      "line": 1213
     },
     {
       "package": "internal/config",
       "identifier": "ProfileEmbedded",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1172
+      "line": 1213
     },
     {
       "package": "internal/config",
       "identifier": "ProfileStandalone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1170
+      "line": 1211
     },
     {
       "package": "internal/config",
       "identifier": "ProfileStandalone",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1170
+      "line": 1211
     },
     {
       "package": "internal/config",
@@ -69383,42 +69425,42 @@
       "identifier": "SurfaceHidden",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1161
+      "line": 1186
     },
     {
       "package": "internal/config",
       "identifier": "SurfaceHidden",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1161
+      "line": 1186
     },
     {
       "package": "internal/config",
       "identifier": "SurfaceState",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1155
+      "line": 1180
     },
     {
       "package": "internal/config",
       "identifier": "SurfaceState",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1155
+      "line": 1180
     },
     {
       "package": "internal/config",
       "identifier": "SurfaceVisible",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1159
+      "line": 1184
     },
     {
       "package": "internal/config",
       "identifier": "SurfaceVisible",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1159
+      "line": 1184
     },
     {
       "package": "internal/config",
@@ -70419,14 +70461,14 @@
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1546
+      "line": 1615
     },
     {
       "package": "internal/config",
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1546
+      "line": 1615
     },
     {
       "package": "internal/config",
@@ -123745,14 +123787,14 @@
       "identifier": "CentralCounter",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 91
+      "line": 119
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CentralCounter",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 91
+      "line": 119
     },
     {
       "package": "internal/north/rest/handlers",
@@ -126517,14 +126559,14 @@
       "identifier": "GetUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 102
+      "line": 130
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 102
+      "line": 130
     },
     {
       "package": "internal/north/rest/handlers",
@@ -129569,14 +129611,14 @@
       "identifier": "PutUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 113
+      "line": 146
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutUISurfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 113
+      "line": 146
     },
     {
       "package": "internal/north/rest/handlers",
@@ -130493,14 +130535,14 @@
       "identifier": "SurfacesRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 82
+      "line": 91
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SurfacesRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/ui_surfaces.go",
-      "line": 82
+      "line": 91
     },
     {
       "package": "internal/north/rest/handlers",
@@ -132748,6 +132790,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
       "line": 1439
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestEmbeddedScopeDecidesPerRequest",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/ui_surfaces_test.go",
+      "line": 90
     },
     {
       "package": "internal/north/rest/handlers",
@@ -137724,49 +137773,63 @@
       "identifier": "TestPutUISurfacesIsAudited",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 222
+      "line": 354
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutUISurfacesPersistsEmbeddedScope",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/ui_surfaces_test.go",
+      "line": 166
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesRejectsFloorHide",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 113
+      "line": 240
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutUISurfacesRejectsUnknownEmbeddedScope",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/ui_surfaces_test.go",
+      "line": 192
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesRejectsUnknownProfile",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 182
+      "line": 314
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesRejectsUnknownState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 135
+      "line": 262
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesStoresSparsely",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 85
+      "line": 212
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesSurvivesNilRecorder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 254
+      "line": 386
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestPutUISurfacesTogglesModeWithoutTouchingProfiles",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 155
+      "line": 282
     },
     {
       "package": "internal/north/rest/handlers",
@@ -139005,7 +139068,7 @@
       "identifier": "TestUISurfacesUnavailableWithoutService",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/ui_surfaces_test.go",
-      "line": 198
+      "line": 330
     },
     {
       "package": "internal/north/rest/handlers",

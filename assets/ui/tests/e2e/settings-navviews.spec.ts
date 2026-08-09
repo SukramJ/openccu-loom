@@ -1,5 +1,9 @@
 import { test, expect } from './helpers/fixtures';
-import { mockAllApis, addStylesForStableScreenshots } from './helpers/mock-api';
+import {
+  mockAllApis,
+  mockEmbeddedMode,
+  addStylesForStableScreenshots,
+} from './helpers/mock-api';
 
 // Settings → Navigation & views: the surface-profile editor.
 //
@@ -80,11 +84,34 @@ test.describe('Settings — navigation & views', () => {
     // The live profile is unchanged: the sidebar still carries Favorites.
     await expect(page.getByRole('link', { name: 'Favorites' })).toBeVisible();
   });
+
+  // The scope control only makes sense while the mode is on, and the
+  // live-profile line has to explain itself: with the default scope on a
+  // direct visit, the toggle says embedded and the profile says
+  // standalone. Without the explanation that reads as a contradiction.
+  test('the scope control appears with the mode and explains this browser', async ({
+    page,
+  }) => {
+    await page.goto(TAB);
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+
+    // Mode off — the question is meaningless, so the control stays away.
+    await expect(page.getByText('Where does the embedded mode apply?')).toHaveCount(0);
+
+    await mockEmbeddedMode(page, { scope: 'inside_ha', insideHA: false });
+    await page.reload();
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(500);
+
+    await expect(page.getByText('Where does the embedded mode apply?')).toBeVisible();
+    await expect(page.getByText('you opened this daemon directly')).toBeVisible();
+  });
 });
 
 // Visual baselines. Both modes, because the editor carries several
 // states that only colour distinguishes — the changed dot, the locked
-// row, the write-gated badge — and a dark-mode regression in any of them
+// row, the unavailable row — and a dark-mode regression in any of them
 // would otherwise ship unnoticed.
 test.describe('Settings — navigation & views, visual', () => {
   test.beforeEach(async ({ page }) => {

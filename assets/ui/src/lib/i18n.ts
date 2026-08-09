@@ -1134,6 +1134,7 @@ const EN: Catalog = {
   "config.field.north.rest.rate_limit.burst": "Burst capacity",
   "config.field.north.ui.enabled": "Bootstrap UI enabled",
   "config.field.north.ui.embedded": "Embedded in Home Assistant",
+  "config.field.north.ui.embedded_scope": "Scope of the embedded mode",
   "config.field.north.ui.profiles": "Navigation profiles",
   "config.field.callback.host": "Callback bind address",
   "config.field.callback.port": "XML-RPC callback port",
@@ -1402,7 +1403,9 @@ const EN: Catalog = {
   "config.help.north.ui.enabled":
     "Bootstrap UI surface (login, /setup wizard, /health). The SPA itself lives on the REST listener.",
   "config.help.north.ui.embedded":
-    "Turn on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration runs against this daemon. Hides what HA already owns and refuses the matching writes for the Ingress identity. Not derived from Ingress: the add-on is also used without the integration.",
+    "Turn on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration runs against this daemon. Hides what HA already owns. Not derived from Ingress: the add-on is also used without the integration. Where the setting applies is a separate question — see “Scope of the embedded mode”.",
+  "config.help.north.ui.embedded_scope":
+    "Where the embedded mode applies. “Only in Home Assistant” (default) reduces the UI only for requests that arrive through Home Assistant, so anyone who opens this daemon's own address keeps the full UI — they chose Loom over the HA panel, and the reason for hiding (Home Assistant shows the same editor) does not apply to them. “Everywhere” reduces it on every path.",
   "config.help.north.ui.profiles":
     "Per-profile navigation overrides, edited under Settings → Navigation & views. Stored sparsely, so views added by a later release keep the default their own code assigns.",
   "config.help.callback.host":
@@ -1709,6 +1712,16 @@ const EN: Catalog = {
   // --- Surface-profile editor ------------------------------------
   "navviews.banner":
     "Hiding a view removes it from the navigation for every user of this daemon. API tokens, Loom accounts and MQTT are unaffected — restrict those through roles and tokens.",
+  "navviews.scope.title": "Where does the embedded mode apply?",
+  "navviews.scope.inside_ha": "Only in Home Assistant",
+  "navviews.scope.inside_ha.desc":
+    "The reduced navigation applies to the Home Assistant panel. Anyone who opens this daemon's own address keeps the full user interface — they chose Loom over the panel, so the reason for hiding does not apply to them.",
+  "navviews.scope.always": "Everywhere",
+  "navviews.scope.always.desc":
+    "The reduced navigation applies on every path, including direct access. Choose this for a daemon whose interface should always look the same.",
+  "navviews.scope.here.inside": "you are in the Home Assistant panel",
+  "navviews.scope.here.direct": "you opened this daemon directly",
+  "navviews.toast.scope_saved": "Scope saved.",
   "navviews.mode.title": "Embedded in Home Assistant",
   "navviews.mode.desc":
     "Turn this on when Home Assistant owns this daemon's config surface — the Homematic(IP) Local integration is configured against this daemon. Loom then hides what Home Assistant already provides: its own login, user and token administration, the CCU connection, the device editors, Matter and the aggregated charts.",
@@ -4855,6 +4868,7 @@ const DE: Catalog = {
   "config.field.north.rest.rate_limit.burst": "Burst-Kapazität",
   "config.field.north.ui.enabled": "Bootstrap-UI aktiv",
   "config.field.north.ui.embedded": "In Home Assistant eingebettet",
+  "config.field.north.ui.embedded_scope": "Geltungsbereich des eingebetteten Modus",
   "config.field.north.ui.profiles": "Navigationsprofile",
   "config.field.callback.host": "Callback-Bind-Adresse",
   "config.field.callback.port": "XML-RPC-Callback-Port",
@@ -5127,7 +5141,9 @@ const DE: Catalog = {
   "config.help.north.ui.enabled":
     "Bootstrap-UI-Oberfläche (Login, /setup-Wizard, /health). Die SPA selbst läuft auf dem REST-Listener.",
   "config.help.north.ui.embedded":
-    "Aktivieren, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon läuft. Blendet aus, was HA bereits besitzt, und weist die zugehörigen Schreibzugriffe der Ingress-Identität ab. Wird nicht aus Ingress abgeleitet: das Add-on wird auch ohne die Integration betrieben.",
+    "Aktivieren, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon läuft. Blendet aus, was HA bereits besitzt. Wird nicht aus Ingress abgeleitet: das Add-on wird auch ohne die Integration betrieben. Wo die Einstellung greift, ist eine eigene Frage — siehe „Geltungsbereich des eingebetteten Modus“.",
+  "config.help.north.ui.embedded_scope":
+    "Wo der eingebettete Modus greift. „Nur in Home Assistant“ (Standard) reduziert die Oberfläche nur für Aufrufe, die über Home Assistant hereinkommen; wer die eigene Adresse dieses Daemons öffnet, behält die volle Oberfläche — er hat sich bewusst für Loom statt für das HA-Panel entschieden, und der Grund fürs Ausblenden (Home Assistant zeigt denselben Editor) trifft auf ihn nicht zu. „Überall“ reduziert auf jedem Weg.",
   "config.help.north.ui.profiles":
     "Navigationsabweichungen je Profil, bearbeitet unter Einstellungen → Navigation & Ansichten. Wird sparsam gespeichert, damit später ergänzte Ansichten den Standard behalten, den ihr eigener Code vergibt.",
   "config.help.callback.host":
@@ -5437,6 +5453,16 @@ const DE: Catalog = {
   // --- Editor für Oberflächenprofile -----------------------------
   "navviews.banner":
     "Eine ausgeblendete Ansicht verschwindet aus der Navigation — für alle Benutzer dieses Daemons. API-Token, Loom-Konten und MQTT bleiben unberührt; die regeln Sie über Rollen und Token.",
+  "navviews.scope.title": "Wo gilt der eingebettete Modus?",
+  "navviews.scope.inside_ha": "Nur in Home Assistant",
+  "navviews.scope.inside_ha.desc":
+    "Die reduzierte Navigation gilt im Home-Assistant-Panel. Wer die eigene Adresse dieses Daemons öffnet, behält die volle Oberfläche — er hat sich bewusst für Loom statt für das Panel entschieden, der Grund fürs Ausblenden trifft auf ihn nicht zu.",
+  "navviews.scope.always": "Überall",
+  "navviews.scope.always.desc":
+    "Die reduzierte Navigation gilt auf jedem Weg, auch beim Direktzugriff. Sinnvoll für einen Daemon, dessen Oberfläche immer gleich aussehen soll.",
+  "navviews.scope.here.inside": "Sie sind im Home-Assistant-Panel",
+  "navviews.scope.here.direct": "Sie haben diesen Daemon direkt geöffnet",
+  "navviews.toast.scope_saved": "Geltungsbereich gespeichert.",
   "navviews.mode.title": "In Home Assistant eingebettet",
   "navviews.mode.desc":
     "Aktivieren Sie das, wenn Home Assistant die Konfigurationsoberfläche dieses Daemons besitzt — die Integration Homematic(IP) Local also gegen diesen Daemon konfiguriert ist. Loom blendet dann aus, was Home Assistant selbst bereitstellt: eigene Anmeldung, Benutzer- und Token-Verwaltung, die CCU-Verbindung, die Geräte-Editoren, Matter und die Auswertungs-Diagramme.",

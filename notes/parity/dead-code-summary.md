@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 9944174a
-HEAD: 9944174a
+Generated: e2f72d0d
+HEAD: e2f72d0d
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27998 |
+| Total Exported | 28007 |
 | Reachable | 4951 |
-| Whitelisted | 20083 |
+| Whitelisted | 20092 |
 | **Unreachable** | **2964** |
 
 ## Top-20 Packages by Dead Code

@@ -8,6 +8,7 @@
 
 import { api } from "$lib/api/client";
 import type {
+  EmbeddedScope,
   ProfileName,
   SurfaceInfo,
   SurfaceState,
@@ -42,6 +43,11 @@ function createSurfacesStore() {
   let error = $state<string | null>(null);
 
   let embedded = $state(false);
+  let embeddedScope = $state<EmbeddedScope>("inside_ha");
+  // Whether THIS browser reached the daemon through Home Assistant. With
+  // the default scope it is what decides the live profile, so the editor
+  // cannot explain the profile without it.
+  let insideHA = $state(false);
   let profile = $state<ProfileName>("standalone");
   let surfaces = $state<SurfaceInfo[]>([]);
   let effective = $state<Record<string, boolean>>({});
@@ -62,6 +68,8 @@ function createSurfacesStore() {
 
   function apply(resp: SurfacesResponse) {
     embedded = resp.embedded;
+    embeddedScope = resp.embedded_scope ?? "inside_ha";
+    insideHA = resp.inside_ha ?? false;
     profile = resp.profile;
     surfaces = resp.surfaces ?? [];
     effective = resp.effective ?? {};
@@ -222,6 +230,16 @@ function createSurfacesStore() {
     apply(await api.putUISurfaces({ embedded: next }));
   }
 
+  /**
+   * Moves where the embedded declaration applies. Saved immediately for
+   * the same reason as the master toggle: it is a mode, and letting it
+   * sit in the dirty set would offer to "discard" a change whose effect
+   * is already on screen.
+   */
+  async function setEmbeddedScope(next: EmbeddedScope): Promise<void> {
+    apply(await api.putUISurfaces({ embedded_scope: next }));
+  }
+
   function setEditing(next: ProfileName) {
     editing = next;
   }
@@ -248,6 +266,12 @@ function createSurfacesStore() {
     },
     get embedded() {
       return embedded;
+    },
+    get embeddedScope() {
+      return embeddedScope;
+    },
+    get insideHA() {
+      return insideHA;
     },
     get centrals() {
       return centrals;
@@ -276,6 +300,7 @@ function createSurfacesStore() {
     discard,
     save,
     setEmbedded,
+    setEmbeddedScope,
     setEditing,
     changeCount,
     deviationCount,

@@ -1,5 +1,7 @@
 {
   "embedded": false,
+  "embedded_scope": "inside_ha",
+  "inside_ha": false,
   "profile": "standalone",
   "profiles": {},
   "effective": {

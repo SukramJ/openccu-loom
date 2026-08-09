@@ -45,10 +45,17 @@ type Fleet struct {
 // MultiCentral reports whether the daemon serves more than one CCU.
 func (f Fleet) MultiCentral() bool { return f.Centrals > 1 }
 
-// ResolveFleet applies ui's active profile with the fleet size that
-// decides two shipped defaults — see [Surface.MultiCentralVisible].
-func ResolveFleet(ui config.NorthUI, fleet Fleet) Resolution {
-	return resolveProfile(ui, ui.ActiveProfile(), fleet)
+// ResolveFleet applies the profile this request should be served, with
+// the fleet size that decides two shipped defaults — see
+// [Surface.MultiCentralVisible].
+//
+// insideHA reports whether the request reached the daemon through Home
+// Assistant. It is a parameter rather than a package-level fact because
+// one daemon answers both kinds of request, and by default the embedded
+// declaration only shapes the first kind — see
+// [config.NorthUI.EmbeddedScope].
+func ResolveFleet(ui config.NorthUI, insideHA bool, fleet Fleet) Resolution {
+	return resolveProfile(ui, ui.ActiveProfileFor(insideHA), fleet)
 }
 
 // resolveProfile applies the named profile, which need not be the live
