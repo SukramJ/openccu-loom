@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: bb1e56e5
-HEAD: bb1e56e5
+Generated: e766f15e
+HEAD: e766f15e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27987 |
+| Total Exported | 27997 |
 | Reachable | 4951 |
-| Whitelisted | 20074 |
-| **Unreachable** | **2962** |
+| Whitelisted | 20082 |
+| **Unreachable** | **2964** |
 
 ## Top-20 Packages by Dead Code
 
@@ -200,7 +200,7 @@ HEAD: bb1e56e5
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 108 | 28 |
-| pkg/hmapi | 0 | 151 | 16 |
+| pkg/hmapi | 0 | 153 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |
