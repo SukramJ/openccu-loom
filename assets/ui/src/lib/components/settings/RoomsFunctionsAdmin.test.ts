@@ -49,6 +49,7 @@ vi.mock("$lib/stores/auth.svelte", () => ({
   authStore: { probe: vi.fn() },
 }));
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: vi.fn(() => () => {}),
 }));
 

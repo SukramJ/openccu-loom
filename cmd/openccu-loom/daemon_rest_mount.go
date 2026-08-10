@@ -463,13 +463,9 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 					logger.Debug("discovery.mdns.txt_refresh_failed", slog.String("err", err.Error()))
 				}
 			}
-			if d.reload != nil {
-				d.reload.mdnsTXTRefresh.Store(&refresh)
-			}
+			d.reload.SetMDNSTXTRefresh(refresh)
 			teardown = func() {
-				if d.reload != nil {
-					d.reload.mdnsTXTRefresh.Store(nil)
-				}
+				d.reload.SetMDNSTXTRefresh(nil)
 				if err := adv.Stop(); err != nil {
 					logger.Warn("discovery.mdns.stop_failed", slog.String("err", err.Error()))
 				}

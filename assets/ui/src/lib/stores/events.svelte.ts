@@ -8,6 +8,7 @@ import type { EventEnvelope } from "$lib/api/types";
 
 let stream: EventStream | null = null;
 const handlers = new Set<(ev: EventEnvelope) => void>();
+const resyncHandlers = new Set<() => void>();
 
 // Reactive connection state — updated via onStateChange so components
 // receive transitions without polling. Starts "closed" because no
@@ -19,9 +20,14 @@ const connectionState = $state<{
 // Diagnostic counters — kept reactive so the ConnectionBadge can
 // display a "received N events since open" hint. Helps debug live-
 // update plumbing without resorting to browser-devtools poking.
-const counters = $state<{ received: number; lastType: string }>({
+const counters = $state<{
+  received: number;
+  lastType: string;
+  resyncs: number;
+}>({
   received: 0,
   lastType: "",
+  resyncs: 0,
 });
 
 function ensure(): EventStream {
@@ -38,7 +44,34 @@ function ensure(): EventStream {
     counters.lastType = ev.type ?? "";
     for (const h of handlers) h(ev);
   });
+  stream.onResync(() => {
+    counters.resyncs += 1;
+    for (const h of resyncHandlers) h();
+  });
   return stream;
+}
+
+/**
+ * Register a callback for the daemon's resync signal: the event stream
+ * cannot bring this client to the current state, so anything loaded
+ * over REST has to be loaded again.
+ *
+ * A view that keeps server state should pair its initial load with one
+ * of these:
+ *
+ *     onMount(() => onResync(() => void load()));
+ *
+ * The daemon signals after a boot snapshot (it writes the model to
+ * MQTT's retained topics rather than replaying every data point into
+ * the live stream) and whenever a connection fell far enough behind
+ * that queued events were dropped. Returns an unsubscribe function.
+ */
+export function onResync(handler: () => void): () => void {
+  ensure();
+  resyncHandlers.add(handler);
+  return () => {
+    resyncHandlers.delete(handler);
+  };
 }
 
 export function subscribe(
@@ -71,6 +104,10 @@ export function status(): "connecting" | "open" | "closed" {
  * whether events are flowing — handy for debugging cases where the
  * server is up but the SPA isn't refreshing.
  */
-export function diagnostics(): { received: number; lastType: string } {
+export function diagnostics(): {
+  received: number;
+  lastType: string;
+  resyncs: number;
+} {
   return counters;
 }

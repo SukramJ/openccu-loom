@@ -34,6 +34,62 @@ type OpOptions struct {
 	Attrs []slog.Attr
 }
 
+// opToleranceKey is the context key under which [WithRetriedFailures]
+// and [WithExpectedSlowness] record what a caller already knows about
+// the operation it is about to make.
+type opToleranceKey struct{}
+
+// opTolerance carries what the caller knows that the span layer cannot
+// see for itself.
+//
+// The span layer classifies an operation by its result alone: an error
+// is an error, a slow call is slow. That is right for a steady-state
+// daemon and wrong during a bring-up, where a caller retries across a
+// backoff window and a co-starting CCU answers in seconds rather than
+// milliseconds. Both were reported at their nominal severity, so a
+// completely healthy boot shipped error and warn lines that resolved
+// themselves — the kind of noise that teaches operators to stop reading
+// the log.
+type opTolerance struct {
+	// retriedFailures demotes a failed end record to Warn: the caller
+	// retries, so this attempt failing is not yet an outcome.
+	retriedFailures bool
+	// expectedSlowness demotes a slow end record to Info: the caller
+	// knows the peer is under startup load.
+	expectedSlowness bool
+}
+
+// WithRetriedFailures marks ctx as covering an attempt whose failure the
+// caller retries. A failed end record on such an operation is logged at
+// Warn with `retried: true` instead of Error.
+//
+// Set it on every attempt but the last one. The final attempt carries no
+// marker, so an interface that never comes up still reports an error.
+func WithRetriedFailures(ctx context.Context) context.Context {
+	tol := toleranceFrom(ctx)
+	tol.retriedFailures = true
+	return context.WithValue(ctx, opToleranceKey{}, tol)
+}
+
+// WithExpectedSlowness marks ctx as covering an operation against a peer
+// the caller knows to be under startup load. A slow end record on such
+// an operation is logged at Info with `expected: true` instead of Warn.
+//
+// It does not touch the failure branch: a call that fails inside a
+// tolerant window is still a failure.
+func WithExpectedSlowness(ctx context.Context) context.Context {
+	tol := toleranceFrom(ctx)
+	tol.expectedSlowness = true
+	return context.WithValue(ctx, opToleranceKey{}, tol)
+}
+
+// toleranceFrom returns the tolerance recorded on ctx, or the zero
+// value (tolerate nothing) when the caller set none.
+func toleranceFrom(ctx context.Context) opTolerance {
+	tol, _ := ctx.Value(opToleranceKey{}).(opTolerance)
+	return tol
+}
+
 // StartOp opens a tracing span for a named operation and returns:
 //   - a derived context whose [reqctx.RequestContext] carries a fresh
 //     SpanID (with ParentSpanID copied from the previous SpanID), and
@@ -73,20 +129,33 @@ func StartOp(ctx context.Context, op string, opts OpOptions) (context.Context, S
 		}
 		closed = true
 		elapsed := time.Since(started)
+		tol := toleranceFrom(ctx)
 		level := slog.LevelDebug
 		outcome := "ok"
+		var demotion slog.Attr
 		switch {
 		case err != nil:
 			level = slog.LevelError
 			outcome = classifyError(err)
+			if tol.retriedFailures {
+				level = slog.LevelWarn
+				demotion = slog.Bool("retried", true)
+			}
 		case opts.SlowThreshold > 0 && elapsed >= opts.SlowThreshold:
 			level = slog.LevelWarn
 			outcome = "slow"
+			if tol.expectedSlowness {
+				level = slog.LevelInfo
+				demotion = slog.Bool("expected", true)
+			}
 		case opts.SlowThreshold < 0:
 			// Suppress success record entirely.
 			return
 		}
 		endAttrs := append([]slog.Attr{}, opts.Attrs...)
+		if demotion.Key != "" {
+			endAttrs = append(endAttrs, demotion)
+		}
 		endAttrs = append(
 			endAttrs,
 			slog.String("op", op),

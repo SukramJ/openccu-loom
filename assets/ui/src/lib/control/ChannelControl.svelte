@@ -12,7 +12,7 @@
   import { onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
   import type { DataPointSummary } from "$lib/api/types";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { t } from "$lib/i18n";
   import { resolveChannel, type ResolvedChannel } from "./resolver";
   import { widgetForResolved } from "./widgets";
@@ -67,8 +67,12 @@
         observed: true,
       };
     });
+    // The boot snapshot no longer replays values into the stream; it
+    // signals a resync and the channel reloads its own data points.
+    const unsubResync = onResync(() => void load());
     return () => {
       unsub();
+      unsubResync();
     };
   });
 

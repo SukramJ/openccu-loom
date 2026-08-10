@@ -878,7 +878,9 @@ export const api = {
   },
   // --- Per-user preferences (favorites / dashboard) -----------
   // Values are opaque JSON owned by the SPA. getPreference resolves to
-  // null when the key is unset (404).
+  // null when the key is unset: the daemon answers 200 with a null
+  // value. The 404 branch below covers daemons older than API 5.15.0,
+  // which reported an unset key as not-found.
   async getPreference<T = unknown>(key: string): Promise<T | null> {
     try {
       const r = await request<{ key: string; value: T }>(

@@ -15,7 +15,7 @@
   import { api, friendlyError } from "$lib/api/client";
   import type { DataPointSummary } from "$lib/api/types";
   import { dpLabel } from "$lib/sensor-actor/classify";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { STATUS_HEADLINE_KEYS } from "$lib/quickcontrol/domain";
   import { t } from "$lib/i18n";
 
@@ -55,7 +55,13 @@
       if (idx < 0) return;
       dataPoints[idx] = { ...dataPoints[idx], value: e.value, observed: true };
     });
-    return () => unsub();
+    // The boot snapshot no longer replays values into the stream; it
+    // signals a resync and the tile reloads its own state.
+    const unsubResync = onResync(() => void load());
+    return () => {
+      unsub();
+      unsubResync();
+    };
   });
 
   // Active alerts win the collapsed slot — when LOW_BAT / SABOTAGE / …

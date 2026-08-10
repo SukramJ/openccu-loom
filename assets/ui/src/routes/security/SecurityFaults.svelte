@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -41,6 +41,9 @@
   }
 
   let unsubEvents: (() => void) | null = null;
+  // The boot snapshot signals a resync instead of replaying the model
+  // into the stream, so the view reloads what it read over REST.
+  let unsubResync: (() => void) | null = null;
   let reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   // A fault change arrives as a push, but the ledger row carries more
@@ -58,6 +61,7 @@
 
   onMount(() => {
     void load();
+    unsubResync = onResync(() => void load());
     unsubEvents = subscribe((ev) => {
       if (ev.type === "security.fault_changed") scheduleReload();
     });
@@ -65,6 +69,7 @@
 
   onDestroy(() => {
     unsubEvents?.();
+    unsubResync?.();
     if (reloadTimer) clearTimeout(reloadTimer);
   });
 

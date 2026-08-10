@@ -35,6 +35,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
 
 // centralScopedValuesCache returns deps.ValuesCache when the filter
@@ -599,6 +600,29 @@ func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *cen
 	return callbackURL, binRPCCallbackAddr, handlers, deregister
 }
 
+// ingestAttemptContext returns the context for one boot-time ingest
+// attempt, carrying what the retry loop knows about the CCU it is
+// talking to.
+//
+// A co-starting CCU answers the first attempts with http 503 while its
+// per-interface RPC service trails ReGaHss, and answers slowly for as
+// long as it is still booting. The span layer sees only the result, so
+// without these markers a boot that recovered on its second attempt
+// shipped `level: error` — and every slow bring-up call shipped a
+// warning that resolved itself a few seconds later.
+//
+// The final attempt (attempt == retries) deliberately drops the retry
+// marker: nothing follows it, so an interface that never comes up still
+// reports its failure as one. Slowness stays tolerated either way — the
+// peer is still booting whether or not this attempt is the last.
+func ingestAttemptContext(ctx context.Context, attempt, retries int) context.Context {
+	ctx = hmlog.WithExpectedSlowness(ctx)
+	if attempt < retries {
+		ctx = hmlog.WithRetriedFailures(ctx)
+	}
+	return ctx
+}
+
 //nolint:contextcheck,gocognit,gocyclo,funlen // the probe / async consistency-check / deinit contexts are intentionally rooted in a fresh context (cancelled via their own cancel funcs on teardown), not the wiring ctx — see the per-line notes below; composition/wiring: long sequential setup
 func wireInterface(
 	ctx context.Context,
@@ -948,6 +972,7 @@ func wireInterface(
 	probeWireID := wireID
 	probeIC := ic
 	probeBus := unit.EventBus
+	probeUnit := unit
 	//nolint:contextcheck // probe goroutine must outlive the wiring ctx (60s timeout); daemon-lifetime background context is intentional
 	probeCtx, probeCancel := context.WithCancel(context.Background())
 	go func() {
@@ -988,7 +1013,16 @@ func wireInterface(
 				//     guards the post-init window so a freshly
 				//     initialised client cannot trip the check
 				//     before the first push event lands.
-				if !probeIC.CheckConnectionAvailability(probeCtx, false) {
+				// Until the central latches southbound-ready the CCU is
+				// still bringing its interfaces up, and a ping that
+				// takes seconds says so rather than reporting a fault.
+				// The tolerance ends with the bring-up: once ready, a
+				// slow ping is worth a warning again.
+				tickCtx := probeCtx
+				if probeUnit != nil && !probeUnit.IsSouthboundReady() {
+					tickCtx = hmlog.WithExpectedSlowness(probeCtx)
+				}
+				if !probeIC.CheckConnectionAvailability(tickCtx, false) {
 					publishLost()
 					continue
 				}
@@ -1224,12 +1258,15 @@ func wireInterface(
 	}
 ingestLoop:
 	for attempt := 0; ; attempt++ {
-		err := activate(ctx)
+		err := activate(ingestAttemptContext(ctx, attempt, len(ingestBackoff)))
 		if err == nil {
 			break
 		}
 		if attempt >= len(ingestBackoff) {
-			logger.Warn("wire.interface.ingest_failed",
+			// Every retry is spent and the interface stayed empty: no
+			// devices, no callbacks, nothing north-bound. That is an
+			// outcome, not a transient.
+			logger.Error("wire.interface.ingest_failed",
 				slog.String("central", cc.Name),
 				slog.String("interface", wireID),
 				slog.String("err", err.Error()))

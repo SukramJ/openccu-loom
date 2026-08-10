@@ -19,6 +19,19 @@ export type EventStream = {
   onStateChange(
     handler: (s: "connecting" | "open" | "closed") => void,
   ): () => void;
+  /**
+   * Register a callback for the daemon's resync signal
+   * (`{op:"replay_lost"}`): the stream cannot bring this client to the
+   * current state, so whatever it holds must be reloaded over REST.
+   *
+   * The daemon sends it after a boot snapshot — it writes the model to
+   * MQTT's retained topics and tells stream subscribers to reload rather
+   * than replaying tens of thousands of frames at them — and when a
+   * connection fell so far behind that queued events had to be dropped.
+   *
+   * Returns an unsubscribe function.
+   */
+  onResync(handler: () => void): () => void;
   close(): void;
   readonly state: () => "connecting" | "open" | "closed";
 };
@@ -52,6 +65,18 @@ function isControlPing(raw: unknown): boolean {
     typeof raw === "object" &&
     raw !== null &&
     (raw as { op?: unknown }).op === "ping"
+  );
+}
+
+/**
+ * True for the daemon's resync signal `{op:"replay_lost"}` — the stream
+ * has a gap this client cannot reconstruct and must reload from REST.
+ */
+function isResyncSignal(raw: unknown): boolean {
+  return (
+    typeof raw === "object" &&
+    raw !== null &&
+    (raw as { op?: unknown }).op === "replay_lost"
   );
 }
 
@@ -129,7 +154,11 @@ export function connectEvents(): EventStream {
   const stateHandlers = new Set<
     (s: "connecting" | "open" | "closed") => void
   >();
+  const resyncHandlers = new Set<() => void>();
   let current: "connecting" | "open" | "closed" = "connecting";
+  // A boot snapshot signals once per central, so a multi-CCU daemon
+  // emits a short burst. Coalesce it into one reload.
+  let resyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   const url = buildURL();
 
@@ -186,6 +215,14 @@ export function connectEvents(): EventStream {
         }
         return;
       }
+      if (isResyncSignal(parsed)) {
+        if (resyncTimer !== null) clearTimeout(resyncTimer);
+        resyncTimer = setTimeout(() => {
+          resyncTimer = null;
+          for (const h of resyncHandlers) h();
+        }, 250);
+        return;
+      }
       const env = normalizeEvent(parsed);
       if (!env) return;
       for (const h of handlers) h(env);
@@ -214,8 +251,16 @@ export function connectEvents(): EventStream {
       stateHandlers.add(handler);
       return () => stateHandlers.delete(handler);
     },
+    onResync(handler) {
+      resyncHandlers.add(handler);
+      return () => resyncHandlers.delete(handler);
+    },
     close() {
       closed = true;
+      if (resyncTimer !== null) {
+        clearTimeout(resyncTimer);
+        resyncTimer = null;
+      }
       socket?.close();
     },
     state: () => current,

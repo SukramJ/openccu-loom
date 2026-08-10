@@ -13,6 +13,7 @@ let capturedHandler: ((ev: { type: string; payload?: unknown }) => void) | null 
   null;
 
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: vi.fn((h: (ev: { type: string; payload?: unknown }) => void) => {
     capturedHandler = h;
     return vi.fn();

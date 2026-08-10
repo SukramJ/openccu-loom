@@ -41,6 +41,7 @@ vi.mock("$lib/api/client", () => ({
 }));
 
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: vi.fn(() => () => {}),
 }));
 

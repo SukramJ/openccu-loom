@@ -1,6 +1,6 @@
 import { api, ApiError } from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { subscribe } from "./events.svelte";
+import { onResync, subscribe } from "./events.svelte";
 import type {
   DeviceAvailableEvent,
   DeviceSummary,
@@ -68,7 +68,16 @@ function createDeviceStore() {
 
   function ensureStream() {
     if (unsub) return;
-    unsub = subscribe(applyEvent);
+    const unsubEvents = subscribe(applyEvent);
+    // The daemon's boot snapshot no longer replays every data point
+    // into the stream — it writes MQTT's retained topics and signals a
+    // resync instead. Without this the list keeps whatever it read
+    // before the daemon restarted.
+    const unsubResync = onResync(() => void refresh());
+    unsub = () => {
+      unsubEvents();
+      unsubResync();
+    };
   }
 
   function applyEvent(ev: EventEnvelope) {

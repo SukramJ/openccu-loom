@@ -15,7 +15,7 @@
   import { onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
   import type { CustomDPSummary, DataPointSummary } from "$lib/api/types";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { t } from "$lib/i18n";
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
@@ -132,7 +132,13 @@
       if (idx < 0) return;
       dataPoints[idx] = { ...dataPoints[idx], value: e.value, observed: true };
     });
-    return () => unsub();
+    // The boot snapshot no longer replays values into the stream; it
+    // signals a resync and the tile reloads its own state.
+    const unsubResync = onResync(() => void load());
+    return () => {
+      unsub();
+      unsubResync();
+    };
   });
 </script>
 

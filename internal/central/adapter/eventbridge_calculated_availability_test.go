@@ -8,12 +8,15 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -107,8 +110,13 @@ func TestCalculatedSlotStateGatedOnSourceValidity(t *testing.T) {
 	}
 }
 
-// wsAvailability drives an initial snapshot and returns the `available` flag
+// wsAvailability drives a live value change and returns the `available` flag
 // of the WebSocket value-changed push for the named parameter.
+//
+// Live, not the boot snapshot: the snapshot signals a resync to WebSocket
+// subscribers rather than replaying the model frame by frame (see
+// [EventBridge.publishSnapshotValue]), so it emits no per-data-point push to
+// read a flag off. The invariant under test belongs to the live push anyway.
 func wsAvailability(t *testing.T, param string, tempStatus hmenum.ParameterStatus) bool {
 	t.Helper()
 
@@ -156,15 +164,33 @@ func wsAvailability(t *testing.T, param string, tempStatus hmenum.ParameterStatu
 	eb.Start(context.Background())
 	defer eb.Stop()
 
-	eb.PublishInitialSnapshot(context.Background())
+	// A live CCU push over the bus the central owns — the path a real
+	// value change takes.
+	unit, ok := reg.Get("ccu-01")
+	if !ok {
+		t.Fatal("setup: central not registered")
+	}
+	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+		Base: hmevent.NewBaseAt(time.Now()),
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      param,
+		},
+		NewValue: hmtypes.FloatValue(20.0),
+	})
 
-	res := wsHub.Replay(0, nil)
-	for _, e := range res.Events {
-		p, ok := e.Payload.(ws.DataPointValueChangedPayload)
-		if !ok || p.Parameter != param {
-			continue
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, e := range wsHub.Replay(0, nil).Events {
+			p, ok := e.Payload.(ws.DataPointValueChangedPayload)
+			if !ok || p.Parameter != param {
+				continue
+			}
+			return p.Available
 		}
-		return p.Available
+		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("no value-changed push for %s", param)
 	return false

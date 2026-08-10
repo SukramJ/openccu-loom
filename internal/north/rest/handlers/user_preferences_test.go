@@ -96,7 +96,15 @@ func TestGetPreference_ExistingKey_Returns200WithValue(t *testing.T) {
 	}
 }
 
-func TestGetPreference_MissingKey_Returns404(t *testing.T) {
+// TestGetPreference_MissingKey_ReturnsNullValue pins that an unset key
+// reads as a null value rather than a 404.
+//
+// Every key starts unset, and the SPA asks for favorites and
+// start_route on its first page load, so 404 was the normal answer for
+// a fresh session — one that the request logger recorded at warn level
+// each time. The key-value surface has no notion of a key that "should"
+// exist, so absence is a value, not a fault.
+func TestGetPreference_MissingKey_ReturnsNullValue(t *testing.T) {
 	t.Parallel()
 	svc := newFakePreferencesSvc()
 
@@ -107,8 +115,21 @@ func TestGetPreference_MissingKey_Returns404(t *testing.T) {
 
 	GetPreference(svc).ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Key   string          `json:"key"`
+		Value json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("response is not valid JSON: %v (%s)", err, w.Body.String())
+	}
+	if resp.Key != "unknown" {
+		t.Errorf("key = %q, want %q", resp.Key, "unknown")
+	}
+	if string(resp.Value) != "null" {
+		t.Errorf("value = %s, want null — the SPA reads this as \"not set yet\"", resp.Value)
 	}
 }
 

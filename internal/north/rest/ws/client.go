@@ -10,14 +10,23 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 )
 
 // clientBufferSize is the max number of queued events per client.
-// Slow clients overflowing this buffer are closed.
+// A client that overflows it loses the oldest events, not its
+// connection — see [client.enqueue].
 const clientBufferSize = 1000
+
+// overflowDropFraction is the share of the outbound buffer discarded on
+// overflow. Dropping a block rather than a single event keeps the
+// overflow path off the hot path for the rest of the burst: with a
+// single-event drop, every subsequent event in the same flood re-enters
+// it.
+const overflowDropFraction = 2
 
 // maxTopicsPerClient caps the retained subscription set per connection. Each
 // subscribe frame appends deduped topics with no natural bound, so an
@@ -64,6 +73,12 @@ type client struct {
 	ctrl   chan wireMsg
 	closed chan struct{}
 	once   sync.Once
+
+	// gapSignalled marks an in-flight overflow episode: the client has
+	// been told its stream has a gap and does not need telling again
+	// until the writer has drained the queue. Without it a single flood
+	// produces one warning and one resync frame per dropped event.
+	gapSignalled atomic.Bool
 }
 
 // wireMsg is one pre-serialised control-plane frame queued for the
@@ -155,13 +170,83 @@ func (c *client) matches(topic string) bool {
 	return false
 }
 
+// enqueue queues a domain event for the writer goroutine.
+//
+// On overflow the client loses events, not its connection: the oldest
+// block in the queue is discarded, the new event takes its place, and
+// the client is told once that its stream has a gap so it can resync
+// from a snapshot — the same contract a `since` cursor older than the
+// replay ring already gets (ADR 0022).
+//
+// Closing instead, as this did originally, made every slow or
+// briefly-blocked consumer lose its session. The boot snapshot fans one
+// event out per data point, so on a large installation a daemon restart
+// cut every open SPA session and filled the log while doing it: the
+// closed client stayed registered on the hub, so the publisher kept
+// selecting it and the overflow branch logged again for each attempt.
 func (c *client) enqueue(ev Event) {
+	select {
+	case <-c.closed:
+		return
+	case c.out <- ev:
+		return
+	default:
+	}
+
+	// At least one, so a small buffer still makes room instead of
+	// discarding the event that just arrived and keeping stale ones.
+	dropped := c.dropOldest(max(1, cap(c.out)/overflowDropFraction))
 	select {
 	case c.out <- ev:
 	default:
-		// Buffer full → close the client.
-		c.logger.Warn("ws.backpressure", slog.String("topic", ev.Topic))
-		c.close()
+		// The writer is not draining at all; this event goes too. The
+		// gap signal below covers it.
+		dropped++
+	}
+	c.signalGap(ev.Topic, dropped)
+}
+
+// dropOldest discards up to n queued events, oldest first, and reports
+// how many it removed. Non-blocking: it stops as soon as the queue runs
+// dry, so a concurrent writer draining in parallel cannot stall it.
+func (c *client) dropOldest(n int) int {
+	dropped := 0
+	for range n {
+		select {
+		case <-c.out:
+			dropped++
+		default:
+			return dropped
+		}
+	}
+	return dropped
+}
+
+// signalGap warns and tells the client to resync, once per overflow
+// episode. [client.noteDrained] ends the episode.
+func (c *client) signalGap(topic string, dropped int) {
+	if !c.gapSignalled.CompareAndSwap(false, true) {
+		return
+	}
+	c.logger.Warn("ws.backpressure",
+		slog.String("topic", topic),
+		slog.Int("dropped", dropped),
+		slog.String("action", "client asked to resync from a snapshot"))
+	// OldestSeq anchors the resume: everything up to the hub's current
+	// top either arrived or was dropped and the client cannot tell
+	// which, so it resyncs from a snapshot and resumes above this mark.
+	var anchor uint64
+	if c.hub != nil {
+		anchor = c.hub.CurrentSeq()
+	}
+	c.sendOp(outboundOp{Op: "replay_lost", OldestSeq: anchor})
+}
+
+// noteDrained ends an overflow episode once the writer has emptied the
+// queue, so a later overflow warns again rather than passing silently.
+func (c *client) noteDrained() {
+	if len(c.out) == 0 {
+		c.gapSignalled.Store(false)
 	}
 }
 
@@ -174,7 +259,15 @@ func (c *client) enqueueCtrl(op byte, payload []byte) {
 	select {
 	case c.ctrl <- wireMsg{op: op, payload: payload}:
 	default:
-		c.logger.Warn("ws.backpressure", slog.String("kind", "control"))
+		// Control frames carry ACKs, auth results and command replies —
+		// dropping one desynchronises the client silently, so this plane
+		// keeps the strict policy. Warn once; close() is idempotent but
+		// the log line is not.
+		if c.gapSignalled.CompareAndSwap(false, true) {
+			c.logger.Warn("ws.backpressure",
+				slog.String("kind", "control"),
+				slog.String("action", "connection closed; control frames cannot be dropped"))
+		}
 		c.close()
 	}
 }
@@ -256,11 +349,32 @@ func (c *client) Identity() auth.Identity {
 	return c.identity
 }
 
+// close tears the connection down and takes the client out of the hub's
+// fan-out set.
+//
+// The deregistration is the important half. The handler defers one too,
+// but that only runs once readPump returns — and the publisher keeps
+// selecting the client as a target until then, re-entering the
+// backpressure path for every event in flight. One overflowing session
+// produced 413 warnings in two seconds that way.
 func (c *client) close() {
 	c.once.Do(func() {
 		close(c.closed)
 		_ = c.conn.Close()
+		if c.hub != nil {
+			c.hub.deregister(c)
+		}
 	})
+}
+
+// isClosed reports whether the connection has been torn down.
+func (c *client) isClosed() bool {
+	select {
+	case <-c.closed:
+		return true
+	default:
+		return false
+	}
 }
 
 // inboundMessage is the subset of client→server JSON we care about.
@@ -415,6 +529,9 @@ func (c *client) writePump() {
 			if err := c.rawWrite(opText, buf); err != nil {
 				return
 			}
+			// Queue empty again → the overflow episode (if any) is over
+			// and the next one is worth reporting.
+			c.noteDrained()
 		case msg := <-c.ctrl:
 			if err := c.rawWrite(msg.op, msg.payload); err != nil {
 				return

@@ -7,6 +7,7 @@ import { render } from "@testing-library/svelte";
 let wsStatusValue: "connecting" | "open" | "closed" = "closed";
 
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: vi.fn(() => () => {}),
   // status() is a reactive getter — return whatever the outer variable says.
   status: () => wsStatusValue,

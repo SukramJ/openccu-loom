@@ -48,7 +48,14 @@ func preferenceSubject(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return ident.Subject, true
 }
 
-// GetPreference returns the caller's stored value for {key}, or 404.
+// GetPreference returns the caller's stored value for {key}.
+//
+// An unset key is not an error: the store is a key-value surface whose
+// keys the SPA invents, so "nothing stored yet" is the state every key
+// starts in. It answers 200 with a null value, which is what a fresh
+// session reads for every preference it asks about — favorites and
+// start_route on the very first page load. Reporting that as 404 put a
+// warn-level line in the log for ordinary use.
 func GetPreference(svc UserPreferencesService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
@@ -63,8 +70,7 @@ func GetPreference(svc UserPreferencesService) http.HandlerFunc {
 		key := chi.URLParam(r, "key")
 		value, err := svc.Get(r.Context(), subject, key)
 		if errors.Is(err, sqlite.ErrPreferenceNotFound) {
-			problem.Write(w, http.StatusNotFound,
-				problem.New(problem.TypeNotFound, r, "Preference not found", key))
+			JSON(w, http.StatusOK, preferenceResponse{Key: key, Value: json.RawMessage("null")})
 			return
 		}
 		if err != nil {

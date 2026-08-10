@@ -1,5 +1,23 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.57.2
+
+- **The Config UI no longer loses its live connection when Loom
+  restarts.** The start-up data burst overran the connection's buffer
+  and the daemon closed the socket; on a large installation that hit
+  every open browser tab. Loom now tells the page to refresh its data
+  instead, and the page reloads what it shows.
+- **Loom advertises its CCU serial numbers on the network again.** On
+  every installation configured through the web UI (rather than a YAML
+  file), the announcement crashed internally the moment a CCU finished
+  starting, so other tools could not tell Loom's CCUs apart during
+  discovery.
+- **A quieter log.** A CCU that is still booting answers the first
+  requests with an error and slowly; both were reported as faults even
+  though Loom retries and recovers on its own. The same goes for the
+  first page load of the web UI, which asked for settings the user had
+  never saved.
+
 ## 0.57.1
 
 - **Restarting Loom no longer triggers your button automations.** A
