@@ -2306,8 +2306,10 @@ paths:
                 type: object
                 properties:
                   key: { type: string }
-                  value:
-                    nullable: true
+                  # Opaque SPA-owned JSON; null when the key is unset.
+                  # An empty schema already admits every type including
+                  # null — OpenAPI 3.1 has no `nullable` keyword.
+                  value: {}
         "401": { $ref: "#/components/responses/Unauthorized" }
     put:
       operationId: putPreference
