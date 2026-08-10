@@ -1068,6 +1068,14 @@ func (p *DevicePipeline) seedValues(
 			continue
 		}
 		channelAddr, parameter := parts[1], parts[2]
+		// The script emits every DP that carries a valid Timestamp(), which a
+		// button acquires on its first press and keeps forever. Seeding that
+		// value would mark the data point observed and hand the boot-time
+		// snapshot a keypress to replay — see the edge-trigger exclusion in
+		// the values cache for the same reason.
+		if hmenum.IsEdgeTriggerParameter(hmenum.Parameter(parameter)) {
+			continue
+		}
 		deviceAddr := deviceAddressOf(channelAddr)
 		dev, ok := p.unit.ModelRegistry.Get(deviceAddr)
 		if !ok {
@@ -1868,6 +1876,14 @@ func (p *DevicePipeline) restoreValuesFromCache(
 				continue
 			}
 			for _, row := range rows {
+				// Rows written before edge-trigger parameters were excluded
+				// from the cache are still on disk, so the restore side has
+				// to reject them too — otherwise an existing installation
+				// keeps replaying its last keypress on every boot until the
+				// GC pass happens to clear the row.
+				if hmenum.IsEdgeTriggerParameter(hmenum.Parameter(row.Parameter)) {
+					continue
+				}
 				dp := ch.Parameter(hmenum.Parameter(row.Parameter))
 				if dp == nil {
 					skipped++

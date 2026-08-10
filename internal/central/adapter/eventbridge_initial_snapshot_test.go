@@ -502,3 +502,144 @@ func TestEventBridgePublishesOnlineAtBootAndDoesNotRepublish(t *testing.T) {
 		t.Errorf("availability = %q, want online", availability[0])
 	}
 }
+
+// TestPublishInitialSnapshotDoesNotFirePressEvents pins that the
+// boot-time snapshot never emits a keypress pulse on the per-channel
+// `/event` topic.
+//
+// A PRESS_* parameter carries no restorable state: its value is the
+// edge, not a level. Two boot paths nonetheless leave one behind —
+// the persistent VALUES cache (a press observed in the previous
+// daemon lifetime) and the fetch_all_device_data seed (the ReGa
+// script emits every DP with a valid Timestamp(), which a button
+// acquires on its first press). The snapshot then sees
+// `observed == true` and routes the value through the same
+// publishChannelEventState path a live keypress takes.
+//
+// Downstream that is indistinguishable from a real press — the
+// payload carries the correct event_type and a fresh modified_at —
+// so every consumer automation fires on every daemon restart.
+func TestPublishInitialSnapshotDoesNotFirePressEvents(t *testing.T) {
+	t.Parallel()
+
+	reg, dev := registryWithDevice(t)
+	ch := dev.AddChannel("0001ABCD:1", 1, "KEY", hmenum.ParamsetKeyValues)
+
+	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
+		ch.Put(generic.NewDataPoint[bool](generic.Spec{
+			Key: hmtypes.DataPointKey{
+				InterfaceID:    "HmIP-RF",
+				ChannelAddress: "0001ABCD:1",
+				ParamsetKey:    hmenum.ParamsetKeyValues,
+				Parameter:      param,
+			},
+			Descriptor: hmproto.ParameterData{
+				Type:       hmenum.ParameterTypeAction,
+				Operations: hmenum.OperationsWrite | hmenum.OperationsEvent,
+			},
+		}))
+	}
+
+	// A press observed before the restart: this is exactly what the
+	// values cache restores and what fetch_all_device_data re-seeds.
+	dp := ch.Parameter(hmenum.ParameterPressShort)
+	if dp == nil {
+		t.Fatalf("PRESS_SHORT not registered on the channel")
+	}
+	setter, ok := dp.(interface{ OnWireValue(any) bool })
+	if !ok {
+		t.Fatalf("PRESS_SHORT does not accept a wire value")
+	}
+	if !setter.OnWireValue(true) {
+		t.Fatalf("OnWireValue refused to seed PRESS_SHORT")
+	}
+
+	pub := mqtt.NewNoopClient()
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base:        "openccu-loom",
+		CentralName: "ccu-01",
+		RawEnabled:  true,
+	}, pub)
+	mw := mqtt.NewWiring(bridge, nil)
+
+	eb := NewEventBridge(reg, nil, mw)
+	eb.Start(context.Background())
+	defer eb.Stop()
+
+	eb.PublishInitialSnapshot(context.Background())
+	eb.Flush()
+
+	for _, p := range pub.Published() {
+		if strings.HasSuffix(p.Topic, "/0001ABCD/1/event") {
+			t.Errorf("boot snapshot published a keypress pulse to %s: %s", p.Topic, p.Payload)
+		}
+	}
+}
+
+// TestLiveKeypressStillFiresPressEvent is the counterpart to
+// [TestPublishInitialSnapshotDoesNotFirePressEvents]: the boot-time
+// suppression must not swallow the real thing. A PRESS_* event
+// arriving on the bus — the path a physical keypress takes — has to
+// reach the per-channel `/event` topic, because HA's event entity has
+// no other source.
+//
+// The two tests are deliberately a pair. Gating the pulse on the
+// envelope kind is only correct while the live path actually carries
+// [ws.KindChange] all the way to the publish; nothing else in the
+// suite crosses that seam through the bus.
+func TestLiveKeypressStillFiresPressEvent(t *testing.T) {
+	t.Parallel()
+
+	reg, dev := registryWithDevice(t)
+	ch := dev.AddChannel("0001ABCD:1", 1, "KEY", hmenum.ParamsetKeyValues)
+
+	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
+		ch.Put(generic.NewDataPoint[bool](generic.Spec{
+			Key: hmtypes.DataPointKey{
+				InterfaceID:    "HmIP-RF",
+				ChannelAddress: "0001ABCD:1",
+				ParamsetKey:    hmenum.ParamsetKeyValues,
+				Parameter:      param,
+			},
+			Descriptor: hmproto.ParameterData{
+				Type:       hmenum.ParameterTypeAction,
+				Operations: hmenum.OperationsWrite | hmenum.OperationsEvent,
+			},
+		}))
+	}
+
+	pub := mqtt.NewNoopClient()
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01", RawEnabled: true,
+	}, pub)
+	mw := mqtt.NewWiring(bridge, nil)
+
+	eb := NewEventBridge(reg, nil, mw)
+	eb.Start(context.Background())
+	defer eb.Stop()
+
+	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
+		Base: hmevent.NewBaseAt(time.Now()),
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: "0001ABCD:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "PRESS_SHORT",
+		},
+		NewValue: hmtypes.BoolValue(true),
+	})
+	eb.Flush()
+
+	found := false
+	for _, p := range pub.Published() {
+		if strings.HasSuffix(p.Topic, "/0001ABCD/1/event") {
+			found = true
+			if !strings.Contains(string(p.Payload), `"event_type":"press_short"`) {
+				t.Errorf("keypress payload = %s, want event_type press_short", p.Payload)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("live keypress published no pulse to .../0001ABCD/1/event")
+	}
+}

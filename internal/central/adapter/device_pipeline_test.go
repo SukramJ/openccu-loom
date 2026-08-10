@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
@@ -932,5 +933,136 @@ func TestDevicePipeline_SeedValues_DecodesURLEncodedStringValue(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("IP_ADDRESS = %q, want decoded value %q (URL-encoded literal must not reach the model)", got, want)
+	}
+}
+
+// TestDevicePipeline_SeedValues_SkipsEdgeTriggerParameters pins that the
+// fetch_all_device_data seed never marks a button as observed.
+//
+// The script emits every data point carrying a valid Timestamp() (see
+// internal/client/rega/scripts/fetch_all_device_data.fn), and a PRESS_*
+// data point acquires one on its first press and keeps it for good. Seeding
+// that value hands the boot-time snapshot a keypress to replay, so a button
+// pressed once on the CCU fires its consumers again on every daemon start.
+// The neighbouring STATE value must still land — the exclusion is scoped to
+// edge-trigger parameters, not to the whole seed.
+func TestDevicePipeline_SeedValues_SkipsEdgeTriggerParameters(t *testing.T) {
+	t.Parallel()
+	f := buildBoost7Fixture(t)
+	p := NewDevicePipeline(f.unit)
+
+	ch := f.dev.Channel("DEV002:0")
+	if ch == nil {
+		t.Fatal("fixture channel DEV002:0 missing")
+	}
+	press := generic.NewDataPoint[bool](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: "DEV002:0",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "PRESS_SHORT",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeAction,
+			Operations: hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	})
+	ch.Put(press)
+	state := generic.NewDataPoint[bool](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: "DEV002:0",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "STATE",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	ch.Put(state)
+
+	payload := `{"HmIP-RF.DEV002%3A0.PRESS_SHORT": true, "HmIP-RF.DEV002%3A0.STATE": true}`
+	srv := newBoost6JSONRPCServerAlwaysOK(t, payload)
+	defer srv.Close()
+	jc := newBoost6JSONRPCClient(t, srv.URL)
+	r := newBoost6RegaRunner(t, jc)
+
+	if err := p.seedValues(context.Background(), "HmIP-RF", r, slog.Default()); err != nil {
+		t.Fatalf("seedValues: %v", err)
+	}
+
+	if _, observed := press.Value(); observed {
+		t.Error("PRESS_SHORT was seeded — an edge-trigger parameter must stay unobserved after a seed")
+	}
+	if _, observed := state.Value(); !observed {
+		t.Error("STATE was not seeded — the exclusion must be scoped to edge-trigger parameters")
+	}
+}
+
+// TestDevicePipeline_RestoreValuesFromCache_SkipsEdgeTriggerParameters
+// pins the second half of the edge-trigger exclusion: rows written before
+// the cache stopped accepting PRESS_* are still on disk, so the restore
+// side has to reject them as well.
+//
+// Without this an existing installation keeps replaying its last keypress
+// on every boot until the GC pass happens to clear the row — the write-side
+// filter alone fixes only fresh databases.
+func TestDevicePipeline_RestoreValuesFromCache_SkipsEdgeTriggerParameters(t *testing.T) {
+	t.Parallel()
+	f := buildBoost7Fixture(t)
+	store := freshValuesCacheStoreForAdapter(t)
+	p := NewDevicePipeline(f.unit).WithValuesCacheStore(store, f.unit.Name())
+
+	ch := f.dev.Channel("DEV002:0")
+	if ch == nil {
+		t.Fatal("fixture channel DEV002:0 missing")
+	}
+	for _, param := range []string{"PRESS_SHORT", "STATE"} {
+		ch.Put(generic.NewDataPoint[bool](generic.Spec{
+			Key: hmtypes.DataPointKey{
+				InterfaceID:    "HmIP-RF",
+				ChannelAddress: "DEV002:0",
+				ParamsetKey:    hmenum.ParamsetKeyValues,
+				Parameter:      param,
+			},
+			Descriptor: hmproto.ParameterData{
+				Type:       hmenum.ParameterTypeBool,
+				Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			},
+		}))
+	}
+
+	// A legacy database: both rows present, written by an older build.
+	ctx := context.Background()
+	now := time.UnixMilli(time.Now().UnixMilli())
+	for _, param := range []string{"PRESS_SHORT", "STATE"} {
+		if err := store.SaveValue(ctx, f.unit.Name(), "HmIP-RF", "DEV002:0", param, true, now, now); err != nil {
+			t.Fatalf("SaveValue %s: %v", param, err)
+		}
+	}
+
+	p.restoreValuesFromCache(ctx, "HmIP-RF", slog.Default())
+
+	press := ch.Parameter(hmenum.ParameterPressShort)
+	if press == nil {
+		t.Fatal("PRESS_SHORT missing from the channel")
+	}
+	if reader, ok := press.(interface{ RawValue() (any, bool) }); ok {
+		if _, observed := reader.RawValue(); observed {
+			t.Error("PRESS_SHORT was restored — a persisted keypress must never be replayed into the model")
+		}
+	} else {
+		t.Fatal("PRESS_SHORT does not expose RawValue")
+	}
+
+	state := ch.Parameter(hmenum.ParameterState)
+	if state == nil {
+		t.Fatal("STATE missing from the channel")
+	}
+	if reader, ok := state.(interface{ RawValue() (any, bool) }); ok {
+		if _, observed := reader.RawValue(); !observed {
+			t.Error("STATE was not restored — the exclusion must be scoped to edge-trigger parameters")
+		}
 	}
 }

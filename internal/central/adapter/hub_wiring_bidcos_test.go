@@ -211,3 +211,55 @@ func TestAggregateBidcosGatewaysEmpty(t *testing.T) {
 		t.Fatal("expected ok=false for an empty gateway list")
 	}
 }
+
+// TestLoadBidcosInterfacesQueriesTheCCUInterfaceName pins which of the two
+// interface names goes on the wire.
+//
+// A client entry carries both: `InterfaceID` is the daemon-internal handle
+// ("<central>-BidCos-RF", the id the callback server routes on), while
+// `Interface` is the name the CCU itself knows ("BidCos-RF", the one
+// interfaces.Get() resolves). Interface.listBidcosInterfaces takes the
+// latter — passing the handle makes the CCU answer `unknown interface`, and
+// the poll then fails on every scheduler tick, leaving the whole duty-cycle
+// / carrier-sense surface empty.
+//
+// The cache stays keyed by InterfaceID: that is what the north-bound
+// interface list looks the snapshot up by.
+func TestLoadBidcosInterfacesQueriesTheCCUInterfaceName(t *testing.T) {
+	t.Parallel()
+
+	const (
+		interfaceID = "RM-Test-VM-96-BidCos-RF"
+		ccuName     = "BidCos-RF"
+	)
+	cc := coordinators.NewClientCoordinator()
+	if err := cc.Register(&coordinators.ClientEntry{
+		InterfaceID: interfaceID,
+		Interface:   hmenum.InterfaceBidCosRF,
+	}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	unit := &central.Unit{
+		Clients: cc,
+		Hub:     coordinators.NewHubCoordinator("c", events.NewBus()),
+	}
+
+	lister := &fakeBidcosLister{
+		replies: map[string][]jsonrpc.BidcosInterface{
+			ccuName: {
+				{Address: "OEQ1234567", Type: "CCU2", DutyCycle: 42, CarrierSense: -1, Connected: true, Default: true},
+			},
+		},
+	}
+
+	if err := loadBidcosInterfaces(context.Background(), lister, unit); err != nil {
+		t.Fatalf("loadBidcosInterfaces: %v", err)
+	}
+
+	if len(lister.requested) != 1 || lister.requested[0] != ccuName {
+		t.Fatalf("requested = %v, want [%s] — the CCU does not know the internal interface id", lister.requested, ccuName)
+	}
+	if _, ok := unit.Hub.BidcosInterface(interfaceID); !ok {
+		t.Fatalf("no snapshot cached under %q — the north-bound interface list keys on the interface id", interfaceID)
+	}
+}

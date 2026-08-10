@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"runtime/debug"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -100,10 +101,18 @@ func subscribeHubReadyTrigger(bus *events.Bus, trigger func()) func() {
 
 // runHubDiscoveryRestart invokes restart with panic isolation so a fault in the
 // publisher re-wire cannot crash the daemon from the debounce goroutine.
+//
+// The stack goes into the record because this is the only trace that survives:
+// the re-wire runs on its own goroutine, the recover consumes the panic, and
+// the daemon carries on with a hub plane that Start had already torn down and
+// then failed to rebuild. Without the stack an operator report of this line
+// carries no way to locate the fault.
 func runHubDiscoveryRestart(ctx context.Context, restart func(context.Context), logger *slog.Logger) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error("mqtt.hub_discovery.restart_on_ready.panic", slog.Any("panic", r))
+			logger.Error("mqtt.hub_discovery.restart_on_ready.panic",
+				slog.Any("panic", r),
+				slog.String("stack", string(debug.Stack())))
 		}
 	}()
 	restart(ctx)

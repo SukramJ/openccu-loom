@@ -181,3 +181,65 @@ func TestFlushOnce_ShutdownWalksEveryCentralRegardlessOfTracker(t *testing.T) {
 		t.Fatalf("writtenKeys = %v, want exactly 2 keys (shutdown full walk)", got)
 	}
 }
+
+// TestFlushOnce_NeverPersistsEdgeTriggerParameters pins that a keypress
+// never reaches the persistent VALUES cache.
+//
+// PRESS_* (and the keypad's CODE_ID / CODE_STATE) report an edge, not a
+// level. A persisted `PRESS_SHORT: true` is restored on the next boot,
+// marks the data point observed, and the boot-time snapshot then replays
+// it as a keypress that nobody made — one phantom trigger per daemon
+// restart on every consumer that listens for the button.
+//
+// The DP is live and non-nil here, so it clears every other
+// persistability rule: only the edge-trigger exclusion can keep it out.
+func TestFlushOnce_NeverPersistsEdgeTriggerParameters(t *testing.T) {
+	t.Parallel()
+
+	reg, centralName := buildTwoLiveDPCentral(t)
+
+	c, ok := reg.Get(centralName)
+	if !ok {
+		t.Fatalf("central %s not registered", centralName)
+	}
+	dev, ok := c.ModelRegistry.Get("DEV")
+	if !ok {
+		t.Fatal("device DEV not registered")
+	}
+	ch := dev.Channel("DEV:1")
+	if ch == nil {
+		t.Fatal("channel DEV:1 not registered")
+	}
+	press := generic.NewDataPoint[bool](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID: "if1", ChannelAddress: "DEV:1",
+			ParamsetKey: hmenum.ParamsetKeyValues, Parameter: "PRESS_SHORT",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type: hmenum.ParameterTypeAction, Operations: hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	})
+	press.OnWireValue(true)
+	ch.Put(press)
+	if press.Source() != hmenum.ValueSourceLive {
+		t.Fatalf("setup: PRESS_SHORT must be live, got %s", press.Source())
+	}
+
+	tracker := newDirtyTracker()
+	tracker.Register(centralName)
+
+	saver := &fakeSaver{}
+	flushOnce(context.Background(), reg, saver, tracker, nil, "tick")
+
+	got := saver.writtenKeys()
+	if _, ok := got["DEV:1|PRESS_SHORT"]; ok {
+		t.Errorf("writtenKeys = %v, PRESS_SHORT must never be persisted", got)
+	}
+	// The surrounding DPs still persist — the exclusion is parameter-scoped,
+	// not a blanket opt-out for the channel.
+	for _, want := range []string{"DEV:1|STATE", "DEV:1|LEVEL"} {
+		if _, ok := got[want]; !ok {
+			t.Errorf("writtenKeys = %v, want to contain %s", got, want)
+		}
+	}
+}

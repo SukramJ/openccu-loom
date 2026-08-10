@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.57.1
+
+- **Restarting Loom no longer triggers your button automations.** A
+  button that had been pressed once was replayed as a fresh keypress on
+  every restart, so any automation listening for it ran again. Buttons
+  now only report presses that actually happened.
+- **The duty-cycle and carrier-sense readings for BidCos interfaces are
+  back.** The periodic query asked the CCU under the wrong interface
+  name and failed every time, leaving those fields blank in the
+  interface list.
+
 ## 0.57.0
 
 - **Groundwork: Loom now tells clients where its own interface can be
