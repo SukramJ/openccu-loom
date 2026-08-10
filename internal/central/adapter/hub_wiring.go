@@ -1632,7 +1632,12 @@ func loadBidcosInterfaces(ctx context.Context, lister bidcosInterfaceLister, uni
 		if e == nil || e.Interface != hmenum.InterfaceBidCosRF {
 			continue
 		}
-		gateways, err := lister.ListBidcosInterfaces(ctx, e.InterfaceID)
+		// The wire takes the CCU-side interface name (`BidCos-RF`, what
+		// interfaces.Get() resolves), not the daemon-internal handle
+		// (`<central>-BidCos-RF`) the callback server routes on. The cache
+		// below stays keyed by the handle — that is what the north-bound
+		// interface list looks a snapshot up by.
+		gateways, err := lister.ListBidcosInterfaces(ctx, string(e.Interface))
 		if err != nil {
 			if firstErr == nil {
 				firstErr = fmt.Errorf("loadBidcosInterfaces %s: %w", e.InterfaceID, err)

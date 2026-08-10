@@ -965,11 +965,11 @@ func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPo
 	}
 	f := b.fanout.Load()
 	if f == nil {
-		b.publishValueChangedMQTT(b.lifetimeCtx, centralName, e)
+		b.publishValueChangedMQTT(b.lifetimeCtx, centralName, envKind, e)
 		return
 	}
 	f.enqueue(func() {
-		b.publishValueChangedMQTT(f.ctx, centralName, e)
+		b.publishValueChangedMQTT(f.ctx, centralName, envKind, e)
 	})
 }
 
@@ -985,7 +985,7 @@ func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPo
 // side inline and hands the MQTT side to the fan-out worker.
 func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
 	b.publishValueChangedWS(centralName, envKind, e)
-	b.publishValueChangedMQTT(ctx, centralName, e)
+	b.publishValueChangedMQTT(ctx, centralName, envKind, e)
 }
 
 // publishValueChangedWS emits the WebSocket-side fan-out for a value change.
@@ -1083,7 +1083,7 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 // waits for a PUBACK up to the transport's AckTimeout), so on the live path it
 // runs on the fan-out worker rather than the bus dispatch goroutine. The
 // boot-time snapshot path calls it inline via [onValueChangedKind].
-func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName string, e hmevent.DataPointValueChangedEvent) {
+func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
 	if b.mqtt == nil {
 		return
 	}
@@ -1154,9 +1154,19 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 	// to `<base>/<central>/<iface>/<addr>/<ch>/event`. HA's event
 	// entity (one per channel) reads `value_json.event_type` from
 	// this topic.
+	//
+	// Gated on a LIVE value change. A keypress is an edge, so only an
+	// event arriving off the bus may pulse the topic. The boot-time
+	// snapshot ([ws.KindInitial]) and the source-token re-emit
+	// ([ws.KindRefresh]) both replay a value the model already holds —
+	// and a PRESS_* value survives a restart through the persistent
+	// VALUES cache and the fetch_all_device_data seed. Pulsing on
+	// those replays is indistinguishable downstream from a real press
+	// (same event_type, fresh modified_at), so every consumer
+	// automation fired on every daemon restart.
 	// Best-effort — a broker error here does not roll back the main
 	// publish above.
-	if discoveryEligible {
+	if discoveryEligible && envKind == ws.KindChange {
 		b.publishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, ev.Model, e.Key.Parameter, ev.Channel)
 	}
 

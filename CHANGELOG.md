@@ -4,6 +4,44 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.57.1]
+
+### Fixed
+
+- **Restarting the daemon no longer replays keypresses** — a button that
+  had been pressed once fired its Home Assistant automations again on
+  every restart.
+
+  A `PRESS_*` parameter reports an edge, not a level, but two boot paths
+  treated it as restorable state: the persistent VALUES cache kept the
+  last press across restarts, and the `fetch_all_device_data` seed
+  re-read it from the CCU (the script emits every data point with a valid
+  timestamp, which a button acquires on its first press and keeps). The
+  boot-time snapshot then found the value observed and pushed it through
+  the same per-channel `/event` topic a live keypress uses — same
+  `event_type`, fresh timestamp, indistinguishable downstream.
+
+  Edge-trigger parameters (`PRESS_*`, `CODE_ID`, `CODE_STATE`) now stay
+  out of the values cache on both the write and the read side, the ReGa
+  seed skips them, and the keypress pulse is gated on a live value change
+  so neither the boot snapshot nor a cache-to-live source flip can emit
+  one. Existing installations are covered without a database migration —
+  the restore side rejects rows an older build already wrote.
+
+- **The BidCos radio-utilisation poll reached the CCU again** — the
+  `hub.bidcos_interfaces_refresh` job passed the daemon-internal
+  interface handle (`<central>-BidCos-RF`) where
+  `Interface.listBidcosInterfaces` expects the name the CCU knows
+  (`BidCos-RF`), so every run failed with `unknown interface` and the
+  duty-cycle / carrier-sense fields stayed empty on the interface list.
+
+- **A panic during the hub-discovery re-wire now logs its stack** —
+  `mqtt.hub_discovery.restart_on_ready.panic` recorded the panic value
+  alone. The re-wire runs on its own goroutine and the recover keeps the
+  daemon alive, so that line was the only trace of a hub plane that had
+  been torn down and not rebuilt, and it carried no way to locate the
+  fault.
+
 ## [0.57.0]
 
 ### Added

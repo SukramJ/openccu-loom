@@ -448,6 +448,15 @@ func appendPersistableEntry(
 		return
 	}
 	key := addr.DataPointKey()
+	// An edge-trigger parameter (PRESS_*, CODE_ID, CODE_STATE) carries an
+	// edge, not a level: `PRESS_SHORT: true` says a button was pressed once,
+	// never that it is being held. Restoring that on the next boot resurrects
+	// a keypress nobody made — the north-bound planes cannot tell the replay
+	// from the original. Nothing downstream wants the stale edge, so it never
+	// enters the cache in the first place.
+	if hmenum.IsEdgeTriggerParameter(hmenum.Parameter(key.Parameter)) {
+		return
+	}
 	*out = append(*out, sqlite.SaveEntry{
 		CentralName:    centralName,
 		InterfaceID:    interfaceID,
