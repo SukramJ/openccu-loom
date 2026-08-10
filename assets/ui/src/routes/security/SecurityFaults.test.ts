@@ -30,6 +30,7 @@ vi.mock("$lib/api/client", () => ({
 // so the shared pump is replaced by a hand-driven one.
 let emit: ((ev: { type: string }) => void) | null = null;
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: (handler: (ev: { type: string }) => void) => {
     emit = handler;
     return () => {

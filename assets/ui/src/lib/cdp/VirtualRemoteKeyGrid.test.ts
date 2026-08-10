@@ -25,6 +25,7 @@ vi.mock("$lib/stores/toast.svelte", () => ({
 // `eventHandlers` capture pattern used by ChannelPanel.brightness.test.ts.
 const eventHandlers: Array<(ev: unknown) => void> = [];
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: (handler: (ev: unknown) => void) => {
     eventHandlers.push(handler);
     return () => {

@@ -20,6 +20,7 @@ vi.mock("$lib/api/client", () => ({
 
 // Stub out the events store — we don't want a live WebSocket in unit tests.
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: vi.fn(() => () => {}),
 }));
 

@@ -103,6 +103,51 @@ func (d *reloadDeps) MQTTReseed() func(context.Context) {
 	return nil
 }
 
+// SetMDNSTXTRefresh installs the mDNS TXT re-announce hook. The REST
+// mount calls it once the advertiser is running and clears it (nil fn)
+// when the advertiser stops.
+func (d *reloadDeps) SetMDNSTXTRefresh(fn func()) {
+	if d == nil {
+		return
+	}
+	if fn == nil {
+		d.mdnsTXTRefresh.Store(nil)
+		return
+	}
+	d.mdnsTXTRefresh.Store(&fn)
+}
+
+// RefreshMDNSTXT re-announces the daemon-discovery TXT bundle when an
+// advertiser is running, and does nothing when none is (mDNS disabled,
+// pre-boot, or a nil bag).
+//
+// The nil-bag case is the common one, not an edge: daemonServe passes a
+// nil bag whenever the daemon runs without a config file, which is every
+// installation that keeps its configuration in the database. The
+// composition root hands this method to the southbound wiring as the
+// post-hub-ready hook, so it runs on each central's ready event —
+// dereferencing the bag there panicked that whole class of installation
+// on every boot, and the recover in the hub-ready path turned it into a
+// log line instead of a crash.
+func (d *reloadDeps) RefreshMDNSTXT() {
+	if d == nil {
+		return
+	}
+	if f := d.mdnsTXTRefresh.Load(); f != nil && *f != nil {
+		(*f)()
+	}
+}
+
+// NotifyNorthBridges invokes the test-only north-bridge observation hook
+// when one is installed. Production installs none, so this is a no-op
+// there.
+func (d *reloadDeps) NotifyNorthBridges(reg *northbridge.Registry) {
+	if d == nil || d.onNorthBridges == nil {
+		return
+	}
+	d.onNorthBridges(reg)
+}
+
 // SetMQTTSupervisor installs the MQTT supervisor. May be called
 // exactly once during daemon boot. A nil supervisor clears the
 // slot (used by tests).

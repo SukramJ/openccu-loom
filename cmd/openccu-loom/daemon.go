@@ -468,11 +468,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		mqttWiring:              mqttWiring,
 		bridge:                  bridge,
 		hubMQTT:                 hubMQTT,
-		postHubReady: func() {
-			if f := deps.mdnsTXTRefresh.Load(); f != nil {
-				(*f)()
-			}
-		},
+		postHubReady:            deps.RefreshMDNSTXT,
 	}
 	sb, southboundTeardown := wireSouthbound(ctx, sbDeps, &availClosers)
 	defer southboundTeardown()
@@ -817,9 +813,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// REST during their wiring). The guard test inspects the registry here to
 	// pin that no surface is hand-wired past the registry and that the
 	// reverse-stop order is stable. No-op in production (deps/hook nil).
-	if deps != nil && deps.onNorthBridges != nil {
-		deps.onNorthBridges(northBridges)
-	}
+	deps.NotifyNorthBridges(northBridges)
 
 	// Start the PhaseLate north-bound surfaces — the webhook, Matter and the
 	// REST/HTTP server — now that the daemon is fully up (router assembled,

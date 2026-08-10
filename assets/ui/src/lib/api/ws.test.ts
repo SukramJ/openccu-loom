@@ -59,3 +59,71 @@ describe("connectEvents heartbeat", () => {
     stream.close();
   });
 });
+
+describe("connectEvents resync signal", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("invokes the resync handler on replay_lost", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    let resyncs = 0;
+    stream.onResync(() => resyncs++);
+
+    sock.emit("open");
+    sock.emit("message", {
+      data: JSON.stringify({ op: "replay_lost", oldest_seq: 42 }),
+    });
+    vi.advanceTimersByTime(300);
+
+    expect(resyncs).toBe(1);
+    stream.close();
+  });
+
+  it("coalesces a burst into one resync", () => {
+    // A multi-CCU daemon signals once per central as each finishes its
+    // boot snapshot. Reloading once per signal would refetch the whole
+    // SPA state several times in a row.
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    let resyncs = 0;
+    stream.onResync(() => resyncs++);
+
+    sock.emit("open");
+    for (let i = 0; i < 5; i++) {
+      sock.emit("message", { data: JSON.stringify({ op: "replay_lost" }) });
+    }
+    vi.advanceTimersByTime(300);
+
+    expect(resyncs).toBe(1);
+    stream.close();
+  });
+
+  it("does not surface replay_lost as a data event", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    const received: unknown[] = [];
+    stream.onMessage((e) => received.push(e));
+
+    sock.emit("open");
+    sock.emit("message", { data: JSON.stringify({ op: "replay_lost" }) });
+    vi.advanceTimersByTime(300);
+
+    expect(received).toHaveLength(0);
+    stream.close();
+  });
+
+  it("drops a pending resync when the stream is closed", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    let resyncs = 0;
+    stream.onResync(() => resyncs++);
+
+    sock.emit("open");
+    sock.emit("message", { data: JSON.stringify({ op: "replay_lost" }) });
+    stream.close();
+    vi.advanceTimersByTime(300);
+
+    expect(resyncs).toBe(0);
+  });
+});

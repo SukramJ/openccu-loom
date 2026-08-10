@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.14.0
+  version: 5.15.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2290,6 +2290,8 @@ paths:
       description: >
         Per-user UI state (e.g. key `favorites`). The value is opaque
         JSON owned by the SPA. Scoped to the authenticated subject.
+        A key that was never stored is not an error: the response is
+        200 with `value: null`.
       tags: [auth]
       security:
         - basicAuth: []
@@ -2297,16 +2299,18 @@ paths:
         - openIdConnect: []
       responses:
         "200":
-          description: Preference value
+          description: Preference value, or null when the key is unset
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   key: { type: string }
+                  # Opaque SPA-owned JSON; null when the key is unset.
+                  # An empty schema already admits every type including
+                  # null — OpenAPI 3.1 has no `nullable` keyword.
                   value: {}
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
     put:
       operationId: putPreference
       summary: Store the caller's UI preference for {key}

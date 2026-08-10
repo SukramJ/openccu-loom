@@ -31,7 +31,7 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { notifyWakeupPending } from "$lib/links/wakeup-hint";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
   import type { DataPointChangedEvent } from "$lib/api/types";
   import { dirty } from "$lib/stores/dirty.svelte";
@@ -272,6 +272,17 @@
   $effect(() => {
     if (paramset !== "MASTER" || !pushesConfigPending) return;
     return maintenanceStore.onSettled(address, () => {
+      if (dirtyNames.length > 0) return;
+      void load(address, channel, paramset, locale, peer, expertMode);
+    });
+  });
+
+  // A daemon boot snapshot signals a resync instead of replaying the
+  // model into the event stream, so this panel refetches rather than
+  // waiting for pushes that will not come. Skipped over an unsaved
+  // working copy for the same reason the reload above is.
+  $effect(() => {
+    return onResync(() => {
       if (dirtyNames.length > 0) return;
       void load(address, channel, paramset, locale, peer, expertMode);
     });

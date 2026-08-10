@@ -60,6 +60,7 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
 }));
 
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: () => () => {},
 }));
 

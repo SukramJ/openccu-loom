@@ -60,6 +60,7 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
 // `subscribe` internally but the MASTER-only reload effect never reaches
 // it in these LINK-paramset tests.
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: (handler: (ev: unknown) => void) => {
     eventHandlers.push(handler);
     return () => {

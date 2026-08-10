@@ -1,6 +1,6 @@
 import { api, ApiError } from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { subscribe } from "./events.svelte";
+import { onResync, subscribe } from "./events.svelte";
 import type { EventEnvelope, SystemCCUEntry } from "$lib/api/types";
 import { authStore } from "./auth.svelte";
 
@@ -52,7 +52,14 @@ function createCentralStore() {
 
   function ensureStream() {
     if (unsub) return;
-    unsub = subscribe(applyEvent);
+    const unsubEvents = subscribe(applyEvent);
+    // A resync follows each central's boot snapshot, which is exactly
+    // when readiness and availability have moved.
+    const unsubResync = onResync(() => void refresh());
+    unsub = () => {
+      unsubEvents();
+      unsubResync();
+    };
   }
 
   function applyEvent(ev: EventEnvelope) {

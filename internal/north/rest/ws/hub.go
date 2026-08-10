@@ -6,6 +6,7 @@ package ws
 import (
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -82,6 +83,46 @@ type Hub struct {
 	// `Auth lifecycle on long-lived connections` section in
 	// docs/external-clients/topic-hierarchy.md.
 	tokens auth.TokenStore
+
+	// resyncSignals counts [Hub.SignalResync] calls so a wiring test
+	// can assert that a producer actually reaches this seam.
+	resyncSignals atomic.Uint64
+}
+
+// SignalResync tells every connected client that its view of the model
+// may be stale and that it should reload from REST rather than wait for
+// the stream to catch up. Reports how many clients were told.
+//
+// It carries the same `replay_lost` frame a too-old `since` cursor gets:
+// both mean "the stream cannot get you to the current state, take a
+// snapshot". The boot snapshot uses it in place of the per-data-point
+// broadcast it used to emit — on a 1000-device installation that walk
+// produced tens of thousands of frames, every one of them delivered to
+// every "*" subscriber, which is how a daemon restart used to overrun
+// each connected session's queue.
+func (h *Hub) SignalResync() int {
+	h.resyncSignals.Add(1)
+	h.mu.RLock()
+	targets := make([]*client, 0, len(h.clients))
+	for c := range h.clients {
+		if !c.isClosed() {
+			targets = append(targets, c)
+		}
+	}
+	h.mu.RUnlock()
+
+	anchor := h.CurrentSeq()
+	for _, c := range targets {
+		c.sendOp(outboundOp{Op: "replay_lost", OldestSeq: anchor})
+	}
+	return len(targets)
+}
+
+// ResyncSignals reports how many times [Hub.SignalResync] has been
+// called. Producers of the signal are wired far from the hub, so this
+// is what lets a test assert the wiring instead of the mechanism.
+func (h *Hub) ResyncSignals() uint64 {
+	return h.resyncSignals.Load()
 }
 
 // SetTokenStore wires the bearer-token resolver the in-band reauth
@@ -136,7 +177,10 @@ func (h *Hub) Publish(ev Event) {
 	h.mu.RLock()
 	targets := make([]*client, 0, len(h.clients))
 	for c := range h.clients {
-		if c.matches(ev.Topic) {
+		// A closed client is not a target. It normally leaves the set in
+		// close(), but readPump and writePump both close asynchronously,
+		// so a publish can still race the removal.
+		if !c.isClosed() && c.matches(ev.Topic) {
 			targets = append(targets, c)
 		}
 	}

@@ -534,6 +534,13 @@ func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Uni
 	for _, d := range u.ModelRegistry.List() {
 		b.publishDeviceSnapshot(ctx, centralName, d)
 	}
+	// The snapshot wrote the whole model to MQTT's retained topics. WS
+	// subscribers get one signal instead of one frame per data point:
+	// their view is now behind, and reloading over REST is both cheaper
+	// and more complete than replaying the walk into a live stream.
+	if b.wsHub != nil {
+		b.wsHub.SignalResync()
+	}
 	if b.postSnapshotHook != nil {
 		b.postSnapshotHook(ctx, centralName)
 	}
@@ -624,7 +631,7 @@ func (b *EventBridge) publishDeviceSnapshot(ctx context.Context, centralName str
 			if err != nil {
 				continue
 			}
-			b.onValueChangedKind(ctx, centralName, ws.KindInitial, hmevent.DataPointValueChangedEvent{
+			b.publishSnapshotValue(ctx, centralName, hmevent.DataPointValueChangedEvent{
 				Base: hmevent.NewBase(),
 				Key: hmtypes.DataPointKey{
 					InterfaceID:    ifaceID,
@@ -783,7 +790,23 @@ func (b *EventBridge) registerAndLoadDP(
 		if err != nil {
 			return
 		}
-		b.onValueChangedKind(ctx, centralName, ws.KindInitial, hmevent.DataPointValueChangedEvent{
+		// Visibility gate, ahead of the fan-out rather than inside the
+		// MQTT half of it, so both north-bound planes carry the same
+		// set. MQTT consulted buildPublishEvent on its way through and
+		// dropped what the gate refused; the WebSocket half consulted
+		// nothing and broadcast it. A channel with a week program holds
+		// hundreds of MASTER slots that MASTER's default-deny whitelist
+		// refuses, and the boot snapshot pushed every one of them to
+		// every subscriber — enough, on a large installation, to run a
+		// session past its buffer before it had finished connecting.
+		chAddr, _ := parseChannel(ch.Address)
+		if _, _, ok, _ := b.buildPublishEvent(
+			centralName, ifaceID, d.Address, chAddr, channelNo,
+			d.Model, d.Name, dpk, raw, paramsetKey,
+		); !ok {
+			return
+		}
+		b.publishSnapshotValue(ctx, centralName, hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			Key:      dpk,
 			OldValue: hmtypes.NoneValue(),
@@ -986,6 +1009,21 @@ func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPo
 func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
 	b.publishValueChangedWS(centralName, envKind, e)
 	b.publishValueChangedMQTT(ctx, centralName, envKind, e)
+}
+
+// publishSnapshotValue publishes one data point of a boot snapshot.
+//
+// MQTT only, deliberately. MQTT is a retained-state plane: a consumer
+// that arrives later reads the topic and gets the value, so the snapshot
+// has to write each one. The WebSocket plane is a live stream whose
+// consumers hold their own state and load it over REST — replaying the
+// whole model into it as individual frames tells them nothing they
+// cannot ask for, and on a large installation it is tens of thousands of
+// frames arriving faster than a browser drains them. Subscribers get a
+// single resync signal at the end of the walk instead; see
+// [Hub.SignalResync] and the call in [EventBridge.publishCentralSnapshot].
+func (b *EventBridge) publishSnapshotValue(ctx context.Context, centralName string, e hmevent.DataPointValueChangedEvent) {
+	b.publishValueChangedMQTT(ctx, centralName, ws.KindInitial, e)
 }
 
 // publishValueChangedWS emits the WebSocket-side fan-out for a value change.

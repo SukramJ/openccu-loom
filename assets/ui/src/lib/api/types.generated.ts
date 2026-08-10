@@ -2378,7 +2378,7 @@ export interface paths {
         };
         /**
          * Read the caller's UI preference for {key}
-         * @description Per-user UI state (e.g. key `favorites`). The value is opaque JSON owned by the SPA. Scoped to the authenticated subject.
+         * @description Per-user UI state (e.g. key `favorites`). The value is opaque JSON owned by the SPA. Scoped to the authenticated subject. A key that was never stored is not an error: the response is 200 with `value: null`.
          */
         get: operations["getPreference"];
         /**
@@ -11114,7 +11114,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Preference value */
+            /** @description Preference value, or null when the key is unset */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -11127,7 +11127,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
         };
     };
     putPreference: {

@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { DataPointChangedEvent } from "$lib/api/types";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { t } from "$lib/i18n";
   import Icon from "$lib/components/ui/Icon.svelte";
   import type { IconName } from "$lib/icons";
@@ -57,9 +57,13 @@
   }
 
   let unsubEvents: (() => void) | null = null;
+  // The boot snapshot signals a resync instead of replaying the model
+  // into the stream, so the view reloads what it read over REST.
+  let unsubResync: (() => void) | null = null;
 
   onMount(() => {
     void load();
+    unsubResync = onResync(() => void load());
     unsubEvents = subscribe((env) => {
       if (env.type !== "data_point") return;
       // Discriminated-union narrowing falls back to `unknown` for the
@@ -76,6 +80,7 @@
 
   onDestroy(() => {
     unsubEvents?.();
+    unsubResync?.();
   });
 
   type StatusItem = {

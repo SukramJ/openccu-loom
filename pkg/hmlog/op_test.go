@@ -421,3 +421,133 @@ func TestStartOp_OperationOverwritesPrevious(t *testing.T) {
 		t.Errorf("Operation = %q, want %q", rc.Operation, "new.operation")
 	}
 }
+
+// --------------------------------------------------------------------------
+// Startup tolerance: failures the caller retries, slowness the caller expects
+// --------------------------------------------------------------------------
+
+// TestStartOp_RetriedFailureLogsAtWarn pins that a failure whose caller
+// retries is recorded at Warn, not Error.
+//
+// A co-starting CCU answers the first listDevices with http 503 while its
+// per-interface RPC service trails ReGaHss. The bring-up retries across a
+// ~33 s backoff window and the interface comes up fine — but the span layer
+// knew nothing of the retry and stamped every attempt `level: error`, so a
+// healthy boot shipped an error line that operators reasonably read as a
+// fault.
+func TestStartOp_RetriedFailureLogsAtWarn(t *testing.T) {
+	var buf bytes.Buffer
+	logger := newJSONLogger(&buf)
+
+	ctx := hmlog.WithRetriedFailures(context.Background())
+	_, closer := hmlog.StartOp(ctx, "xml-rpc.listDevices", hmlog.OpOptions{Logger: logger})
+	closer(errors.New("http 503: internal backend exception"))
+
+	end := lastRecord(t, &buf)
+	if got := end["level"]; got != "WARN" {
+		t.Errorf("level = %v, want WARN for a failure the caller retries", got)
+	}
+	if got := end["outcome"]; got != "error" {
+		t.Errorf("outcome = %v, want error — the operation did fail, only its severity is reduced", got)
+	}
+	if got := end["retried"]; got != true {
+		t.Errorf("retried = %v, want true so the demotion is visible in the record", got)
+	}
+}
+
+// TestStartOp_UnretriedFailureStaysError pins the other half: without the
+// marker — the last attempt, or any caller that does not retry — a failure
+// is still an error.
+func TestStartOp_UnretriedFailureStaysError(t *testing.T) {
+	var buf bytes.Buffer
+	logger := newJSONLogger(&buf)
+
+	_, closer := hmlog.StartOp(context.Background(), "xml-rpc.listDevices", hmlog.OpOptions{Logger: logger})
+	closer(errors.New("http 503: internal backend exception"))
+
+	end := lastRecord(t, &buf)
+	if got := end["level"]; got != "ERROR" {
+		t.Errorf("level = %v, want ERROR when nothing retries the failure", got)
+	}
+	if _, ok := end["retried"]; ok {
+		t.Error("retried must be absent when the caller does not retry")
+	}
+}
+
+// TestStartOp_ExpectedSlownessLogsAtInfo pins that slowness a caller
+// expects is recorded at Info rather than Warn.
+//
+// A CCU that is still booting answers init/ping in 7-10 s. That is the
+// CCU's load, not a daemon fault, and it resolves on its own once the
+// bring-up completes — warning about it trains operators to ignore the
+// warning that matters later.
+func TestStartOp_ExpectedSlownessLogsAtInfo(t *testing.T) {
+	var buf bytes.Buffer
+	logger := newJSONLogger(&buf)
+
+	ctx := hmlog.WithExpectedSlowness(context.Background())
+	_, closer := hmlog.StartOp(ctx, "xml-rpc.ping", hmlog.OpOptions{
+		Logger:        logger,
+		SlowThreshold: time.Nanosecond,
+	})
+	time.Sleep(time.Millisecond)
+	closer(nil)
+
+	end := lastRecord(t, &buf)
+	if got := end["level"]; got != "INFO" {
+		t.Errorf("level = %v, want INFO for slowness the caller expects", got)
+	}
+	if got := end["outcome"]; got != "slow" {
+		t.Errorf("outcome = %v, want slow", got)
+	}
+	if got := end["expected"]; got != true {
+		t.Errorf("expected = %v, want true so the demotion is visible in the record", got)
+	}
+}
+
+// TestStartOp_ExpectedSlownessDoesNotMaskFailure pins that the slowness
+// marker only touches the slow branch: a real failure inside a
+// bring-up-tolerant call is still reported as one.
+func TestStartOp_ExpectedSlownessDoesNotMaskFailure(t *testing.T) {
+	var buf bytes.Buffer
+	logger := newJSONLogger(&buf)
+
+	ctx := hmlog.WithExpectedSlowness(context.Background())
+	_, closer := hmlog.StartOp(ctx, "xml-rpc.init", hmlog.OpOptions{
+		Logger:        logger,
+		SlowThreshold: time.Nanosecond,
+	})
+	closer(errors.New("connection refused"))
+
+	end := lastRecord(t, &buf)
+	if got := end["level"]; got != "ERROR" {
+		t.Errorf("level = %v, want ERROR — expected slowness must not demote a failure", got)
+	}
+}
+
+// TestStartOp_ToleranceMarkersCompose pins that the two markers are
+// independent: the bring-up sets both on every attempt but the last, which
+// keeps only the slowness tolerance.
+func TestStartOp_ToleranceMarkersCompose(t *testing.T) {
+	var buf bytes.Buffer
+	logger := newJSONLogger(&buf)
+
+	ctx := hmlog.WithExpectedSlowness(hmlog.WithRetriedFailures(context.Background()))
+	_, closer := hmlog.StartOp(ctx, "xml-rpc.listDevices", hmlog.OpOptions{Logger: logger})
+	closer(errors.New("http 503"))
+
+	end := lastRecord(t, &buf)
+	if got := end["level"]; got != "WARN" {
+		t.Errorf("level = %v, want WARN — the retry marker must survive the slowness marker", got)
+	}
+}
+
+// lastRecord returns the final parsed log line in buf.
+func lastRecord(t *testing.T, buf *bytes.Buffer) map[string]any {
+	t.Helper()
+	records := parseLines(t, buf)
+	if len(records) == 0 {
+		t.Fatal("no log records emitted")
+	}
+	return records[len(records)-1]
+}

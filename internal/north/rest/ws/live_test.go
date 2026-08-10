@@ -407,14 +407,16 @@ func TestLiveMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestLiveEnqueueBackpressure drives the enqueue default branch
-// (buffer overflow) by flooding a client whose buffer is tiny.
-// We cannot set clientBufferSize per-test, so instead we build a raw
-// client with a tiny out channel and call enqueue until it overflows.
+// TestLiveEnqueueBackpressure drives the enqueue overflow branch by
+// flooding a client whose buffer is tiny. clientBufferSize cannot be set
+// per-test, so the client is built directly with a small out channel.
+//
+// The policy under test: overflow costs the client events, not its
+// connection. See [client.enqueue] for why closing was wrong — the boot
+// snapshot overflows any per-client buffer on a large installation, and
+// closing turned every daemon restart into a severed SPA session.
 func TestLiveEnqueueBackpressure(t *testing.T) {
 	t.Parallel()
-	// Build a pipe-backed client with a capacity-1 channel so the
-	// very first enqueue after the channel fills triggers the close path.
 	serverConn, clientConn := net.Pipe()
 	defer clientConn.Close()
 
@@ -426,24 +428,38 @@ func TestLiveEnqueueBackpressure(t *testing.T) {
 		br:     br,
 		bw:     bw,
 		hub:    hub,
-		logger: slog.Default(),      // non-nil so the Warn call in enqueue doesn't panic
-		out:    make(chan Event, 1), // capacity 1 → second enqueue fills it
+		logger: slog.Default(), // non-nil so the Warn call in enqueue doesn't panic
+		out:    make(chan Event, 2),
+		ctrl:   make(chan wireMsg, 2),
 		closed: make(chan struct{}),
 	}
 
 	ev := Event{Topic: "x", Type: "t", When: time.Now()}
+	for range 8 {
+		c.enqueue(ev)
+	}
 
-	// First enqueue fills the channel.
-	c.enqueue(ev)
-	// Second enqueue hits the default branch and closes the client.
-	c.enqueue(ev)
-
-	// After the second enqueue the client must be closed.
 	select {
 	case <-c.closed:
-		// correct
-	case <-time.After(time.Second):
-		t.Fatal("client not closed after buffer overflow")
+		t.Fatal("buffer overflow closed the client; it must drop events and resync instead")
+	default:
+	}
+
+	// The client is told its stream has a gap.
+	var sawResync bool
+	for {
+		select {
+		case msg := <-c.ctrl:
+			if strings.Contains(string(msg.payload), "replay_lost") {
+				sawResync = true
+			}
+			continue
+		default:
+		}
+		break
+	}
+	if !sawResync {
+		t.Error("no replay_lost frame queued; the client cannot know it must resync")
 	}
 }
 

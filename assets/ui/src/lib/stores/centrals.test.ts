@@ -22,6 +22,7 @@ vi.mock("$lib/api/client", () => ({
 // inbound WS envelopes without a real WebSocket.
 let capturedHandler: ((ev: unknown) => void) | null = null;
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: vi.fn((handler: (ev: unknown) => void) => {
     capturedHandler = handler;
     return () => {

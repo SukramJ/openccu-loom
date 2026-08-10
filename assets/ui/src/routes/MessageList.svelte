@@ -18,7 +18,7 @@
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
 
@@ -213,6 +213,9 @@
   // gone. The broadcast carries a count, not the rows, so a change
   // triggers a reload rather than a patch.
   let unsubEvents: (() => void) | null = null;
+  // The boot snapshot signals a resync instead of replaying the model
+  // into the stream, so the view reloads what it read over REST.
+  let unsubResync: (() => void) | null = null;
   let reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Acknowledging in this view already reloads, and the server answers the
@@ -229,6 +232,7 @@
 
   onMount(() => {
     void load();
+    unsubResync = onResync(() => void load());
     unsubEvents = subscribe((ev) => {
       if (ev.type === "hub.service_message" || ev.type === "hub.alarm_message") {
         scheduleReload();
@@ -238,6 +242,7 @@
 
   onDestroy(() => {
     unsubEvents?.();
+    unsubResync?.();
     if (reloadTimer) clearTimeout(reloadTimer);
   });
 

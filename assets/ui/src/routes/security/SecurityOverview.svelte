@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
   import { securityClassIcon } from "$lib/security/classes";
@@ -40,6 +40,9 @@
   }
 
   let unsubEvents: (() => void) | null = null;
+  // The boot snapshot signals a resync instead of replaying the model
+  // into the stream, so the view reloads what it read over REST.
+  let unsubResync: (() => void) | null = null;
   let reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   // One physical event moves several of these at once — a smoke alarm
@@ -55,6 +58,7 @@
 
   onMount(() => {
     void load();
+    unsubResync = onResync(() => void load());
     unsubEvents = subscribe((ev) => {
       if (typeof ev.type === "string" && ev.type.startsWith("security.")) {
         scheduleReload();
@@ -64,6 +68,7 @@
 
   onDestroy(() => {
     unsubEvents?.();
+    unsubResync?.();
     if (reloadTimer) clearTimeout(reloadTimer);
   });
 

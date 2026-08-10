@@ -18,6 +18,7 @@ vi.mock("$lib/stores/preferences.svelte", () => ({
 // daemon would send.
 let emit: ((ev: { type: string }) => void) | null = null;
 vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
   subscribe: (handler: (ev: { type: string }) => void) => {
     emit = handler;
     return () => {

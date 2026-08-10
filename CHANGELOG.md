@@ -4,6 +4,68 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.57.2]
+
+### Fixed
+
+- **The mDNS TXT record advertises the CCU serials again** — every
+  installation that runs without a YAML config file (the shape any setup
+  that keeps its configuration in the database has) hit a nil-pointer
+  panic the moment a central reported southbound-ready. The composition
+  root reached into the reload bag's fields from a closure instead of
+  going through one of its nil-guarded accessors, and `daemonServe`
+  passes a nil bag on exactly that path. The recover in the hub-ready
+  pipeline turned it into a single `restart_on_ready.panic` log line, so
+  the daemon carried on with the ADR 0058 serial re-announce silently
+  dead — discovery clients never received the `ccus=` list and
+  `centrals=` stayed stale after a live adopt. Present since 0.50.0.
+
+  A contract test now fails the build on any direct field access to that
+  bag from outside its own file.
+
+- **A busy WebSocket connection is no longer severed** — when a client
+  fell behind, the daemon closed its socket. The boot snapshot fans out
+  one frame per data point, which on a large installation is far past
+  any per-client queue, so every open Config-UI session was cut during a
+  daemon restart. An overflow now drops the oldest queued events and
+  sends the client a `replay_lost` frame so it resyncs, keeping the
+  session alive.
+
+- **One overflowing connection no longer floods the log** — a closed
+  client stayed in the hub's fan-out set until its read loop noticed, so
+  the publisher kept selecting it and every attempt logged again. One
+  session produced 413 `ws.backpressure` warnings in two seconds. The
+  client now leaves the set immediately and the condition is logged once
+  per episode.
+
+### Changed
+
+- **The boot snapshot no longer replays the model into the WebSocket
+  stream** — it writes MQTT's retained topics as before and sends
+  subscribers a single resync signal instead of tens of thousands of
+  individual frames. The Config UI reloads the affected views on that
+  signal; a channel editor with unsaved edits is left alone. The two
+  north-bound planes also apply the same visibility rules now: the
+  WebSocket side had none, so the ~780 MASTER week-program slots of a
+  single channel were broadcast on every boot while MQTT correctly
+  refused them.
+
+- **An unset user preference reads as `null` instead of 404** — `GET
+  /me/preferences/{key}` answers 200 with a null value. Every key starts
+  unset and the Config UI asks for `favorites` and `start_route` on its
+  first page load, so the old answer put a warn-level line in the log
+  for ordinary use. API version 5.15.0; clients that already treat 404
+  as "not set" keep working.
+
+- **A co-starting CCU no longer reports errors that resolve themselves**
+  — the first `listDevices` against a CCU whose per-interface RPC
+  service still trails ReGaHss answers `http 503`, and the bring-up
+  retries across a ~33 s window. That attempt is now logged at warn with
+  `retried: true` rather than error, and slow calls against a booting
+  CCU at info rather than warn. The final attempt keeps full severity,
+  and an interface that never comes up is now an error rather than a
+  warning.
+
 ## [0.57.1]
 
 ### Fixed
