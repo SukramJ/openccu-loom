@@ -90,6 +90,16 @@ func (s testAlarmSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) err
 	return lastErr
 }
 
+func (s testAlarmSink) ResetMotion(ctx context.Context, zoneID string) error {
+	s.ah.svc.Engine().ResetTriggeredMotion(ctx, zoneID, "", alarmMqttSource)
+	return nil
+}
+
+func (s testAlarmSink) MasterResetMotion(ctx context.Context) error {
+	s.ah.svc.Engine().ResetTriggeredMotion(ctx, "", "", alarmMqttSource)
+	return nil
+}
+
 func (s testAlarmSink) MasterDisarm(ctx context.Context) error {
 	var lastErr error
 	for _, a := range s.ah.svc.Engine().Zones() {

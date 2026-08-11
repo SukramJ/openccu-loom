@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: e2f72d0d
-HEAD: e2f72d0d
+Generated: 90388341
+HEAD: 90388341
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28007 |
-| Reachable | 4951 |
-| Whitelisted | 20092 |
-| **Unreachable** | **2964** |
+| Total Exported | 28121 |
+| Reachable | 4959 |
+| Whitelisted | 20188 |
+| **Unreachable** | **2974** |
 
 ## Top-20 Packages by Dead Code
 
@@ -120,7 +120,7 @@ HEAD: e2f72d0d
 | internal/addonupdate | 0 | 18 | 18 |
 | internal/alarm | 0 | 25 | 0 |
 | internal/alarm/codes | 0 | 13 | 0 |
-| internal/alarm/engine | 0 | 26 | 6 |
+| internal/alarm/engine | 0 | 29 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
 | internal/alarm/outputs | 0 | 24 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
@@ -185,7 +185,7 @@ HEAD: e2f72d0d
 | internal/north/matter/transport/message | 0 | 6 | 12 |
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
-| internal/north/mcp | 0 | 8 | 0 |
+| internal/north/mcp | 0 | 11 | 0 |
 | internal/north/mqtt | 0 | 86 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
@@ -200,7 +200,7 @@ HEAD: e2f72d0d
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 108 | 28 |
-| pkg/hmapi | 0 | 153 | 16 |
+| pkg/hmapi | 0 | 157 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 6 |
