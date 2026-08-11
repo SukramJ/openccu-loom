@@ -6,6 +6,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.58.1]
 
+API 5.18.0 — additive: the parameter enumeration gains
+`PRESENCE_DETECTION_STATE` and `RESET_PRESENCE`.
+
 ### Fixed
 
 - **Resetting triggered motion detectors actually reaches the
