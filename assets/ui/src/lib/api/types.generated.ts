@@ -7578,6 +7578,8 @@ export interface components {
             /** @enum {string} */
             paramset: "VALUES" | "MASTER";
             reason: components["schemas"]["UnIgnoreReason"];
+            /** @description Concrete rule text behind `reason` — the matched name prefix or suffix, e.g. "STATUS_FLAG_" or "_STATUS" — so a badge can name the rule rather than its category. Absent for reasons whose rule is a membership list rather than a pattern. */
+            reason_detail?: string;
             /** @description Every rule that matched anywhere in the fleet, in precedence order. */
             reasons: components["schemas"]["UnIgnoreReason"][];
             /** @description Pattern that re-enables the parameter on every device and channel. Absent for MASTER, which has no short pattern form. */

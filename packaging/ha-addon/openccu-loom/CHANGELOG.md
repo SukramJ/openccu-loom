@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.58.2
+
+- **Wochenprogramm-Zellen im Bildschirm "Ausgeblendete Parameter"**
+  werden wieder als Wochenprogramm einsortiert. Zwei Drittel von ihnen
+  landeten unter "MASTER-Einstellung" und damit in der offenen Liste
+  statt in der eingeklappten Kategorie.
+- **Badges nennen die Regel statt ihrer Kategorie**: statt
+  "Namenspräfix" steht dort jetzt "Präfix `STATUS_FLAG_`".
+
 ## 0.58.1
 
 - **The motion-detector reset from 0.58.0 now actually works.** No

@@ -63,6 +63,33 @@ export function reasonHelpKey(reason: UnIgnoreReason | string): string {
   return `unignore.reason_help.${reason}`;
 }
 
+/** i18n key for a reason's badge when the server supplied the concrete
+    rule text. Takes a `{pattern}` placeholder. */
+export function reasonDetailLabelKey(reason: UnIgnoreReason | string): string {
+  return `unignore.reason_detail.${reason}`;
+}
+
+/** Badge text for a candidate group.
+ *
+ * With a `reason_detail` the badge names the rule that fired
+ * ("Prefix STATUS_FLAG_"); without one it falls back to the rule's
+ * category ("Name prefix"). The category alone leaves an operator to
+ * guess which of seven prefixes applied, so the detail is preferred
+ * whenever the server sends it.
+ */
+export function reasonBadgeText(
+  group: { reason: UnIgnoreReason | string; reason_detail?: string },
+  t: (key: string, vars?: Record<string, string>) => string,
+): string {
+  const detail = group.reason_detail;
+  if (!detail) return t(reasonLabelKey(group.reason));
+  const key = reasonDetailLabelKey(group.reason);
+  const text = t(key, { pattern: detail });
+  // A reason that gained a detail server-side but has no detail
+  // catalogue entry yet must not render its raw key at the operator.
+  return text === key ? t(reasonLabelKey(group.reason)) : text;
+}
+
 export function isNoiseReason(reason: UnIgnoreReason | string): boolean {
   return (NOISE_REASONS as readonly string[]).includes(reason);
 }

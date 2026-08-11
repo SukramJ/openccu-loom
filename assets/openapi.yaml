@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.18.0
+  version: 5.19.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9946,6 +9946,13 @@ components:
           description: Localised parameter name; absent when the catalogue has no entry.
         paramset: { type: string, enum: [VALUES, MASTER] }
         reason: { $ref: "#/components/schemas/UnIgnoreReason" }
+        reason_detail:
+          type: string
+          description: >-
+            Concrete rule text behind `reason` — the matched name prefix or
+            suffix, e.g. "STATUS_FLAG_" or "_STATUS" — so a badge can name the
+            rule rather than its category. Absent for reasons whose rule is a
+            membership list rather than a pattern.
         reasons:
           type: array
           description: Every rule that matched anywhere in the fleet, in precedence order.

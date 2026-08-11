@@ -1079,6 +1079,9 @@ const EN: Catalog = {
   "unignore.reason.ignore_list": "Excluded",
   "unignore.reason.wildcard_prefix": "Name prefix",
   "unignore.reason.wildcard_suffix": "Name suffix",
+  // Badge text once the server names the pattern that actually matched.
+  "unignore.reason_detail.wildcard_prefix": "Prefix {pattern}",
+  "unignore.reason_detail.wildcard_suffix": "Suffix {pattern}",
   "unignore.reason.channel_restricted": "Other channel",
   "unignore.reason.event_suppressed": "Events suppressed",
   "unignore.reason.internal_flag": "Internal",
@@ -4881,6 +4884,8 @@ const DE: Catalog = {
   "unignore.reason.ignore_list": "Ausgeschlossen",
   "unignore.reason.wildcard_prefix": "Namenspräfix",
   "unignore.reason.wildcard_suffix": "Namenssuffix",
+  "unignore.reason_detail.wildcard_prefix": "Präfix {pattern}",
+  "unignore.reason_detail.wildcard_suffix": "Suffix {pattern}",
   "unignore.reason.channel_restricted": "Anderer Kanal",
   "unignore.reason.event_suppressed": "Events unterdrückt",
   "unignore.reason.internal_flag": "Intern",

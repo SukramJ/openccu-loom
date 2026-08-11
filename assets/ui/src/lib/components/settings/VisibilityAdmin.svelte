@@ -16,6 +16,7 @@
     reasonCounts,
     reasonLabelKey,
     reasonHelpKey,
+    reasonBadgeText,
     suppressedCount,
     toggleGroup,
     togglePattern,
@@ -471,7 +472,7 @@
                         variant={reasonVariant(group.reason)}
                         title={t(reasonHelpKey(group.reason))}
                       >
-                        {t(reasonLabelKey(group.reason))}
+                        {reasonBadgeText(group, t)}
                       </Badge>
                       {#if group.paramset === "MASTER"}
                         <Badge variant="muted">MASTER</Badge>

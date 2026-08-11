@@ -119,6 +119,10 @@ type UnIgnoreCandidateGroupDTO struct {
 	// matched anywhere in the fleet.
 	Reason  string   `json:"reason"`
 	Reasons []string `json:"reasons"`
+	// ReasonDetail is the concrete rule text behind Reason — the matched
+	// name prefix or suffix — so the badge can name the rule instead of
+	// its category. Empty for reasons that have no such text.
+	ReasonDetail string `json:"reason_detail,omitempty"`
 	// SimplePattern re-enables the parameter fleet-wide. Empty for
 	// MASTER, which has no short pattern form.
 	SimplePattern string                      `json:"simple_pattern,omitempty"`
@@ -395,6 +399,11 @@ func mergeCandidateGroup(dst *visibility.CandidateGroup, src visibility.Candidat
 	dst.Reasons = visibility.MergeReasons(dst.Reasons, src.Reasons)
 	if len(dst.Reasons) > 0 {
 		dst.Reason = dst.Reasons[0]
+		// The merge can promote a different reason to primary, and the
+		// detail describes the primary one. Both centrals see the same
+		// parameter name, so recomputing is exact rather than a guess at
+		// which side's detail to keep.
+		dst.ReasonDetail = visibility.ReasonDetail(dst.Reason, dst.Parameter)
 	}
 	dst.Devices += src.Devices
 	byModel := make(map[string]int, len(dst.Models))
@@ -438,6 +447,7 @@ func candidateGroupDTO(g visibility.CandidateGroup, labels ParameterLabeler) UnI
 		Parameter:     g.Parameter,
 		Paramset:      string(g.Paramset),
 		Reason:        string(g.Reason),
+		ReasonDetail:  g.ReasonDetail,
 		Reasons:       make([]string, 0, len(g.Reasons)),
 		SimplePattern: g.SimplePattern,
 		Models:        make([]UnIgnoreCandidateModelDTO, 0, len(g.Models)),

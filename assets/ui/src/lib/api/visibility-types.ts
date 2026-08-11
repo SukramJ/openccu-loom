@@ -65,6 +65,10 @@ export type UnIgnoreCandidateGroup = {
   label?: string;
   paramset: string;
   reason: UnIgnoreReason;
+  /** Concrete rule text behind `reason` — the matched name prefix or
+      suffix. Absent for reasons whose rule is a membership list, and on
+      responses from a daemon older than API 5.18.0. */
+  reason_detail?: string;
   reasons: UnIgnoreReason[];
   simple_pattern?: string;
   models: UnIgnoreCandidateModel[];

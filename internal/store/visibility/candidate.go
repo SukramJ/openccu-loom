@@ -42,6 +42,10 @@ type CandidateGroup struct {
 	// Reason is the most explanatory rule that hid the parameter; it
 	// drives the badge and the filter chip.
 	Reason HiddenReason
+	// ReasonDetail is the concrete rule text behind Reason — the matched
+	// prefix or suffix — or empty when the reason has no such text. It
+	// turns the badge from a rule category into the rule itself.
+	ReasonDetail string
 	// Reasons lists every rule that matched anywhere in the fleet, in
 	// precedence order.
 	Reasons []HiddenReason
@@ -151,6 +155,7 @@ func (c *CandidateCollector) Groups() []CandidateGroup {
 		if len(group.Reasons) > 0 {
 			group.Reason = group.Reasons[0]
 		}
+		group.ReasonDetail = ReasonDetail(group.Reason, gk.parameter)
 		if gk.paramset == hmenum.ParamsetKeyValues {
 			group.SimplePattern = gk.parameter
 		}
