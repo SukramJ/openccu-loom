@@ -658,19 +658,32 @@ var scheduleActorChannelByBit = func() []struct {
 }()
 
 // weekdayBits maps weekday names to the bitmask the CCU's
-// `<NN>_WP_WEEKDAY` parameter expects. Same layout as Python's
-// Weekday IntEnum: Monday=2, Tuesday=4, … Sunday=64.
+// `<NN>_WP_WEEKDAY` parameter expects.
+//
+// Sunday is bit 0, not bit 7: the week wraps at the bottom, so the mask
+// runs Sunday=1, Monday=2, … Saturday=64 and a schedule for all seven
+// days is 127. The layout is taken from the checkbox values the CCU's
+// own editor emits — `_getWeekDay` in
+// `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js` — and confirmed
+// against a real CCU, which stores and returns WEEKDAY=1 for a
+// Sunday-only entry.
+//
+// Reading bit 7 as Sunday dropped it in both directions: a Sunday
+// schedule made on the CCU came back with no weekday at all, and one
+// saved here set a bit the device does not evaluate, so it never fired.
 var weekdayBits = map[string]int{
+	"SUNDAY":    1 << 0,
 	"MONDAY":    1 << 1,
 	"TUESDAY":   1 << 2,
 	"WEDNESDAY": 1 << 3,
 	"THURSDAY":  1 << 4,
 	"FRIDAY":    1 << 5,
 	"SATURDAY":  1 << 6,
-	"SUNDAY":    1 << 7,
 }
 
-// weekdayNamesByBit is the reverse table for parsing.
+// weekdayNamesByBit is the reverse table for parsing. Ordered Monday
+// first because that is how the names are presented, while the bit
+// values follow the wire layout above.
 var weekdayNamesByBit = []struct {
 	bit  int
 	name string
@@ -681,7 +694,7 @@ var weekdayNamesByBit = []struct {
 	{1 << 4, "THURSDAY"},
 	{1 << 5, "FRIDAY"},
 	{1 << 6, "SATURDAY"},
-	{1 << 7, "SUNDAY"},
+	{1 << 0, "SUNDAY"},
 }
 
 // parseSimpleSchedule extracts active slots from the raw paramset.

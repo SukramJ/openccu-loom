@@ -323,15 +323,29 @@ func TestFillUpWeekdaySlots(t *testing.T) {
 func TestWeekdayBitmaskHelpers(t *testing.T) {
 	t.Parallel()
 
+	// Sunday is bit 0, so all seven days are 127 — the value the CCU's
+	// own editor produces when every checkbox is ticked. Reading Sunday
+	// as bit 7 made this 254, a mask whose top bit the device ignores.
 	allDays := schedule.Weekdays // 7 days
 	bitmask := WeekdayListToBitmask(allDays)
-	if bitmask != 254 { // bits 1-7: 2+4+8+16+32+64+128 = 254
-		t.Errorf("bitmask(allDays) = %d, want 254 (bits 1-7)", bitmask)
+	if bitmask != 127 { // bits 0-6: 1+2+4+8+16+32+64 = 127
+		t.Errorf("bitmask(allDays) = %d, want 127 (bits 0-6)", bitmask)
 	}
 
 	back := WeekdayBitmaskToList(bitmask)
 	if len(back) != 7 {
 		t.Errorf("WeekdayBitmaskToList(allBits) len = %d, want 7", len(back))
+	}
+
+	// Sunday on its own is 1, and it must survive the round-trip: the
+	// defect dropped it silently in both directions.
+	sunday := []schedule.Weekday{schedule.WeekdaySunday}
+	if bm := WeekdayListToBitmask(sunday); bm != 1 {
+		t.Errorf("bitmask(SUNDAY) = %d, want 1 (bit 0)", bm)
+	}
+	backSun := WeekdayBitmaskToList(1)
+	if len(backSun) != 1 || backSun[0] != schedule.WeekdaySunday {
+		t.Errorf("WeekdayBitmaskToList(1) = %v, want [SUNDAY]", backSun)
 	}
 
 	// Empty list → 0.

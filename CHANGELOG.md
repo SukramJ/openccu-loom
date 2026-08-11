@@ -4,6 +4,30 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.3]
+
+### Fixed
+
+- **Sunday works in device week profiles again.** The
+  `<NN>_WP_WEEKDAY` bitmask was read with Sunday on bit 7. The CCU puts
+  it on bit 0 — the mask runs Sunday=1, Monday=2 … Saturday=64, so all
+  seven days are 127, not 254.
+
+  The consequence ran both ways and was silent in each. A schedule set
+  on the CCU for Sunday arrived here with an empty weekday list, so the
+  entry looked like it applied to no day at all. A schedule saved from
+  here for Sunday set a bit the device does not evaluate, so it simply
+  never fired — the entry looked correct everywhere it was displayed
+  and did nothing. Every other day was unaffected, which is why this
+  survived: a Monday-to-Saturday schedule round-tripped perfectly.
+
+  The layout is taken from the checkbox values the CCU's own editor
+  emits (`_getWeekDay` in `HmIPWeeklyProgram.js`) and was confirmed
+  against a real CCU: written `WEEKDAY=1`, stored and returned as `1`,
+  while this daemon reported the entry as having no weekdays. Both
+  tables that encode the mask — they had drifted apart from each other
+  as well — now assert their values against that source.
+
 ## [0.58.2]
 
 API 5.19.0 — additive: a hidden-parameter candidate gains

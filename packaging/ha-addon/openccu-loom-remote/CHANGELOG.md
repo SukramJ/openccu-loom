@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.58.3
+
+- Version alignment with OpenCCU-Loom 0.58.3. The proxy itself is
+  unchanged; the release fixes Sunday in device week profiles.
+
 # 0.58.2
 
 - Version alignment with OpenCCU-Loom 0.58.2. The proxy itself is
