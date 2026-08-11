@@ -44,6 +44,13 @@ func (a *Action) Trigger(ctx context.Context, value any, priority hmenum.Command
 	)
 }
 
+// FireAction implements [ActionTrigger]. The CCU treats any write to an
+// ACTION parameter as "do it now", so the bare bool is the canonical
+// trigger value.
+func (a *Action) FireAction(ctx context.Context, priority hmenum.CommandPriority) error {
+	return a.Trigger(ctx, true, priority)
+}
+
 // MatterMeasurementClass implements
 // [interfaces.MatterMeasurementSource]. Press-event parameters
 // (PRESS_SHORT / PRESS_LONG / …) surface as MomentarySwitch (Matter

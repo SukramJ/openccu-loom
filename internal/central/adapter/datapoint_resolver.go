@@ -88,9 +88,8 @@ func isDeviceErrorEvent(parameter string) bool {
 // buttonActionParameters are write-only ACTION parameters that are rendered
 // as a stateless button.
 var buttonActionParameters = map[hmenum.Parameter]struct{}{
-	hmenum.ParameterResetMotion: {},
-	// RESET_PRESENCE is not modelled as an enum constant yet — match
-	// By raw string to stay in sync
+	hmenum.ParameterResetMotion:   {},
+	hmenum.ParameterResetPresence: {},
 }
 
 // binarySensorValueLists enumerates the VALUE_LIST shapes that
@@ -164,9 +163,6 @@ func resolveWritable(cfg generic.Spec, param hmenum.Parameter, pd hmproto.Parame
 func resolveAction(cfg generic.Spec, param hmenum.Parameter, pd hmproto.ParameterData) device.ParameterDataPoint {
 	if pd.Operations == hmenum.OperationsWrite {
 		if _, ok := buttonActionParameters[param]; ok {
-			return generic.NewButton(withKind(cfg, generic.KindButton))
-		}
-		if string(param) == "RESET_PRESENCE" {
 			return generic.NewButton(withKind(cfg, generic.KindButton))
 		}
 		if len(pd.ValueList) > 0 {

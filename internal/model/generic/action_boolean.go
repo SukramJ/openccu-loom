@@ -40,3 +40,10 @@ func (a *ActionBoolean) Trigger(ctx context.Context, v bool, priority hmenum.Com
 		priority,
 	)
 }
+
+// FireAction implements [ActionTrigger]. `true` is the trigger value for
+// a write-only boolean: the parameter carries no state a caller could
+// toggle, so the only meaningful write is the firing one.
+func (a *ActionBoolean) FireAction(ctx context.Context, priority hmenum.CommandPriority) error {
+	return a.Trigger(ctx, true, priority)
+}

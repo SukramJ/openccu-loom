@@ -2186,6 +2186,10 @@
           "wire_value": "POWER"
         },
         {
+          "go_name": "ParameterPresenceDetectionState",
+          "wire_value": "PRESENCE_DETECTION_STATE"
+        },
+        {
           "go_name": "ParameterPress",
           "wire_value": "PRESS"
         },
@@ -2260,6 +2264,10 @@
         {
           "go_name": "ParameterResetMotion",
           "wire_value": "RESET_MOTION"
+        },
+        {
+          "go_name": "ParameterResetPresence",
+          "wire_value": "RESET_PRESENCE"
         },
         {
           "go_name": "ParameterSabotage",

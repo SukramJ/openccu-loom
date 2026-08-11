@@ -1,5 +1,18 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.58.1
+
+- **The motion-detector reset from 0.58.0 now actually works.** No
+  reset button ever appeared, and arming never cleared anything: the
+  daemon looked for the reset parameter in the wrong internal shape, so
+  it found none of them and reported that no detector was resettable.
+  If you saw the feature announced but never a button, this is why.
+- **Presence detectors (HmIP-SPI) are included.** They use a different
+  reset parameter than motion detectors and were skipped entirely.
+- **The Security & Safety panel's link to the alarm panel** moved into
+  the header toolbar, matching the link in the opposite direction, and
+  no longer appears twice on the same screen.
+
 ## 0.58.0
 
 - **Triggered motion detectors can be reset — per zone or all at
