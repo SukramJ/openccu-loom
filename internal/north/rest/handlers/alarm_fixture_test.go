@@ -84,6 +84,13 @@ func (f *alarmPanelFixture) Reload(ctx context.Context) error {
 // through the seed* helpers (direct store writes + reload) or by
 // driving the CRUD handlers under test.
 func newAlarmPanelFixture(t *testing.T) *alarmPanelFixture {
+	return newAlarmPanelFixtureWithMotionReset(t, nil)
+}
+
+// newAlarmPanelFixtureWithMotionReset is [newAlarmPanelFixture] with a
+// RESET_MOTION port wired. A nil port leaves the feature inert, which
+// is what every fixture that does not exercise it wants.
+func newAlarmPanelFixtureWithMotionReset(t *testing.T, motionReset engine.MotionResetPort) *alarmPanelFixture {
 	t.Helper()
 	ctx := context.Background()
 	db := openMigratedTestDB(t, "alarm.db")
@@ -108,14 +115,15 @@ func newAlarmPanelFixture(t *testing.T) *alarmPanelFixture {
 	}
 
 	eng, err := engine.New(engine.Deps{
-		Clock:     clk,
-		Zones:     stores.Zones,
-		Sensors:   stores.Sensors,
-		State:     stores.State,
-		Incidents: stores.Incidents,
-		Runtime:   stores.Runtime,
-		Outputs:   mgr,
-		Journal:   jrn,
+		Clock:       clk,
+		Zones:       stores.Zones,
+		Sensors:     stores.Sensors,
+		State:       stores.State,
+		Incidents:   stores.Incidents,
+		Runtime:     stores.Runtime,
+		Outputs:     mgr,
+		Journal:     jrn,
+		MotionReset: motionReset,
 	})
 	if err != nil {
 		t.Fatalf("engine.New: %v", err)
