@@ -221,3 +221,44 @@ func TestBuildAlarmPanelDiscovery_NoModesYieldsTriggerOnlyFeatureList(t *testing
 		t.Errorf("supported_features = %v, want [%s]", features, alarmFeatureTrigger)
 	}
 }
+
+// TestAlarmEntityCategoriesMatchTheirRole pins where Home Assistant
+// files each alarm entity.
+//
+// The reset button shipped as `entity_category: "config"`, which puts it
+// in a collapsed section of the device page and keeps it out of
+// dashboards and the entity picker's default view. It is a control an
+// operator presses during an incident, not a setting, and it was
+// reported as missing by someone looking for it. The count beside it is
+// a readout and stays diagnostic.
+func TestAlarmEntityCategoriesMatchTheirRole(t *testing.T) {
+	t.Parallel()
+
+	decode := func(t *testing.T, item DiscoveryItem) map[string]any {
+		t.Helper()
+		if !item.OK {
+			t.Fatal("discovery item not OK")
+		}
+		var body map[string]any
+		if err := json.Unmarshal(item.Payload, &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		return body
+	}
+
+	reset := decode(t, BuildAlarmMotionResetDiscovery("base", "zone-1", "Zone", "Reset motion", false))
+	if cat, ok := reset["entity_category"]; ok {
+		t.Errorf("reset button carries entity_category %q; a control belongs to the "+
+			"device's main surface like the panel entity, which has none", cat)
+	}
+
+	panel := decode(t, BuildAlarmPanelDiscovery("base", "zone-1", "Zone", nil, false, false, false))
+	if cat, ok := panel["entity_category"]; ok {
+		t.Errorf("panel carries entity_category %q, want none", cat)
+	}
+
+	count := decode(t, BuildAlarmTriggeredMotionDiscovery("base", "zone-1", "Zone", "Triggered motion detectors", false))
+	if got := count["entity_category"]; got != "diagnostic" {
+		t.Errorf("triggered-motion count entity_category = %v, want diagnostic", got)
+	}
+}

@@ -713,14 +713,20 @@ func TestSimpleScheduleSlotRangeEnforced(t *testing.T) {
 	if err := s.Put(0, e); err == nil {
 		t.Fatal("slot 0 must be rejected")
 	}
-	if err := s.Put(25, e); err == nil {
-		t.Fatal("slot 25 must be rejected")
+	if err := s.Put(schedule.SimpleMaxSlot+1, e); err == nil {
+		t.Fatalf("slot %d must be rejected", schedule.SimpleMaxSlot+1)
 	}
 	if err := s.Put(1, e); err != nil {
 		t.Fatalf("slot 1 must be accepted: %v", err)
 	}
-	if err := s.Put(24, e); err != nil {
-		t.Fatalf("slot 24 must be accepted: %v", err)
+	// 25 used to be the first rejected slot. The CCU declares up to 75 on
+	// a switch/dimmer/blind channel and edits all of them, so every slot
+	// in that range has to be storable.
+	if err := s.Put(25, e); err != nil {
+		t.Fatalf("slot 25 must be accepted: %v", err)
+	}
+	if err := s.Put(schedule.SimpleMaxSlot, e); err != nil {
+		t.Fatalf("slot %d must be accepted: %v", schedule.SimpleMaxSlot, err)
 	}
 }
 

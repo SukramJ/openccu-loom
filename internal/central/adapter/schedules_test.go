@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"testing"
 
+	schedulemodel "github.com/SukramJ/openccu-loom/internal/model/schedule"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -220,7 +222,7 @@ func TestSerializeSimpleScheduleZeroesUnusedSlots(t *testing.T) {
 			Time:     "07:30",
 			Level:    1,
 		},
-	})
+	}, schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -246,7 +248,7 @@ func TestSerializeSimpleScheduleRoundTrip(t *testing.T) {
 		{SlotNo: 1, Weekdays: []string{"MONDAY", "TUESDAY"}, Time: "06:30", Level: 1, Condition: "fixed_time"},
 		{SlotNo: 2, Weekdays: []string{"SATURDAY", "SUNDAY"}, Time: "08:00", Level: 0.5, Condition: "fixed_time"},
 	}
-	raw, err := serializeSimpleSchedule(in)
+	raw, err := serializeSimpleSchedule(in, schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -272,7 +274,7 @@ func TestSerializeSimpleScheduleAstroAndDuration(t *testing.T) {
 			RampTime:           "500ms",
 		},
 	}
-	raw, err := serializeSimpleSchedule(in)
+	raw, err := serializeSimpleSchedule(in, schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("serialize: %v", err)
 	}
@@ -436,7 +438,7 @@ func baseEntry(slot int) hmapi.SimpleScheduleEntry {
 func TestSerializeSimpleScheduleSlotOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(0) // slot 0 is out of range
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("slot 0 must error")
 	}
@@ -444,10 +446,19 @@ func TestSerializeSimpleScheduleSlotOutOfRange(t *testing.T) {
 
 func TestSerializeSimpleScheduleSlotTooHigh(t *testing.T) {
 	t.Parallel()
-	e := baseEntry(25) // max is 24
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
-	if err == nil {
-		t.Error("slot 25 must error")
+	// Slot 25 used to be the first rejected one, which made every
+	// schedule the CCU holds past that point readable but unsavable —
+	// the device declares up to schedulemodel.SimpleMaxSlot groups and edits
+	// all of them. Only past the model's limit is out of range.
+	if _, err := serializeSimpleSchedule(
+		[]hmapi.SimpleScheduleEntry{baseEntry(25)}, schedulemodel.SimpleMaxSlot,
+	); err != nil {
+		t.Errorf("slot 25 must serialize: %v", err)
+	}
+	if _, err := serializeSimpleSchedule(
+		[]hmapi.SimpleScheduleEntry{baseEntry(schedulemodel.SimpleMaxSlot + 1)}, schedulemodel.SimpleMaxSlot,
+	); err == nil {
+		t.Errorf("slot %d must error", schedulemodel.SimpleMaxSlot+1)
 	}
 }
 
@@ -455,7 +466,7 @@ func TestSerializeSimpleScheduleDuplicateSlot(t *testing.T) {
 	t.Parallel()
 	e1 := baseEntry(1)
 	e2 := baseEntry(1)
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e1, e2})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e1, e2}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("duplicate slot must error")
 	}
@@ -465,7 +476,7 @@ func TestSerializeSimpleScheduleNoWeekday(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Weekdays = nil // empty weekday list
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("no weekday must error")
 	}
@@ -475,7 +486,7 @@ func TestSerializeSimpleScheduleInvalidTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Time = "not-a-time"
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("invalid time must error")
 	}
@@ -485,7 +496,7 @@ func TestSerializeSimpleScheduleUnknownCondition(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Condition = "NOT_A_REAL_CONDITION_X99"
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("unknown condition must error")
 	}
@@ -495,7 +506,7 @@ func TestSerializeSimpleScheduleUnknownAstroType(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroType = "moonrise" // not sunrise or sunset
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("unknown astro_type must error")
 	}
@@ -505,7 +516,7 @@ func TestSerializeSimpleScheduleAstroOffsetOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroOffsetMinutes = 800 // > 720
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("astro offset > 720 must error")
 	}
@@ -515,7 +526,7 @@ func TestSerializeSimpleScheduleAstroOffsetNegativeOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroOffsetMinutes = -800 // < -720
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("astro offset < -720 must error")
 	}
@@ -525,7 +536,7 @@ func TestSerializeSimpleScheduleSunsetAstroType(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroType = "sunset"
-	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("sunset astro_type: %v", err)
 	}
@@ -539,7 +550,7 @@ func TestSerializeSimpleScheduleLevel2NonNil(t *testing.T) {
 	e := baseEntry(1)
 	level2 := 0.75
 	e.Level2 = &level2
-	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("Level2 non-nil: %v", err)
 	}
@@ -552,7 +563,7 @@ func TestSerializeSimpleScheduleInvalidDuration(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Duration = "not-a-duration"
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("invalid duration must error")
 	}
@@ -562,7 +573,7 @@ func TestSerializeSimpleScheduleInvalidRampTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.RampTime = "not-a-ramp"
-	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err == nil {
 		t.Error("invalid ramp_time must error")
 	}
@@ -572,7 +583,7 @@ func TestSerializeSimpleScheduleValidRampTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.RampTime = "10s"
-	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e}, schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("valid ramp_time: %v", err)
 	}
@@ -670,7 +681,7 @@ func TestSerializeSimpleScheduleLockAutorelockEnd(t *testing.T) {
 			LockAction: "lock_autorelock_end",
 		},
 	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "lock")
+	m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("serializeSimpleScheduleWithDomain lock autorelock_end: %v", err)
 	}
@@ -751,7 +762,7 @@ func TestSerializeSimpleScheduleSwitchEmptyDuration(t *testing.T) {
 			Level:    1.0,
 		},
 	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "switch")
+	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("serializeSimpleScheduleWithDomain switch: %v", err)
 	}
@@ -787,7 +798,7 @@ func TestSerializeSimpleScheduleSwitchWithDuration(t *testing.T) {
 			Duration: "5min",
 		},
 	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "switch")
+	m, err := serializeSimpleScheduleWithDomain(entries, "switch", schedulemodel.SimpleMaxSlot)
 	if err != nil {
 		t.Fatalf("serializeSimpleScheduleWithDomain switch 5min: %v", err)
 	}

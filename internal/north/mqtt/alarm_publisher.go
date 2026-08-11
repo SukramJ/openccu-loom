@@ -29,11 +29,18 @@ const (
 	alarmEventTypeNotification = "NOTIFICATION"
 )
 
-// alarmMasterNameKey resolves the master panel's display name; the
-// fallback is used when the catalogue lacks the key.
+// Display-name catalogue keys with the fallback used when the
+// catalogue lacks the key. Entity names reach the operator, so they are
+// resolved through i18n rather than assembled from English literals.
 const (
 	alarmMasterNameKey      = "discovery.alarm_system"
 	alarmMasterNameFallback = "Alarm system"
+
+	alarmResetMotionNameKey      = "discovery.alarm_reset_motion"
+	alarmResetMotionNameFallback = "Reset motion"
+
+	alarmTriggeredMotionNameKey      = "discovery.alarm_triggered_motion"
+	alarmTriggeredMotionNameFallback = "Triggered motion detectors"
 )
 
 // alarmEventPayload is the JSON body published on the non-retained
@@ -567,12 +574,20 @@ func (p *AlarmMQTTPublisher) lookupName(zoneID string) string {
 }
 
 func (p *AlarmMQTTPublisher) masterName() string {
+	return p.localized(alarmMasterNameKey, alarmMasterNameFallback)
+}
+
+// localized resolves one catalogue key in the publisher's locale,
+// falling back to the English literal when no catalogue is wired or the
+// key is missing. [i18n.Catalogs.T] returns the key itself on a miss, so
+// that case is treated as absent.
+func (p *AlarmMQTTPublisher) localized(key, fallback string) string {
 	if p.tr != nil {
-		if name := p.tr.T(p.locale, alarmMasterNameKey); name != "" && name != alarmMasterNameKey {
+		if name := p.tr.T(p.locale, key); name != "" && name != key {
 			return name
 		}
 	}
-	return alarmMasterNameFallback
+	return fallback
 }
 
 // zoneCodePolicy resolves the per-zone arm/disarm code requirement for
@@ -673,11 +688,13 @@ func (p *AlarmMQTTPublisher) publishMotionEntities(ctx context.Context, b *Bridg
 	if eng == nil {
 		return
 	}
-	if err := b.PublishAlarmDiscovery(ctx, BuildAlarmMotionResetDiscovery(base, zone, name, master)); err != nil {
+	if err := b.PublishAlarmDiscovery(ctx, BuildAlarmMotionResetDiscovery(base, zone, name,
+		p.localized(alarmResetMotionNameKey, alarmResetMotionNameFallback), master)); err != nil {
 		p.logger.Warn("mqtt.alarm.discovery.reset_motion",
 			slog.String("zone", zone), slog.String("err", err.Error()))
 	}
-	if err := b.PublishAlarmDiscovery(ctx, BuildAlarmTriggeredMotionDiscovery(base, zone, name, master)); err != nil {
+	if err := b.PublishAlarmDiscovery(ctx, BuildAlarmTriggeredMotionDiscovery(base, zone, name,
+		p.localized(alarmTriggeredMotionNameKey, alarmTriggeredMotionNameFallback), master)); err != nil {
 		p.logger.Warn("mqtt.alarm.discovery.triggered_motion",
 			slog.String("zone", zone), slog.String("err", err.Error()))
 	}

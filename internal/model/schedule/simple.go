@@ -301,7 +301,24 @@ func EmptySimpleEntry(category hmenum.DataPointCategory) SimpleEntry {
 	return base
 }
 
-// Simple is a full 24-slot schedule for non-climate devices.
+// SimpleMaxSlot is the highest slot a simple schedule can hold.
+//
+// It is the largest count the CCU declares for such a channel: 75 on a
+// dimmer, universal-light, switch, blind or servo channel, 69 on the
+// models its web UI special-cases (HmIP-MP3P, HmIPW-WRC6(-A),
+// HmIP-WRC6-230, water switches, HmIP-BSL on firmware 2.x). See
+// `_getMaxEntries` in the CCU's own
+// `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js`, which edits
+// every one of them.
+//
+// A given device may declare fewer, and that is the real bound: what a
+// channel's MASTER paramset does not contain cannot be written to it.
+// This constant is the model's outer limit, not a promise that every
+// device has this many slots.
+const SimpleMaxSlot = 75
+
+// Simple is a slot-indexed schedule for non-climate devices, holding up
+// to [SimpleMaxSlot] entries.
 type Simple struct {
 	Entries map[int]SimpleEntry
 }
@@ -309,10 +326,11 @@ type Simple struct {
 // NewSimple constructs a Simple with an empty slot map.
 func NewSimple() *Simple { return &Simple{Entries: make(map[int]SimpleEntry)} }
 
-// Put inserts or replaces an entry under slot. Slot must be 1..24.
+// Put inserts or replaces an entry under slot. Slot must be
+// 1..[SimpleMaxSlot].
 func (s *Simple) Put(slot int, e SimpleEntry) error {
-	if slot < 1 || slot > 24 {
-		return fmt.Errorf("schedule: slot %d out of range (1..24)", slot)
+	if slot < 1 || slot > SimpleMaxSlot {
+		return fmt.Errorf("schedule: slot %d out of range (1..%d)", slot, SimpleMaxSlot)
 	}
 	if err := e.Validate(); err != nil {
 		return err

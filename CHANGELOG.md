@@ -8,6 +8,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Week profiles keep every entry past the 24th.** A switching,
+  dimming, blind or servo channel carries 75 schedule groups (69 on the
+  models the CCU's web UI special-cases), and the CCU's own editor uses
+  all of them. This daemon stopped at 24 — a number describing its own
+  storage, not any device. A schedule built past that point on the CCU
+  was truncated on read, and the write path rejected the slots outright,
+  so such a schedule could be opened here but never saved back.
+
+  Confirmed against a real CCU, which stored and returned a group-25
+  entry written over XML-RPC. The four places that each repeated the
+  limit now share one named constant.
+
+  The sweep that clears deleted entries is bounded by what the target
+  channel actually declares, read from the device: naming a group a
+  channel does not have fails the whole paramset with a `-5` fault, so
+  a fixed upper bound would have broken every 69-group model.
+
+- **The MQTT motion-reset button is findable and translated.** It
+  carried `entity_category: "config"`, which files an entity into a
+  collapsed section of the Home Assistant device page and keeps it out
+  of dashboards — right for a setting, wrong for a control an operator
+  presses during an incident. The panel entity beside it never had a
+  category either. Its name was also assembled from an English literal
+  (`"… — reset motion"`) instead of the translation catalogues, so a
+  German installation read half-English entity names. Both the button
+  and the latched-detector count are now named through i18n; the count
+  stays `diagnostic`, since that one really is a readout.
+
 - **Sunday works in device week profiles again.** The
   `<NN>_WP_WEEKDAY` bitmask was read with Sunday on bit 7. The CCU puts
   it on bit 0 — the mask runs Sunday=1, Monday=2 … Saturday=64, so all

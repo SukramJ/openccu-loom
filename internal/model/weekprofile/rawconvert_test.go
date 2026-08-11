@@ -484,7 +484,7 @@ func TestSimpleParamsetRoundTrip(t *testing.T) {
 		Level:    0.5,
 	})
 
-	raw := BuildSimpleRawParamset(s)
+	raw := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
 
 	// Groups 1 and 2 must be non-zero; rest must be zeroed.
 	if raw["01_WP_WEEKDAY"] == 0 {
@@ -534,7 +534,7 @@ func TestSimpleParamsetColorRoundTrip(t *testing.T) {
 		t.Fatalf("colour not parsed: %+v", entry)
 	}
 
-	out := BuildSimpleRawParamset(s)
+	out := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
 	if out["03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"] != ct ||
 		out["03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"] != cv {
 		t.Errorf("colour not re-emitted: %v / %v",
@@ -567,7 +567,7 @@ func TestParseSimpleRawParamsetSkipsInactiveGroups(t *testing.T) {
 
 func TestBuildSimpleRawParamsetNilIsAllZeros(t *testing.T) {
 	t.Parallel()
-	raw := BuildSimpleRawParamset(nil)
+	raw := BuildSimpleRawParamset(nil, schedule.SimpleMaxSlot)
 	for no := 1; no <= 24; no++ {
 		key := fmt.Sprintf("%02d_WP_WEEKDAY", no)
 		if raw[key] != 0 {

@@ -2,6 +2,14 @@
 
 ## 0.58.3
 
+- **Wochenprogramme behalten Einträge jenseits des 24.** Schalt-, Dimm-
+  und Rollladenkanäle haben 75 Zeitprogramm-Gruppen; ausgewertet wurden
+  nur 24. Ein auf der CCU angelegtes längeres Programm kam hier gekürzt
+  an und ließ sich nicht zurückspeichern.
+- **Der MQTT-Button "Bewegung zurücksetzen" ist auffindbar und
+  übersetzt.** Er lag in Home Assistant im eingeklappten
+  Konfigurations-Bereich des Geräts und hieß halb englisch
+  ("… — reset motion").
 - **Sonntag funktioniert in Geräte-Wochenprogrammen wieder.** Die
   Wochentagsmaske wurde für Sonntag auf dem falschen Bit gelesen. Ein
   auf der CCU für Sonntag gesetztes Programm kam ohne Wochentag an,

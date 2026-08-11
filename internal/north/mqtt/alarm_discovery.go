@@ -166,7 +166,7 @@ func alarmTriggeredMotionTopic(base, zone string) string {
 // The button is an entity in its own right rather than a panel feature
 // because HA's alarm_control_panel has no vocabulary for it — without a
 // separate entity there is nothing for an automation to press.
-func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName string, master bool) DiscoveryItem {
+func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName, label string, master bool) DiscoveryItem {
 	zone := zoneID
 	if master {
 		zone = alarmMasterZone
@@ -176,13 +176,21 @@ func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName string, master bool) 
 	}
 	uniqueID := "openccu-loom_alarm_" + zone + "_reset_motion"
 	body := map[string]any{
-		"name":              zoneName + " — reset motion",
-		"unique_id":         uniqueID,
-		"object_id":         uniqueID,
-		"command_topic":     alarmCommandTopic(base, zone),
-		"payload_press":     alarmCommandResetMotion,
-		"icon":              "mdi:motion-sensor-off",
-		"entity_category":   "config",
+		"name":          zoneName + " — " + label,
+		"unique_id":     uniqueID,
+		"object_id":     uniqueID,
+		"command_topic": alarmCommandTopic(base, zone),
+		"payload_press": alarmCommandResetMotion,
+		"icon":          "mdi:motion-sensor-off",
+		// No entity_category on purpose. Home Assistant files `config`
+		// entities away in a collapsed section of the device page and
+		// keeps them out of dashboards and the entity picker's default
+		// view — right for a knob that tunes behaviour, wrong for
+		// something an operator presses during an incident. This is a
+		// control belonging to the panel's main purpose, like the panel
+		// entity itself, which carries no category either. The
+		// latched-detector count next to it stays `diagnostic`; that one
+		// really is a readout.
 		"availability":      alarmAvailability(base, zone),
 		"availability_mode": "all",
 		"device":            alarmDeviceBlock(),
@@ -207,7 +215,7 @@ func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName string, master bool) 
 // It exists so an automation can decide rather than guess: pressing the
 // button blindly writes to the radio for nothing, and a non-zero count
 // on a disarmed zone is usually the reason an arm refuses.
-func BuildAlarmTriggeredMotionDiscovery(base, zoneID, zoneName string, master bool) DiscoveryItem {
+func BuildAlarmTriggeredMotionDiscovery(base, zoneID, zoneName, label string, master bool) DiscoveryItem {
 	zone := zoneID
 	if master {
 		zone = alarmMasterZone
@@ -217,7 +225,7 @@ func BuildAlarmTriggeredMotionDiscovery(base, zoneID, zoneName string, master bo
 	}
 	uniqueID := "openccu-loom_alarm_" + zone + "_triggered_motion"
 	body := map[string]any{
-		"name":                zoneName + " — triggered motion detectors",
+		"name":                zoneName + " — " + label,
 		"unique_id":           uniqueID,
 		"object_id":           uniqueID,
 		"state_topic":         alarmTriggeredMotionTopic(base, zone),
