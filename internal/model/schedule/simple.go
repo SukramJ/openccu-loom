@@ -42,16 +42,27 @@ func isValidWeekday(w Weekday) bool {
 // Condition is the trigger condition of a schedule entry.
 type Condition string
 
-// Condition values.
+// Condition values, in the order of the CCU's `<NN>_WP_CONDITION`
+// integer (0..7).
+//
+// The names come from the option list the CCU's own editor renders —
+// `arOptions` in `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js` —
+// so a condition means here what it means on the device. Six of them
+// used to say something else: condition 2 was called "astro before
+// fixed" where the device selects the *fixed* time if it falls before
+// the astro one, and 6/7 were called "between" and "or" where the device
+// picks the earlier or the later of the two. The REST schedules domain
+// had them right, so the two halves of the daemon named the same rule
+// differently.
 const (
-	ConditionFixedTime           Condition = "fixed_time"
-	ConditionAstro               Condition = "astro"
-	ConditionAstroBeforeFixed    Condition = "astro_before_fixed"
-	ConditionAstroAfterFixed     Condition = "astro_after_fixed"
-	ConditionFixedBetweenAstro   Condition = "fixed_between_astro"
-	ConditionAstroBetweenFixed   Condition = "astro_between_fixed"
-	ConditionAstroBetweenAstro   Condition = "astro_between_astro"
-	ConditionFixedAstroThreshold Condition = "fixed_or_astro"
+	ConditionFixedTime            Condition = "fixed_time"
+	ConditionAstro                Condition = "astro"
+	ConditionFixedIfBeforeAstro   Condition = "fixed_if_before_astro"
+	ConditionAstroIfBeforeFixed   Condition = "astro_if_before_fixed"
+	ConditionFixedIfAfterAstro    Condition = "fixed_if_after_astro"
+	ConditionAstroIfAfterFixed    Condition = "astro_if_after_fixed"
+	ConditionEarliestOfFixedAstro Condition = "earliest_of_fixed_and_astro"
+	ConditionLatestOfFixedAstro   Condition = "latest_of_fixed_and_astro"
 )
 
 func (c Condition) isAstro() bool { return c != ConditionFixedTime && c != "" }

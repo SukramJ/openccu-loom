@@ -8,6 +8,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Six of the eight schedule conditions were named after a different
+  rule than the device applies.** The `<NN>_WP_CONDITION` integer is
+  translated in two places, and they disagreed. Condition 2 was called
+  "astro before fixed" where the CCU selects the *fixed* time when it
+  falls before the astro one — the two roles swapped — and 6 and 7 were
+  called "between" and "or" where the device picks the earlier or the
+  later of the two times.
+
+  Reading a schedule through the week-profile path therefore reported a
+  rule the device does not implement. Writing was worse: the reverse
+  lookup did not recognise the correct names at all and fell through to
+  0, so a caller asking for "earliest of fixed and astro" silently got a
+  plain fixed time. The REST schedules domain had the vocabulary right;
+  it now comes from the CCU editor's own option list, and a guard
+  compares both translations against it.
+
 - **Week profiles keep every entry past the 24th.** A switching,
   dimming, blind or servo channel carries 75 schedule groups (69 on the
   models the CCU's web UI special-cases), and the CCU's own editor uses

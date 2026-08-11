@@ -497,13 +497,24 @@ func WeekdayListToBitmask(days []schedule.Weekday) int {
 var conditionFromInt = map[int]schedule.Condition{
 	0: schedule.ConditionFixedTime,
 	1: schedule.ConditionAstro,
-	2: schedule.ConditionAstroBeforeFixed,
-	3: schedule.ConditionAstroAfterFixed,
-	4: schedule.ConditionFixedBetweenAstro,
-	5: schedule.ConditionAstroBetweenFixed,
-	6: schedule.ConditionAstroBetweenAstro,
-	7: schedule.ConditionFixedAstroThreshold,
+	2: schedule.ConditionFixedIfBeforeAstro,
+	3: schedule.ConditionAstroIfBeforeFixed,
+	4: schedule.ConditionFixedIfAfterAstro,
+	5: schedule.ConditionAstroIfAfterFixed,
+	6: schedule.ConditionEarliestOfFixedAstro,
+	7: schedule.ConditionLatestOfFixedAstro,
 }
+
+// ConditionForWire maps a CCU `<NN>_WP_CONDITION` integer to its
+// [schedule.Condition]. Unknown values yield the empty condition.
+//
+// Exported so the parity guard can compare this vocabulary against the
+// REST schedules domain, which translates the same field independently.
+func ConditionForWire(id int) schedule.Condition { return conditionFromInt[id] }
+
+// WireForCondition is the inverse of [ConditionForWire]. Unknown
+// conditions yield 0 (fixed time).
+func WireForCondition(c schedule.Condition) int { return conditionToInt[c] }
 
 // conditionToInt maps a [schedule.Condition] to the CCU integer value.
 var conditionToInt = func() map[schedule.Condition]int {
