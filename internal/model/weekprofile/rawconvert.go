@@ -41,6 +41,40 @@ var climateParamPattern = regexp.MustCompile(
 	`^(P[1-6])_(TEMPERATURE|ENDTIME)_([A-Z]+)_(\d+)$`,
 )
 
+// SimpleMaxGroup is the highest simple-schedule group [schedule.Simple]
+// can hold, and it is smaller than what the hardware offers.
+//
+// The CCU declares 75 groups on a dimmer, universal-light, switch,
+// blind or servo channel and 69 on the models its web UI special-cases
+// (HmIP-MP3P, HmIPW-WRC6(-A), HmIP-WRC6-230, water switches, HmIP-BSL
+// on firmware 2.x) — see `_getMaxEntries` in the CCU's own
+// `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js`, which edits
+// every one of them. A real CCU confirms the same split.
+//
+// This limit is therefore a known gap, not a property of the devices:
+// a schedule an operator built on the CCU using more than
+// [SimpleMaxGroup] entries is read back truncated. Raising it means
+// widening [schedule.Simple] and its round-trip, so the cap stays
+// explicit and named rather than buried as a literal.
+const SimpleMaxGroup = 24
+
+// SimpleGroupNo extracts the group number from a simple week-profile
+// key ("01_WP_LEVEL" → 1). ok is false when the key is not of that
+// form. The number is returned unclamped, so callers can tell an
+// out-of-range group ("25_WP_LEVEL") apart from a key that is not a
+// week-profile cell at all.
+func SimpleGroupNo(key string) (groupNo int, ok bool) {
+	parts := strings.SplitN(key, "_", 3)
+	if len(parts) != 3 || parts[1] != "WP" || parts[2] == "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(parts[0])
+	if err != nil || n < 1 {
+		return 0, false
+	}
+	return n, true
+}
+
 // IsParameterName reports whether a MASTER paramset key is one cell of a
 // week profile — either the climate form ("P1_ENDTIME_MONDAY_1") or the
 // simple form ("01_WP_LEVEL").
@@ -51,6 +85,12 @@ var climateParamPattern = regexp.MustCompile(
 // individually buries every other parameter — and the profile already
 // has a first-class editor that presents them as a schedule.
 //
+// A cell is recognised regardless of its group number: "25_WP_LEVEL" is
+// as much a week-profile cell as "01_WP_LEVEL". Capping the predicate at
+// [SimpleMaxGroup] — this package's own storage limit — filed two thirds
+// of a fleet's cells under whichever unrelated rule also matched them,
+// which is a statement about our parser, not about the parameter.
+//
 // Both branches read the same grammar the parsers in this file use:
 // [climateParamPattern] and the "<NN>_WP_<FIELD>" split in
 // [ParseSimpleRawParamset]. Keeping the predicate here means a change to
@@ -59,12 +99,8 @@ func IsParameterName(key string) bool {
 	if climateParamPattern.MatchString(key) {
 		return true
 	}
-	parts := strings.SplitN(key, "_", 3)
-	if len(parts) != 3 || parts[1] != "WP" || parts[2] == "" {
-		return false
-	}
-	groupNo, err := strconv.Atoi(parts[0])
-	return err == nil && groupNo >= 1 && groupNo <= 24
+	_, ok := SimpleGroupNo(key)
+	return ok
 }
 
 // ---------------------------------------------------------------------------
@@ -516,15 +552,15 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 	groups := make(map[int]*group)
 
 	for key, val := range raw {
-		// Expected format: "01_WP_FIELDNAME"
+		// Expected format: "01_WP_FIELDNAME". Groups above
+		// [SimpleMaxGroup] are skipped because [schedule.Simple] has no
+		// slot for them — the device declares them, no editor reaches
+		// them.
+		groupNo, ok := SimpleGroupNo(key)
+		if !ok || groupNo > SimpleMaxGroup {
+			continue
+		}
 		parts := strings.SplitN(key, "_", 3)
-		if len(parts) != 3 || parts[1] != "WP" {
-			continue
-		}
-		groupNo, err := strconv.Atoi(parts[0])
-		if err != nil || groupNo < 1 || groupNo > 24 {
-			continue
-		}
 		if _, ok := groups[groupNo]; !ok {
 			groups[groupNo] = &group{condition: schedule.ConditionFixedTime}
 		}

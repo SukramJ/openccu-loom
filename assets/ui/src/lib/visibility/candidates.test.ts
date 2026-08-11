@@ -15,6 +15,7 @@ import {
   NOISE_REASONS,
   orphanPatterns,
   presentReasons,
+  reasonBadgeText,
   reasonCounts,
   suppressedCount,
   toggleGroup,
@@ -346,5 +347,49 @@ describe("orphanPatterns", () => {
 
   it("returns nothing when every pattern is covered", () => {
     expect(orphanPatterns([lowBat], ["LOW_BAT:VALUES@HmIP-SWDO:0"])).toEqual([]);
+  });
+});
+
+describe("reasonBadgeText", () => {
+  // The catalogue is stubbed so the test pins the fallback logic rather
+  // than the wording of any one locale.
+  const t = (key: string, vars?: Record<string, string>) => {
+    const catalogue: Record<string, string> = {
+      "unignore.reason.wildcard_prefix": "Name prefix",
+      "unignore.reason.wildcard_suffix": "Name suffix",
+      "unignore.reason.ignore_list": "Excluded",
+      "unignore.reason_detail.wildcard_prefix": "Prefix {pattern}",
+      "unignore.reason_detail.wildcard_suffix": "Suffix {pattern}",
+    };
+    const raw = catalogue[key];
+    if (raw === undefined) return key;
+    return vars
+      ? raw.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? `{${k}}`)
+      : raw;
+  };
+
+  it("names the matched pattern when the server supplies one", () => {
+    expect(
+      reasonBadgeText(
+        { reason: "wildcard_prefix", reason_detail: "STATUS_FLAG_" },
+        t,
+      ),
+    ).toBe("Prefix STATUS_FLAG_");
+    expect(
+      reasonBadgeText({ reason: "wildcard_suffix", reason_detail: "_STATUS" }, t),
+    ).toBe("Suffix _STATUS");
+  });
+
+  it("falls back to the category when no detail is supplied", () => {
+    expect(reasonBadgeText({ reason: "wildcard_prefix" }, t)).toBe("Name prefix");
+    expect(reasonBadgeText({ reason: "ignore_list" }, t)).toBe("Excluded");
+  });
+
+  it("falls back rather than rendering a raw key for an uncatalogued detail", () => {
+    // A daemon that grows a detail for a reason the catalogue does not
+    // cover yet must not leak "unignore.reason_detail.x" into the badge.
+    expect(
+      reasonBadgeText({ reason: "ignore_list", reason_detail: "BOOTED" }, t),
+    ).toBe("Excluded");
   });
 });

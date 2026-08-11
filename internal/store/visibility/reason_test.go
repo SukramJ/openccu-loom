@@ -256,6 +256,16 @@ func TestClassifyRecognisesEveryWeekProfileKeyShape(t *testing.T) {
 		"01_WP_FIXED_MINUTE",
 		"01_WP_LEVEL",
 		"24_WP_LEVEL",
+		// The CCU declares 75 groups on a switch/dimmer/blind channel
+		// and 69 on the models its web UI special-cases, and edits every
+		// one of them (`_getMaxEntries` in the CCU's
+		// WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js). A cell is
+		// a week-profile cell at any of those numbers; the lower cap
+		// this project applies when parsing is its own storage limit and
+		// must not leak into the classification.
+		"25_WP_LEVEL",
+		"69_WP_LEVEL",
+		"75_WP_LEVEL",
 	}
 	for _, key := range weekProfileKeys {
 		got := visibility.ClassifyPrimary(visibility.ClassifyInput{
@@ -276,7 +286,6 @@ func TestClassifyRecognisesEveryWeekProfileKeyShape(t *testing.T) {
 	notWeekProfile := []string{
 		"P7_ENDTIME_MONDAY_1", // no seventh profile
 		"P1_LEVEL_MONDAY_1",   // not a profile field
-		"25_WP_LEVEL",         // group numbers stop at 24
 		"00_WP_LEVEL",         // group numbers start at 1
 		"AA_WP_LEVEL",         // not a group number
 		"01_XP_LEVEL",         // not the WP marker
@@ -474,5 +483,38 @@ func TestAllHiddenReasonsExcludesUnknown(t *testing.T) {
 	all[0] = visibility.ReasonUnknown
 	if visibility.AllHiddenReasons()[0] == visibility.ReasonUnknown {
 		t.Error("AllHiddenReasons returns a shared slice; want a copy")
+	}
+}
+
+// TestReasonDetailNamesTheMatchedPattern pins the badge contract: a
+// wildcard reason carries the pattern that actually matched, so the
+// operator reads the rule rather than its category.
+func TestReasonDetailNamesTheMatchedPattern(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		parameter string
+		reason    visibility.HiddenReason
+		want      string
+	}{
+		{"STATUS_FLAG_LOW_BAT", visibility.ReasonWildcardPrefix, "STATUS_FLAG_"},
+		{"PARTY_START_TIME", visibility.ReasonWildcardPrefix, "PARTY_START_"},
+		{"ERR_TTM_SOMETHING", visibility.ReasonWildcardPrefix, "ERR_TTM_"},
+		{"HUMIDITY_STATUS", visibility.ReasonWildcardSuffix, "_STATUS"},
+		{"ENERGY_COUNTER_OVERFLOW", visibility.ReasonWildcardSuffix, "_OVERFLOW"},
+		{"CONFIG_SUBMIT", visibility.ReasonWildcardSuffix, "_SUBMIT"},
+		// Reasons whose rule is a membership list carry no detail: the
+		// parameter name on the row already is the list entry.
+		{"BOOTED", visibility.ReasonIgnoreList, ""},
+		{"UPDATE_PENDING", visibility.ReasonHidden, ""},
+		{"01_WP_LEVEL", visibility.ReasonWeekProfile, ""},
+		// A parameter that does not match the reason's pattern yields no
+		// detail rather than a wrong one.
+		{"LOW_BAT", visibility.ReasonWildcardPrefix, ""},
+	}
+	for _, tc := range cases {
+		if got := visibility.ReasonDetail(tc.reason, tc.parameter); got != tc.want {
+			t.Errorf("ReasonDetail(%q, %q) = %q, want %q", tc.reason, tc.parameter, got, tc.want)
+		}
 	}
 }

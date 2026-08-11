@@ -226,6 +226,29 @@ func ClassifyPrimary(in ClassifyInput) HiddenReason {
 	return reasons[0]
 }
 
+// ReasonDetail returns the concrete rule text behind a reason, or "" for
+// reasons that have none.
+//
+// The wildcard reasons are the ones that need it. "Name prefix" tells an
+// operator which *kind* of rule fired but not which of the seven
+// prefixes matched, so the badge names a category the operator then has
+// to go and look up. "STATUS_FLAG_" is the rule itself, and the caller
+// already holds everything needed to say so.
+//
+// Reasons whose rule is a membership list rather than a pattern
+// (ignore_list, hidden, device_specific) return "": the parameter name
+// on the row already is the entry, so repeating it adds nothing.
+func ReasonDetail(reason HiddenReason, parameter string) string {
+	switch reason {
+	case ReasonWildcardPrefix:
+		return wildcardPrefixOf(parameter)
+	case ReasonWildcardSuffix:
+		return wildcardSuffixOf(parameter)
+	default:
+		return ""
+	}
+}
+
 // MergeReasons folds per-occurrence reason lists into one deduplicated
 // list in precedence order. The candidate builder uses it because the
 // same parameter can be suppressed for different reasons on different

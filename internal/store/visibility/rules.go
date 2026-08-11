@@ -283,6 +283,30 @@ func parameterIsWildcardIgnored(name string) bool {
 		ignoredParametersStartPattern.MatchString(name)
 }
 
+// wildcardPrefixOf returns the suppressed prefix name starts with, or ""
+// when it starts with none.
+//
+// The rule that hid the parameter is only actionable if the operator can
+// see which of the seven prefixes applied: "name prefix" describes the
+// kind of rule, "STATUS_FLAG_" describes the rule.
+func wildcardPrefixOf(name string) string {
+	m := ignoredParametersStartPattern.FindStringSubmatch(name)
+	if len(m) < 2 {
+		return ""
+	}
+	return m[1]
+}
+
+// wildcardSuffixOf returns the suppressed suffix name ends with, or ""
+// when it ends with none. Counterpart of [wildcardPrefixOf].
+func wildcardSuffixOf(name string) string {
+	m := ignoredParametersEndPattern.FindStringSubmatch(name)
+	if len(m) < 2 {
+		return ""
+	}
+	return m[1]
+}
+
 // unIgnoreParametersByDevice lists parameters that are normally ignored but
 // should be created for specific device models.
 var unIgnoreParametersByDevice = map[string]map[hmenum.Parameter]struct{}{

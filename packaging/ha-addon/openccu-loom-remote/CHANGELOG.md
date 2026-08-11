@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.58.2
+
+- Version alignment with OpenCCU-Loom 0.58.2. The proxy itself is
+  unchanged; the release fixes the hidden-parameters screen's
+  week-profile categorisation and makes its rule badges concrete.
+
 # 0.58.1
 
 - Version alignment with OpenCCU-Loom 0.58.1. The proxy itself is

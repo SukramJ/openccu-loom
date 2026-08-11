@@ -4,6 +4,39 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.2]
+
+API 5.19.0 — additive: a hidden-parameter candidate gains
+`reason_detail`.
+
+### Fixed
+
+- **Week-profile cells above group 24 are filed as week profiles
+  again.** The hidden-parameters screen sorted two thirds of them —
+  657 of 969 on a real installation — under "MASTER setting" instead,
+  which put them in the open list rather than the collapsed
+  week-profile category they belong to, defeating the tidying the
+  screen exists for. The predicate that recognises a cell stopped at
+  group 24, a limit that describes this project's own schedule storage
+  and says nothing about the parameter.
+
+  The CCU declares 75 such groups on a dimmer, switch, blind or servo
+  channel and 69 on the models its web UI special-cases, and it edits
+  every one of them (`_getMaxEntries` in the CCU's own
+  `HmIPWeeklyProgram.js`). Confirmed against a real CCU, which stored
+  and returned a group-25 entry written over XML-RPC. Recognition no
+  longer caps; the storage limit stays where it belongs and is now
+  named rather than repeated as a literal.
+
+### Changed
+
+- **A suppressed-name badge names the rule instead of its category.**
+  "Name prefix" left an operator to work out which of seven prefixes
+  applied; the badge now reads "Prefix `STATUS_FLAG_`" or
+  "Suffix `_STATUS`". Reasons whose rule is a membership list rather
+  than a pattern are unchanged — there the parameter name already is
+  the entry.
+
 ## [0.58.1]
 
 API 5.18.0 — additive: the parameter enumeration gains
