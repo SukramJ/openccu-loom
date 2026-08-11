@@ -74,6 +74,25 @@ func (v *visibilityAdapter) UnIgnoreCandidates(centralName string, paramset hmen
 	return q.GetUnIgnoreCandidates(paramset)
 }
 
+// UnIgnoreCandidateGroups implements
+// handlers.VisibilityCandidateGroupProvider — the grouped counterpart to
+// [visibilityAdapter.UnIgnoreCandidates], walking the central's model
+// once for all requested paramsets.
+func (v *visibilityAdapter) UnIgnoreCandidateGroups(centralName string, paramsets []hmenum.ParamsetKey) []visibility.CandidateGroup {
+	if v == nil || v.centralRegistry == nil {
+		return nil
+	}
+	unit, ok := v.centralRegistry.Get(centralName)
+	if !ok {
+		return nil
+	}
+	q := unit.QueryFacade()
+	if q == nil {
+		return nil
+	}
+	return q.GetUnIgnoreCandidateGroups(paramsets...)
+}
+
 // LoadUnIgnore implements handlers.VisibilityRegistryLoader. It writes
 // `patterns` for `centralName` into the shared registry as part of the
 // union of every central's persisted set, then re-runs the
@@ -140,7 +159,8 @@ func (v *visibilityAdapter) LoadUnIgnore(centralName string, _ []string) (affect
 
 // Compile-time interface checks.
 var (
-	_ handlers.VisibilityCentralLister     = (*visibilityAdapter)(nil)
-	_ handlers.VisibilityCandidateProvider = (*visibilityAdapter)(nil)
-	_ handlers.VisibilityRegistryLoader    = (*visibilityAdapter)(nil)
+	_ handlers.VisibilityCentralLister          = (*visibilityAdapter)(nil)
+	_ handlers.VisibilityCandidateProvider      = (*visibilityAdapter)(nil)
+	_ handlers.VisibilityCandidateGroupProvider = (*visibilityAdapter)(nil)
+	_ handlers.VisibilityRegistryLoader         = (*visibilityAdapter)(nil)
 )

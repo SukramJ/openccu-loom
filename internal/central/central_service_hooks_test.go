@@ -421,6 +421,9 @@ func TestQueryFacadeGetUnIgnoreCandidatesNilModel(t *testing.T) {
 	if candidates != nil {
 		t.Fatal("expected nil with nil model")
 	}
+	if groups := q.GetUnIgnoreCandidateGroups("MASTER", "VALUES"); groups != nil {
+		t.Fatal("expected nil groups with nil model")
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,6 @@ package central
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -366,53 +365,73 @@ func (q *QueryFacade) GetParameters(paramsetKey hmenum.ParamsetKey, ops hmenum.O
 //	  4. "PARAM:MASTER@MODEL:<channelNo>"   — specific channel
 //
 // The wildcard token "all" matches [visibility.UnIgnoreWildcard].
+// A facade without a model registry returns nil rather than an empty
+// slice, matching every other accessor here — callers distinguish "no
+// model loaded yet" from "a model with nothing to offer".
 func (q *QueryFacade) GetUnIgnoreCandidates(paramsetKey hmenum.ParamsetKey) []string {
 	if q.model == nil {
 		return nil
 	}
-	simple := make(map[string]struct{})
-	wildcard := make(map[string]struct{})
-	channelSpecific := make(map[string]struct{})
+	return q.collectUnIgnoreCandidates(paramsetKey).Patterns()
+}
+
+// GetUnIgnoreCandidateGroups returns the same candidate set as
+// [GetUnIgnoreCandidates], grouped by (parameter, paramset) with the
+// affected models, channels and the rule that hid each one.
+//
+// The flat form is the cross-product of parameter × model × channel in
+// three redundant pattern formats: a 399-device fleet produces ~2800
+// strings out of ~45 distinct parameters. The picker needs the 45, plus
+// the scopes to drill into, so it groups here rather than re-deriving
+// the structure from parsed strings in the browser.
+//
+// Passing several paramsets walks the model once and returns the groups
+// of all of them, ordered by paramset then parameter name.
+func (q *QueryFacade) GetUnIgnoreCandidateGroups(paramsetKeys ...hmenum.ParamsetKey) []visibility.CandidateGroup {
+	if q.model == nil {
+		return nil
+	}
+	return q.collectUnIgnoreCandidates(paramsetKeys...).Groups()
+}
+
+// collectUnIgnoreCandidates walks the model registry once and feeds
+// every suppressed, un-ignorable data point into a collector. Both
+// public candidate accessors share it so the flat and the grouped shape
+// are always the same underlying set.
+func (q *QueryFacade) collectUnIgnoreCandidates(paramsetKeys ...hmenum.ParamsetKey) *visibility.CandidateCollector {
+	c := visibility.NewCandidateCollector()
+	if q.model == nil || len(paramsetKeys) == 0 {
+		return c
+	}
 	for _, d := range q.model.List() {
-		model := d.Model
 		for _, ch := range d.Channels() {
-			channelNo := ch.Number
-			for _, dp := range ch.ParamsetDataPoints(paramsetKey) {
-				if !isIgnoredDataPoint(dp) {
-					continue
-				}
-				p := dp.Parameter()
-				if visibility.IsIgnoredForUnIgnore(p) {
-					continue
-				}
-				if !operationsMatchParamset(dp, paramsetKey) {
-					continue
-				}
-				name := string(p)
-				if paramsetKey == hmenum.ParamsetKeyValues {
-					simple[name] = struct{}{}
-					wildcard[fmt.Sprintf("%s:%s@%s:%s",
-						name, paramsetKey, model, visibility.UnIgnoreWildcard)] = struct{}{}
-				}
-				if channelNo >= 0 {
-					channelSpecific[fmt.Sprintf("%s:%s@%s:%d",
-						name, paramsetKey, model, channelNo)] = struct{}{}
+			operationMode := ch.OperationMode()
+			for _, paramsetKey := range paramsetKeys {
+				for _, dp := range ch.ParamsetDataPoints(paramsetKey) {
+					if !isIgnoredDataPoint(dp) {
+						continue
+					}
+					p := dp.Parameter()
+					if visibility.IsIgnoredForUnIgnore(p) {
+						continue
+					}
+					if !operationsMatchParamset(dp, paramsetKey) {
+						continue
+					}
+					c.Add(visibility.ClassifyInput{
+						Model:         d.Model,
+						ChannelType:   ch.Type,
+						ChannelNo:     ch.Number,
+						Paramset:      paramsetKey,
+						Parameter:     p,
+						ParameterData: dp.ParameterData(),
+						OperationMode: operationMode,
+					}, d.Address)
 				}
 			}
 		}
 	}
-	out := make([]string, 0, len(simple)+len(wildcard)+len(channelSpecific))
-	for s := range simple {
-		out = append(out, s)
-	}
-	for s := range wildcard {
-		out = append(out, s)
-	}
-	for s := range channelSpecific {
-		out = append(out, s)
-	}
-	sort.Strings(out)
-	return out
+	return c
 }
 
 // isIgnoredDataPoint reports whether dp carries

@@ -1,1 +1,24 @@
-{ "items": [] }
+{
+  "centrals": [
+    {
+      "central_name": "ccu-test",
+      "patterns": [
+        {
+          "pattern": "ACTIVITY_STATE",
+          "updated_at": "2026-01-01T08:00:00.000Z",
+          "updated_by": "admin"
+        },
+        {
+          "pattern": "WORKING:VALUES@HM-Sec-Win:1",
+          "updated_at": "2026-01-01T08:00:00.000Z",
+          "updated_by": "admin"
+        },
+        {
+          "pattern": "RSSI_PEER:VALUES@HmIP-GONE:0",
+          "updated_at": "2025-11-02T12:30:00.000Z",
+          "updated_by": "admin"
+        }
+      ]
+    }
+  ]
+}

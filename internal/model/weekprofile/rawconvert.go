@@ -41,6 +41,32 @@ var climateParamPattern = regexp.MustCompile(
 	`^(P[1-6])_(TEMPERATURE|ENDTIME)_([A-Z]+)_(\d+)$`,
 )
 
+// IsParameterName reports whether a MASTER paramset key is one cell of a
+// week profile — either the climate form ("P1_ENDTIME_MONDAY_1") or the
+// simple form ("01_WP_LEVEL").
+//
+// Callers outside this package use it to keep week-profile cells out of
+// per-parameter surfaces. A single climate device carries up to 6
+// profiles × 7 weekdays × 13 slots × 2 fields, so listing the cells
+// individually buries every other parameter — and the profile already
+// has a first-class editor that presents them as a schedule.
+//
+// Both branches read the same grammar the parsers in this file use:
+// [climateParamPattern] and the "<NN>_WP_<FIELD>" split in
+// [ParseSimpleRawParamset]. Keeping the predicate here means a change to
+// either format updates the parser and its consumers together.
+func IsParameterName(key string) bool {
+	if climateParamPattern.MatchString(key) {
+		return true
+	}
+	parts := strings.SplitN(key, "_", 3)
+	if len(parts) != 3 || parts[1] != "WP" || parts[2] == "" {
+		return false
+	}
+	groupNo, err := strconv.Atoi(parts[0])
+	return err == nil && groupNo >= 1 && groupNo <= 24
+}
+
 // ---------------------------------------------------------------------------
 // Climate: raw paramset → [rawClimateSchedule]
 // ---------------------------------------------------------------------------

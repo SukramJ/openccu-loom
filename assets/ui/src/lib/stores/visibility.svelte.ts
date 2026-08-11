@@ -9,6 +9,7 @@
 import { api } from "$lib/api/client";
 import { dirty } from "./dirty.svelte";
 import type {
+  UnIgnoreCandidateGroup,
   UnIgnoreCentralPatterns,
   UnIgnoreUpdateResponse,
 } from "$lib/api/visibility-types";
@@ -21,6 +22,9 @@ function createVisibilityStore() {
   let centralsError = $state<string | null>(null);
 
   let candidates = $state<string[]>([]);
+  let candidateSet = $state<Set<string>>(new Set());
+  let groups = $state<UnIgnoreCandidateGroup[]>([]);
+  let reasonVocabulary = $state<string[]>([]);
   let candidatesLoading = $state(false);
   let candidatesError = $state<string | null>(null);
   let includeMaster = $state(false);
@@ -57,11 +61,22 @@ function createVisibilityStore() {
     try {
       const resp = await api.listVisibilityUnIgnoreCandidates(withMaster);
       candidates = resp.candidates ?? [];
+      // Membership is asked once per rendered row; a Set keeps that O(1).
+      // As an array scan it was O(n) inside an O(n) render — ~5M string
+      // comparisons per keystroke on a 399-device fleet.
+      candidateSet = new Set(candidates);
+      groups = resp.groups ?? [];
+      reasonVocabulary = resp.reasons ?? [];
     } catch (e) {
       candidatesError = e instanceof Error ? e.message : String(e);
     } finally {
       candidatesLoading = false;
     }
+  }
+
+  /** O(1) membership test against the candidate set. */
+  function isCandidate(pattern: string): boolean {
+    return candidateSet.has(pattern);
   }
 
   /** Toggle a single pattern in the pending set for `central`. */
@@ -72,6 +87,18 @@ function createVisibilityStore() {
       : [...current, pattern].sort();
     const newMap = new Map(pending);
     newMap.set(central, next);
+    pending = newMap;
+    markDirty();
+  }
+
+  /** Replace the pending pattern list for `central` wholesale. The
+      group-level toggles compute the next list in one step (enabling a
+      narrower scope drops the fleet-wide form, clearing a group drops
+      every scope it owns), so they hand the result over rather than
+      replaying it as a sequence of single-pattern toggles. */
+  function setPatterns(central: string, patterns: string[]) {
+    const newMap = new Map(pending);
+    newMap.set(central, [...patterns].sort());
     pending = newMap;
     markDirty();
   }
@@ -150,6 +177,13 @@ function createVisibilityStore() {
     get candidates() {
       return candidates;
     },
+    get groups() {
+      return groups;
+    },
+    get reasonVocabulary() {
+      return reasonVocabulary;
+    },
+    isCandidate,
     get candidatesLoading() {
       return candidatesLoading;
     },
@@ -165,6 +199,7 @@ function createVisibilityStore() {
     loadCentrals,
     loadCandidates,
     togglePattern,
+    setPatterns,
     addPattern,
     discardPending,
     save,

@@ -70,6 +70,7 @@ The table below catalogues every ADR. Each entry links to the record itself.
 | [0059](../adr/0059-security-safety-mqtt-plane.md) | The Security & Safety MQTT plane | Extends ADR 0052: hazard classes aggregate across centrals, so they get daemon-level topics too. |
 | [0060](../adr/0060-loom-prefixed-interface-ids.md) | `loom`-prefixed CCU-facing interface ids | Partially supersedes ADR 0024: the wire-boundary `InitInterfaceID` carries a `loom` prefix and drops the repeated central name. |
 | [0061](../adr/0061-migration-down-path-unsupported.md) | The migration Down path is unsupported | `goose` Down blocks exist to satisfy the tool; they are destructive and must never run in production. |
+| [0062](../adr/0062-suppression-reasons-are-recomputed.md) | Suppression reasons are recomputed, not recorded | Extends ADR 0015: the `Ignored` mark says *that* a parameter is hidden, never which rule hid it, so the reason is re-derived from the same rule sets. |
 
 ## Related reading
 
