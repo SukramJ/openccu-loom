@@ -41,22 +41,15 @@ var climateParamPattern = regexp.MustCompile(
 	`^(P[1-6])_(TEMPERATURE|ENDTIME)_([A-Z]+)_(\d+)$`,
 )
 
-// SimpleMaxGroup is the highest simple-schedule group [schedule.Simple]
-// can hold, and it is smaller than what the hardware offers.
+// SimpleMaxGroup is the highest simple-schedule group this package
+// parses, and it tracks what [schedule.Simple] can hold.
 //
-// The CCU declares 75 groups on a dimmer, universal-light, switch,
-// blind or servo channel and 69 on the models its web UI special-cases
-// (HmIP-MP3P, HmIPW-WRC6(-A), HmIP-WRC6-230, water switches, HmIP-BSL
-// on firmware 2.x) — see `_getMaxEntries` in the CCU's own
-// `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js`, which edits
-// every one of them. A real CCU confirms the same split.
-//
-// This limit is therefore a known gap, not a property of the devices:
-// a schedule an operator built on the CCU using more than
-// [SimpleMaxGroup] entries is read back truncated. Raising it means
-// widening [schedule.Simple] and its round-trip, so the cap stays
-// explicit and named rather than buried as a literal.
-const SimpleMaxGroup = 24
+// It sat at 24 for a long time, which silently truncated every schedule
+// an operator built past that point on the CCU: the device declares 75
+// groups on a dimmer, switch, blind or servo channel and edits all of
+// them. See [schedule.SimpleMaxSlot] for the source and the
+// device-specific caveat.
+const SimpleMaxGroup = schedule.SimpleMaxSlot
 
 // SimpleGroupNo extracts the group number from a simple week-profile
 // key ("01_WP_LEVEL" → 1). ok is false when the key is not of that
@@ -504,13 +497,24 @@ func WeekdayListToBitmask(days []schedule.Weekday) int {
 var conditionFromInt = map[int]schedule.Condition{
 	0: schedule.ConditionFixedTime,
 	1: schedule.ConditionAstro,
-	2: schedule.ConditionAstroBeforeFixed,
-	3: schedule.ConditionAstroAfterFixed,
-	4: schedule.ConditionFixedBetweenAstro,
-	5: schedule.ConditionAstroBetweenFixed,
-	6: schedule.ConditionAstroBetweenAstro,
-	7: schedule.ConditionFixedAstroThreshold,
+	2: schedule.ConditionFixedIfBeforeAstro,
+	3: schedule.ConditionAstroIfBeforeFixed,
+	4: schedule.ConditionFixedIfAfterAstro,
+	5: schedule.ConditionAstroIfAfterFixed,
+	6: schedule.ConditionEarliestOfFixedAstro,
+	7: schedule.ConditionLatestOfFixedAstro,
 }
+
+// ConditionForWire maps a CCU `<NN>_WP_CONDITION` integer to its
+// [schedule.Condition]. Unknown values yield the empty condition.
+//
+// Exported so the parity guard can compare this vocabulary against the
+// REST schedules domain, which translates the same field independently.
+func ConditionForWire(id int) schedule.Condition { return conditionFromInt[id] }
+
+// WireForCondition is the inverse of [ConditionForWire]. Unknown
+// conditions yield 0 (fixed time).
+func WireForCondition(c schedule.Condition) int { return conditionToInt[c] }
 
 // conditionToInt maps a [schedule.Condition] to the CCU integer value.
 var conditionToInt = func() map[schedule.Condition]int {
@@ -659,9 +663,14 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 // for inactive groups to avoid spurious -5 faults on devices whose
 // MASTER paramset description omits those fields.
 //
-// Mirrors `DefaultWeekProfile.convert_dict_to_raw_schedule`.
-func BuildSimpleRawParamset(s *schedule.Simple) map[string]any {
-	out := make(map[string]any, 24*4)
+// deactivateUpTo is the highest group the target channel declares. It
+// must come from the device rather than from [schedule.SimpleMaxSlot]:
+// channels differ (69 or 75 in the field), and naming a group the
+// channel does not have earns the same -5 fault. Pass 0 to skip the
+// deactivation sweep entirely, which writes the active groups and
+// leaves every other one untouched.
+func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int) map[string]any {
+	out := make(map[string]any, (deactivateUpTo+1)*4)
 	if s != nil {
 		for groupNo, entry := range s.Entries { //nolint:gocritic // rangeValCopy: map values cannot be addressed; copy is unavoidable
 			mask := WeekdayListToBitmask(entry.Weekdays)
@@ -725,10 +734,15 @@ func BuildSimpleRawParamset(s *schedule.Simple) map[string]any {
 			}
 		}
 	}
-	// Deactivate unused groups (1..24): zero WEEKDAY and TARGET_CHANNELS only.
+	// Deactivate unused groups: zero WEEKDAY and TARGET_CHANNELS only.
 	// Writing all optional fields for inactive groups triggers fault -5 on devices
 	// whose MASTER paramset description omits those keys.
-	for no := 1; no <= 24; no++ {
+	//
+	// deactivateUpTo bounds the sweep because the same fault applies to
+	// the group itself: a channel that declares 69 groups rejects a write
+	// naming group 70. The caller derives the bound from the device, so a
+	// deleted entry is cleared wherever the device can hold one.
+	for no := 1; no <= deactivateUpTo; no++ {
 		key := fmt.Sprintf("%02d_WP_WEEKDAY", no)
 		if _, ok := out[key]; !ok {
 			out[key] = 0

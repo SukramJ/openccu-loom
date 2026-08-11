@@ -1125,7 +1125,7 @@ func weekdayNamesToBits(names []string) int {
 // SPA users edit the friendly fields, the wire ends up consistent
 // With.
 func serializeSimpleScheduleWithDomain(
-	entries []hmapi.SimpleScheduleEntry, domain string,
+	entries []hmapi.SimpleScheduleEntry, domain string, deactivateUpTo int,
 ) (map[string]any, error) {
 	if domain == "lock" {
 		// Apply the lock encoding *before* serialising so the
@@ -1136,7 +1136,7 @@ func serializeSimpleScheduleWithDomain(
 		}
 		entries = mapped
 	}
-	return serializeSimpleSchedule(entries)
+	return serializeSimpleSchedule(entries, deactivateUpTo)
 }
 
 // applyLockEncoding rewrites a lock slot's level / duration / target_channels
@@ -1171,7 +1171,7 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 	return e
 }
 
-func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry) (map[string]any, error) { //nolint:funlen // single-purpose schedule serialization logic with many branches
+func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry, deactivateUpTo int) (map[string]any, error) { //nolint:funlen // single-purpose schedule serialization logic with many branches
 	// Size hint omitted deliberately: deriving it from len(entries) (a
 	// request-controlled length) risks an integer-overflowing allocation
 	// size. The map grows on demand; schedules are small.
@@ -1179,8 +1179,13 @@ func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry) (map[string]an
 	used := make(map[int]bool, len(entries))
 	for i := range entries {
 		e := entries[i]
-		if e.SlotNo < 1 || e.SlotNo > 24 {
-			return nil, fmt.Errorf("schedules: slot_no out of range: %d", e.SlotNo)
+		// The read path has never capped, so a schedule the CCU holds
+		// past this point comes back in full. Rejecting it on the way
+		// out turned every such schedule into one an operator could open
+		// but not save.
+		if e.SlotNo < 1 || e.SlotNo > schedule.SimpleMaxSlot {
+			return nil, fmt.Errorf("schedules: slot_no out of range: %d (1..%d)",
+				e.SlotNo, schedule.SimpleMaxSlot)
 		}
 		if used[e.SlotNo] {
 			return nil, fmt.Errorf("schedules: duplicate slot_no %d", e.SlotNo)
@@ -1281,8 +1286,14 @@ func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry) (map[string]an
 			out[prefix+"OUTPUT_BEHAVIOUR"] = *e.OutputBehaviour
 		}
 	}
-	// Deactivate every unused slot (1..24) so deleted entries vanish on the CCU.
-	for n := 1; n <= 24; n++ {
+	// Deactivate every unused slot so deleted entries vanish on the CCU.
+	//
+	// The bound comes from the device: channels declare 69 or 75 groups,
+	// and naming one they do not have fails the whole paramset with a -5
+	// fault. When the caller could not read the description it passes 0,
+	// which writes the active slots and leaves the rest alone — a save
+	// that does not clear deletions beats one the CCU rejects.
+	for n := 1; n <= deactivateUpTo; n++ {
 		if used[n] {
 			continue
 		}
@@ -1290,6 +1301,19 @@ func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry) (map[string]an
 		out[fmt.Sprintf("%02d_WP_TARGET_CHANNELS", n)] = 0
 	}
 	return out, nil
+}
+
+// highestScheduleGroup reports the highest `<NN>_WP_*` group present in a
+// MASTER paramset description, or 0 when the description is unavailable
+// or names none.
+func highestScheduleGroup(descKeys map[string]struct{}) int {
+	highest := 0
+	for key := range descKeys {
+		if no, ok := weekprofile.SimpleGroupNo(key); ok && no > highest {
+			highest = no
+		}
+	}
+	return highest
 }
 
 func splitTime(hhmm string) (hour, minute int, err error) {
@@ -1351,7 +1375,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	descKeys := scheduleDescKeys(ctx, backend, channelAddr)
 	switch sched.Kind {
 	case "simple":
-		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain)
+		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain, highestScheduleGroup(descKeys))
 		if err == nil && len(raw) > 0 && len(descKeys) > 0 {
 			// Filter out schedule fields the device does not advertise in its
 			// MASTER paramset description. Devices like HmIP-DLD expose only a

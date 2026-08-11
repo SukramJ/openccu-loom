@@ -51,8 +51,8 @@ const (
 )
 
 // maxSimpleEntries is the maximum number of groups in a simple schedule.
-// Mirrors `_MAX_SIMPLE_ENTRIES = 24`.
-const maxSimpleEntries = 24
+// A specific device may declare fewer — see [schedule.SimpleMaxSlot].
+const maxSimpleEntries = schedule.SimpleMaxSlot
 
 // maxClimateSlots is the max total slot count across all profiles + weekdays.
 // 13 slots × 7 weekdays × 6 profiles = 546.

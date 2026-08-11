@@ -48,15 +48,15 @@ func TestAlarmPlaneTopicsRoundTrip(t *testing.T) {
 	// topic of its own, which is exactly the shape that can be declared
 	// and then never written.
 	for _, zone := range zones {
-		collectAlarmDeclaredTopics(t, BuildAlarmMotionResetDiscovery(base, zone, "Zone "+zone, false), declared)
-		collectAlarmDeclaredTopics(t, BuildAlarmTriggeredMotionDiscovery(base, zone, "Zone "+zone, false), declared)
+		collectAlarmDeclaredTopics(t, BuildAlarmMotionResetDiscovery(base, zone, "Zone "+zone, "Reset motion", false), declared)
+		collectAlarmDeclaredTopics(t, BuildAlarmTriggeredMotionDiscovery(base, zone, "Zone "+zone, "Triggered motion detectors", false), declared)
 	}
 	// The aggregate master panel — same builder, master=true.
 	masterItem := BuildAlarmPanelDiscovery(base, "ignored", "Alarm system",
 		[]hmenum.AlarmMode{hmenum.AlarmModeFull}, true, false, false)
 	collectAlarmDeclaredTopics(t, masterItem, declared)
-	collectAlarmDeclaredTopics(t, BuildAlarmMotionResetDiscovery(base, "ignored", "Alarm system", true), declared)
-	collectAlarmDeclaredTopics(t, BuildAlarmTriggeredMotionDiscovery(base, "ignored", "Alarm system", true), declared)
+	collectAlarmDeclaredTopics(t, BuildAlarmMotionResetDiscovery(base, "ignored", "Alarm system", "Reset motion", true), declared)
+	collectAlarmDeclaredTopics(t, BuildAlarmTriggeredMotionDiscovery(base, "ignored", "Alarm system", "Triggered motion detectors", true), declared)
 
 	if len(declared) == 0 {
 		t.Fatal("no topics declared; the walk found no discovery payloads and would pass vacuously")

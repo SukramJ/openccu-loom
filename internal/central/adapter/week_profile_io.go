@@ -147,11 +147,39 @@ func (sv *defaultChannelSaver) Save(ctx context.Context, s *schedule.Simple) err
 	if w == nil {
 		return ErrChannelNotWired
 	}
-	values := weekprofile.BuildSimpleRawParamset(s)
+	values := weekprofile.BuildSimpleRawParamset(s, sv.declaredGroups(ctx))
 	if err := w.PutParamset(ctx, sv.ch.Address, hmenum.ParamsetKeyMaster, values, sv.priority); err != nil {
 		return fmt.Errorf("schedule.save.simple: PutParamset: %w", err)
 	}
 	return nil
+}
+
+// declaredGroups reports the highest week-profile group the channel
+// declares, for the deactivation sweep in
+// [weekprofile.BuildSimpleRawParamset].
+//
+// The count is read from the device rather than assumed: channels carry
+// 69 or 75 groups depending on model and firmware, and writing to one
+// that does not exist fails the whole paramset with fault -5. A read
+// that fails yields 0, which skips the sweep — the active groups are
+// still written, so a save degrades to "does not clear deleted entries"
+// instead of failing outright.
+func (sv *defaultChannelSaver) declaredGroups(ctx context.Context) int {
+	r := sv.ch.Refresher()
+	if r == nil {
+		return 0
+	}
+	values, err := r.GetParamset(ctx, sv.ch.Address, hmenum.ParamsetKeyMaster)
+	if err != nil {
+		return 0
+	}
+	highest := 0
+	for key := range values {
+		if no, ok := weekprofile.SimpleGroupNo(key); ok && no > highest {
+			highest = no
+		}
+	}
+	return highest
 }
 
 // bindDefaultScheduleIO attaches a fully-wired

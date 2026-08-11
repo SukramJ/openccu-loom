@@ -42,16 +42,27 @@ func isValidWeekday(w Weekday) bool {
 // Condition is the trigger condition of a schedule entry.
 type Condition string
 
-// Condition values.
+// Condition values, in the order of the CCU's `<NN>_WP_CONDITION`
+// integer (0..7).
+//
+// The names come from the option list the CCU's own editor renders —
+// `arOptions` in `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js` —
+// so a condition means here what it means on the device. Six of them
+// used to say something else: condition 2 was called "astro before
+// fixed" where the device selects the *fixed* time if it falls before
+// the astro one, and 6/7 were called "between" and "or" where the device
+// picks the earlier or the later of the two. The REST schedules domain
+// had them right, so the two halves of the daemon named the same rule
+// differently.
 const (
-	ConditionFixedTime           Condition = "fixed_time"
-	ConditionAstro               Condition = "astro"
-	ConditionAstroBeforeFixed    Condition = "astro_before_fixed"
-	ConditionAstroAfterFixed     Condition = "astro_after_fixed"
-	ConditionFixedBetweenAstro   Condition = "fixed_between_astro"
-	ConditionAstroBetweenFixed   Condition = "astro_between_fixed"
-	ConditionAstroBetweenAstro   Condition = "astro_between_astro"
-	ConditionFixedAstroThreshold Condition = "fixed_or_astro"
+	ConditionFixedTime            Condition = "fixed_time"
+	ConditionAstro                Condition = "astro"
+	ConditionFixedIfBeforeAstro   Condition = "fixed_if_before_astro"
+	ConditionAstroIfBeforeFixed   Condition = "astro_if_before_fixed"
+	ConditionFixedIfAfterAstro    Condition = "fixed_if_after_astro"
+	ConditionAstroIfAfterFixed    Condition = "astro_if_after_fixed"
+	ConditionEarliestOfFixedAstro Condition = "earliest_of_fixed_and_astro"
+	ConditionLatestOfFixedAstro   Condition = "latest_of_fixed_and_astro"
 )
 
 func (c Condition) isAstro() bool { return c != ConditionFixedTime && c != "" }
@@ -301,7 +312,24 @@ func EmptySimpleEntry(category hmenum.DataPointCategory) SimpleEntry {
 	return base
 }
 
-// Simple is a full 24-slot schedule for non-climate devices.
+// SimpleMaxSlot is the highest slot a simple schedule can hold.
+//
+// It is the largest count the CCU declares for such a channel: 75 on a
+// dimmer, universal-light, switch, blind or servo channel, 69 on the
+// models its web UI special-cases (HmIP-MP3P, HmIPW-WRC6(-A),
+// HmIP-WRC6-230, water switches, HmIP-BSL on firmware 2.x). See
+// `_getMaxEntries` in the CCU's own
+// `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js`, which edits
+// every one of them.
+//
+// A given device may declare fewer, and that is the real bound: what a
+// channel's MASTER paramset does not contain cannot be written to it.
+// This constant is the model's outer limit, not a promise that every
+// device has this many slots.
+const SimpleMaxSlot = 75
+
+// Simple is a slot-indexed schedule for non-climate devices, holding up
+// to [SimpleMaxSlot] entries.
 type Simple struct {
 	Entries map[int]SimpleEntry
 }
@@ -309,10 +337,11 @@ type Simple struct {
 // NewSimple constructs a Simple with an empty slot map.
 func NewSimple() *Simple { return &Simple{Entries: make(map[int]SimpleEntry)} }
 
-// Put inserts or replaces an entry under slot. Slot must be 1..24.
+// Put inserts or replaces an entry under slot. Slot must be
+// 1..[SimpleMaxSlot].
 func (s *Simple) Put(slot int, e SimpleEntry) error {
-	if slot < 1 || slot > 24 {
-		return fmt.Errorf("schedule: slot %d out of range (1..24)", slot)
+	if slot < 1 || slot > SimpleMaxSlot {
+		return fmt.Errorf("schedule: slot %d out of range (1..%d)", slot, SimpleMaxSlot)
 	}
 	if err := e.Validate(); err != nil {
 		return err

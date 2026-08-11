@@ -4,6 +4,7 @@
 package weekprofile
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
@@ -552,7 +553,7 @@ func TestSimpleParamsetBuildDictToRaw(t *testing.T) {
 	if err := ss.Put(1, entry); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	got := BuildSimpleRawParamset(ss)
+	got := BuildSimpleRawParamset(ss, schedule.SimpleMaxSlot)
 	if _, ok := got["01_WP_WEEKDAY"]; !ok {
 		t.Error("missing 01_WP_WEEKDAY")
 	}
@@ -577,5 +578,84 @@ func TestSimpleParamsetBuildDictToRaw(t *testing.T) {
 	// MONDAY=bit1→2, TUESDAY=bit2→4; total bitmask = 6
 	if got["01_WP_WEEKDAY"] != 6 {
 		t.Errorf("01_WP_WEEKDAY = %v, want 6 (MONDAY+TUESDAY)", got["01_WP_WEEKDAY"])
+	}
+}
+
+// TestSimpleRawParamsetRoundTripsGroupsAboveTwentyFour pins the group
+// range against the hardware.
+//
+// The parser capped at 24, a number that came from this project's own
+// storage rather than from any device: a switch, dimmer, blind or servo
+// channel declares 75 groups and the CCU's own editor edits all of them
+// (`_getMaxEntries` in HmIPWeeklyProgram.js). A real CCU stores and
+// returns a group-25 entry unchanged. Everything past 24 was therefore
+// dropped on read and never written back.
+func TestSimpleRawParamsetRoundTripsGroupsAboveTwentyFour(t *testing.T) {
+	t.Parallel()
+
+	for _, group := range []int{1, 24, 25, 69, schedule.SimpleMaxSlot} {
+		t.Run(fmt.Sprintf("group_%d", group), func(t *testing.T) {
+			t.Parallel()
+
+			raw := map[string]any{
+				fmt.Sprintf("%02d_WP_WEEKDAY", group):         2, // Monday
+				fmt.Sprintf("%02d_WP_FIXED_HOUR", group):      7,
+				fmt.Sprintf("%02d_WP_FIXED_MINUTE", group):    30,
+				fmt.Sprintf("%02d_WP_LEVEL", group):           1.0,
+				fmt.Sprintf("%02d_WP_TARGET_CHANNELS", group): 1,
+			}
+			s, err := ParseSimpleRawParamset(raw)
+			if err != nil {
+				t.Fatalf("ParseSimpleRawParamset: %v", err)
+			}
+			entry, ok := s.Entries[group]
+			if !ok {
+				t.Fatalf("group %d missing after parse; parsed %d entries", group, len(s.Entries))
+			}
+			if entry.Time != "07:30" {
+				t.Errorf("group %d time = %q, want 07:30", group, entry.Time)
+			}
+
+			// And back out again: a schedule that survives the read must
+			// survive the write, or an operator opening it loses it.
+			out := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
+			if got := out[fmt.Sprintf("%02d_WP_WEEKDAY", group)]; got != 2 {
+				t.Errorf("group %d WEEKDAY after build = %v, want 2", group, got)
+			}
+		})
+	}
+}
+
+// TestBuildSimpleRawParamsetHonoursTheDeactivationBound pins that the
+// sweep stays inside what the device declares. Naming a group a channel
+// does not have fails the entire paramset with fault -5, so the bound is
+// a correctness requirement, not a tidiness one.
+func TestBuildSimpleRawParamsetHonoursTheDeactivationBound(t *testing.T) {
+	t.Parallel()
+
+	s := schedule.NewSimple()
+	if err := s.Put(1, schedule.SimpleEntry{
+		Weekdays: []schedule.Weekday{schedule.WeekdayMonday},
+		Time:     "07:30",
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	out := BuildSimpleRawParamset(s, 69)
+	if _, ok := out["69_WP_WEEKDAY"]; !ok {
+		t.Error("group 69 not deactivated although the device declares it")
+	}
+	if _, ok := out["70_WP_WEEKDAY"]; ok {
+		t.Error("group 70 written although the device declares only 69")
+	}
+
+	// Bound 0 means "device unknown": write the active groups, touch
+	// nothing else.
+	none := BuildSimpleRawParamset(s, 0)
+	if _, ok := none["02_WP_WEEKDAY"]; ok {
+		t.Error("deactivation swept with bound 0")
+	}
+	if _, ok := none["01_WP_WEEKDAY"]; !ok {
+		t.Error("active group 1 missing with bound 0")
 	}
 }

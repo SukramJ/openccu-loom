@@ -80,8 +80,17 @@ func TestSimpleSlotRange(t *testing.T) {
 	if err := s.Put(0, SimpleEntry{Weekdays: []Weekday{WeekdayMonday}, Time: "08:00", Level: 1}); err == nil {
 		t.Fatal("slot 0 must be rejected")
 	}
-	if err := s.Put(25, SimpleEntry{Weekdays: []Weekday{WeekdayMonday}, Time: "08:00", Level: 1}); err == nil {
-		t.Fatal("slot 25 must be rejected")
+	// The CCU declares up to SimpleMaxSlot groups on a switch, dimmer,
+	// blind or servo channel and edits every one, so only past that is
+	// out of range.
+	if err := s.Put(25, SimpleEntry{Weekdays: []Weekday{WeekdayMonday}, Time: "08:00", Level: 1}); err != nil {
+		t.Fatalf("slot 25 must be accepted: %v", err)
+	}
+	if err := s.Put(SimpleMaxSlot, SimpleEntry{Weekdays: []Weekday{WeekdayMonday}, Time: "08:00", Level: 1}); err != nil {
+		t.Fatalf("slot %d must be accepted: %v", SimpleMaxSlot, err)
+	}
+	if err := s.Put(SimpleMaxSlot+1, SimpleEntry{Weekdays: []Weekday{WeekdayMonday}, Time: "08:00", Level: 1}); err == nil {
+		t.Fatalf("slot %d must be rejected", SimpleMaxSlot+1)
 	}
 }
 
