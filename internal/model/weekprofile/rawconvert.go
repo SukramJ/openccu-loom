@@ -450,41 +450,44 @@ func slotsToClimateWeekday(ws weekdaySlots) schedule.ClimateWeekday {
 // Simple / non-climate: raw paramset ↔ [schedule.Simple]
 // ---------------------------------------------------------------------------
 
-// weekdayBitMap maps CCU bit positions to weekday strings.
-// Bit 1 = Monday, 2 = Tuesday, …, 7 = Sunday (1-indexed bits).
-var weekdayBitMap = []schedule.Weekday{
-	1: schedule.WeekdayMonday,
-	2: schedule.WeekdayTuesday,
-	3: schedule.WeekdayWednesday,
-	4: schedule.WeekdayThursday,
-	5: schedule.WeekdayFriday,
-	6: schedule.WeekdaySaturday,
-	7: schedule.WeekdaySunday,
+// weekdaysByBit lists the CCU's `<NN>_WP_WEEKDAY` bit positions with the
+// weekday each one stands for, in presentation order.
+//
+// Sunday is bit 0, not bit 7: the mask runs Sunday=1, Monday=2, …
+// Saturday=64, so all seven days are 127. Taken from the checkbox values
+// the CCU's own editor emits (`_getWeekDay` in
+// `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js`) and confirmed
+// against a real CCU, which stores and returns WEEKDAY=1 for a
+// Sunday-only entry.
+var weekdaysByBit = []struct {
+	bit int
+	day schedule.Weekday
+}{
+	{1, schedule.WeekdayMonday},
+	{2, schedule.WeekdayTuesday},
+	{3, schedule.WeekdayWednesday},
+	{4, schedule.WeekdayThursday},
+	{5, schedule.WeekdayFriday},
+	{6, schedule.WeekdaySaturday},
+	{0, schedule.WeekdaySunday},
 }
 
 // WeekdayBitmaskToList converts a CCU WEEKDAY bitmask to a list of weekday strings.
-// Mirrors `_bitwise_to_list(value, WeekdayInt)`.
 func WeekdayBitmaskToList(mask int) []schedule.Weekday {
 	var out []schedule.Weekday
-	for bit := 1; bit <= 7; bit++ {
-		if mask&(1<<bit) != 0 {
-			out = append(out, weekdayBitMap[bit])
+	for _, e := range weekdaysByBit {
+		if mask&(1<<e.bit) != 0 {
+			out = append(out, e.day)
 		}
 	}
 	return out
 }
 
 // WeekdayListToBitmask converts a list of weekday strings to the CCU bitmask.
-// Mirrors `_list_to_bitwise`.
 func WeekdayListToBitmask(days []schedule.Weekday) int {
-	bitPos := map[schedule.Weekday]int{
-		schedule.WeekdayMonday:    1,
-		schedule.WeekdayTuesday:   2,
-		schedule.WeekdayWednesday: 3,
-		schedule.WeekdayThursday:  4,
-		schedule.WeekdayFriday:    5,
-		schedule.WeekdaySaturday:  6,
-		schedule.WeekdaySunday:    7,
+	bitPos := make(map[schedule.Weekday]int, len(weekdaysByBit))
+	for _, e := range weekdaysByBit {
+		bitPos[e.day] = e.bit
 	}
 	mask := 0
 	for _, day := range days {

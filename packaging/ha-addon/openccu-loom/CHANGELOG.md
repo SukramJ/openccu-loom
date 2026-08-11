@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.58.3
+
+- **Sonntag funktioniert in Geräte-Wochenprogrammen wieder.** Die
+  Wochentagsmaske wurde für Sonntag auf dem falschen Bit gelesen. Ein
+  auf der CCU für Sonntag gesetztes Programm kam ohne Wochentag an,
+  ein hier gespeichertes hat sonntags nie geschaltet — beides
+  unbemerkt, weil alle anderen Tage korrekt waren.
+
 ## 0.58.2
 
 - **Wochenprogramm-Zellen im Bildschirm "Ausgeblendete Parameter"**

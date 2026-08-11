@@ -935,3 +935,41 @@ func scheduleTestDevice(c *central.Unit, address, model, name string) *device.De
 	c.ModelRegistry.Put(d)
 	return d
 }
+
+// TestWeekdayBitsMatchTheCCUEditor pins the wire layout of
+// `<NN>_WP_WEEKDAY` against the CCU's own editor, which emits Sunday=1,
+// Monday=2 … Saturday=64 (`_getWeekDay` in HmIPWeeklyProgram.js).
+//
+// Sunday sat on bit 7 here, a bit the device does not evaluate. A
+// Sunday schedule made on the CCU came back with an empty weekday list,
+// and one saved from here never fired. Both directions are asserted
+// because the two tables that encode this are separate.
+func TestWeekdayBitsMatchTheCCUEditor(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]int{
+		"SUNDAY": 1, "MONDAY": 2, "TUESDAY": 4, "WEDNESDAY": 8,
+		"THURSDAY": 16, "FRIDAY": 32, "SATURDAY": 64,
+	}
+	for day, bit := range want {
+		if got := weekdayNamesToBits([]string{day}); got != bit {
+			t.Errorf("weekdayNamesToBits(%s) = %d, want %d", day, got, bit)
+		}
+		names := weekdayBitsToNames(bit)
+		if len(names) != 1 || names[0] != day {
+			t.Errorf("weekdayBitsToNames(%d) = %v, want [%s]", bit, names, day)
+		}
+	}
+
+	// Every day at once is 127, not 254.
+	all := make([]string, 0, len(want))
+	for day := range want {
+		all = append(all, day)
+	}
+	if got := weekdayNamesToBits(all); got != 127 {
+		t.Errorf("weekdayNamesToBits(all seven) = %d, want 127", got)
+	}
+	if got := weekdayBitsToNames(127); len(got) != 7 {
+		t.Errorf("weekdayBitsToNames(127) = %v, want all seven days", got)
+	}
+}
