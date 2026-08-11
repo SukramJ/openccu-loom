@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.58.1
+
+- Version alignment with OpenCCU-Loom 0.58.1. The proxy itself is
+  unchanged; the release repairs the motion-detector reset added in
+  0.58.0, which never reached the devices, and extends it to presence
+  detectors.
+
 # 0.58.0
 
 - Version alignment with OpenCCU-Loom 0.58.0. The proxy itself is

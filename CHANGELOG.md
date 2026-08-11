@@ -4,6 +4,45 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.1]
+
+API 5.18.0 — additive: the parameter enumeration gains
+`PRESENCE_DETECTION_STATE` and `RESET_PRESENCE`.
+
+### Fixed
+
+- **Resetting triggered motion detectors actually reaches the
+  device.** The feature shipped in 0.58.0 was inert on real hardware:
+  no reset button ever appeared, `GET /alarm/triggered-motion` reported
+  an empty set however many detectors were latched, and the pre-arm
+  reset pass wrote nothing. `RESET_MOTION` is classified as a button
+  action, so the model holds it as a `Button`, while the reset looked
+  for the `Action` shape. The type assertion was false for every real
+  detector — which is a silent runtime miss, not a compile error, and
+  the same lookup decides both what gets written and what gets counted,
+  so the operator saw a consistent and consistently empty answer.
+
+  The lookup now depends on the capability (fire this parameter) rather
+  than on one concrete shape. Verified against a live CCU whose zone
+  readiness reported three blocking detectors while the endpoint
+  returned none.
+
+- **Presence detectors are covered too.** An HmIP-SPI latches
+  `PRESENCE_DETECTION_STATE` and clears it with `RESET_PRESENCE`, not
+  `MOTION` / `RESET_MOTION`, so it was skipped even once the shape
+  mismatch above was out of the way. The reset parameter is now derived
+  from the enrolled state parameter, which keys it to what the device
+  actually exposes instead of to the sensor type both families share.
+
+### Changed
+
+- **The Security & Safety and alarm panels link to each other the same
+  way.** The cross-link into the alarm panel sat below the zone list as
+  a borderless button while its counterpart sat in the header toolbar
+  with a border and an icon. It now occupies the mirrored toolbar slot
+  with the same variant and the navigation's alarm icon, and no longer
+  appears twice on one screen.
+
 ## [0.58.0]
 
 ### Added

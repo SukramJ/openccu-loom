@@ -40,6 +40,12 @@ func (b *Button) Press(ctx context.Context, priority hmenum.CommandPriority) err
 	return b.sendAndObserve(ctx, true, true, priority)
 }
 
+// FireAction implements [ActionTrigger]. A button press is exactly the
+// value-less trigger the interface describes.
+func (b *Button) FireAction(ctx context.Context, priority hmenum.CommandPriority) error {
+	return b.Press(ctx, priority)
+}
+
 // MatterMeasurementClass implements [interfaces.MatterMeasurementSource].
 // Press-event parameters surface as MomentarySwitch (Matter §1.13
 // GenericSwitch); other parameter shapes opt out by returning None.

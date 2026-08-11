@@ -14,15 +14,36 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// motionResetter implements engine.MotionResetPort by writing the
-// RESET_MOTION parameter of an enrolled sensor's own channel.
+// motionResetter implements engine.MotionResetPort by writing the reset
+// parameter of an enrolled sensor's own channel.
 //
-// A motion detector exposes MOTION (the state the alarm watches) and
-// RESET_MOTION (a write-only action that clears it) on the same
-// channel, so the enrolled sensor row already carries everything
-// needed to find the target — no second enrolment, no configuration.
+// A latching presence sensor exposes two parameters on one channel: the
+// state the alarm watches, and a write-only action that clears it. The
+// enrolled sensor row already names the first, so the second follows
+// from it — no second enrolment, no configuration.
 type motionResetter struct {
 	reg *central.Registry
+}
+
+// resetParameterFor maps a watched state parameter to the action that
+// clears it.
+//
+// The two families are separate devices, not synonyms: a motion
+// detector (HmIP-SMO, HM-Sec-MDIR) latches MOTION and clears it with
+// RESET_MOTION, while a presence detector (HmIP-SPI) latches
+// PRESENCE_DETECTION_STATE and clears it with RESET_PRESENCE. Both
+// enrol as sensor type "motion", so keying the reset off the sensor
+// type instead of the parameter would silently skip every presence
+// detector.
+func resetParameterFor(stateParameter string) (hmenum.Parameter, bool) {
+	switch hmenum.Parameter(stateParameter) {
+	case hmenum.ParameterMotion:
+		return hmenum.ParameterResetMotion, true
+	case hmenum.ParameterPresenceDetectionState:
+		return hmenum.ParameterResetPresence, true
+	default:
+		return "", false
+	}
 }
 
 // newMotionResetter binds the port to the central registry. A nil
@@ -32,14 +53,26 @@ func newMotionResetter(reg *central.Registry) *motionResetter {
 	return &motionResetter{reg: reg}
 }
 
-// action resolves the sensor's RESET_MOTION data point.
+// action resolves the sensor's reset data point.
 //
 // The lookup is the definition of "resettable" for the whole feature:
 // Supports and Reset both go through it, so the count the UI shows and
 // the set the button writes to cannot disagree.
-func (m *motionResetter) action(row sqlitestore.AlarmSensorRow) (*generic.Action, error) {
+//
+// The result is a [generic.ActionTrigger], not a concrete shape. Both
+// reset parameters are classified as button actions, so the resolver
+// builds a [generic.Button] for them, while a parameter outside that
+// classification becomes a [generic.Action]. Depending on either
+// concrete type makes the lookup fail for every real detector without a
+// compile error.
+func (m *motionResetter) action(row sqlitestore.AlarmSensorRow) (generic.ActionTrigger, error) {
 	if m == nil || m.reg == nil {
 		return nil, errors.New("alarm: motion reset not wired")
+	}
+	resetParam, ok := resetParameterFor(row.Parameter)
+	if !ok {
+		return nil, fmt.Errorf("alarm: %q on %q has no reset action",
+			row.Parameter, row.ChannelAddress)
 	}
 	u, ok := m.reg.Get(row.CentralName)
 	if !ok {
@@ -49,14 +82,14 @@ func (m *motionResetter) action(row sqlitestore.AlarmSensorRow) (*generic.Action
 	if ch == nil {
 		return nil, fmt.Errorf("alarm: unknown channel %q on %q", row.ChannelAddress, row.CentralName)
 	}
-	dp := ch.Parameter(hmenum.ParameterResetMotion)
+	dp := ch.Parameter(resetParam)
 	if dp == nil {
-		return nil, fmt.Errorf("alarm: channel %q has no %s", row.ChannelAddress, hmenum.ParameterResetMotion)
+		return nil, fmt.Errorf("alarm: channel %q has no %s", row.ChannelAddress, resetParam)
 	}
-	act, ok := dp.(*generic.Action)
+	act, ok := dp.(generic.ActionTrigger)
 	if !ok {
-		return nil, fmt.Errorf("alarm: %s on %q is not an action data point",
-			hmenum.ParameterResetMotion, row.ChannelAddress)
+		return nil, fmt.Errorf("alarm: %s on %q is not a triggerable data point (%T)",
+			resetParam, row.ChannelAddress, dp)
 	}
 	return act, nil
 }
@@ -78,5 +111,5 @@ func (m *motionResetter) Reset(ctx context.Context, row sqlitestore.AlarmSensorR
 	if err != nil {
 		return err
 	}
-	return act.Trigger(ctx, true, hmenum.CommandPriorityHigh)
+	return act.FireAction(ctx, hmenum.CommandPriorityHigh)
 }

@@ -215,14 +215,26 @@
           ? t("security.overview.engine_healthy")
           : t("security.overview.engine_unhealthy")}
       </Badge>
-      <a href="#/security/faults" class="ml-auto">
-        <Badge variant={faults.length > 0 ? "danger" : "muted"} class="gap-1">
-          <Icon name="mdi:alert-triangle" size={14} aria-label="" />
-          {faults.length > 0
-            ? t("security.overview.faults_count", { count: faults.length })
-            : t("security.overview.faults_none")}
-        </Badge>
-      </a>
+      <div class="ml-auto flex items-center gap-2">
+        <a href="#/security/faults">
+          <Badge variant={faults.length > 0 ? "danger" : "muted"} class="gap-1">
+            <Icon name="mdi:alert-triangle" size={14} aria-label="" />
+            {faults.length > 0
+              ? t("security.overview.faults_count", { count: faults.length })
+              : t("security.overview.faults_none")}
+          </Badge>
+        </a>
+        <!-- Cross-link into the alarm panel. Mirrors the link the alarm
+             overview carries in the same toolbar slot, with the same
+             variant and the nav's alarm icon, so the pair reads as one
+             navigation affordance rather than two unrelated buttons. -->
+        <a href="#/alarm">
+          <Button variant="outline" size="sm">
+            <Icon name="mdi:shield-home" size={16} aria-label="" />
+            {t("security.overview.zones_open_alarm")}
+          </Button>
+        </a>
+      </div>
     </div>
 
     <!-- Hazard & fault classes. -->
@@ -301,7 +313,10 @@
         >
           {#snippet action()}
             <a href="#/alarm">
-              <Button variant="outline" size="sm">{t("security.overview.zones_open_alarm")}</Button>
+              <Button variant="outline" size="sm">
+                <Icon name="mdi:shield-home" size={16} aria-label="" />
+                {t("security.overview.zones_open_alarm")}
+              </Button>
             </a>
           {/snippet}
         </EmptyState>
@@ -323,9 +338,6 @@
             </Card>
           {/each}
         </div>
-        <a href="#/alarm" class="mt-2 inline-block">
-          <Button variant="ghost" size="sm">{t("security.overview.zones_open_alarm")}</Button>
-        </a>
       {/if}
     </div>
   </div>
