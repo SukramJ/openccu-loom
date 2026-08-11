@@ -189,8 +189,11 @@ type Deps struct {
 	Incidents IncidentStore
 	Runtime   RuntimeStore
 	Outputs   OutputPort
-	Sink      EventSink
-	Journal   Journal
+	// MotionReset clears latched motion detectors; nil disables both
+	// the manual verb and the pre-arm pass.
+	MotionReset MotionResetPort
+	Sink        EventSink
+	Journal     Journal
 	// SourceLedger records the per-incident source ledger; nil disables it.
 	SourceLedger IncidentSourceLedger
 	SensorReader SensorReader
@@ -216,6 +219,7 @@ type Engine struct {
 	incidents    IncidentStore
 	runtime      RuntimeStore
 	outputs      OutputPort
+	motionReset  MotionResetPort
 	sink         EventSink
 	journal      Journal
 	ledger       IncidentSourceLedger
@@ -280,6 +284,7 @@ func New(deps Deps) (*Engine, error) {
 		incidents:    deps.Incidents,
 		runtime:      deps.Runtime,
 		outputs:      outputs,
+		motionReset:  deps.MotionReset,
 		sink:         sink,
 		journal:      journal,
 		ledger:       deps.SourceLedger,
@@ -404,6 +409,18 @@ func (e *Engine) Arm(ctx context.Context, zoneID string, req ArmRequest) (ArmRes
 func (e *Engine) beginArm(ctx context.Context, a *zone, req ArmRequest, mcfg ModeConfig) (ArmResult, error) {
 	// A fresh arm supersedes any pending auto-rearm.
 	a.cancelAutoRearm()
+
+	// Clear latched motion detectors as early as possible, so the write
+	// is on the radio before the exit delay starts ticking.
+	//
+	// This deliberately does NOT feed into the arm decision below. The
+	// reset is asynchronous — its effect arrives later as MOTION=false
+	// events — and letting it pre-empt the blocker check would mean
+	// treating a detector that is latched *because someone is moving in
+	// the room* as clear. The existing blocker and auto-bypass rules
+	// stay in charge; the reset only shortens how long a stale latch
+	// keeps a zone un-armable.
+	e.resetTriggeredMotionForArm(ctx, a, req.By, req.Source)
 
 	// Resolve blockers against the requested + automatic bypasses.
 	bypass := map[string]bool{}

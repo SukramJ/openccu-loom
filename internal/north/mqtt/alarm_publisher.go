@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strconv"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
@@ -447,6 +448,7 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		if err := b.PublishAlarmState(ctx, alarmStateTopic(base, s.ID), token); err != nil {
 			p.logger.Warn("mqtt.alarm.state", slog.String("zone", s.ID), slog.String("err", err.Error()))
 		}
+		p.publishMotionEntities(ctx, b, base, s.ID, s.Name, false)
 		p.knownZones[s.ID] = true
 	}
 
@@ -473,6 +475,7 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		if err := b.PublishAlarmState(ctx, alarmStateTopic(base, alarmMasterZone), alarmpanel.MasterStateToken(tokens)); err != nil {
 			p.logger.Warn("mqtt.alarm.state", slog.String("zone", alarmMasterZone), slog.String("err", err.Error()))
 		}
+		p.publishMotionEntities(ctx, b, base, alarmMasterZone, p.masterName(), true)
 		p.masterKnown = true
 	} else if p.masterKnown {
 		p.retractPanel(ctx, b, base, alarmMasterZone)
@@ -487,6 +490,13 @@ func (p *AlarmMQTTPublisher) retractPanel(ctx context.Context, b *Bridge, base, 
 	if err := b.RetractAlarmDiscovery(ctx, string(HAComponentAlarmControlPanel), alarmDiscoveryNodeID, zone); err != nil {
 		p.logger.Warn("mqtt.alarm.retract_discovery", slog.String("zone", zone), slog.String("err", err.Error()))
 	}
+	if err := b.RetractAlarmDiscovery(ctx, string(HAComponentButton), alarmDiscoveryNodeID, zone+"_reset_motion"); err != nil {
+		p.logger.Warn("mqtt.alarm.retract_discovery", slog.String("zone", zone), slog.String("err", err.Error()))
+	}
+	if err := b.RetractAlarmDiscovery(ctx, string(HAComponentSensor), alarmDiscoveryNodeID, zone+"_triggered_motion"); err != nil {
+		p.logger.Warn("mqtt.alarm.retract_discovery", slog.String("zone", zone), slog.String("err", err.Error()))
+	}
+	_ = b.RetractAlarmTopic(ctx, alarmTriggeredMotionTopic(base, zone))
 	_ = b.RetractAlarmTopic(ctx, alarmStateTopic(base, zone))
 	_ = b.RetractAlarmTopic(ctx, alarmAvailabilityTopic(base, zone))
 }
@@ -648,4 +658,38 @@ func (b *Bridge) RetractAlarmTopic(ctx context.Context, topic string) error {
 // PublishAlarmEvent publishes a non-retained JSON alarm event.
 func (b *Bridge) PublishAlarmEvent(ctx context.Context, topic string, body []byte) error {
 	return b.client.Publish(ctx, topic, body, QoS0, false)
+}
+
+// publishMotionEntities publishes the reset button, the latched-detector
+// count sensor, and the count itself for one zone (or the master
+// aggregate).
+//
+// The count and the discovery go out together on purpose: a declared
+// state topic that nobody writes leaves the entity `unavailable`
+// forever in Home Assistant, which is the exact failure the plane's
+// round-trip guard exists to catch.
+func (p *AlarmMQTTPublisher) publishMotionEntities(ctx context.Context, b *Bridge, base, zone, name string, master bool) {
+	eng := p.svc.Engine()
+	if eng == nil {
+		return
+	}
+	if err := b.PublishAlarmDiscovery(ctx, BuildAlarmMotionResetDiscovery(base, zone, name, master)); err != nil {
+		p.logger.Warn("mqtt.alarm.discovery.reset_motion",
+			slog.String("zone", zone), slog.String("err", err.Error()))
+	}
+	if err := b.PublishAlarmDiscovery(ctx, BuildAlarmTriggeredMotionDiscovery(base, zone, name, master)); err != nil {
+		p.logger.Warn("mqtt.alarm.discovery.triggered_motion",
+			slog.String("zone", zone), slog.String("err", err.Error()))
+	}
+	// The master aggregate counts every zone, which is what the empty
+	// scope means to the engine.
+	scope := zone
+	if master {
+		scope = ""
+	}
+	count := strconv.Itoa(len(eng.TriggeredMotionSensors(scope)))
+	if err := b.PublishAlarmState(ctx, alarmTriggeredMotionTopic(base, zone), count); err != nil {
+		p.logger.Warn("mqtt.alarm.triggered_motion",
+			slog.String("zone", zone), slog.String("err", err.Error()))
+	}
 }

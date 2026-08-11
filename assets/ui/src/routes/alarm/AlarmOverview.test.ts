@@ -22,6 +22,8 @@ const mockDisarm = vi.fn();
 const mockSilence = vi.fn();
 const mockSilenceAll = vi.fn();
 const mockAcknowledge = vi.fn();
+const mockResetMotion = vi.fn();
+let mockTriggeredMotion: { sensor_id: string; zone_id: string; name?: string }[] = [];
 
 vi.mock("$lib/stores/alarmPanel.svelte", () => ({
   alarmPanelStore: {
@@ -54,6 +56,14 @@ vi.mock("$lib/stores/alarmPanel.svelte", () => ({
     silence: (...args: unknown[]) => mockSilence(...args),
     silenceAll: (...args: unknown[]) => mockSilenceAll(...args),
     acknowledge: (...args: unknown[]) => mockAcknowledge(...args),
+    resetMotion: (...args: unknown[]) => mockResetMotion(...args),
+    get triggeredMotion() {
+      return mockTriggeredMotion;
+    },
+    triggeredMotionFor: (id?: string) =>
+      id
+        ? mockTriggeredMotion.filter((s) => s.zone_id === id)
+        : mockTriggeredMotion,
   },
 }));
 
@@ -88,6 +98,8 @@ beforeEach(() => {
   mockReadiness = {};
   mockCountdowns = {};
   mockJournal = [];
+  mockTriggeredMotion = [];
+  mockResetMotion.mockResolvedValue(true);
   mockArm.mockResolvedValue({ state: "armed" });
   mockDisarm.mockResolvedValue(true);
   mockSilence.mockResolvedValue(true);
@@ -247,5 +259,48 @@ describe("AlarmOverview — PIN-pad flow", () => {
     expect(mockDisarm).not.toHaveBeenCalled();
     // No PIN pad ever mounts for silence, regardless of the zone's policy.
     expect(queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("AlarmOverview — motion reset", () => {
+  it("offers no reset control while nothing is latched", () => {
+    // A button that would write to no device teaches the operator to
+    // distrust it; the control only exists when it can do something.
+    mockZones = [zone()];
+    const { queryByTestId } = render(AlarmOverview);
+    expect(queryByTestId("reset-motion-all")).toBeNull();
+    expect(queryByTestId("reset-motion-zone-1")).toBeNull();
+  });
+
+  it("offers a per-zone reset when that zone has a latched detector", async () => {
+    mockZones = [zone()];
+    mockTriggeredMotion = [
+      { sensor_id: "s1", zone_id: "zone-1", name: "Hallway" },
+    ];
+    const { getByTestId } = render(AlarmOverview);
+
+    await fireEvent.click(getByTestId("reset-motion-zone-1"));
+    expect(mockResetMotion).toHaveBeenCalledWith("zone-1");
+  });
+
+  it("scopes the per-zone control to its own zone", () => {
+    // The latched detector belongs to another zone, so this zone's
+    // control must stay absent rather than clearing someone else's.
+    mockZones = [zone()];
+    mockTriggeredMotion = [{ sensor_id: "s1", zone_id: "other", name: "Attic" }];
+    const { queryByTestId } = render(AlarmOverview);
+    expect(queryByTestId("reset-motion-zone-1")).toBeNull();
+  });
+
+  it("resets every zone from the toolbar", async () => {
+    mockZones = [zone()];
+    mockTriggeredMotion = [
+      { sensor_id: "s1", zone_id: "zone-1" },
+      { sensor_id: "s2", zone_id: "other" },
+    ];
+    const { getByTestId } = render(AlarmOverview);
+
+    await fireEvent.click(getByTestId("reset-motion-all"));
+    expect(mockResetMotion).toHaveBeenCalledWith();
   });
 });

@@ -219,6 +219,10 @@ const (
 	ActionAlarmCodeChange   Action = "alarm_code_change"
 	ActionAlarmWalkTest     Action = "alarm_walk_test"
 	ActionAlarmOutputTest   Action = "alarm_output_test"
+	// ActionAlarmMotionReset records a RESET_MOTION write on enrolled
+	// detectors — an actuation of somebody's hardware, so it is audited
+	// like the other alarm verbs.
+	ActionAlarmMotionReset Action = "alarm_motion_reset"
 
 	// ActionAddonUpdateInstall records an operator-triggered install of
 	// the CCU add-on's self-update (ADR 0057). The daemon restarts as

@@ -173,6 +173,13 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	if d.Health != nil {
 		registerGetHealth(s, d)
 	}
+	if d.Alarm != nil {
+		registerListAlarmZones(s, d)
+		registerListTriggeredMotion(s, d)
+	}
+	if d.Security != nil {
+		registerGetSecurityStatus(s, d)
+	}
 	// Device-topology read tools project the device model directly.
 	if d.Devices != nil {
 		registerListRooms(s, d)
@@ -400,6 +407,11 @@ func registerWriteTools(s *mcpsdk.Server, d Deps) {
 	}
 	if d.Hubs != nil {
 		registerTriggerProgram(s, d)
+	}
+	if d.AlarmControl != nil {
+		registerArmAlarmZone(s, d)
+		registerDisarmAlarmZone(s, d)
+		registerResetMotion(s, d)
 	}
 }
 

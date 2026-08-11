@@ -119,6 +119,11 @@ type AlarmSink interface {
 	// zone panels carry the code prompt).
 	MasterArm(ctx context.Context, mode hmenum.AlarmMode) error
 	MasterDisarm(ctx context.Context) error
+	// ResetMotion clears the latched motion detectors of one zone; the
+	// master form covers every zone. Unlike silence and trigger it has
+	// a meaningful fleet-wide shape, so both are wired.
+	ResetMotion(ctx context.Context, zoneID string) error
+	MasterResetMotion(ctx context.Context) error
 }
 
 // AddonUpdateSink is the optional domain-facing contract for the
@@ -928,6 +933,11 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 // loud panic path (notes/concepts/alarm-concept.md §7). It has no master form.
 const alarmCommandTrigger = "TRIGGER"
 
+// alarmCommandResetMotion clears the zone's latched motion detectors.
+// It is an openccu-loom extension to the HA command vocabulary, carried
+// on the same command topic so the plane keeps one subscription.
+const alarmCommandResetMotion = "RESET_MOTION"
+
 // dispatchAlarm resolves the HA command string onto the alarm verb and
 // enqueues it. The reserved "master" zone routes to the aggregate verbs;
 // SILENCE and TRIGGER have no master form and are dropped for it. The
@@ -961,6 +971,21 @@ func (c *CommandSubscriber) dispatchAlarm(topic, zone, action, code string) {
 			defer cancel()
 			if err := c.alarmSink.Silence(ctx, zone, code); err != nil {
 				c.logger.Warn("mqtt.command.alarm.silence",
+					slog.String("topic", topic), slog.String("err", err.Error()))
+			}
+		})
+	case alarmCommandResetMotion:
+		c.dispatcher.Enqueue(topic, func() {
+			ctx, cancel := context.WithCancel(c.lifecycleCtx)
+			defer cancel()
+			var err error
+			if master {
+				err = c.alarmSink.MasterResetMotion(ctx)
+			} else {
+				err = c.alarmSink.ResetMotion(ctx, zone)
+			}
+			if err != nil {
+				c.logger.Warn("mqtt.command.alarm.reset_motion",
 					slog.String("topic", topic), slog.String("err", err.Error()))
 			}
 		})

@@ -1122,6 +1122,34 @@ python3 script/generate_profiles.py
    alongside the handler in `internal/north/rest/handlers/`.
 5. Unit tests + integration test.
 6. Regenerate OpenAPI client if we publish one.
+7. Walk the two surfaces below — a new capability that only exists on
+   REST is half-delivered.
+
+### A new capability has more surfaces than the one you are editing
+
+A feature is not done when its own bridge works. Two surfaces are
+consistently forgotten because nothing fails when they are skipped —
+the build stays green, the tests stay green, and the gap only shows up
+as "the assistant cannot do X" or "the view is not in the menu" weeks
+later.
+
+**MCP (`internal/north/mcp/`).** The MCP server is how an AI assistant
+drives the daemon. When you add, rename, or change the semantics of a
+verb, a resource, or a payload field, ask whether the MCP surface has
+to follow — and either extend it in the same change or record why not.
+A capability that exists on REST/WS/MQTT but not on MCP is invisible to
+every assistant-driven workflow.
+
+**Navigation & views (`internal/north/ui/surface/`, Settings → Navigation
+& views).** Every view the SPA can show is registered as a surface and
+is switchable per operating mode. A new view that is not registered
+cannot be hidden, cannot be shown in the right profiles, and does not
+appear in the operator's own navigation editor. A view that moved or
+was folded needs its registry entry updated too.
+
+Both are reviewed, not guard-enforced: no test fails when an MCP tool
+or a surface entry is missing, which is exactly why they belong on the
+checklist.
 
 ### Add a translation key
 

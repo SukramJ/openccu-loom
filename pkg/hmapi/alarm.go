@@ -436,3 +436,27 @@ type AlarmSensorCandidate struct {
 	Enrolled bool   `json:"enrolled,omitempty"`
 	ZoneID   string `json:"zone_id,omitempty"`
 }
+
+// AlarmTriggeredMotionSensor is one latched motion detector that the
+// reset verb can clear.
+type AlarmTriggeredMotionSensor struct {
+	SensorID string `json:"sensor_id"`
+	ZoneID   string `json:"zone_id"`
+	Name     string `json:"name,omitempty"`
+	// ChannelAddress and Parameter identify the sensor's own data
+	// point, not the RESET_MOTION one the reset writes.
+	ChannelAddress string `json:"channel_address"`
+	Parameter      string `json:"parameter"`
+}
+
+// AlarmMotionResetResult reports one reset pass. Reset + Failed is the
+// number of detectors attempted; Sensors names them.
+//
+// A per-device failure is reported here rather than as an HTTP error:
+// the verb ran, and an operator needs to see that three of four
+// detectors cleared.
+type AlarmMotionResetResult struct {
+	Reset   int                          `json:"reset"`
+	Failed  int                          `json:"failed"`
+	Sensors []AlarmTriggeredMotionSensor `json:"sensors"`
+}

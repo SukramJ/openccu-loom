@@ -147,3 +147,98 @@ func BuildAlarmPanelDiscovery(base, zoneID, zoneName string, modes []hmenum.Alar
 		OK:        true,
 	}
 }
+
+// alarmTriggeredMotionTopic carries the number of latched motion
+// detectors of a zone. It is a state topic like the panel's, so the
+// round-trip guard covers it the same way.
+func alarmTriggeredMotionTopic(base, zone string) string {
+	return base + "/alarm/" + zone + "/triggered-motion"
+}
+
+// BuildAlarmMotionResetDiscovery builds the "clear latched motion
+// detectors" button for one zone (or the master aggregate).
+//
+// It rides the panel's existing command topic with a `RESET_MOTION`
+// press payload rather than opening a second command plane: the
+// subscriber already wildcards `<base>/alarm/+/set`, so one plane keeps
+// one subscription and the round-trip guard keeps checking one shape.
+//
+// The button is an entity in its own right rather than a panel feature
+// because HA's alarm_control_panel has no vocabulary for it — without a
+// separate entity there is nothing for an automation to press.
+func BuildAlarmMotionResetDiscovery(base, zoneID, zoneName string, master bool) DiscoveryItem {
+	zone := zoneID
+	if master {
+		zone = alarmMasterZone
+	}
+	if zone == "" {
+		return DiscoveryItem{}
+	}
+	uniqueID := "openccu-loom_alarm_" + zone + "_reset_motion"
+	body := map[string]any{
+		"name":              zoneName + " — reset motion",
+		"unique_id":         uniqueID,
+		"object_id":         uniqueID,
+		"command_topic":     alarmCommandTopic(base, zone),
+		"payload_press":     alarmCommandResetMotion,
+		"icon":              "mdi:motion-sensor-off",
+		"entity_category":   "config",
+		"availability":      alarmAvailability(base, zone),
+		"availability_mode": "all",
+		"device":            alarmDeviceBlock(),
+		"origin":            BuildOriginInfo(),
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{
+		Component: string(HAComponentButton),
+		NodeID:    alarmDiscoveryNodeID,
+		ObjectID:  zone + "_reset_motion",
+		Payload:   buf,
+		OK:        true,
+	}
+}
+
+// BuildAlarmTriggeredMotionDiscovery builds the sensor that reports how
+// many detectors the reset button would clear.
+//
+// It exists so an automation can decide rather than guess: pressing the
+// button blindly writes to the radio for nothing, and a non-zero count
+// on a disarmed zone is usually the reason an arm refuses.
+func BuildAlarmTriggeredMotionDiscovery(base, zoneID, zoneName string, master bool) DiscoveryItem {
+	zone := zoneID
+	if master {
+		zone = alarmMasterZone
+	}
+	if zone == "" {
+		return DiscoveryItem{}
+	}
+	uniqueID := "openccu-loom_alarm_" + zone + "_triggered_motion"
+	body := map[string]any{
+		"name":                zoneName + " — triggered motion detectors",
+		"unique_id":           uniqueID,
+		"object_id":           uniqueID,
+		"state_topic":         alarmTriggeredMotionTopic(base, zone),
+		"state_class":         "measurement",
+		"icon":                "mdi:motion-sensor",
+		"entity_category":     "diagnostic",
+		"unit_of_measurement": "detectors",
+		"availability":        alarmAvailability(base, zone),
+		"availability_mode":   "all",
+		"device":              alarmDeviceBlock(),
+		"origin":              BuildOriginInfo(),
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{
+		Component: string(HAComponentSensor),
+		NodeID:    alarmDiscoveryNodeID,
+		ObjectID:  zone + "_triggered_motion",
+		Payload:   buf,
+		OK:        true,
+	}
+}

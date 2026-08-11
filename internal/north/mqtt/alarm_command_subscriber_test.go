@@ -15,13 +15,15 @@ import (
 // tests can assert exactly which verb the raw `<base>/alarm/<area>/set`
 // command plane dispatched, with which area/mode/code.
 type fakeAlarmSink struct {
-	mu             sync.Mutex
-	armCalls       []fakeAlarmArmCall
-	disarmCalls    []fakeAlarmCodeCall
-	silenceCalls   []fakeAlarmCodeCall
-	panicCalls     []string
-	masterArmCalls []hmenum.AlarmMode
-	masterDisarm   int
+	mu                sync.Mutex
+	armCalls          []fakeAlarmArmCall
+	disarmCalls       []fakeAlarmCodeCall
+	silenceCalls      []fakeAlarmCodeCall
+	panicCalls        []string
+	masterArmCalls    []hmenum.AlarmMode
+	masterDisarm      int
+	resetMotionCalls  []string
+	masterResetMotion int
 }
 
 type fakeAlarmArmCall struct {
@@ -70,6 +72,20 @@ func (f *fakeAlarmSink) MasterArm(_ context.Context, mode hmenum.AlarmMode) erro
 func (f *fakeAlarmSink) MasterDisarm(context.Context) error {
 	f.mu.Lock()
 	f.masterDisarm++
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeAlarmSink) ResetMotion(_ context.Context, zoneID string) error {
+	f.mu.Lock()
+	f.resetMotionCalls = append(f.resetMotionCalls, zoneID)
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeAlarmSink) MasterResetMotion(context.Context) error {
+	f.mu.Lock()
+	f.masterResetMotion++
 	f.mu.Unlock()
 	return nil
 }

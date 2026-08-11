@@ -234,6 +234,12 @@ const (
 	AlarmJournalClassTest AlarmJournalClass = "test"
 	// AlarmJournalClassConfig covers configuration changes.
 	AlarmJournalClassConfig AlarmJournalClass = "config"
+	// AlarmJournalClassMaintenance covers operator actions that service
+	// enrolled devices without changing the arm state — clearing the
+	// latched motion of a detector so it stops blocking an arm. They
+	// actuate real hardware, so they belong in the timeline, but
+	// bucketing them under arm or bypass would misreport what happened.
+	AlarmJournalClassMaintenance AlarmJournalClass = "maintenance"
 )
 
 // String returns the wire representation.
@@ -243,7 +249,8 @@ func (c AlarmJournalClass) String() string { return string(c) }
 func (c AlarmJournalClass) Valid() bool {
 	switch c {
 	case AlarmJournalClassArm, AlarmJournalClassDisarm, AlarmJournalClassTrigger, AlarmJournalClassSilence,
-		AlarmJournalClassBypass, AlarmJournalClassFault, AlarmJournalClassTest, AlarmJournalClassConfig:
+		AlarmJournalClassBypass, AlarmJournalClassFault, AlarmJournalClassTest, AlarmJournalClassConfig,
+		AlarmJournalClassMaintenance:
 		return true
 	default:
 		return false

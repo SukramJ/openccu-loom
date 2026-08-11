@@ -1,5 +1,28 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.58.0
+
+- **Triggered motion detectors can be reset — per zone or all at
+  once.** A motion detector holds its "motion" flag until its own
+  blocking time expires, and while it does the sensor reads as open and
+  can block arming. The alarm overview now offers a reset next to each
+  affected zone and one in the toolbar; both appear only while a
+  detector is actually latched, and both name how many they would
+  clear.
+
+- **Arming clears them automatically.** Activating a zone writes the
+  reset to its latched detectors before the exit delay starts. It does
+  not override the readiness check: a detector that reports because
+  somebody is moving in the room still blocks the arm, exactly as
+  before.
+
+- **Available on the other bridges too.** Home Assistant gets a reset
+  button and a "triggered motion detectors" counter per zone (and for
+  the whole system); REST gains `POST /alarm/zones/{id}/reset-motion`,
+  `POST /alarm/reset-motion` and `GET /alarm/triggered-motion`; MQTT
+  accepts `RESET_MOTION` on the alarm command topic. Every reset is
+  recorded in the alarm journal.
+
 ## 0.57.2
 
 - **The Config UI no longer loses its live connection when Loom

@@ -178,22 +178,7 @@ func NewService(deps Deps) (*Service, error) {
 		Logger:  logger,
 	})
 
-	eng, err := engine.New(engine.Deps{
-		Clock:               clk,
-		Zones:               deps.Stores.Zones,
-		Sensors:             deps.Stores.Sensors,
-		State:               deps.Stores.State,
-		Incidents:           deps.Stores.Incidents,
-		Runtime:             deps.Stores.Runtime,
-		Outputs:             mgr,
-		Sink:                sinkFunc(s.publish),
-		Journal:             s.journal,
-		SourceLedger:        deps.Stores.IncidentSources,
-		SensorReader:        &sensorReader{reg: deps.Registry},
-		Validator:           s.codes,
-		Logger:              logger,
-		RestartLoopBreakerK: deps.Settings.RestartLoopBreaker,
-	})
+	eng, err := engine.New(s.engineDeps(deps, clk, mgr, logger))
 	if err != nil {
 		return nil, err
 	}
@@ -743,5 +728,29 @@ func (s *Service) purgeIncidents(maxAge time.Duration) {
 		s.log.Error("alarm incident source retention failed", "error", err)
 	} else if n > 0 {
 		s.log.Info("alarm incident source retention", "deleted", n)
+	}
+}
+
+// engineDeps assembles the engine's dependency set. Extracted from
+// NewService so the constructor stays inside the length budget and the
+// wiring reads as one list rather than a block inside a longer
+// function.
+func (s *Service) engineDeps(deps Deps, clk clock.Clock, mgr *outputs.Manager, logger *slog.Logger) engine.Deps {
+	return engine.Deps{
+		Clock:               clk,
+		Zones:               deps.Stores.Zones,
+		Sensors:             deps.Stores.Sensors,
+		State:               deps.Stores.State,
+		Incidents:           deps.Stores.Incidents,
+		Runtime:             deps.Stores.Runtime,
+		Outputs:             mgr,
+		Sink:                sinkFunc(s.publish),
+		Journal:             s.journal,
+		SourceLedger:        deps.Stores.IncidentSources,
+		SensorReader:        &sensorReader{reg: deps.Registry},
+		MotionReset:         newMotionResetter(deps.Registry),
+		Validator:           s.codes,
+		Logger:              logger,
+		RestartLoopBreakerK: deps.Settings.RestartLoopBreaker,
 	}
 }

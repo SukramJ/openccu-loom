@@ -5269,6 +5269,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alarm/reset-motion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear every latched motion detector across all zones (operator)
+         * @description Writes RESET_MOTION on the enrolled detectors that are currently latched and whose channel exposes the parameter. Detectors that are not triggered are left alone, so a routine call adds no radio traffic. A device that fails to answer is counted in `failed` and does not fail the request — the verb ran.
+         */
+        post: operations["resetAllAlarmMotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/triggered-motion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the latched motion detectors that a reset would clear
+         * @description The list is derived from the same predicate the reset verb uses, so it never names a detector the reset would skip.
+         */
+        get: operations["listAlarmTriggeredMotion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/zones/{id}/reset-motion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear the latched motion detectors of one zone (operator) */
+        post: operations["resetAlarmZoneMotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alarm/zones/{id}/readiness": {
         parameters: {
             query?: never;
@@ -9702,6 +9761,22 @@ export interface components {
             retrigger_cycles: number;
             acoustic_seconds: number;
             open: boolean;
+        };
+        AlarmTriggeredMotionSensor: {
+            sensor_id: string;
+            zone_id: string;
+            name?: string;
+            /** @description The sensor's own channel — the reset writes RESET_MOTION there. */
+            channel_address: string;
+            /** @description The sensor's own parameter (e.g. MOTION), not RESET_MOTION. */
+            parameter: string;
+        };
+        AlarmMotionResetResult: {
+            /** @description detectors whose write succeeded */
+            reset: number;
+            /** @description Detectors whose write failed. Reported here rather than as an HTTP error: the verb ran, and a partial result is actionable. */
+            failed: number;
+            sensors: components["schemas"]["AlarmTriggeredMotionSensor"][];
         };
         /** @description One entry in the alarm engine's append-only event journal, as returned by GET /alarm/journal. */
         AlarmJournalEntry: {
@@ -16180,6 +16255,71 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    resetAllAlarmMotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reset pass completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmMotionResetResult"];
+                };
+            };
+        };
+    };
+    listAlarmTriggeredMotion: {
+        parameters: {
+            query?: {
+                /** @description Restrict to one zone; omit for every zone. */
+                zone_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmTriggeredMotionSensor"][];
+                };
+            };
+        };
+    };
+    resetAlarmZoneMotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reset pass completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmMotionResetResult"];
+                };
             };
         };
     };

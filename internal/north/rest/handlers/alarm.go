@@ -249,6 +249,76 @@ func SilenceAllAlarmZones(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	}
 }
 
+// ResetAlarmZoneMotion clears the latched motion detectors of one
+// zone. Wires POST /api/v1/alarm/zones/{id}/reset-motion.
+func ResetAlarmZoneMotion(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		writeMotionResetResult(w, r, p, id, rec)
+	}
+}
+
+// ResetAllAlarmMotion clears the latched motion detectors of every
+// zone. Wires POST /api/v1/alarm/reset-motion.
+func ResetAllAlarmMotion(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeMotionResetResult(w, r, p, "", rec)
+	}
+}
+
+// writeMotionResetResult runs the reset for one scope and reports what
+// it did.
+//
+// The response carries counts rather than 204: a reset that reached no
+// detector and a reset that failed on all of them look identical from
+// a status code, and both are things an operator needs to see. A
+// per-device failure is not an HTTP error — the verb did run.
+func writeMotionResetResult(w http.ResponseWriter, r *http.Request, p AlarmPanel, zoneID string, rec audit.Recorder) {
+	res := p.Engine().ResetTriggeredMotion(
+		r.Context(), zoneID, identityFromCtx(r.Context()), alarmSourceREST,
+	)
+	scope := zoneID
+	if scope == "" {
+		scope = "all"
+	}
+	recordAlarm(rec, r, audit.ActionAlarmMotionReset, "zone="+scope)
+	JSON(w, http.StatusOK, apiMotionResetResult(res))
+}
+
+// ListAlarmTriggeredMotion reports the latched, resettable detectors of
+// one zone, or of every zone when no zone is given. Wires
+// GET /api/v1/alarm/triggered-motion.
+func ListAlarmTriggeredMotion(p AlarmPanel) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		zoneID := r.URL.Query().Get("zone_id")
+		JSON(w, http.StatusOK, apiTriggeredMotion(p.Engine().TriggeredMotionSensors(zoneID)))
+	}
+}
+
+// apiMotionResetResult converts the engine result to its wire shape.
+func apiMotionResetResult(res engine.MotionResetResult) hmapi.AlarmMotionResetResult {
+	return hmapi.AlarmMotionResetResult{
+		Reset:   res.Reset,
+		Failed:  res.Failed,
+		Sensors: apiTriggeredMotion(res.Sensors),
+	}
+}
+
+// apiTriggeredMotion converts the engine's sensor list to its wire shape.
+func apiTriggeredMotion(in []engine.TriggeredMotionSensor) []hmapi.AlarmTriggeredMotionSensor {
+	out := make([]hmapi.AlarmTriggeredMotionSensor, 0, len(in))
+	for _, s := range in {
+		out = append(out, hmapi.AlarmTriggeredMotionSensor{
+			SensorID:       s.SensorID,
+			ZoneID:         s.ZoneID,
+			Name:           s.Name,
+			ChannelAddress: s.ChannelAddress,
+			Parameter:      s.Parameter,
+		})
+	}
+	return out
+}
+
 // ListAlarmJournal queries the append-only alarm event journal.
 func ListAlarmJournal(p AlarmPanel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

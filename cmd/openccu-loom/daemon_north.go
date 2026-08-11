@@ -378,6 +378,23 @@ func (s *alarmMQTTSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) er
 	return errors.Join(errs...)
 }
 
+// ResetMotion clears the latched motion detectors of one zone.
+func (s *alarmMQTTSink) ResetMotion(ctx context.Context, zoneID string) error {
+	s.svc.Engine().ResetTriggeredMotion(ctx, zoneID, "", alarmSourceMQTT)
+	return nil
+}
+
+// MasterResetMotion clears the latched motion detectors of every zone.
+//
+// Neither form returns an error: a per-device failure is counted in the
+// engine result and journalled, and there is nothing an MQTT publisher
+// could do with it that the journal and the triggered-count topic do
+// not already say.
+func (s *alarmMQTTSink) MasterResetMotion(ctx context.Context) error {
+	s.svc.Engine().ResetTriggeredMotion(ctx, "", "", alarmSourceMQTT)
+	return nil
+}
+
 // MasterDisarm disarms every zone best-effort.
 func (s *alarmMQTTSink) MasterDisarm(ctx context.Context) error {
 	eng := s.svc.Engine()

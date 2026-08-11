@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.16.0
+  version: 5.17.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6836,6 +6836,72 @@ paths:
       responses:
         "204": { description: Silenced }
 
+  /alarm/reset-motion:
+    post:
+      operationId: resetAllAlarmMotion
+      summary: Clear every latched motion detector across all zones (operator)
+      description: >-
+        Writes RESET_MOTION on the enrolled detectors that are currently
+        latched and whose channel exposes the parameter. Detectors that are
+        not triggered are left alone, so a routine call adds no radio
+        traffic. A device that fails to answer is counted in `failed` and
+        does not fail the request — the verb ran.
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200":
+          description: Reset pass completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmMotionResetResult" }
+
+  /alarm/triggered-motion:
+    get:
+      operationId: listAlarmTriggeredMotion
+      summary: List the latched motion detectors that a reset would clear
+      description: >-
+        The list is derived from the same predicate the reset verb uses, so
+        it never names a detector the reset would skip.
+      tags: [alarm]
+      parameters:
+        - name: zone_id
+          in: query
+          required: false
+          schema: { type: string }
+          description: Restrict to one zone; omit for every zone.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmTriggeredMotionSensor" }
+
+  /alarm/zones/{id}/reset-motion:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: resetAlarmZoneMotion
+      summary: Clear the latched motion detectors of one zone (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200":
+          description: Reset pass completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmMotionResetResult" }
+
   /alarm/zones/{id}/readiness:
     parameters:
       - name: id
@@ -12733,6 +12799,34 @@ components:
         retrigger_cycles: { type: integer }
         acoustic_seconds: { type: integer }
         open: { type: boolean }
+
+    AlarmTriggeredMotionSensor:
+      type: object
+      required: [sensor_id, zone_id, channel_address, parameter]
+      properties:
+        sensor_id: { type: string }
+        zone_id: { type: string }
+        name: { type: string }
+        channel_address:
+          type: string
+          description: The sensor's own channel — the reset writes RESET_MOTION there.
+        parameter:
+          type: string
+          description: The sensor's own parameter (e.g. MOTION), not RESET_MOTION.
+
+    AlarmMotionResetResult:
+      type: object
+      required: [reset, failed, sensors]
+      properties:
+        reset: { type: integer, description: detectors whose write succeeded }
+        failed:
+          type: integer
+          description: >-
+            Detectors whose write failed. Reported here rather than as an
+            HTTP error: the verb ran, and a partial result is actionable.
+        sensors:
+          type: array
+          items: { $ref: "#/components/schemas/AlarmTriggeredMotionSensor" }
 
     AlarmJournalEntry:
       type: object
