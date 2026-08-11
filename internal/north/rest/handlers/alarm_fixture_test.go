@@ -84,6 +84,7 @@ func (f *alarmPanelFixture) Reload(ctx context.Context) error {
 // through the seed* helpers (direct store writes + reload) or by
 // driving the CRUD handlers under test.
 func newAlarmPanelFixture(t *testing.T) *alarmPanelFixture {
+	t.Helper()
 	return newAlarmPanelFixtureWithMotionReset(t, nil)
 }
 
