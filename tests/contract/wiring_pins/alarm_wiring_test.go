@@ -21,6 +21,25 @@ func TestPin_AlarmService_ConstructedInDaemon(t *testing.T) {
 		"", "wireAlarmService")
 }
 
+// TestPin_AlarmMotionReset_Wired pins that the alarm service passes a
+// motion-reset port into the engine.
+//
+// The engine treats a nil port as "feature off" — every reset becomes
+// a no-op and TriggeredMotionSensors reports nothing — and the engine's
+// own tests inject their own fake, so dropping the production line
+// leaves the whole package green while the button in the UI silently
+// stops clearing anything.
+//
+// This is a source-level pin, so it proves the constructor is called,
+// not that a real detector gets written to. The behavioural half lives
+// in the engine tests (the reset set and the reported count derive
+// from one predicate) and in the REST handler tests.
+func TestPin_AlarmMotionReset_Wired(t *testing.T) {
+	contract.MustFindCallerInFile(t,
+		"internal/alarm/service.go",
+		"", "newMotionResetter")
+}
+
 // TestPin_AlarmCentralHook_Installed pins that runtime-adopted
 // centrals are subscribed onto the alarm service — otherwise sensors
 // on a live-adopted CCU silently never reach the engine.

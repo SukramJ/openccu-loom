@@ -291,6 +291,18 @@
     if (ok) toastStore.success(t("alarm.toast.silenced"));
   }
 
+  // Reset is offered only while something is actually latched: a button
+  // that writes to nothing teaches the operator to distrust it.
+  const triggeredMotionCount = $derived(store.triggeredMotion.length);
+
+  async function resetMotionAll() {
+    await store.resetMotion();
+  }
+
+  async function resetMotionZone(zone: AlarmZoneStatus) {
+    await store.resetMotion(zone.id);
+  }
+
   async function acknowledge(zone: AlarmZoneStatus) {
     const ok = await store.acknowledge(zone.id);
     if (ok) toastStore.success(t("alarm.toast.acknowledged"));
@@ -333,6 +345,20 @@
         <Button variant="destructive" size="sm" onclick={silenceAll}>
           <Icon name="mdi:bell-off" size={16} aria-label="" />
           {t("alarm.overview.silence_all")}
+        </Button>
+      {/if}
+      {#if triggeredMotionCount > 0}
+        <Button
+          variant="outline"
+          size="sm"
+          onclick={resetMotionAll}
+          data-testid="reset-motion-all"
+          title={t("alarm.overview.reset_motion_all.hint")}
+        >
+          <Icon name="mdi:refresh" size={16} aria-label="" />
+          {t("alarm.overview.reset_motion_all", {
+            count: String(triggeredMotionCount),
+          })}
         </Button>
       {/if}
       <!-- Cross-link into the Security & Safety domain (docs/security-safety-
@@ -461,6 +487,22 @@
                   {t(`alarm.mode.${mode}`)}
                 </Button>
               {/each}
+
+              {#if store.triggeredMotionFor(zone.id).length > 0}
+                {@const latched = store.triggeredMotionFor(zone.id)}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onclick={() => void resetMotionZone(zone)}
+                  data-testid="reset-motion-{zone.id}"
+                  title={latched.map((s) => s.name || s.sensor_id).join(", ")}
+                >
+                  <Icon name="mdi:refresh" size={16} aria-label="" />
+                  {t("alarm.action.reset_motion", {
+                    count: String(latched.length),
+                  })}
+                </Button>
+              {/if}
             </div>
 
             {#if cd}

@@ -42,10 +42,21 @@ func TestAlarmPlaneTopicsRoundTrip(t *testing.T) {
 			[]hmenum.AlarmMode{hmenum.AlarmModeFull}, false, false, false)
 		collectAlarmDeclaredTopics(t, item, declared)
 	}
+	// The reset button and the latched-detector count are entities of
+	// the same plane and are declared from the same walk. The button
+	// rides the panel's command topic; the sensor introduces a state
+	// topic of its own, which is exactly the shape that can be declared
+	// and then never written.
+	for _, zone := range zones {
+		collectAlarmDeclaredTopics(t, BuildAlarmMotionResetDiscovery(base, zone, "Zone "+zone, false), declared)
+		collectAlarmDeclaredTopics(t, BuildAlarmTriggeredMotionDiscovery(base, zone, "Zone "+zone, false), declared)
+	}
 	// The aggregate master panel — same builder, master=true.
 	masterItem := BuildAlarmPanelDiscovery(base, "ignored", "Alarm system",
 		[]hmenum.AlarmMode{hmenum.AlarmModeFull}, true, false, false)
 	collectAlarmDeclaredTopics(t, masterItem, declared)
+	collectAlarmDeclaredTopics(t, BuildAlarmMotionResetDiscovery(base, "ignored", "Alarm system", true), declared)
+	collectAlarmDeclaredTopics(t, BuildAlarmTriggeredMotionDiscovery(base, "ignored", "Alarm system", true), declared)
 
 	if len(declared) == 0 {
 		t.Fatal("no topics declared; the walk found no discovery payloads and would pass vacuously")
@@ -89,7 +100,7 @@ var alarmUndeclaredByDesign = map[string]bool{
 func collectAlarmDeclaredTopics(t *testing.T, item DiscoveryItem, out map[string]bool) {
 	t.Helper()
 	if !item.OK {
-		t.Fatalf("BuildAlarmPanelDiscovery returned OK=false for a valid panel")
+		t.Fatalf("a discovery builder returned OK=false for a valid entity")
 	}
 	var body map[string]any
 	if err := json.Unmarshal(item.Payload, &body); err != nil {
@@ -119,11 +130,17 @@ func alarmPublishedTopics(base string, zones []string) map[string]bool {
 	out := map[string]bool{
 		base + "/alarm/" + alarmMasterZone + "/state": true,
 		base + "/alarm/" + alarmMasterZone + "/set":   true,
+		// Restated literally, not via alarmTriggeredMotionTopic: calling
+		// the same helper on both sides would move them in lockstep and
+		// the comparison could never fail. Mirrors what
+		// AlarmMQTTPublisher.publishMotionEntities writes.
+		base + "/alarm/" + alarmMasterZone + "/triggered-motion": true,
 	}
 	for _, zone := range zones {
 		out[alarmStateTopic(base, zone)] = true
 		// Mirrors CommandSubscriber.Start's `base+"/alarm/+/set"` wildcard.
 		out[base+"/alarm/"+zone+"/set"] = true
+		out[base+"/alarm/"+zone+"/triggered-motion"] = true
 	}
 	return out
 }

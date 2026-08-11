@@ -4,7 +4,71 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.58.0]
+
+### Added
+
+- **Triggered motion detectors can be reset — per zone or all at
+  once.** A motion detector holds its `MOTION` flag until the device's
+  own blocking time expires or the parameter is written. While it does,
+  the sensor reads as open, which blocks an arm or forces an
+  auto-bypass — and until now there was no way to clear it short of
+  waiting. The alarm overview offers a reset beside each affected zone
+  and one in the toolbar. Both appear only while a detector is actually
+  latched, and both say how many they would clear; a detector that is
+  not triggered is never written to.
+
+  The set that gets reset and the count that is displayed come from one
+  predicate — currently active *and* the channel exposes a writable
+  `RESET_MOTION` — so the number an operator sees can never name a
+  detector the button would skip. Door contacts fall out of it by
+  construction.
+
+- **Arming clears them automatically.** `beginArm` writes the reset to
+  the zone's latched detectors before the exit delay starts, so the
+  clearing has the whole delay to take effect. It deliberately does not
+  feed into the arm decision: the reset is asynchronous, and letting it
+  pre-empt the blocker check would treat a detector that is latched
+  *because somebody is moving in the room* as clear. The existing
+  blocker and auto-bypass rules stay in charge.
+
+- **Reachable from every north-bound bridge.** REST gains
+  `POST /alarm/zones/{id}/reset-motion`, `POST /alarm/reset-motion` and
+  `GET /alarm/triggered-motion` (API 5.17.0). MQTT accepts
+  `RESET_MOTION` on the alarm command topic and publishes a reset button
+  plus a `triggered motion detectors` counter per zone and for the
+  master aggregate. MCP gains `list_triggered_motion` and `reset_motion`.
+  Every reset is recorded in the alarm journal under the new
+  `maintenance` class.
+
+- **MCP catches up with the rest of the daemon.** The adapter had not
+  gained a tool since it landed, while eighteen REST domains were built
+  around it — the alarm system alone had grown to 35 routes while MCP
+  could read incidents and nothing else. New tools:
+  `list_alarm_zones`, `list_triggered_motion`, `get_security_status`,
+  and, behind `AllowWrites`, `arm_alarm_zone`, `disarm_alarm_zone`,
+  `reset_motion`. The arm and disarm tools take no code argument on
+  purpose: a code is a human authorization factor, so zones that
+  require one refuse an assistant-driven arm.
+
+  A contract test now compares the tool catalogue against the REST
+  router in the direction that actually drifted — a new capability with
+  no tool. Domains that are deliberately not projected (account
+  administration, daemon configuration, the first-run wizard) are
+  declared with the reason; domains that are merely still pending are
+  declared separately, so "decided against" and "not done yet" cannot
+  wear the same face. A domain in neither list fails the build.
+
+
+- **`GET /api/v1/visibility/unignore/candidates` returns grouped
+  candidates** — a new `groups` array carries one entry per (parameter,
+  paramset) with its models, channels, per-scope patterns and the
+  suppression reason, plus a `reasons` vocabulary for building filters.
+  The reason is recomputed from the same rule sets the suppression
+  passes consult, so the categories cannot drift from the rules; an
+  integration test over the whole embedded fleet fails on any candidate
+  that no rule explains. The flat `candidates` field and the
+  `include_master` query parameter are unchanged. API 5.16.0.
 
 ### Changed
 
@@ -39,18 +103,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Patterns that were saved earlier but match no current candidate are
   listed separately instead of vanishing, so a save cannot silently drop
   them.
-
-### Added
-
-- **`GET /api/v1/visibility/unignore/candidates` returns grouped
-  candidates** — a new `groups` array carries one entry per (parameter,
-  paramset) with its models, channels, per-scope patterns and the
-  suppression reason, plus a `reasons` vocabulary for building filters.
-  The reason is recomputed from the same rule sets the suppression
-  passes consult, so the categories cannot drift from the rules; an
-  integration test over the whole embedded fleet fails on any candidate
-  that no rule explains. The flat `candidates` field and the
-  `include_master` query parameter are unchanged. API 5.16.0.
 
 ## [0.57.2]
 

@@ -218,6 +218,33 @@ func (j *fakeJournal) events() []string {
 	return out
 }
 
+func (j *fakeJournal) all() []engine.JournalEntry {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return append([]engine.JournalEntry(nil), j.entries...)
+}
+
+// entriesOfClass returns every recorded entry of one journal class.
+func (j *fakeJournal) entriesOfClass(class hmenum.AlarmJournalClass) []engine.JournalEntry {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	out := make([]engine.JournalEntry, 0, len(j.entries))
+	for _, e := range j.entries {
+		if e.Class == class {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// reset drops everything recorded so far, so a test can assert on what
+// happens after a setup step rather than filtering it out.
+func (j *fakeJournal) reset() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.entries = nil
+}
+
 func (j *fakeJournal) has(event string) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -265,6 +292,9 @@ type harness struct {
 	sink    *fakeSink
 	journal *fakeJournal
 	reader  *fakeReader
+	// motionReset is optional: tests that exercise the RESET_MOTION
+	// pass set it before start(); nil leaves the feature inert.
+	motionReset engine.MotionResetPort
 
 	zones     *sqlitestore.AlarmZoneStore
 	sensors   *sqlitestore.AlarmSensorStore
@@ -373,6 +403,7 @@ func (h *harness) build() {
 		Sink:         h.sink,
 		Journal:      h.journal,
 		SensorReader: h.reader,
+		MotionReset:  h.motionReset,
 	})
 	if err != nil {
 		h.t.Fatalf("engine.New: %v", err)

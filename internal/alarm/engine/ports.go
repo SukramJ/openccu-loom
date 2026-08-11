@@ -120,6 +120,33 @@ type OutputPort interface {
 	Chirp(ctx context.Context, zoneID string, req ChirpRequest) error
 }
 
+// MotionResetPort clears the latched motion state of enrolled sensors
+// by writing their channel's RESET_MOTION parameter.
+//
+// A motion detector holds its MOTION flag until the device's own
+// blocking time expires or the parameter is written. While it is held
+// the sensor reads as open, which blocks an arm or forces an
+// auto-bypass — so the engine needs a way to clear it rather than only
+// report it.
+//
+// Contract:
+//   - Supports reports whether the sensor's channel exposes a writable
+//     RESET_MOTION data point. It is the single source of truth for
+//     "resettable": the engine derives both the reset set and the
+//     reported count from it, so the count can never name a sensor the
+//     reset would skip.
+//   - Reset writes the parameter for one sensor. It is best-effort:
+//     the caller records failures and carries on, because a
+//     non-responding detector must not be able to block arming.
+//
+// Reset runs WITHOUT the engine lock held (unlike [OutputPort]) — the
+// write goes to the radio and the engine must stay responsive to the
+// events it triggers.
+type MotionResetPort interface {
+	Supports(row sqlitestore.AlarmSensorRow) bool
+	Reset(ctx context.Context, row sqlitestore.AlarmSensorRow) error
+}
+
 // CodeValidator authenticates an alarm code for one verb on one zone
 // (notes/concepts/alarm-concept.md §11). It is satisfied by the codes facade,
 // which owns the code store; the engine only knows this port.

@@ -74,6 +74,9 @@ const EN: Catalog = {
   "alarm.overview.master": "All zones",
   "alarm.overview.ready": "Ready",
   "alarm.overview.silence_all": "Silence all sirens",
+  "alarm.overview.reset_motion_all": "Reset motion ({count})",
+  "alarm.overview.reset_motion_all.hint":
+    "Clears the motion detectors that are currently triggered. A triggered detector reads as open and can block arming.",
   "alarm.overview.open_security": "Security & Safety",
   "alarm.readiness.ready": "ready",
   "alarm.readiness.blocked": "{count} blocking",
@@ -105,6 +108,7 @@ const EN: Catalog = {
   "alarm.action.disarm_pin": "Disarm (PIN)",
   "alarm.action.silence": "Silence sirens",
   "alarm.action.acknowledge": "Acknowledge",
+  "alarm.action.reset_motion": "Reset motion ({count})",
   // Toasts.
   "alarm.toast.armed": "{zone} armed ({mode})",
   "alarm.toast.arming": "{zone} arming…",
@@ -112,6 +116,11 @@ const EN: Catalog = {
   "alarm.toast.disarmed": "{zone} disarmed",
   "alarm.toast.disarm_failed": "Disarm failed",
   "alarm.toast.silenced": "Sirens silenced",
+  "alarm.toast.motion_reset": "Motion detectors reset: {count}",
+  "alarm.toast.motion_reset_none": "No triggered motion detector to reset",
+  "alarm.toast.motion_reset_partial":
+    "Motion reset — succeeded: {reset}, failed: {failed}",
+  "alarm.toast.motion_reset_failed": "Motion reset failed",
   "alarm.toast.silence_failed": "Silence failed",
   "alarm.toast.acknowledged": "Acknowledged",
   "alarm.toast.ack_failed": "Acknowledge failed",
@@ -3828,6 +3837,9 @@ const DE: Catalog = {
   "alarm.overview.master": "Alle Zonen",
   "alarm.overview.ready": "Bereit",
   "alarm.overview.silence_all": "Alle Sirenen aus",
+  "alarm.overview.reset_motion_all": "Bewegung zurücksetzen ({count})",
+  "alarm.overview.reset_motion_all.hint":
+    "Setzt die aktuell ausgelösten Bewegungsmelder zurück. Ein ausgelöster Melder gilt als offen und kann die Scharfschaltung blockieren.",
   "alarm.overview.open_security": "Sicherheit & Sicherheitstechnik",
   "alarm.readiness.ready": "bereit",
   "alarm.readiness.blocked": "{count} blockierend",
@@ -3859,6 +3871,7 @@ const DE: Catalog = {
   "alarm.action.disarm_pin": "Unscharf (PIN)",
   "alarm.action.silence": "Sirenen aus",
   "alarm.action.acknowledge": "Quittieren",
+  "alarm.action.reset_motion": "Bewegung zurücksetzen ({count})",
   // Toasts.
   "alarm.toast.armed": "{zone} scharf ({mode})",
   "alarm.toast.arming": "{zone} wird scharf …",
@@ -3866,6 +3879,12 @@ const DE: Catalog = {
   "alarm.toast.disarmed": "{zone} unscharf",
   "alarm.toast.disarm_failed": "Unscharf schalten fehlgeschlagen",
   "alarm.toast.silenced": "Sirenen aus",
+  "alarm.toast.motion_reset": "Bewegungsmelder zurückgesetzt: {count}",
+  "alarm.toast.motion_reset_none":
+    "Kein ausgelöster Bewegungsmelder zum Zurücksetzen",
+  "alarm.toast.motion_reset_partial":
+    "Bewegung zurückgesetzt — erfolgreich: {reset}, fehlgeschlagen: {failed}",
+  "alarm.toast.motion_reset_failed": "Zurücksetzen fehlgeschlagen",
   "alarm.toast.silence_failed": "Sirenen aus fehlgeschlagen",
   "alarm.toast.acknowledged": "Quittiert",
   "alarm.toast.ack_failed": "Quittieren fehlgeschlagen",

@@ -547,6 +547,10 @@ export type AlarmRemoteKeyCandidate =
   components["schemas"]["AlarmRemoteKeyCandidate"];
 // Whether a zone is ready to arm into one specific mode + blocker list.
 export type AlarmModeReadiness = components["schemas"]["AlarmModeReadiness"];
+export type AlarmTriggeredMotionSensor =
+  components["schemas"]["AlarmTriggeredMotionSensor"];
+export type AlarmMotionResetResult =
+  components["schemas"]["AlarmMotionResetResult"];
 // Arm request body (POST /alarm/zones/{id}/arm) and its accepted reply.
 // AlarmArmRequest carries an optional `code` (notes/concepts/alarm-concept.md §11).
 export type AlarmArmRequest = components["schemas"]["AlarmArmRequest"];

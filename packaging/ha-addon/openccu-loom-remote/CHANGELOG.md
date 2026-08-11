@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.58.0
+
+- Version alignment with OpenCCU-Loom 0.58.0. The proxy itself is
+  unchanged; the release adds the motion-detector reset to the daemon's
+  alarm system, reachable through the surfaces this add-on forwards.
+
 # 0.57.2
 
 - Version bump in lockstep with the main add-on. No change to the proxy

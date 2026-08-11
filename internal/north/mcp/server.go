@@ -88,16 +88,23 @@ type IncidentsReader interface {
 // Audit may be nil (no change-log surface); when present it serves both
 // the read tool (List) and records MCP-origin writes (Record).
 type Deps struct {
-	Centrals    CentralLister
-	Devices     DeviceLister
-	Writer      ValueWriter
-	Paramsets   ParamsetService
-	Health      HealthReader
-	Hubs        HubResolver
-	Audit       audit.Recorder
-	Incidents   IncidentsReader
-	AllowWrites bool
-	Version     string
+	Centrals  CentralLister
+	Devices   DeviceLister
+	Writer    ValueWriter
+	Paramsets ParamsetService
+	Health    HealthReader
+	Hubs      HubResolver
+	Audit     audit.Recorder
+	Incidents IncidentsReader
+	// Alarm / AlarmControl project the alarm system; Security projects
+	// the Security & Safety domain. Each is optional: a nil seam leaves
+	// its tools unregistered rather than advertising a tool that
+	// cannot answer.
+	Alarm        AlarmReader
+	AlarmControl AlarmController
+	Security     SecurityReader
+	AllowWrites  bool
+	Version      string
 }
 
 // NewServer builds the MCP server and registers the tool set. Read

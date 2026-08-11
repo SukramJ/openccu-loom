@@ -13,6 +13,7 @@ import type {
   AlarmJournalAppendedPayload,
   AlarmJournalEntry,
   AlarmModeReadiness,
+  AlarmTriggeredMotionSensor,
   AlarmReadinessChangedPayload,
   AlarmStateChangedPayload,
   AlarmTriggeredPayload,
@@ -72,6 +73,10 @@ function createAlarmPanelStore() {
   let countdowns = $state<Record<string, Countdown>>({});
   // Newest-first live journal tail (capped at JOURNAL_MAX).
   let journal = $state<AlarmJournalEntry[]>([]);
+  // Latched motion detectors, refreshed with the panel state. The list
+  // rather than a bare count so a zone view can name what it would
+  // clear.
+  let triggeredMotion = $state<AlarmTriggeredMotionSensor[]>([]);
   // Live walk-test progress per zone.
   let walktest = $state<Record<string, WalkTestProgress>>({});
   // Alarm-subsystem health. Defaults healthy until told otherwise.
@@ -96,6 +101,9 @@ function createAlarmPanelStore() {
         api.getAlarmState(),
         api.listAlarmZones(),
         api.listAlarmJournal({ limit: JOURNAL_MAX }),
+        // Fetched alongside rather than after: the count belongs to the
+        // same picture of the system as the arm state.
+        loadTriggeredMotion(),
       ]);
       zones = state.zones;
       zonesConfig = config;
@@ -310,6 +318,55 @@ function createAlarmPanelStore() {
     }
   }
 
+  // Motion reset writes RESET_MOTION to the detectors that are latched
+  // right now. Passing no id clears every zone. The result is reported
+  // rather than swallowed: "nothing to reset" and "four detectors did
+  // not answer" are different situations and the operator has to be
+  // able to tell them apart.
+  async function resetMotion(id?: string): Promise<boolean> {
+    try {
+      const res = id
+        ? await api.resetAlarmZoneMotion(id)
+        : await api.resetAllAlarmMotion();
+      if (res.reset === 0 && res.failed === 0) {
+        toastStore.success(t("alarm.toast.motion_reset_none"));
+      } else if (res.failed > 0) {
+        toastStore.error(
+          t("alarm.toast.motion_reset_partial", {
+            reset: String(res.reset),
+            failed: String(res.failed),
+          }),
+        );
+      } else {
+        toastStore.success(
+          t("alarm.toast.motion_reset", { count: String(res.reset) }),
+        );
+      }
+      await refresh();
+      return res.failed === 0;
+    } catch (err) {
+      toastStore.error(t("alarm.toast.motion_reset_failed"), friendlyError(err, t));
+      return false;
+    }
+  }
+
+  /** The latched detectors, refreshed with the panel state. */
+  async function loadTriggeredMotion(): Promise<void> {
+    try {
+      triggeredMotion = await api.listAlarmTriggeredMotion();
+    } catch {
+      // A failed count must not break the panel; the button stays
+      // available and reports its own result.
+      triggeredMotion = [];
+    }
+  }
+
+  /** Latched detectors of one zone, or of every zone when id is empty. */
+  function triggeredMotionFor(id?: string): AlarmTriggeredMotionSensor[] {
+    if (!id) return triggeredMotion;
+    return triggeredMotion.filter((s) => s.zone_id === id);
+  }
+
   async function acknowledge(id: string): Promise<boolean> {
     try {
       await api.acknowledgeAlarmZone(id);
@@ -321,6 +378,12 @@ function createAlarmPanelStore() {
   }
 
   return {
+    get triggeredMotion() {
+      return triggeredMotion;
+    },
+    triggeredMotionFor,
+    resetMotion,
+    loadTriggeredMotion,
     get zones() {
       return zones;
     },

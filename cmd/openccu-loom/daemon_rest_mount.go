@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/addonupdate"
 	"github.com/SukramJ/openccu-loom/internal/alarm"
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/build"
@@ -34,6 +35,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
 
@@ -565,16 +567,19 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 	// credentialed or not, is rejected with 401 (the MCP mount sits
 	// outside the REST router's own middleware stack).
 	mcpHandler := d.restResolve(d.authMw.Require(mcp.Handler(mcp.Deps{
-		Centrals:    d.reg,
-		Devices:     d.devicesAdapter,
-		Writer:      d.dpWriterAdapter,
-		Paramsets:   d.paramsetsDomain,
-		Health:      d.healthAdapter,
-		Hubs:        d.reg,
-		Audit:       d.auditRec,
-		Incidents:   d.incidents,
-		AllowWrites: cfg.North.MCP.AllowWrites,
-		Version:     build.Version,
+		Centrals:     d.reg,
+		Devices:      d.devicesAdapter,
+		Writer:       d.dpWriterAdapter,
+		Paramsets:    d.paramsetsDomain,
+		Health:       d.healthAdapter,
+		Hubs:         d.reg,
+		Audit:        d.auditRec,
+		Incidents:    d.incidents,
+		Alarm:        mcpAlarmSeam(d),
+		AlarmControl: mcpAlarmControlSeam(d),
+		Security:     mcpSecuritySeam(d),
+		AllowWrites:  cfg.North.MCP.AllowWrites,
+		Version:      build.Version,
 	})))
 	path := cfg.North.MCP.MountPath()
 	mux := http.NewServeMux()
@@ -599,4 +604,67 @@ func appDBServices(auditDB *sql.DB) (handlers.UserPreferencesService, handlers.D
 	return sqlitestore.NewUserPreferencesStore(auditDB),
 		newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB)),
 		sqlitestore.NewAreaStore(auditDB)
+}
+
+// --- MCP alarm / security seams ---------------------------------------
+
+// mcpAlarmSeam projects the alarm service onto the MCP read port. A nil
+// service (subsystem disabled) yields a nil port, which leaves the
+// alarm tools unregistered rather than advertising tools that answer
+// "not configured" to every call.
+func mcpAlarmSeam(d restMountDeps) mcp.AlarmReader {
+	if d.alarm == nil {
+		return nil
+	}
+	return &mcpAlarmAdapter{svc: d.alarm}
+}
+
+// mcpAlarmControlSeam projects the write half. It is only consulted
+// when AllowWrites is set; the nil-service rule is the same.
+func mcpAlarmControlSeam(d restMountDeps) mcp.AlarmController {
+	if d.alarm == nil {
+		return nil
+	}
+	return &mcpAlarmAdapter{svc: d.alarm}
+}
+
+// mcpSecuritySeam projects the Security & Safety domain.
+func mcpSecuritySeam(d restMountDeps) mcp.SecurityReader {
+	if d.security == nil {
+		return nil
+	}
+	return d.security
+}
+
+// mcpAlarmAdapter satisfies both MCP alarm ports over the engine.
+type mcpAlarmAdapter struct{ svc *alarm.Service }
+
+func (a *mcpAlarmAdapter) Zones() []engine.ZoneSnapshot { return a.svc.Engine().Zones() }
+
+func (a *mcpAlarmAdapter) TriggeredMotionSensors(zoneID string) []engine.TriggeredMotionSensor {
+	return a.svc.Engine().TriggeredMotionSensors(zoneID)
+}
+
+// alarmSourceMCP tags the journal and audit trail so an operator can
+// tell an assistant-driven arm from one a person performed. It
+// deliberately does not carry the `-operator` suffix that marks the
+// REST session as a break-glass surface: an assistant must not bypass
+// a required code.
+const alarmSourceMCP = "mcp"
+
+func (a *mcpAlarmAdapter) Arm(ctx context.Context, zoneID string, mode hmenum.AlarmMode) error {
+	_, err := a.svc.Engine().Arm(ctx, zoneID, engine.ArmRequest{
+		Mode:   mode,
+		Source: alarmSourceMCP,
+	})
+	return err
+}
+
+func (a *mcpAlarmAdapter) Disarm(ctx context.Context, zoneID string) error {
+	return a.svc.Engine().Disarm(ctx, zoneID, "", alarmSourceMCP)
+}
+
+func (a *mcpAlarmAdapter) ResetMotion(ctx context.Context, zoneID string) (reset, failed int) {
+	res := a.svc.Engine().ResetTriggeredMotion(ctx, zoneID, "", alarmSourceMCP)
+	return res.Reset, res.Failed
 }

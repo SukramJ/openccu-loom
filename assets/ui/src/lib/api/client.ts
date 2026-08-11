@@ -13,6 +13,8 @@ import type {
   AlarmJournalEntry,
   AlarmMessage,
   AlarmModeReadiness,
+  AlarmMotionResetResult,
+  AlarmTriggeredMotionSensor,
   AlarmOutput,
   AlarmOutputCandidate,
   AlarmOutputTestRequest,
@@ -1936,6 +1938,23 @@ export const api = {
   },
   silenceAllAlarmZones() {
     return request<void>(`/alarm/silence-all`, { method: "POST" });
+  },
+  resetAlarmZoneMotion(id: string) {
+    return request<AlarmMotionResetResult>(
+      `/alarm/zones/${encodeURIComponent(id)}/reset-motion`,
+      { method: "POST" },
+    );
+  },
+  resetAllAlarmMotion() {
+    return request<AlarmMotionResetResult>(`/alarm/reset-motion`, {
+      method: "POST",
+    });
+  },
+  listAlarmTriggeredMotion(zoneID?: string) {
+    const q = zoneID ? `?zone_id=${encodeURIComponent(zoneID)}` : "";
+    return request<AlarmTriggeredMotionSensor[]>(
+      `/alarm/triggered-motion${q}`,
+    );
   },
   getAlarmZoneReadiness(id: string) {
     return request<Record<string, AlarmModeReadiness>>(

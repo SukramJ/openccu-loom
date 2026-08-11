@@ -57,6 +57,39 @@ test.describe('Alarm', () => {
     await expect(ogHeader.locator('> span')).toHaveText('Disarmed');
   });
 
+  test('a latched motion detector offers a reset, per zone and fleet-wide', async ({
+    page,
+  }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(600);
+
+    // The fixture latches one detector in zone-eg. Both the toolbar
+    // control and that zone's own control appear; the other zone's does
+    // not, because a reset must never reach into a zone the operator
+    // did not ask about.
+    await expect(page.getByTestId('reset-motion-all')).toBeVisible();
+    await expect(page.getByTestId('reset-motion-zone-eg')).toBeVisible();
+    await expect(page.getByTestId('reset-motion-zone-og')).toHaveCount(0);
+
+    await page.getByTestId('reset-motion-zone-eg').click();
+    // A reset that reports nothing is indistinguishable from one that
+    // silently did nothing.
+    await expect(page.getByText(/Motion detectors reset/)).toBeVisible();
+  });
+
+  test('no reset control appears while nothing is latched', async ({ page }) => {
+    await page.route('**/api/v1/alarm/triggered-motion*', (route) =>
+      route.fulfill({ json: [] }),
+    );
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(600);
+
+    await expect(page.getByTestId('reset-motion-all')).toHaveCount(0);
+    await expect(page.getByTestId('reset-motion-zone-eg')).toHaveCount(0);
+  });
+
   test('sensors tab renders the sensor picker surface', async ({ page }) => {
     await page.goto('http://localhost:5173/app/#/alarm');
     await page.waitForSelector('#main');

@@ -1,0 +1,9 @@
+[
+  {
+    "sensor_id": "sensor-motion-hall",
+    "zone_id": "zone-eg",
+    "name": "Flur Bewegungsmelder",
+    "channel_address": "0001D3C99C1234:1",
+    "parameter": "MOTION"
+  }
+]

@@ -317,6 +317,18 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/alarm/zones/*/readiness', (route) =>
     route.fulfill({ json: fixture('alarm-readiness.json') }),
   );
+  // Latched motion detectors + the reset verb. The list drives whether
+  // the reset controls appear at all, so it carries one entry by
+  // default; alarm.spec.ts overrides it to test the empty case.
+  await page.route('**/api/v1/alarm/triggered-motion*', (route) =>
+    route.fulfill({ json: fixture('alarm-triggered-motion.json') }),
+  );
+  await page.route('**/api/v1/alarm/reset-motion', (route) =>
+    route.fulfill({ json: { reset: 1, failed: 0, sensors: [] } }),
+  );
+  await page.route('**/api/v1/alarm/zones/*/reset-motion', (route) =>
+    route.fulfill({ json: { reset: 1, failed: 0, sensors: [] } }),
+  );
   await page.route('**/api/v1/alarm/zones/*/walktest/start', (route) =>
     route.fulfill({ status: 200 }),
   );
