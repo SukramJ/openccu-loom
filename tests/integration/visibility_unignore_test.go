@@ -115,7 +115,7 @@ func newVisibilityServer(t *testing.T, fx *visibilityTestFixture) *httptest.Serv
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/v1/visibility/unignore", handlers.ListVisibilityUnIgnore(fx.lister, fx.store))
 	mux.Handle("PUT /api/v1/visibility/unignore", handlers.UpdateVisibilityUnIgnore(fx.store, fx.loader, fx.auditBuf))
-	mux.Handle("GET /api/v1/visibility/unignore/candidates", handlers.ListVisibilityUnIgnoreCandidates(fx.lister, fx.provider))
+	mux.Handle("GET /api/v1/visibility/unignore/candidates", handlers.ListVisibilityUnIgnoreCandidates(fx.lister, fx.provider, nil))
 	mux.Handle("GET /api/v1/audit", handlers.ListAudit(fx.auditBuf, nil))
 	s := httptest.NewServer(mux)
 	t.Cleanup(s.Close)

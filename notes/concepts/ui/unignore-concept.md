@@ -270,13 +270,67 @@ Mapped to `config.CentralConfig.Visibility.UnIgnore []string`.
 - **Snapshot parity**: `tests/integration/TestModelSnapshotDumpAgainstGodevccu`
   runs with an un-ignore list on both sides — drift stays 0.
 
+## Rework: parameter-first picker
+
+The first shipped screen rendered the candidate list flat. Measured
+against the full embedded godevccu fleet (399 devices):
+
+| | rows | distinct parameters |
+| --- | --- | --- |
+| VALUES | 1857 (35 simple + 536 `@MODEL:all` + 1286 `@MODEL:<ch>`) | 35 |
+| MASTER | 943 (channel-specific only) | 10 |
+
+2800 rows out of 45 parameters — the flat list is the cross-product of
+parameter × model × channel in three pattern formats. Two consequences:
+the screen was unusable by inspection, and it was slow, because each row
+asked `candidates.includes(pattern)` (an O(n) array scan) inside an O(n)
+render, re-run on every keystroke.
+
+What replaced it:
+
+- **`GET .../candidates` also returns `groups[]`** — one entry per
+  (parameter, paramset) with `models[]`, their channels, every scope's
+  pattern, and the suppression `reason`. `candidates[]` and
+  `include_master` are unchanged for existing clients. Built by
+  `visibility.CandidateCollector`, which emits both shapes from one
+  accumulated state so they cannot drift.
+- **Reasons come from the rules, not from a keyword list** —
+  `visibility.Classify` re-evaluates the same rule sets the suppression
+  passes consult (`internal/store/visibility/reason.go`). It has to
+  recompute rather than read the mark: `SetForcedUsage` records *that* a
+  parameter is suppressed, never which pass did it, and the passes
+  overwrite one another. The drift risk that creates is covered by
+  `TestUnIgnoreCandidateGroupsAgainstTheFleet/every_candidate_has_a_known_reason`,
+  which fails on any candidate in the fleet that no rule explains.
+- **Two-level UI** — 45 rows, expandable to their model/channel scopes;
+  three-state row toggle (off / all devices / partial); category chips
+  with counts; paramset chips; search over parameter, label and model;
+  "only enabled"; sticky save bar.
+- **Noise categories start collapsed** — `week_profile`, `read_only`,
+  `wildcard_suffix`, `wildcard_prefix`, `ignore_list`, `internal_flag`,
+  `event_suppressed`, `channel_restricted`. A visible "hidden by the
+  category filter: N — show all" keeps the suppression honest.
+  Distribution over the embedded fleet: `internal_flag` 26 groups (sole
+  reason for all 26), `hidden` 8, `master_gate` 8, `operation_mode` 1,
+  `ignore_list` 1, `wildcard_prefix` 1.
+- **Orphan patterns are listed** — saved entries matching no candidate
+  stay on screen so a save cannot drop them unseen.
+
+`week_profile` is worth its own category: a climate device carries up to
+6 profiles × 7 weekdays × 13 slots × 2 fields of `P<n>_ENDTIME_*` /
+`P<n>_TEMPERATURE_*`, plus the `<NN>_WP_*` form on simple profiles. The
+predicate lives in `weekprofile.IsParameterName`, next to the parsers
+that define the grammar.
+
 ## Design decisions (recorded)
 
 1. **MASTER-reload hint** — dropped. MASTER paramset changes need no
    device restart. The UI stays consistent between VALUES and MASTER,
    with no inline badge and no confirm dialog. The `include_master`
-   checkbox remains as a pure list filter (prevents the default
-   candidate list from being swamped with MASTER parameters).
+   checkbox remains as a pure list filter for the legacy flat field;
+   after the rework the picker loads both paramsets always (grouped,
+   MASTER costs ~10 entries rather than ~940 patterns) and offers the
+   paramset as a filter chip.
 2. **Export/Import** — no. The list lives only in SQLite; backup
    happens indirectly through the existing backup mechanism
    (`var/backups/`). This avoided an extra REST endpoint and a

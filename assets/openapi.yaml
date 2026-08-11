@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.15.0
+  version: 5.16.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9833,6 +9833,91 @@ components:
           type: array
           items: { type: string, description: "parameter name (bare) or MODEL:CHANNEL:PARAMETER full-form" }
         include_master: { type: boolean }
+        groups:
+          type: array
+          description: >-
+            One entry per (parameter, paramset), with the models and channels it
+            occurs on. The flat `candidates` list is the cross-product of
+            parameter x model x channel in three pattern formats — a 399-device
+            fleet yields ~2800 strings out of ~45 parameters — so clients that
+            render a picker should use this instead. Both paramsets are always
+            present here, each group tagged with its own; `include_master`
+            governs only `candidates`.
+          items: { $ref: "#/components/schemas/UnIgnoreCandidateGroup" }
+        reasons:
+          type: array
+          description: Every suppression category the groups can carry, in display order.
+          items: { $ref: "#/components/schemas/UnIgnoreReason" }
+
+    UnIgnoreReason:
+      type: string
+      description: >-
+        The rule that suppressed a parameter from the user-visible surface.
+        `unknown` is never part of the published vocabulary — it appears on a
+        group only when the classifier has drifted from the suppression passes.
+      enum:
+        - operation_mode
+        - week_profile
+        - master_gate
+        - device_specific
+        - ignore_list
+        - wildcard_prefix
+        - wildcard_suffix
+        - hidden
+        - channel_restricted
+        - event_suppressed
+        - internal_flag
+        - read_only
+        - unknown
+
+    UnIgnoreCandidateGroup:
+      type: object
+      required: [parameter, paramset, reason, reasons, models, device_count, channel_count]
+      properties:
+        parameter: { type: string, description: "bare parameter name, e.g. LOW_BAT" }
+        label:
+          type: string
+          description: Localised parameter name; absent when the catalogue has no entry.
+        paramset: { type: string, enum: [VALUES, MASTER] }
+        reason: { $ref: "#/components/schemas/UnIgnoreReason" }
+        reasons:
+          type: array
+          description: Every rule that matched anywhere in the fleet, in precedence order.
+          items: { $ref: "#/components/schemas/UnIgnoreReason" }
+        simple_pattern:
+          type: string
+          description: >-
+            Pattern that re-enables the parameter on every device and channel.
+            Absent for MASTER, which has no short pattern form.
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/UnIgnoreCandidateModel" }
+        device_count: { type: integer, description: "distinct devices carrying the parameter" }
+        channel_count: { type: integer, description: "distinct (model, channel) pairs" }
+
+    UnIgnoreCandidateModel:
+      type: object
+      required: [model, channels, device_count]
+      properties:
+        model: { type: string, description: "device model, e.g. HmIP-eTRV-2" }
+        wildcard_pattern:
+          type: string
+          description: >-
+            Pattern covering every channel of the model
+            ("LOW_BAT:VALUES@HmIP-eTRV-2:all"). Absent for MASTER.
+        channels:
+          type: array
+          items: { $ref: "#/components/schemas/UnIgnoreCandidateChannel" }
+        device_count: { type: integer }
+
+    UnIgnoreCandidateChannel:
+      type: object
+      required: [channel, pattern]
+      properties:
+        channel: { type: integer }
+        pattern:
+          type: string
+          description: Pattern re-enabling the parameter on exactly this model and channel.
 
     # ─── WebSocket push surface ───────────────────────────────────────
     # The schemas below describe the WebSocket broadcast envelope and

@@ -1,0 +1,520 @@
+{
+  "candidates": [
+    "ACTIVITY_STATE",
+    "ERR_TTM_INTERNAL",
+    "SECTION",
+    "STICKY_SABOTAGE",
+    "WORKING"
+  ],
+  "include_master": false,
+  "reasons": [
+    "operation_mode",
+    "week_profile",
+    "master_gate",
+    "device_specific",
+    "ignore_list",
+    "wildcard_prefix",
+    "wildcard_suffix",
+    "hidden",
+    "channel_restricted",
+    "event_suppressed",
+    "internal_flag",
+    "read_only"
+  ],
+  "groups": [
+    {
+      "parameter": "P1_ENDTIME_MONDAY_1",
+      "paramset": "MASTER",
+      "reason": "week_profile",
+      "reasons": [
+        "week_profile",
+        "master_gate"
+      ],
+      "device_count": 3,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HmIP-eTRV-2",
+          "device_count": 3,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "P1_ENDTIME_MONDAY_1:MASTER@HmIP-eTRV-2:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "01_WP_LEVEL",
+      "paramset": "MASTER",
+      "reason": "week_profile",
+      "reasons": [
+        "week_profile",
+        "master_gate"
+      ],
+      "device_count": 2,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HmIP-BROLL",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 4,
+              "pattern": "01_WP_LEVEL:MASTER@HmIP-BROLL:4"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "TEMPERATURE_OFFSET",
+      "label": "Temperatur-Offset",
+      "paramset": "MASTER",
+      "reason": "master_gate",
+      "reasons": [
+        "master_gate"
+      ],
+      "device_count": 4,
+      "channel_count": 2,
+      "models": [
+        {
+          "model": "HmIP-BWTH",
+          "device_count": 3,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "TEMPERATURE_OFFSET:MASTER@HmIP-BWTH:1"
+            }
+          ]
+        },
+        {
+          "model": "HmIP-eTRV-2",
+          "device_count": 1,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "TEMPERATURE_OFFSET:MASTER@HmIP-eTRV-2:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "LOW_BAT_LIMIT",
+      "label": "Batteriewarnschwelle",
+      "paramset": "MASTER",
+      "reason": "master_gate",
+      "reasons": [
+        "master_gate"
+      ],
+      "device_count": 2,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HmIP-SWDO",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 0,
+              "pattern": "LOW_BAT_LIMIT:MASTER@HmIP-SWDO:0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "ACTIVITY_STATE",
+      "label": "Fahrtrichtung",
+      "paramset": "VALUES",
+      "reason": "hidden",
+      "reasons": [
+        "hidden"
+      ],
+      "simple_pattern": "ACTIVITY_STATE",
+      "device_count": 5,
+      "channel_count": 3,
+      "models": [
+        {
+          "model": "HmIP-BROLL",
+          "wildcard_pattern": "ACTIVITY_STATE:VALUES@HmIP-BROLL:all",
+          "device_count": 3,
+          "channels": [
+            {
+              "channel": 3,
+              "pattern": "ACTIVITY_STATE:VALUES@HmIP-BROLL:3"
+            },
+            {
+              "channel": 4,
+              "pattern": "ACTIVITY_STATE:VALUES@HmIP-BROLL:4"
+            }
+          ]
+        },
+        {
+          "model": "HmIP-FROLL",
+          "wildcard_pattern": "ACTIVITY_STATE:VALUES@HmIP-FROLL:all",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 3,
+              "pattern": "ACTIVITY_STATE:VALUES@HmIP-FROLL:3"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "SECTION",
+      "label": "Abschnitt",
+      "paramset": "VALUES",
+      "reason": "hidden",
+      "reasons": [
+        "hidden"
+      ],
+      "simple_pattern": "SECTION",
+      "device_count": 2,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HM-LC-Bl1-FM",
+          "wildcard_pattern": "SECTION:VALUES@HM-LC-Bl1-FM:all",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "SECTION:VALUES@HM-LC-Bl1-FM:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "WORKING",
+      "label": "Arbeitet",
+      "paramset": "VALUES",
+      "reason": "hidden",
+      "reasons": [
+        "hidden",
+        "read_only"
+      ],
+      "simple_pattern": "WORKING",
+      "device_count": 6,
+      "channel_count": 2,
+      "models": [
+        {
+          "model": "HM-LC-Dim1T-FM",
+          "wildcard_pattern": "WORKING:VALUES@HM-LC-Dim1T-FM:all",
+          "device_count": 4,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "WORKING:VALUES@HM-LC-Dim1T-FM:1"
+            }
+          ]
+        },
+        {
+          "model": "HM-Sec-Win",
+          "wildcard_pattern": "WORKING:VALUES@HM-Sec-Win:all",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "WORKING:VALUES@HM-Sec-Win:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "UPDATE_PENDING",
+      "label": "Update ausstehend",
+      "paramset": "VALUES",
+      "reason": "hidden",
+      "reasons": [
+        "hidden"
+      ],
+      "simple_pattern": "UPDATE_PENDING",
+      "device_count": 12,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HmIP-PSM",
+          "wildcard_pattern": "UPDATE_PENDING:VALUES@HmIP-PSM:all",
+          "device_count": 12,
+          "channels": [
+            {
+              "channel": 0,
+              "pattern": "UPDATE_PENDING:VALUES@HmIP-PSM:0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "STATE",
+      "label": "Zustand",
+      "paramset": "VALUES",
+      "reason": "operation_mode",
+      "reasons": [
+        "operation_mode"
+      ],
+      "simple_pattern": "STATE",
+      "device_count": 2,
+      "channel_count": 2,
+      "models": [
+        {
+          "model": "HmIP-FCI6",
+          "wildcard_pattern": "STATE:VALUES@HmIP-FCI6:all",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "STATE:VALUES@HmIP-FCI6:1"
+            },
+            {
+              "channel": 2,
+              "pattern": "STATE:VALUES@HmIP-FCI6:2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "CURRENT_ILLUMINATION",
+      "label": "Aktuelle Helligkeit",
+      "paramset": "VALUES",
+      "reason": "device_specific",
+      "reasons": [
+        "device_specific"
+      ],
+      "simple_pattern": "CURRENT_ILLUMINATION",
+      "device_count": 1,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HmIP-SMI",
+          "wildcard_pattern": "CURRENT_ILLUMINATION:VALUES@HmIP-SMI:all",
+          "device_count": 1,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "CURRENT_ILLUMINATION:VALUES@HmIP-SMI:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "BOOT",
+      "paramset": "VALUES",
+      "reason": "ignore_list",
+      "reasons": [
+        "ignore_list"
+      ],
+      "simple_pattern": "BOOT",
+      "device_count": 3,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HM-LC-Sw1-Pl",
+          "wildcard_pattern": "BOOT:VALUES@HM-LC-Sw1-Pl:all",
+          "device_count": 3,
+          "channels": [
+            {
+              "channel": 0,
+              "pattern": "BOOT:VALUES@HM-LC-Sw1-Pl:0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "ERR_TTM_INTERNAL",
+      "paramset": "VALUES",
+      "reason": "wildcard_prefix",
+      "reasons": [
+        "wildcard_prefix",
+        "internal_flag"
+      ],
+      "simple_pattern": "ERR_TTM_INTERNAL",
+      "device_count": 2,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HM-Sec-Win",
+          "wildcard_pattern": "ERR_TTM_INTERNAL:VALUES@HM-Sec-Win:all",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "ERR_TTM_INTERNAL:VALUES@HM-Sec-Win:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "SMOKE_DETECTOR_ALARM_STATUS",
+      "label": "Rauchmelder-Alarmstatus",
+      "paramset": "VALUES",
+      "reason": "wildcard_suffix",
+      "reasons": [
+        "wildcard_suffix"
+      ],
+      "simple_pattern": "SMOKE_DETECTOR_ALARM_STATUS",
+      "device_count": 4,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HmIP-SWSD",
+          "wildcard_pattern": "SMOKE_DETECTOR_ALARM_STATUS:VALUES@HmIP-SWSD:all",
+          "device_count": 4,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "SMOKE_DETECTOR_ALARM_STATUS:VALUES@HmIP-SWSD:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "STICKY_SABOTAGE",
+      "label": "Sabotage (gespeichert)",
+      "paramset": "VALUES",
+      "reason": "internal_flag",
+      "reasons": [
+        "internal_flag",
+        "read_only"
+      ],
+      "simple_pattern": "STICKY_SABOTAGE",
+      "device_count": 8,
+      "channel_count": 2,
+      "models": [
+        {
+          "model": "HmIP-SCI",
+          "wildcard_pattern": "STICKY_SABOTAGE:VALUES@HmIP-SCI:all",
+          "device_count": 3,
+          "channels": [
+            {
+              "channel": 0,
+              "pattern": "STICKY_SABOTAGE:VALUES@HmIP-SCI:0"
+            }
+          ]
+        },
+        {
+          "model": "HmIP-SWDO",
+          "wildcard_pattern": "STICKY_SABOTAGE:VALUES@HmIP-SWDO:all",
+          "device_count": 5,
+          "channels": [
+            {
+              "channel": 0,
+              "pattern": "STICKY_SABOTAGE:VALUES@HmIP-SWDO:0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "ERR_TTCU_TURN_TILT_ACT_BLOCKED",
+      "paramset": "VALUES",
+      "reason": "internal_flag",
+      "reasons": [
+        "internal_flag"
+      ],
+      "simple_pattern": "ERR_TTCU_TURN_TILT_ACT_BLOCKED",
+      "device_count": 1,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HM-Sec-Win",
+          "wildcard_pattern": "ERR_TTCU_TURN_TILT_ACT_BLOCKED:VALUES@HM-Sec-Win:all",
+          "device_count": 1,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "ERR_TTCU_TURN_TILT_ACT_BLOCKED:VALUES@HM-Sec-Win:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "STICKY_POWER",
+      "paramset": "VALUES",
+      "reason": "internal_flag",
+      "reasons": [
+        "internal_flag",
+        "read_only"
+      ],
+      "simple_pattern": "STICKY_POWER",
+      "device_count": 2,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HmIP-SWDO",
+          "wildcard_pattern": "STICKY_POWER:VALUES@HmIP-SWDO:all",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 0,
+              "pattern": "STICKY_POWER:VALUES@HmIP-SWDO:0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "LOWBAT",
+      "label": "Batterie schwach",
+      "paramset": "VALUES",
+      "reason": "channel_restricted",
+      "reasons": [
+        "channel_restricted",
+        "read_only"
+      ],
+      "simple_pattern": "LOWBAT",
+      "device_count": 2,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HM-LC-Sw1-Pl",
+          "wildcard_pattern": "LOWBAT:VALUES@HM-LC-Sw1-Pl:all",
+          "device_count": 2,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "LOWBAT:VALUES@HM-LC-Sw1-Pl:1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "parameter": "PRESS_SHORT",
+      "label": "Kurzer Tastendruck",
+      "paramset": "VALUES",
+      "reason": "event_suppressed",
+      "reasons": [
+        "event_suppressed"
+      ],
+      "simple_pattern": "PRESS_SHORT",
+      "device_count": 12,
+      "channel_count": 1,
+      "models": [
+        {
+          "model": "HmIP-PSM",
+          "wildcard_pattern": "PRESS_SHORT:VALUES@HmIP-PSM:all",
+          "device_count": 12,
+          "channels": [
+            {
+              "channel": 1,
+              "pattern": "PRESS_SHORT:VALUES@HmIP-PSM:1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

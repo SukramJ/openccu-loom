@@ -1130,7 +1130,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// points. See notes/concepts/ui/unignore-concept.md.
 			pr.Get("/visibility/unignore", handlers.ListVisibilityUnIgnore(d.VisibilityCentralLister, d.VisibilityUnIgnoreStore))
 			pr.With(admin).Put("/visibility/unignore", handlers.UpdateVisibilityUnIgnore(d.VisibilityUnIgnoreStore, d.VisibilityRegistryLoader, d.MatterAuditRecorder))
-			pr.Get("/visibility/unignore/candidates", handlers.ListVisibilityUnIgnoreCandidates(d.VisibilityCentralLister, d.VisibilityCandidateProvider))
+			pr.Get("/visibility/unignore/candidates", handlers.ListVisibilityUnIgnoreCandidates(d.VisibilityCentralLister, d.VisibilityCandidateProvider, d.Labels))
 			if d.Backup != nil {
 				pr.With(admin).Post("/backups", handlers.TriggerBackup(d.Backup))
 				// The listing is admin-gated like every other backup route:

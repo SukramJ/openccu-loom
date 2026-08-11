@@ -288,6 +288,19 @@ test.describe('Documentation screenshots (light mode)', () => {
     await formCard.screenshot({ path: `${IMG_DIR}/web-ui-channel-config.png` });
   });
 
+  test('hidden parameters with a row expanded', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/settings?tab=visibility');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(800);
+    // Expand one row: the scope list is the part of the screen the
+    // user guide has to explain, and it is closed on arrival.
+    await page.getByTestId('group-expand-ACTIVITY_STATE').click();
+    await page.getByTestId('group-scopes-ACTIVITY_STATE').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await addStylesForStableScreenshots(page);
+    await page.screenshot({ path: `${IMG_DIR}/web-ui-hidden-parameters.png` });
+  });
+
   test('Matter view with QR + manual pairing code', async ({ page }) => {
     // Matter bridge enabled with an open commissioning window.
     await page.route('**/api/v1/matter/status', (route) =>

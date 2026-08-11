@@ -241,7 +241,7 @@ func TestVisibilityUnIgnoreCandidatesAggregates(t *testing.T) {
 
 	t.Run("values_only", func(t *testing.T) {
 		t.Parallel()
-		h := handlers.ListVisibilityUnIgnoreCandidates(lister, provider)
+		h := handlers.ListVisibilityUnIgnoreCandidates(lister, provider, nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/visibility/unignore/candidates", http.NoBody)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -261,7 +261,7 @@ func TestVisibilityUnIgnoreCandidatesAggregates(t *testing.T) {
 
 	t.Run("with_master", func(t *testing.T) {
 		t.Parallel()
-		h := handlers.ListVisibilityUnIgnoreCandidates(lister, provider)
+		h := handlers.ListVisibilityUnIgnoreCandidates(lister, provider, nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/visibility/unignore/candidates?include_master=true", http.NoBody)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)

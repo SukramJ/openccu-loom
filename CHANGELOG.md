@@ -4,6 +4,54 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Hidden parameters are a workable screen again** — the picker listed
+  every un-ignore pattern the fleet could produce, flat and
+  alphabetical. On a 399-device fleet that is 2800 rows, built as the
+  cross-product of parameter × device model × channel in three pattern
+  formats out of only 45 distinct parameters. Enabling *Include MASTER
+  parameters* added 943 more and the screen crawled, because each row
+  asked whether its pattern was a candidate by scanning the full
+  candidate array — an O(n) lookup inside an O(n) render, re-run on
+  every keystroke.
+
+  The screen is now parameter-first: one row per hidden parameter, which
+  expands to the device models and channels it occurs on. The same fleet
+  yields 45 rows instead of 2800. Each row carries the localized
+  parameter name, a badge naming the rule that hid it, and a three-state
+  toggle that distinguishes "enabled everywhere" from "enabled for some
+  models". Membership lookups are set-based, so MASTER no longer slows
+  the list down — it is now always loaded and offered as a filter chip
+  rather than a checkbox that triggers a reload.
+
+  Category chips filter the list, and the ones that describe internal
+  plumbing — diagnostic bits, `FLAGS=INTERNAL` service values, the
+  `_STATUS`/`_RESULT`/`_SUBMIT` name families, and week-profile cells —
+  start collapsed, with a visible "hidden by the category filter: N —
+  show all" so nothing disappears quietly. Week-profile cells matter
+  most in practice: one climate device carries up to 6 profiles × 7
+  weekdays × 13 slots × 2 fields, and they already have a schedule
+  editor.
+
+  Patterns that were saved earlier but match no current candidate are
+  listed separately instead of vanishing, so a save cannot silently drop
+  them.
+
+### Added
+
+- **`GET /api/v1/visibility/unignore/candidates` returns grouped
+  candidates** — a new `groups` array carries one entry per (parameter,
+  paramset) with its models, channels, per-scope patterns and the
+  suppression reason, plus a `reasons` vocabulary for building filters.
+  The reason is recomputed from the same rule sets the suppression
+  passes consult, so the categories cannot drift from the rules; an
+  integration test over the whole embedded fleet fails on any candidate
+  that no rule explains. The flat `candidates` field and the
+  `include_master` query parameter are unchanged. API 5.16.0.
+
 ## [0.57.2]
 
 ### Fixed

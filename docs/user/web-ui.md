@@ -92,11 +92,43 @@ You can also **export** a channel's configuration and **import** it again, which
 
 ## Showing hidden parameters (un-ignore)
 
-Some parameters are hidden by default to keep views clean — see [parameter visibility](concepts.md#parameter-visibility-ignore-un-ignore). **Settings → Advanced → Hidden parameters** lists the parameters currently available to un-ignore, and lets you mark the ones you want.
+Some parameters are hidden by default to keep views clean — see [parameter visibility](concepts.md#parameter-visibility-ignore-un-ignore). **Settings → Advanced → Hidden parameters** lists what is currently hidden and lets you switch individual parameters back on.
+
+The list shows **one row per parameter**, not one row per device. A large installation hides only a few dozen distinct parameters, but each of them occurs on many device models and channels — so the row is the parameter, and you open it to choose where it applies.
 
 1. Open **Settings** and pick the **Hidden parameters** tab.
-2. Find the parameter you need (the view can suggest candidates).
-3. Mark it to un-ignore.
+2. Find the parameter you need — type part of its name, its translated label, or a device model into the search box.
+3. Switch it on with the checkbox at the start of the row. That enables it **for every device**.
+4. To be more selective, expand the row with the chevron on the right and tick a single device model, or a single channel of that model.
+5. Click **Save**.
+
+![The Hidden parameters tab: category filter chips with counts, the search box, and a parameter row expanded to show its device models and channels.](img/web-ui-hidden-parameters.png)
+
+### If you cannot find a parameter
+
+Most hidden parameters are internal plumbing — diagnostic bits, service values the CCU marks as internal, and the individual cells of week profiles. Those categories **start collapsed**, so the list opens on the parameters that are usually worth a decision.
+
+A line under the filter tells you how many rows are currently hidden and offers **Show all**. You can also click the category chips to filter to exactly the categories you want; each chip shows how many parameters it holds.
+
+The category on each row names the rule that hid the parameter:
+
+| Category | Meaning |
+| --- | --- |
+| **Channel mode** | The channel's operation mode excludes it. Changing the mode reveals it without an un-ignore entry — usually the better fix. |
+| **MASTER setting** | A configuration value outside the list of MASTER parameters shown by default. |
+| **Week profile** | One cell of a week profile (`P1_ENDTIME_MONDAY_1`, `01_WP_LEVEL`). A single thermostat has hundreds; edit the profile in the schedule editor instead. |
+| **Used internally** | The value exists and is used elsewhere — a maintenance channel or a combined data point — but is not shown on its own. |
+| **Device-specific** | Suppressed for this device model in particular. |
+| **Excluded**, **Name prefix**, **Name suffix** | On the built-in exclusion list, or matching a suppressed name pattern such as `*_STATUS`, `*_RESULT`, `ERR_TTM_*`. |
+| **Internal**, **Diagnostic bit** | The CCU marks it as an internal service value, or it is a read-only bit the CCU never reports on its own. |
+
+### Three-state checkboxes
+
+A row's checkbox has three states: empty (off), checked (on for every device), and a dash (on for some device models or channels only). The right-hand column tells you which — *All devices*, or how many scopes are active.
+
+### Patterns without a matching parameter
+
+If you previously enabled a parameter that no device in your installation carries any more — a device you removed, or a hand-typed entry with a typo — it appears in a separate **Patterns without a matching parameter** list at the bottom instead of disappearing. Saving never drops those silently; remove them yourself with the ✕ button.
 
 Once un-ignored, the parameter shows up in the device's data-point list and is published to MQTT, REST, and the other north-bound bridges like any other data point.
 

@@ -7501,6 +7501,46 @@ export interface components {
         UnIgnoreCandidateList: {
             candidates: string[];
             include_master?: boolean;
+            /** @description One entry per (parameter, paramset), with the models and channels it occurs on. The flat `candidates` list is the cross-product of parameter x model x channel in three pattern formats — a 399-device fleet yields ~2800 strings out of ~45 parameters — so clients that render a picker should use this instead. Both paramsets are always present here, each group tagged with its own; `include_master` governs only `candidates`. */
+            groups?: components["schemas"]["UnIgnoreCandidateGroup"][];
+            /** @description Every suppression category the groups can carry, in display order. */
+            reasons?: components["schemas"]["UnIgnoreReason"][];
+        };
+        /**
+         * @description The rule that suppressed a parameter from the user-visible surface. `unknown` is never part of the published vocabulary — it appears on a group only when the classifier has drifted from the suppression passes.
+         * @enum {string}
+         */
+        UnIgnoreReason: "operation_mode" | "week_profile" | "master_gate" | "device_specific" | "ignore_list" | "wildcard_prefix" | "wildcard_suffix" | "hidden" | "channel_restricted" | "event_suppressed" | "internal_flag" | "read_only" | "unknown";
+        UnIgnoreCandidateGroup: {
+            /** @description bare parameter name, e.g. LOW_BAT */
+            parameter: string;
+            /** @description Localised parameter name; absent when the catalogue has no entry. */
+            label?: string;
+            /** @enum {string} */
+            paramset: "VALUES" | "MASTER";
+            reason: components["schemas"]["UnIgnoreReason"];
+            /** @description Every rule that matched anywhere in the fleet, in precedence order. */
+            reasons: components["schemas"]["UnIgnoreReason"][];
+            /** @description Pattern that re-enables the parameter on every device and channel. Absent for MASTER, which has no short pattern form. */
+            simple_pattern?: string;
+            models: components["schemas"]["UnIgnoreCandidateModel"][];
+            /** @description distinct devices carrying the parameter */
+            device_count: number;
+            /** @description distinct (model, channel) pairs */
+            channel_count: number;
+        };
+        UnIgnoreCandidateModel: {
+            /** @description device model, e.g. HmIP-eTRV-2 */
+            model: string;
+            /** @description Pattern covering every channel of the model ("LOW_BAT:VALUES@HmIP-eTRV-2:all"). Absent for MASTER. */
+            wildcard_pattern?: string;
+            channels: components["schemas"]["UnIgnoreCandidateChannel"][];
+            device_count: number;
+        };
+        UnIgnoreCandidateChannel: {
+            channel: number;
+            /** @description Pattern re-enabling the parameter on exactly this model and channel. */
+            pattern: string;
         };
         /**
          * @description Shape of every WebSocket frame the daemon emits. Broadcast

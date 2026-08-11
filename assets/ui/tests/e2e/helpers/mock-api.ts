@@ -505,10 +505,30 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: { reloaded: true, took_ms: 1 } }),
   );
 
-  // Visibility
-  await page.route('**/api/v1/visibility/**', (route) =>
-    route.fulfill({ json: fixture('visibility-unignore.json') }),
-  );
+  // Visibility. The two endpoints return different shapes — the
+  // candidate list is what the hidden-parameter picker groups and
+  // filters, the un-ignore list is what it ticks — so one handler
+  // branches on the path. Two overlapping page.route patterns would
+  // work too, but only in the right registration order (Playwright
+  // prefers the most recently added), and that is an easy thing to
+  // break by moving a block.
+  await page.route('**/api/v1/visibility/**', (route) => {
+    const url = route.request().url();
+    if (url.includes('/unignore/candidates')) {
+      return route.fulfill({ json: fixture('visibility-candidates.json') });
+    }
+    if (route.request().method() === 'PUT') {
+      return route.fulfill({
+        json: {
+          applied_count: 3,
+          parse_errors: [],
+          affected_devices: 12,
+          patterns: [],
+        },
+      });
+    }
+    return route.fulfill({ json: fixture('visibility-unignore.json') });
+  });
 
   // Sessions
   await page.route('**/api/v1/sessions/**', (route) => {

@@ -1024,15 +1024,12 @@ const EN: Catalog = {
   "unignore.warning":
     "Excessive writes to MASTER paramset values can damage devices.",
   "unignore.central_label": "Central:",
-  "unignore.include_master": "Include MASTER parameters",
   "unignore.search_placeholder": "Filter by name…",
   "unignore.add_pattern": "Add pattern",
   "unignore.add_pattern_placeholder":
     "PARAMETER or PARAMETER:PARAMSET@MODEL:CHANNEL",
   "unignore.save": "Save",
-  "unignore.saving": "Saving…",
   "unignore.discard": "Discard",
-  "unignore.unsaved_changes": "Unsaved changes",
   "unignore.no_centrals": "No centrals registered.",
   "unignore.no_candidates": "No hidden parameters available.",
   "unignore.no_match": "no match",
@@ -1040,6 +1037,70 @@ const EN: Catalog = {
   "unignore.saved": "Un-ignore list updated ({count} patterns).",
   "unignore.saved_with_errors": "Saved with {count} parse error(s).",
   "unignore.save_failed": "Save failed: {err}",
+  "unignore.stats":
+    "{total} hidden parameters · {active} enabled · {pending} changed",
+  "unignore.pending_changes": "Unsaved changes: {count}",
+  "unignore.filter.categories": "Category",
+  "unignore.filter.paramset": "Paramset",
+  "unignore.filter.only_enabled": "Only enabled",
+  "unignore.filter.hidden_notice":
+    "Hidden by the category filter: {count}.",
+  "unignore.filter.show_all": "Show all",
+  "unignore.filter.reset": "Reset filter",
+  "unignore.no_filter_match": "No parameter matches the filter.",
+  "unignore.no_filter_match_hint":
+    "Widen the search or re-enable a category chip.",
+  "unignore.toggle_parameter": "Enable or disable {parameter}",
+  "unignore.toggle_scopes": "Show device models for {parameter}",
+  "unignore.remove_pattern": "Remove pattern {pattern}",
+  "unignore.orphans_title": "Patterns without a matching parameter",
+  "unignore.orphans_hint":
+    "Saved earlier or typed by hand — no device in the fleet currently carries them.",
+  "unignore.scope.all_devices": "All devices",
+  "unignore.scope.all_channels": "all channels",
+  "unignore.scope.partial": "Scopes: {count}",
+  "unignore.scope.models": "Models: {count}",
+  "unignore.scope.channel": "Channel {channel}",
+  "unignore.scope.device_count": "Devices: {count}",
+  "unignore.reason.operation_mode": "Channel mode",
+  "unignore.reason.master_gate": "MASTER setting",
+  "unignore.reason.week_profile": "Week profile",
+  "unignore.reason.device_specific": "Device-specific",
+  "unignore.reason.hidden": "Used internally",
+  "unignore.reason.ignore_list": "Excluded",
+  "unignore.reason.wildcard_prefix": "Name prefix",
+  "unignore.reason.wildcard_suffix": "Name suffix",
+  "unignore.reason.channel_restricted": "Other channel",
+  "unignore.reason.event_suppressed": "Events suppressed",
+  "unignore.reason.internal_flag": "Internal",
+  "unignore.reason.read_only": "Diagnostic bit",
+  "unignore.reason.unknown": "Unknown",
+  "unignore.reason_help.operation_mode":
+    "The channel's operation mode excludes this parameter. Changing the mode surfaces it without an un-ignore entry.",
+  "unignore.reason_help.master_gate":
+    "A MASTER configuration value outside the whitelist for this model and channel.",
+  "unignore.reason_help.week_profile":
+    "One cell of a week profile (P1_ENDTIME_MONDAY_1, 01_WP_LEVEL). A single thermostat has hundreds of them; edit the profile in the schedule editor instead.",
+  "unignore.reason_help.device_specific":
+    "Suppressed for this device model specifically.",
+  "unignore.reason_help.hidden":
+    "The data point exists and is consumed elsewhere (maintenance channel, combined data point) but is not shown on its own.",
+  "unignore.reason_help.ignore_list":
+    "On the built-in list of parameters that never become data points.",
+  "unignore.reason_help.wildcard_prefix":
+    "Matches a suppressed name prefix (ADJUSTING_, ERR_TTM_, HANDLE_, IDENTIFY_, PARTY_START_, PARTY_STOP_, STATUS_FLAG_).",
+  "unignore.reason_help.wildcard_suffix":
+    "Matches a suppressed name suffix (_OVERFLOW, _OVERRUN, _REPORTING, _RESULT, _STATUS, _SUBMIT).",
+  "unignore.reason_help.channel_restricted":
+    "Accepted only on a different channel of this device.",
+  "unignore.reason_help.event_suppressed":
+    "Events for this parameter are filtered on this device model.",
+  "unignore.reason_help.internal_flag":
+    "The CCU marks the parameter as INTERNAL — a service value, not an operating one.",
+  "unignore.reason_help.read_only":
+    "Neither writable nor event-capable: the CCU never pushes it, so it only updates when polled.",
+  "unignore.reason_help.unknown":
+    "No known rule explains this suppression. Please report it.",
   "programs.title": "Programs",
   "programs.empty": "No programs.",
   "programs.run": "Execute",
@@ -3489,9 +3550,6 @@ const EN: Catalog = {
   "inbox.col.serial": "Serial",
   "inbox.col.first_seen": "First seen",
   "inbox.col.actions": "Actions",
-  "unignore.col.pattern": "Pattern",
-  "unignore.col.match": "Status",
-  "unignore.col.enabled": "Enabled",
   "audit.col.time": "Time",
   "audit.col.action": "Action",
   "audit.col.user": "User",
@@ -4757,15 +4815,12 @@ const DE: Catalog = {
   "unignore.warning":
     "Häufige Schreibvorgänge auf MASTER-Paramset-Werte können Geräte beschädigen.",
   "unignore.central_label": "Zentrale:",
-  "unignore.include_master": "MASTER-Parameter einbeziehen",
   "unignore.search_placeholder": "Nach Name filtern…",
   "unignore.add_pattern": "Hinzufügen",
   "unignore.add_pattern_placeholder":
     "PARAMETER oder PARAMETER:PARAMSET@MODEL:CHANNEL",
   "unignore.save": "Speichern",
-  "unignore.saving": "Speichere…",
   "unignore.discard": "Verwerfen",
-  "unignore.unsaved_changes": "Nicht gespeicherte Änderungen",
   "unignore.no_centrals": "Keine Zentralen registriert.",
   "unignore.no_candidates": "Keine versteckten Parameter verfügbar.",
   "unignore.no_match": "kein Treffer",
@@ -4774,6 +4829,70 @@ const DE: Catalog = {
   "unignore.saved": "Un-Ignore-Liste aktualisiert ({count} Muster).",
   "unignore.saved_with_errors": "Gespeichert mit {count} Parse-Fehler(n).",
   "unignore.save_failed": "Speichern fehlgeschlagen: {err}",
+  "unignore.stats":
+    "{total} versteckte Parameter · {active} aktiviert · {pending} geändert",
+  "unignore.pending_changes": "Nicht gespeichert: {count}",
+  "unignore.filter.categories": "Kategorie",
+  "unignore.filter.paramset": "Paramset",
+  "unignore.filter.only_enabled": "Nur aktivierte",
+  "unignore.filter.hidden_notice":
+    "Durch den Kategoriefilter ausgeblendet: {count}.",
+  "unignore.filter.show_all": "Alle anzeigen",
+  "unignore.filter.reset": "Filter zurücksetzen",
+  "unignore.no_filter_match": "Kein Parameter passt zum Filter.",
+  "unignore.no_filter_match_hint":
+    "Suche erweitern oder eine Kategorie wieder einblenden.",
+  "unignore.toggle_parameter": "{parameter} aktivieren oder deaktivieren",
+  "unignore.toggle_scopes": "Gerätetypen für {parameter} anzeigen",
+  "unignore.remove_pattern": "Muster {pattern} entfernen",
+  "unignore.orphans_title": "Muster ohne passenden Parameter",
+  "unignore.orphans_hint":
+    "Früher gespeichert oder von Hand eingetragen — aktuell trägt sie kein Gerät im Bestand.",
+  "unignore.scope.all_devices": "Alle Geräte",
+  "unignore.scope.all_channels": "alle Kanäle",
+  "unignore.scope.partial": "Bereiche: {count}",
+  "unignore.scope.models": "Gerätetypen: {count}",
+  "unignore.scope.channel": "Kanal {channel}",
+  "unignore.scope.device_count": "Geräte: {count}",
+  "unignore.reason.operation_mode": "Kanalmodus",
+  "unignore.reason.master_gate": "MASTER-Einstellung",
+  "unignore.reason.week_profile": "Wochenprogramm",
+  "unignore.reason.device_specific": "Gerätespezifisch",
+  "unignore.reason.hidden": "Intern verwendet",
+  "unignore.reason.ignore_list": "Ausgeschlossen",
+  "unignore.reason.wildcard_prefix": "Namenspräfix",
+  "unignore.reason.wildcard_suffix": "Namenssuffix",
+  "unignore.reason.channel_restricted": "Anderer Kanal",
+  "unignore.reason.event_suppressed": "Events unterdrückt",
+  "unignore.reason.internal_flag": "Intern",
+  "unignore.reason.read_only": "Diagnose-Bit",
+  "unignore.reason.unknown": "Unbekannt",
+  "unignore.reason_help.operation_mode":
+    "Der Betriebsmodus des Kanals schließt diesen Parameter aus. Ein anderer Modus blendet ihn ohne Un-Ignore-Eintrag ein.",
+  "unignore.reason_help.master_gate":
+    "MASTER-Konfigurationswert außerhalb der Freigabeliste für diesen Gerätetyp und Kanal.",
+  "unignore.reason_help.week_profile":
+    "Eine Zelle eines Wochenprogramms (P1_ENDTIME_MONDAY_1, 01_WP_LEVEL). Ein einzelnes Thermostat hat davon hunderte; bearbeiten Sie das Profil stattdessen im Zeitprogramm-Editor.",
+  "unignore.reason_help.device_specific":
+    "Gezielt für diesen Gerätetyp unterdrückt.",
+  "unignore.reason_help.hidden":
+    "Der Datenpunkt existiert und wird an anderer Stelle ausgewertet (Wartungskanal, kombinierter Datenpunkt), erscheint aber nicht einzeln.",
+  "unignore.reason_help.ignore_list":
+    "Steht auf der eingebauten Liste von Parametern, die nie zu Datenpunkten werden.",
+  "unignore.reason_help.wildcard_prefix":
+    "Trifft auf ein unterdrücktes Namenspräfix zu (ADJUSTING_, ERR_TTM_, HANDLE_, IDENTIFY_, PARTY_START_, PARTY_STOP_, STATUS_FLAG_).",
+  "unignore.reason_help.wildcard_suffix":
+    "Trifft auf ein unterdrücktes Namenssuffix zu (_OVERFLOW, _OVERRUN, _REPORTING, _RESULT, _STATUS, _SUBMIT).",
+  "unignore.reason_help.channel_restricted":
+    "Nur auf einem anderen Kanal dieses Geräts vorgesehen.",
+  "unignore.reason_help.event_suppressed":
+    "Events dieses Parameters werden für diesen Gerätetyp gefiltert.",
+  "unignore.reason_help.internal_flag":
+    "Die CCU kennzeichnet den Parameter als INTERNAL — ein Service-Wert, kein Betriebswert.",
+  "unignore.reason_help.read_only":
+    "Weder schreibbar noch event-fähig: Die CCU sendet ihn nie von sich aus, er aktualisiert sich nur beim Abfragen.",
+  "unignore.reason_help.unknown":
+    "Keine bekannte Regel erklärt diese Unterdrückung. Bitte melden.",
   "programs.title": "Programme",
   "programs.empty": "Keine Programme.",
   "programs.run": "Ausführen",
@@ -7225,9 +7344,6 @@ const DE: Catalog = {
   "inbox.col.serial": "Seriennr.",
   "inbox.col.first_seen": "Erstmals gesehen",
   "inbox.col.actions": "Aktionen",
-  "unignore.col.pattern": "Muster",
-  "unignore.col.match": "Status",
-  "unignore.col.enabled": "Aktiv",
   "audit.col.time": "Zeit",
   "audit.col.action": "Aktion",
   "audit.col.user": "Benutzer",
