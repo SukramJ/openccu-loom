@@ -2,40 +2,37 @@
 
 ## 0.58.3
 
-- **Speichern kürzt die Schaltdauern nicht mehr.** Die CCU legt eine
-  Dauer als Zeitbasis plus Faktor ab; der Editor zeigte dieses Paar
-  gerundet an — aus 65 Sekunden wurde „1min". Angezeigt wurde, was beim
-  nächsten Speichern zurückgeschrieben wird, also verkürzte ein
-  unverändertes Öffnen-und-Speichern die Dauer auf 60 Sekunden.
-- **Türschlösser und lange Schaltdauern tauchen im Wochenprogramm wieder
-  auf.** Die Wochenprogramm-Oberfläche verwarf stillschweigend jeden
-  Eintrag, den sie nicht erneut prüfen konnte: jeden Schloss-Eintrag mit
-  „bis auf Weiteres" und jeden Schalteintrag mit einer Dauer auf grober
-  Zeitbasis, etwa 12 Minuten. Auf dem Gerät waren sie da, hier fehlten
-  sie.
-- **Ein Eintrag mit fester Uhrzeit behauptet keinen Sonnenaufgang mehr.**
-- **Wochenprogramme behalten Einträge jenseits des 24.** Schalt-, Dimm-
-  und Rollladenkanäle haben 75 Zeitprogramm-Gruppen; ausgewertet wurden
-  nur 24. Ein auf der CCU angelegtes längeres Programm kam hier gekürzt
-  an und ließ sich nicht zurückspeichern.
-- **Der MQTT-Button "Bewegung zurücksetzen" ist auffindbar und
-  übersetzt.** Er lag in Home Assistant im eingeklappten
-  Konfigurations-Bereich des Geräts und hieß halb englisch
-  ("… — reset motion").
-- **Sonntag funktioniert in Geräte-Wochenprogrammen wieder.** Die
-  Wochentagsmaske wurde für Sonntag auf dem falschen Bit gelesen. Ein
-  auf der CCU für Sonntag gesetztes Programm kam ohne Wochentag an,
-  ein hier gespeichertes hat sonntags nie geschaltet — beides
-  unbemerkt, weil alle anderen Tage korrekt waren.
+- **Saving a schedule no longer shortens its switching durations.** The
+  CCU stores a duration as a time base plus a factor, and the editor
+  rendered that pair rounded — 65 seconds came back as "1min". What is
+  displayed is what the next save writes back, so opening a schedule and
+  saving it unchanged cut the duration to 60 seconds.
+- **Door locks and long switching durations reappear in week profiles.**
+  The week-profile surface silently discarded every entry it could not
+  re-validate: every lock entry set to "until further notice" and every
+  switching entry whose duration sits on a coarse time base, such as
+  12 minutes. They were on the device; they were missing here.
+- **A fixed-time entry no longer claims a sunrise.**
+- **Week profiles keep every entry past the 24th.** Switching, dimming
+  and blind channels carry 75 schedule groups, and only 24 were
+  evaluated. A longer schedule built on the CCU arrived here truncated
+  and could not be saved back.
+- **The MQTT "reset motion" button is findable and translated.** Home
+  Assistant filed it into the collapsed configuration section of the
+  device page, and its name was half English ("… — reset motion").
+- **Sunday works in device week profiles again.** The weekday mask was
+  read with Sunday on the wrong bit. A schedule set on the CCU for
+  Sunday arrived with no weekday at all, and one saved here never fired
+  on a Sunday — both unnoticed, because every other day was correct.
 
 ## 0.58.2
 
-- **Wochenprogramm-Zellen im Bildschirm "Ausgeblendete Parameter"**
-  werden wieder als Wochenprogramm einsortiert. Zwei Drittel von ihnen
-  landeten unter "MASTER-Einstellung" und damit in der offenen Liste
-  statt in der eingeklappten Kategorie.
-- **Badges nennen die Regel statt ihrer Kategorie**: statt
-  "Namenspräfix" steht dort jetzt "Präfix `STATUS_FLAG_`".
+- **Week-profile cells on the "hidden parameters" screen** are filed as
+  week profiles again. Two thirds of them ended up under "MASTER
+  setting", which put them in the open list instead of the collapsed
+  category.
+- **Badges name the rule instead of its category**: "Name prefix" now
+  reads "Prefix `STATUS_FLAG_`".
 
 ## 0.58.1
 
