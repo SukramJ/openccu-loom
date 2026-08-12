@@ -484,9 +484,13 @@ func TestClimateConvertRawWithInvalidSlotNumberStr(t *testing.T) {
 // Simple paramset round-trip
 // ---------------------------------------------------------------------------
 
+// TestSimpleParamsetConvertRawToDictSchedule covers the core
+// WEEKDAY/LEVEL/FIXED_HOUR/FIXED_MINUTE fields and the handling of keys
+// that are not week-profile cells. The optional fields
+// (TARGET_CHANNELS, CONDITION, ASTRO_*, DURATION, RAMP_TIME, colour) are
+// covered by the parity tests in internal/central/adapter, which drive
+// them through both surfaces at once.
 func TestSimpleParamsetConvertRawToDictSchedule(t *testing.T) {
-	// Note: TARGET_CHANNELS/CONDITION/ASTRO_* are not yet in the Go parser;
-	// only the core WEEKDAY/LEVEL/FIXED_HOUR/FIXED_MINUTE fields are tested.
 	t.Parallel()
 	raw := map[string]any{
 		"01_WP_WEEKDAY":      6, // MONDAY(2) + TUESDAY(4) = bitmask 6
@@ -553,7 +557,10 @@ func TestSimpleParamsetBuildDictToRaw(t *testing.T) {
 	if err := ss.Put(1, entry); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	got := BuildSimpleRawParamset(ss, schedule.SimpleMaxSlot)
+	got, err := BuildSimpleRawParamset(ss, schedule.SimpleMaxSlot)
+	if err != nil {
+		t.Fatalf("BuildSimpleRawParamset: %v", err)
+	}
 	if _, ok := got["01_WP_WEEKDAY"]; !ok {
 		t.Error("missing 01_WP_WEEKDAY")
 	}
@@ -618,7 +625,10 @@ func TestSimpleRawParamsetRoundTripsGroupsAboveTwentyFour(t *testing.T) {
 
 			// And back out again: a schedule that survives the read must
 			// survive the write, or an operator opening it loses it.
-			out := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
+			out, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
+			if err != nil {
+				t.Fatalf("BuildSimpleRawParamset: %v", err)
+			}
 			if got := out[fmt.Sprintf("%02d_WP_WEEKDAY", group)]; got != 2 {
 				t.Errorf("group %d WEEKDAY after build = %v, want 2", group, got)
 			}
@@ -641,7 +651,10 @@ func TestBuildSimpleRawParamsetHonoursTheDeactivationBound(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 
-	out := BuildSimpleRawParamset(s, 69)
+	out, err := BuildSimpleRawParamset(s, 69)
+	if err != nil {
+		t.Fatalf("BuildSimpleRawParamset: %v", err)
+	}
 	if _, ok := out["69_WP_WEEKDAY"]; !ok {
 		t.Error("group 69 not deactivated although the device declares it")
 	}
@@ -651,7 +664,10 @@ func TestBuildSimpleRawParamsetHonoursTheDeactivationBound(t *testing.T) {
 
 	// Bound 0 means "device unknown": write the active groups, touch
 	// nothing else.
-	none := BuildSimpleRawParamset(s, 0)
+	none, err := BuildSimpleRawParamset(s, 0)
+	if err != nil {
+		t.Fatalf("BuildSimpleRawParamset: %v", err)
+	}
 	if _, ok := none["02_WP_WEEKDAY"]; ok {
 		t.Error("deactivation swept with bound 0")
 	}

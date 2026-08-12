@@ -223,6 +223,47 @@ This is a deliberate cleanup, not a missing data point.
 suppression signature on these three parameters; any other drift on them still
 surfaces.
 
+### BD-Schedule-CoarsestTimeBase — the duration encoder picks the coarsest base, not the natural one
+
+`<NN>_WP_DURATION_BASE` / `_FACTOR` (and the RAMP_TIME pair) encode a duration
+as a time base plus a factor the firmware caps at 30. Several pairs express the
+same duration — 10s is `(SEC_10, 1)`, `(SEC_5, 2)` and `(SEC_1, 10)` alike — so
+an encoder needs a tie-break rule.
+
+- **aiohomematic** starts at the *natural* base for the input unit and promotes
+  only when the factor would exceed the cap, so "10s" becomes `(SEC_1, 10)` and
+  "40min" becomes `(MIN_5, 8)` (`convert_duration_to_base_factor`,
+  `_NATURAL_BASE_INDEX`, `model/schedule_models.py`).
+- **OpenCCU-Loom** picks the *coarsest* base that divides evenly within the
+  cap, so "10s" becomes `(SEC_10, 1)` and "40min" becomes `(MIN_10, 4)`
+  (`weekprofile.ParseTimeBaseFactor`).
+
+Both are valid encodings of the identical duration and the CCU accepts either;
+the device evaluates base × factor, not the shape of the pair. The rule differs
+because OpenCCU-Loom reached this format from the REST side first, and the
+coarsest-base rule was already what its schedule editor wrote to every device in
+the field. Switching to the natural base would have re-encoded every stored
+schedule on its next save for no behavioural gain.
+
+Two properties are enforced instead of the reference's rule, and they are what
+the tests pin (`TestDurationBaseFactorRoundTrip`,
+`TestDurationEncodingSettlesAfterOnePass`, `internal/model/weekprofile`):
+
+- **Value preservation.** Decoding is exact — the factor is multiplied out in
+  its base's own unit, so `(SEC_5, 13)` reads "65s". Rendering by magnitude
+  instead ("1min") loses 5 seconds on the next save, because the string is what
+  gets re-encoded.
+- **One-pass settling.** A schedule opened and saved unedited may have its pair
+  normalised once and never moves again.
+
+The reference's other duration rules are ported unchanged: the factor cap of
+30, the eight time bases and their 100ms weights, and the rejection of
+sub-100ms granularity. One documented addition — the pair `(HOUR_1, 31)` passes
+through verbatim although it sits past the cap, because the firmware parks it on
+slots with no duration and the lock domain uses it for "until further notice";
+the reference rejects "31h" outright, which would make every door-lock schedule
+read from a CCU unsavable.
+
 ### BD-Visibility-RedundantForcedUsage — Go records a forced_usage that restates the agreed usage
 
 Click-event press parameters (`PRESS_SHORT`, `PRESS_LONG`, `PRESS`) on physical

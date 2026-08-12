@@ -295,8 +295,10 @@ type ClimateSchedule struct {
 // position. `duration` keeps the actor at this level for a fixed
 // time (auto-revert), `ramp_time` controls the dimmer ramp.
 type SimpleScheduleEntry struct {
-	// SlotNo is 1..24 — preserved so a partial update keeps unrelated
-	// slots intact on the CCU.
+	// SlotNo is 1..75 — preserved so a partial update keeps unrelated
+	// slots intact on the CCU. A given channel declares fewer (69 or 75
+	// in the field), and that is the real bound: what its MASTER
+	// paramset does not contain cannot be written to it.
 	SlotNo int `json:"slot_no"`
 
 	// --- Trigger -----------------------------------------------

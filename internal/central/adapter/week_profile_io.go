@@ -139,16 +139,20 @@ type defaultChannelSaver struct {
 }
 
 // Save converts s into the CCU MASTER paramset wire form and writes it
-// through the channel's writer. Inactive groups (1..24) are explicitly
-// zeroed so the CCU deactivates deleted entries. Returns
+// through the channel's writer. Inactive groups are explicitly zeroed so
+// the CCU deactivates deleted entries, bounded by what the channel
+// declares — see [defaultChannelSaver.declaredGroups]. Returns
 // [ErrChannelNotWired] when no writer has been installed.
 func (sv *defaultChannelSaver) Save(ctx context.Context, s *schedule.Simple) error {
 	w := sv.ch.Writer()
 	if w == nil {
 		return ErrChannelNotWired
 	}
-	values := weekprofile.BuildSimpleRawParamset(s, sv.declaredGroups(ctx))
-	if err := w.PutParamset(ctx, sv.ch.Address, hmenum.ParamsetKeyMaster, values, sv.priority); err != nil {
+	values, err := weekprofile.BuildSimpleRawParamset(s, sv.declaredGroups(ctx))
+	if err != nil {
+		return fmt.Errorf("schedule.save.simple: %w", err)
+	}
+	if err = w.PutParamset(ctx, sv.ch.Address, hmenum.ParamsetKeyMaster, values, sv.priority); err != nil {
 		return fmt.Errorf("schedule.save.simple: PutParamset: %w", err)
 	}
 	return nil

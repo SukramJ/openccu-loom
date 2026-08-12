@@ -8,6 +8,40 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Saving a schedule no longer shortens its switching durations.** The
+  CCU stores a duration as a time base plus a factor, and the schedule
+  editor rendered that pair by magnitude: a slot set to 65 seconds came
+  back as "1min", one set to 1.2 seconds as "1s". The displayed string is
+  what gets written on the next save, so opening a schedule and saving it
+  unchanged handed the device a shorter duration than it had — 65s became
+  60s, 70 minutes became an hour. Durations are now rendered exactly, so
+  the value survives the round trip.
+
+- **Door locks and long switching durations reappear in week profiles.**
+  The week-profile surface — MQTT and the `/week_profile` endpoints —
+  silently discarded any entry it could not re-validate on the way in.
+  That caught more than it was meant to: every door-lock slot the CCU
+  encodes as "until further notice" (an unlock, an auto-relock end, any
+  standing user permission) and every switching entry whose duration sits
+  on a coarse time base, such as 12 minutes. Those schedules existed on
+  the device and were simply absent here. What the CCU holds is now
+  reported as it stands.
+
+- **A fixed-time entry no longer claims a sunrise.** The week-profile
+  path read the CCU's ASTRO_TYPE field on every group, including groups
+  that switch at a fixed time and ignore it, and reported them as tied to
+  sunrise.
+
+### Changed
+
+- **Schedule durations are reported in the unit the device stores them
+  in.** `duration` and `ramp_time` on `SimpleScheduleEntry` now carry the
+  exact value — a slot the CCU holds as 13 × 5 seconds reads "65s", and
+  one it holds as 24 × 5 seconds reads "120s" where it previously read
+  "2min". Both forms were always accepted on input and still are; this
+  changes what the API reports, and it is what makes the round trip
+  lossless. (REST API 5.20.0)
+
 - **Six of the eight schedule conditions were named after a different
   rule than the device applies.** The `<NN>_WP_CONDITION` integer is
   translated in two places, and they disagreed. Condition 2 was called

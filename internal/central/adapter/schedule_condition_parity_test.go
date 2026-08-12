@@ -10,23 +10,25 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 )
 
-// TestScheduleConditionVocabularyMatchesTheCCU pins both translations of
+// TestScheduleConditionVocabularyMatchesTheCCU pins the translation of
 // the `<NN>_WP_CONDITION` integer against the device.
 //
-// The daemon converts that one CCU field in two places — the REST
-// schedules domain and the week-profile model — and they disagreed on
-// six of the eight values. The CCU's own editor is the authority; its
-// option list is, in order, Fixed, Astro, FixedIfBeforeAstro,
-// AstroIfBeforeFixed, FixedIfAfterAstro, AstroIfAfterFixed,
-// EarliestOfFixedAndAstro, LatestOfFixedAndAstro (`arOptions` in
-// WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js).
+// The CCU's own editor is the authority; its option list is, in order,
+// Fixed, Astro, FixedIfBeforeAstro, AstroIfBeforeFixed, FixedIfAfterAstro,
+// AstroIfAfterFixed, EarliestOfFixedAndAstro, LatestOfFixedAndAstro
+// (`arOptions` in WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js).
 //
-// The week-profile side named condition 2 "astro_before_fixed" where the
-// device means "fixed if before astro" — the two roles swapped — and
-// called 6 and 7 "between" and "or" where the device selects the
-// earlier or later of the two times. A schedule read through that path
-// reported a rule the device does not implement, and one written through
-// it selected a different rule than the name promised.
+// The daemon translated that one field in two places and they disagreed
+// on six of the eight values: condition 2 was called "astro_before_fixed"
+// where the device means "fixed if before astro" — the two roles swapped
+// — and 6 and 7 were called "between" and "or" where the device selects
+// the earlier or later of the two times. A schedule read through that
+// path reported a rule the device does not implement, and one written
+// through it selected a different rule than the name promised.
+//
+// There is one table now, so this test pins it against the device rather
+// than the two against each other. The guard that the second table does
+// not grow back is TestSimpleScheduleReadAgreesAcrossSurfaces.
 func TestScheduleConditionVocabularyMatchesTheCCU(t *testing.T) {
 	t.Parallel()
 
@@ -43,21 +45,29 @@ func TestScheduleConditionVocabularyMatchesTheCCU(t *testing.T) {
 	}
 
 	for id, name := range want {
-		if got := scheduleConditionByID[id]; got != name {
-			t.Errorf("REST vocabulary: condition %d = %q, want %q", id, got, name)
-		}
 		if got := string(weekprofile.ConditionForWire(id)); got != name {
-			t.Errorf("week-profile vocabulary: condition %d = %q, want %q", id, got, name)
+			t.Errorf("condition %d = %q, want %q", id, got, name)
 		}
 	}
 
 	// Both directions, so a write selects what its name promises.
 	for id, name := range want {
-		if got := scheduleConditionIDByName[name]; got != id {
-			t.Errorf("REST reverse: %q = %d, want %d", name, got, id)
-		}
 		if got := weekprofile.WireForCondition(schedulemodel.Condition(name)); got != id {
-			t.Errorf("week-profile reverse: %q = %d, want %d", name, got, id)
+			t.Errorf("reverse: %q = %d, want %d", name, got, id)
+		}
+		if !weekprofile.ConditionIsKnown(schedulemodel.Condition(name)) {
+			t.Errorf("%q is not recognised as a condition", name)
+		}
+	}
+
+	// The vocabulary is closed: a name the device does not offer must be
+	// rejected rather than silently written as condition 0. The REST
+	// surface takes the condition as a free string, so this is the only
+	// thing standing between a typo and a schedule that fires at the
+	// wrong time.
+	for _, bogus := range []string{"astro_before_fixed", "between", "or", "FIXED_TIME", "nonsense"} {
+		if weekprofile.ConditionIsKnown(schedulemodel.Condition(bogus)) {
+			t.Errorf("%q is accepted as a condition but the CCU has no such option", bogus)
 		}
 	}
 }

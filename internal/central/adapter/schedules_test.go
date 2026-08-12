@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 
 	schedulemodel "github.com/SukramJ/openccu-loom/internal/model/schedule"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -294,9 +296,9 @@ func TestSerializeSimpleScheduleAstroAndDuration(t *testing.T) {
 	// Duration "10s" → base SEC_10 (3) × factor 1 OR base SEC_1 (1) × factor 10. Heuristic picks largest.
 	dBase := raw["01_WP_DURATION_BASE"].(int)
 	dFactor := raw["01_WP_DURATION_FACTOR"].(int)
-	gotDuration := timeBaseSecondsScheduleField[dBase] * float64(dFactor)
-	if gotDuration != 10 {
-		t.Errorf("DURATION encodes %v seconds, want 10", gotDuration)
+	gotDuration := weekprofile.FormatTimeBaseFactor(dBase, dFactor)
+	if gotDuration != "10s" {
+		t.Errorf("DURATION_BASE/FACTOR encodes %q, want %q", gotDuration, "10s")
 	}
 	// Ramp 500ms → base MS_100 (0) × factor 5
 	if raw["01_WP_RAMP_TIME_BASE"] != 0 || raw["01_WP_RAMP_TIME_FACTOR"] != 5 {
@@ -594,58 +596,58 @@ func TestSerializeSimpleScheduleValidRampTime(t *testing.T) {
 }
 
 // ============================================================
-// parseTimeBaseFactor — bare-number path and "m" suffix
+// weekprofile.ParseTimeBaseFactor — bare-number path and "m" suffix
 // ============================================================
 
 func TestParseTimeBaseFactorBareNumber(t *testing.T) {
 	t.Parallel()
 	// "60" (bare seconds) → ok
-	_, _, ok := parseTimeBaseFactor("60")
+	_, _, ok := weekprofile.ParseTimeBaseFactor("60")
 	if !ok {
-		t.Error("parseTimeBaseFactor bare number 60 must succeed")
+		t.Error("ParseTimeBaseFactor bare number 60 must succeed")
 	}
 }
 
 func TestParseTimeBaseFactorMinuteSuffix(t *testing.T) {
 	t.Parallel()
 	// "5m" → 5 × 60 = 300 seconds
-	_, _, ok := parseTimeBaseFactor("5m")
+	_, _, ok := weekprofile.ParseTimeBaseFactor("5m")
 	if !ok {
-		t.Error("parseTimeBaseFactor 5m must succeed")
+		t.Error("ParseTimeBaseFactor 5m must succeed")
 	}
 }
 
 func TestParseTimeBaseFactorZeroSeconds(t *testing.T) {
 	t.Parallel()
 	// "0s" → seconds=0 → should fail (seconds <= 0)
-	_, _, ok := parseTimeBaseFactor("0s")
+	_, _, ok := weekprofile.ParseTimeBaseFactor("0s")
 	if ok {
-		t.Error("parseTimeBaseFactor 0s must fail (zero duration)")
+		t.Error("ParseTimeBaseFactor 0s must fail (zero duration)")
 	}
 }
 
 func TestParseTimeBaseFactorNegativeNumber(t *testing.T) {
 	t.Parallel()
-	_, _, ok := parseTimeBaseFactor("-5")
+	_, _, ok := weekprofile.ParseTimeBaseFactor("-5")
 	if ok {
-		t.Error("parseTimeBaseFactor -5 must fail (negative duration)")
+		t.Error("ParseTimeBaseFactor -5 must fail (negative duration)")
 	}
 }
 
 // TestParseTimeBaseFactorPermanentSentinel locks the (HOUR_1, 31)
-// sentinel round-trip. formatTimeBaseFactor renders that pair as "31h";
-// without the pass-through, parseTimeBaseFactor would reject it because
-// factor=31 exceeds the regular maxDurationFactor=30 cap. The sentinel
+// sentinel round-trip. FormatTimeBaseFactor renders that pair as "31h";
+// without the pass-through, ParseTimeBaseFactor would reject it because
+// factor=31 exceeds the regular MaxTimeBaseFactor=30 cap. The sentinel
 // appears in the wild on lock auto-relock actions and on switch slots
 // where the CCU firmware default writes 31 into DURATION_FACTOR.
 func TestParseTimeBaseFactorPermanentSentinel(t *testing.T) {
 	t.Parallel()
-	b, f, ok := parseTimeBaseFactor("31h")
+	b, f, ok := weekprofile.ParseTimeBaseFactor("31h")
 	if !ok {
-		t.Fatal("parseTimeBaseFactor 31h must succeed (permanent sentinel)")
+		t.Fatal("ParseTimeBaseFactor 31h must succeed (permanent sentinel)")
 	}
 	if b != 7 || f != 31 {
-		t.Errorf("parseTimeBaseFactor 31h = (%d, %d), want (7, 31)", b, f)
+		t.Errorf("ParseTimeBaseFactor 31h = (%d, %d), want (7, 31)", b, f)
 	}
 }
 
@@ -656,11 +658,11 @@ func TestParseTimeBaseFactorPermanentSentinel(t *testing.T) {
 // to re-encode on save.
 func TestTimeBaseFactorRoundTripPermanent(t *testing.T) {
 	t.Parallel()
-	s := formatTimeBaseFactor(7, 31)
+	s := weekprofile.FormatTimeBaseFactor(7, 31)
 	if s != "31h" {
-		t.Fatalf("formatTimeBaseFactor(7,31) = %q, want %q", s, "31h")
+		t.Fatalf("FormatTimeBaseFactor(7,31) = %q, want %q", s, "31h")
 	}
-	b, f, ok := parseTimeBaseFactor(s)
+	b, f, ok := weekprofile.ParseTimeBaseFactor(s)
 	if !ok || b != 7 || f != 31 {
 		t.Fatalf("round-trip %q = (%d, %d, %v), want (7, 31, true)", s, b, f, ok)
 	}
@@ -963,24 +965,25 @@ func TestWeekdayBitsMatchTheCCUEditor(t *testing.T) {
 		"THURSDAY": 16, "FRIDAY": 32, "SATURDAY": 64,
 	}
 	for day, bit := range want {
-		if got := weekdayNamesToBits([]string{day}); got != bit {
-			t.Errorf("weekdayNamesToBits(%s) = %d, want %d", day, got, bit)
+		days := []schedulemodel.Weekday{schedulemodel.Weekday(strings.ToUpper(day))}
+		if got := weekprofile.WeekdayListToBitmask(days); got != bit {
+			t.Errorf("WeekdayListToBitmask(%s) = %d, want %d", day, got, bit)
 		}
-		names := weekdayBitsToNames(bit)
-		if len(names) != 1 || names[0] != day {
-			t.Errorf("weekdayBitsToNames(%d) = %v, want [%s]", bit, names, day)
+		names := weekprofile.WeekdayBitmaskToList(bit)
+		if len(names) != 1 || string(names[0]) != day {
+			t.Errorf("WeekdayBitmaskToList(%d) = %v, want [%s]", bit, names, day)
 		}
 	}
 
 	// Every day at once is 127, not 254.
-	all := make([]string, 0, len(want))
+	all := make([]schedulemodel.Weekday, 0, len(want))
 	for day := range want {
-		all = append(all, day)
+		all = append(all, schedulemodel.Weekday(strings.ToUpper(day)))
 	}
-	if got := weekdayNamesToBits(all); got != 127 {
-		t.Errorf("weekdayNamesToBits(all seven) = %d, want 127", got)
+	if got := weekprofile.WeekdayListToBitmask(all); got != 127 {
+		t.Errorf("WeekdayListToBitmask(all seven) = %d, want 127", got)
 	}
-	if got := weekdayBitsToNames(127); len(got) != 7 {
-		t.Errorf("weekdayBitsToNames(127) = %v, want all seven days", got)
+	if got := weekprofile.WeekdayBitmaskToList(127); len(got) != 7 {
+		t.Errorf("WeekdayBitmaskToList(127) = %v, want all seven days", got)
 	}
 }

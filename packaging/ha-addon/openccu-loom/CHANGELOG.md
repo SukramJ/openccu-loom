@@ -2,6 +2,18 @@
 
 ## 0.58.3
 
+- **Speichern kürzt die Schaltdauern nicht mehr.** Die CCU legt eine
+  Dauer als Zeitbasis plus Faktor ab; der Editor zeigte dieses Paar
+  gerundet an — aus 65 Sekunden wurde „1min". Angezeigt wurde, was beim
+  nächsten Speichern zurückgeschrieben wird, also verkürzte ein
+  unverändertes Öffnen-und-Speichern die Dauer auf 60 Sekunden.
+- **Türschlösser und lange Schaltdauern tauchen im Wochenprogramm wieder
+  auf.** Die Wochenprogramm-Oberfläche verwarf stillschweigend jeden
+  Eintrag, den sie nicht erneut prüfen konnte: jeden Schloss-Eintrag mit
+  „bis auf Weiteres" und jeden Schalteintrag mit einer Dauer auf grober
+  Zeitbasis, etwa 12 Minuten. Auf dem Gerät waren sie da, hier fehlten
+  sie.
+- **Ein Eintrag mit fester Uhrzeit behauptet keinen Sonnenaufgang mehr.**
 - **Wochenprogramme behalten Einträge jenseits des 24.** Schalt-, Dimm-
   und Rollladenkanäle haben 75 Zeitprogramm-Gruppen; ausgewertet wurden
   nur 24. Ein auf der CCU angelegtes längeres Programm kam hier gekürzt

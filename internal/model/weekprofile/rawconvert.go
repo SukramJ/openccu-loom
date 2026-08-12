@@ -9,19 +9,25 @@
 //   "P1_ENDTIME_MONDAY_1"     : 360      ← integer minutes since midnight
 //
 // SIMPLE (NON-CLIMATE) PARAMSET FORMAT (CCU):
-//   "01_WP_WEEKDAY"    : 127   ← bitwise weekday mask (Mon=2, …, Sun=64)
+//   "01_WP_WEEKDAY"    : 127   ← bitwise weekday mask (Sun=1, Mon=2, …, Sat=64)
 //   "01_WP_FIXED_HOUR" : 7
 //   "01_WP_FIXED_MINUTE": 30
 //   "01_WP_LEVEL"      : 1.0
 //
-// These helpers are the Go port of the corresponding static methods on
-// `ClimateWeekProfile` and `DefaultWeekProfile` in
+// The week wraps at the bottom: Sunday is bit 0, not bit 7. See
+// [weekdaysByBit] for the source and what reading it the other way cost.
+//
+// This file holds the daemon's only translation of either format. The
+// REST/WS schedules domain used to carry a second implementation of the
+// simple one; the two were written in parallel, never reconciled, and
+// every defect in the format had to be found and fixed twice.
 
 package weekprofile
 
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"sort"
@@ -516,6 +522,15 @@ func ConditionForWire(id int) schedule.Condition { return conditionFromInt[id] }
 // conditions yield 0 (fixed time).
 func WireForCondition(c schedule.Condition) int { return conditionToInt[c] }
 
+// ConditionIsKnown reports whether c is one of the eight conditions the
+// CCU's `<NN>_WP_CONDITION` field carries. Callers that accept the
+// condition as a free string — the REST surface does — use it to reject
+// a typo by name instead of silently writing "fixed time".
+func ConditionIsKnown(c schedule.Condition) bool {
+	_, ok := conditionToInt[c]
+	return ok
+}
+
 // conditionToInt maps a [schedule.Condition] to the CCU integer value.
 var conditionToInt = func() map[schedule.Condition]int {
 	m := make(map[schedule.Condition]int, len(conditionFromInt))
@@ -536,6 +551,19 @@ var conditionToInt = func() map[schedule.Condition]int {
 // round-trip through ParseSimpleRawParamset → BuildSimpleRawParamset
 // produces a semantically equivalent paramset.
 //
+// This is the one translation of the `<NN>_WP_<FIELD>` read direction:
+// the REST/WS schedules domain projects its DTOs off this result rather
+// than decoding the paramset a second time.
+//
+// What the CCU holds is authoritative, so entries are stored as read
+// rather than passed through [schedule.Simple.Put] — the same rule
+// [RawToClimate] follows and for the same reason. Validating here
+// discarded real data: [schedule.SimpleEntry.Validate] caps a duration's
+// numeral at 30, which every slot on a coarse time base exceeds, so a
+// switching programme with a 12-minute duration and every lock slot the
+// CCU encodes with the "permanent" sentinel vanished from the surface
+// instead of being displayed.
+//
 // Mirrors `DefaultWeekProfile.convert_raw_to_dict_schedule`.
 func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //nolint:gocyclo,funlen // flat per-field switch dispatch; length/complexity is field count, not control-flow depth
 	type group struct {
@@ -545,7 +573,8 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 		level           float64
 		level2          *float64
 		condition       schedule.Condition
-		astroType       schedule.Astro
+		astroTypeWire   int
+		astroTypeSeen   bool
 		astroOffset     int
 		targetChannels  int
 		durationBase    int
@@ -589,11 +618,8 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 				g.condition = c
 			}
 		case "ASTRO_TYPE":
-			if toInt(val) == 1 {
-				g.astroType = schedule.AstroSunset
-			} else {
-				g.astroType = schedule.AstroSunrise
-			}
+			g.astroTypeSeen = true
+			g.astroTypeWire = toInt(val)
 		case "ASTRO_OFFSET":
 			g.astroOffset = toInt(val)
 		case "TARGET_CHANNELS":
@@ -620,6 +646,9 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 
 	s := schedule.NewSimple()
 	for groupNo, g := range groups {
+		if groupNo < 1 || groupNo > SimpleMaxGroup {
+			continue
+		}
 		if g.weekday == 0 {
 			continue // inactive group
 		}
@@ -634,25 +663,44 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 			Level:              g.level,
 			Level2:             g.level2,
 			Condition:          g.condition,
-			AstroType:          g.astroType,
 			AstroOffsetMinutes: g.astroOffset,
 			TargetChannels:     TargetChannelsBitmaskToList(g.targetChannels),
 		}
-		if g.durationFactor > 0 {
-			entry.Duration = FormatTimeBaseFactor(g.durationBase, g.durationFactor)
+		// ASTRO_TYPE is only meaningful once the condition consults an
+		// astro event. The CCU carries the field on every group, so
+		// reading it unconditionally labelled plain fixed-time entries
+		// "sunrise" and offered the operator a sun picker the device
+		// ignores.
+		if g.astroTypeSeen && entry.Condition != schedule.ConditionFixedTime {
+			if g.astroTypeWire == 1 {
+				entry.AstroType = schedule.AstroSunset
+			} else {
+				entry.AstroType = schedule.AstroSunrise
+			}
 		}
-		if g.rampFactor > 0 {
-			entry.RampTime = FormatTimeBaseFactor(g.rampBase, g.rampFactor)
-		}
+		entry.Duration = decodeWireDuration(g.durationBase, g.durationFactor)
+		entry.RampTime = decodeWireDuration(g.rampBase, g.rampFactor)
 		entry.ColorType = g.colorType
 		entry.ColorValue = g.colorValue
 		entry.OutputBehaviour = g.outputBehaviour
-		if err := s.Put(groupNo, entry); err != nil {
-			// Skip entries that fail basic validation rather than aborting.
-			continue
-		}
+		s.Entries[groupNo] = entry
 	}
 	return s, nil
+}
+
+// decodeWireDuration renders a DURATION / RAMP_TIME (base, factor) pair
+// as a duration string, or "" when the pair carries no duration.
+//
+// Factors above [MaxTimeBaseFactor] are read as "unset". The CCU parks
+// factor 31 on slots that have no duration — it is the firmware default
+// and the lock domain's "permanent" sentinel — but rejects a write of
+// any factor past 30 with fault -5. Surfacing such a value would offer
+// the operator a duration the device then refuses to take back.
+func decodeWireDuration(base, factor int) string {
+	if factor <= 0 || factor > MaxTimeBaseFactor {
+		return ""
+	}
+	return FormatTimeBaseFactor(base, factor)
 }
 
 // BuildSimpleRawParamset converts a [schedule.Simple] to the CCU flat
@@ -669,12 +717,27 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //no
 // channel does not have earns the same -5 fault. Pass 0 to skip the
 // deactivation sweep entirely, which writes the active groups and
 // leaves every other one untouched.
-func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int) map[string]any {
+//
+// This is the one translation of the `<NN>_WP_<FIELD>` write direction:
+// the REST/WS schedules domain maps its DTOs onto [schedule.Simple] and
+// calls this rather than encoding the paramset a second time. Errors
+// name the offending group so a REST caller gets a usable 4xx.
+func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int) (map[string]any, error) { //nolint:gocyclo,gocognit,funlen // flat per-field emit; length/complexity is field count, not control-flow depth
 	out := make(map[string]any, (deactivateUpTo+1)*4)
 	if s != nil {
-		for groupNo, entry := range s.Entries { //nolint:gocritic // rangeValCopy: map values cannot be addressed; copy is unavoidable
+		for _, groupNo := range s.Slots() {
+			entry := s.Entries[groupNo]
+			if groupNo < 1 || groupNo > schedule.SimpleMaxSlot {
+				return nil, fmt.Errorf("slot_no out of range: %d (1..%d)", groupNo, schedule.SimpleMaxSlot)
+			}
 			mask := WeekdayListToBitmask(entry.Weekdays)
-			hour, minute := parseHHMM(entry.Time)
+			if mask == 0 {
+				return nil, fmt.Errorf("slot %d: no weekday selected", groupNo)
+			}
+			hour, minute, err := splitHHMM(entry.Time)
+			if err != nil {
+				return nil, fmt.Errorf("slot %d: %w", groupNo, err)
+			}
 			prefix := fmt.Sprintf("%02d_WP_", groupNo)
 
 			// Mandatory fields.
@@ -685,17 +748,30 @@ func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int) map[string]a
 
 			// CONDITION — integer code; 0 = fixed_time (default).
 			condID := 0
-			if c, ok := conditionToInt[entry.Condition]; ok {
+			if entry.Condition != "" {
+				c, ok := conditionToInt[entry.Condition]
+				if !ok {
+					return nil, fmt.Errorf("slot %d: unknown condition %q", groupNo, entry.Condition)
+				}
 				condID = c
 			}
 			out[prefix+"CONDITION"] = condID
 
-			// ASTRO_TYPE — 0 = sunrise, 1 = sunset.
+			// ASTRO_TYPE — 0 = sunrise, 1 = sunset. Written even for
+			// fixed-time entries so the CCU does not retain stale data.
 			astroID := 0
-			if entry.AstroType == schedule.AstroSunset {
+			switch entry.AstroType {
+			case "", schedule.AstroSunrise:
+				// astroID stays 0 — sunrise is the wire default.
+			case schedule.AstroSunset:
 				astroID = 1
+			default:
+				return nil, fmt.Errorf("slot %d: unknown astro_type %q", groupNo, entry.AstroType)
 			}
 			out[prefix+"ASTRO_TYPE"] = astroID
+			if entry.AstroOffsetMinutes < -720 || entry.AstroOffsetMinutes > 720 {
+				return nil, fmt.Errorf("slot %d: astro_offset_minutes out of range", groupNo)
+			}
 			out[prefix+"ASTRO_OFFSET"] = entry.AstroOffsetMinutes
 
 			// TARGET_CHANNELS bitmask.
@@ -709,14 +785,20 @@ func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int) map[string]a
 			// DURATION — emit only when set; (0,0) is rejected by some CCU
 			// firmware when the MASTER description omits DURATION_BASE.
 			if entry.Duration != "" {
-				b, f := parseDurationToBaseFactorInts(entry.Duration)
+				b, f, ok := ParseTimeBaseFactor(entry.Duration)
+				if !ok {
+					return nil, fmt.Errorf("slot %d: invalid duration %q", groupNo, entry.Duration)
+				}
 				out[prefix+"DURATION_BASE"] = b
 				out[prefix+"DURATION_FACTOR"] = f
 			}
 
 			// RAMP_TIME — same conditional emit policy as DURATION.
 			if entry.RampTime != "" {
-				b, f := parseDurationToBaseFactorInts(entry.RampTime)
+				b, f, ok := ParseTimeBaseFactor(entry.RampTime)
+				if !ok {
+					return nil, fmt.Errorf("slot %d: invalid ramp_time %q", groupNo, entry.RampTime)
+				}
 				out[prefix+"RAMP_TIME_BASE"] = b
 				out[prefix+"RAMP_TIME_FACTOR"] = f
 			}
@@ -749,7 +831,7 @@ func BuildSimpleRawParamset(s *schedule.Simple, deactivateUpTo int) map[string]a
 			out[fmt.Sprintf("%02d_WP_TARGET_CHANNELS", no)] = 0
 		}
 	}
-	return out
+	return out, nil
 }
 
 // IsSimpleGroupActive reports whether a raw schedule group is active,
@@ -786,11 +868,6 @@ func toFloat(v any) float64 {
 		return f
 	}
 	return 0
-}
-
-func parseHHMM(s string) (hour, minute int) {
-	fmt.Sscanf(s, "%d:%d", &hour, &minute) //nolint:errcheck // best-effort: hour/minute stay 0 on bad input
-	return hour, minute
 }
 
 // ---------------------------------------------------------------------------
@@ -852,11 +929,25 @@ func TargetChannelsBitmaskToList(mask int) []string {
 // Duration / ramp-time encoding helpers
 // ---------------------------------------------------------------------------
 
-// maxTimeBaseFactor is the largest DURATION_FACTOR / RAMP_TIME_FACTOR the CCU
-// firmware accepts (factor=31 is reserved as a "permanent" sentinel for lock
-// channels). The encoder promotes to a larger TimeBase rather than emit a
-// factor above this cap. Mirrors `_MAX_DURATION_FACTOR` in schedule_models.py.
-const maxTimeBaseFactor = 30
+// MaxTimeBaseFactor is the largest DURATION_FACTOR / RAMP_TIME_FACTOR the CCU
+// firmware accepts. The encoder promotes to a larger TimeBase rather than emit
+// a factor above this cap, and the reader treats anything above it as "no
+// duration". Mirrors `_MAX_DURATION_FACTOR` in schedule_models.py.
+const MaxTimeBaseFactor = 30
+
+// permanentBase and permanentFactor are the pair the CCU firmware parks
+// on a slot that carries no duration, and the encoding the lock domain
+// uses for "until further notice" — an auto-relock end, an unlock, or a
+// standing user permission.
+//
+// It sits one past [MaxTimeBaseFactor] on purpose: the device stores it
+// but rejects a write of any *other* factor above the cap. The encoder
+// therefore passes this one pair through verbatim so a lock schedule
+// read from the CCU can be saved again.
+const (
+	permanentBase   = 7 // HOUR_1
+	permanentFactor = 31
+)
 
 // timeBaseTable maps a CCU TimeBase integer to (unit string, multiplier in that
 // unit, base expressed in 100ms units). `mult` converts a factor to a concrete
@@ -879,35 +970,29 @@ var timeBaseTable = []struct {
 	{7, "h", 1, 36000},   // HOUR_1
 }
 
-// naturalBaseIndex is the index into [timeBaseTable] where the encoder starts
-// its search for a given input unit. Starting at the natural base (rather than
-// the finest base) makes "2min" encode as (MIN_1, 2) instead of being needlessly
-// promoted to a finer base like (SEC_5, 24) — both are 120s, but the CCU editor
-// surfaces the emitted base/factor, so the coarser natural base matches what the
-// reference writes. Mirrors `_NATURAL_BASE_INDEX` in schedule_models.py:223.
-var naturalBaseIndex = map[string]int{
-	"ms":  0, // MS_100
-	"s":   1, // SEC_1
-	"min": 4, // MIN_1
-	"h":   7, // HOUR_1
-}
-
 // durationUnitIn100ms converts a duration unit to 100ms steps. "ms" is
 // special-cased (the literal millisecond value is collapsed to 100ms steps by
 // the caller). Mirrors `_DURATION_UNIT_IN_100MS` in schedule_models.py:231.
-var durationUnitIn100ms = map[string]int{
-	"ms":  1,
+var durationUnitIn100ms = map[string]float64{
+	"ms":  0.01,
 	"s":   10,
+	"m":   600,
 	"min": 600,
 	"h":   36000,
 }
 
 // FormatTimeBaseFactor converts a (base, factor) pair from the CCU
 // paramset into a human-readable duration string used by [schedule.SimpleEntry].
-// Returns "" when factor == 0 or the base id is unknown.
-// Mirrors `convert_base_factor_to_duration` in schedule_models.py.
+// Returns "" when factor is not positive or the base id is unknown.
+//
+// The rendering is exact: the factor is multiplied out in the base's own
+// unit, so (SEC_5, 13) reads "65s". Choosing the unit by magnitude
+// instead — rendering the same pair as "1min" — rounds the value away,
+// and the string is what gets encoded on the next save, so the device
+// ends up with a duration the operator never asked for. Mirrors
+// `convert_base_factor_to_duration` in schedule_models.py.
 func FormatTimeBaseFactor(base, factor int) string {
-	if factor == 0 {
+	if factor <= 0 {
 		return ""
 	}
 	for _, row := range timeBaseTable {
@@ -918,53 +1003,103 @@ func FormatTimeBaseFactor(base, factor int) string {
 	return ""
 }
 
-// parseDurationToBaseFactorInts converts a human-readable duration string
-// ("10s", "5min", "1h", "500ms") to the (base id, factor) pair written into the
-// CCU paramset. It starts the search at the *natural* base for the input unit
-// and promotes to a larger base only when the factor would exceed the CCU cap,
-// so "2min" encodes as (MIN_1, 2) — not the finer (SEC_5, 24) a smallest-base
-// search would pick. Returns (0, 0) for unparseable or non-representable
-// strings. Mirrors `convert_duration_to_base_factor` in schedule_models.py:706.
-func parseDurationToBaseFactorInts(d string) (base, factor int) {
-	if d == "" {
-		return 0, 0
+// ParseTimeBaseFactor converts a human-readable duration string ("10s",
+// "5min", "1h", "500ms") to the (base id, factor) pair written into the
+// CCU paramset. ok is false for unparseable or non-representable input.
+//
+// It picks the *coarsest* base that divides the value evenly into a
+// factor of 1..[MaxTimeBaseFactor]. Coarsest-first matters because the
+// factor is capped: 45s has no representation in SEC_1 (factor 45) and
+// lands on SEC_5 (factor 9), and every value that fits a coarse base
+// also fits several finer ones, so without a rule the two ends of the
+// daemon picked different pairs for the same duration.
+//
+// The search is exact — it runs in whole 100ms steps rather than
+// floating-point seconds — so a value the CCU can hold is never rejected
+// for a rounding artefact, and one it cannot hold is never silently
+// snapped to a neighbour.
+//
+// Input is taken leniently because it reaches here straight from a REST
+// payload: a bare number counts as seconds, "m" as minutes, and a
+// fractional value is accepted when it lands on a whole 100ms step.
+func ParseTimeBaseFactor(d string) (base, factor int, ok bool) {
+	total100ms, ok := durationIn100ms(d)
+	if !ok {
+		return 0, 0, false
 	}
-	// Parse trailing unit. Order matters: the three-letter "min" suffix must be
-	// tested before the "ms"/"s" suffixes so it wins.
-	var unit, numStr string
-	for _, u := range []string{"min", "ms", "h", "s"} {
+	// Coarsest base first: timeBaseTable is ordered by ascending
+	// granularity, so walk it backwards.
+	for i := len(timeBaseTable) - 1; i >= 0; i-- {
+		row := timeBaseTable[i]
+		if total100ms%row.in100ms != 0 {
+			continue
+		}
+		if f := total100ms / row.in100ms; f >= 1 && f <= MaxTimeBaseFactor {
+			return row.id, f, true
+		}
+	}
+	// The "permanent" pair is one past the cap and therefore unreachable
+	// above, but the device holds it and a lock schedule read from the
+	// CCU carries it straight back into a save.
+	for _, row := range timeBaseTable {
+		if row.id == permanentBase && total100ms == permanentFactor*row.in100ms {
+			return permanentBase, permanentFactor, true
+		}
+	}
+	return 0, 0, false
+}
+
+// durationIn100ms converts a duration string to whole 100ms steps.
+// ok is false for an unparseable string, a non-positive value, or one
+// with sub-100ms granularity, which the CCU cannot represent.
+func durationIn100ms(d string) (total100ms int, ok bool) {
+	d = strings.TrimSpace(strings.ToLower(d))
+	if d == "" {
+		return 0, false
+	}
+	// Order matters: "min" must be tested before "ms"/"m"/"s" so the
+	// three-letter suffix wins, and "ms" before "m"/"s".
+	unit, numStr := "s", d
+	for _, u := range []string{"min", "ms", "h", "m", "s"} {
 		if strings.HasSuffix(d, u) {
 			unit, numStr = u, strings.TrimSuffix(d, u)
 			break
 		}
 	}
-	if unit == "" {
-		return 0, 0
-	}
-	n, err := strconv.Atoi(numStr)
+	n, err := strconv.ParseFloat(strings.TrimSpace(numStr), 64)
 	if err != nil || n <= 0 {
-		return 0, 0
+		return 0, false
 	}
+	// Sub-100ms granularity is not representable on the CCU; require the
+	// value to land on a whole step rather than rounding to one.
+	steps := n * durationUnitIn100ms[unit]
+	rounded := math.Round(steps)
+	if math.Abs(steps-rounded) > 1e-6 {
+		return 0, false
+	}
+	return int(rounded), true
+}
 
-	total100ms := n * durationUnitIn100ms[unit]
-	if unit == "ms" {
-		// ms carries a literal millisecond value; collapse it to 100ms steps.
-		// Sub-100ms granularity is not representable on the CCU.
-		if total100ms%100 != 0 {
-			return 0, 0
-		}
-		total100ms /= 100
+// splitHHMM parses a "HH:MM" switching time into its two components.
+//
+// The length bound rejects a stray "1:2" or "123:45" before the field
+// parse can read them as a plausible time — the REST surface hands this
+// string straight through from the request body.
+func splitHHMM(hhmm string) (hour, minute int, err error) {
+	if len(hhmm) < 4 || len(hhmm) > 5 {
+		return 0, 0, fmt.Errorf("invalid time %q", hhmm)
 	}
-
-	// Start at the natural base for the input unit and promote to a larger base
-	// only when the factor would overflow the CCU cap.
-	for _, row := range timeBaseTable[naturalBaseIndex[unit]:] {
-		if total100ms%row.in100ms != 0 {
-			continue
-		}
-		if f := total100ms / row.in100ms; f >= 1 && f <= maxTimeBaseFactor {
-			return row.id, f
-		}
+	before, after, found := strings.Cut(hhmm, ":")
+	if !found {
+		return 0, 0, fmt.Errorf("invalid time %q", hhmm)
 	}
-	return 0, 0
+	h, err := strconv.Atoi(before)
+	if err != nil || h < 0 || h > 23 {
+		return 0, 0, fmt.Errorf("invalid hour in %q", hhmm)
+	}
+	m, err := strconv.Atoi(after)
+	if err != nil || m < 0 || m > 59 {
+		return 0, 0, fmt.Errorf("invalid minute in %q", hhmm)
+	}
+	return h, m, nil
 }

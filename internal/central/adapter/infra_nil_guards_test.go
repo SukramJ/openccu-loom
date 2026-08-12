@@ -14,6 +14,8 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/schedule"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -492,27 +494,39 @@ func TestParseSimpleScheduleWithDomainLockUserPermission(t *testing.T) {
 }
 
 // ============================================================
-// schedules.go: formatTimeBaseFactor / parseTimeBaseFactor
+// weekprofile.FormatTimeBaseFactor / weekprofile.ParseTimeBaseFactor
 // ============================================================
 
+// TestFormatTimeBaseFactor pins the exact (not magnitude-rounded)
+// rendering: the string is what gets re-encoded on the next save, so
+// picking a coarser unit than the base actually carries loses the
+// remainder. (SEC_5, 13) is 65s, not "1min" — rendering it as "1min"
+// would silently shrink the duration by 5s on the next write.
 func TestFormatTimeBaseFactor(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		base, factor int
 		want         string
 	}{
-		{4, 5, "5min"},
-		{1, 30, "30s"},
-		{7, 2, "2h"},
-		{0, 10, "1s"}, // base 0 = 0.1s/unit → 10 units = 1.0s
-		{0, 0, ""},    // zero factor
-		{-1, 5, ""},   // negative base
-		{99, 5, ""},   // out of range base
+		{4, 5, "5min"},    // MIN_1
+		{1, 30, "30s"},    // SEC_1
+		{7, 2, "2h"},      // HOUR_1
+		{0, 10, "1000ms"}, // MS_100: rendered in its own unit, not collapsed to "1s"
+		{2, 13, "65s"},    // SEC_5, 13 → 65s (was "1min", magnitude-rounded)
+		{0, 12, "1200ms"}, // MS_100, 12 → 1200ms (was "1s", magnitude-rounded)
+		{2, 24, "120s"},   // SEC_5, 24 → 120s (was "2min")
+		{3, 7, "70s"},     // SEC_10, 7 → 70s (was "1min")
+		{5, 13, "65min"},  // MIN_5, 13 → 65min (was "1h")
+		{6, 7, "70min"},   // MIN_10, 7 → 70min (was "1h")
+		{5, 12, "60min"},  // MIN_5, 12 → 60min (was "1h")
+		{0, 0, ""},        // zero factor
+		{-1, 5, ""},       // negative base
+		{99, 5, ""},       // out of range base
 	}
 	for _, tc := range cases {
-		got := formatTimeBaseFactor(tc.base, tc.factor)
+		got := weekprofile.FormatTimeBaseFactor(tc.base, tc.factor)
 		if got != tc.want {
-			t.Errorf("formatTimeBaseFactor(%d,%d) = %q, want %q", tc.base, tc.factor, got, tc.want)
+			t.Errorf("FormatTimeBaseFactor(%d,%d) = %q, want %q", tc.base, tc.factor, got, tc.want)
 		}
 	}
 }
@@ -532,73 +546,73 @@ func TestParseTimeBaseFactor(t *testing.T) {
 		{"-5s", false},
 	}
 	for _, tc := range cases {
-		_, _, ok := parseTimeBaseFactor(tc.s)
+		_, _, ok := weekprofile.ParseTimeBaseFactor(tc.s)
 		if ok != tc.wantOK {
-			t.Errorf("parseTimeBaseFactor(%q) ok=%v, want %v", tc.s, ok, tc.wantOK)
+			t.Errorf("ParseTimeBaseFactor(%q) ok=%v, want %v", tc.s, ok, tc.wantOK)
 		}
 	}
 }
 
 // ============================================================
-// schedules.go: decodeTargetChannels / encodeTargetChannels
+// weekprofile.TargetChannelsBitmaskToList / TargetChannelsListToBitmask
 // ============================================================
 
 func TestDecodeEncodeTargetChannels(t *testing.T) {
 	t.Parallel()
 	// Encode "1_1" (bit 0) → 1, then decode back.
-	encoded := encodeTargetChannels([]string{"1_1"})
+	encoded := weekprofile.TargetChannelsListToBitmask([]string{"1_1"})
 	if encoded == 0 {
-		t.Fatal("encodeTargetChannels(1_1) = 0, want non-zero")
+		t.Fatal("TargetChannelsListToBitmask(1_1) = 0, want non-zero")
 	}
-	decoded := decodeTargetChannels(encoded)
+	decoded := weekprofile.TargetChannelsBitmaskToList(encoded)
 	found := slices.Contains(decoded, "1_1")
 	if !found {
-		t.Errorf("decodeTargetChannels → %v, expected to contain 1_1", decoded)
+		t.Errorf("TargetChannelsBitmaskToList → %v, expected to contain 1_1", decoded)
 	}
 }
 
 func TestDecodeTargetChannelsZero(t *testing.T) {
 	t.Parallel()
-	if got := decodeTargetChannels(0); len(got) != 0 {
-		t.Errorf("decodeTargetChannels(0) = %v, want empty", got)
+	if got := weekprofile.TargetChannelsBitmaskToList(0); len(got) != 0 {
+		t.Errorf("TargetChannelsBitmaskToList(0) = %v, want empty", got)
 	}
 }
 
 func TestEncodeTargetChannelsEmpty(t *testing.T) {
 	t.Parallel()
-	if got := encodeTargetChannels(nil); got != 0 {
-		t.Errorf("encodeTargetChannels(nil) = %d, want 0", got)
+	if got := weekprofile.TargetChannelsListToBitmask(nil); got != 0 {
+		t.Errorf("TargetChannelsListToBitmask(nil) = %d, want 0", got)
 	}
 }
 
 // ============================================================
-// schedules.go: weekdayBitsToNames / weekdayNamesToBits
+// weekprofile.WeekdayBitmaskToList / weekprofile.WeekdayListToBitmask
 // ============================================================
 
 func TestWeekdayBitsToNamesRoundtrip(t *testing.T) {
 	t.Parallel()
-	names := []string{"MONDAY", "WEDNESDAY", "FRIDAY"}
-	bits := weekdayNamesToBits(names)
+	names := []schedule.Weekday{schedule.WeekdayMonday, schedule.WeekdayWednesday, schedule.WeekdayFriday}
+	bits := weekprofile.WeekdayListToBitmask(names)
 	if bits == 0 {
-		t.Fatal("weekdayNamesToBits returned 0 for MONDAY/WEDNESDAY/FRIDAY")
+		t.Fatal("WeekdayListToBitmask returned 0 for MONDAY/WEDNESDAY/FRIDAY")
 	}
-	decoded := weekdayBitsToNames(bits)
+	decoded := weekprofile.WeekdayBitmaskToList(bits)
 	if len(decoded) != 3 {
-		t.Errorf("weekdayBitsToNames → %v, want 3 names", decoded)
+		t.Errorf("WeekdayBitmaskToList → %v, want 3 names", decoded)
 	}
 }
 
 func TestWeekdayNamesToBitsZero(t *testing.T) {
 	t.Parallel()
-	if got := weekdayNamesToBits(nil); got != 0 {
-		t.Errorf("weekdayNamesToBits(nil) = %d, want 0", got)
+	if got := weekprofile.WeekdayListToBitmask(nil); got != 0 {
+		t.Errorf("WeekdayListToBitmask(nil) = %d, want 0", got)
 	}
 }
 
 func TestWeekdayBitsToNamesZero(t *testing.T) {
 	t.Parallel()
-	if got := weekdayBitsToNames(0); len(got) != 0 {
-		t.Errorf("weekdayBitsToNames(0) = %v, want empty", got)
+	if got := weekprofile.WeekdayBitmaskToList(0); len(got) != 0 {
+		t.Errorf("WeekdayBitmaskToList(0) = %v, want empty", got)
 	}
 }
 

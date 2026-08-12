@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.19.0
+  version: 5.20.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -11600,7 +11600,15 @@ components:
       required: [slot_no, weekdays, time, level]
       description: One slot of a non-climate (switch/dimmer/astro) weekly program.
       properties:
-        slot_no: { type: integer }
+        slot_no:
+          type: integer
+          minimum: 1
+          maximum: 75
+          description: >
+            Slot this entry occupies, preserved so a partial update leaves
+            unrelated slots intact. A given channel declares fewer slots
+            (69 or 75 in the field) and that is the real bound — a slot the
+            channel's MASTER paramset does not contain cannot be written.
         weekdays:
           type: array
           items: { type: string }
@@ -11613,8 +11621,19 @@ components:
           items: { type: string }
         level: { type: number }
         level_2: { type: number }
-        duration: { type: string }
-        ramp_time: { type: string }
+        duration:
+          type: string
+          description: >
+            Auto-revert time, as a whole number and a unit — "500ms", "10s",
+            "65s", "5min", "1h". The value is exact: the CCU stores a
+            (time base, factor) pair, and the string carries the factor
+            multiplied out in that base's own unit rather than rounded to a
+            larger one, so a 65-second slot reads "65s" and not "1min".
+            Empty when the slot carries no duration.
+        ramp_time:
+          type: string
+          description: >
+            Dimmer ramp time, same format and exactness rule as `duration`.
         lock_mode: { type: string }
         lock_action: { type: string }
         permission: { type: string }
