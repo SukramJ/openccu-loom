@@ -8910,6 +8910,7 @@ export interface components {
         };
         /** @description One slot of a non-climate (switch/dimmer/astro) weekly program. */
         SimpleScheduleEntry: {
+            /** @description Slot this entry occupies, preserved so a partial update leaves unrelated slots intact. A given channel declares fewer slots (69 or 75 in the field) and that is the real bound — a slot the channel's MASTER paramset does not contain cannot be written. */
             slot_no: number;
             weekdays: string[];
             time: string;
@@ -8919,7 +8920,9 @@ export interface components {
             target_channels?: string[];
             level: number;
             level_2?: number;
+            /** @description Auto-revert time, as a whole number and a unit — "500ms", "10s", "65s", "5min", "1h". The value is exact: the CCU stores a (time base, factor) pair, and the string carries the factor multiplied out in that base's own unit rather than rounded to a larger one, so a 65-second slot reads "65s" and not "1min". Empty when the slot carries no duration. */
             duration?: string;
+            /** @description Dimmer ramp time, same format and exactness rule as `duration`. */
             ramp_time?: string;
             lock_mode?: string;
             lock_action?: string;

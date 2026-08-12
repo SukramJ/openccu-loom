@@ -193,11 +193,6 @@ func (s *SchedulesDomain) FindScheduleChannel(ctx context.Context, deviceAddress
 	return 0, fmt.Errorf("%w: device %s", hmerr.ErrDescriptionNotFound, deviceAddress)
 }
 
-// simpleSlotPattern matches one entry of the SimpleSchedule paramset shape:
-// "<NN>_WP_<FIELD>" with NN ∈ 01..99 and FIELD any of the well-known
-// WP-prefix names (WEEKDAY, FIXED_HOUR, FIXED_MINUTE, LEVEL, …).
-var simpleSlotPattern = regexp.MustCompile(`^(\d+)_WP_([A-Z_0-9]+)$`)
-
 // hasScheduleParams returns true when raw contains at least one
 // P<n>_ENDTIME_<weekday>_<slot> key — the cheap shape check for
 // "this channel carries a climate schedule".
@@ -211,11 +206,15 @@ func hasScheduleParams(raw map[string]any) bool {
 }
 
 // hasSimpleScheduleParams returns true when raw contains at least
-// one NN_WP_* key — the shape used by switch / cover / light week
-// profiles.
+// one `<NN>_WP_<FIELD>` key — the shape used by switch / cover / light
+// week profiles.
+//
+// The grammar comes from [weekprofile.SimpleGroupNo], the same one the
+// parser applies, so a channel is reported as carrying a schedule
+// exactly when the parser would read cells from it.
 func hasSimpleScheduleParams(raw map[string]any) bool {
 	for k := range raw {
-		if simpleSlotPattern.MatchString(k) {
+		if _, ok := weekprofile.SimpleGroupNo(k); ok {
 			return true
 		}
 	}
@@ -591,112 +590,6 @@ func detectLockPermission(level float64) string {
 	return "not_granted"
 }
 
-// scheduleConditionByID maps the CCU's CONDITION integer to the
-// Human-readable string the SPA uses. 1:1 port.
-// ScheduleCondition IntEnum.
-var scheduleConditionByID = map[int]string{
-	0: "fixed_time",
-	1: "astro",
-	2: "fixed_if_before_astro",
-	3: "astro_if_before_fixed",
-	4: "fixed_if_after_astro",
-	5: "astro_if_after_fixed",
-	6: "earliest_of_fixed_and_astro",
-	7: "latest_of_fixed_and_astro",
-}
-
-// scheduleConditionIDByName is the reverse table.
-var scheduleConditionIDByName = func() map[string]int {
-	out := make(map[string]int, len(scheduleConditionByID))
-	for id, name := range scheduleConditionByID {
-		out[name] = id
-	}
-	return out
-}()
-
-// maxScheduleFactor is the highest DURATION_FACTOR / RAMP_TIME_FACTOR
-// the CCU firmware accepts via put_paramset. factor=31 is reserved as
-// the internal "permanent" sentinel (also the firmware default for
-// unset duration slots) and is rejected on write with xml-rpc fault -5.
-const maxScheduleFactor = 30
-
-// TimeBaseSecondsScheduleField mirrors
-// duration (in seconds) one factor unit represents. Reused for both
-// DURATION and RAMP_TIME pairs.
-var timeBaseSecondsScheduleField = []float64{
-	0.1,  // MS_100
-	1,    // SEC_1
-	5,    // SEC_5
-	10,   // SEC_10
-	60,   // MIN_1
-	300,  // MIN_5
-	600,  // MIN_10
-	3600, // HOUR_1
-}
-
-// scheduleActorChannelByBit decodes the TARGET_CHANNELS bitmask into
-// The "X_Y" channel-function strings Layout
-// CHANNEL_1_1=1, CHANNEL_1_2=2, CHANNEL_1_3=4, CHANNEL_2_1=8, …
-var scheduleActorChannelByBit = func() []struct {
-	bit  int
-	name string
-} {
-	out := make([]struct {
-		bit  int
-		name string
-	}, 0, 24)
-	for ch := 1; ch <= 8; ch++ {
-		for fn := 1; fn <= 3; fn++ {
-			bit := 1 << ((ch-1)*3 + (fn - 1))
-			out = append(out, struct {
-				bit  int
-				name string
-			}{bit: bit, name: fmt.Sprintf("%d_%d", ch, fn)})
-		}
-	}
-	return out
-}()
-
-// weekdayBits maps weekday names to the bitmask the CCU's
-// `<NN>_WP_WEEKDAY` parameter expects.
-//
-// Sunday is bit 0, not bit 7: the week wraps at the bottom, so the mask
-// runs Sunday=1, Monday=2, … Saturday=64 and a schedule for all seven
-// days is 127. The layout is taken from the checkbox values the CCU's
-// own editor emits — `_getWeekDay` in
-// `WebUI/www/config/easymodes/js/HmIPWeeklyProgram.js` — and confirmed
-// against a real CCU, which stores and returns WEEKDAY=1 for a
-// Sunday-only entry.
-//
-// Reading bit 7 as Sunday dropped it in both directions: a Sunday
-// schedule made on the CCU came back with no weekday at all, and one
-// saved here set a bit the device does not evaluate, so it never fired.
-var weekdayBits = map[string]int{
-	"SUNDAY":    1 << 0,
-	"MONDAY":    1 << 1,
-	"TUESDAY":   1 << 2,
-	"WEDNESDAY": 1 << 3,
-	"THURSDAY":  1 << 4,
-	"FRIDAY":    1 << 5,
-	"SATURDAY":  1 << 6,
-}
-
-// weekdayNamesByBit is the reverse table for parsing. Ordered Monday
-// first because that is how the names are presented, while the bit
-// values follow the wire layout above.
-var weekdayNamesByBit = []struct {
-	bit  int
-	name string
-}{
-	{1 << 1, "MONDAY"},
-	{1 << 2, "TUESDAY"},
-	{1 << 3, "WEDNESDAY"},
-	{1 << 4, "THURSDAY"},
-	{1 << 5, "FRIDAY"},
-	{1 << 6, "SATURDAY"},
-	{1 << 0, "SUNDAY"},
-}
-
 // parseSimpleSchedule extracts active slots from the raw paramset.
 // A slot counts as "active" when its WEEKDAY bitmask is non-zero
 // All fields
@@ -776,7 +669,7 @@ func parseSimpleScheduleWithDomain(raw map[string]any, domain string) []hmapi.Si
 // lookupSlotDuration reads DURATION_BASE/FACTOR for the named slot
 // directly from the raw paramset. Called by the lock branch after
 // stripUnsupportedFields cleared the Duration string on the entry.
-// Slot keys follow [simpleSlotPattern] (`NN_WP_<FIELD>`); the slot
+// Slot keys follow the `<NN>_WP_<FIELD>` grammar; the slot
 // number is zero-padded to two digits in the wire shape.
 func lookupSlotDuration(raw map[string]any, slotNo int) (durationBase, durationFactor int) {
 	prefix := fmt.Sprintf("%02d_WP_", slotNo)
@@ -785,338 +678,106 @@ func lookupSlotDuration(raw map[string]any, slotNo int) (durationBase, durationF
 	return dBase, dFactor
 }
 
-func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry { //nolint:gocognit,gocyclo,funlen // single-purpose schedule parsing logic with many branches
-	type slot struct {
-		weekday          int
-		hour             int
-		minute           int
-		condition        int
-		conditionSeen    bool
-		astroType        int
-		astroTypeSeen    bool
-		astroOffset      int
-		targetChannels   int
-		targetChannelsOK bool
-		level            float64
-		level2           float64
-		level2Seen       bool
-		durationBase     int
-		durationBaseSeen bool
-		durationFactor   int
-		durationFactorOK bool
-		rampBase         int
-		rampBaseSeen     bool
-		rampFactor       int
-		rampFactorOK     bool
-		colorType        int
-		colorTypeSeen    bool
-		colorValue       int
-		colorValueSeen   bool
-		outputBehaviour  int
-		outputBehSeen    bool
-		seen             bool
+// parseSimpleSchedule decodes the `<NN>_WP_<FIELD>` MASTER paramset into
+// the REST/WS DTO shape, ascending by slot.
+//
+// The wire translation itself lives in
+// [weekprofile.ParseSimpleRawParamset]; this is the projection of its
+// result onto [hmapi.SimpleScheduleEntry]. The two used to be separate
+// implementations of the same format, which meant every defect in it had
+// to be found twice — Sunday's bit, the group limit and six of the eight
+// condition names each cost a release that way.
+func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry {
+	s, err := weekprofile.ParseSimpleRawParamset(raw)
+	if err != nil {
+		// The parser reports the CCU's data as it finds it and has no
+		// failure mode of its own; an error here means the paramset was
+		// unreadable, which reads to the caller as "no schedule".
+		return nil
 	}
-	bySlot := make(map[int]*slot)
-	for k, v := range raw {
-		m := simpleSlotPattern.FindStringSubmatch(k)
-		if m == nil {
-			continue
+	out := make([]hmapi.SimpleScheduleEntry, 0, len(s.Entries))
+	for _, slotNo := range s.Slots() {
+		e := s.Entries[slotNo]
+		weekdays := make([]string, 0, len(e.Weekdays))
+		for _, d := range e.Weekdays {
+			weekdays = append(weekdays, string(d))
 		}
-		slotNo, err := strconv.Atoi(m[1])
-		if err != nil {
-			continue
-		}
-		field := m[2]
-		s, ok := bySlot[slotNo]
-		if !ok {
-			s = &slot{}
-			bySlot[slotNo] = s
-		}
-		s.seen = true
-		switch field {
-		case "WEEKDAY":
-			if i, ok := coerceInt(v); ok {
-				s.weekday = i
-			}
-		case "FIXED_HOUR":
-			if i, ok := coerceInt(v); ok {
-				s.hour = i
-			}
-		case "FIXED_MINUTE":
-			if i, ok := coerceInt(v); ok {
-				s.minute = i
-			}
-		case "CONDITION":
-			if i, ok := coerceInt(v); ok {
-				s.condition = i
-				s.conditionSeen = true
-			}
-		case "ASTRO_TYPE":
-			if i, ok := coerceInt(v); ok {
-				s.astroType = i
-				s.astroTypeSeen = true
-			}
-		case "ASTRO_OFFSET":
-			if i, ok := coerceInt(v); ok {
-				s.astroOffset = i
-			}
-		case "TARGET_CHANNELS":
-			if i, ok := coerceInt(v); ok {
-				s.targetChannels = i
-				s.targetChannelsOK = true
-			}
-		case "LEVEL":
-			if f, ok := coerceFloat(v); ok {
-				s.level = f
-			}
-		case "LEVEL_2":
-			if f, ok := coerceFloat(v); ok {
-				s.level2 = f
-				s.level2Seen = true
-			}
-		case "DURATION_BASE":
-			if i, ok := coerceInt(v); ok {
-				s.durationBase = i
-				s.durationBaseSeen = true
-			}
-		case "DURATION_FACTOR":
-			if i, ok := coerceInt(v); ok {
-				s.durationFactor = i
-				s.durationFactorOK = true
-			}
-		case "RAMP_TIME_BASE":
-			if i, ok := coerceInt(v); ok {
-				s.rampBase = i
-				s.rampBaseSeen = true
-			}
-		case "RAMP_TIME_FACTOR":
-			if i, ok := coerceInt(v); ok {
-				s.rampFactor = i
-				s.rampFactorOK = true
-			}
-		case "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE":
-			if i, ok := coerceInt(v); ok {
-				s.colorType = i
-				s.colorTypeSeen = true
-			}
-		case "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE":
-			if i, ok := coerceInt(v); ok {
-				s.colorValue = i
-				s.colorValueSeen = true
-			}
-		case "OUTPUT_BEHAVIOUR":
-			if i, ok := coerceInt(v); ok {
-				s.outputBehaviour = i
-				s.outputBehSeen = true
-			}
-		}
-	}
-	keys := make([]int, 0, len(bySlot))
-	for k := range bySlot {
-		keys = append(keys, k)
-	}
-	sort.Ints(keys)
-	out := make([]hmapi.SimpleScheduleEntry, 0, len(keys))
-	for _, k := range keys {
-		s := bySlot[k]
-		if !s.seen || s.weekday == 0 {
-			continue // inactive slot
-		}
-		entry := hmapi.SimpleScheduleEntry{
-			SlotNo:             k,
-			Weekdays:           weekdayBitsToNames(s.weekday),
-			Time:               fmt.Sprintf("%02d:%02d", s.hour, s.minute),
-			Level:              s.level,
-			AstroOffsetMinutes: s.astroOffset,
-		}
-		if s.conditionSeen {
-			if name, ok := scheduleConditionByID[s.condition]; ok {
-				entry.Condition = name
-			}
-		}
-		if entry.Condition == "" {
-			entry.Condition = "fixed_time"
-		}
-		if entry.Condition != "fixed_time" && s.astroTypeSeen {
-			switch s.astroType {
-			case 0:
-				entry.AstroType = "sunrise"
-			case 1:
-				entry.AstroType = "sunset"
-			}
-		}
-		if s.targetChannelsOK && s.targetChannels != 0 {
-			entry.TargetChannels = decodeTargetChannels(s.targetChannels)
-		}
-		if s.level2Seen {
-			lvl := s.level2
-			entry.Level2 = &lvl
-		}
-		// Skip duration emission for the CCU-side "permanent" sentinel
-		// (factor == 31) and any other value the device might have parked
-		// above the writable cap of 30. The CCU stores 31 as a firmware
-		// default on unused duration slots but rejects writes of factor>30
-		// via put_paramset (xml-rpc fault -5). Surfacing "31h" to the SPA
-		// would create a round-trip the CCU then refuses to accept.
-		if s.durationBaseSeen && s.durationFactorOK && s.durationFactor > 0 && s.durationFactor <= maxScheduleFactor {
-			entry.Duration = formatTimeBaseFactor(s.durationBase, s.durationFactor)
-		}
-		if s.rampBaseSeen && s.rampFactorOK && s.rampFactor > 0 && s.rampFactor <= maxScheduleFactor {
-			entry.RampTime = formatTimeBaseFactor(s.rampBase, s.rampFactor)
-		}
-		// Universal-light colour / effect (opaque, lossless). 0 is a
-		// legitimate value, so presence is tracked separately from value.
-		if s.colorTypeSeen {
-			ct := s.colorType
-			entry.ColorType = &ct
-		}
-		if s.colorValueSeen {
-			cv := s.colorValue
-			entry.ColorValue = &cv
-		}
-		if s.outputBehSeen {
-			ob := s.outputBehaviour
-			entry.OutputBehaviour = &ob
-		}
-		out = append(out, entry)
+		out = append(out, hmapi.SimpleScheduleEntry{
+			SlotNo:             slotNo,
+			Weekdays:           weekdays,
+			Time:               e.Time,
+			Condition:          string(e.Condition),
+			AstroType:          string(e.AstroType),
+			AstroOffsetMinutes: e.AstroOffsetMinutes,
+			TargetChannels:     e.TargetChannels,
+			Level:              e.Level,
+			Level2:             e.Level2,
+			Duration:           e.Duration,
+			RampTime:           e.RampTime,
+			ColorType:          e.ColorType,
+			ColorValue:         e.ColorValue,
+			OutputBehaviour:    e.OutputBehaviour,
+		})
 	}
 	return out
 }
 
-// decodeTargetChannels expands the TARGET_CHANNELS bitmask into
-// "X_Y" notation. Same encoding as
-// ScheduleActorChannel IntEnum.
-func decodeTargetChannels(bits int) []string {
-	out := make([]string, 0, 4)
-	for _, e := range scheduleActorChannelByBit {
-		if bits&e.bit != 0 {
-			out = append(out, e.name)
+// simpleScheduleToDomain maps the REST/WS DTO list onto the domain model
+// the wire encoder consumes.
+//
+// The list-level rules live here because they are properties of the
+// request rather than of the schedule: a slot named twice is a malformed
+// payload, and the condition / astro vocabularies arrive as free strings
+// that have to be rejected by name for the caller to get a usable 4xx.
+func simpleScheduleToDomain(entries []hmapi.SimpleScheduleEntry) (*schedule.Simple, error) {
+	s := schedule.NewSimple()
+	for i := range entries {
+		e := entries[i]
+		// The read path has never capped, so a schedule the CCU holds
+		// past this point comes back in full. Rejecting it on the way
+		// out turned every such schedule into one an operator could open
+		// but not save.
+		if e.SlotNo < 1 || e.SlotNo > schedule.SimpleMaxSlot {
+			return nil, fmt.Errorf("slot_no out of range: %d (1..%d)", e.SlotNo, schedule.SimpleMaxSlot)
+		}
+		if _, dup := s.Entries[e.SlotNo]; dup {
+			return nil, fmt.Errorf("duplicate slot_no %d", e.SlotNo)
+		}
+		weekdays := make([]schedule.Weekday, 0, len(e.Weekdays))
+		for _, d := range e.Weekdays {
+			weekdays = append(weekdays, schedule.Weekday(strings.ToUpper(d)))
+		}
+		condition := schedule.Condition(e.Condition)
+		if condition != "" && !weekprofile.ConditionIsKnown(condition) {
+			return nil, fmt.Errorf("slot %d: unknown condition %q", e.SlotNo, e.Condition)
+		}
+		var astro schedule.Astro
+		switch strings.ToLower(e.AstroType) {
+		case "":
+		case string(schedule.AstroSunrise):
+			astro = schedule.AstroSunrise
+		case string(schedule.AstroSunset):
+			astro = schedule.AstroSunset
+		default:
+			return nil, fmt.Errorf("slot %d: unknown astro_type %q", e.SlotNo, e.AstroType)
+		}
+		s.Entries[e.SlotNo] = schedule.SimpleEntry{
+			Weekdays:           weekdays,
+			Time:               e.Time,
+			Condition:          condition,
+			AstroType:          astro,
+			AstroOffsetMinutes: e.AstroOffsetMinutes,
+			TargetChannels:     e.TargetChannels,
+			Level:              e.Level,
+			Level2:             e.Level2,
+			Duration:           e.Duration,
+			RampTime:           e.RampTime,
+			ColorType:          e.ColorType,
+			ColorValue:         e.ColorValue,
+			OutputBehaviour:    e.OutputBehaviour,
 		}
 	}
-	return out
-}
-
-// encodeTargetChannels packs an "X_Y" list into the bitmask.
-// Returns 0 (CCU default) when the list is empty.
-func encodeTargetChannels(names []string) int {
-	bits := 0
-	for _, n := range names {
-		for _, e := range scheduleActorChannelByBit {
-			if e.name == n {
-				bits |= e.bit
-				break
-			}
-		}
-	}
-	return bits
-}
-
-// formatTimeBaseFactor renders a (base, factor) pair as a compact
-// human string ("100ms", "5s", "10min", "1h"). Used for DURATION /
-// RAMP_TIME wire values.
-func formatTimeBaseFactor(base, factor int) string {
-	if factor <= 0 || base < 0 || base >= len(timeBaseSecondsScheduleField) {
-		return ""
-	}
-	seconds := timeBaseSecondsScheduleField[base] * float64(factor)
-	switch {
-	case seconds < 1:
-		return fmt.Sprintf("%dms", int(math.Round(seconds*1000)))
-	case seconds < 60:
-		return fmt.Sprintf("%ds", int(math.Round(seconds)))
-	case seconds < 3600:
-		return fmt.Sprintf("%dmin", int(math.Round(seconds/60)))
-	default:
-		return fmt.Sprintf("%dh", int(math.Round(seconds/3600)))
-	}
-}
-
-// parseTimeBaseFactor maps a human duration ("10s", "500ms", "1h")
-// onto a (base, factor) pair. Picks the largest base that yields a
-// Positive integer factor.
-func parseTimeBaseFactor(s string) (base, factor int, ok bool) {
-	s = strings.TrimSpace(strings.ToLower(s))
-	if s == "" {
-		return 0, 0, false
-	}
-	// Order matters: "ms" before "m" so 500ms doesn't parse as 500m.
-	suffixes := []struct {
-		suffix  string
-		seconds float64
-	}{
-		{"ms", 0.001},
-		{"min", 60},
-		{"h", 3600},
-		{"s", 1},
-		{"m", 60},
-	}
-	var seconds float64
-	for _, suf := range suffixes {
-		if !strings.HasSuffix(s, suf.suffix) {
-			continue
-		}
-		numStr := strings.TrimSuffix(s, suf.suffix)
-		n, err := strconv.ParseFloat(numStr, 64)
-		if err != nil {
-			return 0, 0, false
-		}
-		seconds = n * suf.seconds
-		ok = true
-		break
-	}
-	if !ok {
-		// Bare number → seconds.
-		if n, err := strconv.ParseFloat(s, 64); err == nil {
-			seconds = n
-			ok = true
-		}
-	}
-	if !ok || seconds <= 0 {
-		return 0, 0, false
-	}
-	// Pick the largest base whose unit divides `seconds` into a small
-	// integer factor (1..30). The CCU firmware caps DURATION_FACTOR /
-	// RAMP_TIME_FACTOR at maxScheduleFactor — values above are rejected
-	// by put_paramset (xml-rpc fault -5). The encoder therefore promotes
-	// to a larger base instead of emitting the same seconds with a higher
-	// factor.
-	for i, unit := range slices.Backward(timeBaseSecondsScheduleField) {
-
-		f := seconds / unit
-		if f >= 1 && f <= maxScheduleFactor && math.Abs(f-math.Round(f)) < 1e-6 {
-			return i, int(math.Round(f)), true
-		}
-	}
-	// Sentinel pass-through: (HOUR_1, 31) is the documented "permanent"
-	// pair that formatTimeBaseFactor renders as "31h". Accept it round-trip
-	// so that re-saving a schedule read back from the CCU (lock auto-relock
-	// actions, switch slots with the firmware default) does not fail.
-	const sentinelBaseIdx = 7 // HOUR_1
-	const sentinelFactor = 31
-	if math.Abs(seconds-timeBaseSecondsScheduleField[sentinelBaseIdx]*sentinelFactor) < 1e-6 {
-		return sentinelBaseIdx, sentinelFactor, true
-	}
-	return 0, 0, false
-}
-
-func weekdayBitsToNames(bits int) []string {
-	out := make([]string, 0, 7)
-	for _, e := range weekdayNamesByBit {
-		if bits&e.bit != 0 {
-			out = append(out, e.name)
-		}
-	}
-	return out
-}
-
-func weekdayNamesToBits(names []string) int {
-	bits := 0
-	for _, n := range names {
-		if b, ok := weekdayBits[strings.ToUpper(n)]; ok {
-			bits |= b
-		}
-	}
-	return bits
+	return s, nil
 }
 
 // serializeSimpleSchedule emits a flat paramset patch. When `domain`
@@ -1149,7 +810,7 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 			return e
 		}
 		e.Level = level
-		e.Duration = formatTimeBaseFactor(durBase, durFactor)
+		e.Duration = weekprofile.FormatTimeBaseFactor(durBase, durFactor)
 		// door_lock always targets channel 1_1 unless caller
 		// overrode TargetChannels explicitly.
 		if len(e.TargetChannels) == 0 {
@@ -1162,7 +823,7 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 		case "not_granted":
 			e.Level = 0.0
 		}
-		e.Duration = formatTimeBaseFactor(lockPermissionDurationBase, lockPermissionDurationFactor)
+		e.Duration = weekprofile.FormatTimeBaseFactor(lockPermissionDurationBase, lockPermissionDurationFactor)
 		// Permission slots target channels >= 2_x.
 		if len(e.TargetChannels) == 0 {
 			e.TargetChannels = []string{"2_1"}
@@ -1171,136 +832,24 @@ func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 	return e
 }
 
-func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry, deactivateUpTo int) (map[string]any, error) { //nolint:funlen // single-purpose schedule serialization logic with many branches
-	// Size hint omitted deliberately: deriving it from len(entries) (a
-	// request-controlled length) risks an integer-overflowing allocation
-	// size. The map grows on demand; schedules are small.
-	out := make(map[string]any)
-	used := make(map[int]bool, len(entries))
-	for i := range entries {
-		e := entries[i]
-		// The read path has never capped, so a schedule the CCU holds
-		// past this point comes back in full. Rejecting it on the way
-		// out turned every such schedule into one an operator could open
-		// but not save.
-		if e.SlotNo < 1 || e.SlotNo > schedule.SimpleMaxSlot {
-			return nil, fmt.Errorf("schedules: slot_no out of range: %d (1..%d)",
-				e.SlotNo, schedule.SimpleMaxSlot)
-		}
-		if used[e.SlotNo] {
-			return nil, fmt.Errorf("schedules: duplicate slot_no %d", e.SlotNo)
-		}
-		used[e.SlotNo] = true
-		bits := weekdayNamesToBits(e.Weekdays)
-		if bits == 0 {
-			return nil, fmt.Errorf("schedules: slot %d: no weekday selected", e.SlotNo)
-		}
-		hh, mm, err := splitTime(e.Time)
-		if err != nil {
-			return nil, fmt.Errorf("schedules: slot %d: %w", e.SlotNo, err)
-		}
-		prefix := fmt.Sprintf("%02d_WP_", e.SlotNo)
-		out[prefix+"WEEKDAY"] = bits
-		out[prefix+"FIXED_HOUR"] = hh
-		out[prefix+"FIXED_MINUTE"] = mm
-		out[prefix+"LEVEL"] = e.Level
-
-		// CONDITION: default to fixed_time when blank.
-		condID := 0
-		if e.Condition != "" {
-			id, ok := scheduleConditionIDByName[e.Condition]
-			if !ok {
-				return nil, fmt.Errorf("schedules: slot %d: unknown condition %q", e.SlotNo, e.Condition)
-			}
-			condID = id
-		}
-		out[prefix+"CONDITION"] = condID
-
-		// ASTRO_TYPE / ASTRO_OFFSET — only meaningful when the
-		// condition involves astro events; we still write zeros for
-		// the inactive case so the CCU does not retain stale data.
-		var astroID int
-		switch strings.ToLower(e.AstroType) {
-		case "sunrise", "":
-			astroID = 0
-		case "sunset":
-			astroID = 1
-		default:
-			return nil, fmt.Errorf("schedules: slot %d: unknown astro_type %q", e.SlotNo, e.AstroType)
-		}
-		out[prefix+"ASTRO_TYPE"] = astroID
-		offset := e.AstroOffsetMinutes
-		if offset < -720 || offset > 720 {
-			return nil, fmt.Errorf("schedules: slot %d: astro_offset_minutes out of range", e.SlotNo)
-		}
-		out[prefix+"ASTRO_OFFSET"] = offset
-
-		// TARGET_CHANNELS bitmask. Empty list keeps the CCU default.
-		out[prefix+"TARGET_CHANNELS"] = encodeTargetChannels(e.TargetChannels)
-
-		// LEVEL_2 (cover slat) — write only when the caller supplied
-		// an explicit value; otherwise the CCU keeps its stored one.
-		if e.Level2 != nil {
-			out[prefix+"LEVEL_2"] = *e.Level2
-		}
-
-		// DURATION (base + factor) — only emit when the caller actually
-		// set a duration. Writing DURATION_BASE/FACTOR=0 to a CCU switch
-		// channel triggers xml-rpc fault -5 because (0, 0) is below the
-		// param description's MIN — the field is left untouched so the
-		// CCU keeps the existing wire value.
-		if e.Duration != "" {
-			b, f, ok := parseTimeBaseFactor(e.Duration)
-			if !ok {
-				return nil, fmt.Errorf("schedules: slot %d: invalid duration %q", e.SlotNo, e.Duration)
-			}
-			out[prefix+"DURATION_BASE"] = b
-			out[prefix+"DURATION_FACTOR"] = f
-		}
-
-		// RAMP_TIME (base + factor) — same emit-only-when-set rule as
-		// DURATION above. Switch channels often have no RAMP_TIME param
-		// at all and reject any write to it.
-		if e.RampTime != "" {
-			b, f, ok := parseTimeBaseFactor(e.RampTime)
-			if !ok {
-				return nil, fmt.Errorf("schedules: slot %d: invalid ramp_time %q", e.SlotNo, e.RampTime)
-			}
-			out[prefix+"RAMP_TIME_BASE"] = b
-			out[prefix+"RAMP_TIME_FACTOR"] = f
-		}
-
-		// Universal-light colour / effect (opaque). Emit only when the
-		// caller carried a value (nil = leave the CCU's stored value
-		// untouched via the sparse merge). Writing the read-back value
-		// re-glues the colour to this entry's current slot, so it survives
-		// reorder / insert / delete deterministically. 0 is legitimate and
-		// is written when present.
-		if e.ColorType != nil {
-			out[prefix+"HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"] = *e.ColorType
-		}
-		if e.ColorValue != nil {
-			out[prefix+"HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"] = *e.ColorValue
-		}
-		if e.OutputBehaviour != nil {
-			out[prefix+"OUTPUT_BEHAVIOUR"] = *e.OutputBehaviour
-		}
+// serializeSimpleSchedule emits the `<NN>_WP_<FIELD>` MASTER paramset
+// for the given entries, deactivating every unused slot up to
+// deactivateUpTo so deleted entries vanish on the CCU.
+//
+// Like [parseSimpleSchedule] this is a projection: the DTO list is
+// mapped onto [schedule.Simple] and encoded by
+// [weekprofile.BuildSimpleRawParamset], which is the daemon's only
+// encoder for this format.
+func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry, deactivateUpTo int) (map[string]any, error) {
+	s, err := simpleScheduleToDomain(entries)
+	if err != nil {
+		return nil, fmt.Errorf("schedules: %w", err)
 	}
-	// Deactivate every unused slot so deleted entries vanish on the CCU.
-	//
-	// The bound comes from the device: channels declare 69 or 75 groups,
-	// and naming one they do not have fails the whole paramset with a -5
-	// fault. When the caller could not read the description it passes 0,
-	// which writes the active slots and leaves the rest alone — a save
-	// that does not clear deletions beats one the CCU rejects.
-	for n := 1; n <= deactivateUpTo; n++ {
-		if used[n] {
-			continue
-		}
-		out[fmt.Sprintf("%02d_WP_WEEKDAY", n)] = 0
-		out[fmt.Sprintf("%02d_WP_TARGET_CHANNELS", n)] = 0
+	raw, err := weekprofile.BuildSimpleRawParamset(s, deactivateUpTo)
+	if err != nil {
+		return nil, fmt.Errorf("schedules: %w", err)
 	}
-	return out, nil
+	return raw, nil
 }
 
 // highestScheduleGroup reports the highest `<NN>_WP_*` group present in a
@@ -1314,25 +863,6 @@ func highestScheduleGroup(descKeys map[string]struct{}) int {
 		}
 	}
 	return highest
-}
-
-func splitTime(hhmm string) (hour, minute int, err error) {
-	if len(hhmm) < 4 || len(hhmm) > 5 {
-		return 0, 0, fmt.Errorf("invalid time %q", hhmm)
-	}
-	before, after, ok := strings.Cut(hhmm, ":")
-	if !ok {
-		return 0, 0, fmt.Errorf("invalid time %q", hhmm)
-	}
-	h, err := strconv.Atoi(before)
-	if err != nil || h < 0 || h > 23 {
-		return 0, 0, fmt.Errorf("invalid hour in %q", hhmm)
-	}
-	m, err := strconv.Atoi(after)
-	if err != nil || m < 0 || m > 59 {
-		return 0, 0, fmt.Errorf("invalid minute in %q", hhmm)
-	}
-	return h, m, nil
 }
 
 // isCCUScheduleFalsePositive reports whether err is the documented

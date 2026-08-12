@@ -7,7 +7,8 @@ top-level CHANGELOG.md. Newest version first.
 # 0.58.3
 
 - Version alignment with OpenCCU-Loom 0.58.3. The proxy itself is
-  unchanged; the release fixes Sunday in device week profiles.
+  unchanged; the release fixes device week profiles — Sunday, entries
+  past the 24th, condition names, and durations that shortened on save.
 
 # 0.58.2
 

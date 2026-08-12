@@ -186,86 +186,14 @@ func TestChannelNumberNonNumericSuffix(t *testing.T) {
 }
 
 // ============================================================
-// schedules.go: splitTime, isValidWeekdayName
+// schedules.go: isValidWeekdayName
 // ============================================================
-
-func TestSplitTimeValidHHMM(t *testing.T) {
-	t.Parallel()
-	h, m, err := splitTime("08:30")
-	if err != nil {
-		t.Fatalf("splitTime valid: %v", err)
-	}
-	if h != 8 || m != 30 {
-		t.Errorf("splitTime = (%d, %d), want (8, 30)", h, m)
-	}
-}
-
-func TestSplitTimeValidSingleDigitHour(t *testing.T) {
-	t.Parallel()
-	h, m, err := splitTime("9:05")
-	if err != nil {
-		t.Fatalf("splitTime single-digit hour: %v", err)
-	}
-	if h != 9 || m != 5 {
-		t.Errorf("splitTime = (%d, %d), want (9, 5)", h, m)
-	}
-}
-
-func TestSplitTimeTooShortFormat(t *testing.T) {
-	t.Parallel()
-	_, _, err := splitTime("1:2")
-	if err == nil {
-		t.Error("splitTime too short must error")
-	}
-}
-
-func TestSplitTimeTooLongFormat(t *testing.T) {
-	t.Parallel()
-	_, _, err := splitTime("123:45")
-	if err == nil {
-		t.Error("splitTime too long must error")
-	}
-}
-
-func TestSplitTimeNoColonFormat(t *testing.T) {
-	t.Parallel()
-	_, _, err := splitTime("0830")
-	if err == nil {
-		t.Error("splitTime no colon must error")
-	}
-}
-
-func TestSplitTimeInvalidHourRange(t *testing.T) {
-	t.Parallel()
-	_, _, err := splitTime("25:00")
-	if err == nil {
-		t.Error("splitTime hour=25 must error")
-	}
-}
-
-func TestSplitTimeInvalidMinuteRange(t *testing.T) {
-	t.Parallel()
-	_, _, err := splitTime("08:60")
-	if err == nil {
-		t.Error("splitTime minute=60 must error")
-	}
-}
-
-func TestSplitTimeNonNumericHourField(t *testing.T) {
-	t.Parallel()
-	_, _, err := splitTime("ab:30")
-	if err == nil {
-		t.Error("splitTime non-numeric hour must error")
-	}
-}
-
-func TestSplitTimeNonNumericMinuteField(t *testing.T) {
-	t.Parallel()
-	_, _, err := splitTime("08:xy")
-	if err == nil {
-		t.Error("splitTime non-numeric minute must error")
-	}
-}
+//
+// Time-string parsing for the `<NN>_WP_<FIELD>` wire format moved to
+// weekprofile.splitHHMM, which carries its own coverage in that
+// package. serializeSimpleSchedule's rejection of a malformed Time
+// (TestSerializeSimpleScheduleInvalidTime, schedules_test.go) still
+// pins the behaviour through this package's public path.
 
 func TestIsValidWeekdayNameAllTrue(t *testing.T) {
 	t.Parallel()
@@ -5848,13 +5776,13 @@ func TestGetClimateSchedule_GetParamsetError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseTimeBaseFactor — bare number path (line 786-791)
+// weekprofile.ParseTimeBaseFactor — bare number path
 // ---------------------------------------------------------------------------
 
 func TestParseTimeBaseFactor_BareNumber(t *testing.T) {
 	t.Parallel()
 	// "3600" with no suffix → treated as seconds → base, factor
-	base, factor, ok := parseTimeBaseFactor("3600")
+	base, factor, ok := weekprofile.ParseTimeBaseFactor("3600")
 	if !ok {
 		t.Fatal("expected ok=true for bare number")
 	}
@@ -5866,7 +5794,7 @@ func TestParseTimeBaseFactor_BareNumber(t *testing.T) {
 
 func TestParseTimeBaseFactor_EmptyString(t *testing.T) {
 	t.Parallel()
-	_, _, ok := parseTimeBaseFactor("")
+	_, _, ok := weekprofile.ParseTimeBaseFactor("")
 	if ok {
 		t.Error("expected ok=false for empty string")
 	}
@@ -5874,7 +5802,7 @@ func TestParseTimeBaseFactor_EmptyString(t *testing.T) {
 
 func TestParseTimeBaseFactor_InvalidNumber(t *testing.T) {
 	t.Parallel()
-	_, _, ok := parseTimeBaseFactor("not-a-number")
+	_, _, ok := weekprofile.ParseTimeBaseFactor("not-a-number")
 	if ok {
 		t.Error("expected ok=false for invalid number")
 	}
@@ -8275,7 +8203,7 @@ func TestParseSimpleSchedule_AstroCondition(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-	// Condition should be resolved from scheduleConditionByID.
+	// Condition should be resolved from weekprofile.ConditionForWire.
 	if entries[0].Condition == "fixed_time" {
 		t.Errorf("expected non-fixed_time condition, got %q", entries[0].Condition)
 	}
@@ -8316,12 +8244,12 @@ func TestParseSimpleSchedule_Duration(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseSimpleScheduleWithDomain — lock domain + parseTimeBaseFactor path
+// parseSimpleScheduleWithDomain — lock domain + weekprofile.ParseTimeBaseFactor path
 // ---------------------------------------------------------------------------
 
 // TestParseSimpleScheduleWithDomain_LockDomain exercises the lock domain
-// path in parseSimpleScheduleWithDomain (lines 533-545) including the
-// parseTimeBaseFactor call within detectLockAction.
+// path in parseSimpleScheduleWithDomain, including the
+// weekprofile.ParseTimeBaseFactor call within detectLockAction.
 func TestParseSimpleScheduleWithDomain_LockDomain(t *testing.T) {
 	t.Parallel()
 	raw := map[string]any{
@@ -8343,33 +8271,33 @@ func TestParseSimpleScheduleWithDomain_LockDomain(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseTimeBaseFactor — ParseFloat error inside suffix match
+// weekprofile.ParseTimeBaseFactor — ParseFloat error inside suffix match
 // ---------------------------------------------------------------------------
 
-// TestParseTimeBaseFactor_ParseFloatError exercises the error return at
-// line 779-781: suffix matched but numeric prefix is not a valid float.
+// TestParseTimeBaseFactor_ParseFloatError exercises the error return when
+// a unit suffix matches but the numeric prefix is not a valid float.
 func TestParseTimeBaseFactor_ParseFloatError(t *testing.T) {
 	t.Parallel()
 	// "abcs" matches suffix "s" but "abc" is not a valid float.
-	_, _, ok := parseTimeBaseFactor("abcs")
+	_, _, ok := weekprofile.ParseTimeBaseFactor("abcs")
 	if ok {
-		t.Fatal("expected parseTimeBaseFactor to fail for 'abcs'")
+		t.Fatal("expected ParseTimeBaseFactor to fail for 'abcs'")
 	}
 }
 
-// TestParseTimeBaseFactor_NoMatchingBase exercises the path where ok=true
-// but no (base,factor) pair fits within maxDurationFactor (line 810).
+// TestParseTimeBaseFactor_NoMatchingBase pins that a duration no time
+// base can express within the factor cap is rejected outright.
+//
+// 31 seconds is the smallest such value: SEC_1 would need factor 31,
+// one past the cap, and 310 hundred-millisecond steps divide evenly by
+// no coarser base. Snapping it to a neighbour the CCU would accept —
+// 30s, or 35s — is the one thing the encoder must not do, because the
+// caller never sees the substitution.
 func TestParseTimeBaseFactor_NoMatchingBase(t *testing.T) {
 	t.Parallel()
-	// 31 seconds — factor would be 31 which exceeds maxDurationFactor=30.
-	// With base=1 (1 second): 31/1=31 > 30, out of range.
-	// No other base fits this value cleanly, so the function returns false.
-	_, _, ok := parseTimeBaseFactor("31s")
-	// 31s = 31 seconds; base=1 (1s/unit), factor=31 → exceeds 30 → not ok.
-	// base=0 (100ms): 31/0.1 = 310 → exceeds 30. So no base works.
+	base, factor, ok := weekprofile.ParseTimeBaseFactor("31s")
 	if ok {
-		t.Logf("parseTimeBaseFactor returned ok for '31s' (base picked, not necessarily wrong)")
-		// Some implementations may find a match. Don't fail if ok, just don't panic.
+		t.Errorf("ParseTimeBaseFactor(%q) = (%d, %d, true), want rejection", "31s", base, factor)
 	}
 }
 
@@ -10314,7 +10242,7 @@ func TestParseSimpleSchedule_AstroTypeBranch(t *testing.T) {
 	t.Parallel()
 	// Build a raw paramset that has one slot with:
 	//   WEEKDAY=1 (active slot — weekday bits non-zero)
-	//   CONDITION=1  ("astro" → scheduleConditionByID[1]=="astro")
+	//   CONDITION=1  ("astro" → weekprofile.ConditionForWire(1)=="astro")
 	//   ASTRO_TYPE=0 ("sunrise")
 	raw := map[string]any{
 		"1_WP_WEEKDAY":    1, // non-zero → slot is active
@@ -13560,38 +13488,51 @@ func TestSchedulesDomain_GetClimateSchedule_BackendError(t *testing.T) {
 // GetClimateSchedule — backend returns simple schedule params
 // ---------------------------------------------------------------------------
 
+// TestSchedulesDomain_GetClimateSchedule_SimpleParams pins how a channel
+// is classified from its MASTER paramset alone: `<NN>_WP_<FIELD>` cells
+// make it a simple schedule, and a paramset carrying neither those nor
+// the climate `P<n>_` keys is not a schedule channel at all.
+//
+// The grammar is shared with the parser, so a paramset that reads as a
+// schedule here is one the parser can actually read cells from.
 func TestSchedulesDomain_GetClimateSchedule_SimpleParams(t *testing.T) {
 	t.Parallel()
-	// Minimal simple-schedule: slot 1 with WEEKDAY + FIXED_HOUR + FIXED_MINUTE + LEVEL.
-	params := map[string]any{
-		"ENDTIME_MONDAY_1":     480,
-		"TEMPERATURE_MONDAY_1": 21.0,
-	}
-	_ = params
-	// Use the actual key format from hasSimpleScheduleParams.
-	simpleParams := map[string]any{
-		"ENDTIME_MONDAY_1":     480,
-		"TEMPERATURE_MONDAY_1": 21.0,
-	}
-	_ = simpleParams
-	// hasSimpleScheduleParams looks for keys with prefix ENDTIME_ or a
-	// slot pattern, so use a format that matches simpleSlotPattern.
-	// Looking at schedules.go, simpleSlotPattern matches "SLOT_<N>_<FIELD>".
-	// Use keys that pass hasSimpleScheduleParams: needs key with ENDTIME or TEMPERATURE prefix.
-	schedParams := map[string]any{
-		"SLOT_1_WEEKDAY":      1,
-		"SLOT_1_FIXED_HOUR":   8,
-		"SLOT_1_FIXED_MINUTE": 0,
-		"SLOT_1_LEVEL":        0.5,
-	}
-	f := buildBoost8Fixture(t, schedParams, nil)
-	sd := NewSchedulesDomain(f.reg, f.writer)
-	// Will get ErrNoSchedule because neither hasScheduleParams nor hasSimpleScheduleParams
-	// detects our keys — that's fine, we're exercising the ErrNoSchedule path.
-	_, err := sd.GetClimateSchedule(context.Background(), "DEV003", 1)
-	if err == nil {
-		t.Error("expected ErrNoSchedule for keys not matching any schedule pattern")
-	}
+
+	t.Run("wp cells are a simple schedule", func(t *testing.T) {
+		t.Parallel()
+		f := buildBoost8Fixture(t, map[string]any{
+			"01_WP_WEEKDAY":      2,
+			"01_WP_FIXED_HOUR":   8,
+			"01_WP_FIXED_MINUTE": 0,
+			"01_WP_LEVEL":        0.5,
+		}, nil)
+		sd := NewSchedulesDomain(f.reg, f.writer)
+		got, err := sd.GetClimateSchedule(context.Background(), "DEV003", 1)
+		if err != nil {
+			t.Fatalf("GetClimateSchedule: %v", err)
+		}
+		if got.Kind != "simple" {
+			t.Errorf("Kind = %q, want %q", got.Kind, "simple")
+		}
+		if len(got.SimpleEntries) != 1 {
+			t.Fatalf("SimpleEntries = %d, want 1", len(got.SimpleEntries))
+		}
+		if e := got.SimpleEntries[0]; e.SlotNo != 1 || e.Time != "08:00" || e.Level != 0.5 {
+			t.Errorf("entry = %+v, want slot 1 at 08:00 level 0.5", e)
+		}
+	})
+
+	t.Run("neither grammar is no schedule", func(t *testing.T) {
+		t.Parallel()
+		f := buildBoost8Fixture(t, map[string]any{
+			"SLOT_1_WEEKDAY":    1,
+			"SLOT_1_FIXED_HOUR": 8,
+		}, nil)
+		sd := NewSchedulesDomain(f.reg, f.writer)
+		if _, err := sd.GetClimateSchedule(context.Background(), "DEV003", 1); !errors.Is(err, ErrNoSchedule) {
+			t.Errorf("err = %v, want ErrNoSchedule", err)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
