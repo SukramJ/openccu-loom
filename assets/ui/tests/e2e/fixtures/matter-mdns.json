@@ -1,0 +1,31 @@
+{
+  "advertising": true,
+  "services": [
+    {
+      "service_type": "_matterc._udp",
+      "instance_name": "9C71D38FBE48F2E5",
+      "host_name": "loom.local",
+      "port": 5540,
+      "addresses": ["fe80::1c4b:2aff:fe3d:9f12", "192.168.1.40"],
+      "subtypes": ["_L3840", "_S15", "_V4874", "_CM"],
+      "txt": { "VP": "4874+1", "DN": "OpenCCU-Loom Bridge", "CM": "1" }
+    },
+    {
+      "service_type": "_matter._tcp",
+      "instance_name": "9C71D38FBE48F2E5-0000000012345678",
+      "host_name": "loom.local",
+      "port": 5540,
+      "addresses": ["fe80::1c4b:2aff:fe3d:9f12", "192.168.1.40"],
+      "subtypes": ["_I9C71D38FBE48F2E5"],
+      "txt": { "SII": "5000", "SAI": "300" }
+    }
+  ],
+  "findings": [
+    {
+      "severity": "warning",
+      "code": "no_ipv6_address",
+      "message": "The operational record announces no IPv6 address. Thread controllers reach the bridge over IPv6 only.",
+      "service": "_matter._tcp"
+    }
+  ]
+}

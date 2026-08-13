@@ -507,10 +507,21 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
-  // Matter
-  await page.route('**/api/v1/matter/**', (route) =>
-    route.fulfill({ json: fixture('matter-status.json') }),
-  );
+  // Matter. The diagnostics tab reads four sibling endpoints whose
+  // shapes differ from the status document, so one handler branches on
+  // the path rather than layering overlapping page.route patterns —
+  // those work only in the right registration order (Playwright prefers
+  // the most recently added), which is easy to break by moving a block.
+  const matterFixtures: Record<string, string> = {
+    sessions: 'matter-sessions.json',
+    mdns: 'matter-mdns.json',
+    endpoints: 'matter-endpoints.json',
+    compatibility: 'matter-compatibility.json',
+  };
+  await page.route('**/api/v1/matter/**', (route) => {
+    const leaf = new URL(route.request().url()).pathname.split('/').pop() ?? '';
+    route.fulfill({ json: fixture(matterFixtures[leaf] ?? 'matter-status.json') });
+  });
 
   // Admin
   await page.route('**/api/v1/admin/**', (route) =>

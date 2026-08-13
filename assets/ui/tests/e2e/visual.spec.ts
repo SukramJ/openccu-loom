@@ -87,6 +87,37 @@ test.describe('Visual regression - light mode', () => {
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('alarm-light.png');
   });
+
+  // The Matter diagnostics tab is dense with severity colour: finding
+  // badges, a reachability column, an idle-age column that turns amber.
+  // Those are exactly the pixels a token change silently inverts, which
+  // is why this view carries a baseline in both modes.
+  test('MatterDiagnostics light', async ({ page }) => {
+    // Matter is off in the shared fixture, and the surface registry
+    // hides the whole view when it is — flipping the fixture globally
+    // would add a sidebar entry to every other baseline. Override the
+    // status document for this test alone; a route registered after
+    // mockAllApis takes precedence.
+    await page.route('**/api/v1/matter/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/diagnostics');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(1500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-diagnostics-light.png');
+  });
 });
 
 test.describe('Visual regression - dark mode', () => {
@@ -163,5 +194,32 @@ test.describe('Visual regression - dark mode', () => {
     await page.waitForTimeout(1500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('alarm-dark.png');
+  });
+
+  test('MatterDiagnostics dark', async ({ page }) => {
+    // Matter is off in the shared fixture, and the surface registry
+    // hides the whole view when it is — flipping the fixture globally
+    // would add a sidebar entry to every other baseline. Override the
+    // status document for this test alone; a route registered after
+    // mockAllApis takes precedence.
+    await page.route('**/api/v1/matter/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/diagnostics');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(1500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-diagnostics-dark.png');
   });
 });

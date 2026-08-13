@@ -1,0 +1,15 @@
+{
+  "ecosystems": [
+    { "ecosystem": "apple", "vendor_id": 4996, "fabric_index": 1, "label": "Home" },
+    { "ecosystem": "google", "vendor_id": 24582, "fabric_index": 2 }
+  ],
+  "endpoint_count": 4,
+  "findings": [
+    {
+      "ecosystem": "google",
+      "code": "device_type_unsupported",
+      "message": "Google Home does not surface the water-valve device type. The endpoint stays exposed but never appears in the app.",
+      "device_type": 66
+    }
+  ]
+}
