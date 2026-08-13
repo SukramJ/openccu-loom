@@ -608,31 +608,24 @@ func TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag(t *testing.T) {
 	stateTopic := f.base + "/alarm/eg/state"
 	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
 
-	f.mp.mu.Lock()
-	before := len(f.mp.sent)
-	f.mp.mu.Unlock()
-
-	events.Publish(f.svc.Bus(), hmevent.AlarmNotificationEvent{
-		Base: hmevent.NewBaseAt(time.Now()), ZoneID: "eg", ZoneName: "Erdgeschoss",
-		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 1, Mode: hmenum.AlarmModeFull,
-		MQTT: false, Webhook: true,
-	})
-
-	time.Sleep(20 * time.Millisecond)
-	f.mp.mu.Lock()
-	after := len(f.mp.sent)
-	f.mp.mu.Unlock()
-	if after != before {
-		t.Fatalf("MQTT=false notification enqueued %d new publish(es), want 0", after-before)
+	eventTopic := f.base + "/alarm/eg/event"
+	notification := func(mqtt bool) hmevent.AlarmNotificationEvent {
+		return hmevent.AlarmNotificationEvent{
+			Base: hmevent.NewBaseAt(time.Now()), ZoneID: "eg", ZoneName: "Erdgeschoss",
+			OutputID: "notify1", OutputName: "Doorbell", IncidentID: 1, Mode: hmenum.AlarmModeFull,
+			MQTT: mqtt, Webhook: true,
+		}
 	}
 
-	events.Publish(f.svc.Bus(), hmevent.AlarmNotificationEvent{
-		Base: hmevent.NewBaseAt(time.Now()), ZoneID: "eg", ZoneName: "Erdgeschoss",
-		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 1, Mode: hmenum.AlarmModeFull,
-		MQTT: true, Webhook: true,
-	})
+	// Both events go onto the bus in order, and the bus delivers serially:
+	// once the MQTT=true one has reached the event topic, the MQTT=false one
+	// has had its turn too. Counting publishes on the event topic — rather
+	// than every publish inside a fixed sleep window — keeps the assertion
+	// immune to whatever else the start-up sequence is still flushing, which
+	// is what made this test fail on a loaded CI runner.
+	events.Publish(f.svc.Bus(), notification(false))
+	events.Publish(f.svc.Bus(), notification(true))
 
-	eventTopic := f.base + "/alarm/eg/event"
 	rec := f.waitForPublish(eventTopic, func(r publishRecord) bool {
 		var pay alarmEventPayload
 		if err := json.Unmarshal([]byte(r.payload), &pay); err != nil {
@@ -642,6 +635,18 @@ func TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag(t *testing.T) {
 	})
 	if rec.retain {
 		t.Errorf("notification event-topic publish must not be retained")
+	}
+	f.mp.mu.Lock()
+	onEventTopic := 0
+	for _, r := range f.mp.sent {
+		if r.topic == eventTopic {
+			onEventTopic++
+		}
+	}
+	f.mp.mu.Unlock()
+	if onEventTopic != 1 {
+		t.Fatalf("%d publishes on the event topic, want exactly 1 — the MQTT=false notification must "+
+			"publish nothing", onEventTopic)
 	}
 	var pay alarmEventPayload
 	if err := json.Unmarshal([]byte(rec.payload), &pay); err != nil {

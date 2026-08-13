@@ -426,6 +426,8 @@ type ParameterLabeler interface {
 // translation file behind it, so a raw "auto_mode" stays "auto_mode" on
 // screen forever. The labels are the same ones the REST and UI surfaces
 // resolve, so a value reads identically wherever an operator meets it.
+//
+// loom:reachable:reason="the event bridge asserts its labeler against this interface (b.labels.(mqtt.ValueListLabeler)) before stamping localised enum options, and the labeler the daemon wires in satisfies it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve"
 type ValueListLabeler interface {
 	ValueListLabels(channelType, parameter string, values []string) []string
 }
