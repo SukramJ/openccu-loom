@@ -37,6 +37,7 @@ import (
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	matterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
@@ -132,7 +133,11 @@ type matterBridgeBundle struct {
 	// diagnostics surface can report how many subscriptions ride on each
 	// session — a commissioned controller holding none looks identical
 	// to a healthy one from every other angle.
-	subMgr         *subscription.Manager
+	subMgr *subscription.Manager
+	// advertiser is the live mDNS advertiser. Carried so the diagnostics
+	// surface can report what is actually announced rather than what the
+	// config asked for — the two diverge exactly when discovery fails.
+	advertiser     mdns.Advertiser
 	opCreds        *mattercore.OperationalCredentials
 	configuredPase *matterbridge.PaseAdapter // nil when ConcurrentPairings is enabled or no passcode is configured
 	rootRefs       rootClusterRefs           // typed handles for daemon-side lifecycle wiring
@@ -976,6 +981,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		store:          store,
 		opMgr:          opMgr,
 		subMgr:         subMgr,
+		advertiser:     advertiser,
 		opCreds:        opCreds,
 		configuredPase: configuredPase,
 		rootRefs:       rootRefs,
@@ -2796,17 +2802,20 @@ func mdnsCCUSerials(reg *central.Registry) []string {
 // matterWiring carries the Matter REST/WS-facing adapters produced by
 // wireMatterRuntime. All fields are nil when the bridge is disabled.
 type matterWiring struct {
-	fabricStore   handlers.MatterFabricStore
-	sessionLister handlers.MatterSessionLister
-	opener        handlers.MatterCommissioningOpener
-	statusReader  handlers.MatterStatusReader
-	fabricRevoker handlers.MatterFabricRevoker
-	closer        handlers.MatterCommissioningCloser
-	exposureStore handlers.MatterExposureStore
-	candidates    handlers.MatterCandidateProvider
-	pub           *matterEventPublisher
-	reassembler   handlers.MatterTopologyReassembler
-	bi            *mattercore.BasicInformation
+	fabricStore       handlers.MatterFabricStore
+	sessionLister     handlers.MatterSessionLister
+	mdnsReporter      handlers.MatterMdnsReporter
+	endpointInspector handlers.MatterEndpointInspector
+	compatReporter    handlers.MatterCompatibilityReporter
+	opener            handlers.MatterCommissioningOpener
+	statusReader      handlers.MatterStatusReader
+	fabricRevoker     handlers.MatterFabricRevoker
+	closer            handlers.MatterCommissioningCloser
+	exposureStore     handlers.MatterExposureStore
+	candidates        handlers.MatterCandidateProvider
+	pub               *matterEventPublisher
+	reassembler       handlers.MatterTopologyReassembler
+	bi                *mattercore.BasicInformation
 	// centralHook wires a runtime-adopted central into the running bridge
 	// (readiness latch + reassemble-on-ready + reachable forward). Nil when
 	// the bridge is disabled; the live-adopt orchestrator skips it then.
@@ -3135,6 +3144,12 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		teardown = bundle.stop
 		wiring.fabricStore = mfs
 		wiring.sessionLister = matterSessionLister{op: bundle.opMgr, sub: bundle.subMgr}
+		wiring.mdnsReporter = matterMdnsReporter{adv: bundle.advertiser}
+		wiring.endpointInspector = matterEndpointInspector{bridge: mb}
+		wiring.compatReporter = matterCompatibilityReporter{
+			fabrics:   mfs,
+			inspector: wiring.endpointInspector,
+		}
 		wiring.exposureStore = mfs
 		wiring.reassembler = mb
 		// Wire the allowlist checker so the assembler only bridges
@@ -3510,6 +3525,196 @@ func (l matterSessionLister) MatterSessions() []handlers.MatterSessionInfo {
 			Subscriptions:    counts[s.SessionID],
 			LastActivity:     s.LastActivity,
 			LastPeerActivity: s.LastPeerActivity,
+		})
+	}
+	return out
+}
+
+// matterMdnsReporter reads the live advertiser and runs the mDNS
+// diagnosis over what it is currently announcing.
+//
+// Reading the advertiser rather than the config is the point: the two
+// diverge exactly when discovery fails. A configured address set that
+// the host resolved differently, a subtype responder that failed to
+// start, a publish that errored after boot — each leaves the config
+// looking correct and the announcement wrong.
+type matterMdnsReporter struct{ adv mdns.Advertiser }
+
+// MatterMdns implements [handlers.MatterMdnsReporter].
+func (r matterMdnsReporter) MatterMdns() handlers.MatterMdnsDiagnostics {
+	out := handlers.MatterMdnsDiagnostics{
+		Services: []handlers.MatterMdnsService{},
+		Findings: []handlers.MatterMdnsFinding{},
+	}
+	if r.adv == nil {
+		return out
+	}
+	// A no-op advertiser is the explicit "stay quiet" opt-in, not a
+	// fault: reporting it as advertising=false lets the surface say so
+	// instead of listing an empty announcement as a defect.
+	_, isNoop := r.adv.(*mdns.Noop)
+	out.Advertising = !isNoop
+
+	services := r.adv.Active()
+	for i := range services {
+		svc := &services[i]
+		addrs := make([]string, 0, len(svc.Addresses))
+		for _, ip := range svc.Addresses {
+			addrs = append(addrs, ip.String())
+		}
+		txt := make(map[string]string, len(svc.TXT))
+		for _, rec := range svc.TXT {
+			txt[rec.Key] = rec.Value
+		}
+		out.Services = append(out.Services, handlers.MatterMdnsService{
+			ServiceType:  svc.ServiceType,
+			InstanceName: svc.InstanceName,
+			HostName:     svc.HostName,
+			Port:         svc.Port,
+			Addresses:    addrs,
+			Subtypes:     append([]string(nil), svc.Subtypes...),
+			TXT:          txt,
+		})
+	}
+	if !out.Advertising {
+		return out
+	}
+	for _, f := range mdns.Diagnose(services) {
+		out.Findings = append(out.Findings, handlers.MatterMdnsFinding{
+			Severity: string(f.Severity),
+			Code:     f.Code,
+			Message:  f.Message,
+			Service:  f.Service,
+		})
+	}
+	return out
+}
+
+// matterEndpointInspector reads the bridge's assembled topology.
+//
+// It reports the endpoint identity as assigned, never as derived: the
+// numbers come from persisted identity rather than from position in the
+// device list, so they survive restarts but cannot be inferred from the
+// fleet. Anything picking an endpoint by ordinal — "the lowest one with
+// cluster X" — reads a different device after any change to the store's
+// history.
+type matterEndpointInspector struct{ bridge *matterbridge.Bridge }
+
+// MatterEndpoints implements [handlers.MatterEndpointInspector].
+func (i matterEndpointInspector) MatterEndpoints() []handlers.MatterEndpointInfo {
+	if i.bridge == nil {
+		return nil
+	}
+	topo := i.bridge.Topology()
+	if topo == nil {
+		return nil
+	}
+	out := make([]handlers.MatterEndpointInfo, 0, len(topo.Endpoints))
+	for _, ep := range topo.Endpoints {
+		if ep == nil {
+			continue
+		}
+		info := handlers.MatterEndpointInfo{
+			EndpointID:       ep.ID,
+			ParentEndpointID: ep.ParentEndpointID,
+			DeviceType:       ep.DeviceType,
+			Reachable:        ep.Reachable,
+			FriendlyName:     ep.FriendlyName,
+			Clusters:         []handlers.MatterEndpointCluster{},
+		}
+		if name, ok := matterschema.DeviceTypeName(uint32(ep.DeviceType)); ok {
+			info.DeviceTypeName = name
+		}
+		if rev, ok := matterschema.DeviceTypeRevision(uint32(ep.DeviceType)); ok {
+			info.DeviceTypeRevision = rev
+		}
+		if ep.BridgedDevice != nil {
+			info.DeviceAddress = ep.BridgedDevice.Address
+		}
+		if ep.Channel != nil {
+			info.ChannelAddress = ep.Channel.Address
+		}
+		if ep.Source != nil {
+			seen := make(map[uint32]struct{})
+			for _, cs := range ep.Source.MatterClusterServers() {
+				if cs == nil {
+					continue
+				}
+				id := cs.MatterClusterID()
+				if _, dup := seen[id]; dup {
+					continue
+				}
+				seen[id] = struct{}{}
+				cluster := handlers.MatterEndpointCluster{ID: id}
+				if name, ok := matterschema.ClusterName(id); ok {
+					cluster.Name = name
+				}
+				if rev, ok := matterschema.ClusterRevision(id); ok {
+					cluster.Revision = rev
+				}
+				info.Clusters = append(info.Clusters, cluster)
+			}
+			sort.Slice(info.Clusters, func(a, b int) bool { return info.Clusters[a].ID < info.Clusters[b].ID })
+		}
+		out = append(out, info)
+	}
+	return out
+}
+
+// matterCompatibilityReporter joins the commissioned fabrics with the
+// assembled topology, which is the only place both halves are known.
+//
+// A compatibility problem needs both: the device type alone is fine
+// until an ecosystem that refuses it is commissioned, and the fabric
+// alone says nothing about what it will be shown.
+type matterCompatibilityReporter struct {
+	fabrics   handlers.MatterFabricStore
+	inspector handlers.MatterEndpointInspector
+}
+
+// MatterCompatibility implements [handlers.MatterCompatibilityReporter].
+func (r matterCompatibilityReporter) MatterCompatibility() handlers.MatterCompatibility {
+	out := handlers.MatterCompatibility{
+		Ecosystems: []handlers.MatterEcosystem{},
+		Findings:   []handlers.MatterCompatFinding{},
+	}
+
+	var vendorIDs []uint16
+	if r.fabrics != nil {
+		if recs, err := r.fabrics.ListFabrics(context.Background()); err == nil {
+			for _, rec := range recs {
+				vendorIDs = append(vendorIDs, rec.VendorID)
+				out.Ecosystems = append(out.Ecosystems, handlers.MatterEcosystem{
+					Ecosystem:   string(eligibility.EcosystemForVendor(rec.VendorID)),
+					VendorID:    rec.VendorID,
+					FabricIndex: rec.FabricIndex,
+					Label:       rec.Label,
+				})
+			}
+		}
+	}
+
+	deviceTypes := make(map[uint16]int)
+	if r.inspector != nil {
+		endpoints := r.inspector.MatterEndpoints()
+		// The root and aggregator endpoints are bridge scaffolding, not
+		// exposed devices — counting them would push the ecosystem
+		// ceiling warning two devices early.
+		for _, ep := range endpoints {
+			if ep.EndpointID <= 1 {
+				continue
+			}
+			deviceTypes[ep.DeviceType]++
+			out.EndpointCount++
+		}
+	}
+
+	for _, f := range eligibility.Compat(vendorIDs, deviceTypes, out.EndpointCount) {
+		out.Findings = append(out.Findings, handlers.MatterCompatFinding{
+			Ecosystem:  string(f.Ecosystem),
+			Code:       f.Code,
+			Message:    f.Message,
+			DeviceType: f.DeviceType,
 		})
 	}
 	return out

@@ -82,7 +82,11 @@ import type {
   MatterCommissioningWindow,
   MatterExposableResponse,
   MatterExposureUpdate,
+  MatterCompatibility,
+  MatterEndpointsResponse,
   MatterFabricsResponse,
+  MatterMdnsDiagnostics,
+  MatterSessionsResponse,
   MatterSetupPayload,
   MatterStatus,
 } from "./matter-types";
@@ -1595,6 +1599,18 @@ export const api = {
   },
   matterFabrics() {
     return request<MatterFabricsResponse>(`/matter/fabrics`);
+  },
+  matterSessions() {
+    return request<MatterSessionsResponse>(`/matter/sessions`);
+  },
+  matterMdns() {
+    return request<MatterMdnsDiagnostics>(`/matter/mdns`);
+  },
+  matterEndpoints() {
+    return request<MatterEndpointsResponse>(`/matter/endpoints`);
+  },
+  matterCompatibility() {
+    return request<MatterCompatibility>(`/matter/compatibility`);
   },
   deleteMatterFabric(id: number) {
     return request<void>(`/matter/fabrics/${id}`, { method: "DELETE" });

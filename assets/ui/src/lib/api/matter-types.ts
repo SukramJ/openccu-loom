@@ -25,6 +25,91 @@ export type MatterFabricsResponse = {
   fabrics: MatterFabric[];
 };
 
+/** One open secure session, from GET /matter/sessions. */
+export type MatterSession = {
+  session_id: number;
+  fabric_index: number;
+  peer_node_id: string;
+  local_node_id: string;
+  is_pase: boolean;
+  subscriptions: number;
+  last_activity: string;
+  last_peer_activity: string;
+  idle_seconds: number;
+  /** Seconds since the controller last sent anything — the liveness signal. */
+  peer_idle_seconds: number;
+};
+
+export type MatterSessionsResponse = {
+  sessions: MatterSession[];
+};
+
+export type MatterMdnsService = {
+  service_type: string;
+  instance_name: string;
+  host_name: string;
+  port: number;
+  addresses: string[];
+  subtypes: string[];
+  txt: Record<string, string>;
+};
+
+export type MatterMdnsFinding = {
+  severity: "error" | "warning";
+  code: string;
+  message: string;
+  service?: string;
+};
+
+export type MatterMdnsDiagnostics = {
+  advertising: boolean;
+  services: MatterMdnsService[];
+  findings: MatterMdnsFinding[];
+};
+
+export type MatterEndpointCluster = {
+  id: number;
+  name: string;
+  revision: number;
+};
+
+export type MatterEndpointInfo = {
+  endpoint_id: number;
+  parent_endpoint_id: number;
+  device_type: number;
+  device_type_name: string;
+  device_type_revision?: number;
+  reachable: boolean;
+  friendly_name: string;
+  device_address?: string;
+  channel_address?: string;
+  clusters: MatterEndpointCluster[];
+};
+
+export type MatterEndpointsResponse = {
+  endpoints: MatterEndpointInfo[];
+};
+
+export type MatterEcosystem = {
+  ecosystem: string;
+  vendor_id: number;
+  fabric_index: number;
+  label?: string;
+};
+
+export type MatterCompatFinding = {
+  ecosystem: string;
+  code: string;
+  message: string;
+  device_type?: number;
+};
+
+export type MatterCompatibility = {
+  ecosystems: MatterEcosystem[];
+  endpoint_count: number;
+  findings: MatterCompatFinding[];
+};
+
 /** Mapping eligibility state from the cluster mapper. */
 export type MatterMappability = "mappable" | "partially_mappable" | "unmappable";
 

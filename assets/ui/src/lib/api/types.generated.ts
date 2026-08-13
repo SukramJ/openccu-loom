@@ -4567,6 +4567,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/matter/compatibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How each commissioned ecosystem will treat what the bridge exposes
+         * @description Classifies every commissioned fabric by ecosystem and reports what
+         *     that ecosystem does with the exposed device types.
+         *
+         *     These problems are invisible from the bridge: the endpoint is
+         *     assembled, its clusters answer reads, commissioning succeeds — and
+         *     the device is missing from the app, or the whole bridge stops
+         *     responding there. Naming the combination is what connects the two.
+         */
+        get: operations["matterCompatibility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/matter/endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The assembled Matter topology as a controller sees it
+         * @description Reports every endpoint the bridge exposes with its device type,
+         *     its clusters and where it came from — the view a controller gets,
+         *     without needing chip-tool to obtain it.
+         *
+         *     Endpoint numbers are assigned from persisted identity, not from
+         *     position, so they are stable across restarts but not derivable
+         *     from the device list. Reading them here is the way to find the
+         *     endpoint belonging to a given device; guessing by ordinal is not.
+         */
+        get: operations["matterEndpointInspector"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/matter/mdns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the bridge advertises over mDNS, and what is wrong with it
+         * @description Reports the mDNS records the bridge currently announces, together
+         *     with findings that explain why a controller might not discover it.
+         *
+         *     Every finding corresponds to a failure that presents identically
+         *     from inside the daemon: advertising succeeds, the log says so, and
+         *     the controller simply never offers the bridge. Missing subtype
+         *     PTRs (Apple and Google browse through them), container-internal
+         *     addresses a LAN controller cannot route to, a commissioning port
+         *     other than 5540 (Alexa uses no other), an IPv4-only announcement.
+         */
+        get: operations["matterMdnsDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/matter/sessions": {
         parameters: {
             query?: never;
@@ -7486,6 +7567,78 @@ export interface components {
         };
         MatterFabricList: {
             fabrics: components["schemas"]["MatterFabric"][];
+        };
+        MatterEcosystem: {
+            /** @enum {string} */
+            ecosystem: "apple" | "google" | "amazon" | "smartthings" | "aqara" | "home_assistant" | "unknown";
+            vendor_id: number;
+            fabric_index: number;
+            label?: string;
+        };
+        MatterCompatFinding: {
+            ecosystem: string;
+            code: string;
+            message: string;
+            /** @description The device type concerned; absent when the finding applies to the bridge as a whole */
+            device_type?: number;
+        };
+        MatterCompatibility: {
+            ecosystems: components["schemas"]["MatterEcosystem"][];
+            endpoint_count: number;
+            findings: components["schemas"]["MatterCompatFinding"][];
+        };
+        MatterEndpointCluster: {
+            /** @description Cluster id */
+            id: number;
+            /** @description Empty when the cluster is not in the generated schema */
+            name: string;
+            /** @description 0 when unknown to the schema */
+            revision: number;
+        };
+        MatterEndpointInfo: {
+            endpoint_id: number;
+            parent_endpoint_id: number;
+            device_type: number;
+            device_type_name: string;
+            device_type_revision?: number;
+            reachable: boolean;
+            friendly_name: string;
+            /** @description Source device, absent for the root and aggregator endpoints */
+            device_address?: string;
+            /** @description Source channel, absent when the endpoint is not channel-scoped */
+            channel_address?: string;
+            clusters: components["schemas"]["MatterEndpointCluster"][];
+        };
+        MatterEndpointList: {
+            endpoints: components["schemas"]["MatterEndpointInfo"][];
+        };
+        MatterMdnsService: {
+            /** @example _matterc._udp */
+            service_type: string;
+            instance_name: string;
+            host_name: string;
+            port: number;
+            addresses: string[];
+            /** @description Service subtypes (`_L<discriminator>`, `_S<short>`, `_CM`) Apple and Google browse through */
+            subtypes: string[];
+            txt: {
+                [key: string]: string;
+            };
+        };
+        MatterMdnsFinding: {
+            /** @enum {string} */
+            severity: "error" | "warning";
+            /** @description Stable identifier; the message is prose and may be reworded */
+            code: string;
+            message: string;
+            /** @description The advertised record this applies to; absent when it concerns the advertisement as a whole */
+            service?: string;
+        };
+        MatterMdnsDiagnostics: {
+            /** @description False when advertising is switched off (`north.matter.mdns_advertise: noop`) */
+            advertising: boolean;
+            services: components["schemas"]["MatterMdnsService"][];
+            findings: components["schemas"]["MatterMdnsFinding"][];
         };
         MatterSession: {
             session_id: number;
@@ -14930,6 +15083,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MatterStatus"];
+                };
+            };
+        };
+    };
+    matterCompatibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatterCompatibility"];
+                };
+            };
+            /** @description Matter bridge not enabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    matterEndpointInspector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatterEndpointList"];
+                };
+            };
+            /** @description Matter bridge not enabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    matterMdnsDiagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatterMdnsDiagnostics"];
+                };
+            };
+            /** @description Matter bridge not enabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
