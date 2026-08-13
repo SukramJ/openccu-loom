@@ -54,15 +54,6 @@ var customFieldsWithAKnownDefect = map[string]string{
 		"(DRG-DALI, LSC, RGBW). The RF dimmers carry COLOR_LEVEL, a 0..1 float the reference converts " +
 		"to kelvin through mireds (aiohomematic CustomDpColorTempDimmer.color_temp_kelvin); this " +
 		"daemon has no COLOR_LEVEL path at all, so colour temperature does not work on those devices.",
-	"cover.Cover.groupLevel": "bound through SetGroupLevel, which no production path calls — the group-channel " +
-		"LEVEL it would carry never reaches GroupBrightness. Either the materialiser has to bind it or " +
-		"the accessor pair is dead weight; that is a decision, not a repair.",
-	"light.Light.groupLevel": "bound through SetGroupLevel, which no production path calls — the group-channel " +
-		"LEVEL it would carry never reaches GroupBrightness. Either the materialiser has to bind it or " +
-		"the accessor pair is dead weight; that is a decision, not a repair.",
-	"light.EffectLight.program": "PROGRAM is INTEGER with OPERATIONS 7 → Integer, which is what the field " +
-		"asks for, and two channels in the fleet carry it — but not the channel the effect light is " +
-		"built on. A channel-scope question, not a shape one.",
 }
 
 // TestEveryCustomDataPointFieldIsFilledBySomeDevice drives the real

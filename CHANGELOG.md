@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Dimmers and covers report their group brightness again, and colour
+  dimmers their effects.** A dimmer's group level comes from a different
+  parameter per family — the HmIP devices report it on the group's state
+  channel, the RF ones on the light's own channel — and both are
+  read-only there, while the daemon asked for the writable form on the
+  light's channel alone. Neither family ever filled the slot, so the
+  group brightness a north-bound consumer reads stayed absent. The same
+  applied to covers. The effect list of an RF colour dimmer was empty for
+  a related reason: its effects parameter sits two channels above the
+  light.
+
 - **An RGBW light knows which mode it is in.** HmIP-RGBW, HmIP-LSC and
   HmIP-DRDI3 report their operating mode on the device's channel 0, and
   the light read it on its own channel — where it does not exist. Three

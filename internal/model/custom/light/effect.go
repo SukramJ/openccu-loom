@@ -29,12 +29,26 @@ type EffectLight struct {
 }
 
 // NewEffectLight constructs an EffectLight against the channel from cfg.
+//
+// programChannel names the channel carrying PROGRAM. The RF colour
+// dimmers keep it two channels above the light's own (HM-LC-RGBW-WM
+// reports PROGRAM on channel 3 while the light sits on channel 1), which
+// is what the profile's channel-field mapping says; passing nil falls
+// back to the light's own channel.
 func NewEffectLight(cfg Config) *EffectLight {
+	return NewEffectLightOn(cfg, cfg.Channel)
+}
+
+// NewEffectLightOn is [NewEffectLight] with an explicit PROGRAM channel.
+func NewEffectLightOn(cfg Config, programChannel *device.Channel) *EffectLight {
 	cl := NewColorLight(cfg)
-	prog := custom.IntegerField(cfg.Channel, hmenum.ParameterProgram)
+	if programChannel == nil {
+		programChannel = cfg.Channel
+	}
+	prog := custom.IntegerField(programChannel, hmenum.ParameterProgram)
 	var effects []string
-	if cfg.Channel != nil {
-		if dp := cfg.Channel.Parameter(hmenum.ParameterProgram); dp != nil {
+	if programChannel != nil {
+		if dp := programChannel.Parameter(hmenum.ParameterProgram); dp != nil {
 			effects = append([]string(nil), dp.ParameterData().ValueList...)
 		}
 	}

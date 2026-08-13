@@ -76,9 +76,13 @@ type Light struct {
 	// countdowns survive cluster-server reconstruction.
 	timed timedOnOffState
 
-	mu         sync.RWMutex
-	lastLevel  float64
-	groupLevel *generic.Float // optional GROUP_LEVEL sensor (set via SetGroupLevel)
+	mu        sync.RWMutex
+	lastLevel float64
+	// groupLevel is the optional group-channel level slot, bound by the
+	// profile's GROUP_LEVEL field. Its shape differs per family — LEVEL
+	// (read+write) on an HmIP state channel, LEVEL_REAL (read-only) on an
+	// RF action channel — so it is held by capability, not by type.
+	groupLevel custom.GroupLevelDataPoint
 
 	// enableLastBrightness controls a plain turn-on. When true (the
 	// default, set from the device's per-central behavior in [New]) a
@@ -314,7 +318,7 @@ func (l *Light) Category() hmenum.DataPointCategory {
 // of this DP is used by [GroupBrightness] and [GroupBrightnessPct] to expose
 // the aggregated group brightness to north-bound consumers. Pass nil to
 // clear.
-func (l *Light) SetGroupLevel(dp *generic.Float) {
+func (l *Light) SetGroupLevel(dp custom.GroupLevelDataPoint) {
 	l.mu.Lock()
 	l.groupLevel = dp
 	l.mu.Unlock()
