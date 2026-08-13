@@ -53,9 +53,15 @@ type Siren struct {
 	writer Writer
 
 	acousticActive *generic.BinarySensor
-	acousticIdx    *generic.Sensor[string]
-	opticalActive  *generic.BinarySensor
-	opticalIdx     *generic.Sensor[string]
+	// acousticIdx / opticalIdx are the alarm-selection parameters. They are
+	// write-only ENUMs on the wire (OPERATIONS=2), so the resolver builds an
+	// ActionSelect for them and the device never reports a value: what they
+	// carry is the selection this daemon last sent, plus the VALUE_LIST and
+	// DEFAULT the CCU declares. TurnOff needs that DEFAULT to name the value
+	// that silences the device.
+	acousticIdx   *generic.ActionSelect
+	opticalActive *generic.BinarySensor
+	opticalIdx    *generic.ActionSelect
 
 	// duration is the combined DURATION_VALUE + DURATION_UNIT pair
 	// exposed as a single seconds-as-float DP. Created when the
@@ -109,9 +115,9 @@ func New(cfg Config) *Siren {
 		key:            key,
 		writer:         cfg.Writer,
 		acousticActive: custom.BinarySensorField(cfg.Channel, hmenum.ParameterAcousticAlarmActive),
-		acousticIdx:    custom.StringSensorField(cfg.Channel, hmenum.ParameterAcousticAlarmSelection),
+		acousticIdx:    custom.ActionSelectField(cfg.Channel, hmenum.ParameterAcousticAlarmSelection),
 		opticalActive:  custom.BinarySensorField(cfg.Channel, hmenum.ParameterOpticalAlarmActive),
-		opticalIdx:     custom.StringSensorField(cfg.Channel, hmenum.ParameterOpticalAlarmSelection),
+		opticalIdx:     custom.ActionSelectField(cfg.Channel, hmenum.ParameterOpticalAlarmSelection),
 	}
 	if cfg.Channel != nil {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterAcousticAlarmSelection); dp != nil {
@@ -145,13 +151,13 @@ func New(cfg Config) *Siren {
 		_ = s.acousticActive.OnConfirmedUpdate(func(_, _ bool) { s.dataVersion.Bump() })
 	}
 	if s.acousticIdx != nil {
-		_ = s.acousticIdx.OnConfirmedUpdate(func(_, _ string) { s.dataVersion.Bump() })
+		_ = s.acousticIdx.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
 	}
 	if s.opticalActive != nil {
 		_ = s.opticalActive.OnConfirmedUpdate(func(_, _ bool) { s.dataVersion.Bump() })
 	}
 	if s.opticalIdx != nil {
-		_ = s.opticalIdx.OnConfirmedUpdate(func(_, _ string) { s.dataVersion.Bump() })
+		_ = s.opticalIdx.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
 	}
 	return s
 }
@@ -179,37 +185,43 @@ func (s *Siren) AvailableLights() []string {
 // --- accessors ---
 
 // AcousticState reports the current acoustic alarm state and selection label.
-// The selection is the string label (e.g. "DISABLE_ACOUSTIC_SIGNAL",
-// "FREQUENCY_RISING") as received from the CCU — DpActionSelect sends strings
-// for HmIP siren devices.
+// The state comes from ACOUSTIC_ALARM_ACTIVE, which the device reports. The
+// selection is the label this daemon last sent (e.g. "FREQUENCY_RISING"):
+// ACOUSTIC_ALARM_SELECTION is write-only, so the CCU never reports one back
+// and it is empty until the first TurnOn / TurnOff.
 func (s *Siren) AcousticState() (active bool, selection string, observed bool) {
 	a, aOK := readBool(s.acousticActive)
-	i, iOK := readString(s.acousticIdx)
+	i, iOK := readSelection(s.acousticIdx)
 	return a, i, aOK || iOK
 }
 
 // OpticalState reports the current optical alarm state and selection label.
-// See [AcousticState] for the string-label rationale.
+// See [AcousticState] for where each half comes from.
 func (s *Siren) OpticalState() (active bool, selection string, observed bool) {
 	a, aOK := readBool(s.opticalActive)
-	i, iOK := readString(s.opticalIdx)
+	i, iOK := readSelection(s.opticalIdx)
 	return a, i, aOK || iOK
 }
 
 // IsRefreshed reports whether at least one of the siren's wire slots
 // (acoustic active/selection, optical active/selection) has been observed.
+//
+// Each concrete pointer is tested on its own, for the same reason
+// [Siren.Subscribe] does it that way: a nil *generic.ActionSelect handed
+// to an `interface{ IsRefreshed() bool }` parameter is a non-nil
+// interface holding a nil pointer, so the nil check inside the helper
+// never fires and the call dereferences nothing.
 func (s *Siren) IsRefreshed() bool {
-	check := func(dp interface {
-		IsRefreshed() bool
-	},
-	) bool {
-		if dp == nil {
-			return false
-		}
-		return dp.IsRefreshed()
+	if s.acousticActive != nil && s.acousticActive.IsRefreshed() {
+		return true
 	}
-	return check(s.acousticActive) || check(s.acousticIdx) ||
-		check(s.opticalActive) || check(s.opticalIdx)
+	if s.acousticIdx != nil && s.acousticIdx.IsRefreshed() {
+		return true
+	}
+	if s.opticalActive != nil && s.opticalActive.IsRefreshed() {
+		return true
+	}
+	return s.opticalIdx != nil && s.opticalIdx.IsRefreshed()
 }
 
 // IsActive reports whether any alarm channel is currently firing.
@@ -325,13 +337,13 @@ func (s *Siren) TurnOn(ctx context.Context, cfg OnConfig, priority hmenum.Comman
 	if s.Capabilities.SupportsAcoustic {
 		if sel, ok := params[hmenum.ParameterAcousticAlarmSelection].(string); ok {
 			writeBool(s.acousticActive, true)
-			writeString(s.acousticIdx, sel)
+			recordSelection(s.acousticIdx, sel)
 		}
 	}
 	if s.Capabilities.SupportsOptical {
 		if sel, ok := params[hmenum.ParameterOpticalAlarmSelection].(string); ok {
 			writeBool(s.opticalActive, true)
-			writeString(s.opticalIdx, sel)
+			recordSelection(s.opticalIdx, sel)
 		}
 	}
 	return nil
@@ -373,11 +385,11 @@ func (s *Siren) TurnOff(ctx context.Context, priority hmenum.CommandPriority) er
 	}
 	if s.Capabilities.SupportsAcoustic {
 		writeBool(s.acousticActive, false)
-		writeString(s.acousticIdx, sirenSelectionDefaultString(s.acousticIdx))
+		recordSelection(s.acousticIdx, sirenSelectionDefaultString(s.acousticIdx))
 	}
 	if s.Capabilities.SupportsOptical {
 		writeBool(s.opticalActive, false)
-		writeString(s.opticalIdx, sirenSelectionDefaultString(s.opticalIdx))
+		recordSelection(s.opticalIdx, sirenSelectionDefaultString(s.opticalIdx))
 	}
 	return nil
 }
@@ -415,18 +427,18 @@ func writeBool(dp *generic.BinarySensor, v bool) {
 	dp.OnEvent(v)
 }
 
-func readString(dp *generic.Sensor[string]) (string, bool) {
+func readSelection(dp *generic.ActionSelect) (string, bool) {
 	if dp == nil {
 		return "", false
 	}
-	return dp.Value()
+	return dp.Label()
 }
 
-func writeString(dp *generic.Sensor[string], v string) {
+func recordSelection(dp *generic.ActionSelect, label string) {
 	if dp == nil {
 		return
 	}
-	dp.OnEvent(v)
+	dp.RecordLabel(label)
 }
 
 // sirenSelectionDefaultString returns the effective disable-label for the
@@ -435,27 +447,25 @@ func writeString(dp *generic.Sensor[string], v string) {
 //  2. First entry in the VALUE_LIST — on real HmIP-ASIR hardware this is
 //     conventionally the "disable" label (e.g. "DISABLE_ACOUSTIC_SIGNAL").
 //  3. Empty string as last resort (e.g. no VALUE_LIST, no default).
-func sirenSelectionDefaultString(dp *generic.Sensor[string]) string {
+func sirenSelectionDefaultString(dp *generic.ActionSelect) string {
 	if dp == nil {
 		return ""
 	}
-	if def := dp.Default(); def != nil {
-		return *def
+	label, ok := dp.DefaultLabel()
+	if !ok {
+		return ""
 	}
-	if len(dp.Descriptor.ValueList) > 0 {
-		return dp.Descriptor.ValueList[0]
-	}
-	return ""
+	return label
 }
 
 // sirenSelectionCurrentOrDefault returns the last observed value for the given
 // alarm-selection DP, or falls back to the declared default when no value has
 // been observed yet.
-func sirenSelectionCurrentOrDefault(dp *generic.Sensor[string]) string {
+func sirenSelectionCurrentOrDefault(dp *generic.ActionSelect) string {
 	if dp == nil {
 		return ""
 	}
-	if v, ok := dp.Value(); ok && v != "" {
+	if v, ok := dp.Label(); ok && v != "" {
 		return v
 	}
 	return sirenSelectionDefaultString(dp)

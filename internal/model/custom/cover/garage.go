@@ -81,8 +81,11 @@ type Garage struct {
 
 	writer Writer
 
-	doorStateDp   *generic.Sensor[int32]
-	doorCommandDp *generic.Sensor[string]
+	doorStateDp *generic.Sensor[int32]
+	// doorCommandDp is DOOR_COMMAND: a write-only ENUM (OPERATIONS=2), so
+	// the resolver builds an ActionSelect. It carries no readable state —
+	// the door position comes from DOOR_STATE.
+	doorCommandDp *generic.ActionSelect
 	sectionDp     *generic.Sensor[int32]
 
 	mu       sync.RWMutex
@@ -116,7 +119,7 @@ func NewGarage(cfg GarageConfig) *Garage {
 		key:           key,
 		writer:        cfg.Writer,
 		doorStateDp:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterDoorState),
-		doorCommandDp: custom.StringSensorField(cfg.Channel, hmenum.ParameterDoorCommand),
+		doorCommandDp: custom.ActionSelectField(cfg.Channel, hmenum.ParameterDoorCommand),
 		sectionDp:     custom.IntegerSensorField(cfg.Channel, hmenum.ParameterSection),
 	}
 	g.registerGarageServices()
@@ -124,7 +127,7 @@ func NewGarage(cfg GarageConfig) *Garage {
 		_ = g.doorStateDp.OnConfirmedUpdate(func(_, _ int32) { g.dataVersion.Bump() })
 	}
 	if g.doorCommandDp != nil {
-		_ = g.doorCommandDp.OnConfirmedUpdate(func(_, _ string) { g.dataVersion.Bump() })
+		_ = g.doorCommandDp.OnConfirmedUpdate(func(_, _ int32) { g.dataVersion.Bump() })
 	}
 	if g.sectionDp != nil {
 		_ = g.sectionDp.OnConfirmedUpdate(func(_, _ int32) { g.dataVersion.Bump() })

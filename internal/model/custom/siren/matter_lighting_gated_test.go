@@ -106,7 +106,7 @@ func TestSirenOnOffLightingGatedCommandsRouteToOnOff(t *testing.T) {
 		// declared ValueList default would otherwise make TurnOn's write
 		// conditionally empty, which is a Siren-selection concern
 		// unrelated to the OnOff LT command routing this test locks down.
-		r.acousticIdxDP.OnEvent("FREQUENCY_RISING")
+		r.acousticIdxDP.RecordLabel("FREQUENCY_RISING")
 		srv := findCluster(t, r.siren, matterClusterOnOff)
 		if _, err := srv.MatterInvoke(context.Background(), cmd, nil, hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("MatterInvoke(0x%02X) error: %v", cmd, err)

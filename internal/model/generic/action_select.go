@@ -5,6 +5,7 @@ package generic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -22,6 +23,74 @@ type ActionSelect struct {
 func NewActionSelect(cfg Spec) *ActionSelect {
 	cfg.OptimisticDisabled = true
 	return &ActionSelect{DataPoint: NewDataPoint[int32](cfg)}
+}
+
+// Label returns the VALUE_LIST label for the value this data point
+// currently carries, mirroring [Select.Label].
+//
+// A write-only parameter never receives a value from the CCU, so this
+// reports something only after a caller has recorded what it wrote (see
+// [ActionSelect.RecordLabel]). That is the same contract the reference
+// implementation's `.value` has for an action-select data point.
+func (a *ActionSelect) Label() (string, bool) {
+	v, observed := a.Value()
+	if !observed {
+		return "", false
+	}
+	if int(v) < 0 || int(v) >= len(a.Descriptor.ValueList) {
+		return "", false
+	}
+	return a.Descriptor.ValueList[v], true
+}
+
+// DefaultLabel returns the VALUE_LIST label the descriptor declares as
+// DEFAULT, and whether one could be resolved.
+//
+// The CCU spells an ENUM default either as the label itself
+// (`"DISABLE_ACOUSTIC_SIGNAL"`, the HmIP convention) or as its index
+// (`0`); both are accepted here. When the descriptor declares neither,
+// the first VALUE_LIST entry is reported — for the alarm-selection
+// parameters that is the disable label, which is the value a caller
+// needs when it has to name a safe state rather than leave one implied.
+func (a *ActionSelect) DefaultLabel() (string, bool) {
+	values := a.Descriptor.ValueList
+	if len(values) == 0 {
+		return "", false
+	}
+	if raw := a.Descriptor.Default; len(raw) > 0 {
+		var label string
+		if err := json.Unmarshal(raw, &label); err == nil {
+			if _, ok := labelIndex(values, label); ok {
+				return label, true
+			}
+		}
+		var idx int
+		if err := json.Unmarshal(raw, &idx); err == nil && idx >= 0 && idx < len(values) {
+			return values[idx], true
+		}
+	}
+	return values[0], true
+}
+
+// LabelIndex resolves a VALUE_LIST label to its 0-based index.
+func (a *ActionSelect) LabelIndex(label string) (int32, bool) {
+	idx, ok := labelIndex(a.Descriptor.ValueList, label)
+	if !ok {
+		return 0, false
+	}
+	return int32(idx), true //nolint:gosec // a VALUE_LIST index is bounded by the list length
+}
+
+// RecordLabel records label as this data point's current value without
+// writing anything to the CCU. It is how a caller reflects a value it
+// just sent on a parameter the device will never report back — without
+// it, a write-only selection has no readable state at all.
+func (a *ActionSelect) RecordLabel(label string) {
+	idx, ok := a.LabelIndex(label)
+	if !ok {
+		return
+	}
+	a.OnEvent(idx)
 }
 
 // TriggerIndex sends the given 0-based enum index.

@@ -49,23 +49,7 @@ var customFieldsNeverFilled = map[string]string{
 // filled — the guard reports a listed-but-filled field as an error, so a
 // fix cannot leave a stale claim behind.
 var customFieldsWithAKnownDefect = map[string]string{
-	"cover.Garage.doorCommandDp": "DOOR_COMMAND is ENUM with OPERATIONS 2 (write-only) → the resolver " +
-		"yields an ActionSelect, while the field asks for Sensor[string]. A write-only parameter also has " +
-		"no readable value, so the field cannot work as a status source at all.",
 	"light.RGBWLight.mode": "DEVICE_OPERATION_MODE is a MASTER ENUM with OPERATIONS 3 → Select, while the " +
-		"field asks for Sensor[string].",
-	"light.SoundPlayerLED.onTimeList": "ON_TIME_LIST_1 is ENUM with OPERATIONS 2 → ActionSelect, while the " +
-		"field asks for Sensor[string].",
-	"light.SoundPlayerLED.repetitions": "REPETITIONS is ENUM with OPERATIONS 2 → ActionSelect, while the " +
-		"field asks for Sensor[string].",
-	"siren.Siren.acousticIdx": "ACOUSTIC_ALARM_SELECTION is ENUM with OPERATIONS 2 → ActionSelect, while " +
-		"the field asks for Sensor[string]. The siren's acoustic-alarm read-back is therefore absent on " +
-		"every device.",
-	"siren.Siren.opticalIdx": "OPTICAL_ALARM_SELECTION is ENUM with OPERATIONS 2 → ActionSelect, while the " +
-		"field asks for Sensor[string].",
-	"siren.SmokeSiren.command": "SMOKE_DETECTOR_COMMAND is ENUM with OPERATIONS 2 → ActionSelect, while " +
-		"the field asks for Sensor[string].",
-	"siren.SoundPlayer.repetitions": "REPETITIONS is ENUM with OPERATIONS 2 → ActionSelect, while the " +
 		"field asks for Sensor[string].",
 	"siren.SoundPlayer.soundfile": "HmIP-MP3P carries SOUNDFILE twice — read-only on channel 1 (→ " +
 		"Sensor[int32]) and read+write on channel 2 (→ Select). The sound player sits on the writable " +

@@ -272,17 +272,29 @@ func newSirenFixture(t *testing.T, w *fakeWriter) *siren.Siren {
 		})
 		ch.Put(dp)
 	}
-	for _, p := range []hmenum.Parameter{hmenum.ParameterAcousticAlarmSelection, hmenum.ParameterOpticalAlarmSelection} {
-		dp := generic.NewStringSensor(generic.Spec{
-			Key: hmtypes.DataPointKey{ChannelAddress: "ASIR0001:3", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(p)},
+	// The alarm-selection parameters are write-only ENUMs on the wire
+	// (OPERATIONS=2) with their own VALUE_LIST and a string-labelled
+	// DEFAULT, so the resolver builds an ActionSelect for each. The
+	// previous fixture modelled them as readable string sensors sharing
+	// the acoustic value list, which is why the recorded snapshot showed
+	// the acoustic disable label being written to the optical parameter.
+	for _, sel := range []struct {
+		param  hmenum.Parameter
+		values []string
+	}{
+		{hmenum.ParameterAcousticAlarmSelection, []string{"DISABLE_ACOUSTIC_SIGNAL", "FREQUENCY_RISING", "FREQUENCY_FALLING"}},
+		{hmenum.ParameterOpticalAlarmSelection, []string{"DISABLE_OPTICAL_SIGNAL", "BLINKING_ALTERNATELY_REPEATING", "BLINKING_BOTH_REPEATING"}},
+	} {
+		ch.Put(generic.NewActionSelect(generic.Spec{
+			Key: hmtypes.DataPointKey{ChannelAddress: "ASIR0001:3", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(sel.param)},
 			Descriptor: hmproto.ParameterData{
 				Type:       hmenum.ParameterTypeEnum,
-				Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-				ValueList:  []string{"DISABLE_ACOUSTIC_SIGNAL", "FREQUENCY_RISING", "FREQUENCY_FALLING"},
+				Operations: hmenum.OperationsWrite,
+				ValueList:  sel.values,
+				Default:    []byte(`"` + sel.values[0] + `"`),
 			},
 			Writer: w,
-		})
-		ch.Put(dp)
+		}))
 	}
 
 	caps := custom.SirenCapabilities{SupportsAcoustic: true, SupportsOptical: true, SupportsDuration: false}

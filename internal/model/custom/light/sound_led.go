@@ -115,8 +115,11 @@ type LedOnConfig struct {
 type SoundPlayerLED struct {
 	*FixedColorLight
 
-	onTimeList  *generic.Sensor[string]
-	repetitions *generic.Sensor[string]
+	// ON_TIME_LIST_1 and REPETITIONS are write-only ENUMs (OPERATIONS=2)
+	// whose VALUE_LIST carries the labels; the resolver builds an
+	// ActionSelect for each.
+	onTimeList  *generic.ActionSelect
+	repetitions *generic.ActionSelect
 
 	availableOnTimes     []string
 	availableRepetitions []string
@@ -133,14 +136,14 @@ func NewSoundPlayerLED(cfg Config) *SoundPlayerLED {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterRepetitions); dp != nil {
 			led.availableRepetitions = append([]string(nil), dp.ParameterData().ValueList...)
 		}
-		led.onTimeList = custom.StringSensorField(cfg.Channel, hmenum.ParameterOnTimeList1)
-		led.repetitions = custom.StringSensorField(cfg.Channel, hmenum.ParameterRepetitions)
+		led.onTimeList = custom.ActionSelectField(cfg.Channel, hmenum.ParameterOnTimeList1)
+		led.repetitions = custom.ActionSelectField(cfg.Channel, hmenum.ParameterRepetitions)
 	}
 	if led.onTimeList != nil {
-		_ = led.onTimeList.OnConfirmedUpdate(func(_, _ string) { led.dataVersion.Bump() })
+		_ = led.onTimeList.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
 	}
 	if led.repetitions != nil {
-		_ = led.repetitions.OnConfirmedUpdate(func(_, _ string) { led.dataVersion.Bump() })
+		_ = led.repetitions.OnConfirmedUpdate(func(_, _ int32) { led.dataVersion.Bump() })
 	}
 	return led
 }

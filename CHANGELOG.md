@@ -8,6 +8,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A siren can be silenced again, and sounds a defined alarm.** The two
+  alarm-selection parameters are write-only ENUMs on the wire, so the
+  daemon builds a write-only selection for them — but the siren looked
+  them up as readable text, which matches nothing on any device. Both
+  slots were therefore empty, and with them the "disable" value the CCU
+  declares: switching a siren off wrote an empty selection, which the CCU
+  rejects, and switching it on without naming a tone sent no selection at
+  all, leaving the device to repeat whatever was set last — including the
+  disable tone a preceding off-command had left behind. Both commands now
+  name the value they mean. The optical channel also gets its own disable
+  value; it was being sent the acoustic one.
+
+  Five further data points were absent for the same reason and are now
+  found: the smoke detector's command, the garage door's command, the
+  sound player's repetitions, and the sound-LED's repetitions and
+  on-time list. Their state changes reach the north-bound planes again.
+
 - **A parameter no longer arrives in Home Assistant under two different
   names.** The same data point was called "Frostschutz" over the REST
   drop-in and "Frostschutz ch1" over MQTT discovery. The daemon composes

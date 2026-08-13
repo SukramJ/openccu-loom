@@ -60,12 +60,15 @@ type SoundPlayer struct {
 	// changes for the SoundPlayer's Matter LevelControl mapping.
 	hmtypes.DataVersionTracker
 
-	key          hmtypes.DataPointKey
-	writer       custom.Writer
-	level        *generic.Float          // LEVEL (0..1 volume)
-	soundfile    *generic.Sensor[int32]  // SOUNDFILE (read-only ENUM, index sensor)
-	repetitions  *generic.Sensor[string] // REPETITIONS
-	direction    *generic.Sensor[int32]  // DIRECTION (UP/DOWN; read-only ENUM, index sensor)
+	key       hmtypes.DataPointKey
+	writer    custom.Writer
+	level     *generic.Float         // LEVEL (0..1 volume)
+	soundfile *generic.Sensor[int32] // SOUNDFILE (read-only ENUM, index sensor)
+	// repetitions is REPETITIONS: a write-only ENUM (OPERATIONS=2) whose
+	// VALUE_LIST carries the REPETITIONS_nnn labels, so the resolver builds
+	// an ActionSelect for it.
+	repetitions  *generic.ActionSelect  // REPETITIONS
+	direction    *generic.Sensor[int32] // DIRECTION (UP/DOWN; read-only ENUM, index sensor)
 	availableSF  []string
 	availableRep []string
 }
@@ -111,7 +114,7 @@ func NewSoundPlayer(cfg SoundPlayerConfig) *SoundPlayer {
 		writer:      cfg.Writer,
 		level:       custom.FloatField(cfg.Channel, hmenum.ParameterLevel),
 		soundfile:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterSoundfile),
-		repetitions: custom.StringSensorField(cfg.Channel, hmenum.ParameterRepetitions),
+		repetitions: custom.ActionSelectField(cfg.Channel, hmenum.ParameterRepetitions),
 		direction:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterDirection),
 	}
 	if cfg.Channel != nil {
