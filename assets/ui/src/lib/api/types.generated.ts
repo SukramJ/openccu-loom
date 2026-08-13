@@ -4567,6 +4567,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/matter/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open Matter sessions with per-session liveness (operator diagnostics)
+         * @description Lists every secure session the bridge currently holds, with when it
+         *     last carried traffic and how many subscriptions ride on it.
+         *
+         *     The two timestamps answer different questions. `last_activity` moves
+         *     on traffic in either direction; `last_peer_activity` only when the
+         *     controller sent something. A session whose peer has been quiet while
+         *     the bridge kept reporting is a controller that went away without
+         *     closing — the shape that otherwise shows up only as entities going
+         *     stale in the ecosystem.
+         *
+         *     No key material is exposed.
+         */
+        get: operations["listMatterSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/matter/fabrics": {
         parameters: {
             query?: never;
@@ -7456,6 +7486,36 @@ export interface components {
         };
         MatterFabricList: {
             fabrics: components["schemas"]["MatterFabric"][];
+        };
+        MatterSession: {
+            session_id: number;
+            /** @description 0 for a PASE (commissioning) session */
+            fabric_index: number;
+            /** @description 64-bit node id, hex */
+            peer_node_id: string;
+            /** @description 64-bit node id, hex */
+            local_node_id: string;
+            /** @description Commissioning session rather than an operational (CASE) one */
+            is_pase: boolean;
+            /** @description Active subscriptions riding on this session */
+            subscriptions: number;
+            /**
+             * Format: date-time
+             * @description Last traffic in either direction
+             */
+            last_activity: string;
+            /**
+             * Format: date-time
+             * @description Last message received from the peer
+             */
+            last_peer_activity: string;
+            /** @description Seconds since last_activity */
+            idle_seconds: number;
+            /** @description Seconds since last_peer_activity — the controller-liveness signal */
+            peer_idle_seconds: number;
+        };
+        MatterSessionList: {
+            sessions: components["schemas"]["MatterSession"][];
         };
         MatterSetupPayload: {
             discriminator: number;
@@ -14870,6 +14930,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MatterStatus"];
+                };
+            };
+        };
+    };
+    listMatterSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatterSessionList"];
+                };
+            };
+            /** @description Matter bridge not enabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
