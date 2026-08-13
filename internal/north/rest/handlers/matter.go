@@ -326,3 +326,152 @@ func MatterSessions(l MatterSessionLister) http.HandlerFunc {
 		JSON(w, http.StatusOK, MatterSessionList{Sessions: out})
 	}
 }
+
+// MatterMdnsService is one advertised record as the diagnostics surface
+// reports it.
+type MatterMdnsService struct {
+	ServiceType  string            `json:"service_type"`
+	InstanceName string            `json:"instance_name"`
+	HostName     string            `json:"host_name"`
+	Port         uint16            `json:"port"`
+	Addresses    []string          `json:"addresses"`
+	Subtypes     []string          `json:"subtypes"`
+	TXT          map[string]string `json:"txt"`
+}
+
+// MatterMdnsFinding explains one reason a controller might not discover
+// the bridge.
+type MatterMdnsFinding struct {
+	Severity string `json:"severity"`
+	Code     string `json:"code"`
+	Message  string `json:"message"`
+	Service  string `json:"service,omitempty"`
+}
+
+// MatterMdnsDiagnostics is the body of GET /api/v1/matter/mdns.
+type MatterMdnsDiagnostics struct {
+	Advertising bool                `json:"advertising"`
+	Services    []MatterMdnsService `json:"services"`
+	Findings    []MatterMdnsFinding `json:"findings"`
+}
+
+// MatterMdnsReporter reports the bridge's current mDNS advertisement
+// together with the findings diagnosed from it.
+type MatterMdnsReporter interface {
+	MatterMdns() MatterMdnsDiagnostics
+}
+
+// MatterMdns serves GET /api/v1/matter/mdns.
+//
+// Discovery failures are the hardest Matter problem to attribute,
+// because the daemon side looks correct throughout: the records publish,
+// the log confirms it, and the controller simply never lists the bridge.
+// This endpoint reports what is actually announced and names the
+// conditions that produce that outcome.
+func MatterMdns(r MatterMdnsReporter) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if r == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, req,
+					"Matter bridge not enabled",
+					"north.matter.enabled is false in the daemon config"))
+			return
+		}
+		JSON(w, http.StatusOK, r.MatterMdns())
+	}
+}
+
+// MatterEndpointCluster is one cluster on an endpoint.
+type MatterEndpointCluster struct {
+	ID       uint32 `json:"id"`
+	Name     string `json:"name"`
+	Revision uint16 `json:"revision"`
+}
+
+// MatterEndpointInfo is one endpoint of the assembled topology.
+type MatterEndpointInfo struct {
+	EndpointID         uint16                  `json:"endpoint_id"`
+	ParentEndpointID   uint16                  `json:"parent_endpoint_id"`
+	DeviceType         uint16                  `json:"device_type"`
+	DeviceTypeName     string                  `json:"device_type_name"`
+	DeviceTypeRevision uint16                  `json:"device_type_revision,omitempty"`
+	Reachable          bool                    `json:"reachable"`
+	FriendlyName       string                  `json:"friendly_name"`
+	DeviceAddress      string                  `json:"device_address,omitempty"`
+	ChannelAddress     string                  `json:"channel_address,omitempty"`
+	Clusters           []MatterEndpointCluster `json:"clusters"`
+}
+
+// MatterEndpointList is the body of GET /api/v1/matter/endpoints.
+type MatterEndpointList struct {
+	Endpoints []MatterEndpointInfo `json:"endpoints"`
+}
+
+// MatterEndpointInspector reports the assembled Matter topology.
+type MatterEndpointInspector interface {
+	MatterEndpoints() []MatterEndpointInfo
+}
+
+// MatterEndpoints serves GET /api/v1/matter/endpoints.
+//
+// What a controller sees is assembled at runtime from the exposure
+// allowlist, the device model and persisted endpoint identity, and until
+// now the only way to look at the result was to commission a controller
+// and browse it with chip-tool. That makes every "why is this device
+// missing in Apple Home" question start with a commissioning step.
+func MatterEndpoints(i MatterEndpointInspector) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if i == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, req,
+					"Matter bridge not enabled",
+					"north.matter.enabled is false in the daemon config"))
+			return
+		}
+		JSON(w, http.StatusOK, MatterEndpointList{Endpoints: i.MatterEndpoints()})
+	}
+}
+
+// MatterEcosystem is one commissioned fabric classified by controller
+// vendor.
+type MatterEcosystem struct {
+	Ecosystem   string `json:"ecosystem"`
+	VendorID    uint16 `json:"vendor_id"`
+	FabricIndex uint8  `json:"fabric_index"`
+	Label       string `json:"label,omitempty"`
+}
+
+// MatterCompatFinding warns about one ecosystem/device-type combination.
+type MatterCompatFinding struct {
+	Ecosystem  string `json:"ecosystem"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	DeviceType uint16 `json:"device_type,omitempty"`
+}
+
+// MatterCompatibility is the body of GET /api/v1/matter/compatibility.
+type MatterCompatibility struct {
+	Ecosystems    []MatterEcosystem     `json:"ecosystems"`
+	EndpointCount int                   `json:"endpoint_count"`
+	Findings      []MatterCompatFinding `json:"findings"`
+}
+
+// MatterCompatibilityReporter joins the commissioned fabrics with the
+// exposed topology.
+type MatterCompatibilityReporter interface {
+	MatterCompatibility() MatterCompatibility
+}
+
+// MatterCompatibilityHandler serves GET /api/v1/matter/compatibility.
+func MatterCompatibilityHandler(r MatterCompatibilityReporter) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if r == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, req,
+					"Matter bridge not enabled",
+					"north.matter.enabled is false in the daemon config"))
+			return
+		}
+		JSON(w, http.StatusOK, r.MatterCompatibility())
+	}
+}

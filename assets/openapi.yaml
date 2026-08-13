@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.21.0
+  version: 5.22.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5655,6 +5655,84 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MatterStatus" }
 
+  /matter/compatibility:
+    get:
+      operationId: matterCompatibility
+      summary: How each commissioned ecosystem will treat what the bridge exposes
+      description: |
+        Classifies every commissioned fabric by ecosystem and reports what
+        that ecosystem does with the exposed device types.
+
+        These problems are invisible from the bridge: the endpoint is
+        assembled, its clusters answer reads, commissioning succeeds — and
+        the device is missing from the app, or the whole bridge stops
+        responding there. Naming the combination is what connects the two.
+      tags: [matter]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterCompatibility" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /matter/endpoints:
+    get:
+      operationId: matterEndpointInspector
+      summary: The assembled Matter topology as a controller sees it
+      description: |
+        Reports every endpoint the bridge exposes with its device type,
+        its clusters and where it came from — the view a controller gets,
+        without needing chip-tool to obtain it.
+
+        Endpoint numbers are assigned from persisted identity, not from
+        position, so they are stable across restarts but not derivable
+        from the device list. Reading them here is the way to find the
+        endpoint belonging to a given device; guessing by ordinal is not.
+      tags: [matter]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterEndpointList" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /matter/mdns:
+    get:
+      operationId: matterMdnsDiagnostics
+      summary: What the bridge advertises over mDNS, and what is wrong with it
+      description: |
+        Reports the mDNS records the bridge currently announces, together
+        with findings that explain why a controller might not discover it.
+
+        Every finding corresponds to a failure that presents identically
+        from inside the daemon: advertising succeeds, the log says so, and
+        the controller simply never offers the bridge. Missing subtype
+        PTRs (Apple and Google browse through them), container-internal
+        addresses a LAN controller cannot route to, a commissioning port
+        other than 5540 (Alexa uses no other), an IPv4-only announcement.
+      tags: [matter]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterMdnsDiagnostics" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /matter/sessions:
     get:
       operationId: listMatterSessions
@@ -9763,6 +9841,125 @@ components:
         fabrics:
           type: array
           items: { $ref: "#/components/schemas/MatterFabric" }
+
+    MatterEcosystem:
+      type: object
+      required: [ecosystem, vendor_id, fabric_index]
+      properties:
+        ecosystem:
+          type: string
+          enum: [apple, google, amazon, smartthings, aqara, home_assistant, unknown]
+        vendor_id: { type: integer }
+        fabric_index: { type: integer }
+        label: { type: string }
+
+    MatterCompatFinding:
+      type: object
+      required: [ecosystem, code, message]
+      properties:
+        ecosystem: { type: string }
+        code: { type: string }
+        message: { type: string }
+        device_type:
+          type: integer
+          description: "The device type concerned; absent when the finding applies to the bridge as a whole"
+
+    MatterCompatibility:
+      type: object
+      required: [ecosystems, endpoint_count, findings]
+      properties:
+        ecosystems:
+          type: array
+          items: { $ref: "#/components/schemas/MatterEcosystem" }
+        endpoint_count: { type: integer }
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/MatterCompatFinding" }
+
+    MatterEndpointCluster:
+      type: object
+      required: [id, name, revision]
+      properties:
+        id: { type: integer, description: "Cluster id" }
+        name: { type: string, description: "Empty when the cluster is not in the generated schema" }
+        revision: { type: integer, description: "0 when unknown to the schema" }
+
+    MatterEndpointInfo:
+      type: object
+      required:
+        [endpoint_id, parent_endpoint_id, device_type, device_type_name,
+         reachable, friendly_name, clusters]
+      properties:
+        endpoint_id: { type: integer }
+        parent_endpoint_id: { type: integer }
+        device_type: { type: integer }
+        device_type_name: { type: string }
+        device_type_revision: { type: integer }
+        reachable: { type: boolean }
+        friendly_name: { type: string }
+        device_address:
+          type: string
+          description: "Source device, absent for the root and aggregator endpoints"
+        channel_address:
+          type: string
+          description: "Source channel, absent when the endpoint is not channel-scoped"
+        clusters:
+          type: array
+          items: { $ref: "#/components/schemas/MatterEndpointCluster" }
+
+    MatterEndpointList:
+      type: object
+      required: [endpoints]
+      properties:
+        endpoints:
+          type: array
+          items: { $ref: "#/components/schemas/MatterEndpointInfo" }
+
+    MatterMdnsService:
+      type: object
+      required: [service_type, instance_name, host_name, port, addresses, subtypes, txt]
+      properties:
+        service_type: { type: string, example: "_matterc._udp" }
+        instance_name: { type: string }
+        host_name: { type: string }
+        port: { type: integer }
+        addresses:
+          type: array
+          items: { type: string }
+        subtypes:
+          type: array
+          items: { type: string }
+          description: "Service subtypes (`_L<discriminator>`, `_S<short>`, `_CM`) Apple and Google browse through"
+        txt:
+          type: object
+          additionalProperties: { type: string }
+
+    MatterMdnsFinding:
+      type: object
+      required: [severity, code, message]
+      properties:
+        severity: { type: string, enum: [error, warning] }
+        code:
+          type: string
+          description: "Stable identifier; the message is prose and may be reworded"
+        message: { type: string }
+        service:
+          type: string
+          description: "The advertised record this applies to; absent when it concerns the advertisement as a whole"
+
+    MatterMdnsDiagnostics:
+      type: object
+      required: [advertising, services, findings]
+      properties:
+        advertising:
+          type: boolean
+          description: "False when advertising is switched off (`north.matter.mdns_advertise: noop`)"
+        services:
+          type: array
+          items: { $ref: "#/components/schemas/MatterMdnsService" }
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/MatterMdnsFinding" }
 
     MatterSession:
       type: object

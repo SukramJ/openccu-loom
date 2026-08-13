@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 9c0e9818
-HEAD: 9c0e9818
+Generated: 67539d03
+HEAD: 67539d03
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28187 |
-| Reachable | 4973 |
-| Whitelisted | 20240 |
+| Total Exported | 28281 |
+| Reachable | 4999 |
+| Whitelisted | 20308 |
 | **Unreachable** | **2974** |
 
 ## Top-20 Packages by Dead Code

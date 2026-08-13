@@ -2,6 +2,13 @@
 
 ## 0.59.0
 
+- **Matter diagnostics in the Config UI.** A new Diagnostics tab shows
+  why a controller might not find the bridge (missing discovery
+  subtypes, container-only addresses, a non-standard commissioning
+  port), what the topology looks like from a controller's side, and
+  which of your paired ecosystems will refuse a device type you exposed
+  — including the one that makes Alexa drop the whole bridge.
+
 - **New: see whether a Matter controller is still talking to the
   bridge.** The API now reports every open Matter session with how long
   the controller has been quiet and how many subscriptions it holds — a

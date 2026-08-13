@@ -417,6 +417,15 @@ type Deps struct {
 	// ports.
 	MatterSessionLister handlers.MatterSessionLister
 
+	// MatterMdnsReporter backs GET /api/v1/matter/mdns.
+	MatterMdnsReporter handlers.MatterMdnsReporter
+
+	// MatterEndpointInspector backs GET /api/v1/matter/endpoints.
+	MatterEndpointInspector handlers.MatterEndpointInspector
+
+	// MatterCompatibilityReporter backs GET /api/v1/matter/compatibility.
+	MatterCompatibilityReporter handlers.MatterCompatibilityReporter
+
 	// MatterFabricRevoker backs `DELETE /matter/fabrics/{id}`.
 	MatterFabricRevoker handlers.MatterFabricRevoker
 	// MatterCommissioningCloser backs `POST /matter/commissioning/window/close`.
@@ -1125,6 +1134,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/matter/status", handlers.MatterStatus(d.MatterStatusReader))
 			pr.Get("/matter/fabrics", handlers.MatterFabrics(d.MatterFabricStore))
 			pr.Get("/matter/sessions", handlers.MatterSessions(d.MatterSessionLister))
+			pr.Get("/matter/mdns", handlers.MatterMdns(d.MatterMdnsReporter))
+			pr.Get("/matter/endpoints", handlers.MatterEndpoints(d.MatterEndpointInspector))
+			pr.Get("/matter/compatibility", handlers.MatterCompatibilityHandler(d.MatterCompatibilityReporter))
 			pr.With(admin).Delete("/matter/fabrics/{id}", handlers.MatterFabricRevoke(d.MatterFabricRevoker, d.MatterEventPublisher, d.MatterAuditRecorder))
 			pr.Get("/matter/setup-payload", handlers.MatterSetupPayload(d.MatterCommissioning))
 			pr.Get("/matter/exposable", handlers.MatterExposable(d.MatterCandidateProvider, d.MatterExposureStore, d.Labels))
