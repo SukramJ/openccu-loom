@@ -83,6 +83,18 @@ func addressRoot(address string) string {
 	return address
 }
 
+// NeedsCentralScope reports whether an address only becomes unique once
+// the CCU's serial is prepended — the hub pseudo-addresses, the internal
+// INT000* addresses, and the virtual-remote buses, all of which repeat
+// verbatim on every CCU.
+//
+// A north-bound plane that keys entities by unique_id has to consult
+// this before publishing without a serial: two CCUs would otherwise
+// declare the identical id, and the consumer keeps whichever arrived
+// first. Home Assistant does exactly that, and the payload is retained,
+// so the loss outlives the daemon that caused it.
+func NeedsCentralScope(address string) bool { return needsCentralPrefix(address) }
+
 // needsCentralPrefix reports whether the parameter-level key for the
 // given address is namespaced by the central: hub-level pseudo
 // addresses, internal addresses, and virtual-remote channels.

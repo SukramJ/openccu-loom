@@ -461,9 +461,12 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	if generic.IsForceSensorParameter(ev.Model, hmenum.Parameter(ev.Parameter)) {
 		keyParameter += datapoint.ForcedSensorSuffix
 	}
-	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), chAddr, keyParameter, "")
+	uniqueID, scoped := d.scopedUniqueID(ev.Central, chAddr, keyParameter, "")
 	if ev.Calculated {
-		uniqueID = routingkey.CalculatedUniqueID(d.serialSuffix(ev.Central), chAddr, ev.Parameter)
+		uniqueID, scoped = d.scopedUniqueID(ev.Central, chAddr, ev.Parameter, routingkey.CalculatedFamilyPrefix)
+	}
+	if !scoped {
+		return "", "", "", nil, false
 	}
 
 	stateTopic := pd.MQTTState(d.TopicBuilder.Base, central)
@@ -1361,4 +1364,26 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 		desc["suggested_area"] = room
 	}
 	return desc
+}
+
+// scopedUniqueID builds a device-bound unique_id and reports whether it
+// is safe to publish.
+//
+// It is not safe when the address only becomes unique through the CCU's
+// serial — the virtual-remote buses, INT000*, the hub pseudo-addresses —
+// and no serial is registered for the central yet. Every CCU would then
+// declare the identical id, and a consumer that keys its entity registry
+// on unique_id keeps whichever arrived first. Home Assistant does, and
+// the payload is retained, so the second CCU's entities stay missing
+// until someone clears the topic by hand.
+//
+// Skipping is recoverable and visible; colliding is neither. The serial
+// arrives with the hub bring-up, and the snapshot that follows it
+// publishes what was skipped.
+func (d *DefaultDiscoveryBuilder) scopedUniqueID(centralName, address, parameter, prefix string) (string, bool) {
+	serial := d.serialSuffix(centralName)
+	if serial == "" && routingkey.NeedsCentralScope(address) {
+		return "", false
+	}
+	return routingkey.CanonicalUniqueID(serial, address, parameter, prefix), true
 }

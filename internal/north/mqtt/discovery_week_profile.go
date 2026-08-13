@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
-
-	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // WeekProfileDescriptor is the narrow read-side contract on a week-profile
@@ -82,7 +80,10 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 	// "WEEKPROFILE" parameter. The WeekProfileEvent carries DeviceAddress and
 	// ChannelNo directly, so we compose the channel address string here.
 	channelAddr := ev.DeviceAddress + ":" + strconv.Itoa(ev.ChannelNo)
-	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), channelAddr, "WEEKPROFILE", "")
+	uniqueID, scoped := d.scopedUniqueID(centralName, channelAddr, "WEEKPROFILE", "")
+	if !scoped {
+		return DiscoveryItem{}
+	}
 	// object_id is the normalised (colon→underscore, lower-case) form of the
 	// legacy "<central>:<addr>:WEEKPROFILE" identifier — kept for HA topic
 	// continuity. The unique_id is the canonical routing-key form.

@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -642,4 +643,125 @@ func (b *Bridge) RunRawOrphanCleanupOnce(ctx context.Context, centralName string
 		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true)
 	}
 	return len(orphans), nil
+}
+
+// unscopedUniqueIDMarker is what an entity id looks like when the CCU
+// serial slot was empty at publish time: the loom namespace, the missing
+// discriminator, and the separator that follows it.
+const unscopedUniqueIDMarker = loomNamespacePrefix + "_"
+
+// loomNamespacePrefix is the namespace every entity id this daemon
+// publishes carries. Spelled here rather than imported so the sweep
+// matches the string that is actually on the broker.
+const loomNamespacePrefix = "loom_"
+
+// RunUnscopedDiscoveryCleanupOnce subscribes to `homeassistant/#` for a
+// short window and clears every retained discovery config this daemon
+// published with an unscoped entity id — one whose CCU-serial slot was
+// empty, leaving `loom__…`.
+//
+// It exists because the ordinary orphan sweep cannot see this class. That
+// one compares topics against what the current build declared, and here
+// the topic is unchanged: the same entity is republished on the same
+// topic with a corrected id. What changes is inside the payload. So the
+// broker ends up carrying the right config while the consumer still holds
+// the wrong identity — Home Assistant keys its registry on unique_id, so
+// the corrected payload creates a second entity beside the stale one
+// instead of replacing it.
+//
+// Clearing the topic first is what makes the consumer forget: an empty
+// retained payload removes the entity, and the snapshot that follows
+// announces it again under the id that carries the serial. That ordering
+// is the reason this runs before [EventBridge.PublishInitialSnapshot]
+// rather than beside the other sweeps, which run after it.
+//
+// Scope is the daemon's own payloads, identified by the origin block the
+// discovery builder writes. A second loom daemon on the same broker
+// would have its unscoped ids cleared too — they are equally ambiguous,
+// and it republishes them correctly on its own next snapshot.
+//
+// Best-effort: returns the number of configs cleared plus any subscribe
+// error.
+func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWindow time.Duration) (int, error) {
+	if !b.cfg.HADiscoveryEnabled {
+		return 0, nil
+	}
+	if snapshotWindow <= 0 {
+		snapshotWindow = 2 * time.Second
+	}
+	subClient, ok := b.cleanupSubscriber()
+	if !ok {
+		return 0, errCleanupClientLacksSubscribe
+	}
+
+	var (
+		mu    sync.Mutex
+		stale []string
+	)
+	handler := func(topic string, payload []byte, _ bool) {
+		if !strings.HasPrefix(topic, "homeassistant/") || !strings.HasSuffix(topic, "/config") {
+			return
+		}
+		if len(payload) == 0 {
+			return
+		}
+		if !payloadCarriesUnscopedUniqueID(payload) {
+			return
+		}
+		mu.Lock()
+		stale = append(stale, topic)
+		mu.Unlock()
+	}
+
+	filter := "homeassistant/#"
+	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.Discovery, LegacyHandler(handler)); err != nil {
+		return 0, err
+	}
+	timer := time.NewTimer(snapshotWindow)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+	if err := subClient.Unsubscribe(ctx, filter); err != nil {
+		return 0, err
+	}
+
+	mu.Lock()
+	topics := append([]string(nil), stale...)
+	mu.Unlock()
+	for _, topic := range topics {
+		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
+		// Drop it from `declared` as well: the snapshot that follows has
+		// to republish this topic, and the diff gate would otherwise
+		// suppress it against the payload we just cleared.
+		b.mu.Lock()
+		delete(b.declared, topic)
+		b.mu.Unlock()
+	}
+	return len(topics), nil
+}
+
+// payloadCarriesUnscopedUniqueID reports whether a retained discovery
+// config was published by this daemon with an empty serial slot.
+//
+// Both halves matter. The origin block keeps the sweep off other
+// integrations' payloads, which may legitimately use any id shape; the
+// marker identifies the ones this daemon can no longer address, because
+// a second CCU would produce the identical string.
+func payloadCarriesUnscopedUniqueID(payload []byte) bool {
+	var body struct {
+		UniqueID string `json:"unique_id"`
+		Origin   struct {
+			Name string `json:"name"`
+		} `json:"origin"`
+	}
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return false
+	}
+	if body.Origin.Name != originName {
+		return false
+	}
+	return strings.HasPrefix(body.UniqueID, unscopedUniqueIDMarker)
 }

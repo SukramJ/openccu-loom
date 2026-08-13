@@ -13,7 +13,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
-	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -90,7 +89,10 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 		return "", "", "", nil, false
 	}
 	objectID = d.channelObjectID(ev, "event")
-	uniqueID := d.channelUniqueID(ev, "event")
+	uniqueID, scoped := d.channelUniqueID(ev, "event")
+	if !scoped {
+		return "", "", "", nil, false
+	}
 	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
 	stateTopic := d.TopicBuilder.ChannelEvent(d.centralFor(ev), ev.Interface, ev.DeviceAddress, ev.ChannelNo)
 	// Press-event entity name prefers the CCU-operator-assigned
@@ -200,7 +202,10 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 		return "", "", "", nil, false
 	}
 	objectID = d.channelObjectID(ev, comp)
-	uniqueID := d.channelUniqueID(ev, comp)
+	uniqueID, scoped := d.channelUniqueID(ev, comp)
+	if !scoped {
+		return "", "", "", nil, false
+	}
 	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
 	base := d.channelBaseBody(ev, displayChannelName(ev), uniqueID)
 	maps.Copy(body, base)
@@ -335,10 +340,10 @@ func (d *DefaultDiscoveryBuilder) channelObjectID(ev Event, suffix string) strin
 }
 
 // channelUniqueID is the cross-broker-stable id used for HA's
-// `unique_id` payload field. Uses [routingkey.CanonicalUniqueID] with
-// the channel address (device:channel) and suffix as the parameter.
-func (d *DefaultDiscoveryBuilder) channelUniqueID(ev Event, suffix string) string {
-	return routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), suffix, "")
+// `unique_id` payload field, and whether it is safe to publish — see
+// [DefaultDiscoveryBuilder.scopedUniqueID] for what makes it unsafe.
+func (d *DefaultDiscoveryBuilder) channelUniqueID(ev Event, suffix string) (string, bool) {
+	return d.scopedUniqueID(ev.Central, ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), suffix, "")
 }
 
 // channelPathData builds the channel-scoped [naming.PathData] used

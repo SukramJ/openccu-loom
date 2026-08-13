@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
-	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // UpdateEvent carries the per-device context needed to build discovery
@@ -96,7 +95,10 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 
 	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 	// object_id is unique per device — there is exactly one update entity per device.
-	objectID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), ev.DeviceAddress, "update", "")
+	objectID, scoped := d.scopedUniqueID(centralName, ev.DeviceAddress, "update", "")
+	if !scoped {
+		return DiscoveryItem{}
+	}
 
 	// Compose the mock Event needed by deviceDescriptor / channelBaseBody.
 	mockEv := Event{

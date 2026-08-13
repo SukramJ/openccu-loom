@@ -8,6 +8,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A second CCU no longer loses its virtual-remote entities.** A few
+  address classes are identical on every CCU — the virtual remotes, the
+  internal devices, the hub itself — so what separates their entities is
+  the CCU's serial. The serial is resolved by the hub bring-up, on a
+  different path than the devices take, and the device snapshot did not
+  wait for it: entities were declared with the serial slot left blank,
+  which made two CCUs announce the very same entity id. Home Assistant
+  keeps whichever it saw first, so the second CCU's virtual remotes were
+  missing — and stayed missing, because the announcement is retained on
+  the broker.
+
+  The snapshot now reads the serial straight from the CCU it belongs to
+  before writing anything, and an entity that would need a serial it does
+  not have is not announced at all rather than announced ambiguously. It
+  appears on the next snapshot, once the serial is known. Single-CCU
+  setups were never affected.
+
+  Announcements already on the broker are cleaned up on the next start:
+  the daemon withdraws the ambiguous ones before re-announcing, so the
+  duplicate that would otherwise appear beside each corrected entity
+  never shows up. Nothing has to be deleted by hand, and other
+  integrations sharing the broker are left untouched.
+
 - **Tunable-white dimmers report and accept a colour temperature.** The
   RF families (HM-LC-DW-WM, HM-DW-WM) have no colour-temperature
   parameter at all: they express the white point as a second dimmer
