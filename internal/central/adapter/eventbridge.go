@@ -531,6 +531,17 @@ func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Uni
 		return
 	}
 	centralName := u.Name()
+	// Stamp the CCU serial onto the discovery builder before writing a
+	// single payload. A few address classes repeat verbatim across CCUs —
+	// the virtual-remote buses, INT000*, the hub pseudo-addresses — and
+	// the serial is the only thing that separates their unique_ids. It
+	// reaches the builder by a slower route than the devices do: the
+	// composition root stamps it while SystemInformation is still empty,
+	// and the authoritative stamp rides the hub publisher's debounced
+	// ready-restart, which lands after this snapshot. Reading it live from
+	// the registry here removes the ordering question instead of timing
+	// around it.
+	b.stampHubSerial(u)
 	for _, d := range u.ModelRegistry.List() {
 		b.publishDeviceSnapshot(ctx, centralName, d)
 	}
@@ -3095,4 +3106,33 @@ func encodeLevelCompositeJSON(c combined.LevelComposite) string {
 // publishCombinedHSColorSensor and OnAnyUpdate publish to the MQTT state topic.
 func encodeHSJSON(hs combined.HS) string {
 	return fmt.Sprintf(`{"hue":%d,"saturation":%g}`, hs.Hue, hs.Saturation)
+}
+
+// stampHubSerial registers the central's CCU serial with the MQTT
+// discovery builder, reading it live from the registry unit.
+//
+// It is deliberately gated on a non-empty serial: an empty stamp would
+// overwrite one an earlier pass already resolved, and the whole point of
+// the stamp is to have a discriminator. When the serial is genuinely not
+// known yet, the builder skips the payloads that need it rather than
+// publishing colliding ones.
+func (b *EventBridge) stampHubSerial(u *central.Unit) {
+	if b.mqtt == nil || u == nil {
+		return
+	}
+	bridge := b.mqtt.Bridge()
+	if bridge == nil {
+		return
+	}
+	si := u.SystemInformation()
+	if si.Serial == "" {
+		return
+	}
+	bridge.SetHubInfoFor(u.Name(), mqtt.HubInfo{
+		Name:    u.Name(),
+		Model:   si.Model,
+		Version: si.Version,
+		Serial:  si.Serial,
+		URL:     si.URL,
+	})
 }

@@ -2,6 +2,13 @@
 
 ## 0.58.6
 
+- **A second CCU no longer loses its virtual-remote entities.** Virtual
+  remotes, internal devices and the hub have the same address on every
+  CCU, so only the CCU serial separates their entities — and it was not
+  always known when they were announced. Two CCUs then announced the
+  same entity, and Home Assistant kept only the first. Single-CCU setups
+  were never affected.
+
 - **Tunable-white dimmers (HM-LC-DW-WM, HM-DW-WM) report and accept a
   colour temperature.** These lamps express the white point as a second
   dimmer channel and have no colour-temperature parameter, so the setting

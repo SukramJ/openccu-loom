@@ -48,7 +48,10 @@ func (d *DefaultDiscoveryBuilder) BuildTextDisplayNotify(ev Event) DiscoveryItem
 		return DiscoveryItem{}
 	}
 	objectID := d.channelObjectID(ev, "notify")
-	uniqueID := d.channelUniqueID(ev, "notify")
+	uniqueID, scoped := d.channelUniqueID(ev, "notify")
+	if !scoped {
+		return DiscoveryItem{}
+	}
 	nodeID := discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
 	commandTopic := d.discoveryContext(ev).ServiceMethodCommandTopic("write")
 	if commandTopic == "" {

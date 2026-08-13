@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
-	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -62,7 +61,10 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 	central := d.centralFor(ev)
 	nodeID := pd.DiscoveryNodeID(central)
 	objectID := pd.DiscoveryObjectID(ev.Parameter)
-	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), ev.Parameter, "")
+	uniqueID, scoped := d.scopedUniqueID(ev.Central, ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), ev.Parameter, "")
+	if !scoped {
+		return DiscoveryItem{}
+	}
 	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, central)
 	availability := []map[string]string{
 		{
