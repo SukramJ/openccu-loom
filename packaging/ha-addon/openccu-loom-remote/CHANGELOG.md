@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.58.6
+
+- Version alignment with OpenCCU-Loom 0.58.6. The proxy itself is
+  unchanged; the release gives the RF tunable-white dimmers a colour
+  temperature, which they never had.
+
 # 0.58.5
 
 - Version alignment with OpenCCU-Loom 0.58.5. The proxy itself is

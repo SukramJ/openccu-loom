@@ -164,11 +164,26 @@ type ColorTempLight struct {
 	MaxKelvin int32
 
 	kelvin *generic.Integer
+
+	// colorLevel is the white-point channel the RF tunable-white dimmers
+	// use instead of COLOR_TEMPERATURE, which they do not have: the
+	// profile maps COLOR_LEVEL onto the LEVEL of the channel above this
+	// one, and the value converts through mireds. Exactly one of kelvin
+	// and colorLevel is populated per device family.
+	colorLevel *generic.Float
 }
 
-// NewColorTempLight constructs a ColorTempLight. Kelvin bounds default
-// to 2000 / 6500 when zero or negative values are passed.
+// NewColorTempLight constructs a ColorTempLight reading COLOR_TEMPERATURE
+// off its own channel — the HmIP shape. Kelvin bounds default to
+// 2000 / 6500 when zero or negative values are passed.
 func NewColorTempLight(cfg Config, minK, maxK int32) *ColorTempLight {
+	return newColorTempLightOn(cfg, minK, maxK, nil)
+}
+
+// newColorTempLightOn is [NewColorTempLight] with the white-point channel
+// the RF families carry their colour temperature on. A nil whitePoint
+// keeps the COLOR_TEMPERATURE-only behaviour.
+func newColorTempLightOn(cfg Config, minK, maxK int32, whitePoint *device.Channel) *ColorTempLight {
 	if minK <= 0 {
 		minK = 2000
 	}
@@ -181,21 +196,34 @@ func NewColorTempLight(cfg Config, minK, maxK int32) *ColorTempLight {
 		MaxKelvin: maxK,
 		kelvin:    custom.IntegerField(cfg.Channel, hmenum.ParameterColorTemperature),
 	}
+	if ct.kelvin == nil && whitePoint != nil {
+		ct.colorLevel = custom.FloatField(whitePoint, hmenum.ParameterLevel)
+	}
 	if ct.Float != nil {
 		ct.registerColorTempLightServices()
 	}
 	if ct.kelvin != nil {
 		_ = ct.kelvin.OnConfirmedUpdate(func(_, _ int32) { ct.dataVersion.Bump() })
 	}
+	if ct.colorLevel != nil {
+		_ = ct.colorLevel.OnConfirmedUpdate(func(_, _ float64) { ct.dataVersion.Bump() })
+	}
 	return ct
 }
 
 // Kelvin returns the last observed colour temperature.
 func (l *ColorTempLight) Kelvin() (int32, bool) {
-	if l.kelvin == nil {
+	if l.kelvin != nil {
+		return l.kelvin.Value()
+	}
+	if l.colorLevel == nil {
 		return 0, false
 	}
-	return l.kelvin.Value()
+	level, observed := l.colorLevel.Value()
+	if !observed {
+		return 0, false
+	}
+	return kelvinFromColorLevel(level), true
 }
 
 // NamePostfix overrides [Light.NamePostfix] with the "color_temp" suffix.
@@ -243,13 +271,49 @@ func (l *ColorTempLight) SetKelvin(ctx context.Context, v int32, priority hmenum
 	if !l.IsStateChangeFull(StateChangeArgsFull{ColorTempKelvin: &kelvinU16}) {
 		return nil
 	}
-	if l.kelvin == nil {
-		return errors.New("colortemp: channel missing COLOR_TEMPERATURE")
-	}
-	if err := l.kelvin.Set(custom.EnsureContext(ctx), v, priority); err != nil {
-		return fmt.Errorf("colortemp: SET: %w", err)
+	switch {
+	case l.kelvin != nil:
+		if err := l.kelvin.Set(custom.EnsureContext(ctx), v, priority); err != nil {
+			return fmt.Errorf("colortemp: SET: %w", err)
+		}
+	case l.colorLevel != nil:
+		if err := l.colorLevel.Set(custom.EnsureContext(ctx), colorLevelFromKelvin(v), priority); err != nil {
+			return fmt.Errorf("colortemp: SET: %w", err)
+		}
+	default:
+		return errors.New("colortemp: channel carries neither COLOR_TEMPERATURE nor a white-point level")
 	}
 	return nil
+}
+
+// Mireds are the unit the colour temperature of the RF tunable-white
+// dimmers is expressed in: the white-point level runs 0..1 across the
+// mired range, and kelvin is its reciprocal. The three constants and the
+// exact arithmetic — including the truncation — come from the reference
+// implementation (model/custom/light.py, CustomDpColorTempDimmer).
+const (
+	maxKelvinScale = 1_000_000
+	maxMireds      = 500
+	minMireds      = 153
+)
+
+// kelvinFromColorLevel converts a 0..1 white-point level to kelvin.
+func kelvinFromColorLevel(level float64) int32 {
+	mireds := int(maxMireds - (maxMireds-minMireds)*level)
+	if mireds <= 0 {
+		return 0
+	}
+	return int32(maxKelvinScale / mireds) //nolint:gosec // bounded by minMireds: at most 6535
+}
+
+// colorLevelFromKelvin is the inverse, clamped to the 0..1 the wire
+// parameter accepts.
+func colorLevelFromKelvin(kelvin int32) float64 {
+	if kelvin <= 0 {
+		return 0
+	}
+	level := float64(maxMireds-maxKelvinScale/int(kelvin)) / float64(maxMireds-minMireds)
+	return math.Min(1, math.Max(0, level))
 }
 
 // --- ColorBehaviour: post-on colour restore ---

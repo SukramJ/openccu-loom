@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.58.6
+
+- **Tunable-white dimmers (HM-LC-DW-WM, HM-DW-WM) report and accept a
+  colour temperature.** These lamps express the white point as a second
+  dimmer channel and have no colour-temperature parameter, so the setting
+  was missing entirely on them.
+
 ## 0.58.5
 
 - **Dimmers and covers report their group brightness again**, and RF

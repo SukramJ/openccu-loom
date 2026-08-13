@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.6]
+
+### Fixed
+
+- **Tunable-white dimmers report and accept a colour temperature.** The
+  RF families (HM-LC-DW-WM, HM-DW-WM) have no colour-temperature
+  parameter at all: they express the white point as a second dimmer
+  channel. The daemon only ever read the parameter the HmIP devices use,
+  so on these lamps the colour temperature was absent in both
+  directions — nothing to read, nothing to set. The white-point channel
+  is now converted through mireds, the same arithmetic the reference
+  implementation uses, so a value set comes back as the value read.
+
 ## [0.58.5]
 
 ### Fixed

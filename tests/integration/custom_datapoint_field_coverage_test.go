@@ -32,6 +32,11 @@ var customFieldsNeverFilled = map[string]string{
 	"climate.Climate.humidity": "HmIP thermostats report HUMIDITY as INTEGER (OPERATIONS 5), which the " +
 		"resolver projects onto Sensor[int32] — Climate.humidityInt covers every model in the fleet. The " +
 		"float accessor exists for wired/BidCos thermostats that report it as FLOAT.",
+	"light.ColorTempLight.kelvin": "COLOR_TEMPERATURE exists only on the HmIP families, and the fleet " +
+		"attaches a bare ColorTempLight only for the RF tunable-white dimmers, which express their " +
+		"colour temperature through the white-point level instead — ColorTempLight.colorLevel, which " +
+		"the fleet does fill. The HmIP path is embedded inside DRGDaliLight, and this walk inspects " +
+		"only a custom data point's own fields, not those of a struct it embeds.",
 	"light.FixedColorLight.channelColor": "CHANNEL_COLOR appears in no embedded device description at all, " +
 		"so the fleet cannot witness this field either way.",
 	"siren.SoundPlayer.direction": "HmIP-MP3P is the only SoundPlayer in the fleet and its description " +
@@ -48,13 +53,7 @@ var customFieldsNeverFilled = map[string]string{
 // of an exemption. An entry disappears when the field starts being
 // filled — the guard reports a listed-but-filled field as an error, so a
 // fix cannot leave a stale claim behind.
-var customFieldsWithAKnownDefect = map[string]string{
-	"light.ColorTempLight.kelvin": "wrong parameter for this profile. ColorTempLight is registered for " +
-		"the RF colour-temperature dimmers, and COLOR_TEMPERATURE exists only on the HmIP families " +
-		"(DRG-DALI, LSC, RGBW). The RF dimmers carry COLOR_LEVEL, a 0..1 float the reference converts " +
-		"to kelvin through mireds (aiohomematic CustomDpColorTempDimmer.color_temp_kelvin); this " +
-		"daemon has no COLOR_LEVEL path at all, so colour temperature does not work on those devices.",
-}
+var customFieldsWithAKnownDefect = map[string]string{}
 
 // TestEveryCustomDataPointFieldIsFilledBySomeDevice drives the real
 // hydration pipeline over the whole simulated fleet and asserts that
