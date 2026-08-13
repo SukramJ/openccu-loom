@@ -323,6 +323,31 @@ For per-parameter wire DPs:
 { "unit": "°C", "type": "FLOAT", "paramset": "VALUES", "min": -10, "max": 50 }
 ```
 
+An `ENUM` parameter additionally carries its value list twice — the raw
+CCU tokens in `value_list` and their localised display strings in
+`value_labels`, index-aligned:
+
+```json
+{
+  "type": "ENUM",
+  "paramset": "VALUES",
+  "value_list": ["AUTO_MODE", "MANU_MODE", "PARTY_MODE", "BOOST_MODE"],
+  "value_labels": ["Automatik", "Manuell", "Urlaub", "Boost"]
+}
+```
+
+The tokens stay authoritative: a write has to carry one of them back to
+the CCU. The labels exist because a consumer that renders values — Home
+Assistant above all — has no translation table of its own, so it would
+otherwise show `auto_mode` verbatim. Home Assistant discovery therefore
+publishes the labels as an entity's `options` and maps them back to the
+token in the `command_template`. A parameter the translation archive has
+no value table for is humanised instead (`AUTO_MODE` → `Auto Mode`), the
+same string the REST and UI surfaces show, so a value reads identically
+wherever an operator meets it. Labels are omitted when they would be
+ambiguous (a duplicate or empty label), and the raw tokens are then
+published unchanged.
+
 For custom-DP aggregates the shape is domain-specific (climate emits
 `hvac_modes` / `preset_modes` / `min_temp` etc., cover emits
 `supports_tilt` / `inverted_control`, …). Each Custom-DP type owns its

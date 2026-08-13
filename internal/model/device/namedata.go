@@ -71,18 +71,12 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 		postfix = fmt.Sprintf(" ch%d", channel.Number)
 	}
 
-	translated := ""
-	if parameterTranslation != "" {
-		translated = strings.TrimSpace(parameterTranslation + postfix)
-	}
-
 	return naming.NameData{
-		DeviceName:              deviceName,
-		ChannelName:             cName,
-		ParameterName:           strings.TrimSpace(pName + postfix),
-		TranslatedParameterName: translated,
-		ChannelPostfix:          strings.TrimSpace(postfix),
-	}
+		DeviceName:     deviceName,
+		ChannelName:    cName,
+		ParameterName:  strings.TrimSpace(pName + postfix),
+		ChannelPostfix: strings.TrimSpace(postfix),
+	}.WithTranslatedParameter(parameterTranslation)
 }
 
 // BuildCustomDataPointName resolves the name quadruple for a channel's

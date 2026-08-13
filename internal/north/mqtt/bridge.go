@@ -260,6 +260,16 @@ func (e Event) descValueList() []string {
 	return nil
 }
 
+// descValueLabels returns the localised VALUE_LIST labels, index-aligned
+// with [Event.descValueList]. Empty when the event carries no labeler-
+// resolved labels; the discovery builder then falls back to raw tokens.
+func (e Event) descValueLabels() []string {
+	if d := e.genericDesc(); d != nil {
+		return d.ValueLabels
+	}
+	return nil
+}
+
 // descUnit returns the descriptor unit string.
 func (e Event) descUnit() string {
 	if d := e.genericDesc(); d != nil {
@@ -404,6 +414,20 @@ type IgnoreMultipleChannelsForNameInspector interface {
 type ParameterLabeler interface {
 	ParameterLabel(channelType, parameter string) string
 	ParameterLabelOk(channelType, parameter string) (string, bool)
+}
+
+// ValueListLabeler is the optional extension a [ParameterLabeler] carries
+// when it can also localise the entries of an ENUM parameter's
+// VALUE_LIST. The returned slice is index-aligned with the input, and
+// every entry is non-empty for a non-empty input token.
+//
+// It exists because Home Assistant shows an MQTT entity's options
+// verbatim: unlike an HA-native integration, a discovered entity has no
+// translation file behind it, so a raw "auto_mode" stays "auto_mode" on
+// screen forever. The labels are the same ones the REST and UI surfaces
+// resolve, so a value reads identically wherever an operator meets it.
+type ValueListLabeler interface {
+	ValueListLabels(channelType, parameter string, values []string) []string
 }
 
 // Bridge orchestrates the raw + HA Discovery planes atop a shared

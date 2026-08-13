@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.58.4
+
+- Version alignment with OpenCCU-Loom 0.58.4. The proxy itself is
+  unchanged; the release stops a parameter from reaching Home Assistant
+  under two different names, and shows enum values in your language over
+  MQTT.
+
 # 0.58.3
 
 - Version alignment with OpenCCU-Loom 0.58.3. The proxy itself is
