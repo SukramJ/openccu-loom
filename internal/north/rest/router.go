@@ -412,6 +412,11 @@ type Deps struct {
 	// MatterStatusReader backs `/matter/status`. Nil → status returns
 	// `{"enabled":false}` (clean default for SPA probing).
 	MatterStatusReader handlers.MatterStatusReader
+	// MatterSessionLister backs GET /api/v1/matter/sessions. Nil
+	// disables the route (Matter bridge off), matching the other Matter
+	// ports.
+	MatterSessionLister handlers.MatterSessionLister
+
 	// MatterFabricRevoker backs `DELETE /matter/fabrics/{id}`.
 	MatterFabricRevoker handlers.MatterFabricRevoker
 	// MatterCommissioningCloser backs `POST /matter/commissioning/window/close`.
@@ -1119,6 +1124,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// (PUT / POST / DELETE) gate on admin role.
 			pr.Get("/matter/status", handlers.MatterStatus(d.MatterStatusReader))
 			pr.Get("/matter/fabrics", handlers.MatterFabrics(d.MatterFabricStore))
+			pr.Get("/matter/sessions", handlers.MatterSessions(d.MatterSessionLister))
 			pr.With(admin).Delete("/matter/fabrics/{id}", handlers.MatterFabricRevoke(d.MatterFabricRevoker, d.MatterEventPublisher, d.MatterAuditRecorder))
 			pr.Get("/matter/setup-payload", handlers.MatterSetupPayload(d.MatterCommissioning))
 			pr.Get("/matter/exposable", handlers.MatterExposable(d.MatterCandidateProvider, d.MatterExposureStore, d.Labels))

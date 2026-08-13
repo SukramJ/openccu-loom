@@ -18,7 +18,7 @@ import (
 // and .goreleaser.yaml for the wiring; unset at `go run` time.
 var (
 	// Version is the SemVer tag or `git describe` output.
-	Version = "0.58.6"
+	Version = "0.59.0"
 	// Commit is the short git SHA the binary was built from.
 	Commit = "none"
 	// BuildDate is the UTC RFC3339 timestamp of the build.

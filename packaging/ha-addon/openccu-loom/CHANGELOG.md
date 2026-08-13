@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.59.0
+
+- **New: see whether a Matter controller is still talking to the
+  bridge.** The API now reports every open Matter session with how long
+  the controller has been quiet and how many subscriptions it holds — a
+  controller that vanished without closing its session previously looked
+  healthy from every angle, and showed up only as entities that stopped
+  updating.
+
 ## 0.58.6
 
 - **A second CCU no longer loses its virtual-remote entities.** Virtual

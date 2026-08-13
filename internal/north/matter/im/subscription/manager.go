@@ -619,3 +619,24 @@ func (m *Manager) snapshot() []*Subscription {
 	}
 	return out
 }
+
+// CountBySession returns how many active subscriptions each session
+// holds, keyed by session id.
+//
+// A session with no subscriptions and a controller with several are
+// operationally very different states, and neither was visible from
+// outside: the manager counted subscriptions only to enforce its
+// per-fabric quota. Read-only snapshot; the returned map is the
+// caller's.
+func (m *Manager) CountBySession() map[uint16]int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[uint16]int, len(m.byID))
+	for _, sub := range m.byID {
+		if sub == nil {
+			continue
+		}
+		out[sub.SessionID]++
+	}
+	return out
+}
