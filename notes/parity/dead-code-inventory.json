@@ -1,6 +1,6 @@
 {
-  "generated": "5e5e386c",
-  "head": "5e5e386c",
+  "generated": "b81d091b",
+  "head": "b81d091b",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28287,
+    "total_exported": 28288,
     "reachable": 4999,
-    "whitelisted": 20312,
+    "whitelisted": 20313,
     "unreachable": 2976
   },
   "by_package": [
@@ -28618,6 +28618,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/schedules_test.go",
       "line": 583
+    },
+    {
+      "package": "internal/alarm",
+      "identifier": "TestReconcileActsOnASirenThatWasAlreadySoundingWhenTheModelArrived",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/reconcile_boot_order_test.go",
+      "line": 95
     },
     {
       "package": "internal/alarm",

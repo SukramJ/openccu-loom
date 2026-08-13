@@ -60,6 +60,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A siren still sounding after a restart is dealt with again.** The
+  alarm engine reads the live state of every enrolled siren when it
+  starts and reconciles: one whose zone is armed is adopted as a
+  triggered incident — journalled, notified, kept sounding within its
+  bound — because it is evidence of a trigger during the window the
+  daemon was down; one whose zone is disarmed is switched off. That pass
+  ran at the end of the alarm service's start, which is the same second
+  the daemon starts and long before the CCU has answered with a single
+  device, so it read an empty model and found nothing. It never ran
+  again: the two other entry points are a central adopted at runtime and
+  a connection returning after a total loss, and an ordinary restart is
+  neither. A siren left sounding across one was therefore neither
+  adopted nor stopped, on every path, with nothing logged. The pass now
+  also runs when a CCU reports its device model complete. Confirmed
+  against a real CCU: before, a switched siren burned for 153 s after a
+  restart into a disarmed zone until it was switched off by hand; after,
+  it stops 21 s in, and an armed zone opens an adopted incident instead.
 - **A timed switch-on reaches the device as one radio message again.**
   Switching something on for a bounded time writes two things: how long
   it may stay on, and that it is on now. Both belong in the same
