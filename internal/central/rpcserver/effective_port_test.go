@@ -15,6 +15,7 @@ package rpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -78,16 +79,15 @@ func TestXMLRPCServerTwoPortZeroBindsGetDifferentPorts(t *testing.T) {
 func TestXMLRPCServerWithFixedPortReturnsThatPort(t *testing.T) {
 	t.Parallel()
 
-	// Discover a free port then release it before binding the server,
-	// to avoid EADDRINUSE races in parallel test runs.
-	free := freePort(t)
-
-	srv, err := NewXMLRPCServer(XMLRPCConfig{
-		Addr: fmt.Sprintf("127.0.0.1:%d", free),
+	var srv *XMLRPCServer
+	free := bindFixedPort(t, func(port int) error {
+		s, err := NewXMLRPCServer(XMLRPCConfig{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+		if err != nil {
+			return err
+		}
+		srv = s
+		return nil
 	})
-	if err != nil {
-		t.Fatalf("NewXMLRPCServer: %v", err)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx) }()
@@ -138,13 +138,15 @@ func TestBINRPCServerTwoPortZeroBindsGetDifferentPorts(t *testing.T) {
 func TestBINRPCServerWithFixedPortReturnsThatPort(t *testing.T) {
 	t.Parallel()
 
-	free := freePort(t)
-	srv, err := NewBINRPCServer(BINRPCConfig{
-		Addr: fmt.Sprintf("127.0.0.1:%d", free),
+	var srv *BINRPCServer
+	free := bindFixedPort(t, func(port int) error {
+		s, err := NewBINRPCServer(BINRPCConfig{Addr: fmt.Sprintf("127.0.0.1:%d", port)})
+		if err != nil {
+			return err
+		}
+		srv = s
+		return nil
 	})
-	if err != nil {
-		t.Fatalf("NewBINRPCServer: %v", err)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx) }()
@@ -477,6 +479,36 @@ func effectivePort(t *testing.T, addr net.Addr) int {
 // claim the port between the close and the bind), but this is the
 // standard Go idiom for test port allocation and is good enough for
 // CI where there is no port competition.
+// bindFixedPort picks a free port, hands it to bind, and retries with a
+// fresh one when the bind loses the race — returning the port that
+// finally succeeded.
+//
+// Picking a port and binding it are necessarily two steps: the port has
+// to be released before the code under test can take it, and anything
+// else on the machine may claim it in between. Within this package that
+// window is narrow enough never to lose; across a full `go test ./...`,
+// where dozens of packages bind ports concurrently, it eventually does —
+// and the failure lands on whichever pull request happened to run then.
+//
+// Retrying keeps what these tests assert intact. Their subject is that a
+// configured port is reported back verbatim, not that a bind succeeds on
+// the first attempt.
+func bindFixedPort(t *testing.T, bind func(port int) error) int {
+	t.Helper()
+	const attempts = 8
+	var lastErr error
+	for range attempts {
+		port := freePort(t)
+		if err := bind(port); err != nil {
+			lastErr = err
+			continue
+		}
+		return port
+	}
+	t.Fatalf("no free port survived %d bind attempts: %v", attempts, lastErr)
+	return 0
+}
+
 func freePort(t *testing.T) int {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -486,4 +518,42 @@ func freePort(t *testing.T) int {
 	port := ln.Addr().(*net.TCPAddr).Port
 	_ = ln.Close()
 	return port
+}
+
+// TestBindFixedPortSurvivesALostRace measures what the retry is for: the
+// pick-then-bind sequence has an unavoidable window, and the helper has
+// to come back with a port that bound rather than failing the test that
+// depends on it.
+//
+// The race cannot be provoked reliably from inside one package — the OS
+// hands a competing listener some other port — so the lost bind is
+// injected here instead. Without the retry the first error is terminal,
+// which is exactly how this surfaced: as one red test on an unrelated
+// pull request during a full `go test ./...`.
+func TestBindFixedPortSurvivesALostRace(t *testing.T) {
+	t.Parallel()
+
+	var (
+		attempts int
+		bound    int
+	)
+	got := bindFixedPort(t, func(port int) error {
+		attempts++
+		if attempts < 3 {
+			return errors.New("listen tcp: address already in use")
+		}
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		if err != nil {
+			return err
+		}
+		t.Cleanup(func() { _ = ln.Close() })
+		bound = ln.Addr().(*net.TCPAddr).Port
+		return nil
+	})
+	if attempts != 3 {
+		t.Errorf("bind was attempted %d time(s), want 3 — the first two losses must be retried", attempts)
+	}
+	if got != bound {
+		t.Errorf("reported port %d, want the one that actually bound (%d)", got, bound)
+	}
 }
