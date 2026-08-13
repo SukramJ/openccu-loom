@@ -7839,7 +7839,7 @@ func TestSeedRelevantInitParameters_EmptyRegistry_NoPanic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UISchemaAdapter.resolveValueLabel — known parameter with translations
+// ValueListLabel (shared enum-value label chain) — known parameter with translations
 // ---------------------------------------------------------------------------
 
 func TestResolveValueLabel_KnownValue_ReturnsTranslation(t *testing.T) {
@@ -7851,8 +7851,8 @@ func TestResolveValueLabel_KnownValue_ReturnsTranslation(t *testing.T) {
 	a := &UISchemaAdapter{translations: tr}
 	// "true" / "false" are commonly translated for boolean parameters.
 	// We only verify the function returns without panic.
-	_ = a.resolveValueLabel("de", "SWITCH", "STATE", "true", 0)
-	_ = a.resolveValueLabel("de", "SWITCH", "STATE", "false", 1)
+	_ = ValueListLabel(a.translations, "de", "SWITCH", "STATE", "true", 0)
+	_ = ValueListLabel(a.translations, "de", "SWITCH", "STATE", "false", 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -9599,12 +9599,12 @@ func TestSynthesiseMasterProfile_EmptyLabelKeyFallback(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// valueList — translations != nil → resolveValueLabel called (line 653-655)
+// valueList — translations != nil → ValueListLabel called
 // ---------------------------------------------------------------------------
 
 // TestValueList_WithTranslations exercises lines 653-655 of valueList:
-// a.translations is non-nil so resolveValueLabel is called.
-// The translations struct is empty so resolveValueLabel returns "" and
+// a.translations is non-nil so ValueListLabel is called.
+// The translations struct is empty so ValueListLabel resolves the label and
 // humanizeRaw is used as fallback.
 func TestValueList_WithTranslations(t *testing.T) {
 	t.Parallel()
@@ -14677,7 +14677,7 @@ func TestDeviceAdminDomain_SetFunctions_WithFunctionMutator_HappyPath(t *testing
 }
 
 // ---------------------------------------------------------------------------
-// UISchemaAdapter.resolveValueLabel
+// ValueListLabel (shared enum-value label chain)
 // ---------------------------------------------------------------------------
 
 func TestResolveValueLabel_WithTranslations_DoesNotPanic(t *testing.T) {
@@ -14691,8 +14691,8 @@ func TestResolveValueLabel_WithTranslations_DoesNotPanic(t *testing.T) {
 	// function either returns "" (no translation found) or a translated
 	// string. Both are valid; we only verify it does not panic and returns
 	// a string.
-	_ = a.resolveValueLabel("en", "UNKNOWN_CHAN", "UNKNOWN_PARAM", "SOME_VALUE", 0)
-	_ = a.resolveValueLabel("de", "SWITCH", "STATE", "true", 1)
+	_ = ValueListLabel(a.translations, "en", "UNKNOWN_CHAN", "UNKNOWN_PARAM", "SOME_VALUE", 0)
+	_ = ValueListLabel(a.translations, "de", "SWITCH", "STATE", "true", 1)
 }
 
 func TestResolveValueLabel_NilTranslations_Safe(t *testing.T) {
@@ -14703,10 +14703,10 @@ func TestResolveValueLabel_NilTranslations_Safe(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			// If nil translations cause a panic, that's a bug worth knowing.
-			t.Logf("resolveValueLabel panicked with nil translations: %v", r)
+			t.Logf("ValueListLabel panicked with nil translations: %v", r)
 		}
 	}()
-	_ = a.resolveValueLabel("en", "T", "P", "V", 0)
+	_ = ValueListLabel(a.translations, "en", "T", "P", "V", 0)
 }
 
 // ---------------------------------------------------------------------------

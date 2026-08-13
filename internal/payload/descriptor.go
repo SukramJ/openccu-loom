@@ -20,7 +20,12 @@ type GenericConfig struct {
 	Max       *float64             `json:"max,omitempty"`
 	Default   any                  `json:"default,omitempty"`
 	ValueList []string             `json:"value_list,omitempty"`
-	Label     string               `json:"label,omitempty"`
+	// ValueLabels carries the localised display strings for ValueList,
+	// index-aligned with it. The raw tokens stay in ValueList — they are
+	// what a write has to carry back to the CCU — so a consumer can show
+	// the label and still address the value.
+	ValueLabels []string `json:"value_labels,omitempty"`
+	Label       string   `json:"label,omitempty"`
 	// LabelOmitted is true when the embedded translation_custom
 	// table maps this parameter to an explicit empty string (e.g.
 	// `"state": ""` in translation_custom/parameters_*.json). That

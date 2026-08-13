@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
@@ -732,37 +731,13 @@ func (a *UISchemaAdapter) resolvePresetLabel(locale string, opt ccudata.OptionPr
 func (a *UISchemaAdapter) valueList(locale, channelType, parameter string, values []string) []hmapi.UISchemaValueListEntry {
 	out := make([]hmapi.UISchemaValueListEntry, 0, len(values))
 	for i, v := range values {
-		label := ""
-		if a.translations != nil {
-			label = a.resolveValueLabel(locale, channelType, parameter, v, i)
-		}
-		if label == "" {
-			label = humanizeRaw(v)
-		}
-		out = append(out, hmapi.UISchemaValueListEntry{Value: i, Key: v, Label: label})
+		out = append(out, hmapi.UISchemaValueListEntry{
+			Value: i,
+			Key:   v,
+			Label: ValueListLabel(a.translations, locale, channelType, parameter, v, i),
+		})
 	}
 	return out
-}
-
-// resolveValueLabel walks the extended lookup chain. Returns "" when
-// nothing matches so the caller can fall through to humanisation.
-func (a *UISchemaAdapter) resolveValueLabel(locale, channelType, parameter, value string, index int) string {
-	t := a.translations
-	// Delegate to ParameterValue which now handles the full lookup chain
-	// including ct|param=value (stage 1) and value-only fallback (stage 4).
-	// We call ParameterValue with channelType so the channel-specific stage
-	// fires naturally; the old manual "channelType+|+parameter" prefix
-	// construction is superseded.
-	if got := t.ParameterValue(locale, channelType, parameter, value); got != value {
-		return got
-	}
-	// Index-based fallback: easymode TCL stores parameter=N when the
-	// VALUE_LIST strings aren't available at extraction time.
-	idx := strconv.Itoa(index)
-	if got := t.ParameterValue(locale, channelType, parameter, idx); got != idx {
-		return got
-	}
-	return ""
 }
 
 // humanizeRaw produces a readable label from an untranslated

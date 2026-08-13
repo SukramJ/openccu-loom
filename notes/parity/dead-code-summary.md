@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 90388341
-HEAD: 90388341
+Generated: 9648d20c
+HEAD: 9648d20c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28121 |
-| Reachable | 4959 |
-| Whitelisted | 20188 |
+| Total Exported | 28175 |
+| Reachable | 4967 |
+| Whitelisted | 20234 |
 | **Unreachable** | **2974** |
 
 ## Top-20 Packages by Dead Code

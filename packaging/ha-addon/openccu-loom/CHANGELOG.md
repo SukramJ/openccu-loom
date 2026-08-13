@@ -1,5 +1,21 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.58.4
+
+- **A parameter no longer arrives in Home Assistant under two different
+  names.** The same data point was called "Frostschutz" over the REST
+  drop-in and "Frostschutz ch1" over MQTT discovery, because the MQTT
+  path re-decided when to append the `chN` channel marker and got it
+  wrong for parameters that sit on several named channels (for example
+  FROST_PROTECTION on an HmIP-BWTH).
+- **Enum values are shown in your language over MQTT.** Selects and enum
+  sensors published raw CCU tokens (`auto_mode`) and relied on Home
+  Assistant translating them, which it cannot do for discovered MQTT
+  entities. Options now carry the same labels the Config UI shows
+  ("Automatik", "Manuell"), and writing still reaches the device.
+  Automations comparing a state against a raw token need to compare
+  against the label instead.
+
 ## 0.58.3
 
 - **Saving a schedule no longer shortens its switching durations.** The

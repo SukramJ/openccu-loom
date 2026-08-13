@@ -1385,14 +1385,12 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 			labelOmitted = true
 		}
 		if cached, ok := datapointNameDataOf(dp); ok && !cached.IsZero() {
-			if translation != "" {
-				postfix := ""
-				if ch.IsParameterInMultipleChannels(key.Parameter) && ch.Number != 0 {
-					postfix = fmt.Sprintf(" ch%d", ch.Number)
-				}
-				cached.TranslatedParameterName = strings.TrimSpace(translation + postfix)
-			}
-			label = cached.TranslatedName()
+			// The cached quadruple was built without a translation, so the
+			// locale-aware label is applied here — through the name data's
+			// own composer, which re-applies the postfix the authority
+			// decided on. Deciding it again here is what made the MQTT
+			// discovery name diverge from the REST one.
+			label = cached.WithTranslatedParameter(translation).TranslatedName()
 		} else {
 			nameData := device.BuildDataPointName(ch, key.Parameter, translation)
 			label = nameData.TranslatedName()
@@ -1486,6 +1484,12 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 			}
 			if len(pd.ValueList) > 0 {
 				desc.ValueList = append([]string(nil), pd.ValueList...)
+				// Localised options for the discovery payload. The raw
+				// tokens stay in ValueList because a write carries them
+				// back to the CCU verbatim.
+				if vl, ok := b.labels.(mqtt.ValueListLabeler); ok && vl != nil {
+					desc.ValueLabels = vl.ValueListLabels(channelType, key.Parameter, pd.ValueList)
+				}
 			}
 			ev.Descriptor = desc
 		} else {

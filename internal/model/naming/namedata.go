@@ -81,6 +81,28 @@ func (n NameData) Name() string {
 	return composeName(n.ChannelName, n.ParameterName, n.DeviceName)
 }
 
+// WithTranslatedParameter returns a copy of n carrying translation as its
+// [NameData.TranslatedParameterName], with the already-decided
+// [NameData.ChannelPostfix] re-applied. An empty translation leaves n
+// unchanged, so the caller keeps the [ParameterName] fallback.
+//
+// This is the only place a translation and the multi-channel postfix are
+// joined. A caller that composes the pair itself has to re-derive when
+// the postfix applies, and re-deriving is how the MQTT discovery name
+// drifted away from the REST one: the copy tested two of the three
+// conditions the postfix rule actually has, so a data point on a named
+// channel of a multi-channel device (FROST_PROTECTION on HmIP-BWTH
+// channels 1 and 8) was published as "Frostschutz ch1" over MQTT while
+// REST called it "Frostschutz". Whether the postfix applies is decided
+// once, by the authority that builds the NameData.
+func (n NameData) WithTranslatedParameter(translation string) NameData {
+	if translation == "" {
+		return n
+	}
+	n.TranslatedParameterName = strings.TrimSpace(translation + " " + n.ChannelPostfix)
+	return n
+}
+
 // TranslatedName uses [NameData.TranslatedParameterName] when set,
 // else falls back to [NameData.Name]. The device-name prefix is
 // stripped the same way as in [NameData.Name].

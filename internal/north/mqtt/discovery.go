@@ -46,6 +46,50 @@ const valueJSONValueTemplate = `{% if value_json is defined and value_json.value
 // non-lower variant (`none | lower` would otherwise render "none").
 const valueJSONValueLowerTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`
 
+// enumOptionTemplates builds the pair of templates that let an entity
+// display a localised enum option while still writing the CCU's own
+// token.
+//
+// Home Assistant shows an MQTT entity's `options` verbatim — a discovered
+// entity has no translation file behind it, so raw tokens
+// ("auto_mode", "manu_mode") are what an operator reads. Publishing the
+// labels as options fixes the display but breaks the write, because HA
+// sends the chosen option string back. The mapping closes that loop:
+// state side maps token → label, command side maps label → token, and
+// both fall through to the input when a value is not in the list (an
+// unexpected token then shows as itself rather than blanking the entity).
+//
+// values and labels must be index-aligned; the caller checks that the
+// labels are distinct, since HA keys the option by its display string.
+func enumOptionTemplates(values, labels []string) (valueTemplate, commandTemplate string) {
+	var state, command strings.Builder
+	state.WriteString(`{% set m = {`)
+	command.WriteString(`{% set m = {`)
+	for i, v := range values {
+		if i > 0 {
+			state.WriteString(", ")
+			command.WriteString(", ")
+		}
+		state.WriteString(jinjaQuote(v) + ": " + jinjaQuote(labels[i]))
+		command.WriteString(jinjaQuote(labels[i]) + ": " + jinjaQuote(v))
+	}
+	state.WriteString(`} %}{% if value_json is defined and value_json.value is not none %}` +
+		`{{ m.get(value_json.value, value_json.value) }}{% endif %}`)
+	command.WriteString(`} %}{{ m.get(value, value) }}`)
+	return state.String(), command.String()
+}
+
+// jinjaQuote renders s as a single-quoted Jinja string literal,
+// escaping the backslash and quote that would otherwise end it. Without
+// the escape a label carrying an apostrophe ("Ein'aus") would produce a
+// template Home Assistant cannot parse, and the entity would silently
+// stop updating.
+func jinjaQuote(s string) string {
+	escaped := strings.ReplaceAll(s, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `'`, `\'`)
+	return `'` + escaped + `'`
+}
+
 // HAComponent identifies a Home Assistant entity category. Only the
 // MVP-relevant subset is listed; the catalogue grows as profiles
 // are ported.
@@ -647,8 +691,13 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// translatable in HA; mirror that by lowercasing the options and
 		// piping the state through the `| lower` template.
 		if dc, _ := body["device_class"].(string); dc == "enum" && len(ev.descValueList()) > 0 {
-			body["options"] = lowercasedOptions(ev.descValueList())
-			body["value_template"] = valueJSONValueLowerTemplate
+			if labels, ok := localisedEnumOptions(ev); ok {
+				body["options"] = labels
+				body["value_template"], _ = enumOptionTemplates(ev.descValueList(), ev.descValueLabels())
+			} else {
+				body["options"] = lowercasedOptions(ev.descValueList())
+				body["value_template"] = valueJSONValueLowerTemplate
+			}
 		}
 		// Apply
 		// canonical unit string regardless of CCU firmware quirks
@@ -765,9 +814,14 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// state template, `| upper` on the command template so the CCU
 		// receives the exact VALUE_LIST entry.
 		if vl := ev.descValueList(); len(vl) > 0 {
-			body["options"] = lowercasedOptions(vl)
-			body["value_template"] = valueJSONValueLowerTemplate
-			body["command_template"] = "{{ value | upper }}"
+			if labels, ok := localisedEnumOptions(ev); ok {
+				body["options"] = labels
+				body["value_template"], body["command_template"] = enumOptionTemplates(vl, ev.descValueLabels())
+			} else {
+				body["options"] = lowercasedOptions(vl)
+				body["value_template"] = valueJSONValueLowerTemplate
+				body["command_template"] = "{{ value | upper }}"
+			}
 		}
 		// Action-selects (write-only enum parameters) are operator inputs;
 		// the reference stack relegates them to HA's Configuration section.
@@ -874,6 +928,33 @@ func jsonValueTemplate(comp HAComponent) string {
 // translate them; the `| lower` value_template keeps the state side
 // consistent and the select command_template (`| upper`) restores the
 // CCU token on write.
+// localisedEnumOptions returns the localised options for an enum entity
+// and whether they are usable. They are usable only when the labeler
+// supplied one label per value and the labels are distinct and
+// non-empty — Home Assistant addresses an option by its display string,
+// so a duplicate or empty label would make the write ambiguous. The
+// caller then falls back to the raw tokens, which look worse but never
+// misroute a command.
+func localisedEnumOptions(ev Event) ([]any, bool) {
+	values, labels := ev.descValueList(), ev.descValueLabels()
+	if len(labels) == 0 || len(labels) != len(values) {
+		return nil, false
+	}
+	seen := make(map[string]struct{}, len(labels))
+	out := make([]any, len(labels))
+	for i, l := range labels {
+		if strings.TrimSpace(l) == "" {
+			return nil, false
+		}
+		if _, dup := seen[l]; dup {
+			return nil, false
+		}
+		seen[l] = struct{}{}
+		out[i] = l
+	}
+	return out, true
+}
+
 func lowercasedOptions(valueList []string) []any {
 	opts := make([]any, len(valueList))
 	for i, v := range valueList {

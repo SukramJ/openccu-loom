@@ -4,6 +4,43 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.4]
+
+### Fixed
+
+- **A parameter no longer arrives in Home Assistant under two different
+  names.** The same data point was called "Frostschutz" over the REST
+  drop-in and "Frostschutz ch1" over MQTT discovery. The daemon composes
+  entity names in one place, and that composer appends the multi-channel
+  marker `chN` only when the channel name alone cannot identify the
+  channel. The MQTT path had its own copy of that decision which tested
+  two of the three conditions, so it marked up channels the authority had
+  already found unambiguous — visible on any device that carries a
+  parameter on several named channels, such as FROST_PROTECTION on an
+  HmIP-BWTH (channels 1 and 8). The marker is now decided once.
+
+- **Enum values are shown in the operator's language over MQTT.** A
+  select or enum sensor published its options as the CCU's raw tokens
+  (`auto_mode`, `manu_mode`) and relied on Home Assistant translating
+  them. A discovered MQTT entity has no translation table behind it, so
+  the tokens stayed on screen. The options now carry the same localised
+  labels the REST and UI surfaces show ("Automatik", "Manuell"), and a
+  value the translation archive does not cover is humanised the same way
+  it is everywhere else (`AUTO_MODE` → "Auto Mode").
+
+  Writing still reaches the device: the discovery payload maps the chosen
+  label back to the CCU's own token. Automations that compare an entity's
+  state against a raw token (`auto_mode`) need to compare against the
+  label instead — the state is what an operator sees. Where labels would
+  be ambiguous (two values sharing one label), the raw tokens are kept.
+
+### Changed
+
+- **The `/config` companion topic of an `ENUM` parameter carries
+  `value_labels`.** The localised display strings sit next to the
+  unchanged `value_list` tokens, index-aligned, so a consumer can render
+  the label and still address the value. Existing fields keep their shape.
+
 ## [0.58.3]
 
 ### Fixed
