@@ -44,6 +44,25 @@ still open, trust this file plus `CHANGELOG.md`.
   per [`docs/matter-parity-contract.md`](../../docs/matter-parity-contract.md).*
   *Plan: [`notes/plans/A1-matter-im-depth.md`](A1-matter-im-depth.md).*
 
+### Devices
+
+- **Colour temperature on the RF tunable-white dimmers.** `ColorTempLight`
+  is registered for the RF colour-temperature dimmers (`RfDimmer_Color_Temp`,
+  e.g. HM-LC-DW-WM) and reads `COLOR_TEMPERATURE` — a parameter that exists
+  only on the HmIP families (DRG-DALI, LSC, RGBW). The RF devices carry
+  `COLOR_LEVEL`, a 0..1 float the reference implementation converts to kelvin
+  through mireds (`CustomDpColorTempDimmer.color_temp_kelvin`), and this
+  daemon has no `COLOR_LEVEL` path at all — the parameter has no `hmenum`
+  constant. Colour temperature therefore does not work on those devices at
+  all, in either direction.
+
+  Closing it means adding the parameter, the mireds conversion on both the
+  read and the write side, and deciding what the Matter colour-temperature
+  attribute reports meanwhile. *Effort: M. Found by
+  `TestEveryCustomDataPointFieldIsFilledBySomeDevice`
+  (`tests/integration/`), which holds the last entry of its defect register
+  until this lands.*
+
 ### REST API
 
 - **Two pagination envelopes across list endpoints.** `/devices` returns

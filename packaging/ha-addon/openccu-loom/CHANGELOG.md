@@ -1,5 +1,26 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.58.5
+
+- **Dimmers and covers report their group brightness again**, and RF
+  colour dimmers their effect list — both were read from the wrong
+  channel, or in a shape no device uses.
+
+- **An RGBW light knows which mode it is in.** HmIP-RGBW, HmIP-LSC and
+  HmIP-DRDI3 report their operating mode on channel 0; the light looked
+  for it on its own channel and fell back to plain brightness, so a lamp
+  in RGB or tunable-white mode advertised the wrong capabilities.
+- **A key-matic reports its turning direction again**, the sound player
+  its selected sound file, and the display its burst-limit warning.
+
+- **A siren can be silenced again.** Switching a siren off wrote an empty
+  alarm selection, which the CCU rejects; switching it on without naming a
+  tone sent no selection at all, so the device repeated whatever was set
+  last — possibly the disable tone. Both commands now name the value they
+  mean, and the optical channel gets its own disable value instead of the
+  acoustic one. The smoke detector's and garage door's commands, and the
+  sound player's repetitions, were missing for the same reason.
+
 ## 0.58.4
 
 - **A parameter no longer arrives in Home Assistant under two different

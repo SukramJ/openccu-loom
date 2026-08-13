@@ -1,6 +1,6 @@
 {
-  "generated": "9648d20c",
-  "head": "9648d20c",
+  "generated": "9c0e9818",
+  "head": "9c0e9818",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28175,
-    "reachable": 4802,
-    "whitelisted": 20234,
+    "total_exported": 28187,
+    "reachable": 4808,
+    "whitelisted": 20240,
     "unreachable": 3139
   },
   "by_package": [
@@ -7682,14 +7682,14 @@
       "package": "internal/model/custom",
       "identifier": "RawValuer",
       "file": "internal/model/custom/replay.go",
-      "line": 37,
+      "line": 100,
       "kind": "type"
     },
     {
       "package": "internal/model/custom",
       "identifier": "RawValuer",
       "file": "internal/model/custom/replay.go",
-      "line": 37,
+      "line": 100,
       "kind": "type"
     },
     {
@@ -8235,14 +8235,14 @@
       "package": "internal/model/custom/cover",
       "identifier": "GarageConfig",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 96,
+      "line": 99,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "GarageConfig",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 96,
+      "line": 99,
       "kind": "type"
     },
     {
@@ -8431,14 +8431,14 @@
       "package": "internal/model/custom/light",
       "identifier": "HSColor",
       "file": "internal/model/custom/light/light.go",
-      "line": 864,
+      "line": 868,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "HSColor",
       "file": "internal/model/custom/light/light.go",
-      "line": 864,
+      "line": 868,
       "kind": "type"
     },
     {
@@ -8459,14 +8459,14 @@
       "package": "internal/model/custom/light",
       "identifier": "OnConfig",
       "file": "internal/model/custom/light/light.go",
-      "line": 626,
+      "line": 630,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "OnConfig",
       "file": "internal/model/custom/light/light.go",
-      "line": 626,
+      "line": 630,
       "kind": "type"
     },
     {
@@ -8543,14 +8543,14 @@
       "package": "internal/model/custom/light",
       "identifier": "StateChangeArgsFull",
       "file": "internal/model/custom/light/light.go",
-      "line": 852,
+      "line": 856,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "StateChangeArgsFull",
       "file": "internal/model/custom/light/light.go",
-      "line": 852,
+      "line": 856,
       "kind": "type"
     },
     {
@@ -8767,14 +8767,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "Config",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 85,
+      "line": 91,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "Config",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 85,
+      "line": 91,
       "kind": "type"
     },
     {
@@ -8795,14 +8795,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "ErrInvalidTone",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 237,
+      "line": 249,
       "kind": "var"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ErrInvalidTone",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 237,
+      "line": 249,
       "kind": "var"
     },
     {
@@ -8823,28 +8823,28 @@
       "package": "internal/model/custom/siren",
       "identifier": "OnConfig",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 386,
+      "line": 398,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "OnConfig",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 386,
+      "line": 398,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "PlayConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 219,
+      "line": 228,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "PlayConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 219,
+      "line": 228,
       "kind": "type"
     },
     {
@@ -8907,14 +8907,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "SmokeSirenConfig",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 93,
+      "line": 97,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "SmokeSirenConfig",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 93,
+      "line": 97,
       "kind": "type"
     },
     {
@@ -8935,14 +8935,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "SoundPlayerConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 85,
+      "line": 91,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "SoundPlayerConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 85,
+      "line": 91,
       "kind": "type"
     },
     {
@@ -75190,6 +75190,20 @@
     },
     {
       "package": "internal/model/custom",
+      "identifier": "GroupLevelDataPoint",
+      "reason": "the field type of Light.groupLevel and Cover.groupLevel and the return type of GroupLevelField, which the light and cover constructors call on every hydration; an interface reached through its implementations, which the analyzer's type heuristic (reachable only via its own methods) cannot see used",
+      "file": "internal/model/custom/resolve.go",
+      "line": 168
+    },
+    {
+      "package": "internal/model/custom",
+      "identifier": "GroupLevelDataPoint",
+      "reason": "the field type of Light.groupLevel and Cover.groupLevel and the return type of GroupLevelField, which the light and cover constructors call on every hydration; an interface reached through its implementations, which the analyzer's type heuristic (reachable only via its own methods) cannot see used",
+      "file": "internal/model/custom/resolve.go",
+      "line": 168
+    },
+    {
+      "package": "internal/model/custom",
       "identifier": "NewBrightness",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/mixins.go",
@@ -78840,14 +78854,14 @@
       "identifier": "NewGarage",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 103
+      "line": 106
     },
     {
       "package": "internal/model/custom/cover",
       "identifier": "NewGarage",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/cover/garage.go",
-      "line": 103
+      "line": 106
     },
     {
       "package": "internal/model/custom/cover",
@@ -80583,14 +80597,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/light.go",
-      "line": 127
+      "line": 131
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/light.go",
-      "line": 127
+      "line": 131
     },
     {
       "package": "internal/model/custom/light",
@@ -80639,14 +80653,14 @@
       "identifier": "NewEffectLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/effect.go",
-      "line": 32
+      "line": 38
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "NewEffectLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/effect.go",
-      "line": 32
+      "line": 38
     },
     {
       "package": "internal/model/custom/light",
@@ -80667,28 +80681,28 @@
       "identifier": "NewRGBWLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/rgbw.go",
-      "line": 97
+      "line": 100
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "NewRGBWLight",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/rgbw.go",
-      "line": 97
+      "line": 100
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "NewSoundPlayerLED",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/sound_led.go",
-      "line": 126
+      "line": 129
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "NewSoundPlayerLED",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/light/sound_led.go",
-      "line": 126
+      "line": 129
     },
     {
       "package": "internal/model/custom/light",
@@ -82918,6 +82932,13 @@
     },
     {
       "package": "internal/model/custom/light",
+      "identifier": "TestRGBWLightReadsTheOperatingModeFromChannelZero",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/light/rgbw_operation_mode_test.go",
+      "line": 77
+    },
+    {
+      "package": "internal/model/custom/light",
       "identifier": "TestRGBWLightSetColorModeCheck",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/light/light_behavior_test.go",
@@ -83950,14 +83971,14 @@
       "identifier": "ConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 197
+      "line": 206
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 197
+      "line": 206
     },
     {
       "package": "internal/model/custom/siren",
@@ -83978,70 +83999,70 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 92
+      "line": 98
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/siren.go",
-      "line": 92
+      "line": 98
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSmokeSiren",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 99
+      "line": 103
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSmokeSiren",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/smoke.go",
-      "line": 99
+      "line": 103
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSoundPlayer",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 91
+      "line": 97
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSoundPlayer",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 91
+      "line": 97
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 208
+      "line": 215
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestConvertPlayRepetitionsIndexEmptyList",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 248
+      "line": 255
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestConvertSoundfileIndex",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 299
+      "line": 306
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestEncodeDurationUnits",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 186
+      "line": 193
     },
     {
       "package": "internal/model/custom/siren",
@@ -84223,21 +84244,21 @@
       "identifier": "TestPlaySoundRepetitionsSemantics",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 258
+      "line": 265
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenAcousticState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 334
+      "line": 341
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenAddressReturnsChannelAddress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1346
+      "line": 1367
     },
     {
       "package": "internal/model/custom/siren",
@@ -84251,7 +84272,7 @@
       "identifier": "TestSirenCapabilityGatesOptical",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1501
+      "line": 1522
     },
     {
       "package": "internal/model/custom/siren",
@@ -84272,14 +84293,14 @@
       "identifier": "TestSirenConfigPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 484
+      "line": 491
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenConfigPayloadNilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 504
+      "line": 511
     },
     {
       "package": "internal/model/custom/siren",
@@ -84297,10 +84318,17 @@
     },
     {
       "package": "internal/model/custom/siren",
+      "identifier": "TestSirenExposesTheAvailableSelections",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/siren/siren_selection_wire_test.go",
+      "line": 163
+    },
+    {
+      "package": "internal/model/custom/siren",
       "identifier": "TestSirenHAComponent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 427
+      "line": 434
     },
     {
       "package": "internal/model/custom/siren",
@@ -84328,42 +84356,42 @@
       "identifier": "TestSirenInfoPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 462
+      "line": 469
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenInfoPayloadNilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 475
+      "line": 482
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenIngestion",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 154
+      "line": 161
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenIsActiveReflectsDP",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1435
+      "line": 1456
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenIsRefreshed_FalseWhenNoDPObserved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1726
+      "line": 1747
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenIsRefreshed_TrueAfterAcousticPush",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1738
+      "line": 1759
     },
     {
       "package": "internal/model/custom/siren",
@@ -84398,56 +84426,56 @@
       "identifier": "TestSirenMatterEligibility",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 590
+      "line": 597
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenMatterInvokeUnknownCmdReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 643
+      "line": 650
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenMatterReadOnOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 655
+      "line": 662
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenMatterReportable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 694
+      "line": 701
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenMatterWriteOnOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 600
+      "line": 607
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenMatterWriteUnknownAttrReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 621
+      "line": 628
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenMatterWriteWrongTypeReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 632
+      "line": 639
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenNilChannelGracefullyDegrades",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1358
+      "line": 1379
     },
     {
       "package": "internal/model/custom/siren",
@@ -84531,77 +84559,77 @@
       "identifier": "TestSirenOpticalState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 363
+      "line": 370
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenRegisterServiceTurnOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 551
+      "line": 558
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenRegisterServiceTurnOn",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 567
+      "line": 574
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenSharesAcousticInstanceWithChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 170
+      "line": 177
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenStatePayloadNilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 540
+      "line": 547
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenStatePayloadOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 513
+      "line": 520
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenStatePayloadOn",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 526
+      "line": 533
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenStopForwardsStopCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1406
+      "line": 1427
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenSubscribeNilChannelReturnsUnsubFunc",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1544
+      "line": 1565
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenSubscribeRegistersHooksAndReplays",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1560
+      "line": 1581
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenSubscribeUnsubRemovesHooks",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1593
+      "line": 1614
     },
     {
       "package": "internal/model/custom/siren",
@@ -84615,77 +84643,91 @@
       "identifier": "TestSirenTopicSlotFallbackOnInvalidAddress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 449
+      "line": 456
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenTopicSlotWithChannelAddress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 436
+      "line": 443
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenTurnOffNilWriter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 411
+      "line": 418
+    },
+    {
+      "package": "internal/model/custom/siren",
+      "identifier": "TestSirenTurnOffSendsTheDisableLabel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/siren/siren_selection_wire_test.go",
+      "line": 101
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenTurnOffZerosBothChannels",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 134
+      "line": 141
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenTurnOnForwardsAcousticAndOptical",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1379
+      "line": 1400
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenTurnOnNilWriter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 393
+      "line": 400
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenTurnOnSendsSelectionAndDuration",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 106
+      "line": 113
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenTurnOnWithDurationForwardsDurationValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1475
+      "line": 1496
+    },
+    {
+      "package": "internal/model/custom/siren",
+      "identifier": "TestSirenTurnOnWithoutSelectionIsDeterministic",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/siren/siren_selection_wire_test.go",
+      "line": 135
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenValidateTone_AcceptedWhenEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1747
+      "line": 1768
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenValidateTone_AcceptsKnownTone",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1764
+      "line": 1785
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSirenValidateTone_RejectsUnknownTone",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1756
+      "line": 1777
     },
     {
       "package": "internal/model/custom/siren",
@@ -84706,7 +84748,7 @@
       "identifier": "TestSmokeSirenConfigPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 803
+      "line": 810
     },
     {
       "package": "internal/model/custom/siren",
@@ -84727,7 +84769,7 @@
       "identifier": "TestSmokeSirenHAComponent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 718
+      "line": 725
     },
     {
       "package": "internal/model/custom/siren",
@@ -84755,7 +84797,7 @@
       "identifier": "TestSmokeSirenInfoPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 790
+      "line": 797
     },
     {
       "package": "internal/model/custom/siren",
@@ -84769,14 +84811,14 @@
       "identifier": "TestSmokeSirenIsIntrusion",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 750
+      "line": 757
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenIsSecondaryAlarm",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 737
+      "line": 744
     },
     {
       "package": "internal/model/custom/siren",
@@ -84804,7 +84846,7 @@
       "identifier": "TestSmokeSirenMatterDeviceType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 883
+      "line": 890
     },
     {
       "package": "internal/model/custom/siren",
@@ -84818,49 +84860,49 @@
       "identifier": "TestSmokeSirenMatterInvokeAlwaysErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 969
+      "line": 976
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenMatterReadAttributes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 892
+      "line": 899
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenMatterReportable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 981
+      "line": 988
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenMatterWriteAlwaysErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 958
+      "line": 965
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenNilChannelAvailableLightsAndTones",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 852
+      "line": 859
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenNilWriterTurnOffReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 781
+      "line": 788
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenNilWriterTurnOnReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 772
+      "line": 779
     },
     {
       "package": "internal/model/custom/siren",
@@ -84888,49 +84930,49 @@
       "identifier": "TestSmokeSirenReadBatteryAlert",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 993
+      "line": 1000
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenReadSecondaryAlarmWarning",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1005
+      "line": 1012
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenServicesTurnOnOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 865
+      "line": 872
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenStatePayloadIdleOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 816
+      "line": 823
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenStatePayloadNilReceiverReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 843
+      "line": 850
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenStatePayloadOn",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 829
+      "line": 836
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenStatusReflectsDP",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1684
+      "line": 1705
     },
     {
       "package": "internal/model/custom/siren",
@@ -84944,42 +84986,42 @@
       "identifier": "TestSmokeSirenTopicSlot",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 727
+      "line": 734
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenTurnOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 760
+      "line": 767
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSmokeSirenTurnOnSendsIntrusionCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1522
+      "line": 1543
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerAvailableLightsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1108
+      "line": 1127
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerCurrentSoundfile",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1117
+      "line": 1136
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerDataPointKey",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1098
+      "line": 1117
     },
     {
       "package": "internal/model/custom/siren",
@@ -85007,7 +85049,7 @@
       "identifier": "TestSoundPlayerHAComponent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1079
+      "line": 1098
     },
     {
       "package": "internal/model/custom/siren",
@@ -85049,14 +85091,14 @@
       "identifier": "TestSoundPlayerInfoPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1292
+      "line": 1313
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerIsPlaying",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1152
+      "line": 1173
     },
     {
       "package": "internal/model/custom/siren",
@@ -85084,77 +85126,77 @@
       "identifier": "TestSoundPlayerPlaySound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1200
+      "line": 1221
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerPlaySoundEmptyParamsUsesDefaults",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1240
+      "line": 1261
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerPlaySoundNilWriterReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1231
+      "line": 1252
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerServicesTurnOnOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1318
+      "line": 1339
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerStatePayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1305
+      "line": 1326
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerStopSound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1255
+      "line": 1276
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerStopSoundNilWriterReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1271
+      "line": 1292
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerSubscribeNilChannelReturnsUnsubFunc",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1614
+      "line": 1635
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerSubscribeRegistersHooksOnWireDPs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1628
+      "line": 1649
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerTopicSlot",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1088
+      "line": 1107
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "TestSoundPlayerTurnOff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
-      "line": 1280
+      "line": 1301
     },
     {
       "package": "internal/model/custom/siren",
@@ -89711,14 +89753,14 @@
       "identifier": "ActionSelect",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/action_select.go",
-      "line": 16
+      "line": 17
     },
     {
       "package": "internal/model/generic",
       "identifier": "ActionSelect",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/action_select.go",
-      "line": 16
+      "line": 17
     },
     {
       "package": "internal/model/generic",
@@ -90495,14 +90537,14 @@
       "identifier": "NewActionSelect",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/action_select.go",
-      "line": 22
+      "line": 23
     },
     {
       "package": "internal/model/generic",
       "identifier": "NewActionSelect",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/action_select.go",
-      "line": 22
+      "line": 23
     },
     {
       "package": "internal/model/generic",
@@ -163715,7 +163757,7 @@
       "identifier": "TestWireSnapshots",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wire_snapshots/snapshot_pin_test.go",
-      "line": 672
+      "line": 684
     },
     {
       "package": "tests/contract/wire_snapshots",

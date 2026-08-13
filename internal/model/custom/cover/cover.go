@@ -164,7 +164,7 @@ type Cover struct {
 	// remap mode. Set by Config.WindowDrive at construction.
 	windowDrive bool
 
-	groupLevel              *generic.Float
+	groupLevel              custom.GroupLevelDataPoint
 	useGroupChannelForState bool
 
 	// directionDp is the channel's motion parameter — DIRECTION on
@@ -334,7 +334,7 @@ func (c *Cover) observedLevel() (float64, bool) {
 // SetGroupLevel binds an optional group-channel LEVEL data point.
 // Used by the materializer for sub-cover channels whose canonical
 // position lives on the group master. Pass nil to clear.
-func (c *Cover) SetGroupLevel(dp *generic.Float, useGroupChannelForState bool) {
+func (c *Cover) SetGroupLevel(dp custom.GroupLevelDataPoint, useGroupChannelForState bool) {
 	c.groupLevel = dp
 	c.useGroupChannelForState = useGroupChannelForState
 }

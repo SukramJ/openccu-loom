@@ -49,41 +49,11 @@ var customFieldsNeverFilled = map[string]string{
 // filled — the guard reports a listed-but-filled field as an error, so a
 // fix cannot leave a stale claim behind.
 var customFieldsWithAKnownDefect = map[string]string{
-	"cover.Garage.doorCommandDp": "DOOR_COMMAND is ENUM with OPERATIONS 2 (write-only) → the resolver " +
-		"yields an ActionSelect, while the field asks for Sensor[string]. A write-only parameter also has " +
-		"no readable value, so the field cannot work as a status source at all.",
-	"light.RGBWLight.mode": "DEVICE_OPERATION_MODE is a MASTER ENUM with OPERATIONS 3 → Select, while the " +
-		"field asks for Sensor[string].",
-	"light.SoundPlayerLED.onTimeList": "ON_TIME_LIST_1 is ENUM with OPERATIONS 2 → ActionSelect, while the " +
-		"field asks for Sensor[string].",
-	"light.SoundPlayerLED.repetitions": "REPETITIONS is ENUM with OPERATIONS 2 → ActionSelect, while the " +
-		"field asks for Sensor[string].",
-	"siren.Siren.acousticIdx": "ACOUSTIC_ALARM_SELECTION is ENUM with OPERATIONS 2 → ActionSelect, while " +
-		"the field asks for Sensor[string]. The siren's acoustic-alarm read-back is therefore absent on " +
-		"every device.",
-	"siren.Siren.opticalIdx": "OPTICAL_ALARM_SELECTION is ENUM with OPERATIONS 2 → ActionSelect, while the " +
-		"field asks for Sensor[string].",
-	"siren.SmokeSiren.command": "SMOKE_DETECTOR_COMMAND is ENUM with OPERATIONS 2 → ActionSelect, while " +
-		"the field asks for Sensor[string].",
-	"siren.SoundPlayer.repetitions": "REPETITIONS is ENUM with OPERATIONS 2 → ActionSelect, while the " +
-		"field asks for Sensor[string].",
-	"siren.SoundPlayer.soundfile": "HmIP-MP3P carries SOUNDFILE twice — read-only on channel 1 (→ " +
-		"Sensor[int32]) and read+write on channel 2 (→ Select). The sound player sits on the writable " +
-		"channel, where the Sensor[int32] the field asks for is not what the resolver produced.",
-	"lock.Lock.directionDp": "DIRECTION exists only on the HM key-matic family (ENUM, OPERATIONS 5 → " +
-		"Sensor[int32] on channel 1), but the field is assigned in the LOCK_STATE branch that HmIP door " +
-		"locks take, and those descriptions carry no DIRECTION.",
-	"textdisplay.TextDisplay.burstLimitWarningDP": "HmIP-WRCD reports BURST_LIMIT_WARNING on the " +
-		"maintenance channel 0, while the lookup runs against the display channel.",
-	"light.ColorTempLight.kelvin": "COLOR_TEMPERATURE is INTEGER with OPERATIONS 7 → Integer, which is " +
-		"what the field asks for, but it is absent from the channel the colour-temperature light is " +
-		"built on for every model in the fleet.",
-	"cover.Cover.groupLevel": "assigned through a setter rather than a channel accessor; no production " +
-		"path calls that setter for any model in the fleet.",
-	"light.Light.groupLevel": "assigned through a setter rather than a channel accessor; no production " +
-		"path calls that setter for any model in the fleet.",
-	"light.EffectLight.program": "assigned through a setter rather than a channel accessor; no production " +
-		"path calls that setter for any model in the fleet.",
+	"light.ColorTempLight.kelvin": "wrong parameter for this profile. ColorTempLight is registered for " +
+		"the RF colour-temperature dimmers, and COLOR_TEMPERATURE exists only on the HmIP families " +
+		"(DRG-DALI, LSC, RGBW). The RF dimmers carry COLOR_LEVEL, a 0..1 float the reference converts " +
+		"to kelvin through mireds (aiohomematic CustomDpColorTempDimmer.color_temp_kelvin); this " +
+		"daemon has no COLOR_LEVEL path at all, so colour temperature does not work on those devices.",
 }
 
 // TestEveryCustomDataPointFieldIsFilledBySomeDevice drives the real

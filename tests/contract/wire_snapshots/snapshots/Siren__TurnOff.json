@@ -11,7 +11,7 @@
           "address": "ASIR0001:3",
           "put_values": {
             "ACOUSTIC_ALARM_SELECTION": "DISABLE_ACOUSTIC_SIGNAL",
-            "OPTICAL_ALARM_SELECTION": "DISABLE_ACOUSTIC_SIGNAL"
+            "OPTICAL_ALARM_SELECTION": "DISABLE_OPTICAL_SIGNAL"
           }
         }
       ]

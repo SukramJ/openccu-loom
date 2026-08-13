@@ -291,22 +291,30 @@ func newSirenFixtureRef(t *testing.T, w *fakeWriter) *siren.Siren {
 		})
 		ch.Put(dp)
 	}
-	acousticSel := generic.NewStringSensor(generic.Spec{
+	// Write-only ENUM (OPERATIONS=2) with a string-labelled DEFAULT — the
+	// shape the resolver produces for an alarm selection.
+	selValues := []string{"DISABLE_ACOUSTIC_SIGNAL", "FREQUENCY_RISING", "FREQUENCY_FALLING"}
+	acousticSel := generic.NewActionSelect(generic.Spec{
 		Key: hmtypes.DataPointKey{ChannelAddress: "ASIR0001:3", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterAcousticAlarmSelection)},
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
-			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-			ValueList:  []string{"DISABLE_ACOUSTIC_SIGNAL", "FREQUENCY_RISING", "FREQUENCY_FALLING"},
+			Operations: hmenum.OperationsWrite,
+			ValueList:  selValues,
+			Default:    []byte(`"` + selValues[0] + `"`),
 		},
 		Writer: w,
 	})
 	ch.Put(acousticSel)
-	opticalSel := generic.NewStringSensor(generic.Spec{
+	// Write-only ENUM (OPERATIONS=2) with a string-labelled DEFAULT — the
+	// shape the resolver produces for an alarm selection.
+	selValues = []string{"DISABLE_OPTICAL_SIGNAL", "BLINKING_RED", "BLINKING_BLUE"}
+	opticalSel := generic.NewActionSelect(generic.Spec{
 		Key: hmtypes.DataPointKey{ChannelAddress: "ASIR0001:3", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterOpticalAlarmSelection)},
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
-			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
-			ValueList:  []string{"DISABLE_OPTICAL_SIGNAL", "BLINKING_RED", "BLINKING_BLUE"},
+			Operations: hmenum.OperationsWrite,
+			ValueList:  selValues,
+			Default:    []byte(`"` + selValues[0] + `"`),
 		},
 		Writer: w,
 	})

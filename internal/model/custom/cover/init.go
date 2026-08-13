@@ -191,7 +191,12 @@ func applyGroupLevel(cov *Cover, ch *device.Channel, rebased custom.RebasedChann
 		if groupCh == nil {
 			continue
 		}
-		if dp := custom.FloatField(groupCh, param); dp != nil {
+		// The group channel's LEVEL is read-only on the HmIP families
+		// (HmIP-BROLL reports it as OPERATIONS 5 on channel 3 while the
+		// action channels are read+write), so it resolves to a sensor
+		// rather than a writable float. Asking for the writable shape
+		// found nothing on any device.
+		if dp := custom.GroupLevelField(groupCh, param); dp != nil {
 			cov.SetGroupLevel(dp, useGroupChannelForState(ch))
 			return
 		}

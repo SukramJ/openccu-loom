@@ -169,7 +169,7 @@ func TestParityMatterJS_RGBWColorDataVersionBumpsOnCTInvoke(t *testing.T) {
 		Writer:       w,
 		Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true},
 	})
-	l.recordMode("TUNABLE_WHITE")
+	l.recordMode("2_TUNABLE_WHITE")
 	l.OnLevel(1.0) // on — MoveToColorTemperature gates on ExecuteIfOff while off.
 	before := l.MatterDataVersion()
 

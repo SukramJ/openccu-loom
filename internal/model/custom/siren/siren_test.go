@@ -51,9 +51,9 @@ type rig struct {
 	siren            *Siren
 	channel          *device.Channel
 	acousticActiveDP *generic.BinarySensor
-	acousticIdxDP    *generic.Sensor[string]
+	acousticIdxDP    *generic.ActionSelect
 	opticalActiveDP  *generic.BinarySensor
-	opticalIdxDP     *generic.Sensor[string]
+	opticalIdxDP     *generic.ActionSelect
 }
 
 func newRig(t *testing.T, address string, w Writer, caps custom.SirenCapabilities) *rig {
@@ -76,16 +76,23 @@ func newRig(t *testing.T, address string, w Writer, caps custom.SirenCapabilitie
 		ch.Put(dp)
 		return dp
 	}
-	strSensor := func(p hmenum.Parameter) *generic.Sensor[string] {
-		dp := generic.NewStringSensor(generic.Spec{
+	// The alarm-selection parameters are write-only ENUMs on the wire
+	// (OPERATIONS=2, VALUE_LIST, string-labelled DEFAULT), which the
+	// resolver turns into an ActionSelect. Modelling them as readable
+	// string sensors described a device that does not exist and kept this
+	// suite green while both fields were nil on every real device.
+	selection := func(p hmenum.Parameter, values []string, def string) *generic.ActionSelect {
+		dp := generic.NewActionSelect(generic.Spec{
 			Key: hmtypes.DataPointKey{
 				ChannelAddress: address,
 				ParamsetKey:    hmenum.ParamsetKeyValues,
 				Parameter:      string(p),
 			},
 			Descriptor: hmproto.ParameterData{
-				Type:       hmenum.ParameterTypeString,
-				Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+				Type:       hmenum.ParameterTypeEnum,
+				Operations: hmenum.OperationsWrite,
+				ValueList:  values,
+				Default:    []byte(`"` + def + `"`),
 			},
 		})
 		ch.Put(dp)
@@ -95,9 +102,9 @@ func newRig(t *testing.T, address string, w Writer, caps custom.SirenCapabilitie
 	r := &rig{
 		channel:          ch,
 		acousticActiveDP: binSensor(hmenum.ParameterAcousticAlarmActive),
-		acousticIdxDP:    strSensor(hmenum.ParameterAcousticAlarmSelection),
+		acousticIdxDP:    selection(hmenum.ParameterAcousticAlarmSelection, acousticSelectionValues, acousticDisableLabel),
 		opticalActiveDP:  binSensor(hmenum.ParameterOpticalAlarmActive),
-		opticalIdxDP:     strSensor(hmenum.ParameterOpticalAlarmSelection),
+		opticalIdxDP:     selection(hmenum.ParameterOpticalAlarmSelection, opticalSelectionValues, opticalDisableLabel),
 	}
 	r.siren = New(Config{Channel: ch, Writer: w, Capabilities: caps})
 	return r
@@ -157,9 +164,9 @@ func TestSirenIngestion(t *testing.T) {
 	// Drive the channel-side data points (production path) and
 	// verify Siren observes them through its shared pointers.
 	r.acousticActiveDP.OnEvent(true)
-	r.acousticIdxDP.OnEvent("FREQUENCY_RISING")
+	r.acousticIdxDP.RecordLabel("FREQUENCY_RISING")
 	r.opticalActiveDP.OnEvent(false)
-	r.opticalIdxDP.OnEvent("DISABLE_OPTICAL_SIGNAL")
+	r.opticalIdxDP.RecordLabel(opticalDisableLabel)
 
 	active, _ := r.siren.IsActive()
 	if !active {
@@ -345,7 +352,7 @@ func TestSirenAcousticState(t *testing.T) {
 	}
 
 	r.acousticActiveDP.OnEvent(true)
-	r.acousticIdxDP.OnEvent("FREQUENCY_RISING")
+	r.acousticIdxDP.RecordLabel("FREQUENCY_RISING")
 	active, sel, obs := r.siren.AcousticState()
 	if !obs {
 		t.Error("AcousticState should be observed after events")
@@ -373,7 +380,7 @@ func TestSirenOpticalState(t *testing.T) {
 	}
 
 	r.opticalActiveDP.OnEvent(false)
-	r.opticalIdxDP.OnEvent("BLINKING_RED")
+	r.opticalIdxDP.RecordLabel("BLINKING_BOTH_REPEATING")
 	active, sel, obs := r.siren.OpticalState()
 	if !obs {
 		t.Error("OpticalState should be observed after events")
@@ -381,8 +388,8 @@ func TestSirenOpticalState(t *testing.T) {
 	if active {
 		t.Error("OpticalState active should be false")
 	}
-	if sel != "BLINKING_RED" {
-		t.Errorf("OpticalState selection = %q, want BLINKING_RED", sel)
+	if sel != "BLINKING_BOTH_REPEATING" {
+		t.Errorf("OpticalState selection = %q, want BLINKING_BOTH_REPEATING", sel)
 	}
 }
 
@@ -1019,6 +1026,18 @@ func TestSmokeSirenReadSecondaryAlarmWarning(t *testing.T) {
 // resulting raw index as a wire event — mirrors how the resolver projects a
 // read-only ENUM parameter (SOUNDFILE, DIRECTION) onto an index-valued
 // Sensor[int32].
+// fireSelect drives a read+write ENUM (a Select) by label.
+func fireSelect(t *testing.T, dp *generic.Select, label string) {
+	t.Helper()
+	for i, v := range dp.ParameterData().ValueList {
+		if v == label {
+			dp.OnEvent(int32(i)) //nolint:gosec // VALUE_LIST index
+			return
+		}
+	}
+	t.Fatalf("label %q not in VALUE_LIST", label)
+}
+
 func fireEnum(t *testing.T, dp *generic.Sensor[int32], label string) {
 	t.Helper()
 	idx, ok := custom.EnumLabelIndex(dp, label)
@@ -1128,7 +1147,9 @@ func TestSoundPlayerCurrentSoundfile(t *testing.T) {
 	// Get the soundfile DP from the channel directly; drive it.
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P0001"})
 	ch := d.AddChannel("MP3P0001:2", 2, "AUDIO", hmenum.ParamsetKeyValues)
-	sfDP := generic.NewIntegerSensor(generic.Spec{
+	// HmIP-MP3P reports SOUNDFILE as a read+write ENUM on the sound
+	// player's own channel 2, which resolves to a Select.
+	sfDP := generic.NewSelect(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "MP3P0001:2",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
@@ -1136,13 +1157,13 @@ func TestSoundPlayerCurrentSoundfile(t *testing.T) {
 		},
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
-			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
 			ValueList:  []string{"SOUNDFILE_042"},
 		},
 	})
 	ch.Put(sfDP)
 	sp2 := NewSoundPlayer(SoundPlayerConfig{Channel: ch, Writer: &stubWriter{}})
-	fireEnum(t, sfDP, "SOUNDFILE_042")
+	fireSelect(t, sfDP, "SOUNDFILE_042")
 	sf, obs2 := sp2.CurrentSoundfile()
 	if !obs2 || sf != "SOUNDFILE_042" {
 		t.Errorf("CurrentSoundfile = %q obs=%v, want (SOUNDFILE_042, true)", sf, obs2)
@@ -1397,7 +1418,7 @@ func TestSirenTurnOnForwardsAcousticAndOptical(t *testing.T) {
 		t.Errorf("acoustic selection = %v ok=%v, want FREQUENCY_RISING", v, ok)
 	}
 	if v, ok := w.has(hmenum.ParameterOpticalAlarmSelection); !ok || v.(string) != "BLINKING_RED" {
-		t.Errorf("optical selection = %v ok=%v, want BLINKING_RED", v, ok)
+		t.Errorf("optical selection = %v ok=%v, want BLINKING_BOTH_REPEATING", v, ok)
 	}
 }
 

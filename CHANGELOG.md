@@ -4,6 +4,60 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.5]
+
+### Fixed
+
+- **Dimmers and covers report their group brightness again, and colour
+  dimmers their effects.** A dimmer's group level comes from a different
+  parameter per family — the HmIP devices report it on the group's state
+  channel, the RF ones on the light's own channel — and both are
+  read-only there, while the daemon asked for the writable form on the
+  light's channel alone. Neither family ever filled the slot, so the
+  group brightness a north-bound consumer reads stayed absent. The same
+  applied to covers. The effect list of an RF colour dimmer was empty for
+  a related reason: its effects parameter sits two channels above the
+  light.
+
+- **An RGBW light knows which mode it is in.** HmIP-RGBW, HmIP-LSC and
+  HmIP-DRDI3 report their operating mode on the device's channel 0, and
+  the light read it on its own channel — where it does not exist. Three
+  things had to be wrong at once for it to stay unnoticed: the lookup
+  channel, the value shape (the mode is an enum, whose wire value is an
+  index rather than a word), and the two mode names, which carry a
+  channel-count prefix the daemon did not expect. The light therefore
+  fell back to "assume plain brightness" on every device, so a lamp in
+  RGB or tunable-white mode advertised the wrong capabilities and its
+  secondary channels surfaced as entities of their own.
+
+- **A key-matic reports which way it turned.** The lock's direction
+  slot was filled only for HmIP door locks, which do not have it, while
+  the HM key-matic family — which does — took the branch that skipped
+  it.
+
+- **The sound player reads its selected sound file, and the display its
+  burst-limit warning.** The sound file is writable on the player's own
+  channel, so it never matched the read-only shape the code looked for;
+  the burst-limit warning sits on the device's channel 0, not on the
+  display channel.
+
+- **A siren can be silenced again, and sounds a defined alarm.** The two
+  alarm-selection parameters are write-only ENUMs on the wire, so the
+  daemon builds a write-only selection for them — but the siren looked
+  them up as readable text, which matches nothing on any device. Both
+  slots were therefore empty, and with them the "disable" value the CCU
+  declares: switching a siren off wrote an empty selection, which the CCU
+  rejects, and switching it on without naming a tone sent no selection at
+  all, leaving the device to repeat whatever was set last — including the
+  disable tone a preceding off-command had left behind. Both commands now
+  name the value they mean. The optical channel also gets its own disable
+  value; it was being sent the acoustic one.
+
+  Five further data points were absent for the same reason and are now
+  found: the smoke detector's command, the garage door's command, the
+  sound player's repetitions, and the sound-LED's repetitions and
+  on-time list. Their state changes reach the north-bound planes again.
+
 ## [0.58.4]
 
 ### Fixed

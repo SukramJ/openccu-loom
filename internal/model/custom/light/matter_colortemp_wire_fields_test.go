@@ -77,7 +77,7 @@ func TestRGBWMoveToColorTemperatureGenericTagMapWireShape(t *testing.T) {
 	w := &colorStubWriter{}
 	ch := newRGBWRig(t, "HmIP-RGBW:4", w, custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true})
 	l := NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true}})
-	l.recordMode("TUNABLE_WHITE")
+	l.recordMode("2_TUNABLE_WHITE")
 	l.OnLevel(1.0) // on — the ExecuteIfOff gate only matters while off (see matter_color_options_test.go).
 	var rgbw rgbwColorServer
 	for _, s := range l.MatterClusterServers() {

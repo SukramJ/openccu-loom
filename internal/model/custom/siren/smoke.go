@@ -48,8 +48,12 @@ type SmokeSiren struct {
 	// status carries SMOKE_DETECTOR_ALARM_STATUS, a read-only ENUM the
 	// resolver projects onto a raw-index Sensor[int32]; the string label is
 	// resolved on read via [custom.EnumLabelValue].
-	status  *generic.Sensor[int32]
-	command *generic.Sensor[string]
+	status *generic.Sensor[int32]
+	// command is SMOKE_DETECTOR_COMMAND: a write-only ENUM on the wire
+	// (OPERATIONS=2), which the resolver builds as an ActionSelect. Looking
+	// it up as a readable string sensor left it nil on every device, so the
+	// data-version bump and the subscribe hook below never fired.
+	command *generic.ActionSelect
 }
 
 // DataPointKey returns the composite identifier for this custom data
@@ -115,7 +119,7 @@ func NewSmokeSiren(cfg SmokeSirenConfig) *SmokeSiren {
 		key:     key,
 		writer:  cfg.Writer,
 		status:  custom.EnumSensorField(cfg.Channel, hmenum.ParameterSmokeDetectorAlarmStatus),
-		command: custom.StringSensorField(cfg.Channel, hmenum.ParameterSmokeDetectorCommand),
+		command: custom.ActionSelectField(cfg.Channel, hmenum.ParameterSmokeDetectorCommand),
 	}
 	s.registerSmokeSirenServices()
 	// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
@@ -123,7 +127,7 @@ func NewSmokeSiren(cfg SmokeSirenConfig) *SmokeSiren {
 		_ = s.status.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
 	}
 	if s.command != nil {
-		_ = s.command.OnConfirmedUpdate(func(_, _ string) { s.dataVersion.Bump() })
+		_ = s.command.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
 	}
 	return s
 }

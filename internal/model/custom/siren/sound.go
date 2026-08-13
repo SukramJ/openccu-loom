@@ -60,12 +60,18 @@ type SoundPlayer struct {
 	// changes for the SoundPlayer's Matter LevelControl mapping.
 	hmtypes.DataVersionTracker
 
-	key          hmtypes.DataPointKey
-	writer       custom.Writer
-	level        *generic.Float          // LEVEL (0..1 volume)
-	soundfile    *generic.Sensor[int32]  // SOUNDFILE (read-only ENUM, index sensor)
-	repetitions  *generic.Sensor[string] // REPETITIONS
-	direction    *generic.Sensor[int32]  // DIRECTION (UP/DOWN; read-only ENUM, index sensor)
+	key    hmtypes.DataPointKey
+	writer custom.Writer
+	level  *generic.Float // LEVEL (0..1 volume)
+	// soundfile is SOUNDFILE. HmIP-MP3P carries it twice: read-only on
+	// channel 1 and read+write on channel 2, where the sound player sits
+	// — so the resolver builds a Select here, not an index sensor.
+	soundfile *generic.Select
+	// repetitions is REPETITIONS: a write-only ENUM (OPERATIONS=2) whose
+	// VALUE_LIST carries the REPETITIONS_nnn labels, so the resolver builds
+	// an ActionSelect for it.
+	repetitions  *generic.ActionSelect  // REPETITIONS
+	direction    *generic.Sensor[int32] // DIRECTION (UP/DOWN; read-only ENUM, index sensor)
 	availableSF  []string
 	availableRep []string
 }
@@ -110,8 +116,8 @@ func NewSoundPlayer(cfg SoundPlayerConfig) *SoundPlayer {
 		key:         key,
 		writer:      cfg.Writer,
 		level:       custom.FloatField(cfg.Channel, hmenum.ParameterLevel),
-		soundfile:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterSoundfile),
-		repetitions: custom.StringSensorField(cfg.Channel, hmenum.ParameterRepetitions),
+		soundfile:   custom.SelectField(cfg.Channel, hmenum.ParameterSoundfile),
+		repetitions: custom.ActionSelectField(cfg.Channel, hmenum.ParameterRepetitions),
 		direction:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterDirection),
 	}
 	if cfg.Channel != nil {
@@ -147,7 +153,10 @@ func (sp *SoundPlayer) AvailableRepetitions() []string {
 // CurrentSoundfile returns the last observed SOUNDFILE label and
 // whether it has been observed yet.
 func (sp *SoundPlayer) CurrentSoundfile() (string, bool) {
-	return custom.EnumLabelValue(sp.soundfile)
+	if sp.soundfile == nil {
+		return "", false
+	}
+	return sp.soundfile.Label()
 }
 
 // IsPlaying reports whether the unit is currently playing back a sound file.

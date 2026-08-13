@@ -798,8 +798,8 @@ func TestRGBWLightNamePostfixAllModes(t *testing.T) {
 	}{
 		{"RGB", "hs"},
 		{"RGBW", "hs"},
-		{"TUNABLE_WHITE", "color_temp"},
-		{"PWM", ""},
+		{"2_TUNABLE_WHITE", "color_temp"},
+		{"4_PWM", ""},
 		{"", ""},
 	}
 	for _, tc := range cases {
@@ -820,7 +820,7 @@ func TestRGBWLightHasMode(t *testing.T) {
 	if r.HasMode() {
 		t.Error("HasMode() before any event must return false")
 	}
-	r.recordMode("PWM")
+	r.recordMode("4_PWM")
 	if !r.HasMode() {
 		t.Error("HasMode() after recordMode must return true")
 	}
@@ -858,7 +858,7 @@ func TestRGBWLightUsageAllModes(t *testing.T) {
 	// TunableWhite: channels 3,4 → Secondary; others → Primary.
 	for _, no := range []int{1, 2, 3, 4} {
 		r3 := &RGBWLight{channelNo: no}
-		r3.recordMode("TUNABLE_WHITE")
+		r3.recordMode("2_TUNABLE_WHITE")
 		got := r3.Usage()
 		want := RGBWUsagePrimary
 		if no == 3 || no == 4 {
@@ -893,7 +893,7 @@ func TestRGBWLightKelvinBranches(t *testing.T) {
 		t.Error("Kelvin() before event must return ok=false")
 	}
 	// Feed an event.
-	r2.recordMode("TUNABLE_WHITE")
+	r2.recordMode("2_TUNABLE_WHITE")
 	kelvinDP := r2.kelvin
 	if kelvinDP != nil {
 		kelvinDP.OnEvent(int32(4000))
@@ -921,7 +921,7 @@ func TestRGBWLightSetKelvinModeCheck(t *testing.T) {
 func TestRGBWLightSetKelvinClampsAndSucceeds(t *testing.T) {
 	w := &colorStubWriter{}
 	r := newRGBWLightRigCh(t, "RGBW:1", w, 1)
-	r.recordMode("TUNABLE_WHITE")
+	r.recordMode("2_TUNABLE_WHITE")
 	// Below min.
 	if err := r.SetKelvin(context.Background(), 100, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("SetKelvin(100): %v", err)
@@ -938,7 +938,7 @@ func TestRGBWLightEffectsBranches(t *testing.T) {
 	r := newRGBWLightRigCh(t, "RGBW:1", w, 1)
 
 	// PWM mode → no effects.
-	r.recordMode("PWM")
+	r.recordMode("4_PWM")
 	if r.Effects() != nil {
 		t.Error("Effects() in PWM mode must return nil")
 	}
@@ -956,7 +956,7 @@ func TestRGBWLightSetEffectBranches(t *testing.T) {
 	r := newRGBWLightRigCh(t, "RGBW:1", w, 1)
 
 	// Mode without effects → error.
-	r.recordMode("PWM")
+	r.recordMode("4_PWM")
 	if err := r.SetEffect(context.Background(), "BLINKING_SLOW", hmenum.CommandPriorityHigh); err == nil {
 		t.Error("SetEffect in PWM mode must return an error")
 	}
@@ -972,7 +972,7 @@ func TestRGBWLightSetEffectBranches(t *testing.T) {
 func TestRGBWLightSetColorModeCheck(t *testing.T) {
 	w := &colorStubWriter{}
 	r := newRGBWLightRigCh(t, "RGBW:1", w, 1)
-	r.recordMode("TUNABLE_WHITE")
+	r.recordMode("2_TUNABLE_WHITE")
 	if err := r.SetColor(context.Background(), 120, 1.0, hmenum.CommandPriorityHigh); err == nil {
 		t.Error("SetColor in TUNABLE_WHITE mode must return an error")
 	}

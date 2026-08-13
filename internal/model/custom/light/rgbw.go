@@ -66,8 +66,11 @@ const (
 type RGBWLight struct {
 	*ColorLight
 
-	kelvin    *generic.Integer
-	mode      *generic.Sensor[string]
+	kelvin *generic.Integer
+	// mode is DEVICE_OPERATION_MODE. It lives on the device's channel 0
+	// in the MASTER paramset and is a read+write ENUM, which the resolver
+	// builds as a Select — not on this channel, and not as text.
+	mode      *generic.Select
 	effect    *generic.ActionSelect
 	MinKelvin int32
 	MaxKelvin int32
@@ -103,7 +106,7 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 	r := &RGBWLight{
 		ColorLight: cl,
 		kelvin:     custom.IntegerField(cfg.Channel, hmenum.ParameterColorTemperature),
-		mode:       custom.StringSensorField(cfg.Channel, hmenum.ParameterDeviceOperationMode),
+		mode:       deviceOperationModeDP(cfg.Channel),
 		effect:     custom.ActionSelectField(cfg.Channel, hmenum.ParameterEffect),
 		MinKelvin:  2000,
 		MaxKelvin:  6500,
@@ -118,7 +121,7 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 		r.registerRGBWLightServices()
 	}
 	if r.mode != nil {
-		_ = r.mode.OnConfirmedUpdate(func(_, _ string) { r.dataVersion.Bump() })
+		_ = r.mode.OnConfirmedUpdate(func(_, _ int32) { r.dataVersion.Bump() })
 	}
 	if r.kelvin != nil {
 		_ = r.kelvin.OnConfirmedUpdate(func(_, _ int32) { r.dataVersion.Bump() })
@@ -229,15 +232,20 @@ func (r *RGBWLight) HiddenByOperationMode() bool {
 // [device.SubscribingDataPoint].
 func (r *RGBWLight) Subscribe(ch *device.Channel) func() {
 	subs := []func(){r.Light.Subscribe(ch)}
-	applyMode := func(next any) {
-		if s, ok := next.(string); ok {
-			r.recordMode(s)
-		}
-	}
 	if ch != nil {
-		// DEVICE_OPERATION_MODE lives on MASTER for the HmIP-RGBW
-		// family — fall back to MASTER if VALUES does not carry it.
-		if dp := custom.ParamFromAnyParamset(ch, hmenum.ParameterDeviceOperationMode); dp != nil {
+		// DEVICE_OPERATION_MODE lives in the MASTER paramset of the
+		// device's channel 0 for the HmIP-RGBW family, so the lookup has
+		// to leave this channel to find it.
+		dp := custom.ParamFromChannelOrDevice(ch, hmenum.ParameterDeviceOperationMode)
+		applyMode := func(next any) {
+			// A read+write ENUM is a Select, whose wire value is the
+			// 0-based index; asserting it to a string silently matched
+			// nothing and left the mode unobserved forever.
+			if label, ok := custom.EnumWireLabel(dp, next); ok {
+				r.recordMode(label)
+			}
+		}
+		if dp != nil {
 			subs = append(subs, dp.OnAnyUpdate(func(_, next any) {
 				applyMode(next)
 			}))
@@ -257,14 +265,18 @@ func (r *RGBWLight) recordMode(s string) {
 	r.muMode.Lock()
 	defer r.muMode.Unlock()
 	r.hasMode = true
+	// The wire labels are what the CCU reports and what the reference
+	// implementation matches on (model/custom/light.py,
+	// _DeviceOperationMode): "4_PWM" and "2_TUNABLE_WHITE" carry a
+	// channel-count prefix. Matching the bare words recognised neither.
 	switch s {
-	case "PWM":
+	case "4_PWM":
 		r.current = RGBWModePWM
 	case "RGB":
 		r.current = RGBWModeRGB
 	case "RGBW":
 		r.current = RGBWModeRGBW
-	case "TUNABLE_WHITE":
+	case "2_TUNABLE_WHITE":
 		r.current = RGBWModeTunableWhite
 	default:
 		r.current = RGBWModeUnknown
@@ -396,4 +408,14 @@ func (r *RGBWLight) SetColor(ctx context.Context, hue int32, saturation float64,
 		return errors.New("rgbw: current mode does not support HSV colour")
 	}
 	return r.ColorLight.SetColor(ctx, hue, saturation, priority)
+}
+
+// deviceOperationModeDP resolves DEVICE_OPERATION_MODE for an RGBW
+// channel. The parameter describes the whole device and the CCU reports
+// it on channel 0 only, in the MASTER paramset, as a read+write ENUM —
+// so it resolves to a [generic.Select] on a channel this light does not
+// sit on.
+func deviceOperationModeDP(ch *device.Channel) *generic.Select {
+	dp, _ := custom.ParamFromChannelOrDevice(ch, hmenum.ParameterDeviceOperationMode).(*generic.Select)
+	return dp
 }

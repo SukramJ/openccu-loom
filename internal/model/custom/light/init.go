@@ -179,17 +179,52 @@ func applyGroupLevel(l *Light, ch *device.Channel, rebased custom.RebasedChannel
 	if l == nil || ch == nil {
 		return
 	}
-	fv, ok := rebased.Fields[hmenum.FieldGroupLevel]
-	if !ok {
-		return
+	// The RF families declare GROUP_LEVEL group-wide, mapped to
+	// LEVEL_REAL on this very channel; the HmIP families declare it per
+	// channel, mapped to LEVEL on the group's state channel. Reading only
+	// the group-wide block missed every HmIP device, and both wire
+	// parameters are read-only where they are declared, so asking for a
+	// writable float missed the rest.
+	if fv, ok := rebased.Fields[hmenum.FieldGroupLevel]; ok {
+		if param, _ := custom.ResolveFieldValue(fv); param != "" {
+			if dp := custom.GroupLevelField(ch, param); dp != nil {
+				l.SetGroupLevel(dp)
+				return
+			}
+		}
 	}
-	param, _ := custom.ResolveFieldValue(fv)
-	if param == "" {
-		return
+	for chNo, fields := range rebased.ChannelFields {
+		fv, ok := fields[hmenum.FieldGroupLevel]
+		if !ok {
+			continue
+		}
+		param, _ := custom.ResolveFieldValue(fv)
+		if param == "" {
+			continue
+		}
+		groupCh := siblingChannel(ch, chNo)
+		if groupCh == nil {
+			continue
+		}
+		if dp := custom.GroupLevelField(groupCh, param); dp != nil {
+			l.SetGroupLevel(dp)
+			return
+		}
 	}
-	if dp := custom.FloatField(ch, param); dp != nil {
-		l.SetGroupLevel(dp)
+}
+
+// siblingChannel returns the channel of ch's device carrying number no.
+func siblingChannel(ch *device.Channel, no int) *device.Channel {
+	dev := ch.Device()
+	if dev == nil {
+		return nil
 	}
+	for _, sibling := range dev.Channels() {
+		if sibling.Number == no {
+			return sibling
+		}
+	}
+	return nil
 }
 
 // newDimmerConstructor builds a plain dimmable Light.
@@ -251,8 +286,9 @@ func newRGBWConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) 
 func newEffectLightConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	// The reference CustomDpColorDimmerEffect carries a PROGRAM effect field, so
 	// its has_effects resolves true (the effect list is the PROGRAM value list).
-	el := NewEffectLight(
+	el := newEffectLightOn(
 		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}),
+		programChannel(ch, rebased),
 	)
 	applyGroupLevel(el.Light, ch, rebased)
 	return el, nil
@@ -302,4 +338,24 @@ func newSoundPlayerLEDConstructor(ch *device.Channel, _ custom.RebasedChannelGro
 		Transition:    true,
 		SupportsColor: true,
 	})), nil
+}
+
+// programChannel resolves the channel the profile maps PROGRAM onto. The
+// RF colour dimmers declare it two channels above the light's own, so
+// looking on the light's channel found nothing and the effect list came
+// out empty on every device.
+func programChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) *device.Channel {
+	for chNo, fields := range rebased.ChannelFields {
+		fv, ok := fields[hmenum.FieldProgram]
+		if !ok {
+			continue
+		}
+		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterProgram {
+			continue
+		}
+		if sibling := siblingChannel(ch, chNo); sibling != nil {
+			return sibling
+		}
+	}
+	return ch
 }

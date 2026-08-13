@@ -4,6 +4,8 @@
 package custom
 
 import (
+	"time"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -149,4 +151,42 @@ func SelectField(ch *device.Channel, p hmenum.Parameter) *generic.Select {
 func ActionSelectField(ch *device.Channel, p hmenum.Parameter) *generic.ActionSelect {
 	dp, _ := resolveDP(ch, p).(*generic.ActionSelect)
 	return dp
+}
+
+// GroupLevelDataPoint is the read side of a group-channel level slot.
+//
+// The two wire parameters that fill it have different shapes: HmIP
+// dimmers and covers report the group level as LEVEL on the group's
+// state channel, which is read+write and resolves to a [generic.Float],
+// while the RF families report LEVEL_REAL on the action channel itself,
+// which is read-only and resolves to a [generic.Sensor]. Naming the
+// capability instead of a shape is what keeps both reachable: casting to
+// either concrete type left the slot nil for every device of the other
+// kind — and for both, since the read-only one was never even tried.
+//
+// loom:reachable:reason="the field type of Light.groupLevel and Cover.groupLevel and the return type of GroupLevelField, which the light and cover constructors call on every hydration; an interface reached through its implementations, which the analyzer's type heuristic (reachable only via its own methods) cannot see used"
+type GroupLevelDataPoint interface {
+	Value() (float64, bool)
+	Parameter() hmenum.Parameter
+	ModifiedAt() time.Time
+}
+
+var (
+	_ GroupLevelDataPoint = (*generic.Float)(nil)
+	_ GroupLevelDataPoint = (*generic.Sensor[float64])(nil)
+)
+
+// GroupLevelField returns the channel's group-level data point for
+// parameter p in whichever shape the resolver produced, or nil when the
+// channel does not carry p. The nil is a true nil interface, not a typed
+// nil, so a caller's `!= nil` check means what it says.
+func GroupLevelField(ch *device.Channel, p hmenum.Parameter) GroupLevelDataPoint {
+	switch dp := resolveDP(ch, p).(type) {
+	case *generic.Float:
+		return dp
+	case *generic.Sensor[float64]:
+		return dp
+	default:
+		return nil
+	}
 }

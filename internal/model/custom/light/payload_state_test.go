@@ -256,7 +256,7 @@ func TestRGBWLightStatePayload_TunableWhiteDropsColor(t *testing.T) {
 	t.Parallel()
 	w := &colorStubWriter{}
 	r := newRGBWLightRig(t, "HmIP-RGBW:1", w)
-	r.recordMode("TUNABLE_WHITE")
+	r.recordMode("2_TUNABLE_WHITE")
 
 	r.OnEvent(0.7)
 	r.hue.OnEvent(int32(200))
@@ -285,7 +285,7 @@ func TestRGBWLightStatePayload_PWMSetsBrightnessMode(t *testing.T) {
 	t.Parallel()
 	w := &colorStubWriter{}
 	r := newRGBWLightRig(t, "HmIP-RGBW:1", w)
-	r.recordMode("PWM")
+	r.recordMode("4_PWM")
 
 	r.OnEvent(0.5)
 

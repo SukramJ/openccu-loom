@@ -271,7 +271,7 @@ func TestRGBWLightInvokeMoveToCTRequiresTunableMode(t *testing.T) {
 	ch := newRGBWRig(t, "HmIP-RGBW:4", w, custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true})
 	l := NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true}})
 	// Seed the mode via the wire-side recorder so SetKelvin is allowed.
-	l.recordMode("TUNABLE_WHITE")
+	l.recordMode("2_TUNABLE_WHITE")
 	var rgbw rgbwColorServer
 	for _, s := range l.MatterClusterServers() {
 		if v, ok := s.(rgbwColorServer); ok {
@@ -301,10 +301,10 @@ func TestRGBWLightColorModeFollowsDeviceOperatingMode(t *testing.T) {
 		modeWire string
 		want     uint8
 	}{
-		{"TUNABLE_WHITE", matterColorModeColorTemp},
+		{"2_TUNABLE_WHITE", matterColorModeColorTemp},
 		{"RGB", matterColorModeHueSaturation},
 		{"RGBW", matterColorModeHueSaturation},
-		{"PWM", matterColorModeHueSaturation},
+		{"4_PWM", matterColorModeHueSaturation},
 		// Empty / unset mode resolves to RGBWModeUnknown and must keep
 		// the defensive HS fallback.
 		{"", matterColorModeHueSaturation},
