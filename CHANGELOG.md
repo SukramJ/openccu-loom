@@ -4,6 +4,26 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.59.0]
+
+### Added
+
+- **The bridge can say whether a Matter controller is still talking to
+  it.** `GET /api/v1/matter/sessions` lists every open secure session
+  with two separate ages: when the session last carried traffic in any
+  direction, and when the controller last sent something. The difference
+  is the point. A controller that goes away without closing its session
+  leaves it open and simply stops sending, so the bridge keeps reporting
+  into it — from every other angle that looks healthy, and in the
+  ecosystem it shows up only as entities that quietly stop updating.
+  Each session also reports how many subscriptions ride on it: a
+  commissioned controller holding none is connected but receiving
+  nothing.
+
+  The daemon has tracked all of this internally for the idle-session
+  reaper; none of it could be seen from outside. No key material is
+  exposed. (REST API 5.21.0)
+
 ## [0.58.6]
 
 ### Fixed

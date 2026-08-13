@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.20.0
+  version: 5.21.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5655,6 +5655,35 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MatterStatus" }
 
+  /matter/sessions:
+    get:
+      operationId: listMatterSessions
+      summary: Open Matter sessions with per-session liveness (operator diagnostics)
+      description: |
+        Lists every secure session the bridge currently holds, with when it
+        last carried traffic and how many subscriptions ride on it.
+
+        The two timestamps answer different questions. `last_activity` moves
+        on traffic in either direction; `last_peer_activity` only when the
+        controller sent something. A session whose peer has been quiet while
+        the bridge kept reporting is a controller that went away without
+        closing — the shape that otherwise shows up only as entities going
+        stale in the ecosystem.
+
+        No key material is exposed.
+      tags: [matter]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterSessionList" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /matter/fabrics:
     get:
       operationId: listMatterFabrics
@@ -9734,6 +9763,50 @@ components:
         fabrics:
           type: array
           items: { $ref: "#/components/schemas/MatterFabric" }
+
+    MatterSession:
+      type: object
+      required:
+        [session_id, fabric_index, peer_node_id, local_node_id, is_pase,
+         subscriptions, last_activity, last_peer_activity,
+         idle_seconds, peer_idle_seconds]
+      properties:
+        session_id: { type: integer, minimum: 0, maximum: 65535 }
+        fabric_index:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: "0 for a PASE (commissioning) session"
+        peer_node_id: { type: string, description: "64-bit node id, hex" }
+        local_node_id: { type: string, description: "64-bit node id, hex" }
+        is_pase:
+          type: boolean
+          description: "Commissioning session rather than an operational (CASE) one"
+        subscriptions:
+          type: integer
+          description: "Active subscriptions riding on this session"
+        last_activity:
+          type: string
+          format: date-time
+          description: "Last traffic in either direction"
+        last_peer_activity:
+          type: string
+          format: date-time
+          description: "Last message received from the peer"
+        idle_seconds:
+          type: integer
+          description: "Seconds since last_activity"
+        peer_idle_seconds:
+          type: integer
+          description: "Seconds since last_peer_activity — the controller-liveness signal"
+
+    MatterSessionList:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/MatterSession" }
 
     MatterSetupPayload:
       type: object

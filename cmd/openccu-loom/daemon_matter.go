@@ -124,10 +124,15 @@ func buildMatterAdvertiser(mc config.NorthMatter, logger *slog.Logger) mdns.Adve
 // REST/UI layer wires into the [matterbridge.CommissioningWindowOpener]
 // when ephemeral-window mode is enabled.
 type matterBridgeBundle struct {
-	bridge         *matterbridge.Bridge
-	stop           func()
-	store          *matterstore.Store
-	opMgr          *operational.Manager
+	bridge *matterbridge.Bridge
+	stop   func()
+	store  *matterstore.Store
+	opMgr  *operational.Manager
+	// subMgr is the IM subscription manager. Carried so the REST
+	// diagnostics surface can report how many subscriptions ride on each
+	// session — a commissioned controller holding none looks identical
+	// to a healthy one from every other angle.
+	subMgr         *subscription.Manager
 	opCreds        *mattercore.OperationalCredentials
 	configuredPase *matterbridge.PaseAdapter // nil when ConcurrentPairings is enabled or no passcode is configured
 	rootRefs       rootClusterRefs           // typed handles for daemon-side lifecycle wiring
@@ -970,6 +975,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		stop:           stop,
 		store:          store,
 		opMgr:          opMgr,
+		subMgr:         subMgr,
 		opCreds:        opCreds,
 		configuredPase: configuredPase,
 		rootRefs:       rootRefs,
@@ -2791,6 +2797,7 @@ func mdnsCCUSerials(reg *central.Registry) []string {
 // wireMatterRuntime. All fields are nil when the bridge is disabled.
 type matterWiring struct {
 	fabricStore   handlers.MatterFabricStore
+	sessionLister handlers.MatterSessionLister
 	opener        handlers.MatterCommissioningOpener
 	statusReader  handlers.MatterStatusReader
 	fabricRevoker handlers.MatterFabricRevoker
@@ -3127,6 +3134,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		mfs := bundle.store
 		teardown = bundle.stop
 		wiring.fabricStore = mfs
+		wiring.sessionLister = matterSessionLister{op: bundle.opMgr, sub: bundle.subMgr}
 		wiring.exposureStore = mfs
 		wiring.reassembler = mb
 		// Wire the allowlist checker so the assembler only bridges
@@ -3465,3 +3473,44 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 // address (":8119", "0.0.0.0:8119", "[::]:8119"). Reports ok=false
 // for addresses without a numeric port (e.g. Unix sockets, malformed
 // strings) so the caller can degrade gracefully.
+
+// matterSessionLister joins the two managers that each hold half of the
+// session picture: the operational manager knows which sessions exist
+// and when they last carried traffic, the subscription manager knows
+// what rides on them.
+//
+// Neither half is meaningful alone. A session with recent local activity
+// and a long-idle peer is a controller that went away without closing;
+// a session with no subscriptions is a controller that is connected but
+// receiving nothing. Both states are invisible from the ecosystem side,
+// where they look like entities that quietly stop updating.
+type matterSessionLister struct {
+	op  *operational.Manager
+	sub *subscription.Manager
+}
+
+// MatterSessions implements [handlers.MatterSessionLister].
+func (l matterSessionLister) MatterSessions() []handlers.MatterSessionInfo {
+	if l.op == nil {
+		return nil
+	}
+	var counts map[uint16]int
+	if l.sub != nil {
+		counts = l.sub.CountBySession()
+	}
+	sessions := l.op.Sessions()
+	out := make([]handlers.MatterSessionInfo, 0, len(sessions))
+	for _, s := range sessions {
+		out = append(out, handlers.MatterSessionInfo{
+			SessionID:        s.SessionID,
+			FabricIndex:      s.FabricIndex,
+			PeerNodeID:       s.PeerNodeID,
+			LocalNodeID:      s.LocalNodeID,
+			IsPASE:           s.IsPASE,
+			Subscriptions:    counts[s.SessionID],
+			LastActivity:     s.LastActivity,
+			LastPeerActivity: s.LastPeerActivity,
+		})
+	}
+	return out
+}

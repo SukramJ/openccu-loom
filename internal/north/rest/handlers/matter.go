@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/setup"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
@@ -240,5 +241,88 @@ func MatterFabrics(s MatterFabricStore) http.HandlerFunc {
 			})
 		}
 		JSON(w, http.StatusOK, MatterFabricList{Fabrics: out})
+	}
+}
+
+// MatterSessionInfo is one open secure session as the diagnostics
+// surface reports it. It carries no key material — only identity,
+// liveness and how much the session is being used.
+type MatterSessionInfo struct {
+	SessionID   uint16 `json:"session_id"`
+	FabricIndex uint8  `json:"fabric_index"`
+	PeerNodeID  uint64 `json:"-"`
+	LocalNodeID uint64 `json:"-"`
+	IsPASE      bool   `json:"is_pase"`
+	// Subscriptions counts what rides on this session. A commissioned
+	// controller with none is a controller that is connected but not
+	// listening — a state the ecosystem shows as entities that never
+	// update, with nothing on this side looking wrong.
+	Subscriptions int
+	// LastActivity moves on traffic in either direction,
+	// LastPeerActivity only on what the peer sent.
+	LastActivity     time.Time
+	LastPeerActivity time.Time
+}
+
+// MatterSessionResponse is the wire shape of one session.
+type MatterSessionResponse struct {
+	SessionID        uint16 `json:"session_id"`
+	FabricIndex      uint8  `json:"fabric_index"`
+	PeerNodeID       string `json:"peer_node_id"`
+	LocalNodeID      string `json:"local_node_id"`
+	IsPASE           bool   `json:"is_pase"`
+	Subscriptions    int    `json:"subscriptions"`
+	LastActivity     string `json:"last_activity"`
+	LastPeerActivity string `json:"last_peer_activity"`
+	IdleSeconds      int64  `json:"idle_seconds"`
+	PeerIdleSeconds  int64  `json:"peer_idle_seconds"`
+}
+
+// MatterSessionList is the body of GET /api/v1/matter/sessions.
+type MatterSessionList struct {
+	Sessions []MatterSessionResponse `json:"sessions"`
+}
+
+// MatterSessionLister reports the bridge's open secure sessions.
+// Implemented by the daemon over the operational session manager plus
+// the subscription manager's per-session counts.
+type MatterSessionLister interface {
+	MatterSessions() []MatterSessionInfo
+}
+
+// MatterSessions serves GET /api/v1/matter/sessions.
+//
+// It answers the question the daemon could not answer before: whether a
+// commissioned controller is still talking to the bridge. The per-peer
+// idle age is the load-bearing field — a controller that vanished
+// without closing its session leaves the session open and only stops
+// sending, so local activity keeps moving while peer activity does not.
+func MatterSessions(l MatterSessionLister) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if l == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, req,
+					"Matter bridge not enabled",
+					"north.matter.enabled is false in the daemon config"))
+			return
+		}
+		now := time.Now()
+		infos := l.MatterSessions()
+		out := make([]MatterSessionResponse, 0, len(infos))
+		for _, s := range infos {
+			out = append(out, MatterSessionResponse{
+				SessionID:        s.SessionID,
+				FabricIndex:      s.FabricIndex,
+				PeerNodeID:       fmt.Sprintf("%016X", s.PeerNodeID),
+				LocalNodeID:      fmt.Sprintf("%016X", s.LocalNodeID),
+				IsPASE:           s.IsPASE,
+				Subscriptions:    s.Subscriptions,
+				LastActivity:     s.LastActivity.UTC().Format(time.RFC3339),
+				LastPeerActivity: s.LastPeerActivity.UTC().Format(time.RFC3339),
+				IdleSeconds:      int64(now.Sub(s.LastActivity).Seconds()),
+				PeerIdleSeconds:  int64(now.Sub(s.LastPeerActivity).Seconds()),
+			})
+		}
+		JSON(w, http.StatusOK, MatterSessionList{Sessions: out})
 	}
 }

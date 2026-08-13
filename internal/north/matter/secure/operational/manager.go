@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -1005,4 +1006,67 @@ func (m *Manager) allocateIDLocked() (uint16, error) {
 		}
 	}
 	return 0, ErrSessionExhausted
+}
+
+// SessionInfo is a read-only view of one secure session, for operator
+// diagnostics. It deliberately carries no key material, no attestation
+// challenge and no session object — only what answers "is this
+// controller still talking to us, and when did it last".
+//
+// loom:reachable:reason="returned by Manager.Sessions, which the daemon's matterSessionLister calls on every GET /api/v1/matter/sessions; a data struct whose fields the REST layer copies out, which the analyzer's type heuristic (reachable only via its own methods) cannot see used"
+type SessionInfo struct {
+	// SessionID is the local 16-bit identifier carried in the message
+	// header of every encrypted exchange with this peer.
+	SessionID uint16
+	// FabricIndex is the fabric the session belongs to. Zero means a
+	// PASE session, which exists only during commissioning.
+	FabricIndex uint8
+	// PeerNodeID / LocalNodeID identify the two ends of the session.
+	PeerNodeID  uint64
+	LocalNodeID uint64
+	// IsPASE marks a session from the commissioning handshake rather
+	// than an operational (CASE) one. It survives the fabric adoption
+	// that AddNOC performs, so it stays true for the commissioning
+	// session even once it carries a fabric index.
+	IsPASE bool
+	// LastActivity is when this session last carried traffic in either
+	// direction; LastPeerActivity only counts what the peer sent. The
+	// difference is what distinguishes "we keep reporting into a void"
+	// from "the controller is still there" — an idle peer with recent
+	// local activity is exactly the shape of a controller that went
+	// away without closing its session.
+	LastActivity     time.Time
+	LastPeerActivity time.Time
+}
+
+// Sessions returns a snapshot of every open session, ordered by session
+// id so repeated calls read consistently.
+//
+// It exists because the daemon tracks per-session liveness that nothing
+// could see: the reaper consumed it internally and no operator surface
+// could answer whether a controller was still connected. The snapshot is
+// a copy — callers cannot reach the session keys through it.
+func (m *Manager) Sessions() []SessionInfo {
+	m.mu.RLock()
+	out := make([]SessionInfo, 0, len(m.sessions))
+	for _, e := range m.sessions {
+		if e == nil || e.Session == nil {
+			continue
+		}
+		e.mu.Lock()
+		info := SessionInfo{
+			SessionID:        e.SessionID,
+			FabricIndex:      e.fabricIndex,
+			PeerNodeID:       e.Session.PeerNodeID(),
+			LocalNodeID:      e.Session.LocalNodeID(),
+			IsPASE:           e.isPase,
+			LastActivity:     e.lastActivity,
+			LastPeerActivity: e.lastPeerActivity,
+		}
+		e.mu.Unlock()
+		out = append(out, info)
+	}
+	m.mu.RUnlock()
+	sort.Slice(out, func(i, j int) bool { return out[i].SessionID < out[j].SessionID })
+	return out
 }

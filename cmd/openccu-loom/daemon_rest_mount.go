@@ -368,7 +368,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// bridge's [matterbridge.CommissioningWindowOpener] (reuses
 		// the configured PASE acceptor; ephemeral verifier
 		// generation is a post-0.1.0 follow-up).
-		MatterFabricStore: d.matter.fabricStore,
+		MatterFabricStore:   d.matter.fabricStore,
+		MatterSessionLister: d.matter.sessionLister,
 		// WithDefaults keeps the setup payload aligned with the bridge
 		// runtime: QR / manual code must carry the SAME discriminator the
 		// mDNS record advertises, or commissioners filter the bridge out.
