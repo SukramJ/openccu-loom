@@ -25,6 +25,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   appears on the next snapshot, once the serial is known. Single-CCU
   setups were never affected.
 
+  Announcements already on the broker are cleaned up on the next start:
+  the daemon withdraws the ambiguous ones before re-announcing, so the
+  duplicate that would otherwise appear beside each corrected entity
+  never shows up. Nothing has to be deleted by hand, and other
+  integrations sharing the broker are left untouched.
+
 - **Tunable-white dimmers report and accept a colour temperature.** The
   RF families (HM-LC-DW-WM, HM-DW-WM) have no colour-temperature
   parameter at all: they express the white point as a second dimmer

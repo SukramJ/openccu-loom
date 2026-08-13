@@ -394,6 +394,27 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 			} else if n > 0 {
 				logger.Info("mqtt.retain_cleanup", slog.Int("evicted", n))
 			}
+
+			// Clear discovery configs a previous build published with an
+			// empty CCU-serial slot (`loom__…`). Those ids are ambiguous
+			// across CCUs, and the consumer keys its entity registry on
+			// them: republishing the corrected payload on the same topic
+			// creates a second entity beside the stale one instead of
+			// replacing it. An empty retained payload is what makes the
+			// consumer forget the old identity.
+			//
+			// This runs BEFORE the snapshot, unlike the orphan sweeps
+			// after it: the snapshot is what re-announces these entities
+			// under an id that carries the serial, so the clear has to
+			// come first or it would wipe the payload just written.
+			unscopedCtx, unscopedCancel := context.WithTimeout(ctx, cleanupWindow+8*time.Second)
+			cleared, unscopedErr := mqttBridge.RunUnscopedDiscoveryCleanupOnce(unscopedCtx, cleanupWindow)
+			unscopedCancel()
+			if unscopedErr != nil {
+				logger.Warn("mqtt.unscoped_discovery_cleanup", slog.String("err", unscopedErr.Error()))
+			} else if cleared > 0 {
+				logger.Info("mqtt.unscoped_discovery_cleanup", slog.Int("cleared", cleared))
+			}
 		}
 	}
 
