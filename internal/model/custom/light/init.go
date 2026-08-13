@@ -286,7 +286,7 @@ func newRGBWConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) 
 func newEffectLightConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	// The reference CustomDpColorDimmerEffect carries a PROGRAM effect field, so
 	// its has_effects resolves true (the effect list is the PROGRAM value list).
-	el := NewEffectLightOn(
+	el := newEffectLightOn(
 		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}),
 		programChannel(ch, rebased),
 	)

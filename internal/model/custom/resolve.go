@@ -163,6 +163,8 @@ func ActionSelectField(ch *device.Channel, p hmenum.Parameter) *generic.ActionSe
 // capability instead of a shape is what keeps both reachable: casting to
 // either concrete type left the slot nil for every device of the other
 // kind — and for both, since the read-only one was never even tried.
+//
+// loom:reachable:reason="the field type of Light.groupLevel and Cover.groupLevel and the return type of GroupLevelField, which the light and cover constructors call on every hydration; an interface reached through its implementations, which the analyzer's type heuristic (reachable only via its own methods) cannot see used"
 type GroupLevelDataPoint interface {
 	Value() (float64, bool)
 	Parameter() hmenum.Parameter

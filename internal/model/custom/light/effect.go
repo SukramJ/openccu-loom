@@ -36,11 +36,11 @@ type EffectLight struct {
 // is what the profile's channel-field mapping says; passing nil falls
 // back to the light's own channel.
 func NewEffectLight(cfg Config) *EffectLight {
-	return NewEffectLightOn(cfg, cfg.Channel)
+	return newEffectLightOn(cfg, cfg.Channel)
 }
 
-// NewEffectLightOn is [NewEffectLight] with an explicit PROGRAM channel.
-func NewEffectLightOn(cfg Config, programChannel *device.Channel) *EffectLight {
+// newEffectLightOn is [NewEffectLight] with an explicit PROGRAM channel.
+func newEffectLightOn(cfg Config, programChannel *device.Channel) *EffectLight {
 	cl := NewColorLight(cfg)
 	if programChannel == nil {
 		programChannel = cfg.Channel
