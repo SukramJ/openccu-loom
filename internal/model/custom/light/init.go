@@ -300,9 +300,10 @@ func newEffectLightConstructor(ch *device.Channel, rebased custom.RebasedChannel
 // is 2000–6500 K.
 func newColorTempConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	minK, maxK := kelvinBoundsFromChannel(ch)
-	ctl := NewColorTempLight(
+	ctl := newColorTempLightOn(
 		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true}),
 		minK, maxK,
+		whitePointChannel(ch, rebased),
 	)
 	applyGroupLevel(ctl.Light, ch, rebased)
 	return ctl, nil
@@ -358,4 +359,25 @@ func programChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig
 		}
 	}
 	return ch
+}
+
+// whitePointChannel resolves the channel the profile maps COLOR_LEVEL
+// onto. The RF tunable-white dimmers express their colour temperature as
+// the LEVEL of the channel above the light's own — they carry no
+// COLOR_TEMPERATURE parameter at all — so a light that only looks at its
+// own channel reports no colour temperature on any of them.
+func whitePointChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) *device.Channel {
+	for chNo, fields := range rebased.ChannelFields {
+		fv, ok := fields[hmenum.FieldColorLevel]
+		if !ok {
+			continue
+		}
+		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterLevel {
+			continue
+		}
+		if sibling := siblingChannel(ch, chNo); sibling != nil {
+			return sibling
+		}
+	}
+	return nil
 }
