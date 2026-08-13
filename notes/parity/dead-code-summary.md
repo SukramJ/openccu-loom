@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 67539d03
-HEAD: 67539d03
+Generated: 5e5e386c
+HEAD: 5e5e386c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28281 |
+| Total Exported | 28287 |
 | Reachable | 4999 |
-| Whitelisted | 20308 |
-| **Unreachable** | **2974** |
+| Whitelisted | 20312 |
+| **Unreachable** | **2976** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: 67539d03
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 92 | 48 |
+| internal/central/adapter | 4 | 94 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -99,7 +99,7 @@ HEAD: 67539d03
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 92 | 48 |
+| internal/central/adapter | 4 | 94 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |

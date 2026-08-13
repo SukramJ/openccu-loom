@@ -229,6 +229,45 @@ func (c *CallParameterCollector) Add(dp CollectableDataPoint, value any, order i
 	return nil
 }
 
+// AddParam buffers a bare (channel, paramset, parameter) write that has
+// no data point of its own.
+//
+// The auto-off and ramp parameters are the reason it exists: ON_TIME,
+// RAMP_TIME and their unit companions are write-only side parameters of
+// a switch or dimmer, so they carry no state and no data point — yet
+// they have to travel in the SAME wire call as the value they qualify.
+// Writing them past the collector is what split a bounded switch-on
+// into two radio transmissions, each spending duty-cycle budget the
+// following stop command needs.
+//
+// Because such a parameter has no observable state, no optimistic value
+// is applied and nothing is rolled back for it on failure.
+func (c *CallParameterCollector) AddParam(
+	channelAddress string, paramsetKey hmenum.ParamsetKey, parameter string, value any, order int,
+) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.consumed {
+		return ErrCollectorConsumed
+	}
+	for i := range c.items {
+		it := &c.items[i]
+		if it.paramsetKey == paramsetKey && it.channelAddress == channelAddress &&
+			it.parameter == parameter && it.order == order {
+			it.value = value
+			return nil
+		}
+	}
+	c.items = append(c.items, collectedItem{
+		value:          value,
+		paramsetKey:    paramsetKey,
+		channelAddress: channelAddress,
+		parameter:      parameter,
+		order:          order,
+	})
+	return nil
+}
+
 // Len reports how many sub-sets are currently buffered.
 func (c *CallParameterCollector) Len() int {
 	c.mu.Lock()
@@ -284,6 +323,11 @@ func (c *CallParameterCollector) Send(ctx context.Context) error { //nolint:funl
 	// wire call afterwards.
 	rollbacks := make([]func(), 0, len(items))
 	for _, it := range items {
+		if it.dp == nil {
+			// A bare parameter (AddParam) has no observable state to
+			// apply or roll back.
+			continue
+		}
 		if rb := it.dp.ApplyOptimistic(it.value); rb != nil {
 			rollbacks = append(rollbacks, rb)
 		}
