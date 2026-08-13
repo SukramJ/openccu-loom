@@ -28,7 +28,7 @@ import (
 func TestMatterSessionListerIsWiredFromBothManagers(t *testing.T) {
 	t.Parallel()
 
-	matter := readMatterComposition(t)
+	matter := collapseSpaces(readMatterComposition(t))
 	if !strings.Contains(matter, "wiring.sessionLister = matterSessionLister{") {
 		t.Error("wireMatterRuntime never builds a matterSessionLister — GET /matter/sessions answers 503 " +
 			"on a daemon whose Matter bridge is running")
@@ -40,10 +40,56 @@ func TestMatterSessionListerIsWiredFromBothManagers(t *testing.T) {
 		}
 	}
 
-	mount := readRestMount(t)
+	mount := collapseSpaces(readRestMount(t))
 	if !strings.Contains(mount, "MatterSessionLister: d.matter.sessionLister") {
 		t.Error("the REST router never receives the session lister, so the endpoint stays disabled " +
 			"however well the bridge itself is wired")
+	}
+}
+
+// TestMatterDiagnosticsSurfacesAreWired pins the other three diagnostic
+// surfaces the same way, for the same reason: each answers 503 "Matter
+// bridge not enabled" on a running bridge when its port is unset, which
+// reads as a configuration problem rather than a wiring one.
+func TestMatterDiagnosticsSurfacesAreWired(t *testing.T) {
+	t.Parallel()
+
+	matter := collapseSpaces(readMatterComposition(t))
+	for _, built := range []struct{ what, expr string }{
+		{"mDNS diagnostics", "wiring.mdnsReporter = matterMdnsReporter{"},
+		{"endpoint inspector", "wiring.endpointInspector = matterEndpointInspector{"},
+		{"ecosystem compatibility", "wiring.compatReporter = matterCompatibilityReporter{"},
+	} {
+		if !strings.Contains(matter, built.expr) {
+			t.Errorf("wireMatterRuntime never builds the %s adapter", built.what)
+		}
+	}
+
+	// The mDNS reporter must read the live advertiser rather than the
+	// config: the two diverge exactly when discovery fails, which is the
+	// only situation the endpoint exists for.
+	if !strings.Contains(matter, "adv: bundle.advertiser") {
+		t.Error("the mDNS reporter is not fed from the live advertiser — reporting the configured " +
+			"advertisement would agree with itself in precisely the case that is broken")
+	}
+	// Compatibility needs both halves: fabrics say which ecosystems are
+	// commissioned, the topology says what they are being shown.
+	for _, half := range []string{"fabrics: mfs", "inspector: wiring.endpointInspector"} {
+		if !strings.Contains(matter, half) {
+			t.Errorf("the compatibility reporter is missing its %q source; with one half absent it "+
+				"reports 'no problems' for a combination it cannot see", half)
+		}
+	}
+
+	mount := collapseSpaces(readRestMount(t))
+	for _, port := range []string{
+		"MatterMdnsReporter:",
+		"MatterEndpointInspector:",
+		"MatterCompatibilityReporter:",
+	} {
+		if !strings.Contains(mount, port) {
+			t.Errorf("the REST router never receives %s", port)
+		}
 	}
 }
 
@@ -69,4 +115,25 @@ func readRepoFile(t *testing.T, rel string) string {
 		t.Fatalf("read %s: %v", rel, err)
 	}
 	return string(src)
+}
+
+// collapseSpaces folds runs of spaces and tabs to a single space so a
+// pin matches the code rather than gofmt's column alignment, which
+// shifts whenever a longer field name joins the same struct literal.
+func collapseSpaces(src string) string {
+	var b strings.Builder
+	b.Grow(len(src))
+	prevSpace := false
+	for _, r := range src {
+		if r == ' ' || r == '\t' {
+			if !prevSpace {
+				b.WriteByte(' ')
+			}
+			prevSpace = true
+			continue
+		}
+		prevSpace = false
+		b.WriteRune(r)
+	}
+	return b.String()
 }

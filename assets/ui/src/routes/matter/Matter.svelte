@@ -8,8 +8,9 @@
   import MatterExposureList from "./MatterExposureList.svelte";
   import MatterFabrics from "./MatterFabrics.svelte";
   import MatterPair from "./MatterPair.svelte";
+  import MatterDiagnostics from "./MatterDiagnostics.svelte";
 
-  type Tab = "expose" | "fabrics" | "pair";
+  type Tab = "expose" | "fabrics" | "pair" | "diagnostics";
 
   type Props = {
     subpath?: string;
@@ -20,6 +21,7 @@
   const activeTab = $derived.by<Tab>(() => {
     if (subpath === "/fabrics") return "fabrics";
     if (subpath === "/pair") return "pair";
+    if (subpath === "/diagnostics") return "diagnostics";
     return "expose";
   });
 
@@ -98,7 +100,7 @@
       class="mt-4 flex gap-1 border-b border-slate-200 dark:border-slate-700 overflow-x-auto"
       role="tablist"
     >
-      {#each ([["expose", "#/matter/expose"], ["fabrics", "#/matter/fabrics"], ["pair", "#/matter/pair"]] as const) as [tab, href]}
+      {#each ([["expose", "#/matter/expose"], ["fabrics", "#/matter/fabrics"], ["pair", "#/matter/pair"], ["diagnostics", "#/matter/diagnostics"]] as const) as [tab, href]}
         {@const active = activeTab === tab}
         <a
           {href}
@@ -117,6 +119,8 @@
         <MatterExposureList />
       {:else if activeTab === "fabrics"}
         <MatterFabrics />
+      {:else if activeTab === "diagnostics"}
+        <MatterDiagnostics />
       {:else}
         <MatterPair />
       {/if}

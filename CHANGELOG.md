@@ -8,6 +8,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Matter bridge diagnostics.** Three further views into what the
+  bridge is doing, reachable under **Matter → Diagnostics**:
+
+  *Discovery.* What the bridge actually announces over mDNS, and what
+  would keep a controller from finding it: missing service subtypes
+  (Apple and Google browse through those, so without them the bridge is
+  invisible to both while chip-tool finds it), addresses only reachable
+  inside a container, a commissioning port other than 5540 (Alexa uses
+  no other), an announcement without IPv6. Each of these leaves the
+  daemon looking correct — advertising succeeds and the log says so.
+
+  *Endpoints.* The assembled topology as a controller sees it, with
+  device types and clusters. Until now the only way to look at it was to
+  commission a controller and browse with chip-tool, so every "why is
+  this device missing" question started with a pairing step.
+
+  *Ecosystem compatibility.* Each paired fabric is classified by
+  controller vendor, and the exposed device types are checked against
+  what that ecosystem accepts — a valve Google and Alexa will not show,
+  a leak detector that makes Alexa drop the entire bridge, an endpoint
+  count past where Alexa becomes unreliable. The bridge cannot observe
+  any of this: it exposes the endpoint correctly and the ecosystem
+  silently omits it. (REST API 5.21.0)
+
 - **The bridge can say whether a Matter controller is still talking to
   it.** `GET /api/v1/matter/sessions` lists every open secure session
   with two separate ages: when the session last carried traffic in any
