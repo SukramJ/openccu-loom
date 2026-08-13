@@ -30,7 +30,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a leak detector that makes Alexa drop the entire bridge, an endpoint
   count past where Alexa becomes unreliable. The bridge cannot observe
   any of this: it exposes the endpoint correctly and the ecosystem
-  silently omits it. (REST API 5.21.0)
+  silently omits it. (REST API 5.22.0)
 
 - **The bridge can say whether a Matter controller is still talking to
   it.** `GET /api/v1/matter/sessions` lists every open secure session
