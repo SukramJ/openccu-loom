@@ -194,14 +194,18 @@ func New(cfg Config) *Lock {
 	if cfg.Kind == KindRF {
 		l.rfErrorDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterError)
 	}
+	// DIRECTION is a read-only ENUM reporting which way the motor last
+	// turned. The CCU exposes it on the HM key-matic family (channel 1),
+	// not on the HmIP door locks — the opposite of what the branches
+	// below assumed, which left the field nil on every device. Resolving
+	// it for every kind lets the accessor decide from the wire.
+	l.directionDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterDirection)
 	switch cfg.Kind {
 	case KindIP:
-		// HmIP locks: LOCK_STATE (read-only ENUM) + DIRECTION (read-only ENUM).
+		// HmIP locks: LOCK_STATE (read-only ENUM).
 		l.stateDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterLockState)
-		l.directionDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterDirection)
 	case KindRF:
-		// RF locks: bool STATE only — the CCU does not expose LOCK_STATE /
-		// DIRECTION on these channels.
+		// RF locks: bool STATE only — the CCU exposes no LOCK_STATE here.
 		l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterState)
 	case KindButton:
 		// Button locks: the wire parameter is GLOBAL_BUTTON_LOCK (a

@@ -438,7 +438,7 @@ func TestRGBWLightHASchemaJSON_TunableWhiteMode(t *testing.T) {
 		Writer:       &colorStubWriter{},
 		Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true},
 	})
-	r.recordMode("TUNABLE_WHITE")
+	r.recordMode("2_TUNABLE_WHITE")
 	_, body := r.HADiscoveryPayload(discoveryCtx{})
 
 	modes, _ := body["supported_color_modes"].([]string)
@@ -460,7 +460,7 @@ func TestRGBWLightHASchemaJSON_PWMMode(t *testing.T) {
 		Writer:       &colorStubWriter{},
 		Capabilities: custom.LightCapabilities{Dimmable: true},
 	})
-	r.recordMode("PWM")
+	r.recordMode("4_PWM")
 	_, body := r.HADiscoveryPayload(discoveryCtx{})
 
 	modes, _ := body["supported_color_modes"].([]string)

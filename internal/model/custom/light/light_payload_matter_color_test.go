@@ -264,7 +264,7 @@ func TestRGBWLightStatePayloadModes(t *testing.T) {
 	r := newRGBWLightRigCh(t, "RGBW:1", w, 1)
 
 	// PWM: color must be absent, color_mode=brightness.
-	r.recordMode("PWM")
+	r.recordMode("4_PWM")
 	state, _ := r.State().(*payload.RGBWLightState)
 	if state == nil {
 		t.Fatal("StatePayload must not return nil")
@@ -277,7 +277,7 @@ func TestRGBWLightStatePayloadModes(t *testing.T) {
 	}
 
 	// TunableWhite: inject kelvin, expect color_temp_kelvin.
-	r.recordMode("TUNABLE_WHITE")
+	r.recordMode("2_TUNABLE_WHITE")
 	r.kelvin.OnEvent(int32(3000))
 	state, _ = r.State().(*payload.RGBWLightState)
 	if state == nil {
@@ -305,7 +305,7 @@ func TestRGBWLightStatePayloadModes(t *testing.T) {
 func TestRGBWModeName(t *testing.T) {
 	// rgbwModeName is called by RGBWLight.InfoPayload.
 	w := &colorStubWriter{}
-	for _, mode := range []string{"PWM", "RGB", "RGBW", "TUNABLE_WHITE"} {
+	for _, mode := range []string{"4_PWM", "RGB", "RGBW", "TUNABLE_WHITE"} {
 		r := newRGBWLightRigCh(t, "RGBW:1", w, 1)
 		r.recordMode(mode)
 		info, _ := r.Info().(*payload.RGBWLightInfo)

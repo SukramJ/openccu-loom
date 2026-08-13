@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.58.5
+
+- Version alignment with OpenCCU-Loom 0.58.5. The proxy itself is
+  unchanged; the release makes a siren silenceable again and restores
+  several device values that were missing from every device.
+
 # 0.58.4
 
 - Version alignment with OpenCCU-Loom 0.58.4. The proxy itself is

@@ -482,11 +482,11 @@ func TestRGBWLightModeDispatch(t *testing.T) {
 	}
 
 	// SetColor must fail in PWM mode.
-	modeSensor.OnEvent("PWM")
+	modeSensor.OnEvent("4_PWM")
 	// Drive Subscribe to wire up the mode sensor.
 	unsubscribe := r.Subscribe(ch)
 	defer unsubscribe()
-	modeSensor.OnEvent("PWM")
+	modeSensor.OnEvent("4_PWM")
 
 	if r.Mode() != RGBWModePWM {
 		t.Errorf("after PWM event, mode = %v, want PWM", r.Mode())
@@ -553,10 +553,10 @@ func TestRGBWLightCapabilityPredicates(t *testing.T) {
 		wantColorTempMode bool
 		wantEffects       bool
 	}{
-		{"PWM", false, false, false, false, false},
+		{"4_PWM", false, false, false, false, false},
 		{"RGB", true, true, false, false, true},
 		{"RGBW", true, true, true, false, true},
-		{"TUNABLE_WHITE", false, false, true, true, true},
+		{"2_TUNABLE_WHITE", false, false, true, true, true},
 	} {
 		modeSensor.OnEvent(tc.mode)
 		if got := r.HasColor(); got != tc.wantColor {
@@ -658,7 +658,7 @@ func TestRGBWLightCurrentHsColorReturnsFalseInPWMMode(t *testing.T) {
 	r := NewRGBWLight(Config{Channel: ch, Capabilities: custom.LightCapabilities{Dimmable: true}})
 	unsub := r.Subscribe(ch)
 	defer unsub()
-	modeSensor.OnEvent("PWM")
+	modeSensor.OnEvent("4_PWM")
 
 	_, _, ok := r.CurrentHsColor()
 	if ok {

@@ -71,7 +71,10 @@ func init() {
 			// Wire the BURST_LIMIT_WARNING binary sensor when the channel
 			// exposes the parameter so Write/WriteWithSound can emit a
 			// log warning before dispatching writes.
-			if raw := ch.Parameter(hmenum.ParameterBurstLimitWarning); raw != nil {
+			// BURST_LIMIT_WARNING describes the whole device: HmIP-WRCD
+			// reports it on channel 0, not on the display channel this
+			// custom data point sits on.
+			if raw := custom.ParamFromChannelOrDevice(ch, hmenum.ParameterBurstLimitWarning); raw != nil {
 				if bs, ok := raw.(*generic.BinarySensor); ok {
 					td.SetBurstLimitWarningDP(bs)
 				}

@@ -49,25 +49,20 @@ var customFieldsNeverFilled = map[string]string{
 // filled — the guard reports a listed-but-filled field as an error, so a
 // fix cannot leave a stale claim behind.
 var customFieldsWithAKnownDefect = map[string]string{
-	"light.RGBWLight.mode": "DEVICE_OPERATION_MODE is a MASTER ENUM with OPERATIONS 3 → Select, while the " +
-		"field asks for Sensor[string].",
-	"siren.SoundPlayer.soundfile": "HmIP-MP3P carries SOUNDFILE twice — read-only on channel 1 (→ " +
-		"Sensor[int32]) and read+write on channel 2 (→ Select). The sound player sits on the writable " +
-		"channel, where the Sensor[int32] the field asks for is not what the resolver produced.",
-	"lock.Lock.directionDp": "DIRECTION exists only on the HM key-matic family (ENUM, OPERATIONS 5 → " +
-		"Sensor[int32] on channel 1), but the field is assigned in the LOCK_STATE branch that HmIP door " +
-		"locks take, and those descriptions carry no DIRECTION.",
-	"textdisplay.TextDisplay.burstLimitWarningDP": "HmIP-WRCD reports BURST_LIMIT_WARNING on the " +
-		"maintenance channel 0, while the lookup runs against the display channel.",
-	"light.ColorTempLight.kelvin": "COLOR_TEMPERATURE is INTEGER with OPERATIONS 7 → Integer, which is " +
-		"what the field asks for, but it is absent from the channel the colour-temperature light is " +
-		"built on for every model in the fleet.",
-	"cover.Cover.groupLevel": "assigned through a setter rather than a channel accessor; no production " +
-		"path calls that setter for any model in the fleet.",
-	"light.Light.groupLevel": "assigned through a setter rather than a channel accessor; no production " +
-		"path calls that setter for any model in the fleet.",
-	"light.EffectLight.program": "assigned through a setter rather than a channel accessor; no production " +
-		"path calls that setter for any model in the fleet.",
+	"light.ColorTempLight.kelvin": "wrong parameter for this profile. ColorTempLight is registered for " +
+		"the RF colour-temperature dimmers, and COLOR_TEMPERATURE exists only on the HmIP families " +
+		"(DRG-DALI, LSC, RGBW). The RF dimmers carry COLOR_LEVEL, a 0..1 float the reference converts " +
+		"to kelvin through mireds (aiohomematic CustomDpColorTempDimmer.color_temp_kelvin); this " +
+		"daemon has no COLOR_LEVEL path at all, so colour temperature does not work on those devices.",
+	"cover.Cover.groupLevel": "bound through SetGroupLevel, which no production path calls — the group-channel " +
+		"LEVEL it would carry never reaches GroupBrightness. Either the materialiser has to bind it or " +
+		"the accessor pair is dead weight; that is a decision, not a repair.",
+	"light.Light.groupLevel": "bound through SetGroupLevel, which no production path calls — the group-channel " +
+		"LEVEL it would carry never reaches GroupBrightness. Either the materialiser has to bind it or " +
+		"the accessor pair is dead weight; that is a decision, not a repair.",
+	"light.EffectLight.program": "PROGRAM is INTEGER with OPERATIONS 7 → Integer, which is what the field " +
+		"asks for, and two channels in the fleet carry it — but not the channel the effect light is " +
+		"built on. A channel-scope question, not a shape one.",
 }
 
 // TestEveryCustomDataPointFieldIsFilledBySomeDevice drives the real

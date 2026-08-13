@@ -28,6 +28,69 @@ func ParamFromAnyParamset(ch *device.Channel, p hmenum.Parameter) device.Paramet
 	return ch.MasterParameter(p)
 }
 
+// ParamFromChannelOrDevice is [ParamFromAnyParamset] widened to the
+// device's channel 0.
+//
+// Some parameters describe the whole device rather than one of its
+// channels, and the CCU reports them on channel 0 only: HmIP-RGBW's
+// DEVICE_OPERATION_MODE (MASTER) and HmIP-WRCD's BURST_LIMIT_WARNING
+// are the two in the current fleet. A custom data point sitting on a
+// functional channel finds nothing when it looks for those on its own
+// channel — silently, because the lookup returns nil and the feature
+// behind it simply reports as unsupported.
+func ParamFromChannelOrDevice(ch *device.Channel, p hmenum.Parameter) device.ParameterDataPoint {
+	if dp := ParamFromAnyParamset(ch, p); dp != nil {
+		return dp
+	}
+	if ch == nil {
+		return nil
+	}
+	dev := ch.Device()
+	if dev == nil || ch.Number == 0 {
+		return nil
+	}
+	return ParamFromAnyParamset(dev.Channel(dev.Address+":0"), p)
+}
+
+// EnumWireLabel resolves a value pushed by an ENUM data point to its
+// VALUE_LIST label.
+//
+// The wire value of an ENUM is its 0-based index — a [generic.Select]
+// carries int32, not the label — so a consumer that type-asserts the
+// pushed value to a string gets nothing and never learns why. Passing
+// the value through here keeps the index-to-label rule in one place and
+// accepts the label form too, for the parameters the CCU spells that way.
+func EnumWireLabel(dp device.ParameterDataPoint, value any) (string, bool) {
+	if s, ok := value.(string); ok {
+		return s, s != ""
+	}
+	if dp == nil {
+		return "", false
+	}
+	values := dp.ParameterData().ValueList
+	idx, ok := enumIndexOf(value)
+	if !ok || idx < 0 || idx >= len(values) {
+		return "", false
+	}
+	return values[idx], true
+}
+
+// enumIndexOf narrows the integer forms an ENUM value arrives in.
+func enumIndexOf(value any) (int, bool) {
+	switch v := value.(type) {
+	case int32:
+		return int(v), true
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
 // RawValuer is the minimal "snapshot of the wire DP's last observed
 // value" interface needed by [ReplayCurrentValue]. Every
 // [device.ParameterDataPoint] satisfies it; the helper takes the

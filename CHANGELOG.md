@@ -4,9 +4,31 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.58.4]
+## [0.58.5]
 
 ### Fixed
+
+- **An RGBW light knows which mode it is in.** HmIP-RGBW, HmIP-LSC and
+  HmIP-DRDI3 report their operating mode on the device's channel 0, and
+  the light read it on its own channel — where it does not exist. Three
+  things had to be wrong at once for it to stay unnoticed: the lookup
+  channel, the value shape (the mode is an enum, whose wire value is an
+  index rather than a word), and the two mode names, which carry a
+  channel-count prefix the daemon did not expect. The light therefore
+  fell back to "assume plain brightness" on every device, so a lamp in
+  RGB or tunable-white mode advertised the wrong capabilities and its
+  secondary channels surfaced as entities of their own.
+
+- **A key-matic reports which way it turned.** The lock's direction
+  slot was filled only for HmIP door locks, which do not have it, while
+  the HM key-matic family — which does — took the branch that skipped
+  it.
+
+- **The sound player reads its selected sound file, and the display its
+  burst-limit warning.** The sound file is writable on the player's own
+  channel, so it never matched the read-only shape the code looked for;
+  the burst-limit warning sits on the device's channel 0, not on the
+  display channel.
 
 - **A siren can be silenced again, and sounds a defined alarm.** The two
   alarm-selection parameters are write-only ENUMs on the wire, so the
@@ -24,6 +46,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   found: the smoke detector's command, the garage door's command, the
   sound player's repetitions, and the sound-LED's repetitions and
   on-time list. Their state changes reach the north-bound planes again.
+
+## [0.58.4]
+
+### Fixed
 
 - **A parameter no longer arrives in Home Assistant under two different
   names.** The same data point was called "Frostschutz" over the REST

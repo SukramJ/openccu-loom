@@ -1026,6 +1026,18 @@ func TestSmokeSirenReadSecondaryAlarmWarning(t *testing.T) {
 // resulting raw index as a wire event — mirrors how the resolver projects a
 // read-only ENUM parameter (SOUNDFILE, DIRECTION) onto an index-valued
 // Sensor[int32].
+// fireSelect drives a read+write ENUM (a Select) by label.
+func fireSelect(t *testing.T, dp *generic.Select, label string) {
+	t.Helper()
+	for i, v := range dp.ParameterData().ValueList {
+		if v == label {
+			dp.OnEvent(int32(i)) //nolint:gosec // VALUE_LIST index
+			return
+		}
+	}
+	t.Fatalf("label %q not in VALUE_LIST", label)
+}
+
 func fireEnum(t *testing.T, dp *generic.Sensor[int32], label string) {
 	t.Helper()
 	idx, ok := custom.EnumLabelIndex(dp, label)
@@ -1135,7 +1147,9 @@ func TestSoundPlayerCurrentSoundfile(t *testing.T) {
 	// Get the soundfile DP from the channel directly; drive it.
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P0001"})
 	ch := d.AddChannel("MP3P0001:2", 2, "AUDIO", hmenum.ParamsetKeyValues)
-	sfDP := generic.NewIntegerSensor(generic.Spec{
+	// HmIP-MP3P reports SOUNDFILE as a read+write ENUM on the sound
+	// player's own channel 2, which resolves to a Select.
+	sfDP := generic.NewSelect(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "MP3P0001:2",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
@@ -1143,13 +1157,13 @@ func TestSoundPlayerCurrentSoundfile(t *testing.T) {
 		},
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
-			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
 			ValueList:  []string{"SOUNDFILE_042"},
 		},
 	})
 	ch.Put(sfDP)
 	sp2 := NewSoundPlayer(SoundPlayerConfig{Channel: ch, Writer: &stubWriter{}})
-	fireEnum(t, sfDP, "SOUNDFILE_042")
+	fireSelect(t, sfDP, "SOUNDFILE_042")
 	sf, obs2 := sp2.CurrentSoundfile()
 	if !obs2 || sf != "SOUNDFILE_042" {
 		t.Errorf("CurrentSoundfile = %q obs=%v, want (SOUNDFILE_042, true)", sf, obs2)
