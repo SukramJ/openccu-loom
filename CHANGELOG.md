@@ -4,49 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.59.0]
-
-### Added
-
-- **Matter bridge diagnostics.** Three further views into what the
-  bridge is doing, reachable under **Matter → Diagnostics**:
-
-  *Discovery.* What the bridge actually announces over mDNS, and what
-  would keep a controller from finding it: missing service subtypes
-  (Apple and Google browse through those, so without them the bridge is
-  invisible to both while chip-tool finds it), addresses only reachable
-  inside a container, a commissioning port other than 5540 (Alexa uses
-  no other), an announcement without IPv6. Each of these leaves the
-  daemon looking correct — advertising succeeds and the log says so.
-
-  *Endpoints.* The assembled topology as a controller sees it, with
-  device types and clusters. Until now the only way to look at it was to
-  commission a controller and browse with chip-tool, so every "why is
-  this device missing" question started with a pairing step.
-
-  *Ecosystem compatibility.* Each paired fabric is classified by
-  controller vendor, and the exposed device types are checked against
-  what that ecosystem accepts — a valve Google and Alexa will not show,
-  a leak detector that makes Alexa drop the entire bridge, an endpoint
-  count past where Alexa becomes unreliable. The bridge cannot observe
-  any of this: it exposes the endpoint correctly and the ecosystem
-  silently omits it. (REST API 5.22.0)
-
-- **The bridge can say whether a Matter controller is still talking to
-  it.** `GET /api/v1/matter/sessions` lists every open secure session
-  with two separate ages: when the session last carried traffic in any
-  direction, and when the controller last sent something. The difference
-  is the point. A controller that goes away without closing its session
-  leaves it open and simply stops sending, so the bridge keeps reporting
-  into it — from every other angle that looks healthy, and in the
-  ecosystem it shows up only as entities that quietly stop updating.
-  Each session also reports how many subscriptions ride on it: a
-  commissioned controller holding none is connected but receiving
-  nothing.
-
-  The daemon has tracked all of this internally for the idle-session
-  reaper; none of it could be seen from outside. No key material is
-  exposed. (REST API 5.21.0)
+## [Unreleased]
 
 ### Fixed
 
@@ -184,6 +142,51 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   gone. The offline clear now exits 1 and names every store that
   failed, matching what the daemon-side clear already reports over
   REST.
+
+## [0.59.0]
+
+### Added
+
+- **Matter bridge diagnostics.** Three further views into what the
+  bridge is doing, reachable under **Matter → Diagnostics**:
+
+  *Discovery.* What the bridge actually announces over mDNS, and what
+  would keep a controller from finding it: missing service subtypes
+  (Apple and Google browse through those, so without them the bridge is
+  invisible to both while chip-tool finds it), addresses only reachable
+  inside a container, a commissioning port other than 5540 (Alexa uses
+  no other), an announcement without IPv6. Each of these leaves the
+  daemon looking correct — advertising succeeds and the log says so.
+
+  *Endpoints.* The assembled topology as a controller sees it, with
+  device types and clusters. Until now the only way to look at it was to
+  commission a controller and browse with chip-tool, so every "why is
+  this device missing" question started with a pairing step.
+
+  *Ecosystem compatibility.* Each paired fabric is classified by
+  controller vendor, and the exposed device types are checked against
+  what that ecosystem accepts — a valve Google and Alexa will not show,
+  a leak detector that makes Alexa drop the entire bridge, an endpoint
+  count past where Alexa becomes unreliable. The bridge cannot observe
+  any of this: it exposes the endpoint correctly and the ecosystem
+  silently omits it. (REST API 5.22.0)
+
+- **The bridge can say whether a Matter controller is still talking to
+  it.** `GET /api/v1/matter/sessions` lists every open secure session
+  with two separate ages: when the session last carried traffic in any
+  direction, and when the controller last sent something. The difference
+  is the point. A controller that goes away without closing its session
+  leaves it open and simply stops sending, so the bridge keeps reporting
+  into it — from every other angle that looks healthy, and in the
+  ecosystem it shows up only as entities that quietly stop updating.
+  Each session also reports how many subscriptions ride on it: a
+  commissioned controller holding none is connected but receiving
+  nothing.
+
+  The daemon has tracked all of this internally for the idle-session
+  reaper; none of it could be seen from outside. No key material is
+  exposed. (REST API 5.21.0)
+
 
 ## [0.58.6]
 
