@@ -365,6 +365,21 @@ func (b *TopicBuilder) systemTopic(centralName, metric string) string {
 	return b.Base + "/" + naming.TopicSafe(centralName) + "/system/" + metric
 }
 
+// systemMetricTopics returns the retained topics of all central-wide
+// metric sensors of one central.
+//
+// One list so a caller that reasons about the group as a whole — the
+// retained-orphan sweep, which has to tell a retired spelling of these
+// topics from a live one — cannot enumerate a different set than the
+// publishers do.
+func (b *TopicBuilder) systemMetricTopics(centralName string) []string {
+	return []string{
+		b.HubSystemHealthScore(centralName),
+		b.HubConnectionLatency(centralName),
+		b.HubLastEventAge(centralName),
+	}
+}
+
 // HubUpdate is the retained firmware-update state topic
 // (`<base>/<central>/hub/update`). Matches the state_topic in
 // BuildHubUpdateDiscovery.

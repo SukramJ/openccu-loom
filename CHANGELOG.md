@@ -1131,6 +1131,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   session matched every rule written for the previous controller's
   group.
 
+- **The frozen health-score, latency and last-event-age topics of a
+  renamed CCU subtree are cleaned up.** The three central-wide metric
+  sensors used to lower-case the CCU name into their topic while every
+  other topic on the plane escapes it; correcting that left the values on
+  the old topics behind, retained on the broker and never updated again,
+  so a dashboard or automation subscribing them kept reading a health
+  score from the previous build. The opt-in retained-cleanup pass now
+  clears them — but only where the two spellings actually differ. For a
+  CCU whose name needs no escaping the old and the new topic are the same
+  string, and for those deployments (and for any topic another configured
+  CCU publishes to) the pass does nothing at all, so no live value is
+  ever blanked.
+
 ## [0.59.0]
 
 ### Added

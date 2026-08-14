@@ -20,11 +20,19 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 
-func bridgeHealthSupplier(cfg *config.Config, startedAt time.Time) func() map[string]any {
-	centrals := make([]string, 0, len(cfg.Centrals))
+// configuredCentralNames returns the names of every configured central,
+// in configuration order. The list is the DB-overlaid one, so a CCU the
+// operator adopted through the SPA is included.
+func configuredCentralNames(cfg *config.Config) []string {
+	names := make([]string, 0, len(cfg.Centrals))
 	for i := range cfg.Centrals {
-		centrals = append(centrals, cfg.Centrals[i].Name)
+		names = append(names, cfg.Centrals[i].Name)
 	}
+	return names
+}
+
+func bridgeHealthSupplier(cfg *config.Config, startedAt time.Time) func() map[string]any {
+	centrals := configuredCentralNames(cfg)
 	return func() map[string]any {
 		return map[string]any{
 			"version":    build.Version,

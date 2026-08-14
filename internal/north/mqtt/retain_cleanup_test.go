@@ -616,3 +616,137 @@ func TestRunRawOrphanCleanupOnceSweepsTheTopicsTheBridgeWrote(t *testing.T) {
 		t.Fatalf("evicted = %v, want [%s]", evicted, orphanTopic)
 	}
 }
+
+// retiredMetricSpellings returns the three central-wide metric topics as
+// the build before the escaping fix wrote them: the central segment
+// lower-cased instead of [naming.TopicSafe]-escaped. Spelled out here
+// because no production code produces this shape any more — it exists
+// only in the retained stores of deployments that ran that build.
+func retiredMetricSpellings(base, centralName string) []string {
+	segment := strings.ToLower(centralName)
+	return []string{
+		base + "/" + segment + "/system/health_score",
+		base + "/" + segment + "/system/latency",
+		base + "/" + segment + "/system/last_event_age",
+	}
+}
+
+// TestRunRetainCleanupOnceClearsTheRetiredMetricSpelling pins that the
+// opt-in sweep clears the metric topics the escaping fix orphaned.
+//
+// The three central-wide metric sensors used to lower-case the central
+// segment while every other topic on the plane escapes it. For a CCU
+// whose name the escaping rewrites, the values on the old topics are
+// frozen at the moment of the upgrade and no publisher will ever touch
+// them again — a consumer subscribing the base wildcard keeps reading a
+// health score from the previous build forever.
+func TestRunRetainCleanupOnceClearsTheRetiredMetricSpelling(t *testing.T) {
+	t.Parallel()
+
+	const (
+		base    = "openccu-loom"
+		central = "Haus CCÜ"
+	)
+	topics := NewTopicBuilder(base)
+	live := []string{
+		topics.HubSystemHealthScore(central),
+		topics.HubConnectionLatency(central),
+		topics.HubLastEventAge(central),
+	}
+	retired := retiredMetricSpellings(base, central)
+	if retired[0] == live[0] {
+		t.Fatalf("fixture central %q is invariant under the escaping and cannot detect the orphan", central)
+	}
+
+	retained := make([]retainedMsg, 0, len(live)+len(retired))
+	for _, topic := range append(append([]string{}, live...), retired...) {
+		retained = append(retained, retainedMsg{topic: topic, payload: []byte(`{"value":42}`)})
+	}
+	mc := &mockRetainClient{retained: retained}
+	b := NewBridge(BridgeConfig{
+		Base:         base,
+		CentralName:  central,
+		CentralNames: []string{central},
+		RawEnabled:   true,
+	}, mc)
+
+	n, err := b.RunRetainCleanupOnce(context.Background(), 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunRetainCleanupOnce: %v", err)
+	}
+	if n != len(retired) {
+		t.Fatalf("evicted = %d, want %d — the orphaned metric topics keep serving a value from the previous build", n, len(retired))
+	}
+	evicted := make(map[string]bool)
+	for _, topic := range mc.evicted() {
+		evicted[topic] = true
+	}
+	for _, topic := range retired {
+		if !evicted[topic] {
+			t.Errorf("retired metric topic %q survived the sweep", topic)
+		}
+	}
+	for _, topic := range live {
+		if evicted[topic] {
+			t.Errorf("the sweep cleared the live metric topic %q", topic)
+		}
+	}
+}
+
+// TestRunRetainCleanupOnceKeepsMetricTopicsTheEscapingNeverMoved is the
+// data-loss guard on the sweep above.
+//
+// For a CCU whose name the escaping leaves alone — every plain
+// lower-case ASCII name, which is the common case — the "old" spelling
+// and the current one are the identical topic. An unguarded sweep would
+// blank the live health score, latency and last-event-age of exactly the
+// deployments the rename never affected. The multi-CCU row covers the
+// same collision across centrals: one CCU's retired spelling is another
+// CCU's live topic.
+func TestRunRetainCleanupOnceKeepsMetricTopicsTheEscapingNeverMoved(t *testing.T) {
+	t.Parallel()
+
+	const base = "openccu-loom"
+	for _, tc := range []struct {
+		name     string
+		centrals []string
+		// owner is the central whose live metric topics the sweep must
+		// leave untouched.
+		owner string
+	}{
+		{name: "name unchanged by the escaping", centrals: []string{"ccu1"}, owner: "ccu1"},
+		{name: "another central's live topics", centrals: []string{"CCU1", "ccu1"}, owner: "ccu1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			topics := NewTopicBuilder(base)
+			live := []string{
+				topics.HubSystemHealthScore(tc.owner),
+				topics.HubConnectionLatency(tc.owner),
+				topics.HubLastEventAge(tc.owner),
+			}
+			retained := make([]retainedMsg, 0, len(live))
+			for _, topic := range live {
+				retained = append(retained, retainedMsg{topic: topic, payload: []byte(`{"value":42}`)})
+			}
+			mc := &mockRetainClient{retained: retained}
+			b := NewBridge(BridgeConfig{
+				Base:         base,
+				CentralName:  tc.centrals[0],
+				CentralNames: tc.centrals,
+				RawEnabled:   true,
+			}, mc)
+
+			n, err := b.RunRetainCleanupOnce(context.Background(), 50*time.Millisecond)
+			if err != nil {
+				t.Fatalf("RunRetainCleanupOnce: %v", err)
+			}
+			if n != 0 {
+				t.Fatalf("evicted = %d, want 0 — the sweep blanked live metric values", n)
+			}
+			if cleared := mc.evicted(); len(cleared) != 0 {
+				t.Fatalf("cleared %v — those are the live metric topics of %q", cleared, tc.owner)
+			}
+		})
+	}
+}

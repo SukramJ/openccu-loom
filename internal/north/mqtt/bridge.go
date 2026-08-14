@@ -60,8 +60,14 @@ type VisibilitySet interface {
 
 // BridgeConfig controls which planes are active and the topic base.
 type BridgeConfig struct {
-	Base                 string
-	CentralName          string
+	Base        string
+	CentralName string
+	// CentralNames lists every configured central, not just the default
+	// one. The retained-orphan sweeps need the whole set: a topic that
+	// carries a retired spelling of one CCU's name can be the live topic
+	// of another CCU, and clearing it would blank a value the daemon
+	// still publishes. Empty falls back to CentralName.
+	CentralNames         []string
 	RawEnabled           bool
 	HADiscoveryEnabled   bool
 	QoS                  QoSProfile
@@ -1297,6 +1303,24 @@ func (b *Bridge) resolvedCentral(centralName string) string {
 		return centralName
 	}
 	return b.cfg.CentralName
+}
+
+// cleanupCentralNames returns every central the retained sweeps have to
+// reason about: the full configured set when the composition root wired
+// it, otherwise the bridge's default central alone.
+//
+// The fallback keeps a single-CCU deployment covered, and it stays safe
+// for a multi-CCU one: a candidate topic is only ever cleared when it is
+// no configured central's live topic, so a shorter list clears less, not
+// more.
+func (b *Bridge) cleanupCentralNames() []string {
+	if len(b.cfg.CentralNames) > 0 {
+		return b.cfg.CentralNames
+	}
+	if b.cfg.CentralName != "" {
+		return []string{b.cfg.CentralName}
+	}
+	return nil
 }
 
 // EvictState publishes an empty retained payload (nil / zero bytes)
