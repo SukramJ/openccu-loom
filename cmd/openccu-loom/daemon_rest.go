@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -26,10 +27,16 @@ import (
 // composition root (audit persistence, shared SQLite stores, the
 // in-memory auth stores) and threaded through unchanged.
 type restWiringDeps struct {
-	cfg           *config.Config
-	logger        *slog.Logger
-	reg           *central.Registry
-	auditBuf      *audit.Buffer
+	cfg      *config.Config
+	logger   *slog.Logger
+	reg      *central.Registry
+	auditBuf *audit.Buffer
+	// auditRec is the recorder the durable audit trail is written through
+	// (the buffer alone when no database opened). Every admin-grade surface
+	// records through it; the raw auditBuf reaches only the in-memory ring,
+	// which the audit read path stops consulting the moment SQLite is
+	// present.
+	auditRec      audit.Recorder
 	auditDB       *gosql.DB
 	healthTracker *health.Tracker
 	configStore   *configstore.Store
@@ -40,6 +47,11 @@ type restWiringDeps struct {
 	users         *auth.MemoryUserStore
 	tokens        *auth.MemoryTokenStore
 	sessions      *auth.SessionStore
+	// wsHub is the live WebSocket hub. This phase re-registers the chained
+	// token store on it, because the in-band {op:"reauth"} frame resolves
+	// through the hub's own store and the boot-time registration knows only
+	// the YAML-seeded in-memory tokens.
+	wsHub *ws.Hub
 	// authMw and sessionResolve are the auth middleware + session
 	// resolver built by the auth phase. When SQLite persistence is
 	// available this phase swaps authMw for the chained stores and
@@ -186,11 +198,21 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 		// an ungated rebuild would discard `basic_enabled: false` /
 		// `bearer_enabled: false` in essentially every deployment and
 		// keep serving the scheme the operator switched off.
+		chainedTokens := auth.ChainedTokenStore{Primary: d.sqTokens, Secondary: d.tokens}
 		authMw = gatedAuthMiddleware(
 			cfg,
 			loginChainWithCCU(d.sqUsers, d.users, ccuStore, ccuPrimary),
-			auth.ChainedTokenStore{Primary: d.sqTokens, Secondary: d.tokens},
+			chainedTokens,
 		)
+		// The WebSocket hub resolves the in-band {op:"reauth"} token through
+		// its own store, and it was handed the in-memory one built from the
+		// YAML `auth.tokens` map. Every token the operator mints through the
+		// admin surface lives only in SQLite, so it authenticated the upgrade
+		// (which goes through the chain above) and then failed reauth, which
+		// drops the connection. Register the same chain here.
+		if d.wsHub != nil && cfg.North.REST.Auth.BearerAuthEnabled() {
+			d.wsHub.SetTokenStore(chainedTokens)
+		}
 		// Re-bind the resolver after swapping the middleware so the
 		// REST chain picks up the chained stores. The HA Ingress
 		// passthrough (ADR 0044) is the INNERMOST resolver so real
@@ -224,12 +246,24 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	secureCookie := cfg.North.REST.TLSEnabled() ||
 		cfg.North.REST.CSRFSecure ||
 		strings.HasPrefix(strings.ToLower(cfg.North.REST.PublicURL), "https://")
+	// The token create/revoke entries go through the durable recorder, not
+	// the raw ring: with a database present the audit read path serves
+	// exclusively from SQL, so a buffer-only entry is invisible on
+	// GET /api/v1/audit and gone entirely after a restart — leaving the
+	// issuance and revocation of a credential with no trace at all.
+	var auditRec audit.Recorder
+	switch {
+	case d.auditRec != nil:
+		auditRec = d.auditRec
+	case d.auditBuf != nil:
+		auditRec = d.auditBuf
+	}
 	restAuth := &handlers.AuthDeps{
 		Users:         d.users,
 		Sessions:      d.sessions,
 		Tokens:        d.tokens,
 		Secure:        secureCookie,
-		AuditRecorder: d.auditBuf,
+		AuditRecorder: auditRec,
 	}
 	// When SQLite-backed user persistence is available, route the
 	// /auth/login resolver through the chained store so

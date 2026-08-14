@@ -479,14 +479,14 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	sessionLookup := matterbridge.NewOperationalSessionLookup(
 		func(id uint16) (*channel.Session, bool) {
 			entry, err := opMgr.Get(id)
-			if err != nil {
+			if err != nil || entry == nil {
 				return nil, false
 			}
 			return entry.Session, true
 		},
 	).WithFabricResolver(func(id uint16) (uint8, bool) {
 		entry, err := opMgr.Get(id)
-		if err != nil {
+		if err != nil || entry == nil {
 			return 0, false
 		}
 		return entry.FabricIndex(), true

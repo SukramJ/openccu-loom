@@ -51,6 +51,16 @@ type reloadDeps struct {
 	// in production (set only by the guard test). Read once on the boot
 	// goroutine, so it needs no atomic.
 	onNorthBridges func(*northbridge.Registry)
+
+	// onCentralOrchestrator is a test-only observation hook invoked once
+	// during boot, after every per-central hook has been registered on the
+	// live-adopt orchestrator. It lets a wiring test adopt a central through
+	// the orchestrator the composition root actually built — with the hooks
+	// the composition root actually installed — instead of assembling one
+	// itself and choosing its own hook set, which is what let a whole family
+	// of per-central wirings go missing from the adopt path unnoticed. Nil in
+	// production. Read once on the boot goroutine, so it needs no atomic.
+	onCentralOrchestrator func(*centralOrchestrator)
 }
 
 // configAssembler boxes the effective-config assembly function so it can live
@@ -146,6 +156,16 @@ func (d *reloadDeps) NotifyNorthBridges(reg *northbridge.Registry) {
 		return
 	}
 	d.onNorthBridges(reg)
+}
+
+// NotifyCentralOrchestrator invokes the test-only orchestrator observation
+// hook when one is installed. Production installs none, so this is a no-op
+// there.
+func (d *reloadDeps) NotifyCentralOrchestrator(o *centralOrchestrator) {
+	if d == nil || d.onCentralOrchestrator == nil {
+		return
+	}
+	d.onCentralOrchestrator(o)
 }
 
 // SetMQTTSupervisor installs the MQTT supervisor. May be called

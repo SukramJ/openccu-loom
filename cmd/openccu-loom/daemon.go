@@ -192,13 +192,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	// Audit every program run the daemon triggers, so a program reported as
 	// running twice can be attributed to the daemon or ruled out.
-	defer wireProgramExecuteAudit(reg, auditRec, logger)()
+	programAuditCentralHook, programAuditTeardown := wireProgramExecuteAudit(reg, auditRec, logger)
+	defer programAuditTeardown()
 
 	// Seed every central's health tracker (synthetic "started" sample,
 	// primary-interface pin, event-bus / audit / scheduler gauges) and wire
 	// its metrics aggregator. Extracted into seedCentralHealthAndMetrics
 	// (daemon_wiring.go).
-	seedCentralHealthAndMetrics(reg, cfg, auditDurableStats, logger)
+	centralHealthSeed := seedCentralHealthAndMetrics(reg, cfg, auditDurableStats, logger)
 
 	// --- shared infrastructure ---------------------------------
 	si, sharedInfraTeardown := wireSharedInfrastructure(ctx, cfg, logger, reg, deps, channelFlagsOverlay)
@@ -487,6 +488,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.
 	centralOrch.setHubReadyTrigger(sb.hubReadyTrigger)
+	// The health/metrics seed runs before the adopted unit is registered, so
+	// it is installed on its own seam rather than through addCentralHook.
+	centralOrch.setCentralSeed(centralHealthSeed)
 	// Every collaborator that subscribed by walking the registry once at boot
 	// registers a per-central hook here, so a CCU adopted at runtime is wired
 	// like a boot-time one instead of coming up live but unheard. The
@@ -495,8 +499,16 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	centralOrch.addCentralHook(sb.historyCentralHook)
 	centralOrch.addCentralHook(sessionRecorderCentralHook)
 	centralOrch.addCentralHook(incidentCentralHook)
+	centralOrch.addCentralHook(programAuditCentralHook)
 	centralOrch.addCentralHook(func(u *central.Unit) func() {
 		return webhookOutbound.AttachCentral(u)
+	})
+	// `backup.schedule` applies daemon-wide, so an adopted CCU must get the
+	// same scheduler job the boot loop above registered. Job registration has
+	// no unwire — the job dies with the unit's scheduler.
+	centralOrch.addCentralHook(func(u *central.Unit) func() {
+		registerScheduledBackupJobFor(u, cfg, backupAdapter, logger)
+		return nil
 	})
 
 	// --- adapters ----------------------------------------------
@@ -541,6 +553,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		logger:         logger,
 		reg:            reg,
 		auditBuf:       auditBuf,
+		auditRec:       auditRec,
 		auditDB:        auditDB,
 		healthTracker:  healthTracker,
 		configStore:    configStore,
@@ -554,6 +567,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		authMw:         authMw,
 		restResolve:    restResolve,
 		sessionResolve: sessionResolve,
+		wsHub:          wsHub,
 	})
 	restStatusMetrics := rw.statusMetrics
 	restAuth := rw.auth
@@ -712,6 +726,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	centralOrch.setEventSourceCentralHook(func(u *central.Unit) func() {
 		return eventSourceFeed.StartCentral(u)
 	})
+
+	// Adopt-completeness observation point: every per-central hook is now
+	// registered. The guard test adopts through this orchestrator and asserts
+	// a runtime-adopted CCU comes up wired like a boot-time one. No-op in
+	// production (deps/hook nil).
+	deps.NotifyCentralOrchestrator(centralOrch)
 
 	// --- REST --------------------------------------------------
 	// Build + mount the REST router/server (and optional mDNS advertiser).

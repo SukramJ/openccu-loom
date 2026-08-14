@@ -101,6 +101,15 @@ type centralOrchestrator struct {
 	// trigger — indistinguishable from a fleet whose buttons nobody has
 	// pressed, because the feed only walks the registry once at boot.
 	eventSourceHook func(u *central.Unit) (unwire func())
+	// centralSeed primes a fresh unit's health tracker, gauges,
+	// observability recorder and metrics aggregator. Set via
+	// [centralOrchestrator.setCentralSeed].
+	//
+	// It is a field of its own rather than one more entry in extraHooks
+	// because it is the one wiring that must run BEFORE the unit enters the
+	// shared registry: it writes unsynchronised Unit fields the serving
+	// handlers read, and the registry is what makes the unit observable.
+	centralSeed func(u *central.Unit)
 	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
 	// serial resolves. Set via [centralOrchestrator.setHubReadyTrigger] from the
 	// southbound wiring result so a runtime-adopted central publishes its
@@ -227,6 +236,17 @@ func (o *centralOrchestrator) addCentralHook(hook func(u *central.Unit) (unwire 
 	}
 	o.mu.Lock()
 	o.extraHooks = append(o.extraHooks, hook)
+	o.mu.Unlock()
+}
+
+// setCentralSeed installs the per-central health/metrics seed run on every
+// runtime-adopted central before it is registered. Nil-safe on both sides.
+func (o *centralOrchestrator) setCentralSeed(seed func(u *central.Unit)) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.centralSeed = seed
 	o.mu.Unlock()
 }
 
@@ -360,6 +380,16 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	})
 	if err != nil {
 		return fmt.Errorf("central_adopt: new unit %s: %w", cc.Name, err)
+	}
+	// Seed health, gauges, observability and metrics BEFORE the unit becomes
+	// visible in the shared registry — those setters write fields the serving
+	// handlers read without synchronisation, and boot writes them while
+	// nothing is serving yet.
+	o.mu.Lock()
+	seed := o.centralSeed
+	o.mu.Unlock()
+	if seed != nil {
+		seed(unit)
 	}
 	if err := o.reg.Register(unit); err != nil {
 		return fmt.Errorf("central_adopt: register %s: %w", cc.Name, err)

@@ -63,6 +63,43 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Nothing failed and nothing logged, and a daemon restart made all of it
   work — which made the gap read like a transient.
 
+- **A CCU added while the daemon runs is backed up, watched and
+  audited.** Three more wirings that ran once at boot and therefore
+  skipped it: its automatic backup — `backup.schedule` applies
+  daemon-wide, so the configured CCUs kept producing daily backups while
+  the added one produced none and pruned nothing, discoverable only by
+  noticing its backup list stayed empty, typically once a restore was
+  already needed; its health seed, its event-bus, audit and scheduler
+  gauges and its metrics aggregator, so its section of `/health` and the
+  diagnostics dump had nothing in it, which reads like an idle CCU
+  rather than an unwatched one; and the record of every program the
+  daemon runs on it, which is what tells a duplicate execution the
+  daemon sent from one the CCU produced on its own — for that CCU the
+  record was simply empty, while it worked for its neighbours.
+
+- **Issuing and revoking an API token leaves a trace.** Both entries
+  went to the in-memory ring only. With a database present the audit
+  view and its CSV export read exclusively from the database, so
+  `GET /api/v1/audit` returned rows that contained neither, and a
+  restart erased them entirely — the creation and revocation of a
+  credential were the two events with no record at all.
+
+- **A WebSocket connection can refresh its identity with a token from
+  the SPA.** The in-band `reauth` frame resolved the supplied token
+  against the tokens from the configuration file alone. A token minted
+  through the admin surface lives in the database, so it authenticated
+  the connection at upgrade time and was then rejected on refresh, which
+  closes the connection — a credential valid everywhere else dropped the
+  socket.
+
+- **A Matter controller that reuses a session id mid-handshake no longer
+  silences itself.** A session id reserved for an in-flight (or aborted)
+  CASE handshake resolved as an established session with nothing behind
+  it. A controller that echoed the id it read out of Sigma2 in an
+  ordinary encrypted packet made the receive path fault on the absent
+  session; the per-packet recovery swallowed it without a log line, so
+  the only symptom was a controller whose messages stopped arriving.
+
 - **Deleting or disabling a CCU takes effect without a restart.** For a
   CCU the daemon had loaded at boot — the normal case after the
   onboarding wizard, once the daemon has been restarted — `DELETE
