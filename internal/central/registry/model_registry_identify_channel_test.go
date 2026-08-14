@@ -20,7 +20,7 @@ func newIdentifyChannelDevice(address string, deviceIseID int, channelAddress st
 		IseID:     deviceIseID,
 	})
 	ch := d.AddChannel(channelAddress, 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.IseID = channelIseID
+	ch.SetIseID(channelIseID)
 	return d
 }
 

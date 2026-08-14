@@ -345,8 +345,16 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		}
 		d := p.ensureDevice(dd, interfaceID, iface)
 		byAddress[dd.Address] = d
+		// The device registry is keyed by the canonical wire id
+		// (`<central>-<iface>`) — that is what the callback path
+		// (DeviceCoordinator.HandleNewDevices) and every coordinator lookup
+		// use. Registering under the bare interface here made the same device
+		// appear twice after a hot-plug and made every coordinator that
+		// resolves a device by its description key miss it. ProductGroup keeps
+		// the bare enum: it classifies the radio technology, not a registry
+		// key.
 		p.unit.DeviceRegistry.Put(registry.DeviceEntry{
-			Interface:    iface,
+			Interface:    hmenum.Interface(interfaceID),
 			Address:      dd.Address,
 			Model:        dd.Type,
 			ProductGroup: hmenum.ProductGroupForModel(dd.Type, iface),
@@ -363,55 +371,76 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		if !ok {
 			continue
 		}
+		// Build the channel fully BEFORE publishing it on the parent device.
+		// The parent is already in the model registry (first pass), so every
+		// north-bound reader can reach it; a channel installed empty and filled
+		// afterwards is a torn read for those readers, and on a mid-life
+		// re-ingest the replacement channel goes live blank while the previous
+		// one is already gone. [device.Device.PutChannel] takes the device lock
+		// that [device.Device.Channels] reads under, so it is the release edge
+		// for the whole object.
 		chNum := channelNumber(dd.Address)
-		ch := parent.AddChannel(dd.Address, chNum, dd.Type, hmenum.ParamsetKeyValues)
+		ch := device.NewChannel(dd.Address, chNum, dd.Type, hmenum.ParamsetKeyValues)
 		// Carry the raw CCU LINK_SOURCE_ROLES / LINK_TARGET_ROLES onto the
 		// channel so the direct-link role-matching filter can intersect them
-		// without a CCU roundtrip. AddChannel rebuilds a fresh channel on
-		// every (re)ingest, so this re-applies on hot-plug / reconnect.
+		// without a CCU roundtrip. Every (re)ingest rebuilds a fresh channel,
+		// so this re-applies on hot-plug / reconnect.
 		ch.SetLinkRoles([]string(dd.LinkSourceRoles), []string(dd.LinkTargetRoles))
-		// Re-apply the operator per-channel overrides (G12). AddChannel
-		// rebuilds a fresh channel on every (re)ingest, so a hidden/locked
-		// channel would otherwise revert on a reconnect / hot-plug.
+		// Re-apply the operator per-channel overrides (G12) for the same
+		// reason: a hidden/locked channel would otherwise revert on a
+		// reconnect / hot-plug.
 		if p.channelFlags != nil {
 			f := p.channelFlags.Get(p.centralName, dd.Address)
 			ch.SetOperatorFlags(f.Hidden, f.Locked)
 		}
-		if p.names != nil {
-			ch.Name = p.names[dd.Address]
-		}
-		if p.rooms != nil {
-			ch.Rooms = p.rooms[dd.Address]
-		}
-		if p.functions != nil {
-			ch.Functions = p.functions[dd.Address]
-		}
-		// Hot-plugged devices are absent from the bring-up snapshot maps
-		// (names/rooms/functions were pulled once during hub wiring). The
-		// DeviceDetails cache is the living source — refreshed by the
-		// periodic loader and force-refreshed before each hot-plug ingest —
-		// so fall back to it whenever the snapshot has no entry.
-		if p.unit.DeviceDetails != nil {
-			if ch.Name == "" {
-				ch.Name = p.unit.DeviceDetails.GetName(dd.Address)
-			}
-			if len(ch.Rooms) == 0 {
-				ch.Rooms = p.unit.DeviceDetails.GetChannelRooms(dd.Address)
-			}
-			if len(ch.Functions) == 0 {
-				ch.Functions = p.unit.DeviceDetails.GetFunctions(dd.Address)
-			}
-		}
+		name, rooms, functions := p.channelAssignments(dd.Address)
+		ch.SetName(name)
+		ch.SetRooms(rooms)
+		ch.SetFunctions(functions)
 		// Stamp the channel's CCU ise_id from the DeviceDetails cache (seeded
 		// in WireHub before ingest). It lets a system variable / program whose
 		// name carries the channel identifier be linked to this channel — see
 		// [device.Device.IdentifyChannel] and the Python reference's
 		// `model/device.py:1012` (Channel.ise_id via get_address_id).
 		if p.unit.DeviceDetails != nil {
-			ch.IseID = p.unit.DeviceDetails.GetAddressID(dd.Address)
+			ch.SetIseID(p.unit.DeviceDetails.GetAddressID(dd.Address))
 		}
+		parent.PutChannel(ch)
 	}
 	return ctx.Err()
+}
+
+// channelAssignments resolves a channel's operator-assigned name, rooms and
+// functions.
+//
+// Hot-plugged devices are absent from the bring-up snapshot maps (names /
+// rooms / functions were pulled once during hub wiring). The DeviceDetails
+// cache is the living source — refreshed by the periodic loader and
+// force-refreshed before each hot-plug ingest — so it fills in whenever the
+// snapshot has no entry.
+func (p *DevicePipeline) channelAssignments(address string) (name string, rooms, functions []string) {
+	if p.names != nil {
+		name = p.names[address]
+	}
+	if p.rooms != nil {
+		rooms = p.rooms[address]
+	}
+	if p.functions != nil {
+		functions = p.functions[address]
+	}
+	if p.unit.DeviceDetails == nil {
+		return name, rooms, functions
+	}
+	if name == "" {
+		name = p.unit.DeviceDetails.GetName(address)
+	}
+	if len(rooms) == 0 {
+		rooms = p.unit.DeviceDetails.GetChannelRooms(address)
+	}
+	if len(functions) == 0 {
+		functions = p.unit.DeviceDetails.GetFunctions(address)
+	}
+	return name, rooms, functions
 }
 
 func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID string, iface hmenum.Interface) *device.Device {

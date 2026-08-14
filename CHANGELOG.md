@@ -119,6 +119,66 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   delivered every event twice — each one acted on twice by MQTT, the
   alarm intent routing and CCU program triggers.
 
+- **Unpairing a device now clears everything it left behind.** The
+  cleanup after a successful unpair deleted the device address under the
+  bare interface name, while the description and paramset caches are keyed
+  by the central-scoped one and hold one entry per channel, not one per
+  device. Nothing matched, so every channel's descriptions survived and
+  the persistence layer was never asked to drop the corresponding rows —
+  which the next start read back and could re-materialise into a device
+  the CCU no longer has.
+
+- **Reloading a device or channel configuration writes where the rest of
+  the daemon reads.** "Reload device config" stored the refreshed
+  descriptions and paramsets under a second, bare key space nothing else
+  looks in: the reloaded data was invisible, duplicate rows were persisted,
+  and the periodic firmware sweep then asked for a southbound backend under
+  that bare name and logged a failure on every run for the life of the
+  daemon. The on-demand link-peer refresh that rides along found no
+  descriptions at all. The same mismatch is fixed in the eager
+  model refresh after a device replacement.
+
+- **Smoke-detector teams can be assigned again.** The team-candidate
+  lookup resolved the target channel under the bare interface name, so
+  `GET /api/v1/devices/{address}/channels/{no}/team-candidates` returned an
+  empty list with HTTP 200 on every CCU and no channel could ever be joined
+  to a team from the UI.
+
+- **A device list served during a CCU reconnect no longer reads
+  half-built channels.** A reconnect or a hot-plug re-ingests the device
+  inventory and rebuilds every channel of a device the REST, MQTT and
+  Matter surfaces are already serving. The channel went into the live
+  device empty and its name, rooms, functions and CCU id were written
+  afterwards, unsynchronised — so a reader that hit that window saw a
+  blank channel, and a concurrent read of the room or function list could
+  return garbage or fault outright. Channels are now finished before they
+  are published, and those four fields are read and written under the
+  lock the channel already had.
+
+- **Snapshot publishing no longer loses track of what it subscribed
+  to.** Every broker reconnect and every CCU that finishes its bring-up
+  runs a snapshot pass, on two different goroutines, and each pass wires
+  live callbacks that shutdown has to release. The bookkeeping was
+  unsynchronised, so concurrent passes overwrote each other's records:
+  the lost callbacks kept publishing into a bridge that had already been
+  torn down, for the rest of the process lifetime.
+
+- **Interface health reflects that the CCU is actually pushing events.**
+  Thirty percent of an interface's health score is how recently it last
+  carried traffic, and the only thing that feeds it was a bus event
+  nothing ever published. A perfectly healthy interface delivering
+  callbacks for hours reported a "last event received" of never and
+  scored 0.70 out of 1.00 permanently. The raw callback path publishes it
+  now, before the unchanged-value filter, because a device re-reporting a
+  stable reading is still a live interface. A build-time guard fails on
+  any future event type that has subscribers but no producer.
+
+- **Device-trigger events carry the CCU they came from.** The event
+  coordinator's central scope was never set, so every device trigger and
+  every raw-parameter trace left the bus unattributed. The WebSocket
+  device-trigger plane derived its entity id from that empty name, which
+  made the ids of two CCUs collide.
+
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle
   and are still attempted while the circuit breaker for a struggling CCU

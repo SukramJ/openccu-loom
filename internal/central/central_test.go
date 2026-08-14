@@ -626,7 +626,7 @@ func TestRenameChannel_UpdatesInMemoryAndPersists(t *testing.T) {
 	if gotAddr != addr+":1" || gotName != "Kitchen Light" {
 		t.Errorf("hook got (%q, %q), want (%q, %q)", gotAddr, gotName, addr+":1", "Kitchen Light")
 	}
-	if got := d.Channel(addr + ":1").Name; got != "Kitchen Light" {
+	if got := d.Channel(addr + ":1").Name(); got != "Kitchen Light" {
 		t.Errorf("in-memory channel name = %q, want %q", got, "Kitchen Light")
 	}
 }
@@ -649,7 +649,7 @@ func TestRenameChannel_NoFn_InMemoryOnlySucceeds(t *testing.T) {
 	if err := c.RenameChannel(context.Background(), addr+":1", "Living Room"); err != nil {
 		t.Fatalf("RenameChannel with no hook: %v", err)
 	}
-	if got := d.Channel(addr + ":1").Name; got != "Living Room" {
+	if got := d.Channel(addr + ":1").Name(); got != "Living Room" {
 		t.Errorf("in-memory channel name = %q, want %q", got, "Living Room")
 	}
 }
@@ -703,7 +703,7 @@ func TestRenameChannel_UnknownChannelOnKnownDevice_SkipsInMemory(t *testing.T) {
 		t.Errorf("hook address = %q, want %q", gotAddr, addr+":99")
 	}
 	// The real channel must be untouched.
-	if got := d.Channel(addr + ":1").Name; got != "" {
+	if got := d.Channel(addr + ":1").Name(); got != "" {
 		t.Errorf("unrelated channel name mutated: %q", got)
 	}
 }

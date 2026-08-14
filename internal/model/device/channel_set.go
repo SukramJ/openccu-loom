@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -155,6 +156,75 @@ type SetOptions struct {
 	// (e.g. "rest:PUT /devices/.../value", "mqtt:command", "ws:put").
 	// Default empty.
 	Source string
+}
+
+// --- Operator-assigned identity (name / rooms / functions / ise-id) -----
+//
+// These four carry CCU-owned operator state. The ingest pipeline seeds them
+// while it builds the channel, and both the pipeline (on reconnect / hot-plug)
+// and the rename path rewrite them while north-bound readers are serving
+// requests, so every access goes through mu. The getters hand out copies of
+// the slices: callers such as the alarm candidate scan and the payload
+// assembler keep the result well past the call, and must not alias state the
+// next re-ingest overwrites in place.
+
+// Name returns the CCU-assigned channel name, or "" when the operator
+// configured none.
+func (c *Channel) Name() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.name
+}
+
+// SetName replaces the CCU-assigned channel name.
+func (c *Channel) SetName(name string) {
+	c.mu.Lock()
+	c.name = name
+	c.mu.Unlock()
+}
+
+// Rooms returns a copy of the channel's assigned room names.
+func (c *Channel) Rooms() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return slices.Clone(c.rooms)
+}
+
+// SetRooms replaces the channel's assigned room names with a copy of rooms.
+func (c *Channel) SetRooms(rooms []string) {
+	c.mu.Lock()
+	c.rooms = slices.Clone(rooms)
+	c.mu.Unlock()
+}
+
+// Functions returns a copy of the channel's assigned function (Gewerk) names.
+func (c *Channel) Functions() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return slices.Clone(c.functions)
+}
+
+// SetFunctions replaces the channel's assigned function names with a copy of
+// functions.
+func (c *Channel) SetFunctions(functions []string) {
+	c.mu.Lock()
+	c.functions = slices.Clone(functions)
+	c.mu.Unlock()
+}
+
+// IseID returns the CCU-internal numeric identifier of this channel, or 0
+// when the device-details cache had no entry for its address.
+func (c *Channel) IseID() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.iseID
+}
+
+// SetIseID replaces the CCU-internal numeric identifier of this channel.
+func (c *Channel) SetIseID(id int) {
+	c.mu.Lock()
+	c.iseID = id
+	c.mu.Unlock()
 }
 
 // --- Wire dependency installers ----------------------------------------

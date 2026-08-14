@@ -73,8 +73,8 @@ func channelAssignmentFixture(t *testing.T, centralName, deviceAddr string) (reg
 	})
 	ch1 = dev.AddChannel(deviceAddr+":1", 1, "SWITCH", hmenum.ParamsetKeyValues)
 	ch2 := dev.AddChannel(deviceAddr+":2", 2, "SWITCH", hmenum.ParamsetKeyValues)
-	ch2.Rooms = []string{"Küche"}
-	ch2.Functions = []string{"Heizung"}
+	ch2.SetRooms([]string{"Küche"})
+	ch2.SetFunctions([]string{"Heizung"})
 	c.ModelRegistry.Put(dev)
 	return reg, dev, ch1
 }
@@ -102,8 +102,8 @@ func TestDeviceAdminDomain_SetChannelRooms_HappyPath(t *testing.T) {
 	if mutator.lastAddress != "DEV020:1" {
 		t.Fatalf("expected the CCU write to target the channel address %q, got %q", "DEV020:1", mutator.lastAddress)
 	}
-	if len(ch1.Rooms) != 1 || ch1.Rooms[0] != "Wohnzimmer" {
-		t.Fatalf("expected channel Rooms to be stamped to [Wohnzimmer], got %v", ch1.Rooms)
+	if len(ch1.Rooms()) != 1 || ch1.Rooms()[0] != "Wohnzimmer" {
+		t.Fatalf("expected channel Rooms to be stamped to [Wohnzimmer], got %v", ch1.Rooms())
 	}
 	// dev.Rooms recomputes as the sorted union over every channel: channel 1
 	// now carries "Wohnzimmer", channel 2 still carries "Küche".
@@ -173,8 +173,8 @@ func TestDeviceAdminDomain_SetChannelFunctions_HappyPath(t *testing.T) {
 	if mutator.lastAddress != "DEV030:1" {
 		t.Fatalf("expected the CCU write to target the channel address %q, got %q", "DEV030:1", mutator.lastAddress)
 	}
-	if len(ch1.Functions) != 1 || ch1.Functions[0] != "Licht" {
-		t.Fatalf("expected channel Functions to be stamped to [Licht], got %v", ch1.Functions)
+	if len(ch1.Functions()) != 1 || ch1.Functions()[0] != "Licht" {
+		t.Fatalf("expected channel Functions to be stamped to [Licht], got %v", ch1.Functions())
 	}
 	want := []string{"Heizung", "Licht"}
 	if len(dev.Functions) != len(want) {

@@ -47,7 +47,7 @@ func chanWithDevice(t *testing.T) *device.Channel {
 func namedChanWithDevice(t *testing.T, channelName string) *device.Channel {
 	t.Helper()
 	ch := chanWithDevice(t)
-	ch.Name = channelName
+	ch.SetName(channelName)
 	return ch
 }
 

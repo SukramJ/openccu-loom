@@ -76,7 +76,7 @@ func (c *Channel) DataPointName(parameter string) string {
 	if c.device != nil {
 		deviceName = c.device.Name
 	}
-	channelName := normaliseChannelName(deviceName, c.Name)
+	channelName := normaliseChannelName(deviceName, c.Name())
 	if channelName != "" && parameter != "" {
 		return strings.TrimSpace(channelName + " " + parameter)
 	}

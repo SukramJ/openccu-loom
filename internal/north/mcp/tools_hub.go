@@ -450,7 +450,7 @@ func registerListChannels(s *mcpsdk.Server, d Deps) {
 				Number:      ch.Number,
 				Type:        ch.Type,
 				TypeLabel:   ch.TypeTranslation(),
-				Name:        ch.Name,
+				Name:        ch.Name(),
 				Room:        ch.Room(),
 				ParamsetKey: string(ch.ParamsetIn),
 				DataPoints:  len(ch.DataPoints()),

@@ -76,7 +76,8 @@ const ChannelNumberDevice = -1
 //   - mu (sync.RWMutex) — guards all data-point maps (valuePoints,
 //     masterPoints), the writer/refresher pointers, calculatedDPs,
 //     customDP, genericEvents, eventGroups, weekProfile,
-//     masterRefreshHook, centralName, and typeTranslation.
+//     masterRefreshHook, centralName, typeTranslation, and the
+//     operator-assigned identity (name, rooms, functions, iseID).
 //   - linkPeersMu (sync.RWMutex) — guards linkPeers only. Kept
 //     separate from mu so topology updates do not stall concurrent
 //     data-point reads on a busy channel.
@@ -89,36 +90,43 @@ const ChannelNumberDevice = -1
 // the only method that touches two mutexes across its lifetime — and
 // it does so sequentially, not simultaneously.
 type Channel struct {
-	Address string
-	Number  int
-	Type    string
-	// Name is the CCU-assigned human-readable channel name (e.g.
-	// "Wohnzimmer Licht") when the operator configured one. Falls
-	// back to an empty string — the UI then renders "Kanal N".
-	Name       string
+	Address    string
+	Number     int
+	Type       string
 	ParamsetIn hmenum.ParamsetKey
 
-	// Rooms / Functions are populated by the Rega-script ingest
-	// (set_device_rooms.fn / set_device_functions.fn) and used by the
-	// north-bound adapters to render group dashboards. Empty when the
-	// CCU operator has not assigned any.
+	// name is the CCU-assigned human-readable channel name (e.g.
+	// "Wohnzimmer Licht") when the operator configured one. Empty when the
+	// operator configured none — the UI then renders "Kanal N".
 	//
-	// The singular [Channel.Room] method derives the unambiguous case
-	// (exactly one room, including the group-master fallback) — north-
-	// bound code that wants the single canonical label should call
-	// that method rather than indexing into Rooms[0].
-	Rooms     []string
-	Functions []string
+	// rooms / functions are populated by the Rega-script ingest
+	// (set_device_rooms.fn / set_device_functions.fn) and used by the
+	// north-bound adapters to render group dashboards. Empty when the CCU
+	// operator has not assigned any. The singular [Channel.Room] method
+	// derives the unambiguous case (exactly one room, including the
+	// group-master fallback) — north-bound code that wants the single
+	// canonical label should call that rather than index into Rooms()[0].
+	//
+	// iseID is the CCU-internal numeric identifier for this channel, stamped
+	// by the ingest pipeline from the device-details response
+	// (`get_address_id` on the channel address).
+	//
+	// All four carry live operator state that is rewritten long after the
+	// channel went live: the ingest pipeline re-materialises them on every
+	// reconnect and hot-plug, and the rename path writes them from the REST
+	// handler goroutine. They are therefore guarded by mu and reachable only
+	// through the accessors — as plain exported fields they were a torn read
+	// for every unlocked north-bound reader (REST device list, MQTT
+	// discovery, alarm candidate scan).
+	name      string
+	rooms     []string
+	functions []string
+	iseID     int
 
 	// GroupNo is the channel-group number this channel belongs to. Zero means
 	// "no group". When non-zero, the master channel of the group has Number ==
 	// GroupNo.
 	GroupNo int
-
-	// IseID is the CCU-internal numeric identifier for this channel. Set by the
-	// ingest pipeline from the Rega script device-details response
-	// (`get_address_id` on the channel address).
-	IseID int
 
 	// typeTranslation is the CCU/OCCU translation for the channel type (e.g.
 	// "Heizungsregler Transceiver" for HEATING_CLIMATECONTROL_TRANSCEIVER). Set
@@ -332,7 +340,7 @@ func (c *Channel) ChannelName() string {
 	if c == nil {
 		return ""
 	}
-	return c.Name
+	return c.Name()
 }
 
 // SetCentralName records the owning Unit's name so custom-DP
@@ -849,14 +857,15 @@ func (c *Channel) SubDeviceName() string {
 	if c.device != nil {
 		deviceName = c.device.Name
 	}
-	if isNumericString(master.Name) {
+	masterName := master.Name()
+	if isNumericString(masterName) {
 		if deviceName == "" {
-			return master.Name
+			return masterName
 		}
-		return deviceName + "-" + master.Name
+		return deviceName + "-" + masterName
 	}
-	if master.Name != "" {
-		return master.Name
+	if masterName != "" {
+		return masterName
 	}
 	if deviceName == "" {
 		return itoa(master.GroupNo)
@@ -905,8 +914,8 @@ func (c *Channel) GroupMaster() *Channel {
 // when no unique room can be resolved (multi-room assignments yield empty per
 // Python parity).
 func (c *Channel) Room() string {
-	if len(c.Rooms) == 1 {
-		return c.Rooms[0]
+	if rooms := c.Rooms(); len(rooms) == 1 {
+		return rooms[0]
 	}
 	if c.IsGroupMaster() {
 		return ""

@@ -363,6 +363,14 @@ func New(cfg Config) (*Unit, error) {
 	cache.SetCentralName(cfg.Name)
 	cache.SubscribeToBus(bus)
 
+	// The event coordinator stamps the same scope onto everything it
+	// publishes from a raw callback. Nothing called this, so every
+	// device-trigger and every raw-parameter event left the bus with an empty
+	// central: the health wiring's per-central filter dropped them, and the
+	// WebSocket device-trigger plane resolved the CCU serial from "" and
+	// emitted unique ids that collide across CCUs.
+	c.Events.SetCentralName(cfg.Name)
+
 	return c, nil
 }
 
@@ -1025,7 +1033,7 @@ func (u *Unit) RenameDeviceWithChannels(ctx context.Context, address, name strin
 	var firstErr error
 	for _, ch := range dev.Channels() {
 		chName := name + ":" + strconv.Itoa(ch.Number)
-		ch.Name = chName
+		ch.SetName(chName)
 		if fn != nil {
 			if err := fn(ctx, ch.Address, chName); err != nil && firstErr == nil {
 				firstErr = err
@@ -1053,7 +1061,7 @@ func (u *Unit) RenameChannel(ctx context.Context, channelAddress, name string) e
 		base, _, _ := strings.Cut(channelAddress, ":")
 		if dev, ok := u.ModelRegistry.Get(base); ok && dev != nil {
 			if ch := dev.Channel(channelAddress); ch != nil {
-				ch.Name = name
+				ch.SetName(name)
 			}
 		}
 	}

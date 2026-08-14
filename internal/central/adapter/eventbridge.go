@@ -202,6 +202,36 @@ func (b *EventBridge) Start(ctx context.Context) {
 	}
 }
 
+// addUnsub records one subscription released by [EventBridge.detach].
+//
+// The snapshot publishers call it from whichever goroutine drove their pass —
+// the MQTT lifecycle's reconnect loop runs PublishInitialSnapshot, the fan-out
+// worker runs PublishCentralSnapshot for a central that just cleared its
+// readiness gate, and the boot goroutine runs both — so the slice needs the
+// same lock detach() reads it under. Appending unlocked lost whole passes of
+// subscriptions to the last writer's slice header, leaving live OnChange
+// handlers publishing into a bridge that had already been torn down.
+//
+// Only the append happens under startMu; the caller's broker I/O never does,
+// so a slow publish cannot stall Start/Stop.
+//
+// A pass that finishes after detach() has already drained the slice releases
+// its subscription immediately instead of recording it — otherwise it would
+// register a callback nobody will ever release.
+func (b *EventBridge) addUnsub(unsub func()) {
+	if unsub == nil {
+		return
+	}
+	b.startMu.Lock()
+	if !b.started {
+		b.startMu.Unlock()
+		unsub()
+		return
+	}
+	b.unsubs = append(b.unsubs, unsub)
+	b.startMu.Unlock()
+}
+
 // AttachCentral subscribes a central that joined the registry AFTER
 // [EventBridge.Start] — a live-adopted CCU. Start snapshots the registry
 // once, so without this call the new central's bus reaches no north-bound
@@ -2415,7 +2445,7 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 				b.publishCustomDPState(context.Background(), centralName, iface, d.Address, channelNo, ch)
 			})
 		})
-		b.unsubs = append(b.unsubs, scheduleUnsub)
+		b.addUnsub(scheduleUnsub)
 		// Background load: deliberately decoupled from any request
 		// context — the goroutine outlives the function call and a
 		// cancelled request must not abort the warm-up fetch.
@@ -2445,7 +2475,7 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 			capturedWP.CurrentProfile(),
 		)
 	})
-	b.unsubs = append(b.unsubs, unsub)
+	b.addUnsub(unsub)
 }
 
 // publishUpdateSnapshot publishes the HA-Discovery `update` entity and
@@ -2503,7 +2533,7 @@ func (b *EventBridge) publishUpdateSnapshot(
 			capturedUpd.State(),
 		)
 	})
-	b.unsubs = append(b.unsubs, unsub)
+	b.addUnsub(unsub)
 }
 
 // publishCombinedDPSnapshot publishes HA-Discovery entities for every
@@ -2580,7 +2610,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 				capCentral, capIface, capAddr, capCh, capWP,
 			)
 		})
-		b.unsubs = append(b.unsubs, unsubSimple)
+		b.addUnsub(unsubSimple)
 	}
 
 	// Wire-read sync: when the WEEK_PROGRAM_CHANNEL_LOCKS bitfield
@@ -2605,7 +2635,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 				applyLocks(raw)
 			}
 			unsubLocks := anyDP.OnAnyUpdate(func(_, next any) { applyLocks(next) })
-			b.unsubs = append(b.unsubs, unsubLocks)
+			b.addUnsub(unsubLocks)
 		}
 	}
 
@@ -2622,7 +2652,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 			capturedCentral, capturedIface, capturedAddr, capturedCh, capturedWP,
 		)
 	})
-	b.unsubs = append(b.unsubs, unsub)
+	b.addUnsub(unsub)
 }
 
 // simpleScheduleEntriesJSON encodes the wp.Simple() schedule entries
@@ -2784,7 +2814,7 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 			)
 		}
 	})
-	b.unsubs = append(b.unsubs, unsub)
+	b.addUnsub(unsub)
 }
 
 // orderedTargetKeys returns the keys of channels in canonical
@@ -2984,7 +3014,7 @@ func (b *EventBridge) publishCombinedTimer(
 			"duration", next,
 		)
 	})
-	b.unsubs = append(b.unsubs, unsub)
+	b.addUnsub(unsub)
 }
 
 // publishCombinedLevelSensor wires the HA sensor entity and live state for a
@@ -3027,7 +3057,7 @@ func (b *EventBridge) publishCombinedLevelSensor(
 			"level_combined", payload,
 		)
 	})
-	b.unsubs = append(b.unsubs, unsub)
+	b.addUnsub(unsub)
 }
 
 // publishCombinedHSColorSensor wires the HA sensor entity and live state for
@@ -3070,7 +3100,7 @@ func (b *EventBridge) publishCombinedHSColorSensor(
 			"hs_color", payload,
 		)
 	})
-	b.unsubs = append(b.unsubs, unsub)
+	b.addUnsub(unsub)
 }
 
 // combinedTimerLabel resolves the user-facing label for a combined Timer

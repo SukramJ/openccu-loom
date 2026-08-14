@@ -353,10 +353,10 @@ func resolveMemberIdentity(unit *central.Unit, address string) memberIdentity {
 		return id
 	}
 	if ch := unit.GetChannel(address); ch != nil {
-		id.ChannelName = ch.Name
+		id.ChannelName = ch.Name()
 		id.ChannelNo = ch.Number
-		id.Rooms = append([]string(nil), ch.Rooms...)
-		id.Functions = append([]string(nil), ch.Functions...)
+		id.Rooms = ch.Rooms()
+		id.Functions = ch.Functions()
 		fillDeviceIdentity(&id, ch.Device())
 		return id
 	}

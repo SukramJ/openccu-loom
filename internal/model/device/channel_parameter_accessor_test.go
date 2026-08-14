@@ -50,7 +50,7 @@ func TestChannelDeviceAndCentralName(t *testing.T) {
 	if ch.Device() != d {
 		t.Error("Device() should return parent device")
 	}
-	ch.Name = "MyChannel"
+	ch.SetName("MyChannel")
 	if ch.ChannelName() != "MyChannel" {
 		t.Errorf("ChannelName() = %q, want MyChannel", ch.ChannelName())
 	}

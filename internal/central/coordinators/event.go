@@ -160,6 +160,22 @@ func (c *EventCoordinator) HandleRawEvent(
 		Parameter:      parameter,
 	}
 	c.MarkEvent(interfaceID, time.Time{})
+	// Announce the raw arrival before anything can filter it out. The health
+	// tracker scores an interface partly on how recently it last saw traffic,
+	// and traffic is a property of the wire, not of the value: a device that
+	// re-reports the same reading every minute is a fully alive interface. The
+	// unchanged-value early return below must therefore not swallow it.
+	c.mu.RLock()
+	cn := c.centralName
+	c.mu.RUnlock()
+	events.Publish(c.bus, hmevent.DataPointValueReceivedEvent{
+		Base:           hmevent.NewBase(),
+		CentralName:    cn,
+		InterfaceID:    interfaceID,
+		ChannelAddress: channelAddress,
+		Parameter:      parameter,
+		Value:          value.Unwrap(),
+	})
 	newVal := value
 
 	old, hadOld := c.cache.Get(key)

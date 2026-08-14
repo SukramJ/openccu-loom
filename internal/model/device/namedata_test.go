@@ -80,7 +80,7 @@ func TestBaseChannelName(t *testing.T) {
 		t.Parallel()
 		d := makeDevice("Schlafzimmer", "HmIP-eTRV", "000ABC")
 		ch := d.AddChannel("000ABC:1", 1, "", hmenum.ParamsetKeyValues)
-		ch.Name = "Schlafzimmer Heizung"
+		ch.SetName("Schlafzimmer Heizung")
 		got := baseChannelName(ch, d.Model, d.Name)
 		if got != "Schlafzimmer Heizung" {
 			t.Fatalf("got %q, want %q", got, "Schlafzimmer Heizung")
@@ -91,7 +91,7 @@ func TestBaseChannelName(t *testing.T) {
 		t.Parallel()
 		d := makeDevice("Schlafzimmer", "HmIP-eTRV", "000ABC")
 		ch := d.AddChannel("000ABC:1", 1, "", hmenum.ParamsetKeyValues)
-		ch.Name = "HmIP-eTRV 000ABC:1" // auto-default form
+		ch.SetName("HmIP-eTRV 000ABC:1") // auto-default form
 		got := baseChannelName(ch, d.Model, d.Name)
 		want := "Schlafzimmer:1"
 		if got != want {
@@ -231,7 +231,7 @@ func TestBuildDataPointName_UniqueCustomNameSkipsPostfix(t *testing.T) {
 	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
 	ch3.Put(newValuesDP("000ABC:3", "STATE"))
 	ch4.Put(newValuesDP("000ABC:4", "STATE"))
-	ch3.Name = "Relay Status"
+	ch3.SetName("Relay Status")
 
 	nd := BuildDataPointName(ch3, "STATE", "Status")
 	if nd.ParameterName != "State" {
@@ -261,7 +261,7 @@ func TestBuildDataPointName_CustomNameWithChannelNoKeepsPostfix(t *testing.T) {
 	ch5 := d.AddChannel("000ABC:5", 5, "", hmenum.ParamsetKeyValues)
 	ch4.Put(newValuesDP("000ABC:4", "STATE"))
 	ch5.Put(newValuesDP("000ABC:5", "STATE"))
-	ch5.Name = "Relay:1"
+	ch5.SetName("Relay:1")
 
 	nd := BuildDataPointName(ch5, "STATE", "")
 	if nd.ChannelName != "Relay" {
@@ -281,8 +281,8 @@ func TestBuildDataPointName_DuplicateCustomNamesKeepPostfix(t *testing.T) {
 	ch6 := d.AddChannel("000ABC:6", 6, "", hmenum.ParamsetKeyValues)
 	ch4.Put(newValuesDP("000ABC:4", "STATE"))
 	ch6.Put(newValuesDP("000ABC:6", "STATE"))
-	ch4.Name = "Relay Twin"
-	ch6.Name = "Relay Twin"
+	ch4.SetName("Relay Twin")
+	ch6.SetName("Relay Twin")
 
 	nd4 := BuildDataPointName(ch4, "STATE", "")
 	if nd4.ParameterName != "State ch4" {
@@ -306,8 +306,8 @@ func TestBuildDataPointName_SameNameSiblingWithoutParameterNotAmbiguous(t *testi
 	ch5 := d.AddChannel("000ABC:5", 5, "", hmenum.ParamsetKeyValues)
 	ch3.Put(newValuesDP("000ABC:3", "STATE"))
 	ch4.Put(newValuesDP("000ABC:4", "STATE"))
-	ch3.Name = "Status"
-	ch5.Name = "Status" // no STATE on this channel
+	ch3.SetName("Status")
+	ch5.SetName("Status") // no STATE on this channel
 
 	nd := BuildDataPointName(ch3, "STATE", "")
 	if nd.ParameterName != "State" {
@@ -320,7 +320,7 @@ func TestBuildDataPointName_ExplicitChannelName(t *testing.T) {
 	// Channel has a real operator-set name — no :N suffix to strip.
 	d := makeDevice("Schlafzimmer", "HmIP-eTRV", "000ABC")
 	ch := d.AddChannel("000ABC:1", 1, "", hmenum.ParamsetKeyValues)
-	ch.Name = "Schlafzimmer Heizung"
+	ch.SetName("Schlafzimmer Heizung")
 
 	nd := BuildDataPointName(ch, "SET_POINT_TEMPERATURE", "")
 	if nd.ChannelName != "Schlafzimmer Heizung" {
@@ -334,7 +334,7 @@ func TestBuildDataPointName_AutoDefaultChannelName(t *testing.T) {
 	// falls back to deviceName:channelNo then strips the :N suffix.
 	d := makeDevice("Wohnzimmer", "HmIP-eTRV", "000ABC")
 	ch := d.AddChannel("000ABC:1", 1, "", hmenum.ParamsetKeyValues)
-	ch.Name = "HmIP-eTRV 000ABC:1" // matches autoDefault
+	ch.SetName("HmIP-eTRV 000ABC:1") // matches autoDefault
 
 	nd := BuildDataPointName(ch, "STATE", "")
 	// baseChannelName returns "Wohnzimmer:1"; stripChannelAddressSuffix yields "Wohnzimmer".
@@ -419,8 +419,8 @@ func TestBuildCustomDataPointName_CustomChannelNames(t *testing.T) {
 	ch4.GroupNo, ch5.GroupNo = 4, 4
 	attachCustomStub(ch4, "switch")
 	attachCustomStub(ch5, "switch")
-	ch4.Name = "Treppe"
-	ch5.Name = "Treppe:5"
+	ch4.SetName("Treppe")
+	ch5.SetName("Treppe:5")
 
 	// A custom name without :N is used verbatim — no marker.
 	if got := BuildCustomDataPointName(ch4, "", "").TranslatedName(); got != "Treppe" {
@@ -442,7 +442,7 @@ func TestBuildCustomDataPointName_MarkerDigitsFollowNameSuffix(t *testing.T) {
 	ch5.GroupNo, ch6.GroupNo = 5, 6
 	attachCustomStub(ch5, "switch")
 	attachCustomStub(ch6, "switch")
-	ch5.Name = "Relais:9"
+	ch5.SetName("Relais:9")
 
 	if got := BuildCustomDataPointName(ch5, "", "").TranslatedName(); got != "Relais ch9" {
 		t.Fatalf("suffix-digit marker: TranslatedName=%q, want %q", got, "Relais ch9")

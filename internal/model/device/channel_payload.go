@@ -37,13 +37,13 @@ func (c *Channel) Info() payload.InfoPayload {
 		Address:   c.Address,
 		ChannelNo: c.Number,
 		Type:      c.Type,
-		Name:      c.Name,
+		Name:      c.Name(),
 	}
-	if len(c.Rooms) > 0 {
-		info.Rooms = append([]string(nil), c.Rooms...)
+	if rooms := c.Rooms(); len(rooms) > 0 {
+		info.Rooms = rooms
 	}
-	if len(c.Functions) > 0 {
-		info.Functions = append([]string(nil), c.Functions...)
+	if functions := c.Functions(); len(functions) > 0 {
+		info.Functions = functions
 	}
 	info.Room = c.Room()
 	if c.GroupNo != 0 {

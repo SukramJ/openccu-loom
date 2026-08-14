@@ -27,7 +27,7 @@ func newSubDeviceFixture(t *testing.T, deviceName, masterName string) (dev *Devi
 	})
 	master = dev.AddChannel("DEV0001:5", 5, "TYPE_A", "")
 	master.GroupNo = 5
-	master.Name = masterName
+	master.SetName(masterName)
 
 	member = dev.AddChannel("DEV0001:6", 6, "TYPE_A", "")
 	member.GroupNo = 5

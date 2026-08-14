@@ -33,6 +33,7 @@ func TestRatchetReasonsAreNotDeferrals(t *testing.T) {
 
 	ratchets := map[string]map[string]string{
 		"eventsWithoutSubscriber":    eventsWithoutSubscriber,
+		"eventsWithoutPublisher":     eventsWithoutPublisher,
 		"wiringSettersWithoutCaller": wiringSettersWithoutCaller,
 	}
 	for listName, entries := range ratchets {

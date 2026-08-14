@@ -551,8 +551,8 @@ func TestOutputCandidatesPopulatesMetadata(t *testing.T) {
 	t.Parallel()
 
 	ch := newSwitchChannel(t, "VCU2128127", "VCU2128127:4", 4, false)
-	ch.Rooms = []string{"Living Room"}
-	ch.Functions = []string{"Security"}
+	ch.SetRooms([]string{"Living Room"})
+	ch.SetFunctions([]string{"Security"})
 	dev := ch.Device()
 	reg := newCandidatesRegistry(t, "my-ccu", dev)
 

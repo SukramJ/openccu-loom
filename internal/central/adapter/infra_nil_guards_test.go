@@ -169,7 +169,7 @@ func TestChannelNameOf_ValidChannel(t *testing.T) {
 	t.Parallel()
 	dev := device.New(device.Config{Address: "DEV003", InterfaceID: "test", Model: "M"})
 	ch := dev.AddChannel("DEV003:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.Name = "My Switch"
+	ch.SetName("My Switch")
 	if got := channelNameOf(ch); got != "My Switch" {
 		t.Errorf("channelNameOf = %q, want My Switch", got)
 	}

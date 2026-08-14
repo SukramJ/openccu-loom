@@ -474,7 +474,7 @@ func (d *LinksDomain) LinkableChannels(
 					Address:          ch.Address,
 					ChannelType:      ch.Type,
 					ChannelTypeLabel: d.channelTypeLabel(locale, ch),
-					ChannelName:      ch.Name,
+					ChannelName:      ch.Name(),
 					DeviceAddress:    dev.Address,
 					DeviceName:       deviceNameOr(dev, dev.Address),
 					DeviceModel:      dev.Model,
@@ -592,7 +592,7 @@ func channelNameOf(ch *device.Channel) string {
 	if ch == nil {
 		return ""
 	}
-	return ch.Name
+	return ch.Name()
 }
 
 func deviceNameOr(dev *device.Device, fallback string) string {

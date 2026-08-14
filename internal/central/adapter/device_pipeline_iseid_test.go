@@ -50,8 +50,8 @@ func TestIngestPopulatesIseIDFromDeviceDetails(t *testing.T) {
 	if ch == nil {
 		t.Fatal("channel 0001ABCD:1 not found")
 	}
-	if ch.IseID != 200 {
-		t.Fatalf("Channel.IseID = %d, want 200 (not stamped from DeviceDetails cache)", ch.IseID)
+	if ch.IseID() != 200 {
+		t.Fatalf("Channel.IseID = %d, want 200 (not stamped from DeviceDetails cache)", ch.IseID())
 	}
 
 	// End-to-end: a sysvar name carrying the device ise_id (100) or the channel

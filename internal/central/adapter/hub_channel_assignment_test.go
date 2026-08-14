@@ -27,7 +27,7 @@ func hubChannelAssignmentFixture(t *testing.T) (c *central.Unit, d *device.Devic
 	}
 	d = device.New(device.Config{Address: "0001ABCD", IseID: 100})
 	ch = d.AddChannel("0001ABCD:1", 1, "TYPE", hmenum.ParamsetKeyValues)
-	ch.IseID = 200
+	ch.SetIseID(200)
 	c.ModelRegistry.Put(d)
 	return c, d, ch
 }
@@ -224,7 +224,7 @@ func TestAssignHubChannelsExplicitAssignmentWins(t *testing.T) {
 	// Second device provides the explicit target channel.
 	other := device.New(device.Config{Address: "0002EFGH", IseID: 300})
 	otherCh := other.AddChannel("0002EFGH:2", 2, "TYPE", hmenum.ParamsetKeyValues)
-	otherCh.IseID = 400
+	otherCh.SetIseID(400)
 	c.ModelRegistry.Put(other)
 
 	// Name matches device 0001ABCD (ise_id 100); explicit points elsewhere.
@@ -290,7 +290,7 @@ func TestAssignHubChannelsExplicitChangeRepublishes(t *testing.T) {
 
 	other := device.New(device.Config{Address: "0002EFGH", IseID: 300})
 	otherCh := other.AddChannel("0002EFGH:2", 2, "TYPE", hmenum.ParamsetKeyValues)
-	otherCh.IseID = 400
+	otherCh.SetIseID(400)
 	c.ModelRegistry.Put(other)
 
 	sv := hub.NewSysvar("ccu-01", "svNoNameHint", "", hmenum.HubValueTypeString, nil)
@@ -344,7 +344,7 @@ func TestAssignHubChannelsEnergyCounterNameShape(t *testing.T) {
 	}
 	d := device.New(device.Config{Address: "000858A994D482", IseID: 14880})
 	ch := d.AddChannel("000858A994D482:7", 7, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
-	ch.IseID = 14884
+	ch.SetIseID(14884)
 	c.ModelRegistry.Put(d)
 
 	const name = "svEnergyCounter_14884_000858A994D482:7"

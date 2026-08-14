@@ -673,7 +673,7 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		Type:         ch.Type,
 		TypeLabel:    channelTypeLabel(labels, ch.Type),
 		Category:     ch.Type,
-		Name:         ch.Name,
+		Name:         ch.Name(),
 		ParamsetKey:  string(ch.ParamsetIn),
 		ParamsetKeys: channelParamsetKeys(ch),
 		DataPoints:   ch.Len(),
@@ -690,11 +690,11 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		}
 	}
 	s.Room = ch.Room()
-	if len(ch.Rooms) > 0 {
-		s.Rooms = ch.Rooms
+	if rooms := ch.Rooms(); len(rooms) > 0 {
+		s.Rooms = rooms
 	}
-	if len(ch.Functions) > 0 {
-		s.Functions = ch.Functions
+	if functions := ch.Functions(); len(functions) > 0 {
+		s.Functions = functions
 	}
 	s.IsCustomDpPrimary = ch.IsCustomDPPrimaryChannel()
 	// Operator per-channel overrides (G12): surfaced so the SPA can badge a

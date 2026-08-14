@@ -853,7 +853,7 @@ func TestSnapshot_Anonymise_NestedChannelNames(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice("0001ABCD", "HmIP-TEST")
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.Name = "Bookshelf Lamp"
+	ch.SetName("Bookshelf Lamp")
 
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
@@ -101,7 +102,11 @@ func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldA
 	}
 	if unit.Devices != nil {
 		fetcher := &callbackDescFetcher{ops: backend}
-		if rerr := unit.Devices.ReplaceDevice(ctx, fetcher, dev.Interface, oldAddress, newAddress); rerr != nil {
+		// The coordinator resolves the old device and its descriptions from
+		// the registries, which are keyed by the canonical wire id — the bare
+		// interface finds nothing and turns the eager refresh into a
+		// permanent "old device not found".
+		if rerr := unit.Devices.ReplaceDevice(ctx, fetcher, hmenum.Interface(dev.InterfaceID), oldAddress, newAddress); rerr != nil {
 			// The CCU swap already happened and is irreversible; the eager
 			// model refresh is best-effort. The CCU's own replaceDevice
 			// callback reconciles the model authoritatively (and treats the

@@ -251,8 +251,8 @@ func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChann
 			}
 			address := fmt.Sprintf("%s:%d", dev.Address, member.ChannelNo)
 			name := fmt.Sprintf("Channel %d", member.ChannelNo)
-			if ch := dev.Channel(address); ch != nil && ch.Name != "" {
-				name = ch.Name
+			if ch := dev.Channel(address); ch != nil && ch.Name() != "" {
+				name = ch.Name()
 			}
 			out[key] = weekprofile.TargetChannelInfo{
 				ChannelNo:      member.ChannelNo,

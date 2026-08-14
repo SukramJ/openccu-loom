@@ -287,7 +287,7 @@ func TestChannelFullNameWithDeviceName(t *testing.T) {
 		Name:    "Wohnzimmer",
 	})
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH_TRANSMITTER", "VALUES")
-	ch.Name = "Wohnzimmer Licht"
+	ch.SetName("Wohnzimmer Licht")
 
 	full := ch.FullName()
 	if full == "" {

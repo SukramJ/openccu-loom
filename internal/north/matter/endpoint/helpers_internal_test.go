@@ -144,7 +144,7 @@ func makeDevice(addr, name string) *device.Device {
 
 func makeChannel(dev *device.Device, addr string, no int, name string) *device.Channel {
 	ch := dev.AddChannel(addr, no, "TEST_CHANNEL", hmenum.ParamsetKeyValues)
-	ch.Name = name
+	ch.SetName(name)
 	return ch
 }
 

@@ -180,7 +180,7 @@ func addFrostProtectionChannel(t *testing.T, dev *device.Device, number int, nam
 	addr := dev.Address + ":" + strconv.Itoa(number)
 	ch := dev.AddChannel(addr, number, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
 	if name != "" {
-		ch.Name = name
+		ch.SetName(name)
 	}
 	dp := resolveDataPoint(generic.Spec{
 		Key: hmtypes.DataPointKey{

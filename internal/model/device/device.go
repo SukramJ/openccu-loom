@@ -372,21 +372,47 @@ func (d *Device) AttachUpdate(updater FirmwareUpdater, refresher FirmwareRefresh
 	return d.update
 }
 
-// AddChannel registers (or replaces) a channel under its address.
-// The new channel is returned. `channelType` is the CCU-reported
-// CHANNEL_TYPE string (e.g. "SHUTTER_TRANSMITTER") that downstream
-// layers need for metadata keying.
-func (d *Device) AddChannel(address string, number int, channelType string, paramset hmenum.ParamsetKey) *Channel {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	ch := &Channel{
+// NewChannel builds a detached channel that is not yet reachable from any
+// device. Callers populate it and hand it to [Device.PutChannel], which is the
+// single release edge: readers reach a channel only through
+// [Device.Channel] / [Device.Channels], both of which take d.mu, so a channel
+// published this way is never observed half-built.
+//
+// `channelType` is the CCU-reported CHANNEL_TYPE string (e.g.
+// "SHUTTER_TRANSMITTER") that downstream layers need for metadata keying.
+func NewChannel(address string, number int, channelType string, paramset hmenum.ParamsetKey) *Channel {
+	return &Channel{
 		Address:    address,
 		Number:     number,
 		Type:       channelType,
 		ParamsetIn: paramset,
-		device:     d,
 	}
-	d.channels[address] = ch
+}
+
+// PutChannel registers (or replaces) an already-populated channel under its
+// address and binds it to the device.
+//
+// Prefer this over [Device.AddChannel] whenever the caller has more to fill in
+// than the four constructor fields: AddChannel publishes an empty channel into
+// a device the north-bound surfaces are already reading, so every field
+// written afterwards races the readers and, on a mid-life re-ingest, the
+// replacement channel goes live blank.
+func (d *Device) PutChannel(ch *Channel) {
+	if ch == nil {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	ch.device = d
+	d.channels[ch.Address] = ch
+}
+
+// AddChannel builds an empty channel, registers it under its address and
+// returns it. See [Device.PutChannel] for the build-then-publish variant that
+// callers with more state to seed must use.
+func (d *Device) AddChannel(address string, number int, channelType string, paramset hmenum.ParamsetKey) *Channel {
+	ch := NewChannel(address, number, channelType, paramset)
+	d.PutChannel(ch)
 	return ch
 }
 
@@ -637,7 +663,7 @@ func (d *Device) IdentifyChannel(text string) *Channel {
 		if addr != "" && strings.HasSuffix(text, addr) {
 			return ch
 		}
-		if ch.IseID != 0 && containsWord(text, strconv.Itoa(ch.IseID)) {
+		if chIseID := ch.IseID(); chIseID != 0 && containsWord(text, strconv.Itoa(chIseID)) {
 			return ch
 		}
 	}

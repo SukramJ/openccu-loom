@@ -163,8 +163,8 @@ func TestChannelIseIDDefaultsToZero(t *testing.T) {
 	if ch == nil {
 		t.Fatal("channel VCU0000001:1 not found")
 	}
-	if ch.IseID != 0 {
-		t.Errorf("Channel.IseID = %d, want 0 (default)", ch.IseID)
+	if ch.IseID() != 0 {
+		t.Errorf("Channel.IseID = %d, want 0 (default)", ch.IseID())
 	}
 }
 
@@ -178,8 +178,8 @@ func TestChannelIseIDSet(t *testing.T) {
 	if ch == nil {
 		t.Fatal("channel VCU0000001:1 not found")
 	}
-	ch.IseID = 99
-	if ch.IseID != 99 {
-		t.Errorf("Channel.IseID = %d, want 99 after direct assignment", ch.IseID)
+	ch.SetIseID(99)
+	if ch.IseID() != 99 {
+		t.Errorf("Channel.IseID = %d, want 99 after SetIseID", ch.IseID())
 	}
 }

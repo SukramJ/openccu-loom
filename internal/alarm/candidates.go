@@ -156,8 +156,8 @@ func (s *Service) OutputCandidates(class hmenum.AlarmOutputClass) []OutputCandid
 				cand.ChannelNo = ch.Number
 				cand.ChannelName = ch.NameData().ChannelName
 				cand.ChannelType = ch.Type
-				cand.Rooms = append([]string(nil), ch.Rooms...)
-				cand.Functions = append([]string(nil), ch.Functions...)
+				cand.Rooms = ch.Rooms()
+				cand.Functions = ch.Functions()
 				out = append(out, cand)
 			}
 		}

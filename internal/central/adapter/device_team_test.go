@@ -33,21 +33,29 @@ func (f *teamRecordingOperations) ListTeams(context.Context) ([]hmproto.DeviceDe
 	return f.teams, nil
 }
 
+// teamDomainWith seeds the registries the way the running wiring does: the
+// device carries the canonical wire id (`<central>-<iface>`), and the
+// description registry plus the value writer are keyed by it. Registering
+// under the bare interface instead would collapse the two identifier spaces
+// and hide a key mismatch in the code under test.
 func teamDomainWith(t *testing.T, iface hmenum.Interface, fake backends.Operations) *DeviceAdminDomain {
 	t.Helper()
 	unit, reg := newReplaceUnit(t, "ccu-01")
+	wireID := WireInterfaceID("ccu-01", iface)
 	dev := device.New(device.Config{
-		InterfaceID: string(iface), Interface: iface, Address: "SD001", Model: "HM-Sec-SD",
+		InterfaceID: wireID, Interface: iface, Address: "SD001", Model: "HM-Sec-SD",
 	})
 	unit.ModelRegistry.Put(dev)
-	unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: iface, Address: "SD001", Model: "HM-Sec-SD"})
+	unit.DeviceRegistry.Put(registry.DeviceEntry{
+		Interface: hmenum.Interface(wireID), Address: "SD001", Model: "HM-Sec-SD",
+	})
 	// The target channel description carries the team tag the candidate
 	// filter matches on.
-	unit.DescRegistry.Put(iface, hmproto.DeviceDescription{
+	unit.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{
 		Address: "SD001:1", Parent: "SD001", TeamTag: "SMOKE", Team: "TEAM:1",
 	})
 	w := client.NewValueWriter()
-	w.Register("ccu-01", string(iface), fake)
+	w.Register("ccu-01", wireID, fake)
 	return NewDeviceAdminDomain(reg, w)
 }
 
