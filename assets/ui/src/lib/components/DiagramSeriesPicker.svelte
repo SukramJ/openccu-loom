@@ -63,26 +63,42 @@
     onChange({ ...series, ...patch });
   }
 
+  // Monotonic generation guarding the channel and data-point fetches. The
+  // series' central / interface / channel address are emitted synchronously
+  // on the pick, so a response for the device or channel the operator has
+  // already left must never repopulate the dropdowns underneath them —
+  // otherwise a series can be saved whose parameter belongs to a different
+  // device than its address.
+  let loadGeneration = 0;
+
   async function loadChannels(addr: string) {
+    const generation = ++loadGeneration;
     loadingChannels = true;
     try {
-      channels = (await api.listChannels(addr)).items ?? [];
+      const items = (await api.listChannels(addr)).items ?? [];
+      if (generation !== loadGeneration) return;
+      channels = items;
     } catch {
+      if (generation !== loadGeneration) return;
       channels = [];
       toastStore.error(t("diagrams.picker.channels_failed"));
     } finally {
-      loadingChannels = false;
+      if (generation === loadGeneration) loadingChannels = false;
     }
   }
   async function loadParams(addr: string, channelNo: number) {
+    const generation = ++loadGeneration;
     loadingParams = true;
     try {
-      dataPoints = (await api.listDataPoints(addr, channelNo)) ?? [];
+      const items = (await api.listDataPoints(addr, channelNo)) ?? [];
+      if (generation !== loadGeneration) return;
+      dataPoints = items;
     } catch {
+      if (generation !== loadGeneration) return;
       dataPoints = [];
       toastStore.error(t("diagrams.picker.params_failed"));
     } finally {
-      loadingParams = false;
+      if (generation === loadGeneration) loadingParams = false;
     }
   }
 
@@ -96,6 +112,9 @@
       channel_address: "",
       parameter: "",
     });
+    // Clear the previous device's lists up front — they belong to a device
+    // the series no longer points at.
+    channels = [];
     dataPoints = [];
     await loadChannels(addr);
   }

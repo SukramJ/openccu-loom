@@ -109,11 +109,13 @@ type Assembler struct {
 	// translations resolves the localized NodeLabel channel-number fallback in
 	// cfg.Locale. Auto-loaded in [New] (immutable embedded data); nil-tolerant.
 	translations *i18n.Catalogs
-	// versions owns the per-(endpoint, cluster) DataVersion trackers,
+	// states owns the per-endpoint state that must outlive a single
+	// dispatch (DataVersion trackers, the Identify cluster server),
 	// keyed by the stable [store.EndpointKey]. It lives across every
-	// [Assembler.Assemble] so a bridged endpoint's DataVersion survives
-	// reassembly — see [versionRegistry] and [Endpoint.versions].
-	versions *versionRegistry
+	// [Assembler.Assemble] so a bridged endpoint's DataVersion and
+	// running Identify survive reassembly — see
+	// [endpointStateRegistry] and [Endpoint.state].
+	states *endpointStateRegistry
 }
 
 // New returns an assembler. logger may be nil; the assembler then
@@ -135,7 +137,7 @@ func New(s Store, cfg Config, logger *slog.Logger) (*Assembler, error) {
 		exposures: allowAllExposureChecker{},
 		cfg:       cfg,
 		logger:    logger,
-		versions:  newVersionRegistry(),
+		states:    newEndpointStateRegistry(),
 	}
 	if cat, err := i18n.NewCatalogs(); err == nil {
 		a.translations = cat
@@ -208,12 +210,13 @@ func (a *Assembler) Assemble(ctx context.Context, snapshots []Snapshot) (*Topolo
 		return nil, err
 	}
 
-	// Release DataVersion trackers for sources that vanished / were
-	// de-exposed this run so a later re-add gets a fresh version (matches
-	// matter.js destroying the Datasource on endpoint removal) and the
-	// registry stays bounded to the live topology. Trackers for endpoints
-	// still present in `seen` are retained, keeping their version stable.
-	a.versions.retain(seen)
+	// Release the state of sources that vanished / were de-exposed this
+	// run so a later re-add gets a fresh version (matches matter.js
+	// destroying the Datasource on endpoint removal), a running Identify
+	// countdown stops, and the registry stays bounded to the live
+	// topology. State of endpoints still present in `seen` is retained,
+	// keeping their version stable.
+	a.states.retain(seen)
 
 	sort.SliceStable(topology.Endpoints, func(i, j int) bool {
 		return topology.Endpoints[i].ID < topology.Endpoints[j].ID
@@ -537,9 +540,10 @@ func (a *Assembler) makeButtonGroupEndpoint(
 		Channel:       ch,
 		Measurement:   group,
 		SourceKey:     sourceKey,
-		// Reuse the DataVersion tracker set bound to this stable source
-		// key so the endpoint's per-cluster version survives reassembly.
-		versions: a.versions.setFor(sourceKey),
+		// Reuse the state bound to this stable source key so the
+		// endpoint's per-cluster version and Identify server survive
+		// reassembly.
+		state: a.states.stateFor(sourceKey),
 		// Bridged under the Aggregator (EP 1), same parent chain as
 		// every other bridged endpoint.
 		ParentEndpointID:    1,
@@ -623,9 +627,10 @@ func (a *Assembler) makeEndpoint(
 		Channel:       ch,
 		Source:        src,
 		SourceKey:     sourceKey,
-		// Reuse the DataVersion tracker set bound to this stable source
-		// key so the endpoint's per-cluster version survives reassembly.
-		versions: a.versions.setFor(sourceKey),
+		// Reuse the state bound to this stable source key so the
+		// endpoint's per-cluster version and Identify server survive
+		// reassembly.
+		state: a.states.stateFor(sourceKey),
 		// Bridged endpoints are children of the Aggregator (EP 1).
 		// Mirrors chip examples/bridge-app/linux/main.cpp:261-276
 		// AddDeviceEndpoint(..., parentEndpointId=1) and matter.js
@@ -667,9 +672,10 @@ func (a *Assembler) makeMeasurementEndpoint(
 		Source:        nil,
 		Measurement:   meas,
 		SourceKey:     sourceKey,
-		// Reuse the DataVersion tracker set bound to this stable source
-		// key so the endpoint's per-cluster version survives reassembly.
-		versions: a.versions.setFor(sourceKey),
+		// Reuse the state bound to this stable source key so the
+		// endpoint's per-cluster version and Identify server survive
+		// reassembly.
+		state: a.states.stateFor(sourceKey),
 		// Measurement sub-endpoints are also bridged under the Aggregator
 		// (EP 1). Same parent-chain as source endpoints.
 		ParentEndpointID:    1,

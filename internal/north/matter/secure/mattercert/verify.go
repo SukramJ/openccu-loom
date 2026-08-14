@@ -197,6 +197,31 @@ func (v *Verifier) PeerNodeIDFromNOC(noc []byte) (uint64, error) {
 	return c.Subject.MatterNodeID, nil
 }
 
+// PeerFabricIDFromNOC implements the [sigma.PeerFabricIDExtractor]
+// optional surface. It decodes noc and returns the matter-fabric-id
+// carried by the certificate subject (Matter §6.5.6.1).
+//
+// The chain walk in [Verifier.VerifyAndExtractPubKey] proves only that
+// the peer NOC links back to this fabric's root — it never compares
+// the subject's fabric-id. Two fabrics provisioned from one trust root
+// would therefore accept each other's operational certificates, and a
+// controller holding a fabric-B NOC could open a session tagged with
+// fabric A and read fabric A's ACL-scoped data. The Sigma responder
+// makes that comparison, but only for verifiers exposing this method,
+// so dropping it here turns the check back into dead code. Mirrors
+// matter.js packages/protocol/src/session/case/CaseServer.ts
+// (`if (fabric.fabricId !== peerFabricId) throw new UnexpectedDataError`).
+func (v *Verifier) PeerFabricIDFromNOC(noc []byte) (uint64, error) {
+	c, err := Decode(noc)
+	if err != nil {
+		return 0, fmt.Errorf("noc decode: %w", err)
+	}
+	if !c.Subject.HasFabricID {
+		return 0, fmt.Errorf("%w: NOC subject missing FabricID", ErrMalformed)
+	}
+	return c.Subject.MatterFabricID, nil
+}
+
 // PeerCATsFromNOC implements the [sigma.PeerCATsExtractor] optional
 // surface. It decodes noc and returns the list of CASE Authenticated
 // Tags from the certificate subject. The Sigma responder pipes this

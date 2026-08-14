@@ -48,23 +48,23 @@ var (
 )
 
 // EventMinimumNumber is one entry in the EventFilters list that a
-// commissioner sends to tell the bridge "I have already received all
-// events up to this number; only send events with Number > EventMin."
+// commissioner sends to tell the bridge "the lowest event number I still
+// want is EventMin; everything below it I already have."
 //
 // Mirrors Matter Core Spec §10.6.9 EventFilterIB and matter.js
-// packages/protocol/src/interaction/InteractionMessenger.ts EventFilter.
-// chip src/app/ReadHandler.cpp:598 ProcessEventFilters stores EventMin
+// packages/types/src/protocol/types/TlvEventFilter.ts. chip
+// src/app/ReadHandler.cpp:598 ProcessEventFilters stores EventMin
 // from EventFilterIB.EventMin and uses it to gate the event query.
 type EventMinimumNumber struct {
-	// NodeID is the optional node filter from EventFilterIB tag 1.
+	// NodeID is the optional node filter from EventFilterIB tag 0.
 	// In a bridge context this is always the bridge's own NodeID or
 	// omitted; openccu-loom stores it for completeness but does not
 	// use it in the query — only EventMin is applied.
 	NodeID    uint64
 	HasNodeID bool
-	// EventMin is the minimum event number (exclusive lower bound):
-	// the bridge only emits events with Number > EventMin.
-	// Corresponds to EventFilterIB tag 2.
+	// EventMin is the minimum event number (INCLUSIVE lower bound): the
+	// bridge emits events with Number >= EventMin — see [EventLog.Query].
+	// Corresponds to EventFilterIB tag 1.
 	EventMin uint64
 }
 

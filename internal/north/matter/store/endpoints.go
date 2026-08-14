@@ -151,10 +151,12 @@ WHERE central_name = ? AND device_address = ? AND channel_no = ? AND dp_kind = ?
 	return nil
 }
 
-// AssignEndpointID returns the next free endpoint_id in [1, 65534].
-// The lookup happens against the live table; the caller is responsible
-// for inserting the assigned value before calling AssignEndpointID
-// again, otherwise the same ID is returned twice.
+// AssignEndpointID allocates the next bridged endpoint_id in [2, 65534] and
+// advances the persisted counter, so two calls never return the same number
+// even when the caller has not inserted the first one yet. Numbers already
+// stored in matter_endpoints are skipped; numbers released by
+// [Store.RemoveEndpoint] are retired rather than reissued (see
+// [allocateEndpointID]).
 //
 // Typical use is inside a transaction:
 //
@@ -172,7 +174,7 @@ func (s *Store) AssignEndpointID(ctx context.Context) (uint16, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	id, err := nextFreeEndpointID(ctx, tx)
+	id, err := allocateEndpointID(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
@@ -234,7 +236,7 @@ func (s *Store) upsertEndpointAssigningOnce(ctx context.Context, rec EndpointRec
 
 	id := rec.EndpointID
 	if id == 0 {
-		next, err := nextFreeEndpointID(ctx, tx)
+		next, err := allocateEndpointID(ctx, tx)
 		if err != nil {
 			return 0, err
 		}
@@ -262,41 +264,117 @@ ON CONFLICT(central_name, device_address, channel_no, dp_kind, dp_key) DO UPDATE
 	return id, nil
 }
 
-// nextFreeEndpointID walks the existing endpoint_id values in tx and
-// returns the smallest unused 1..65534. SQLite locks the table at
-// COMMIT, not at SELECT, so callers must wrap the SELECT-then-INSERT
-// in the same transaction (see [Store.UpsertEndpointAssigning]).
-func nextFreeEndpointID(ctx context.Context, tx *sql.Tx) (uint16, error) {
+// Bridged endpoint numbers occupy [2, 65534]: 0 is the RootNode and 1 the
+// Aggregator of the bridge topology. Mirrors matter.js's
+// `ServerNode.create(...).add(aggregator).add(child)`, which always lands
+// bridged endpoints at 2..N.
+const (
+	firstBridgedEndpointID = 2
+	lastBridgedEndpointID  = 65534
+	bridgedEndpointIDSlots = lastBridgedEndpointID - firstBridgedEndpointID + 1
+)
+
+// allocateEndpointID hands out the next bridged endpoint number and advances
+// the persisted high-water mark inside tx, so the allocation and the counter
+// commit together. SQLite locks the table at COMMIT, not at SELECT, so callers
+// must wrap the SELECT-then-INSERT in the same transaction (see
+// [Store.UpsertEndpointAssigning]).
+//
+// Allocation is monotonic, never hole-filling: a number released by
+// [Store.RemoveEndpoint] — an unpaired device, or a channel the operator
+// de-exposed — is not handed to a different source afterwards. Controllers key
+// their accessory cache on the endpoint number, and the Aggregator's
+// Descriptor.PartsList set is unchanged by a remove-then-add pair, so a
+// reissued number signals nothing: the controller keeps the removed device's
+// cached device type and cluster set and renders the new device under its
+// identity until the bridge is removed and re-added by hand.
+//
+// Mirrors matter.js packages/node/src/storage/server/ServerEndpointStores.ts
+// assignNumber, which allocates from the persisted #nextNumber and skips
+// numbers held in #allocatedNumbers / #preAllocatedNumbers; eraseStoreForEndpoint
+// drops a number from those sets but never rewinds the counter.
+func allocateEndpointID(ctx context.Context, tx *sql.Tx) (uint16, error) {
+	occupied, highest, err := occupiedEndpointIDs(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	if len(occupied) >= bridgedEndpointIDSlots {
+		return 0, ErrEndpointIDExhausted
+	}
+
+	candidate, ok, err := getNextEndpointIDFromMetadata(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		candidate = firstBridgedEndpointID
+	}
+	// Rows can sit above the counter: a database migrated from the former
+	// hole-filling allocator, or a row written with an explicit number. Lift
+	// the counter past them so those numbers are not reissued either — the
+	// equivalent of matter.js pre-allocating every persisted number at load().
+	// Skipped once the number space has wrapped, where the occupancy scan
+	// below is the only guard left.
+	if highest >= candidate && highest < lastBridgedEndpointID {
+		candidate = highest + 1
+	}
+
+	// Skip numbers still in use. The capacity check above guarantees at least
+	// one free slot, so the walk terminates.
+	for range bridgedEndpointIDSlots {
+		if _, taken := occupied[candidate]; !taken {
+			break
+		}
+		candidate = endpointIDAfter(candidate)
+	}
+	if _, taken := occupied[candidate]; taken {
+		return 0, ErrEndpointIDExhausted
+	}
+
+	if err := setNextEndpointID(ctx, tx, endpointIDAfter(candidate)); err != nil {
+		return 0, err
+	}
+	return candidate, nil
+}
+
+// endpointIDAfter returns the number following id, wrapping the top of the
+// bridged range back to its start. Mirrors matter.js's
+// `this.#nextNumber = (this.#nextNumber + 1) % 0xffff` in
+// ServerEndpointStores.ts assignNumber.
+func endpointIDAfter(id uint16) uint16 {
+	if id >= lastBridgedEndpointID {
+		return firstBridgedEndpointID
+	}
+	return id + 1
+}
+
+// occupiedEndpointIDs reads every stored endpoint number in tx and returns the
+// lookup set plus the highest value seen (0 when the table is empty).
+func occupiedEndpointIDs(ctx context.Context, tx *sql.Tx) (occupied map[uint16]struct{}, highest uint16, err error) {
 	rows, err := tx.QueryContext(ctx, `
 SELECT endpoint_id FROM matter_endpoints ORDER BY endpoint_id ASC`)
 	if err != nil {
-		return 0, fmt.Errorf("matter store: next endpoint id: %w", err)
+		return nil, 0, fmt.Errorf("matter store: next endpoint id: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	// Endpoint IDs 0 + 1 are structural (RootNode + Aggregator,
-	// Apple-bridge topology). Bridged endpoints start at 2; mirrors
-	// matter.js's `ServerNode.create(...).add(aggregator).add(child)`
-	// which always lands bridged endpoints at 2..N.
-	want := uint16(2)
+	occupied = make(map[uint16]struct{}, 64)
 	for rows.Next() {
 		var got int
 		if err := rows.Scan(&got); err != nil {
-			return 0, fmt.Errorf("matter store: next endpoint id: scan: %w", err)
+			return nil, 0, fmt.Errorf("matter store: next endpoint id: scan: %w", err)
 		}
-		if got < 2 || got > 65534 {
-			return 0, fmt.Errorf("matter store: next endpoint id: stored value %d out of range", got)
+		if got < firstBridgedEndpointID || got > lastBridgedEndpointID {
+			return nil, 0, fmt.Errorf("matter store: next endpoint id: stored value %d out of range", got)
 		}
-		if uint16(got) != want { //nolint:gosec // bounded by the range check above; see #20
-			return want, nil
+		id := uint16(got) //nolint:gosec // bounded by the range check above; see #20
+		occupied[id] = struct{}{}
+		if id > highest {
+			highest = id
 		}
-		if want == 65534 {
-			return 0, ErrEndpointIDExhausted
-		}
-		want++
 	}
 	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("matter store: next endpoint id: rows: %w", err)
+		return nil, 0, fmt.Errorf("matter store: next endpoint id: rows: %w", err)
 	}
-	return want, nil
+	return occupied, highest, nil
 }

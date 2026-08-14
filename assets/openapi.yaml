@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.24.0
+  version: 5.24.1
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -10072,7 +10072,7 @@ components:
         enabled: { type: boolean, description: "Bridge feature flag" }
         listening: { type: boolean, description: "UDP listener bound" }
         listen_addr: { type: string, description: "Effective UDP listen address" }
-        endpoint_count: { type: integer, description: "Bridged-endpoint count (excluding root)" }
+        endpoint_count: { type: integer, description: "Bridged-endpoint count (excludes the root and Aggregator endpoints)" }
         fabric_count: { type: integer, description: "Commissioned fabrics" }
         enabled_count: { type: integer, description: "Allowlist entries with enabled=true" }
         advertising: { type: boolean, description: "mDNS records emitted" }
@@ -11360,7 +11360,7 @@ components:
         endpoint_count:
           type: integer
           minimum: 0
-          description: "Number of endpoints in the assembled topology, including the root + Aggregator."
+          description: "Bridged-endpoint count of the assembled topology (excludes the root and Aggregator endpoints)."
 
     # ─── Wave-C live-edit schemas ─────────────────────────────────────
 

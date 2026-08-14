@@ -64,9 +64,16 @@ type Identify struct {
 	// active". One goroutine per Identify cluster decrements every
 	// second until either zero is reached or a write/command sets a
 	// new non-zero value (in which case the existing goroutine
-	// continues with the new value).
+	// continues with the new value). The instance MUST therefore
+	// outlive a single dispatch — a per-call instance both loses the
+	// state and strands one ticker goroutine per invoke.
 	timerMu     sync.Mutex
 	timerActive bool
+	closed      bool
+	// done is closed by [Identify.Close] and terminates a running
+	// countdown immediately, so an instance whose endpoint disappeared
+	// cannot keep a ticker alive for up to 65535 s.
+	done chan struct{}
 }
 
 // Cluster ID + revision per Matter §1.2.
@@ -86,8 +93,33 @@ const (
 
 // NewIdentify constructs a fresh Identify cluster instance with
 // IdentifyTime = 0 and IdentifyType = None.
+//
+// The returned instance is stateful (IdentifyTime + its countdown) and
+// must be bound to the lifetime of the endpoint that hosts it. Call
+// [Identify.Close] when that endpoint goes away.
 func NewIdentify() *Identify {
-	return &Identify{}
+	return &Identify{done: make(chan struct{})}
+}
+
+// Close releases the cluster: a running countdown terminates at once and
+// no later write / command starts a new one. Idempotent and safe for
+// concurrent use.
+//
+// Mirrors matter.js
+// packages/node/src/behaviors/identify/IdentifyServer.ts
+// [Symbol.asyncDispose], which stops the identify timer when the
+// behavior — and with it the endpoint — is destroyed.
+func (i *Identify) Close() {
+	i.timerMu.Lock()
+	defer i.timerMu.Unlock()
+	if i.closed {
+		return
+	}
+	i.closed = true
+	i.timerActive = false
+	if i.done != nil {
+		close(i.done)
+	}
 }
 
 // Compile-time assertions.
@@ -199,28 +231,35 @@ func (i *Identify) MatterGeneratedCommands() []uint32 { return nil }
 // maybeStartCountdown starts a background goroutine that decrements
 // IdentifyTime once per second per Matter §1.2.5.1, if one is not
 // already running. Concurrent callers are serialised by timerMu so
-// only one goroutine is ever active at a time.
+// only one goroutine is ever active at a time; the goroutine returns
+// when the countdown reaches zero or [Identify.Close] is called.
 func (i *Identify) maybeStartCountdown() {
 	i.timerMu.Lock()
-	if i.timerActive || i.identifyTime.Load() == 0 {
+	if i.closed || i.timerActive || i.identifyTime.Load() == 0 {
 		i.timerMu.Unlock()
 		return
 	}
 	i.timerActive = true
+	done := i.done
 	i.timerMu.Unlock()
 
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
-			v := i.identifyTime.Load()
-			if v == 0 {
-				i.timerMu.Lock()
-				i.timerActive = false
-				i.timerMu.Unlock()
+		for {
+			select {
+			case <-done:
 				return
+			case <-ticker.C:
+				v := i.identifyTime.Load()
+				if v == 0 {
+					i.timerMu.Lock()
+					i.timerActive = false
+					i.timerMu.Unlock()
+					return
+				}
+				i.identifyTime.Store(v - 1)
 			}
-			i.identifyTime.Store(v - 1)
 		}
 	}()
 }

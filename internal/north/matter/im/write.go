@@ -231,38 +231,61 @@ func (wr WriteResponse) MarshalTLV(enc *tlv.Encoder) {
 // FabricAccessControl.forRequest and chip src/app/WriteHandler.cpp:780
 // "Execute the ACL Access Granting Algorithm before existence checks". When
 // d implements [ACLChecker], the requesting fabric's privilege is verified
-// before each write path is dispatched. The required privilege for a plain
-// Write is Operate (3) per Matter §9.10.4.4. fabricIndex is extracted via
-// [FabricFilterFromContext]; fabricIndex==0 (PASE) bypasses the ACL check.
+// before each write path is dispatched, at the location the path resolves
+// to. The required privilege for a plain Write is Operate (3) per Matter
+// §9.10.4.4, raised per attribute by [AttributeWritePrivilegeProvider].
+// fabricIndex is extracted via [FabricFilterFromContext]; fabricIndex==0
+// (PASE) bypasses the ACL check.
 func HandleWriteRequest(ctx context.Context, d Dispatcher, req WriteRequest) WriteResponse {
 	_, fabricIndex := FabricFilterFromContext(ctx)
 	subjectNodeID, subjectCATs := SubjectFromContext(ctx)
 	aclChecker, hasACL := d.(ACLChecker)
 	privProvider, hasPrivProvider := d.(AttributeWritePrivilegeProvider)
+	authWriter, hasAuthWriter := d.(AuthorizingWriter)
 	dvReader, hasDV := d.(DataVersionReader)
+	// PASE (fabricIndex==0) skips ACL: commissioning writes arrive before
+	// the fabric's ACL entry exists.
+	aclActive := hasACL && fabricIndex != 0
 
 	// writePrivilege returns the minimum privilege needed to write the
-	// given (endpoint, cluster, attribute). Falls back to Operate (3) —
-	// the Matter §9.10.4.4 default write privilege — when no
-	// AttributeWritePrivilegeProvider is wired, the path is not concrete,
-	// or the attribute has no elevated requirement.
-	writePrivilege := func(w AttributeWrite) uint8 {
+	// given resolved (endpoint, cluster, attribute). Falls back to
+	// Operate (3) — the Matter §9.10.4.4 default write privilege — when no
+	// AttributeWritePrivilegeProvider is wired or the attribute has no
+	// elevated requirement.
+	writePrivilege := func(endpoint uint16, clusterID, attrID uint32) uint8 {
 		const privilegeOperate uint8 = 3
-		if hasPrivProvider && w.Path.HasAttribute {
-			return privProvider.MinWritePrivilege(w.Path.Endpoint, w.Path.Cluster, w.Path.Attribute)
+		if hasPrivProvider {
+			return privProvider.MinWritePrivilege(endpoint, clusterID, attrID)
 		}
 		return privilegeOperate
 	}
 
 	var wr WriteResponse
 	for _, w := range req.Writes {
-		// ACL gate. PASE (fabricIndex==0) skips ACL: commissioning writes
-		// arrive before the fabric's ACL entry exists. The required
-		// privilege is per-attribute (AccessControl.ACL → Administer,
+		// A write path MUST name a concrete cluster and attribute. Matter
+		// reserves wildcards for Read/Subscribe; a wildcard-attribute write
+		// has no per-attribute privilege to gate on, so it would apply one
+		// value — under one flat Operate check — to every attribute the
+		// cluster exposes, AccessControl.ACL included. Mirrors matter.js
+		// packages/protocol/src/action/server/AttributeWriteResponse.ts:278-283
+		// ("Wildcard path write must specify a clusterId and attributeId")
+		// and :308-311 ("Wildcard path write must specify an attributeId").
+		if !w.Path.HasCluster || !w.Path.HasAttribute {
+			wr.Responses = append(wr.Responses, AttributeStatus{
+				Path:   w.Path,
+				Status: StatusIB{Status: StatusInvalidAction},
+			})
+			continue
+		}
+		// ACL gate for a concrete path. The required privilege is
+		// per-attribute (AccessControl.ACL → Administer,
 		// BasicInformation.NodeLabel → Manage) rather than a flat Operate,
-		// so an Operate-only subject cannot escalate via a privileged write.
-		if hasACL && fabricIndex != 0 {
-			if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, w.Path.Endpoint, w.Path.Cluster, writePrivilege(w)); !status.IsSuccess() {
+		// so an Operate-only subject cannot escalate via a privileged
+		// write. A wildcard-endpoint path is authorized further down, at
+		// every endpoint it resolves to.
+		if aclActive && w.Path.HasEndpoint {
+			priv := writePrivilege(w.Path.Endpoint, w.Path.Cluster, w.Path.Attribute)
+			if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, w.Path.Endpoint, w.Path.Cluster, priv); !status.IsSuccess() {
 				wr.Responses = append(wr.Responses, AttributeStatus{
 					Path:   w.Path,
 					Status: StatusIB{Status: status},
@@ -297,7 +320,31 @@ func HandleWriteRequest(ctx context.Context, d Dispatcher, req WriteRequest) Wri
 				}
 			}
 		}
-		for _, res := range d.Write(ctx, w.Path, w.Value) {
+		// Dispatch. A wildcard-endpoint write expands inside the
+		// dispatcher and mutates state as it goes, so every resolved
+		// location has to be authorized there — a check on the returned
+		// results would run after the value already landed. Mirrors
+		// matter.js AttributeWriteResponse.ts:324-343.
+		var results []WriteResult
+		switch {
+		case !aclActive || w.Path.HasEndpoint:
+			results = d.Write(ctx, w.Path, w.Value)
+		case hasAuthWriter:
+			results = authWriter.WriteAuthorized(ctx, w.Path, w.Value, func(endpoint uint16, clusterID, attrID uint32) StatusCode {
+				return aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, endpoint, clusterID, writePrivilege(endpoint, clusterID, attrID))
+			})
+		default:
+			// ACL enforcement is on but this dispatcher cannot authorize
+			// the endpoints a wildcard resolves to. Fail closed rather
+			// than write everywhere on the strength of one check against
+			// a zero-value endpoint.
+			wr.Responses = append(wr.Responses, AttributeStatus{
+				Path:   w.Path,
+				Status: StatusIB{Status: StatusUnsupportedAccess},
+			})
+			continue
+		}
+		for _, res := range results {
 			// When a cluster-specific status is conveyed, the outer global
 			// status MUST be FAILURE (not a more specific global code).
 			// Mirrors matter.js

@@ -832,6 +832,9 @@ func (b *Bridge) handleSecureChannelStatusReport(src *net.UDPAddr, requestHdr *m
 		return nil
 	}
 	b.sessionPeerAddrs.Delete(requestHdr.SessionID)
+	// Every exchange the session carried dies with it, so any timed
+	// deadline it registered can never be consumed.
+	b.routing.dropSessionTimedDeadlines(requestHdr.SessionID)
 	b.mu.RLock()
 	reg := b.sessionRegistry
 	b.mu.RUnlock()
@@ -911,6 +914,12 @@ func (b *Bridge) resolveSessionPeerAddr(sessionID uint16) *net.UDPAddr {
 // requiresAck=false): the report is NOT MRP-tracked, the peer does not
 // ack a farewell.
 func (b *Bridge) sendCloseSessionReport(sessionID uint16, sess *channel.Session) {
+	// The session is being torn down whether or not the farewell
+	// reaches the peer, so its per-exchange timed deadlines can never
+	// be consumed again. Dropped before the early returns below — none
+	// of them means the session survives. Teardown paths that do not
+	// notify the peer fall back to the expiry sweep.
+	b.routing.dropSessionTimedDeadlines(sessionID)
 	b.mu.RLock()
 	listener := b.listener
 	b.mu.RUnlock()

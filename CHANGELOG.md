@@ -590,6 +590,194 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   also caps the scan every new flow performs while holding the lock, the
   part that slowed down genuine logins.
 
+### Fixed
+
+- **The device page follows the device in the address bar.** Opening a
+  second device while a device page was already open — a pasted
+  `#/devices/<address>`, a deep link, browser back/forward between two
+  device pages — kept rendering the first device's data under the second
+  device's URL and breadcrumb. Every write issued from that page (rename,
+  delete, MASTER save, room or function assignment, link edit) went to
+  the device the operator was no longer looking at. The view now reloads
+  on the address it is given, and a response for a device that has since
+  been left is discarded instead of repainting the page.
+
+- **"Away" on an HmIP thermostat tile no longer switches to manual
+  heating.** The away segment of the mode row was sent as a mode, and
+  away is not one: the daemon's mode write only knows auto, heat, cool
+  and off, so the button silently wrote manual mode at the current
+  setpoint. It now triggers the away operation, is offered only for
+  devices that support away, and leaving away clears the away window
+  first, which a plain mode write does not.
+
+- **System-variable values update live again.** The daemon has been
+  pushing every system-variable change over the event stream, but the
+  SPA translated the frame to a shape nothing consumed, so the list only
+  ever showed what the last reload fetched.
+
+- **Charts, pickers and the device page discard superseded responses.**
+  The history chart, the multi-series diagram chart, the diagram series
+  picker and the system-variable channel picker each let a slower earlier
+  request overwrite the answer to a newer one — showing another range's
+  history, another device's channels, or a parameter list belonging to a
+  device the series no longer points at. Each fetch is now tied to the
+  selection it was started for. The history chart also stopped issuing
+  its initial request twice.
+
+- **Favorites no longer survive a user switch.** After a logout and a
+  login as somebody else in the same tab, the pinned devices, channels
+  and programs of the previous operator stayed on screen, and the first
+  star toggled wrote them into the new operator's own favorites. Pinned
+  items are now scoped to the identity they were loaded for, and so is
+  the per-user start page.
+
+- **The group editor dialog now closes on Escape and keeps keyboard focus
+  inside it.** Escape only ever reached the dialog's own root element,
+  so a keyboard user whose focus was still on the button that opened the
+  dialog — nothing inside it was ever focused — could not close it with
+  Escape, and Tab could cycle out to the page behind the modal. Opening
+  the dialog now moves focus in and restores it to the trigger on close,
+  mirroring the confirm dialog's existing pattern.
+
+- **The audit log and the device history tab discard superseded
+  responses.** Changing the audit log's date filters, or switching
+  channels on a device's History tab, before the previous request
+  returned could let the older, slower response overwrite the newer
+  one — an audit trail that silently disagreed with the visible filter,
+  or a history chart showing the previous channel's parameters under the
+  channel the picker still shows selected. Both are now tied to the
+  selection that started them.
+
+- **A CCU firmware-update poll no longer outlives the panel that started
+  it.** Navigating away from Settings → System while an install was
+  still in progress and a poll tick's fetch was in flight left that
+  fetch to reschedule itself after the component was gone, so the daemon
+  kept polling `GET /system/update` every five seconds with nothing left
+  to stop it.
+
+- **Two more missing translation keys.** The Rooms & Functions area save
+  confirmation and the Favorites program run button each referenced a
+  key neither catalogue defined, so both showed the raw key
+  (`areas.toast.rooms_saved`, `programs.execute`) instead of a
+  translated message.
+
+- **Hour-axis labels and the sunset/sunrise glyphs in the weekly
+  schedule strip now invert in dark mode**, matching every other
+  colour-bearing element in the same chart.
+
+- **A Matter controller can no longer take over another controller's
+  session slot.** The bridge reserves one secure-session id per CASE
+  exchange, and Apple Home opens a second session on an exchange it has
+  already used. The second session was registered under the id the first
+  one still held: the first controller's session disappeared from the
+  table with its keys live and its subscriptions still registered, so
+  the bridge kept serving them — encrypted for the wrong controller.
+  Each handshake now takes its own id, and a session that would displace
+  a live one is torn down properly first.
+
+- **Aborted Matter handshakes give their session id back.** A CASE
+  exchange that sent Sigma1 and never finished reserved one of the
+  65534 session ids for the lifetime of the daemon. Enough of them —
+  which a device on the same network can produce on its own — and every
+  further handshake was refused, including legitimate reconnects from an
+  already-paired controller, until a restart. Reserved ids now expire,
+  and an exhausted id space reclaims the oldest reservation instead of
+  failing.
+
+- **Matter announces the port it actually listens on.** With
+  `north.matter.listen` set to port `0` — the way to let the operating
+  system pick a free port, e.g. next to a second Matter bridge on the
+  same host — every mDNS record still named 5540. Commissioners resolved
+  the announcement and sent their first packet to a port nothing was
+  listening on, so pairing timed out against a perfectly valid QR code
+  while the log reported the announcement as successful, and a bridge
+  paired by direct addressing became unreachable after a restart.
+
+- **The Matter bridge no longer reports one bridged device too many.**
+  The endpoint count shown in the Matter view, published on the event
+  stream after every topology rebuild and logged at startup counted the
+  aggregator endpoint — bridge scaffolding, not a device. With nothing
+  exposed the SPA showed one bridged device; every other topology was
+  one too high. (REST API 5.22.1)
+
+- **An abandoned Matter timed write no longer leaks.** A controller that
+  announces a timed write or command and never sends it — a dropped
+  packet, a backgrounded app, a controller reboot — left the deadline
+  behind, and closing the session did not reclaim it either. The
+  bookkeeping only ever grew, for as long as the daemon ran, and a peer
+  could drive it there deliberately. Deadlines now expire and are
+  dropped with the session that registered them.
+
+- **A Matter controller that already holds events no longer gets them
+  all again.** A read or subscribe can carry "the lowest event number I
+  still want", which controllers send on every reconnect so they receive
+  only what they missed. The bridge read that number out of the wrong
+  field of the request, so it always came out as zero and the filter had
+  no effect: every reconnect replayed the whole buffered event history —
+  up to 112 records — and lock operations or switch presses the
+  controller had already seen arrived a second time.
+
+- **"Identify" on a bridged device does something again.** Identifying an
+  accessory from Apple Home, Google Home or chip-tool was acknowledged
+  with success and then had no effect whatsoever: the remaining identify
+  time read back as zero on the very next request, no controller ever saw
+  a countdown, and each attempt left a timer running in the background for
+  as long as the requested duration — up to eighteen hours, once per
+  attempt. The cluster is now bound to the endpoint, so it keeps the state
+  it was given across requests and across a topology rebuild, and it stops
+  when the device leaves the bridge.
+
+- **A removed device's Matter endpoint number is not handed to the next
+  device.** Endpoint numbers were reissued as soon as they were free, so
+  the first device bridged after a device was unpaired — or after a
+  channel was un-exposed — took over the number the old one had. Apple
+  Home and Google Home cache an accessory by its endpoint number and are
+  told nothing when the bridge's endpoint list has the same numbers as
+  before, so the new device showed up under the removed device's name,
+  icon and room until the bridge was removed and re-added by hand.
+  Numbers now advance and a released one stays retired.
+
+- **A vendor-specific Matter message is no longer mistaken for an
+  Interaction Model one.** The protocol header put the protocol id where
+  the wire carries the vendor id and vice versa. Both fields are absent
+  from the traffic the bridge normally sees, so nothing showed until a
+  controller sent a vendor-qualified message: its vendor id was then read
+  as the protocol id, and a payload the bridge does not implement was fed
+  into the Interaction Model dispatcher instead of being rejected. The
+  header now follows the field order every other Matter stack uses.
+
+### Security
+
+- **A Matter write is authorized where it lands.** A write whose path
+  left out the attribute or the cluster was checked once, against the
+  default privilege for the un-expanded path, and then applied to every
+  attribute of the cluster it resolved to. A controller holding only
+  Operate — a guest ecosystem, a shared-home account — could target the
+  Access Control cluster this way and rewrite the access rules
+  themselves, which requires Administer. Such a write is now refused
+  outright, as the Matter specification requires; a write that names
+  every endpoint is authorized separately at each endpoint it reaches,
+  so it can no longer touch endpoints the controller's own access rules
+  do not cover.
+
+- **A Matter controller is bound to the fabric its certificate names.**
+  Verifying a controller's operational certificate proved it chained to
+  the fabric's root, but never that the certificate was issued for THAT
+  fabric. Where two fabrics are provisioned from one certificate
+  authority, a controller could present its own fabric's certificate,
+  complete the handshake against another fabric, and read and write that
+  fabric's data. The check existed but could never run, because the
+  daemon's certificate verifier did not expose the fabric id it needed.
+
+- **A Matter session no longer inherits the previous controller's
+  authenticated tags.** CASE Authenticated Tags identify the
+  administrator group a controller belongs to, and access rules can be
+  written against them. When a second controller ran a handshake on an
+  exchange a first one had used, and its own certificate carried no
+  tags, the previous controller's tags stayed attached — so the new
+  session matched every rule written for the previous controller's
+  group.
+
 ## [0.59.0]
 
 ### Added

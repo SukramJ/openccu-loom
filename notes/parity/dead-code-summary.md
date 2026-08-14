@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 951d1b0e
-HEAD: 951d1b0e
+Generated: 7a7d54af
+HEAD: 7a7d54af
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28444 |
-| Reachable | 5014 |
-| Whitelisted | 20445 |
-| **Unreachable** | **2985** |
+| Total Exported | 28391 |
+| Reachable | 5010 |
+| Whitelisted | 20402 |
+| **Unreachable** | **2979** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: 951d1b0e
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 95 | 52 |
+| internal/central/adapter | 4 | 94 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -99,7 +99,7 @@ HEAD: 951d1b0e
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 95 | 52 |
+| internal/central/adapter | 4 | 94 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -122,7 +122,7 @@ HEAD: 951d1b0e
 | internal/alarm/codes | 0 | 13 | 0 |
 | internal/alarm/engine | 0 | 29 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
-| internal/alarm/outputs | 0 | 26 | 4 |
+| internal/alarm/outputs | 0 | 24 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/backup/sbk | 0 | 2 | 4 |
@@ -168,8 +168,8 @@ HEAD: 951d1b0e
 | internal/north/filter | 0 | 1 | 0 |
 | internal/north/matter/bridge | 0 | 51 | 38 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
-| internal/north/matter/endpoint | 0 | 9 | 0 |
-| internal/north/matter/im | 0 | 74 | 14 |
+| internal/north/matter/endpoint | 0 | 8 | 0 |
+| internal/north/matter/im | 0 | 78 | 14 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/mdns | 0 | 8 | 4 |
 | internal/north/matter/schema | 0 | 0 | 8 |
@@ -186,7 +186,7 @@ HEAD: 951d1b0e
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 11 | 0 |
-| internal/north/mqtt | 0 | 88 | 4 |
+| internal/north/mqtt | 0 | 86 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |

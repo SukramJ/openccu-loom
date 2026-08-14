@@ -19,8 +19,8 @@
 //	|   - ExchFlags    | 1B
 //	|   - Opcode       | 1B
 //	|   - ExchangeID   | 2B
+//	|   - VendorID     | 0 or 2B (per V flag)
 //	|   - ProtocolID   | 2B
-//	|   - VendorID     | 0 or 2B (per VID flag)
 //	|   - AckCounter   | 0 or 4B (per A flag)
 //	+------------------+
 //	| Payload          | TLV-encoded application data
