@@ -60,6 +60,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Curated value labels now reach the last translation fallback.** When a
+  value has no label of its own for the parameter reporting it, the daemon
+  falls back to the label the same value carries on any other parameter.
+  That reverse index was built from the raw CCU stringtable before the
+  curated corrections were merged on top, so a label that exists only in
+  the curated set — the sound-file names of the acoustic signal devices,
+  among others — was invisible to it, and the SPA, the REST API and MQTT
+  showed the raw value instead. The curated set exists to close exactly
+  those gaps.
+
 - **A derived reading is no longer computed from half of one measurement
   and half of the next.** Dew point, dew-point spread, frost point, vapor
   concentration, enthalpy and apparent temperature are each computed from

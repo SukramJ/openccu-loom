@@ -50,6 +50,34 @@ func TestCustomOverlayFillsCoolingProfileGaps(t *testing.T) {
 	}
 }
 
+// TestCustomOverlayFeedsValueOnlyFallback pins the last lookup stage of
+// [Translations.ParameterValue] against the curated overlay. `SOUNDFILE_072`
+// carries a label only in translation_custom/parameter_values_<locale>.json;
+// the raw stringtable extract has no entry for that value under any
+// parameter. A parameter that is itself absent from both tables therefore
+// misses stages 1-3 and can only be served by the value-only reverse index.
+// When that index is not rebuilt after the overlay merge, curated
+// gap-fills stay invisible and the operator sees the raw value.
+func TestCustomOverlayFeedsValueOnlyFallback(t *testing.T) {
+	tr, err := LoadTranslationsEmbedded()
+	if err != nil {
+		t.Fatalf("LoadTranslationsEmbedded: %v", err)
+	}
+	cases := []struct {
+		locale string
+		want   string
+	}{
+		{"de", "Sounddatei 72"},
+		{"en", "Sound file 72"},
+	}
+	for _, tc := range cases {
+		got := tr.ParameterValue(tc.locale, "", "PARAMETER_WITHOUT_VALUE_TABLE", "SOUNDFILE_072")
+		if got != tc.want {
+			t.Errorf("ParameterValue(%s, value-only fallback) = %q, want %q", tc.locale, got, tc.want)
+		}
+	}
+}
+
 // TestEmbeddedProfilesCount guards against accidental archive trim:
 func TestEmbeddedProfilesCount(t *testing.T) {
 	store, err := LoadProfilesEmbedded()
