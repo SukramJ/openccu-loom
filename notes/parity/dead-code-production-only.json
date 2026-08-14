@@ -1,6 +1,6 @@
 {
-  "generated": "267901bd",
-  "head": "267901bd",
+  "generated": "79a4cba9",
+  "head": "79a4cba9",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28610,
+    "total_exported": 28611,
     "reachable": 4860,
-    "whitelisted": 20597,
+    "whitelisted": 20598,
     "unreachable": 3153
   },
   "by_package": [
@@ -7577,14 +7577,14 @@
       "package": "internal/model/custom",
       "identifier": "DefaultDataPoints",
       "file": "internal/model/custom/generated_default_data_points.go",
-      "line": 20,
+      "line": 19,
       "kind": "var"
     },
     {
       "package": "internal/model/custom",
       "identifier": "DefaultDataPoints",
       "file": "internal/model/custom/generated_default_data_points.go",
-      "line": 20,
+      "line": 19,
       "kind": "var"
     },
     {
@@ -159169,6 +159169,13 @@
     },
     {
       "package": "internal/store/visibility",
+      "identifier": "TestMasterGatingFSIInputChannelExposesOperationMode",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/visibility/master_gating_test.go",
+      "line": 353
+    },
+    {
+      "package": "internal/store/visibility",
       "identifier": "TestMasterGatingNonWhitelistedParamIsIgnored",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/visibility/master_gating_test.go",
@@ -165479,7 +165486,7 @@
       "identifier": "TestProfileFieldMappingsMatchAiohomematicSource",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/custom_profile_constructor_resolves_test.go",
-      "line": 308
+      "line": 310
     },
     {
       "package": "tests/contract",
