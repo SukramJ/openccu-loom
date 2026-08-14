@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: a169d20c
-HEAD: a169d20c
+Generated: ffc1e302
+HEAD: ffc1e302
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28292 |
-| Reachable | 4999 |
-| Whitelisted | 20317 |
-| **Unreachable** | **2976** |
+| Total Exported | 28374 |
+| Reachable | 5006 |
+| Whitelisted | 20383 |
+| **Unreachable** | **2985** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: a169d20c
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 94 | 48 |
+| internal/central/adapter | 4 | 95 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -87,10 +87,10 @@ HEAD: a169d20c
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 97 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 97 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 94 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 94 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 101 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 101 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 98 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 98 |
 
 ## Full By-Package Breakdown
 
@@ -99,7 +99,7 @@ HEAD: a169d20c
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 94 | 48 |
+| internal/central/adapter | 4 | 95 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -122,7 +122,7 @@ HEAD: a169d20c
 | internal/alarm/codes | 0 | 13 | 0 |
 | internal/alarm/engine | 0 | 29 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
-| internal/alarm/outputs | 0 | 24 | 4 |
+| internal/alarm/outputs | 0 | 26 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/backup/sbk | 0 | 2 | 4 |
@@ -186,7 +186,7 @@ HEAD: a169d20c
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 11 | 0 |
-| internal/north/mqtt | 0 | 86 | 4 |
+| internal/north/mqtt | 0 | 88 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |
