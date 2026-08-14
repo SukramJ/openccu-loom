@@ -119,11 +119,23 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	// every boot. teardown closes it last (LIFO defer in daemonServeWithDeps),
 	// after every downstream user has torn down.
 	ov.db = openLoomDB(cfg, logger) //nolint:contextcheck // deliberately opens on its own timeout, independent of the lifecycle ctx — see openLoomDB doc comment
+	var stopAuditSink func()
+	ov.rec, ov.durableStats, stopAuditSink = wireAuditPersistenceWithDB(ov.db, ov.buf, logger) //nolint:contextcheck // the durable sink persists on its own per-write timeout, detached from the boot ctx by design
 	if ov.db != nil {
 		db := ov.db
-		teardown = func() { _ = db.Close() }
+		// Order is the whole point: the durable audit sink persists off its
+		// own queue through this very handle, so the worker is joined — which
+		// drains what is still queued — and only then is the handle closed.
+		// Closing first ends a burst of mutations that arrived just before
+		// shutdown with "database is closed", leaving the append-only trail
+		// short of exactly the writes an operator is most likely to look for.
+		// This runs as the last teardown in the LIFO chain, by which point
+		// every producer is already down and cannot refill the queue.
+		teardown = func() {
+			stopAuditSink()
+			_ = db.Close()
+		}
 	}
-	ov.rec, ov.durableStats = wireAuditPersistenceWithDB(ov.db, ov.buf, logger) //nolint:contextcheck // the durable sink persists on its own per-write timeout, detached from the boot ctx by design
 	if ov.db != nil {
 		ov.sqUsers = sqlitestore.NewUserStore(ov.db)
 		ov.sqTokens = sqlitestore.NewTokenStore(ov.db)

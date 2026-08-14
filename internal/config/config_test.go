@@ -330,6 +330,47 @@ north:
 	}
 }
 
+func TestMQTTTopicBaseSlashesTrimmed(t *testing.T) {
+	// A base written with slashes has to arrive canonical: the topic builder
+	// trims them for every declared topic, while consumers that concatenate
+	// the raw base (last will, retained-cleanup subscribe filters) do not, so
+	// an untrimmed base publishes the offline signal and the retain sweep onto
+	// topics nothing declares.
+	buf := []byte(minimalCentralYAML + `
+north:
+  mqtt:
+    enabled: true
+    broker_url: tcp://192.168.1.5:1883
+    topic_base: /loom/
+`)
+	cfg, err := Parse(buf)
+	if err != nil {
+		t.Fatalf("slash-bearing topic_base should be accepted: %v", err)
+	}
+	if cfg.North.MQTT.TopicBase != "loom" {
+		t.Fatalf("expected canonical topic_base 'loom', got: %q", cfg.North.MQTT.TopicBase)
+	}
+}
+
+func TestMQTTTopicBaseOnlySlashesFallsBackToDefault(t *testing.T) {
+	// Trimming a base of nothing but slashes leaves an empty string, which the
+	// validator rejects; the default has to fill it as if it were unset.
+	buf := []byte(minimalCentralYAML + `
+north:
+  mqtt:
+    enabled: true
+    broker_url: tcp://192.168.1.5:1883
+    topic_base: "/"
+`)
+	cfg, err := Parse(buf)
+	if err != nil {
+		t.Fatalf("slash-only topic_base should fall back to the default: %v", err)
+	}
+	if cfg.North.MQTT.TopicBase != "openccu-loom" {
+		t.Fatalf("expected default topic_base 'openccu-loom', got: %q", cfg.North.MQTT.TopicBase)
+	}
+}
+
 func TestMQTTBrokerURLMissingHost(t *testing.T) {
 	// Scheme present but no host (e.g. "tcp:///").
 	buf := []byte(minimalCentralYAML + `

@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -67,12 +68,20 @@ type sharedInfra struct {
 // teardown func and run in the same LIFO order the inline defers used
 // (mqtt.Shutdown → valuesCacheStore.Close → masterValuesStore.Close →
 // visibilityStore.Close). The caller defers teardown.
+//
+// channelFlags carries the per-channel operator overrides (G12). It is a
+// parameter rather than a post-construction setter because the MQTT bridge
+// reads its hidden-channel gate once, at build time: installing the gate after
+// Start left the boot-built bridge — the one that lives for the whole daemon
+// lifetime — publishing channels the operator had hidden everywhere else. A
+// nil overlay leaves the gate off.
 func wireSharedInfrastructure(
 	ctx context.Context,
 	cfg *config.Config,
 	logger *slog.Logger,
 	reg *central.Registry,
 	deps *reloadDeps,
+	channelFlags *channelflags.Overlay,
 ) (si *sharedInfra, teardown func()) {
 	si = &sharedInfra{}
 
@@ -163,6 +172,12 @@ func wireSharedInfrastructure(
 	si.mqttCollector = metrics.NewMqttCollector(si.metricsReg, pickFirstCentral(cfg))
 	si.mqttSup = newMQTTSupervisor(logger, si.healthTracker)
 	si.mqttSup.SetCollector(si.mqttCollector)
+	// G12: let every (re)built MQTT bridge skip operator-hidden channels, so a
+	// hidden channel disappears from the MQTT plane like it does from the REST
+	// operation list and Matter. Installed BEFORE Start, which builds the first
+	// bridge — the gate is captured at build time and has no setter afterwards.
+	// The overlay is keyed on (central, address).
+	si.mqttSup.SetChannelHidden(channelHiddenGate(channelFlags))
 	if err := si.mqttSup.Start(ctx, cfg); err != nil {
 		logger.Warn("mqtt.supervisor.start", slog.String("err", err.Error()))
 	}
@@ -223,4 +238,16 @@ func wireSharedInfrastructure(
 	}
 
 	return si, teardown
+}
+
+// channelHiddenGate turns the per-channel operator overlay into the predicate
+// the MQTT bridge consults (G12). A nil overlay yields a nil predicate, which
+// disables the gate rather than hiding everything.
+func channelHiddenGate(overlay *channelflags.Overlay) func(centralName, channelAddress string) bool {
+	if overlay == nil {
+		return nil
+	}
+	return func(centralName, channelAddress string) bool {
+		return overlay.Get(centralName, channelAddress).Hidden
+	}
 }

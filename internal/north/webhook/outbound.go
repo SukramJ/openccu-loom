@@ -191,10 +191,16 @@ func (o *Outbound) Start(_ context.Context) error {
 }
 
 // subscribeCentral attaches the three event handlers for one central and
-// records their unsubscribe funcs.
+// records their unsubscribe funcs. Caller holds o.mu.
 func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
-	o.unsubs = append(
-		o.unsubs,
+	o.unsubs = append(o.unsubs, o.centralSubscriptions(bus, name)...)
+}
+
+// centralSubscriptions attaches the three per-central handlers and returns
+// their unsubscribe funcs without recording them, so a caller that owns the
+// teardown (the live-adopt path) can detach exactly what it attached.
+func (o *Outbound) centralSubscriptions(bus *events.Bus, name string) []func() {
+	return []func(){
 		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
 			o.onDataPoint(name, e)
 		}),
@@ -204,7 +210,36 @@ func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
 		events.Subscribe(bus, func(e hmevent.IncidentRecordedEvent) {
 			o.onIncident(name, e)
 		}),
-	)
+	}
+}
+
+// AttachCentral subscribes one central adopted after Start and returns the
+// detach. It returns nil when the bridge is not running, the central carries
+// no bus, or the central is outside the configured allow-list.
+//
+// Start only ever walked the registry as it stood at boot, so a CCU adopted at
+// runtime delivered no webhook at all — not for its data points, not for its
+// status changes, not for its reliability incidents — until a daemon restart
+// turned it into a boot-time central. Nothing failed and nothing logged.
+func (o *Outbound) AttachCentral(u *central.Unit) func() {
+	if o == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.started {
+		return nil
+	}
+	name := u.Name()
+	if !o.centralAllowed(name) {
+		return nil
+	}
+	unsubs := o.centralSubscriptions(u.EventBus, name)
+	return func() {
+		for _, unsub := range unsubs {
+			unsub()
+		}
+	}
 }
 
 // subscribeAlarm attaches the alarm-plane handlers to the daemon-level

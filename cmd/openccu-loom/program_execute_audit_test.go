@@ -30,7 +30,7 @@ func TestWireProgramExecuteAudit(t *testing.T) {
 	}
 	buf := audit.NewBuffer(10)
 
-	teardown := wireProgramExecuteAudit(reg, buf, nil)
+	_, teardown := wireProgramExecuteAudit(reg, buf, nil)
 	defer teardown()
 
 	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
@@ -90,7 +90,8 @@ func TestWireProgramExecuteAuditTeardownStops(t *testing.T) {
 	}
 	buf := audit.NewBuffer(10)
 
-	wireProgramExecuteAudit(reg, buf, nil)()
+	_, teardown := wireProgramExecuteAudit(reg, buf, nil)
+	teardown()
 
 	events.Publish(unit.EventBus, hmevent.ProgramExecutedEvent{
 		Base:        hmevent.NewBase(),
@@ -107,6 +108,14 @@ func TestWireProgramExecuteAuditTeardownStops(t *testing.T) {
 // no recorder yields a usable no-op teardown rather than a panic at boot.
 func TestWireProgramExecuteAuditNilInputs(t *testing.T) {
 	t.Parallel()
-	wireProgramExecuteAudit(nil, audit.NewBuffer(1), nil)()
-	wireProgramExecuteAudit(central.NewRegistry(), nil, nil)()
+	hook, teardown := wireProgramExecuteAudit(nil, audit.NewBuffer(1), nil)
+	teardown()
+	if hook != nil {
+		t.Error("a nil registry must yield no per-central hook")
+	}
+	hook, teardown = wireProgramExecuteAudit(central.NewRegistry(), nil, nil)
+	teardown()
+	if hook != nil {
+		t.Error("a nil recorder must yield no per-central hook")
+	}
 }

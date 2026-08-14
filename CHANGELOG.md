@@ -4,49 +4,144 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.59.0]
+## [Unreleased]
 
-### Added
+### Fixed
 
-- **Matter bridge diagnostics.** Three further views into what the
-  bridge is doing, reachable under **Matter → Diagnostics**:
+- **A CCU added while the daemon runs is now wired like one that was
+  there at boot.** Adding a second CCU through the SPA brought it up,
+  its devices appeared, and its values flowed — while measurement
+  history for it stayed empty forever, no webhook was ever sent for it,
+  no `device.trigger`, `device.created` / `device.removed`,
+  `datapoint.optimistic_rolled_back` or `system.<central>.status`
+  WebSocket frame was emitted, its interface transitions never reached
+  `GET /system-status` or the MQTT system-status plane, no recorded
+  session was persisted and no reliability incident registered. Each of
+  those subscribes by walking the list of CCUs exactly once, at start.
+  Nothing failed and nothing logged, and a daemon restart made all of it
+  work — which made the gap read like a transient.
 
-  *Discovery.* What the bridge actually announces over mDNS, and what
-  would keep a controller from finding it: missing service subtypes
-  (Apple and Google browse through those, so without them the bridge is
-  invisible to both while chip-tool finds it), addresses only reachable
-  inside a container, a commissioning port other than 5540 (Alexa uses
-  no other), an announcement without IPv6. Each of these leaves the
-  daemon looking correct — advertising succeeds and the log says so.
+- **A CCU added while the daemon runs is backed up, watched and
+  audited.** Three more wirings that ran once at boot and therefore
+  skipped it: its automatic backup — `backup.schedule` applies
+  daemon-wide, so the configured CCUs kept producing daily backups while
+  the added one produced none and pruned nothing, discoverable only by
+  noticing its backup list stayed empty, typically once a restore was
+  already needed; its health seed, its event-bus, audit and scheduler
+  gauges and its metrics aggregator, so its section of `/health` and the
+  diagnostics dump had nothing in it, which reads like an idle CCU
+  rather than an unwatched one; and the record of every program the
+  daemon runs on it, which is what tells a duplicate execution the
+  daemon sent from one the CCU produced on its own — for that CCU the
+  record was simply empty, while it worked for its neighbours.
 
-  *Endpoints.* The assembled topology as a controller sees it, with
-  device types and clusters. Until now the only way to look at it was to
-  commission a controller and browse with chip-tool, so every "why is
-  this device missing" question started with a pairing step.
+- **Issuing and revoking an API token leaves a trace.** Both entries
+  went to the in-memory ring only. With a database present the audit
+  view and its CSV export read exclusively from the database, so
+  `GET /api/v1/audit` returned rows that contained neither, and a
+  restart erased them entirely — the creation and revocation of a
+  credential were the two events with no record at all.
 
-  *Ecosystem compatibility.* Each paired fabric is classified by
-  controller vendor, and the exposed device types are checked against
-  what that ecosystem accepts — a valve Google and Alexa will not show,
-  a leak detector that makes Alexa drop the entire bridge, an endpoint
-  count past where Alexa becomes unreliable. The bridge cannot observe
-  any of this: it exposes the endpoint correctly and the ecosystem
-  silently omits it. (REST API 5.22.0)
+- **A WebSocket connection can refresh its identity with a token from
+  the SPA.** The in-band `reauth` frame resolved the supplied token
+  against the tokens from the configuration file alone. A token minted
+  through the admin surface lives in the database, so it authenticated
+  the connection at upgrade time and was then rejected on refresh, which
+  closes the connection — a credential valid everywhere else dropped the
+  socket.
 
-- **The bridge can say whether a Matter controller is still talking to
-  it.** `GET /api/v1/matter/sessions` lists every open secure session
-  with two separate ages: when the session last carried traffic in any
-  direction, and when the controller last sent something. The difference
-  is the point. A controller that goes away without closing its session
-  leaves it open and simply stops sending, so the bridge keeps reporting
-  into it — from every other angle that looks healthy, and in the
-  ecosystem it shows up only as entities that quietly stop updating.
-  Each session also reports how many subscriptions ride on it: a
-  commissioned controller holding none is connected but receiving
-  nothing.
+- **A Matter controller that reuses a session id mid-handshake no longer
+  silences itself.** A session id reserved for an in-flight (or aborted)
+  CASE handshake resolved as an established session with nothing behind
+  it. A controller that echoed the id it read out of Sigma2 in an
+  ordinary encrypted packet made the receive path fault on the absent
+  session; the per-packet recovery swallowed it without a log line, so
+  the only symptom was a controller whose messages stopped arriving.
 
-  The daemon has tracked all of this internally for the idle-session
-  reaper; none of it could be seen from outside. No key material is
-  exposed. (REST API 5.21.0)
+- **Deleting or disabling a CCU takes effect without a restart.** For a
+  CCU the daemon had loaded at boot — the normal case after the
+  onboarding wizard, once the daemon has been restarted — `DELETE
+  /api/v1/admin/centrals/{name}` returned 204 and the entry vanished
+  from the list while the CCU stayed completely live: still polled,
+  still publishing to MQTT and WebSocket, still holding its callback
+  routes, still writing cache rows. A second delete answered 404. Only a
+  restart made the deletion real.
+
+- **"Clear caches and re-pull" clears something.** The scoped cache
+  clear (and `hmcli cache clear`, and the cache purge that runs when a
+  CCU is removed) addressed the cached rows by the bare interface name
+  from the config, while every row is stored under the CCU-qualified
+  interface id. Every delete matched zero rows: the report said
+  devices/paramsets/values/master = 0, no error was raised, and the
+  re-pull re-hydrated from exactly the stale rows the operator had asked
+  to discard. Both spellings are accepted now.
+
+- **`basic_enabled: false` / `bearer_enabled: false` switch the scheme
+  off.** Both gates were discarded on every deployment with a database —
+  which is every normal one — when the daemon layered its persistent
+  user and token stores onto the login chain. A disabled scheme kept
+  authenticating and granting the stored role, with no signal that the
+  setting had done nothing.
+
+- **A hidden channel disappears from MQTT too.** The per-channel
+  operator override took effect on REST and Matter, but the MQTT bridge
+  kept publishing the channel's state and its Home Assistant discovery
+  config: the gate was installed on the supervisor after the boot bridge
+  had already been built. It only began working after some unrelated
+  `north.mqtt.*` edit rebuilt the bridge, so the same installation
+  behaved differently before and after any MQTT config change.
+
+- **A daemon that cannot open its database serves REST instead of
+  exiting.** A missing or read-only `data_dir`, a failed migration or a
+  migration-lock timeout is logged and boot continues in a degraded,
+  REST-only mode — except the REST mount then dereferenced the absent
+  config service and took the process down with it.
+
+- **A CCU added while the daemon runs keeps its `primary_interface`.**
+  The pin decides which interface the CCU's primary-client health
+  verdict and score are computed from. It reached only the CCUs listed
+  in the configuration file, so for one added through the SPA the daemon
+  fell back to its built-in "an interface whose name contains HmIP-RF"
+  rule — which matches nothing on a wired-only or BidCos-only CCU.
+  `/health` and the health tile then reported that CCU against an
+  interface it does not have.
+
+- **The values-cache endpoints answer instead of crashing when the cache
+  is off.** With `persistence.values_cache.enabled: false`,
+  `GET /api/v1/admin/values-cache/stats` and both reset endpoints
+  panicked on every call — recovered into a 500 with a stack trace in
+  the log — because the absent store still passed the handler's
+  "is it wired" check. They now return the documented 503, and the
+  per-device reset no longer reports "device not found" about a device
+  it never looked for.
+
+- **Audit entries written just before shutdown survive it.** The audit
+  trail persists through a background queue. Shutdown closed the
+  database handle without stopping that queue first, so a burst of
+  changes followed by a restart lost whatever had not been written yet —
+  the trail ends mid-burst, with a warning line as the only trace. The
+  queue is now drained and its worker joined before the handle closes.
+
+- **The MQTT last will lands on the topic every entity listens to.** A
+  `topic_base` written with a leading or trailing slash — `loom/` — was
+  used verbatim for the last-will topic while every declared topic had
+  it trimmed. The broker then published `offline` to `loom//bridge/status`
+  while all entities watch `loom/bridge/status`: when the daemon died or
+  the connection dropped, Home Assistant kept every bridged entity
+  available with its last value, forever. The base is now normalised
+  once, when the configuration is loaded, so every consumer of it —
+  including the retained-topic cleanup — agrees.
+
+- **`hmcli cache clear --offline` fails when it could not clear.** A
+  delete that the database rejected — a locked file, a table missing
+  after an interrupted migration, a read-only data directory — was
+  printed as an `error:` line on standard output and then followed by
+  exit code 0. Anything that reads the exit code instead of the text —
+  a maintenance script, an `ExecStartPre` hook, a CI job — treated the
+  run as done and the next daemon start read the cache it believed was
+  gone. The offline clear now exits 1 and names every store that
+  failed, matching what the daemon-side clear already reports over
+  REST.
 
 ### Fixed
 
@@ -235,6 +330,51 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tags, the previous controller's tags stayed attached — so the new
   session matched every rule written for the previous controller's
   group.
+
+## [0.59.0]
+
+### Added
+
+- **Matter bridge diagnostics.** Three further views into what the
+  bridge is doing, reachable under **Matter → Diagnostics**:
+
+  *Discovery.* What the bridge actually announces over mDNS, and what
+  would keep a controller from finding it: missing service subtypes
+  (Apple and Google browse through those, so without them the bridge is
+  invisible to both while chip-tool finds it), addresses only reachable
+  inside a container, a commissioning port other than 5540 (Alexa uses
+  no other), an announcement without IPv6. Each of these leaves the
+  daemon looking correct — advertising succeeds and the log says so.
+
+  *Endpoints.* The assembled topology as a controller sees it, with
+  device types and clusters. Until now the only way to look at it was to
+  commission a controller and browse with chip-tool, so every "why is
+  this device missing" question started with a pairing step.
+
+  *Ecosystem compatibility.* Each paired fabric is classified by
+  controller vendor, and the exposed device types are checked against
+  what that ecosystem accepts — a valve Google and Alexa will not show,
+  a leak detector that makes Alexa drop the entire bridge, an endpoint
+  count past where Alexa becomes unreliable. The bridge cannot observe
+  any of this: it exposes the endpoint correctly and the ecosystem
+  silently omits it. (REST API 5.22.0)
+
+- **The bridge can say whether a Matter controller is still talking to
+  it.** `GET /api/v1/matter/sessions` lists every open secure session
+  with two separate ages: when the session last carried traffic in any
+  direction, and when the controller last sent something. The difference
+  is the point. A controller that goes away without closing its session
+  leaves it open and simply stops sending, so the bridge keeps reporting
+  into it — from every other angle that looks healthy, and in the
+  ecosystem it shows up only as entities that quietly stop updating.
+  Each session also reports how many subscriptions ride on it: a
+  commissioned controller holding none is connected but receiving
+  nothing.
+
+  The daemon has tracked all of this internally for the idle-session
+  reaper; none of it could be seen from outside. No key material is
+  exposed. (REST API 5.21.0)
+
 
 ## [0.58.6]
 

@@ -59,42 +59,60 @@ func NewDeviceTriggerSubscriber(reg *central.Registry, hub *Hub) *DeviceTriggerS
 }
 
 // Start attaches subscriptions to every registered central's event bus.
+// A central adopted later must be attached with
+// [DeviceTriggerSubscriber.StartCentral].
 func (s *DeviceTriggerSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.unsubs = append(s.unsubs, unwire)
 		}
-		hub := s.hub
-		reg := s.reg
-		unsub := events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
-			channelAddr := e.DeviceAddress + ":" + strconv.Itoa(e.ChannelNo)
-			hub.Publish(Event{
-				Topic: DeviceTriggerTopic(e.DeviceAddress, e.ChannelNo),
-				Type:  string(hmevent.EventTypeDeviceTrigger),
-				When:  e.Timestamp(),
-				Payload: DeviceTriggerPayload{
-					Central:       e.CentralName,
-					InterfaceID:   e.InterfaceID,
-					DeviceAddress: e.DeviceAddress,
-					Channel:       e.ChannelNo,
-					EventType:     string(e.EventType_),
-					Parameter:     e.Parameter,
-					UniqueID: routingkey.CanonicalUniqueID(
-						reg.SerialSuffix(e.CentralName), channelAddr, e.Parameter, "",
-					),
-					Value: e.Value.Unwrap(),
-				},
-			})
-		})
-		s.unsubs = append(s.unsubs, unsub)
 	}
 }
 
-// Stop drops all event-bus subscriptions.
+// StartCentral attaches this subscriber to a single central's event bus and
+// returns the unwire (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so pressing a
+// button on a device of a central adopted at runtime published a
+// DeviceTriggerEvent nobody consumed: no `device.trigger` frame was ever
+// emitted, and every client keying on it stayed silent until a restart.
+func (s *DeviceTriggerSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.reg == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
+		return nil
+	}
+	hub := s.hub
+	reg := s.reg
+	return events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
+		channelAddr := e.DeviceAddress + ":" + strconv.Itoa(e.ChannelNo)
+		hub.Publish(Event{
+			Topic: DeviceTriggerTopic(e.DeviceAddress, e.ChannelNo),
+			Type:  string(hmevent.EventTypeDeviceTrigger),
+			When:  e.Timestamp(),
+			Payload: DeviceTriggerPayload{
+				Central:       e.CentralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.DeviceAddress,
+				Channel:       e.ChannelNo,
+				EventType:     string(e.EventType_),
+				Parameter:     e.Parameter,
+				UniqueID: routingkey.CanonicalUniqueID(
+					reg.SerialSuffix(e.CentralName), channelAddr, e.Parameter, "",
+				),
+				Value: e.Value.Unwrap(),
+			},
+		})
+	})
+}
+
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (s *DeviceTriggerSubscriber) Stop() {
 	for _, u := range s.unsubs {
 		u()

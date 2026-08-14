@@ -715,12 +715,30 @@ func (m *Manager) installEntryLocked(id uint16, entry *Entry) *Entry {
 	return displaced
 }
 
-// Get looks up a session by id.
+// Get looks up an established session by id.
+//
+// An id that [Manager.AllocateID] has merely reserved — the CASE/PASE
+// handshake that claimed it has not reached key derivation, or aborted
+// before it — is reported as [ErrSessionNotFound]. The reservation is a
+// placeholder with no Session under it, and every caller of Get uses the
+// entry to reach that Session: handing the stub out reads to them as "a
+// usable session exists", so a peer that echoes its pre-allocated
+// responderSessionID back in an ordinary secure datagram makes the
+// receive path dereference a nil session and panic. The panic is
+// swallowed by the listener's per-datagram recover, so the only symptom
+// is a controller whose messages vanish.
+//
+// Mirrors matter.js packages/protocol/src/session/SessionManager.ts:513
+// getSession, whose map holds only constructed sessions — it reserves an
+// id by asserting getSession(id) is undefined rather than by staking a
+// stub, so a reserved id resolves to nothing there. The stub is ours
+// alone (it keeps two concurrent allocators apart); keeping it out of
+// Get restores the same observable contract.
 func (m *Manager) Get(sessionID uint16) (*Entry, error) {
 	m.mu.RLock()
 	entry, ok := m.sessions[sessionID]
 	m.mu.RUnlock()
-	if !ok {
+	if !ok || entry == nil || entry.Session == nil {
 		return nil, ErrSessionNotFound
 	}
 	return entry, nil
@@ -775,7 +793,11 @@ func (m *Manager) Close(sessionID uint16) error {
 	}
 	delete(m.sessions, sessionID)
 	m.mu.Unlock()
-	entry.Session.Close()
+	// A pre-allocated id whose handshake never reached key derivation has
+	// no Session under it; dropping the reservation is the whole teardown.
+	if entry.Session != nil {
+		entry.Session.Close()
+	}
 	m.fireOnSessionClose([]*Entry{entry})
 	m.fireReannounceIfPeerGone([]*Entry{entry})
 	return nil

@@ -63,6 +63,29 @@ type authStores struct {
 // out. A nil persistence (no DB — tests, dev-loopback) keeps the
 // historical in-memory-only behaviour, and a hydration failure falls
 // back to in-memory rather than crashing boot.
+// gatedAuthMiddleware builds the header-auth middleware from the two stores,
+// honouring the tri-state scheme gates: the middleware only receives the store
+// whose scheme is enabled, and a nil store disables that scheme (see
+// [auth.NewMiddleware]). The concrete stores stay available to their callers
+// regardless — SPA login and the user/token admin endpoints work on them
+// independently of the header-based schemes.
+//
+// It is shared by every construction site (boot-time in-memory stores, and the
+// SQLite-chained rebuild in wireREST) because a site that skips the gate
+// re-enables a scheme the operator switched off, with no signal that the
+// setting did nothing.
+func gatedAuthMiddleware(cfg *config.Config, users auth.UserStore, tokens auth.TokenStore) *auth.Middleware {
+	var mwUsers auth.UserStore
+	if cfg.North.REST.Auth.BasicAuthEnabled() {
+		mwUsers = users
+	}
+	var mwTokens auth.TokenStore
+	if cfg.North.REST.Auth.BearerAuthEnabled() {
+		mwTokens = tokens
+	}
+	return auth.NewMiddleware(mwUsers, mwTokens)
+}
+
 func buildAuthStores(cfg *config.Config, wsHub *ws.Hub, sessionPersist auth.SessionPersistence, logger *slog.Logger) authStores {
 	users := auth.NewMemoryUserStore()
 	for name, pass := range cfg.North.REST.Auth.Users {
@@ -77,23 +100,12 @@ func buildAuthStores(cfg *config.Config, wsHub *ws.Hub, sessionPersist auth.Sess
 	tokens := auth.NewMemoryTokenStore(buildTokenMap(cfg))
 	sessions := buildSessionStore(sessionPersist, logger)
 
-	// The middleware only receives the stores whose scheme gate is on:
-	// a nil store disables that scheme (see [auth.NewMiddleware]). The
-	// concrete stores stay in authStores regardless — the SPA login and
-	// the user/token admin endpoints work on them independently of the
-	// header-based schemes.
-	var mwUsers auth.UserStore
-	if cfg.North.REST.Auth.BasicAuthEnabled() {
-		mwUsers = users
-	}
-	var mwTokens auth.TokenStore
 	if cfg.North.REST.Auth.BearerAuthEnabled() {
-		mwTokens = tokens
 		// WS upgrades authenticate via the same Bearer tokens; the hub
 		// only learns the store when the scheme is on.
 		wsHub.SetTokenStore(tokens)
 	}
-	authMw := auth.NewMiddleware(mwUsers, mwTokens)
+	authMw := gatedAuthMiddleware(cfg, users, tokens)
 
 	sessionResolve := auth.SessionMiddleware(sessions)
 	restResolve := func(next http.Handler) http.Handler {
@@ -548,15 +560,14 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 	return stack
 }
 
-// buildLWTTopic assembles the retained LWT/online topic for the
-// bridge. Mirrors mqtt.TopicBuilder.BridgeStatus without requiring
-// bridge instantiation first.
+// buildLWTTopic returns the retained LWT/online topic for the bridge,
+// before a bridge exists to ask. It delegates to the same builder the online
+// publish and every discovery availability entry use rather than re-assembling
+// the string: a second assembly drifts from the declared topic the moment the
+// base needs normalising, and the will is the one topic whose divergence stays
+// invisible until the daemon is already gone.
 func buildLWTTopic(cfg *config.Config) string {
-	base := cfg.North.MQTT.TopicBase
-	if base == "" {
-		base = "openccu-loom"
-	}
-	return base + "/bridge/status"
+	return mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).BridgeStatus()
 }
 
 // bridgeHealthSupplier returns a closure the MQTT bridge invokes on

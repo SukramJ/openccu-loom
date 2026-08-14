@@ -81,7 +81,7 @@ func TestSharedInfrastructureEvictsHistoryWithRecordingDisabled(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	si, teardown := wireSharedInfrastructure(ctx, cfg, discardTestLogger(), central.NewRegistry(), &reloadDeps{})
+	si, teardown := wireSharedInfrastructure(ctx, cfg, discardTestLogger(), central.NewRegistry(), &reloadDeps{}, nil)
 
 	// The recording feature stays off: no history store, so no /history
 	// REST surface and no `history` runtime capability.

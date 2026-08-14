@@ -112,10 +112,34 @@ type MasterClearer interface {
 
 // Topology enumerates the configured centrals and their interfaces so a
 // coarse scope can be expanded to the (central, interface) units the stores
-// clear at.
+// clear at. Interfaces may be reported either bare (`HmIP-RF`, the form the
+// config carries) or already canonical — [StoreInterfaceID] normalizes both.
 type Topology interface {
 	Centrals() []string
 	Interfaces(centralName string) []string
+}
+
+// StoreInterfaceID returns the canonical `<central>-<interface>` identifier
+// every persisted cache row is keyed by, from a possibly-bare interface name.
+//
+// The four stores this package clears (device descriptions, paramset
+// descriptions, VALUES cache, MASTER values) all record the interface id the
+// device pipeline stamps onto its devices, which carries the central-name
+// prefix (ADR-0024 option B) so addresses repeating across CCUs stay distinct.
+// The configured topology, in contrast, names interfaces bare — clearing with
+// that name produced exact-match DELETEs that matched no row at all, so an
+// operator's "clear caches and re-pull" reported zeros and the re-init
+// re-hydrated from exactly the rows they asked to discard.
+//
+// Normalization is idempotent: an id that already carries the prefix (a
+// client or the CLI passing the canonical form for an interface- or
+// device-scoped clear) is returned unchanged. An empty central name yields
+// the bare interface, matching how the wire id is composed without one.
+func StoreInterfaceID(centralName, iface string) string {
+	if centralName == "" || strings.HasPrefix(iface, centralName+"-") {
+		return iface
+	}
+	return centralName + "-" + iface
 }
 
 // Reiniter re-initializes a central's south-bound (teardown -> clear model ->
@@ -218,17 +242,25 @@ func (s *Service) Clear(ctx context.Context, scope Scope) (Report, error) {
 	return rep, nil
 }
 
-// ifaceUnit is one (central, interface) the stores clear at.
+// ifaceUnit is one (central, interface) the stores clear at. iface always
+// holds the canonical [StoreInterfaceID] the persisted rows are keyed by, not
+// the bare name the scope and the topology carry.
 type ifaceUnit struct {
 	central string
 	iface   string
 }
 
 // expand turns a scope into the set of (central, interface) units to clear.
+// Every unit's interface is normalized to the canonical store id, so an
+// operator-supplied bare interface and a client-supplied wire id both reach
+// the stores in the one form the rows carry.
 func (s *Service) expand(scope Scope) []ifaceUnit {
 	switch scope.Kind {
 	case ScopeInterface, ScopeDevice:
-		return []ifaceUnit{{central: scope.Central, iface: scope.Interface}}
+		return []ifaceUnit{{
+			central: scope.Central,
+			iface:   StoreInterfaceID(scope.Central, scope.Interface),
+		}}
 	case ScopeCentral:
 		return s.unitsForCentral(scope.Central)
 	case ScopeGlobal:
@@ -248,7 +280,10 @@ func (s *Service) unitsForCentral(central string) []ifaceUnit {
 	var out []ifaceUnit
 	if s.d.Topology != nil {
 		for _, iface := range s.d.Topology.Interfaces(central) {
-			out = append(out, ifaceUnit{central: central, iface: iface})
+			out = append(out, ifaceUnit{
+				central: central,
+				iface:   StoreInterfaceID(central, iface),
+			})
 		}
 	}
 	return out
