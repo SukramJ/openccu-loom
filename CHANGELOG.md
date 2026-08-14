@@ -185,6 +185,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it was given across requests and across a topology rebuild, and it stops
   when the device leaves the bridge.
 
+- **A removed device's Matter endpoint number is not handed to the next
+  device.** Endpoint numbers were reissued as soon as they were free, so
+  the first device bridged after a device was unpaired — or after a
+  channel was un-exposed — took over the number the old one had. Apple
+  Home and Google Home cache an accessory by its endpoint number and are
+  told nothing when the bridge's endpoint list has the same numbers as
+  before, so the new device showed up under the removed device's name,
+  icon and room until the bridge was removed and re-added by hand.
+  Numbers now advance and a released one stays retired.
+
 ### Security
 
 - **A Matter write is authorized where it lands.** A write whose path

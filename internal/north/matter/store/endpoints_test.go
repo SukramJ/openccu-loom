@@ -247,10 +247,12 @@ func TestUpsertEndpointAssigning_CallerProvided(t *testing.T) {
 	}
 }
 
-// TestNextFreeEndpointID_GapDetection verifies that nextFreeEndpointID picks
-// the first gap when IDs are not contiguous. We insert IDs 2, 3, 5 directly
-// then AssignEndpointID should return 4 (the gap).
-func TestNextFreeEndpointID_GapDetection(t *testing.T) {
+// TestAssignEndpointID_SkipsHoles verifies that a hole in the stored numbers
+// is not filled: allocation runs off the high-water mark, so IDs 2, 3, 5 in
+// the table yield 6 and leave 4 retired. Reissuing 4 would hand a removed
+// device's endpoint number — and therefore its cached controller identity —
+// to an unrelated device.
+func TestAssignEndpointID_SkipsHoles(t *testing.T) {
 	t.Parallel()
 	db := openTestDB(t)
 	s := store.New(db)
@@ -263,13 +265,12 @@ func TestNextFreeEndpointID_GapDetection(t *testing.T) {
 		}
 	}
 
-	// ID 4 is the gap.
 	id, err := s.AssignEndpointID(ctx)
 	if err != nil {
 		t.Fatalf("AssignEndpointID: %v", err)
 	}
-	if id != 4 {
-		t.Errorf("expected gap ID 4, got %d", id)
+	if id != 6 {
+		t.Errorf("assigned ID = %d, want 6 (the hole at 4 stays retired)", id)
 	}
 }
 
