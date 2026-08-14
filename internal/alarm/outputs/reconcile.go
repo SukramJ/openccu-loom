@@ -91,7 +91,7 @@ func (m *Manager) AdoptBounded(ctx context.Context, zoneID string, incidentID in
 		// optical/light activations are bounded but not budgeted.
 		if incidentID != 0 && inst.row.Class.Acoustic() {
 			if err := m.ledger.AddAcousticMS(ctx, incidentID, d.Milliseconds()); err != nil {
-				m.journalFault(ctx, zoneID, "acoustic_ledger_failed", inst.row.ID, incidentID, err)
+				m.outputFailed(ctx, zoneID, "acoustic_ledger_failed", inst.row.ID, incidentID, err)
 			}
 		}
 		m.armStopWatchdog(inst, incidentID, d, s)
@@ -111,7 +111,7 @@ func (m *Manager) StopUnowned(ctx context.Context, zoneID string) {
 			continue
 		}
 		if err := m.stopAndVerify(ctx, inst, 0); err != nil {
-			m.journalFault(ctx, zoneID, "output_stop_failed", inst.row.ID, 0, err)
+			m.outputFailed(ctx, zoneID, "output_stop_failed", inst.row.ID, 0, err)
 			continue
 		}
 		m.journalFault(ctx, zoneID, "reconcile_stopped_unowned_siren", inst.row.ID, 0, nil)

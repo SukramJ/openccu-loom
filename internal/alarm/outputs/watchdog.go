@@ -94,7 +94,7 @@ func (m *Manager) runStop(inst *instance, act *activation, s stopper, verifyUnti
 		return
 	}
 	if err := s.stop(ctx); err != nil {
-		m.journalFault(ctx, act.zoneID, "output_stop_failed", act.outputID, act.incidentID, err)
+		m.outputFailed(ctx, act.zoneID, "output_stop_failed", act.outputID, act.incidentID, err)
 	}
 	m.mu.Lock()
 	current, ok := m.active[act.outputID]

@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: b81d091b
-HEAD: b81d091b
+Generated: 195ba3a6
+HEAD: 195ba3a6
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28288 |
+| Total Exported | 28291 |
 | Reachable | 4999 |
-| Whitelisted | 20313 |
+| Whitelisted | 20316 |
 | **Unreachable** | **2976** |
 
 ## Top-20 Packages by Dead Code

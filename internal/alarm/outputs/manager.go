@@ -208,7 +208,7 @@ func (m *Manager) FireCycle(ctx context.Context, zoneID string, incident sqlites
 			// own path.
 		}
 		if err != nil {
-			m.journalFault(ctx, zoneID, "output_fire_failed", inst.row.ID, incident.ID, err)
+			m.outputFailed(ctx, zoneID, "output_fire_failed", inst.row.ID, incident.ID, err)
 			errs = append(errs, fmt.Errorf("output %s: %w", inst.row.ID, err))
 		}
 	}
@@ -232,7 +232,7 @@ func (m *Manager) StopAll(ctx context.Context, zoneID string, incidentID int64) 
 			hmenum.AlarmOutputClassSwitchedSiren, hmenum.AlarmOutputClassSmokeSounder,
 			hmenum.AlarmOutputClassAlarmLight, hmenum.AlarmOutputClassChirp:
 			if err := m.stopAndVerify(ctx, inst, incidentID); err != nil {
-				m.journalFault(ctx, zoneID, "output_stop_failed", inst.row.ID, incidentID, err)
+				m.outputFailed(ctx, zoneID, "output_stop_failed", inst.row.ID, incidentID, err)
 				errs = append(errs, fmt.Errorf("output %s: %w", inst.row.ID, err))
 			}
 		case hmenum.AlarmOutputClassNotification, hmenum.AlarmOutputClassSysvarMirror:
@@ -431,16 +431,46 @@ func classEligible(class hmenum.AlarmOutputClass, opts engine.FireOptions) bool 
 
 // journalFault records a driver fault (fail-visible, S7).
 func (m *Manager) journalFault(ctx context.Context, zoneID, event, outputID string, incidentID int64, cause error) {
+	m.journalEntry(ctx, hmenum.AlarmJournalClassFault, zoneID, event, outputID, incidentID, cause)
+}
+
+// journalEntry appends one output-scoped journal entry under class.
+func (m *Manager) journalEntry(
+	ctx context.Context, class hmenum.AlarmJournalClass,
+	zoneID, event, outputID string, incidentID int64, cause error,
+) {
 	details := map[string]any{"output_id": outputID}
 	if cause != nil {
 		details["error"] = cause.Error()
 	}
 	if _, err := m.journal.Append(ctx, engine.JournalEntry{
-		ZoneID: zoneID, Class: hmenum.AlarmJournalClassFault, Event: event,
+		ZoneID: zoneID, Class: class, Event: event,
 		IncidentID: incidentID, Details: details,
 	}); err != nil {
 		m.log.Error("alarm output journal append failed", "zone", zoneID, "event", event, "error", err)
 	}
+}
+
+// outputFailed records a failed output command on both the surfaces S7
+// requires: the journal, which is what an operator reads afterwards, and
+// the health signal, which is what tells them to look at all.
+//
+// The two halves have to move together. A command that only journals
+// leaves /api/v1/health reporting the alarm domain healthy while a siren
+// did not go off, and that is the exact shape of the failure S7 exists
+// to prevent — an alarm quietly non-functional for weeks.
+func (m *Manager) outputFailed(
+	ctx context.Context, zoneID, event, outputID string, incidentID int64, cause error,
+) {
+	m.journalFault(ctx, zoneID, event, outputID, incidentID, cause)
+	if m.health == nil {
+		return
+	}
+	note := "alarm output " + outputID + " " + event
+	if cause != nil {
+		note += ": " + cause.Error()
+	}
+	m.health(false, note)
 }
 
 // noopJournal drops entries (unwired manager in tests).

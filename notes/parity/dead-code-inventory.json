@@ -1,6 +1,6 @@
 {
-  "generated": "b81d091b",
-  "head": "b81d091b",
+  "generated": "195ba3a6",
+  "head": "195ba3a6",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28288,
+    "total_exported": 28291,
     "reachable": 4999,
-    "whitelisted": 20313,
+    "whitelisted": 20316,
     "unreachable": 2976
   },
   "by_package": [
@@ -1524,14 +1524,14 @@
       "package": "internal/alarm/outputs",
       "identifier": "HealthFunc",
       "file": "internal/alarm/outputs/ports.go",
-      "line": 84,
+      "line": 89,
       "kind": "type"
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "HealthFunc",
       "file": "internal/alarm/outputs/ports.go",
-      "line": 84,
+      "line": 89,
       "kind": "type"
     },
     {
@@ -28953,6 +28953,27 @@
       "identifier": "TestHashPINVerifyPINRoundTrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/codes/codes_test.go",
+      "line": 85
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestAFailedOutputCommandSurfacesOnEverySignal",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/failure_visibility_test.go",
+      "line": 39
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestARefusedTestFireIsNotReportedAsADegradation",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/failure_visibility_test.go",
+      "line": 163
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestASuccessfulTestFireIsNotFiledAsAFault",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/failure_visibility_test.go",
       "line": 85
     },
     {

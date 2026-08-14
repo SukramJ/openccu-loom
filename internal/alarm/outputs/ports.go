@@ -78,7 +78,12 @@ type OutputRowSource interface {
 	GetAll(ctx context.Context) ([]sqlitestore.AlarmOutputRow, error)
 }
 
-// HealthFunc receives driver-level health transitions (stop verified
-// failed / recovered). Optional; nil drops the signal (journal
-// entries still record every failure).
+// HealthFunc receives driver-level health transitions: every failed
+// output command — activation, stop, test — reports a degradation
+// naming the output, and a verified stop reports recovery. Optional;
+// nil drops the signal, and the journal still records every failure.
+//
+// A refusal by design is not a failure: a test fire the manager
+// declines for a class without a safe test path reports nothing, so the
+// signal keeps meaning "something is wrong" (S7).
 type HealthFunc func(healthy bool, note string)

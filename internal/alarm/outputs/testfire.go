@@ -46,14 +46,26 @@ func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly boo
 		return ErrUnknownOutput
 	}
 
+	// A test that worked is not a fault. Filing it as one put a fault
+	// row in the journal per successful siren test, which buries the
+	// failures the fault filter exists to surface.
 	journalTest := func() {
-		m.journalFault(ctx, inst.row.ZoneID, "output_test_fired", inst.row.ID, 0, nil)
+		m.journalEntry(ctx, hmenum.AlarmJournalClassTest, inst.row.ZoneID,
+			"output_test_fired", inst.row.ID, 0, nil)
+	}
+	// Every return below used to hand the error to the caller and stop
+	// there. The operator who pressed the button saw it; the journal and
+	// the health signal did not, so a siren sweep recorded only the
+	// outputs that worked (S7).
+	testFailed := func(err error) error {
+		m.outputFailed(ctx, inst.row.ZoneID, "output_test_failed", inst.row.ID, 0, err)
+		return err
 	}
 	switch inst.row.Class {
 	case hmenum.AlarmOutputClassAcousticSiren, hmenum.AlarmOutputClassOpticalSiren, hmenum.AlarmOutputClassChirp:
 		dev, err := m.resolver.Siren(inst.row.CentralName, inst.row.ChannelAddress)
 		if err != nil {
-			return err
+			return testFailed(err)
 		}
 		on := sirencdp.OnConfig{Duration: testFireDuration}
 		if opticalOnly || inst.row.Class == hmenum.AlarmOutputClassOpticalSiren {
@@ -76,7 +88,7 @@ func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly boo
 			on.AcousticTone = tone
 		}
 		if err := dev.TurnOn(ctx, on, hmenum.CommandPriorityLow); err != nil {
-			return err
+			return testFailed(err)
 		}
 		m.armStopWatchdog(inst, 0, testFireDuration, m.sirenStopper(inst, !opticalOnly && inst.row.Class != hmenum.AlarmOutputClassOpticalSiren))
 		journalTest()
@@ -84,15 +96,18 @@ func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly boo
 	case hmenum.AlarmOutputClassSwitchedSiren, hmenum.AlarmOutputClassAlarmLight:
 		dev, err := m.resolver.Actuator(inst.row.CentralName, inst.row.ChannelAddress)
 		if err != nil {
-			return err
+			return testFailed(err)
 		}
 		if err := dev.TurnOnBounded(ctx, testFireDuration, inst.cfg.Level, hmenum.CommandPriorityLow); err != nil {
-			return err
+			return testFailed(err)
 		}
 		m.armStopWatchdog(inst, 0, testFireDuration, m.actuatorStopper(inst))
 		journalTest()
 		return nil
 	default:
+		// A class without a safe test path is a refusal by design, not
+		// a device that failed. Reporting it as a degradation would put
+		// a false fault on the one signal an operator trusts.
 		return ErrTestFireUnsupported
 	}
 }
