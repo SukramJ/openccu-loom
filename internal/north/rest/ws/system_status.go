@@ -49,8 +49,21 @@ func SystemStatusTopic(centralName string) string {
 //
 // Start/Stop manage the subscription lifetime.
 type SystemStatusSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
+	reg *central.Registry
+	hub *Hub
+	// unsubs holds what the boot walk attached, and nothing else. It needs
+	// no lock because exactly one goroutine ever touches it: the
+	// composition root fills it in Start before any server is listening and
+	// drains it in Stop after every server has stopped.
+	//
+	// What keeps that true is StartCentral — the runtime-adopt entry point,
+	// which runs on an HTTP goroutine while the daemon is live. It hands its
+	// unwire back to the adopt path instead of recording it here, so the
+	// adopt path owns the detach and this slice stays single-threaded.
+	// Appending to it from StartCentral would both silence an adopted
+	// central at shutdown and make the field shared mutable state.
+	// TestSubscriberStopDropsOnlyTheBootWalksSubscriptions pins the
+	// ownership rule for every subscriber in this package.
 	unsubs []func()
 }
 

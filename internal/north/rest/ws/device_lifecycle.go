@@ -66,8 +66,12 @@ func DeviceLifecycleTopic(deviceAddr string) string {
 // family gets a focused subscriber and failure of one path cannot
 // starve the other.
 type DeviceLifecycleSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
+	reg *central.Registry
+	hub *Hub
+	// unsubs holds what the boot walk attached; StartCentral hands its
+	// unwire to the adopt path instead of recording it here. That is what
+	// keeps the slice single-threaded without a lock — see the field on
+	// [SystemStatusSubscriber] for the full ownership rule.
 	unsubs []func()
 }
 

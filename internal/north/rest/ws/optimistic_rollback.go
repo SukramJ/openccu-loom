@@ -41,8 +41,12 @@ type OptimisticRollbackPayload struct {
 // [hmevent.DataPointOptimisticRolledBackEvent] from the domain bus to the
 // WebSocket [*Hub]. Mirrors [DeviceLifecycleSubscriber] in shape.
 type OptimisticRollbackSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
+	reg *central.Registry
+	hub *Hub
+	// unsubs holds what the boot walk attached; StartCentral hands its
+	// unwire to the adopt path instead of recording it here. That is what
+	// keeps the slice single-threaded without a lock — see the field on
+	// [SystemStatusSubscriber] for the full ownership rule.
 	unsubs []func()
 }
 

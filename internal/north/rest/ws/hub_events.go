@@ -4,7 +4,6 @@
 package ws
 
 import (
-	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -195,10 +194,13 @@ type HubEventsSubscriber struct {
 	reg *central.Registry
 	hub *Hub
 
-	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
-	// touch the slice at all - it hands its unwire back to the caller, so
-	// the runtime-adopt path owns its own detach.
-	mu     sync.Mutex
+	// unsubs holds what the boot walk attached; StartCentral hands its
+	// unwire to the adopt path instead of recording it here. That is what
+	// keeps the slice single-threaded without a lock — see the field on
+	// [SystemStatusSubscriber] for the full ownership rule. A lock here
+	// would guard a Start/Stop overlap that cannot occur: the composition
+	// root runs Start before any server listens and Stop after every server
+	// has stopped.
 	unsubs []func()
 }
 
@@ -215,9 +217,7 @@ func (s *HubEventsSubscriber) Start() {
 	}
 	for _, u := range s.reg.List() {
 		if unwire := s.StartCentral(u); unwire != nil {
-			s.mu.Lock()
 			s.unsubs = append(s.unsubs, unwire)
-			s.mu.Unlock()
 		}
 	}
 }
@@ -534,11 +534,8 @@ func (s *HubEventsSubscriber) hubModelSubscriptions(centralName string, hm *hubm
 // Subscriptions handed to a caller by StartCentral are that caller's to
 // detach.
 func (s *HubEventsSubscriber) Stop() {
-	s.mu.Lock()
-	unsubs := s.unsubs
-	s.unsubs = nil
-	s.mu.Unlock()
-	for _, u := range unsubs {
+	for _, u := range s.unsubs {
 		u()
 	}
+	s.unsubs = nil
 }
