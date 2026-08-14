@@ -35,22 +35,22 @@ func wsEventsOnTopic(h *ws.Hub, topic string) []ws.Event {
 	return h.Replay(0, func(got string) bool { return got == topic }).Events
 }
 
-// TestWireSystemStatusSubscribersHubEventsHookAttachesCentral verifies the
-// composition root hands back a usable per-central hub-events hook: the
-// WebSocket hub-events subscriber walks the registry once at wiring time, so
-// without this hook a central that appears later is never subscribed and none
-// of its hub singletons reach a client.
-func TestWireSystemStatusSubscribersHubEventsHookAttachesCentral(t *testing.T) {
+// TestWireSystemStatusSubscribersCentralHookAttachesCentral verifies the
+// composition root hands back a usable per-central hook: every north-bound
+// subscriber it stands up walks the registry once at wiring time, so without
+// this hook a central that appears later is never subscribed and none of its
+// hub singletons reach a client.
+func TestWireSystemStatusSubscribersCentralHookAttachesCentral(t *testing.T) {
 	t.Parallel()
 
 	reg := central.NewRegistry()
 	wsHub := ws.NewHub()
 
-	_, hubEventsHook, _, _, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger())
+	_, centralHook, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger())
 	t.Cleanup(teardown)
 
-	if hubEventsHook == nil {
-		t.Fatal("wireSystemStatusSubscribers returned a nil hub-events hook")
+	if centralHook == nil {
+		t.Fatal("wireSystemStatusSubscribers returned a nil per-central hook")
 	}
 
 	unit, err := central.New(central.Config{Name: "late-central"})
@@ -61,9 +61,9 @@ func TestWireSystemStatusSubscribersHubEventsHookAttachesCentral(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	unwire := hubEventsHook(unit)
+	unwire := centralHook(unit)
 	if unwire == nil {
-		t.Fatal("hub-events hook returned a nil unwire for a central with a hub model")
+		t.Fatal("per-central hook returned a nil unwire for a central with a hub model")
 	}
 	t.Cleanup(unwire)
 
@@ -111,7 +111,7 @@ func TestAdoptCentralWiresHubEventsBroadcasts(t *testing.T) {
 		t.Fatalf("broadcasts without the hub-events hook = %d, want 0", len(got))
 	}
 
-	orch.setHubEventsCentralHook(func(u *central.Unit) func() { return subscriber.StartCentral(u) })
+	orch.addCentralHook(func(u *central.Unit) func() { return subscriber.StartCentral(u) })
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("hooked")); err != nil {
 		t.Fatalf("adoptCentral(hooked): %v", err)
@@ -164,22 +164,22 @@ func TestAdoptCentralWiresHubEventsBroadcasts(t *testing.T) {
 	}
 }
 
-// TestSetHubEventsCentralHookNilSafe pins the nil-tolerant setter contract
-// the composition root relies on: a nil orchestrator (southbound never came
-// up) and a nil hook must both be no-ops rather than panics.
-func TestSetHubEventsCentralHookNilSafe(t *testing.T) {
+// TestAddCentralHookNilSafe pins the nil-tolerant registrar contract the
+// composition root relies on: a nil orchestrator (southbound never came up)
+// and a nil hook must both be no-ops rather than panics.
+func TestAddCentralHookNilSafe(t *testing.T) {
 	t.Parallel()
 
 	var nilOrch *centralOrchestrator
-	nilOrch.setHubEventsCentralHook(func(*central.Unit) func() { return nil })
+	nilOrch.addCentralHook(func(*central.Unit) func() { return nil })
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	orch := buildLiveTestOrchestrator(ctx, t, central.NewRegistry(), &config.Config{})
-	orch.setHubEventsCentralHook(nil)
+	orch.addCentralHook(nil)
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("no-hook")); err != nil {
-		t.Fatalf("adoptCentral with a nil hub-events hook: %v", err)
+		t.Fatalf("adoptCentral with a nil per-central hook: %v", err)
 	}
 	if err := orch.removeCentral(ctx, "no-hook"); err != nil {
 		t.Fatalf("removeCentral: %v", err)

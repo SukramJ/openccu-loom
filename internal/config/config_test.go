@@ -359,6 +359,47 @@ north:
 	}
 }
 
+func TestMQTTTopicBaseSlashesTrimmed(t *testing.T) {
+	// A base written with slashes has to arrive canonical: the topic builder
+	// trims them for every declared topic, while consumers that concatenate
+	// the raw base (last will, retained-cleanup subscribe filters) do not, so
+	// an untrimmed base publishes the offline signal and the retain sweep onto
+	// topics nothing declares.
+	buf := []byte(minimalCentralYAML + `
+north:
+  mqtt:
+    enabled: true
+    broker_url: tcp://192.168.1.5:1883
+    topic_base: /loom/
+`)
+	cfg, err := Parse(buf)
+	if err != nil {
+		t.Fatalf("slash-bearing topic_base should be accepted: %v", err)
+	}
+	if cfg.North.MQTT.TopicBase != "loom" {
+		t.Fatalf("expected canonical topic_base 'loom', got: %q", cfg.North.MQTT.TopicBase)
+	}
+}
+
+func TestMQTTTopicBaseOnlySlashesFallsBackToDefault(t *testing.T) {
+	// Trimming a base of nothing but slashes leaves an empty string, which the
+	// validator rejects; the default has to fill it as if it were unset.
+	buf := []byte(minimalCentralYAML + `
+north:
+  mqtt:
+    enabled: true
+    broker_url: tcp://192.168.1.5:1883
+    topic_base: "/"
+`)
+	cfg, err := Parse(buf)
+	if err != nil {
+		t.Fatalf("slash-only topic_base should fall back to the default: %v", err)
+	}
+	if cfg.North.MQTT.TopicBase != "openccu-loom" {
+		t.Fatalf("expected default topic_base 'openccu-loom', got: %q", cfg.North.MQTT.TopicBase)
+	}
+}
+
 func TestMQTTBrokerURLMissingHost(t *testing.T) {
 	// Scheme present but no host (e.g. "tcp:///").
 	buf := []byte(minimalCentralYAML + `
@@ -552,6 +593,80 @@ centrals:
 	}
 	if !strings.Contains(err.Error(), "rpc_type") {
 		t.Errorf("error should mention 'rpc_type', got: %v", err)
+	}
+}
+
+// TestInterfaceSpecRPCTypeContradictingDerivedTransport pins that a
+// syntactically valid rpc_type which the daemon cannot honour is rejected
+// at config load. The transport is derived from the interface — CUxD is
+// BIN-RPC, everything else XML-RPC — and no per-interface knob overrides
+// that. Accepting a contradicting value left the operator believing the
+// daemon spoke a protocol it never selected.
+func TestInterfaceSpecRPCTypeContradictingDerivedTransport(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		spec InterfaceSpec
+		ok   bool
+	}{
+		{name: "binrpc on an XML-RPC interface", spec: InterfaceSpec{Name: "BidCos-RF", RPCType: "binrpc"}},
+		{name: "xmlrpc on CUxD", spec: InterfaceSpec{Name: "CUxD", RPCType: "xmlrpc"}},
+		{name: "xmlrpc agrees with the derived transport", spec: InterfaceSpec{Name: "BidCos-RF", RPCType: "xmlrpc"}, ok: true},
+		{name: "binrpc agrees with the derived transport", spec: InterfaceSpec{Name: "CUxD", RPCType: "binrpc"}, ok: true},
+		{name: "unset derives silently", spec: InterfaceSpec{Name: "CUxD"}, ok: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.spec.Validate(0)
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("Validate: unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected rpc_type to be rejected")
+			}
+			if !strings.Contains(err.Error(), "rpc_type") {
+				t.Errorf("error should mention 'rpc_type', got: %v", err)
+			}
+		})
+	}
+}
+
+// TestInterfaceSpecRemotePathValidation pins that a remote_path which the
+// XML-RPC endpoint composer cannot use fails at config load instead of at
+// the first RPC. POSTing to the bare "/" crashes the CCU's putParamset
+// handler, and a path without a leading slash would silently glue itself
+// onto the port.
+func TestInterfaceSpecRemotePathValidation(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		path string
+		ok   bool
+	}{
+		{name: "unset", path: "", ok: true},
+		{name: "absolute path", path: "/rpc", ok: true},
+		{name: "missing leading slash", path: "rpc"},
+		{name: "bare root", path: "/"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := InterfaceSpec{Name: "HmIP-RF", RemotePath: tc.path}.Validate(0)
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("Validate: unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected remote_path to be rejected")
+			}
+			if !strings.Contains(err.Error(), "remote_path") {
+				t.Errorf("error should mention 'remote_path', got: %v", err)
+			}
+		})
 	}
 }
 

@@ -4,12 +4,17 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
 	"log/slog"
+	"path/filepath"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // ── buildBackupAdapter ────────────────────────────────────────────────────────
@@ -58,7 +63,7 @@ func TestBuildBackupAdapter_EmptyDataDir_FallsBackToVar(t *testing.T) {
 
 func TestWireSessionRecorderPersistence_NilDB_ReturnsNoop(t *testing.T) {
 	t.Parallel()
-	closer := wireSessionRecorderPersistence(nil, central.NewRegistry(), slog.Default())
+	_, closer := wireSessionRecorderPersistence(nil, central.NewRegistry(), slog.Default())
 	// Must not panic; nil db → early return noop func.
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
@@ -69,7 +74,7 @@ func TestWireSessionRecorderPersistence_NilDB_ReturnsNoop(t *testing.T) {
 func TestWireSessionRecorderPersistence_NilRegistry_ReturnsNoop(t *testing.T) {
 	t.Parallel()
 	db := openTestLoomDB(t)
-	closer := wireSessionRecorderPersistence(db, nil, slog.Default())
+	_, closer := wireSessionRecorderPersistence(db, nil, slog.Default())
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
@@ -81,7 +86,7 @@ func TestWireSessionRecorderPersistence_ValidDB_ReturnsCloser(t *testing.T) {
 	db := openTestLoomDB(t)
 	reg := central.NewRegistry()
 	logger := slog.New(slog.DiscardHandler)
-	closer := wireSessionRecorderPersistence(db, reg, logger)
+	_, closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
@@ -99,14 +104,14 @@ func TestWireSessionRecorderPersistence_ValidDB_ReturnsCloser(t *testing.T) {
 func TestWireIncidentRecorder_NilDB_IsNoop(t *testing.T) {
 	t.Parallel()
 	// Must not panic.
-	_, closer := wireIncidentRecorder(nil, central.NewRegistry(), slog.Default())
+	_, _, closer := wireIncidentRecorder(nil, central.NewRegistry(), slog.Default())
 	t.Cleanup(closer)
 }
 
 func TestWireIncidentRecorder_NilRegistry_IsNoop(t *testing.T) {
 	t.Parallel()
 	db := openTestLoomDB(t)
-	_, closer := wireIncidentRecorder(db, nil, slog.Default())
+	_, _, closer := wireIncidentRecorder(db, nil, slog.Default())
 	t.Cleanup(closer)
 }
 
@@ -115,7 +120,7 @@ func TestWireIncidentRecorder_ValidDB_DoesNotPanic(t *testing.T) {
 	db := openTestLoomDB(t)
 	reg := central.NewRegistry()
 	logger := slog.New(slog.DiscardHandler)
-	store, closer := wireIncidentRecorder(db, reg, logger)
+	store, _, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 	if store == nil {
 		t.Fatal("expected non-nil incident store for a valid shared db")
@@ -134,7 +139,7 @@ func TestWireIncidentRecorder_ValidDB_DoesNotPanic(t *testing.T) {
 func TestWireAuditPersistenceWithDB_NilDB_ReturnsBuf(t *testing.T) {
 	t.Parallel()
 	buf := audit.NewBuffer(16)
-	got, stats := wireAuditPersistenceWithDB(nil, buf, slog.Default())
+	got, stats, _ := wireAuditPersistenceWithDB(nil, buf, slog.Default())
 	// nil db → returns the buf unchanged.
 	if got == nil {
 		t.Fatal("expected non-nil recorder")
@@ -146,7 +151,7 @@ func TestWireAuditPersistenceWithDB_NilDB_ReturnsBuf(t *testing.T) {
 
 func TestWireAuditPersistenceWithDB_NilBuf_ReturnsBuf(t *testing.T) {
 	t.Parallel()
-	got, _ := wireAuditPersistenceWithDB(nil, nil, slog.Default())
+	got, _, _ := wireAuditPersistenceWithDB(nil, nil, slog.Default())
 	// nil buf → returns nil (the function returns buf which is nil).
 	_ = got
 }
@@ -156,10 +161,69 @@ func TestWireAuditPersistenceWithDB_ValidDB_ReturnsPersistedRecorder(t *testing.
 	db := openTestLoomDB(t)
 	buf := audit.NewBuffer(16)
 	logger := slog.New(slog.DiscardHandler)
-	got, _ := wireAuditPersistenceWithDB(db, buf, logger)
+	got, _, stop := wireAuditPersistenceWithDB(db, buf, logger)
+	t.Cleanup(stop)
 	if got == nil {
 		t.Fatal("expected non-nil recorder")
 	}
 	// The result must accept a Record call without panicking.
 	got.Record(audit.Entry{User: "test", Parameter: "key"})
+}
+
+// TestAuditOverlayTeardownPersistsQueuedEntries pins the shutdown order the
+// composition root owns: the durable audit sink is joined — draining its
+// queue — BEFORE the shared database handle it writes through is closed.
+//
+// The sink persists off a 256-entry channel on its own goroutine, so a burst
+// of writes followed by an immediate SIGTERM leaves entries queued. With the
+// stop closure discarded, teardown closed the handle under the still-running
+// worker: every queued mutation was lost with nothing but a warn line, and the
+// operator's audit trail simply ends mid-burst — the one guarantee an
+// append-only trail exists to give.
+//
+// The assertion is on the persisted rows, not on the closure having run.
+func TestAuditOverlayTeardownPersistsQueuedEntries(t *testing.T) {
+	t.Parallel()
+
+	dataDir := t.TempDir()
+	cfg := config.Default()
+	cfg.DataDir = dataDir
+	logger := slog.New(slog.DiscardHandler)
+
+	ov, teardown := wireAuditOverlay(context.Background(), cfg, logger)
+	if ov.db == nil {
+		t.Fatal("the audit overlay opened no database")
+	}
+
+	const entries = 200
+	for i := range entries {
+		ov.rec.Record(audit.Entry{
+			User:      "burst",
+			Action:    audit.ActionParamsetWrite,
+			Parameter: fmt.Sprintf("BURST_%03d", i),
+		})
+	}
+	// The burst is still draining; this is the shutdown that must wait for it.
+	teardown()
+
+	db, err := sql.Open("sqlite", sqlitestore.FileDSN(filepath.Join(dataDir, "openccu-loom.db")))
+	if err != nil {
+		t.Fatalf("reopen audit db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	rows, err := sqlitestore.NewAuditStore(db).Query(context.Background(), audit.Query{Limit: entries * 2})
+	if err != nil {
+		t.Fatalf("query audit rows: %v", err)
+	}
+	persisted := 0
+	for _, e := range rows {
+		if e.User == "burst" {
+			persisted++
+		}
+	}
+	if persisted != entries {
+		t.Errorf("audit rows surviving shutdown: got %d of %d — the queue was dropped when the handle closed",
+			persisted, entries)
+	}
 }

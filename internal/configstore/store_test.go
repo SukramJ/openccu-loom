@@ -20,15 +20,24 @@ import (
 // ---------------------------------------------------------------------------
 
 // fakeSectionLoader is a fake SectionLoader backed by an in-memory map.
+// getErr lets a test make one section unreadable, which is what a sealed
+// row whose master key is gone looks like to the Store.
 type fakeSectionLoader struct {
-	rows map[string]sqlite.SectionRow
+	rows   map[string]sqlite.SectionRow
+	getErr map[string]error
 }
 
 func newFakeSectionLoader() *fakeSectionLoader {
-	return &fakeSectionLoader{rows: make(map[string]sqlite.SectionRow)}
+	return &fakeSectionLoader{
+		rows:   make(map[string]sqlite.SectionRow),
+		getErr: make(map[string]error),
+	}
 }
 
 func (f *fakeSectionLoader) Get(_ context.Context, section string) (sqlite.SectionRow, error) {
+	if err, ok := f.getErr[section]; ok {
+		return sqlite.SectionRow{}, err
+	}
 	r, ok := f.rows[section]
 	if !ok {
 		return sqlite.SectionRow{}, sqlite.ErrSectionNotFound
@@ -126,6 +135,31 @@ func TestStoreEffectiveBootstrapFieldSources(t *testing.T) {
 		if got := res.Sources[f]; got != SourceBootstrap {
 			t.Errorf("Sources[%q]=%q want %q", f, got, SourceBootstrap)
 		}
+	}
+}
+
+// TestStoreEffectiveCarriesBootstrapSafety pins that the hardening toggle
+// survives the assembly the daemon's reload and the SPA's config snapshot
+// both run through. The toggle is bootstrap-tier: an effective config that
+// dropped it would re-open the unauthenticated /setup surface on the next
+// re-assembly of a hardened deployment.
+func TestStoreEffectiveCarriesBootstrapSafety(t *testing.T) {
+	t.Parallel()
+	bs := defaultBootstrap()
+	bs.Bootstrap.AllowFirstRunSetup = new(false)
+	s := New(bs, nil, nil)
+	res, err := s.Effective(context.Background())
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	if res.Config.Bootstrap.FirstRunSetupAllowed() {
+		t.Error("effective config must carry allow_first_run_setup: false")
+	}
+	if got := res.Sources["bootstrap.allow_first_run_setup"]; got != SourceBootstrap {
+		t.Errorf("Sources[bootstrap.allow_first_run_setup]=%q want %q", got, SourceBootstrap)
+	}
+	if _, ok := UnmanagedFieldPaths()["bootstrap.allow_first_run_setup"]; !ok {
+		t.Error("bootstrap.allow_first_run_setup must not be editable through the section editor")
 	}
 }
 
@@ -376,8 +410,26 @@ func TestStoreEffectiveWithCentralsLoader(t *testing.T) {
 	}
 }
 
+// yamlBaseWithCentral returns a YAML-tier base config carrying one central,
+// mirroring a daemon booted from a config.yaml whose `centrals:` entry was
+// copied into the centrals table on first run. Without such a base the
+// central-tier tests assert against an already-empty slice and pass for a
+// reason unrelated to the code under test.
+func yamlBaseWithCentral() *config.Config {
+	cfg := config.Default()
+	cfg.Centrals = []config.CentralConfig{{
+		Name:       "ccu1",
+		Host:       "10.0.0.9",
+		Port:       2010,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}},
+	}}
+	return cfg
+}
+
 // TestStoreEffectiveDisabledCentralsFiltered verifies that disabled
-// centrals are silently excluded from cfg.Centrals.
+// centrals are silently excluded from cfg.Centrals — including when the
+// YAML base still lists a central of its own, which the DB tier replaces
+// wholesale.
 func TestStoreEffectiveDisabledCentralsFiltered(t *testing.T) {
 	t.Parallel()
 	cl := &fakeCentralLoader{
@@ -387,7 +439,7 @@ func TestStoreEffectiveDisabledCentralsFiltered(t *testing.T) {
 		},
 	}
 
-	s := New(defaultBootstrap(), nil, cl)
+	s := New(defaultBootstrap(), nil, cl, WithBaseConfig(yamlBaseWithCentral()))
 	res, err := s.Effective(context.Background())
 	if err != nil {
 		t.Fatalf("Effective: %v", err)
@@ -400,9 +452,12 @@ func TestStoreEffectiveDisabledCentralsFiltered(t *testing.T) {
 	}
 }
 
-// TestStoreEffectiveAllCentralsDisabledYieldsEmptyCentrals verifies
-// that when every central is disabled, cfg.Centrals remains empty and
-// the "centrals" source key is absent.
+// TestStoreEffectiveAllCentralsDisabledYieldsEmptyCentrals verifies that a
+// centrals table holding only parked rows yields no centrals at all, even
+// though the YAML base the daemon booted from still lists one. A table with
+// rows is the authoritative tier: "every central is parked" must mean "no
+// central", not "fall back to the config file" — otherwise disabling the
+// last CCU in the SPA reconnects to it on the next restart.
 func TestStoreEffectiveAllCentralsDisabledYieldsEmptyCentrals(t *testing.T) {
 	t.Parallel()
 	cl := &fakeCentralLoader{
@@ -412,7 +467,7 @@ func TestStoreEffectiveAllCentralsDisabledYieldsEmptyCentrals(t *testing.T) {
 		},
 	}
 
-	s := New(defaultBootstrap(), nil, cl)
+	s := New(defaultBootstrap(), nil, cl, WithBaseConfig(yamlBaseWithCentral()))
 	res, err := s.Effective(context.Background())
 	if err != nil {
 		t.Fatalf("Effective: %v", err)
@@ -420,8 +475,26 @@ func TestStoreEffectiveAllCentralsDisabledYieldsEmptyCentrals(t *testing.T) {
 	if len(res.Config.Centrals) != 0 {
 		t.Fatalf("Centrals len=%d want 0 (all disabled)", len(res.Config.Centrals))
 	}
-	if _, ok := res.Sources["centrals"]; ok {
-		t.Error("Sources[centrals] present but should be absent when all centrals disabled")
+	if res.Sources["centrals"] != SourceDB {
+		t.Errorf("Sources[centrals]=%q want db (the table is in use)", res.Sources["centrals"])
+	}
+}
+
+// TestStoreEffectiveEmptyCentralsTableKeepsYAMLCentrals verifies the other
+// half of the tier rule: a centrals table with no rows at all means the DB
+// tier has nothing to say, so the YAML `centrals:` list stays authoritative.
+func TestStoreEffectiveEmptyCentralsTableKeepsYAMLCentrals(t *testing.T) {
+	t.Parallel()
+	s := New(defaultBootstrap(), nil, &fakeCentralLoader{}, WithBaseConfig(yamlBaseWithCentral()))
+	res, err := s.Effective(context.Background())
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	if len(res.Config.Centrals) != 1 || res.Config.Centrals[0].Name != "ccu1" {
+		t.Fatalf("Centrals=%+v want the YAML entry to survive an empty table", res.Config.Centrals)
+	}
+	if got := res.Sources["centrals"]; got == SourceDB {
+		t.Errorf("Sources[centrals]=%q must not be db while the table is empty", got)
 	}
 }
 
@@ -721,5 +794,128 @@ func TestApplyMarshalCoverAllSections(t *testing.T) {
 				t.Errorf("marshalSection(%q) returned error (missing case?): %v", sec, err)
 			}
 		})
+	}
+}
+
+// TestOverlayIntoLeavesConfigUntouchedOnSectionFailure pins the
+// all-or-nothing contract of the boot overlay. A section that cannot be
+// read — the shape a sealed row takes once its master key is gone — used to
+// abort the merge half-way: the sections layered before the failure were
+// already written into the caller's config, the ones after it silently
+// reverted to their YAML values, and ApplyDefaults never ran. The daemon
+// then kept running on that half-merged config. After a failure the
+// caller's config must be exactly the YAML tier it handed in.
+func TestOverlayIntoLeavesConfigUntouchedOnSectionFailure(t *testing.T) {
+	t.Parallel()
+	sl := newFakeSectionLoader()
+	// locale and north.mqtt are layered before north.matter (AllSections
+	// order), so both would already have been applied when matter fails.
+	sl.rows[string(SectionLocale)] = sqlite.SectionRow{
+		Section:   string(SectionLocale),
+		ValueJSON: []byte(`{"locale":"de"}`),
+	}
+	sl.rows[string(SectionMQTT)] = sqlite.SectionRow{
+		Section:   string(SectionMQTT),
+		ValueJSON: []byte(`{"enabled":true,"broker_url":"tcp://db:1883"}`),
+	}
+	sl.getErr[string(SectionMatter)] = errors.New("open secrets: encrypted value but no master key available")
+
+	cfg := config.Default()
+	cfg.Locale = "en"
+	cfg.North.REST.PublicURL = "https://yaml.example.com"
+	before := config.Clone(cfg)
+
+	s := New(defaultBootstrap(), sl, nil)
+	if _, err := s.OverlayInto(context.Background(), cfg); err == nil {
+		t.Fatal("OverlayInto: want error from the unreadable section, got nil")
+	}
+	if !reflect.DeepEqual(cfg, before) {
+		t.Errorf("config was mutated by a failed overlay:\n got: %+v\nwant: %+v", cfg, before)
+	}
+}
+
+// TestOverlayIntoCommitsEveryLayeredSection is the positive half of the
+// same contract: on success the caller's config carries every section that
+// was layered, plus the defaults ApplyDefaults fills in.
+func TestOverlayIntoCommitsEveryLayeredSection(t *testing.T) {
+	t.Parallel()
+	sl := newFakeSectionLoader()
+	sl.rows[string(SectionLocale)] = sqlite.SectionRow{
+		Section:   string(SectionLocale),
+		ValueJSON: []byte(`{"locale":"de"}`),
+	}
+	sl.rows[string(SectionMQTT)] = sqlite.SectionRow{
+		Section:   string(SectionMQTT),
+		ValueJSON: []byte(`{"enabled":true,"broker_url":"tcp://db:1883"}`),
+	}
+
+	cfg := config.Default()
+	cfg.Locale = "en"
+	s := New(defaultBootstrap(), sl, nil)
+	srcs, err := s.OverlayInto(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("OverlayInto: %v", err)
+	}
+	if cfg.Locale != "de" {
+		t.Errorf("Locale=%q want de", cfg.Locale)
+	}
+	if cfg.North.MQTT.BrokerURL != "tcp://db:1883" {
+		t.Errorf("BrokerURL=%q want tcp://db:1883", cfg.North.MQTT.BrokerURL)
+	}
+	if cfg.North.MQTT.TopicBase == "" {
+		t.Error("TopicBase empty: ApplyDefaults must run after the merge")
+	}
+	if srcs[string(SectionMQTT)] != SourceDB {
+		t.Errorf("Sources[north.mqtt]=%q want db", srcs[string(SectionMQTT)])
+	}
+}
+
+// TestPlaintextSecretsAllowed pins the read side of the security section:
+// the flag governs whether a central password may be persisted in the clear
+// when no master key is available, so an unreadable, absent or malformed
+// row must read as "not allowed" (the documented default).
+func TestPlaintextSecretsAllowed(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		row  string
+		err  error
+		want bool
+	}{
+		{name: "absent row defaults to false"},
+		{name: "explicit false", row: `{"allow_plaintext_secrets":false}`},
+		{name: "explicit true", row: `{"allow_plaintext_secrets":true}`, want: true},
+		{name: "malformed row defaults to false", row: `{broken`},
+		{name: "unreadable row defaults to false", err: errors.New("open secrets")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sl := newFakeSectionLoader()
+			if tc.row != "" {
+				sl.rows[string(SectionSecurity)] = sqlite.SectionRow{
+					Section:   string(SectionSecurity),
+					ValueJSON: []byte(tc.row),
+				}
+			}
+			if tc.err != nil {
+				sl.getErr[string(SectionSecurity)] = tc.err
+			}
+			s := New(defaultBootstrap(), sl, nil)
+			if got := s.PlaintextSecretsAllowed(context.Background()); got != tc.want {
+				t.Errorf("PlaintextSecretsAllowed()=%v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPlaintextSecretsAllowedWithoutSectionStore pins the degraded path: a
+// Store with no section loader cannot read the operator's opt-in, so it must
+// report the safe default rather than assuming consent.
+func TestPlaintextSecretsAllowedWithoutSectionStore(t *testing.T) {
+	t.Parallel()
+	s := New(defaultBootstrap(), nil, nil)
+	if s.PlaintextSecretsAllowed(context.Background()) {
+		t.Error("PlaintextSecretsAllowed() = true without a section store, want false")
 	}
 }

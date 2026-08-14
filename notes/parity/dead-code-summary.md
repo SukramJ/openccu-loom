@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: ffc1e302
-HEAD: ffc1e302
+Generated: 951d1b0e
+HEAD: 951d1b0e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28374 |
-| Reachable | 5006 |
-| Whitelisted | 20383 |
+| Total Exported | 28444 |
+| Reachable | 5014 |
+| Whitelisted | 20445 |
 | **Unreachable** | **2985** |
 
 ## Top-20 Packages by Dead Code
@@ -87,10 +87,10 @@ HEAD: ffc1e302
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 101 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 101 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 98 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 98 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 97 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 97 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 94 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 94 |
 
 ## Full By-Package Breakdown
 
@@ -128,7 +128,7 @@ HEAD: ffc1e302
 | internal/backup/sbk | 0 | 2 | 4 |
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 24 | 2 |
-| internal/central/cachereset | 0 | 20 | 0 |
+| internal/central/cachereset | 0 | 18 | 0 |
 | internal/central/coordinators | 0 | 109 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 10 | 4 |
@@ -199,7 +199,7 @@ HEAD: ffc1e302
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 108 | 28 |
+| internal/store/sqlite | 0 | 108 | 30 |
 | pkg/hmapi | 0 | 157 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

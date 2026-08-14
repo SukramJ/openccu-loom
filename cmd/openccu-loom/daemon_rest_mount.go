@@ -197,9 +197,20 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	// YAML cfg): the overview compares it against the same assembly per
 	// request, so YAML-only fields the effective view derives elsewhere
 	// (e.g. locale) don't read as spurious changes on a clean start.
+	//
+	// configSvc is nil whenever the app database could not be opened
+	// (missing / read-only data dir, failed migration, migration-lock
+	// timeout): openLoomDB logs and returns nil, and boot deliberately
+	// continues in the degraded, REST-only mode every neighbouring consumer
+	// is guarded for. Dereferencing it here took the whole daemon down on the
+	// boot goroutine instead — a nil interface dispatches no method — so the
+	// baseline falls back to the raw config, which is what a daemon without a
+	// config store has anyway.
 	bootBaseline := cfg
-	if eff, err := d.configSvc.Effective(ctx); err == nil && eff != nil && eff.Config != nil {
-		bootBaseline = eff.Config
+	if d.configSvc != nil {
+		if eff, err := d.configSvc.Effective(ctx); err == nil && eff != nil && eff.Config != nil {
+			bootBaseline = eff.Config
+		}
 	}
 	restartState := newRestartPendingProvider(bootBaseline, d.configSvc)
 	// The live surface profile. Seeded from the assembled effective
@@ -305,9 +316,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			Users: d.sqUsers,
 			// The live-adopt decorator, not the raw store: the wizard's CCU
 			// must come up immediately, exactly as an admin-created one does.
-			Centrals: d.centSvc,
-			Sections: d.sqSections,
-			Required: d.noUsers,
+			Centrals:        d.centSvc,
+			Sections:        d.sqSections,
+			Required:        d.noUsers,
+			FirstRunAllowed: cfg.Bootstrap.FirstRunSetupAllowed,
 		},
 		LoginRateLimit:  middleware.NewLoginRateLimiter(),
 		Backup:          d.backupAdapter,

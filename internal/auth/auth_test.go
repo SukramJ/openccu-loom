@@ -32,6 +32,22 @@ func TestBasicAuthCaseInsensitiveUsername(t *testing.T) {
 	}
 }
 
+// TestBasicAuthReturnsCanonicalSubject pins that the identity carries the
+// canonical spelling of the subject rather than the casing the caller
+// typed. Sessions, audit notes and the revocation hooks behind a
+// credential change all key on the canonical form.
+func TestBasicAuthReturnsCanonicalSubject(t *testing.T) {
+	us := NewMemoryUserStore()
+	us.Put("Alice", "s", RoleViewer)
+	id, err := us.AuthenticateBasic(context.Background(), " ALICE ", "s")
+	if err != nil {
+		t.Fatalf("auth: %v", err)
+	}
+	if id.Subject != "alice" {
+		t.Errorf("Subject=%q want %q", id.Subject, "alice")
+	}
+}
+
 func TestBasicAuthWrongPassword(t *testing.T) {
 	us := NewMemoryUserStore()
 	us.Put("alice", "s", RoleViewer)

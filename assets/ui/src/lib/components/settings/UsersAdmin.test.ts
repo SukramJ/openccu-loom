@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, screen } from "@testing-library/svelte";
+import { render, cleanup, waitFor, screen, fireEvent } from "@testing-library/svelte";
 
 // ---------------------------------------------------------------------------
 // Mutable mock fns
@@ -188,5 +188,52 @@ describe("UsersAdmin — delete", () => {
     screen.getAllByText("common.delete")[0].click();
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith("users.last_admin_error"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Creating a user
+// ---------------------------------------------------------------------------
+
+describe("UsersAdmin — create", () => {
+  it("says the name is taken when the daemon refuses the create", async () => {
+    const { ApiError } = await import("$lib/api/client");
+    mockCreateUser.mockRejectedValue(new ApiError(409, { code: "conflict" }, "conflict"));
+
+    const { container } = render(UsersAdmin);
+    await waitFor(() => expect(screen.getByText("viewer1")).toBeInTheDocument());
+
+    screen.getByText("users.add").click();
+    await waitFor(() => expect(screen.getByText("users.add_title")).toBeInTheDocument());
+
+    const inputs = container.querySelectorAll("input");
+    await fireEvent.input(inputs[0], { target: { value: "viewer1" } });
+    await fireEvent.input(inputs[1], { target: { value: "s3cret" } });
+
+    screen.getByText("common.add").click();
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith("users.exists_error"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Editing a user
+// ---------------------------------------------------------------------------
+
+describe("UsersAdmin — edit", () => {
+  it("names the last-admin lockout when a role change is refused", async () => {
+    const { ApiError } = await import("$lib/api/client");
+    mockUpdateUser.mockRejectedValue(new ApiError(409, { code: "conflict" }, "conflict"));
+
+    render(UsersAdmin);
+    await waitFor(() => expect(screen.getByText("viewer1")).toBeInTheDocument());
+
+    screen.getAllByText("common.edit")[0].click();
+    await waitFor(() => expect(screen.getByText("common.save")).toBeInTheDocument());
+    screen.getByText("common.save").click();
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith("users.last_admin_demote_error"),
+    );
   });
 });

@@ -2,13 +2,9 @@
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
 // Package webhook implements the outbound webhook bridge: a north-bound
-// adapter that subscribes to the event bus of every central registered at
-// start time and POSTs a signed, versioned JSON payload to an
-// operator-configured endpoint on datapoint, system-status and incident
-// events. A central adopted after start is attached by the composition
-// root through [Outbound.StartCentral]; the registry itself is walked
-// once. The daemon-level alarm and Security & Safety buses are wired
-// separately and are not per-central.
+// adapter that subscribes to every registered central's event bus and POSTs
+// a signed, versioned JSON payload to an operator-configured endpoint on
+// datapoint, system-status and incident events.
 package webhook
 
 import (
@@ -155,9 +151,6 @@ func (o *Outbound) Name() string { return "webhook-outbound" }
 // Start subscribes one handler set per allowed central and spawns the
 // delivery worker. It is a no-op (returns nil) when the bridge is disabled,
 // has no URL, or is already started — so the daemon can always register it.
-//
-// The registry walk happens exactly once, here. A central adopted later needs
-// [Outbound.StartCentral].
 func (o *Outbound) Start(_ context.Context) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -180,7 +173,7 @@ func (o *Outbound) Start(_ context.Context) error {
 		if !o.centralAllowed(name) {
 			continue
 		}
-		o.unsubs = append(o.unsubs, o.subscribeCentral(u.EventBus, name)...)
+		o.subscribeCentral(u.EventBus, name)
 	}
 	centralSubs := len(o.unsubs)
 	if o.securityBus != nil {
@@ -198,8 +191,15 @@ func (o *Outbound) Start(_ context.Context) error {
 }
 
 // subscribeCentral attaches the three event handlers for one central and
-// returns their unsubscribe funcs in attach order.
-func (o *Outbound) subscribeCentral(bus *events.Bus, name string) []func() {
+// records their unsubscribe funcs. Caller holds o.mu.
+func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
+	o.unsubs = append(o.unsubs, o.centralSubscriptions(bus, name)...)
+}
+
+// centralSubscriptions attaches the three per-central handlers and returns
+// their unsubscribe funcs without recording them, so a caller that owns the
+// teardown (the live-adopt path) can detach exactly what it attached.
+func (o *Outbound) centralSubscriptions(bus *events.Bus, name string) []func() {
 	return []func(){
 		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
 			o.onDataPoint(name, e)
@@ -213,37 +213,28 @@ func (o *Outbound) subscribeCentral(bus *events.Bus, name string) []func() {
 	}
 }
 
-// StartCentral attaches exactly one central and returns its unwire, or nil
-// when there is nothing to attach (bridge not running, central excluded by
-// north.webhook.centrals, no bus). The composition root routes this through
-// the live-adopt hook chain.
+// AttachCentral subscribes one central adopted after Start and returns the
+// detach. It returns nil when the bridge is not running, the central carries
+// no bus, or the central is outside the configured allow-list.
 //
-// Start's registry walk happens once, at daemon boot. A CCU adopted at
-// runtime is invisible to it, so without this seam none of that CCU's
-// datapoints, status changes or incidents ever reach the operator's endpoint
-// while the boot-time CCUs keep delivering normally — the failure looks like
-// a quiet CCU, not like a broken bridge.
-//
-// The unwire is handed to the caller rather than recorded in o.unsubs: the
-// adopt path owns the detach, so a central removed at runtime stops
-// delivering immediately instead of at the next daemon Stop.
-func (o *Outbound) StartCentral(u *central.Unit) (unwire func()) {
+// Start only ever walked the registry as it stood at boot, so a CCU adopted at
+// runtime delivered no webhook at all — not for its data points, not for its
+// status changes, not for its reliability incidents — until a daemon restart
+// turned it into a boot-time central. Nothing failed and nothing logged.
+func (o *Outbound) AttachCentral(u *central.Unit) func() {
 	if o == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.started {
 		return nil
 	}
 	name := u.Name()
 	if !o.centralAllowed(name) {
 		return nil
 	}
-	o.mu.Lock()
-	started := o.started
-	o.mu.Unlock()
-	if !started {
-		// Start has not run yet; its own registry walk will pick this
-		// central up. Subscribing here too would deliver every event twice.
-		return nil
-	}
-	unsubs := o.subscribeCentral(u.EventBus, name)
+	unsubs := o.centralSubscriptions(u.EventBus, name)
 	return func() {
 		for _, unsub := range unsubs {
 			unsub()

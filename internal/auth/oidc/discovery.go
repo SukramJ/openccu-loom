@@ -34,7 +34,7 @@ type Providers struct {
 // forged-discovery redirect of the token/JWKS traffic.
 func Discover(ctx context.Context, client *http.Client, issuer string) (*Providers, error) {
 	if client == nil {
-		client = http.DefaultClient
+		client = defaultHTTPClient()
 	}
 	if err := requireHTTPSURL(issuer); err != nil {
 		return nil, err

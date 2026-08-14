@@ -85,13 +85,11 @@ func (b *SystemStatusBuffer) SystemStatusEntries() []SystemStatusEntry {
 	return out
 }
 
-// Subscribe attaches the buffer to every central registered right now so
-// incoming [hmevent.SystemStatusChangedEvent] values are appended
-// automatically. Returns a closer that removes all subscriptions.
-//
-// A central adopted later needs [SystemStatusBuffer.SubscribeCentral] — this
-// walk cannot see it, and `GET /api/v1/system/status` would list nothing for
-// that CCU no matter how often its interfaces flapped.
+// Subscribe attaches the buffer to every central in reg so incoming
+// [hmevent.SystemStatusChangedEvent] values are appended automatically.
+// Returns a closer that removes all subscriptions. Safe to call once
+// after the bus is live. A central adopted later must be attached with
+// [SystemStatusBuffer.SubscribeCentral].
 func (b *SystemStatusBuffer) Subscribe(reg *central.Registry) (stop func()) {
 	if reg == nil {
 		return func() {}
@@ -109,15 +107,22 @@ func (b *SystemStatusBuffer) Subscribe(reg *central.Registry) (stop func()) {
 	}
 }
 
-// SubscribeCentral attaches the buffer to exactly one central and returns its
-// unwire, or nil when there is nothing to attach. The composition root routes
-// this through the live-adopt hook chain.
-func (b *SystemStatusBuffer) SubscribeCentral(u *central.Unit) (stop func()) {
-	if b == nil || u == nil || u.EventBus == nil {
+// SubscribeCentral attaches the buffer to a single central's event bus and
+// returns the unsubscribe (nil when there was nothing to attach).
+//
+// Subscribe only ever walked the registry as it stood at boot, so the
+// interface up/down transitions of a central adopted at runtime never appeared
+// in `GET /api/v1/system-status` until the daemon was restarted.
+func (b *SystemStatusBuffer) SubscribeCentral(u *central.Unit) func() {
+	if b == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
 		return nil
 	}
 	centralName := u.Name()
-	return events.Subscribe(u.EventBus, func(e hmevent.SystemStatusChangedEvent) {
+	return events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
 		b.append(SystemStatusEntry{
 			Central:            centralName,
 			Component:          e.Component,

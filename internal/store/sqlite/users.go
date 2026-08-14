@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -44,9 +43,12 @@ var ErrLastAdmin = errors.New("sqlite: refusing to remove the last admin")
 const bcryptCost = 12
 
 // Put creates or replaces a user. Empty username / password are
-// rejected so the table cannot accumulate sentinel rows.
+// rejected so the table cannot accumulate sentinel rows. Returns
+// [ErrLastAdmin] when the write would demote the only remaining admin —
+// the same lockout the [UserStore.Delete] guard prevents, reached by
+// changing a role instead of removing a row.
 func (s *UserStore) Put(ctx context.Context, subject, password string, role auth.Role) error {
-	subject = strings.TrimSpace(strings.ToLower(subject))
+	subject = auth.CanonicalSubject(subject)
 	if subject == "" {
 		return errors.New("sqlite: user subject required")
 	}
@@ -57,8 +59,34 @@ func (s *UserStore) Put(ctx context.Context, subject, password string, role auth
 	if err != nil {
 		return fmt.Errorf("sqlite: bcrypt: %w", err)
 	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite: users upsert: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// The count and the write share one transaction so two concurrent
+	// demotions cannot each observe a second admin that the other removes.
+	if role != auth.RoleAdmin {
+		var current string
+		err = tx.QueryRowContext(ctx, `SELECT role FROM users WHERE subject = ?`, subject).Scan(&current)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("sqlite: users upsert: select: %w", err)
+		}
+		if current == string(auth.RoleAdmin) {
+			var adminCount int
+			if err := tx.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM users WHERE role = ?`, string(auth.RoleAdmin)).Scan(&adminCount); err != nil {
+				return fmt.Errorf("sqlite: users upsert: admin count: %w", err)
+			}
+			if adminCount <= 1 {
+				return ErrLastAdmin
+			}
+		}
+	}
+
 	now := time.Now().UTC()
-	_, err = s.db.ExecContext(ctx,
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO users (subject, password_hash, role, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(subject) DO UPDATE SET password_hash=excluded.password_hash,
@@ -67,13 +95,13 @@ func (s *UserStore) Put(ctx context.Context, subject, password string, role auth
 	if err != nil {
 		return fmt.Errorf("sqlite: users upsert: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // Delete removes a user. Refuses to remove the last admin so the
 // daemon never locks itself out.
 func (s *UserStore) Delete(ctx context.Context, subject string) error {
-	subject = strings.TrimSpace(strings.ToLower(subject))
+	subject = auth.CanonicalSubject(subject)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("sqlite: users delete: begin: %w", err)
@@ -113,7 +141,7 @@ var dummyBcryptHash = []byte("$2a$12$w3j05DkTLbO8bN3FgkOfxuNFDLEzElC42sZuPYO0eAC
 // AuthenticateBasic resolves credentials. Uses bcrypt.CompareHashAndPassword
 // for constant-time comparison.
 func (s *UserStore) AuthenticateBasic(ctx context.Context, username, password string) (auth.Identity, error) {
-	subject := strings.TrimSpace(strings.ToLower(username))
+	subject := auth.CanonicalSubject(username)
 	if subject == "" || password == "" {
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
@@ -134,7 +162,10 @@ func (s *UserStore) AuthenticateBasic(ctx context.Context, username, password st
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
 	_, _ = s.db.ExecContext(ctx, `UPDATE users SET last_seen_at = ? WHERE subject = ?`, time.Now().UTC(), subject)
-	return auth.Identity{Subject: username, Scheme: auth.SchemeBasic, Role: auth.Role(role)}, nil
+	// Report the subject the row is keyed on, not the casing the caller
+	// typed: the session, the audit trail and every revocation hook behind
+	// a credential change compare against the stored spelling.
+	return auth.Identity{Subject: subject, Scheme: auth.SchemeBasic, Role: auth.Role(role)}, nil
 }
 
 // UserRow is one entry from [UserStore.List].

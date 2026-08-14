@@ -148,3 +148,58 @@ func TestSessionChangedParametersCarriesFromTo(t *testing.T) {
 		t.Fatalf("change=%+v", got[0])
 	}
 }
+
+// A WebSocket client controls the value of `config.session.set` verbatim, so a
+// JSON array or object arrives as an uncomparable []any / map[string]any.
+// Comparing two of those with Go's == panics, which used to take the whole
+// connection down mid-frame. Every diffing path must survive them.
+func TestSessionToleratesUncomparableValues(t *testing.T) {
+	s := NewSession(sampleDescriptions(), map[string]any{"TEMPERATURE_OFFSET": 0.5})
+
+	s.Set("TEMPERATURE_OFFSET", []any{1.0, 2.0})
+	s.Set("TEMPERATURE_OFFSET", []any{1.0, 2.0})
+
+	if !s.IsDirty() {
+		t.Fatal("session must be dirty after storing an array value")
+	}
+	if got := len(s.ChangedParameters()); got != 1 {
+		t.Fatalf("ChangedParameters=%d want 1", got)
+	}
+	if got := s.Changes(); len(got) != 1 {
+		t.Fatalf("Changes=%v want one entry", got)
+	}
+	if got := s.ValidateChanges(nil); len(got) != 1 {
+		t.Fatalf("ValidateChanges=%+v want one issue", got)
+	}
+	// The repeated Set carries an identical value, so it must not push a
+	// second undo entry — one Undo restores the initial scalar.
+	if !s.Undo() {
+		t.Fatal("Undo must succeed")
+	}
+	if got := s.CurrentValue("TEMPERATURE_OFFSET"); got != 0.5 {
+		t.Fatalf("after Undo=%v want 0.5", got)
+	}
+	if s.IsDirty() {
+		t.Fatal("session must be clean again after the single Undo")
+	}
+}
+
+// Values that arrive uncomparable from the CCU snapshot itself must not blow up
+// the diff either: the initial and the current side then hold the same
+// uncomparable dynamic type, which is exactly the case Go's == rejects.
+func TestSessionToleratesUncomparableInitialValues(t *testing.T) {
+	s := NewSession(sampleDescriptions(), map[string]any{"TEMPERATURE_OFFSET": []any{1.0}})
+
+	if s.IsDirty() {
+		t.Fatal("untouched session must be clean")
+	}
+	if got := s.Changes(); len(got) != 0 {
+		t.Fatalf("Changes=%v want empty", got)
+	}
+	if got := s.ChangedParameters(); len(got) != 0 {
+		t.Fatalf("ChangedParameters=%+v want empty", got)
+	}
+	if got := s.ValidateChanges(nil); len(got) != 0 {
+		t.Fatalf("ValidateChanges=%+v want none", got)
+	}
+}

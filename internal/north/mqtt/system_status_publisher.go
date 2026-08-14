@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -27,10 +26,6 @@ type SystemStatusPublisher struct {
 	wiring *Wiring
 	logger *slog.Logger
 
-	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
-	// touch the slice at all - it hands its unwire back to the caller, so
-	// the runtime-adopt path owns its own detach.
-	mu     sync.Mutex
 	unsubs []func()
 }
 
@@ -57,36 +52,37 @@ type systemStatusPayload struct {
 	EventAt            time.Time `json:"event_at"`
 }
 
-// Start attaches one subscription per central registered right now. A
-// central that appears later — adopted through the REST admin API — needs
-// [SystemStatusPublisher.StartCentral]; this walk cannot see it.
+// Start attaches one subscription per registered central. Safe to call
+// multiple times — subsequent calls are no-ops if already started.
+// A central adopted later must be attached with
+// [SystemStatusPublisher.StartCentral].
 func (p *SystemStatusPublisher) Start() {
-	if p.reg == nil {
+	if p.reg == nil || p.wiring == nil {
 		return
 	}
 	for _, u := range p.reg.List() {
-		if unwire := p.StartCentral(u); unwire != nil {
-			p.mu.Lock()
-			p.unsubs = append(p.unsubs, unwire)
-			p.mu.Unlock()
+		if unsub := p.StartCentral(u); unsub != nil {
+			p.unsubs = append(p.unsubs, unsub)
 		}
 	}
 }
 
-// StartCentral subscribes exactly one central's event bus and returns the
-// unwire for it, or nil when there is nothing to attach.
+// StartCentral attaches this publisher to a single central's event bus and
+// returns the unsubscribe (nil when there was nothing to attach).
 //
-// The composition root routes this through the live-adopt hook chain so a
-// CCU adopted at runtime publishes its interface degradation to
-// `<base>/<central>/system/status` like a boot-time one. Without it an
-// operator's alerting rule silently never fires for the adopted CCU while it
-// keeps working for the others.
-func (p *SystemStatusPublisher) StartCentral(u *central.Unit) (unwire func()) {
-	if p == nil || p.wiring == nil || u == nil || u.EventBus == nil {
+// Start only ever walked the registry as it stood at boot, so a central
+// adopted at runtime never published a single message on the MQTT
+// system-status plane until the daemon was restarted.
+func (p *SystemStatusPublisher) StartCentral(u *central.Unit) func() {
+	if p == nil || p.wiring == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
 		return nil
 	}
 	centralName := u.Name()
-	unsub := events.Subscribe(u.EventBus, func(e hmevent.SystemStatusChangedEvent) {
+	return events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
 		pay := systemStatusPayload{
 			CentralName:        centralName,
 			Component:          e.Component,
@@ -120,17 +116,13 @@ func (p *SystemStatusPublisher) StartCentral(u *central.Unit) (unwire func()) {
 				slog.String("err", err.Error()))
 		}
 	})
-
-	return unsub
 }
 
-// Stop drops all event-bus subscriptions.
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (p *SystemStatusPublisher) Stop() {
-	p.mu.Lock()
-	unsubs := p.unsubs
-	p.unsubs = nil
-	p.mu.Unlock()
-	for _, u := range unsubs {
+	for _, u := range p.unsubs {
 		u()
 	}
+	p.unsubs = nil
 }

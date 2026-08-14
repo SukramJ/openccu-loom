@@ -520,11 +520,16 @@ type Deps struct {
 	// ValuesCache backs `/admin/values-cache/stats` and the reset
 	// endpoints. Wired in production with the daemon's persistent
 	// VALUES cache store. Nil leaves the endpoints returning 503.
+	//
+	// A typed nil pointer boxed into this interface is NOT nil and defeats
+	// both the handler guard and every other nil check on it, so the
+	// composition root's constructor returns this interface type rather than
+	// its concrete adapter.
 	ValuesCache handlers.ValuesCacheService
 	// DeviceLookup resolves a bare device address to its (central,
 	// interface) tuple so the per-device values-cache reset works in
-	// multi-CCU deployments. Nil disables that one endpoint; the
-	// global reset still works.
+	// multi-CCU deployments. Nil leaves that one endpoint returning 503;
+	// the global reset still works.
 	DeviceLookup handlers.DeviceLookup
 	// KnownCentrals is the list of CCU scope names whose
 	// per-central health score the diagnostics dump should
@@ -681,7 +686,16 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		r.Get("/setup/status", handlers.SetupStatus(d.Setup))
 		r.Post("/setup", handlers.Setup(d.Setup))
 		if d.OIDC != nil {
-			r.Get("/auth/oidc/start", handlers.OIDCStart(d.OIDC))
+			// The start route is pre-auth and mints server-held state on
+			// every call, so it gets the same per-IP speed bump as the login
+			// POST. The callback consumes state instead of creating it and
+			// needs no limiter. Nil limiter ⇒ plain handler (test fixtures).
+			start := handlers.OIDCStart(d.OIDC)
+			if d.LoginRateLimit != nil {
+				r.With(d.LoginRateLimit.Middleware()).Get("/auth/oidc/start", start)
+			} else {
+				r.Get("/auth/oidc/start", start)
+			}
 			r.Get("/auth/oidc/callback", handlers.OIDCCallback(d.OIDC))
 		}
 
@@ -1119,13 +1133,15 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Metrics != nil {
 				pr.Get("/metrics", handlers.MetricsHandler(d.Metrics))
 			}
-			if d.ValuesCache != nil {
-				pr.With(admin).Get("/admin/values-cache/stats", handlers.GetValuesCacheStats(d.ValuesCache))
-				pr.With(admin).Post("/admin/values-cache/reset", handlers.ResetValuesCacheGlobal(d.ValuesCache))
-				if d.DeviceLookup != nil {
-					pr.With(admin).Post("/devices/{addr}/values-cache/reset", handlers.ResetValuesCacheDevice(d.ValuesCache, d.DeviceLookup))
-				}
-			}
+			// Values-cache endpoints — mounted unconditionally, each handler
+			// answering 503 service_unready while its dependency is nil, so
+			// `persistence.values_cache.enabled: false` surfaces as the
+			// documented "cache feature disabled" response
+			// (assets/openapi.yaml) rather than as a 404 indistinguishable
+			// from a wrong URL. Same rationale as the Matter block below.
+			pr.With(admin).Get("/admin/values-cache/stats", handlers.GetValuesCacheStats(d.ValuesCache))
+			pr.With(admin).Post("/admin/values-cache/reset", handlers.ResetValuesCacheGlobal(d.ValuesCache))
+			pr.With(admin).Post("/devices/{addr}/values-cache/reset", handlers.ResetValuesCacheDevice(d.ValuesCache, d.DeviceLookup))
 
 			// Matter endpoints — each sub-route returns 503 service_unready
 			// when its dependency is nil, so the bridge being disabled

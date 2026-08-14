@@ -54,8 +54,8 @@ const (
 	// single field at the top of the legacy YAML).
 	SectionLocale Section = "locale"
 	// SectionSecurity carries cross-cutting safety toggles, currently
-	// just allow_plaintext_secrets (governs whether central rows may
-	// store plaintext passwords vs env-var references).
+	// just allow_plaintext_secrets (governs whether a central row may
+	// store a password that cannot be encrypted at rest).
 	SectionSecurity Section = "security"
 )
 
@@ -85,11 +85,13 @@ func AllSections() []Section {
 
 // SecurityConfig holds the DB-tier security toggles.
 type SecurityConfig struct {
-	// AllowPlaintextSecrets, when true, permits central rows to
-	// store plaintext passwords (password_plain column) instead of
-	// env-variable references. Default false — production daemons
-	// rely on env-resolution exclusively; this knob exists for
-	// test rigs and one-off dev installs.
+	// AllowPlaintextSecrets, when true, permits a central row to store a
+	// CCU password that cannot be encrypted at rest (ADR 0027), i.e. when
+	// no master key was resolved. Default false: the daemon then refuses
+	// the write instead of putting the credential in the database in the
+	// clear. It changes nothing while a master key is available — the
+	// password is sealed either way. Read through
+	// [Store.PlaintextSecretsAllowed].
 	AllowPlaintextSecrets bool `json:"allow_plaintext_secrets" cfg:"expert"`
 }
 

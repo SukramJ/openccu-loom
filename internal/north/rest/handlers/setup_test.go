@@ -350,6 +350,30 @@ func TestSetup_AlreadyCompleted_409(t *testing.T) {
 	}
 }
 
+// TestSetup_FirstRunDisabled_403 pins the refusal an operator gets after
+// closing the onboarding surface with bootstrap.allow_first_run_setup: false.
+// It must not read as "already completed" — the users table is empty, so a
+// 409 would send the operator looking for an account nobody ever created.
+func TestSetup_FirstRunDisabled_403(t *testing.T) {
+	t.Parallel()
+	svc := nilBackedSetupService(true)
+	svc.FirstRunAllowed = func() bool { return false }
+	body := strings.NewReader(`{
+		"admin":  {"username":"admin","password":"password123"},
+		"locale": {"locale":"de","theme":"light"}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup", body)
+	w := httptest.NewRecorder()
+	Setup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("got %d body=%s, want 403", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "allow_first_run_setup") {
+		t.Errorf("refusal must name the toggle that closed the surface: %s", w.Body.String())
+	}
+}
+
 func TestSetup_BadJSON_400(t *testing.T) {
 	t.Parallel()
 	svc := nilBackedSetupService(true)

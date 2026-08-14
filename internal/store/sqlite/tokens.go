@@ -78,8 +78,13 @@ type CreateResult struct {
 // hash + fingerprint + identity, and returns the plaintext token in
 // the result. The caller MUST show the token to the operator
 // immediately — the daemon cannot recover it from disk.
+//
+// The subject is canonicalised before it is written: it is free-form
+// operator input, while the identity it produces at authentication time is
+// compared verbatim by every per-subject store (preferences, private diagram
+// ownership) and has to line up with the users row it belongs to.
 func (s *TokenStore) Create(ctx context.Context, in CreateInput) (CreateResult, error) {
-	subject := strings.TrimSpace(in.Subject)
+	subject := auth.CanonicalSubject(in.Subject)
 	if subject == "" {
 		return CreateResult{}, errors.New("sqlite: token subject required")
 	}
@@ -128,7 +133,7 @@ func (s *TokenStore) Import(ctx context.Context, secret, subject string, role au
 	if secret == "" {
 		return "", errors.New("sqlite: token secret required")
 	}
-	subject = strings.TrimSpace(subject)
+	subject = auth.CanonicalSubject(subject)
 	if subject == "" {
 		return "", errors.New("sqlite: token subject required")
 	}
@@ -151,11 +156,17 @@ func (s *TokenStore) Import(ctx context.Context, secret, subject string, role au
 // count removed. Called when the underlying user account is deleted so a
 // bearer token bound to a now-nonexistent subject cannot keep
 // authenticating.
+//
+// Both sides are canonicalised, and the comparison stays case-insensitive on
+// top of that: a token that outlives the account it belongs to is a live
+// credential for a deleted user, so a row an external writer left in a
+// spelling of its own must not escape the purge either.
 func (s *TokenStore) DeleteBySubject(ctx context.Context, subject string) (int, error) {
 	if s == nil || s.db == nil {
 		return 0, nil
 	}
-	res, err := s.db.ExecContext(ctx, `DELETE FROM tokens WHERE subject = ?`, subject)
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM tokens WHERE subject = ? COLLATE NOCASE`, auth.CanonicalSubject(subject))
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: tokens delete by subject: %w", err)
 	}

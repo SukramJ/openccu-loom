@@ -103,9 +103,12 @@ logging:
 bootstrap:
   # Controls whether the unprotected /setup route is reachable.
   # true = required for a fresh installation (first admin user must be
-  # created here). Once an admin exists this toggle is effectively a
-  # no-op — /setup is blocked as soon as a user record is present.
-  # false = /setup remains locked even with an empty users table.
+  # created here). Once an admin exists this toggle changes nothing —
+  # /setup is blocked as soon as any authentication source is present.
+  # false = /setup stays closed even with an empty users table:
+  # GET /api/v1/setup/status reports required:false and POST /api/v1/setup
+  # answers 403. With no authentication source configured that is a
+  # deliberate lockout — the only way back in is this file plus a restart.
   # [default: true]
   allow_first_run_setup: true
 
@@ -718,11 +721,13 @@ persistence:
 # =============================================================================
 #
 # security:
-#   # When true, SPA/DB-created central rows may store a plaintext CCU
-#   # password (password_plain column) instead of an env-variable
-#   # reference. Default false — production daemons resolve every central
-#   # secret from the environment; this knob exists for test rigs and
-#   # one-off dev installs.  [default: false]
+#   # When true, a central row may store a CCU password that cannot be
+#   # encrypted at rest — i.e. when no master key was resolved. Default
+#   # false: the daemon then rejects the save instead of writing the
+#   # credential to the database in the clear. With a master key present
+#   # the flag changes nothing (the password is sealed either way); this
+#   # knob exists for test rigs and one-off dev installs.
+#   # [default: false]
 #   allow_plaintext_secrets: false
 
 
@@ -834,7 +839,12 @@ centrals:
       # Short form: interface name only
       - HmIP-RF
       - BidCos-RF
-      # Long form: full control over port, remote_path, and rpc_type
+      # Long form: per-interface port and URL path. remote_path is for a
+      # CCU behind a reverse proxy that exposes XML-RPC somewhere other
+      # than /RPC2 (/groups for VirtualDevices); it must be absolute.
+      # rpc_type only restates the transport the interface name already
+      # implies — CUxD is BIN-RPC, everything else XML-RPC — and a value
+      # that contradicts it is rejected at startup.
       # - name: VirtualDevices
       #   port: 9292
       #   remote_path: /groups

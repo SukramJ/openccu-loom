@@ -619,11 +619,10 @@ func TestNewWithClientSecret(t *testing.T) {
 	}
 }
 
-// TestDiscoverNilClientFallback exercises the nil-client default in Discover.
-// We pass nil as client; Discover substitutes http.DefaultClient internally.
-// We cannot contact the test server with http.DefaultClient, so we just
-// verify the nil-client path does not panic (it will fail with a network error
-// if our test server URL is unreachable via DefaultClient).
+// TestDiscoverNilClientFallback exercises the nil-client default in
+// Discover, which substitutes the package's own bounded client. The call
+// must reach the network rather than panic; the exact error depends on
+// the environment.
 func TestDiscoverNilClientFallback(t *testing.T) {
 	// Use a URL that will immediately refuse so we get a fast error, not a hang.
 	_, err := Discover(context.Background(), nil, "http://127.0.0.1:1")
@@ -750,10 +749,13 @@ func TestJWKSRefreshDoError(t *testing.T) {
 	}
 }
 
-// TestNewNilHTTPClientUsesDefaultClient exercises the nil-httpClient
-// fallback in New — the caller passes nil and the package must substitute
-// http.DefaultClient rather than dereferencing a nil client.
-func TestNewNilHTTPClientUsesDefaultClient(t *testing.T) {
+// TestNewNilHTTPClientUsesBoundedClient exercises the nil-httpClient
+// fallback in New — the caller passes nil (the daemon's own wiring does)
+// and the package must substitute a client that carries a request
+// deadline and owns its transport, not http.DefaultClient: an identity
+// provider that accepts the connection and never answers would otherwise
+// hold the discovery, exchange and JWKS calls open indefinitely.
+func TestNewNilHTTPClientUsesBoundedClient(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.well-known/openid-configuration" {
 			issuer := "http://" + r.Host
@@ -771,8 +773,14 @@ func TestNewNilHTTPClientUsesDefaultClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new with nil http client: %v", err)
 	}
-	if c.http != http.DefaultClient {
-		t.Fatal("expected New to substitute http.DefaultClient for a nil httpClient")
+	if c.http == nil || c.http == http.DefaultClient {
+		t.Fatal("expected New to substitute a client of its own for a nil httpClient")
+	}
+	if c.http.Timeout <= 0 {
+		t.Errorf("substituted client Timeout = %v, want a positive deadline", c.http.Timeout)
+	}
+	if c.http.Transport == nil || c.http.Transport == http.DefaultTransport {
+		t.Error("substituted client shares the process-wide http.DefaultTransport")
 	}
 }
 

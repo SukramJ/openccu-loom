@@ -263,6 +263,35 @@ func TestPutConfigSection_RESTRowNeverCarriesNestedAuthSections(t *testing.T) {
 	}
 }
 
+// TestPutConfigSection_MapEntryDeletionIsPersisted pins that removing one
+// entry from a map-valued field actually lands. The candidate the handler
+// validates and persists is a clone of the current config, and decoding a
+// JSON object into an already-populated Go map keeps the entries the
+// payload omits — so a role_mapping the operator trimmed came back as the
+// union of old and new, while the response still said "saved".
+func TestPutConfigSection_MapEntryDeletionIsPersisted(t *testing.T) {
+	t.Parallel()
+
+	current := config.Default()
+	current.North.REST.Auth.CCU.RoleMapping = map[string]string{"8": "admin", "1": "admin"}
+	fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: current}}
+
+	w := putSection(fake, "north.rest.auth.ccu", `{"role_mapping":{"8":"admin"}}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	var saved config.CCUAuthConfig
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON invalid: %v", err)
+	}
+	if _, still := saved.RoleMapping["1"]; still {
+		t.Errorf("deleted role_mapping entry survived the save: %v", saved.RoleMapping)
+	}
+	if saved.RoleMapping["8"] != "admin" {
+		t.Errorf("kept role_mapping entry lost: %v", saved.RoleMapping)
+	}
+}
+
 // TestPutConfigSectionRefusesToSaveWhenTheEffectiveConfigIsUnavailable is
 // the guard for a save that used to succeed by skipping everything that
 // makes it safe.

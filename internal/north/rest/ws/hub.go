@@ -82,7 +82,13 @@ type Hub struct {
 	// token-rotation flow on every connected client. See the
 	// `Auth lifecycle on long-lived connections` section in
 	// docs/external-clients/topic-hierarchy.md.
-	tokens auth.TokenStore
+	//
+	// Guarded by tokensMu: the composition root registers it twice —
+	// once with the config-seeded in-memory store and again with the
+	// database-chained store once the stores exist — and the second
+	// registration can land while the listener is already accepting.
+	tokensMu sync.RWMutex
+	tokens   auth.TokenStore
 
 	// resyncSignals counts [Hub.SignalResync] calls so a wiring test
 	// can assert that a producer actually reaches this seam.
@@ -126,13 +132,26 @@ func (h *Hub) ResyncSignals() uint64 {
 }
 
 // SetTokenStore wires the bearer-token resolver the in-band reauth
-// op consults. Nil disables reauth (clients sending {op:"reauth"}
-// receive {op:"reauth_failed"} and stay connected with their
-// original identity).
-func (h *Hub) SetTokenStore(t auth.TokenStore) { h.tokens = t }
+// op consults. Nil disables reauth: a client sending {op:"reauth"}
+// then receives {op:"reauth_failed"} and the connection is closed —
+// see [client.reauth], which treats an unresolvable token and an
+// absent store alike, because both leave the connection's identity
+// unverifiable.
+//
+// The store must resolve every token the HTTP upgrade accepts. A
+// narrower one rejects a credential that is valid everywhere else.
+func (h *Hub) SetTokenStore(t auth.TokenStore) {
+	h.tokensMu.Lock()
+	h.tokens = t
+	h.tokensMu.Unlock()
+}
 
 // TokenStore returns the registered token resolver, or nil.
-func (h *Hub) TokenStore() auth.TokenStore { return h.tokens }
+func (h *Hub) TokenStore() auth.TokenStore {
+	h.tokensMu.RLock()
+	defer h.tokensMu.RUnlock()
+	return h.tokens
+}
 
 // NewHub returns an empty hub with a fresh [*Router].
 func NewHub() *Hub {

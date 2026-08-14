@@ -4,8 +4,6 @@
 package ws
 
 import (
-	"sync"
-
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -48,13 +46,8 @@ func DeviceLifecycleTopic(deviceAddr string) string {
 // family gets a focused subscriber and failure of one path cannot
 // starve the other.
 type DeviceLifecycleSubscriber struct {
-	reg *central.Registry
-	hub *Hub
-
-	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
-	// touch the slice at all - it hands its unwire back to the caller, so
-	// the runtime-adopt path owns its own detach.
-	mu     sync.Mutex
+	reg    *central.Registry
+	hub    *Hub
 	unsubs []func()
 }
 
@@ -63,33 +56,37 @@ func NewDeviceLifecycleSubscriber(reg *central.Registry, hub *Hub) *DeviceLifecy
 	return &DeviceLifecycleSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every central registered right now. A
-// central adopted later needs [DeviceLifecycleSubscriber.StartCentral] —
-// this walk cannot see it.
+// Start attaches subscriptions to every registered central's event bus.
+// A central adopted later must be attached with
+// [DeviceLifecycleSubscriber.StartCentral].
 func (s *DeviceLifecycleSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
 		if unwire := s.StartCentral(u); unwire != nil {
-			s.mu.Lock()
 			s.unsubs = append(s.unsubs, unwire)
-			s.mu.Unlock()
 		}
 	}
 }
 
-// StartCentral subscribes exactly one central and returns its unwire, or nil
-// when there is nothing to attach. The composition root routes this through
-// the live-adopt hook chain, so a runtime-adopted CCU's device create/remove
-// frames reach WebSocket clients like a boot-time one's.
-func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) (unwire func()) {
-	if s == nil || s.reg == nil || s.hub == nil || u == nil || u.EventBus == nil {
+// StartCentral attaches this subscriber to a single central's event bus and
+// returns the unwire (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so a central
+// adopted at runtime emitted no `device.created` / `device.removed` frame for
+// any of its devices until the daemon was restarted.
+func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
 		return nil
 	}
 	centralName := u.Name()
 	hub := s.hub
-	unsubCreated := events.Subscribe(u.EventBus, func(e hmevent.DeviceCreatedEvent) {
+	unsubCreated := events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
 		hub.Publish(Event{
 			Topic: DeviceLifecycleTopic(e.Address),
 			Type:  string(hmevent.EventTypeDeviceCreated),
@@ -103,7 +100,7 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) (unwire func()
 			},
 		})
 	})
-	unsubRemoved := events.Subscribe(u.EventBus, func(e hmevent.DeviceRemovedEvent) {
+	unsubRemoved := events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
 		hub.Publish(Event{
 			Topic: DeviceLifecycleTopic(e.Address),
 			Type:  string(hmevent.EventTypeDeviceRemoved),
@@ -118,13 +115,11 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) (unwire func()
 	return unwireAll([]func(){unsubCreated, unsubRemoved})
 }
 
-// Stop drops all event-bus subscriptions.
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (s *DeviceLifecycleSubscriber) Stop() {
-	s.mu.Lock()
-	unsubs := s.unsubs
-	s.unsubs = nil
-	s.mu.Unlock()
-	for _, u := range unsubs {
+	for _, u := range s.unsubs {
 		u()
 	}
+	s.unsubs = nil
 }

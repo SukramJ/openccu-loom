@@ -11,8 +11,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/mod/semver"
+
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 )
 
 // defaultGitHubAPIBase is the REST API root for this project's own
@@ -75,17 +79,32 @@ type Checker struct {
 	BaseURL string
 }
 
-// NewChecker returns a Checker wired to the real GitHub API over the
-// default HTTP client.
+// releaseCheckTimeout bounds one GitHub API round trip end to end. The
+// response is a few KB, so anything still open after this has stalled
+// rather than progressed — and the check runs on the recurring cadence's
+// single goroutine, which a request without a deadline parks for the
+// daemon's remaining uptime.
+const releaseCheckTimeout = 30 * time.Second
+
+// checkerClient is the HTTP client every Checker uses unless the caller
+// injects one. It owns its transport (see [internal/httpx]) so the
+// release check does not share a connection pool with unrelated callers,
+// and carries [releaseCheckTimeout] as its request deadline.
+var checkerClient = sync.OnceValue(func() *http.Client {
+	return httpx.NewClient(releaseCheckTimeout)
+})
+
+// NewChecker returns a Checker wired to the real GitHub API over a
+// bounded HTTP client of its own.
 func NewChecker() *Checker {
-	return &Checker{HTTPClient: http.DefaultClient, BaseURL: defaultGitHubAPIBase}
+	return &Checker{HTTPClient: checkerClient(), BaseURL: defaultGitHubAPIBase}
 }
 
 func (c *Checker) httpClient() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
 	}
-	return http.DefaultClient
+	return checkerClient()
 }
 
 func (c *Checker) baseURL() string {

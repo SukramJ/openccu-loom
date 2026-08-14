@@ -5,7 +5,6 @@ package ws
 
 import (
 	"strconv"
-	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -49,13 +48,8 @@ func DeviceTriggerTopic(deviceAddr string, channel int) string {
 // [DeviceLifecycleSubscriber] in shape; runs alongside it so each event
 // family gets a focused subscriber.
 type DeviceTriggerSubscriber struct {
-	reg *central.Registry
-	hub *Hub
-
-	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
-	// touch the slice at all - it hands its unwire back to the caller, so
-	// the runtime-adopt path owns its own detach.
-	mu     sync.Mutex
+	reg    *central.Registry
+	hub    *Hub
 	unsubs []func()
 }
 
@@ -64,33 +58,38 @@ func NewDeviceTriggerSubscriber(reg *central.Registry, hub *Hub) *DeviceTriggerS
 	return &DeviceTriggerSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every central registered right now. A
-// central adopted later needs [DeviceTriggerSubscriber.StartCentral] — this
-// walk cannot see it.
+// Start attaches subscriptions to every registered central's event bus.
+// A central adopted later must be attached with
+// [DeviceTriggerSubscriber.StartCentral].
 func (s *DeviceTriggerSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
 		if unwire := s.StartCentral(u); unwire != nil {
-			s.mu.Lock()
 			s.unsubs = append(s.unsubs, unwire)
-			s.mu.Unlock()
 		}
 	}
 }
 
-// StartCentral subscribes exactly one central and returns its unwire, or nil
-// when there is nothing to attach. The composition root routes this through
-// the live-adopt hook chain, so a runtime-adopted CCU's keypresses reach
-// WebSocket clients like a boot-time one's.
-func (s *DeviceTriggerSubscriber) StartCentral(u *central.Unit) (unwire func()) {
-	if s == nil || s.reg == nil || s.hub == nil || u == nil || u.EventBus == nil {
+// StartCentral attaches this subscriber to a single central's event bus and
+// returns the unwire (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so pressing a
+// button on a device of a central adopted at runtime published a
+// DeviceTriggerEvent nobody consumed: no `device.trigger` frame was ever
+// emitted, and every client keying on it stayed silent until a restart.
+func (s *DeviceTriggerSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.reg == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
 		return nil
 	}
 	hub := s.hub
 	reg := s.reg
-	return events.Subscribe(u.EventBus, func(e hmevent.DeviceTriggerEvent) {
+	return events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
 		channelAddr := e.DeviceAddress + ":" + strconv.Itoa(e.ChannelNo)
 		hub.Publish(Event{
 			Topic: DeviceTriggerTopic(e.DeviceAddress, e.ChannelNo),
@@ -112,13 +111,11 @@ func (s *DeviceTriggerSubscriber) StartCentral(u *central.Unit) (unwire func()) 
 	})
 }
 
-// Stop drops all event-bus subscriptions.
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (s *DeviceTriggerSubscriber) Stop() {
-	s.mu.Lock()
-	unsubs := s.unsubs
-	s.unsubs = nil
-	s.mu.Unlock()
-	for _, u := range unsubs {
+	for _, u := range s.unsubs {
 		u()
 	}
+	s.unsubs = nil
 }

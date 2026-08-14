@@ -78,12 +78,12 @@ func TestAdoptCentralWiresTheSystemStatusPlane(t *testing.T) {
 	wiring := mqtt.NewWiring(bridge, discardTestLogger())
 	wsHub := ws.NewHub()
 
-	sysStatusBuf, _, sysStatusHook, _, teardown := wireSystemStatusSubscribers(
+	sysStatusBuf, centralHook, teardown := wireSystemStatusSubscribers(
 		reg, wsHub, wiring, nil, nil, nil, nil, "", "", discardTestLogger(),
 	)
 	t.Cleanup(teardown)
-	if sysStatusHook == nil {
-		t.Fatal("wireSystemStatusSubscribers returned a nil system-status hook")
+	if centralHook == nil {
+		t.Fatal("wireSystemStatusSubscribers returned a nil per-central hook")
 	}
 
 	// No hook installed yet — this is what a runtime-adopted central used to
@@ -101,7 +101,7 @@ func TestAdoptCentralWiresTheSystemStatusPlane(t *testing.T) {
 		t.Fatalf("publishes to %q without the hook = %d, want 0", unhookedTopic, got)
 	}
 
-	orch.setSysStatusCentralHook(sysStatusHook)
+	orch.addCentralHook(centralHook)
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("hooked")); err != nil {
 		t.Fatalf("adoptCentral(hooked): %v", err)

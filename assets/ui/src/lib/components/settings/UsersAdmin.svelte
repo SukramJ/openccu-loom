@@ -84,7 +84,13 @@
       createForm = { username: "", password: "", role: "viewer" };
       await load();
     } catch (err) {
-      toastStore.error(errMsg(err));
+      // Creating is create-only: an existing username comes back as a
+      // conflict problem. Name the cause instead of echoing a status.
+      if (err instanceof ApiError && err.problemCode === "conflict") {
+        toastStore.error(t("users.exists_error"));
+      } else {
+        toastStore.error(errMsg(err));
+      }
     } finally {
       savingUser = false;
     }
@@ -108,7 +114,14 @@
       editingUser = null;
       await load();
     } catch (err) {
-      toastStore.error(errMsg(err));
+      // The daemon refuses to demote the only remaining admin with a
+      // conflict problem code — that lockout is what the operator needs
+      // to read, not a bare HTTP status.
+      if (err instanceof ApiError && err.problemCode === "conflict") {
+        toastStore.error(t("users.last_admin_demote_error"));
+      } else {
+        toastStore.error(errMsg(err));
+      }
     } finally {
       savingEdit = false;
     }

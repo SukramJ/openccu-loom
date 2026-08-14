@@ -47,6 +47,16 @@ type Identity struct {
 	TokenID string // set when Scheme == bearer
 }
 
+// CanonicalSubject folds a subject to the single spelling every store
+// and every lookup agrees on: trimmed and lower-cased. Local user
+// records are keyed on it, so an [Identity] must carry it rather than
+// the casing a caller happened to type — otherwise a session, a bearer
+// token or an audit note issued for "Markus" is invisible to the
+// revocation that a credential change for "markus" triggers.
+func CanonicalSubject(subject string) string {
+	return strings.TrimSpace(strings.ToLower(subject))
+}
+
 // ErrUnauthenticated marks a request that could not be resolved to
 // any identity. Require emits `401 Unauthorized`.
 var ErrUnauthenticated = errors.New("auth: unauthenticated")
@@ -207,9 +217,9 @@ func NewMemoryUserStore() *MemoryUserStore {
 	return &MemoryUserStore{users: make(map[string]userRecord)}
 }
 
-// Put stores or replaces a user.
+// Put stores or replaces a user under its canonical subject.
 func (s *MemoryUserStore) Put(username, password string, role Role) {
-	s.users[strings.ToLower(username)] = userRecord{password: password, role: role}
+	s.users[CanonicalSubject(username)] = userRecord{password: password, role: role}
 }
 
 // bcryptCost matches the persistent SQLite user store
@@ -259,7 +269,8 @@ func HashPassword(password string) (string, error) {
 // against [dummyBcryptHash] so the response time is indistinguishable from
 // the wrong-password path, preventing user-enumeration via timing analysis.
 func (s *MemoryUserStore) AuthenticateBasic(_ context.Context, username, password string) (Identity, error) {
-	rec, ok := s.users[strings.ToLower(username)]
+	subject := CanonicalSubject(username)
+	rec, ok := s.users[subject]
 	if !ok {
 		// Consume roughly the same wall-clock as a real bcrypt verify so
 		// an attacker cannot distinguish "no such user" from "wrong password"
@@ -274,7 +285,9 @@ func (s *MemoryUserStore) AuthenticateBasic(_ context.Context, username, passwor
 	} else if subtle.ConstantTimeCompare([]byte(rec.password), []byte(password)) != 1 {
 		return Identity{}, ErrUnauthenticated
 	}
-	return Identity{Subject: username, Scheme: SchemeBasic, Role: rec.role}, nil
+	// Report the canonical subject, not the caller's spelling: it is what
+	// the record is keyed on and what every later lookup compares against.
+	return Identity{Subject: subject, Scheme: SchemeBasic, Role: rec.role}, nil
 }
 
 // UserSummary is one entry of [MemoryUserStore.List]. Passwords are

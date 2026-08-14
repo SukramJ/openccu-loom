@@ -101,12 +101,12 @@ func TestAdoptCentralWiresTheDeviceEventPlanes(t *testing.T) {
 	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
 	wsHub := ws.NewHub()
 
-	_, _, _, deviceEventsHook, teardown := wireSystemStatusSubscribers(
+	_, centralHook, teardown := wireSystemStatusSubscribers(
 		reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger(),
 	)
 	t.Cleanup(teardown)
-	if deviceEventsHook == nil {
-		t.Fatal("wireSystemStatusSubscribers returned a nil device-events hook")
+	if centralHook == nil {
+		t.Fatal("wireSystemStatusSubscribers returned a nil per-central hook")
 	}
 
 	// No hook installed yet — this is what a runtime-adopted central used
@@ -125,7 +125,7 @@ func TestAdoptCentralWiresTheDeviceEventPlanes(t *testing.T) {
 		}
 	}
 
-	orch.setDeviceEventsCentralHook(deviceEventsHook)
+	orch.addCentralHook(centralHook)
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("hooked")); err != nil {
 		t.Fatalf("adoptCentral(hooked): %v", err)

@@ -78,6 +78,15 @@ func processRestartRules() []RestartRule {
 			Differs: func(b, e *Config) bool { return b.North.REST.Listen != e.North.REST.Listen },
 		},
 		{
+			// Bootstrap tier: the first-run probe and the onboarding
+			// endpoints bind the value at boot, so flipping it in the YAML
+			// of a running daemon must be reported rather than look applied.
+			Path: "bootstrap.allow_first_run_setup",
+			Differs: func(b, e *Config) bool {
+				return b.Bootstrap.FirstRunSetupAllowed() != e.Bootstrap.FirstRunSetupAllowed()
+			},
+		},
+		{
 			Path:    "north.rest.public_url",
 			Differs: func(b, e *Config) bool { return b.North.REST.PublicURL != e.North.REST.PublicURL },
 		},

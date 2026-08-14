@@ -4,8 +4,6 @@
 package ws
 
 import (
-	"sync"
-
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -43,13 +41,8 @@ type OptimisticRollbackPayload struct {
 // [hmevent.DataPointOptimisticRolledBackEvent] from the domain bus to the
 // WebSocket [*Hub]. Mirrors [DeviceLifecycleSubscriber] in shape.
 type OptimisticRollbackSubscriber struct {
-	reg *central.Registry
-	hub *Hub
-
-	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
-	// touch the slice at all - it hands its unwire back to the caller, so
-	// the runtime-adopt path owns its own detach.
-	mu     sync.Mutex
+	reg    *central.Registry
+	hub    *Hub
 	unsubs []func()
 }
 
@@ -58,34 +51,38 @@ func NewOptimisticRollbackSubscriber(reg *central.Registry, hub *Hub) *Optimisti
 	return &OptimisticRollbackSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every central registered right now. A
-// central adopted later needs [OptimisticRollbackSubscriber.StartCentral] —
-// this walk cannot see it.
+// Start attaches subscriptions to every registered central's event bus.
+// A central adopted later must be attached with
+// [OptimisticRollbackSubscriber.StartCentral].
 func (s *OptimisticRollbackSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
 		if unwire := s.StartCentral(u); unwire != nil {
-			s.mu.Lock()
 			s.unsubs = append(s.unsubs, unwire)
-			s.mu.Unlock()
 		}
 	}
 }
 
-// StartCentral subscribes exactly one central and returns its unwire, or nil
-// when there is nothing to attach. The composition root routes this through
-// the live-adopt hook chain, so a runtime-adopted CCU's rollbacks reach
-// WebSocket clients like a boot-time one's.
-func (s *OptimisticRollbackSubscriber) StartCentral(u *central.Unit) (unwire func()) {
-	if s == nil || s.reg == nil || s.hub == nil || u == nil || u.EventBus == nil {
+// StartCentral attaches this subscriber to a single central's event bus and
+// returns the unwire (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so a write that
+// never landed on a central adopted at runtime rolled back silently: no
+// `datapoint.optimistic_rolled_back` frame reached any client until a restart.
+func (s *OptimisticRollbackSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.reg == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
 		return nil
 	}
 	centralName := u.Name()
 	hub := s.hub
 	reg := s.reg
-	return events.Subscribe(u.EventBus, func(e hmevent.DataPointOptimisticRolledBackEvent) {
+	return events.Subscribe(bus, func(e hmevent.DataPointOptimisticRolledBackEvent) {
 		channel, _ := e.Key.ChannelNo()
 		hub.Publish(Event{
 			Topic: DataPointTopic(e.Key.DeviceAddress(), channel, e.Key.Parameter),
@@ -108,13 +105,11 @@ func (s *OptimisticRollbackSubscriber) StartCentral(u *central.Unit) (unwire fun
 	})
 }
 
-// Stop drops all event-bus subscriptions.
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (s *OptimisticRollbackSubscriber) Stop() {
-	s.mu.Lock()
-	unsubs := s.unsubs
-	s.unsubs = nil
-	s.mu.Unlock()
-	for _, u := range unsubs {
+	for _, u := range s.unsubs {
 		u()
 	}
+	s.unsubs = nil
 }

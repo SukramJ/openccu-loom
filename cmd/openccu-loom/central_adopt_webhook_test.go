@@ -121,7 +121,7 @@ func TestAdoptCentralWiresTheOutboundWebhook(t *testing.T) {
 		t.Fatalf("deliveries for the central adopted without the hook = %d, want 0", got)
 	}
 
-	orch.setWebhookCentralHook(func(u *central.Unit) func() { return outbound.StartCentral(u) })
+	orch.addCentralHook(func(u *central.Unit) func() { return outbound.AttachCentral(u) })
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("hooked")); err != nil {
 		t.Fatalf("adoptCentral(hooked): %v", err)

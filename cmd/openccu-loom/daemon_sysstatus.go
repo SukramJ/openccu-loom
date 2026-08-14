@@ -27,9 +27,14 @@ import (
 // teardown runs every subscriber's Stop in the same LIFO order the inline
 // defers would have executed.
 //
-// Three per-central hooks come back with it. Every subscriber here walks the
-// registry exactly once, so a central adopted at runtime is invisible to all
-// of them; the hooks are how the live-adopt path attaches one.
+// centralHook attaches ALL of these subscribers to one central adopted at
+// runtime and returns a single composite unwire. Every one of them subscribes
+// by walking the registry exactly once, so without it an adopted CCU emitted
+// no device.trigger / device lifecycle / optimistic-rollback / system-status
+// frame on any plane — WebSocket, REST buffer or MQTT — until the daemon was
+// restarted and the central became a boot-time one. It is deliberately ONE
+// hook rather than one per subscriber: the previous shape covered exactly the
+// hub-events subscriber and silently forgot the other five.
 func wireSystemStatusSubscribers(
 	reg *central.Registry,
 	wsHub *ws.Hub,
@@ -40,13 +45,7 @@ func wireSystemStatusSubscribers(
 	securitySvc *security.Service,
 	locale, publicURL string,
 	logger *slog.Logger,
-) (
-	sysStatusBuf *handlers.SystemStatusBuffer,
-	hubEventsHook func(u *central.Unit) (unwire func()),
-	sysStatusHook func(u *central.Unit) (unwire func()),
-	deviceEventsHook func(u *central.Unit) (unwire func()),
-	teardown func(),
-) {
+) (sysStatusBuf *handlers.SystemStatusBuffer, centralHook func(u *central.Unit) (unwire func()), teardown func()) {
 	sysStatusBuf = handlers.NewSystemStatusBuffer(100)
 	stopSysStatusBuf := sysStatusBuf.Subscribe(reg)
 
@@ -55,10 +54,6 @@ func wireSystemStatusSubscribers(
 
 	wsHubEvents := ws.NewHubEventsSubscriber(reg, wsHub)
 	wsHubEvents.Start()
-	// Start only walks the registry as it stands now; a central adopted at
-	// runtime needs the same subscriptions attached explicitly or none of
-	// its hub singletons ever reach a WebSocket client.
-	hubEventsHook = func(u *central.Unit) func() { return wsHubEvents.StartCentral(u) }
 
 	wsDeviceLifecycle := ws.NewDeviceLifecycleSubscriber(reg, wsHub)
 	wsDeviceLifecycle.Start()
@@ -68,8 +63,6 @@ func wireSystemStatusSubscribers(
 
 	wsOptimisticRollback := ws.NewOptimisticRollbackSubscriber(reg, wsHub)
 	wsOptimisticRollback.Start()
-
-	deviceEventsHook = deviceEventsCentralHook(wsDeviceLifecycle, wsDeviceTrigger, wsOptimisticRollback)
 
 	// The alarm_panel.* broadcast subscriber rides the daemon-level alarm
 	// event bus (areas are daemon-level, not per-central), so it binds to
@@ -99,7 +92,13 @@ func wireSystemStatusSubscribers(
 		mqttSysStatus.Start() //nolint:contextcheck // Start has no ctx parameter; it subscribes to the event bus internally
 	}
 
-	sysStatusHook = systemStatusCentralHook(sysStatusBuf, wsSysStatus, mqttSysStatus)
+	// One hook fanning out over every registry-snapshotting subscriber above.
+	centralHook = func(u *central.Unit) func() {
+		return composeUnwires(sysStatusBuf.SubscribeCentral(u), wsSysStatus.StartCentral(u),
+			wsHubEvents.StartCentral(u), wsDeviceLifecycle.StartCentral(u),
+			wsDeviceTrigger.StartCentral(u), wsOptimisticRollback.StartCentral(u),
+			mqttSysStatus.StartCentral(u))
+	}
 
 	// The MQTT alarm publisher mirrors the daemon-level alarm engine onto
 	// the HA alarm_control_panel plane. Nil-safe: only wired when both the
@@ -160,73 +159,17 @@ func wireSystemStatusSubscribers(
 		stopSysStatusBuf()
 	}
 
-	return sysStatusBuf, hubEventsHook, sysStatusHook, deviceEventsHook, teardown
+	return sysStatusBuf, centralHook, teardown
 }
 
-// deviceEventsCentralHook returns the per-central attach for the WebSocket
-// device-event planes: triggers (`device.<addr>.channels.<n>.trigger`),
-// lifecycle (`device.<addr>.lifecycle`) and optimistic rollbacks.
-//
-// They share one hook because they share one defect shape: each subscriber
-// walked the registry exactly once at boot, so a CCU adopted at runtime
-// published none of the three — every keypress on one of its remotes was
-// lost to every WS client until the daemon restarted, while the boot-time
-// CCUs kept publishing normally.
-//
-// The returned unwire detaches every part again, so a central removed at
-// runtime stops publishing.
-func deviceEventsCentralHook(
-	lifecycle *ws.DeviceLifecycleSubscriber,
-	trigger *ws.DeviceTriggerSubscriber,
-	rollback *ws.OptimisticRollbackSubscriber,
-) func(u *central.Unit) (unwire func()) {
-	return func(u *central.Unit) func() {
-		unwires := []func(){
-			lifecycle.StartCentral(u),
-			trigger.StartCentral(u),
-			rollback.StartCentral(u),
-		}
-		return func() {
-			for _, unwire := range unwires {
-				if unwire != nil {
-					unwire()
-				}
-			}
-		}
-	}
-}
-
-// systemStatusCentralHook returns the per-central attach for the whole
-// system-status plane: the REST ring buffer behind `GET
-// /api/v1/system/status`, the WebSocket broadcast, and the MQTT
-// `<base>/<central>/system/status` topic.
-//
-// They share one hook because they carry the same event and shared the same
-// defect: each subscriber walked the registry exactly once, so a CCU adopted
-// at runtime reported its interface degradation on none of the three, while
-// the boot-time CCUs kept reporting normally. mqttSysStatus is nil while MQTT
-// is not configured.
-//
-// The returned unwire detaches every part again, so a central removed at
-// runtime stops publishing.
-func systemStatusCentralHook(
-	buf *handlers.SystemStatusBuffer,
-	wsSysStatus *ws.SystemStatusSubscriber,
-	mqttSysStatus *mqtt.SystemStatusPublisher,
-) func(u *central.Unit) (unwire func()) {
-	return func(u *central.Unit) func() {
-		unwires := []func(){
-			buf.SubscribeCentral(u),
-			wsSysStatus.StartCentral(u),
-		}
-		if mqttSysStatus != nil {
-			unwires = append(unwires, mqttSysStatus.StartCentral(u))
-		}
-		return func() {
-			for _, unwire := range unwires {
-				if unwire != nil {
-					unwire()
-				}
+// composeUnwires folds several per-central unwires into one, skipping the nil
+// entries a subscriber returns when it had nothing to attach. The composite is
+// what the orchestrator stores, so removing the central drops the whole set.
+func composeUnwires(unwires ...func()) func() {
+	return func() {
+		for _, unwire := range unwires {
+			if unwire != nil {
+				unwire()
 			}
 		}
 	}

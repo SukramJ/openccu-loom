@@ -176,6 +176,70 @@ func TestUserStoreAuthenticateBasicCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestUserStoreAuthenticateBasicReturnsStoredSubject verifies that a
+// successful login reports the canonical (stored) spelling of the
+// subject, not the casing the caller happened to type. Everything that
+// keys on an identity — the session map, the audit note, the revocation
+// hooks behind a password or role change — compares against the stored
+// spelling, so returning the caller's casing makes those lookups miss.
+func TestUserStoreAuthenticateBasicReturnsStoredSubject(t *testing.T) {
+	s := newUserStore(t)
+	ctx := context.Background()
+
+	if err := s.Put(ctx, "Frank", "pw", auth.RoleViewer); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	for _, username := range []string{"frank", "Frank", "FRANK", " fRaNk "} {
+		id, err := s.AuthenticateBasic(ctx, username, "pw")
+		if err != nil {
+			t.Fatalf("AuthenticateBasic(%q): %v", username, err)
+		}
+		if id.Subject != "frank" {
+			t.Errorf("AuthenticateBasic(%q).Subject=%q want %q", username, id.Subject, "frank")
+		}
+	}
+}
+
+// TestUserStorePutRefusesToDemoteLastAdmin pins the lockout guard on the
+// write path: demoting the only admin would leave the daemon with zero
+// accounts able to reach any admin route, and no admin-only API to
+// recover with. Delete already refuses this; Put must too.
+func TestUserStorePutRefusesToDemoteLastAdmin(t *testing.T) {
+	s := newUserStore(t)
+	ctx := context.Background()
+
+	if err := s.Put(ctx, "onlyadmin", "pw", auth.RoleAdmin); err != nil {
+		t.Fatalf("Put admin: %v", err)
+	}
+	if err := s.Put(ctx, "viewer", "pw", auth.RoleViewer); err != nil {
+		t.Fatalf("Put viewer: %v", err)
+	}
+
+	if err := s.Put(ctx, "OnlyAdmin", "newpw", auth.RoleViewer); !errors.Is(err, ErrLastAdmin) {
+		t.Fatalf("Put demoting last admin: want ErrLastAdmin, got %v", err)
+	}
+	rows, err := s.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, r := range rows {
+		if r.Subject == "onlyadmin" && r.Role != auth.RoleAdmin {
+			t.Errorf("onlyadmin role=%q want admin (write must not have landed)", r.Role)
+		}
+	}
+	// The same account may still have its password reset while keeping
+	// the admin role, and a second admin unblocks the demotion.
+	if err := s.Put(ctx, "onlyadmin", "newpw", auth.RoleAdmin); err != nil {
+		t.Fatalf("Put same role: %v", err)
+	}
+	if err := s.Put(ctx, "second", "pw", auth.RoleAdmin); err != nil {
+		t.Fatalf("Put second admin: %v", err)
+	}
+	if err := s.Put(ctx, "onlyadmin", "newpw", auth.RoleViewer); err != nil {
+		t.Fatalf("Put demoting with a second admin present: %v", err)
+	}
+}
+
 // TestUserStoreDeleteHappyPath verifies that Delete removes the user.
 func TestUserStoreDeleteHappyPath(t *testing.T) {
 	s := newUserStore(t)

@@ -4,7 +4,6 @@
 package ws
 
 import (
-	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -50,13 +49,8 @@ func SystemStatusTopic(centralName string) string {
 //
 // Start/Stop manage the subscription lifetime.
 type SystemStatusSubscriber struct {
-	reg *central.Registry
-	hub *Hub
-
-	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
-	// touch the slice at all - it hands its unwire back to the caller, so
-	// the runtime-adopt path owns its own detach.
-	mu     sync.Mutex
+	reg    *central.Registry
+	hub    *Hub
 	unsubs []func()
 }
 
@@ -65,33 +59,39 @@ func NewSystemStatusSubscriber(reg *central.Registry, hub *Hub) *SystemStatusSub
 	return &SystemStatusSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every central registered right now. A
-// central adopted later needs [SystemStatusSubscriber.StartCentral] — this
-// walk cannot see it.
+// Start attaches subscriptions to every registered central's event bus.
+// Safe to call from the daemon composition root after the bus is ready.
+// A central adopted later must be attached with
+// [SystemStatusSubscriber.StartCentral].
 func (s *SystemStatusSubscriber) Start() {
-	if s.reg == nil {
+	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
 		if unwire := s.StartCentral(u); unwire != nil {
-			s.mu.Lock()
 			s.unsubs = append(s.unsubs, unwire)
-			s.mu.Unlock()
 		}
 	}
 }
 
-// StartCentral subscribes exactly one central and returns its unwire, or nil
-// when there is nothing to attach. The composition root routes this through
-// the live-adopt hook chain, so a runtime-adopted CCU's status changes reach
-// WebSocket clients like a boot-time one's.
-func (s *SystemStatusSubscriber) StartCentral(u *central.Unit) (unwire func()) {
-	if s == nil || s.hub == nil || u == nil || u.EventBus == nil {
+// StartCentral attaches this subscriber to a single central's event bus and
+// returns the unwire (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so a central
+// adopted at runtime emitted no `system.<central>.status` frame at all: its
+// interface up/down transitions never reached a WebSocket client until the
+// daemon was restarted.
+func (s *SystemStatusSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
 		return nil
 	}
 	centralName := u.Name()
 	hub := s.hub
-	unsub := events.Subscribe(u.EventBus, func(e hmevent.SystemStatusChangedEvent) {
+	return events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
 		hub.Publish(Event{
 			Topic: SystemStatusTopic(centralName),
 			Type:  string(hmevent.EventTypeSystemStatusChanged),
@@ -113,16 +113,13 @@ func (s *SystemStatusSubscriber) StartCentral(u *central.Unit) (unwire func()) {
 			},
 		})
 	})
-	return unsub
 }
 
-// Stop drops all event-bus subscriptions.
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (s *SystemStatusSubscriber) Stop() {
-	s.mu.Lock()
-	unsubs := s.unsubs
-	s.unsubs = nil
-	s.mu.Unlock()
-	for _, u := range unsubs {
+	for _, u := range s.unsubs {
 		u()
 	}
+	s.unsubs = nil
 }
