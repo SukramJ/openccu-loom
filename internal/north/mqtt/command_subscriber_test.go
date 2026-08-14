@@ -870,3 +870,49 @@ func TestCommandSubscriberRefusesAmbiguousCentralSegment(t *testing.T) {
 		t.Fatalf("an ambiguous central segment was routed to a CCU anyway (calls=%d)", sink.setValues.Load())
 	}
 }
+
+// TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite pins that a topic
+// owned by a dedicated subscription is handled by that subscription alone.
+//
+// The week-profile command topic has seven levels, which is exactly the shape
+// of the legacy bucket-less data-point filter, and a broker delivers a message
+// to EVERY matching subscription. Delivering through one named filter at a
+// time — what the other tests in this file do — cannot see that: the topic has
+// to go through the client so both handlers run, the way production does.
+//
+// Without the guard, picking a heating profile in Home Assistant switched the
+// profile AND issued a CCU write for a parameter named `week_profile`, which
+// no channel has.
+func TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
+	client := newEchoClient()
+	sink := &fakeSink{}
+	wpSink := &fakeWPSink{}
+	sub := NewCommandSubscriber(client, NewTopicBuilder("openccu-loom"), sink, nil).WithWeekProfileSink(wpSink)
+	if err := sub.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	const topic = "openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/week_profile/set"
+	// Vacuity guard: the overlap only exists while both filters are active.
+	matching := 0
+	for _, f := range client.Filters() {
+		if mqttFilterMatches(f, topic) {
+			matching++
+		}
+	}
+	if matching < 2 {
+		t.Fatalf("filters matching %q = %d, want at least 2 — the overlap this test guards is gone", topic, matching)
+	}
+
+	if err := client.Publish(context.Background(), topic, []byte("P2"), QoS1, false); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	sub.WaitIdle()
+
+	if got := wpSink.calls.Load(); got != 1 {
+		t.Fatalf("week-profile writes = %d, want 1", got)
+	}
+	if got := sink.setValues.Load(); got != 0 {
+		t.Fatalf("CCU data-point writes = %d, want 0 (a bogus `week_profile` parameter reached the CCU)", got)
+	}
+}

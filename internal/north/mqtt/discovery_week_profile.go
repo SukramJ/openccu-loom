@@ -191,5 +191,5 @@ func (b *Bridge) PublishWeekProfileState(ctx context.Context, centralName, iface
 		centralName = b.cfg.CentralName
 	}
 	topic := b.topics.WeekProfileState(centralName, iface, address, channel)
-	return b.client.Publish(ctx, topic, []byte(currentProfile), b.cfg.QoS.State, true)
+	return b.publishRawRetained(ctx, topic, []byte(currentProfile))
 }

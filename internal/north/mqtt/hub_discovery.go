@@ -106,7 +106,7 @@ func hubDeviceBlock(centralName string, info HubInfo) map[string]any {
 		model = info.Model
 	}
 	block := map[string]any{
-		"identifiers":  []string{"openccu-loom_central_" + safeLower(centralName)},
+		"identifiers":  []string{centralDeviceIdentifier(centralName)},
 		"name":         name,
 		"manufacturer": "eQ-3",
 		"model":        model,
@@ -141,7 +141,7 @@ func hubEntityDeviceBlock(centralName, deviceAddress string, info HubInfo) map[s
 	}
 	return map[string]any{
 		"identifiers": []string{physicalDeviceIdentifier(deviceAddress)},
-		"via_device":  "openccu-loom_central_" + safeLower(centralName),
+		"via_device":  centralDeviceIdentifier(centralName),
 	}
 }
 

@@ -100,6 +100,13 @@ type centralOrchestrator struct {
 	// central would never push a hub change to any WS client, because the
 	// subscriber only walks the registry once at boot.
 	hubEventsHook func(u *central.Unit) (unwire func())
+	// sysStatusHook attaches an adopted central to the system-status plane:
+	// the REST ring buffer, the WebSocket broadcast and the MQTT
+	// `<base>/<central>/system/status` topic. Set via
+	// [centralOrchestrator.setSysStatusCentralHook]. Without it an adopted
+	// CCU's interface degradation reaches none of those surfaces, because
+	// each of their subscribers only walks the registry once at boot.
+	sysStatusHook func(u *central.Unit) (unwire func())
 	// eventSourceHook feeds an adopted central's model event sources from
 	// its device triggers. Set via
 	// [centralOrchestrator.setEventSourceCentralHook]. Without it the
@@ -141,6 +148,7 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	alarmHook := o.alarmHook
 	securityHook := o.securityHook
 	hubEventsHook := o.hubEventsHook
+	sysStatusHook := o.sysStatusHook
 	eventSourceHook := o.eventSourceHook
 	hubReadyTrigger := o.hubReadyTrigger
 	o.mu.Unlock()
@@ -183,6 +191,12 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	// already has a listener.
 	if hubEventsHook != nil {
 		keep(hubEventsHook(unit))
+	}
+	// Attach the system-status plane (REST buffer, WebSocket broadcast, MQTT
+	// status topic) before the bring-up starts, so the very first interface
+	// state this central reports is already carried north.
+	if sysStatusHook != nil {
+		keep(sysStatusHook(unit))
 	}
 	// Feed the central's model event sources from its device triggers, so the
 	// first keypress it reports is recorded on the channel's event group.
@@ -230,6 +244,17 @@ func (o *centralOrchestrator) setHubEventsCentralHook(hook func(u *central.Unit)
 	}
 	o.mu.Lock()
 	o.hubEventsHook = hook
+	o.mu.Unlock()
+}
+
+// setSysStatusCentralHook installs the per-central system-status wiring hook.
+// Nil-safe on both sides, mirroring setHubEventsCentralHook.
+func (o *centralOrchestrator) setSysStatusCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.sysStatusHook = hook
 	o.mu.Unlock()
 }
 

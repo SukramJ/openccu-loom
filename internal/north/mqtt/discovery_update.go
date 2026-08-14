@@ -208,5 +208,5 @@ func (b *Bridge) PublishUpdateState(ctx context.Context, centralName, iface, add
 		return err
 	}
 	topic := b.topics.DeviceUpdateState(centralName, iface, address)
-	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
+	return b.publishRawRetained(ctx, topic, body)
 }

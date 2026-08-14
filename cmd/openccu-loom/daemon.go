@@ -700,13 +700,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, hubEventsCentralHook, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, securitySvc, cfg.Locale, cfg.North.REST.PublicURL, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, hubEventsCentralHook, sysStatusCentralHook, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, securitySvc, cfg.Locale, cfg.North.REST.PublicURL, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
 	// Installed here rather than next to the Matter/alarm hooks above because
 	// the subscriber it closes over is built by the call right above. Runtime
 	// adoption is driven over REST, which is not listening yet, so no central
 	// can be adopted before this point.
 	centralOrch.setHubEventsCentralHook(hubEventsCentralHook)
+	centralOrch.setSysStatusCentralHook(sysStatusCentralHook)
 	centralOrch.setEventSourceCentralHook(func(u *central.Unit) func() {
 		return eventSourceFeed.StartCentral(u)
 	})

@@ -142,7 +142,7 @@ func (b *Bridge) PublishScheduleEntityState(
 		centralName = b.cfg.CentralName
 	}
 	topic := b.topics.ScheduleEntityState(centralName, iface, address, channel)
-	return b.client.Publish(ctx, topic, fmt.Appendf(nil, "%d", count), b.cfg.QoS.State, true)
+	return b.publishRawRetained(ctx, topic, fmt.Appendf(nil, "%d", count))
 }
 
 // PublishScheduleEntityAttrs publishes the rich schedule structure to
@@ -171,7 +171,7 @@ func (b *Bridge) PublishScheduleEntityAttrs(
 		return err
 	}
 	topic := b.topics.ScheduleEntityAttrs(centralName, iface, address, channel)
-	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
+	return b.publishRawRetained(ctx, topic, body)
 }
 
 // ScheduleSwitchEvent carries the context the discovery builder needs
@@ -365,5 +365,5 @@ func (b *Bridge) PublishScheduleSwitchState(
 		msg = []byte("true")
 	}
 	topic := b.topics.ScheduleSwitchState(centralName, iface, address, channel, key)
-	return b.client.Publish(ctx, topic, msg, b.cfg.QoS.State, true)
+	return b.publishRawRetained(ctx, topic, msg)
 }

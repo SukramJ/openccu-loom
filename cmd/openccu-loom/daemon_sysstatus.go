@@ -26,6 +26,10 @@ import (
 // surface and is consumed later in the composition root. The returned
 // teardown runs every subscriber's Stop in the same LIFO order the inline
 // defers would have executed.
+//
+// Two per-central hooks come back with it. Every subscriber here walks the
+// registry exactly once, so a central adopted at runtime is invisible to all
+// of them; the hooks are how the live-adopt path attaches one.
 func wireSystemStatusSubscribers(
 	reg *central.Registry,
 	wsHub *ws.Hub,
@@ -36,7 +40,12 @@ func wireSystemStatusSubscribers(
 	securitySvc *security.Service,
 	locale, publicURL string,
 	logger *slog.Logger,
-) (sysStatusBuf *handlers.SystemStatusBuffer, hubEventsHook func(u *central.Unit) (unwire func()), teardown func()) {
+) (
+	sysStatusBuf *handlers.SystemStatusBuffer,
+	hubEventsHook func(u *central.Unit) (unwire func()),
+	sysStatusHook func(u *central.Unit) (unwire func()),
+	teardown func(),
+) {
 	sysStatusBuf = handlers.NewSystemStatusBuffer(100)
 	stopSysStatusBuf := sysStatusBuf.Subscribe(reg)
 
@@ -86,6 +95,8 @@ func wireSystemStatusSubscribers(
 		mqttSysStatus = mqtt.NewSystemStatusPublisher(reg, mqttWiring, logger)
 		mqttSysStatus.Start() //nolint:contextcheck // Start has no ctx parameter; it subscribes to the event bus internally
 	}
+
+	sysStatusHook = systemStatusCentralHook(sysStatusBuf, wsSysStatus, mqttSysStatus)
 
 	// The MQTT alarm publisher mirrors the daemon-level alarm engine onto
 	// the HA alarm_control_panel plane. Nil-safe: only wired when both the
@@ -146,5 +157,41 @@ func wireSystemStatusSubscribers(
 		stopSysStatusBuf()
 	}
 
-	return sysStatusBuf, hubEventsHook, teardown
+	return sysStatusBuf, hubEventsHook, sysStatusHook, teardown
+}
+
+// systemStatusCentralHook returns the per-central attach for the whole
+// system-status plane: the REST ring buffer behind `GET
+// /api/v1/system/status`, the WebSocket broadcast, and the MQTT
+// `<base>/<central>/system/status` topic.
+//
+// They share one hook because they carry the same event and shared the same
+// defect: each subscriber walked the registry exactly once, so a CCU adopted
+// at runtime reported its interface degradation on none of the three, while
+// the boot-time CCUs kept reporting normally. mqttSysStatus is nil while MQTT
+// is not configured.
+//
+// The returned unwire detaches every part again, so a central removed at
+// runtime stops publishing.
+func systemStatusCentralHook(
+	buf *handlers.SystemStatusBuffer,
+	wsSysStatus *ws.SystemStatusSubscriber,
+	mqttSysStatus *mqtt.SystemStatusPublisher,
+) func(u *central.Unit) (unwire func()) {
+	return func(u *central.Unit) func() {
+		unwires := []func(){
+			buf.SubscribeCentral(u),
+			wsSysStatus.StartCentral(u),
+		}
+		if mqttSysStatus != nil {
+			unwires = append(unwires, mqttSysStatus.StartCentral(u))
+		}
+		return func() {
+			for _, unwire := range unwires {
+				if unwire != nil {
+					unwire()
+				}
+			}
+		}
+	}
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	pload "github.com/SukramJ/openccu-loom/internal/payload"
 )
 
 // TestLegacyAggregateStateMatcherPositiveCases pins what counts as a
@@ -536,5 +537,82 @@ func TestRawOrphanCandidateMatcherEscapesCentralName(t *testing.T) {
 	// Another central's subtree stays out of scope.
 	if RawOrphanCandidateMatcher(base, "Schlaf Zimmer", topic) {
 		t.Error("a foreign central's topic matched")
+	}
+}
+
+// filteringRetainClient is [mockRetainClient] with a broker's actual
+// subscribe semantics: it replays a retained message only to a subscription
+// whose filter matches it. The non-filtering double cannot see a wrong
+// subscribe filter at all, which is exactly the defect below.
+type filteringRetainClient struct {
+	mockRetainClient
+}
+
+func (m *filteringRetainClient) Subscribe(_ context.Context, filter string, _ QoS, handler MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
+	m.mu.Lock()
+	retained := make([]retainedMsg, len(m.retained))
+	copy(retained, m.retained)
+	m.mu.Unlock()
+	for _, msg := range retained {
+		if !mqttFilterMatches(filter, msg.topic) {
+			continue
+		}
+		handler(&Message{Topic: msg.topic, Payload: msg.payload, Retain: true})
+	}
+	return SubscribeResult{}, nil
+}
+
+// TestRunRawOrphanCleanupOnceSweepsTheTopicsTheBridgeWrote pins that the raw
+// orphan sweep looks where the raw plane actually publishes.
+//
+// The sweep derives its subscribe filter and its candidate matcher from the
+// configured topic base, while every publisher goes through the topic builder,
+// which trims the base's slashes. An operator who writes `topic_base` with a
+// trailing slash therefore had a sweep that subscribed to a prefix nothing
+// writes: it reported zero evicted on every boot and retained topics from a
+// previous build kept feeding stale values forever.
+//
+// The fixture asserts against a topic the bridge itself wrote, not a
+// hand-built literal, so the two halves cannot drift apart again.
+func TestRunRawOrphanCleanupOnceSweepsTheTopicsTheBridgeWrote(t *testing.T) {
+	t.Parallel()
+
+	const (
+		configuredBase = "home/hm/"
+		central        = "Wohn Zimmer"
+		iface          = "HmIP-RF"
+		addr           = "0001ABCD"
+	)
+	mc := &filteringRetainClient{}
+	b := NewBridge(BridgeConfig{Base: configuredBase, CentralName: central, RawEnabled: true}, mc)
+
+	ctx := context.Background()
+	live := pload.TopicSlot{Address: addr, Channel: 1, Bucket: pload.BucketValues, Parameter: "STATE"}
+	if err := b.PublishSlotState(ctx, central, iface, live, pload.PerDPState{Value: true, Available: true}); err != nil {
+		t.Fatalf("PublishSlotState: %v", err)
+	}
+	liveTopic := b.topics.SlotState(central, iface, live)
+	// The orphan is a sibling of the live topic — same device, a parameter
+	// this build no longer publishes.
+	stale := pload.TopicSlot{Address: addr, Channel: 8, Bucket: pload.BucketMaster, Parameter: "01_WP_WEEKDAY"}
+	orphanTopic := b.topics.SlotState(central, iface, stale)
+
+	mc.mu.Lock()
+	mc.retained = []retainedMsg{
+		{topic: liveTopic, payload: []byte(`{"value":true}`)},
+		{topic: orphanTopic, payload: []byte(`{"value":1}`)},
+	}
+	mc.mu.Unlock()
+
+	n, err := b.RunRawOrphanCleanupOnce(ctx, central, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunRawOrphanCleanupOnce: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("evicted = %d, want 1 — the sweep never reached the topics the bridge wrote", n)
+	}
+	evicted := mc.evicted()
+	if len(evicted) != 1 || evicted[0] != orphanTopic {
+		t.Fatalf("evicted = %v, want [%s]", evicted, orphanTopic)
 	}
 }

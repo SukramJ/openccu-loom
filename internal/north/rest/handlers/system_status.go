@@ -85,43 +85,53 @@ func (b *SystemStatusBuffer) SystemStatusEntries() []SystemStatusEntry {
 	return out
 }
 
-// Subscribe attaches the buffer to every central in reg so incoming
-// [hmevent.SystemStatusChangedEvent] values are appended automatically.
-// Returns a closer that removes all subscriptions. Safe to call once
-// after the bus is live.
+// Subscribe attaches the buffer to every central registered right now so
+// incoming [hmevent.SystemStatusChangedEvent] values are appended
+// automatically. Returns a closer that removes all subscriptions.
+//
+// A central adopted later needs [SystemStatusBuffer.SubscribeCentral] — this
+// walk cannot see it, and `GET /api/v1/system/status` would list nothing for
+// that CCU no matter how often its interfaces flapped.
 func (b *SystemStatusBuffer) Subscribe(reg *central.Registry) (stop func()) {
 	if reg == nil {
 		return func() {}
 	}
 	var unsubs []func()
 	for _, u := range reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unsub := b.SubscribeCentral(u); unsub != nil {
+			unsubs = append(unsubs, unsub)
 		}
-		centralName := u.Name()
-		unsub := events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
-			b.append(SystemStatusEntry{
-				Central:            centralName,
-				Component:          e.Component,
-				Healthy:            e.Healthy,
-				Reason:             e.Reason,
-				InterfaceID:        e.InterfaceID,
-				ErrorCode:          e.ErrorCode,
-				CentralState:       e.CentralState,
-				ConnectionState:    e.ConnectionState,
-				DegradedInterfaces: e.DegradedInterfaces,
-				Issues:             e.Issues,
-				EventAt:            e.Timestamp(),
-			})
-		})
-		unsubs = append(unsubs, unsub)
 	}
 	return func() {
 		for _, u := range unsubs {
 			u()
 		}
 	}
+}
+
+// SubscribeCentral attaches the buffer to exactly one central and returns its
+// unwire, or nil when there is nothing to attach. The composition root routes
+// this through the live-adopt hook chain.
+func (b *SystemStatusBuffer) SubscribeCentral(u *central.Unit) (stop func()) {
+	if b == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	return events.Subscribe(u.EventBus, func(e hmevent.SystemStatusChangedEvent) {
+		b.append(SystemStatusEntry{
+			Central:            centralName,
+			Component:          e.Component,
+			Healthy:            e.Healthy,
+			Reason:             e.Reason,
+			InterfaceID:        e.InterfaceID,
+			ErrorCode:          e.ErrorCode,
+			CentralState:       e.CentralState,
+			ConnectionState:    e.ConnectionState,
+			DegradedInterfaces: e.DegradedInterfaces,
+			Issues:             e.Issues,
+			EventAt:            e.Timestamp(),
+		})
+	})
 }
 
 // SystemStatusResponse is the body of `GET /api/v1/system/status`.

@@ -4,6 +4,7 @@
 package ws
 
 import (
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -49,8 +50,13 @@ func SystemStatusTopic(centralName string) string {
 //
 // Start/Stop manage the subscription lifetime.
 type SystemStatusSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
+	reg *central.Registry
+	hub *Hub
+
+	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
+	// touch the slice at all - it hands its unwire back to the caller, so
+	// the runtime-adopt path owns its own detach.
+	mu     sync.Mutex
 	unsubs []func()
 }
 
@@ -59,49 +65,64 @@ func NewSystemStatusSubscriber(reg *central.Registry, hub *Hub) *SystemStatusSub
 	return &SystemStatusSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
-// Safe to call from the daemon composition root after the bus is ready.
+// Start attaches subscriptions to every central registered right now. A
+// central adopted later needs [SystemStatusSubscriber.StartCentral] — this
+// walk cannot see it.
 func (s *SystemStatusSubscriber) Start() {
-	if s.reg == nil || s.hub == nil {
+	if s.reg == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.mu.Lock()
+			s.unsubs = append(s.unsubs, unwire)
+			s.mu.Unlock()
 		}
-		centralName := u.Name()
-		hub := s.hub
-		unsub := events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
-			hub.Publish(Event{
-				Topic: SystemStatusTopic(centralName),
-				Type:  string(hmevent.EventTypeSystemStatusChanged),
-				When:  e.Timestamp(),
-				Payload: SystemStatusChangedPayload{
-					Central:            centralName,
-					Component:          e.Component,
-					Healthy:            e.Healthy,
-					Reason:             e.Reason,
-					InterfaceID:        e.InterfaceID,
-					ErrorCode:          e.ErrorCode,
-					CentralState:       e.CentralState,
-					ConnectionState:    e.ConnectionState,
-					ClientState:        e.ClientState,
-					CallbackState:      e.CallbackState,
-					DegradedInterfaces: e.DegradedInterfaces,
-					Issues:             e.Issues,
-					EventAt:            e.Timestamp(),
-				},
-			})
-		})
-		s.unsubs = append(s.unsubs, unsub)
 	}
+}
+
+// StartCentral subscribes exactly one central and returns its unwire, or nil
+// when there is nothing to attach. The composition root routes this through
+// the live-adopt hook chain, so a runtime-adopted CCU's status changes reach
+// WebSocket clients like a boot-time one's.
+func (s *SystemStatusSubscriber) StartCentral(u *central.Unit) (unwire func()) {
+	if s == nil || s.hub == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	hub := s.hub
+	unsub := events.Subscribe(u.EventBus, func(e hmevent.SystemStatusChangedEvent) {
+		hub.Publish(Event{
+			Topic: SystemStatusTopic(centralName),
+			Type:  string(hmevent.EventTypeSystemStatusChanged),
+			When:  e.Timestamp(),
+			Payload: SystemStatusChangedPayload{
+				Central:            centralName,
+				Component:          e.Component,
+				Healthy:            e.Healthy,
+				Reason:             e.Reason,
+				InterfaceID:        e.InterfaceID,
+				ErrorCode:          e.ErrorCode,
+				CentralState:       e.CentralState,
+				ConnectionState:    e.ConnectionState,
+				ClientState:        e.ClientState,
+				CallbackState:      e.CallbackState,
+				DegradedInterfaces: e.DegradedInterfaces,
+				Issues:             e.Issues,
+				EventAt:            e.Timestamp(),
+			},
+		})
+	})
+	return unsub
 }
 
 // Stop drops all event-bus subscriptions.
 func (s *SystemStatusSubscriber) Stop() {
-	for _, u := range s.unsubs {
+	s.mu.Lock()
+	unsubs := s.unsubs
+	s.unsubs = nil
+	s.mu.Unlock()
+	for _, u := range unsubs {
 		u()
 	}
-	s.unsubs = nil
 }

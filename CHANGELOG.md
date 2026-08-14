@@ -60,6 +60,62 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A CCU added while the daemon is running reports its system status.**
+  The `<base>/<CCU>/system/status` topic an operator's alerting watches
+  for interface degradation was published by a subscriber that walked
+  the configured CCUs once, at start-up. A CCU adopted afterwards over
+  the admin API was never subscribed, so its interfaces could go down in
+  silence — no MQTT event, no WebSocket broadcast, and nothing in
+  `GET /api/v1/system/status` — while the alerting kept working for the
+  CCUs present at boot. All three surfaces are attached when the CCU is
+  adopted now, and detached when it is removed.
+
+- **A removed device stops leaving retained topics behind.** Unpairing a
+  device cleared its per-data-point state but not its firmware-update,
+  week-profile, schedule, aggregate or combined-data-point topics: those
+  publishers never recorded what they had written, and no shape the
+  boot-time sweep recognises matches them. Raw-plane consumers kept
+  reading the gone device's last known profile and firmware state
+  indefinitely. Every device-scoped retained publisher records its topic
+  now, and only once the broker has accepted the publish.
+
+- **Entities missing after a broker outage during start-up.** Home
+  Assistant discovery configs were marked as published before the
+  publish was attempted, so a broker that was briefly unreachable — or a
+  circuit breaker that had opened — lost every config of that pass while
+  the daemon considered them all declared. The identical payload rebuilt
+  from the next value change was then suppressed as a duplicate, and the
+  entities stayed absent until Home Assistant itself was restarted. The
+  same held for the raw plane's `/config` companions. Both cache what
+  the broker accepted now, and the replay Home Assistant triggers on its
+  own restart continues past a failing topic instead of abandoning the
+  rest of the fleet.
+
+- **Choosing a heating profile no longer writes a phantom parameter to
+  the CCU.** The week-profile command topic has the same number of
+  levels as the legacy data-point command topic, and a broker delivers a
+  message to every matching subscription — so each profile change
+  switched the profile and additionally issued a CCU write for a
+  parameter named `week_profile`, which no channel has. One wasted wire
+  call and one warning per profile change.
+
+- **Devices nest under their CCU in Home Assistant again for CCU names
+  that are not bare slugs.** The card of each physical device pointed at
+  its parent CCU with a differently-spelled identifier than the one the
+  CCU's own card is registered under — the two spellings only coincide
+  while the name is plain ASCII without spaces. With a name like `Haus
+  CCU` the link could not resolve, so every device floated at the top
+  level of the Devices view instead of nesting, and the system
+  variables and programs bound to a device lost their link too.
+
+- **The raw-plane orphan sweep tolerates a `topic_base` with a trailing
+  slash.** Every publisher goes through the topic builder, which trims
+  the base's slashes; the sweep assembled its own prefix from the raw
+  configured value. With `topic_base: openccu-loom/` it therefore
+  subscribed to a prefix nothing writes and evicted nothing on every
+  boot, leaving retained topics of retired data points feeding stale
+  values forever.
+
 - **MQTT commands reach a CCU whose name contains a space.** Every topic
   the daemon publishes escapes the CCU name — `Wohn Zimmer` becomes
   `Wohn_Zimmer` — but the inbound handlers read that segment back

@@ -1267,6 +1267,21 @@ func physicalDeviceIdentifier(deviceAddress string) string {
 	return "openccu-loom_" + strings.ToLower(deviceAddress)
 }
 
+// centralDeviceIdentifier returns the HA device-block `identifiers` value for
+// the synthetic central hub card. Single source of truth so the hub card
+// ([hubDeviceBlock]) and every `via_device` that references it agree
+// byte-for-byte — HA resolves a parent only on an exact match, and a device
+// whose via_device does not resolve floats at the top level instead of
+// nesting under its CCU.
+//
+// The name goes through the same discovery slug as every other discovery
+// identifier, so a central called "Haus CCU" or "Büro" reads the same on both
+// halves; a plain lower-casing left space and umlaut untouched and broke the
+// hierarchy for every such CCU.
+func centralDeviceIdentifier(centralName string) string {
+	return "openccu-loom_central_" + safeLower(centralName)
+}
+
 func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 	parentID := physicalDeviceIdentifier(ev.DeviceAddress)
 	desc := map[string]any{
@@ -1280,7 +1295,7 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 	// via_device floats at the top level, mixed with the central
 	// itself — confusing in the HA Devices view.
 	if ev.Central != "" {
-		desc["via_device"] = "openccu-loom_central_" + strings.ToLower(ev.Central)
+		desc["via_device"] = centralDeviceIdentifier(ev.Central)
 	}
 	// Sub-device override: when enabled and the parent device + channel
 	// confirm the multi-group structure, swap the descriptor to identify

@@ -558,6 +558,20 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 	return len(orphans), nil
 }
 
+// rawCentralPrefix returns the `<base>/<central>/` prefix the raw plane
+// publishes every per-data-point topic under. One definition for both halves
+// of the orphan sweep — the subscribe filter and the candidate matcher — so
+// they cannot look in different places.
+//
+// The base is trimmed and the central name escaped exactly as
+// [naming.PathData.MQTTState] does when it writes those topics. Both had
+// drifted: a `topic_base` written with a trailing slash and a CCU whose name
+// carries a space each produced a sweep that collected nothing at all, so
+// retained topics from a previous build kept feeding stale values forever.
+func rawCentralPrefix(topicBase, centralName string) string {
+	return strings.Trim(topicBase, "/") + "/" + naming.TopicSafe(centralName) + "/"
+}
+
 // RawOrphanCandidateMatcher reports whether topic is a per-DP bucket topic
 // (state or its /config companion) of the given central under topicBase:
 //
@@ -577,7 +591,7 @@ func RawOrphanCandidateMatcher(topicBase, centralName, topic string) bool {
 	if topicBase == "" || centralName == "" {
 		return false
 	}
-	prefix := topicBase + "/" + naming.TopicSafe(centralName) + "/"
+	prefix := rawCentralPrefix(topicBase, centralName)
 	if !strings.HasPrefix(topic, prefix) {
 		return false
 	}
@@ -666,7 +680,7 @@ func (b *Bridge) RunRawOrphanCleanupOnce(ctx context.Context, centralName string
 		mu.Unlock()
 	}
 
-	filter := b.cfg.Base + "/" + naming.TopicSafe(centralName) + "/#"
+	filter := rawCentralPrefix(b.cfg.Base, centralName) + "#"
 	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.State, LegacyHandler(handler)); err != nil {
 		return 0, err
 	}

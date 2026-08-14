@@ -426,6 +426,22 @@ func (c *CommandSubscriber) WithLifecycleContext(ctx context.Context) *CommandSu
 	return c
 }
 
+// reservedLegacyParamSegments lists the segments a seven-level `.../set`
+// topic can carry that belong to another subscription rather than to a CCU
+// parameter. The legacy bucket-less data-point filter registered in
+// [CommandSubscriber.Start] is a seven-level wildcard, so it matches every
+// seven-level command topic the plane defines — and a broker fans a message
+// out to all matching subscriptions, not just the most specific one.
+//
+// Every literal segment used in a seven-level command filter MUST be listed
+// here, or that topic is dispatched a second time as a data-point write to a
+// parameter that does not exist. The eight-level branch of
+// [CommandSubscriber.handleDataPoint] gets the same protection for free from
+// its bucket allow-list.
+var reservedLegacyParamSegments = map[string]struct{}{
+	"week_profile": {},
+}
+
 // Start attaches the four subscriptions.
 func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if c.sub == nil {
@@ -780,6 +796,17 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	isMaster := false
 	switch len(parts) {
 	case 7:
+		// A broker delivers a message to EVERY matching subscription, and
+		// the legacy filter is the same length as the filters that own a
+		// literal segment here. Without this guard picking a heating profile
+		// wrote the profile AND issued a CCU write for a parameter named
+		// `week_profile`, which no channel has.
+		if _, reserved := reservedLegacyParamSegments[parts[5]]; reserved {
+			c.logger.Debug("mqtt.command.reserved_segment",
+				slog.String("topic", topic),
+				slog.String("segment", parts[5]))
+			return
+		}
 		centralSeg, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[5]
 	case 8:
 		bucket := parts[5]
