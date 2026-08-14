@@ -21,6 +21,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A radio interface that disappears from the CCU is now reported as
+  unreachable.** The CCU answers with the interfaces it currently serves,
+  so an interface that dies signals it by dropping out of that answer
+  rather than by an explicit flag. The reconciliation pass looked only at
+  the entries it received, so a vanished interface kept its last known
+  state indefinitely: its MQTT connectivity sensor stayed on, the REST hub
+  data points still called it reachable, and the alarm domain kept
+  trusting every sensor behind it while armed. The pass now compares each
+  answer against the previous one, emits exactly one unreachable event for
+  an interface that left, and a reachable one when it returns. A failed or
+  empty answer — an unreachable or rebooting CCU — counts as no
+  information, so a CCU restart does not report every interface as lost.
+
 - **A cover's Open and Close buttons in Home Assistant move the cover
   again.** Home Assistant gives an MQTT cover one command topic and tells
   Open, Close and Stop apart by the payload alone, but discovery pointed

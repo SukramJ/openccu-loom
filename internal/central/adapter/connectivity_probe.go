@@ -16,15 +16,14 @@ import (
 // JSONRPCConnectivityProbe implements [coordinators.ConnectivityProbe]
 // by calling the CCU's `Interface.listInterfaces` JSON-RPC method.
 //
-// — the CCU returns one entry per *currently active* interface, so
-// every entry is reported as Reachable=true unless the firmware adds an
+// The CCU returns one entry per *currently active* interface, so every
+// entry is reported as Reachable=true unless the firmware adds an
 // explicit `connected: false`. Interfaces the CCU is no longer serving
-// simply do not appear, and nothing downstream turns that absence into
-// Reachable=false: [coordinators.Reconciler] iterates the probed
-// entries only, so an interface that vanishes keeps its last reported
-// state until it comes back. A firmware without the `connected` field
-// therefore never produces an unreachable transition through this
-// probe.
+// simply do not appear — the absence itself is the down signal, which
+// [coordinators.Reconciler] turns into Reachable=false by diffing the
+// answer against the previous one. Membership therefore carries the
+// unreachable transition on firmwares that never emit the `connected`
+// field.
 //
 // Some CCU firmwares add extra fields like `info` or `connected` to
 // each entry. If a `connected` boolean is present it is honored;

@@ -188,3 +188,115 @@ func TestReconcilerSkipsOnNegativeHealth(t *testing.T) {
 		t.Fatalf("metric should remain unobserved")
 	}
 }
+
+// TestReconcilerConnectivityFollowsTheProbeMembership walks a full probe
+// sequence and pins which ConnectivityChangedEvents each answer produces.
+//
+// The CCU lists the interfaces it currently serves, so an interface that
+// stops appearing is gone — not unchanged. Reconciling only the entries
+// the probe returned left such an interface reporting its last known
+// state forever, which every consumer (MQTT sensor, WS topic, the alarm
+// domain's sensor availability) then believed.
+//
+// The two answers that carry no membership information are pinned in the
+// same walk: a probe that errors out and a probe that comes back empty
+// are what an unreachable or rebooting CCU produces, and turning either
+// into a down event per interface would run the alarm domain's
+// central-loss escalation on every CCU restart.
+func TestReconcilerConnectivityFollowsTheProbeMembership(t *testing.T) {
+	type reach struct {
+		iface     string
+		reachable bool
+	}
+	up := func(ids ...string) []coordinators.InterfaceReachability {
+		out := make([]coordinators.InterfaceReachability, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, coordinators.InterfaceReachability{InterfaceID: id, Reachable: true})
+		}
+		return out
+	}
+
+	steps := []struct {
+		name    string
+		probed  []coordinators.InterfaceReachability
+		probeEr error
+		wantErr bool
+		want    []reach
+	}{
+		{
+			name:   "first probe reports every interface it sees",
+			probed: up("BidCos-RF", "HmIP-RF"),
+			want:   []reach{{"BidCos-RF", true}, {"HmIP-RF", true}},
+		},
+		{
+			name:   "an interface that disappears goes down",
+			probed: up("HmIP-RF"),
+			want:   []reach{{"BidCos-RF", false}},
+		},
+		{
+			name:   "staying absent does not repeat the down event",
+			probed: up("HmIP-RF"),
+			want:   nil,
+		},
+		{
+			name:    "a failed probe is no information",
+			probeEr: errors.New("ccu unreachable"),
+			wantErr: true,
+			want:    nil,
+		},
+		{
+			name:   "an empty answer is no information",
+			probed: nil,
+			want:   nil,
+		},
+		{
+			name:   "the interface comes back up",
+			probed: up("BidCos-RF", "HmIP-RF"),
+			want:   []reach{{"BidCos-RF", true}},
+		},
+	}
+
+	bus := events.NewBus()
+	connectivity := hub.NewConnectivity()
+	var seen []reach
+	defer events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) {
+		seen = append(seen, reach{e.InterfaceID, e.Reachable})
+	})()
+
+	var (
+		probed  []coordinators.InterfaceReachability
+		probeEr error
+	)
+	r := &coordinators.Reconciler{
+		CentralName:  "ccu1",
+		Connectivity: connectivity,
+		Bus:          bus,
+		Connect: coordinators.ProbeFunc(func(_ context.Context) ([]coordinators.InterfaceReachability, error) {
+			return probed, probeEr
+		}),
+	}
+
+	for _, step := range steps {
+		probed, probeEr = step.probed, step.probeEr
+		seen = nil
+		err := r.Reconcile(context.Background())
+		if (err != nil) != step.wantErr {
+			t.Fatalf("%s: Reconcile err = %v, wantErr = %v", step.name, err, step.wantErr)
+		}
+		if len(seen) != len(step.want) {
+			t.Fatalf("%s: connectivity events = %+v, want %+v", step.name, seen, step.want)
+		}
+		for i, w := range step.want {
+			if seen[i] != w {
+				t.Fatalf("%s: connectivity event %d = %+v, want %+v", step.name, i, seen[i], w)
+			}
+		}
+	}
+
+	// The vanished interface stays in the tracker as unreachable rather
+	// than dropping out of it, so the north-bound surfaces keep showing
+	// it with an honest state.
+	if reachable, observed := connectivity.Reachable("BidCos-RF"); !observed || !reachable {
+		t.Fatalf("BidCos-RF reachable=%v observed=%v, want true/true after it returned", reachable, observed)
+	}
+}

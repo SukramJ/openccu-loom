@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -102,6 +103,12 @@ type Reconciler struct {
 	// re-assigns the probe after a transient boot-time hub failure while the
 	// reconcile job may concurrently read it. Use SetConnect / connectProbe.
 	connectMu sync.RWMutex
+
+	// probedMu guards lastProbed, the interface-id set of the most recent
+	// informative probe answer. reconcileConnectivity diffs the current
+	// answer against it to detect interfaces that vanished.
+	probedMu   sync.Mutex
+	lastProbed map[string]bool
 }
 
 // SetConnect wires (or re-wires) the connectivity probe under connectMu. Use
@@ -179,7 +186,77 @@ func (r *Reconciler) reconcileConnectivity(ctx context.Context) error {
 			})
 		}
 	}
+	r.reconcileVanishedInterfaces(probed)
 	return nil
+}
+
+// reconcileVanishedInterfaces marks every interface the previous probe
+// listed and the current one no longer does as unreachable.
+//
+// The CCU answers with the interfaces it currently serves, so an entry
+// that stops appearing is gone rather than unchanged. Reconciling the
+// returned entries alone left it reporting its last known state until it
+// came back — a radio that dies mid-flight kept every sensor behind it
+// looking alive on MQTT, on the WebSocket topic and, worst, in the alarm
+// domain's sensor-availability view.
+//
+// Two answers carry no membership information and must not produce down
+// events: the first answer of the process (nothing to diff against) and
+// an empty answer, which is what an unreachable or rebooting CCU
+// produces. Reading either as "every interface went down" would run the
+// alarm domain's central-loss escalation on every CCU restart, so an
+// empty answer leaves the previous membership in place instead.
+func (r *Reconciler) reconcileVanishedInterfaces(probed []InterfaceReachability) {
+	current := make(map[string]bool, len(probed))
+	for _, p := range probed {
+		current[p.InterfaceID] = true
+	}
+	r.probedMu.Lock()
+	previous := r.lastProbed
+	if len(current) > 0 {
+		r.lastProbed = current
+	}
+	r.probedMu.Unlock()
+	if len(current) == 0 || previous == nil {
+		return
+	}
+
+	vanished := make([]string, 0, len(previous))
+	for id := range previous {
+		if !current[id] {
+			vanished = append(vanished, id)
+		}
+	}
+	// Map iteration is unordered; a stable event order keeps the
+	// north-bound sequence reproducible when several interfaces go at
+	// once.
+	slices.Sort(vanished)
+
+	for _, id := range vanished {
+		cached, observed := r.Connectivity.Reachable(id)
+		// The interface keeps its tracker entry with Reachable=false
+		// instead of dropping out of it, so the north-bound surfaces
+		// show it as down rather than as never-seen.
+		r.Connectivity.OnStateWithInterface(id, hmenum.Interface(id), false)
+		if observed && !cached {
+			continue
+		}
+		if r.Bus == nil {
+			continue
+		}
+		events.Publish(r.Bus, hmevent.ConnectivityChangedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: r.CentralName,
+			InterfaceID: id,
+			Reachable:   false,
+		})
+		events.Publish(r.Bus, hmevent.DriftCorrectedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: r.CentralName,
+			Component:   "connectivity",
+			Detail:      fmt.Sprintf("%s absent from probe observed=%v cached=%v -> false", id, observed, cached),
+		})
+	}
 }
 
 // reconcileUnobservedDataPoints invokes the registered

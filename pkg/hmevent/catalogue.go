@@ -613,8 +613,10 @@ func (IncidentRecordedEvent) Type() EventType { return EventTypeIncidentRecorded
 
 // ConnectivityChangedEvent fires whenever per-interface reachability
 // flips. The reconciliation job emits one for every interface whose
-// state has drifted from the cached value; the regular push pipeline
-// emits one whenever a CCU callback signals a change.
+// state has drifted from the cached value — including one with
+// Reachable=false for an interface that has disappeared from the CCU's
+// interface list; the regular push pipeline emits one whenever a CCU
+// callback signals a change.
 type ConnectivityChangedEvent struct {
 	Base
 	CentralName string
