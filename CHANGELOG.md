@@ -307,6 +307,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   A login now reports the stored name, and the session and token purges
   match case-insensitively regardless.
 
+- **A CCU login is now the same principal however it is typed.** Logins
+  validated against a CCU's own user database reported the subject with
+  whatever casing the person entered, so signing in as `Markus` and as
+  `markus` produced two identities out of one CCU account: separate
+  per-user preferences, separate privately owned diagrams, two actors in
+  the audit trail, and an API token — stored canonically — that belonged
+  to neither. The CCU is still asked about the name as typed, since it
+  owns that namespace, but the identity the daemon files everything
+  under is the canonical one every other login path already reported.
+
 - **Creating a user can no longer overwrite one.** `POST /api/v1/users`
   upserted: re-submitting an existing name silently rewrote that
   account's password and role and answered 201 — without the session

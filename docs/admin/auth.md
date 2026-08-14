@@ -273,7 +273,12 @@ Mechanics:
 
 3. A successful check issues a normal Loom session (the same
    persisted-session mechanism as any other scheme) — the CCU is not
-   consulted again for the lifetime of that session.
+   consulted again for the lifetime of that session. The session subject
+   is the CCU username folded to lower case, the same spelling every
+   other login path reports, so preferences, API tokens and audit
+   entries stay attached to one identity no matter how the name was
+   typed at the login prompt. The CCU itself is still asked about the
+   name as entered.
 
 **Break-glass fallback.** The auth chain always keeps a local
 break-glass path: when `primary` is true (the default once CCU login
