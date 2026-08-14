@@ -223,8 +223,10 @@ func TestRealDeviceModelsMaterializeCustomDataPoint(t *testing.T) {
 // drift here means the generator's count and the source's count disagree,
 // which the generated file's own self-referential constant cannot reveal.
 func TestProfileRegistryCountsMatchAiohomematicSource(t *testing.T) {
+	// Counted against reference-implementation 2026.8.3, the version the
+	// checked-in tables were generated from.
 	const (
-		wantProfileCount          = 141
+		wantProfileCount          = 142
 		wantProfileConfigCount    = 33
 		wantDefaultDataPointCount = 3
 	)
