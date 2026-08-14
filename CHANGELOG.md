@@ -320,6 +320,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every other alarm event — to its own `open_count`, matching the
   WebSocket broadcast of the same event.
 
+- **A running intrusion keeps its start time when another zone is
+  disarmed.** The security domain records when the intrusion class
+  became active once, for the whole installation, while the state
+  machine runs per zone. Any zone leaving the triggered state released
+  that single record — so in a multi-zone installation, disarming a
+  quiet zone while an incident ran in another one left the incident
+  reported as active with a start time of zero, and MQTT, the REST
+  snapshot and the Config UI all showed the break-in as having begun at
+  the Unix epoch. The start time is now released only once no zone is
+  triggered any more and no intrusion sensor is still active.
+
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle
   and are still attempted while the circuit breaker for a struggling CCU
