@@ -317,6 +317,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   owns that namespace, but the identity the daemon files everything
   under is the canonical one every other login path already reported.
 
+- **A channel-configuration edit can no longer drop the WebSocket
+  connection.** Staging a parameter whose value was a JSON array or
+  object — anything but the scalar a paramset actually holds — crashed
+  the command that stages it as soon as the same value was sent twice:
+  the two values were compared with an equality that only works on
+  scalars. The connection died mid-frame without being closed, so the
+  browser lost every live update until it reconnected and the daemon
+  leaked the writer goroutine behind it. Comparing two staged values now
+  copes with any shape, and a non-scalar value is refused up front with
+  a clear error instead of being staged and failing later against the
+  CCU.
+
 - **Creating a user can no longer overwrite one.** `POST /api/v1/users`
   upserted: re-submitting an existing name silently rewrote that
   account's password and role and answered 201 — without the session
