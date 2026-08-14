@@ -230,7 +230,15 @@ type ParamsetOps interface {
 	// appended to the wire call when non-empty ([hmenum.CommandRxModeUnset]
 	// omits the argument). Backends that do not support rx_mode on the wire
 	// (e.g. BIN-RPC) silently ignore the parameter.
-	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, rxMode hmenum.CommandRxMode) error
+	// PutParamset writes several parameters of one paramset in a single
+	// call. The priority travels with the command for the same reason
+	// SetValue's does: a bounded siren activation leaves as one
+	// put_paramset, and the throttle and circuit breaker decide what to
+	// do with it by reading the priority.
+	PutParamset(
+		ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
+		priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
+	) error
 
 	// DetermineParameter reads the current value of a named parameter from the
 	// CCU for the given channel address. The CCU auto-selects the most

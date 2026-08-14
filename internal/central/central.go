@@ -212,6 +212,10 @@ func (u *Unit) SetObservabilityRecorder(rec observability.Recorder) {
 	}
 	u.Hub.SetRecorder(rec)
 	u.Recovery.SetRecorder(rec)
+	// Link was omitted here while AddLink and RemoveLink acquired
+	// production callers, so every direct-link operation recorded into
+	// the no-op default the constructor installs.
+	u.Link.SetRecorder(rec)
 }
 
 // SystemInfo carries the CCU-side metadata northbound consumers need

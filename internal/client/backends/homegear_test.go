@@ -14,10 +14,11 @@ import (
 // recordingCaller records recent calls — unlike fakeCaller (atomic-based)
 // it uses a simple slice for sequence assertions.
 type recordingCaller struct {
-	calls   []recordedCall
-	reply   any
-	replies map[string]any // method → reply (takes precedence over reply)
-	err     error
+	lastPriority hmenum.CommandPriority
+	calls        []recordedCall
+	reply        any
+	replies      map[string]any // method → reply (takes precedence over reply)
+	err          error
 }
 
 type recordedCall struct {
@@ -106,7 +107,7 @@ func TestHomegearGetSetParamset(t *testing.T) {
 	}
 
 	x.reply = nil
-	if err := b.PutParamset(context.Background(), "ABCD1234:1", hmenum.ParamsetKeyValues, map[string]any{"STATE": false}, hmenum.CommandRxModeUnset); err != nil {
+	if err := b.PutParamset(context.Background(), "ABCD1234:1", hmenum.ParamsetKeyValues, map[string]any{"STATE": false}, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		t.Fatalf("put: %v", err)
 	}
 	last := x.lastCall()
@@ -356,7 +357,7 @@ func TestHomegearAllOpsErrNotWiredWithoutCaller(t *testing.T) {
 	if _, err := b.GetParamset(ctx, "x", hmenum.ParamsetKeyValues); !errors.Is(err, ErrNotWired) {
 		t.Errorf("GetParamset err=%v", err)
 	}
-	if err := b.PutParamset(ctx, "x", hmenum.ParamsetKeyValues, nil, hmenum.CommandRxModeUnset); !errors.Is(err, ErrNotWired) {
+	if err := b.PutParamset(ctx, "x", hmenum.ParamsetKeyValues, nil, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); !errors.Is(err, ErrNotWired) {
 		t.Errorf("PutParamset err=%v", err)
 	}
 	if _, err := b.GetSystemVariable(ctx, "x"); !errors.Is(err, ErrNotWired) {
@@ -874,4 +875,13 @@ func TestHomegearGetDeviceDetailsNotWired(t *testing.T) {
 	if _, err := b.GetDeviceDetails(context.Background(), []string{"ADDR"}); !errors.Is(err, ErrNotWired) {
 		t.Fatalf("want ErrNotWired, got %v", err)
 	}
+}
+
+// CallAt implements Caller: records the priority the command carried
+// alongside the call itself.
+func (r *recordingCaller) CallAt(
+	ctx context.Context, priority hmenum.CommandPriority, method string, args ...any,
+) (any, error) {
+	r.lastPriority = priority
+	return r.Call(ctx, method, args...)
 }

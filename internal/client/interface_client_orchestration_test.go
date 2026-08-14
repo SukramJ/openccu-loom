@@ -53,7 +53,7 @@ func (b *orchBackend) GetParamset(context.Context, string, hmenum.ParamsetKey) (
 	return nil, nil
 }
 
-func (b *orchBackend) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any, hmenum.CommandRxMode) error {
+func (b *orchBackend) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any, hmenum.CommandPriority, hmenum.CommandRxMode) error {
 	return nil
 }
 

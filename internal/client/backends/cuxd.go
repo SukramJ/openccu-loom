@@ -81,17 +81,18 @@ func (b *CuxdBackend) GetParamset(
 // PutParamset implements Operations. rxMode is silently ignored —
 // BIN-RPC has no rx_mode argument slot.
 func (b *CuxdBackend) PutParamset(
-	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, rxMode hmenum.CommandRxMode,
+	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
+	priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
 ) error {
-	return putParamsetViaCaller(ctx, b.bin, address, key, values, rxMode, false)
+	return putParamsetViaCaller(ctx, b.bin, address, key, values, priority, rxMode, false)
 }
 
 // SetValue implements Operations. rxMode is silently ignored —
 // BIN-RPC has no rx_mode argument slot.
 func (b *CuxdBackend) SetValue(
-	ctx context.Context, address string, parameter hmenum.Parameter, value any, _ hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
+	ctx context.Context, address string, parameter hmenum.Parameter, value any, priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
 ) error {
-	return setValueViaCaller(ctx, b.bin, address, parameter, value, rxMode, false)
+	return setValueViaCaller(ctx, b.bin, address, parameter, value, priority, rxMode, false)
 }
 
 // GetValue implements Operations.

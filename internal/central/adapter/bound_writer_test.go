@@ -26,7 +26,8 @@ type putsCapturingFakeOps struct {
 }
 
 func (f *putsCapturingFakeOps) PutParamset(
-	_ context.Context, address string, key hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandRxMode,
+	_ context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
+	_ hmenum.CommandPriority, _ hmenum.CommandRxMode,
 ) error {
 	f.putCalls++
 	f.lastAddr = address

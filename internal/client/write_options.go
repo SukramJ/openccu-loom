@@ -305,7 +305,7 @@ func (w *ValueWriter) PutParamsetWithOptions(
 		if err := ic.PutParamset(ctx, b, channelAddress, string(paramsetKey), values, opts.Priority, opts.RxMode, true); err != nil {
 			return err
 		}
-	} else if err := b.PutParamset(ctx, channelAddress, paramsetKey, values, opts.RxMode); err != nil {
+	} else if err := b.PutParamset(ctx, channelAddress, paramsetKey, values, opts.Priority, opts.RxMode); err != nil {
 		return err
 	}
 	if opts.WaitForCallback && resolved != nil {

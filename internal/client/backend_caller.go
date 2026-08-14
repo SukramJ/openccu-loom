@@ -42,6 +42,16 @@ func (c *BackendCaller) Call(ctx context.Context, method string, args ...any) (a
 	return c.client.Call(ctx, method, args, c.priority, coalesceKey)
 }
 
+// CallAt implements backends.Caller: the same path as Call, at the
+// priority the command carries rather than the one this caller was
+// constructed with.
+func (c *BackendCaller) CallAt(
+	ctx context.Context, priority hmenum.CommandPriority, method string, args ...any,
+) (any, error) {
+	coalesceKey := coalesceKeyFor(method, args)
+	return c.client.Call(ctx, method, args, priority, coalesceKey)
+}
+
 // Priority exposes the configured priority, useful in tests.
 func (c *BackendCaller) Priority() hmenum.CommandPriority { return c.priority }
 

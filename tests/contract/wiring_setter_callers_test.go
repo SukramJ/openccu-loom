@@ -44,10 +44,15 @@ var wiringSettersWithoutCaller = map[string]string{
 	"github.com/SukramJ/openccu-loom/internal/central/adapter.BackupAdapter.SetRestorer":                           "restore resolves per central via SetRestorerForCentral, and an ownerless archive now resolves to the sole configured central; this legacy field is only an explicit override",
 
 	// Verified: an alternative production path carries the same duty.
-	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetHubLogoutFn":                  "logout on Stop already runs through the closer WireHub returns (addCloser); this hook is a second, dead path",
-	"github.com/SukramJ/openccu-loom/internal/model/weekprofile.Profile.SetPublishHook":     "the profile-change push flows through Profile.OnChange, which the event bridge subscribes to; this is an unused parallel API",
-	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge.Bridge.AttachCaseHandler": "CASE dispatch is wired via AttachCaseHandlerProvider, which takes precedence for every exchange; this is the unused singleton fallback",
-	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge.CaseAdapter.SetResponder": "identity rotation builds a fresh CaseAdapter plus Responder per AddNOC; nothing swaps a responder into an existing adapter",
+	"github.com/SukramJ/openccu-loom/internal/client.InterfaceClient.SetClearJSONRPCSessionHook": "the JSON-RPC client invalidates its own session in transport/jsonrpc/client.go; nothing ever invokes the hook this stores either, so both ends of the path are dead",
+	"github.com/SukramJ/openccu-loom/internal/client.ValueWriter.RegisterIC":                     "the branch it feeds runs only when WriteOptions.SkipRetry is set, and no production caller sets it; ordinary writes go through the backend",
+	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetHubLogoutFn":                       "logout on Stop already runs through the closer WireHub returns (addCloser); this hook is a second, dead path",
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile.Profile.SetPublishHook":          "the profile-change push flows through Profile.OnChange, which the event bridge subscribes to; this is an unused parallel API",
+	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge.Bridge.AttachCaseHandler":      "CASE dispatch is wired via AttachCaseHandlerProvider, which takes precedence for every exchange; this is the unused singleton fallback",
+	"github.com/SukramJ/openccu-loom/internal/north/matter/bridge.CaseAdapter.SetResponder":      "identity rotation builds a fresh CaseAdapter plus Responder per AddNOC; nothing swaps a responder into an existing adapter",
+
+	// Verified: the seam is a test-only affordance and says so.
+	"github.com/SukramJ/openccu-loom/pkg/hmlog.LevelRegistry.SetNowFunc": "documented as a test clock; production keeps the time.Now default NewLevelRegistry installs",
 
 	// Verified: the component around the seam is unmounted by a
 	// documented choice, so the seam is dead along with it.
@@ -73,7 +78,9 @@ var wiringSettersWithoutCaller = map[string]string{
 // only ever answer `[]` — was closed by wiring the producer into device
 // ingestion, and is held by
 // TestE2EEventGroupsAreProducedDuringDeviceIngestion.
-var wiringSeamsUnderInvestigation = map[string]string{}
+var wiringSeamsUnderInvestigation = map[string]string{
+	"github.com/SukramJ/openccu-loom/internal/store/sqlite.ParamsetStore.RegisterAdditionalParameter": "keeps the address-parameter cache consistent for parameters synthesised outside Upsert — calculated and custom data points. Whether their absence from that cache changes an answer of IsInMultipleChannels, which decides the channel postfix in a data-point name, is not established.",
+}
 
 // TestEveryWiringSetterHasAProductionCaller asserts that every method
 // which injects a collaborator is actually called by production code.
@@ -110,7 +117,7 @@ func TestEveryWiringSetterHasAProductionCaller(t *testing.T) {
 
 	var orphans []string
 	for _, key := range sortedSeamKeys(seams) {
-		if called[key] || wiredViaInterface(seams[key].recv, dispatched) {
+		if called[key] || wiredViaInterface(seams[key].recv, seams[key].method, dispatched) {
 			if reason, declared := declaredReason(key); declared {
 				t.Errorf("%s is listed in wiringSettersWithoutCaller (%q) but production does call "+
 					"it — drop the entry so the list keeps meaning what it says", key, reason)
@@ -190,7 +197,11 @@ func findWiringSeams(pkgs []*packages.Package) map[string]wiringSeam {
 					continue
 				}
 				key := p.PkgPath + "." + recv + "." + fn.Name.Name
-				out[key] = wiringSeam{pos: shortPos(p.Fset, fn.Pos()), recv: obj.Type().(*types.Signature).Recv().Type()}
+				out[key] = wiringSeam{
+					pos:    shortPos(p.Fset, fn.Pos()),
+					recv:   obj.Type().(*types.Signature).Recv().Type(),
+					method: fn.Name.Name,
+				}
 			}
 		}
 	})
@@ -233,10 +244,36 @@ func isWiringVerb(name string) bool {
 // filter that excludes the founding example is not strict, it is blind.
 func injectsCollaborator(fn *types.Func) bool {
 	sig, ok := fn.Type().(*types.Signature)
-	if !ok || sig.Params().Len() != 1 || !returnsNothingOrSelf(sig) {
+	if !ok || sig.Variadic() || !returnsNothingOrSelf(sig) {
 		return false
 	}
-	switch t := sig.Params().At(0).Type().(type) {
+	// Exactly one collaborator, and nothing but scoping keys beside it.
+	//
+	// Demanding a single parameter — which this did — made the guard
+	// blind to the keyed form, and in a daemon that is multi-CCU by
+	// design the keyed form is the common one, not the exception:
+	// ValueWriter.RegisterIC(centralName, interfaceID string, ic
+	// icSetterLike) never had a production caller, and the guard could
+	// not see it because of the two strings in front.
+	collaborators := 0
+	for i := range sig.Params().Len() {
+		switch {
+		case isCollaborator(sig.Params().At(i).Type()):
+			collaborators++
+		case isScopingKey(sig.Params().At(i).Type()):
+			// A string or number identifying which slot the
+			// collaborator goes into.
+		default:
+			return false
+		}
+	}
+	return collaborators == 1
+}
+
+// isCollaborator reports whether t is one of the three ways this
+// codebase hands one component to another.
+func isCollaborator(t types.Type) bool {
+	switch t := t.(type) {
 	case *types.Pointer:
 		_, named := t.Elem().(*types.Named)
 		return named
@@ -249,6 +286,19 @@ func injectsCollaborator(fn *types.Func) bool {
 		return true
 	}
 	return false
+}
+
+// isScopingKey reports whether t is a plain value naming which slot a
+// keyed registration targets — a central name, an interface id, an
+// index. A named string type (hmenum.Interface) counts; a named type
+// whose underlying type is an interface does not, and is caught as a
+// collaborator above.
+func isScopingKey(t types.Type) bool {
+	if named, ok := t.(*types.Named); ok {
+		t = named.Underlying()
+	}
+	_, basic := t.(*types.Basic)
+	return basic
 }
 
 // returnsNothingOrSelf accepts the plain setter and the fluent one, and
@@ -338,12 +388,30 @@ func findCalledFuncs(pkgs []*packages.Package) (concrete map[string]bool, ifaces
 
 // wiredViaInterface reports whether production hands this seam's
 // receiver over through one of the interfaces it dispatches on.
-func wiredViaInterface(recv types.Type, ifaces []*types.Interface) bool {
-	if recv == nil {
+func wiredViaInterface(recv types.Type, method string, ifaces []*types.Interface) bool {
+	if recv == nil || method == "" {
 		return false
 	}
 	for _, iface := range ifaces {
+		// The interface has to declare THIS method. Asking only whether
+		// the receiver implements some dispatched interface excuses every
+		// seam on a type that satisfies any of them: *ValueWriter
+		// satisfies several small ones, so RegisterIC — which no
+		// production code has ever called — counted as wired.
+		if !declaresMethod(iface, method) {
+			continue
+		}
 		if types.Implements(recv, iface) {
+			return true
+		}
+	}
+	return false
+}
+
+// declaresMethod reports whether iface has a method of that name.
+func declaresMethod(iface *types.Interface, method string) bool {
+	for i := range iface.NumMethods() {
+		if iface.Method(i).Name() == method {
 			return true
 		}
 	}
@@ -389,8 +457,9 @@ func shortPos(fset *token.FileSet, pos token.Pos) string {
 // wiringSeam is one seam plus the receiver type, which is what lets the
 // interface-dispatch check ask whether production wires it indirectly.
 type wiringSeam struct {
-	pos  string
-	recv types.Type
+	pos    string
+	recv   types.Type
+	method string
 }
 
 func sortedSeamKeys(m map[string]wiringSeam) []string {

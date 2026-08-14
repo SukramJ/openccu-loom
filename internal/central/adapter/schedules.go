@@ -942,7 +942,8 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	if len(raw) == 0 {
 		return errors.New("schedules: empty payload")
 	}
-	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, raw, hmenum.CommandRxModeUnset); err != nil {
+	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, raw,
+		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		if !isCCUScheduleFalsePositive(err) {
 			return err
 		}
@@ -997,7 +998,7 @@ func (s *SchedulesDomain) SetActiveProfile(
 	idx, _ := strconv.Atoi(strings.TrimPrefix(profile, "P"))
 	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyValues, map[string]any{
 		"ACTIVE_PROFILE": idx,
-	}, hmenum.CommandRxModeUnset); err != nil {
+	}, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		return err
 	}
 	s.audit.Record(audit.Entry{

@@ -76,7 +76,7 @@ func TestCcuBackendPutParamsetDispatch(t *testing.T) {
 	b := NewCcuBackend(x, nil, nil)
 
 	values := map[string]any{"SET_TEMPERATURE": 22.0}
-	if err := b.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, values, hmenum.CommandRxModeUnset); err != nil {
+	if err := b.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, values, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		t.Fatalf("PutParamset: %v", err)
 	}
 
@@ -470,7 +470,7 @@ func TestCcuBackendXMLRPCErrorPropagates(t *testing.T) {
 	if err := b.SetValue(ctx, "0001ABCD:1", hmenum.ParameterState, true, hmenum.CommandPriorityHigh, hmenum.CommandRxModeUnset); !errors.Is(err, sentinel) {
 		t.Errorf("SetValue: want sentinel, got %v", err)
 	}
-	if err := b.PutParamset(ctx, "0001ABCD:1", hmenum.ParamsetKeyValues, map[string]any{}, hmenum.CommandRxModeUnset); !errors.Is(err, sentinel) {
+	if err := b.PutParamset(ctx, "0001ABCD:1", hmenum.ParamsetKeyValues, map[string]any{}, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); !errors.Is(err, sentinel) {
 		t.Errorf("PutParamset: want sentinel, got %v", err)
 	}
 	if _, err := b.GetLinks(ctx, "0001ABCD:1"); !errors.Is(err, sentinel) {
