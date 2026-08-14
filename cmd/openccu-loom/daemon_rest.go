@@ -180,7 +180,14 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 		// authentication so wizard-created users + YAML-pinned
 		// users both resolve. The chain prefers SQLite; falls back
 		// to Memory only on a clean "unauthenticated" miss.
-		authMw = auth.NewMiddleware(
+		//
+		// The scheme gates apply here exactly as they do to the
+		// pre-swap middleware: SQLite is open on every normal boot, so
+		// an ungated rebuild would discard `basic_enabled: false` /
+		// `bearer_enabled: false` in essentially every deployment and
+		// keep serving the scheme the operator switched off.
+		authMw = gatedAuthMiddleware(
+			cfg,
 			loginChainWithCCU(d.sqUsers, d.users, ccuStore, ccuPrimary),
 			auth.ChainedTokenStore{Primary: d.sqTokens, Secondary: d.tokens},
 		)

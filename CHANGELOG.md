@@ -48,6 +48,60 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reaper; none of it could be seen from outside. No key material is
   exposed. (REST API 5.21.0)
 
+### Fixed
+
+- **A CCU added while the daemon runs is now wired like one that was
+  there at boot.** Adding a second CCU through the SPA brought it up,
+  its devices appeared, and its values flowed — while measurement
+  history for it stayed empty forever, no webhook was ever sent for it,
+  no `device.trigger`, `device.created` / `device.removed`,
+  `datapoint.optimistic_rolled_back` or `system.<central>.status`
+  WebSocket frame was emitted, its interface transitions never reached
+  `GET /system-status` or the MQTT system-status plane, no recorded
+  session was persisted and no reliability incident registered. Each of
+  those subscribes by walking the list of CCUs exactly once, at start.
+  Nothing failed and nothing logged, and a daemon restart made all of it
+  work — which made the gap read like a transient.
+
+- **Deleting or disabling a CCU takes effect without a restart.** For a
+  CCU the daemon had loaded at boot — the normal case after the
+  onboarding wizard, once the daemon has been restarted — `DELETE
+  /api/v1/admin/centrals/{name}` returned 204 and the entry vanished
+  from the list while the CCU stayed completely live: still polled,
+  still publishing to MQTT and WebSocket, still holding its callback
+  routes, still writing cache rows. A second delete answered 404. Only a
+  restart made the deletion real.
+
+- **"Clear caches and re-pull" clears something.** The scoped cache
+  clear (and `hmcli cache clear`, and the cache purge that runs when a
+  CCU is removed) addressed the cached rows by the bare interface name
+  from the config, while every row is stored under the CCU-qualified
+  interface id. Every delete matched zero rows: the report said
+  devices/paramsets/values/master = 0, no error was raised, and the
+  re-pull re-hydrated from exactly the stale rows the operator had asked
+  to discard. Both spellings are accepted now.
+
+- **`basic_enabled: false` / `bearer_enabled: false` switch the scheme
+  off.** Both gates were discarded on every deployment with a database —
+  which is every normal one — when the daemon layered its persistent
+  user and token stores onto the login chain. A disabled scheme kept
+  authenticating and granting the stored role, with no signal that the
+  setting had done nothing.
+
+- **A hidden channel disappears from MQTT too.** The per-channel
+  operator override took effect on REST and Matter, but the MQTT bridge
+  kept publishing the channel's state and its Home Assistant discovery
+  config: the gate was installed on the supervisor after the boot bridge
+  had already been built. It only began working after some unrelated
+  `north.mqtt.*` edit rebuilt the bridge, so the same installation
+  behaved differently before and after any MQTT config change.
+
+- **A daemon that cannot open its database serves REST instead of
+  exiting.** A missing or read-only `data_dir`, a failed migration or a
+  migration-lock timeout is logged and boot continues in a degraded,
+  REST-only mode — except the REST mount then dereferenced the absent
+  config service and took the process down with it.
+
 ## [0.58.6]
 
 ### Security

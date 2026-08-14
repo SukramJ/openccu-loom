@@ -82,6 +82,10 @@ type southboundWiring struct {
 	// subscribes runtime-added centrals onto the same pipeline. Nil when MQTT is
 	// not configured.
 	hubReadyTrigger func()
+	// historyCentralHook subscribes one runtime-adopted central to the
+	// measurement recorder, which otherwise walks the registry only at boot.
+	// Nil when history recording is off.
+	historyCentralHook func(u *central.Unit) (unwire func())
 }
 
 // serialBackfiller returns the WireDeps.PersistSerial callback: it records a
@@ -265,11 +269,12 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// to genuine live wire value changes and persists a numeric
 	// time-series for SPA charts (no-op when history is off — nil store).
 	// See ADR 0040. Both helpers manage their own daemon-lifetime context.
+	historyCentralHook, stopHistoryRecorder := wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the recorder bounds its own internal contexts; it takes no ctx
 	//nolint:contextcheck // these wiring helpers take no ctx; they bound their own internal contexts
 	teardowns = append(
 		teardowns,
 		adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger),
-		wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger),
+		stopHistoryRecorder,
 	)
 	// Surface the values-cache counters as health gauges so the
 	// /diagnostics surface and any Prometheus scraper see how many
@@ -444,9 +449,10 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	teardowns = append(teardowns, stopSweep)
 
 	result = southboundWiring{
-		backupAdapter:   backupAdapter,
-		bringUpManager:  bringUpMgr,
-		hubReadyTrigger: hubReadyTriggerFn,
+		backupAdapter:      backupAdapter,
+		bringUpManager:     bringUpMgr,
+		hubReadyTrigger:    hubReadyTriggerFn,
+		historyCentralHook: historyCentralHook,
 	}
 	return result, teardown
 }

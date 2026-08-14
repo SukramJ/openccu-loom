@@ -243,11 +243,14 @@ func runCacheClearOffline(
 
 	ctx := context.Background()
 	if kind == cachereset.ScopeDevice {
-		if errV := valStore.DeleteDevice(ctx, central, iface, device); errV != nil {
-			sum.errors = append(sum.errors, fmt.Sprintf("values[%s/%s]: %v", central, iface, errV))
+		// The cached rows are keyed by the canonical `<central>-<interface>`
+		// id, not by the bare interface the operator types.
+		wireIface := cachereset.StoreInterfaceID(central, iface)
+		if errV := valStore.DeleteDevice(ctx, central, wireIface, device); errV != nil {
+			sum.errors = append(sum.errors, fmt.Sprintf("values[%s/%s]: %v", central, wireIface, errV))
 		}
-		if errM := masterStore.DeleteDevice(ctx, central, iface, device); errM != nil {
-			sum.errors = append(sum.errors, fmt.Sprintf("master[%s/%s]: %v", central, iface, errM))
+		if errM := masterStore.DeleteDevice(ctx, central, wireIface, device); errM != nil {
+			sum.errors = append(sum.errors, fmt.Sprintf("master[%s/%s]: %v", central, wireIface, errM))
 		}
 		// The device-scoped deletes do not report row counts; leave them at 0.
 		printSummary(stdout, sum, true)
@@ -316,10 +319,15 @@ func resolveOfflineDSN(kind cachereset.ScopeKind, cfgPath, dbOverride string) (d
 // resolveOfflineUnits expands a non-device scope into the (central, interface)
 // pairs to clear. global/central enumerate from the loaded config; interface
 // uses the explicit qualifiers and needs no config.
+//
+// Every unit's interface is normalized to the canonical
+// [cachereset.StoreInterfaceID]: the config names interfaces bare while every
+// cached row is keyed by the `<central>-<interface>` wire id, so deleting with
+// the config name matches nothing at all.
 func resolveOfflineUnits(kind cachereset.ScopeKind, central, iface string, cfg *config.Config) ([]ifaceUnit, error) {
 	switch kind {
 	case cachereset.ScopeInterface:
-		return []ifaceUnit{{central: central, iface: iface}}, nil
+		return []ifaceUnit{{central: central, iface: cachereset.StoreInterfaceID(central, iface)}}, nil
 	case cachereset.ScopeGlobal:
 		if cfg == nil {
 			return nil, errors.New("cache clear: --config required to enumerate centrals for scope=global")
@@ -328,7 +336,10 @@ func resolveOfflineUnits(kind cachereset.ScopeKind, central, iface string, cfg *
 		for i := range cfg.Centrals {
 			cc := &cfg.Centrals[i]
 			for j := range cc.Interfaces {
-				units = append(units, ifaceUnit{central: cc.Name, iface: cc.Interfaces[j].Name})
+				units = append(units, ifaceUnit{
+					central: cc.Name,
+					iface:   cachereset.StoreInterfaceID(cc.Name, cc.Interfaces[j].Name),
+				})
 			}
 		}
 		return units, nil
@@ -343,7 +354,10 @@ func resolveOfflineUnits(kind cachereset.ScopeKind, central, iface string, cfg *
 			}
 			units := make([]ifaceUnit, 0, len(cc.Interfaces))
 			for j := range cc.Interfaces {
-				units = append(units, ifaceUnit{central: cc.Name, iface: cc.Interfaces[j].Name})
+				units = append(units, ifaceUnit{
+					central: cc.Name,
+					iface:   cachereset.StoreInterfaceID(cc.Name, cc.Interfaces[j].Name),
+				})
 			}
 			return units, nil
 		}

@@ -118,6 +118,11 @@ func wireRecordingOverrides(
 // subscribes it to every enabled central. Returns a teardown that stops
 // the recorder (with a final flush). No-op when the store is nil
 // (feature off) so callers can wire unconditionally.
+//
+// It also returns a per-central hook the live-adopt orchestrator installs:
+// Recorder.Wire walks the registry exactly once, so a CCU adopted at runtime
+// recorded no measurement history at all and its charts stayed permanently
+// empty — indistinguishable from a CCU whose data points never change.
 func wireHistoryRecorder(
 	cfg *config.Config,
 	reg *central.Registry,
@@ -125,9 +130,9 @@ func wireHistoryRecorder(
 	overrides *history.RecordingOverrides,
 	healthTracker *health.Tracker,
 	logger *slog.Logger,
-) func() {
+) (centralHook func(u *central.Unit) (unwire func()), teardown func()) {
 	if store == nil || cfg == nil || reg == nil {
-		return func() {}
+		return nil, func() {}
 	}
 	hc := cfg.Persistence.History
 	exporter := buildHistoryExporter(hc.Export, logger)
@@ -144,6 +149,7 @@ func wireHistoryRecorder(
 		Logger:          logger,
 	})
 	stop := rec.Wire(reg)
+	centralHook = func(u *central.Unit) func() { return rec.WireCentral(u) }
 
 	if healthTracker != nil && exporter != nil {
 		if infl, ok := exporter.(*history.InfluxExporter); ok {
@@ -168,7 +174,7 @@ func wireHistoryRecorder(
 		healthTracker.RegisterGauge("history.retention_deleted",
 			func() float64 { return float64(store.MetricsSnapshot().RetentionDeleted) })
 	}
-	return stop
+	return centralHook, stop
 }
 
 // buildHistoryExporter constructs the opt-in push exporter from config,

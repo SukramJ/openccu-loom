@@ -72,21 +72,30 @@ func buildBackupAdapter(cfg *config.Config, reg *central.Registry, logger *slog.
 // closer that stops every per-central auto-persist ticker; nil-safe to call
 // when the wiring degraded (no DB available, no centrals registered).
 //
+// It also returns a per-central hook the live-adopt orchestrator installs: the
+// loop below walks the registry exactly once, so a CCU adopted at runtime
+// persisted no recorded session at all — an operator who activated recording
+// on it lost every capture on the next restart.
+//
 // db is the shared <DataDir>/openccu-loom.db handle opened once by
 // [openLoomDB] in the composition root; this function never opens or closes
 // it — ownership (and the final Close) stays with the caller that opened it.
-func wireSessionRecorderPersistence(db *gosql.DB, reg *central.Registry, logger *slog.Logger) func() {
+func wireSessionRecorderPersistence(
+	db *gosql.DB, reg *central.Registry, logger *slog.Logger,
+) (centralHook func(u *central.Unit) (unwire func()), teardown func()) {
 	if db == nil || reg == nil {
-		return func() {}
+		return nil, func() {}
 	}
 	store := sqlite.NewSessionRecorderStore(db)
+	centralHook = func(u *central.Unit) func() {
+		if u == nil || u.Recorder == nil {
+			return nil
+		}
+		return u.WireSessionRecorderPersistence(context.Background(), store, "default", 0)
+	}
 	var closers []func()
 	for _, u := range reg.List() {
-		if u == nil || u.Recorder == nil {
-			continue
-		}
-		closer := u.WireSessionRecorderPersistence(context.Background(), store, "default", 0)
-		if closer != nil {
+		if closer := centralHook(u); closer != nil {
 			closers = append(closers, closer)
 		}
 	}
@@ -94,7 +103,7 @@ func wireSessionRecorderPersistence(db *gosql.DB, reg *central.Registry, logger 
 		"session.recorder.persist.ready",
 		slog.Int("centrals", len(closers)),
 	)
-	return func() {
+	return centralHook, func() {
 		for _, c := range closers {
 			c()
 		}
@@ -114,9 +123,16 @@ func wireSessionRecorderPersistence(db *gosql.DB, reg *central.Registry, logger 
 //
 // Degrades gracefully — when db is nil the centrals run without incident
 // persistence (the slot remains nil / no-op).
-func wireIncidentRecorder(db *gosql.DB, reg *central.Registry, logger *slog.Logger) (store *sqlite.IncidentStore, teardown func()) {
+// It also returns a per-central hook the live-adopt orchestrator installs: the
+// loop below walks the registry exactly once, so a CCU adopted at runtime
+// registered no reliability incident at all — its circuit-breaker trips and
+// callback failures were absent from the incidents surface, which reads
+// identically to a CCU that never had a problem.
+func wireIncidentRecorder(
+	db *gosql.DB, reg *central.Registry, logger *slog.Logger,
+) (store *sqlite.IncidentStore, centralHook func(u *central.Unit) (unwire func()), teardown func()) {
 	if db == nil || reg == nil {
-		return nil, func() {}
+		return nil, nil, func() {}
 	}
 	store = sqlite.NewIncidentStore(db)
 	// Decorate the SQLite recorder so a successful persist also publishes an
@@ -124,17 +140,24 @@ func wireIncidentRecorder(db *gosql.DB, reg *central.Registry, logger *slog.Logg
 	// consumers such as the webhook bridge subscribe to it). The store
 	// returned to the caller stays the raw SQLite store for read access.
 	recorder := adapter.NewPublishingIncidentRecorder(store, reg)
-	for _, u := range reg.List() {
+	// The recorder is a single shared instance, so attaching is just the
+	// install; there is nothing per-central to unwire (the slot dies with the
+	// unit), hence the nil unwire.
+	centralHook = func(u *central.Unit) func() {
 		if u == nil || u.Cache == nil {
-			continue
+			return nil
 		}
 		u.Cache.SetIncidentRecorder(recorder)
+		return nil
+	}
+	for _, u := range reg.List() {
+		centralHook(u)
 	}
 	logger.Info(
 		"incident.recorder.ready",
 		slog.Int("centrals", len(reg.List())),
 	)
-	return store, func() {}
+	return store, centralHook, func() {}
 }
 
 // wireAuditPersistenceWithDB layers SQLite persistence on top of the in-

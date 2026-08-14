@@ -274,7 +274,23 @@ func TestResolveOfflineUnitsInterfaceNeedsNoConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveOfflineUnits: %v", err)
 	}
-	if len(units) != 1 || units[0].central != "ccu1" || units[0].iface != "HmIP-RF" {
+	// The unit carries the canonical store id, not the bare name the
+	// operator typed: every cached row is keyed by `<central>-<interface>`.
+	if len(units) != 1 || units[0].central != "ccu1" || units[0].iface != "ccu1-HmIP-RF" {
+		t.Fatalf("units=%+v", units)
+	}
+}
+
+// TestResolveOfflineUnitsAcceptsCanonicalInterface pins that passing the
+// canonical id (as an operator who copied it off a topic would) is not
+// double-prefixed into an id no row carries.
+func TestResolveOfflineUnitsAcceptsCanonicalInterface(t *testing.T) {
+	t.Parallel()
+	units, err := resolveOfflineUnits("interface", "ccu1", "ccu1-HmIP-RF", nil)
+	if err != nil {
+		t.Fatalf("resolveOfflineUnits: %v", err)
+	}
+	if len(units) != 1 || units[0].iface != "ccu1-HmIP-RF" {
 		t.Fatalf("units=%+v", units)
 	}
 }

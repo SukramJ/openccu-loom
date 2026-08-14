@@ -26,6 +26,15 @@ import (
 // surface and is consumed later in the composition root. The returned
 // teardown runs every subscriber's Stop in the same LIFO order the inline
 // defers would have executed.
+//
+// centralHook attaches ALL of these subscribers to one central adopted at
+// runtime and returns a single composite unwire. Every one of them subscribes
+// by walking the registry exactly once, so without it an adopted CCU emitted
+// no device.trigger / device lifecycle / optimistic-rollback / system-status
+// frame on any plane — WebSocket, REST buffer or MQTT — until the daemon was
+// restarted and the central became a boot-time one. It is deliberately ONE
+// hook rather than one per subscriber: the previous shape covered exactly the
+// hub-events subscriber and silently forgot the other five.
 func wireSystemStatusSubscribers(
 	reg *central.Registry,
 	wsHub *ws.Hub,
@@ -36,7 +45,7 @@ func wireSystemStatusSubscribers(
 	securitySvc *security.Service,
 	locale, publicURL string,
 	logger *slog.Logger,
-) (sysStatusBuf *handlers.SystemStatusBuffer, hubEventsHook func(u *central.Unit) (unwire func()), teardown func()) {
+) (sysStatusBuf *handlers.SystemStatusBuffer, centralHook func(u *central.Unit) (unwire func()), teardown func()) {
 	sysStatusBuf = handlers.NewSystemStatusBuffer(100)
 	stopSysStatusBuf := sysStatusBuf.Subscribe(reg)
 
@@ -45,10 +54,6 @@ func wireSystemStatusSubscribers(
 
 	wsHubEvents := ws.NewHubEventsSubscriber(reg, wsHub)
 	wsHubEvents.Start()
-	// Start only walks the registry as it stands now; a central adopted at
-	// runtime needs the same subscriptions attached explicitly or none of
-	// its hub singletons ever reach a WebSocket client.
-	hubEventsHook = func(u *central.Unit) func() { return wsHubEvents.StartCentral(u) }
 
 	wsDeviceLifecycle := ws.NewDeviceLifecycleSubscriber(reg, wsHub)
 	wsDeviceLifecycle.Start()
@@ -85,6 +90,14 @@ func wireSystemStatusSubscribers(
 	if mqttWiring != nil {
 		mqttSysStatus = mqtt.NewSystemStatusPublisher(reg, mqttWiring, logger)
 		mqttSysStatus.Start() //nolint:contextcheck // Start has no ctx parameter; it subscribes to the event bus internally
+	}
+
+	// One hook fanning out over every registry-snapshotting subscriber above.
+	centralHook = func(u *central.Unit) func() {
+		return composeUnwires(sysStatusBuf.SubscribeCentral(u), wsSysStatus.StartCentral(u),
+			wsHubEvents.StartCentral(u), wsDeviceLifecycle.StartCentral(u),
+			wsDeviceTrigger.StartCentral(u), wsOptimisticRollback.StartCentral(u),
+			mqttSysStatus.StartCentral(u))
 	}
 
 	// The MQTT alarm publisher mirrors the daemon-level alarm engine onto
@@ -146,5 +159,18 @@ func wireSystemStatusSubscribers(
 		stopSysStatusBuf()
 	}
 
-	return sysStatusBuf, hubEventsHook, teardown
+	return sysStatusBuf, centralHook, teardown
+}
+
+// composeUnwires folds several per-central unwires into one, skipping the nil
+// entries a subscriber returns when it had nothing to attach. The composite is
+// what the orchestrator stores, so removing the central drops the whole set.
+func composeUnwires(unwires ...func()) func() {
+	return func() {
+		for _, unwire := range unwires {
+			if unwire != nil {
+				unwire()
+			}
+		}
+	}
 }

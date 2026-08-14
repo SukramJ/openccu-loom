@@ -58,7 +58,7 @@ func TestBuildBackupAdapter_EmptyDataDir_FallsBackToVar(t *testing.T) {
 
 func TestWireSessionRecorderPersistence_NilDB_ReturnsNoop(t *testing.T) {
 	t.Parallel()
-	closer := wireSessionRecorderPersistence(nil, central.NewRegistry(), slog.Default())
+	_, closer := wireSessionRecorderPersistence(nil, central.NewRegistry(), slog.Default())
 	// Must not panic; nil db → early return noop func.
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
@@ -69,7 +69,7 @@ func TestWireSessionRecorderPersistence_NilDB_ReturnsNoop(t *testing.T) {
 func TestWireSessionRecorderPersistence_NilRegistry_ReturnsNoop(t *testing.T) {
 	t.Parallel()
 	db := openTestLoomDB(t)
-	closer := wireSessionRecorderPersistence(db, nil, slog.Default())
+	_, closer := wireSessionRecorderPersistence(db, nil, slog.Default())
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
@@ -81,7 +81,7 @@ func TestWireSessionRecorderPersistence_ValidDB_ReturnsCloser(t *testing.T) {
 	db := openTestLoomDB(t)
 	reg := central.NewRegistry()
 	logger := slog.New(slog.DiscardHandler)
-	closer := wireSessionRecorderPersistence(db, reg, logger)
+	_, closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
@@ -99,14 +99,14 @@ func TestWireSessionRecorderPersistence_ValidDB_ReturnsCloser(t *testing.T) {
 func TestWireIncidentRecorder_NilDB_IsNoop(t *testing.T) {
 	t.Parallel()
 	// Must not panic.
-	_, closer := wireIncidentRecorder(nil, central.NewRegistry(), slog.Default())
+	_, _, closer := wireIncidentRecorder(nil, central.NewRegistry(), slog.Default())
 	t.Cleanup(closer)
 }
 
 func TestWireIncidentRecorder_NilRegistry_IsNoop(t *testing.T) {
 	t.Parallel()
 	db := openTestLoomDB(t)
-	_, closer := wireIncidentRecorder(db, nil, slog.Default())
+	_, _, closer := wireIncidentRecorder(db, nil, slog.Default())
 	t.Cleanup(closer)
 }
 
@@ -115,7 +115,7 @@ func TestWireIncidentRecorder_ValidDB_DoesNotPanic(t *testing.T) {
 	db := openTestLoomDB(t)
 	reg := central.NewRegistry()
 	logger := slog.New(slog.DiscardHandler)
-	store, closer := wireIncidentRecorder(db, reg, logger)
+	store, _, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 	if store == nil {
 		t.Fatal("expected non-nil incident store for a valid shared db")
