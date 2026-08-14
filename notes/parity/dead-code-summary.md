@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 5f7d6701
-HEAD: 5f7d6701
+Generated: 267901bd
+HEAD: 267901bd
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28605 |
+| Total Exported | 28610 |
 | Reachable | 5024 |
-| Whitelisted | 20592 |
+| Whitelisted | 20597 |
 | **Unreachable** | **2989** |
 
 ## Top-20 Packages by Dead Code

@@ -1,6 +1,6 @@
 {
-  "generated": "5f7d6701",
-  "head": "5f7d6701",
+  "generated": "267901bd",
+  "head": "267901bd",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28605,
+    "total_exported": 28610,
     "reachable": 4860,
-    "whitelisted": 20592,
+    "whitelisted": 20597,
     "unreachable": 3153
   },
   "by_package": [
@@ -120144,6 +120144,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestAWeekProgramSuffixThatIsNotANumberIsLeftAlone",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/discovery_climate_presets_test.go",
+      "line": 124
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestActionCategoriesNotDiscovered",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/parity_round1_test.go",
@@ -121264,6 +121271,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestBuildTranslatesWeekProgramPresets",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/discovery_climate_presets_test.go",
+      "line": 145
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestBuildUpdateDiscoveryBuilderReturnsEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
@@ -121383,6 +121397,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestClimatePresetsWithoutAWeekProgramAreLeftAlone",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/discovery_climate_presets_test.go",
+      "line": 102
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestClimateStepAbsentWhenNotInConfigPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_payload_test.go",
@@ -121394,6 +121415,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_payload_test.go",
       "line": 413
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestClimateWeekProgramPresetsAreTranslatedAndStandardOnesAreNot",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/discovery_climate_presets_test.go",
+      "line": 36
     },
     {
       "package": "internal/north/mqtt",
@@ -124194,6 +124222,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_week_profile_test.go",
       "line": 65
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestTranslatedClimatePresetsCarryBothTemplates",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/discovery_climate_presets_test.go",
+      "line": 71
     },
     {
       "package": "internal/north/mqtt",
@@ -165038,7 +165073,7 @@
       "identifier": "TestEveryWiringSetterHasAProductionCaller",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_setter_callers_test.go",
-      "line": 105
+      "line": 104
     },
     {
       "package": "tests/contract",
