@@ -513,35 +513,35 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 	raw = stripForeignFields(sec, raw)
 	switch sec {
 	case SectionMQTT:
-		return json.Unmarshal(raw, &cfg.North.MQTT)
+		return overlaySection(raw, &cfg.North.MQTT)
 	case SectionMatter:
-		return json.Unmarshal(raw, &cfg.North.Matter)
+		return overlaySection(raw, &cfg.North.Matter)
 	case SectionMCP:
-		return json.Unmarshal(raw, &cfg.North.MCP)
+		return overlaySection(raw, &cfg.North.MCP)
 	case SectionDiscovery:
-		return json.Unmarshal(raw, &cfg.North.Discovery)
+		return overlaySection(raw, &cfg.North.Discovery)
 	case SectionWebhook:
-		return json.Unmarshal(raw, &cfg.North.Webhook)
+		return overlaySection(raw, &cfg.North.Webhook)
 	case SectionREST:
-		return json.Unmarshal(raw, &cfg.North.REST)
+		return overlaySection(raw, &cfg.North.REST)
 	case SectionOIDC:
-		return json.Unmarshal(raw, &cfg.North.REST.Auth.OIDC)
+		return overlaySection(raw, &cfg.North.REST.Auth.OIDC)
 	case SectionCCUAuth:
-		return json.Unmarshal(raw, &cfg.North.REST.Auth.CCU)
+		return overlaySection(raw, &cfg.North.REST.Auth.CCU)
 	case SectionHAIngress:
-		return json.Unmarshal(raw, &cfg.North.REST.Auth.HAIngress)
+		return overlaySection(raw, &cfg.North.REST.Auth.HAIngress)
 	case SectionUI:
-		return json.Unmarshal(raw, &cfg.North.UI)
+		return overlaySection(raw, &cfg.North.UI)
 	case SectionCallback:
-		return json.Unmarshal(raw, &cfg.Callback)
+		return overlaySection(raw, &cfg.Callback)
 	case SectionCCUData:
-		return json.Unmarshal(raw, &cfg.CCUData)
+		return overlaySection(raw, &cfg.CCUData)
 	case SectionReliability:
-		return json.Unmarshal(raw, &cfg.Reliability)
+		return overlaySection(raw, &cfg.Reliability)
 	case SectionPersistence:
-		return json.Unmarshal(raw, &cfg.Persistence)
+		return overlaySection(raw, &cfg.Persistence)
 	case SectionAlarm:
-		return json.Unmarshal(raw, &cfg.Alarm)
+		return overlaySection(raw, &cfg.Alarm)
 	case SectionLocale:
 		var v LocaleConfig
 		if err := json.Unmarshal(raw, &v); err != nil {

@@ -700,6 +700,34 @@ func TestRouter_OIDC_branch(t *testing.T) {
 	}
 }
 
+// TestRouter_OIDCStartRateLimited pins that the pre-auth OIDC start route
+// carries the same per-IP speed bump as the login POST. Every call mints a
+// PKCE verifier plus nonce that the daemon has to hold for the full state
+// TTL, so an unthrottled sweep grows the state map at the caller's rate.
+func TestRouter_OIDCStartRateLimited(t *testing.T) {
+	t.Parallel()
+	r := NewRouter(Deps{
+		StartedAt:      time.Now(),
+		OIDC:           &handlers.OIDCDeps{},
+		LoginRateLimit: middleware.NewLoginRateLimiter(),
+	})
+
+	limited := false
+	for range 20 {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/start", http.NoBody)
+		req.RemoteAddr = "203.0.113.7:5555"
+		r.ServeHTTP(rr, req)
+		if rr.Code == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Error("GET /auth/oidc/start is never rate limited")
+	}
+}
+
 // TestRouter_UISchema_route confirms the ui-schema route is registered when
 // the dep is wired and absent when it is nil.
 func TestRouter_UISchema_route(t *testing.T) {

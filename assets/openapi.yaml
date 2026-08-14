@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.22.0
+  version: 5.23.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6285,6 +6285,11 @@ paths:
     post:
       operationId: createUser
       summary: Create a new user (admin)
+      description: |
+        Create-only. Returns 409 Conflict when the username already
+        exists (compared case-insensitively — usernames are stored
+        lower-cased); change an existing account through
+        PATCH /users/{subject}, which also revokes its live sessions.
       tags: [user-admin]
       security:
         - basicAuth: []
@@ -6303,6 +6308,11 @@ paths:
               schema: { $ref: "#/components/schemas/UserSummary" }
         "400":
           $ref: "#/components/responses/BadRequest"
+        "409":
+          description: A user with this name already exists
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /users/{subject}:
@@ -6314,6 +6324,10 @@ paths:
     patch:
       operationId: patchUser
       summary: Update user password or role (admin)
+      description: |
+        Returns 409 Conflict when the change would demote the last admin
+        account. The daemon enforces at least one admin at all times.
+        Every live session of the subject is revoked on success.
       tags: [user-admin]
       security:
         - basicAuth: []
@@ -6331,6 +6345,11 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: Cannot demote the last admin account
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
     delete:
       operationId: deleteUser

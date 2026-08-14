@@ -2033,6 +2033,8 @@ const EN: Catalog = {
   "users.password_changed": "Password changed.",
   "users.role_changed": "Role updated.",
   "users.last_admin_error": "Cannot remove the last admin.",
+  "users.last_admin_demote_error": "Cannot demote the last admin.",
+  "users.exists_error": "A user with this name already exists.",
   "users.change_password": "Change password",
   "users.change_password_title": "Change password for {subject}",
   "users.new_password": "New password",
@@ -5884,6 +5886,9 @@ const DE: Catalog = {
   "users.password_changed": "Passwort geändert.",
   "users.role_changed": "Rolle aktualisiert.",
   "users.last_admin_error": "Letzter Admin kann nicht entfernt werden.",
+  "users.last_admin_demote_error":
+    "Letzter Admin kann nicht herabgestuft werden.",
+  "users.exists_error": "Ein Benutzer mit diesem Namen existiert bereits.",
   "users.change_password": "Passwort ändern",
   "users.change_password_title": "Passwort ändern für {subject}",
   "users.new_password": "Neues Passwort",

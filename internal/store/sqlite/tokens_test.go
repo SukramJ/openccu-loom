@@ -224,6 +224,31 @@ func TestTokenStoreDeleteBySubjectRemovesAllForSubject(t *testing.T) {
 	}
 }
 
+// TestTokenStoreDeleteBySubjectIgnoresSubjectCasing verifies that the
+// purge behind a deleted user account matches the subject regardless of
+// the casing a token was issued with. The users table is canonicalised
+// to lower case, so a token created from a mixed-case identity would
+// otherwise outlive the account it belongs to.
+func TestTokenStoreDeleteBySubjectIgnoresSubjectCasing(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	res, err := s.Create(ctx, CreateInput{Subject: "Markus", Role: auth.RoleAdmin})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	n, err := s.DeleteBySubject(ctx, "markus")
+	if err != nil {
+		t.Fatalf("DeleteBySubject: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("DeleteBySubject count=%d want 1", n)
+	}
+	if _, err := s.AuthenticateToken(ctx, res.Token); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Error("token still authenticates after the account was deleted")
+	}
+}
+
 // TestTokenStoreDeleteBySubjectUnknownSubjectIsZero verifies that deleting
 // tokens for a subject with none returns a zero count and no error.
 func TestTokenStoreDeleteBySubjectUnknownSubjectIsZero(t *testing.T) {

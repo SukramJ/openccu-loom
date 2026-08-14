@@ -151,11 +151,17 @@ func (s *TokenStore) Import(ctx context.Context, secret, subject string, role au
 // count removed. Called when the underlying user account is deleted so a
 // bearer token bound to a now-nonexistent subject cannot keep
 // authenticating.
+//
+// The match is case-insensitive: the users table is canonicalised to
+// lower case while a token may have been issued with the operator's own
+// spelling, and a token that outlives the account it belongs to is a live
+// credential for a deleted user.
 func (s *TokenStore) DeleteBySubject(ctx context.Context, subject string) (int, error) {
 	if s == nil || s.db == nil {
 		return 0, nil
 	}
-	res, err := s.db.ExecContext(ctx, `DELETE FROM tokens WHERE subject = ?`, subject)
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM tokens WHERE subject = ? COLLATE NOCASE`, strings.TrimSpace(subject))
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: tokens delete by subject: %w", err)
 	}

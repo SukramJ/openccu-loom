@@ -149,21 +149,28 @@ func TestCreateUser_Happy(t *testing.T) {
 	}
 }
 
-func TestCreateUser_Upsert_ExistingUser(t *testing.T) {
+// TestCreateUser_ExistingUser_Returns409 pins POST as create-only. An
+// upsert here would rewrite an existing account's password and role
+// without the session revocation PATCH performs, leaving a stolen cookie
+// with the old role alive for the rest of the session TTL. The casing of
+// the submitted username must not matter: the store canonicalises before
+// the conflict is detected.
+func TestCreateUser_ExistingUser_Returns409(t *testing.T) {
 	t.Parallel()
-	svc := newFakeUserSvc()
-	body := strings.NewReader(`{"username":"bob","password":"newpass","role":"viewer"}`)
-	req := httptest.NewRequest(http.MethodPost, "/admin/users", body)
-	w := httptest.NewRecorder()
-	CreateUser(svc, audit.NoopRecorder()).ServeHTTP(w, req)
+	for _, username := range []string{"bob", "Bob", "BOB"} {
+		svc := newFakeUserSvc()
+		body := strings.NewReader(`{"username":"` + username + `","password":"newpass","role":"viewer"}`)
+		req := httptest.NewRequest(http.MethodPost, "/admin/users", body)
+		w := httptest.NewRecorder()
+		CreateUser(svc, audit.NoopRecorder()).ServeHTTP(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201 on upsert, got %d body=%s", w.Code, w.Body.String())
-	}
-	// Verify the role was updated.
-	for _, u := range svc.users {
-		if u.Subject == "bob" && u.Role != auth.RoleViewer {
-			t.Errorf("expected bob role=viewer after upsert, got %q", u.Role)
+		if w.Code != http.StatusConflict {
+			t.Fatalf("POST %q: expected 409, got %d body=%s", username, w.Code, w.Body.String())
+		}
+		for _, u := range svc.users {
+			if u.Subject == "bob" && u.Role != auth.RoleOperator {
+				t.Errorf("POST %q: bob role=%q, want the stored role untouched", username, u.Role)
+			}
 		}
 	}
 }
@@ -303,6 +310,58 @@ func TestUpdateUser_InvalidRole_Returns400(t *testing.T) {
 	}
 }
 
+// TestUpdateUser_RevokesSessionIssuedWithDifferentCasing drives a real
+// [auth.SessionStore] instead of a recording fake: the guarantee the
+// handler documents is that the session is *gone* after a password or
+// role change, and a fake that only records the call cannot show that.
+// A user who signs in typing "Markus" gets a session; the admin can only
+// address the account by its canonical spelling "markus", and that
+// spelling must still evict the session.
+func TestUpdateUser_RevokesSessionIssuedWithDifferentCasing(t *testing.T) {
+	t.Parallel()
+	svc := &fakeUserAdminService{users: []sqlite.UserRow{{Subject: "markus", Role: auth.RoleOperator}}}
+	sessions := auth.NewSessionStore()
+	sess, err := sessions.Issue(auth.Identity{Subject: "Markus", Role: auth.RoleOperator})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+
+	body := strings.NewReader(`{"password":"newpass","role":"viewer"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/admin/users/markus", body)
+	req = withChiParam(req, "subject", "markus")
+	w := httptest.NewRecorder()
+	UpdateUser(svc, audit.NoopRecorder(), sessions).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if sessions.Lookup(sess.ID) != nil {
+		t.Error("session survived the password reset that was supposed to kill it")
+	}
+}
+
+// TestUpdateUser_LastAdmin_Returns409 verifies that a store refusing to
+// demote the last admin surfaces as the same conflict the DELETE path
+// produces, instead of a bare 500.
+func TestUpdateUser_LastAdmin_Returns409(t *testing.T) {
+	t.Parallel()
+	svc := newFakeUserSvc()
+	svc.putErr = sqlite.ErrLastAdmin
+	revoker := &fakeSessionRevoker{}
+	body := strings.NewReader(`{"password":"newpass","role":"viewer"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/admin/users/admin", body)
+	req = withChiParam(req, "subject", "admin")
+	w := httptest.NewRecorder()
+	UpdateUser(svc, audit.NoopRecorder(), revoker).ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(revoker.revokeBySubjectCalls) != 0 {
+		t.Errorf("expected no revocation when the write was refused, got %v", revoker.revokeBySubjectCalls)
+	}
+}
+
 // --- DeleteUser ---
 
 func TestDeleteUser_Happy(t *testing.T) {
@@ -323,6 +382,36 @@ func TestDeleteUser_Happy(t *testing.T) {
 	}
 	if len(tokens.deleteBySubjectCalls) != 1 || tokens.deleteBySubjectCalls[0] != "bob" {
 		t.Errorf("expected DeleteBySubject(bob) exactly once, got %v", tokens.deleteBySubjectCalls)
+	}
+}
+
+// TestDeleteUser_RevokesSessionIssuedWithDifferentCasing is the DELETE
+// twin of the PATCH case: a deleted account must retain no live
+// credentials, including the session of a login that used a different
+// spelling, and the token purge must be asked for the canonical subject.
+func TestDeleteUser_RevokesSessionIssuedWithDifferentCasing(t *testing.T) {
+	t.Parallel()
+	svc := &fakeUserAdminService{users: []sqlite.UserRow{{Subject: "markus", Role: auth.RoleOperator}}}
+	sessions := auth.NewSessionStore()
+	sess, err := sessions.Issue(auth.Identity{Subject: "Markus", Role: auth.RoleOperator})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+	tokens := &fakeTokenPurger{}
+
+	req := httptest.NewRequest(http.MethodDelete, "/admin/users/markus", http.NoBody)
+	req = withChiParam(req, "subject", "markus")
+	w := httptest.NewRecorder()
+	DeleteUser(svc, audit.NoopRecorder(), sessions, tokens).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if sessions.Lookup(sess.ID) != nil {
+		t.Error("session survived the deletion of the account it belongs to")
+	}
+	if len(tokens.deleteBySubjectCalls) != 1 || tokens.deleteBySubjectCalls[0] != "markus" {
+		t.Errorf("token purge calls=%v, want one call for the canonical subject", tokens.deleteBySubjectCalls)
 	}
 }
 

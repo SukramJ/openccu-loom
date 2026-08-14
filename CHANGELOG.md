@@ -200,6 +200,52 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A password reset now ends the sessions it is meant to end.** User
+  names are stored lower-cased, but a login reported back whatever
+  casing the person typed, and that spelling went into the session. An
+  admin can only address the account by its stored spelling, so
+  resetting the password of someone who had signed in as `Markus`
+  evicted nothing: the handler answered 204 while the old cookie kept
+  full access for the rest of the session lifetime. Deleting the account
+  behaved the same way, and left the subject's bearer tokens alive too.
+  A login now reports the stored name, and the session and token purges
+  match case-insensitively regardless.
+
+- **Creating a user can no longer overwrite one.** `POST /api/v1/users`
+  upserted: re-submitting an existing name silently rewrote that
+  account's password and role and answered 201 — without the session
+  revocation the update path performs, so an attacker's cookie kept the
+  old admin role after the "reset". The route is create-only now and
+  answers 409 for a name that exists (compared case-insensitively);
+  changes go through `PATCH /api/v1/users/{subject}`, which revokes.
+  (REST API 5.23.0)
+
+- **The last admin can no longer be demoted into a lockout.** Deleting
+  the only admin was refused, but changing its role to operator or
+  viewer was not — and a daemon with zero admins answers 403 on every
+  admin route, including the one that would create a new admin.
+  Recovery meant editing the database by hand. The user store now
+  refuses the demotion in the same transaction that counts the admins,
+  and both the API and the Users view report it.
+
+- **Deleting one entry from a map-valued setting sticks.** Trimming a
+  single key out of `north.rest.auth.ccu.role_mapping` (or
+  `north.ui.profiles`) was accepted with a success toast and then
+  quietly restored: the saved section was assembled by decoding the
+  request over the stored value, and decoding a JSON object into an
+  existing map only ever adds to it. So a CCU user level the operator
+  had just stopped mapping to admin kept mapping to admin. A key the
+  request carries is now authoritative; a key it omits still keeps its
+  stored value.
+
+- **The OIDC login start is no longer an unmetered allocator.**
+  `GET /api/v1/auth/oidc/start` needs no credentials and parks a PKCE
+  verifier plus nonce in memory for five minutes per call, with nothing
+  bounding how many. It now carries the same per-IP speed bump as the
+  login POST, and the in-flight flow table has a hard ceiling — which
+  also caps the scan every new flow performs while holding the lock, the
+  part that slowed down genuine logins.
+
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle
   and are still attempted while the circuit breaker for a struggling CCU

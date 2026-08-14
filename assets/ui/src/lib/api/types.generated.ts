@@ -5009,7 +5009,13 @@ export interface paths {
         /** List all users (admin) */
         get: operations["listUsersV2"];
         put?: never;
-        /** Create a new user (admin) */
+        /**
+         * Create a new user (admin)
+         * @description Create-only. Returns 409 Conflict when the username already
+         *     exists (compared case-insensitively — usernames are stored
+         *     lower-cased); change an existing account through
+         *     PATCH /users/{subject}, which also revokes its live sessions.
+         */
         post: operations["createUser"];
         delete?: never;
         options?: never;
@@ -5038,7 +5044,12 @@ export interface paths {
         delete: operations["deleteUser"];
         options?: never;
         head?: never;
-        /** Update user password or role (admin) */
+        /**
+         * Update user password or role (admin)
+         * @description Returns 409 Conflict when the change would demote the last admin
+         *     account. The daemon enforces at least one admin at all times.
+         *     Every live session of the subject is revoked on success.
+         */
         patch: operations["patchUser"];
         trace?: never;
     };
@@ -15845,6 +15856,15 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            /** @description A user with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };
@@ -15904,6 +15924,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            /** @description Cannot demote the last admin account */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };
