@@ -60,6 +60,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A derived reading is no longer computed from half of one measurement
+  and half of the next.** Dew point, dew-point spread, frost point, vapor
+  concentration, enthalpy and apparent temperature are each computed from
+  two or three separate readings of the same channel, and every one of
+  those readings arrives on its own connection from the CCU. Nothing kept
+  the writers apart, so a burst that carried temperature and humidity
+  together could publish a value mixing the fresh humidity with the
+  temperature it was replacing — or silently drop the update instead. The
+  battery level had the same problem across a different pair: the
+  low-battery limit comes from the device configuration while the voltage
+  comes with the live events, so a configuration re-read landing beside a
+  voltage report could publish a percentage measured against a reference
+  that no longer applied. Window, smoke and intrusion states could lose an
+  update the same way.
+
 - **Saving a device setting twice in quick succession no longer leaves the
   old value on screen.** Classic HomeMatic interfaces do not report MASTER
   changes back, so the daemon reads the paramset again a couple of seconds

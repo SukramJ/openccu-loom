@@ -183,19 +183,14 @@ func TestCalculatedSetForcedUsageNoCreate(t *testing.T) {
 	}
 }
 
-// TestCalculatedConcurrent race-tests the migrated calculated DP at
-// the embedded [datapoint.BaseDataPointFields] surface: the
-// foundation's lock is independent of the inner [generic.Sensor]'s
-// `DataPoint.mu`, so concurrent forced-usage churn, publisher updates,
-// and identity reads must not race or deadlock.
+// TestCalculatedConcurrent race-tests the calculated DP at the embedded
+// [datapoint.BaseDataPointFields] surface: the foundation's lock is
+// independent of the inner [generic.Sensor]'s `DataPoint.mu`, so concurrent
+// forced-usage churn, publisher updates, and identity reads must not race or
+// deadlock.
 //
-// The existing per-formula recompute path (`OnTemperature` /
-// `OnHumidity` on `s.in`, `s.last`) is intentionally NOT driven
-// concurrently here — those state slots predate this migration and
-// Have never been concurrent-safe on the producer side
-// also relies on a single-writer event loop for the inputs. The race
-// detector therefore only exercises the surface introduced in Phase
-// 5C-3.
+// The per-formula recompute path is covered separately by
+// [TestClimateSensorConcurrentInputsDoNotRace].
 func TestCalculatedConcurrent(t *testing.T) {
 	t.Parallel()
 	s := NewDewPointSensorWithIdentity("ccu-prod", "VCU0123:1")

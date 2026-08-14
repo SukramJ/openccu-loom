@@ -4,6 +4,7 @@
 package calculated
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -333,5 +334,111 @@ func TestIntrusionAlarmAndSmokeAlarmSensors(t *testing.T) {
 	sa.OnLabel("PRIMARY_ALARM")
 	if v, _ := sa.Value(); !v {
 		t.Fatal("primary alarm should be on")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Concurrent input delivery
+// ---------------------------------------------------------------------------
+
+// TestClimateSensorConcurrentInputsDoNotRace drives the inputs of a
+// climate-derived sensor from separate goroutines, the way the daemon delivers
+// them: ACTUAL_TEMPERATURE and HUMIDITY are two independent upstream data
+// points, each firing its own update handler on whichever goroutine the
+// callback server accepted the CCU connection on. Nothing serialises the two,
+// so the composite input state and the dedup slots must carry their own lock.
+//
+// Run with -race: without synchronisation the temperature writer and the
+// recompute triggered by the humidity writer touch the same words.
+func TestClimateSensorConcurrentInputsDoNotRace(t *testing.T) {
+	t.Parallel()
+	s := NewDewPointSensorWithIdentity("ccu-prod", "VCU0123:1")
+
+	const iterations = 300
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range iterations {
+			s.OnTemperature(15 + float64(i%10))
+		}
+	})
+	wg.Go(func() {
+		for i := range iterations {
+			s.OnHumidity(40 + float64(i%20))
+		}
+	})
+	wg.Go(func() {
+		for range iterations {
+			_ = s.IsRefreshed()
+			_, _ = s.Value()
+			_ = s.StateUncertain()
+		}
+	})
+	wg.Wait()
+
+	if !s.IsRefreshed() {
+		t.Fatal("sensor must have emitted at least one computed value")
+	}
+}
+
+// TestApparentTemperatureSensorConcurrentInputsDoNotRace covers the
+// three-input shape (temperature, humidity, wind speed), where a third
+// upstream data point adds a third concurrent writer.
+func TestApparentTemperatureSensorConcurrentInputsDoNotRace(t *testing.T) {
+	t.Parallel()
+	s := NewApparentTemperatureSensorWithIdentity("ccu-prod", "VCU0123:1")
+
+	const iterations = 300
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range iterations {
+			s.OnTemperature(20 + float64(i%15))
+		}
+	})
+	wg.Go(func() {
+		for i := range iterations {
+			s.OnHumidity(30 + float64(i%30))
+		}
+	})
+	wg.Go(func() {
+		for i := range iterations {
+			s.OnWindSpeed(float64(i % 25))
+		}
+	})
+	wg.Wait()
+
+	if !s.IsRefreshed() {
+		t.Fatal("sensor must have emitted at least one computed value")
+	}
+}
+
+// TestDerivedBinarySensorConcurrentLabelsDoNotRace pins the derived-binary
+// dedup slots: a channel that relays both a primary and a secondary alarm
+// label can deliver two updates concurrently while a north-bound payload
+// assembly reads IsRefreshed.
+func TestDerivedBinarySensorConcurrentLabelsDoNotRace(t *testing.T) {
+	t.Parallel()
+	s := NewWindowOpenSensor()
+
+	const iterations = 300
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range iterations {
+			s.OnLabel("OPEN")
+		}
+	})
+	wg.Go(func() {
+		for range iterations {
+			s.OnLabel("CLOSED")
+		}
+	})
+	wg.Go(func() {
+		for range iterations {
+			_ = s.IsRefreshed()
+		}
+	})
+	wg.Wait()
+
+	if !s.IsRefreshed() {
+		t.Fatal("sensor must have classified at least one label")
 	}
 }
