@@ -6,9 +6,12 @@ package mqtt
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // TestLegacyAggregateStateMatcherPositiveCases pins what counts as a
@@ -450,5 +453,88 @@ func TestRunRawOrphanCleanupOnce_EvictsUnpublishedBucketTopics(t *testing.T) {
 		if evictedSet[topic] {
 			t.Errorf("topic %q was incorrectly evicted", topic)
 		}
+	}
+}
+
+// TestRunDiscoveryOrphanCleanupOnce_NonSlugCentralName pins the sweep's
+// scoping prefix against the spellings its own producers put on the
+// wire.
+//
+// Node ids are slugged (`naming.DiscoverySlug`): `CCU Küche` becomes
+// `ccu_kueche`. The sweep used to rebuild the prefix by hand with
+// `strings.ToLower`, yielding `ccu küche_`, which matches nothing — so
+// the once-per-boot cleanup was a complete no-op for every central
+// whose name is not already a bare ASCII slug, and retired entities
+// kept being re-created by Home Assistant on every restart.
+//
+// The legacy row covers the configs an older build retained under
+// `strings.ToLower(naming.TopicSafe(name))`; they must stay reachable
+// so they can be swept once.
+func TestRunDiscoveryOrphanCleanupOnce_NonSlugCentralName(t *testing.T) {
+	t.Parallel()
+	const centralName = "CCU Küche"
+	var (
+		deviceOrphan = "homeassistant/switch/" + naming.DiscoverySlug(centralName) + "_0001d3c99c1234/state/config"
+		hubOrphan    = "homeassistant/sensor/" + hubNodeID(centralName, "system") + "/connection_latency/config"
+		legacyOrphan = "homeassistant/switch/" + strings.ToLower(naming.TopicSafe(centralName)) + "_0001d3c99c9999/state/config"
+		liveTopic    = "homeassistant/switch/" + naming.DiscoverySlug(centralName) + "_0001d3c99c1234/level/config"
+		foreign      = "homeassistant/light/zigbee2mqtt_0x1234/state/config"
+	)
+	if naming.DiscoverySlug(centralName) == strings.ToLower(centralName) {
+		t.Fatalf("fixture central %q is invariant under the slug and cannot detect the drift", centralName)
+	}
+
+	mc := &mockRetainClient{retained: []retainedMsg{
+		{topic: deviceOrphan, payload: []byte(`{}`)},
+		{topic: hubOrphan, payload: []byte(`{}`)},
+		{topic: legacyOrphan, payload: []byte(`{}`)},
+		{topic: liveTopic, payload: []byte(`{}`)},
+		{topic: foreign, payload: []byte(`{}`)},
+	}}
+	b := NewBridge(BridgeConfig{
+		Base: "openccu-loom", HADiscoveryEnabled: true, CentralName: centralName,
+	}, mc)
+	b.mu.Lock()
+	b.declared[liveTopic] = []byte(`{}`)
+	b.mu.Unlock()
+
+	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), 50*time.Millisecond); err != nil {
+		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
+	}
+	evicted := map[string]bool{}
+	for _, topic := range mc.evicted() {
+		evicted[topic] = true
+	}
+	for _, topic := range []string{deviceOrphan, hubOrphan, legacyOrphan} {
+		if !evicted[topic] {
+			t.Errorf("orphan %q survived the sweep — the phantom entity is re-created on every restart", topic)
+		}
+	}
+	if evicted[liveTopic] {
+		t.Errorf("the sweep evicted a declared entity: %q", liveTopic)
+	}
+	if evicted[foreign] {
+		t.Errorf("the sweep evicted another integration's config: %q", foreign)
+	}
+}
+
+// TestRawOrphanCandidateMatcherEscapesCentralName: the raw plane writes
+// the central name TopicSafe-escaped, so the sweep has to compare
+// against the escaped spelling. Matching the configured name verbatim
+// made the raw orphan pass miss every topic of a central whose name
+// contains a space.
+func TestRawOrphanCandidateMatcherEscapesCentralName(t *testing.T) {
+	t.Parallel()
+	const (
+		base        = "openccu-loom"
+		centralName = "Wohn Zimmer"
+	)
+	topic := base + "/" + naming.TopicSafe(centralName) + "/HmIP-RF/0001ABCD/1/values/STATE"
+	if !RawOrphanCandidateMatcher(base, centralName, topic) {
+		t.Fatalf("the escaped topic %q of central %q was not recognised as this daemon's", topic, centralName)
+	}
+	// Another central's subtree stays out of scope.
+	if RawOrphanCandidateMatcher(base, "Schlaf Zimmer", topic) {
+		t.Error("a foreign central's topic matched")
 	}
 }

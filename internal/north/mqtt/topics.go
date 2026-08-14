@@ -331,8 +331,14 @@ func (b *TopicBuilder) HubDiagnostics(centralName string) string {
 // HubSystemHealthScore is the retained system-health score topic
 // (`<base>/<central>/system/health_score`). Matches the state_topic
 // in BuildSystemHealthDiscovery.
+//
+// The central segment is [naming.TopicSafe]d like every other topic on
+// the plane. It used to be lower-cased instead, which put the metric
+// sensors of a central whose name carries an upper-case letter, a dot
+// or an umlaut on a different segment than the rest of its topics — and
+// on a different segment than the discovery payload declared.
 func (b *TopicBuilder) HubSystemHealthScore(centralName string) string {
-	return b.Base + "/" + strings.ToLower(centralName) + "/system/health_score"
+	return b.systemTopic(centralName, "health_score")
 }
 
 // HubConnectionLatency is the retained aggregated connection-latency
@@ -340,7 +346,7 @@ func (b *TopicBuilder) HubSystemHealthScore(centralName string) string {
 // BuildConnectionLatencyDiscovery — one central-wide latency sensor, not
 // per-interface.
 func (b *TopicBuilder) HubConnectionLatency(centralName string) string {
-	return b.Base + "/" + strings.ToLower(centralName) + "/system/latency"
+	return b.systemTopic(centralName, "latency")
 }
 
 // HubLastEventAge is the retained last-event-age state topic
@@ -348,7 +354,15 @@ func (b *TopicBuilder) HubConnectionLatency(centralName string) string {
 // BuildLastEventAgeDiscovery. The value is the age in seconds of the
 // newest backend event — a liveness signal for the CCU connection.
 func (b *TopicBuilder) HubLastEventAge(centralName string) string {
-	return b.Base + "/" + strings.ToLower(centralName) + "/system/last_event_age"
+	return b.systemTopic(centralName, "last_event_age")
+}
+
+// systemTopic is the shared `<base>/<central>/system/<metric>` shape of
+// the central-wide metric sensors. One builder so the three of them
+// cannot drift apart from each other or from the discovery payloads,
+// which derive their state topics from these methods.
+func (b *TopicBuilder) systemTopic(centralName, metric string) string {
+	return b.Base + "/" + naming.TopicSafe(centralName) + "/system/" + metric
 }
 
 // HubUpdate is the retained firmware-update state topic

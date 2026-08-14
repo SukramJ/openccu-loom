@@ -146,3 +146,48 @@ func TestMQTTCommandSinkSetValueCanonicalizesTopicAddress(t *testing.T) {
 		t.Fatalf("unknown address must pass through unchanged, got %q", w.last.chanAddr)
 	}
 }
+
+// recordingSysvarWriter captures the sysvar name the CCU-side write
+// carries, which is the half that must survive the topic escaping.
+type recordingSysvarWriter struct{ name string }
+
+func (w *recordingSysvarWriter) SetSysvar(_ context.Context, name string, _ any) error {
+	w.name = name
+	return nil
+}
+
+// TestMQTTCommandSinkSetSysvarResolvesEscapedTopicSegment pins the
+// consume side of the sysvar command topic.
+//
+// The discovery payload declares the command topic with the sysvar name
+// TopicSafe-escaped, so a sysvar named `Außen Temperatur` is published
+// to as `…/hub/sysvars/Außen_Temperatur/set`. The sink used to look
+// that segment up verbatim, missed, and dropped every write to the very
+// topic the daemon advertised — while the entity kept rendering as
+// writable. The CCU-side write has to carry the real name.
+func TestMQTTCommandSinkSetSysvarResolvesEscapedTopicSegment(t *testing.T) {
+	t.Parallel()
+	const (
+		centralName = "ccu-sysvar-segment"
+		sysvarName  = "Außen Temperatur"
+		segment     = "Außen_Temperatur"
+	)
+	c, err := central.New(central.Config{Name: centralName})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	w := &recordingSysvarWriter{}
+	c.HubModel.PutSysvar(hub.NewSysvar(centralName, sysvarName, "", hmenum.HubValueTypeNumber, w))
+
+	s := NewMQTTCommandSink(reg, nil)
+	if err := s.SetSysvar(context.Background(), centralName, segment, 21.5); err != nil {
+		t.Fatalf("SetSysvar via the declared topic segment: %v", err)
+	}
+	if w.name != sysvarName {
+		t.Fatalf("CCU-side write carried %q, want the configured name %q", w.name, sysvarName)
+	}
+}

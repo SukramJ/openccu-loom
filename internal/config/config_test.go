@@ -81,6 +81,35 @@ centrals:
 	}
 }
 
+// TestParseCollidingCentralTopicSegmentRejected: north-bound planes
+// address a central through one escaped topic segment, so two names
+// that collapse onto the same segment share every state topic and make
+// every inbound command ambiguous.
+func TestParseCollidingCentralTopicSegmentRejected(t *testing.T) {
+	buf := []byte(`
+centrals:
+  - name: Wohn Zimmer
+    host: h1
+    interfaces: [HmIP-RF]
+  - name: Wohn+Zimmer
+    host: h2
+    interfaces: [HmIP-RF]
+`)
+	if _, err := Parse(buf); err == nil {
+		t.Fatal("two central names that escape to the same topic segment must be rejected")
+	}
+	// A name that merely needs escaping stays legal.
+	ok := []byte(`
+centrals:
+  - name: Wohn Zimmer
+    host: h1
+    interfaces: [HmIP-RF]
+`)
+	if _, err := Parse(ok); err != nil {
+		t.Fatalf("a central name with a space is a legal configuration: %v", err)
+	}
+}
+
 func TestParseInvalidLogLevel(t *testing.T) {
 	buf := []byte(`logging: {level: lol, format: json}`)
 	if _, err := Parse(buf); err == nil || !strings.Contains(err.Error(), "logging.level") {

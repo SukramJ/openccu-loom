@@ -313,6 +313,24 @@ func (e *Engine) Stop(ctx context.Context) {
 	}
 }
 
+// ZonesLoaded reports whether Start has finished loading the configured
+// zone set, i.e. whether an empty [Engine.Zones] means "no zones are
+// configured" rather than "the engine has not read its stores yet".
+//
+// Consumers that act on the ABSENCE of a zone need this: the MQTT
+// publisher reconciles once eagerly at start-up, and treating that
+// pre-load pass as authoritative would let the retained-config orphan
+// sweep classify every live alarm panel as a leftover and wipe the
+// plane.
+func (e *Engine) ZonesLoaded() bool {
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.started
+}
+
 // Zones returns snapshots of every managed zone, ordered by ID.
 func (e *Engine) Zones() []ZoneSnapshot {
 	e.mu.Lock()

@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -759,5 +760,113 @@ func TestCommandSubscriberProgramEnableTopic(t *testing.T) {
 				t.Errorf("enabled = %v, want %v", sink.lastProgramEnable.enabled, tc.want)
 			}
 		})
+	}
+}
+
+// fakeCentralNames is a [CentralNameLister] over a fixed name set.
+type fakeCentralNames struct{ names []string }
+
+func (f fakeCentralNames) Names() []string { return f.names }
+
+// TestCommandSubscriberResolvesEscapedCentralSegment pins the inverse of
+// the topic escaping every publisher applies.
+//
+// A central named `Wohn Zimmer` is advertised — by our own discovery
+// payloads — under the topic segment `Wohn_Zimmer`. Handing that segment
+// to the sinks verbatim missed every exact-key lookup they perform
+// (`Registry.Get`, the ValueWriter's per-central backend map), so every
+// MQTT write for that CCU was dropped while its state topics kept
+// updating.
+func TestCommandSubscriberResolvesEscapedCentralSegment(t *testing.T) {
+	t.Parallel()
+	const (
+		base       = "openccu-loom"
+		configured = "Wohn Zimmer"
+		segment    = "Wohn_Zimmer"
+	)
+	if got := naming.TopicSafe(configured); got != segment {
+		t.Fatalf("fixture no longer exercises the escaping: TopicSafe(%q) = %q", configured, got)
+	}
+
+	newSub := func() (*NoopClient, *fakeSink, *CommandSubscriber) {
+		noop := NewNoopClient()
+		sink := &fakeSink{}
+		sub := NewCommandSubscriber(noop, NewTopicBuilder(base), sink, nil).
+			WithCentralNames(fakeCentralNames{names: []string{configured, "ccu-01"}})
+		if err := sub.Start(context.Background()); err != nil {
+			t.Fatalf("start: %v", err)
+		}
+		return noop, sink, sub
+	}
+
+	t.Run("data point", func(t *testing.T) {
+		t.Parallel()
+		noop, sink, sub := newSub()
+		if !noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
+			base+"/"+segment+"/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true")) {
+			t.Fatal("subscription did not match the declared command topic")
+		}
+		sub.dispatcher.flush()
+		if sink.setValues.Load() != 1 {
+			t.Fatalf("calls=%d, want 1", sink.setValues.Load())
+		}
+		if sink.lastVal.centralName != configured {
+			t.Errorf("central = %q, want %q — the write never reaches a backend", sink.lastVal.centralName, configured)
+		}
+	})
+
+	t.Run("sysvar", func(t *testing.T) {
+		t.Parallel()
+		noop, sink, sub := newSub()
+		noop.DeliverInbound(base+"/+/hub/sysvars/+/set",
+			base+"/"+segment+"/hub/sysvars/Anwesenheit/set", []byte("true"))
+		sub.dispatcher.flush()
+		if sink.lastSysvar.centralName != configured {
+			t.Errorf("central = %q, want %q", sink.lastSysvar.centralName, configured)
+		}
+	})
+
+	t.Run("program trigger", func(t *testing.T) {
+		t.Parallel()
+		noop, sink, sub := newSub()
+		noop.DeliverInbound(base+"/+/hub/programs/+/trigger",
+			base+"/"+segment+"/hub/programs/1234/trigger", []byte("PRESS"))
+		sub.dispatcher.flush()
+		if sink.lastProgram.centralName != configured {
+			t.Errorf("central = %q, want %q", sink.lastProgram.centralName, configured)
+		}
+	})
+
+	t.Run("unescaped names still route verbatim", func(t *testing.T) {
+		t.Parallel()
+		noop, sink, sub := newSub()
+		noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
+			base+"/ccu-01/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true"))
+		sub.dispatcher.flush()
+		if sink.lastVal.centralName != "ccu-01" {
+			t.Errorf("central = %q, want %q", sink.lastVal.centralName, "ccu-01")
+		}
+	})
+}
+
+// TestCommandSubscriberRefusesAmbiguousCentralSegment: two configured
+// centrals whose names escape to the same topic segment cannot be told
+// apart from the wire, so the command is dropped rather than routed to
+// an arbitrary one of them.
+func TestCommandSubscriberRefusesAmbiguousCentralSegment(t *testing.T) {
+	t.Parallel()
+	const base = "openccu-loom"
+	noop := NewNoopClient()
+	sink := &fakeSink{}
+	sub := NewCommandSubscriber(noop, NewTopicBuilder(base), sink, nil).
+		WithCentralNames(fakeCentralNames{names: []string{"Wohn Zimmer", "Wohn+Zimmer"}})
+	if err := sub.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	noop.DeliverInbound(base+"/+/+/+/+/+/+/set",
+		base+"/Wohn_Zimmer/HmIP-RF/0001ABCD/4/values/STATE/set", []byte("true"))
+	sub.dispatcher.flush()
+	if sink.setValues.Load() != 0 {
+		t.Fatalf("an ambiguous central segment was routed to a CCU anyway (calls=%d)", sink.setValues.Load())
 	}
 }

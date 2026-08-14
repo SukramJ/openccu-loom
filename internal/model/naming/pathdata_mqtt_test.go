@@ -457,3 +457,30 @@ func TestMQTTTopics_BaseSlashTrimmed(t *testing.T) {
 		t.Errorf("MQTTDeviceInfo (slash base) = %q, want %q", got, want)
 	}
 }
+
+// TestDiscoveryNodeIDSlugsTheCentralName pins the node-id spelling
+// against the shared discovery slug.
+//
+// HA only accepts `[A-Za-z0-9_-]` in a node_id, and the retained-config
+// orphan sweep re-derives the same prefix to find the daemon's own
+// configs. Escaping the central with TopicSafe alone left dots and
+// umlauts on the wire: the config was rejected by the consumer, and it
+// was spelled differently from the hub configs of the very same
+// central, so the sweep could match neither.
+func TestDiscoveryNodeIDSlugsTheCentralName(t *testing.T) {
+	t.Parallel()
+	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "0001ABCD", 1, BucketValues, "STATE")
+	for _, tc := range []struct{ central, want string }{
+		{"ccu-01", "ccu-01_0001abcd"},
+		{"Wohn Zimmer", "wohn_zimmer_0001abcd"},
+		{"CCU Küche", "ccu_kueche_0001abcd"},
+		{"ccu.küche", "ccu_kueche_0001abcd"},
+	} {
+		if got := pd.DiscoveryNodeID(tc.central); got != tc.want {
+			t.Errorf("DiscoveryNodeID(%q) = %q, want %q", tc.central, got, tc.want)
+		}
+		if want := DiscoverySlug(tc.central) + "_0001abcd"; pd.DiscoveryNodeID(tc.central) != want {
+			t.Errorf("DiscoveryNodeID(%q) does not use the shared slug", tc.central)
+		}
+	}
+}

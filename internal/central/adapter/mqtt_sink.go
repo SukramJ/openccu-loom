@@ -154,12 +154,19 @@ func (s *MQTTCommandSink) SetMasterValue(
 
 // SetSysvar looks up the named sysvar on the target central and
 // dispatches via its writer.
+//
+// `name` arrives as the MQTT topic segment, which is TopicSafe-escaped
+// — a sysvar named `Außen Temperatur` reaches us as
+// `Außen_Temperatur`. Resolution therefore goes through
+// [hub.Hub.SysvarByTopicSegment], which tries the exact name first and
+// falls back to the unique sysvar whose escaped name matches, so the
+// CCU-side write still carries the real name.
 func (s *MQTTCommandSink) SetSysvar(ctx context.Context, centralName, name string, value any) error {
 	c, ok := s.registry.Get(centralName)
 	if !ok {
 		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
 	}
-	sv, ok := c.HubModel.Sysvar(name)
+	sv, ok := c.HubModel.SysvarByTopicSegment(name)
 	if !ok {
 		return fmt.Errorf("mqtt_sink: unknown sysvar %q on %s", name, centralName)
 	}

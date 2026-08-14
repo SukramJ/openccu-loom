@@ -19,6 +19,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -1807,16 +1808,11 @@ func (c *Config) Validate() error {
 	if err := validateOperatorSurfaces(c); err != nil {
 		return err
 	}
-	names := make(map[string]struct{}, len(c.Centrals))
+	if err := validateCentralNames(c.Centrals); err != nil {
+		return err
+	}
 	for i := range c.Centrals {
 		cc := &c.Centrals[i]
-		if cc.Name == "" {
-			return fmt.Errorf("config: centrals[%d].name: required", i)
-		}
-		if _, dup := names[cc.Name]; dup {
-			return fmt.Errorf("config: duplicate central name %q", cc.Name)
-		}
-		names[cc.Name] = struct{}{}
 		if cc.Host == "" {
 			return fmt.Errorf("config: centrals[%d].host: required", i)
 		}
@@ -1864,6 +1860,36 @@ var centralHostLabel = regexp.MustCompile(`^[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-
 // path, query, fragment, credentials, or an embedded port must be
 // rejected at this trust boundary rather than silently reshaping those
 // URLs. The TCP port has its own config field.
+// validateCentralNames enforces that every central carries a name and
+// that no two centrals are indistinguishable — neither as the exact
+// configured name nor as the single escaped segment the north-bound
+// planes address them through. Two names that collapse onto the same
+// segment would share every state topic, and an inbound command on that
+// segment could not be attributed to a CCU at all.
+func validateCentralNames(centrals []CentralConfig) error {
+	names := make(map[string]struct{}, len(centrals))
+	segments := make(map[string]string, len(centrals))
+	for i := range centrals {
+		name := centrals[i].Name
+		if name == "" {
+			return fmt.Errorf("config: centrals[%d].name: required", i)
+		}
+		if _, dup := names[name]; dup {
+			return fmt.Errorf("config: duplicate central name %q", name)
+		}
+		names[name] = struct{}{}
+		seg := naming.TopicSafe(name)
+		if other, dup := segments[seg]; dup {
+			return fmt.Errorf(
+				"config: centrals[%d].name %q collides with %q in the north-bound topic segment %q: rename one of them",
+				i, name, other, seg,
+			)
+		}
+		segments[seg] = name
+	}
+	return nil
+}
+
 func validateCentralHost(idx int, host string) error {
 	// IP literal, bare or bracketed (IPv6 URL form).
 	candidate := host

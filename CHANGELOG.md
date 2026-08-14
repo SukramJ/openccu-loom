@@ -60,6 +60,62 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **MQTT commands reach a CCU whose name contains a space.** Every topic
+  the daemon publishes escapes the CCU name — `Wohn Zimmer` becomes
+  `Wohn_Zimmer` — but the inbound handlers read that segment back
+  verbatim and looked it up as a configured name, which never matched.
+  Every MQTT write for such a CCU was dropped ("no backend") while its
+  state topics kept updating, so the plane looked healthy. Data points,
+  MASTER writes, system variables, programs, install mode, week
+  profiles, schedules, combined data points and custom-DP invokes all
+  resolve the segment back to the configured CCU now. Two CCU names that
+  escape to the same segment are ambiguous on the wire and are rejected
+  at start-up.
+
+- **System variables whose name contains a space are writable over
+  MQTT.** The command topic the daemon advertises for `Außen Temperatur`
+  is `…/hub/sysvars/Außen_Temperatur/set`; a write there was resolved
+  against the CCU's variable list verbatim, missed, and died as "unknown
+  sysvar" — while the entity kept rendering as writable. The escaped
+  segment now resolves back to the real variable, and the CCU-side write
+  carries its real name.
+
+- **The System-health and Connection-latency sensors report again for
+  CCUs whose name is not plain ASCII.** The two sensors declared one
+  state topic and the daemon published to another, so both stayed
+  unavailable forever while the Last-event-age sensor beside them
+  worked. All three now share one topic builder, and the central segment
+  of these three topics is spelled like every other topic on the plane
+  (escaped, case preserved) instead of lower-cased.
+
+- **The retained-discovery cleanup pass works for CCU names that are not
+  bare slugs.** The once-per-boot sweep that removes the configs of
+  entities this build no longer publishes derived its scope with a third
+  spelling of the CCU name, which matched neither the per-device nor the
+  hub configs it was meant to find. For a CCU named `CCU Küche` it
+  evicted nothing at all, so retired entities kept being re-created by
+  Home Assistant on every restart. Producers and sweep now share one
+  identifier normaliser, and the sweep also still recognises the
+  spelling earlier builds wrote, so those leftovers are cleaned up once.
+  The raw-plane sweep matches the escaped CCU name it actually
+  publishes under.
+
+- **A deleted alarm zone stops haunting Home Assistant.** The alarm
+  plane never told the orphan sweep that it had published, so its
+  retained panel configs were exempt from the sweep forever: a zone
+  removed while the daemon was down kept a permanently unavailable panel
+  in Home Assistant with no automatic way to clear it. The plane now
+  declares once the engine has really loaded its zone set — declaring
+  earlier, on the empty pass Start triggers, would have wiped the live
+  alarm surface instead.
+
+- **A CCU that reports its serial while values are flowing no longer
+  risks aborting the daemon.** The discovery builder's per-CCU metadata
+  map was written from the boot path, the snapshot pass and the hub
+  publisher's worker while the event path read it for every value event.
+  Go treats that as fatal, not as a benign race, and each additional CCU
+  widened the window.
+
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle
   and are still attempted while the circuit breaker for a struggling CCU

@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -30,6 +31,23 @@ type CommandSink interface {
 	SetSysvar(ctx context.Context, centralName, name string, payload any) error
 	TriggerProgram(ctx context.Context, centralName, id string) error
 	SetProgramEnabled(ctx context.Context, centralName, id string, enabled bool) error
+}
+
+// CentralNameLister supplies the configured central names so the
+// subscriber can turn the `<central>` topic segment back into the name
+// the domain is keyed on. The composition root wires the central
+// registry; when nil the segment is passed through unchanged.
+//
+// It exists because every publisher escapes the central through
+// [naming.TopicSafe] before it reaches the wire (space / `+` / `#` /
+// `/` all become `_`), while every sink does an exact-key lookup —
+// `Registry.Get(name)`, `ValueWriter`'s per-central backend map. A CCU
+// configured as `Wohn Zimmer` therefore had every one of its MQTT
+// commands dropped with "no backend", while its state topics kept
+// updating and the plane looked healthy.
+type CentralNameLister interface {
+	// Names returns the configured central names, unescaped.
+	Names() []string
 }
 
 // WeekProfileSink is the optional domain-facing contract for
@@ -211,6 +229,10 @@ type CommandSubscriber struct {
 	imSink    InstallModeSink        // may be nil; install-mode button presses are dropped with a debug log when nil
 	alarmSink AlarmSink              // may be nil; alarm commands are dropped with a debug log when nil
 	addonSink AddonUpdateSink        // may be nil; the add-on update INSTALL command is dropped with a debug log when nil
+	// centrals resolves the escaped `<central>` topic segment back to a
+	// configured central name (see [CentralNameLister]). May be nil, in
+	// which case the segment is used verbatim.
+	centrals CentralNameLister
 	// qos is the QoS level every inbound command subscription registers
 	// at. Defaults to QoS1 (at-least-once) in [NewCommandSubscriber] —
 	// matching [DefaultQoS.Commands] — and can be overridden via
@@ -280,6 +302,58 @@ func (c *CommandSubscriber) WaitIdle() {
 func (c *CommandSubscriber) WithQoS(qos QoS) *CommandSubscriber {
 	c.qos = qos
 	return c
+}
+
+// WithCentralNames attaches the central-name source used to resolve the
+// escaped `<central>` topic segment back to the configured name.
+// Returns the receiver for call-site chaining.
+func (c *CommandSubscriber) WithCentralNames(l CentralNameLister) *CommandSubscriber {
+	c.centrals = l
+	return c
+}
+
+// resolveCentral maps the `<central>` topic segment onto a configured
+// central name. The segment is [naming.TopicSafe]d by every publisher,
+// so a central named `Wohn Zimmer` arrives as `Wohn_Zimmer` and would
+// miss every exact-key lookup downstream.
+//
+// Resolution order: the segment itself when it names a configured
+// central (the common case — most names need no escaping), otherwise
+// the unique central whose escaped name equals the segment. An
+// ambiguous segment (two centrals that escape to the same string) is
+// refused with a warning rather than routed to an arbitrary one of
+// them; the caller drops the command. An unknown segment is passed
+// through unchanged so the sink reports the unknown central as it
+// always has.
+func (c *CommandSubscriber) resolveCentral(topic, segment string) (string, bool) {
+	if c.centrals == nil || segment == "" {
+		return segment, true
+	}
+	var (
+		match   string
+		matches int
+	)
+	for _, name := range c.centrals.Names() {
+		if name == segment {
+			return name, true
+		}
+		if naming.TopicSafe(name) == segment {
+			match = name
+			matches++
+		}
+	}
+	switch matches {
+	case 0:
+		return segment, true
+	case 1:
+		return match, true
+	default:
+		c.logger.Warn("mqtt.command.ambiguous_central",
+			slog.String("topic", topic),
+			slog.String("segment", segment),
+			slog.String("detail", "several configured centrals escape to this topic segment; rename one of them"))
+		return "", false
+	}
 }
 
 // WithCollector attaches the metrics collector so the subscriber can
@@ -478,7 +552,11 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 		c.logger.Warn("mqtt.command.schedule.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralName, iface, deviceAddr, channelStr, key := parts[1], parts[2], parts[3], parts[4], parts[6]
+	centralSeg, iface, deviceAddr, channelStr, key := parts[1], parts[2], parts[3], parts[4], parts[6]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 	channel, err := strconv.Atoi(channelStr)
 	if err != nil {
 		c.logger.Warn("mqtt.command.schedule.bad_channel", slog.String("topic", topic))
@@ -531,7 +609,11 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 		c.logger.Warn("mqtt.command.wp.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralName, iface, deviceAddr, channelStr := parts[1], parts[2], parts[3], parts[4]
+	centralSeg, iface, deviceAddr, channelStr := parts[1], parts[2], parts[3], parts[4]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 	channel, err := strconv.Atoi(channelStr)
 	if err != nil {
 		c.logger.Warn("mqtt.command.wp.bad_channel", slog.String("topic", topic))
@@ -577,7 +659,11 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 		c.logger.Warn("mqtt.command.combined.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralName, iface, deviceAddr, channelStr, kind := parts[1], parts[2], parts[3], parts[4], parts[6]
+	centralSeg, iface, deviceAddr, channelStr, kind := parts[1], parts[2], parts[3], parts[4], parts[6]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 	channel, err := strconv.Atoi(channelStr)
 	if err != nil {
 		c.logger.Warn("mqtt.command.combined.bad_channel", slog.String("topic", topic))
@@ -627,7 +713,11 @@ func (c *CommandSubscriber) handleServiceMethod(topic string, raw []byte, retain
 		c.logger.Warn("mqtt.command.svc.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralName, iface, deviceAddr, channelStr, method := parts[1], parts[2], parts[3], parts[4], parts[8]
+	centralSeg, iface, deviceAddr, channelStr, method := parts[1], parts[2], parts[3], parts[4], parts[8]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 	channel, err := strconv.Atoi(channelStr)
 	if err != nil {
 		c.logger.Warn("mqtt.command.svc.bad_channel", slog.String("topic", topic))
@@ -686,11 +776,11 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	var centralName, iface, device, channelStr, parameter string
+	var centralSeg, iface, device, channelStr, parameter string
 	isMaster := false
 	switch len(parts) {
 	case 7:
-		centralName, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[5]
+		centralSeg, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[5]
 	case 8:
 		bucket := parts[5]
 		switch bucket {
@@ -707,9 +797,13 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 				slog.String("bucket", bucket))
 			return
 		}
-		centralName, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[6]
+		centralSeg, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[6]
 	default:
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
+		return
+	}
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
 		return
 	}
 	channel, err := strconv.Atoi(channelStr)
@@ -751,7 +845,11 @@ func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained boo
 	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "sysvars" || parts[5] != "set" {
 		return
 	}
-	centralName, name := parts[1], parts[4]
+	centralSeg, name := parts[1], parts[4]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 	value := parseCommandPayload(body)
 	c.incReceivedCommands()
 	c.dispatcher.Enqueue(topic, func() {
@@ -784,7 +882,11 @@ func (c *CommandSubscriber) handleProgram(topic string, body []byte, retained bo
 	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "programs" || parts[5] != "trigger" {
 		return
 	}
-	centralName, id := parts[1], parts[4]
+	centralSeg, id := parts[1], parts[4]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 	c.incReceivedCommands()
 	c.dispatcher.Enqueue(topic, func() {
 		ctx, cancel := context.WithCancel(c.lifecycleCtx)
@@ -812,7 +914,11 @@ func (c *CommandSubscriber) handleProgramEnable(topic string, body []byte, retai
 	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "programs" || parts[5] != "set" {
 		return
 	}
-	centralName, id := parts[1], parts[4]
+	centralSeg, id := parts[1], parts[4]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 	enabled, ok := parseBoolPayload(body)
 	if !ok {
 		c.logger.Warn("mqtt.command.program_enable.bad_payload",
@@ -860,7 +966,11 @@ func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retaine
 		c.logger.Warn("mqtt.command.install_mode.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralName, iface := parts[1], parts[4]
+	centralSeg, iface := parts[1], parts[4]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 	if c.imSink == nil {
 		c.logger.Debug("mqtt.command.install_mode.no_sink",
 			slog.String("topic", topic),
@@ -1089,7 +1199,11 @@ func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained b
 		c.logger.Warn("mqtt.command.cdp.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralName, deviceAddr, name, operation := parts[1], parts[3], parts[5], parts[6]
+	centralSeg, deviceAddr, name, operation := parts[1], parts[3], parts[5], parts[6]
+	centralName, ok := c.resolveCentral(topic, centralSeg)
+	if !ok {
+		return
+	}
 
 	if c.cdpSink == nil {
 		c.logger.Warn("mqtt.command.cdp.no_sink",

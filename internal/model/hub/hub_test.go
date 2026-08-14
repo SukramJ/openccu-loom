@@ -458,3 +458,47 @@ func TestInstallModeIsActiveAndRemaining(t *testing.T) {
 		t.Fatal("after Disable IsActive must be false")
 	}
 }
+
+// TestHubSysvarByTopicSegmentResolvesEscapedNames pins the inverse of
+// the MQTT topic escaping.
+//
+// A sysvar named `Außen Temperatur` is advertised — by our own
+// discovery payload — with the command topic segment
+// `Außen_Temperatur`. Resolving that segment with an exact map lookup
+// missed, so every write to the topic the daemon itself declared died
+// as "unknown sysvar" while the entity kept rendering as writable.
+func TestHubSysvarByTopicSegmentResolvesEscapedNames(t *testing.T) {
+	t.Parallel()
+	h := NewHub("ccu-01")
+	spaced := NewSysvar("ccu-01", "Außen Temperatur", "", hmenum.HubValueTypeNumber, nil)
+	plain := NewSysvar("ccu-01", "Anwesenheit", "", hmenum.HubValueTypeLogic, nil)
+	h.PutSysvar(spaced)
+	h.PutSysvar(plain)
+
+	if got, ok := h.SysvarByTopicSegment("Außen_Temperatur"); !ok || got != spaced {
+		t.Fatalf("escaped segment did not resolve (ok=%v) — every MQTT write to the declared topic is dropped", ok)
+	}
+	if got, ok := h.SysvarByTopicSegment("Anwesenheit"); !ok || got != plain {
+		t.Fatalf("exact name did not resolve (ok=%v)", ok)
+	}
+	if _, ok := h.SysvarByTopicSegment("Nicht Vorhanden"); ok {
+		t.Error("an unknown segment resolved to a sysvar")
+	}
+	if _, ok := h.SysvarByTopicSegment(""); ok {
+		t.Error("an empty segment resolved to a sysvar")
+	}
+}
+
+// TestHubSysvarByTopicSegmentRefusesAmbiguity: two sysvar names that
+// escape to the same topic segment cannot be told apart on the wire, so
+// the write is refused instead of being routed to an arbitrary one.
+func TestHubSysvarByTopicSegmentRefusesAmbiguity(t *testing.T) {
+	t.Parallel()
+	h := NewHub("ccu-01")
+	h.PutSysvar(NewSysvar("ccu-01", "Alarm Zone", "", hmenum.HubValueTypeLogic, nil))
+	h.PutSysvar(NewSysvar("ccu-01", "Alarm+Zone", "", hmenum.HubValueTypeLogic, nil))
+
+	if _, ok := h.SysvarByTopicSegment("Alarm_Zone"); ok {
+		t.Fatal("an ambiguous segment was routed to one of the two sysvars")
+	}
+}

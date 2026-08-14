@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
@@ -176,6 +177,13 @@ type DefaultDiscoveryBuilder struct {
 	// defaults. Populate via [WithHubInfo]. Used when no per-central entry
 	// in [hubs] matches the discovery target.
 	Hub HubInfo
+	// hubsMu guards [hubs] (including its lazy allocation). The map is
+	// written from the composition root, from the central's snapshot
+	// goroutine, and from the hub publisher's worker, while [hubFor]
+	// reads it on the discovery hot path of every value event — an
+	// unsynchronised map there is a `fatal error: concurrent map read
+	// and map write` process abort, not a benign race.
+	hubsMu sync.RWMutex
 	// hubs holds per-central HubInfo entries so a multi-CCU daemon emits
 	// the correct device-block metadata (Name / Model / Version / Serial /
 	// URL) for each CCU. Populated via [SetHubInfoFor]; lookup performed
@@ -253,10 +261,17 @@ func (d *DefaultDiscoveryBuilder) WithHubInfo(info HubInfo) *DefaultDiscoveryBui
 // emits the correct device-block metadata for each CCU. central must
 // match the value passed into the discovery-builder method's
 // `central` argument.
+//
+// Safe to call from any goroutine: the daemon stamps the hub serial
+// from the boot path, from the southbound-ready subscriber, and from
+// the hub publisher's worker while discovery payloads are already
+// being built for incoming CCU events.
 func (d *DefaultDiscoveryBuilder) SetHubInfoFor(centralName string, info HubInfo) {
 	if d == nil || centralName == "" {
 		return
 	}
+	d.hubsMu.Lock()
+	defer d.hubsMu.Unlock()
 	if d.hubs == nil {
 		d.hubs = make(map[string]HubInfo)
 	}
@@ -265,11 +280,20 @@ func (d *DefaultDiscoveryBuilder) SetHubInfoFor(centralName string, info HubInfo
 
 // hubFor returns the HubInfo to use for the named central. Falls
 // back to the default [Hub] when no per-central entry is registered.
+// The returned value is a copy, so the lock is released before the
+// caller touches it.
+//
+// [Hub] itself needs no lock: it is the wiring-time default, written
+// once before the builder is handed to the publish path.
 func (d *DefaultDiscoveryBuilder) hubFor(centralName string) HubInfo {
-	if d != nil && d.hubs != nil {
-		if hi, ok := d.hubs[centralName]; ok {
-			return hi
-		}
+	if d == nil {
+		return HubInfo{}
+	}
+	d.hubsMu.RLock()
+	hi, ok := d.hubs[centralName]
+	d.hubsMu.RUnlock()
+	if ok {
+		return hi
 	}
 	return d.Hub
 }
