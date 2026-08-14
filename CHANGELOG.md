@@ -92,6 +92,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now too. Separately, the writer every data point is handed could not
   write a parameter set at all, which left the atomic path unreachable
   even where nothing opened a collector; it can now.
+- **The Refresh button on the Matter diagnostics view showed its
+  translation key.** `common.refresh` had no entry in either catalogue,
+  so the button rendered the literal string `common.refresh`.
 
 - **A second CCU no longer loses its virtual-remote entities.** A few
   address classes are identical on every CCU — the virtual remotes, the

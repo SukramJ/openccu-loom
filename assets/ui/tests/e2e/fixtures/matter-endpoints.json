@@ -1,0 +1,56 @@
+{
+  "endpoints": [
+    {
+      "endpoint_id": 0,
+      "parent_endpoint_id": 0,
+      "device_type": 22,
+      "device_type_name": "RootNode",
+      "device_type_revision": 3,
+      "reachable": true,
+      "friendly_name": "",
+      "clusters": []
+    },
+    {
+      "endpoint_id": 1,
+      "parent_endpoint_id": 0,
+      "device_type": 14,
+      "device_type_name": "Aggregator",
+      "device_type_revision": 1,
+      "reachable": true,
+      "friendly_name": "",
+      "clusters": []
+    },
+    {
+      "endpoint_id": 2,
+      "parent_endpoint_id": 1,
+      "device_type": 266,
+      "device_type_name": "OnOffPlugInUnit",
+      "device_type_revision": 4,
+      "reachable": true,
+      "friendly_name": "Bücherregal",
+      "device_address": "00021BE9957782",
+      "channel_address": "00021BE9957782:4",
+      "clusters": [
+        { "id": 6, "name": "OnOff", "revision": 6 },
+        { "id": 29, "name": "Descriptor", "revision": 2 },
+        { "id": 57, "name": "BridgedDeviceBasicInformation", "revision": 4 }
+      ]
+    },
+    {
+      "endpoint_id": 3,
+      "parent_endpoint_id": 1,
+      "device_type": 257,
+      "device_type_name": "DimmableLight",
+      "device_type_revision": 4,
+      "reachable": false,
+      "friendly_name": "Esstisch",
+      "device_address": "0004D8A9C11B3E",
+      "channel_address": "0004D8A9C11B3E:1",
+      "clusters": [
+        { "id": 6, "name": "OnOff", "revision": 6 },
+        { "id": 8, "name": "LevelControl", "revision": 6 },
+        { "id": 29, "name": "Descriptor", "revision": 2 }
+      ]
+    }
+  ]
+}
