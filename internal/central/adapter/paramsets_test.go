@@ -64,7 +64,7 @@ func (f *paramsetFakeOps) GetParamset(ctx context.Context, address string, key h
 	return map[string]any{}, nil
 }
 
-func (f *paramsetFakeOps) PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandRxMode) error {
+func (f *paramsetFakeOps) PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode) error {
 	if f.putParamsetFn != nil {
 		return f.putParamsetFn(ctx, address, key, values)
 	}

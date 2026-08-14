@@ -292,7 +292,8 @@ func (s *SchedulesDomain) SetSchedule(
 	if len(values) == 0 {
 		return errors.New("schedules: empty schedule payload")
 	}
-	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, values, hmenum.CommandRxModeUnset); err != nil {
+	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, values,
+		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		return err
 	}
 	// Invalidate cache; the next GetSchedule call will re-fetch.
@@ -452,7 +453,8 @@ func (s *SchedulesDomain) SetProfile(
 	if err != nil {
 		return err
 	}
-	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, values, hmenum.CommandRxModeUnset); err != nil {
+	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, values,
+		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		return err
 	}
 	s.climateCache().invalidate(channelAddr)
@@ -558,7 +560,8 @@ func (s *SchedulesDomain) CopyProfileTo(
 	if err != nil {
 		return err
 	}
-	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, values, hmenum.CommandRxModeUnset); err != nil {
+	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, values,
+		hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 		return err
 	}
 	s.climateCache().invalidate(channelAddr)

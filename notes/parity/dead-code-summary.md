@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 195ba3a6
-HEAD: 195ba3a6
+Generated: a169d20c
+HEAD: a169d20c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28291 |
+| Total Exported | 28292 |
 | Reachable | 4999 |
-| Whitelisted | 20316 |
+| Whitelisted | 20317 |
 | **Unreachable** | **2976** |
 
 ## Top-20 Packages by Dead Code

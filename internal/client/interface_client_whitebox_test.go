@@ -427,7 +427,7 @@ func (b *orchBackendStub) GetParamset(context.Context, string, hmenum.ParamsetKe
 	return nil, nil
 }
 
-func (b *orchBackendStub) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any, hmenum.CommandRxMode) error {
+func (b *orchBackendStub) PutParamset(context.Context, string, hmenum.ParamsetKey, map[string]any, hmenum.CommandPriority, hmenum.CommandRxMode) error {
 	return nil
 }
 

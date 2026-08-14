@@ -60,6 +60,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A siren stop now actually beats the queue it is supposed to beat.**
+  Stop commands are marked critical so they skip the command throttle
+  and are still attempted while the circuit breaker for a struggling CCU
+  is open — the difference between a siren that can be silenced and one
+  that cannot. The mark never arrived: every layer between the alarm
+  engine and the wire declared a priority, and the last one dropped it,
+  because the object that talks to the transport is built once per
+  interface and carries a single fixed priority for every call it ever
+  makes. Measured through the real write path: a critical write produced
+  no wire attempt at all past an open breaker, exactly as an ordinary one
+  does. The priority now travels with the command. Bounded activations
+  are covered too — those leave as one `put_paramset`, which carried no
+  priority at all.
+
+- **Direct-link operations record telemetry again.** The link
+  coordinator's observability recorder was never handed over, so every
+  add and remove wrote into the no-op default while its neighbours on
+  the same central were wired.
+
 - **A siren that fails to fire no longer does so quietly.** An output
   command that fails — an activation during an incident, a stop, an
   operator's test — now records a journal entry *and* a health signal

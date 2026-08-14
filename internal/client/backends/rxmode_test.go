@@ -135,6 +135,7 @@ func TestPutParamsetWithRxModeWakeup(t *testing.T) {
 		"0001ABCD:1",
 		hmenum.ParamsetKeyMaster,
 		values,
+		hmenum.CommandPriorityLow,
 		hmenum.CommandRxModeWakeup,
 	); err != nil {
 		t.Fatalf("PutParamset: %v", err)
@@ -174,6 +175,7 @@ func TestPutParamsetWithRxModeUnsetSendsNoArgument(t *testing.T) {
 		"0001ABCD:1",
 		hmenum.ParamsetKeyMaster,
 		values,
+		hmenum.CommandPriorityLow,
 		hmenum.CommandRxModeUnset,
 	); err != nil {
 		t.Fatalf("PutParamset: %v", err)
@@ -204,6 +206,7 @@ func TestPutParamsetWithRxModeLazyConfig(t *testing.T) {
 		"0001ABCD:1",
 		hmenum.ParamsetKeyMaster,
 		values,
+		hmenum.CommandPriorityLow,
 		hmenum.CommandRxModeLazyConfig,
 	); err != nil {
 		t.Fatalf("PutParamset: %v", err)
@@ -259,6 +262,7 @@ func TestCuxdPutParamsetIgnoresRxMode(t *testing.T) {
 		"CUX0001:1",
 		hmenum.ParamsetKeyValues,
 		values,
+		hmenum.CommandPriorityLow,
 		hmenum.CommandRxModeBurst, // should be silently ignored
 	); err != nil {
 		t.Fatalf("PutParamset: %v", err)

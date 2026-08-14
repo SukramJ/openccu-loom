@@ -57,7 +57,7 @@ func (t *testBackendOps) GetParamset(_ context.Context, _ string, _ hmenum.Param
 	return nil, nil
 }
 
-func (t *testBackendOps) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandRxMode) error {
+func (t *testBackendOps) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode) error {
 	return nil
 }
 

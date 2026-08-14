@@ -45,7 +45,7 @@ func (f *fakeOperations) GetParamset(_ context.Context, _ string, _ hmenum.Param
 	return nil, nil
 }
 
-func (f *fakeOperations) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandRxMode) error {
+func (f *fakeOperations) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode) error {
 	return nil
 }
 

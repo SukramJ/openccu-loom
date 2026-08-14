@@ -70,6 +70,12 @@ type fakeCcuCall struct{}
 
 func (f *fakeCcuCall) Call(_ context.Context, _ string, _ ...any) (any, error) { return nil, nil }
 
+func (f *fakeCcuCall) CallAt(
+	_ context.Context, _ hmenum.CommandPriority, _ string, _ ...any,
+) (any, error) {
+	return nil, nil
+}
+
 // stubRetrier2 records CancelInterface calls; lives here to avoid a
 // name collision with the stubRetrier in write_options_test.go (same
 // package but different names).

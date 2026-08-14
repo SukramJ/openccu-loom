@@ -19,10 +19,11 @@ import (
 var jsonUnmarshal = json.Unmarshal
 
 type fakeCaller struct {
-	called  atomic.Int32
-	lastArg atomic.Value
-	reply   any
-	err     error
+	lastPriority atomic.Value
+	called       atomic.Int32
+	lastArg      atomic.Value
+	reply        any
+	err          error
 }
 
 func (f *fakeCaller) Call(_ context.Context, method string, args ...any) (any, error) {
@@ -790,4 +791,14 @@ func TestKindForAllMVPInterfaces(t *testing.T) {
 			}
 		})
 	}
+}
+
+// CallAt implements Caller. The priority is recorded alongside the call
+// so a test can assert what the command carried, which is the whole
+// point of the method existing.
+func (f *fakeCaller) CallAt(
+	ctx context.Context, priority hmenum.CommandPriority, method string, args ...any,
+) (any, error) {
+	f.lastPriority.Store(priority)
+	return f.Call(ctx, method, args...)
 }

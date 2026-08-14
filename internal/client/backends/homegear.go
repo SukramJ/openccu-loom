@@ -115,9 +115,10 @@ func (b *HomegearBackend) GetParamset(
 // PutParamset implements Operations. rxMode is silently ignored —
 // Homegear's XML-RPC surface does not define a rx_mode argument.
 func (b *HomegearBackend) PutParamset(
-	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, rxMode hmenum.CommandRxMode,
+	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
+	priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
 ) error {
-	return putParamsetViaCaller(ctx, b.xml, address, key, values, rxMode, false)
+	return putParamsetViaCaller(ctx, b.xml, address, key, values, priority, rxMode, false)
 }
 
 // SetValue implements Operations. Priority is advisory and dropped
@@ -125,9 +126,9 @@ func (b *HomegearBackend) PutParamset(
 // rxMode is silently ignored — Homegear's XML-RPC surface does not
 // define a rx_mode argument.
 func (b *HomegearBackend) SetValue(
-	ctx context.Context, address string, parameter hmenum.Parameter, value any, _ hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
+	ctx context.Context, address string, parameter hmenum.Parameter, value any, priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
 ) error {
-	return setValueViaCaller(ctx, b.xml, address, parameter, value, rxMode, false)
+	return setValueViaCaller(ctx, b.xml, address, parameter, value, priority, rxMode, false)
 }
 
 // GetValue implements Operations.

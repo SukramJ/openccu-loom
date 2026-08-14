@@ -1,6 +1,6 @@
 {
-  "generated": "195ba3a6",
-  "head": "195ba3a6",
+  "generated": "a169d20c",
+  "head": "a169d20c",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28291,
+    "total_exported": 28292,
     "reachable": 4999,
-    "whitelisted": 20316,
+    "whitelisted": 20317,
     "unreachable": 2976
   },
   "by_package": [
@@ -2553,14 +2553,14 @@
       "package": "internal/central",
       "identifier": "CCUInterface",
       "file": "internal/central/central.go",
-      "line": 264,
+      "line": 268,
       "kind": "type"
     },
     {
       "package": "internal/central",
       "identifier": "CCUInterface",
       "file": "internal/central/central.go",
-      "line": 264,
+      "line": 268,
       "kind": "type"
     },
     {
@@ -2637,14 +2637,14 @@
       "package": "internal/central",
       "identifier": "Readiness",
       "file": "internal/central/central.go",
-      "line": 493,
+      "line": 497,
       "kind": "type"
     },
     {
       "package": "internal/central",
       "identifier": "Readiness",
       "file": "internal/central/central.go",
-      "line": 493,
+      "line": 497,
       "kind": "type"
     },
     {
@@ -2714,14 +2714,14 @@
       "package": "internal/central",
       "identifier": "SystemInfo",
       "file": "internal/central/central.go",
-      "line": 224,
+      "line": 228,
       "kind": "type"
     },
     {
       "package": "internal/central",
       "identifier": "SystemInfo",
       "file": "internal/central/central.go",
-      "line": 224,
+      "line": 228,
       "kind": "type"
     },
     {
@@ -5283,14 +5283,14 @@
       "package": "internal/client/backends",
       "identifier": "Announcer",
       "file": "internal/client/backends/caller.go",
-      "line": 26,
+      "line": 45,
       "kind": "type"
     },
     {
       "package": "internal/client/backends",
       "identifier": "Announcer",
       "file": "internal/client/backends/caller.go",
-      "line": 26,
+      "line": 45,
       "kind": "type"
     },
     {
@@ -5549,14 +5549,14 @@
       "package": "internal/client/backends",
       "identifier": "LinkOps",
       "file": "internal/client/backends/backend.go",
-      "line": 274,
+      "line": 282,
       "kind": "type"
     },
     {
       "package": "internal/client/backends",
       "identifier": "LinkOps",
       "file": "internal/client/backends/backend.go",
-      "line": 274,
+      "line": 282,
       "kind": "type"
     },
     {
@@ -5584,14 +5584,14 @@
       "package": "internal/client/backends",
       "identifier": "Operations",
       "file": "internal/client/backends/backend.go",
-      "line": 446,
+      "line": 454,
       "kind": "type"
     },
     {
       "package": "internal/client/backends",
       "identifier": "Operations",
       "file": "internal/client/backends/backend.go",
-      "line": 446,
+      "line": 454,
       "kind": "type"
     },
     {
@@ -5612,14 +5612,14 @@
       "package": "internal/client/backends",
       "identifier": "ScriptRunner",
       "file": "internal/client/backends/caller.go",
-      "line": 35,
+      "line": 54,
       "kind": "type"
     },
     {
       "package": "internal/client/backends",
       "identifier": "ScriptRunner",
       "file": "internal/client/backends/caller.go",
-      "line": 35,
+      "line": 54,
       "kind": "type"
     },
     {
@@ -5640,14 +5640,14 @@
       "package": "internal/client/backends",
       "identifier": "SystemOps",
       "file": "internal/client/backends/backend.go",
-      "line": 326,
+      "line": 334,
       "kind": "type"
     },
     {
       "package": "internal/client/backends",
       "identifier": "SystemOps",
       "file": "internal/client/backends/backend.go",
-      "line": 326,
+      "line": 334,
       "kind": "type"
     },
     {
@@ -5668,14 +5668,14 @@
       "package": "internal/client/backends",
       "identifier": "ValueOps",
       "file": "internal/client/backends/backend.go",
-      "line": 246,
+      "line": 254,
       "kind": "type"
     },
     {
       "package": "internal/client/backends",
       "identifier": "ValueOps",
       "file": "internal/client/backends/backend.go",
-      "line": 246,
+      "line": 254,
       "kind": "type"
     },
     {
@@ -35218,21 +35218,21 @@
       "identifier": "TestChannelWriterAdapterPutParamsetPropagatesError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/bound_writer_test.go",
-      "line": 74
+      "line": 75
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestChannelWriterAdapterPutParamsetRoutes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/bound_writer_test.go",
-      "line": 40
+      "line": 41
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestChannelWriterAdapterSetValueRoutes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/bound_writer_test.go",
-      "line": 89
+      "line": 90
     },
     {
       "package": "internal/central/adapter",
@@ -56040,6 +56040,13 @@
     },
     {
       "package": "internal/client",
+      "identifier": "TestACriticalWriteIsAttemptedWhileTheBreakerIsOpen",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/write_priority_chain_test.go",
+      "line": 66
+    },
+    {
+      "package": "internal/client",
       "identifier": "TestApplyReconnectJitterNilRandIsSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/reconnect_backoff_test.go",
@@ -57030,7 +57037,7 @@
       "identifier": "TestValueWriterCancelInterfaceDelegatesToRetrier",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/wiring_test.go",
-      "line": 94
+      "line": 100
     },
     {
       "package": "internal/client",
@@ -57282,35 +57289,35 @@
       "identifier": "TestCcuBackendDeleteDeviceDispatchesXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 182
+      "line": 183
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendDeleteDeviceForwardsFlags",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 204
+      "line": 205
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendDeleteDeviceWithoutXMLRPCErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 219
+      "line": 220
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendDetermineParameter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 607
+      "line": 608
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendDetermineParameterNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 624
+      "line": 625
     },
     {
       "package": "internal/client/backends",
@@ -57352,14 +57359,14 @@
       "identifier": "TestCcuBackendFirmwareUpdateRequiresXML",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 93
+      "line": 94
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendFirmwareUpdateTriesInstallFirst",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 100
+      "line": 101
     },
     {
       "package": "internal/client/backends",
@@ -57415,7 +57422,7 @@
       "identifier": "TestCcuBackendGetParamsetDescriptionMapsStructs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 587
+      "line": 588
     },
     {
       "package": "internal/client/backends",
@@ -57464,35 +57471,35 @@
       "identifier": "TestCcuBackendListDevices",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 68
+      "line": 69
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendListReplaceableDevicesDispatchesXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 300
+      "line": 301
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendListReplaceableDevicesPropagatesFault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 329
+      "line": 330
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendListReplaceableDevicesWithoutXMLRPCErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 341
+      "line": 342
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendListTeamsDecodesStructArray",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 550
+      "line": 551
     },
     {
       "package": "internal/client/backends",
@@ -57541,84 +57548,84 @@
       "identifier": "TestCcuBackendReplaceDeviceDispatchesXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 351
+      "line": 352
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendReplaceDevicePropagatesFault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 373
+      "line": 374
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendReplaceDeviceWithoutXMLRPCErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 385
+      "line": 386
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendReportValueUsageDispatchesXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 156
+      "line": 157
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendReportValueUsageWithoutXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 175
+      "line": 176
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendRestoreConfigToDeviceDispatchesXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 238
+      "line": 239
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendRestoreConfigToDevicePropagatesFault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 261
+      "line": 262
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendRestoreConfigToDeviceWithoutXMLRPCErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 273
+      "line": 274
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendSearchDevicesCoercesFloat64Result",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 458
+      "line": 459
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendSearchDevicesDispatchesXMLRPCNoArgsIntResult",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 432
+      "line": 433
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendSearchDevicesNonWiredInterfaceUnsupportedWithoutWireCall",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 474
+      "line": 475
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendSearchDevicesWithoutXMLRPCReturnsErrNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 489
+      "line": 490
     },
     {
       "package": "internal/client/backends",
@@ -57653,28 +57660,28 @@
       "identifier": "TestCcuBackendSetTeamDispatchesXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 513
+      "line": 514
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendSetTeamEmptyResetsTeam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 528
+      "line": 529
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendSetTeamWithoutXMLRPCUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 542
+      "line": 543
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCcuBackendSetValuePassesThrough",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 82
+      "line": 83
     },
     {
       "package": "internal/client/backends",
@@ -58619,21 +58626,21 @@
       "identifier": "TestCuxdBackendDeleteDeviceUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 227
+      "line": 228
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCuxdBackendDetermineParameterUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 634
+      "line": 635
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCuxdBackendFirmwareUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 112
+      "line": 113
     },
     {
       "package": "internal/client/backends",
@@ -58689,7 +58696,7 @@
       "identifier": "TestCuxdBackendKindMatchesContract",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 119
+      "line": 120
     },
     {
       "package": "internal/client/backends",
@@ -58710,7 +58717,7 @@
       "identifier": "TestCuxdBackendListReplaceableDevicesUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 393
+      "line": 394
     },
     {
       "package": "internal/client/backends",
@@ -58731,7 +58738,7 @@
       "identifier": "TestCuxdBackendReplaceDeviceUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 401
+      "line": 402
     },
     {
       "package": "internal/client/backends",
@@ -58745,14 +58752,14 @@
       "identifier": "TestCuxdBackendRestoreConfigToDeviceUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 281
+      "line": 282
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestCuxdBackendSearchDevicesUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 497
+      "line": 498
     },
     {
       "package": "internal/client/backends",
@@ -58780,7 +58787,7 @@
       "identifier": "TestCuxdBackendTeamUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 565
+      "line": 566
     },
     {
       "package": "internal/client/backends",
@@ -58969,7 +58976,7 @@
       "identifier": "TestCuxdPutParamsetIgnoresRxMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/rxmode_test.go",
-      "line": 251
+      "line": 254
     },
     {
       "package": "internal/client/backends",
@@ -59018,7 +59025,7 @@
       "identifier": "TestCuxdSetValueIgnoresRxMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/rxmode_test.go",
-      "line": 225
+      "line": 228
     },
     {
       "package": "internal/client/backends",
@@ -59144,70 +59151,70 @@
       "identifier": "TestFactoryErrorsWhenBINRPCMissingForCUxD",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 724
+      "line": 725
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactoryErrorsWhenXMLRPCMissingForCCU",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 714
+      "line": 715
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactoryErrorsWhenXMLRPCMissingForHomegear",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 734
+      "line": 735
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactoryHomegearIgnoresJSONRPCCaller",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 756
+      "line": 757
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactorySelectsCcuForAllRFInterfaces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 691
+      "line": 692
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactoryWiresCcuForHmIPRF",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 126
+      "line": 127
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactoryWiresCuxd",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 136
+      "line": 137
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactoryWiresHomegear",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 146
+      "line": 147
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactoryWithKindErrorsForUnknownKind",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 744
+      "line": 745
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestFactoryWithKind_CcuImplementsInitializer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 679
+      "line": 680
     },
     {
       "package": "internal/client/backends",
@@ -59221,14 +59228,14 @@
       "identifier": "TestHomegearAddLinkNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 737
+      "line": 738
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearAllOpsErrNotWiredWithoutCaller",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 343
+      "line": 344
     },
     {
       "package": "internal/client/backends",
@@ -59242,35 +59249,35 @@
       "identifier": "TestHomegearBackendKindAndCapabilities",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 46
+      "line": 47
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearBackendListReplaceableDevicesUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 409
+      "line": 410
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearBackendReplaceDeviceUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 417
+      "line": 418
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearBackendRestoreConfigToDeviceUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 289
+      "line": 290
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearBackendSearchDevicesUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 505
+      "line": 506
     },
     {
       "package": "internal/client/backends",
@@ -59291,7 +59298,7 @@
       "identifier": "TestHomegearBackendTeamUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 576
+      "line": 577
     },
     {
       "package": "internal/client/backends",
@@ -59305,7 +59312,7 @@
       "identifier": "TestHomegearCapabilitiesAdvertisedMatchImplementation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 457
+      "line": 458
     },
     {
       "package": "internal/client/backends",
@@ -59361,49 +59368,49 @@
       "identifier": "TestHomegearDeleteDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 402
+      "line": 403
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearDeleteDeviceForwardsFlags",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 420
+      "line": 421
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearDeleteDeviceWithoutXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 434
+      "line": 435
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearDeleteMetadataNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 729
+      "line": 730
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearDeleteSystemVariableNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 713
+      "line": 714
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearDetermineParameter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 524
+      "line": 525
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearDetermineParameterNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 547
+      "line": 548
     },
     {
       "package": "internal/client/backends",
@@ -59417,7 +59424,7 @@
       "identifier": "TestHomegearFirmwareUpdateUnsupported",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 150
+      "line": 151
     },
     {
       "package": "internal/client/backends",
@@ -59452,35 +59459,35 @@
       "identifier": "TestHomegearGetAllSystemVariablesErrorPropagates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 792
+      "line": 793
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetAllSystemVariablesNilReturnsEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 201
+      "line": 202
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetAllSystemVariablesRawNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 783
+      "line": 784
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetAllSystemVariablesRawTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 773
+      "line": 774
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetDeviceDescriptionHappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 626
+      "line": 627
     },
     {
       "package": "internal/client/backends",
@@ -59494,35 +59501,35 @@
       "identifier": "TestHomegearGetDeviceDescriptionTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 644
+      "line": 645
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetDeviceDetailsNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 871
+      "line": 872
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetDeviceDetailsReturnsNameAndEmptyID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 558
+      "line": 559
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetDeviceNameMissingMetadataIsEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 254
+      "line": 255
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetDeviceNameNonStringMetadataCoerces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 266
+      "line": 267
     },
     {
       "package": "internal/client/backends",
@@ -59543,77 +59550,77 @@
       "identifier": "TestHomegearGetLinkParamsetDescriptionAndPutLinkParamset",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 474
+      "line": 475
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetLinkParamsetDescriptionNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 827
+      "line": 828
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetLinkParamsetDescriptionTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 835
+      "line": 836
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetLinkParamsetHappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 585
+      "line": 586
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetLinkParamsetNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 606
+      "line": 607
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetLinkParamsetTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 615
+      "line": 616
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetLinkPeersTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 763
+      "line": 764
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetLinksTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 753
+      "line": 754
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetParamsetDescriptionCallError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 690
+      "line": 691
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetParamsetDescriptionHappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 656
+      "line": 657
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearGetParamsetDescriptionTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 680
+      "line": 681
     },
     {
       "package": "internal/client/backends",
@@ -59627,7 +59634,7 @@
       "identifier": "TestHomegearGetSetParamset",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 96
+      "line": 97
     },
     {
       "package": "internal/client/backends",
@@ -59641,7 +59648,7 @@
       "identifier": "TestHomegearGetValueNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 819
+      "line": 820
     },
     {
       "package": "internal/client/backends",
@@ -59655,49 +59662,49 @@
       "identifier": "TestHomegearInitDeinitDelegatesToAnnouncer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 388
+      "line": 389
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearInitDeinitWithoutAnnouncerNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 370
+      "line": 371
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearLinkOps",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 278
+      "line": 279
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearListDevicesEntryTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 861
+      "line": 862
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearListDevicesNormalizes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 78
+      "line": 79
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearListDevicesTypeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 852
+      "line": 853
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearMetadataAndDeviceName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 213
+      "line": 214
     },
     {
       "package": "internal/client/backends",
@@ -59711,7 +59718,7 @@
       "identifier": "TestHomegearOperationsInterfaceCompliance",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 442
+      "line": 443
     },
     {
       "package": "internal/client/backends",
@@ -59725,21 +59732,21 @@
       "identifier": "TestHomegearPingUsesClientServerInitialized",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 63
+      "line": 64
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearPutLinkParamsetNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 844
+      "line": 845
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearRemoveLinkNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 745
+      "line": 746
     },
     {
       "package": "internal/client/backends",
@@ -59760,21 +59767,21 @@
       "identifier": "TestHomegearReportValueUsage",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 328
+      "line": 329
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearReportValueUsageNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 803
+      "line": 804
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearSetGetValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 122
+      "line": 123
     },
     {
       "package": "internal/client/backends",
@@ -59788,21 +59795,21 @@
       "identifier": "TestHomegearSetMetadataNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 721
+      "line": 722
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearSetSystemVariableNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 705
+      "line": 706
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestHomegearSetValueNotWired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 811
+      "line": 812
     },
     {
       "package": "internal/client/backends",
@@ -59816,7 +59823,7 @@
       "identifier": "TestHomegearSystemVariablesViaXMLRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/homegear_test.go",
-      "line": 157
+      "line": 158
     },
     {
       "package": "internal/client/backends",
@@ -59844,7 +59851,7 @@
       "identifier": "TestKindForAllMVPInterfaces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 772
+      "line": 773
     },
     {
       "package": "internal/client/backends",
@@ -59935,14 +59942,14 @@
       "identifier": "TestMaybeInitialize_CallsInitializerWhenPresent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 656
+      "line": 657
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestMaybeInitialize_NoopWhenNotImplemented",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
-      "line": 668
+      "line": 669
     },
     {
       "package": "internal/client/backends",
@@ -60054,14 +60061,14 @@
       "identifier": "TestPutParamsetWithRxModeLazyConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/rxmode_test.go",
-      "line": 196
+      "line": 198
     },
     {
       "package": "internal/client/backends",
       "identifier": "TestPutParamsetWithRxModeUnsetSendsNoArgument",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/rxmode_test.go",
-      "line": 166
+      "line": 167
     },
     {
       "package": "internal/client/backends",
@@ -161890,7 +161897,7 @@
       "identifier": "TestEveryWiringSetterHasAProductionCaller",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_setter_callers_test.go",
-      "line": 98
+      "line": 105
     },
     {
       "package": "tests/contract",

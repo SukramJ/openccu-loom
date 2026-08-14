@@ -146,35 +146,39 @@ func getParamsetViaCaller(
 // one, and even there only when the caller actually set it.
 func putParamsetViaCaller(
 	ctx context.Context, caller Caller, address string, key hmenum.ParamsetKey,
-	values map[string]any, rxMode hmenum.CommandRxMode, appendRxMode bool,
+	values map[string]any, priority hmenum.CommandPriority,
+	rxMode hmenum.CommandRxMode, appendRxMode bool,
 ) error {
 	if caller == nil {
 		return ErrNotWired
 	}
 	if appendRxMode && rxMode != hmenum.CommandRxModeUnset {
-		_, err := caller.Call(ctx, "putParamset", address, string(key), values, string(rxMode))
+		_, err := caller.CallAt(ctx, priority, "putParamset", address, string(key), values, string(rxMode))
 		return err
 	}
-	_, err := caller.Call(ctx, "putParamset", address, string(key), values)
+	_, err := caller.CallAt(ctx, priority, "putParamset", address, string(key), values)
 	return err
 }
 
 // setValueViaCaller implements the SetValue wire call shared by every
-// backend. Priority is advisory and dropped by every caller of this
-// helper; the caller's command throttle is the effective scheduler.
+// backend. The command's priority is forwarded rather than dropped: the
+// throttle and the circuit breaker both read it, and a stop that
+// arrives as ordinary traffic queues behind pending writes and is
+// refused outright while the breaker is open.
 // See [putParamsetViaCaller] for the appendRxMode contract.
 func setValueViaCaller(
 	ctx context.Context, caller Caller, address string, parameter hmenum.Parameter,
-	value any, rxMode hmenum.CommandRxMode, appendRxMode bool,
+	value any, priority hmenum.CommandPriority,
+	rxMode hmenum.CommandRxMode, appendRxMode bool,
 ) error {
 	if caller == nil {
 		return ErrNotWired
 	}
 	if appendRxMode && rxMode != hmenum.CommandRxModeUnset {
-		_, err := caller.Call(ctx, "setValue", address, string(parameter), value, string(rxMode))
+		_, err := caller.CallAt(ctx, priority, "setValue", address, string(parameter), value, string(rxMode))
 		return err
 	}
-	_, err := caller.Call(ctx, "setValue", address, string(parameter), value)
+	_, err := caller.CallAt(ctx, priority, "setValue", address, string(parameter), value)
 	return err
 }
 

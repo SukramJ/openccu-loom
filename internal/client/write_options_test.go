@@ -55,7 +55,7 @@ func (s *stubBackend) SetValue(_ context.Context, ch string, p hmenum.Parameter,
 	return err
 }
 
-func (s *stubBackend) PutParamset(_ context.Context, ch string, key hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandRxMode) error {
+func (s *stubBackend) PutParamset(_ context.Context, ch string, key hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.putCalls = append(s.putCalls, stubPutCall{Channel: ch, Key: key, Values: values})

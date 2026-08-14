@@ -18,6 +18,25 @@ import (
 // bool / int / int64 / float64 / string / []any / map[string]any.
 type Caller interface {
 	Call(ctx context.Context, method string, args ...any) (any, error)
+
+	// CallAt issues one call at an explicit priority, overriding the
+	// caller's configured default for this call alone.
+	//
+	// It exists because the priority is a property of the command, not
+	// of the transport: a siren stop has to bypass the throttle queue
+	// and probe an open circuit breaker, and both behaviours are
+	// selected by the priority the reliability stack observes. A caller
+	// constructed once per interface carries one priority for every
+	// call it ever makes, so the command's own priority reached the
+	// wire layer and stopped there — every write, including a stop
+	// marked critical, arrived as ordinary traffic.
+	//
+	// This is a required method rather than an optional capability on
+	// purpose. An optional one falls back silently, which is exactly
+	// how the defect above stayed invisible.
+	CallAt(
+		ctx context.Context, priority hmenum.CommandPriority, method string, args ...any,
+	) (any, error)
 }
 
 // Announcer is the optional init/deinit contract some transports

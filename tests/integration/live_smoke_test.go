@@ -473,3 +473,11 @@ func TestLive_DiscoverySnapshot(t *testing.T) {
 		}
 	}
 }
+
+// CallAt implements backends.Caller: this fake has no scheduler, so the
+// priority is recorded by the caller's own assertions, not here.
+func (c *liveBECaller) CallAt(
+	ctx context.Context, _ hmenum.CommandPriority, method string, args ...any,
+) (any, error) {
+	return c.Call(ctx, method, args...)
+}

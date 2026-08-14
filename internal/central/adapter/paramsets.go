@@ -170,7 +170,7 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 		if validErr := validateParamsetValues(ctx, b, deviceAddress, key, values); validErr != nil {
 			return validErr
 		}
-		if err := b.PutParamset(ctx, deviceAddress, key, values, hmenum.CommandRxModeUnset); err != nil {
+		if err := b.PutParamset(ctx, deviceAddress, key, values, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 			return err
 		}
 	}
@@ -539,7 +539,10 @@ func paramValueMapToAny(values map[hmenum.Parameter]hmtypes.ParamValue) map[stri
 // Decoupled from backends.Operations so tests can inject small fakes.
 type paramsetBackend interface {
 	GetParamset(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error)
-	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, rxMode hmenum.CommandRxMode) error
+	PutParamset(
+		ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
+		priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
+	) error
 	GetParamsetDescription(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error)
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error

@@ -783,7 +783,7 @@ func (c *InterfaceClient) PutParamset(
 			return b.PutLinkParamset(ctx, channelAddress, paramsetKeyOrLinkAddress, values)
 		}
 		pKey := hmenum.ParamsetKey(paramsetKeyOrLinkAddress)
-		return b.PutParamset(ctx, channelAddress, pKey, values, rxMode)
+		return b.PutParamset(ctx, channelAddress, pKey, values, priority, rxMode)
 	}
 	err := c.cfg.Circuit.Do(ctx, "putParamset", func(ctx context.Context) error {
 		if skipRetry {

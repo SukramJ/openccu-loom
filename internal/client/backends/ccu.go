@@ -183,18 +183,19 @@ func (b *CcuBackend) GetParamset(
 // PutParamset implements Operations. When rxMode is non-empty it is
 // appended as a 4th wire argument.
 func (b *CcuBackend) PutParamset(
-	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, rxMode hmenum.CommandRxMode,
+	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any,
+	priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
 ) error {
-	return putParamsetViaCaller(ctx, b.xml, address, key, values, rxMode, true)
+	return putParamsetViaCaller(ctx, b.xml, address, key, values, priority, rxMode, true)
 }
 
 // SetValue implements Operations. Priority is advisory and dropped
 // here; the caller's command throttle is the effective scheduler.
 // When rxMode is non-empty it is appended as a 4th wire argument.
 func (b *CcuBackend) SetValue(
-	ctx context.Context, address string, parameter hmenum.Parameter, value any, _ hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
+	ctx context.Context, address string, parameter hmenum.Parameter, value any, priority hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
 ) error {
-	return setValueViaCaller(ctx, b.xml, address, parameter, value, rxMode, true)
+	return setValueViaCaller(ctx, b.xml, address, parameter, value, priority, rxMode, true)
 }
 
 // GetValue implements Operations.

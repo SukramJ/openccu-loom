@@ -9,6 +9,8 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // jsonrpcCaller bridges a [jsonrpc.Client] to the [backends.Caller]
@@ -41,4 +43,15 @@ func (c *jsonrpcCaller) Call(ctx context.Context, method string, args ...any) (a
 		return nil, err
 	}
 	return out, nil
+}
+
+// CallAt implements backends.Caller. The JSON-RPC bridge issues its
+// calls directly, without the command throttle and circuit breaker the
+// XML-RPC path goes through, so there is no scheduler here to read a
+// priority. It is accepted and ignored, which is the honest shape: the
+// alternative is a caller that silently looks priority-aware.
+func (c *jsonrpcCaller) CallAt(
+	ctx context.Context, _ hmenum.CommandPriority, method string, args ...any,
+) (any, error) {
+	return c.Call(ctx, method, args...)
 }

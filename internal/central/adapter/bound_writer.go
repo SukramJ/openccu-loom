@@ -110,10 +110,7 @@ func (a *channelWriterAdapter) PutParamset(
 	values map[string]any,
 	priority hmenum.CommandPriority,
 ) error {
-	// Priority hint is advisory for PutParamset; the backend does not
-	// consume it on this path but we accept it to satisfy the interface.
-	_ = priority
-	return a.backend.PutParamset(ctx, channelAddress, paramsetKey, values, hmenum.CommandRxModeUnset)
+	return a.backend.PutParamset(ctx, channelAddress, paramsetKey, values, priority, hmenum.CommandRxModeUnset)
 }
 
 var _ device.ChannelWriter = (*channelWriterAdapter)(nil)

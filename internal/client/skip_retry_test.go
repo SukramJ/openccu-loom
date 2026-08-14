@@ -56,7 +56,7 @@ func (b *countingBackend) GetParamset(_ context.Context, _ string, _ hmenum.Para
 	return nil, nil
 }
 
-func (b *countingBackend) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandRxMode) error {
+func (b *countingBackend) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode) error {
 	return nil
 }
 
