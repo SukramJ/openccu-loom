@@ -1,6 +1,6 @@
 {
-  "generated": "a169d20c",
-  "head": "a169d20c",
+  "generated": "f5237dbb",
+  "head": "f5237dbb",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28292,
-    "reachable": 4999,
-    "whitelisted": 20317,
-    "unreachable": 2976
+    "total_exported": 28315,
+    "reachable": 5003,
+    "whitelisted": 20338,
+    "unreachable": 2974
   },
   "by_package": [
     {
@@ -211,7 +211,7 @@
     {
       "package": "internal/central/cachereset",
       "unreachable_funcs": 0,
-      "unreachable_types": 20,
+      "unreachable_types": 18,
       "unreachable_other": 0
     },
     {
@@ -3750,14 +3750,14 @@
       "package": "internal/central/cachereset",
       "identifier": "Deps",
       "file": "internal/central/cachereset/cachereset.go",
-      "line": 130,
+      "line": 154,
       "kind": "type"
     },
     {
       "package": "internal/central/cachereset",
       "identifier": "Deps",
       "file": "internal/central/cachereset/cachereset.go",
-      "line": 130,
+      "line": 154,
       "kind": "type"
     },
     {
@@ -3806,35 +3806,28 @@
       "package": "internal/central/cachereset",
       "identifier": "Reiniter",
       "file": "internal/central/cachereset/cachereset.go",
-      "line": 123,
+      "line": 147,
       "kind": "type"
     },
     {
       "package": "internal/central/cachereset",
       "identifier": "Reiniter",
       "file": "internal/central/cachereset/cachereset.go",
-      "line": 123,
+      "line": 147,
       "kind": "type"
     },
     {
       "package": "internal/central/cachereset",
       "identifier": "Report",
       "file": "internal/central/cachereset/cachereset.go",
-      "line": 160,
+      "line": 184,
       "kind": "type"
     },
     {
       "package": "internal/central/cachereset",
       "identifier": "Report",
       "file": "internal/central/cachereset/cachereset.go",
-      "line": 160,
-      "kind": "type"
-    },
-    {
-      "package": "internal/central/cachereset",
-      "identifier": "Scope",
-      "file": "internal/central/cachereset/cachereset.go",
-      "line": 41,
+      "line": 184,
       "kind": "type"
     },
     {
@@ -3853,23 +3846,16 @@
     },
     {
       "package": "internal/central/cachereset",
-      "identifier": "Service",
+      "identifier": "Topology",
       "file": "internal/central/cachereset/cachereset.go",
-      "line": 143,
+      "line": 117,
       "kind": "type"
     },
     {
       "package": "internal/central/cachereset",
       "identifier": "Topology",
       "file": "internal/central/cachereset/cachereset.go",
-      "line": 116,
-      "kind": "type"
-    },
-    {
-      "package": "internal/central/cachereset",
-      "identifier": "Topology",
-      "file": "internal/central/cachereset/cachereset.go",
-      "line": 116,
+      "line": 117,
       "kind": "type"
     },
     {
@@ -21540,84 +21526,84 @@
       "identifier": "TestCacheClearCentralScopeRequiresCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 54
+      "line": 57
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearDeviceScopeRequiresAllQualifiers",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 78
+      "line": 81
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearInterfaceScopeRequiresBothQualifiers",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 66
+      "line": 69
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearMissingOperationReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 95
+      "line": 98
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearOnlineCentralPostsCorrectBody",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 170
+      "line": 173
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearOnlineDevicePostsCorrectBody",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 211
+      "line": 214
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearOnlineGlobalPostsCorrectBody",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 146
+      "line": 149
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearOnlineInterfacePostsCorrectBody",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 192
+      "line": 195
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearOnlineNon2xxReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 230
+      "line": 233
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearOnlineSendsBearerToken",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 247
+      "line": 250
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearUnknownCacheOperationReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 107
+      "line": 110
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestCacheClearUnknownScopeReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 42
+      "line": 45
     },
     {
       "package": "cmd/hmcli",
@@ -22443,63 +22429,91 @@
       "identifier": "TestResolveOfflineDSNDBOverrideWins",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 330
+      "line": 349
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestResolveOfflineDSNGlobalNeedsConfigEvenWithDB",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 344
+      "line": 363
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestResolveOfflineDSNRequiresConfigOrDB",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 323
+      "line": 342
+    },
+    {
+      "package": "cmd/hmcli",
+      "identifier": "TestResolveOfflineUnitsAcceptsCanonicalInterface",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/hmcli/cache_test.go",
+      "line": 290
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestResolveOfflineUnitsCentralEnumeratesItsInterfaces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 309
+      "line": 328
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestResolveOfflineUnitsCentralUnknownNameErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 289
+      "line": 308
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestResolveOfflineUnitsGlobalEnumeratesAll",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 297
+      "line": 316
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestResolveOfflineUnitsGlobalRequiresConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 282
+      "line": 301
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestResolveOfflineUnitsInterfaceNeedsNoConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 271
+      "line": 274
+    },
+    {
+      "package": "cmd/hmcli",
+      "identifier": "TestRunCacheClearOfflineDeviceScopeFailsWhenStoreDeletesFail",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/hmcli/cache_test.go",
+      "line": 428
+    },
+    {
+      "package": "cmd/hmcli",
+      "identifier": "TestRunCacheClearOfflineInterfaceScopeFailsWhenStoreDeletesFail",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/hmcli/cache_test.go",
+      "line": 407
     },
     {
       "package": "cmd/hmcli",
       "identifier": "TestRunCacheClearOfflineMissingConfigErrors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/hmcli/cache_test.go",
-      "line": 351
+      "line": 370
+    },
+    {
+      "package": "cmd/hmcli",
+      "identifier": "TestRunCacheClearOfflineSucceedsAgainstIntactDB",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/hmcli/cache_test.go",
+      "line": 446
     },
     {
       "package": "cmd/hmcli",
@@ -22804,10 +22818,17 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestAddCentralHookNilSafe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/central_adopt_hub_events_test.go",
+      "line": 170
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestAdoptCentralRollbackKeepsForeignBringUpHandle",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 344
+      "line": 350
     },
     {
       "package": "cmd/openccu-loom",
@@ -22815,6 +22836,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_hub_events_test.go",
       "line": 88
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestAdoptCentralWiresNorthboundSubscribers",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/central_adopt_northbound_test.go",
+      "line": 37
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestAdoptedCentralIsWiredLikeABootTimeCentral",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/central_adopt_boot_parity_test.go",
+      "line": 46
     },
     {
       "package": "cmd/openccu-loom",
@@ -22930,6 +22965,13 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestAuditOverlayTeardownPersistsQueuedEntries",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/audit_wiring_test.go",
+      "line": 185
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestBackupCreateEncryptedFilePerms",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/backup_test.go",
@@ -23021,6 +23063,13 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestBootBuiltMQTTBridgeHonoursHiddenChannels",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/mqtt_channel_hidden_wiring_test.go",
+      "line": 29
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestBuildAggregatorClusters_BuildsWithCorrectDeviceType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_lifecycle_test.go",
@@ -23066,21 +23115,21 @@
       "identifier": "TestBuildBackupAdapter_EmptyDataDir_FallsBackToVar",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 38
+      "line": 43
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBuildBackupAdapter_NilConfig_ReturnsAdapter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 17
+      "line": 22
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBuildBackupAdapter_ValidDataDir_ReturnsAdapter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 26
+      "line": 31
     },
     {
       "package": "cmd/openccu-loom",
@@ -23206,14 +23255,21 @@
       "identifier": "TestBuildLWTTopic_CustomBase",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 25
+      "line": 26
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestBuildLWTTopic_Default",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 14
+      "line": 15
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestBuildLWTTopic_SlashBearingBaseMatchesDeclaredTopic",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/helpers_test.go",
+      "line": 44
     },
     {
       "package": "cmd/openccu-loom",
@@ -23332,7 +23388,7 @@
       "identifier": "TestBuildOpenAPIValidator_ValidSpecPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_lifecycle_test.go",
-      "line": 942
+      "line": 943
     },
     {
       "package": "cmd/openccu-loom",
@@ -23703,28 +23759,28 @@
       "identifier": "TestCentralConfigNeedsRestartDetectsSouthboundFieldChanges",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 664
+      "line": 670
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCentralOrchestratorAdoptCentralRejectsDuplicateRegistration",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 231
+      "line": 237
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCentralOrchestratorIsRegisteredReflectsSharedRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 260
+      "line": 266
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestCentralOrchestratorRemoveCentralUnmanagedReturnsSentinel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 377
+      "line": 383
     },
     {
       "package": "cmd/openccu-loom",
@@ -24193,14 +24249,14 @@
       "identifier": "TestEvictModelNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 172
+      "line": 178
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestEvictModelRemovesDevicesDescriptionsAndParamsets",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 136
+      "line": 142
     },
     {
       "package": "cmd/openccu-loom",
@@ -24396,42 +24452,42 @@
       "identifier": "TestLiveCentralAdminDeleteRemovesLiveCentralBeforePersisting",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 533
+      "line": 539
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestLiveCentralAdminDeleteToleratesNeverAdoptedCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 708
+      "line": 714
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestLiveCentralAdminPutAdoptsNewCentralLive",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 462
+      "line": 468
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestLiveCentralAdminPutDisablesRegisteredCentralTearsDownLive",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 570
+      "line": 576
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestLiveCentralAdminPutEditOfLiveCentralLogsRestartRequired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 612
+      "line": 618
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestLiveCentralAdminPutSkipsAdoptForAlreadyRegisteredCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 495
+      "line": 501
     },
     {
       "package": "cmd/openccu-loom",
@@ -25296,10 +25352,17 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestMountRESTServerWithoutConfigStore",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_rest_mount_degraded_test.go",
+      "line": 26
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestNewCentralOrchestratorNilBringUpReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 181
+      "line": 187
     },
     {
       "package": "cmd/openccu-loom",
@@ -25334,7 +25397,7 @@
       "identifier": "TestNewLiveCentralAdminPassthroughWhenUnavailable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 447
+      "line": 453
     },
     {
       "package": "cmd/openccu-loom",
@@ -25551,21 +25614,21 @@
       "identifier": "TestPickFirstCentral_Empty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 38
+      "line": 57
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestPickFirstCentral_Multiple",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 56
+      "line": 75
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestPickFirstCentral_Single",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 47
+      "line": 66
     },
     {
       "package": "cmd/openccu-loom",
@@ -25600,7 +25663,7 @@
       "identifier": "TestPurgeCentralStateNilStoresAreSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 123
+      "line": 129
     },
     {
       "package": "cmd/openccu-loom",
@@ -25768,7 +25831,14 @@
       "identifier": "TestRemoveCentralRetractsDevicesBeforeStoppingBus",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
-      "line": 294
+      "line": 300
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestRemoveCentralTearsDownABootTimeCentral",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/central_adopt_boot_removal_test.go",
+      "line": 28
     },
     {
       "package": "cmd/openccu-loom",
@@ -25943,7 +26013,7 @@
       "identifier": "TestScheduleWeekProfileSink_NilDomain_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 97
+      "line": 116
     },
     {
       "package": "cmd/openccu-loom",
@@ -25975,13 +26045,6 @@
     },
     {
       "package": "cmd/openccu-loom",
-      "identifier": "TestSetHubEventsCentralHookNilSafe",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "cmd/openccu-loom/central_adopt_hub_events_test.go",
-      "line": 170
-    },
-    {
-      "package": "cmd/openccu-loom",
       "identifier": "TestSharedInfrastructureEvictsHistoryWithRecordingDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/history_wiring_test.go",
@@ -25992,21 +26055,21 @@
       "identifier": "TestSingleCentralName_EmptyRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 71
+      "line": 90
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestSingleCentralName_MultipleCentrals",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 87
+      "line": 106
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestSingleCentralName_OneCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/helpers_test.go",
-      "line": 79
+      "line": 98
     },
     {
       "package": "cmd/openccu-loom",
@@ -26581,6 +26644,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_helpers_test.go",
       "line": 547
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestValuesCacheRoutesReportUnreadyWithoutStore",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/values_cache_handler_adapter_test.go",
+      "line": 25
     },
     {
       "package": "cmd/openccu-loom",
@@ -27595,7 +27665,7 @@
       "identifier": "TestWireAuditPersistenceWithDB_NilBuf_ReturnsBuf",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 147
+      "line": 152
     },
     {
       "package": "cmd/openccu-loom",
@@ -27609,7 +27679,7 @@
       "identifier": "TestWireAuditPersistenceWithDB_NilDB_ReturnsBuf",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 134
+      "line": 139
     },
     {
       "package": "cmd/openccu-loom",
@@ -27623,7 +27693,7 @@
       "identifier": "TestWireAuditPersistenceWithDB_ValidDB_ReturnsPersistedRecorder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 154
+      "line": 159
     },
     {
       "package": "cmd/openccu-loom",
@@ -27679,21 +27749,21 @@
       "identifier": "TestWireIncidentRecorder_NilDB_IsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 99
+      "line": 104
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireIncidentRecorder_NilRegistry_IsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 106
+      "line": 111
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireIncidentRecorder_ValidDB_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 113
+      "line": 118
     },
     {
       "package": "cmd/openccu-loom",
@@ -27784,7 +27854,7 @@
       "identifier": "TestWireProgramExecuteAuditNilInputs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/program_execute_audit_test.go",
-      "line": 108
+      "line": 109
     },
     {
       "package": "cmd/openccu-loom",
@@ -27795,17 +27865,38 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestWireRESTHonoursAuthSchemeGates",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_rest_auth_gate_test.go",
+      "line": 28
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestWireRESTRegistersTheChainedTokenStoreOnTheWSHub",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_rest_test.go",
+      "line": 171
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestWireRESTTokenAuditReachesTheDurableTrail",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_rest_test.go",
+      "line": 106
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestWireREST_SessionCookieSecureFlag",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_rest_test.go",
-      "line": 20
+      "line": 31
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireSessionRecorderPersistence_NilDB_ReturnsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 59
+      "line": 64
     },
     {
       "package": "cmd/openccu-loom",
@@ -27819,14 +27910,14 @@
       "identifier": "TestWireSessionRecorderPersistence_NilRegistry_ReturnsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 69
+      "line": 74
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireSessionRecorderPersistence_ValidDB_ReturnsCloser",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/audit_wiring_test.go",
-      "line": 79
+      "line": 84
     },
     {
       "package": "cmd/openccu-loom",
@@ -27851,7 +27942,7 @@
     },
     {
       "package": "cmd/openccu-loom",
-      "identifier": "TestWireSystemStatusSubscribersHubEventsHookAttachesCentral",
+      "identifier": "TestWireSystemStatusSubscribersCentralHookAttachesCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_hub_events_test.go",
       "line": 43
@@ -68083,14 +68174,14 @@
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1776
+      "line": 1786
     },
     {
       "package": "internal/config",
       "identifier": "MinHubScanInterval",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1776
+      "line": 1786
     },
     {
       "package": "internal/config",
@@ -68601,14 +68692,14 @@
       "identifier": "TestAuthSchemeGateAccessors",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 732
+      "line": 773
     },
     {
       "package": "internal/config",
       "identifier": "TestAuthSchemeGatesFromYAML",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 749
+      "line": 790
     },
     {
       "package": "internal/config",
@@ -68825,70 +68916,70 @@
       "identifier": "TestHmIPWiredRejectedAsInterfaceName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 467
+      "line": 508
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecBackwardsCompatShortList",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 585
+      "line": 626
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecEmptyNameFails",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 444
+      "line": 485
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecInvalidRPCType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 510
+      "line": 551
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecLongForm",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 382
+      "line": 423
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecMixedForm",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 415
+      "line": 456
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecMultiCCUValidate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 533
+      "line": 574
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecPortOutOfRange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 489
+      "line": 530
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecShortForm",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 353
+      "line": 394
     },
     {
       "package": "internal/config",
       "identifier": "TestInterfaceSpecYAMLRoundtrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 561
+      "line": 602
     },
     {
       "package": "internal/config",
@@ -68923,21 +69014,21 @@
       "identifier": "TestMDNSDefaultsToEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 608
+      "line": 649
     },
     {
       "package": "internal/config",
       "identifier": "TestMDNSExplicitOptOut",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 619
+      "line": 660
     },
     {
       "package": "internal/config",
       "identifier": "TestMDNSInstanceNameOverride",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 712
+      "line": 753
     },
     {
       "package": "internal/config",
@@ -68951,7 +69042,7 @@
       "identifier": "TestMQTTBrokerURLMissingHost",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 333
+      "line": 374
     },
     {
       "package": "internal/config",
@@ -69001,6 +69092,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
       "line": 297
+    },
+    {
+      "package": "internal/config",
+      "identifier": "TestMQTTTopicBaseOnlySlashesFallsBackToDefault",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/config/config_test.go",
+      "line": 355
+    },
+    {
+      "package": "internal/config",
+      "identifier": "TestMQTTTopicBaseSlashesTrimmed",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/config/config_test.go",
+      "line": 333
     },
     {
       "package": "internal/config",
@@ -69119,7 +69224,7 @@
       "identifier": "TestOrDefault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 776
+      "line": 817
     },
     {
       "package": "internal/config",
@@ -69364,28 +69469,28 @@
       "identifier": "TestRetainCleanupWindowClampHigh",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 690
+      "line": 731
     },
     {
       "package": "internal/config",
       "identifier": "TestRetainCleanupWindowClampLow",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 678
+      "line": 719
     },
     {
       "package": "internal/config",
       "identifier": "TestRetainCleanupWindowCustom",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 702
+      "line": 743
     },
     {
       "package": "internal/config",
       "identifier": "TestRetainCleanupWindowDefault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 666
+      "line": 707
     },
     {
       "package": "internal/config",
@@ -69497,14 +69602,14 @@
       "identifier": "TestWSReplayCapacity_DefaultsTo1024",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 636
+      "line": 677
     },
     {
       "package": "internal/config",
       "identifier": "TestWSReplayCapacity_Override",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/config/config_test.go",
-      "line": 647
+      "line": 688
     },
     {
       "package": "internal/config",
@@ -70715,7 +70820,7 @@
       "identifier": "TestFlush_RequeuesOnErrorNoSilentDrop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 603
+      "line": 658
     },
     {
       "package": "internal/history",
@@ -70806,49 +70911,49 @@
       "identifier": "TestProvenanceGuard_BoolLiveValueSkipped",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 409
+      "line": 464
     },
     {
       "package": "internal/history",
       "identifier": "TestProvenanceGuard_CacheValueSkipped",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 357
+      "line": 412
     },
     {
       "package": "internal/history",
       "identifier": "TestProvenanceGuard_DeviceNotInRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 462
+      "line": 517
     },
     {
       "package": "internal/history",
       "identifier": "TestProvenanceGuard_LiveValueRecorded",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 304
+      "line": 359
     },
     {
       "package": "internal/history",
       "identifier": "TestProvenanceGuard_LiveZeroRecorded",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 331
+      "line": 386
     },
     {
       "package": "internal/history",
       "identifier": "TestProvenanceGuard_MasterParamsetSkipped",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 435
+      "line": 490
     },
     {
       "package": "internal/history",
       "identifier": "TestProvenanceGuard_UnobservedValueSkipped",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 383
+      "line": 438
     },
     {
       "package": "internal/history",
@@ -70876,28 +70981,35 @@
       "identifier": "TestRequeue_BoundedByMaxBufferCountsDrops",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 645
+      "line": 700
     },
     {
       "package": "internal/history",
       "identifier": "TestRollup_DailyRetentionZero_KeepsDailyForever",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 569
+      "line": 624
     },
     {
       "package": "internal/history",
       "identifier": "TestRollup_FoldsRawIntoHourlyTier",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 493
+      "line": 548
     },
     {
       "package": "internal/history",
       "identifier": "TestRollup_RunsBeforePurge_RawRowSurvivesFold",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/history/recorder_test.go",
-      "line": 530
+      "line": 585
+    },
+    {
+      "package": "internal/history",
+      "identifier": "TestWireCentralRecordsACentralThatAppearedAfterWire",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/history/recorder_test.go",
+      "line": 280
     },
     {
       "package": "internal/history",
@@ -114066,14 +114178,14 @@
       "identifier": "GenerateResumptionID",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 986
+      "line": 1008
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "GenerateResumptionID",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 986
+      "line": 1008
     },
     {
       "package": "internal/north/matter/secure/operational",
@@ -114094,14 +114206,14 @@
       "identifier": "SessionInfo",
       "reason": "returned by Manager.Sessions, which the daemon's matterSessionLister calls on every GET /api/v1/matter/sessions; a data struct whose fields the REST layer copies out, which the analyzer's type heuristic (reachable only via its own methods) cannot see used",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 1017
+      "line": 1039
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "SessionInfo",
       "reason": "returned by Manager.Sessions, which the daemon's matterSessionLister calls on every GET /api/v1/matter/sessions; a data struct whose fields the REST layer copies out, which the analyzer's type heuristic (reachable only via its own methods) cannot see used",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 1017
+      "line": 1039
     },
     {
       "package": "internal/north/matter/secure/operational",
@@ -121871,7 +121983,7 @@
       "identifier": "TestAcceptInboxDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1473
+      "line": 1478
     },
     {
       "package": "internal/north/rest",
@@ -121892,7 +122004,7 @@
       "identifier": "TestBackupEndpoints",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1509
+      "line": 1514
     },
     {
       "package": "internal/north/rest",
@@ -121920,7 +122032,7 @@
       "identifier": "TestCORSPreflight",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1576
+      "line": 1581
     },
     {
       "package": "internal/north/rest",
@@ -121941,7 +122053,7 @@
       "identifier": "TestDeleteDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1438
+      "line": 1443
     },
     {
       "package": "internal/north/rest",
@@ -122025,7 +122137,7 @@
       "identifier": "TestIdempotencyReplays",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1593
+      "line": 1598
     },
     {
       "package": "internal/north/rest",
@@ -122060,7 +122172,7 @@
       "identifier": "TestListIncidents",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1484
+      "line": 1489
     },
     {
       "package": "internal/north/rest",
@@ -122081,7 +122193,7 @@
       "identifier": "TestMetricsEndpointRenders",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1497
+      "line": 1502
     },
     {
       "package": "internal/north/rest",
@@ -122116,14 +122228,14 @@
       "identifier": "TestPatchDeviceChannelRename",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1461
+      "line": 1466
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestPatchDeviceRename",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1449
+      "line": 1454
     },
     {
       "package": "internal/north/rest",
@@ -122179,7 +122291,7 @@
       "identifier": "TestRESTResponsesMatchOpenAPISchema",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1693
+      "line": 1698
     },
     {
       "package": "internal/north/rest",
@@ -122256,21 +122368,21 @@
       "identifier": "TestRouter_AuthTokensCreate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1365
+      "line": 1370
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_AuthTokensDelete",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1393
+      "line": 1398
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_CCUReboot_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1240
+      "line": 1245
     },
     {
       "package": "internal/north/rest",
@@ -122305,21 +122417,21 @@
       "identifier": "TestRouter_DeviceAdmin_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1148
+      "line": 1153
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_DeviceLookup_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1036
+      "line": 1041
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_EditSessions_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1101
+      "line": 1106
     },
     {
       "package": "internal/north/rest",
@@ -122333,7 +122445,7 @@
       "identifier": "TestRouter_FirmwareDownload_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1308
+      "line": 1313
     },
     {
       "package": "internal/north/rest",
@@ -122368,7 +122480,7 @@
       "identifier": "TestRouter_ListBackups_RequiresAdmin",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1545
+      "line": 1550
     },
     {
       "package": "internal/north/rest",
@@ -122396,14 +122508,14 @@
       "identifier": "TestRouter_ParameterDetermine_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1079
+      "line": 1084
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_Paramsets_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1058
+      "line": 1063
     },
     {
       "package": "internal/north/rest",
@@ -122424,14 +122536,14 @@
       "identifier": "TestRouter_RequireAdmin_fallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1185
+      "line": 1190
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_RequireOperator_fallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1170
+      "line": 1175
     },
     {
       "package": "internal/north/rest",
@@ -122445,7 +122557,7 @@
       "identifier": "TestRouter_SnapshotNDJSON_ContentType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1410
+      "line": 1415
     },
     {
       "package": "internal/north/rest",
@@ -122466,7 +122578,7 @@
       "identifier": "TestRouter_SystemCCU",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1203
+      "line": 1208
     },
     {
       "package": "internal/north/rest",
@@ -122487,14 +122599,14 @@
       "identifier": "TestRouter_ValuesCache_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1022
+      "line": 1025
     },
     {
       "package": "internal/north/rest",
       "identifier": "TestRouter_WSHandler_route",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/router_test.go",
-      "line": 1122
+      "line": 1127
     },
     {
       "package": "internal/north/rest",
@@ -127443,14 +127555,14 @@
       "identifier": "ListSystemStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_status.go",
-      "line": 134
+      "line": 149
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSystemStatus",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_status.go",
-      "line": 134
+      "line": 149
     },
     {
       "package": "internal/north/rest/handlers",
@@ -130537,14 +130649,14 @@
       "identifier": "SystemStatusResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_status.go",
-      "line": 128
+      "line": 143
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SystemStatusResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_status.go",
-      "line": 128
+      "line": 143
     },
     {
       "package": "internal/north/rest/handlers",
@@ -142647,14 +142759,14 @@
       "identifier": "NewHub",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub.go",
-      "line": 138
+      "line": 157
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewHub",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub.go",
-      "line": 138
+      "line": 157
     },
     {
       "package": "internal/north/rest/ws",
@@ -142927,14 +143039,14 @@
       "identifier": "ReplayResult",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub.go",
-      "line": 227
+      "line": 246
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "ReplayResult",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub.go",
-      "line": 227
+      "line": 246
     },
     {
       "package": "internal/north/rest/ws",
@@ -147058,6 +147170,27 @@
       "reason": "carried by Surface.Warn into the REST payload so the editor knows which confirmation a hide needs; a method-less string alias the analyzer's type heuristic cannot see used",
       "file": "internal/north/ui/surface/surface.go",
       "line": 84
+    },
+    {
+      "package": "internal/north/webhook",
+      "identifier": "TestAttachCentralBeforeStartIsANoop",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/webhook/outbound_attach_central_test.go",
+      "line": 102
+    },
+    {
+      "package": "internal/north/webhook",
+      "identifier": "TestAttachCentralDeliversForACentralAddedAfterStart",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/webhook/outbound_attach_central_test.go",
+      "line": 24
+    },
+    {
+      "package": "internal/north/webhook",
+      "identifier": "TestAttachCentralRespectsTheCentralAllowList",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/webhook/outbound_attach_central_test.go",
+      "line": 75
     },
     {
       "package": "internal/north/webhook",

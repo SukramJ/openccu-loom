@@ -52,44 +52,61 @@ func NewOptimisticRollbackSubscriber(reg *central.Registry, hub *Hub) *Optimisti
 }
 
 // Start attaches subscriptions to every registered central's event bus.
+// A central adopted later must be attached with
+// [OptimisticRollbackSubscriber.StartCentral].
 func (s *OptimisticRollbackSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.unsubs = append(s.unsubs, unwire)
 		}
-		centralName := u.Name()
-		hub := s.hub
-		reg := s.reg
-		unsub := events.Subscribe(bus, func(e hmevent.DataPointOptimisticRolledBackEvent) {
-			channel, _ := e.Key.ChannelNo()
-			hub.Publish(Event{
-				Topic: DataPointTopic(e.Key.DeviceAddress(), channel, e.Key.Parameter),
-				Type:  string(hmevent.EventTypeDataPointOptimisticRolled),
-				When:  e.Timestamp(),
-				Payload: OptimisticRollbackPayload{
-					Central:       centralName,
-					DeviceAddress: e.Key.DeviceAddress(),
-					Channel:       channel,
-					Parameter:     e.Key.Parameter,
-					ParamsetKey:   string(e.Key.ParamsetKey),
-					Reason:        string(e.Reason),
-					UniqueID: routingkey.CanonicalUniqueID(
-						reg.SerialSuffix(centralName), e.Key.ChannelAddress, e.Key.Parameter, "",
-					),
-					Sent:    e.Sent.Unwrap(),
-					Present: e.Present.Unwrap(),
-				},
-			})
-		})
-		s.unsubs = append(s.unsubs, unsub)
 	}
 }
 
-// Stop drops all event-bus subscriptions.
+// StartCentral attaches this subscriber to a single central's event bus and
+// returns the unwire (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so a write that
+// never landed on a central adopted at runtime rolled back silently: no
+// `datapoint.optimistic_rolled_back` frame reached any client until a restart.
+func (s *OptimisticRollbackSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.reg == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	hub := s.hub
+	reg := s.reg
+	return events.Subscribe(bus, func(e hmevent.DataPointOptimisticRolledBackEvent) {
+		channel, _ := e.Key.ChannelNo()
+		hub.Publish(Event{
+			Topic: DataPointTopic(e.Key.DeviceAddress(), channel, e.Key.Parameter),
+			Type:  string(hmevent.EventTypeDataPointOptimisticRolled),
+			When:  e.Timestamp(),
+			Payload: OptimisticRollbackPayload{
+				Central:       centralName,
+				DeviceAddress: e.Key.DeviceAddress(),
+				Channel:       channel,
+				Parameter:     e.Key.Parameter,
+				ParamsetKey:   string(e.Key.ParamsetKey),
+				Reason:        string(e.Reason),
+				UniqueID: routingkey.CanonicalUniqueID(
+					reg.SerialSuffix(centralName), e.Key.ChannelAddress, e.Key.Parameter, "",
+				),
+				Sent:    e.Sent.Unwrap(),
+				Present: e.Present.Unwrap(),
+			},
+		})
+	})
+}
+
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (s *OptimisticRollbackSubscriber) Stop() {
 	for _, u := range s.unsubs {
 		u()

@@ -191,6 +191,9 @@ func (r *Recorder) Metrics() Metrics {
 // unsubscribes, stops the loop, and runs one final flush so no buffered
 // sample is lost on a graceful stop. Safe to call on a nil/disabled
 // recorder (returns a no-op closer).
+//
+// Wire walks the registry exactly once; a central adopted at runtime must be
+// attached with [Recorder.WireCentral].
 func (r *Recorder) Wire(reg *central.Registry) func() {
 	if r == nil || r.store == nil || reg == nil {
 		return func() {}
@@ -198,17 +201,9 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 
 	var unsubs []func()
 	for _, unit := range reg.List() {
-		if unit == nil || unit.EventBus == nil || unit.ModelRegistry == nil {
-			continue
+		if unsub := r.WireCentral(unit); unsub != nil {
+			unsubs = append(unsubs, unsub)
 		}
-		if !r.enabledFor(unit.Name()) {
-			continue
-		}
-		u := unit
-		unsub := events.Subscribe(u.EventBus, func(e hmevent.DataPointValueChangedEvent) {
-			r.onValueChanged(u, e)
-		})
-		unsubs = append(unsubs, unsub)
 	}
 
 	stopLoop := r.startLoop()
@@ -229,6 +224,31 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 			}
 		})
 	}
+}
+
+// WireCentral subscribes the recorder to one central's EventBus and returns
+// the unsubscribe (nil when the central carries no bus / model, or when
+// recording is not enabled for it).
+//
+// It exists because Wire only ever walked the registry as it stood at boot: a
+// central adopted at runtime recorded no measurement history at all — its
+// charts stayed permanently empty — and nothing failed or logged, so the gap
+// looked like a CCU that simply reported no values. Unlike Wire it does not
+// touch the flush loop, which is daemon-global and already running.
+func (r *Recorder) WireCentral(unit *central.Unit) func() {
+	if r == nil || r.store == nil || unit == nil {
+		return nil
+	}
+	if unit.EventBus == nil || unit.ModelRegistry == nil {
+		return nil
+	}
+	if !r.enabledFor(unit.Name()) {
+		return nil
+	}
+	u := unit
+	return events.Subscribe(u.EventBus, func(e hmevent.DataPointValueChangedEvent) {
+		r.onValueChanged(u, e)
+	})
 }
 
 // StartRetention starts the rollup + retention loop WITHOUT subscribing to

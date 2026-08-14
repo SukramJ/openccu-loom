@@ -239,16 +239,16 @@ func TestClearInterfaceScope(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Devices.Clear called once, Delete not called
-	if len(devs.clearCalls) != 1 || devs.clearCalls[0] != (clearCall{"ccu", "HmIP-RF"}) {
-		t.Errorf("Devices.Clear calls = %v, want [{ccu HmIP-RF}]", devs.clearCalls)
+	// Devices.Clear called once with the canonical store id, Delete not called.
+	if len(devs.clearCalls) != 1 || devs.clearCalls[0] != (clearCall{"ccu", "ccu-HmIP-RF"}) {
+		t.Errorf("Devices.Clear calls = %v, want [{ccu ccu-HmIP-RF}]", devs.clearCalls)
 	}
 	if len(devs.deleteCalls) != 0 {
 		t.Errorf("Devices.Delete should not be called, got %d calls", len(devs.deleteCalls))
 	}
 
 	// Paramsets.ClearForInterface called once, DeleteDevice not called
-	if len(params.clearCalls) != 1 || params.clearCalls[0] != (paramsetClearCall{"ccu", "HmIP-RF"}) {
+	if len(params.clearCalls) != 1 || params.clearCalls[0] != (paramsetClearCall{"ccu", "ccu-HmIP-RF"}) {
 		t.Errorf("Paramsets.ClearForInterface calls = %v", params.clearCalls)
 	}
 	if len(params.deleteCalls) != 0 {
@@ -331,7 +331,7 @@ func TestClearDeviceScope(t *testing.T) {
 	}
 
 	// Devices.Delete called, Clear not called
-	if len(devs.deleteCalls) != 1 || devs.deleteCalls[0] != (deleteCall{"ccu", "HmIP-RF", "ABC:1"}) {
+	if len(devs.deleteCalls) != 1 || devs.deleteCalls[0] != (deleteCall{"ccu", "ccu-HmIP-RF", "ABC:1"}) {
 		t.Errorf("Devices.Delete calls = %v", devs.deleteCalls)
 	}
 	if len(devs.clearCalls) != 0 {
@@ -339,7 +339,7 @@ func TestClearDeviceScope(t *testing.T) {
 	}
 
 	// Paramsets.DeleteDevice called, ClearForInterface not called
-	if len(params.deleteCalls) != 1 || params.deleteCalls[0] != (paramsetDeleteCall{"ccu", "HmIP-RF", "ABC:1"}) {
+	if len(params.deleteCalls) != 1 || params.deleteCalls[0] != (paramsetDeleteCall{"ccu", "ccu-HmIP-RF", "ABC:1"}) {
 		t.Errorf("Paramsets.DeleteDevice calls = %v", params.deleteCalls)
 	}
 	if len(params.clearCalls) != 0 {

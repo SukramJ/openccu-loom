@@ -262,6 +262,61 @@ func TestWireNilSafety(t *testing.T) {
 		t.Fatal("Wire with nil store returned nil closer")
 	}
 	stop2() // must not panic
+
+	// WireCentral shares the guards and must tolerate the same nils.
+	if unwire := nilRec.WireCentral(nil); unwire != nil {
+		t.Error("WireCentral on a nil *Recorder returned a non-nil unwire")
+	}
+	if unwire := r.WireCentral(nil); unwire != nil {
+		t.Error("WireCentral with a nil store returned a non-nil unwire")
+	}
+}
+
+// TestWireCentralRecordsACentralThatAppearedAfterWire pins the entry point the
+// live-adopt path uses: Wire walks the registry exactly once, so a CCU adopted
+// at runtime recorded no measurement history at all and its charts stayed
+// permanently empty — which reads exactly like a CCU whose data points never
+// change.
+func TestWireCentralRecordsACentralThatAppearedAfterWire(t *testing.T) {
+	store := openStore(t)
+	ctx := context.Background()
+
+	// Wire against an empty registry: the boot-time walk sees nothing.
+	r := New(store, Options{})
+	stop := r.Wire(central.NewRegistry())
+	t.Cleanup(stop)
+
+	_, u, _, ch := centralWithDevice(t, "adopted", "DEV009", "DEV009:1")
+	dp := floatDP("DEV009:1", "TEMPERATURE")
+	ch.Put(dp)
+	dp.OnEvent(19.5) // source → live
+
+	// Without the per-central attach the event below reaches no subscriber.
+	publishValueEvent(u, "DEV009:1", "TEMPERATURE", hmenum.ParamsetKeyValues, hmtypes.FloatValue(19.5))
+	if stats, err := store.Stats(ctx); err != nil {
+		t.Fatalf("Stats: %v", err)
+	} else if stats.Rows != 0 {
+		t.Fatalf("rows before WireCentral = %d, want 0 (the assertion below would be vacuous)", stats.Rows)
+	}
+
+	unwire := r.WireCentral(u)
+	if unwire == nil {
+		t.Fatal("WireCentral returned a nil unwire for a recordable central")
+	}
+
+	dp.OnEvent(20.5)
+	publishValueEvent(u, "DEV009:1", "TEMPERATURE", hmenum.ParamsetKeyValues, hmtypes.FloatValue(20.5))
+	stop()
+
+	stats, err := store.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.Rows != 1 {
+		t.Errorf("Rows = %d, want 1 (the adopted central's value must be recorded)", stats.Rows)
+	}
+
+	unwire()
 }
 
 // ============================================================

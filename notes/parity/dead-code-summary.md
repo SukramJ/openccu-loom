@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: a169d20c
-HEAD: a169d20c
+Generated: f5237dbb
+HEAD: f5237dbb
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28292 |
-| Reachable | 4999 |
-| Whitelisted | 20317 |
-| **Unreachable** | **2976** |
+| Total Exported | 28315 |
+| Reachable | 5003 |
+| Whitelisted | 20338 |
+| **Unreachable** | **2974** |
 
 ## Top-20 Packages by Dead Code
 
@@ -128,7 +128,7 @@ HEAD: a169d20c
 | internal/backup/sbk | 0 | 2 | 4 |
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 24 | 2 |
-| internal/central/cachereset | 0 | 20 | 0 |
+| internal/central/cachereset | 0 | 18 | 0 |
 | internal/central/coordinators | 0 | 109 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 10 | 4 |

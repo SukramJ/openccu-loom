@@ -1408,3 +1408,79 @@ func TestOpenFromPaseWithID_SecondSessionNotColliding(t *testing.T) {
 		t.Fatalf("Get(id2=%d): %v", id2, err)
 	}
 }
+
+// TestManagerGetRejectsReservedButUnestablishedID pins that a session id
+// AllocateID has merely reserved reads as a miss.
+//
+// The reservation is a placeholder Entry with no Session under it, kept only
+// so two concurrent allocators cannot hand the same id out twice. Get used to
+// return it with a nil error, and every caller reaches straight through the
+// entry for the Session: the receive path decrypts on it, the privacy path
+// locks its mutex, the subscription path reads its peer id. A commissioner
+// that echoes the responderSessionID it read out of Sigma2 back in an ordinary
+// secure datagram — instead of Sigma3 — therefore hit a nil-receiver
+// dereference, which the listener's per-datagram recover swallowed without a
+// log line.
+func TestManagerGetRejectsReservedButUnestablishedID(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestManager()
+
+	id, err := m.AllocateID()
+	if err != nil {
+		t.Fatalf("AllocateID: %v", err)
+	}
+
+	entry, err := m.Get(id)
+	if !errors.Is(err, operational.ErrSessionNotFound) {
+		t.Fatalf("Get(reserved id %d) error = %v, want ErrSessionNotFound", id, err)
+	}
+	if entry != nil {
+		t.Fatalf("Get(reserved id %d) returned entry %+v, want nil", id, entry)
+	}
+
+	// The reservation must still be honoured: the id stays out of the
+	// allocator's reach until it is established or released.
+	next, err := m.AllocateID()
+	if err != nil {
+		t.Fatalf("AllocateID (second): %v", err)
+	}
+	if next == id {
+		t.Fatalf("AllocateID handed out the reserved id %d twice", id)
+	}
+
+	// Once the handshake establishes the session under the same id, Get
+	// resolves it — the filter is on the placeholder, not on the id.
+	secret := make([]byte, 16)
+	for i := range secret {
+		secret[i] = byte(i + 3)
+	}
+	if _, err := m.OpenFromPaseWithID(id, 0, 0, 0x1234, secret); err != nil {
+		t.Fatalf("OpenFromPaseWithID: %v", err)
+	}
+	if _, err := m.Get(id); err != nil {
+		t.Fatalf("Get(established id %d): %v", id, err)
+	}
+}
+
+// TestManagerCloseDropsReservedButUnestablishedID pins that closing a merely
+// reserved id frees the slot instead of dereferencing the absent Session — the
+// path an aborted CASE handshake takes when the peer sends a CloseSession
+// StatusReport for the id it was given in Sigma2.
+func TestManagerCloseDropsReservedButUnestablishedID(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestManager()
+
+	id, err := m.AllocateID()
+	if err != nil {
+		t.Fatalf("AllocateID: %v", err)
+	}
+	if err := m.Close(id); err != nil {
+		t.Fatalf("Close(reserved id %d): %v", id, err)
+	}
+	if _, err := m.Get(id); !errors.Is(err, operational.ErrSessionNotFound) {
+		t.Fatalf("Get after Close error = %v, want ErrSessionNotFound", err)
+	}
+	if err := m.Close(id); !errors.Is(err, operational.ErrSessionNotFound) {
+		t.Fatalf("second Close error = %v, want ErrSessionNotFound", err)
+	}
+}

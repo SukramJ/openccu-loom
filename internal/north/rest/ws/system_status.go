@@ -61,44 +61,62 @@ func NewSystemStatusSubscriber(reg *central.Registry, hub *Hub) *SystemStatusSub
 
 // Start attaches subscriptions to every registered central's event bus.
 // Safe to call from the daemon composition root after the bus is ready.
+// A central adopted later must be attached with
+// [SystemStatusSubscriber.StartCentral].
 func (s *SystemStatusSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.unsubs = append(s.unsubs, unwire)
 		}
-		centralName := u.Name()
-		hub := s.hub
-		unsub := events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
-			hub.Publish(Event{
-				Topic: SystemStatusTopic(centralName),
-				Type:  string(hmevent.EventTypeSystemStatusChanged),
-				When:  e.Timestamp(),
-				Payload: SystemStatusChangedPayload{
-					Central:            centralName,
-					Component:          e.Component,
-					Healthy:            e.Healthy,
-					Reason:             e.Reason,
-					InterfaceID:        e.InterfaceID,
-					ErrorCode:          e.ErrorCode,
-					CentralState:       e.CentralState,
-					ConnectionState:    e.ConnectionState,
-					ClientState:        e.ClientState,
-					CallbackState:      e.CallbackState,
-					DegradedInterfaces: e.DegradedInterfaces,
-					Issues:             e.Issues,
-					EventAt:            e.Timestamp(),
-				},
-			})
-		})
-		s.unsubs = append(s.unsubs, unsub)
 	}
 }
 
-// Stop drops all event-bus subscriptions.
+// StartCentral attaches this subscriber to a single central's event bus and
+// returns the unwire (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so a central
+// adopted at runtime emitted no `system.<central>.status` frame at all: its
+// interface up/down transitions never reached a WebSocket client until the
+// daemon was restarted.
+func (s *SystemStatusSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	hub := s.hub
+	return events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+		hub.Publish(Event{
+			Topic: SystemStatusTopic(centralName),
+			Type:  string(hmevent.EventTypeSystemStatusChanged),
+			When:  e.Timestamp(),
+			Payload: SystemStatusChangedPayload{
+				Central:            centralName,
+				Component:          e.Component,
+				Healthy:            e.Healthy,
+				Reason:             e.Reason,
+				InterfaceID:        e.InterfaceID,
+				ErrorCode:          e.ErrorCode,
+				CentralState:       e.CentralState,
+				ConnectionState:    e.ConnectionState,
+				ClientState:        e.ClientState,
+				CallbackState:      e.CallbackState,
+				DegradedInterfaces: e.DegradedInterfaces,
+				Issues:             e.Issues,
+				EventAt:            e.Timestamp(),
+			},
+		})
+	})
+}
+
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (s *SystemStatusSubscriber) Stop() {
 	for _, u := range s.unsubs {
 		u()

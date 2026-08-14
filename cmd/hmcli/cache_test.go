@@ -5,14 +5,17 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // newTestConfig builds a two-central topology used by the offline
@@ -274,7 +277,23 @@ func TestResolveOfflineUnitsInterfaceNeedsNoConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveOfflineUnits: %v", err)
 	}
-	if len(units) != 1 || units[0].central != "ccu1" || units[0].iface != "HmIP-RF" {
+	// The unit carries the canonical store id, not the bare name the
+	// operator typed: every cached row is keyed by `<central>-<interface>`.
+	if len(units) != 1 || units[0].central != "ccu1" || units[0].iface != "ccu1-HmIP-RF" {
+		t.Fatalf("units=%+v", units)
+	}
+}
+
+// TestResolveOfflineUnitsAcceptsCanonicalInterface pins that passing the
+// canonical id (as an operator who copied it off a topic would) is not
+// double-prefixed into an id no row carries.
+func TestResolveOfflineUnitsAcceptsCanonicalInterface(t *testing.T) {
+	t.Parallel()
+	units, err := resolveOfflineUnits("interface", "ccu1", "ccu1-HmIP-RF", nil)
+	if err != nil {
+		t.Fatalf("resolveOfflineUnits: %v", err)
+	}
+	if len(units) != 1 || units[0].iface != "ccu1-HmIP-RF" {
 		t.Fatalf("units=%+v", units)
 	}
 }
@@ -354,5 +373,89 @@ func TestRunCacheClearOfflineMissingConfigErrors(t *testing.T) {
 	err := run([]string{"cache", "clear", "--scope", "global", "--offline"}, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error for offline global clear without --config")
+	}
+}
+
+// ─── offline clear: store failures reach the exit code ────────────────────────
+
+// newOfflineCacheDB creates a migrated database file for the offline clear
+// path. When dropCacheTables is set, the two cache tables the clear deletes
+// from are removed afterwards, which makes every delete fail the way a corrupt
+// or half-migrated database does on an operator's machine.
+func newOfflineCacheDB(t *testing.T, dropCacheTables bool) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "openccu-loom.db")
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, sqlite.FileDSN(path))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if dropCacheTables {
+		for _, table := range []string{"values_cache", "master_values"} {
+			if _, err := db.ExecContext(ctx, "DROP TABLE "+table); err != nil {
+				_ = db.Close()
+				t.Fatalf("drop %s: %v", table, err)
+			}
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+	return path
+}
+
+func TestRunCacheClearOfflineInterfaceScopeFailsWhenStoreDeletesFail(t *testing.T) {
+	t.Parallel()
+	dbPath := newOfflineCacheDB(t, true)
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{
+		"cache", "clear", "--offline",
+		"--scope", "interface", "--central", "ccu1", "--interface", "HmIP-RF",
+		"--db", dbPath,
+	}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected a non-nil error when the cache deletes fail")
+	}
+	if !strings.Contains(err.Error(), "values[") || !strings.Contains(err.Error(), "master[") {
+		t.Errorf("error should name both failing stores, got: %v", err)
+	}
+	if code := exitCodeFor(err); code != exitGeneral {
+		t.Errorf("exit code = %d, want %d", code, exitGeneral)
+	}
+}
+
+func TestRunCacheClearOfflineDeviceScopeFailsWhenStoreDeletesFail(t *testing.T) {
+	t.Parallel()
+	dbPath := newOfflineCacheDB(t, true)
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{
+		"cache", "clear", "--offline",
+		"--scope", "device", "--central", "ccu1", "--interface", "HmIP-RF", "--device", "VCU0000001",
+		"--db", dbPath,
+	}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected a non-nil error when the cache deletes fail")
+	}
+	if code := exitCodeFor(err); code != exitGeneral {
+		t.Errorf("exit code = %d, want %d", code, exitGeneral)
+	}
+}
+
+func TestRunCacheClearOfflineSucceedsAgainstIntactDB(t *testing.T) {
+	t.Parallel()
+	dbPath := newOfflineCacheDB(t, false)
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{
+		"cache", "clear", "--offline",
+		"--scope", "interface", "--central", "ccu1", "--interface", "HmIP-RF",
+		"--db", dbPath,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("clear against an intact db: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Cache cleared: scope=interface") {
+		t.Errorf("summary missing from stdout: %q", stdout.String())
 	}
 }
