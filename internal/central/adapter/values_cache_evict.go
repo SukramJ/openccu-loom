@@ -22,6 +22,8 @@ const valuesCacheEvictTimeout = 30 * time.Second
 // ValuesCacheEvictor is the handle [WireValuesCacheEviction] returns. It holds
 // the per-central DeviceRemovedEvent subscriptions that delete a removed
 // device's persisted cache rows.
+//
+// loom:reachable:reason="returned by WireValuesCacheEviction to the daemon's southbound bring-up, which calls Stop as a teardown and StartCentral for every central it adopts; the analyzer resolves a type's methods per loaded package variant, so the reachable instance is not the one it classifies"
 type ValuesCacheEvictor struct {
 	store  *sqlite.ValuesCacheStore
 	logger *slog.Logger

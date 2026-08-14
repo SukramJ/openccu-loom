@@ -193,6 +193,8 @@ func (t *dirtyTracker) Forget(centralName string) {
 // marked dirty, and skipped by every tick for the rest of the daemon's life —
 // its values reached SQLite only through the graceful-shutdown flush, which a
 // SIGKILL, an OOM kill or a host reboot never runs.
+//
+// loom:reachable:reason="returned by WireValuesCacheFlusher to the daemon's southbound bring-up, which calls Stop as a teardown and StartCentral for every central it adopts; the analyzer resolves a type's methods per loaded package variant, so the reachable instance is not the one it classifies"
 type ValuesCacheFlusher struct {
 	tracker *dirtyTracker
 

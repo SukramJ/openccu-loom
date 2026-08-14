@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: a169d20c
-HEAD: a169d20c
+Generated: d0a8b203
+HEAD: d0a8b203
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28292 |
-| Reachable | 4999 |
-| Whitelisted | 20317 |
+| Total Exported | 28345 |
+| Reachable | 4997 |
+| Whitelisted | 20372 |
 | **Unreachable** | **2976** |
 
 ## Top-20 Packages by Dead Code
