@@ -7,7 +7,10 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"io"
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/secret"
@@ -143,6 +146,50 @@ func TestStreamTamperDetected(t *testing.T) {
 	_, err := io.ReadAll(c.NewDecryptReader(bytes.NewReader(tampered)))
 	if err == nil {
 		t.Fatal("expected authentication failure for tampered ciphertext, got nil")
+	}
+}
+
+// TestStreamFrameLengthBoundRejected hand-builds frame headers that declare a
+// ciphertext far larger than a frame can legally carry. The reader must reject
+// them with the descriptive bound error and must never reach the allocation:
+// where int is 32 bits, a declared length above MaxInt32 wraps negative and
+// make() panics instead.
+func TestStreamFrameLengthBoundRejected(t *testing.T) {
+	t.Parallel()
+	c := loadCipher(t)
+
+	const (
+		chunk       = 64 * 1024
+		gcmOverhead = 16
+		streamIDLen = 8 // random per-stream nonce prefix
+		headerLen   = 5 // flag(1) || ciphertextLen(4)
+	)
+
+	// A header-only stream: the stream id, then flag(1) || length(4).
+	header := func(ctLen uint32) []byte {
+		buf := make([]byte, streamIDLen+headerLen)
+		binary.BigEndian.PutUint32(buf[streamIDLen+1:], ctLen)
+		return buf
+	}
+
+	for _, declared := range []uint32{chunk + gcmOverhead + 1, 0xF0000000, math.MaxUint32} {
+		_, err := io.ReadAll(c.NewDecryptReader(bytes.NewReader(header(declared))))
+		if err == nil {
+			t.Fatalf("declared length %#x: expected an error, got nil", declared)
+		}
+		if !strings.Contains(err.Error(), "exceeds bound") {
+			t.Fatalf("declared length %#x: want the length-bound error, got %v", declared, err)
+		}
+	}
+
+	// The largest legal length must still pass the bound check and fail later,
+	// on the missing frame body — the bound must not be tightened by accident.
+	_, err := io.ReadAll(c.NewDecryptReader(bytes.NewReader(header(chunk + gcmOverhead))))
+	if err == nil {
+		t.Fatal("expected an error for a frame with a missing body, got nil")
+	}
+	if strings.Contains(err.Error(), "exceeds bound") {
+		t.Fatalf("the maximum legal frame length must pass the bound check, got %v", err)
 	}
 }
 

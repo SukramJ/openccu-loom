@@ -25,7 +25,20 @@ type CentralsStore struct {
 	// cipher, when set, seals the password_plain column on write and
 	// opens it on read (ADR 0027). Nil = plaintext (resilient fallback).
 	cipher *secret.Cipher
+
+	// plaintextAllowed reports the operator's security.allow_plaintext_secrets
+	// choice. Nil means no caller installed a policy, which keeps the
+	// unconditional plaintext fallback.
+	plaintextAllowed func(context.Context) bool
 }
+
+// ErrPlaintextSecretNotAllowed is returned by [CentralsStore.Put] when a row
+// carries a CCU password that cannot be sealed — no at-rest master key was
+// resolved — and the operator has not set security.allow_plaintext_secrets.
+// Callers surface it as a client error: the write is refused, not retried.
+var ErrPlaintextSecretNotAllowed = errors.New(
+	"sqlite: refusing to store a central password in cleartext: no at-rest master key is available and security.allow_plaintext_secrets is false",
+)
 
 // NewCentralsStore returns a store backed by db.
 func NewCentralsStore(db *sql.DB) *CentralsStore {
@@ -36,11 +49,36 @@ func NewCentralsStore(db *sql.DB) *CentralsStore {
 // Call once at wiring time, before the store handles requests.
 func (s *CentralsStore) SetCipher(c *secret.Cipher) { s.cipher = c }
 
-func (s *CentralsStore) sealPlain(v string) (string, error) {
-	if s.cipher == nil {
+// SetPlaintextSecretPolicy installs the operator's plaintext-fallback policy
+// — the `security.allow_plaintext_secrets` flag. It is consulted on every
+// write, so flipping the flag in the SPA governs the next save without a
+// restart.
+//
+// The gate lives here rather than in each caller because the store is the one
+// choke point every persisting path shares: the SPA's central CRUD, the
+// onboarding wizard, the live-adopt orchestrator and the YAML seed. Without
+// a policy the store keeps the unconditional ADR 0027 fallback, so the admin
+// CLI and tests are unaffected.
+func (s *CentralsStore) SetPlaintextSecretPolicy(allowed func(context.Context) bool) {
+	s.plaintextAllowed = allowed
+}
+
+// sealPlain encrypts a CCU password for the password_plain column, or refuses
+// the write when it would land in the clear against the operator's wish. An
+// unavailable cipher (no master key resolved) passes the value through — that
+// is ADR 0027's resilient fallback — and is exactly the case the security
+// flag governs.
+func (s *CentralsStore) sealPlain(ctx context.Context, v string) (string, error) {
+	if v == "" {
 		return v, nil
 	}
-	return s.cipher.Seal(v)
+	if s.cipher.Available() {
+		return s.cipher.Seal(v)
+	}
+	if s.plaintextAllowed != nil && !s.plaintextAllowed(ctx) {
+		return "", ErrPlaintextSecretNotAllowed
+	}
+	return v, nil
 }
 
 func (s *CentralsStore) openPlain(v string) (string, error) {
@@ -64,7 +102,7 @@ type CentralRow struct {
 	JSONRPCPort           int                     `json:"json_rpc_port,omitempty"`
 	Username              string                  `json:"username,omitempty"`
 	PasswordEnv           string                  `json:"password_env,omitempty"`   // env var name; empty when plaintext used
-	PasswordPlain         string                  `json:"password_plain,omitempty"` // plaintext fallback; populated only when allow_plaintext_secrets is on
+	PasswordPlain         string                  `json:"password_plain,omitempty"` // password fallback; sealed at rest when a master key exists, otherwise gated by allow_plaintext_secrets
 	TLS                   bool                    `json:"tls,omitempty"`
 	TLSInsecureSkipVerify bool                    `json:"tls_insecure_skip_verify,omitempty"`
 	PrimaryInterface      string                  `json:"primary_interface,omitempty"`
@@ -108,7 +146,7 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals: marshal behavior: %w", err)
 	}
-	sealedPlain, err := s.sealPlain(r.PasswordPlain)
+	sealedPlain, err := s.sealPlain(ctx, r.PasswordPlain)
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals: seal password: %w", err)
 	}

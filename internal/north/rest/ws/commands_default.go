@@ -1465,6 +1465,14 @@ func sessionSetHandler(store *configui.SessionStore) CommandHandler {
 		if args.Parameter == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "parameter required")
 		}
+		// A paramset value is always a scalar (bool / number / string / null),
+		// so a JSON array or object is a client error. Rejecting it here keeps
+		// it from being staged and then failing much later as an opaque CCU
+		// fault at save time.
+		switch args.Value.(type) {
+		case []any, map[string]any:
+			return nil, NewCommandError(CommandErrorBadRequest, "value must be a scalar")
+		}
 		s := store.Get(args.key())
 		if s == nil {
 			return nil, NewCommandError(CommandErrorBadRequest, "no open session for key")

@@ -186,8 +186,11 @@ north:
   #     token: change-me     # optional Bearer token for header-only callers
 
 # First-run setup safety. The /setup wizard always refuses once
-# there is at least one admin user; this toggle lets you keep the
-# route dormant even with a manually-emptied users table.
+# there is at least one admin user; setting this to false keeps the
+# route dormant even with a manually-emptied users table (the status
+# probe then reports "not required" and the finalize call answers 403).
+# With no other authentication source that locks you out until you
+# set it back to true and restart — which is the point of the flag.
 bootstrap:
   allow_first_run_setup: true
 

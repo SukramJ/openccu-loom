@@ -22,6 +22,8 @@ import (
 // endpoints. The router wires a [*sqlite.UserStore] underneath.
 type UserAdminService interface {
 	// Put creates or updates a user with the given credentials and role.
+	// Returns [sqlite.ErrLastAdmin] when the write would demote the only
+	// remaining admin.
 	Put(ctx context.Context, subject, password string, role auth.Role) error
 	// Delete removes a user. Returns [sqlite.ErrUserNotFound] when the
 	// subject is unknown and [sqlite.ErrLastAdmin] when removing the
@@ -99,8 +101,15 @@ func validUsername(name string) bool {
 	return true
 }
 
-// CreateUser handles POST /admin/users. It creates or upserts a user
-// with the supplied credentials. Returns 201 with a summary on success.
+// CreateUser handles POST /admin/users. It creates a user with the
+// supplied credentials and returns 201 with a summary.
+//
+// Create-only: a subject that already exists is refused with 409 rather
+// than overwritten. Rewriting an existing account's password and role
+// here would skip the session revocation PATCH performs, so a stolen
+// cookie carrying the old role would survive the very reset that was
+// meant to kill it. Every change to an existing account goes through
+// PATCH /admin/users/{subject}.
 func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body createUserRequest
@@ -131,7 +140,24 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 					"role must be one of: admin, operator, viewer"))
 			return
 		}
-		if err := svc.Put(r.Context(), body.Username, body.Password, body.Role); err != nil {
+		// Compare canonically: the store folds the subject before the
+		// upsert, so a raw comparison would let "Bob" slip past an
+		// existing "bob" and overwrite it.
+		subject := auth.CanonicalSubject(body.Username)
+		users, err := svc.List(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User list failed", err)
+			return
+		}
+		for _, u := range users {
+			if auth.CanonicalSubject(u.Subject) == subject {
+				problem.Write(w, http.StatusConflict,
+					problem.New(problem.TypeConflict, r, "User already exists",
+						"a user with this name already exists — change it via PATCH"))
+				return
+			}
+		}
+		if err := svc.Put(r.Context(), subject, body.Password, body.Role); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User creation failed", err)
 			return
 		}
@@ -140,11 +166,11 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 			rec.Record(audit.Entry{
 				User:   actor,
 				Action: audit.ActionUserCreate,
-				Note:   "subject=" + body.Username + " role=" + string(body.Role),
+				Note:   "subject=" + subject + " role=" + string(body.Role),
 			})
 		}
 		JSON(w, http.StatusCreated, userSummaryResponse{
-			Subject: body.Username,
+			Subject: subject,
 			Role:    body.Role,
 		})
 	}
@@ -152,12 +178,15 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 
 // UpdateUser handles PATCH /admin/users/{subject}. Requires both
 // password and role in the request body to perform a full upsert.
-// Returns 404 when the subject does not exist. On success every existing
-// session for the subject is revoked so a password reset or role change
-// cannot be outrun by a still-cached session.
+// Returns 404 when the subject does not exist and 409 when the change
+// would demote the last admin. On success every existing session for the
+// subject is revoked so a password reset or role change cannot be
+// outrun by a still-cached session.
 func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		subject := chi.URLParam(r, "subject")
+		// Fold the path parameter to the spelling the store and the
+		// session map are keyed on, so the revocation below cannot miss.
+		subject := auth.CanonicalSubject(chi.URLParam(r, "subject"))
 		if subject == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing subject", "subject path parameter is required"))
@@ -172,7 +201,7 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 		}
 		found := false
 		for _, u := range users {
-			if u.Subject == subject {
+			if auth.CanonicalSubject(u.Subject) == subject {
 				found = true
 				break
 			}
@@ -201,6 +230,12 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 			return
 		}
 		if err := svc.Put(r.Context(), subject, body.Password, body.Role); err != nil {
+			if errors.Is(err, sqlite.ErrLastAdmin) {
+				problem.Write(w, http.StatusConflict,
+					problem.New(problem.TypeConflict, r, "Cannot demote last admin",
+						"at least one admin user must remain"))
+				return
+			}
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User update failed", err)
 			return
 		}
@@ -225,7 +260,10 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 // bearer tokens purged so a deleted account retains no live credentials.
 func DeleteUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker, tokens TokenPurger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		subject := chi.URLParam(r, "subject")
+		// Fold the path parameter to the spelling the store, the session
+		// map and the token table are keyed on, so neither the revocation
+		// nor the token purge below can miss.
+		subject := auth.CanonicalSubject(chi.URLParam(r, "subject"))
 		if subject == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing subject", "subject path parameter is required"))

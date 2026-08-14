@@ -127,7 +127,14 @@ func (s *Store) AuthenticateBasic(ctx context.Context, username, password string
 	if !ok {
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
-	return auth.Identity{Subject: username, Scheme: auth.SchemeBasic, Role: role}, nil
+	// Report the canonical subject. The CCU keeps its own user namespace
+	// and both calls above ask it about the name the caller typed, but on
+	// the Loom side the subject is the key for sessions, bearer tokens,
+	// per-user preferences and the audit trail — all of them addressed by
+	// the single spelling [auth.CanonicalSubject] defines. Echoing the
+	// typed casing here would file one operator under two identities, and
+	// a revocation aimed at the canonical one would evict nothing.
+	return auth.Identity{Subject: auth.CanonicalSubject(username), Scheme: auth.SchemeBasic, Role: role}, nil
 }
 
 // roleForLevel maps a CCU UserLevel to a Loom role: an explicit override

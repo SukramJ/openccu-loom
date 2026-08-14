@@ -143,3 +143,38 @@ func TestDownloaderDownloadAndStageNetworkError(t *testing.T) {
 		t.Errorf("stage path exists after network error: stat error = %v", statErr)
 	}
 }
+
+// TestNewDownloaderClientIsBoundedAndOwnsItsTransport pins the two
+// properties the install sequence depends on: the tarball GET carries a
+// deadline of its own (a stalled CDN would otherwise latch the state
+// machine in StateDownloading for the daemon's uptime, making every
+// later Check/Install return ErrBusy), and the client does not share the
+// process-wide default transport.
+func TestNewDownloaderClientIsBoundedAndOwnsItsTransport(t *testing.T) {
+	t.Parallel()
+
+	clients := map[string]*http.Client{
+		"NewDownloader":           NewDownloader().HTTPClient,
+		"zero-value httpClient()": (&Downloader{}).httpClient(),
+	}
+	for name, client := range clients {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if client == nil {
+				t.Fatal("client is nil")
+			}
+			if client == http.DefaultClient {
+				t.Fatal("client is http.DefaultClient: no request deadline and the shared default transport")
+			}
+			if client.Timeout <= 0 {
+				t.Errorf("client.Timeout = %v, want a positive deadline", client.Timeout)
+			}
+			if client.Transport == nil {
+				t.Error("client.Transport is nil: falls back to the shared http.DefaultTransport")
+			}
+			if client.Transport == http.DefaultTransport {
+				t.Error("client.Transport is http.DefaultTransport: connection pool shared with unrelated callers")
+			}
+		})
+	}
+}

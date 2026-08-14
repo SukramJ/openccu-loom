@@ -210,6 +210,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// when the SQLite store that holds them is in use.
 	if ov.db != nil {
 		recordSecretHealth(healthTracker, metricsReg, ov.secretsAvailable)
+		// Surface a failed DB-tier overlay: the daemon then runs on the config
+		// file alone, with every SPA-side section edit silently inactive.
+		recordConfigOverlayHealth(healthTracker, metricsReg, ov.overlayErr)
 	}
 	// Teach the reload path how to re-derive the effective config, so a
 	// REST-triggered reload picks up section edits the SPA persisted to the
@@ -747,6 +750,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// of the UI router so it works whenever REST is up, even with the
 	// diagnostic UI disabled.
 	noUsers := firstRunProbe(cfg, sqUsers, sqCentrals)
+	warnOnDormantOnboarding(ctx, cfg, sqUsers, sqCentrals, logger)
 
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS

@@ -439,3 +439,47 @@ func TestDeleteCentral_NotFound_Returns404(t *testing.T) {
 		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
+
+// TestCentralWriteRefusedForCleartextPasswordReturns400 pins the operator-
+// facing half of security.allow_plaintext_secrets: the store refuses to
+// persist a CCU password it cannot encrypt, and the refusal is the
+// operator's own doing (no master key, no opt-in), not a server fault. A 500
+// would tell them to retry; a 400 tells them what to change.
+func TestCentralWriteRefusedForCleartextPasswordReturns400(t *testing.T) {
+	t.Parallel()
+	body := `{"Name":"office","Host":"10.0.0.5","password_plain":"secret","Enabled":true}`
+	tests := []struct {
+		name    string
+		handler func(svc CentralAdminService) http.HandlerFunc
+	}{
+		{
+			name: "create",
+			handler: func(svc CentralAdminService) http.HandlerFunc {
+				return CreateCentral(svc, nil)
+			},
+		},
+		{
+			name: "update",
+			handler: func(svc CentralAdminService) http.HandlerFunc {
+				return UpdateCentral(svc, nil)
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &fakeCentralAdminService{putErr: sqlite.ErrPlaintextSecretNotAllowed}
+			req := httptest.NewRequest(http.MethodPost, "/admin/centrals/office", strings.NewReader(body))
+			req = withChiParam(req, "name", "office")
+			w := httptest.NewRecorder()
+			tc.handler(svc).ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), "allow_plaintext_secrets") {
+				t.Errorf("response must name the knob the operator has to change: %s", w.Body.String())
+			}
+		})
+	}
+}

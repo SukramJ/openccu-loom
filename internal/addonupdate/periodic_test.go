@@ -335,3 +335,74 @@ func TestPeriodicCheckerStartTwiceIsNoOp(t *testing.T) {
 		t.Fatalf("check count = %d, want 1 (only one loop ran)", got)
 	}
 }
+
+// TestPeriodicCheckerSurvivesAStalledCheck pins the cadence loop against
+// a check that never answers: a server accepts the request and holds it
+// open (a wedged proxy, a half-open connection). Without a per-tick
+// bound the single loop goroutine parks inside Updater.Check forever and
+// the recurring check silently stops firing for the rest of the daemon's
+// uptime — no log line, no error, no later tick.
+func TestPeriodicCheckerSurvivesAStalledCheck(t *testing.T) {
+	t.Parallel()
+
+	stalled := make(chan struct{})
+	t.Cleanup(func() { close(stalled) })
+
+	var hits atomic.Int64
+	mux := http.NewServeMux()
+	mux.HandleFunc("/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			// First tick: never answer. The handler unblocks when the
+			// client hangs up, which is what the per-tick bound causes.
+			select {
+			case <-r.Context().Done():
+			case <-stalled:
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"tag_name":"v1.0.0","html_url":"https://example.invalid","assets":[`+
+			`{"name":"openccu-loom-ccu-1.0.0.tar.gz","browser_download_url":"https://example.invalid/a"},`+
+			`{"name":"checksums.txt","browser_download_url":"https://example.invalid/c"}]}`)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	u := NewUpdater(Deps{
+		Capability: CapabilityProbe{
+			IsAddonBuild:  func() bool { return true },
+			StatInstaller: func(string) (os.FileInfo, error) { return fakeFileInfo{mode: 0o755}, nil },
+		},
+		// srv.Client() carries no Timeout of its own — the tick bound is
+		// the only thing that can end the stalled request.
+		Checker:        &Checker{HTTPClient: srv.Client(), BaseURL: srv.URL},
+		CurrentVersion: "0.1.0",
+		Logger:         discardLogger(),
+	})
+
+	fake := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	p := &PeriodicChecker{
+		Updater:      u,
+		Interval:     time.Hour,
+		BootDelay:    time.Minute,
+		CheckTimeout: 100 * time.Millisecond,
+		Clock:        fake,
+		Jitter:       func() float64 { return 0 },
+		Logger:       discardLogger(),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p.Start(ctx)
+	defer p.Stop()
+
+	waitForPendingCount(t, fake, 1)
+	fake.Advance(time.Minute) // boot tick stalls inside the HTTP round trip
+
+	// Advance removes a fired timer synchronously, so a pending timer can
+	// only reappear once the stalled tick returned and run() looped.
+	waitForPendingCount(t, fake, 1)
+
+	fake.Advance(time.Hour)
+	waitForCheckCount(t, &hits, 2)
+}

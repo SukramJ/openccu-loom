@@ -143,6 +143,180 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   failed, matching what the daemon-side clear already reports over
   REST.
 
+- **A damaged encrypted backup is rejected with an error on 32-bit
+  builds too.** The reader for encrypted backups checks the length each
+  frame declares before it allocates for it, but compared that length as
+  a signed machine word. On the 32-bit builds — armv7 above all — a
+  declared length above 2 GiB wrapped negative and slipped through the
+  very check meant to stop it, so restoring a truncated or bit-flipped
+  archive ended in an allocation panic and a stack trace instead of the
+  descriptive "length exceeds bound" error the same file produces on
+  64-bit.
+
+- **The recurring add-on update check no longer stops after one stalled
+  request.** The release check and the tarball download went out on the
+  process-wide default HTTP client, which carries no request deadline at
+  all. A server that accepts the connection and then never answers — a
+  network partition, a transparent proxy that swallows the response —
+  parked the single goroutine that drives the daily check for the rest
+  of the daemon's uptime: no log line, no error, and no further check
+  until a restart. A stalled download had a louder consequence, latching
+  the updater in `downloading` so every later check or install answered
+  "busy". Both now use a client of their own with an explicit deadline,
+  and each check on the recurring cadence is additionally bounded on its
+  own so no single call can wedge the loop. The calls to an OIDC
+  provider (discovery, JWKS refresh, code exchange) ran unbounded on the
+  same shared client and are bounded now too.
+
+- **An API token now carries the same identity as the account it was
+  issued for.** Tokens were stored with whatever spelling the operator
+  typed into the subject field, while user accounts are keyed
+  lower-cased. A token issued for `Admin` therefore authenticated as a
+  different subject than a login as `admin`: the per-user preferences
+  and the privately owned diagrams of the two never met, and the audit
+  trail recorded them as separate actors. The subject is canonicalised
+  on write now — for freshly created tokens and for the ones migrated
+  out of the config file — the create response reports the spelling that
+  was stored rather than the one that was typed, and a migration folds
+  the rows an earlier version wrote.
+
+- **`security.allow_plaintext_secrets` now governs what it documents.**
+  The setting promised that the daemon refuses to persist a CCU password
+  in cleartext, and no code read it. When the at-rest master key could
+  not be resolved — `secret.key` missing after a restore, a read-only
+  data directory — the daemon logged one warning and wrote every CCU
+  password into the database in the clear, at the default that says it
+  will not. Saving a central in that state is now rejected with `400`
+  naming the setting, on every path that persists one (the CCUs view,
+  the onboarding wizard, live adoption, the config-file seed), and an
+  operator who wants the old behaviour can still opt in by saving the
+  `security` section with the flag set. With a master key present
+  nothing changes: the password is sealed either way.
+
+- **A config section that cannot be read no longer half-applies the
+  rest.** The boot-time merge of the database config sections walked
+  them in order and aborted on the first failure, after writing the
+  earlier ones into the running config and before the defaulting pass —
+  so a single unreadable section (a sealed value whose master key is
+  gone, a row from a newer version) left the daemon on a config that was
+  part database, part config file, never defaulted or validated. An auth
+  scheme the operator had switched off in the SPA came back up because
+  its section was merged after the failing one. The merge is
+  all-or-nothing now: on failure the daemon runs on the config file
+  exactly as loaded, says so at error level, and reports `config.overlay`
+  as degraded on `/health` — the same failure also makes
+  `GET /api/v1/config` fail, so there is no in-UI hint otherwise.
+
+- **Disabling the last CCU keeps it disabled across a restart.** A
+  centrals table in which every row is parked read as "the database has
+  nothing to say about centrals", so the daemon fell back to the
+  `centrals:` list in the config file — the very entry the first-run
+  seed had copied into that table — and reconnected to the CCU the
+  operator had just parked. `GET /api/v1/config` agreed with the wrong
+  answer, attributing the resurrected central to the config file. A
+  table with rows is now authoritative whether or not any of them is
+  enabled; an empty table still leaves the config file in charge.
+
+- **`bootstrap.allow_first_run_setup: false` now closes the onboarding
+  surface it names.** The toggle has been documented as a hardening
+  control since the first release and no code ever read it. An operator
+  who set it and later ended up with an empty users table — a restored
+  volume, a wiped data directory — still had `GET /api/v1/setup/status`
+  reporting first-run and `POST /api/v1/setup` accepting an anonymous
+  request, so anyone who could reach the listener registered themselves
+  as the admin. The probe now honours the flag, and the finalize call
+  answers `403` naming the setting instead of a `409` claiming an
+  account exists. The deliberate consequence, now documented and logged
+  at boot as `setup.onboarding.dormant`: with the flag false and no
+  authentication source at all there is no way in except editing the
+  YAML and restarting. (REST API 5.24.0)
+
+- **A per-interface `remote_path` reaches the CCU.** The override was
+  parsed, validated, stored, exported in the OpenAPI schema and rendered
+  in the config editor, while the endpoint composer hard-coded `/RPC2`
+  (`/groups` for VirtualDevices). Anyone whose CCU sits behind a reverse
+  proxy that exposes XML-RPC elsewhere watched every call 404 with no
+  hint that the configured path had been discarded. The composed URL now
+  honours it, and a path that is not absolute — or the bare `/`, which
+  crashes the CCU's putParamset handler — is rejected at config load
+  rather than at the first RPC.
+
+- **`rpc_type` no longer accepts a transport the daemon cannot use.**
+  The transport follows from the interface name (CUxD speaks BIN-RPC,
+  everything else XML-RPC) and nothing consulted the per-interface
+  value, so `rpc_type: binrpc` on BidCos-RF was accepted, saved, shown
+  as saved, and ignored. A value that contradicts the derived transport
+  is now a config error that names both; a value that agrees still
+  loads.
+
+- **A password reset now ends the sessions it is meant to end.** User
+  names are stored lower-cased, but a login reported back whatever
+  casing the person typed, and that spelling went into the session. An
+  admin can only address the account by its stored spelling, so
+  resetting the password of someone who had signed in as `Markus`
+  evicted nothing: the handler answered 204 while the old cookie kept
+  full access for the rest of the session lifetime. Deleting the account
+  behaved the same way, and left the subject's bearer tokens alive too.
+  A login now reports the stored name, and the session and token purges
+  match case-insensitively regardless.
+
+- **A CCU login is now the same principal however it is typed.** Logins
+  validated against a CCU's own user database reported the subject with
+  whatever casing the person entered, so signing in as `Markus` and as
+  `markus` produced two identities out of one CCU account: separate
+  per-user preferences, separate privately owned diagrams, two actors in
+  the audit trail, and an API token — stored canonically — that belonged
+  to neither. The CCU is still asked about the name as typed, since it
+  owns that namespace, but the identity the daemon files everything
+  under is the canonical one every other login path already reported.
+
+- **A channel-configuration edit can no longer drop the WebSocket
+  connection.** Staging a parameter whose value was a JSON array or
+  object — anything but the scalar a paramset actually holds — crashed
+  the command that stages it as soon as the same value was sent twice:
+  the two values were compared with an equality that only works on
+  scalars. The connection died mid-frame without being closed, so the
+  browser lost every live update until it reconnected and the daemon
+  leaked the writer goroutine behind it. Comparing two staged values now
+  copes with any shape, and a non-scalar value is refused up front with
+  a clear error instead of being staged and failing later against the
+  CCU.
+
+- **Creating a user can no longer overwrite one.** `POST /api/v1/users`
+  upserted: re-submitting an existing name silently rewrote that
+  account's password and role and answered 201 — without the session
+  revocation the update path performs, so an attacker's cookie kept the
+  old admin role after the "reset". The route is create-only now and
+  answers 409 for a name that exists (compared case-insensitively);
+  changes go through `PATCH /api/v1/users/{subject}`, which revokes.
+  (REST API 5.23.0)
+
+- **The last admin can no longer be demoted into a lockout.** Deleting
+  the only admin was refused, but changing its role to operator or
+  viewer was not — and a daemon with zero admins answers 403 on every
+  admin route, including the one that would create a new admin.
+  Recovery meant editing the database by hand. The user store now
+  refuses the demotion in the same transaction that counts the admins,
+  and both the API and the Users view report it.
+
+- **Deleting one entry from a map-valued setting sticks.** Trimming a
+  single key out of `north.rest.auth.ccu.role_mapping` (or
+  `north.ui.profiles`) was accepted with a success toast and then
+  quietly restored: the saved section was assembled by decoding the
+  request over the stored value, and decoding a JSON object into an
+  existing map only ever adds to it. So a CCU user level the operator
+  had just stopped mapping to admin kept mapping to admin. A key the
+  request carries is now authoritative; a key it omits still keeps its
+  stored value.
+
+- **The OIDC login start is no longer an unmetered allocator.**
+  `GET /api/v1/auth/oidc/start` needs no credentials and parks a PKCE
+  verifier plus nonce in memory for five minutes per call, with nothing
+  bounding how many. It now carries the same per-IP speed bump as the
+  login POST, and the in-flight flow table has a hard ceiling — which
+  also caps the scan every new flow performs while holding the lock, the
+  part that slowed down genuine logins.
+
 ### Fixed
 
 - **The device page follows the device in the address bar.** Opening a

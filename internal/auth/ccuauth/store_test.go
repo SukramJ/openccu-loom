@@ -66,6 +66,27 @@ func TestStore_AuthenticateBasic_AdminSuccess(t *testing.T) {
 	}
 }
 
+// TestStore_AuthenticateBasic_ReportsCanonicalSubject pins that the
+// identity carries the canonical subject even though the CCU is asked
+// about the name the caller typed: the session, the bearer tokens and the
+// per-user records the daemon keeps are all keyed on the canonical form,
+// and an admin can only address the account by that form.
+func TestStore_AuthenticateBasic_ReportsCanonicalSubject(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAuthenticator{levels: map[string]int{"Alice": 8}}
+	s := newStore(t, fake, ccuauth.Config{})
+	id, err := s.AuthenticateBasic(context.Background(), "Alice", "secret")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id.Subject != "alice" {
+		t.Errorf("subject = %q, want %q", id.Subject, "alice")
+	}
+	if id.Role != auth.RoleAdmin {
+		t.Errorf("role = %q, want %q", id.Role, auth.RoleAdmin)
+	}
+}
+
 func TestStore_AuthenticateBasic_OperatorSuccess(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAuthenticator{levels: map[string]int{"bob": 2}}

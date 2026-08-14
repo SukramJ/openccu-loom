@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: b9e43966
-HEAD: b9e43966
+Generated: 9133fb06
+HEAD: 9133fb06
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28341 |
-| Reachable | 5006 |
-| Whitelisted | 20358 |
-| **Unreachable** | **2977** |
+| Total Exported | 28391 |
+| Reachable | 5010 |
+| Whitelisted | 20402 |
+| **Unreachable** | **2979** |
 
 ## Top-20 Packages by Dead Code
 
@@ -199,7 +199,7 @@ HEAD: b9e43966
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 108 | 28 |
+| internal/store/sqlite | 0 | 108 | 30 |
 | pkg/hmapi | 0 | 157 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
