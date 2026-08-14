@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // wireCUxDInterface wires the BIN-RPC outbound client, CuxdBackend,
@@ -137,7 +138,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		)
 	}
 
-	writer.Register(cc.Name, wireID, backend)
+	writer.Register(cc.Name, hmtypes.ParseWireInterfaceID(wireID), backend)
 	if backendReg != nil {
 		backendReg.put(wireID, backend)
 	}

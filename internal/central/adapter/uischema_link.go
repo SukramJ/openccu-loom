@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // buildLinkSchema assembles a UI schema for the LINK paramset of one
@@ -39,7 +40,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 	if c == nil {
 		return nil, hmapi.ErrUISchemaNotFound
 	}
-	backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID)
+	backend, ok := a.writer.Backend(c.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return nil, fmt.Errorf("ui-schema: no backend for %s/%s", c.Name(), dev.InterfaceID)
 	}

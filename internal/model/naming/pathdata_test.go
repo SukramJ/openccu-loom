@@ -8,11 +8,20 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+)
+
+// Wire ids of a central without a name: the wire form collapses onto the bare
+// interface there, which keeps the path/topic expectations below readable.
+// The named-central form is exercised where it actually changes an outcome.
+var (
+	wireHmIPRF   = hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF)
+	wireBidCosRF = hmtypes.NewWireInterfaceID("", hmenum.InterfaceBidCosRF)
 )
 
 func TestNewDataPointPathData_StandardInterface(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 3, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 3, BucketValues, "STATE")
 	if pd.SetPath != "device/set/VCU1234567/3/values/STATE" {
 		t.Errorf("SetPath = %q, want %q", pd.SetPath, "device/set/VCU1234567/3/values/STATE")
 	}
@@ -27,20 +36,38 @@ func TestNewDataPointPathData_StandardInterface(t *testing.T) {
 	}
 }
 
+// TestNewDataPointPathData_VirtualDevicesInterface pins the `virtdev/` path
+// roots for a virtual-remote data point on BOTH shapes the interface reaches
+// this constructor in: the bare id an unnamed central produces and the
+// `<central>-VirtualDevices` wire id every named central produces. Only the
+// first was ever covered, and only the first ever matched — a named central
+// took the `device/` roots for every one of its virtual-remote data points.
 func TestNewDataPointPathData_VirtualDevicesInterface(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceVirtualDevices, "INT0000001", 0, BucketValues, "PRESS_SHORT")
-	if pd.SetPath != "virtdev/set/INT0000001/0/values/PRESS_SHORT" {
-		t.Errorf("SetPath = %q, want %q", pd.SetPath, "virtdev/set/INT0000001/0/values/PRESS_SHORT")
-	}
-	if pd.StatePath != "virtdev/status/INT0000001/0/values/PRESS_SHORT" {
-		t.Errorf("StatePath = %q, want %q", pd.StatePath, "virtdev/status/INT0000001/0/values/PRESS_SHORT")
+	for _, tc := range []struct {
+		name    string
+		central string
+	}{
+		{name: "unnamed central", central: ""},
+		{name: "named central", central: "ccu-1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			iface := hmtypes.NewWireInterfaceID(tc.central, hmenum.InterfaceVirtualDevices)
+			pd := NewDataPointPathData(tc.central, iface, "INT0000001", 0, BucketValues, "PRESS_SHORT")
+			if pd.SetPath != "virtdev/set/INT0000001/0/values/PRESS_SHORT" {
+				t.Errorf("SetPath = %q, want %q", pd.SetPath, "virtdev/set/INT0000001/0/values/PRESS_SHORT")
+			}
+			if pd.StatePath != "virtdev/status/INT0000001/0/values/PRESS_SHORT" {
+				t.Errorf("StatePath = %q, want %q", pd.StatePath, "virtdev/status/INT0000001/0/values/PRESS_SHORT")
+			}
+		})
 	}
 }
 
 func TestNewDataPointPathData_MasterBucket(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 0, BucketMaster, "ARR_TIMEOUT")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 0, BucketMaster, "ARR_TIMEOUT")
 	if pd.StatePath != "device/status/VCU1234567/0/master/ARR_TIMEOUT" {
 		t.Errorf("StatePath = %q, want %q", pd.StatePath, "device/status/VCU1234567/0/master/ARR_TIMEOUT")
 	}
@@ -52,7 +79,7 @@ func TestNewDataPointPathData_MasterBucket(t *testing.T) {
 func TestNewDataPointPathData_LowerCaseAddressUpper(t *testing.T) {
 	t.Parallel()
 	// Address and kind must be upper-cased on the way through.
-	pd := NewDataPointPathData(hmenum.InterfaceBidCosRF, "abcd1234", 1, BucketValues, "level")
+	pd := NewDataPointPathData("", wireBidCosRF, "abcd1234", 1, BucketValues, "level")
 	if pd.SetPath != "device/set/ABCD1234/1/values/LEVEL" {
 		t.Errorf("SetPath = %q, want %q", pd.SetPath, "device/set/ABCD1234/1/values/LEVEL")
 	}
@@ -60,17 +87,17 @@ func TestNewDataPointPathData_LowerCaseAddressUpper(t *testing.T) {
 
 func TestNewDataPointPathData_EmptyInputsReturnZero(t *testing.T) {
 	t.Parallel()
-	if got := NewDataPointPathData(hmenum.InterfaceHmIPRF, "", 0, BucketValues, "STATE"); !got.IsZero() {
+	if got := NewDataPointPathData("", wireHmIPRF, "", 0, BucketValues, "STATE"); !got.IsZero() {
 		t.Errorf("empty address must yield zero PathData, got %+v", got)
 	}
-	if got := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1", 0, BucketValues, ""); !got.IsZero() {
+	if got := NewDataPointPathData("", wireHmIPRF, "VCU1", 0, BucketValues, ""); !got.IsZero() {
 		t.Errorf("empty kind must yield zero PathData, got %+v", got)
 	}
 }
 
 func TestNewDataPointPathData_EmptyBucketDefaultsToValues(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1", 0, "", "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1", 0, "", "STATE")
 	if pd.Bucket != BucketValues {
 		t.Errorf("Bucket = %q, want %q (empty bucket → VALUES default)", pd.Bucket, BucketValues)
 	}
@@ -81,7 +108,7 @@ func TestNewDataPointPathData_EmptyBucketDefaultsToValues(t *testing.T) {
 
 func TestPathData_MQTTState(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 1, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, BucketValues, "STATE")
 	got := pd.MQTTState("openccu-loom", "ccu-1")
 	want := "openccu-loom/ccu-1/HmIP-RF/VCU1234567/1/values/STATE"
 	if got != want {
@@ -132,7 +159,7 @@ func TestNewSysvarPathData(t *testing.T) {
 
 func TestPathData_DeviceSetStateRoots(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 1, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, BucketValues, "STATE")
 	if !strings.HasPrefix(pd.SetPath, SetPathRoot) {
 		t.Errorf("SetPath = %q, want prefix %q", pd.SetPath, SetPathRoot)
 	}
@@ -143,7 +170,7 @@ func TestPathData_DeviceSetStateRoots(t *testing.T) {
 
 func TestPathData_EmptyAddressIsZero(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "", 1, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "", 1, BucketValues, "STATE")
 	if !pd.IsZero() {
 		t.Errorf("empty address must yield EmptyPathData, got %+v", pd)
 	}
@@ -151,7 +178,7 @@ func TestPathData_EmptyAddressIsZero(t *testing.T) {
 
 func TestPathData_EmptyKindIsZero(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 1, BucketValues, "")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 1, BucketValues, "")
 	if !pd.IsZero() {
 		t.Errorf("empty kind must yield EmptyPathData, got %+v", pd)
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // SchedulesDomain implements interfaces.ScheduleService. It reads/
@@ -158,7 +159,7 @@ func (s *SchedulesDomain) FindScheduleChannel(ctx context.Context, deviceAddress
 		// Path 2: climate channels carry the schedule directly in
 		// their MASTER paramset (P<n>_*). Probe the candidate types
 		// in order; return the first match.
-		backend, ok := s.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := s.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return 0, fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}
@@ -1044,7 +1045,7 @@ func (s *SchedulesDomain) resolve(
 		if !ok {
 			continue
 		}
-		b, ok := s.writer.Backend(u.Name(), dev.InterfaceID)
+		b, ok := s.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}

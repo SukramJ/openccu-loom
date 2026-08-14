@@ -2321,7 +2321,7 @@ func primaryBackendOf(unit *central.Unit, writer *clientpkg.ValueWriter) (*clien
 	if writer == nil {
 		return nil, nil, ErrSysvarCreatorNoPrimary
 	}
-	b, ok := writer.Backend(unit.Name(), entry.InterfaceID)
+	b, ok := writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(entry.InterfaceID))
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: backend not registered for %s/%s",
 			ErrSysvarCreatorNoPrimary, unit.Name(), entry.InterfaceID)
@@ -2440,7 +2440,7 @@ func (c *clientServiceMessageSuppressor) backendFor(interfaceID string) (*client
 	if !ok || entry == nil || entry.Client == nil {
 		return nil, nil, fmt.Errorf("%w: interface %q", ErrServiceMessageSuppressorNoClient, interfaceID)
 	}
-	b, ok := c.writer.Backend(c.unit.Name(), wireID)
+	b, ok := c.writer.Backend(c.unit.Name(), hmtypes.ParseWireInterfaceID(wireID))
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: backend not registered for %s/%s",
 			ErrServiceMessageSuppressorNoClient, c.unit.Name(), wireID)

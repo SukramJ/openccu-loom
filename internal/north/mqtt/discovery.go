@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // valueJSONValueTemplate is the canonical Jinja extractor for the
@@ -463,14 +464,15 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// unavailable.
 		bucket = string(payload.BucketCalculated)
 	}
+	central := d.centralFor(ev)
 	pd := naming.NewDataPointPathData(
-		hmenum.Interface(ev.Interface),
+		central,
+		hmtypes.ParseWireInterfaceID(ev.Interface),
 		ev.DeviceAddress,
 		ev.ChannelNo,
 		naming.Bucket(bucket),
 		ev.Parameter,
 	)
-	central := d.centralFor(ev)
 	nodeID = pd.DiscoveryNodeID(central)
 	objectID = pd.DiscoveryObjectID(ev.Parameter)
 	// The unique_id follows the same family split as the state bucket

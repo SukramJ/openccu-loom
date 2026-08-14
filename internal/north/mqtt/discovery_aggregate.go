@@ -13,7 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // pressParameters is the closed set of click-event parameter names a press
@@ -352,7 +352,7 @@ func (d *DefaultDiscoveryBuilder) channelUniqueID(ev Event, suffix string) (stri
 // irrelevant for identity derivation and stay zero.
 func channelPathData(ev Event) naming.PathData {
 	return naming.NewChannelPathData(
-		hmenum.Interface(ev.Interface),
+		hmtypes.ParseWireInterfaceID(ev.Interface),
 		ev.DeviceAddress,
 		ev.ChannelNo,
 	)

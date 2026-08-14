@@ -570,7 +570,7 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 	if h.writer == nil {
 		return nil
 	}
-	b, ok := h.writer.Backend(h.unit.Name(), interfaceID)
+	b, ok := h.writer.Backend(h.unit.Name(), hmtypes.ParseWireInterfaceID(interfaceID))
 	if !ok {
 		h.logger.Warn("callback.update_device.no_backend",
 			slog.String("interface", interfaceID))
@@ -602,7 +602,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 	if h.unit == nil || h.unit.Devices == nil || h.writer == nil {
 		return nil
 	}
-	b, ok := h.writer.Backend(h.unit.Name(), interfaceID)
+	b, ok := h.writer.Backend(h.unit.Name(), hmtypes.ParseWireInterfaceID(interfaceID))
 	if !ok {
 		h.logger.Warn("callback.replace_device.no_backend",
 			slog.String("interface", interfaceID))
@@ -635,7 +635,7 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 	if len(addresses) == 0 || h.unit == nil || h.unit.Devices == nil || h.writer == nil {
 		return nil
 	}
-	b, ok := h.writer.Backend(h.unit.Name(), interfaceID)
+	b, ok := h.writer.Backend(h.unit.Name(), hmtypes.ParseWireInterfaceID(interfaceID))
 	if !ok {
 		h.logger.Warn("callback.readded_device.no_backend",
 			slog.String("interface", interfaceID))

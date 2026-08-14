@@ -29,7 +29,7 @@ func (a *DeviceAdminDomain) SetChannelTeam(ctx context.Context, deviceAddr strin
 	if !dev.Interface.SupportsTeams() {
 		return fmt.Errorf("set team: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 	}
-	backend, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+	backend, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, unit.Name(), dev.InterfaceID)
 	}
@@ -59,7 +59,7 @@ func (a *DeviceAdminDomain) TeamCandidates(ctx context.Context, deviceAddr strin
 	if !ok || target.TeamTag == "" {
 		return []hmapi.TeamCandidate{}, nil
 	}
-	backend, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+	backend, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, unit.Name(), dev.InterfaceID)
 	}

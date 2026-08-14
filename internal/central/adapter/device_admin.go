@@ -49,7 +49,7 @@ func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, 
 		if !ok {
 			continue
 		}
-		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
@@ -87,7 +87,7 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string, re
 		if !ok {
 			continue
 		}
-		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
@@ -225,7 +225,7 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 		// eventually pick up the new device anyway.
 		if a.writer != nil {
 			if dev, ok := u.ModelRegistry.Get(address); ok {
-				if backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID); ok {
+				if backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID)); ok {
 					_, _ = backend.ListDevices(ctx)
 				}
 			}
@@ -321,7 +321,7 @@ func (a *DeviceAdminDomain) RestoreDeviceConfig(ctx context.Context, address str
 		if !dev.Interface.SupportsConfigRestore() {
 			return fmt.Errorf("restore config: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 		}
-		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}

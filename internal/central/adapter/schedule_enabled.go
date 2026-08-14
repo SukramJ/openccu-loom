@@ -26,6 +26,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 const (
@@ -220,7 +221,7 @@ func (s *SchedulesDomain) resolveOps(
 		if !ok {
 			continue
 		}
-		b, ok := s.writer.Backend(u.Name(), dev.InterfaceID)
+		b, ok := s.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}

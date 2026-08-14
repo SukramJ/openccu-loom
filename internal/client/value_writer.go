@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // icSetterLike is the narrow contract ValueWriter needs from an
@@ -97,9 +98,24 @@ type retrierLike interface {
 	CancelInterface() int
 }
 
+// valueWriterKey is the backend registry's key: a central plus the canonical
+// `<central>-<interface>` wire id the CCU echoes and every per-central
+// registry uses. The wire id is typed so a lookup cannot be spelled with the
+// bare interface name a device also carries — that mistake compiles, finds
+// nothing, and surfaces as a write that reports "no backend" for an interface
+// that is plainly connected.
 type valueWriterKey struct {
 	Central   string
-	Interface string
+	Interface hmtypes.WireInterfaceID
+}
+
+// keyFor builds the registry key from the wire id in its string form. The
+// write entry points ([ValueWriter.SetValueWithOptions] and friends) take the
+// interface as a string because their signature is declared by port interfaces
+// in a dozen consumer packages; this is the single place that adopts it, so
+// the write path and the registration path cannot key the map differently.
+func keyFor(centralName, interfaceID string) valueWriterKey {
+	return valueWriterKey{Central: centralName, Interface: hmtypes.ParseWireInterfaceID(interfaceID)}
 }
 
 // NewValueWriter returns an empty registry.
@@ -112,7 +128,7 @@ func NewValueWriter() *ValueWriter {
 }
 
 // Register binds a backend for (central, interface).
-func (w *ValueWriter) Register(centralName, interfaceID string, b backends.Operations) {
+func (w *ValueWriter) Register(centralName string, interfaceID hmtypes.WireInterfaceID, b backends.Operations) {
 	if b == nil {
 		return
 	}
@@ -131,7 +147,7 @@ func (w *ValueWriter) Register(centralName, interfaceID string, b backends.Opera
 // Passing nil removes the IC binding; subsequent calls with
 // [WriteOptions.SkipRetry] fall through to the direct backend path
 // (no retrier is involved either way).
-func (w *ValueWriter) RegisterIC(centralName, interfaceID string, ic icSetterLike) {
+func (w *ValueWriter) RegisterIC(centralName string, interfaceID hmtypes.WireInterfaceID, ic icSetterLike) {
 	key := valueWriterKey{Central: centralName, Interface: interfaceID}
 	w.mu.Lock()
 	if ic == nil {
@@ -143,7 +159,7 @@ func (w *ValueWriter) RegisterIC(centralName, interfaceID string, ic icSetterLik
 }
 
 // Deregister drops the binding for both the backend and the IC.
-func (w *ValueWriter) Deregister(centralName, interfaceID string) {
+func (w *ValueWriter) Deregister(centralName string, interfaceID hmtypes.WireInterfaceID) {
 	key := valueWriterKey{Central: centralName, Interface: interfaceID}
 	w.mu.Lock()
 	delete(w.backends, key)
@@ -188,7 +204,7 @@ func (w *ValueWriter) PutParamset(
 }
 
 // Backend returns the operations bound to (central, interface).
-func (w *ValueWriter) Backend(centralName, interfaceID string) (backends.Operations, bool) {
+func (w *ValueWriter) Backend(centralName string, interfaceID hmtypes.WireInterfaceID) (backends.Operations, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	b, ok := w.backends[valueWriterKey{Central: centralName, Interface: interfaceID}]

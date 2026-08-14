@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // restoreRecordingOperations wraps fakeOperations (defined in
@@ -61,7 +62,7 @@ func buildRestoreFixture(
 		restoreErr:     restoreErr,
 	}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", string(iface), fake)
+	w.Register("ccu-01", hmtypes.ParseWireInterfaceID(string(iface)), fake)
 
 	domain = NewDeviceAdminDomain(reg, w)
 	return domain, fake

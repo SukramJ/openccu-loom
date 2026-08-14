@@ -56,7 +56,7 @@ func teamDomainWith(t *testing.T, iface hmenum.Interface, fake backends.Operatio
 		Address: "SD001:1", Parent: "SD001", TeamTag: "SMOKE", Team: "TEAM:1",
 	})
 	w := client.NewValueWriter()
-	w.Register("ccu-01", wireID, fake)
+	w.Register("ccu-01", hmtypes.ParseWireInterfaceID(wireID), fake)
 	return NewDeviceAdminDomain(reg, w)
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ============================================================
@@ -161,7 +162,7 @@ func buildSuppressorFixture(t *testing.T) (
 	ops := &suppressOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
 	w := clientpkg.NewValueWriter()
 	wireID := WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF)
-	w.Register("ccu-01", wireID, ops)
+	w.Register("ccu-01", hmtypes.ParseWireInterfaceID(wireID), ops)
 
 	ic := newTestInterfaceClient(t, "ccu-01", "HmIP-RF", 5)
 	if err := unit.Clients.Register(&coordinators.ClientEntry{
@@ -377,7 +378,7 @@ func TestWireServiceMessageSuppressorWiresBothSeams(t *testing.T) {
 	ops := &suppressOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
 	w := clientpkg.NewValueWriter()
 	wireID := WireInterfaceID("ccu-07", hmenum.InterfaceHmIPRF)
-	w.Register("ccu-07", wireID, ops)
+	w.Register("ccu-07", hmtypes.ParseWireInterfaceID(wireID), ops)
 	ic := newTestInterfaceClient(t, "ccu-07", "HmIP-RF", 5)
 	if err := unit.Clients.Register(&coordinators.ClientEntry{
 		InterfaceID: wireID,

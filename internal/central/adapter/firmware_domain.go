@@ -172,7 +172,7 @@ var _ coordinators.DeviceDescriptionFetcher = (*writerDescFetcher)(nil)
 
 // ListDevices satisfies [coordinators.DeviceDescriptionFetcher].
 func (f *writerDescFetcher) ListDevices(ctx context.Context, iface hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
-	backend, ok := f.writer.Backend(f.central, string(iface))
+	backend, ok := f.writer.Backend(f.central, hmtypes.ParseWireInterfaceID(string(iface)))
 	if !ok {
 		return nil, fmt.Errorf("firmware-domain: no backend for %s/%s", f.central, iface)
 	}

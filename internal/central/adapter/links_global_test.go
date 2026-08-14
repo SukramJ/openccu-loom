@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // addLinkCentral registers a central with one device and a fake backend
@@ -52,7 +53,7 @@ func addLinkCentral(
 		links:          links,
 		linksErr:       linksErr,
 	}
-	w.Register(name, ifaceID, fake)
+	w.Register(name, hmtypes.ParseWireInterfaceID(ifaceID), fake)
 }
 
 func TestLinksDomain_ListAllLinks_AggregatesAcrossCentrals(t *testing.T) {

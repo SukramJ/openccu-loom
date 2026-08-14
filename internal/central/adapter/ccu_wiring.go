@@ -840,7 +840,7 @@ func wireInterface(
 	}
 
 	// Register the backend so REST / MQTT command paths can dispatch.
-	writer.Register(cc.Name, wireID, backend)
+	writer.Register(cc.Name, hmtypes.ParseWireInterfaceID(wireID), backend)
 
 	// Also expose the backend through the per-central registry so the
 	// CONFIG_PENDING hook can resolve it at event-fire time. The hook
@@ -1306,7 +1306,7 @@ ingestLoop:
 			poller.Close()
 		}
 		deinitOnShutdown(backend, callbackURL, centralName, deinitID, logger)
-		writer.Deregister(centralName, ifaceID)
+		writer.Deregister(centralName, hmtypes.ParseWireInterfaceID(ifaceID))
 		if unit.Clients != nil {
 			unit.Clients.Remove(ifaceID)
 		}

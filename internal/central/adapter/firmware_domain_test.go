@@ -432,7 +432,7 @@ func TestRefreshCentralFirmwareDataByStateReachesBackendOnNamedCentral(t *testin
 
 	fake := &listRecordingOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
 	w := clientpkg.NewValueWriter()
-	w.Register(c.Name(), wireID, fake)
+	w.Register(c.Name(), hmtypes.ParseWireInterfaceID(wireID), fake)
 
 	if err := RefreshCentralFirmwareDataByState(context.Background(), c, w,
 		[]hmenum.DeviceFirmwareState{hmenum.DeviceFirmwareStateReadyForUpdate}); err != nil {

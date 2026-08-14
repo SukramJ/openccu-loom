@@ -903,6 +903,12 @@ type ParamsetInconsistency struct {
 // Only MASTER paramsets are checked; VALUES are volatile. Only HmIP devices
 // are checked because the stale-files bug is HmIPServer-specific.
 //
+// The comparison is driven entirely by the paramset registry: it supplies both
+// the channels to visit and the description each is measured against. That
+// keeps the check independent of when the device descriptions arrive, which is
+// a different point in the boot for a first-ever start (CCU callback, after
+// init) than for a restart with a populated store (hydration, before wiring).
+//
 // The two interface arguments live in different identifier spaces and both are
 // required: iface is the BARE interface the CCU names, which decides whether
 // this is the HmIP service at all, while ifaceKey is the canonical
@@ -932,15 +938,26 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 			continue
 		}
 
-		// Collect channel addresses that belong to this device.
-		allDescs := c.descs.All(ifaceKey)
+		// Collect the device's channels from the paramset registry rather
+		// than from the device descriptions. Both hold the same channels once
+		// the daemon has been running for a while, but only the paramset
+		// registry holds them at the moment this check is scheduled: the
+		// device-hydration pass fills it as it fetches each description,
+		// whereas the description registry is filled by the CCU's newDevices
+		// callback, which only arrives after init() — several steps later on a
+		// first-ever boot, and never before the check on that boot. Reading
+		// the wrong one made the whole check silently do nothing there.
+		//
+		// It is also the registry the check is actually about: a channel
+		// without a cached MASTER description is skipped below anyway, so the
+		// set of channels that can produce a finding is exactly the set the
+		// paramset registry knows.
 		var channelAddresses []string
-		for i := range allDescs {
-			d := allDescs[i]
-			if d.Parent == deviceAddr || (d.Address == deviceAddr && !strings.Contains(deviceAddr, ":")) {
-				if strings.Contains(d.Address, ":") {
-					channelAddresses = append(channelAddresses, d.Address)
-				}
+		for _, chAddr := range c.paramsets.GetChannelAddressesByParamsetKey(ifaceKey, deviceAddr)[hmenum.ParamsetKeyMaster] {
+			// Device-level paramsets (address without a channel suffix) stay
+			// out of scope: the stale-files symptom is reported per channel.
+			if strings.Contains(chAddr, ":") {
+				channelAddresses = append(channelAddresses, chAddr)
 			}
 		}
 

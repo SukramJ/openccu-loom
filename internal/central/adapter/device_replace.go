@@ -36,7 +36,7 @@ func (a *DeviceAdminDomain) ReplaceCandidates(ctx context.Context, centralName, 
 		// (`<central>-<iface>`); the bare interface only ever reaches the
 		// operator-facing DTO. Resolving with the bare form misses every
 		// entry and silently yields an empty candidate list.
-		backend, ok := a.writer.Backend(unit.Name(), entry.InterfaceID)
+		backend, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(entry.InterfaceID))
 		if !ok {
 			slog.Default().Debug("device_replace.no_backend",
 				slog.String("central", unit.Name()),
@@ -93,7 +93,7 @@ func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldA
 	if !dev.Interface.SupportsReplace() {
 		return fmt.Errorf("replace device: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 	}
-	backend, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+	backend, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, unit.Name(), dev.InterfaceID)
 	}

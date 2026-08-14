@@ -99,7 +99,7 @@ func TestReplaceCandidatesFiltersKnownDevicesAndChannels(t *testing.T) {
 		{Address: "CAND002", Type: "HM-LC-Sw1"}, // never accepted — must be dropped
 	}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
+	w.Register("ccu-01", hmtypes.NewWireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
 
 	unit.ModelRegistry.Put(device.New(device.Config{
 		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), Interface: hmenum.InterfaceBidCosRF,
@@ -132,7 +132,7 @@ func TestReplaceCandidatesModelMatchesFlag(t *testing.T) {
 		{Address: "CAND002", Type: "HM-LC-Sw1"},
 	}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
+	w.Register("ccu-01", hmtypes.NewWireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
 
 	unit.ModelRegistry.Put(device.New(device.Config{
 		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), Interface: hmenum.InterfaceBidCosRF, Address: "CAND001", Model: "HM-Sec-SC",
@@ -179,8 +179,8 @@ func TestReplaceCandidatesTolerantOfPerInterfaceListError(t *testing.T) {
 	ok.listResult = []hmproto.DeviceDescription{{Address: "CAND001", Type: "HM-Sec-SC"}}
 
 	w := client.NewValueWriter()
-	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), failing)
-	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosWired), ok)
+	w.Register("ccu-01", hmtypes.NewWireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), failing)
+	w.Register("ccu-01", hmtypes.NewWireInterfaceID("ccu-01", hmenum.InterfaceBidCosWired), ok)
 
 	unit.ModelRegistry.Put(device.New(device.Config{
 		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosWired), Interface: hmenum.InterfaceBidCosWired, Address: "CAND001", Model: "HM-Sec-SC",
@@ -204,7 +204,7 @@ func TestReplaceCandidatesCentralResolution(t *testing.T) {
 	unit, reg := newReplaceUnit(t, "ccu-01")
 	registerReplaceClient(t, unit, hmenum.InterfaceBidCosRF)
 	w := client.NewValueWriter()
-	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}})
+	w.Register("ccu-01", hmtypes.NewWireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}})
 	domain := NewDeviceAdminDomain(reg, w)
 
 	if _, err := domain.ReplaceCandidates(context.Background(), "", "NEW001"); err != nil {
@@ -243,7 +243,7 @@ func TestReplaceDeviceEligibleInterfaceCallsBackend(t *testing.T) {
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
+	w.Register("ccu-01", hmtypes.NewWireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	if err := domain.ReplaceDevice(context.Background(), "", "OLD001", "NEW001"); err != nil {
@@ -270,7 +270,7 @@ func TestReplaceDeviceIneligibleInterfaceRejectedBeforeWireCall(t *testing.T) {
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF), fake)
+	w.Register("ccu-01", hmtypes.NewWireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	err := domain.ReplaceDevice(context.Background(), "", "OLD001", "NEW001")
@@ -316,7 +316,7 @@ func TestReplaceDeviceSucceedsWhenEagerRefreshFails(t *testing.T) {
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
+	w.Register("ccu-01", hmtypes.NewWireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	if err := domain.ReplaceDevice(context.Background(), "", "OLD001", "NEW001"); err != nil {

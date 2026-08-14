@@ -9,6 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // comTester is the narrow capability the communication test needs from a
@@ -36,7 +37,7 @@ func (a *DeviceAdminDomain) TestDeviceCommunication(ctx context.Context, address
 		if !dev.Interface.SupportsCommunicationTest() {
 			return hmapi.CommunicationTestResult{}, fmt.Errorf("communication test: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 		}
-		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return hmapi.CommunicationTestResult{}, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}

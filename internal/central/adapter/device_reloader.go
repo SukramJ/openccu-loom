@@ -49,7 +49,7 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 		if !ok {
 			continue
 		}
-		b, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+		b, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return fmt.Errorf("device_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
 		}
@@ -102,7 +102,7 @@ func (a *DeviceReloaderAdapter) ReloadChannelConfig(ctx context.Context, channel
 		if !ok {
 			continue
 		}
-		b, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+		b, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return fmt.Errorf("channel_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
 		}

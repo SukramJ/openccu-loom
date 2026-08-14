@@ -9929,7 +9929,7 @@ func buildFakeWriter(t *testing.T, centralName, iface string) *client.ValueWrite
 	t.Helper()
 	w := client.NewValueWriter()
 	b := &paramsetFakeOps{}
-	w.Register(centralName, iface, b)
+	w.Register(centralName, hmtypes.ParseWireInterfaceID(iface), b)
 	return w
 }
 

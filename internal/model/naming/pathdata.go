@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // Path-root constants. They are the canonical first segment of every
@@ -99,7 +100,16 @@ type PathData struct {
 	// string-only PathData. Adapters that need to compose
 	// transport-specific topic strings read them straight off the
 	// struct without re-parsing SetPath/StatePath.
-	Interface hmenum.Interface
+	//
+	// Interface is the canonical `<central>-<interface>` wire id, which is
+	// what every producer of path data holds (device.Device.InterfaceID,
+	// hmtypes.DataPointKey.InterfaceID) and what the north-bound topic
+	// segment has always carried. It is typed so that a decision which is
+	// really about the radio technology — the `virtdev/` path roots — has to
+	// go through [hmtypes.WireInterfaceID.Bare] instead of comparing a wire
+	// id against a bare interface constant, which never matched on a named
+	// central.
+	Interface hmtypes.WireInterfaceID
 	Address   string // upper-cased CCU device address ("" for non-channel families)
 	ChannelNo int
 	Bucket    Bucket
@@ -477,7 +487,7 @@ func DiscoveryConfigTopic(component, nodeID, objectID string) string {
 // Bucket and Kind stay empty; SetPath / StatePath stay empty
 // (channel-aggregate has no logical path of its
 // own — it is an MQTT-bridge convenience).
-func NewChannelPathData(iface hmenum.Interface, address string, channelNo int) PathData {
+func NewChannelPathData(iface hmtypes.WireInterfaceID, address string, channelNo int) PathData {
 	if address == "" {
 		return EmptyPathData
 	}
@@ -495,7 +505,7 @@ func NewChannelPathData(iface hmenum.Interface, address string, channelNo int) P
 // ChannelNo / Bucket / Kind stay zero; the structured helpers that
 // only need Address + Interface (MQTTDeviceAvailability,
 // MQTTDeviceInfo, …) work with this minimal form.
-func NewDevicePathData(iface hmenum.Interface, address string) PathData {
+func NewDevicePathData(iface hmtypes.WireInterfaceID, address string) PathData {
 	if address == "" {
 		return EmptyPathData
 	}
@@ -516,7 +526,7 @@ func NewDevicePathData(iface hmenum.Interface, address string) PathData {
 // SetPath and StatePath stay empty — custom-DP slots are an
 // MQTT-bridge concept and don't carry an logical
 // path.
-func NewCustomDPPathData(iface hmenum.Interface, address string, channelNo int, kind string) PathData {
+func NewCustomDPPathData(iface hmtypes.WireInterfaceID, address string, channelNo int, kind string) PathData {
 	if address == "" || kind == "" {
 		return EmptyPathData
 	}
@@ -556,11 +566,19 @@ func TopicSafe(s string) string {
 // wire-parameter name (typical case) or the custom-DP type label
 // ("CLIMATE", "LIGHT") for BucketCustom DPs.
 //
+// `centralName` is required for that one decision and for nothing else: the
+// interface arrives as the `<central>-<interface>` wire id every producer
+// holds, and the separator is an ordinary hyphen, so only the owning central's
+// name can split the id back into the bare interface the root selection asks
+// about. Comparing the wire id itself against the bare constant compiled and
+// ran, and picked the `device/` roots for every virtual-remote data point on
+// any central that has a name.
+//
 // OpenCCU-Loom adds the bucket segment to the
 // the same address+channel+kind combination on different paramsets
 // no longer aliases — a real conflict for parameters that exist in
 // both VALUES and MASTER on the same channel.
-func NewDataPointPathData(iface hmenum.Interface, address string, channelNo int, bucket Bucket, kind string) PathData {
+func NewDataPointPathData(centralName string, iface hmtypes.WireInterfaceID, address string, channelNo int, bucket Bucket, kind string) PathData {
 	if address == "" || kind == "" {
 		return EmptyPathData
 	}
@@ -585,7 +603,7 @@ func NewDataPointPathData(iface hmenum.Interface, address string, channelNo int,
 
 	setRoot := SetPathRoot
 	stateRoot := StatePathRoot
-	if iface == hmenum.InterfaceVirtualDevices {
+	if iface.Bare(centralName) == hmenum.InterfaceVirtualDevices {
 		setRoot = VirtDevSetPathRoot
 		stateRoot = VirtDevStatePathRoot
 	}

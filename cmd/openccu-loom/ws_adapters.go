@@ -941,7 +941,7 @@ func (w *wsDeviceQuery) GetParamsetDescription(ctx context.Context, key configui
 		if !ok {
 			continue
 		}
-		backend, ok := w.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := w.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return nil, fmt.Errorf("ws: no backend for %s/%s", u.Name(), dev.InterfaceID)
 		}

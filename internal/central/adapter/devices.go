@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // DevicesAdapter implements handlers.DeviceIndex across every
@@ -85,7 +86,7 @@ func (a *DevicesAdapter) RefreshDevices(ctx context.Context) error {
 				continue
 			}
 			seen[dev.InterfaceID] = struct{}{}
-			backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+			backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 			if !ok {
 				continue
 			}

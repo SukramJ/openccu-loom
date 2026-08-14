@@ -510,7 +510,7 @@ func (p *ParamsetsDomain) resolve(deviceOrChannel string) (paramsetBackend, erro
 		if !ok {
 			continue
 		}
-		b, ok := p.writer.Backend(u.Name(), dev.InterfaceID)
+		b, ok := p.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return nil, fmt.Errorf("%w: %s/%s", ErrNoParamsetBackend, u.Name(), dev.InterfaceID)
 		}

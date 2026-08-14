@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // isPressButtonEvent reports whether ev is a click-event parameter the
@@ -51,14 +52,15 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 	if !isPressButtonEvent(ev) {
 		return DiscoveryItem{}
 	}
+	central := d.centralFor(ev)
 	pd := naming.NewDataPointPathData(
-		hmenum.Interface(ev.Interface),
+		central,
+		hmtypes.ParseWireInterfaceID(ev.Interface),
 		ev.DeviceAddress,
 		ev.ChannelNo,
 		naming.Bucket(payload.BucketValues),
 		ev.Parameter,
 	)
-	central := d.centralFor(ev)
 	nodeID := pd.DiscoveryNodeID(central)
 	objectID := pd.DiscoveryObjectID(ev.Parameter)
 	uniqueID, scoped := d.scopedUniqueID(ev.Central, ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), ev.Parameter, "")

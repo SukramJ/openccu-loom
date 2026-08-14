@@ -1821,7 +1821,8 @@ func (p *DevicePipeline) hydrateParamset(
 				bucket = naming.BucketMaster
 			}
 			init.SetPathData(naming.NewDataPointPathData(
-				hmenum.Interface(interfaceID), ch.Address, ch.Number, bucket, name,
+				p.unit.Name(), hmtypes.ParseWireInterfaceID(interfaceID),
+				ch.Address, ch.Number, bucket, name,
 			))
 			init.SetIsInMultipleChannels(ch.IsParameterInMultipleChannels(name))
 		}

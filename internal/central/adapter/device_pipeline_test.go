@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -1186,5 +1187,78 @@ func TestDevicePipelineKeysRegistriesByTheStampedWireID(t *testing.T) {
 	if _, ok := c.DeviceRegistry.Get(bare, "AABBCC90"); ok {
 		t.Fatalf("DeviceRegistry also holds an entry under the bare interface %q — "+
 			"the same device is registered twice", bare)
+	}
+}
+
+// TestHydrateStampsVirtDevPathRootsOnANamedCentral pins the `virtdev/` path
+// roots of a virtual-remote data point through the real hydration path, on a
+// central that has a name — which every configured central does.
+//
+// The interface reaches the path-data constructor as the canonical
+// `<central>-<interface>` wire id, so a root selection that compared it
+// against the bare `VirtualDevices` constant never matched in a running
+// daemon; it only matched in unit tests that handed the constant in directly.
+// Asserting through IngestFromBackend is what makes the difference visible:
+// the pipeline decides which id it passes, not the test.
+func TestHydrateStampsVirtDevPathRootsOnANamedCentral(t *testing.T) {
+	t.Parallel()
+
+	const centralName = "ccu-virt"
+	c, _ := central.New(central.Config{Name: centralName})
+	p := NewDevicePipeline(c).WithVisibility(newProductionVisibilityGate())
+	wireID := WireInterfaceID(centralName, hmenum.InterfaceVirtualDevices)
+
+	b := &paramsetFakeOps{
+		listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
+			return []hmproto.DeviceDescription{
+				{Address: "INT0000001", Type: "HM-RCV-50"},
+				{Address: "INT0000001:1", Parent: "INT0000001", Type: "VIRTUAL_KEY"},
+			}, nil
+		},
+		getParamsetDescriptionFn: func(_ context.Context, _ string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			if key != hmenum.ParamsetKeyValues {
+				return nil, nil
+			}
+			return map[string]hmproto.ParameterData{
+				"PRESS_SHORT": {
+					Type:       hmenum.ParameterTypeAction,
+					Operations: hmenum.OperationsWrite | hmenum.OperationsEvent,
+				},
+			}, nil
+		},
+		getParamsetFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+			return map[string]any{}, nil
+		},
+	}
+
+	if err := p.IngestFromBackend(
+		context.Background(), wireID, hmenum.InterfaceVirtualDevices,
+		b, &fakeWriter{}, nil, slog.Default(),
+	); err != nil {
+		t.Fatalf("IngestFromBackend: %v", err)
+	}
+
+	dev, ok := c.ModelRegistry.Get("INT0000001")
+	if !ok {
+		t.Fatal("virtual device missing from the model registry")
+	}
+	ch := dev.Channel("INT0000001:1")
+	if ch == nil {
+		t.Fatal("channel INT0000001:1 not hydrated")
+	}
+	dp := ch.Parameter("PRESS_SHORT")
+	if dp == nil {
+		t.Fatal("PRESS_SHORT data point not hydrated")
+	}
+	pather, ok := dp.(interface{ PathData() naming.PathData })
+	if !ok {
+		t.Fatalf("%T carries no path data — the pipeline could not stamp it either", dp)
+	}
+	pd := pather.PathData()
+	if pd.SetPath != "virtdev/set/INT0000001:1/1/values/PRESS_SHORT" {
+		t.Errorf("SetPath = %q, want the virtdev root", pd.SetPath)
+	}
+	if pd.StatePath != "virtdev/status/INT0000001:1/1/values/PRESS_SHORT" {
+		t.Errorf("StatePath = %q, want the virtdev root", pd.StatePath)
 	}
 }

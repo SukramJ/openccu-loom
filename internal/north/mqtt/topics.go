@@ -9,7 +9,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // TopicBuilder assembles topic strings from the raw plane components.
@@ -84,17 +84,17 @@ func (b *TopicBuilder) DiscoveryConfig(component, nodeID, objectID string) strin
 // point in one paramset bucket. Delegates to
 // [naming.PathData.MQTTState].
 func (b *TopicBuilder) ParameterState(centralName, iface, address string, channel int, bucket, parameter string) string {
-	return b.parameterPathData(iface, address, channel, bucket, parameter).MQTTState(b.Base, centralName)
+	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTState(b.Base, centralName)
 }
 
 // ParameterCommand returns the subscribed `/set` topic.
 func (b *TopicBuilder) ParameterCommand(centralName, iface, address string, channel int, bucket, parameter string) string {
-	return b.parameterPathData(iface, address, channel, bucket, parameter).MQTTCommand(b.Base, centralName)
+	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTCommand(b.Base, centralName)
 }
 
 // ParameterConfig returns the descriptor-companion `/config` topic.
 func (b *TopicBuilder) ParameterConfig(centralName, iface, address string, channel int, bucket, parameter string) string {
-	return b.parameterPathData(iface, address, channel, bucket, parameter).MQTTConfig(b.Base, centralName)
+	return b.parameterPathData(centralName, iface, address, channel, bucket, parameter).MQTTConfig(b.Base, centralName)
 }
 
 // DataPointState resolves to [TopicBuilder.ParameterState] on the
@@ -116,21 +116,21 @@ func (b *TopicBuilder) DataPointConfig(centralName, iface, address string, chann
 // DataPointEvent is the legacy per-event-type pulse topic. Delegates
 // to [naming.PathData.MQTTDataPointEvent].
 func (b *TopicBuilder) DataPointEvent(centralName, iface, address string, channel int, etype string) string {
-	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
 	return pd.MQTTDataPointEvent(b.Base, centralName, etype)
 }
 
 // ChannelEvent is the non-retained per-channel aggregate-event
 // topic. Delegates to [naming.PathData.MQTTChannelEvent].
 func (b *TopicBuilder) ChannelEvent(centralName, iface, address string, channel int) string {
-	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
 	return pd.MQTTChannelEvent(b.Base, centralName)
 }
 
 // AggregatedState is the retained per-Source state topic introduced
 // by ADR 0007. Delegates to [naming.PathData.MQTTChannelAggregateState].
 func (b *TopicBuilder) AggregatedState(centralName, iface, address string, channel int) string {
-	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
 	return pd.MQTTChannelAggregateState(b.Base, centralName)
 }
 
@@ -141,7 +141,7 @@ func (b *TopicBuilder) AggregatedState(centralName, iface, address string, chann
 // and to [naming.PathData.MQTTCustomDPState] for [BucketCustom].
 func (b *TopicBuilder) SlotState(centralName, iface string, slot payload.TopicSlot) string {
 	if slot.Bucket == payload.BucketCustom {
-		pd := naming.NewCustomDPPathData(hmenum.Interface(iface), slot.Address, slot.Channel, slot.Parameter)
+		pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
 		return pd.MQTTCustomDPState(b.Base, centralName)
 	}
 	return b.ParameterState(centralName, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
@@ -150,7 +150,7 @@ func (b *TopicBuilder) SlotState(centralName, iface string, slot payload.TopicSl
 // SlotConfig resolves to the matching descriptor-companion topic.
 func (b *TopicBuilder) SlotConfig(centralName, iface string, slot payload.TopicSlot) string {
 	if slot.Bucket == payload.BucketCustom {
-		pd := naming.NewCustomDPPathData(hmenum.Interface(iface), slot.Address, slot.Channel, slot.Parameter)
+		pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
 		return pd.MQTTCustomDPConfig(b.Base, centralName)
 	}
 	return b.ParameterConfig(centralName, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
@@ -161,7 +161,7 @@ func (b *TopicBuilder) SlotConfig(centralName, iface string, slot payload.TopicS
 // [TopicBuilder.CustomDPServiceMethod]).
 func (b *TopicBuilder) SlotCommand(centralName, iface string, slot payload.TopicSlot) string {
 	if slot.Bucket == payload.BucketCustom {
-		pd := naming.NewCustomDPPathData(hmenum.Interface(iface), slot.Address, slot.Channel, slot.Parameter)
+		pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
 		state := pd.MQTTCustomDPState(b.Base, centralName)
 		if state == "" {
 			return ""
@@ -175,7 +175,7 @@ func (b *TopicBuilder) SlotCommand(centralName, iface string, slot payload.Topic
 // custom-DP slot. Delegates to
 // [naming.PathData.MQTTCustomDPServiceMethod].
 func (b *TopicBuilder) CustomDPServiceMethod(centralName, iface string, slot payload.TopicSlot, method string) string {
-	pd := naming.NewCustomDPPathData(hmenum.Interface(iface), slot.Address, slot.Channel, slot.Parameter)
+	pd := naming.NewCustomDPPathData(hmtypes.ParseWireInterfaceID(iface), slot.Address, slot.Channel, slot.Parameter)
 	return pd.MQTTCustomDPServiceMethod(b.Base, centralName, method)
 }
 
@@ -189,27 +189,27 @@ func (b *TopicBuilder) CustomDPInvoke(centralName, deviceAddress, name, operatio
 
 // DeviceAvailability is the per-device retained availability topic.
 func (b *TopicBuilder) DeviceAvailability(centralName, iface, address string) string {
-	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	pd := naming.NewDevicePathData(hmtypes.ParseWireInterfaceID(iface), address)
 	return pd.MQTTDeviceAvailability(b.Base, centralName)
 }
 
 // DeviceInfo is the retained per-device device-info topic.
 func (b *TopicBuilder) DeviceInfo(centralName, iface, address string) string {
-	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	pd := naming.NewDevicePathData(hmtypes.ParseWireInterfaceID(iface), address)
 	return pd.MQTTDeviceInfo(b.Base, centralName)
 }
 
 // DeviceDiagnostics is the retained per-device aggregated-diagnostics
 // topic.
 func (b *TopicBuilder) DeviceDiagnostics(centralName, iface, address string) string {
-	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	pd := naming.NewDevicePathData(hmtypes.ParseWireInterfaceID(iface), address)
 	return pd.MQTTDeviceDiagnostics(b.Base, centralName)
 }
 
 // DeviceUpdateState is the retained JSON state topic for the HA
 // `update` entity.
 func (b *TopicBuilder) DeviceUpdateState(centralName, iface, address string) string {
-	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	pd := naming.NewDevicePathData(hmtypes.ParseWireInterfaceID(iface), address)
 	return pd.MQTTDeviceUpdateState(b.Base, centralName)
 }
 
@@ -219,20 +219,20 @@ func (b *TopicBuilder) DeviceUpdateState(centralName, iface, address string) str
 // retained broker payload is unsafe. See
 // [naming.PathData.MQTTDeviceUpdateCommand] for the full rationale.
 func (b *TopicBuilder) DeviceUpdateCommand(centralName, iface, address string) string {
-	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	pd := naming.NewDevicePathData(hmtypes.ParseWireInterfaceID(iface), address)
 	return pd.MQTTDeviceUpdateCommand(b.Base, centralName)
 }
 
 // WeekProfileState is the retained state topic for the week-profile
 // select entity.
 func (b *TopicBuilder) WeekProfileState(centralName, iface, address string, channel int) string {
-	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
 	return pd.MQTTWeekProfileState(b.Base, centralName)
 }
 
 // WeekProfileCommand is the subscribed set topic.
 func (b *TopicBuilder) WeekProfileCommand(centralName, iface, address string, channel int) string {
-	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	pd := naming.NewChannelPathData(hmtypes.ParseWireInterfaceID(iface), address, channel)
 	return pd.MQTTWeekProfileCommand(b.Base, centralName)
 }
 
@@ -392,12 +392,16 @@ func (b *TopicBuilder) HubUpdate(centralName string) string {
 // parameterPathData composes the [naming.PathData] for a per-DP
 // topic. Centralised so the bucket-empty fallback (→ VALUES) and
 // the iface-string conversion stay in one place.
-func (b *TopicBuilder) parameterPathData(iface, address string, channel int, bucket, parameter string) naming.PathData {
+//
+// centralName is passed through because the data-point constructor needs it to
+// recover the bare interface from the wire id every caller hands in.
+func (b *TopicBuilder) parameterPathData(centralName, iface, address string, channel int, bucket, parameter string) naming.PathData {
 	if bucket == "" {
 		bucket = string(payload.BucketValues)
 	}
 	return naming.NewDataPointPathData(
-		hmenum.Interface(iface),
+		centralName,
+		hmtypes.ParseWireInterfaceID(iface),
 		address,
 		channel,
 		naming.Bucket(bucket),

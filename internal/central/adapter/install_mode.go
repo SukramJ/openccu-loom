@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // installModeNormal is the CCU's "normal" install-mode flavour (mode=1).
@@ -40,7 +41,7 @@ type installModeWriter struct {
 // interface type for the operator surfaces — translate here, or every
 // install-mode write misses the registry and fails.
 func (w *installModeWriter) backend(interfaceID string) (backends.Operations, error) {
-	wireID := WireInterfaceID(w.unit.Name(), hmenum.Interface(interfaceID))
+	wireID := hmtypes.NewWireInterfaceID(w.unit.Name(), hmenum.Interface(interfaceID))
 	b, ok := w.writer.Backend(w.unit.Name(), wireID)
 	if !ok {
 		return nil, fmt.Errorf("install-mode: no backend for %s/%s", w.unit.Name(), wireID)

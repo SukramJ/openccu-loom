@@ -53,6 +53,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The stale-paramset check now runs on a CCU the daemon has never seen
+  before.** After a firmware update the CCU's HmIP service can keep serving
+  descriptor files that list parameters the device no longer has, and the
+  daemon checks for that on every bring-up. The check enumerated the device's
+  channels from the device-description cache, which on a first-ever start is
+  still empty at that point — the CCU only announces its devices moments
+  later — so it examined nothing and reported a clean bill of health. It now
+  reads the channels from the paramset cache the hydration pass has just
+  filled, which is also the cache the comparison is against, and so reports
+  the same findings on a first start as on every later one.
+
 - **One person signing in through the identity provider is now one
   principal.** The session subject came from `preferred_username` — a claim
   the OpenID Connect spec guarantees to be neither stable nor unique, and
