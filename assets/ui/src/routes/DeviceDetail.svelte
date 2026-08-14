@@ -92,15 +92,22 @@
     }
   }
 
+  // Monotonic generation guarding the history data-point fetch. A
+  // response for a channel the operator has already switched away from
+  // must never overwrite the newer channel's data points.
+  let historyDPsGeneration = 0;
+
   // Load data points for the history measurement chart when the
   // history tab opens. We pick the first user channel with numeric DPs.
   async function loadHistoryDPs(channelNo: number) {
     if (!detail) return;
+    const generation = ++historyDPsGeneration;
     historyDPsLoading = true;
     historyDPs = [];
     historyParameter = null;
     try {
       const dps = await api.listDataPoints(detail.address, channelNo);
+      if (generation !== historyDPsGeneration) return;
       // Only numeric parameters (FLOAT / INTEGER) make sense to chart.
       historyDPs = dps.filter(
         (dp) => dp.type === "FLOAT" || dp.type === "INTEGER",
@@ -109,9 +116,10 @@
         historyParameter = historyDPs[0].parameter;
       }
     } catch {
+      if (generation !== historyDPsGeneration) return;
       historyDPs = [];
     } finally {
-      historyDPsLoading = false;
+      if (generation === historyDPsGeneration) historyDPsLoading = false;
     }
   }
 

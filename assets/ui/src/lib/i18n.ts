@@ -3692,6 +3692,7 @@ const EN: Catalog = {
   "areas.rooms_dialog.empty":
     "No rooms known yet — assign a room to a device first.",
   "areas.rooms_dialog.current_area": "currently: {name}",
+  "areas.toast.rooms_saved": "Rooms assigned.",
   // --- Security & Safety domain (notes/concepts/security-safety-concept.md §7.8).
   //     Classifier-driven hazard/fault classes, a fault ledger and the
   //     classified data-point inventory. Runs independently of the alarm
@@ -7534,6 +7535,7 @@ const DE: Catalog = {
   "areas.rooms_dialog.empty":
     "Noch keine Räume bekannt — weise zunächst einem Gerät einen Raum zu.",
   "areas.rooms_dialog.current_area": "aktuell: {name}",
+  "areas.toast.rooms_saved": "Räume zugewiesen.",
   // --- Sicherheit & Sicherheitstechnik (notes/concepts/security-safety-concept.md
   //     §7.8). Klassifikator-gesteuerte Gefahren-/Störungsklassen, ein
   //     Störungs-Ledger und das klassifizierte Datenpunkt-Inventar. Läuft

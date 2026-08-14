@@ -34,6 +34,55 @@
 
   const isEdit = $derived(!!group);
 
+  // Focus-trap bookkeeping, mirroring ConfirmDialog.svelte: `dialogEl`
+  // roots the search for the dialog's focusable controls, and
+  // `previouslyFocused` is the element that had focus before the dialog
+  // opened (typically the trigger button), so it is restored once the
+  // dialog closes instead of leaving focus stranded on `<body>`.
+  let dialogEl = $state<HTMLDivElement | null>(null);
+  let previouslyFocused: HTMLElement | null = null;
+
+  function focusableEls(): HTMLElement[] {
+    if (!dialogEl) return [];
+    return Array.from(
+      dialogEl.querySelectorAll<HTMLElement>(
+        'input, button, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute("disabled"));
+  }
+
+  $effect(() => {
+    previouslyFocused = document.activeElement as HTMLElement | null;
+    // The dialog's DOM is already mounted by the time this effect runs;
+    // queue past the current microtask so any pending Svelte DOM commit
+    // finishes first.
+    queueMicrotask(() => focusableEls()[0]?.focus());
+    return () => {
+      previouslyFocused?.focus();
+      previouslyFocused = null;
+    };
+  });
+
+  function onKey(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      if (!saving) onClose();
+      return;
+    }
+    if (e.key === "Tab") {
+      const els = focusableEls();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      const active = document.activeElement;
+      const atEdge = e.shiftKey ? active === first : active === last;
+      const outside = !els.includes(active as HTMLElement);
+      if (atEdge || outside) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
+    }
+  }
+
   let types = $state<GroupTypeEntry[]>([]);
   let typeId = $state(untrack(() => group?.type_id ?? ""));
   let name = $state(untrack(() => group?.name ?? ""));
@@ -330,17 +379,23 @@
   }
 </script>
 
+<svelte:window onkeydown={onKey} />
+
 <div
   class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
   role="dialog"
   aria-modal="true"
   aria-label={isEdit ? t("groups.editor.edit_title") : t("groups.editor.create_title")}
+  onclick={(e) => {
+    if (e.target === e.currentTarget && !saving) onClose();
+  }}
   onkeydown={(e) => {
     if (e.key === "Escape" && !saving) onClose();
   }}
   tabindex="-1"
 >
   <div
+    bind:this={dialogEl}
     class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-xl"
     style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
   >

@@ -89,6 +89,40 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   items are now scoped to the identity they were loaded for, and so is
   the per-user start page.
 
+- **The group editor dialog now closes on Escape and keeps keyboard focus
+  inside it.** Escape only ever reached the dialog's own root element,
+  so a keyboard user whose focus was still on the button that opened the
+  dialog — nothing inside it was ever focused — could not close it with
+  Escape, and Tab could cycle out to the page behind the modal. Opening
+  the dialog now moves focus in and restores it to the trigger on close,
+  mirroring the confirm dialog's existing pattern.
+
+- **The audit log and the device history tab discard superseded
+  responses.** Changing the audit log's date filters, or switching
+  channels on a device's History tab, before the previous request
+  returned could let the older, slower response overwrite the newer
+  one — an audit trail that silently disagreed with the visible filter,
+  or a history chart showing the previous channel's parameters under the
+  channel the picker still shows selected. Both are now tied to the
+  selection that started them.
+
+- **A CCU firmware-update poll no longer outlives the panel that started
+  it.** Navigating away from Settings → System while an install was
+  still in progress and a poll tick's fetch was in flight left that
+  fetch to reschedule itself after the component was gone, so the daemon
+  kept polling `GET /system/update` every five seconds with nothing left
+  to stop it.
+
+- **Two more missing translation keys.** The Rooms & Functions area save
+  confirmation and the Favorites program run button each referenced a
+  key neither catalogue defined, so both showed the raw key
+  (`areas.toast.rooms_saved`, `programs.execute`) instead of a
+  translated message.
+
+- **Hour-axis labels and the sunset/sunrise glyphs in the weekly
+  schedule strip now invert in dark mode**, matching every other
+  colour-bearing element in the same chart.
+
 ## [0.58.6]
 
 ### Security
