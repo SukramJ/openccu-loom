@@ -4,6 +4,21 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **The diagnostics dump now carries the counters the daemon was already
+  collecting.** Every CCU has had a metrics aggregator running since boot
+  — outbound RPC totals and failures, callback-server traffic, event-bus
+  and cache sizes, recovery attempts, device / channel / data-point counts
+  per category, service-call timings — and none of it left the process.
+  `GET /api/v1/diagnostics` now includes a `metrics` block with one
+  snapshot per central, so the support artefact the SPA downloads answers
+  "how much is this CCU actually doing" without a Prometheus scraper. The
+  block holds counters only and names no device, so it is unaffected by
+  `anonymize`. (REST API 5.23.0)
+
 ## [0.59.0]
 
 ### Added

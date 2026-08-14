@@ -185,6 +185,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	// no store is available. Both the icon proxy and the system-CCU listing
 	// need the same by-name lookup, so a single instance is built here.
 	centralResolve := newCCUAuthCentralResolver(cfg, d.sqCentrals)
+	// Read-only view on live daemon internals: per-interface reliability,
+	// the event-bus tap, and the per-central metrics snapshots the
+	// diagnostics dump renders.
+	introspect := adapter.NewIntrospectAdapter(d.reg)
 	// RPC session recorder (XML/JSON-RPC replay capture). Resume a
 	// recording that was running before a restart, then expose it.
 	rpcRecorder := adapter.NewRPCRecorderAdapter(d.reg, cfg.DataDir)
@@ -411,13 +415,16 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		LogFeed:         d.liveFeed,
 		LogDefaultLevel: d.levels,
 		RPCRecorder:     rpcRecorder,
-		Introspect:      adapter.NewIntrospectAdapter(d.reg),
+		Introspect:      introspect,
 		RSSIInfo:        adapter.NewRSSIInfoDomain(d.reg),
 		AuditRecorder:   d.auditRec,
 		StatusMetrics:   d.restStatusMetrics,
 		KnownCentrals:   d.reg.Names(),
 		HealthGauges:    d.healthAdapter.Gauges,
-		StartupCapture:  handlers.NewStartupCaptureFileService(cfg.DataDir),
+		// The per-CCU aggregators the boot wiring stands up leave the
+		// daemon here — the diagnostics dump is their only reader.
+		CentralMetrics: introspect.MetricsSnapshots,
+		StartupCapture: handlers.NewStartupCaptureFileService(cfg.DataDir),
 		// Mount /system/restart only when a supervisor will
 		// bring the daemon back up. On bare-metal dev runs the
 		// endpoint stays unmounted (404), so the SPA's button

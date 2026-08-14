@@ -175,8 +175,9 @@ func (o *Observer) KeysByPrefix(prefix string) []string {
 // typed snapshots. One Aggregator is created per Unit.
 //
 // All provider fields are optional. Nil providers cause the corresponding
-// snapshot section to return zero-value structs. Concrete implementations
-// in internal/central and internal/client will be wired in P1-11.x.
+// snapshot section to return zero-value structs. The concrete providers
+// live in internal/metrics/wiring and are attached per central by the
+// daemon's boot wiring.
 type Aggregator struct {
 	centralName      string
 	observer         *Observer

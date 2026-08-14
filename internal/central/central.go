@@ -126,8 +126,10 @@ type Unit struct {
 	MetricsClients *clientpkg.MetricsClientProvider
 
 	// Aggregator is the per-CCU metrics aggregator. Nil until the daemon
-	// wires it at boot via [SetAggregator]. REST handlers that expose
-	// snapshots check for nil before dereferencing.
+	// wires it at boot via [SetAggregator], so every reader checks for
+	// nil before dereferencing. Read by the diagnostics introspection
+	// adapter, which renders the snapshot into the `metrics` block of
+	// `GET /api/v1/diagnostics`.
 	Aggregator *metrics.Aggregator
 
 	logger *slog.Logger
@@ -195,9 +197,9 @@ type Unit struct {
 // SetAggregator attaches a metrics aggregator to the central. Called
 // once at daemon boot, after all providers are wired. Nil is a valid
 // value (detaches the current aggregator). The aggregator is exposed
-// via the public [Aggregator] field; REST handlers read it directly
-// without synchronisation because it is only written once before any
-// handler starts serving.
+// via the public [Aggregator] field; readers take it directly without
+// synchronisation because it is only written once before any request
+// is served.
 func (u *Unit) SetAggregator(agg *metrics.Aggregator) {
 	u.Aggregator = agg
 }

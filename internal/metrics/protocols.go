@@ -6,8 +6,8 @@ package metrics
 // Provider interfaces used by Aggregator to pull metrics from system
 // components. Defined here (not in pkg/interfaces) to avoid circular imports.
 //
-// The concrete implementations live in internal/central and internal/client
-// and must be wired up as a follow-up (P1-11.x).
+// The concrete implementations live in internal/metrics/wiring, which adapts
+// the components a central owns onto these interfaces.
 
 // ClientForMetrics is the minimal interface needed to collect RPC metrics
 // from an interface client.

@@ -4,6 +4,7 @@
 package rest
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -536,6 +537,11 @@ type Deps struct {
 	// pull-gauge readings (event_bus / audit / scheduler / rest /
 	// ws). `(*health.Tracker).Gauges` satisfies this directly.
 	HealthGauges func() map[string]float64
+	// CentralMetrics, when set, returns the typed metrics snapshot of
+	// every central, keyed by central name, for the `metrics` block of
+	// the diagnostics dump. The daemon composition root fills this
+	// from the per-CCU aggregators; nil omits the block.
+	CentralMetrics func(ctx context.Context) map[string]metrics.MetricsSnapshot
 	// CSRFEnabled mounts auth.CSRFMiddleware in the chain when true.
 	// The double-submit cookie/header guard protects mutating REST
 	// endpoints against cross-site request forgery. Disabled by
@@ -1086,14 +1092,15 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// agent escalation. Anonymises by default; pass
 			// ?anonymize=0 explicitly for raw output.
 			diagDeps := handlers.DiagnosticsDeps{
-				Health:        d.Health,
-				HealthExt:     d.HealthExtras,
-				Interfaces:    d.Interfaces,
-				Incidents:     d.Incidents,
-				SystemStatus:  d.SystemStatus,
-				LogLevels:     d.LogLevels,
-				KnownCentrals: d.KnownCentrals,
-				HealthGauges:  d.HealthGauges,
+				Health:         d.Health,
+				HealthExt:      d.HealthExtras,
+				Interfaces:     d.Interfaces,
+				Incidents:      d.Incidents,
+				SystemStatus:   d.SystemStatus,
+				LogLevels:      d.LogLevels,
+				KnownCentrals:  d.KnownCentrals,
+				HealthGauges:   d.HealthGauges,
+				CentralMetrics: d.CentralMetrics,
 			}
 			pr.With(admin).Get("/diagnostics", handlers.Diagnostics(diagDeps))
 			if d.StartupCapture != nil {
