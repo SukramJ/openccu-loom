@@ -1,0 +1,28 @@
+{
+  "sessions": [
+    {
+      "session_id": 41221,
+      "fabric_index": 1,
+      "peer_node_id": "00000000DEADBEEF",
+      "local_node_id": "0000000000000001",
+      "is_pase": false,
+      "subscriptions": 3,
+      "last_activity": "2026-02-14T11:59:52Z",
+      "last_peer_activity": "2026-02-14T11:59:52Z",
+      "idle_seconds": 8,
+      "peer_idle_seconds": 8
+    },
+    {
+      "session_id": 5188,
+      "fabric_index": 2,
+      "peer_node_id": "000000000000ABCD",
+      "local_node_id": "0000000000000001",
+      "is_pase": false,
+      "subscriptions": 0,
+      "last_activity": "2026-02-14T11:58:00Z",
+      "last_peer_activity": "2026-02-14T11:20:00Z",
+      "idle_seconds": 120,
+      "peer_idle_seconds": 2400
+    }
+  ]
+}
