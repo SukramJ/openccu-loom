@@ -194,14 +194,13 @@ type HubEventsSubscriber struct {
 	reg *central.Registry
 	hub *Hub
 
-	// unsubs holds what the boot walk attached; StartCentral hands its
-	// unwire to the adopt path instead of recording it here. That is what
-	// keeps the slice single-threaded without a lock — see the field on
+	// remove detaches the registry observer Start installed, together with
+	// every per-central subscription it attached — see the field on
 	// [SystemStatusSubscriber] for the full ownership rule. A lock here
 	// would guard a Start/Stop overlap that cannot occur: the composition
 	// root runs Start before any server listens and Stop after every server
 	// has stopped.
-	unsubs []func()
+	remove func()
 }
 
 // NewHubEventsSubscriber returns a subscriber bound to reg and hub.
@@ -209,17 +208,13 @@ func NewHubEventsSubscriber(reg *central.Registry, hub *Hub) *HubEventsSubscribe
 	return &HubEventsSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
-// A central adopted later must be attached with [HubEventsSubscriber.StartCentral].
+// Start subscribes to every central the registry holds now and to every one
+// registered later.
 func (s *HubEventsSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	for _, u := range s.reg.List() {
-		if unwire := s.StartCentral(u); unwire != nil {
-			s.unsubs = append(s.unsubs, unwire)
-		}
-	}
+	s.remove = s.reg.OnRegister(s.StartCentral)
 }
 
 // StartCentral attaches this subscriber's hub-model and event-bus
@@ -529,13 +524,12 @@ func (s *HubEventsSubscriber) hubModelSubscriptions(centralName string, hm *hubm
 	return unsubs
 }
 
-// Stop drops every subscription this subscriber attached from Start:
-// both the event-bus handlers and the hub-model change callbacks.
-// Subscriptions handed to a caller by StartCentral are that caller's to
-// detach.
+// Stop removes the registry observer and drops every subscription it
+// attached — both the event-bus handlers and the hub-model change callbacks,
+// for boot-time and adopted centrals alike.
 func (s *HubEventsSubscriber) Stop() {
-	for _, u := range s.unsubs {
-		u()
+	if s.remove != nil {
+		s.remove()
+		s.remove = nil
 	}
-	s.unsubs = nil
 }

@@ -738,7 +738,7 @@ func TestWireIncidentRecorder_WithCentralAndDB(t *testing.T) {
 	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-inc")
 	logger := slog.New(slog.DiscardHandler)
-	_, _, closer := wireIncidentRecorder(db, reg, logger)
+	_, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 }
 
@@ -749,7 +749,7 @@ func TestWireSessionRecorderPersistence_WithCentral(t *testing.T) {
 	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-sess")
 	logger := slog.New(slog.DiscardHandler)
-	_, closer := wireSessionRecorderPersistence(db, reg, logger)
+	closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
@@ -929,10 +929,10 @@ func TestWireAuditPersistenceWithDB_SharesHandleWithOtherWiring(t *testing.T) {
 	}
 	rec.Record(audit.Entry{User: "lifecycle-test", Parameter: "p"})
 
-	_, _, incidentCloser := wireIncidentRecorder(db, reg, logger)
+	_, incidentCloser := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(incidentCloser)
 
-	_, sessionCloser := wireSessionRecorderPersistence(db, reg, logger)
+	sessionCloser := wireSessionRecorderPersistence(db, reg, logger)
 	t.Cleanup(sessionCloser)
 }
 

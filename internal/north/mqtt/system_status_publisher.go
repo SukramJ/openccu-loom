@@ -26,7 +26,9 @@ type SystemStatusPublisher struct {
 	wiring *Wiring
 	logger *slog.Logger
 
-	unsubs []func()
+	// remove detaches the registry observer Start installed, together with
+	// every per-central subscription it attached.
+	remove func()
 }
 
 // NewSystemStatusPublisher returns a publisher bound to reg and wiring.
@@ -52,25 +54,20 @@ type systemStatusPayload struct {
 	EventAt            time.Time `json:"event_at"`
 }
 
-// Start attaches one subscription per registered central. Safe to call
-// multiple times — subsequent calls are no-ops if already started.
-// A central adopted later must be attached with
-// [SystemStatusPublisher.StartCentral].
+// Start attaches one subscription per central the registry holds now, and one
+// more for every central registered later.
 func (p *SystemStatusPublisher) Start() {
 	if p.reg == nil || p.wiring == nil {
 		return
 	}
-	for _, u := range p.reg.List() {
-		if unsub := p.StartCentral(u); unsub != nil {
-			p.unsubs = append(p.unsubs, unsub)
-		}
-	}
+	p.remove = p.reg.OnRegister(p.StartCentral)
 }
 
 // StartCentral attaches this publisher to a single central's event bus and
-// returns the unsubscribe (nil when there was nothing to attach).
+// returns the unsubscribe (nil when there was nothing to attach). It is the
+// observer the registry runs per central.
 //
-// Start only ever walked the registry as it stood at boot, so a central
+// Start used to walk the registry as it stood at boot, so a central
 // adopted at runtime never published a single message on the MQTT
 // system-status plane until the daemon was restarted.
 func (p *SystemStatusPublisher) StartCentral(u *central.Unit) func() {
@@ -118,11 +115,11 @@ func (p *SystemStatusPublisher) StartCentral(u *central.Unit) func() {
 	})
 }
 
-// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
-// to a caller by StartCentral are that caller's to detach.
+// Stop removes the registry observer and drops every subscription it
+// attached — including the ones for centrals adopted after Start.
 func (p *SystemStatusPublisher) Stop() {
-	for _, u := range p.unsubs {
-		u()
+	if p.remove != nil {
+		p.remove()
+		p.remove = nil
 	}
-	p.unsubs = nil
 }

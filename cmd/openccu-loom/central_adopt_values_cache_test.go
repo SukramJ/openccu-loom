@@ -53,14 +53,6 @@ func TestAdoptedCentralValuesArePersistedByThePeriodicFlush(t *testing.T) {
 	t.Cleanup(evictor.Stop)
 
 	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
-	orch.addCentralHook(func(u *central.Unit) func() {
-		stopFlush := flusher.StartCentral(u)
-		stopEvict := evictor.StartCentral(u)
-		return func() {
-			stopFlush()
-			stopEvict()
-		}
-	})
 
 	const centralName = "adopted-live"
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig(centralName)); err != nil {

@@ -82,15 +82,6 @@ type southboundWiring struct {
 	// subscribes runtime-added centrals onto the same pipeline. Nil when MQTT is
 	// not configured.
 	hubReadyTrigger func()
-	// historyCentralHook subscribes one runtime-adopted central to the
-	// measurement recorder, which otherwise walks the registry only at boot.
-	// Nil when history recording is off.
-	historyCentralHook func(u *central.Unit) (unwire func())
-	// valuesCacheCentralHook registers a runtime-adopted central with the
-	// values-cache flusher's dirty tracker and its eviction subscription — the
-	// same two seams the boot-time wiring runs for every configured central.
-	// Never nil; both halves are no-ops when the cache is disabled.
-	valuesCacheCentralHook func(u *central.Unit) func()
 }
 
 // serialBackfiller returns the WireDeps.PersistSerial callback: it records a
@@ -273,27 +264,13 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// to genuine live wire value changes and persists a numeric
 	// time-series for SPA charts (no-op when history is off — nil store).
 	// See ADR 0040. Both helpers manage their own daemon-lifetime context.
-	evictor := adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger)                                                             //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
-	historyCentralHook, stopHistoryRecorder := wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the recorder bounds its own internal contexts; it takes no ctx
+	evictor := adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger)                                         //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
+	stopHistoryRecorder := wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the recorder bounds its own internal contexts; it takes no ctx
 	teardowns = append(
 		teardowns,
 		evictor.Stop,
 		stopHistoryRecorder,
 	)
-	// Both subscribe per central, and both were wired from a one-shot walk of
-	// the registry at boot. A CCU adopted at runtime therefore never reached
-	// either: its dirty flag was never armed, so no periodic tick ever wrote
-	// its values (only the graceful-shutdown flush did, which a SIGKILL / OOM
-	// kill / host reboot skips), and unpairing one of its devices left the
-	// rows behind. The live-adopt path runs the same two seams boot does.
-	valuesCacheCentralHook := func(u *central.Unit) func() { //nolint:contextcheck // both seams subscribe bus handlers that bound their own contexts
-		stopFlush := flusher.StartCentral(u)
-		stopEvict := evictor.StartCentral(u)
-		return func() {
-			stopFlush()
-			stopEvict()
-		}
-	}
 	// Surface the values-cache counters as health gauges so the
 	// /diagnostics surface and any Prometheus scraper see how many
 	// rows survived the last restart, how many got cast-rejected,
@@ -467,11 +444,9 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	teardowns = append(teardowns, stopSweep)
 
 	result = southboundWiring{
-		backupAdapter:          backupAdapter,
-		bringUpManager:         bringUpMgr,
-		hubReadyTrigger:        hubReadyTriggerFn,
-		historyCentralHook:     historyCentralHook,
-		valuesCacheCentralHook: valuesCacheCentralHook,
+		backupAdapter:   backupAdapter,
+		bringUpManager:  bringUpMgr,
+		hubReadyTrigger: hubReadyTriggerFn,
 	}
 	return result, teardown
 }

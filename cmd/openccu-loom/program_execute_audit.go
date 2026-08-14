@@ -31,38 +31,27 @@ import (
 // invisible in exactly the situation the record was built for. Source names
 // the ingress surface (see [hmevent.ProgramExecutedEvent.Source]).
 //
-// Returns the per-central hook the live-adopt orchestrator installs, plus a
-// teardown that removes every boot-time subscription. Both are safe no-ops
-// when there is nothing to wire.
+// Returns a teardown that removes every subscription. It is a safe no-op when
+// there is nothing to wire.
 //
-// The hook exists because the loop below walks the registry exactly once: a
-// CCU adopted at runtime got no subscription at all, so a program run on it
-// left neither an audit row nor a log line — the record built to answer
-// "did we send that second execution?" was silently empty for precisely the
-// central the operator was asking about, while it worked for its neighbours.
+// The subscription rides the registry observer because a boot walk saw only
+// the centrals present at boot: a CCU adopted at runtime got no subscription
+// at all, so a program run on it left neither an audit row nor a log line —
+// the record built to answer "did we send that second execution?" was silently
+// empty for precisely the central the operator was asking about, while it
+// worked for its neighbours.
 func wireProgramExecuteAudit(
 	reg *central.Registry, rec audit.Recorder, logger *slog.Logger,
-) (centralHook func(u *central.Unit) (unwire func()), teardown func()) {
+) (teardown func()) {
 	if reg == nil || rec == nil {
-		return nil, func() {}
+		return func() {}
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	centralHook = func(u *central.Unit) func() {
+	return reg.OnRegister(func(u *central.Unit) func() {
 		return subscribeProgramExecuteAudit(u, rec, logger)
-	}
-	var unsubs []func()
-	for _, u := range reg.List() {
-		if unsub := centralHook(u); unsub != nil {
-			unsubs = append(unsubs, unsub)
-		}
-	}
-	return centralHook, func() {
-		for _, unsub := range unsubs {
-			unsub()
-		}
-	}
+	})
 }
 
 // subscribeProgramExecuteAudit records one central's program executions. It

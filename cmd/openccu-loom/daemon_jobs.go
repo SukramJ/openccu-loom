@@ -190,10 +190,19 @@ func registerFirmwareJobsFor(u *central.Unit, valueWriter *clientpkg.ValueWriter
 // post-Start, non-RunOnStart job on its interval, so the first backup fires
 // one interval in — never at boot. Each central backs up its own CCU and (when
 // KeepLast > 0) prunes its own oldest backups.
-func registerScheduledBackupJobs(reg *central.Registry, cfg *config.Config, backupAdapter *adapter.BackupAdapter, logger *slog.Logger) {
-	for _, u := range reg.List() {
-		registerScheduledBackupJobFor(u, cfg, backupAdapter, logger)
+// It rides the registry observer so a CCU adopted at runtime gets the same job
+// the boot-time centrals get: `backup.schedule` applies daemon-wide, and an
+// adopted CCU that silently produced no backup was only discoverable by
+// noticing its backup list never filled. The returned closer detaches the
+// observer; the jobs themselves die with each unit's scheduler.
+func registerScheduledBackupJobs(reg *central.Registry, cfg *config.Config, backupAdapter *adapter.BackupAdapter, logger *slog.Logger) (stop func()) {
+	if reg == nil {
+		return func() {}
 	}
+	return reg.OnRegister(func(u *central.Unit) func() {
+		registerScheduledBackupJobFor(u, cfg, backupAdapter, logger)
+		return nil
+	})
 }
 
 // registerScheduledBackupJobFor registers one central's automatic-backup job.

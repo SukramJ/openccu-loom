@@ -106,23 +106,6 @@ func TestAdoptCentralWiresTheOutboundWebhook(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = outbound.Stop(context.Background()) })
 
-	// No hook installed yet — this is what a runtime-adopted central used to
-	// get: registered, live, and undelivered.
-	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("unhooked")); err != nil {
-		t.Fatalf("adoptCentral(unhooked): %v", err)
-	}
-	unhooked, ok := reg.Get("unhooked")
-	if !ok {
-		t.Fatal("adopted central 'unhooked' not present in the registry")
-	}
-	publishIncidentOn(unhooked)
-	time.Sleep(100 * time.Millisecond)
-	if got := rt.deliveriesFor("unhooked"); got != 0 {
-		t.Fatalf("deliveries for the central adopted without the hook = %d, want 0", got)
-	}
-
-	orch.addCentralHook(func(u *central.Unit) func() { return outbound.AttachCentral(u) })
-
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("hooked")); err != nil {
 		t.Fatalf("adoptCentral(hooked): %v", err)
 	}
@@ -144,6 +127,22 @@ func TestAdoptCentralWiresTheOutboundWebhook(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	if after := rt.deliveriesFor("hooked"); after != before {
 		t.Errorf("deliveries after removeCentral = %d, want %d (the subscription leaked past removal)", after, before)
+	}
+
+	// Negative control: with the bridge stopped, a central adopted afterwards
+	// delivers nothing — the state every runtime adopt used to be in.
+	_ = outbound.Stop(context.Background())
+	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("unhooked")); err != nil {
+		t.Fatalf("adoptCentral(unhooked): %v", err)
+	}
+	unhooked, ok := reg.Get("unhooked")
+	if !ok {
+		t.Fatal("adopted central 'unhooked' not present in the registry")
+	}
+	publishIncidentOn(unhooked)
+	time.Sleep(100 * time.Millisecond)
+	if got := rt.deliveriesFor("unhooked"); got != 0 {
+		t.Fatalf("deliveries for a central adopted after the bridge stopped = %d, want 0", got)
 	}
 
 	if err := orch.removeCentral(ctx, "unhooked"); err != nil {

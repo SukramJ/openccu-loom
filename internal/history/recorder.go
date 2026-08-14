@@ -186,25 +186,18 @@ func (r *Recorder) Metrics() Metrics {
 	}
 }
 
-// Wire subscribes the recorder to every enabled central's EventBus and
-// starts the background flush + retention loop. The returned closer
-// unsubscribes, stops the loop, and runs one final flush so no buffered
-// sample is lost on a graceful stop. Safe to call on a nil/disabled
-// recorder (returns a no-op closer).
-//
-// Wire walks the registry exactly once; a central adopted at runtime must be
-// attached with [Recorder.WireCentral].
+// Wire subscribes the recorder to every enabled central's EventBus — the
+// centrals registered now and every one registered later — and starts the
+// background flush + retention loop. The returned closer unsubscribes, stops
+// the loop, and runs one final flush so no buffered sample is lost on a
+// graceful stop. Safe to call on a nil/disabled recorder (returns a no-op
+// closer).
 func (r *Recorder) Wire(reg *central.Registry) func() {
 	if r == nil || r.store == nil || reg == nil {
 		return func() {}
 	}
 
-	var unsubs []func()
-	for _, unit := range reg.List() {
-		if unsub := r.WireCentral(unit); unsub != nil {
-			unsubs = append(unsubs, unsub)
-		}
-	}
+	removeObserver := reg.OnRegister(r.WireCentral)
 
 	stopLoop := r.startLoop()
 
@@ -213,9 +206,7 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 		once.Do(func() {
 			// Stop new samples first so the final flush drains a quiet
 			// buffer, then stop the loop and wait for the final flush.
-			for _, u := range unsubs {
-				u()
-			}
+			removeObserver()
 			stopLoop()
 			if r.exporter != nil {
 				shutCtx, cancelShut := context.WithTimeout(context.Background(), 5*time.Second)
@@ -228,9 +219,10 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 
 // WireCentral subscribes the recorder to one central's EventBus and returns
 // the unsubscribe (nil when the central carries no bus / model, or when
-// recording is not enabled for it).
+// recording is not enabled for it). It is the observer the registry runs per
+// central.
 //
-// It exists because Wire only ever walked the registry as it stood at boot: a
+// It exists because Wire used to walk the registry as it stood at boot: a
 // central adopted at runtime recorded no measurement history at all — its
 // charts stayed permanently empty — and nothing failed or logged, so the gap
 // looked like a CCU that simply reported no values. Unlike Wire it does not

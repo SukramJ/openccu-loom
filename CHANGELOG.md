@@ -33,6 +33,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A CCU added while the daemon is running is now wired the same way a
+  CCU present at boot is — structurally, not by remembering to.** Every
+  subsystem that works per CCU used to attach itself by walking the list of
+  configured CCUs once during start-up, which left a CCU adopted afterwards
+  silent on that plane until the next restart: no measurement history, no
+  webhook deliveries, no WebSocket status or device-trigger frames, no MQTT
+  system-status messages, no scheduled backups, no reliability incidents.
+  Those subsystems now register themselves once with the CCU registry, which
+  wires them for the CCUs already present and for every CCU added later, and
+  unwires them again when a CCU is removed. The second registration step that
+  had to be remembered per subsystem — and that was the actual defect — no
+  longer exists.
+
 - **`delay_new_device_creation` now has the operator surface it promises.**
   The toggle held a newly paired device back — and there it ended: the
   announced descriptions were parked in memory, no list showed them, and

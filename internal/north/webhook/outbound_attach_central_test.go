@@ -15,13 +15,13 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// TestAttachCentralDeliversForACentralAddedAfterStart pins the entry point the
-// live-adopt path uses. Start subscribes by walking the registry exactly once,
-// so a CCU adopted at runtime never produced a single webhook POST — not for
-// its data points, not for its status changes, not for its incidents — until a
-// daemon restart turned it into a boot-time central. Nothing failed and
-// nothing logged.
-func TestAttachCentralDeliversForACentralAddedAfterStart(t *testing.T) {
+// TestDeliversForACentralRegisteredAfterStart pins the entry point the
+// live-adopt path uses. Start used to subscribe by walking the registry
+// exactly once, so a CCU adopted at runtime never produced a single webhook
+// POST — not for its data points, not for its status changes, not for its
+// incidents — until a daemon restart turned it into a boot-time central.
+// Nothing failed and nothing logged.
+func TestDeliversForACentralRegisteredAfterStart(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	ft := &fakeTransport{}
@@ -36,36 +36,27 @@ func TestAttachCentralDeliversForACentralAddedAfterStart(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	// The central appears only now — after the boot-time walk.
+	// The central appears only now — after Start ran against an empty registry.
 	late := makeCentral(t, "late")
 	if err := reg.Register(late); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
 
 	events.Publish(late.EventBus, datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
-		hmtypes.BoolValue(true), hmtypes.NoneValue()))
-	time.Sleep(100 * time.Millisecond)
-	if n := ft.count(); n != 0 {
-		t.Fatalf("deliveries before AttachCentral = %d, want 0 (the assertion below would be vacuous)", n)
-	}
-
-	detach := o.AttachCentral(late)
-	if detach == nil {
-		t.Fatal("AttachCentral returned a nil detach for a running bridge and an allowed central")
-	}
-
-	events.Publish(late.EventBus, datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(false), hmtypes.NoneValue()))
 	waitForCount(t, ft, 1, 2*time.Second)
 
-	// Detach must stop delivery again, or a removed CCU keeps POSTing.
-	detach()
+	// Leaving the registry must stop delivery again, or a removed CCU keeps
+	// POSTing.
+	if !reg.Unregister("late") {
+		t.Fatal("Unregister reported the central was not present")
+	}
 	before := ft.count()
 	events.Publish(late.EventBus, datapointEvent("late-HmIP-RF", "ABC:1", "STATE",
 		hmtypes.BoolValue(true), hmtypes.NoneValue()))
 	time.Sleep(100 * time.Millisecond)
 	if after := ft.count(); after != before {
-		t.Errorf("deliveries after detach = %d, want %d", after, before)
+		t.Errorf("deliveries after Unregister = %d, want %d", after, before)
 	}
 }
 
@@ -96,9 +87,9 @@ func TestAttachCentralRespectsTheCentralAllowList(t *testing.T) {
 	}
 }
 
-// TestAttachCentralBeforeStartIsANoop pins that the hook cannot subscribe onto
-// a bridge whose delivery worker is not running: the queue is nil until Start,
-// so a subscription made earlier would drop every event it handled.
+// TestAttachCentralBeforeStartIsANoop pins that the observer cannot subscribe
+// onto a bridge whose delivery worker is not running: the queue is nil until
+// Start, so a subscription made earlier would drop every event it handled.
 func TestAttachCentralBeforeStartIsANoop(t *testing.T) {
 	t.Parallel()
 	o := NewOutbound(

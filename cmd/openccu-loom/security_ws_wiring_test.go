@@ -51,7 +51,7 @@ func TestWireSystemStatusSubscribersBroadcastsSecurityEvents(t *testing.T) {
 	reg, svc := newSecurityServiceForWiring(t, hmenum.DuressVisibilityFull)
 	wsHub := ws.NewHub()
 
-	_, _, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, svc, "", "", discardTestLogger())
+	_, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, svc, "", "", discardTestLogger())
 	t.Cleanup(teardown)
 
 	events.Publish(svc.Bus(), hmevent.SecurityClassChangedEvent{
@@ -82,7 +82,7 @@ func TestWireSystemStatusSubscribersWithoutSecurityService(t *testing.T) {
 	t.Parallel()
 
 	wsHub := ws.NewHub()
-	_, _, teardown := wireSystemStatusSubscribers(
+	_, teardown := wireSystemStatusSubscribers(
 		central.NewRegistry(), wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger(),
 	)
 	teardown()

@@ -64,8 +64,8 @@ func statusPublishesFor(t *testing.T, client *mqtt.NoopClient, topic string) int
 // registry exactly once at boot: for a CCU adopted afterwards the rule stayed
 // silent forever while it kept firing for the boot-time CCUs.
 //
-// The first half pins that pre-hook silence so the assertion cannot go
-// vacuous.
+// The last half stops the subscribers and adopts again, which reproduces that
+// silence so the assertion cannot go vacuous.
 func TestAdoptCentralWiresTheSystemStatusPlane(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -78,30 +78,10 @@ func TestAdoptCentralWiresTheSystemStatusPlane(t *testing.T) {
 	wiring := mqtt.NewWiring(bridge, discardTestLogger())
 	wsHub := ws.NewHub()
 
-	sysStatusBuf, centralHook, teardown := wireSystemStatusSubscribers(
+	sysStatusBuf, teardown := wireSystemStatusSubscribers(
 		reg, wsHub, wiring, nil, nil, nil, nil, "", "", discardTestLogger(),
 	)
 	t.Cleanup(teardown)
-	if centralHook == nil {
-		t.Fatal("wireSystemStatusSubscribers returned a nil per-central hook")
-	}
-
-	// No hook installed yet — this is what a runtime-adopted central used to
-	// get: registered, live, and unheard on every status surface.
-	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("unhooked")); err != nil {
-		t.Fatalf("adoptCentral(unhooked): %v", err)
-	}
-	unhooked, ok := reg.Get("unhooked")
-	if !ok {
-		t.Fatal("adopted central 'unhooked' not present in the registry")
-	}
-	publishSystemStatusOn(unhooked, "HmIP-RF")
-	unhookedTopic := bridge.Topics().SystemStatus("unhooked")
-	if got := statusPublishesFor(t, client, unhookedTopic); got != 0 {
-		t.Fatalf("publishes to %q without the hook = %d, want 0", unhookedTopic, got)
-	}
-
-	orch.addCentralHook(centralHook)
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("hooked")); err != nil {
 		t.Fatalf("adoptCentral(hooked): %v", err)
@@ -116,20 +96,15 @@ func TestAdoptCentralWiresTheSystemStatusPlane(t *testing.T) {
 	if got := statusPublishesFor(t, client, hookedTopic); got != 1 {
 		t.Fatalf("publishes to %q = %d, want 1", hookedTopic, got)
 	}
-	// The same hook carries the WebSocket broadcast and the REST buffer, so
-	// the adopted central is visible on all three surfaces or on none.
+	// The WebSocket broadcast and the REST buffer ride the same registry
+	// observer, so the adopted central is visible on all three surfaces or on
+	// none.
 	waitForWSTopic(t, wsHub, ws.SystemStatusTopic("hooked"))
 	entries := sysStatusBuf.SystemStatusEntries()
 	seen := false
 	for _, e := range entries {
-		if e.Reason != probeStatusReason {
-			continue
-		}
-		if e.Central == "hooked" {
+		if e.Reason == probeStatusReason && e.Central == "hooked" {
 			seen = true
-		}
-		if e.Central == "unhooked" {
-			t.Errorf("REST buffer holds an entry for the central adopted before the hook")
 		}
 	}
 	if !seen {
@@ -149,6 +124,22 @@ func TestAdoptCentralWiresTheSystemStatusPlane(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	if after := statusPublishesFor(t, client, hookedTopic); after != before {
 		t.Errorf("publishes after removeCentral = %d, want %d (the subscription leaked past removal)", after, before)
+	}
+
+	// Negative control: with the subscribers stopped, a central adopted
+	// afterwards is unheard on every status surface.
+	teardown()
+	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("unhooked")); err != nil {
+		t.Fatalf("adoptCentral(unhooked): %v", err)
+	}
+	unhooked, ok := reg.Get("unhooked")
+	if !ok {
+		t.Fatal("adopted central 'unhooked' not present in the registry")
+	}
+	publishSystemStatusOn(unhooked, "HmIP-RF")
+	unhookedTopic := bridge.Topics().SystemStatus("unhooked")
+	if got := statusPublishesFor(t, client, unhookedTopic); got != 0 {
+		t.Fatalf("publishes to %q after the subscribers stopped = %d, want 0", unhookedTopic, got)
 	}
 
 	if err := orch.removeCentral(ctx, "unhooked"); err != nil {

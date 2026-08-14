@@ -106,8 +106,8 @@ func deviceEventProbes() []deviceEventProbe {
 // while the boot-time CCUs kept publishing normally. Only a daemon
 // restart repaired it.
 //
-// The first half pins the pre-hook silence so the assertion cannot go
-// vacuous.
+// The last half stops the subscribers and adopts again, which reproduces
+// exactly that silence — so the positive assertion cannot go vacuous.
 func TestAdoptCentralWiresTheDeviceEventPlanes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -116,31 +116,10 @@ func TestAdoptCentralWiresTheDeviceEventPlanes(t *testing.T) {
 	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
 	wsHub := ws.NewHub()
 
-	_, centralHook, teardown := wireSystemStatusSubscribers(
+	_, teardown := wireSystemStatusSubscribers(
 		reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger(),
 	)
 	t.Cleanup(teardown)
-	if centralHook == nil {
-		t.Fatal("wireSystemStatusSubscribers returned a nil per-central hook")
-	}
-
-	// No hook installed yet — this is what a runtime-adopted central used
-	// to get: registered, live, and unheard on every device-event plane.
-	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("unhooked")); err != nil {
-		t.Fatalf("adoptCentral(unhooked): %v", err)
-	}
-	unhooked, ok := reg.Get("unhooked")
-	if !ok {
-		t.Fatal("adopted central 'unhooked' not present in the registry")
-	}
-	for _, p := range deviceEventProbes() {
-		p.publish(unhooked, p.address)
-		if got := len(wsEventsOnTopic(wsHub, p.topic(p.address))); got != 0 {
-			t.Fatalf("%s broadcasts without the hook = %d, want 0", p.name, got)
-		}
-	}
-
-	orch.addCentralHook(centralHook)
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("hooked")); err != nil {
 		t.Fatalf("adoptCentral(hooked): %v", err)
@@ -167,6 +146,25 @@ func TestAdoptCentralWiresTheDeviceEventPlanes(t *testing.T) {
 		p.publish(hooked, p.address)
 		if after := len(wsEventsOnTopic(wsHub, p.topic(p.address))); after != before {
 			t.Errorf("%s broadcasts after removeCentral = %d, want %d (the subscription leaked past removal)",
+				p.name, after, before)
+		}
+	}
+
+	// Negative control: with the subscribers stopped, an adopted central is
+	// unheard on every plane — the state every runtime adopt used to be in.
+	teardown()
+	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("unhooked")); err != nil {
+		t.Fatalf("adoptCentral(unhooked): %v", err)
+	}
+	unhooked, ok := reg.Get("unhooked")
+	if !ok {
+		t.Fatal("adopted central 'unhooked' not present in the registry")
+	}
+	for _, p := range deviceEventProbes() {
+		before := len(wsEventsOnTopic(wsHub, p.topic(p.address)))
+		p.publish(unhooked, p.address)
+		if after := len(wsEventsOnTopic(wsHub, p.topic(p.address))); after != before {
+			t.Errorf("%s broadcasts after the subscribers stopped = %d, want %d",
 				p.name, after, before)
 		}
 	}

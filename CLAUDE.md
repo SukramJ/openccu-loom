@@ -290,10 +290,18 @@ adopted at runtime is silent on that plane until the daemon restarts, and
 nothing anywhere reports it — the boot walk is correct, its tests are green,
 and the gap is invisible. Thirteen instances were found by hand in one audit.
 
-Every such walker needs a per-central seam the composition root calls on
-adopt: an entry point taking a `*central.Unit` (or the central's name), the
-boot walk delegating to it, and `centralOrchestrator.addCentralHook`
-registering it.
+Do not write the walk. Register a `central.Registry.OnRegister` observer
+instead: it replays over every central already registered and runs again for
+every central registered afterwards, and its unwire is run when that central
+leaves the registry. Boot and runtime adopt become one registration, so
+there is no second half to forget — which is what the previous shape
+(a boot walk plus a hook registered on the orchestrator) kept losing.
+
+The exception is a subsystem whose attach order relative to the south-bound
+bring-up is load-bearing. Those keep a named seam on `centralOrchestrator`
+(`setMatterCentralHook`, `setAlarmCentralHook`, …) that runs at a defined
+point in `adoptCentral`, and the composition root calls it with a
+`*central.Unit`.
 
 Guard: `TestEveryRegistryWalkerHasAnAdoptSeam` (`tests/contract/`), with
 `registryWalkersWithoutAdoptSeam` as its ratchet for the walkers that

@@ -109,8 +109,11 @@ func TestEveryRegistryWalkerHasAnAdoptSeam(t *testing.T) {
 		t.Errorf("%d registry walker(s) that subscribe to every central found at boot and have no "+
 			"per-central seam the composition root calls on adopt — a CCU added at runtime is "+
 			"silent on this plane until the daemon restarts, and nothing reports it:\n%s\n"+
-			"Add a per-central entry point taking a *central.Unit, have the boot walk delegate to it, "+
-			"register it with centralOrchestrator.addCentralHook — or declare it in "+
+			"Replace the walk with central.Registry.OnRegister — it replays over the centrals "+
+			"already registered and fires for every later one, so boot and adopt are one "+
+			"registration — or, when the attach order relative to the south-bound bring-up is "+
+			"load-bearing, add a per-central entry point taking a *central.Unit that the "+
+			"composition root calls on adopt. Otherwise declare it in "+
 			"registryWalkersWithoutAdoptSeam with the reason the silence is correct.",
 			len(orphans), strings.Join(orphans, "\n"))
 	}

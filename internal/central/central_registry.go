@@ -6,6 +6,7 @@ package central
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"sync"
 
@@ -20,28 +21,157 @@ import (
 type Registry struct {
 	mu    sync.RWMutex
 	items map[string]*Unit
+
+	// wireMu serializes every membership transition against the observer
+	// fan-out, and is held while an observer or an unwire runs. It is a
+	// second lock rather than a reuse of mu because observers read the
+	// registry (List, Get, SerialSuffix) while they wire themselves, and mu
+	// is what those reads take.
+	//
+	// The one rule it imposes: an observer must not itself Register,
+	// Unregister or OnRegister. No collaborator needs to, and the
+	// alternative — running observers outside the lock — reopens the window
+	// where a replay and a concurrent Register wire the same unit twice.
+	wireMu sync.Mutex
+	// observers holds every registered observer in registration order, which
+	// is the order they are run in for each unit.
+	observers []*centralObserver
+	// unwires is the ledger of what each observer attached to each central,
+	// keyed by central name and kept in attach order.
+	unwires map[string][]attachedUnwire
+}
+
+// Observer is wired for every unit that enters the registry: the ones
+// already present when it is registered AND every one registered afterwards.
+// It returns the teardown for whatever it attached, or nil when it attached
+// nothing.
+//
+// It exists because the daemon's second-largest defect class was a
+// collaborator that walked the registry once at boot and never learned about a
+// CCU adopted later — measurement history stayed empty, no webhook was ever
+// sent, WebSocket topics carried nothing. Every one of those is a boot walk
+// that should have been an observer, and the replay over the units already
+// present is what makes the two cases one case.
+type Observer func(u *Unit) (unwire func())
+
+// centralObserver is one registered observer. It is tracked by pointer so a
+// removal can find exactly its own attachments in the ledger.
+type centralObserver struct {
+	observe Observer
+}
+
+// attachedUnwire is one observer's teardown for one central.
+type attachedUnwire struct {
+	owner  *centralObserver
+	unwire func()
 }
 
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
-	return &Registry{items: make(map[string]*Unit)}
+	return &Registry{items: make(map[string]*Unit), unwires: make(map[string][]attachedUnwire)}
+}
+
+// OnRegister registers observe for every central in the registry — those
+// already registered are wired immediately, in List order, and every later
+// [Registry.Register] runs it too. The returned remove detaches everything
+// observe attached and stops it receiving further centrals; it is idempotent.
+//
+// This is the sanctioned way to wire something per central. A boot walk plus a
+// separate runtime-adopt hook is the same wiring written twice, and the second
+// half is what gets forgotten.
+func (r *Registry) OnRegister(observe Observer) (remove func()) {
+	if r == nil || observe == nil {
+		return func() {}
+	}
+	entry := &centralObserver{observe: observe}
+
+	r.wireMu.Lock()
+	r.observers = append(r.observers, entry)
+	for _, u := range r.List() {
+		r.attachLocked(entry, u)
+	}
+	r.wireMu.Unlock()
+
+	var once sync.Once
+	return func() { once.Do(func() { r.removeObserver(entry) }) }
+}
+
+// attachLocked runs one observer for one unit and records what it attached.
+// Caller holds wireMu.
+func (r *Registry) attachLocked(entry *centralObserver, u *Unit) {
+	if u == nil {
+		return
+	}
+	unwire := entry.observe(u)
+	if unwire == nil {
+		return
+	}
+	if r.unwires == nil {
+		r.unwires = make(map[string][]attachedUnwire)
+	}
+	name := u.Name()
+	r.unwires[name] = append(r.unwires[name], attachedUnwire{owner: entry, unwire: unwire})
+}
+
+// removeObserver drops entry from the observer list and runs every unwire it
+// attached, newest central first so the teardown mirrors the attach.
+func (r *Registry) removeObserver(entry *centralObserver) {
+	r.wireMu.Lock()
+	defer r.wireMu.Unlock()
+
+	r.observers = slices.DeleteFunc(r.observers, func(o *centralObserver) bool { return o == entry })
+
+	names := make([]string, 0, len(r.unwires))
+	for name := range r.unwires {
+		names = append(names, name)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+	for _, name := range names {
+		kept := r.unwires[name][:0]
+		var run []func()
+		for _, a := range r.unwires[name] {
+			if a.owner == entry {
+				run = append(run, a.unwire)
+				continue
+			}
+			kept = append(kept, a)
+		}
+		if len(kept) == 0 {
+			delete(r.unwires, name)
+		} else {
+			r.unwires[name] = kept
+		}
+		for i := len(run) - 1; i >= 0; i-- {
+			run[i]()
+		}
+	}
 }
 
 // ErrAlreadyRegistered is returned on duplicate Register.
 var ErrAlreadyRegistered = errors.New("central: name already registered")
 
-// Register adds c. Returns [ErrAlreadyRegistered] when the name is
-// already taken.
+// Register adds c and runs every registered [Observer] for it, in
+// registration order. Returns [ErrAlreadyRegistered] when the name is already
+// taken — a rejected registration wires nothing, because a subscription for a
+// unit the registry does not hold has no teardown path.
 func (r *Registry) Register(c *Unit) error {
 	if c == nil || c.Name() == "" {
 		return errors.New("central: cannot register nil / unnamed unit")
 	}
+	r.wireMu.Lock()
+	defer r.wireMu.Unlock()
+
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if _, ok := r.items[c.Name()]; ok {
+		r.mu.Unlock()
 		return ErrAlreadyRegistered
 	}
 	r.items[c.Name()] = c
+	r.mu.Unlock()
+
+	for _, entry := range r.observers {
+		r.attachLocked(entry, c)
+	}
 	return nil
 }
 
@@ -85,16 +215,32 @@ func (r *Registry) List() []*Unit {
 	return out
 }
 
-// Unregister atomically removes the central with the given name. Returns true
-// when an entry was found and removed, false when the name was not
-// registered.
+// Unregister atomically removes the central with the given name and runs every
+// observer unwire attached to it, in reverse attach order. Returns true when an
+// entry was found and removed, false when the name was not registered.
+//
+// The unwires run here and not at the call site because that is the only place
+// that sees every observer: a removed central whose subscriptions stay live
+// keeps publishing on planes it no longer belongs to.
 func (r *Registry) Unregister(name string) bool {
+	r.wireMu.Lock()
+	defer r.wireMu.Unlock()
+
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.items[name]; !ok {
+	_, ok := r.items[name]
+	if ok {
+		delete(r.items, name)
+	}
+	r.mu.Unlock()
+	if !ok {
 		return false
 	}
-	delete(r.items, name)
+
+	attached := r.unwires[name]
+	delete(r.unwires, name)
+	for i := len(attached) - 1; i >= 0; i-- {
+		attached[i].unwire()
+	}
 	return true
 }
 

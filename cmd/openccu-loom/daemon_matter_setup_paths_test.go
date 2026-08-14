@@ -1095,7 +1095,7 @@ func TestWireIncidentRecorder_CentralWithCache_SetsRecorder(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-incident")
 	logger := slog.New(slog.DiscardHandler)
 
-	_, _, closer := wireIncidentRecorder(db, reg, logger)
+	_, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 	// No assertion needed — no panic is the goal.
 }
