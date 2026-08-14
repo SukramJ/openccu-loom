@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 34914e43
-HEAD: 34914e43
+Generated: b259abbe
+HEAD: b259abbe
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28518 |
-| Reachable | 5015 |
-| Whitelisted | 20515 |
+| Total Exported | 28565 |
+| Reachable | 5019 |
+| Whitelisted | 20558 |
 | **Unreachable** | **2988** |
 
 ## Top-20 Packages by Dead Code

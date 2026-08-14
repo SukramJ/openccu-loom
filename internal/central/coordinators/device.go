@@ -715,6 +715,8 @@ func (c *DeviceCoordinator) ReloadChannelConfig(
 // queue: announced over a newDevices callback while
 // `delay_new_device_creation` is enabled, waiting for an operator to
 // accept it.
+//
+// loom:reachable:reason="element type of PendingDevices(), which PublishPendingDevices calls from the newDevices callback to populate the operator inbox surface; a method-less data struct the analyzer's type heuristic (reachable only via its methods) cannot see used"
 type PendingDevice struct {
 	// Interface is the canonical wire interface id the device was
 	// announced on.

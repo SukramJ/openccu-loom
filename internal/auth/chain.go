@@ -47,6 +47,8 @@ type ChainedTokenStore struct {
 // SubjectTokenPurger is a token store that can drop every token bound to
 // a subject. [ChainedTokenStore] dispatches on it so a member that cannot
 // purge is skipped instead of blocking the members that can.
+//
+// loom:reachable:reason="optional-capability contract satisfied via type assertion in ChainedTokenStore.DeleteBySubject, which the admin user handlers call on every role change and account delete; the type name never appears in production references, which the reachability analyzer's type heuristic cannot see"
 type SubjectTokenPurger interface {
 	DeleteBySubject(ctx context.Context, subject string) (int, error)
 }
