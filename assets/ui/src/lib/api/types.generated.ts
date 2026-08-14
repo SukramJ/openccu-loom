@@ -2287,7 +2287,7 @@ export interface paths {
         put?: never;
         /**
          * Finalize first-run onboarding
-         * @description Atomically persists the admin account, locale preference, optional CCU, and optional MQTT broker collected by the SPA onboarding wizard. Unauthenticated by necessity (no admin exists yet) but hard-gated: once any authentication source exists it returns 409, so a second admin can never be registered through this endpoint. On success the SPA returns to the login screen and the operator signs in with the new admin account.
+         * @description Atomically persists the admin account, locale preference, optional CCU, and optional MQTT broker collected by the SPA onboarding wizard. Unauthenticated by necessity (no admin exists yet) but hard-gated: once any authentication source exists it returns 409, so a second admin can never be registered through this endpoint. An operator who closed the surface with `bootstrap.allow_first_run_setup: false` gets 403 instead, regardless of how many users exist. On success the SPA returns to the login screen and the operator signs in with the new admin account.
          */
         post: operations["setup"];
         delete?: never;
@@ -8992,13 +8992,13 @@ export interface components {
             name: string;
             /** @description Overrides the default XML-RPC/BIN-RPC port. 0 or absent means "use backend default". */
             port?: number;
-            /** @description URL path override for XML-RPC requests. Empty means "use backend default". */
+            /** @description URL path override for XML-RPC requests, for a CCU reached through a reverse proxy that exposes it elsewhere. Must be an absolute path and may not be the bare "/". Empty means "use backend default" ("/RPC2", "/groups" for VirtualDevices). */
             remote_path?: string;
             /**
-             * @description Transport selector. Empty means "derive from interface name".
+             * @description Restates the transport the interface name already implies (CUxD is binrpc, every other interface xmlrpc). The transport is not selectable per interface: a value contradicting the derived one is rejected at config load. Empty means "derive from interface name".
              * @enum {string}
              */
-            rpc_type?: "" | "xmlrpc" | "binrpc" | "jsonrpc";
+            rpc_type?: "" | "xmlrpc" | "binrpc";
         };
         /** @description Per-central visibility overrides. */
         VisibilityConfig: {
@@ -11342,6 +11342,15 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            /** @description First-run onboarding disabled by bootstrap.allow_first_run_setup */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];

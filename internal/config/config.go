@@ -64,11 +64,19 @@ type InterfaceSpec struct {
 	// RemotePath overrides the URL path for XML-RPC requests.
 	// "" means "use the backend default" ("/RPC2" for HmIP-RF /
 	// BidCos-RF / BidCos-Wired, "/groups" for VirtualDevices).
-	// Operators with non-standard CCU routing can pin the value here.
+	// Operators with non-standard CCU routing — a reverse proxy in
+	// front of the CCU, say — can pin the value here. Must be an
+	// absolute path; the bare "/" is rejected because POSTing to it
+	// crashes the CCU's putParamset handler.
 	RemotePath string `yaml:"remote_path,omitempty" json:"remote_path,omitempty" cfg:"expert"`
 
-	// RPCType selects the transport explicitly. Accepted values: "",
-	// "xmlrpc", "binrpc". "" means "derive from interface name".
+	// RPCType states the transport explicitly. Accepted values: "",
+	// "xmlrpc", "binrpc". "" means "derive from the interface name",
+	// which is also what the daemon always does: CUxD speaks BIN-RPC,
+	// every other interface XML-RPC. The field therefore only ever
+	// confirms the derived transport — a value that contradicts it is
+	// rejected by [InterfaceSpec.Validate] rather than silently
+	// ignored, because no wiring path can honour it.
 	RPCType string `yaml:"rpc_type,omitempty" json:"rpc_type,omitempty" cfg:"expert"`
 }
 
@@ -109,19 +117,75 @@ func (s InterfaceSpec) Validate(idx int) error {
 	if s.Port != 0 && (s.Port < 1 || s.Port > 65535) {
 		return fmt.Errorf("config: interfaces[%d].port: out of range 1-65535: %d", idx, s.Port)
 	}
-	switch s.RPCType {
-	case "", "xmlrpc", "binrpc":
-		// valid
-	default:
-		return fmt.Errorf("config: interfaces[%d].rpc_type: invalid value %q (use xmlrpc or binrpc)", idx, s.RPCType)
+	if err := s.validateRemotePath(idx); err != nil {
+		return err
+	}
+	return s.validateRPCType(idx)
+}
+
+// validateRemotePath rejects a path the XML-RPC endpoint composer cannot
+// use. Failing here means a typo surfaces at config load with the offending
+// value in hand, instead of as a 404 on every call once the interface tries
+// to come up.
+func (s InterfaceSpec) validateRemotePath(idx int) error {
+	if s.RemotePath == "" {
+		return nil
+	}
+	if !strings.HasPrefix(s.RemotePath, "/") {
+		return fmt.Errorf(
+			"config: interfaces[%d].remote_path: %q must be an absolute path (start with \"/\")",
+			idx, s.RemotePath,
+		)
+	}
+	if s.RemotePath == "/" {
+		return fmt.Errorf(
+			"config: interfaces[%d].remote_path: the bare \"/\" is not usable — "+
+				"the CCU's putParamset handler crashes on it; name the real endpoint path",
+			idx,
+		)
 	}
 	return nil
 }
 
+// validateRPCType rejects a transport the daemon cannot select. The
+// transport follows from the interface (CUxD → BIN-RPC, everything else →
+// XML-RPC) and there is no wiring path that deviates, so a contradicting
+// value must fail loudly: silently ignoring it left operators reading a
+// persisted setting the daemon never applied.
+func (s InterfaceSpec) validateRPCType(idx int) error {
+	switch s.RPCType {
+	case "":
+		return nil
+	case "xmlrpc", "binrpc":
+		derived := "xmlrpc"
+		if hmenum.Interface(s.Name).IsBINRPC() {
+			derived = "binrpc"
+		}
+		if s.RPCType != derived {
+			return fmt.Errorf(
+				"config: interfaces[%d].rpc_type: %q contradicts the transport derived for interface %q (%s) — "+
+					"the transport is not selectable per interface; remove the key",
+				idx, s.RPCType, s.Name, derived,
+			)
+		}
+		return nil
+	default:
+		return fmt.Errorf("config: interfaces[%d].rpc_type: invalid value %q (use xmlrpc or binrpc)", idx, s.RPCType)
+	}
+}
+
 // Config is the root daemon configuration.
 type Config struct {
-	Locale      string            `yaml:"locale" json:"locale" cfg:"basic"`
-	DataDir     string            `yaml:"data_dir" json:"data_dir" cfg:"basic"`
+	Locale  string `yaml:"locale" json:"locale" cfg:"basic"`
+	DataDir string `yaml:"data_dir" json:"data_dir" cfg:"basic"`
+	// Bootstrap mirrors the bootstrap tier's safety toggles (see
+	// [BootstrapSafety]). It is parsed here as well because the consumers
+	// of those toggles — above all the first-run onboarding probe — run
+	// off the full config; a value only [BootstrapConfig] can see would
+	// never reach them. Like data_dir and logging it stays owned by the
+	// YAML/env tier: the SPA cannot edit it and no config section carries
+	// it.
+	Bootstrap   BootstrapSafety   `yaml:"bootstrap,omitempty" json:"bootstrap,omitzero" cfg:"basic"`
 	CCUData     CCUDataConfig     `yaml:"ccu_data" json:"ccu_data" cfg:"expert"`
 	Logging     LoggingConfig     `yaml:"logging" json:"logging" cfg:"basic"`
 	Callback    CallbackConfig    `yaml:"callback" json:"callback" cfg:"expert"`

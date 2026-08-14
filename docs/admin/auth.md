@@ -46,6 +46,29 @@ flow:
     further users through the admin API or your configured user store —
     not through `/setup`.
 
+### Closing the surface permanently
+
+The onboarding endpoints are unauthenticated by necessity, and they
+re-open by themselves whenever the daemon has no authentication source
+at all — a wiped data volume or a restored blank database is enough.
+Deployments that must never expose anonymous admin creation pin the
+surface shut in the bootstrap tier of `config.yaml`:
+
+```yaml
+bootstrap:
+  allow_first_run_setup: false
+```
+
+With that set, `GET /api/v1/setup/status` reports `required: false` and
+`POST /api/v1/setup` answers `403` regardless of the users table.
+
+!!! danger "This can lock you out, on purpose"
+    If no authentication source is configured (no local user, no YAML
+    user, no CCU-delegated login, no OIDC), the flag leaves no way into
+    the daemon at all. The only way back is setting it to `true` in the
+    config file and restarting. The daemon logs
+    `setup.onboarding.dormant` at boot when it is in that state.
+
 ## Basic auth
 
 Username/password over HTTP Basic, also backing the HTML login form.

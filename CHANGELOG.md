@@ -200,6 +200,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`bootstrap.allow_first_run_setup: false` now closes the onboarding
+  surface it names.** The toggle has been documented as a hardening
+  control since the first release and no code ever read it. An operator
+  who set it and later ended up with an empty users table — a restored
+  volume, a wiped data directory — still had `GET /api/v1/setup/status`
+  reporting first-run and `POST /api/v1/setup` accepting an anonymous
+  request, so anyone who could reach the listener registered themselves
+  as the admin. The probe now honours the flag, and the finalize call
+  answers `403` naming the setting instead of a `409` claiming an
+  account exists. The deliberate consequence, now documented and logged
+  at boot as `setup.onboarding.dormant`: with the flag false and no
+  authentication source at all there is no way in except editing the
+  YAML and restarting. (REST API 5.24.0)
+
+- **A per-interface `remote_path` reaches the CCU.** The override was
+  parsed, validated, stored, exported in the OpenAPI schema and rendered
+  in the config editor, while the endpoint composer hard-coded `/RPC2`
+  (`/groups` for VirtualDevices). Anyone whose CCU sits behind a reverse
+  proxy that exposes XML-RPC elsewhere watched every call 404 with no
+  hint that the configured path had been discarded. The composed URL now
+  honours it, and a path that is not absolute — or the bare `/`, which
+  crashes the CCU's putParamset handler — is rejected at config load
+  rather than at the first RPC.
+
+- **`rpc_type` no longer accepts a transport the daemon cannot use.**
+  The transport follows from the interface name (CUxD speaks BIN-RPC,
+  everything else XML-RPC) and nothing consulted the per-interface
+  value, so `rpc_type: binrpc` on BidCos-RF was accepted, saved, shown
+  as saved, and ignored. A value that contradicts the derived transport
+  is now a config error that names both; a value that agrees still
+  loads.
+
 - **A password reset now ends the sessions it is meant to end.** User
   names are stored lower-cased, but a login reported back whatever
   casing the person typed, and that spelling went into the session. An

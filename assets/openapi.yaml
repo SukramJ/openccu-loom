@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.23.0
+  version: 5.24.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2148,7 +2148,9 @@ paths:
         and optional MQTT broker collected by the SPA onboarding wizard.
         Unauthenticated by necessity (no admin exists yet) but hard-gated: once
         any authentication source exists it returns 409, so a second admin can
-        never be registered through this endpoint. On success the SPA returns to
+        never be registered through this endpoint. An operator who closed the
+        surface with `bootstrap.allow_first_run_setup: false` gets 403 instead,
+        regardless of how many users exist. On success the SPA returns to
         the login screen and the operator signs in with the new admin account.
       tags: [setup]
       security: []
@@ -2196,6 +2198,11 @@ paths:
       responses:
         "204": { description: Onboarding completed }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: First-run onboarding disabled by bootstrap.allow_first_run_setup
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -11689,11 +11696,19 @@ components:
           description: Overrides the default XML-RPC/BIN-RPC port. 0 or absent means "use backend default".
         remote_path:
           type: string
-          description: URL path override for XML-RPC requests. Empty means "use backend default".
+          description: >
+            URL path override for XML-RPC requests, for a CCU reached through a
+            reverse proxy that exposes it elsewhere. Must be an absolute path and
+            may not be the bare "/". Empty means "use backend default" ("/RPC2",
+            "/groups" for VirtualDevices).
         rpc_type:
           type: string
-          enum: ["", xmlrpc, binrpc, jsonrpc]
-          description: Transport selector. Empty means "derive from interface name".
+          enum: ["", xmlrpc, binrpc]
+          description: >
+            Restates the transport the interface name already implies (CUxD is
+            binrpc, every other interface xmlrpc). The transport is not selectable
+            per interface: a value contradicting the derived one is rejected at
+            config load. Empty means "derive from interface name".
 
     VisibilityConfig:
       type: object

@@ -129,6 +129,31 @@ func TestStoreEffectiveBootstrapFieldSources(t *testing.T) {
 	}
 }
 
+// TestStoreEffectiveCarriesBootstrapSafety pins that the hardening toggle
+// survives the assembly the daemon's reload and the SPA's config snapshot
+// both run through. The toggle is bootstrap-tier: an effective config that
+// dropped it would re-open the unauthenticated /setup surface on the next
+// re-assembly of a hardened deployment.
+func TestStoreEffectiveCarriesBootstrapSafety(t *testing.T) {
+	t.Parallel()
+	bs := defaultBootstrap()
+	bs.Bootstrap.AllowFirstRunSetup = new(false)
+	s := New(bs, nil, nil)
+	res, err := s.Effective(context.Background())
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	if res.Config.Bootstrap.FirstRunSetupAllowed() {
+		t.Error("effective config must carry allow_first_run_setup: false")
+	}
+	if got := res.Sources["bootstrap.allow_first_run_setup"]; got != SourceBootstrap {
+		t.Errorf("Sources[bootstrap.allow_first_run_setup]=%q want %q", got, SourceBootstrap)
+	}
+	if _, ok := UnmanagedFieldPaths()["bootstrap.allow_first_run_setup"]; !ok {
+		t.Error("bootstrap.allow_first_run_setup must not be editable through the section editor")
+	}
+}
+
 // TestStoreEffectiveAppliesSectionMQTT verifies that a north.mqtt row
 // in the section loader is applied to cfg.North.MQTT and attributed
 // to SourceDB.

@@ -526,8 +526,15 @@ centrals:
       - name: CUxD          # CUxD is reached over BIN-RPC
 ```
 
-`rpc_type` is `xmlrpc` or `binrpc` (empty derives it from the
-interface name). `json_rpc_port` defaults to `80` (plain) or `443`
+`rpc_type` is `xmlrpc` or `binrpc` and only ever restates what the
+interface name already implies — CUxD speaks BIN-RPC, every other
+interface XML-RPC. The transport is not selectable per interface, so a
+value that contradicts the derived one is rejected at config load
+instead of being silently ignored; leave the key out unless you want it
+documented in the file. `remote_path` overrides the URL path of the
+XML-RPC endpoint (`/RPC2`, or `/groups` for `VirtualDevices`) for a CCU
+behind a reverse proxy that exposes it elsewhere; it must be an
+absolute path and cannot be the bare `/`. `json_rpc_port` defaults to `80` (plain) or `443`
 (TLS); set it when the CCU sits behind a non-standard proxy. Set
 `tls_insecure_skip_verify` only against a self-signed CCU on a trusted
 network. `check_connection_interval` of `0` uses the `30s` default; a

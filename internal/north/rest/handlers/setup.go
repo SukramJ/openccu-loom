@@ -32,9 +32,17 @@ type SetupService struct {
 	Sections *sqlite.ConfigSectionStore
 	// Required reports first-run state: true only when there is no way to
 	// authenticate yet (no local admin, no YAML user, no CCU-delegated login,
-	// no OIDC). Mirrors the daemon's firstRunNeedsSetup probe. When false the
-	// finalize endpoint is closed so nobody can register a second admin.
+	// no OIDC) AND the operator has not closed the surface. Mirrors the
+	// daemon's firstRunNeedsSetup probe. When false the finalize endpoint is
+	// closed so nobody can register a second admin.
 	Required func(context.Context) bool
+	// FirstRunAllowed reports the operator's `bootstrap.allow_first_run_setup`
+	// toggle. It is the same input Required already folds in; it is carried
+	// separately only so the refusal can say which of the two closed the
+	// surface — a daemon that answered "setup already completed" on a
+	// database with zero users would send the operator hunting for an
+	// account that does not exist. Nil means allowed.
+	FirstRunAllowed func() bool
 }
 
 // setupStatusResponse is the body of GET /api/v1/setup/status.
@@ -101,13 +109,24 @@ func SetupStatus(s *SetupService) http.HandlerFunc {
 // Setup finalizes first-run onboarding. Unauthenticated by necessity (no admin
 // exists yet) but hard-gated on the first-run probe: once any authentication
 // source exists it returns 409 so a second admin can never be registered this
-// way. On success the SPA returns to the login screen and the operator signs
+// way, and an operator who closed the surface with
+// `bootstrap.allow_first_run_setup: false` gets 403 regardless of the users
+// table. On success the SPA returns to the login screen and the operator signs
 // in with the just-created admin account.
 func Setup(s *SetupService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s == nil || s.Users == nil || s.Sections == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
 				problem.New(problem.TypeServiceUnready, r, "Setup unavailable", "no durable store wired"))
+			return
+		}
+		// Hardening gate: the operator disabled onboarding outright. Answered
+		// before the first-run probe so the reason is accurate even on a
+		// database with no users at all.
+		if s.FirstRunAllowed != nil && !s.FirstRunAllowed() {
+			problem.Write(w, http.StatusForbidden,
+				problem.New(problem.TypeForbidden, r, "First-run setup disabled",
+					"bootstrap.allow_first_run_setup is false"))
 			return
 		}
 		// Single-shot guarantee: refuse once any auth source exists. This is the

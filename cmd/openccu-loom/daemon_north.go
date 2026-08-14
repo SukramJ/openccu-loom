@@ -188,6 +188,28 @@ func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore, sqCentral
 	}
 }
 
+// warnOnDormantOnboarding logs once at boot when the operator has closed the
+// first-run surface on a daemon that cannot authenticate anyone. The lockout
+// is the point of `bootstrap.allow_first_run_setup: false`, but from the SPA
+// it is indistinguishable from a broken login — the log record is the only
+// place that can name the cause and the way out.
+func warnOnDormantOnboarding(ctx context.Context, cfg *config.Config, sqUsers *sqlitestore.UserStore, sqCentrals *sqlitestore.CentralsStore, logger *slog.Logger) {
+	if cfg.Bootstrap.FirstRunSetupAllowed() || sqUsers == nil {
+		return
+	}
+	n, err := sqUsers.Count(ctx)
+	if err != nil {
+		return
+	}
+	if !noAuthSourceConfigured(cfg, n, hasConfiguredCentral(ctx, cfg, sqCentrals)) {
+		return
+	}
+	logger.Warn("setup.onboarding.dormant",
+		slog.String("reason", "bootstrap.allow_first_run_setup is false and no authentication source is configured"),
+		slog.String("effect", "nobody can log in and the onboarding wizard stays closed"),
+		slog.String("remedy", "set bootstrap.allow_first_run_setup: true in the config file and restart"))
+}
+
 // hasConfiguredCentral reports whether the operator has a central in either
 // tier: the boot-time cfg.Centrals snapshot (the YAML tier, plus the DB rows
 // layered in at boot) or an enabled row added to the SQLite centrals table
@@ -224,7 +246,22 @@ func hasConfiguredCentral(ctx context.Context, cfg *config.Config, sqCentrals *s
 // add-on install out completely — the wizard was suppressed AND every CCU
 // login was rejected, while adding the central needs an authenticated
 // session.
+//
+// The operator can close the surface outright with
+// `bootstrap.allow_first_run_setup: false`, which wins over everything else:
+// it is a hardening control for deployments that must never expose anonymous
+// admin creation, including on a database whose users table was emptied
+// (restored volume, blank DB). Its documented consequence is a lockout — with
+// the toggle false and no authentication source configured the only way in is
+// editing the YAML back and restarting. [warnOnDormantOnboarding] names that
+// state in the log so it is diagnosable.
 func firstRunNeedsSetup(cfg *config.Config, localUserCount int, hasCentral bool) bool {
+	return cfg.Bootstrap.FirstRunSetupAllowed() && noAuthSourceConfigured(cfg, localUserCount, hasCentral)
+}
+
+// noAuthSourceConfigured reports whether the daemon has no way to
+// authenticate anyone yet.
+func noAuthSourceConfigured(cfg *config.Config, localUserCount int, hasCentral bool) bool {
 	switch {
 	case localUserCount > 0:
 		return false // a persisted local admin exists

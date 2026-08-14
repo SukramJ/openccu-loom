@@ -147,6 +147,11 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 			DataDir: cfg.DataDir,
 			Logging: cfg.Logging,
 			Listen:  config.BootstrapListen{REST: cfg.North.REST.Listen},
+			// The hardening toggle has to travel with the tier that owns it:
+			// [configstore.Store] re-applies the bootstrap tier on every
+			// re-assembly, so omitting it here would silently re-open the
+			// unauthenticated onboarding surface on a reload.
+			Bootstrap: cfg.Bootstrap,
 		}
 		// Resolve the at-rest secret cipher (ADR 0027) and wire it into the
 		// section + centrals stores so secret-classed fields are sealed

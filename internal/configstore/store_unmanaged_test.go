@@ -142,7 +142,12 @@ func TestRESTSectionDoesNotCarryAuthCredentials(t *testing.T) {
 func TestUnmanagedFieldPaths(t *testing.T) {
 	t.Parallel()
 	got := UnmanagedFieldPaths()
-	want := []string{"north.rest.listen", "north.rest.auth.users", "north.rest.auth.tokens"}
+	want := []string{
+		"north.rest.listen",
+		"north.rest.auth.users",
+		"north.rest.auth.tokens",
+		"bootstrap.allow_first_run_setup",
+	}
 	if len(got) != len(want) {
 		t.Fatalf("UnmanagedFieldPaths size=%d want %d: %v", len(got), len(want), got)
 	}

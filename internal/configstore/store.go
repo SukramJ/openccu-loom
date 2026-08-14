@@ -111,10 +111,15 @@ func noopLookup(string) string { return "" }
 //     /api/v1/users and /auth/tokens CRUD). Keeping them out of the REST
 //     section means a REST PUT that omits them can never wipe an operator's
 //     logins.
+//   - bootstrap.allow_first_run_setup is a BOOTSTRAP-tier hardening toggle
+//     that closes the unauthenticated /setup surface. It must be settable
+//     only from the YAML the operator controls — a stored row (or a REST
+//     PUT) that re-opened it would defeat the control it names.
 var sectionUnmanagedPaths = map[string]struct{}{
-	"north.rest.listen":      {},
-	"north.rest.auth.users":  {},
-	"north.rest.auth.tokens": {},
+	"north.rest.listen":               {},
+	"north.rest.auth.users":           {},
+	"north.rest.auth.tokens":          {},
+	"bootstrap.allow_first_run_setup": {},
 }
 
 // UnmanagedFieldPaths returns the set of config field paths that are not
@@ -343,6 +348,7 @@ func (s *Store) bootstrapTierSources(cfg *config.Config) map[string]FieldSource 
 	cfg.DataDir = s.bootstrap.DataDir
 	cfg.Logging = s.bootstrap.Logging
 	cfg.North.REST.Listen = s.bootstrap.Listen.REST
+	cfg.Bootstrap = s.bootstrap.Bootstrap
 	for path := range bootstrapOwnedPaths {
 		srcs[path] = SourceBootstrap
 	}
@@ -355,9 +361,10 @@ func (s *Store) bootstrapTierSources(cfg *config.Config) map[string]FieldSource 
 // claim them — see [sectionUnmanagedPaths] for the persistence half of
 // the same rule.
 var bootstrapOwnedPaths = map[string]struct{}{
-	"data_dir":          {},
-	"logging":           {},
-	"north.rest.listen": {},
+	"data_dir":                        {},
+	"logging":                         {},
+	"north.rest.listen":               {},
+	"bootstrap.allow_first_run_setup": {},
 }
 
 // layerSections walks every known section, reads its JSON row when
