@@ -74,6 +74,23 @@ func (e *Engine) recordSource(ctx context.Context, a *zone, incidentID int64, ca
 	return true
 }
 
+// fireCycle hands one output cycle to the driver layer. It stamps the
+// zone snapshot every cycle carries — the display name and the sources
+// accumulated so far — and journals a driver failure.
+//
+// Every fire goes through here so the snapshot cannot be forgotten at
+// one call site: the driver's notification sink runs under the engine
+// lock and has no other way to learn either value ([FireOptions]).
+//
+// The caller holds the lock.
+func (e *Engine) fireCycle(ctx context.Context, a *zone, inc sqlitestore.AlarmIncident, opts FireOptions) {
+	opts.ZoneName = a.name
+	opts.Sources = a.sourcesCopy()
+	if err := e.outputs.FireCycle(ctx, a.id, inc, opts); err != nil {
+		e.journalFault(ctx, a, "output_fire_failed", err, inc.ID)
+	}
+}
+
 // publishSourcesChanged re-publishes the trigger event for a zone
 // whose source list grew while it was already triggered. The state
 // machine deliberately does not re-trigger in that case, so this is

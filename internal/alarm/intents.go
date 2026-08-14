@@ -25,9 +25,6 @@ var (
 	errUnknownAction = errors.New("alarm: unknown remote binding action")
 	// errBindingIncomplete reports a binding missing its target zone.
 	errBindingIncomplete = errors.New("alarm: code binding missing zone")
-	// errPanicUnsupported reports a remote panic key with no engine
-	// panic path wired.
-	errPanicUnsupported = errors.New("alarm: engine has no panic path")
 )
 
 // CodeKind classifies an alarm-code row (notes/concepts/alarm-concept.md §11).
@@ -89,15 +86,6 @@ type CodeRow struct {
 // wired a nil source keeps hardware-code intent routing inert.
 type CodeSource interface {
 	Rows(ctx context.Context) ([]CodeRow, error)
-}
-
-// panicTriggerer is the optional engine panic port. The always-on
-// hazard/panic path (notes/concepts/alarm-concept.md §6.1/§7) owns PanicTrigger;
-// the intent router discovers it by interface assertion so a remote
-// panic key degrades to a visible fault rather than a compile
-// dependency when the panic path is not yet present.
-type panicTriggerer interface {
-	PanicTrigger(ctx context.Context, zoneID string, silent bool) error
 }
 
 // wkpCorrelationWindow bounds how long a WKP CODE_ID/CODE_STATE scan
@@ -335,14 +323,19 @@ func (r *intentRouter) dispatchDisarm(ctx context.Context, row *CodeRow, source 
 }
 
 // dispatchPanic routes a remote panic key to the engine's always-on
-// panic path when present, otherwise journals the gap.
+// panic path (notes/concepts/alarm-concept.md §6.1/§7).
+//
+// The call is direct rather than routed through an optional port: the
+// engine is a concrete dependency of this router, so an interface
+// assertion buys no decoupling and hides a signature drift as a runtime
+// no-op — which is what silently disabled every bound panic key.
 func (r *intentRouter) dispatchPanic(ctx context.Context, row *CodeRow) {
-	pt, ok := any(r.svc.engine).(panicTriggerer)
-	if !ok {
-		r.journalActionFault(ctx, row, "remote", "panic", errPanicUnsupported)
+	zoneID := row.Binding.ZoneID
+	if zoneID == "" {
+		r.journalActionFault(ctx, row, "remote", "panic", errBindingIncomplete)
 		return
 	}
-	if err := pt.PanicTrigger(ctx, row.Binding.ZoneID, false); err != nil {
+	if err := r.svc.engine.PanicTrigger(ctx, zoneID, false, row.Name, "remote"); err != nil {
 		r.journalActionFault(ctx, row, "remote", "panic", err)
 	}
 }

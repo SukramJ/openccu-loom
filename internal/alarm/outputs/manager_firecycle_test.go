@@ -223,6 +223,73 @@ func TestFireCycle_DegradedRestrictsToOpticalAndLight(t *testing.T) {
 	}
 }
 
+// TestFireCycle_PreAlarmRestrictsToTheQuietClasses pins the first
+// phase of a two-phase trigger: FireOptions.PreAlarm admits only the
+// pre-alarm classes (chirp + notification + light) and no siren of any
+// kind.
+//
+// The phase exists so a resident can silence a false alarm before the
+// sirens sound. A driver that ignored the flag fired the full loud
+// policy at second 0 and again on escalation, which removes the warning
+// window entirely and spends the incident's acoustic budget twice.
+func TestFireCycle_PreAlarmRestrictsToTheQuietClasses(t *testing.T) {
+	h := newHarness(t)
+	h.build(func(c *Config) { c.Notify = h.recordNotify })
+	h.seedStandardZone()
+	h.seedOutputs(outputRow("notify1", hmenum.AlarmOutputClassNotification, OutputConfig{}))
+
+	const incidentID = 41
+	opts := engine.FireOptions{PreAlarm: true, Policy: engine.OutputPolicy{SmokeSounders: true}}
+	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(incidentID, hmenum.AlarmModeFull), opts); err != nil {
+		t.Fatalf("FireCycle: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		got  int
+	}{
+		{"acoustic siren sirA", h.siren("sirA").turnOnCount()},
+		{"outdoor acoustic siren sirOut", h.siren("sirOut").turnOnCount()},
+		{"optical siren sirO", h.siren("sirO").turnOnCount()},
+		{"switched siren plug", h.actuator("plug").boundedCallCount()},
+		{"smoke sounder smoke", h.smoke("smoke").turnOnCount()},
+	} {
+		if tc.got != 0 {
+			t.Errorf("%s activations = %d, want 0 during the pre-alarm phase", tc.name, tc.got)
+		}
+	}
+	if n := h.actuator("light").steadyCallCount(); n != 1 {
+		t.Errorf("alarm light activations = %d, want 1 during the pre-alarm phase", n)
+	}
+	if calls := h.notifyCallsSnapshot(); len(calls) != 1 {
+		t.Errorf("notify calls = %+v, want exactly 1 during the pre-alarm phase", calls)
+	}
+	if calls := h.ledger.callsFor(incidentID); len(calls) != 0 {
+		t.Errorf("acoustic ledger writes = %+v, want none: a pre-alarm phase must not spend the "+
+			"incident's acoustic budget", calls)
+	}
+}
+
+// TestFireCycle_PreAlarmAndDegradedIntersect verifies the two class
+// restrictions compose rather than override: a degraded pre-alarm cycle
+// fires only what both admit, so the optical siren degraded-only allows
+// stays out of the quiet phase.
+func TestFireCycle_PreAlarmAndDegradedIntersect(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+
+	opts := engine.FireOptions{PreAlarm: true, Degraded: true}
+	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(42, hmenum.AlarmModeFull), opts); err != nil {
+		t.Fatalf("FireCycle: %v", err)
+	}
+	if n := h.siren("sirO").turnOnCount(); n != 0 {
+		t.Fatalf("optical siren activations = %d, want 0: the pre-alarm phase excludes every siren", n)
+	}
+	if n := h.actuator("light").steadyCallCount(); n != 1 {
+		t.Fatalf("alarm light activations = %d, want 1: both restrictions admit the light", n)
+	}
+}
+
 // TestFireCycle_ExcludeOutdoorSkipsOutdoorSiren covers S1 case 8: an
 // outdoor-flagged siren is skipped when the mode policy excludes
 // outdoor sirens, and fires normally otherwise.
@@ -374,11 +441,11 @@ func TestFireCycle_NotificationOutputNotifiesInMode(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("notify calls = %+v, want exactly 1", calls)
 	}
-	if calls[0].row.ID != "notify1" {
-		t.Fatalf("notify row ID = %q, want notify1", calls[0].row.ID)
+	if calls[0].Row.ID != "notify1" {
+		t.Fatalf("notify row ID = %q, want notify1", calls[0].Row.ID)
 	}
-	if calls[0].incident.ID != incident.ID || calls[0].incident.Mode != incident.Mode {
-		t.Fatalf("notify incident = %+v, want %+v", calls[0].incident, incident)
+	if calls[0].Incident.ID != incident.ID || calls[0].Incident.Mode != incident.Mode {
+		t.Fatalf("notify incident = %+v, want %+v", calls[0].Incident, incident)
 	}
 }
 

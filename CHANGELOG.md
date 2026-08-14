@@ -79,6 +79,53 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A notification output no longer freezes the alarm system.** Enrolling
+  an output of class *notification* — the documented way to get a
+  messenger or webhook alert — was enough to stop the alarm engine dead
+  the first time the zone triggered. The alert was assembled from inside
+  the trigger itself and asked the engine for the zone it was already
+  triggering, which cannot answer until the trigger finishes. Everything
+  after that point stopped: no state change was published, no further
+  sensor event was handled, and *Disarm* and *Silence* never returned —
+  with the siren already sounding. The alert now carries the zone name
+  and the contributing detectors with it and asks the engine for nothing.
+
+- **A bound panic key raises an alarm.** Binding a keyfob long-press to
+  the `panic` action — a hold-up or medical key — produced nothing when
+  pressed: no incident, no siren, no notification, only a journal entry
+  saying the engine had no panic path. It had one; the router simply
+  never reached it. Every installation with a panic key was affected.
+
+- **The pre-alarm window is quiet again.** A zone with `pre_alarm_s`
+  configured is supposed to spend that window on the chime, the alarm
+  light and the notification so a resident can silence a false alarm
+  before the sirens sound. Instead every enrolled siren fired at full
+  volume from the first second and again when the window elapsed, which
+  also spent the incident's acoustic budget twice.
+
+- **An alarm report names the detector that caused it.** Three trigger
+  routes recorded no contributing data point: an expired entry delay —
+  the most common real intrusion path, a door opening while nobody
+  disarms — a sensor that stopped answering while armed, and a sensor
+  found open after a restart. For those incidents the source list stayed
+  empty everywhere: in the notification, in the `{sensor}` placeholders
+  of the rendered report, and in the after-the-fact audit.
+
+- **A lost radio interface reaches the alarm system.** When a CCU stopped
+  serving one of its interfaces, the alarm service compared the CCU's
+  own interface name against its internally qualified one and matched
+  nothing. Every window and door contact behind that radio kept
+  reporting its last known — usually closed — state while armed, and
+  losing every interface of a CCU never ran the zone's central-loss
+  policy. The per-data-point unreachable path still worked, which is why
+  the gap was invisible.
+
+- **A failed siren command turns the alarm health surface red.** A fire
+  that failed or a stop the watchdog could not verify was recorded on
+  `/api/v1/health` but published nowhere, so the MQTT alarm panels, the
+  SPA health surface, the outbound webhook and the Security overview all
+  kept reporting a healthy alarm system while a siren was stuck on.
+
 - **A WebSocket command split across several frames is executed.** A
   client library is free to fragment a large message — most do above
   some size threshold — and the daemon handled only whole frames: the
