@@ -200,6 +200,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A damaged encrypted backup is rejected with an error on 32-bit
+  builds too.** The reader for encrypted backups checks the length each
+  frame declares before it allocates for it, but compared that length as
+  a signed machine word. On the 32-bit builds — armv7 above all — a
+  declared length above 2 GiB wrapped negative and slipped through the
+  very check meant to stop it, so restoring a truncated or bit-flipped
+  archive ended in an allocation panic and a stack trace instead of the
+  descriptive "length exceeds bound" error the same file produces on
+  64-bit.
+
 - **The recurring add-on update check no longer stops after one stalled
   request.** The release check and the tarball download went out on the
   process-wide default HTTP client, which carries no request deadline at
