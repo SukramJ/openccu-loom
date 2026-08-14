@@ -78,8 +78,13 @@ type CreateResult struct {
 // hash + fingerprint + identity, and returns the plaintext token in
 // the result. The caller MUST show the token to the operator
 // immediately — the daemon cannot recover it from disk.
+//
+// The subject is canonicalised before it is written: it is free-form
+// operator input, while the identity it produces at authentication time is
+// compared verbatim by every per-subject store (preferences, private diagram
+// ownership) and has to line up with the users row it belongs to.
 func (s *TokenStore) Create(ctx context.Context, in CreateInput) (CreateResult, error) {
-	subject := strings.TrimSpace(in.Subject)
+	subject := auth.CanonicalSubject(in.Subject)
 	if subject == "" {
 		return CreateResult{}, errors.New("sqlite: token subject required")
 	}
@@ -128,7 +133,7 @@ func (s *TokenStore) Import(ctx context.Context, secret, subject string, role au
 	if secret == "" {
 		return "", errors.New("sqlite: token secret required")
 	}
-	subject = strings.TrimSpace(subject)
+	subject = auth.CanonicalSubject(subject)
 	if subject == "" {
 		return "", errors.New("sqlite: token subject required")
 	}
@@ -152,16 +157,16 @@ func (s *TokenStore) Import(ctx context.Context, secret, subject string, role au
 // bearer token bound to a now-nonexistent subject cannot keep
 // authenticating.
 //
-// The match is case-insensitive: the users table is canonicalised to
-// lower case while a token may have been issued with the operator's own
-// spelling, and a token that outlives the account it belongs to is a live
-// credential for a deleted user.
+// Both sides are canonicalised, and the comparison stays case-insensitive on
+// top of that: a token that outlives the account it belongs to is a live
+// credential for a deleted user, so a row an external writer left in a
+// spelling of its own must not escape the purge either.
 func (s *TokenStore) DeleteBySubject(ctx context.Context, subject string) (int, error) {
 	if s == nil || s.db == nil {
 		return 0, nil
 	}
 	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM tokens WHERE subject = ? COLLATE NOCASE`, strings.TrimSpace(subject))
+		`DELETE FROM tokens WHERE subject = ? COLLATE NOCASE`, auth.CanonicalSubject(subject))
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: tokens delete by subject: %w", err)
 	}

@@ -54,6 +54,39 @@ func TestTokenStoreCreateReturnsPlaintextAndFingerprint(t *testing.T) {
 	}
 }
 
+// TestTokenStoreCreateCanonicalisesSubject pins that a token issued with the
+// operator's own spelling is persisted under the canonical subject. The users
+// table is keyed on that spelling, and the bearer identity flows straight into
+// stores that compare it verbatim — per-user preferences and private diagram
+// ownership — so a token row keyed on "Admin" splits one account into two
+// identities and survives the purge of its own user.
+func TestTokenStoreCreateCanonicalisesSubject(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	res, err := s.Create(ctx, CreateInput{Subject: "  Mallory  ", Role: auth.RoleOperator})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	id, err := s.AuthenticateToken(ctx, res.Token)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+	if id.Subject != "mallory" {
+		t.Errorf("Identity.Subject=%q want %q", id.Subject, "mallory")
+	}
+	rows, err := s.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("List returned %d rows, want 1", len(rows))
+	}
+	if rows[0].Subject != "mallory" {
+		t.Errorf("row Subject=%q want %q", rows[0].Subject, "mallory")
+	}
+}
+
 // TestTokenStoreCreateEmptySubject verifies that an empty subject is
 // rejected.
 func TestTokenStoreCreateEmptySubject(t *testing.T) {
@@ -432,6 +465,26 @@ func TestTokenStoreImportPreservesSecret(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("Count=%d want 1", n)
+	}
+}
+
+// TestTokenStoreImportCanonicalisesSubject pins that a migrated legacy token
+// lands under the canonical subject too, so an upgraded daemon does not
+// resurrect the split identity the import path was meant to preserve.
+func TestTokenStoreImportCanonicalisesSubject(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	const secret = "legacy-mixed-case-token"
+	if _, err := s.Import(ctx, secret, "  Config-Token  ", auth.RoleOperator); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	id, err := s.AuthenticateToken(ctx, secret)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+	if id.Subject != "config-token" {
+		t.Errorf("Identity.Subject=%q want %q", id.Subject, "config-token")
 	}
 }
 

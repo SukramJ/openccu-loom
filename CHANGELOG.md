@@ -200,6 +200,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An API token now carries the same identity as the account it was
+  issued for.** Tokens were stored with whatever spelling the operator
+  typed into the subject field, while user accounts are keyed
+  lower-cased. A token issued for `Admin` therefore authenticated as a
+  different subject than a login as `admin`: the per-user preferences
+  and the privately owned diagrams of the two never met, and the audit
+  trail recorded them as separate actors. The subject is canonicalised
+  on write now — for freshly created tokens and for the ones migrated
+  out of the config file — the create response reports the spelling that
+  was stored rather than the one that was typed, and a migration folds
+  the rows an earlier version wrote.
+
 - **`security.allow_plaintext_secrets` now governs what it documents.**
   The setting promised that the daemon refuses to persist a CCU password
   in cleartext, and no code read it. When the at-rest master key could

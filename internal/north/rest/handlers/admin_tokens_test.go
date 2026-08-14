@@ -96,6 +96,36 @@ func TestCreateTokenAdmin_Happy(t *testing.T) {
 	}
 }
 
+// TestCreateTokenAdmin_CanonicalisesSubject pins that the handler hands the
+// store — and reports back — the canonical subject rather than the operator's
+// spelling, so the token list and the audit note name the identity the token
+// will actually authenticate as.
+func TestCreateTokenAdmin_CanonicalisesSubject(t *testing.T) {
+	t.Parallel()
+	svc := &fakeTokenAdminService{}
+	body := strings.NewReader(`{"subject":"  CI-Bot  ","role":"operator"}`)
+	req := httptest.NewRequest(http.MethodPost, "/admin/auth/tokens", body)
+	w := httptest.NewRecorder()
+	CreateTokenAdmin(svc, audit.NoopRecorder()).ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
+	}
+	var resp createTokenResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Subject != "ci-bot" {
+		t.Errorf("response subject=%q want %q", resp.Subject, "ci-bot")
+	}
+	if len(svc.tokens) != 1 {
+		t.Fatalf("service holds %d tokens, want 1", len(svc.tokens))
+	}
+	if svc.tokens[0].Subject != "ci-bot" {
+		t.Errorf("stored subject=%q want %q", svc.tokens[0].Subject, "ci-bot")
+	}
+}
+
 func TestCreateTokenAdmin_BadBody_Returns400(t *testing.T) {
 	t.Parallel()
 	svc := &fakeTokenAdminService{}
