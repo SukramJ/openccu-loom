@@ -1,6 +1,6 @@
 {
-  "generated": "43698fe4",
-  "head": "43698fe4",
+  "generated": "4ccc5f22",
+  "head": "4ccc5f22",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
