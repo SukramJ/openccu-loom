@@ -19,6 +19,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   block holds counters only and names no device, so it is unaffected by
   `anonymize`. (REST API 5.23.0)
 
+### Fixed
+
+- **CUxD push callbacks no longer stop for good after a transient accept
+  failure.** The BIN-RPC callback listener ended its accept loop on any
+  error, including the recoverable ones a busy host produces — a peer
+  that resets between SYN and accept, a momentary file-descriptor
+  shortage, an interrupted syscall. Nothing restarted it: the port
+  stayed bound, `/health` stayed green, and every CUxD event, device
+  addition and device removal silently stopped arriving until the daemon
+  was restarted. The loop now backs off and retries those failures, the
+  way the XML-RPC callback listener already did, and unbinds the socket
+  if it ever does have to give up.
+
 ## [0.59.0]
 
 ### Added
