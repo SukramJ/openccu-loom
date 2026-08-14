@@ -1,11 +1,7 @@
 import { api, ApiError } from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { onResync, subscribe } from "./events.svelte";
-import type {
-  DeviceAvailableEvent,
-  DeviceSummary,
-  EventEnvelope,
-} from "$lib/api/types";
+import { onResync } from "./events.svelte";
+import type { DeviceSummary } from "$lib/api/types";
 import { authStore } from "./auth.svelte";
 
 /**
@@ -66,32 +62,14 @@ function createDeviceStore() {
     }
   }
 
+  // The daemon has no per-device availability broadcast, so the list has
+  // no finer-grained live update than a full reload: it re-reads on the
+  // daemon's resync signal (the boot snapshot writes MQTT's retained
+  // topics instead of replaying every data point into the stream, so
+  // without this the list keeps what it read before the restart).
   function ensureStream() {
     if (unsub) return;
-    const unsubEvents = subscribe(applyEvent);
-    // The daemon's boot snapshot no longer replays every data point
-    // into the stream — it writes MQTT's retained topics and signals a
-    // resync instead. Without this the list keeps whatever it read
-    // before the daemon restarted.
-    const unsubResync = onResync(() => void refresh());
-    unsub = () => {
-      unsubEvents();
-      unsubResync();
-    };
-  }
-
-  function applyEvent(ev: EventEnvelope) {
-    if (ev.type === "device_available") {
-      // The fallback variant of EventEnvelope widens payload to
-      // `unknown`, so narrow explicitly before indexing.
-      const p = ev.payload as DeviceAvailableEvent;
-      const i = items.findIndex((d) => d.address === p.address);
-      if (i >= 0) {
-        // $state arrays are reactive on index assignment; no spread
-        // needed for the mutation to propagate.
-        items[i] = { ...items[i], available: p.available };
-      }
-    }
+    unsub = onResync(() => void refresh());
   }
 
   return {

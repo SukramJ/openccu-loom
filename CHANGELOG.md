@@ -48,6 +48,47 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reaper; none of it could be seen from outside. No key material is
   exposed. (REST API 5.21.0)
 
+### Fixed
+
+- **The device page follows the device in the address bar.** Opening a
+  second device while a device page was already open — a pasted
+  `#/devices/<address>`, a deep link, browser back/forward between two
+  device pages — kept rendering the first device's data under the second
+  device's URL and breadcrumb. Every write issued from that page (rename,
+  delete, MASTER save, room or function assignment, link edit) went to
+  the device the operator was no longer looking at. The view now reloads
+  on the address it is given, and a response for a device that has since
+  been left is discarded instead of repainting the page.
+
+- **"Away" on an HmIP thermostat tile no longer switches to manual
+  heating.** The away segment of the mode row was sent as a mode, and
+  away is not one: the daemon's mode write only knows auto, heat, cool
+  and off, so the button silently wrote manual mode at the current
+  setpoint. It now triggers the away operation, is offered only for
+  devices that support away, and leaving away clears the away window
+  first, which a plain mode write does not.
+
+- **System-variable values update live again.** The daemon has been
+  pushing every system-variable change over the event stream, but the
+  SPA translated the frame to a shape nothing consumed, so the list only
+  ever showed what the last reload fetched.
+
+- **Charts, pickers and the device page discard superseded responses.**
+  The history chart, the multi-series diagram chart, the diagram series
+  picker and the system-variable channel picker each let a slower earlier
+  request overwrite the answer to a newer one — showing another range's
+  history, another device's channels, or a parameter list belonging to a
+  device the series no longer points at. Each fetch is now tied to the
+  selection it was started for. The history chart also stopped issuing
+  its initial request twice.
+
+- **Favorites no longer survive a user switch.** After a logout and a
+  login as somebody else in the same tab, the pinned devices, channels
+  and programs of the previous operator stayed on screen, and the first
+  star toggled wrote them into the new operator's own favorites. Pinned
+  items are now scoped to the identity they were loaded for, and so is
+  the per-user start page.
+
 ## [0.58.6]
 
 ### Security

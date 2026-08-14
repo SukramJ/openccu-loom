@@ -135,17 +135,41 @@
     return parts.join(" · ");
   });
 
-  // HmIP mode options — mirror the _ModeHmIP integer set (0=Auto, 1=Manu, 2=Away).
+  // HmIP mode options — mirror the SET_POINT_MODE integer set the device
+  // reports back (0=Auto, 1=Manu, 2=Away). The away segment is offered only
+  // when the CDP reports the away capability, because away is not a mode
+  // the daemon can write: it is a separate operation carrying a duration
+  // and a setpoint (see selectHmipMode).
   const HMIP_MODES = $derived([
     { value: 0, label: t("cdp.climate.mode_auto") },
     { value: 1, label: t("cdp.climate.mode_manual") },
-    { value: 2, label: t("cdp.climate.mode_away") },
+    ...(caps.away ? [{ value: 2, label: t("cdp.climate.mode_away") }] : []),
   ]);
 
   // Map HA-style mode strings (auto / heat / off / cool) for set_mode.
   // The CDP service-method dispatcher accepts those tokens directly.
   function setMode(mode: string) {
     invoke("set_mode", { mode });
+  }
+
+  // Selection handler for the HmIP mode segments. `set_mode` only knows
+  // auto / heat / cool / off, so away (SET_POINT_MODE 2) has to go through
+  // the away operation — sending it as a mode would write manual heat at
+  // the current setpoint, the opposite of what the segment promises.
+  // Leaving away likewise needs its own write: the away window
+  // (PARTY_TIME_END) keeps the device in away until `disable_away` clears
+  // it, so a bare mode write would appear to do nothing.
+  async function selectHmipMode(v: number | string) {
+    if (v === 2) {
+      quickAway24h();
+      return;
+    }
+    if (isAway && caps.away) {
+      await invoke("disable_away");
+      // disable_away already returns the device to its schedule (AUTO).
+      if (v === 0) return;
+    }
+    setMode(v === 0 ? "auto" : "heat");
   }
 
   const hmipPresets = $derived.by(() => {
@@ -323,10 +347,7 @@
           value={typeof setpointModeDP.value === "number" ? setpointModeDP.value : 0}
           options={HMIP_MODES}
           color={tileColor}
-          onChange={(v) =>
-            invoke("set_mode", {
-              mode: typeof v === "number" && v === 0 ? "auto" : "heat",
-            })}
+          onChange={(v) => void selectHmipMode(v)}
         />
       {/if}
 

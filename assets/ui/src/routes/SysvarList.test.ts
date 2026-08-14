@@ -41,6 +41,20 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: vi.fn().mockResolvedValue(false) },
 }));
 
+// Capture the handler the view registers on the WS pump so a test can
+// deliver a `sysvar` envelope without a socket.
+const eventHandlers: Array<(ev: unknown) => void> = [];
+vi.mock("$lib/stores/events.svelte", () => ({
+  onResync: () => () => {},
+  subscribe: (handler: (ev: unknown) => void) => {
+    eventHandlers.push(handler);
+    return () => {
+      const idx = eventHandlers.indexOf(handler);
+      if (idx >= 0) eventHandlers.splice(idx, 1);
+    };
+  },
+}));
+
 import { toastStore } from "$lib/stores/toast.svelte";
 import { ApiError, api } from "$lib/api/client";
 import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -76,6 +90,74 @@ function findReloadButton(container: HTMLElement): HTMLButtonElement {
   if (!btn) throw new Error("reload button not found");
   return btn as HTMLButtonElement;
 }
+
+describe("SysvarList live values", () => {
+  // The daemon already pushes every system-variable change; without a
+  // consumer the table shows the values of the last REST read until the
+  // operator hits reload.
+  it("applies a sysvar broadcast to the matching row", async () => {
+    mockListSysvars.mockResolvedValue([
+      {
+        name: "S_Temperatur",
+        central: "ccu1",
+        value_type: "FLOAT",
+        value: 21.5,
+        value_list: [],
+        unit: "°C",
+      },
+    ]);
+    const { container } = render(SysvarList);
+    await waitFor(() =>
+      expect(
+        container.querySelector<HTMLInputElement>('input[type="number"]')?.value,
+      ).toBe("21.5"),
+    );
+
+    for (const handler of [...eventHandlers]) {
+      handler({
+        type: "sysvar",
+        payload: { central: "ccu1", name: "S_Temperatur", value: 23.5 },
+      });
+    }
+
+    await waitFor(() =>
+      expect(
+        container.querySelector<HTMLInputElement>('input[type="number"]')?.value,
+      ).toBe("23.5"),
+    );
+  });
+
+  it("ignores a broadcast for the same name on another central", async () => {
+    mockListSysvars.mockResolvedValue([
+      {
+        name: "S_Temperatur",
+        central: "ccu1",
+        value_type: "FLOAT",
+        value: 21.5,
+        value_list: [],
+        unit: "°C",
+      },
+    ]);
+    const { container } = render(SysvarList);
+    await waitFor(() =>
+      expect(
+        container.querySelector<HTMLInputElement>('input[type="number"]')?.value,
+      ).toBe("21.5"),
+    );
+
+    for (const handler of [...eventHandlers]) {
+      handler({
+        type: "sysvar",
+        payload: { central: "ccu2", name: "S_Temperatur", value: 23.5 },
+      });
+    }
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(
+      container.querySelector<HTMLInputElement>('input[type="number"]')?.value,
+    ).toBe("21.5");
+  });
+});
 
 describe("SysvarList value widget", () => {
   // The daemon passes the CCU wire type straight through, so LOGIC and

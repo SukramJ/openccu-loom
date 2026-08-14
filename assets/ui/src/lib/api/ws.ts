@@ -39,7 +39,7 @@ export type EventStream = {
 // Wire shape the daemon sends. Distinct from the SPA-facing
 // EventEnvelope so the normaliser below is the single place that
 // reshapes server events into the discriminator the rest of the SPA
-// already consumes ("data_point", "device_available", "sysvar", …).
+// already consumes ("data_point", "custom_data_point", "sysvar").
 type WireEnvelope = {
   topic?: string;
   type?: string;
@@ -87,6 +87,11 @@ function isResyncSignal(raw: unknown): boolean {
  * (QuickControlTab, SensorChannelList, ChannelPanel, maintenanceStore)
  * decoupled from the wire format — they keep using
  * `env.type === "data_point"` and reading `payload.channel_address`.
+ *
+ * Every discriminator the `EventEnvelope` union names must be produced
+ * here for some wire type; a declared shape nothing emits is a live
+ * feature that has never fired. Frames without a normalized shape fall
+ * through with their wire type and payload untouched.
  */
 function normalizeEvent(raw: unknown): EventEnvelope | null {
   if (!raw || typeof raw !== "object") return null;
@@ -138,6 +143,22 @@ function normalizeEvent(raw: unknown): EventEnvelope | null {
         name: p.name,
         kind: p.kind,
         state: p.state ?? {},
+      },
+    };
+  }
+  if (type === "hub.sysvar_changed" && wire.payload) {
+    const p = wire.payload as {
+      central?: string;
+      name?: string;
+      value?: unknown;
+    };
+    if (typeof p.name !== "string") return null;
+    return {
+      type: "sysvar",
+      payload: {
+        central: p.central ?? "",
+        name: p.name,
+        value: p.value,
       },
     };
   }
