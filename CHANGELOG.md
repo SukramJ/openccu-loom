@@ -58,7 +58,63 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   behind Matter CSR generation, and `net/http`. All are fixed in 1.26.6;
   `go.mod`, the builder image, and every workflow move together.
 
+- **A chunked request body is capped like any other.** The OpenAPI
+  request validator capped bodies whose length the client announced, and
+  `Transfer-Encoding: chunked` announces none: such a request streamed
+  into an unbounded read before authentication, CSRF or the login
+  brute-force limiter ever saw it, so an unauthenticated `POST
+  /api/v1/auth/login` could exhaust the daemon's memory with a
+  one-header change.
+
+- **Two per-request tables are now hard-bounded.** The login
+  brute-force limiter's per-IP table only evicted buckets idle for ten
+  minutes, so a source rotating through an address range — an IPv6 /64
+  offers 2^64 of them — grew it by one limiter per request without
+  limit. The `Idempotency-Key` response cache had no eviction at all:
+  its key carries a client-chosen header value, so a caller minting a
+  fresh key per request added one full cached response body per request
+  for the life of the process. Both are now capped; the response cache
+  additionally stops caching statuses that never reached a handler and
+  responses too large to be worth replaying.
+
 ### Fixed
+
+- **Channel configuration export and import work.** `GET` and `POST
+  /api/v1/devices/{address}/channels/{n}/config/export|import` are
+  published in the OpenAPI spec and appear in the generated client, but
+  the daemon never assigned the backend they depend on: every build
+  answered `503 service_unready`, and no configuration could change
+  that. Both endpoints now route through the same gated paramset path
+  the REST paramset write uses, so an import cannot set a parameter that
+  a `PUT` would refuse — and the export offers exactly that set, which
+  is what makes the snapshot importable again.
+
+- **A CCU added while the daemon is running reports device triggers,
+  device lifecycle and optimistic rollbacks.** Three WebSocket
+  subscribers walked the configured CCUs once, at start-up. For a CCU
+  adopted afterwards over the admin API, every keypress on one of its
+  remotes and wall switches, every pairing and removal, and every rolled
+  back optimistic write was lost to every WebSocket client. The topics
+  are declared in `wsapi.json`, so clients subscribed and waited
+  forever; only a daemon restart repaired it.
+
+- **A WebSocket client resuming with a cursor from before a daemon
+  restart is told it lost events.** The sequence counter is
+  process-local and restarts at 0, so a reconnecting client's stored
+  cursor sits above everything the fresh daemon can produce. It received
+  `replay_done` carrying its own cursor back, concluded it had missed
+  nothing, never issued the documented `/snapshot` resync, and kept
+  rendering pre-restart device state. A cursor the daemon cannot place —
+  above its current top, or against a disabled replay buffer — now
+  yields `replay_lost`. (The bundled UI was unaffected: it never sends a
+  cursor.) (REST API 5.23.0)
+
+- **A security source override with a `%` in its name is applied to the
+  source it names.** The handler percent-decoded the reference a second
+  time on top of the router's own decode. A central name containing a
+  literal `%` was rejected as an invalid reference, and one whose
+  decoded form still looked like an escape was silently rewritten — so
+  the override landed on a different data point than the operator chose.
 
 - **A `topic_base` with a trailing slash no longer takes every alarm and
   security entity offline.** The broker's last-will was assembled from

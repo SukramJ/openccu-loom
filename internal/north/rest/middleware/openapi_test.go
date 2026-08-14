@@ -174,3 +174,31 @@ func TestOpenAPIValidatorRejectsOversizedBody(t *testing.T) {
 		t.Fatalf("status=%d want 413, body=%s", rr.Code, rr.Body.String())
 	}
 }
+
+// TestOpenAPIValidatorRejectsOversizedChunkedBody pins the same cap for a
+// body whose length the transport does not announce. net/http reports
+// ContentLength -1 for `Transfer-Encoding: chunked`, so a guard keyed on
+// a positive length lets the request reach openapi3filter, which reads
+// the whole body into memory with an unbounded io.ReadAll — before auth,
+// CSRF or any per-handler limit sees the request.
+func TestOpenAPIValidatorRejectsOversizedChunkedBody(t *testing.T) {
+	v := newValidatorOrFail(t)
+	mw := v.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler must not be invoked for an oversized body")
+	}))
+
+	oversize := bytes.Repeat([]byte("x"), openAPIBodyLimit+1)
+	body := append([]byte(`{"data":"`), oversize...)
+	body = append(body, []byte(`"}`)...)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// What the server hands the chain for a chunked upload.
+	req.ContentLength = -1
+	req.TransferEncoding = []string{"chunked"}
+	rr := httptest.NewRecorder()
+	mw.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status=%d want 413, body=%s", rr.Code, rr.Body.String())
+	}
+}

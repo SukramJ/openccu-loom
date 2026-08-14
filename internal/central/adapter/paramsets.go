@@ -447,6 +447,34 @@ func (p *ParamsetsDomain) checkVisibility(channelAddress string, key hmenum.Para
 	return nil
 }
 
+// VisibleValues returns the subset of values the gate would allow to be
+// written to channelAddress's paramset. Without a gate, or for a channel
+// the model does not know, every value passes — the same tolerance
+// [ParamsetsDomain.checkVisibility] applies.
+//
+// It exists so a read surface can offer exactly what the write surface
+// accepts. The configuration export is the case that needs it: handing
+// out a snapshot containing hidden parameters produces a file that
+// cannot be imported again, because [ParamsetsDomain.PutParamset]
+// rejects the whole write on the first hidden name.
+func (p *ParamsetsDomain) VisibleValues(channelAddress string, key hmenum.ParamsetKey, values map[string]any) map[string]any {
+	if p == nil || p.gate == nil || len(values) == 0 {
+		return values
+	}
+	model, channelType := p.resolveChannelInfo(channelAddress)
+	if model == "" {
+		return values
+	}
+	channelNo := channelNumberOf(channelAddress)
+	out := make(map[string]any, len(values))
+	for name, v := range values {
+		if p.gate.IsAllowedForChannel(model, channelType, channelNo, key, hmenum.Parameter(name)) {
+			out[name] = v
+		}
+	}
+	return out
+}
+
 // resolveChannelInfo returns the device model string and channel type
 // string for the given channel address by walking the central registry.
 // Returns ("", "") when the channel cannot be found.

@@ -4,8 +4,10 @@
 package middleware
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -439,5 +441,126 @@ func TestIdempotency_PanicReleasesReservation(t *testing.T) {
 
 	if calls.Load() != 2 {
 		t.Fatalf("expected the retry after a panic to reach the handler, got %d calls", calls.Load())
+	}
+}
+
+// idempotencyKeyRequest builds a mutating request carrying key.
+func idempotencyKeyRequest(key string) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
+	req.Header.Set("Idempotency-Key", key)
+	return req
+}
+
+// TestIdempotency_ExpiredEntriesAreReclaimed pins that a flood of
+// distinct keys does not grow the table without limit. The header value
+// is client-chosen, so a caller minting a fresh UUID per request never
+// re-reads a key — nothing used to delete one either, and every cached
+// response body stayed live for the life of the process.
+func TestIdempotency_ExpiredEntriesAreReclaimed(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	cache := newIdempotencyCache()
+	cache.now = func() time.Time { return now }
+	handler := idempotencyMiddleware(cache)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"xyz"}`))
+	}))
+
+	for i := range idempotencyCacheCap {
+		handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("key-"+strconv.Itoa(i)))
+	}
+	if got := len(cache.items); got != idempotencyCacheCap {
+		t.Fatalf("cache size = %d, want %d before any entry expires", got, idempotencyCacheCap)
+	}
+
+	// Everything cached so far is now unreplayable; the next key must
+	// reclaim rather than grow the table.
+	cache.now = func() time.Time { return now.Add(IdempotencyTTL + time.Second) }
+	handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("key-after-ttl"))
+
+	if got := len(cache.items); got != 1 {
+		t.Fatalf("cache size = %d, want 1 after the expired entries were reclaimed", got)
+	}
+}
+
+// TestIdempotency_FullCacheRunsUncached pins the flood case where every
+// slot is still fresh: the request executes, no slot is stolen from an
+// entry that could still serve a replay, and the table stays at its cap.
+func TestIdempotency_FullCacheRunsUncached(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	cache := newIdempotencyCache()
+	cache.now = func() time.Time { return now }
+	var calls atomic.Int32
+	handler := idempotencyMiddleware(cache)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+
+	for i := range idempotencyCacheCap {
+		handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("fresh-"+strconv.Itoa(i)))
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, idempotencyKeyRequest("overflow"))
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 — an unrecordable request must still run", rec.Code)
+	}
+	if got := calls.Load(); got != idempotencyCacheCap+1 {
+		t.Fatalf("handler calls = %d, want %d", got, idempotencyCacheCap+1)
+	}
+	if got := len(cache.items); got > idempotencyCacheCap {
+		t.Fatalf("cache size = %d, want <= %d", got, idempotencyCacheCap)
+	}
+}
+
+// TestIdempotency_UnauthorizedIsNotCached pins that a response the
+// request never mutated anything for does not claim a slot. Without it a
+// pre-auth flood fills the table one 401 at a time.
+func TestIdempotency_UnauthorizedIsNotCached(t *testing.T) {
+	t.Parallel()
+
+	cache := newIdempotencyCache()
+	var calls atomic.Int32
+	handler := idempotencyMiddleware(cache)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+
+	handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("denied"))
+	if got := len(cache.items); got != 0 {
+		t.Fatalf("cache size = %d, want 0 after a 401", got)
+	}
+
+	// The retry must re-run rather than 409 against a stale reservation.
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, idempotencyKeyRequest("denied"))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("retry status = %d, want 401", rec.Code)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("handler calls = %d, want 2", got)
+	}
+}
+
+// TestIdempotency_OversizedResponseIsNotCached pins the per-entry size
+// ceiling: one big mutation response must not dominate the table.
+func TestIdempotency_OversizedResponseIsNotCached(t *testing.T) {
+	t.Parallel()
+
+	cache := newIdempotencyCache()
+	body := bytes.Repeat([]byte("x"), idempotencyBodyLimit+1)
+	handler := idempotencyMiddleware(cache)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}))
+
+	handler.ServeHTTP(httptest.NewRecorder(), idempotencyKeyRequest("big"))
+
+	if got := len(cache.items); got != 0 {
+		t.Fatalf("cache size = %d, want 0 for an oversized response", got)
 	}
 }

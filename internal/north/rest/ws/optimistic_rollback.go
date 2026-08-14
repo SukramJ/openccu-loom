@@ -4,6 +4,8 @@
 package ws
 
 import (
+	"sync"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -41,8 +43,13 @@ type OptimisticRollbackPayload struct {
 // [hmevent.DataPointOptimisticRolledBackEvent] from the domain bus to the
 // WebSocket [*Hub]. Mirrors [DeviceLifecycleSubscriber] in shape.
 type OptimisticRollbackSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
+	reg *central.Registry
+	hub *Hub
+
+	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
+	// touch the slice at all - it hands its unwire back to the caller, so
+	// the runtime-adopt path owns its own detach.
+	mu     sync.Mutex
 	unsubs []func()
 }
 
@@ -51,48 +58,63 @@ func NewOptimisticRollbackSubscriber(reg *central.Registry, hub *Hub) *Optimisti
 	return &OptimisticRollbackSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
+// Start attaches subscriptions to every central registered right now. A
+// central adopted later needs [OptimisticRollbackSubscriber.StartCentral] —
+// this walk cannot see it.
 func (s *OptimisticRollbackSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.mu.Lock()
+			s.unsubs = append(s.unsubs, unwire)
+			s.mu.Unlock()
 		}
-		centralName := u.Name()
-		hub := s.hub
-		reg := s.reg
-		unsub := events.Subscribe(bus, func(e hmevent.DataPointOptimisticRolledBackEvent) {
-			channel, _ := e.Key.ChannelNo()
-			hub.Publish(Event{
-				Topic: DataPointTopic(e.Key.DeviceAddress(), channel, e.Key.Parameter),
-				Type:  string(hmevent.EventTypeDataPointOptimisticRolled),
-				When:  e.Timestamp(),
-				Payload: OptimisticRollbackPayload{
-					Central:       centralName,
-					DeviceAddress: e.Key.DeviceAddress(),
-					Channel:       channel,
-					Parameter:     e.Key.Parameter,
-					ParamsetKey:   string(e.Key.ParamsetKey),
-					Reason:        string(e.Reason),
-					UniqueID: routingkey.CanonicalUniqueID(
-						reg.SerialSuffix(centralName), e.Key.ChannelAddress, e.Key.Parameter, "",
-					),
-					Sent:    e.Sent.Unwrap(),
-					Present: e.Present.Unwrap(),
-				},
-			})
-		})
-		s.unsubs = append(s.unsubs, unsub)
 	}
+}
+
+// StartCentral subscribes exactly one central and returns its unwire, or nil
+// when there is nothing to attach. The composition root routes this through
+// the live-adopt hook chain, so a runtime-adopted CCU's rollbacks reach
+// WebSocket clients like a boot-time one's.
+func (s *OptimisticRollbackSubscriber) StartCentral(u *central.Unit) (unwire func()) {
+	if s == nil || s.reg == nil || s.hub == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	hub := s.hub
+	reg := s.reg
+	return events.Subscribe(u.EventBus, func(e hmevent.DataPointOptimisticRolledBackEvent) {
+		channel, _ := e.Key.ChannelNo()
+		hub.Publish(Event{
+			Topic: DataPointTopic(e.Key.DeviceAddress(), channel, e.Key.Parameter),
+			Type:  string(hmevent.EventTypeDataPointOptimisticRolled),
+			When:  e.Timestamp(),
+			Payload: OptimisticRollbackPayload{
+				Central:       centralName,
+				DeviceAddress: e.Key.DeviceAddress(),
+				Channel:       channel,
+				Parameter:     e.Key.Parameter,
+				ParamsetKey:   string(e.Key.ParamsetKey),
+				Reason:        string(e.Reason),
+				UniqueID: routingkey.CanonicalUniqueID(
+					reg.SerialSuffix(centralName), e.Key.ChannelAddress, e.Key.Parameter, "",
+				),
+				Sent:    e.Sent.Unwrap(),
+				Present: e.Present.Unwrap(),
+			},
+		})
+	})
 }
 
 // Stop drops all event-bus subscriptions.
 func (s *OptimisticRollbackSubscriber) Stop() {
-	for _, u := range s.unsubs {
+	s.mu.Lock()
+	unsubs := s.unsubs
+	s.unsubs = nil
+	s.mu.Unlock()
+	for _, u := range unsubs {
 		u()
 	}
-	s.unsubs = nil
 }

@@ -46,7 +46,7 @@ func TestWireSystemStatusSubscribersHubEventsHookAttachesCentral(t *testing.T) {
 	reg := central.NewRegistry()
 	wsHub := ws.NewHub()
 
-	_, hubEventsHook, _, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger())
+	_, hubEventsHook, _, _, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger())
 	t.Cleanup(teardown)
 
 	if hubEventsHook == nil {

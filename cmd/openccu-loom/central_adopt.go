@@ -107,6 +107,13 @@ type centralOrchestrator struct {
 	// CCU's interface degradation reaches none of those surfaces, because
 	// each of their subscribers only walks the registry once at boot.
 	sysStatusHook func(u *central.Unit) (unwire func())
+	// deviceEventsHook attaches an adopted central to the WebSocket
+	// device-event planes: triggers, device lifecycle, and optimistic
+	// rollbacks. Set via [centralOrchestrator.setDeviceEventsCentralHook].
+	// Without it every keypress, pairing and rollback the adopted central
+	// reports is lost to every WebSocket client, because each of those
+	// subscribers only walks the registry once at boot.
+	deviceEventsHook func(u *central.Unit) (unwire func())
 	// eventSourceHook feeds an adopted central's model event sources from
 	// its device triggers. Set via
 	// [centralOrchestrator.setEventSourceCentralHook]. Without it the
@@ -149,6 +156,7 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	securityHook := o.securityHook
 	hubEventsHook := o.hubEventsHook
 	sysStatusHook := o.sysStatusHook
+	deviceEventsHook := o.deviceEventsHook
 	eventSourceHook := o.eventSourceHook
 	hubReadyTrigger := o.hubReadyTrigger
 	o.mu.Unlock()
@@ -197,6 +205,13 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	// state this central reports is already carried north.
 	if sysStatusHook != nil {
 		keep(sysStatusHook(unit))
+	}
+	// Attach the WebSocket device-event planes (trigger, lifecycle,
+	// optimistic rollback) before the bring-up starts, so the devices this
+	// central reports on its first inventory pass already announce
+	// themselves and its first keypress is carried north.
+	if deviceEventsHook != nil {
+		keep(deviceEventsHook(unit))
 	}
 	// Feed the central's model event sources from its device triggers, so the
 	// first keypress it reports is recorded on the channel's event group.
@@ -255,6 +270,18 @@ func (o *centralOrchestrator) setSysStatusCentralHook(hook func(u *central.Unit)
 	}
 	o.mu.Lock()
 	o.sysStatusHook = hook
+	o.mu.Unlock()
+}
+
+// setDeviceEventsCentralHook installs the per-central WebSocket
+// device-event wiring hook. Nil-safe on both sides, mirroring
+// setSysStatusCentralHook.
+func (o *centralOrchestrator) setDeviceEventsCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.deviceEventsHook = hook
 	o.mu.Unlock()
 }
 

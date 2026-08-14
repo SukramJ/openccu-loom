@@ -27,7 +27,7 @@ import (
 // teardown runs every subscriber's Stop in the same LIFO order the inline
 // defers would have executed.
 //
-// Two per-central hooks come back with it. Every subscriber here walks the
+// Three per-central hooks come back with it. Every subscriber here walks the
 // registry exactly once, so a central adopted at runtime is invisible to all
 // of them; the hooks are how the live-adopt path attaches one.
 func wireSystemStatusSubscribers(
@@ -44,6 +44,7 @@ func wireSystemStatusSubscribers(
 	sysStatusBuf *handlers.SystemStatusBuffer,
 	hubEventsHook func(u *central.Unit) (unwire func()),
 	sysStatusHook func(u *central.Unit) (unwire func()),
+	deviceEventsHook func(u *central.Unit) (unwire func()),
 	teardown func(),
 ) {
 	sysStatusBuf = handlers.NewSystemStatusBuffer(100)
@@ -67,6 +68,8 @@ func wireSystemStatusSubscribers(
 
 	wsOptimisticRollback := ws.NewOptimisticRollbackSubscriber(reg, wsHub)
 	wsOptimisticRollback.Start()
+
+	deviceEventsHook = deviceEventsCentralHook(wsDeviceLifecycle, wsDeviceTrigger, wsOptimisticRollback)
 
 	// The alarm_panel.* broadcast subscriber rides the daemon-level alarm
 	// event bus (areas are daemon-level, not per-central), so it binds to
@@ -157,7 +160,40 @@ func wireSystemStatusSubscribers(
 		stopSysStatusBuf()
 	}
 
-	return sysStatusBuf, hubEventsHook, sysStatusHook, teardown
+	return sysStatusBuf, hubEventsHook, sysStatusHook, deviceEventsHook, teardown
+}
+
+// deviceEventsCentralHook returns the per-central attach for the WebSocket
+// device-event planes: triggers (`device.<addr>.channels.<n>.trigger`),
+// lifecycle (`device.<addr>.lifecycle`) and optimistic rollbacks.
+//
+// They share one hook because they share one defect shape: each subscriber
+// walked the registry exactly once at boot, so a CCU adopted at runtime
+// published none of the three — every keypress on one of its remotes was
+// lost to every WS client until the daemon restarted, while the boot-time
+// CCUs kept publishing normally.
+//
+// The returned unwire detaches every part again, so a central removed at
+// runtime stops publishing.
+func deviceEventsCentralHook(
+	lifecycle *ws.DeviceLifecycleSubscriber,
+	trigger *ws.DeviceTriggerSubscriber,
+	rollback *ws.OptimisticRollbackSubscriber,
+) func(u *central.Unit) (unwire func()) {
+	return func(u *central.Unit) func() {
+		unwires := []func(){
+			lifecycle.StartCentral(u),
+			trigger.StartCentral(u),
+			rollback.StartCentral(u),
+		}
+		return func() {
+			for _, unwire := range unwires {
+				if unwire != nil {
+					unwire()
+				}
+			}
+		}
+	}
 }
 
 // systemStatusCentralHook returns the per-central attach for the whole

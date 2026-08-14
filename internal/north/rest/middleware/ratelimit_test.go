@@ -137,12 +137,11 @@ func TestRateLimit_NilRequestKeyedAnonymous(t *testing.T) {
 
 func TestLimiterStore_IdleEvictionGCs(t *testing.T) {
 	t.Parallel()
-	// Force the inline-GC branch by overflowing the 256-entry soft
-	// cap so the next get() sweeps idle entries. Backdate every
-	// existing entry past rateLimitIdleTTL so they all qualify for
-	// eviction.
+	// Fill the table to its capacity so the next get() has to reclaim,
+	// then backdate every existing entry past rateLimitIdleTTL so they
+	// all qualify for eviction.
 	store := newKeyedLimiterStore(rate.Limit(10), 30, rateLimitStoreCap, rateLimitIdleTTL)
-	for i := range 257 {
+	for i := range rateLimitStoreCap {
 		key := "id-" + strconv.Itoa(i)
 		store.get(key)
 	}
@@ -154,8 +153,8 @@ func TestLimiterStore_IdleEvictionGCs(t *testing.T) {
 	}
 	store.mu.Unlock()
 
-	// One more get triggers the GC sweep — the map should shrink
-	// significantly after the sweep removes the backdated entries.
+	// One more get triggers the reclaim pass — the map should shrink
+	// significantly once it removes the backdated entries.
 	store.get("fresh")
 
 	store.mu.Lock()

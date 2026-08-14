@@ -5,6 +5,7 @@ package ws
 
 import (
 	"strconv"
+	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -48,8 +49,13 @@ func DeviceTriggerTopic(deviceAddr string, channel int) string {
 // [DeviceLifecycleSubscriber] in shape; runs alongside it so each event
 // family gets a focused subscriber.
 type DeviceTriggerSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
+	reg *central.Registry
+	hub *Hub
+
+	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
+	// touch the slice at all - it hands its unwire back to the caller, so
+	// the runtime-adopt path owns its own detach.
+	mu     sync.Mutex
 	unsubs []func()
 }
 
@@ -58,46 +64,61 @@ func NewDeviceTriggerSubscriber(reg *central.Registry, hub *Hub) *DeviceTriggerS
 	return &DeviceTriggerSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
+// Start attaches subscriptions to every central registered right now. A
+// central adopted later needs [DeviceTriggerSubscriber.StartCentral] — this
+// walk cannot see it.
 func (s *DeviceTriggerSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.mu.Lock()
+			s.unsubs = append(s.unsubs, unwire)
+			s.mu.Unlock()
 		}
-		hub := s.hub
-		reg := s.reg
-		unsub := events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
-			channelAddr := e.DeviceAddress + ":" + strconv.Itoa(e.ChannelNo)
-			hub.Publish(Event{
-				Topic: DeviceTriggerTopic(e.DeviceAddress, e.ChannelNo),
-				Type:  string(hmevent.EventTypeDeviceTrigger),
-				When:  e.Timestamp(),
-				Payload: DeviceTriggerPayload{
-					Central:       e.CentralName,
-					InterfaceID:   e.InterfaceID,
-					DeviceAddress: e.DeviceAddress,
-					Channel:       e.ChannelNo,
-					EventType:     string(e.EventType_),
-					Parameter:     e.Parameter,
-					UniqueID: routingkey.CanonicalUniqueID(
-						reg.SerialSuffix(e.CentralName), channelAddr, e.Parameter, "",
-					),
-					Value: e.Value.Unwrap(),
-				},
-			})
-		})
-		s.unsubs = append(s.unsubs, unsub)
 	}
+}
+
+// StartCentral subscribes exactly one central and returns its unwire, or nil
+// when there is nothing to attach. The composition root routes this through
+// the live-adopt hook chain, so a runtime-adopted CCU's keypresses reach
+// WebSocket clients like a boot-time one's.
+func (s *DeviceTriggerSubscriber) StartCentral(u *central.Unit) (unwire func()) {
+	if s == nil || s.reg == nil || s.hub == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	hub := s.hub
+	reg := s.reg
+	return events.Subscribe(u.EventBus, func(e hmevent.DeviceTriggerEvent) {
+		channelAddr := e.DeviceAddress + ":" + strconv.Itoa(e.ChannelNo)
+		hub.Publish(Event{
+			Topic: DeviceTriggerTopic(e.DeviceAddress, e.ChannelNo),
+			Type:  string(hmevent.EventTypeDeviceTrigger),
+			When:  e.Timestamp(),
+			Payload: DeviceTriggerPayload{
+				Central:       e.CentralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.DeviceAddress,
+				Channel:       e.ChannelNo,
+				EventType:     string(e.EventType_),
+				Parameter:     e.Parameter,
+				UniqueID: routingkey.CanonicalUniqueID(
+					reg.SerialSuffix(e.CentralName), channelAddr, e.Parameter, "",
+				),
+				Value: e.Value.Unwrap(),
+			},
+		})
+	})
 }
 
 // Stop drops all event-bus subscriptions.
 func (s *DeviceTriggerSubscriber) Stop() {
-	for _, u := range s.unsubs {
+	s.mu.Lock()
+	unsubs := s.unsubs
+	s.unsubs = nil
+	s.mu.Unlock()
+	for _, u := range unsubs {
 		u()
 	}
-	s.unsubs = nil
 }

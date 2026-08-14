@@ -4,6 +4,8 @@
 package ws
 
 import (
+	"sync"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -46,8 +48,13 @@ func DeviceLifecycleTopic(deviceAddr string) string {
 // family gets a focused subscriber and failure of one path cannot
 // starve the other.
 type DeviceLifecycleSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
+	reg *central.Registry
+	hub *Hub
+
+	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
+	// touch the slice at all - it hands its unwire back to the caller, so
+	// the runtime-adopt path owns its own detach.
+	mu     sync.Mutex
 	unsubs []func()
 }
 
@@ -56,52 +63,68 @@ func NewDeviceLifecycleSubscriber(reg *central.Registry, hub *Hub) *DeviceLifecy
 	return &DeviceLifecycleSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
+// Start attaches subscriptions to every central registered right now. A
+// central adopted later needs [DeviceLifecycleSubscriber.StartCentral] —
+// this walk cannot see it.
 func (s *DeviceLifecycleSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.mu.Lock()
+			s.unsubs = append(s.unsubs, unwire)
+			s.mu.Unlock()
 		}
-		centralName := u.Name()
-		hub := s.hub
-		unsubCreated := events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
-			hub.Publish(Event{
-				Topic: DeviceLifecycleTopic(e.Address),
-				Type:  string(hmevent.EventTypeDeviceCreated),
-				When:  e.Timestamp(),
-				Payload: DeviceCreatedPayload{
-					Central:       centralName,
-					InterfaceID:   e.InterfaceID,
-					DeviceAddress: e.Address,
-					Model:         e.Model,
-					Source:        e.Source,
-				},
-			})
-		})
-		unsubRemoved := events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
-			hub.Publish(Event{
-				Topic: DeviceLifecycleTopic(e.Address),
-				Type:  string(hmevent.EventTypeDeviceRemoved),
-				When:  e.Timestamp(),
-				Payload: DeviceRemovedPayload{
-					Central:       centralName,
-					InterfaceID:   e.InterfaceID,
-					DeviceAddress: e.Address,
-				},
-			})
-		})
-		s.unsubs = append(s.unsubs, unsubCreated, unsubRemoved)
 	}
+}
+
+// StartCentral subscribes exactly one central and returns its unwire, or nil
+// when there is nothing to attach. The composition root routes this through
+// the live-adopt hook chain, so a runtime-adopted CCU's device create/remove
+// frames reach WebSocket clients like a boot-time one's.
+func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) (unwire func()) {
+	if s == nil || s.reg == nil || s.hub == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	hub := s.hub
+	unsubCreated := events.Subscribe(u.EventBus, func(e hmevent.DeviceCreatedEvent) {
+		hub.Publish(Event{
+			Topic: DeviceLifecycleTopic(e.Address),
+			Type:  string(hmevent.EventTypeDeviceCreated),
+			When:  e.Timestamp(),
+			Payload: DeviceCreatedPayload{
+				Central:       centralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.Address,
+				Model:         e.Model,
+				Source:        e.Source,
+			},
+		})
+	})
+	unsubRemoved := events.Subscribe(u.EventBus, func(e hmevent.DeviceRemovedEvent) {
+		hub.Publish(Event{
+			Topic: DeviceLifecycleTopic(e.Address),
+			Type:  string(hmevent.EventTypeDeviceRemoved),
+			When:  e.Timestamp(),
+			Payload: DeviceRemovedPayload{
+				Central:       centralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.Address,
+			},
+		})
+	})
+	return unwireAll([]func(){unsubCreated, unsubRemoved})
 }
 
 // Stop drops all event-bus subscriptions.
 func (s *DeviceLifecycleSubscriber) Stop() {
-	for _, u := range s.unsubs {
+	s.mu.Lock()
+	unsubs := s.unsubs
+	s.unsubs = nil
+	s.mu.Unlock()
+	for _, u := range unsubs {
 		u()
 	}
-	s.unsubs = nil
 }

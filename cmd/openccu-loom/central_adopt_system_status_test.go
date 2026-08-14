@@ -78,7 +78,7 @@ func TestAdoptCentralWiresTheSystemStatusPlane(t *testing.T) {
 	wiring := mqtt.NewWiring(bridge, discardTestLogger())
 	wsHub := ws.NewHub()
 
-	sysStatusBuf, _, sysStatusHook, teardown := wireSystemStatusSubscribers(
+	sysStatusBuf, _, sysStatusHook, _, teardown := wireSystemStatusSubscribers(
 		reg, wsHub, wiring, nil, nil, nil, nil, "", "", discardTestLogger(),
 	)
 	t.Cleanup(teardown)

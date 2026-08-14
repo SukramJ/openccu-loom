@@ -195,3 +195,42 @@ func TestParamsetsDomainEmptyValuesSkipsGate(t *testing.T) {
 		t.Fatalf("empty values must not trigger gate; got: %v", err)
 	}
 }
+
+// TestParamsetsDomainVisibleValuesDropsHiddenParam pins the read-side
+// half of the same gate. The configuration export uses it so the
+// snapshot it hands out contains only parameters PutParamset accepts —
+// otherwise the export produces a file its own import endpoint refuses
+// wholesale on the first hidden name.
+func TestParamsetsDomainVisibleValuesDropsHiddenParam(t *testing.T) {
+	t.Parallel()
+
+	domain, _ := registryWithDeviceAndChannel(t, "HmIP-STH", "0001ABCD:1", "CLIMATE_TRANSCEIVER")
+	gate := visibility.NewRegistry()
+	gate.Rules().HideGlobal(hmenum.ParameterTemperatureOffset)
+	domain.SetVisibilityGate(gate)
+
+	in := map[string]any{"TEMPERATURE_OFFSET": 0.5, "LEVEL": 1.0}
+	out := domain.VisibleValues("0001ABCD:1", hmenum.ParamsetKeyValues, in)
+
+	if _, still := out["TEMPERATURE_OFFSET"]; still {
+		t.Error("a hidden parameter survived the filter")
+	}
+	if _, kept := out["LEVEL"]; !kept {
+		t.Error("a visible parameter was dropped")
+	}
+	if err := domain.checkVisibility("0001ABCD:1", hmenum.ParamsetKeyValues, out); err != nil {
+		t.Fatalf("the filtered set must pass the write gate, got %v", err)
+	}
+}
+
+// TestParamsetsDomainVisibleValuesWithoutGate keeps the ungated daemon
+// unaffected: nothing is filtered when no gate is wired.
+func TestParamsetsDomainVisibleValuesWithoutGate(t *testing.T) {
+	t.Parallel()
+
+	domain, _ := registryWithDeviceAndChannel(t, "HmIP-STH", "0001ABCD:1", "CLIMATE_TRANSCEIVER")
+	in := map[string]any{"TEMPERATURE_OFFSET": 0.5}
+	if out := domain.VisibleValues("0001ABCD:1", hmenum.ParamsetKeyValues, in); len(out) != 1 {
+		t.Fatalf("out = %v, want the input unchanged", out)
+	}
+}

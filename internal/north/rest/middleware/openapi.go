@@ -142,10 +142,18 @@ func (v *OpenAPIValidator) Middleware() func(http.Handler) http.Handler {
 			// downstream handler via a tee buffer. The read is capped by
 			// [openAPIBodyLimit] so an oversized POST cannot be buffered
 			// into memory in full at this pre-handler stage.
+			//
+			// The guard covers every length except a known zero: a chunked
+			// upload arrives with ContentLength -1, and capping only the
+			// announced lengths would let it stream straight into
+			// openapi3filter's unbounded io.ReadAll. ContentLength == 0
+			// keeps the bodyless fast path, so a request that legitimately
+			// carries no body is not turned into a non-NoBody empty reader
+			// (which would change the validator's required-body verdict).
 			var bodyCopy []byte
 			validatorReq := r
 			streaming := route != nil && streamingBodyRoutes[r.Method+" "+route.Path]
-			if !streaming && r.Body != nil && r.ContentLength > 0 {
+			if !streaming && r.Body != nil && r.ContentLength != 0 {
 				buf, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, openAPIBodyLimit))
 				if readErr != nil {
 					var mbe *http.MaxBytesError
