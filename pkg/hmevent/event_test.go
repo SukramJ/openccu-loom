@@ -27,7 +27,6 @@ func TestEventCatalogueTypesUniqueAndNonEmpty(t *testing.T) {
 		LinkPeerChangedEvent{},
 		ConnectionLostEvent{},
 		CircuitBreakerStateChangedEvent{},
-		CircuitBreakerTrippedEvent{},
 		HeartbeatTimerFiredEvent{},
 		PingPongMismatchEvent{},
 		RequestCoalescedEvent{},

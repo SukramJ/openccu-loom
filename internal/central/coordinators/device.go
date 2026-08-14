@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 
@@ -798,10 +799,24 @@ func (c *DeviceCoordinator) AddNewDevicesManually(
 	return nil
 }
 
+// maxDelayedDevicesPerInterface bounds the number of distinct devices the
+// pending-accept inbox holds per interface. A CCU fleet is a few hundred
+// devices in total, so the cap is far above any real installation; it exists
+// because the callback listener accepts newDevices announcements without
+// authentication, and every entry stays until an operator accepts it.
+const maxDelayedDevicesPerInterface = 1024
+
 // StoreDelayedDeviceDescriptions stores device descriptions that have been
 // received via a newDevices callback but not yet manually accepted. The
 // descriptions are keyed by device address so AddNewDevicesManually can look
 // them up later.
+//
+// The store is idempotent per description address: a re-announcement replaces
+// the pending description instead of stacking a second copy on top of it.
+// This matters because the daemon answers listDevices with an empty array, so
+// the CCU re-announces its complete inventory after every reconnect — an
+// append-only inbox grew by another full copy of the fleet each time and
+// nothing but the manual-accept flow ever removed anything.
 func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmenum.Interface, descriptions []hmproto.DeviceDescription) {
 	ifaceID := string(iface)
 	c.mu.Lock()
@@ -809,6 +824,7 @@ func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmenum.Interfac
 	if _, ok := c.delayedDescs[ifaceID]; !ok {
 		c.delayedDescs[ifaceID] = make(map[string][]hmproto.DeviceDescription)
 	}
+	pending := c.delayedDescs[ifaceID]
 	for i := range descriptions {
 		d := descriptions[i]
 		// Key by the top-level device address (PARENT or ADDRESS itself).
@@ -816,7 +832,21 @@ func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmenum.Interfac
 		if key == "" {
 			key = d.Address
 		}
-		c.delayedDescs[ifaceID][key] = append(c.delayedDescs[ifaceID][key], d)
+		entry, known := pending[key]
+		if !known && len(pending) >= maxDelayedDevicesPerInterface {
+			c.logger.Warn("StoreDelayedDeviceDescriptions: pending-accept inbox is full",
+				"interface", ifaceID,
+				"address", key,
+				"pending", len(pending))
+			continue
+		}
+		if idx := slices.IndexFunc(entry, func(e hmproto.DeviceDescription) bool {
+			return e.Address == d.Address
+		}); idx >= 0 {
+			entry[idx] = d
+			continue
+		}
+		pending[key] = append(entry, d)
 	}
 }
 

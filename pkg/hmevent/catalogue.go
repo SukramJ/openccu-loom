@@ -42,7 +42,6 @@ const (
 	EventTypeDeviceTrigger               EventType = "device.trigger"
 	EventTypeLinkPeerChanged             EventType = "link.peer_changed"
 	EventTypeConnectionLost              EventType = "connection.lost"
-	EventTypeCircuitBreakerTripped       EventType = "client.circuit_breaker_tripped"
 	EventTypeCircuitBreakerStateChanged  EventType = "client.circuit_breaker_state_changed"
 	EventTypeHeartbeatTimerFired         EventType = "client.heartbeat_timer_fired"
 	EventTypePingPongMismatch            EventType = "client.pingpong_mismatch"
@@ -213,18 +212,6 @@ type ConnectionLostEvent struct {
 
 // Type implements Event.
 func (ConnectionLostEvent) Type() EventType { return EventTypeConnectionLost }
-
-// CircuitBreakerTrippedEvent fires the moment a circuit breaker trips open
-// (state changes from Closed to Open for the first time in a fault run).
-type CircuitBreakerTrippedEvent struct {
-	Base
-	CentralName string
-	InterfaceID string
-	Reason      hmenum.FailureReason
-}
-
-// Type implements Event.
-func (CircuitBreakerTrippedEvent) Type() EventType { return EventTypeCircuitBreakerTripped }
 
 // HeartbeatTimerFiredEvent is published by the heartbeat scheduler job
 // whenever the CCU heartbeat timer fires. The InterfaceIDs slice lists every

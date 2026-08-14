@@ -20,14 +20,7 @@ import (
 // It may shrink freely; growing it needs a reason in the same commit,
 // and "no producer yet" is not one — that is the state this guard
 // exists to make visible.
-var eventsWithoutPublisher = map[string]string{
-	// The Closed→Open transition this announces is already carried by
-	// CircuitBreakerStateChangedEvent, which the recovery coordinator routes
-	// to the same triggerRecovery call in the same Subscribe block — so the
-	// recovery path is driven, and a second announcement of the same
-	// transition would only make it run twice.
-	"CircuitBreakerTrippedEvent": "the Closed→Open transition is carried by CircuitBreakerStateChangedEvent, which the recovery coordinator already routes to triggerRecovery",
-}
+var eventsWithoutPublisher = map[string]string{}
 
 // TestEveryEventTypeHasAPublisher is the mirror image of
 // [TestEveryEventTypeHasASubscriber]: it asserts that every event type

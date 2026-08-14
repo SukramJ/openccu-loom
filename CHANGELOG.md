@@ -60,6 +60,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The daemon stops hoarding device announcements nobody can read.** It
+  answers the CCU's `listDevices` with an empty array, so after every
+  reconnect the CCU re-announces its complete inventory — and every one
+  of those announcements was also copied into the pending-accept inbox,
+  which only the manual accept flow behind `delay_new_device_creation`
+  empties. With that option off, which is the default, nothing could ever
+  read the copies and nothing removed them: on a 400-device installation
+  every CCU reboot or network flap added another few thousand
+  descriptions to a daemon that then held all of them until it was
+  restarted. The inbox is filled only when deferred creation is on now,
+  and a re-announcement replaces a pending device instead of stacking a
+  second copy on top of it.
+
+- **A callback can no longer make the daemon remember an interface it
+  never had.** The keepalive PONG is stamped before the check that a
+  callback names a device we mirror, so whatever interface id it carried
+  went straight into the per-interface liveness clocks — which are
+  cleared only when the CCU is torn down. The callback listener takes no
+  authentication and accepts a 10 MiB request body, so any host on the
+  network could grow those clocks with fabricated ids until the daemon
+  was out of memory. A PONG for an interface no connection of ours
+  registered is dropped now, and the clocks refuse an id that cannot name
+  one of our interfaces.
+
 - **A CCU whose name is not a valid URL segment is refused at the door.**
   A central name becomes a path segment of the callback URL the daemon
   announces to that CCU, and the callback router only accepts letters,

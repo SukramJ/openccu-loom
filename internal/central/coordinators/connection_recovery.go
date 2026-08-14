@@ -487,10 +487,11 @@ func (c *ConnectionRecoveryCoordinator) triggerRecovery(interfaceID string) {
 // Subscribe registers the coordinator as a listener for connection-loss and
 // circuit-breaker events that should trigger automatic recovery. It
 // subscribes to:
-// - [hmevent.ConnectionLostEvent]
-// - [hmevent.CircuitBreakerTrippedEvent]
-// - [hmevent.CircuitBreakerStateChangedEvent] (only To==Open transitions)
-// - [hmevent.HeartbeatTimerFiredEvent]
+//   - [hmevent.ConnectionLostEvent]
+//   - [hmevent.CircuitBreakerStateChangedEvent] — its Closed→Open transition is
+//     the breaker-trip trigger, and the only one; a second lane for the same
+//     transition would just run recovery twice
+//   - [hmevent.HeartbeatTimerFiredEvent]
 //
 // Only events whose CentralName matches the coordinator's own name are acted
 // upon. Call [Stop] to release the subscriptions.
@@ -517,14 +518,7 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 		c.triggerRecovery(e.InterfaceID)
 	})
 
-	unsub2 := events.Subscribe(c.bus, func(e hmevent.CircuitBreakerTrippedEvent) {
-		if e.CentralName != c.centralName {
-			return
-		}
-		c.triggerRecovery(e.InterfaceID)
-	})
-
-	unsub3 := events.Subscribe(c.bus, func(e hmevent.CircuitBreakerStateChangedEvent) {
+	unsub2 := events.Subscribe(c.bus, func(e hmevent.CircuitBreakerStateChangedEvent) {
 		if e.CentralName != c.centralName {
 			return
 		}
@@ -556,7 +550,7 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 		}
 	})
 
-	unsub4 := events.Subscribe(c.bus, func(e hmevent.HeartbeatTimerFiredEvent) {
+	unsub3 := events.Subscribe(c.bus, func(e hmevent.HeartbeatTimerFiredEvent) {
 		if e.CentralName != c.centralName {
 			return
 		}
@@ -579,7 +573,7 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 	// tracker, or a manual operator override) transitions the central into
 	// FAILED. Without this subscriber, external state transitions would
 	// never trigger the recovery pipeline.
-	unsub5 := events.Subscribe(c.bus, func(e hmevent.CentralStateChangedEvent) {
+	unsub4 := events.Subscribe(c.bus, func(e hmevent.CentralStateChangedEvent) {
 		if e.CentralName != c.centralName {
 			return
 		}
@@ -591,7 +585,7 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 	})
 
 	c.subMu.Lock()
-	c.unsubscribers = append(c.unsubscribers, unsub1, unsub2, unsub3, unsub4, unsub5)
+	c.unsubscribers = append(c.unsubscribers, unsub1, unsub2, unsub3, unsub4)
 	c.subMu.Unlock()
 
 	c.recoveryWG.Add(1)

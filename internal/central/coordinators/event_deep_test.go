@@ -5,6 +5,8 @@ package coordinators
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -101,6 +103,50 @@ func TestMarkEventEmptyInterfaceIDIsNoop(t *testing.T) {
 	_, observed := ec.LastEventMonotonicForInterface("")
 	if observed {
 		t.Fatal("empty interfaceID must not be stored in lastEventStamp")
+	}
+}
+
+// TestMarkEventBoundsTheEventClockKeyspace pins the two bounds on the
+// per-interface event clocks: an interface id far longer than the canonical
+// `<central>-<iface>` form is refused, and once the clocks track more
+// interfaces than a central can plausibly own, no further key is admitted.
+//
+// The clocks are only reset when the central is torn down, and the id comes
+// straight off the callback wire — the XML-RPC listener takes no
+// authentication, accepts a 10 MiB body, and stores the id twice per call.
+// Without these bounds a single LAN peer can retain arbitrary heap by looping
+// callbacks with fresh ids until the daemon is out of memory.
+func TestMarkEventBoundsTheEventClockKeyspace(t *testing.T) {
+	t.Parallel()
+	ec, _, _ := newTestEC(t)
+
+	oversized := strings.Repeat("A", maxInterfaceIDLen+1)
+	ec.MarkEvent(oversized, time.Now())
+	if _, observed := ec.LastEventMonotonicForInterface(oversized); observed {
+		t.Errorf("an interface id longer than %d bytes must not be stored", maxInterfaceIDLen)
+	}
+
+	for i := range maxTrackedInterfaces {
+		ec.MarkEvent("ccu-iface-"+strconv.Itoa(i), time.Now())
+	}
+	ec.MarkEvent("ccu-iface-overflow", time.Now())
+	if _, observed := ec.LastEventMonotonicForInterface("ccu-iface-overflow"); observed {
+		t.Errorf("no new interface may be admitted once %d are tracked", maxTrackedInterfaces)
+	}
+
+	// A tracked interface keeps being stamped after the cap is reached —
+	// otherwise the liveness watchdog would go blind on a busy central.
+	want := time.Now().Add(time.Minute)
+	ec.MarkEvent("ccu-iface-0", want)
+	got, observed := ec.LastEventMonotonicForInterface("ccu-iface-0")
+	if !observed || !got.Equal(want) {
+		t.Errorf("already-tracked interface must keep its stamp updated: observed=%v got=%v want=%v",
+			observed, got, want)
+	}
+
+	if n := len(ec.lastEventWall); n != maxTrackedInterfaces {
+		t.Errorf("lastEventWall holds %d entries, want %d — both clocks must honour the cap",
+			n, maxTrackedInterfaces)
 	}
 }
 

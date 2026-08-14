@@ -120,27 +120,49 @@ func (c *EventCoordinator) NewestEventAge(now time.Time) (float64, bool) {
 	return now.Sub(newest).Seconds(), true
 }
 
+// maxInterfaceIDLen bounds the interface id accepted as an event-clock key.
+// The canonical form is `<central>-<iface>`, so a few dozen bytes; a longer id
+// cannot name an interface this central registered. The id arrives on the
+// callback wire, where a single XML-RPC body may carry megabytes.
+const maxInterfaceIDLen = 128
+
+// maxTrackedInterfaces bounds how many distinct interfaces the event clocks
+// track. A central owns one client per configured interface — a handful — so
+// the cap is only ever reached by ids that name no interface of ours. Both
+// clocks are cleared on teardown only, so an unbounded keyspace would be
+// retained for the lifetime of the process.
+const maxTrackedInterfaces = 64
+
 // MarkEvent stamps the per-interface event clock to `at`. Public so
 // transport-side callbacks (init, ping-pong, error) can refresh the
 // "interface alive" signal without going through the
 // HandleRawEvent code path. Pass [time.Time]{} to use time.Now().
+//
+// Ids that cannot name one of this central's interfaces are ignored: an
+// oversized one, and any new id once the clocks already track more interfaces
+// than a central can own. Callers that own the interface identity (the
+// callback adapter resolves it against the client registry) never hit either
+// bound; a fabricated callback does.
 func (c *EventCoordinator) MarkEvent(interfaceID string, at time.Time) {
-	if interfaceID == "" {
+	if interfaceID == "" || len(interfaceID) > maxInterfaceIDLen {
 		return
 	}
 	if at.IsZero() {
 		at = time.Now()
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.lastEventStamp == nil {
 		c.lastEventStamp = make(map[string]time.Time)
+	}
+	if _, tracked := c.lastEventStamp[interfaceID]; !tracked && len(c.lastEventStamp) >= maxTrackedInterfaces {
+		return
 	}
 	c.lastEventStamp[interfaceID] = at
 	if c.lastEventWall == nil {
 		c.lastEventWall = make(map[string]time.Time)
 	}
 	c.lastEventWall[interfaceID] = at
-	c.mu.Unlock()
 }
 
 // HandleRawEvent processes a single event callback. It updates the cache
