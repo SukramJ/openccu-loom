@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
@@ -933,6 +934,64 @@ func TestDevicePipeline_SeedValues_DecodesURLEncodedStringValue(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("IP_ADDRESS = %q, want decoded value %q (URL-encoded literal must not reach the model)", got, want)
+	}
+}
+
+// TestDevicePipeline_SeedValues_TranscodesLatin1StringValue pins the second
+// half of the ReGa decode: the CCU speaks ISO-8859-1, so a percent-escaped
+// umlaut unescapes to a raw high byte that is not valid UTF-8.
+//
+// A bare url.QueryUnescape seeded that byte into the live model, and every
+// north-bound encoder then replaced it with U+FFFD — "Spüle" reached MQTT,
+// REST and the SPA as "Sp\uFFFDle" and stayed that way until the next live
+// event overwrote the value, while the same name fetched through the hub path
+// rendered correctly.
+func TestDevicePipeline_SeedValues_TranscodesLatin1StringValue(t *testing.T) {
+	t.Parallel()
+	f := buildBoost7Fixture(t)
+	p := NewDevicePipeline(f.unit)
+
+	ch := f.dev.Channel("DEV002:0")
+	if ch == nil {
+		t.Fatal("fixture channel DEV002:0 missing")
+	}
+	dp := generic.NewDataPoint[string](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: "DEV002:0",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "TEXT",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeString,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	ch.Put(dp)
+
+	// UriEncode("Spüle") on a CCU: the umlaut is the Latin-1 byte 0xFC.
+	const encoded = "Sp%FCle"
+	const want = "Spüle"
+	payload := `{"HmIP-RF.DEV002%3A0.TEXT": "` + encoded + `"}`
+
+	srv := newBoost6JSONRPCServerAlwaysOK(t, payload)
+	defer srv.Close()
+	jc := newBoost6JSONRPCClient(t, srv.URL)
+	r := newBoost6RegaRunner(t, jc)
+
+	if err := p.seedValues(context.Background(), "HmIP-RF", r, slog.Default()); err != nil {
+		t.Fatalf("seedValues: %v", err)
+	}
+
+	got, observed := dp.Value()
+	if !observed {
+		t.Fatal("TEXT data point was never seeded — OnWireValue did not apply")
+	}
+	if got != want {
+		t.Fatalf("TEXT = %q, want %q (Latin-1 value must be transcoded, not seeded as invalid UTF-8)", got, want)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("TEXT = %q is not valid UTF-8; every north-bound encoder will replace it with U+FFFD", got)
 	}
 }
 

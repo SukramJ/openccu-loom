@@ -18,7 +18,7 @@ func TestDeviceIdentifyChannelEmptyText(t *testing.T) {
 
 	d := New(Config{Address: "0001ABCD", IseID: 100})
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.IseID = 200
+	ch.SetIseID(200)
 
 	if got := d.IdentifyChannel(""); got != nil {
 		t.Fatalf("IdentifyChannel(\"\") = %v, want nil", got)
@@ -33,7 +33,7 @@ func TestDeviceIdentifyChannelMatchesByAddressSuffix(t *testing.T) {
 
 	d := New(Config{Address: "0001ABCD", IseID: 999})
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.IseID = 111
+	ch.SetIseID(111)
 
 	got := d.IdentifyChannel("svEnergy_0001ABCD:1")
 	if got == nil {
@@ -51,7 +51,7 @@ func TestDeviceIdentifyChannelMatchesByChannelIseID(t *testing.T) {
 
 	d := New(Config{Address: "0001ABCD", IseID: 999})
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.IseID = 200
+	ch.SetIseID(200)
 
 	// '_' is itself a word character (see isWordChar), so it does not act as a
 	// token boundary — use a space to bound the ise_id unambiguously.
@@ -73,9 +73,9 @@ func TestDeviceIdentifyChannelMatchesByDeviceIseID(t *testing.T) {
 	d := New(Config{Address: "0001ABCD", IseID: 100})
 	// Add out of address order; neither channel's own ise_id appears in text.
 	ch2 := d.AddChannel("0001ABCD:2", 2, "SWITCH", hmenum.ParamsetKeyValues)
-	ch2.IseID = 666
+	ch2.SetIseID(666)
 	ch1 := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch1.IseID = 555
+	ch1.SetIseID(555)
 
 	got := d.IdentifyChannel("sv 100")
 	if got == nil {
@@ -93,7 +93,7 @@ func TestDeviceIdentifyChannelWordBoundaryNegative(t *testing.T) {
 
 	d := New(Config{Address: "0001ABCD", IseID: 123})
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.IseID = 0 // ignored — must not participate in matching
+	ch.SetIseID(0) // ignored — must not participate in matching
 
 	if got := d.IdentifyChannel("sv_41234"); got != nil {
 		t.Fatalf("IdentifyChannel(\"sv_41234\") = %v, want nil (123 is a substring of 41234, not a standalone word)", got)
@@ -107,7 +107,7 @@ func TestDeviceIdentifyChannelWordBoundaryPositive(t *testing.T) {
 
 	d := New(Config{Address: "0001ABCD", IseID: 123})
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.IseID = 0 // ignored — must not participate in matching
+	ch.SetIseID(0) // ignored — must not participate in matching
 
 	// '_' is itself a word character (see isWordChar), so it does not act as a
 	// token boundary — use a hyphen to bound the ise_id unambiguously.
@@ -128,7 +128,7 @@ func TestDeviceIdentifyChannelZeroIseIDIgnored(t *testing.T) {
 
 	d := New(Config{Address: "0001ABCD", IseID: 0})
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.IseID = 0
+	ch.SetIseID(0)
 
 	if got := d.IdentifyChannel("sv_0"); got != nil {
 		t.Fatalf("IdentifyChannel(\"sv_0\") = %v, want nil (ise_id == 0 must be ignored)", got)
@@ -146,11 +146,11 @@ func TestDeviceIdentifyChannelChannelMatchTakesPriorityOverDeviceMatch(t *testin
 	// chX is first in sorted-address order and would be picked by the
 	// device-wide fallback, but its own ise_id is 0 (ignored).
 	chX := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	chX.IseID = 0
+	chX.SetIseID(0)
 	// chY is second in sorted-address order but carries an ise_id that
 	// appears in text — the channel-specific match must win.
 	chY := d.AddChannel("0001ABCD:2", 2, "SWITCH", hmenum.ParamsetKeyValues)
-	chY.IseID = 200
+	chY.SetIseID(200)
 
 	got := d.IdentifyChannel("sv 100 200")
 	if got == nil {
@@ -172,11 +172,11 @@ func TestDeviceIdentifyChannelDeviceWideMatchIsDeterministic(t *testing.T) {
 	// Register channels out of address order; none of their own ise_ids
 	// appear in the probe text, so only the device-wide fallback can match.
 	ch3 := d.AddChannel("0001ABCD:3", 3, "SWITCH", hmenum.ParamsetKeyValues)
-	ch3.IseID = 777
+	ch3.SetIseID(777)
 	ch1 := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch1.IseID = 555
+	ch1.SetIseID(555)
 	ch2 := d.AddChannel("0001ABCD:2", 2, "SWITCH", hmenum.ParamsetKeyValues)
-	ch2.IseID = 666
+	ch2.SetIseID(666)
 
 	for i := range 20 {
 		got := d.IdentifyChannel("sv 100")

@@ -500,6 +500,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// north-bound WS/REST/MQTT subscribers register further down, next to the
 	// call that builds them.
 	centralOrch.addCentralHook(sb.historyCentralHook)
+	// Without this the adopted CCU is skipped by every periodic flush tick —
+	// its values reach SQLite only through the graceful-shutdown flush, so a
+	// SIGKILL or host reboot loses everything it observed since adoption.
+	centralOrch.addCentralHook(sb.valuesCacheCentralHook)
 	centralOrch.addCentralHook(sessionRecorderCentralHook)
 	centralOrch.addCentralHook(incidentCentralHook)
 	centralOrch.addCentralHook(programAuditCentralHook)

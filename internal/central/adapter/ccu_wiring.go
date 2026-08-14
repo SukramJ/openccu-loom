@@ -1049,13 +1049,16 @@ func wireInterface(
 
 	// For classic HM interfaces (BidCos-RF, BidCos-Wired, VirtualDevices,
 	// CUxD), construct a MasterPoller and wire its SchedulePoll as the
-	// post-MASTER-write hook on every channel. HmIP interfaces use the
-	// CONFIG_PENDING event path instead and get a nil hook (no polling).
+	// post-MASTER-write hook on every channel of THIS interface. HmIP
+	// interfaces use the CONFIG_PENDING event path instead and register
+	// nothing (no polling). The registration is keyed by wireID because the
+	// poller reads through this interface's backend and the pipeline is
+	// shared by every interface of the central.
 	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
 	if poller != nil {
-		pipeline.WithMasterRefreshHook(poller.SchedulePoll)
+		pipeline.WithMasterRefreshHook(wireID, poller.SchedulePoll)
 	} else {
-		pipeline.WithMasterRefreshHook(nil)
+		pipeline.WithMasterRefreshHook(wireID, nil)
 	}
 
 	// Pull the device snapshot and hydrate data points, then announce the
@@ -1105,7 +1108,7 @@ func wireInterface(
 			if len(deviceAddrs) > 0 {
 				//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx (60s timeout)
 				unit.Devices.ScheduleParamsetConsistencyCheck(
-					context.Background(), iface, deviceAddrs, backend,
+					context.Background(), iface, hmenum.Interface(wireID), deviceAddrs, backend,
 					func(inconsistencies []coordinators.ParamsetInconsistency) {
 						for _, inc := range inconsistencies {
 							logger.Warn("wire.paramset_inconsistency",
@@ -1301,17 +1304,7 @@ ingestLoop:
 		if poller != nil {
 			poller.Close()
 		}
-		if callbackURL != "" {
-			//nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx
-			deinitCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			if err := backend.Deinit(deinitCtx, callbackURL); err != nil {
-				logger.Debug("wire.deinit",
-					slog.String("central", centralName),
-					slog.String("interface", deinitID),
-					slog.String("err", err.Error()))
-			}
-			cancel()
-		}
+		deinitOnShutdown(backend, callbackURL, centralName, deinitID, logger)
 		writer.Deregister(centralName, ifaceID)
 		if unit.Clients != nil {
 			unit.Clients.Remove(ifaceID)
@@ -1446,12 +1439,14 @@ func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, erro
 	// endpoint, /groups is the VirtualDevices variant. POSTing to the
 	// bare "/" path causes the CCU's putParamset handler to crash
 	// internally (Vert.x NPE or fault -5) while reads still succeed —
-	// keep paths explicit. Operators with non-standard CCU routing
-	// can override via the per-interface remote_path config field.
+	// keep paths explicit.
 	path := "/RPC2"
 	if iface == hmenum.InterfaceVirtualDevices {
 		path = "/groups"
 	}
+	// A reverse-proxied or otherwise non-standard-routed CCU is reached
+	// through the operator's own path; the value is shape-validated at config
+	// load ([config.InterfaceSpec.Validate]).
 	if ov := interfaceRemotePathOverride(cc, iface); ov != "" {
 		path = ov
 	}

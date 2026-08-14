@@ -545,7 +545,7 @@ func TestDeviceAdminDomain_RenameChannel_HappyPath(t *testing.T) {
 	if gotAddr != "DEV004:1" || gotName != "Kitchen Light" {
 		t.Errorf("hook got (%q, %q), want (%q, %q)", gotAddr, gotName, "DEV004:1", "Kitchen Light")
 	}
-	if got := dev.Channel("DEV004:1").Name; got != "Kitchen Light" {
+	if got := dev.Channel("DEV004:1").Name(); got != "Kitchen Light" {
 		t.Errorf("in-memory channel name = %q, want %q", got, "Kitchen Light")
 	}
 }
@@ -3296,8 +3296,8 @@ func TestDevicePipelineIngest_WithNamesRoomsFunctions(t *testing.T) {
 	if ch == nil {
 		t.Fatal("channel NRF001:1 not found")
 	}
-	if ch.Name != "My Channel" {
-		t.Errorf("channel name = %q, want %q", ch.Name, "My Channel")
+	if ch.Name() != "My Channel" {
+		t.Errorf("channel name = %q, want %q", ch.Name(), "My Channel")
 	}
 }
 
@@ -14338,8 +14338,8 @@ func TestDeviceAdminDomain_AcceptInboxDevice_IncludeChannels_RenamesChannelsToo(
 	if ch == nil {
 		t.Fatal("channel DEV004:1 not found")
 	}
-	if ch.Name != "Kitchen Switch:1" {
-		t.Fatalf("expected channel rename cascade, got %q", ch.Name)
+	if ch.Name() != "Kitchen Switch:1" {
+		t.Fatalf("expected channel rename cascade, got %q", ch.Name())
 	}
 }
 
@@ -15549,7 +15549,7 @@ func TestDevicePipelineWithMasterRefreshHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	p := NewDevicePipeline(c).WithMasterRefreshHook(func(addr string, key hmenum.ParamsetKey) {})
+	p := NewDevicePipeline(c).WithMasterRefreshHook("ccu-test-BidCos-RF", func(addr string, key hmenum.ParamsetKey) {})
 	if p == nil {
 		t.Fatal("WithMasterRefreshHook must return non-nil pipeline")
 	}
@@ -15561,9 +15561,9 @@ func TestDevicePipelineWithNilMasterRefreshHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	p := NewDevicePipeline(c).WithMasterRefreshHook(nil)
+	p := NewDevicePipeline(c).WithMasterRefreshHook("ccu-test-BidCos-RF", nil)
 	if p == nil {
-		t.Fatal("WithMasterRefreshHook(nil) must return non-nil pipeline")
+		t.Fatal("WithMasterRefreshHook with a nil hook must return non-nil pipeline")
 	}
 }
 

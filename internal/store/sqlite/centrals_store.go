@@ -14,6 +14,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/secret"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // CentralsStore persists the CCU connection list. Replaces the
@@ -123,6 +124,13 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 	r.Name = strings.TrimSpace(r.Name)
 	if r.Name == "" {
 		return errors.New("sqlite: central name required")
+	}
+	// The name is a path segment of the callback URL this central announces
+	// to its CCU, so a row the callback router cannot match must never be
+	// persisted — it would come back on every restart as a CCU that pushes
+	// nothing.
+	if err := hmtypes.ValidateCentralName(r.Name); err != nil {
+		return fmt.Errorf("sqlite: %w", err)
 	}
 	if r.Host == "" {
 		return errors.New("sqlite: central host required")

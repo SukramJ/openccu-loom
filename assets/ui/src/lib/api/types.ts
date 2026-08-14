@@ -397,6 +397,12 @@ export type DiagnosticsEnvelope = {
   incidents?: Incident[];
   system_status?: unknown[];
   log_levels?: LogLevelsResponse;
+  // Per-central counter snapshot, keyed by central name (rpc, cache,
+  // recovery, model, ... sections). Travels with the support download;
+  // no view renders it, so it stays unmodelled here rather than
+  // carrying a hand-written copy of the daemon shape that nothing
+  // checks.
+  metrics?: Record<string, unknown>;
 };
 
 export type CentralLinksChannelStatus = {

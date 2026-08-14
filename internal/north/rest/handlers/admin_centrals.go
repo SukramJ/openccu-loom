@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // CentralAdminService is the DI surface for the /api/v1/admin/centrals
@@ -115,6 +116,15 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				problem.New(problem.TypeValidation, r, "Missing name", "central name is required"))
 			return
 		}
+		// The name becomes a path segment of the callback URL announced to
+		// the CCU. Refusing it here is the only place an operator gets an
+		// explanation — at callback time the symptom is a CCU that pushes
+		// nothing, with nothing pointing at the name.
+		if err := hmtypes.ValidateCentralName(row.Name); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Invalid name", err.Error()))
+			return
+		}
 		if row.Host == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
@@ -163,6 +173,11 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 		// URL path name takes precedence so the body name field cannot
 		// accidentally create a different central.
 		row.Name = name
+		if err := hmtypes.ValidateCentralName(row.Name); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Invalid name", err.Error()))
+			return
+		}
 		if row.Host == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))

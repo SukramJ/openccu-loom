@@ -513,7 +513,7 @@ func TestMapCandidatesEnrichesFromModel(t *testing.T) {
 	})
 	c.ModelRegistry.Put(dev)
 	ch := dev.AddChannel("0001BBBB:1", 1, "HEATING_CLIMATE_RECEIVER", hmenum.ParamsetKeyValues)
-	ch.Name = "Heizen"
+	ch.SetName("Heizen")
 	// The channel carries no room/function of its own -> device fallback.
 
 	got := mapCandidates(c, []backends.HeatingGroupMember{
@@ -617,7 +617,7 @@ func TestEnrichGroupMembersResolvesNames(t *testing.T) {
 	})
 	c.ModelRegistry.Put(dev)
 	ch := dev.AddChannel("0001BBBB:1", 1, "HEATING_CLIMATE_RECEIVER", hmenum.ParamsetKeyValues)
-	ch.Name = "Heizen"
+	ch.SetName("Heizen")
 
 	groups := []group.Group{{
 		ID:   1,

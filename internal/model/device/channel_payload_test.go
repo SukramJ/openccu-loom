@@ -120,9 +120,9 @@ func TestChannelInfoPayloadWithOptionals(t *testing.T) {
 	t.Parallel()
 
 	ch := newMinimalChannel("DEV:3", 3, "HEATING_CLIMATECONTROL_TRANSCEIVER")
-	ch.Name = "Wohnzimmer"
-	ch.Rooms = []string{"Wohnzimmer"}
-	ch.Functions = []string{"Heizen"}
+	ch.SetName("Wohnzimmer")
+	ch.SetRooms([]string{"Wohnzimmer"})
+	ch.SetFunctions([]string{"Heizen"})
 	ch.GroupNo = 3 // is group master (GroupNo == Number)
 
 	info, ok := ch.Info().(*payload.ChannelInfo)
@@ -152,9 +152,9 @@ func TestChannelInfoPayloadEmptyOptionalsAreOmitted(t *testing.T) {
 	t.Parallel()
 
 	ch := newMinimalChannel("DEV:2", 2, "TYPE_X")
-	ch.Name = ""
-	ch.Rooms = []string{}
-	ch.Functions = []string{}
+	ch.SetName("")
+	ch.SetRooms([]string{})
+	ch.SetFunctions([]string{})
 	ch.GroupNo = 0
 
 	info, ok := ch.Info().(*payload.ChannelInfo)
@@ -217,7 +217,7 @@ func TestChannelInfoPayloadRoomsCopied(t *testing.T) {
 	t.Parallel()
 
 	ch := newMinimalChannel("DEV:1", 1, "TYPE_X")
-	ch.Rooms = []string{"Kitchen", "Hallway"}
+	ch.SetRooms([]string{"Kitchen", "Hallway"})
 
 	info, ok := ch.Info().(*payload.ChannelInfo)
 	if !ok || info == nil {
@@ -261,7 +261,7 @@ func TestChannelInfoPayloadRoomFromGroupMaster(t *testing.T) {
 	})
 	master := d.AddChannel("FALLBACKDEV:2", 2, "TYPE_A", "")
 	master.GroupNo = 2
-	master.Rooms = []string{"LivingRoom"}
+	master.SetRooms([]string{"LivingRoom"})
 
 	member := d.AddChannel("FALLBACKDEV:3", 3, "TYPE_A", "")
 	member.GroupNo = 2 // belongs to group 2; master is FALLBACKDEV:2

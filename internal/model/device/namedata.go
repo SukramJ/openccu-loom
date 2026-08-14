@@ -229,8 +229,8 @@ func isChannelNameAmbiguous(channel *Channel, parameter, channelName, model, dev
 // otherwise the synthetic `f"{device.name}:{ch.no}"` form.
 func baseChannelName(channel *Channel, model, deviceName string) string {
 	autoDefault := strings.TrimSpace(model + " " + channel.Address)
-	if channel.Name != "" && channel.Name != autoDefault {
-		return channel.Name
+	if name := channel.Name(); name != "" && name != autoDefault {
+		return name
 	}
 	if deviceName == "" {
 		return ""

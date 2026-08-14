@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -95,10 +96,24 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string, re
 		// Drop the local caches. The CCU's `deleteDevices` callback
 		// will re-publish the deletion event; doing it eagerly here
 		// keeps the SPA snappy.
+		//
+		// The description and paramset registries are keyed by the canonical
+		// wire id (`<central>-<iface>`) and carry one entry per CHANNEL, not
+		// one per device: deleting the device address under the bare interface
+		// matched nothing, so every channel's descriptions survived the unpair
+		// and the persistence sink was never asked to drop the SQLite rows —
+		// which the next boot then rehydrated into a device the CCU no longer
+		// reports. Snapshot the channels before RemoveDevice tears them down.
+		iface := hmenum.Interface(dev.InterfaceID)
+		channels := dev.Channels()
 		u.RemoveDevice(address)
-		u.DeviceRegistry.Remove(dev.Interface, address)
-		u.DescRegistry.Delete(dev.Interface, address)
-		u.ParamsetReg.DeleteChannel(dev.Interface, address)
+		u.DeviceRegistry.Remove(iface, address)
+		u.DescRegistry.Delete(iface, address)
+		u.ParamsetReg.DeleteChannel(iface, address)
+		for _, ch := range channels {
+			u.DescRegistry.Delete(iface, ch.Address)
+			u.ParamsetReg.DeleteChannel(iface, ch.Address)
+		}
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -333,7 +348,7 @@ func (a *DeviceAdminDomain) SetRooms(
 		if err := u.HubModel.SetDeviceRoomsRemote(ctx, address, rooms); err != nil {
 			return err
 		}
-		dev.Rooms = append([]string(nil), rooms...)
+		dev.SetRooms(rooms)
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -358,7 +373,7 @@ func (a *DeviceAdminDomain) SetFunctions(
 		if err := u.HubModel.SetDeviceFunctionsRemote(ctx, address, functions); err != nil {
 			return err
 		}
-		dev.Functions = append([]string(nil), functions...)
+		dev.SetFunctions(functions)
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -380,8 +395,8 @@ func (a *DeviceAdminDomain) SetChannelRooms(
 			return u.HubModel.SetDeviceRoomsRemote(ctx, channelAddress, rooms)
 		},
 		func(dev *device.Device, ch *device.Channel) {
-			ch.Rooms = append([]string(nil), rooms...)
-			dev.Rooms = unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Rooms })
+			ch.SetRooms(rooms)
+			dev.SetRooms(unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Rooms() }))
 		})
 }
 
@@ -395,8 +410,8 @@ func (a *DeviceAdminDomain) SetChannelFunctions(
 			return u.HubModel.SetDeviceFunctionsRemote(ctx, channelAddress, functions)
 		},
 		func(dev *device.Device, ch *device.Channel) {
-			ch.Functions = append([]string(nil), functions...)
-			dev.Functions = unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Functions })
+			ch.SetFunctions(functions)
+			dev.SetFunctions(unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Functions() }))
 		})
 }
 

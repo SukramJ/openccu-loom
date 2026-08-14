@@ -4,7 +4,301 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.59.1]
+
+### Added
+
+- **The diagnostics dump now carries the counters the daemon was already
+  collecting.** Every CCU has had a metrics aggregator running since boot
+  — outbound RPC totals and failures, callback-server traffic, event-bus
+  and cache sizes, recovery attempts, device / channel / data-point counts
+  per category, service-call timings — and none of it left the process.
+  `GET /api/v1/diagnostics` now includes a `metrics` block with one
+  snapshot per central, so the support artefact the SPA downloads answers
+  "how much is this CCU actually doing" without a Prometheus scraper. The
+  block holds counters only and names no device, so it is unaffected by
+  `anonymize`. (REST API 5.26.0)
+
+### Fixed
+
+- **A cover's Open and Close buttons in Home Assistant move the cover
+  again.** Home Assistant gives an MQTT cover one command topic and tells
+  Open, Close and Stop apart by the payload alone, but discovery pointed
+  that topic at the STOP parameter. Pressing Open wrote a truthy value
+  there — the cover halted instead of raising — and pressing Close wrote
+  a falsy one, which the actuator ignores entirely; only the position
+  slider ever moved a shutter or blind. The topic now addresses a cover
+  command service that maps the three payloads back onto the real Open /
+  Close / Stop operations, so a blind still drives both axes through its
+  combined parameter and an inverted cover still inverts.
+
+- **Changing a device's rooms or functions no longer risks a garbled
+  device list.** Both assignments were plain fields on the device: the
+  admin write rewrote them from one request while another request read
+  them for the device list, the snapshot export, MQTT discovery or an MCP
+  tool. A reader could observe a half-written list — the new length
+  against the old entries — and in the worst case read past its end. Both
+  sets now live behind the model's lock and every reader receives its own
+  copy. The single area Home Assistant is told to suggest is derived
+  under the same lock, so it follows a room reassignment instead of
+  keeping whatever the device carried at boot.
+
+- **CUxD push callbacks no longer stop for good after a transient accept
+  failure.** The BIN-RPC callback listener ended its accept loop on any
+  error, including the recoverable ones a busy host produces — a peer
+  that resets between SYN and accept, a momentary file-descriptor
+  shortage, an interrupted syscall. Nothing restarted it: the port
+  stayed bound, `/health` stayed green, and every CUxD event, device
+  addition and device removal silently stopped arriving until the daemon
+  was restarted. The loop now backs off and retries those failures, the
+  way the XML-RPC callback listener already did, and unbinds the socket
+  if it ever does have to give up.
+
+- **A heating schedule no longer changes shape when it is merely
+  reloaded.** Reading a climate week profile picks the temperature that
+  fills most of the day as the day's base; that segment is then implicit
+  and only the remaining ones are listed as periods. When two
+  temperatures share the day evenly — a 12 h / 12 h day-and-night
+  schedule is the common case — the winner was whichever one an
+  unordered lookup happened to visit first, so the same untouched CCU
+  data could come back with either half listed, differing between two
+  reloads of the same channel. The earliest of the tied temperatures now
+  wins every time, so the schedule the UI and the REST API show stays
+  put and no longer produces a phantom difference on the next save.
+
+- **Curated value labels now reach the last translation fallback.** When a
+  value has no label of its own for the parameter reporting it, the daemon
+  falls back to the label the same value carries on any other parameter.
+  That reverse index was built from the raw CCU stringtable before the
+  curated corrections were merged on top, so a label that exists only in
+  the curated set — the sound-file names of the acoustic signal devices,
+  among others — was invisible to it, and the SPA, the REST API and MQTT
+  showed the raw value instead. The curated set exists to close exactly
+  those gaps.
+
+- **A derived reading is no longer computed from half of one measurement
+  and half of the next.** Dew point, dew-point spread, frost point, vapor
+  concentration, enthalpy and apparent temperature are each computed from
+  two or three separate readings of the same channel, and every one of
+  those readings arrives on its own connection from the CCU. Nothing kept
+  the writers apart, so a burst that carried temperature and humidity
+  together could publish a value mixing the fresh humidity with the
+  temperature it was replacing — or silently drop the update instead. The
+  battery level had the same problem across a different pair: the
+  low-battery limit comes from the device configuration while the voltage
+  comes with the live events, so a configuration re-read landing beside a
+  voltage report could publish a percentage measured against a reference
+  that no longer applied. Window, smoke and intrusion states could lose an
+  update the same way.
+
+- **Saving a device setting twice in quick succession no longer leaves the
+  old value on screen.** Classic HomeMatic interfaces do not report MASTER
+  changes back, so the daemon reads the paramset again a couple of seconds
+  after each write. A second save inside that window replaced the pending
+  read — and then the replaced one, on its way out, cancelled its own
+  replacement. Neither read happened, so the device had the new setting
+  while the daemon, the API and the UI kept showing the previous one until
+  a later single write or a restart corrected it.
+
+- **A CCU reconnect can no longer make a supported operation look
+  unsupported.** The set of things an interface can do is re-probed when the
+  connection comes back, on a different goroutine from the ones asking about
+  it — a backup, a firmware update, or the ingest of a newly announced
+  device. The hand-off between them was unsynchronised, so on the 32- and
+  64-bit ARM builds a request landing in that instant could read a
+  half-published profile and be turned away, or a device that does support
+  push callbacks could be recorded as one that does not.
+
+- **The daemon stops hoarding device announcements nobody can read.** It
+  answers the CCU's `listDevices` with an empty array, so after every
+  reconnect the CCU re-announces its complete inventory — and every one
+  of those announcements was also copied into the pending-accept inbox,
+  which only the manual accept flow behind `delay_new_device_creation`
+  empties. With that option off, which is the default, nothing could ever
+  read the copies and nothing removed them: on a 400-device installation
+  every CCU reboot or network flap added another few thousand
+  descriptions to a daemon that then held all of them until it was
+  restarted. The inbox is filled only when deferred creation is on now,
+  and a re-announcement replaces a pending device instead of stacking a
+  second copy on top of it.
+
+- **A callback can no longer make the daemon remember an interface it
+  never had.** The keepalive PONG is stamped before the check that a
+  callback names a device we mirror, so whatever interface id it carried
+  went straight into the per-interface liveness clocks — which are
+  cleared only when the CCU is torn down. The callback listener takes no
+  authentication and accepts a 10 MiB request body, so any host on the
+  network could grow those clocks with fabricated ids until the daemon
+  was out of memory. A PONG for an interface no connection of ours
+  registered is dropped now, and the clocks refuse an id that cannot name
+  one of our interfaces.
+
+- **A CCU whose name is not a valid URL segment is refused at the door.**
+  A central name becomes a path segment of the callback URL the daemon
+  announces to that CCU, and the callback router only accepts letters,
+  digits, `-` and `_`. Nothing enforced that on the way in, so a CCU
+  adopted from discovery as `CCU Wohnzimmer` produced a daemon that
+  started cleanly, looked healthy on REST and in the SPA, and never
+  received a single push event. The allowlist is now shared between the
+  two sides and enforced at config load, in the admin API, in the store
+  and in the onboarding wizard; the SPA states the rule next to the field
+  and sanitises the name it prefills from a discovered CCU.
+
+- **HmIP devices pick up a completed configuration write again.** After
+  a MASTER paramset write, the CCU signals completion with
+  `CONFIG_PENDING` going true → false, which is what triggers the
+  week-profile reload, the operation-mode visibility re-apply and the
+  targeted MASTER read that keeps the on-disk cache current. The handler
+  compared the interface id the CCU echoes back against the bare
+  interface name, so it matched on no configured CCU at all and every one
+  of those steps was silently skipped. HmIP has no polling fallback, so
+  nothing else covered it.
+
+- **The replace-device dialog lists candidates again.** The candidate
+  lookup resolved the southbound backend with the bare interface name
+  while the registry is keyed by the central-scoped one, so
+  `GET /api/v1/devices/{address}/replace-candidates` and the matching
+  WebSocket command returned an empty list with HTTP 200 on every
+  interface and every CCU — no device could ever be selected for
+  replacement.
+
+- **Firmware updates show their progress again.** The firmware refresh
+  looked device descriptions up under the bare interface name while the
+  description registry is keyed by the central-scoped one, so a device
+  whose available version or update state changed on the CCU kept the
+  values it was created with at boot. The MQTT update entity and the SPA
+  firmware view stayed frozen for the life of the daemon.
+
+- **A per-interface `remote_path` now reaches the wire.** The field
+  validated, persisted and showed up in the UI while nothing read it, so
+  a reverse-proxied CCU kept being addressed on `/RPC2` and never
+  connected. It is honoured, and shape-checked at load so a typo cannot
+  quietly point the interface somewhere else. `rpc_type` is documented
+  for what it is — a pin on the transport the interface name already
+  implies — and a contradicting value is now refused instead of silently
+  ignored.
+
+- **Two CCUs coming back together no longer risk taking the daemon with
+  them.** Each central wires its own backup restorer from its own
+  bring-up, and the map holding them was unguarded — two centrals
+  clearing their readiness gate in the same window could abort the
+  process with `concurrent map writes`, and a restore issued while a
+  central re-gated could do the same on the read side.
+
+- **CUxD no longer leaves a stale callback registration behind.** The
+  shutdown path asked the CCU to drop the registration on a context that
+  had already been cancelled, so the call never left the process. The old
+  registration survived, the next start added another, and CUxD then
+  delivered every event twice — each one acted on twice by MQTT, the
+  alarm intent routing and CCU program triggers.
+
+- **Unpairing a device now clears everything it left behind.** The
+  cleanup after a successful unpair deleted the device address under the
+  bare interface name, while the description and paramset caches are keyed
+  by the central-scoped one and hold one entry per channel, not one per
+  device. Nothing matched, so every channel's descriptions survived and
+  the persistence layer was never asked to drop the corresponding rows —
+  which the next start read back and could re-materialise into a device
+  the CCU no longer has.
+
+- **Reloading a device or channel configuration writes where the rest of
+  the daemon reads.** "Reload device config" stored the refreshed
+  descriptions and paramsets under a second, bare key space nothing else
+  looks in: the reloaded data was invisible, duplicate rows were persisted,
+  and the periodic firmware sweep then asked for a southbound backend under
+  that bare name and logged a failure on every run for the life of the
+  daemon. The on-demand link-peer refresh that rides along found no
+  descriptions at all. The same mismatch is fixed in the eager
+  model refresh after a device replacement.
+
+- **Smoke-detector teams can be assigned again.** The team-candidate
+  lookup resolved the target channel under the bare interface name, so
+  `GET /api/v1/devices/{address}/channels/{no}/team-candidates` returned an
+  empty list with HTTP 200 on every CCU and no channel could ever be joined
+  to a team from the UI.
+
+- **A device list served during a CCU reconnect no longer reads
+  half-built channels.** A reconnect or a hot-plug re-ingests the device
+  inventory and rebuilds every channel of a device the REST, MQTT and
+  Matter surfaces are already serving. The channel went into the live
+  device empty and its name, rooms, functions and CCU id were written
+  afterwards, unsynchronised — so a reader that hit that window saw a
+  blank channel, and a concurrent read of the room or function list could
+  return garbage or fault outright. Channels are now finished before they
+  are published, and those four fields are read and written under the
+  lock the channel already had.
+
+- **Snapshot publishing no longer loses track of what it subscribed
+  to.** Every broker reconnect and every CCU that finishes its bring-up
+  runs a snapshot pass, on two different goroutines, and each pass wires
+  live callbacks that shutdown has to release. The bookkeeping was
+  unsynchronised, so concurrent passes overwrote each other's records:
+  the lost callbacks kept publishing into a bridge that had already been
+  torn down, for the rest of the process lifetime.
+
+- **Interface health reflects that the CCU is actually pushing events.**
+  Thirty percent of an interface's health score is how recently it last
+  carried traffic, and the only thing that feeds it was a bus event
+  nothing ever published. A perfectly healthy interface delivering
+  callbacks for hours reported a "last event received" of never and
+  scored 0.70 out of 1.00 permanently. The raw callback path publishes it
+  now, before the unchanged-value filter, because a device re-reporting a
+  stable reading is still a live interface. A build-time guard fails on
+  any future event type that has subscribers but no producer.
+
+- **Device-trigger events carry the CCU they came from.** The event
+  coordinator's central scope was never set, so every device trigger and
+  every raw-parameter trace left the bus unattributed. The WebSocket
+  device-trigger plane derived its entity id from that empty name, which
+  made the ids of two CCUs collide.
+
+- **Home Assistant gets one connectivity sensor per radio, and it works.**
+  The sensor declared at startup pointed at a state topic nothing ever
+  wrote, because the declaration used the internal, central-scoped
+  interface id while the reachability updates are published under the
+  name the CCU itself reports. The entity stayed unavailable for good,
+  and the first reachability change created a second one next to it.
+
+- **A device paired while the daemon runs reads its configuration back
+  through its own radio.** After a configuration write, classic
+  HomeMatic devices need a delayed re-read to keep the cached values
+  honest, and that read is bound to one interface's connection. Devices
+  materialised at runtime were all given the connection of whichever
+  interface was configured last: on a CCU running HmIP-RF and BidCos-RF
+  together, a new HmIP device sent its re-reads through the BidCos
+  connection, where the CCU rejects them and the failures count against
+  that interface's circuit breaker. In the reverse configuration the
+  re-read was skipped entirely.
+
+- **The HmIP paramset-consistency check looks at real data again.** The
+  post-start sweep that detects stale descriptor files left behind by an
+  HmIP firmware update looked its channels up under the bare interface
+  name while the caches are keyed by the central-scoped one. Every lookup
+  missed, so the sweep compared nothing, reported no problem and logged
+  nothing — it has been blind, while looking healthy, since it was added.
+
+- **Text values read at startup keep their umlauts.** The bulk value read
+  the daemon issues at startup percent-decodes the strings the CCU
+  returns but skipped the ISO-8859-1 conversion every other CCU-script
+  reader applies. A string data point holding `Spüle` was stored as
+  invalid UTF-8 and rendered as `Sp?le` on MQTT, REST and in the SPA
+  until the device happened to report the value again.
+
+- **Shutdown no longer races the schedule warm-up it is waiting for.**
+  Stopping the north-bound event bridge waits for its background
+  schedule loads to finish, but a broker reconnect landing in that window
+  could start another one — Go detects that as a wait-group misuse and
+  aborts the process, and in the timings it does not detect, the load
+  outlived the bridge and published into a torn-down stack. A pass that
+  starts after teardown now warms nothing up.
+
+- **A CCU added while the daemon runs gets its values persisted.** The
+  periodic value-cache flush and the row cleanup after an unpair both
+  subscribe per CCU, and both did so once at startup: a CCU adopted later
+  was skipped by every flush tick from then on. Its values reached disk
+  only through the flush on a clean shutdown, so a container kill, an OOM
+  kill or a power cut left its cache exactly as empty as it was at
+  adoption, and the next start had nothing to restore for it.
 
 ### Security
 

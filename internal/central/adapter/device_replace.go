@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -30,9 +31,16 @@ func (a *DeviceAdminDomain) ReplaceCandidates(ctx context.Context, centralName, 
 	newModel := a.inboxModelOf(unit, newAddress)
 
 	var out []hmapi.ReplaceCandidate
-	for _, iface := range a.replaceInterfaces(unit) {
-		backend, ok := a.writer.Backend(unit.Name(), string(iface))
+	for _, entry := range a.replaceInterfaces(unit) {
+		// The ValueWriter registry is keyed by the canonical wire id
+		// (`<central>-<iface>`); the bare interface only ever reaches the
+		// operator-facing DTO. Resolving with the bare form misses every
+		// entry and silently yields an empty candidate list.
+		backend, ok := a.writer.Backend(unit.Name(), entry.InterfaceID)
 		if !ok {
+			slog.Default().Debug("device_replace.no_backend",
+				slog.String("central", unit.Name()),
+				slog.String("interface", entry.InterfaceID))
 			continue
 		}
 		descs, listErr := backend.ListReplaceableDevices(ctx, newAddress)
@@ -57,7 +65,7 @@ func (a *DeviceAdminDomain) ReplaceCandidates(ctx context.Context, centralName, 
 				Address:      d.Address,
 				Name:         dev.Name,
 				Model:        d.Type,
-				Interface:    string(iface),
+				Interface:    string(entry.Client.Interface()),
 				Central:      unit.Name(),
 				ModelMatches: newModel != "" && d.Type == newModel,
 			})
@@ -94,7 +102,11 @@ func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldA
 	}
 	if unit.Devices != nil {
 		fetcher := &callbackDescFetcher{ops: backend}
-		if rerr := unit.Devices.ReplaceDevice(ctx, fetcher, dev.Interface, oldAddress, newAddress); rerr != nil {
+		// The coordinator resolves the old device and its descriptions from
+		// the registries, which are keyed by the canonical wire id — the bare
+		// interface finds nothing and turns the eager refresh into a
+		// permanent "old device not found".
+		if rerr := unit.Devices.ReplaceDevice(ctx, fetcher, hmenum.Interface(dev.InterfaceID), oldAddress, newAddress); rerr != nil {
 			// The CCU swap already happened and is irreversible; the eager
 			// model refresh is best-effort. The CCU's own replaceDevice
 			// callback reconciles the model authoritatively (and treats the
@@ -134,20 +146,23 @@ func (a *DeviceAdminDomain) resolveReplaceCentral(centralName string) (*central.
 	return nil, fmt.Errorf("%w: central name required (%d configured)", hmerr.ErrUnknownCentral, len(units))
 }
 
-// replaceInterfaces returns the replace-capable interfaces the unit has
-// a client for (rfd / hs485d).
-func (a *DeviceAdminDomain) replaceInterfaces(unit *central.Unit) []hmenum.Interface {
+// replaceInterfaces returns the client entries of the replace-capable
+// interfaces the unit has a client for (rfd / hs485d). The whole entry is
+// returned rather than the bare interface so the caller never has to
+// reconstruct the wire id: [coordinators.ClientEntry] carries both
+// identifier spaces (`InterfaceID` = wire, `Interface` = bare), and
+// conflating them is what silently empties the candidate list.
+func (a *DeviceAdminDomain) replaceInterfaces(unit *central.Unit) []*coordinators.ClientEntry {
 	if unit.Clients == nil {
 		return nil
 	}
-	var out []hmenum.Interface
+	var out []*coordinators.ClientEntry
 	for _, entry := range unit.Clients.List() {
 		if entry.Client == nil {
 			continue
 		}
-		iface := entry.Client.Interface()
-		if iface.SupportsReplace() {
-			out = append(out, iface)
+		if entry.Client.Interface().SupportsReplace() {
+			out = append(out, entry)
 		}
 	}
 	return out

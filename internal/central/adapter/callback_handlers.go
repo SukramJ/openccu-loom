@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -163,6 +164,18 @@ func (h *CallbackHandlers) canonicalInterfaceID(interfaceID string) string {
 	return CanonicalInterfaceID(h.unit.InstanceName(), h.unit.Name(), interfaceID)
 }
 
+// truncateWireID bounds an untrusted interface id before it reaches a log
+// record. The XML-RPC body limit is 10 MiB, so an id echoed into a log line
+// verbatim would let any caller of the callback listener write log records of
+// arbitrary size. Byte-sliced first so a huge id is never fully copied.
+func truncateWireID(s string) string {
+	const maxBytes = 64
+	if len(s) <= maxBytes {
+		return s
+	}
+	return strings.ToValidUTF8(s[:maxBytes], "") + "…"
+}
+
 // Stop cancels all in-flight background goroutines and waits for them to
 // finish. Safe to call multiple times.
 func (h *CallbackHandlers) Stop() {
@@ -188,16 +201,34 @@ func (h *CallbackHandlers) Stop() {
 // tracker would never correlate the round-trip (pending piles to its cap and
 // health stays degraded). Returns true when the event was a PONG and is fully
 // handled.
+//
+// Because it runs ahead of that guard, the Clients registry is the only thing
+// left that constrains the interface_id a PONG may name — and the registry is
+// exactly the set of interfaces this central brought up. A PONG for anything
+// else can carry no liveness signal for us, so it is dropped here instead of
+// creating a per-interface event clock that is only released when the central
+// is torn down. The callback listener takes no authentication and its
+// source-IP allow-list is off by default, so without this gate any LAN peer
+// could grow those maps until the daemon is out of memory.
 func (h *CallbackHandlers) noteCallbackAndRoutePong(
 	ctx context.Context, interfaceID, channelAddress, parameter string, value xmlrpc.Value,
 ) bool {
+	var registered bool
 	if h.unit != nil && h.unit.Clients != nil {
-		if entry, ok := h.unit.Clients.Get(interfaceID); ok && entry != nil && entry.Client != nil {
-			entry.Client.NotifyCallback()
+		if entry, ok := h.unit.Clients.Get(interfaceID); ok && entry != nil {
+			registered = true
+			if entry.Client != nil {
+				entry.Client.NotifyCallback()
+			}
 		}
 	}
 	if parameter != string(hmenum.ParameterPong) {
 		return false
+	}
+	if !registered {
+		h.logger.Debug("callback.pong.unregistered_interface",
+			slog.String("interface", truncateWireID(interfaceID)))
+		return true
 	}
 	if h.unit != nil && h.unit.Events != nil {
 		h.unit.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, ParamValueFromWire(value))
@@ -467,11 +498,12 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 	})
 }
 
-// NewDevices acknowledges a hot-plug announcement. It stores the incoming
-// device descriptions in the DeviceCoordinator's delayed-inbox for later
-// manual acceptance and hands them to the hot-plug ingestor in the
-// background so the full domain device (channels, data points, custom
-// DPs, values) exists without waiting for a daemon restart.
+// NewDevices acknowledges a hot-plug announcement. It hands the incoming
+// device descriptions to the hot-plug ingestor in the background so the full
+// domain device (channels, data points, custom DPs, values) exists without
+// waiting for a daemon restart. When deferred creation is configured they go
+// to the DeviceCoordinator's pending-accept inbox instead, and no entity is
+// created until the operator accepts them.
 //
 // The materialisation runs detached: the CCU blocks its event channel
 // until this callback returns, while a full hydration round-trips the
@@ -498,11 +530,15 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 	if len(descriptions) == 0 {
 		return nil
 	}
-	// Store for deferred manual acceptance (operator inbox flow).
-	h.unit.Devices.StoreDelayedDeviceDescriptions(iface, descriptions)
 	if h.delayNewDeviceCreation {
 		// Defer entity creation: the operator accepts the device from
-		// the inbox once its description is complete.
+		// the inbox once its description is complete. The inbox is only
+		// filled here because AddNewDevicesManually is the sole path that
+		// empties it — with immediate creation the descriptions go to the
+		// hot-plug ingestor below, and a stored copy would never be read
+		// again while the CCU keeps re-announcing its whole inventory on
+		// every reconnect.
+		h.unit.Devices.StoreDelayedDeviceDescriptions(iface, descriptions)
 		h.logger.Info("callback.new_devices.deferred",
 			slog.String("interface", interfaceID),
 			slog.Int("count", len(descriptions)))

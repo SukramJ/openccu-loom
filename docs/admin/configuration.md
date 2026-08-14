@@ -509,6 +509,15 @@ see the [multi-CCU guide](../user/multi-ccu.md).
 | `visibility.un_ignore` | list | — | — | no |
 | `check_connection_interval` | duration | `30s` | — | no |
 
+`name` may contain only letters, digits, `-` and `_`. It becomes a path
+segment of the XML-RPC callback URL the daemon announces to that CCU, so
+a name outside that set produces a daemon that starts cleanly and never
+receives a single push event. Two names must also stay distinguishable
+after north-bound escaping (`+`, `#`, `/` and spaces become `_`), or the
+two CCUs would share every state topic and no inbound command could be
+attributed to either. Both rules are checked at config load, and the two
+rejections read differently so it is clear which one applies.
+
 `interfaces` accepts a short list of names or a long form with per-
 interface overrides:
 
@@ -534,7 +543,9 @@ instead of being silently ignored; leave the key out unless you want it
 documented in the file. `remote_path` overrides the URL path of the
 XML-RPC endpoint (`/RPC2`, or `/groups` for `VirtualDevices`) for a CCU
 behind a reverse proxy that exposes it elsewhere; it must be an
-absolute path and cannot be the bare `/`. `json_rpc_port` defaults to `80` (plain) or `443`
+absolute path on the same host — the bare `/`, a leading `//`, a scheme,
+a query, a fragment and a `..` segment are all rejected at config load.
+`json_rpc_port` defaults to `80` (plain) or `443`
 (TLS); set it when the CCU sits behind a non-standard proxy. Set
 `tls_insecure_skip_verify` only against a self-signed CCU on a trusted
 network. `check_connection_interval` of `0` uses the `30s` default; a

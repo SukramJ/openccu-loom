@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.59.1
+
+- Version alignment with OpenCCU-Loom 0.59.1. The proxy itself is
+  unchanged; the release is a maintenance release fixing 136 defects
+  across the daemon, including an alarm-engine lock-up and a crash.
+
 # 0.59.0
 
 - Version alignment with OpenCCU-Loom 0.59.0. The proxy itself is

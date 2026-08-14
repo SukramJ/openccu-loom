@@ -71,10 +71,14 @@ type HADiscoveryContext interface {
 	ServiceMethodCommandTopic(method string) string
 
 	// WireParameterCommandTopic is the legacy per-parameter command
-	// topic. Reserved for HA-platform shapes that cannot be reduced
-	// to a single service-method call (cover's payload_open/_close/
-	// _stop multiplexing, light's separate brightness vs. color
-	// channels). New code SHOULD prefer ServiceMethodCommandTopic.
+	// topic. Reserved for HA-platform shapes whose multiplexed payloads
+	// happen to be valid values of one real wire parameter — the lock's
+	// payload_lock/_unlock on LOCK_TARGET_LEVEL, the garage's
+	// payload_open/_close/_stop on DOOR_COMMAND. A shape whose payloads
+	// span several parameters needs a service method that multiplexes
+	// them instead; pointing the topic at one of the parameters makes
+	// the other payloads write nonsense to it. New code SHOULD prefer
+	// ServiceMethodCommandTopic.
 	WireParameterCommandTopic(parameter string) string
 
 	// WireParameterStateTopic is the legacy per-parameter state

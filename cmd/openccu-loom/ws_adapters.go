@@ -881,8 +881,8 @@ func (w *wsDeviceQuery) ListDevices(_ context.Context) ([]map[string]any, error)
 			"name":           d.Name,
 			"available":      d.Available(),
 			"channels_count": len(d.Channels()),
-			"rooms":          d.Rooms,
-			"functions":      d.Functions,
+			"rooms":          d.Rooms(),
+			"functions":      d.Functions(),
 		})
 	}
 	return out, nil
@@ -902,7 +902,7 @@ func (w *wsDeviceQuery) GetDevice(_ context.Context, address string) (map[string
 			"address": ch.Address,
 			"number":  ch.Number,
 			"type":    ch.Type,
-			"name":    ch.Name,
+			"name":    ch.Name(),
 		})
 	}
 	return map[string]any{
@@ -915,8 +915,8 @@ func (w *wsDeviceQuery) GetDevice(_ context.Context, address string) (map[string
 		"available":      d.Available(),
 		"channels_count": len(d.Channels()),
 		"channels":       channels,
-		"rooms":          d.Rooms,
-		"functions":      d.Functions,
+		"rooms":          d.Rooms(),
+		"functions":      d.Functions(),
 	}, nil
 }
 

@@ -43,7 +43,7 @@ func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix, channelLa
 		}
 	}
 	if ch != nil {
-		chName = ch.Name
+		chName = ch.Name()
 		if chName == "" && ch.Number > 0 {
 			chName = fmt.Sprintf("%s %d", channelLabel, ch.Number)
 		}

@@ -96,7 +96,17 @@ func NewBINRPCServer(cfg BINRPCConfig) (*BINRPCServer, error) {
 		return nil, fmt.Errorf("rpcserver: binrpc listen %s: %w", cfg.Addr, err)
 	}
 	ln = limitListener(ln, cfg.MaxConnections)
-	ioTimeout := cfg.IOTimeout
+	return newBINRPCServerOn(ln, logger, cfg.IOTimeout, cfg.PeerAllowlist), nil
+}
+
+// newBINRPCServerOn assembles the server around an already-bound
+// listener. Split out of [NewBINRPCServer] so the accept loop can be
+// exercised against a listener that fails on demand, through the same
+// field initialisation the daemon uses.
+func newBINRPCServerOn(ln net.Listener, logger *slog.Logger, ioTimeout time.Duration, allow []netip.Prefix) *BINRPCServer {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	if ioTimeout <= 0 {
 		ioTimeout = 15 * time.Second
 	}
@@ -105,8 +115,8 @@ func NewBINRPCServer(cfg BINRPCConfig) (*BINRPCServer, error) {
 		listener:  ln,
 		routes:    make(map[string]Handlers),
 		ioTimeout: ioTimeout,
-		allowlist: cfg.PeerAllowlist,
-	}, nil
+		allowlist: allow,
+	}
 }
 
 // Addr returns the effective listener address.
@@ -131,7 +141,10 @@ func (s *BINRPCServer) Deregister(interfaceID string) {
 	s.mu.Unlock()
 }
 
-// Serve blocks until ctx is cancelled.
+// Serve blocks until ctx is cancelled. Recoverable accept failures are
+// retried with backoff (see [isRecoverableAcceptError]); only a failure
+// that leaves the socket unusable ends the loop, and then the listener
+// is closed rather than left bound with no acceptor.
 func (s *BINRPCServer) Serve(ctx context.Context) error {
 	stop := make(chan struct{})
 	defer close(stop)
@@ -143,6 +156,7 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 		}
 	}()
 
+	var retryDelay time.Duration
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
@@ -150,9 +164,33 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 				s.wg.Wait()
 				return nil
 			}
+			// A recoverable failure says nothing about the listening
+			// socket, so give it up and the CUxD push channel is dead
+			// until the daemon restarts — nothing here restarts Serve.
+			// Back off and keep accepting instead.
+			if isRecoverableAcceptError(err) {
+				retryDelay = nextAcceptRetryDelay(retryDelay)
+				s.logger.Warn("binrpc callback: accept failed, retrying",
+					slog.String("err", err.Error()),
+					slog.Duration("retry_in", retryDelay))
+				timer := time.NewTimer(retryDelay)
+				select {
+				case <-timer.C:
+				case <-ctx.Done():
+					timer.Stop()
+					s.closeListener()
+					s.wg.Wait()
+					return nil
+				}
+				continue
+			}
+			// Genuinely fatal: unbind rather than leave the port held by
+			// a process that no longer accepts on it.
+			s.closeListener()
 			s.wg.Wait()
 			return fmt.Errorf("rpcserver: accept: %w", err)
 		}
+		retryDelay = 0
 		// Refuse late-arriving connections that race the shutdown path.
 		// Without this guard wg.Add can fire after Close has already
 		// entered wg.Wait, which is a documented race.

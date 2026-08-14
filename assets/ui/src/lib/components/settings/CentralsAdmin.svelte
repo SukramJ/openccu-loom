@@ -244,7 +244,7 @@
   function prefillFromDiscovered(ccu: DiscoveredCCU) {
     isEdit = false;
     editOriginal = null;
-    fName = ccu.name;
+    fName = sanitizeCentralName(ccu.name);
     // Prefer the daemon's suggested address (localhost for a co-located CCU, a
     // stable docker hostname for an HA add-on); fall back to the raw host.
     fHost = ccu.suggested_host || ccu.host;
@@ -358,6 +358,19 @@
     return out;
   }
 
+  // A central name is a path segment of the callback URL the daemon
+  // announces to the CCU (`/RPC2/<name>`), so the daemon only accepts
+  // letters, digits, "-" and "_". Mirrors hmtypes.ValidateCentralName.
+  const CENTRAL_NAME_RE = /^[A-Za-z0-9_-]+$/;
+
+  // sanitizeCentralName makes an SSDP friendly name usable as a central name:
+  // "CCU Wohnzimmer" arrives with spaces that the callback router rejects, and
+  // a prefill an operator cannot see through would produce a CCU that never
+  // pushes an event.
+  function sanitizeCentralName(raw: string): string {
+    return raw.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  }
+
   function buildRow(): CentralRow {
     const jsonRpcTrimmed = fJsonRpcPort.trim();
     let jsonRpcPort: number | undefined;
@@ -417,6 +430,10 @@
   }
 
   async function saveModal() {
+    if (!CENTRAL_NAME_RE.test(fName)) {
+      modalError = t("centrals.error.invalid_name");
+      return;
+    }
     if (buildInterfaces().length === 0) {
       modalError = t("centrals.error.no_interface");
       return;
@@ -647,8 +664,13 @@
               type="text"
               bind:value={fName}
               disabled={isEdit}
+              pattern="[A-Za-z0-9_-]+"
+              title={t("centrals.field.name_hint")}
               class="h-9 rounded border border-slate-300 px-3 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
             />
+            <span class="text-xs text-slate-500 dark:text-slate-400">
+              {t("centrals.field.name_hint")}
+            </span>
           </label>
           <label class="flex flex-col gap-1">
             <span>{t("centrals.field.host")} *</span>

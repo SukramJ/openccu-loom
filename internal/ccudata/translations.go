@@ -395,10 +395,21 @@ func (t *Translations) ParameterValueSimple(locale, parameter, value string) str
 	return t.ParameterValue(locale, "", parameter, value)
 }
 
+// rebuildValueIndices re-derives the value-only reverse index from the
+// current ParameterValues tables. Every writer of ParameterValues has to
+// call it, otherwise the index keeps serving the pre-write contents.
+func (t *Translations) rebuildValueIndices() {
+	if t == nil {
+		return
+	}
+	t.valueIndices = buildValueIndices(t.ParameterValues)
+}
+
 // valueIndexLookup returns the shortest label for valueLower from the
-// lazy-built value-only index. Returns empty when no label is found.
-// Thread-safety: the index is built once at [translationsFromRaw] time
-// via [buildValueIndices]; no concurrent writes occur after that.
+// derived value-only index. Returns empty when no label is found.
+// Thread-safety: the index is built at [translationsFromRaw] time and
+// re-derived once more after the curated overlay has been merged; it is
+// never written after the loader hands the table out.
 func (t *Translations) valueIndexLookup(locale, valueLower string) string {
 	if t.valueIndices == nil {
 		return ""

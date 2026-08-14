@@ -5,7 +5,10 @@
 // OperatingVoltageLevelSensor behaviour.
 package calculated
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 // ---------------------------------------------------------------------------
 // CellVoltage / BatteryConfig.VoltageMax
@@ -141,4 +144,76 @@ func TestOperatingVoltageLevelSensorDedup(t *testing.T) {
 	if fired != 2 {
 		t.Fatalf("expected 2, got %d", fired)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// OperatingVoltageLevelSensor — concurrent MASTER / VALUES delivery
+// ---------------------------------------------------------------------------
+
+// TestOperatingVoltageLevelSensorConcurrentReferenceAndVoltageDoNotRace pins
+// the two structurally different writers this sensor carries: LOW_BAT_LIMIT
+// arrives from the MASTER paramset (a poller read-back or a REST-triggered
+// refresh) and reaches SetReferences, while OPERATING_VOLTAGE arrives on the
+// callback dispatch and reaches OnOperatingVoltage. They run on different
+// goroutines, so the reference pair and the live voltage must be written and
+// read under one lock — otherwise a level is computed from a fresh limit
+// against a stale maximum and a wrong battery percentage is published.
+//
+// Run with -race.
+func TestOperatingVoltageLevelSensorConcurrentReferenceAndVoltageDoNotRace(t *testing.T) {
+	t.Parallel()
+	s := NewOperatingVoltageLevelSensorWithIdentity("ccu-prod", "VCU0123:0")
+
+	const iterations = 300
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range iterations {
+			s.SetReferences(2.0+float64(i%3)*0.1, 3.0)
+		}
+	})
+	wg.Go(func() {
+		for i := range iterations {
+			s.OnOperatingVoltage(2.2 + float64(i%8)*0.1)
+		}
+	})
+	wg.Go(func() {
+		for range iterations {
+			_ = s.IsRefreshed()
+			_ = s.AdditionalInformation()
+			_, _ = s.LowBatLimitDefault()
+		}
+	})
+	wg.Wait()
+
+	if !s.IsRefreshed() {
+		t.Fatal("sensor must have emitted at least one computed level")
+	}
+}
+
+// TestOperatingVoltageLevelSensorConcurrentSourceRegistrationDoesNotRace
+// reproduces the Subscribe window: the OPERATING_VOLTAGE update handler is
+// installed before the resolved source data point is registered, so a push
+// arriving in between recomputes while RegisterSource appends to the
+// mutex-guarded source slice. recompute must read that slice through the
+// sink's lock, not bare.
+func TestOperatingVoltageLevelSensorConcurrentSourceRegistrationDoesNotRace(t *testing.T) {
+	t.Parallel()
+	s := NewOperatingVoltageLevelSensorWithIdentity("ccu-prod", "VCU0123:0")
+	s.SetReferences(2.0, 3.0)
+
+	const iterations = 300
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range iterations {
+			src := &stubSourceDP{}
+			src.setObserved(2.5 + float64(i%5)*0.1)
+			s.RegisterSource(src)
+		}
+	})
+	wg.Go(func() {
+		for i := range iterations {
+			s.OnOperatingVoltage(2.2 + float64(i%8)*0.1)
+		}
+	})
+	wg.Wait()
 }

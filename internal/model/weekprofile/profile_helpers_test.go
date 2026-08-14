@@ -281,16 +281,23 @@ func TestIdentifyBaseTemperatureTable(t *testing.T) {
 	}
 }
 
-func TestIdentifyBaseTemperatureEqualTime(t *testing.T) {
-	// Python asserts result is one of [18.0, 21.0]; Go returns one deterministically.
+// TestIdentifyBaseTemperatureEqualTimeIsDeterministic pins the tie-break for a
+// day that is split evenly between two temperatures. Every reload of the same
+// unchanged CCU paramset must classify the same temperature as the base — an
+// unstable answer would move a segment in and out of the reported period list
+// and produce a spurious diff on the next save. Repeated calls exercise the
+// tie-break often enough that a map-iteration winner would show up.
+func TestIdentifyBaseTemperatureEqualTimeIsDeterministic(t *testing.T) {
 	t.Parallel()
 	ws := weekdaySlots{
 		1: {EndTime: "12:00", Temperature: 18.0},
 		2: {EndTime: "24:00", Temperature: 21.0},
 	}
-	got := identifyBaseTemperature(ws)
-	if got != 18.0 && got != 21.0 {
-		t.Errorf("identifyBaseTemperature = %v, want 18.0 or 21.0", got)
+	for i := range 200 {
+		// The earliest slot wins the tie.
+		if got := identifyBaseTemperature(ws); got != 18.0 {
+			t.Fatalf("identifyBaseTemperature call %d = %v, want 18.0 (earliest tied slot)", i, got)
+		}
 	}
 }
 

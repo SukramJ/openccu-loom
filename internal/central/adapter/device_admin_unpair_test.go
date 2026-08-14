@@ -231,8 +231,14 @@ func (*fakeOperations) DownloadFirmware(context.Context, string) error          
 func (*fakeOperations) GetMetadata(_ context.Context, _, _ string) (any, error) { return nil, nil }
 func (*fakeOperations) SetMetadata(_ context.Context, _, _ string, _ any) error { return nil }
 
-// buildUnpairFixture creates a central with one device seeded into every
-// relevant registry, wires a fake backend into a ValueWriter, and
+// unpairWireID is the canonical `<central>-<iface>` id every internal
+// registry is keyed by. The fixture deliberately keeps it distinct from the
+// bare interface name: collapsing the two makes a bare-vs-wire key mismatch
+// invisible, which is how the unpair cleanup shipped matching nothing.
+const unpairWireID = "ccu-01-HmIP-RF"
+
+// buildUnpairFixture creates a central with one multi-channel device seeded
+// into every relevant registry, wires a fake backend into a ValueWriter, and
 // returns everything the caller needs to assert on.
 func buildUnpairFixture(t *testing.T, backendErr error) (
 	domain *DeviceAdminDomain,
@@ -251,7 +257,7 @@ func buildUnpairFixture(t *testing.T, backendErr error) (
 	}
 
 	dev = device.New(device.Config{
-		InterfaceID: "HmIP-RF",
+		InterfaceID: unpairWireID,
 		Interface:   hmenum.InterfaceHmIPRF,
 		Address:     "0001ABCD",
 		Model:       "HmIP-STH",
@@ -259,21 +265,35 @@ func buildUnpairFixture(t *testing.T, backendErr error) (
 	})
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: hmenum.Interface(unpairWireID),
 		Address:   "0001ABCD",
 		Model:     "HmIP-STH",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "0001ABCD", Type: "HmIP-STH"})
-	c.ParamsetReg.Put(hmenum.InterfaceHmIPRF, "0001ABCD", hmenum.ParamsetKeyValues, hmproto.Paramset{})
+	c.DescRegistry.Put(hmenum.Interface(unpairWireID), hmproto.DeviceDescription{Address: "0001ABCD", Type: "HmIP-STH"})
+	c.ParamsetReg.Put(hmenum.Interface(unpairWireID), "0001ABCD", hmenum.ParamsetKeyValues, hmproto.Paramset{})
+	// A real device carries its paramsets per channel, never on the device
+	// root alone — that is the shape the ingest pipeline registers.
+	for chNo, chAddr := range unpairChannelAddresses {
+		dev.AddChannel(chAddr, chNo, "MAINTENANCE", hmenum.ParamsetKeyValues)
+		c.DescRegistry.Put(hmenum.Interface(unpairWireID), hmproto.DeviceDescription{
+			Address: chAddr, Parent: "0001ABCD", Type: "MAINTENANCE",
+		})
+		c.ParamsetReg.Put(hmenum.Interface(unpairWireID), chAddr, hmenum.ParamsetKeyValues, hmproto.Paramset{})
+		c.ParamsetReg.Put(hmenum.Interface(unpairWireID), chAddr, hmenum.ParamsetKeyMaster, hmproto.Paramset{})
+	}
 
 	fake = &fakeOperations{kind: backends.KindCCU, deleteDeviceErr: backendErr}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", "HmIP-RF", fake)
+	w.Register("ccu-01", unpairWireID, fake)
 
 	domain = NewDeviceAdminDomain(reg, w)
 	centralUnit = c
 	return domain, centralUnit, dev, fake
 }
+
+// unpairChannelAddresses are the channel addresses seeded on the fixture
+// device.
+var unpairChannelAddresses = []string{"0001ABCD:0", "0001ABCD:1", "0001ABCD:2"}
 
 func TestUnpairDeviceHappyPath(t *testing.T) {
 	t.Parallel()
@@ -289,15 +309,24 @@ func TestUnpairDeviceHappyPath(t *testing.T) {
 	if len(fake.deleteDeviceFlags) != 1 || fake.deleteDeviceFlags[0] != 0 {
 		t.Errorf("deleteDeviceFlags=%v, want [0]", fake.deleteDeviceFlags)
 	}
-	// All in-memory caches must be cleared.
+	// All in-memory caches must be cleared — the device root AND every
+	// channel, under the wire key the registries are populated with.
 	if _, ok := c.ModelRegistry.Get("0001ABCD"); ok {
 		t.Error("device still in ModelRegistry after unpair")
 	}
-	if _, ok := c.DeviceRegistry.Get(hmenum.InterfaceHmIPRF, "0001ABCD"); ok {
+	if _, ok := c.DeviceRegistry.Get(hmenum.Interface(unpairWireID), "0001ABCD"); ok {
 		t.Error("device still in DeviceRegistry after unpair")
 	}
-	if _, ok := c.DescRegistry.Get(hmenum.InterfaceHmIPRF, "0001ABCD"); ok {
+	if _, ok := c.DescRegistry.Get(hmenum.Interface(unpairWireID), "0001ABCD"); ok {
 		t.Error("description still in DescRegistry after unpair")
+	}
+	for _, chAddr := range unpairChannelAddresses {
+		if _, ok := c.DescRegistry.Get(hmenum.Interface(unpairWireID), chAddr); ok {
+			t.Errorf("channel description %s still in DescRegistry after unpair", chAddr)
+		}
+	}
+	if c.DescRegistry.Len() != 0 {
+		t.Errorf("descriptions still present after unpair, len=%d", c.DescRegistry.Len())
 	}
 	if c.ParamsetReg.Len() != 0 {
 		t.Errorf("paramsets still present after unpair, len=%d", c.ParamsetReg.Len())
@@ -373,7 +402,7 @@ func TestUnpairDeviceBackendUnsupportedPropagatesAndDoesNotClearRegistries(t *te
 	if _, ok := c.ModelRegistry.Get("0001ABCD"); !ok {
 		t.Error("ModelRegistry must not be cleared when backend returns ErrUnsupported")
 	}
-	if _, ok := c.DeviceRegistry.Get(hmenum.InterfaceHmIPRF, "0001ABCD"); !ok {
+	if _, ok := c.DeviceRegistry.Get(hmenum.Interface(unpairWireID), "0001ABCD"); !ok {
 		t.Error("DeviceRegistry must not be cleared when backend returns ErrUnsupported")
 	}
 }

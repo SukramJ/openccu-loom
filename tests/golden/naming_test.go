@@ -346,7 +346,7 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 		})
 		ch := d.AddChannel(c.ChannelAddr, c.ChannelNo, c.ChannelType, hmenum.ParamsetKeyValues)
 		if c.ChannelName != "" {
-			ch.Name = c.ChannelName
+			ch.SetName(c.ChannelName)
 		}
 
 		var dpName, fullName string

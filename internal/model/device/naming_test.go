@@ -16,7 +16,7 @@ func TestDataPointNameAndFullName(t *testing.T) {
 		Name:        "Wohnzimmer Licht",
 	})
 	ch := d.AddChannel("ABC0001:1", 1, "DIMMER", hmenum.ParamsetKeyValues)
-	ch.Name = "Wohnzimmer Licht-Kanal"
+	ch.SetName("Wohnzimmer Licht-Kanal")
 
 	if got := ch.DataPointName("LEVEL"); got != "Kanal LEVEL" {
 		t.Fatalf("DataPointName = %q want 'Kanal LEVEL'", got)
@@ -60,7 +60,7 @@ func TestDataPointNameNilChannel(t *testing.T) {
 func TestCustomDataPointName(t *testing.T) {
 	d := New(Config{Address: "ABC0001", Name: "Wohnzimmer Licht"})
 	ch := d.AddChannel("ABC0001:1", 1, "DIMMER", hmenum.ParamsetKeyValues)
-	ch.Name = "Wohnzimmer Licht-Kanal"
+	ch.SetName("Wohnzimmer Licht-Kanal")
 
 	// No postfix → behaves like DataPointName.
 	if got := ch.CustomDataPointName("LEVEL", ""); got != "Kanal LEVEL" {

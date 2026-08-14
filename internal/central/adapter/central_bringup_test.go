@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -49,10 +50,16 @@ func TestCentralBringUp_ConcurrentReinitIsSerialized(t *testing.T) {
 
 // TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries is the
 // reproducer for the resurrection gap: clearModel must drop a device's
-// in-memory device-description and paramset entries, not just the model object.
-// Otherwise the re-pull's CheckAndCreateDevicesFromCache re-materialises a
-// device the CCU no longer reports from its stale description, so a device
-// removed on the CCU would survive a cache clear + re-pull.
+// in-memory device-description, paramset and device-registry entries, not just
+// the model object. Otherwise the re-pull's CheckAndCreateDevicesFromCache
+// re-materialises a device the CCU no longer reports from its stale
+// description, so a device removed on the CCU would survive a cache clear +
+// re-pull — and the device registry keeps counting it on /api/v1/info.
+//
+// Every registry here is keyed the way the hydration pipeline keys it: by the
+// canonical `<central>-<iface>` wire id the device also carries as its
+// InterfaceID. A device built with the bare interface in both fields makes
+// this test agree with any keying bug instead of catching it.
 func TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries(t *testing.T) {
 	t.Parallel()
 
@@ -61,19 +68,23 @@ func TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries(t *test
 		t.Fatalf("central.New: %v", err)
 	}
 
+	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
-		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
+		InterfaceID: wireID, Interface: hmenum.InterfaceHmIPRF,
 		Address: "AAAA0001", Model: "HmIP-STH", Name: "Sensor",
 	})
 	d.AddChannel("AAAA0001:1", 1, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	unit.ModelRegistry.Put(d)
-	unit.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "AAAA0001"})
-	unit.ParamsetReg.Add(hmenum.InterfaceHmIPRF, "AAAA0001:1", hmenum.ParamsetKeyValues,
+	unit.DeviceRegistry.Put(registry.DeviceEntry{
+		Interface: hmenum.Interface(wireID), Address: "AAAA0001", Model: "HmIP-STH",
+	})
+	unit.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{Address: "AAAA0001"})
+	unit.ParamsetReg.Add(hmenum.Interface(wireID), "AAAA0001:1", hmenum.ParamsetKeyValues,
 		hmproto.Paramset{"STATE": {Type: hmenum.ParameterTypeBool}}, "HmIP-STH")
 
-	if unit.DescRegistry.Len() == 0 || unit.ParamsetReg.Len() == 0 {
-		t.Fatalf("precondition: registries must be populated (desc=%d paramset=%d)",
-			unit.DescRegistry.Len(), unit.ParamsetReg.Len())
+	if unit.DescRegistry.Len() == 0 || unit.ParamsetReg.Len() == 0 || unit.DeviceRegistry.Len() == 0 {
+		t.Fatalf("precondition: registries must be populated (desc=%d paramset=%d device=%d)",
+			unit.DescRegistry.Len(), unit.ParamsetReg.Len(), unit.DeviceRegistry.Len())
 	}
 
 	b := &centralBringUp{logger: slog.Default(), unit: unit}
@@ -87,6 +98,9 @@ func TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries(t *test
 	}
 	if got := unit.ParamsetReg.Len(); got != 0 {
 		t.Fatalf("paramset registry not cleared: Len() = %d, want 0", got)
+	}
+	if got := unit.DeviceRegistry.Len(); got != 0 {
+		t.Fatalf("device registry not cleared: Len() = %d, want 0 (removed devices keep counting on /api/v1/info)", got)
 	}
 }
 

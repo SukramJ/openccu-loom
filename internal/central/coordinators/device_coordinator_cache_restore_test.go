@@ -341,7 +341,7 @@ func TestStoreDelayedAndManualCleansUpEmptyInterfaceEntry(t *testing.T) {
 func TestCheckParamsetConsistencyNilCheckerErrors(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _, _ := newDCFull(t)
-	_, err := dc.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, []string{"AA"}, nil)
+	_, err := dc.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"AA"}, nil)
 	if err == nil {
 		t.Fatal("nil checker must return error")
 	}
@@ -355,6 +355,7 @@ func TestCheckParamsetConsistencyNoHmIPInterfaceSkips(t *testing.T) {
 	result, err := dc.CheckParamsetConsistency(
 		context.Background(),
 		hmenum.InterfaceBidCosRF,
+		wireKey(hmenum.InterfaceBidCosRF),
 		[]string{"AA"},
 		checker,
 	)
@@ -371,19 +372,19 @@ func TestCheckParamsetConsistencyDetectsStaleParams(t *testing.T) {
 	dc, _, _, descs, psets := newDCFull(t)
 
 	// Register a device with one channel on HmIP-RF.
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address:  "AA",
 		Type:     "HmIP-X",
 		Children: []string{"AA:0"},
 	})
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address: "AA:0",
 		Parent:  "AA",
 		Type:    "MAINTENANCE",
 	})
 
 	// The cached description says PARAM_STALE should exist (Operations=2 = WRITE).
-	psets.Put(hmenum.InterfaceHmIPRF, "AA:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{
+	psets.Put(wireKey(hmenum.InterfaceHmIPRF), "AA:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{
 		"PARAM_PRESENT": hmproto.ParameterData{Operations: hmenum.OperationsWrite},
 		"PARAM_STALE":   hmproto.ParameterData{Operations: hmenum.OperationsWrite},
 	})
@@ -398,6 +399,7 @@ func TestCheckParamsetConsistencyDetectsStaleParams(t *testing.T) {
 	inconsistencies, err := dc.CheckParamsetConsistency(
 		context.Background(),
 		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
 		[]string{"AA"},
 		checker,
 	)
@@ -420,18 +422,18 @@ func TestCheckParamsetConsistencyCleanDeviceReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	dc, _, _, descs, psets := newDCFull(t)
 
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address:  "BB",
 		Type:     "HmIP-Y",
 		Children: []string{"BB:0"},
 	})
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address: "BB:0",
 		Parent:  "BB",
 		Type:    "SWITCH",
 	})
 
-	psets.Put(hmenum.InterfaceHmIPRF, "BB:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{
+	psets.Put(wireKey(hmenum.InterfaceHmIPRF), "BB:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{
 		"PARAM_A": hmproto.ParameterData{Operations: hmenum.OperationsWrite},
 	})
 
@@ -445,6 +447,7 @@ func TestCheckParamsetConsistencyCleanDeviceReturnsEmpty(t *testing.T) {
 	inconsistencies, err := dc.CheckParamsetConsistency(
 		context.Background(),
 		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
 		[]string{"BB"},
 		checker,
 	)
@@ -464,17 +467,17 @@ func TestScheduleParamsetConsistencyCheckCallsCallback(t *testing.T) {
 	t.Parallel()
 	dc, _, _, descs, psets := newDCFull(t)
 
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address:  "CC",
 		Type:     "HmIP-Z",
 		Children: []string{"CC:0"},
 	})
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address: "CC:0",
 		Parent:  "CC",
 		Type:    "DIMMER",
 	})
-	psets.Put(hmenum.InterfaceHmIPRF, "CC:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{
+	psets.Put(wireKey(hmenum.InterfaceHmIPRF), "CC:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{
 		"STALE": hmproto.ParameterData{Operations: hmenum.OperationsWrite},
 	})
 	checker := &stubParamsetChecker{
@@ -494,6 +497,7 @@ func TestScheduleParamsetConsistencyCheckCallsCallback(t *testing.T) {
 	dc.ScheduleParamsetConsistencyCheck(
 		context.Background(),
 		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
 		[]string{"CC"},
 		checker,
 		cb,

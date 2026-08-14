@@ -841,7 +841,9 @@ centrals:
       - BidCos-RF
       # Long form: per-interface port and URL path. remote_path is for a
       # CCU behind a reverse proxy that exposes XML-RPC somewhere other
-      # than /RPC2 (/groups for VirtualDevices); it must be absolute.
+      # than /RPC2 (/groups for VirtualDevices); it must be an absolute
+      # path on the same host — the bare /, a leading //, a scheme, a
+      # query, a fragment and a .. segment are all rejected at startup.
       # rpc_type only restates the transport the interface name already
       # implies — CUxD is BIN-RPC, everything else XML-RPC — and a value
       # that contradicts it is rejected at startup.

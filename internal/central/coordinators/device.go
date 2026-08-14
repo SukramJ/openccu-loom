@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 
@@ -798,10 +799,24 @@ func (c *DeviceCoordinator) AddNewDevicesManually(
 	return nil
 }
 
+// maxDelayedDevicesPerInterface bounds the number of distinct devices the
+// pending-accept inbox holds per interface. A CCU fleet is a few hundred
+// devices in total, so the cap is far above any real installation; it exists
+// because the callback listener accepts newDevices announcements without
+// authentication, and every entry stays until an operator accepts it.
+const maxDelayedDevicesPerInterface = 1024
+
 // StoreDelayedDeviceDescriptions stores device descriptions that have been
 // received via a newDevices callback but not yet manually accepted. The
 // descriptions are keyed by device address so AddNewDevicesManually can look
 // them up later.
+//
+// The store is idempotent per description address: a re-announcement replaces
+// the pending description instead of stacking a second copy on top of it.
+// This matters because the daemon answers listDevices with an empty array, so
+// the CCU re-announces its complete inventory after every reconnect — an
+// append-only inbox grew by another full copy of the fleet each time and
+// nothing but the manual-accept flow ever removed anything.
 func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmenum.Interface, descriptions []hmproto.DeviceDescription) {
 	ifaceID := string(iface)
 	c.mu.Lock()
@@ -809,6 +824,7 @@ func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmenum.Interfac
 	if _, ok := c.delayedDescs[ifaceID]; !ok {
 		c.delayedDescs[ifaceID] = make(map[string][]hmproto.DeviceDescription)
 	}
+	pending := c.delayedDescs[ifaceID]
 	for i := range descriptions {
 		d := descriptions[i]
 		// Key by the top-level device address (PARENT or ADDRESS itself).
@@ -816,7 +832,21 @@ func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmenum.Interfac
 		if key == "" {
 			key = d.Address
 		}
-		c.delayedDescs[ifaceID][key] = append(c.delayedDescs[ifaceID][key], d)
+		entry, known := pending[key]
+		if !known && len(pending) >= maxDelayedDevicesPerInterface {
+			c.logger.Warn("StoreDelayedDeviceDescriptions: pending-accept inbox is full",
+				"interface", ifaceID,
+				"address", key,
+				"pending", len(pending))
+			continue
+		}
+		if idx := slices.IndexFunc(entry, func(e hmproto.DeviceDescription) bool {
+			return e.Address == d.Address
+		}); idx >= 0 {
+			entry[idx] = d
+			continue
+		}
+		pending[key] = append(entry, d)
 	}
 }
 
@@ -848,9 +878,18 @@ type ParamsetInconsistency struct {
 //
 // Only MASTER paramsets are checked; VALUES are volatile. Only HmIP devices
 // are checked because the stale-files bug is HmIPServer-specific.
+//
+// The two interface arguments live in different identifier spaces and both are
+// required: iface is the BARE interface the CCU names, which decides whether
+// this is the HmIP service at all, while ifaceKey is the canonical
+// `<central>-<iface>` wire id the description and paramset registries are
+// keyed by. Passing the bare interface for both made every registry lookup
+// miss on a named central, so the check reported a clean bill of health for a
+// device it never looked at.
 func (c *DeviceCoordinator) CheckParamsetConsistency(
 	ctx context.Context,
 	iface hmenum.Interface,
+	ifaceKey hmenum.Interface,
 	deviceAddresses []string,
 	checker ParamsetConsistencyChecker,
 ) ([]ParamsetInconsistency, error) {
@@ -859,7 +898,7 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 	}
 
 	var result []ParamsetInconsistency
-	ifaceID := string(iface)
+	ifaceID := string(ifaceKey)
 
 	for _, deviceAddr := range deviceAddresses {
 		// Only HmIP devices are affected by the HmIPServer stale-files bug.
@@ -870,7 +909,7 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 		}
 
 		// Collect channel addresses that belong to this device.
-		allDescs := c.descs.All(iface)
+		allDescs := c.descs.All(ifaceKey)
 		var channelAddresses []string
 		for i := range allDescs {
 			d := allDescs[i]
@@ -884,7 +923,7 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 		var missingForDevice []string
 		for _, chAddr := range channelAddresses {
 			// Get cached MASTER paramset description.
-			masterDesc, ok := c.paramsets.Get(iface, chAddr, hmenum.ParamsetKeyMaster)
+			masterDesc, ok := c.paramsets.Get(ifaceKey, chAddr, hmenum.ParamsetKeyMaster)
 			if !ok || len(masterDesc) == 0 {
 				continue
 			}
@@ -1312,9 +1351,13 @@ func (c *DeviceCoordinator) RenameNewDeviceFromOverride(iface hmenum.Interface, 
 // The goroutine is tracked in c.wg so [Stop] can wait for it to drain during
 // shutdown, and recovers from a panic in the checker or onResult callback so
 // a single misbehaving implementation cannot take down the daemon.
+//
+// iface / ifaceKey carry the same split as [CheckParamsetConsistency]: the
+// bare interface gates the HmIP-only check, the wire id keys the registries.
 func (c *DeviceCoordinator) ScheduleParamsetConsistencyCheck(
 	ctx context.Context,
 	iface hmenum.Interface,
+	ifaceKey hmenum.Interface,
 	deviceAddresses []string,
 	checker ParamsetConsistencyChecker,
 	onResult func([]ParamsetInconsistency),
@@ -1333,7 +1376,7 @@ func (c *DeviceCoordinator) ScheduleParamsetConsistencyCheck(
 					"stack", string(debug.Stack()))
 			}
 		}()
-		inconsistencies, err := c.CheckParamsetConsistency(ctx, iface, deviceAddresses, checker)
+		inconsistencies, err := c.CheckParamsetConsistency(ctx, iface, ifaceKey, deviceAddresses, checker)
 		if err != nil {
 			c.logger.Warn("ScheduleParamsetConsistencyCheck: check failed",
 				"interface", string(iface), "error", err)

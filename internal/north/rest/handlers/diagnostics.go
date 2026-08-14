@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
 )
 
 // DiagnosticsBuild is the build metadata block of a diagnostics dump.
@@ -65,6 +67,12 @@ type DiagnosticsEnvelope struct {
 	SystemStatus   []SystemStatusEntry `json:"system_status,omitempty"`
 	LogLevels      *LogLevelsResponse  `json:"log_levels,omitempty"`
 	CapturesActive int                 `json:"captures_active,omitempty"`
+	// Metrics carries one typed metrics snapshot per central, keyed by
+	// central name — the structured twin of the flat Prometheus
+	// exposition at `/metrics`. Counters only (requests, recovery
+	// attempts, cache sizes, data-point counts per category): the
+	// section names no device and needs no anonymisation.
+	Metrics map[string]metrics.MetricsSnapshot `json:"metrics,omitempty"`
 }
 
 // DiagnosticsDeps bundles every reader the diagnostics handler pulls
@@ -87,6 +95,11 @@ type DiagnosticsDeps struct {
 	// the tracker keeps (event_bus / audit / scheduler / rest / ws).
 	// [*health.Tracker.Gauges] satisfies this directly.
 	HealthGauges func() map[string]float64
+	// CentralMetrics, when set, returns the typed metrics snapshot of
+	// every central that has one. The composition root fills this from
+	// the per-CCU aggregators the daemon wires at boot; nil (or an
+	// empty result) omits the block rather than reporting zeroes.
+	CentralMetrics func(ctx context.Context) map[string]metrics.MetricsSnapshot
 }
 
 // HealthExtras is an optional facade that exposes the numeric score
@@ -217,6 +230,12 @@ func Diagnostics(deps DiagnosticsDeps) http.HandlerFunc { //nolint:gocognit,funl
 
 		if deps.SystemStatus != nil {
 			env.SystemStatus = deps.SystemStatus.SystemStatusEntries()
+		}
+
+		if deps.CentralMetrics != nil {
+			if m := deps.CentralMetrics(r.Context()); len(m) > 0 {
+				env.Metrics = m
+			}
 		}
 
 		if deps.LogLevels != nil {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // orDefault returns *p, or def when p is nil. Shared by the many
@@ -67,8 +68,9 @@ type InterfaceSpec struct {
 	// BidCos-RF / BidCos-Wired, "/groups" for VirtualDevices).
 	// Operators with non-standard CCU routing — a reverse proxy in
 	// front of the CCU, say — can pin the value here. Must be an
-	// absolute path; the bare "/" is rejected because POSTing to it
-	// crashes the CCU's putParamset handler.
+	// absolute path that stays on the configured host; the bare "/" is
+	// rejected because POSTing to it crashes the CCU's putParamset
+	// handler. See [InterfaceSpec.Validate].
 	RemotePath string `yaml:"remote_path,omitempty" json:"remote_path,omitempty" cfg:"expert"`
 
 	// RPCType states the transport explicitly. Accepted values: "",
@@ -124,10 +126,17 @@ func (s InterfaceSpec) Validate(idx int) error {
 	return s.validateRPCType(idx)
 }
 
+// remotePathForbidden lists the substrings that would let the override leave
+// the configured host or stop being a plain path. The value is interpolated
+// into the composed endpoint, so a scheme or an authority silently addresses a
+// different server, and a query, a fragment or a dot segment either builds a
+// malformed URL or resolves somewhere the operator did not name.
+var remotePathForbidden = []string{"://", "?", "#", ".."}
+
 // validateRemotePath rejects a path the XML-RPC endpoint composer cannot
-// use. Failing here means a typo surfaces at config load with the offending
-// value in hand, instead of as a 404 on every call once the interface tries
-// to come up.
+// use, or that would re-point the request off the configured host. Failing
+// here means a typo surfaces at config load with the offending value in hand,
+// instead of as a 404 on every call once the interface tries to come up.
 func (s InterfaceSpec) validateRemotePath(idx int) error {
 	if s.RemotePath == "" {
 		return nil
@@ -144,6 +153,22 @@ func (s InterfaceSpec) validateRemotePath(idx int) error {
 				"the CCU's putParamset handler crashes on it; name the real endpoint path",
 			idx,
 		)
+	}
+	if strings.HasPrefix(s.RemotePath, "//") {
+		return fmt.Errorf(
+			"config: interfaces[%d].remote_path: %q starts with \"//\", which a URL parser reads as an "+
+				"authority and not as a path on the configured host",
+			idx, s.RemotePath,
+		)
+	}
+	for _, bad := range remotePathForbidden {
+		if strings.Contains(s.RemotePath, bad) {
+			return fmt.Errorf(
+				"config: interfaces[%d].remote_path: %q must not contain %q — the value is a plain path on the "+
+					"configured host",
+				idx, s.RemotePath, bad,
+			)
+		}
 	}
 	return nil
 }
@@ -1944,12 +1969,25 @@ var centralHostLabel = regexp.MustCompile(`^[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-
 // path, query, fragment, credentials, or an embedded port must be
 // rejected at this trust boundary rather than silently reshaping those
 // URLs. The TCP port has its own config field.
-// validateCentralNames enforces that every central carries a name and
-// that no two centrals are indistinguishable — neither as the exact
-// configured name nor as the single escaped segment the north-bound
-// planes address them through. Two names that collapse onto the same
-// segment would share every state topic, and an inbound command on that
-// segment could not be attributed to a CCU at all.
+// validateCentralNames enforces the two independent rules a central name
+// has to satisfy, in that order:
+//
+//   - The set has to be distinguishable: every central carries a name, no
+//     two centrals share one, and no two collapse onto the single escaped
+//     segment the north-bound planes address them through. Two names that
+//     collapse onto the same segment would share every state topic, and an
+//     inbound command on that segment could not be attributed to a CCU at
+//     all.
+//   - Every individual name has to be routable south-bound: it becomes a
+//     path segment of the XML-RPC callback URL announced to that CCU
+//     (`/RPC2/<central_name>`), so a name outside the allowlist the
+//     callback router matches on yields a daemon that looks healthy and
+//     never receives a single push event.
+//
+// The set-level rule runs first because an operator who trips both is
+// better served by learning that two CCUs are indistinguishable — that is
+// the failure that silently mixes one CCU's data into another's — before
+// being told how to spell either name.
 func validateCentralNames(centrals []CentralConfig) error {
 	names := make(map[string]struct{}, len(centrals))
 	segments := make(map[string]string, len(centrals))
@@ -1970,6 +2008,11 @@ func validateCentralNames(centrals []CentralConfig) error {
 			)
 		}
 		segments[seg] = name
+	}
+	for i := range centrals {
+		if err := hmtypes.ValidateCentralName(centrals[i].Name); err != nil {
+			return fmt.Errorf("config: centrals[%d].name: %w", i, err)
+		}
 	}
 	return nil
 }

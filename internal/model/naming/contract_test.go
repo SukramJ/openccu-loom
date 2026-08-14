@@ -430,7 +430,7 @@ func TestNamingContract(t *testing.T) {
 			setupDevice: func() (*device.Channel, int) {
 				d := newDevice("Taster 1", "HM-PB-2-WM55", "VCU0011000")
 				ch1 := d.AddChannel("VCU0011000:1", 1, "KEY_TRANSCEIVER", hmenum.ParamsetKeyValues)
-				ch1.Name = "Taster 1 Taste 1" // explicit CCU channel name
+				ch1.SetName("Taster 1 Taste 1") // explicit CCU channel name
 				// No custom DP → falls through to legacy path.
 				return ch1, 1
 			},
@@ -442,7 +442,7 @@ func TestNamingContract(t *testing.T) {
 			setupDevice: func() (*device.Channel, int) {
 				d := newDevice("Taster 2", "HM-PB-2-WM55", "VCU0011001")
 				ch2 := d.AddChannel("VCU0011001:2", 2, "KEY_TRANSCEIVER", hmenum.ParamsetKeyValues)
-				ch2.Name = "Taster 2 Taste 2"
+				ch2.SetName("Taster 2 Taste 2")
 				return ch2, 2
 			},
 			wantSuffix:       "2",

@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -183,5 +184,52 @@ func TestEventRoutesPongToTracker(t *testing.T) {
 		t.Fatalf("PONG must close the pending ping: PendingCount=%d, want 0 — "+
 			"CallbackHandlers.Event must route PONG to the ping-pong tracker "+
 			"before the device-existence guard", got)
+	}
+}
+
+// TestPongForUnregisteredInterfaceLeavesNoEventClock pins that the one
+// callback which runs before the device-existence guard cannot create
+// per-interface state for an interface this central never registered.
+//
+// PONG is stamped on the pseudo-address "CENTRAL", so nothing downstream
+// constrains the interface_id the sender chose. The XML-RPC callback listener
+// takes no authentication and its source-IP allow-list is off by default, and
+// the event clocks are only reset when the central is torn down: any host on
+// the LAN could otherwise post PONGs with fresh (and multi-megabyte)
+// interface_ids and grow the daemon's live heap until it is killed. An
+// interface no client registered under carries no liveness signal for this
+// central, so dropping it loses nothing.
+func TestPongForUnregisteredInterfaceLeavesNoEventClock(t *testing.T) {
+	t.Parallel()
+
+	c := newTestCentralNamed(t, "ccu-01")
+	ic := pingPongClient(t, "ccu-01", "HmIP-RF")
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Client:      ic,
+	}); err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+
+	h := NewCallbackHandlers(c, nil)
+	fabricated := strings.Repeat("A", 4096)
+	if err := h.Event(context.Background(), fabricated, "CENTRAL", "PONG",
+		xmlrpc.StringValue(fabricated+"#1")); err != nil {
+		t.Fatalf("Event(PONG) for an unregistered interface must not error: %v", err)
+	}
+	if _, observed := c.Events.LastEventMonotonicForInterface(fabricated); observed {
+		t.Fatal("a PONG naming an interface no client registered under must not create " +
+			"an event-clock entry — the map is only cleared on teardown, so every " +
+			"fabricated id is retained for the lifetime of the daemon")
+	}
+
+	// The registered interface keeps its liveness signal.
+	if err := h.Event(context.Background(), "HmIP-RF", "CENTRAL", "PONG",
+		xmlrpc.StringValue("HmIP-RF#1")); err != nil {
+		t.Fatalf("Event(PONG): %v", err)
+	}
+	if _, observed := c.Events.LastEventMonotonicForInterface("HmIP-RF"); !observed {
+		t.Fatal("a PONG for a registered interface must still stamp the event clock")
 	}
 }

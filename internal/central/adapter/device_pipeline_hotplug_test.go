@@ -8,11 +8,13 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // hotplugFakeOps is a paramsetFakeOps specialisation that records, per
@@ -26,9 +28,13 @@ type hotplugFakeOps struct {
 	descCalls     map[string]int
 	paramsetCalls map[string]int
 	// valuesParams maps a channel address to the VALUES paramset
-	// description returned for it; MASTER is always empty so
-	// hydration + seedMasterValues stay cheap and deterministic.
+	// description returned for it; MASTER stays empty unless a test fills
+	// masterParams, so hydration + seedMasterValues stay cheap and
+	// deterministic.
 	valuesParams map[string]map[string]hmproto.ParameterData
+	// masterParams is the MASTER counterpart, used by the tests that need a
+	// writable MASTER parameter to trigger the post-write refresh hook.
+	masterParams map[string]map[string]hmproto.ParameterData
 }
 
 func newHotplugFakeOps(valuesParams map[string]map[string]hmproto.ParameterData) *hotplugFakeOps {
@@ -48,7 +54,7 @@ func (f *hotplugFakeOps) GetParamsetDescription(
 	if key == hmenum.ParamsetKeyValues {
 		return f.valuesParams[address], nil
 	}
-	return nil, nil
+	return f.masterParams[address], nil
 }
 
 func (f *hotplugFakeOps) GetParamset(
@@ -377,5 +383,84 @@ func TestIngestNewDevicesConcurrentSameDeviceMaterialisesOnce(t *testing.T) {
 	// once per address — the loser's early-return path issues zero calls.
 	if got := fake.descCallCount(addr); got == 0 {
 		t.Error("winning goroutine never called GetParamsetDescription for the device root")
+	}
+}
+
+// TestIngestNewDevicesUsesTheAnnouncingInterfacesMasterRefreshHook pins the
+// hook a hot-plugged device's channels receive to the interface that
+// announced them.
+//
+// One pipeline serves every interface of a central, and the hot-plug ingestor
+// is built after the whole interface loop has run. With a single hook slot the
+// pipeline held whichever interface was wired last, so a device paired at
+// runtime on HmIP-RF got the BidCos-RF poller: every MASTER read-back for it
+// was then issued through the BidCos-RF backend with an HmIP address, which
+// the CCU rejects and which counts against the wrong interface's breaker.
+func TestIngestNewDevicesUsesTheAnnouncingInterfacesMasterRefreshHook(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-hotplug-hooks"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	hmipWire := WireInterfaceID(c.Name(), hmenum.InterfaceHmIPRF)
+	bidcosWire := WireInterfaceID(c.Name(), hmenum.InterfaceBidCosRF)
+
+	hmipHook := make(chan string, 1)
+	bidcosHook := make(chan string, 1)
+	p := NewDevicePipeline(c)
+	// HmIP registers no poller in production; register one here anyway so the
+	// test can tell "the right hook ran" from "no hook ran at all".
+	p.WithMasterRefreshHook(hmipWire, func(addr string, _ hmenum.ParamsetKey) { hmipHook <- addr })
+	// BidCos-RF is wired last, exactly as `interfaces: [HmIP-RF, BidCos-RF]`
+	// brings the central up.
+	p.WithMasterRefreshHook(bidcosWire, func(addr string, _ hmenum.ParamsetKey) { bidcosHook <- addr })
+
+	const addr = "HMIPHOTPLUG1"
+	const masterParam = hmenum.Parameter("CYCLIC_INFO_MSG")
+	fake := newHotplugFakeOps(map[string]map[string]hmproto.ParameterData{
+		addr + ":1": stateParam,
+	})
+	fake.masterParams = map[string]map[string]hmproto.ParameterData{
+		addr + ":1": {
+			string(masterParam): {
+				Type:       hmenum.ParameterTypeBool,
+				Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+			},
+		},
+	}
+
+	if _, err := p.IngestNewDevices(
+		context.Background(), hmipWire, hmenum.InterfaceHmIPRF,
+		fake, &fakeWriter{}, nil, deviceRootAndChannel(addr, "HmIP-PS", "SWITCH_VIRTUAL_RECEIVER"),
+		slog.Default(),
+	); err != nil {
+		t.Fatalf("IngestNewDevices: %v", err)
+	}
+
+	dev, ok := c.ModelRegistry.Get(addr)
+	if !ok {
+		t.Fatal("hot-plugged device not materialised")
+	}
+	ch := dev.Channel(addr + ":1")
+	if ch == nil {
+		t.Fatal("channel :1 not found")
+	}
+	if err := ch.Set(context.Background(), hmenum.ParamsetKeyMaster, masterParam,
+		hmtypes.BoolValue(true), device.SetOptions{}); err != nil {
+		t.Fatalf("MASTER write: %v", err)
+	}
+
+	select {
+	case got := <-hmipHook:
+		if got != addr+":1" {
+			t.Fatalf("HmIP-RF refresh hook got address %q, want %q", got, addr+":1")
+		}
+	case got := <-bidcosHook:
+		t.Fatalf("a device announced on HmIP-RF scheduled its MASTER read-back "+
+			"through the BidCos-RF poller (address %q)", got)
+	case <-time.After(2 * time.Second):
+		t.Fatal("no MASTER refresh hook fired for the hot-plugged device")
 	}
 }

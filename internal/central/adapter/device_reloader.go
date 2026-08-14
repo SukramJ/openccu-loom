@@ -54,8 +54,15 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 		if !ok {
 			return fmt.Errorf("device_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
 		}
+		// The coordinator uses iface as a registry key, and the device /
+		// description / paramset registries are keyed by the canonical wire id
+		// (`<central>-<iface>`) — that is what the callback path writes under.
+		// Passing the bare interface writes a second, duplicate key space that
+		// no other reader ever finds, and leaves RefreshDeviceLinkPeers looking
+		// for descriptions that are not there.
+		iface := hmenum.Interface(dev.InterfaceID)
 		fetcher := &singleDeviceDescFetcher{ops: b, address: deviceAddress}
-		if err := unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, dev.Interface); err != nil {
+		if err := unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, iface); err != nil {
 			return err
 		}
 		// Also re-pull link-peer addresses on demand. Folding this into the
@@ -63,7 +70,7 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 		// data current without a boot-time per-device RPC sweep over the whole
 		// fleet. RefreshDeviceLinkPeers logs+skips per-channel errors and never
 		// returns one, so it cannot fail the reload.
-		unit.Devices.RefreshDeviceLinkPeers(ctx, &backendLinkPeerFetcher{ops: b}, dev.Interface, deviceAddress)
+		unit.Devices.RefreshDeviceLinkPeers(ctx, &backendLinkPeerFetcher{ops: b}, iface, deviceAddress)
 		return nil
 	}
 	return fmt.Errorf("device_reloader: device not found: %s", deviceAddress)
@@ -100,8 +107,11 @@ func (a *DeviceReloaderAdapter) ReloadChannelConfig(ctx context.Context, channel
 		if !ok {
 			return fmt.Errorf("channel_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
 		}
+		// The paramset + description registries are keyed by the canonical
+		// wire id, not the bare interface — see ReloadDeviceConfig.
+		iface := hmenum.Interface(dev.InterfaceID)
 		// Re-pull the channel's paramset descriptions + MASTER values.
-		if err := unit.Devices.ReloadChannelConfig(ctx, b, dev.Interface, channelAddress, dev.Model); err != nil {
+		if err := unit.Devices.ReloadChannelConfig(ctx, b, iface, channelAddress, dev.Model); err != nil {
 			return err
 		}
 		// Re-materialise the channel's data points so the refreshed
@@ -110,7 +120,7 @@ func (a *DeviceReloaderAdapter) ReloadChannelConfig(ctx context.Context, channel
 		// the device-level refresh for the channel's owning device — the
 		// observable result for the target channel is identical.
 		fetcher := &backendDescFetcher{ops: b}
-		return unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, dev.Interface)
+		return unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, iface)
 	}
 	return fmt.Errorf("channel_reloader: channel not found: %s", channelAddress)
 }

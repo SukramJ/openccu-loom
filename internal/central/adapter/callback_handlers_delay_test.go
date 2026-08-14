@@ -66,3 +66,45 @@ func TestCallbackHandlersDelayNewDeviceCreation(t *testing.T) {
 		})
 	}
 }
+
+// TestNewDevicesLeavesTheInboxEmptyWithoutDeferredCreation pins that the
+// pending-accept inbox is only filled when the operator can ever empty it.
+//
+// The inbox is drained by AddNewDevicesManually alone, which is the
+// delay_new_device_creation accept flow. With the default (delay off) the
+// descriptions go straight to the hot-plug ingestor, so storing them as well
+// only accumulated: the daemon answers listDevices with an empty array, so
+// the CCU re-announces its complete inventory after every reconnect and the
+// inbox kept every copy for the lifetime of the process.
+func TestNewDevicesLeavesTheInboxEmptyWithoutDeferredCreation(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-no-delay-inbox"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	h := NewCallbackHandlers(c, nil)
+	h.SetDelayNewDeviceCreation(false)
+	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
+		t.Fatalf("NewDevices: %v", err)
+	}
+	h.Stop()
+
+	// Subscribe only now: the hot-plug path has already published its own
+	// DeviceCreatedEvent, and this assertion is about the accept flow.
+	var accepted atomic.Int32
+	unsub := events.Subscribe(c.EventBus, func(hmevent.DeviceCreatedEvent) {
+		accepted.Add(1)
+	})
+	defer unsub()
+
+	if err := c.Devices.AddNewDevicesManually(
+		context.Background(), "HmIP-RF", map[string]string{"DELAY001": "Sensor"}, nil,
+	); err != nil {
+		t.Fatalf("AddNewDevicesManually: %v", err)
+	}
+	if got := accepted.Load(); got != 0 {
+		t.Fatalf("the manual-accept flow found %d pending description(s) although deferred "+
+			"creation is off — the inbox is written but nothing ever drains it", got)
+	}
+}

@@ -66,6 +66,20 @@ type sourceSink struct {
 	sources []SourceDP
 }
 
+// snapshotSources returns the registered sources under the read lock. Every
+// reader goes through it: [RegisterSource] appends while a calculated sensor
+// recomputes on a callback goroutine, so touching the slice field directly is
+// a race — the Subscribe hooks install their update handler before they
+// register the resolved source, which leaves a window on every attach.
+//
+// Returning the slice header is safe because append never rewrites the
+// elements a previous reader observed.
+func (ss *sourceSink) snapshotSources() []SourceDP {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+	return ss.sources
+}
+
 // RegisterSource adds dp to the aggregation set. Duplicate
 // registrations are harmless (each DP is queried independently).
 // A nil dp is silently ignored so callers do not need to guard
@@ -99,9 +113,7 @@ func (ss *sourceSink) RegisterSource(dp SourceDP) {
 // Calculated value uncertain (consistent
 // `is_refreshed` guard in `_should_publish_data_point_updated_callback`).
 func (ss *sourceSink) StateUncertain() bool {
-	ss.mu.RLock()
-	srcs := ss.sources
-	ss.mu.RUnlock()
+	srcs := ss.snapshotSources()
 
 	if len(srcs) == 0 {
 		// No source DPs registered → cannot confirm the state.
@@ -137,9 +149,7 @@ func (ss *sourceSink) StateUncertain() bool {
 // never deliver; they are read into a field instead of registered, so they
 // cannot gate validity.
 func (ss *sourceSink) SourcesValid() bool {
-	ss.mu.RLock()
-	srcs := ss.sources
-	ss.mu.RUnlock()
+	srcs := ss.snapshotSources()
 
 	if len(srcs) == 0 {
 		return false
@@ -187,9 +197,7 @@ func (ss *sourceSink) LoadDataPointValue(loader func(channelAddress, parameter s
 	if loader == nil {
 		return
 	}
-	ss.mu.RLock()
-	srcs := ss.sources
-	ss.mu.RUnlock()
+	srcs := ss.snapshotSources()
 	for _, dp := range srcs {
 		if kp, ok := dp.(dataPointKeyProvider); ok {
 			dpk := kp.DataPointKey()
@@ -202,9 +210,7 @@ func (ss *sourceSink) LoadDataPointValue(loader func(channelAddress, parameter s
 // source DPs that implement [sourceTimestampProvider]. Returns the zero time
 // when no sources are registered or none carry a timestamp.
 func (ss *sourceSink) aggregateModifiedAt() time.Time {
-	ss.mu.RLock()
-	srcs := ss.sources
-	ss.mu.RUnlock()
+	srcs := ss.snapshotSources()
 	var latest time.Time
 	for _, dp := range srcs {
 		if tp, ok := dp.(sourceTimestampProvider); ok {
@@ -220,9 +226,7 @@ func (ss *sourceSink) aggregateModifiedAt() time.Time {
 // source DPs that implement [sourceTimestampProvider]. Returns the zero time
 // when no sources are registered or none carry a timestamp.
 func (ss *sourceSink) aggregateRefreshedAt() time.Time {
-	ss.mu.RLock()
-	srcs := ss.sources
-	ss.mu.RUnlock()
+	srcs := ss.snapshotSources()
 	var latest time.Time
 	for _, dp := range srcs {
 		if tp, ok := dp.(sourceTimestampProvider); ok {
@@ -241,9 +245,7 @@ func (ss *sourceSink) aggregateRefreshedAt() time.Time {
 //
 // Returns false when no sources are registered (no information yet).
 func (ss *sourceSink) IsRefreshedFromSources() bool {
-	ss.mu.RLock()
-	srcs := ss.sources
-	ss.mu.RUnlock()
+	srcs := ss.snapshotSources()
 
 	if len(srcs) == 0 {
 		return false

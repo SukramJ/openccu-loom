@@ -8,6 +8,7 @@ package backends
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,10 +19,22 @@ import (
 type fakeGetter struct {
 	result map[string]any
 	err    error
+
+	mu    sync.Mutex
+	calls int
 }
 
 func (f *fakeGetter) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+	f.mu.Lock()
+	f.calls++
+	f.mu.Unlock()
 	return f.result, f.err
+}
+
+func (f *fakeGetter) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
 }
 
 func TestMasterPollerNewAndClose(t *testing.T) {
@@ -104,6 +117,50 @@ func TestMasterPollerTwoDistinctKeysBothFire(t *testing.T) {
 		}
 	}
 	p.Close()
+}
+
+// TestMasterPollerDeduplicatedReplacementStillFires pins the documented dedup
+// contract: a second SchedulePoll for the same (address, paramset) replaces the
+// queued attempt, and that replacement must actually run. The superseded
+// goroutine wakes on its cancelled context immediately while the replacement is
+// still sleeping out the interval, so its cleanup must not touch the entry that
+// now belongs to the replacement — otherwise a MASTER write followed by a second
+// write inside the poll interval never reads the paramset back and the cache
+// keeps the pre-write values.
+func TestMasterPollerDeduplicatedReplacementStillFires(t *testing.T) {
+	t.Parallel()
+	g := &fakeGetter{result: map[string]any{"LEVEL": float64(0.25)}}
+	p := NewMasterPoller(g)
+	p.Interval = 30 * time.Millisecond
+
+	refreshed := make(chan map[string]any, 4)
+	p.OnRefresh = func(_ string, _ hmenum.ParamsetKey, values map[string]any) {
+		refreshed <- values
+	}
+
+	p.SchedulePoll("VCU1234567:1", hmenum.ParamsetKeyMaster)
+	p.SchedulePoll("VCU1234567:1", hmenum.ParamsetKeyMaster)
+
+	select {
+	case got := <-refreshed:
+		if got["LEVEL"] != float64(0.25) {
+			t.Fatalf("LEVEL=%v, want 0.25", got["LEVEL"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the deduplicated replacement poll never fired")
+	}
+
+	// The superseded poll must not produce a second read.
+	select {
+	case <-refreshed:
+		t.Fatal("both polls fired; dedup did not suppress the superseded attempt")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	p.Close()
+	if n := g.callCount(); n != 1 {
+		t.Fatalf("GetParamset called %d times, want exactly 1", n)
+	}
 }
 
 func TestMasterPollerCallsOnErrorOnGetterFailure(t *testing.T) {

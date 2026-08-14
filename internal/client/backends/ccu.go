@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -51,10 +52,13 @@ type CcuBackend struct {
 	sessionRenewFn func(ctx context.Context) (string, error)
 
 	// probedCaps caches the capabilities discovered by [Initialize].
-	// Protected by the backend's own mutation only during Initialize;
-	// safe to read from Capabilities() without a lock because Initialize
-	// is called once before any concurrent operation.
-	probedCaps *Capabilities
+	// Stored atomically because Initialize is re-run on every reconnect
+	// (InterfaceClient.ReinitProxy) on the connection-recovery goroutine,
+	// while Capabilities() is read concurrently from the device-ingest
+	// pipeline and from REST/WS/MQTT handler goroutines. An unordered
+	// publish lets a reader see the pointer before the struct behind it
+	// and reject a supported operation as unsupported.
+	probedCaps atomic.Pointer[Capabilities]
 
 	// ifaceType is the interface this backend serves. Required to pick the
 	// correct install-mode wire call: HmIP-RF uses Interface.setInstallModeHMIP
@@ -114,8 +118,8 @@ func (b *CcuBackend) Kind() Kind { return KindCCU }
 // [Initialize] has been called; falls back to the static KindCCU profile.
 func (b *CcuBackend) Capabilities() Capabilities {
 	caps := CapabilityFor(KindCCU)
-	if b.probedCaps != nil {
-		caps = *b.probedCaps
+	if probed := b.probedCaps.Load(); probed != nil {
+		caps = *probed
 	}
 	// Backup and HasSystemUpdate both route through the ReGa script runner,
 	// which production wires AFTER Initialize() runs (see ccu_wiring.go). If
@@ -132,7 +136,7 @@ func (b *CcuBackend) Capabilities() Capabilities {
 // current runner instead.
 func (b *CcuBackend) Initialize(_ context.Context) error {
 	caps := CapabilityFor(KindCCU)
-	b.probedCaps = &caps
+	b.probedCaps.Store(&caps)
 	return nil
 }
 

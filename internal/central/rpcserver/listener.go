@@ -4,12 +4,63 @@
 package rpcserver
 
 import (
+	"errors"
 	"log/slog"
 	"net"
 	"net/netip"
+	"syscall"
+	"time"
 
 	"golang.org/x/net/netutil"
 )
+
+// acceptRetryDelayInitial and acceptRetryDelayCap bound the exponential
+// backoff applied between retries of a recoverable Accept failure. Same
+// 5 ms → 1 s envelope [http.Server.Serve] uses, so both callback
+// listeners behave alike under descriptor pressure.
+const (
+	acceptRetryDelayInitial = 5 * time.Millisecond
+	acceptRetryDelayCap     = time.Second
+)
+
+// nextAcceptRetryDelay doubles the previous backoff within the
+// [acceptRetryDelayInitial, acceptRetryDelayCap] envelope, starting the
+// sequence when prev is zero.
+func nextAcceptRetryDelay(prev time.Duration) time.Duration {
+	if prev <= 0 {
+		return acceptRetryDelayInitial
+	}
+	if next := prev * 2; next < acceptRetryDelayCap {
+		return next
+	}
+	return acceptRetryDelayCap
+}
+
+// isRecoverableAcceptError reports whether an Accept failure leaves the
+// listening socket healthy, so the accept loop should back off and retry
+// instead of tearing itself down.
+//
+// The set mirrors what [http.Server.Serve] retries — which is what the
+// sibling XML-RPC callback listener inherits for free by delegating to
+// it, and what the BIN-RPC loop has to do for itself. A peer that resets
+// between SYN and accept (ECONNABORTED/ECONNRESET), a transient
+// descriptor or buffer shortage (EMFILE/ENFILE/ENOBUFS), an interrupted
+// syscall (EINTR) and a listener deadline (Timeout) all say nothing
+// about the socket. Returning on one of them leaves the port bound with
+// nobody accepting, which silently stops every CUxD push callback for
+// the rest of the process lifetime.
+func isRecoverableAcceptError(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	return errors.Is(err, syscall.ECONNABORTED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EMFILE) ||
+		errors.Is(err, syscall.ENFILE) ||
+		errors.Is(err, syscall.ENOBUFS) ||
+		errors.Is(err, syscall.EINTR)
+}
 
 // limitListener wraps ln in a [netutil.LimitListener] capping the number
 // of simultaneously-accepted connections at maxConns. Both callback

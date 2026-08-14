@@ -347,7 +347,7 @@ func TestChannelRoomFallbackToMaster(t *testing.T) {
 	d := newTestDevice(t)
 	master := d.AddChannel("0001ABCD:3", 3, "", hmenum.ParamsetKeyValues)
 	master.GroupNo = 3
-	master.Rooms = []string{"Wohnzimmer"}
+	master.SetRooms([]string{"Wohnzimmer"})
 
 	slave := d.Channel("0001ABCD:1")
 	slave.GroupNo = 3
@@ -355,20 +355,20 @@ func TestChannelRoomFallbackToMaster(t *testing.T) {
 		t.Fatalf("slave.Room = %q want Wohnzimmer (fallback to master)", got)
 	}
 	// Slave with own room wins over master fallback.
-	slave.Rooms = []string{"Küche"}
+	slave.SetRooms([]string{"Küche"})
 	if got := slave.Room(); got != "Küche" {
 		t.Fatalf("own single room wins: got %q", got)
 	}
 	// Multi-room assignment on the slave → fall back to master's
 	// single room. Mirrors Python where len != 1 escapes the
 	// short-circuit and proceeds to the group_master lookup.
-	slave.Rooms = []string{"A", "B"}
+	slave.SetRooms([]string{"A", "B"})
 	if got := slave.Room(); got != "Wohnzimmer" {
 		t.Fatalf("multi-room slave falls back to master room: got %q", got)
 	}
 	// Master with multiple rooms → empty (no unique answer).
-	master.Rooms = []string{"R1", "R2"}
-	slave.Rooms = []string{"S1", "S2"}
+	master.SetRooms([]string{"R1", "R2"})
+	slave.SetRooms([]string{"S1", "S2"})
 	if got := slave.Room(); got != "" {
 		t.Fatalf("master also ambiguous → empty, got %q", got)
 	}

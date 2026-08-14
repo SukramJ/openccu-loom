@@ -79,30 +79,6 @@ func TestSubscribeReactsToConnectionLostEvent(t *testing.T) {
 	}
 }
 
-// TestSubscribeReactsToCircuitBreakerTripped verifies that publishing a
-// CircuitBreakerTrippedEvent triggers recovery for the named interface.
-func TestSubscribeReactsToCircuitBreakerTripped(t *testing.T) {
-	t.Parallel()
-
-	bus := events.NewBus()
-	c := NewConnectionRecoveryCoordinatorWithLimit("c1", bus, 0)
-
-	var count atomic.Int32
-	c.WithDefaultPipeline(atomicPipeline(&count))
-	c.Subscribe()
-	defer c.Stop()
-
-	events.Publish(bus, hmevent.CircuitBreakerTrippedEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "c1",
-		InterfaceID: "BidCos-RF",
-	})
-
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
-		t.Fatalf("recovery did not start after CircuitBreakerTrippedEvent (count=%d)", count.Load())
-	}
-}
-
 // TestSubscribeReactsToCBStateChangedOpen verifies that a
 // CircuitBreakerStateChangedEvent with To==Open triggers recovery.
 func TestSubscribeReactsToCBStateChangedOpen(t *testing.T) {
@@ -366,7 +342,6 @@ func TestStopIsIdempotent(t *testing.T) {
 // installs a handler for.
 var recoverySubscribedEventTypes = []hmevent.EventType{
 	hmevent.EventTypeConnectionLost,
-	hmevent.EventTypeCircuitBreakerTripped,
 	hmevent.EventTypeCircuitBreakerStateChanged,
 }
 

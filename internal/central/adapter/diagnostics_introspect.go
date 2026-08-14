@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -46,6 +47,27 @@ func (a *IntrospectAdapter) ReliabilitySnapshot(centralName string) []hmapi.Reli
 				State:        e.Client.State(),
 			})
 		}
+	}
+	return out
+}
+
+// MetricsSnapshots returns one typed metrics snapshot per central, keyed
+// by central name. Centrals whose aggregator has not been wired yet are
+// skipped, so a dump taken during boot reports the centrals that are
+// already up instead of a fleet of zeroes.
+//
+// This is the reader of [central.Unit.Aggregator]: the daemon builds one
+// aggregator per CCU at boot, and the diagnostics dump is where the
+// counters it collects (RPC, recovery, cache, model, services) leave the
+// daemon.
+func (a *IntrospectAdapter) MetricsSnapshots(ctx context.Context) map[string]metrics.MetricsSnapshot {
+	units := a.registry.List()
+	out := make(map[string]metrics.MetricsSnapshot, len(units))
+	for _, u := range units {
+		if u == nil || u.Aggregator == nil {
+			continue
+		}
+		out[u.Name()] = u.Aggregator.Snapshot(ctx)
 	}
 	return out
 }

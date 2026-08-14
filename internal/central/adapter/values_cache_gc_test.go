@@ -173,8 +173,8 @@ func TestWireValuesCacheFlusher_RunsPeriodicGC(t *testing.T) {
 	// A 5ms flush interval pushes gcTickInterval's derived cadence down far
 	// enough that the GC ticker fires promptly, without waiting out the
 	// multi-minute production default.
-	closer := WireValuesCacheFlusher(reg, store, 5*time.Millisecond, logger)
-	defer closer()
+	flusher := WireValuesCacheFlusher(reg, store, 5*time.Millisecond, logger)
+	defer flusher.Stop()
 
 	// Poll for the effect rather than sleeping a fixed span and checking
 	// once: the assertion is that the GC runs, not that it runs within any

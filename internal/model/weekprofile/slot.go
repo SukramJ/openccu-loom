@@ -123,7 +123,11 @@ func fillUpWeekdaySlots(fillTemp float64, ws weekdaySlots) weekdaySlots {
 
 // identifyBaseTemperature determines which temperature occupies the most
 // minutes in a weekday's slot map and returns it as the "base temperature".
-// Ties are broken by returning the temperature of the last applicable slot.
+// Ties are broken in favour of the temperature that appears in the earliest
+// slot: the reference helper's max() keeps the first key in accumulation
+// order, and the base temperature must stay stable across reloads of the same
+// unchanged paramset — a map-iteration tie-break would flip which segment is
+// reported as an explicit period between two loads of identical data.
 //
 // Mirrors `identify_base_temperature` `week_profile.py`.
 func identifyBaseTemperature(ws weekdaySlots) float64 {
@@ -140,7 +144,10 @@ func identifyBaseTemperature(ws weekdaySlots) float64 {
 	}
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].no < ordered[j].no })
 
-	duration := make(map[float64]int)
+	// Accumulate minutes per temperature, remembering first-seen order so the
+	// winner selection below cannot depend on map-iteration order.
+	duration := make(map[float64]int, len(ordered))
+	order := make([]float64, 0, len(ordered))
 	prevMinutes := 0
 	for _, n := range ordered {
 		endMins := toMinutes(n.slot.EndTime)
@@ -149,6 +156,9 @@ func identifyBaseTemperature(ws weekdaySlots) float64 {
 		}
 		dur := endMins - prevMinutes
 		if dur > 0 {
+			if _, seen := duration[n.slot.Temperature]; !seen {
+				order = append(order, n.slot.Temperature)
+			}
 			duration[n.slot.Temperature] += dur
 		}
 		prevMinutes = endMins
@@ -156,12 +166,14 @@ func identifyBaseTemperature(ws weekdaySlots) float64 {
 			break
 		}
 	}
+	if len(order) == 0 {
+		return 0
+	}
 
-	var bestTemp float64
-	var bestDur int
-	for temp, dur := range duration {
-		if dur > bestDur {
-			bestDur = dur
+	// Strict ">" keeps the earliest tied temperature.
+	bestTemp := order[0]
+	for _, temp := range order[1:] {
+		if duration[temp] > duration[bestTemp] {
 			bestTemp = temp
 		}
 	}

@@ -1,5 +1,53 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.59.1
+
+A maintenance release built from a full review of the code base. It fixes
+136 confirmed defects; the ones you are most likely to have been affected by:
+
+- **The alarm system could lock up for good.** If any zone had a
+  notification output enrolled, the first sensor that tripped froze the
+  alarm engine permanently — no siren state change, no further sensor
+  handling, and disarming or silencing stopped responding too. Only a
+  restart recovered it.
+
+- **The daemon could die outright** when the boot-time discovery pass ran
+  at the same moment a CCU pushed an event. The process exited; the
+  supervisor restarted it.
+
+- **A CCU added while the daemon was running was only half connected.**
+  Its devices appeared and its values flowed, but measurement history
+  stayed empty forever, no webhook was ever sent for it, scheduled backups
+  skipped it, and several live update channels never carried its events.
+  A restart made it all work, which made the problem look like a glitch.
+
+- **A password reset did not always end the sessions it was meant to end.**
+  If the account had been signed in with different capitalisation than it
+  was stored under, the old session kept working until it expired on its
+  own. Deleting the account had the same gap.
+
+- **Entities that never worked in Home Assistant.** For any CCU whose name
+  contains a space, dot or umlaut, several entities were announced on one
+  topic and published on another, so they stayed unavailable forever.
+  The cover buttons sent the wrong command entirely: Open and Close both
+  triggered Stop.
+
+- **Matter: one controller could inherit another's permissions.** Within a
+  short window, a second controller could be matched by access rules
+  written for the first. Aborted pairings also leaked session slots until
+  no controller could connect at all.
+
+- **The Config UI could act on the wrong device.** Opening a second device
+  from a link or the address bar left the previous device's data on screen
+  while the address bar showed the new one — and rename, delete and
+  parameter saves went to the device that was still loaded.
+
+A CCU name containing characters other than letters, digits, hyphen and
+underscore is now rejected at start-up instead of being accepted silently.
+Such a name produced a callback address the CCU could never reach, so the
+installation received no events at all. Rename the CCU in the add-on
+configuration to start again.
+
 ## 0.59.0
 
 - **Matter diagnostics in the Config UI.** A new Diagnostics tab shows

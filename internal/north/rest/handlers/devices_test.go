@@ -355,9 +355,9 @@ func TestListChannels_DeviceNotFound_Returns404(t *testing.T) {
 func TestListRooms_HappyPath(t *testing.T) {
 	t.Parallel()
 	d1 := newTestDevice("0001ABCD", "HmIP-BSM")
-	d1.Rooms = []string{"Living Room", "Office"}
+	d1.SetRooms([]string{"Living Room", "Office"})
 	d2 := newTestDevice("0002ABCD", "HmIP-STE2")
-	d2.Rooms = []string{"Living Room"}
+	d2.SetRooms([]string{"Living Room"})
 	idx := &stubDeviceIndex{
 		devices: map[string]*device.Device{
 			"0001ABCD": d1,
@@ -403,7 +403,7 @@ func TestListRooms_NilIndex_ReturnsEmptyArray(t *testing.T) {
 func TestListFunctions_HappyPath(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice("0001ABCD", "HmIP-BSM")
-	d.Functions = []string{"Lighting", "Security"}
+	d.SetFunctions([]string{"Lighting", "Security"})
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/functions", http.NoBody)
 	w := httptest.NewRecorder()
@@ -1359,8 +1359,8 @@ func TestListChannels_GroupAndRoomFields(t *testing.T) {
 	d.AddChannel("0001GRP:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	state := d.AddChannel("0001GRP:3", 3, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 	master := d.AddChannel("0001GRP:4", 4, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
-	master.Name = "Galerie Aktor"
-	master.Rooms = []string{"Galerie"}
+	master.SetName("Galerie Aktor")
+	master.SetRooms([]string{"Galerie"})
 	for _, no := range []int{3, 4, 5} {
 		d.AddChannelToGroup(4, no)
 	}
@@ -1494,7 +1494,7 @@ func TestToChannelSummary_FunctionsPopulated(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice("0001ABCD", "HmIP-BSM")
 	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.Functions = []string{"Licht", "Heizung"}
+	ch.SetFunctions([]string{"Licht", "Heizung"})
 
 	s := toChannelSummary(ch, nil)
 	if len(s.Functions) != 2 {

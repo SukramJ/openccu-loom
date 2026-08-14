@@ -31,6 +31,12 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
+// reloaderWireID is the canonical `<central>-<iface>` id the registries are
+// keyed by. It is deliberately distinct from the bare interface name so a
+// bare-vs-wire key mismatch in the code under test cannot hide behind a
+// fixture that collapses the two spaces.
+const reloaderWireID = "ccu-01-HmIP-RF"
+
 // ─── fakes shared by multiple test groups ────────────────────────────────────
 
 // listDevicesOps is a fake backends.Operations that records ListDevices
@@ -127,7 +133,7 @@ func buildReloaderFixture(
 	}
 
 	dev := device.New(device.Config{
-		InterfaceID: "HmIP-RF",
+		InterfaceID: reloaderWireID,
 		Interface:   hmenum.InterfaceHmIPRF,
 		Address:     deviceAddr,
 		Model:       "HmIP-STH",
@@ -141,7 +147,7 @@ func buildReloaderFixture(
 		returnErr:      backendErr,
 	}
 	w := clientpkg.NewValueWriter()
-	w.Register("ccu-01", "HmIP-RF", fake)
+	w.Register("ccu-01", reloaderWireID, fake)
 
 	return NewDeviceReloaderAdapter(reg, w), fake
 }
@@ -152,7 +158,7 @@ func buildSingleDeviceFixture(
 	t *testing.T,
 	deviceAddr string,
 	fake *getDescOps,
-) *DeviceReloaderAdapter {
+) (*DeviceReloaderAdapter, *central.Unit) {
 	t.Helper()
 
 	c, err := central.New(central.Config{Name: "ccu-01"})
@@ -164,7 +170,7 @@ func buildSingleDeviceFixture(
 		t.Fatalf("reg.Register: %v", err)
 	}
 	dev := device.New(device.Config{
-		InterfaceID: "HmIP-RF",
+		InterfaceID: reloaderWireID,
 		Interface:   hmenum.InterfaceHmIPRF,
 		Address:     deviceAddr,
 		Model:       "HmIP-STH",
@@ -172,8 +178,8 @@ func buildSingleDeviceFixture(
 	})
 	c.ModelRegistry.Put(dev)
 	w := clientpkg.NewValueWriter()
-	w.Register("ccu-01", "HmIP-RF", fake)
-	return NewDeviceReloaderAdapter(reg, w)
+	w.Register("ccu-01", reloaderWireID, fake)
+	return NewDeviceReloaderAdapter(reg, w), c
 }
 
 // ─── ReloadDeviceConfig ───────────────────────────────────────────────────────
@@ -190,7 +196,7 @@ func TestReloadDeviceConfigFetchesSingleDeviceDescription(t *testing.T) {
 			"0001ABCD:1": rawChannelMap("0001ABCD:1", "0001ABCD"),
 		},
 	}
-	a := buildSingleDeviceFixture(t, "0001ABCD", fake)
+	a, unit := buildSingleDeviceFixture(t, "0001ABCD", fake)
 
 	if err := a.ReloadDeviceConfig(context.Background(), "0001ABCD"); err != nil {
 		t.Fatalf("ReloadDeviceConfig: %v", err)
@@ -205,6 +211,19 @@ func TestReloadDeviceConfigFetchesSingleDeviceDescription(t *testing.T) {
 	}
 	if fake.calledAddrs[0] != "0001ABCD" {
 		t.Errorf("first GetDeviceDescription call = %q, want 0001ABCD", fake.calledAddrs[0])
+	}
+	// The refreshed descriptions must land under the canonical wire id. A
+	// second, bare key space is invisible to every other reader and is what
+	// makes the periodic firmware sweep ask the value writer for a backend
+	// that cannot exist.
+	if _, ok := unit.DescRegistry.Get(hmenum.Interface(reloaderWireID), "0001ABCD"); !ok {
+		t.Error("reloaded device description not stored under the wire interface id")
+	}
+	for _, got := range unit.DescRegistry.GetInterfaceIDs() {
+		if string(got) != reloaderWireID {
+			t.Errorf("description registry gained the key %q; every key must be the wire id %q",
+				got, reloaderWireID)
+		}
 	}
 }
 
@@ -223,7 +242,7 @@ func TestReloadDeviceConfigPartialChannelErrorSkipped(t *testing.T) {
 			"0001ABCD:1": errors.New("channel temporarily unreachable"),
 		},
 	}
-	a := buildSingleDeviceFixture(t, "0001ABCD", fake)
+	a, _ := buildSingleDeviceFixture(t, "0001ABCD", fake)
 
 	// A per-channel error must not abort the reload.
 	if err := a.ReloadDeviceConfig(context.Background(), "0001ABCD"); err != nil {
@@ -274,7 +293,7 @@ func TestReloadDeviceConfigNoBackendReturnsError(t *testing.T) {
 	}
 
 	dev := device.New(device.Config{
-		InterfaceID: "HmIP-RF",
+		InterfaceID: reloaderWireID,
 		Interface:   hmenum.InterfaceHmIPRF,
 		Address:     "0001ABCD",
 		Model:       "HmIP-STH",
@@ -354,7 +373,7 @@ func TestReloadChannelConfigNoBackendReturnsError(t *testing.T) {
 	}
 
 	dev := device.New(device.Config{
-		InterfaceID: "HmIP-RF",
+		InterfaceID: reloaderWireID,
 		Interface:   hmenum.InterfaceHmIPRF,
 		Address:     "0001ABCD",
 		Model:       "HmIP-STH",
@@ -479,7 +498,7 @@ func TestReloadDeviceConfigInvokesLinkPeerRefresh(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 	dev := device.New(device.Config{
-		InterfaceID: "HmIP-RF",
+		InterfaceID: reloaderWireID,
 		Interface:   hmenum.InterfaceHmIPRF,
 		Address:     "0001ABCD",
 		Model:       "HmIP-STH",
@@ -489,17 +508,17 @@ func TestReloadDeviceConfigInvokesLinkPeerRefresh(t *testing.T) {
 
 	// Seed the DeviceRegistry so RefreshDeviceLinkPeers can find the device.
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: hmenum.Interface(reloaderWireID),
 		Address:   "0001ABCD",
 		Model:     "HmIP-STH",
 	})
 	// Seed a channel description so the coordinator walks at least one channel.
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(hmenum.Interface(reloaderWireID), hmproto.DeviceDescription{
 		Address: "0001ABCD:1", Type: "SWITCH_VIRTUAL_RECEIVER", Parent: "0001ABCD",
 	})
 
 	w := clientpkg.NewValueWriter()
-	w.Register("ccu-01", "HmIP-RF", fake)
+	w.Register("ccu-01", reloaderWireID, fake)
 
 	a := NewDeviceReloaderAdapter(reg, w)
 	if err := a.ReloadDeviceConfig(context.Background(), "0001ABCD"); err != nil {

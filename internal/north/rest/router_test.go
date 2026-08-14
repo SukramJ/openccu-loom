@@ -978,6 +978,35 @@ func TestRouter_SystemStatus_route(t *testing.T) {
 	}
 }
 
+// TestRouter_DiagnosticsForwardsCentralMetrics verifies the router hands
+// the per-central metrics provider to the composite dump. The provider
+// is the only reader of the per-CCU aggregators, so dropping it here
+// leaves the daemon computing typed metrics that nothing ever reads.
+func TestRouter_DiagnosticsForwardsCentralMetrics(t *testing.T) {
+	t.Parallel()
+	r := NewRouter(Deps{
+		StartedAt: time.Now(),
+		CentralMetrics: func(context.Context) map[string]metrics.MetricsSnapshot {
+			return map[string]metrics.MetricsSnapshot{
+				"ccu-alpha": {Model: metrics.ModelMetrics{DevicesTotal: 5}},
+			}
+		},
+	})
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/diagnostics", http.NoBody))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var env handlers.DiagnosticsEnvelope
+	if err := json.Unmarshal(rr.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if got := env.Metrics["ccu-alpha"].Model.DevicesTotal; got != 5 {
+		t.Errorf("metrics.ccu-alpha.model.devices_total = %d, want 5 (body: %s)", got, rr.Body.String())
+	}
+}
+
 // TestRouter_LogLevels_route verifies diagnostics/log-levels route is guarded.
 func TestRouter_LogLevels_route(t *testing.T) {
 	t.Parallel()

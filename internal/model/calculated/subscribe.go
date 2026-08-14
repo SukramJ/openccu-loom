@@ -205,11 +205,7 @@ func (s *OperatingVoltageLevelSensor) Subscribe(c *device.Channel) func() {
 	// SetReferences is called manually.
 	if dev := c.Device(); dev != nil {
 		if cfg, ok := LookupBatteryConfig(dev.Model); ok {
-			s.voltageMax = cfg.VoltageMax()
-			// Store a pointer to a copy so AdditionalInformation can surface battery
-			// type and quantity.
-			cfgCopy := cfg
-			s.battery = &cfgCopy
+			s.setBatteryConfig(cfg)
 		}
 	}
 	// Resolve _low_bat_limit_default from the MASTER paramset descriptor. This
@@ -219,19 +215,18 @@ func (s *OperatingVoltageLevelSensor) Subscribe(c *device.Channel) func() {
 			var raw any
 			if err := json.Unmarshal(pd.Default, &raw); err == nil {
 				if f, fok := toFloat64(raw); fok {
-					s.lowBatLimitDefault = f
-					s.hasLowBatDefault = true
+					s.setLowBatLimitDefault(f)
 				}
 			}
 		}
 	}
-	// Seed the initial LOW_BAT_LIMIT from MASTER. SetReferences only
-	// stores the pair when voltageMax exceeds the limit, so it stays
-	// inert until both are present.
+	// Seed the initial LOW_BAT_LIMIT from MASTER. applyLowBatLimit only stores
+	// the pair when the battery table supplied a maximum that exceeds the limit,
+	// so it stays inert until both are present.
 	if dp := c.MasterParameter(hmenum.ParameterLowBatLimit); dp != nil {
 		if v, ok := dp.RawValue(); ok {
-			if f, fok := toFloat64(v); fok && s.voltageMax > 0 {
-				s.SetReferences(f, s.voltageMax)
+			if f, fok := toFloat64(v); fok {
+				s.applyLowBatLimit(f)
 			}
 		}
 	}
@@ -248,11 +243,7 @@ func (s *OperatingVoltageLevelSensor) Subscribe(c *device.Channel) func() {
 	return composeUnsubs(
 		// Live MASTER updates: a re-read of LOW_BAT_LIMIT updates the
 		// reference pair so the percentage tracks operator changes.
-		masterSubscribe(c, hmenum.ParameterLowBatLimit, func(v float64) {
-			if s.voltageMax > 0 {
-				s.SetReferences(v, s.voltageMax)
-			}
-		}),
+		masterSubscribe(c, hmenum.ParameterLowBatLimit, s.applyLowBatLimit),
 		uVoltage,
 		// BATTERY_STATE fallback: BidCos / older HmIP devices expose
 		// OPERATING_VOLTAGE through BATTERY_STATE instead. Both subscriptions feed

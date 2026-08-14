@@ -4,6 +4,8 @@
 package calculated
 
 import (
+	"sync"
+
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -33,19 +35,42 @@ type climateInputs struct {
 	hasPressure    bool
 }
 
-// feedSink writes value into sink if the formula yielded ok AND the value is
+// emitState holds the value a calculated float sensor last published, together
+// with the lock that guards it.
+//
+// Every calculated sensor is driven by more than one upstream data point, and
+// each of those fires its update handler on whichever goroutine delivered the
+// CCU event — the callback servers dispatch one per connection and nothing
+// serialises them per channel. Without a lock the compare-and-set below tears:
+// a value can be recorded as published while the emission is lost, or the same
+// value can be emitted twice.
+type emitState struct {
+	mu      sync.Mutex
+	last    float64
+	hasLast bool
+}
+
+// refreshed reports whether the sensor has emitted at least one computed value.
+func (es *emitState) refreshed() bool {
+	es.mu.Lock()
+	defer es.mu.Unlock()
+	return es.hasLast
+}
+
+// feed writes value into sink if the formula yielded ok AND the value is
 // different from the previous emission. Dedup lives here so subscribers of
 // generic.Sensor.OnUpdate don't receive no-op events.
 //
 // If the sensor itself has published within the last 500 ms, suppress the
 // call so rapid CCU bursts don't produce intermediate values. The
-// sources-level guard ([shouldPublishCalcUpdate]) is evaluated separately by
-// the per-sensor On* methods via the passed sources slice.
-func feedSink(sink *generic.Sensor[float64], value float64, ok bool, prev *float64, hasPrev *bool, sources []SourceDP) {
+// sources-level guard ([shouldPublishCalcUpdate]) is evaluated from the
+// snapshot the calling sensor passes in.
+//
+// Only the dedup compare-and-set runs under the lock: sink.OnEvent fans out to
+// arbitrary subscribers, and a sensor lock held across that fan-out would
+// invite re-entrancy through a subscriber that reads the sensor back.
+func (es *emitState) feed(sink *generic.Sensor[float64], value float64, ok bool, sources []SourceDP) {
 	if !ok {
-		return
-	}
-	if *hasPrev && *prev == value {
 		return
 	}
 	// Sensor-level guard: don't publish if the sensor just published.
@@ -56,9 +81,54 @@ func feedSink(sink *generic.Sensor[float64], value float64, ok bool, prev *float
 	if !shouldPublishCalcUpdate(sources) {
 		return
 	}
-	*prev = value
-	*hasPrev = true
+	es.mu.Lock()
+	if es.hasLast && es.last == value {
+		es.mu.Unlock()
+		return
+	}
+	es.last, es.hasLast = value, true
+	es.mu.Unlock()
 	sink.OnEvent(value)
+}
+
+// climateState guards the composite inputs a climate-derived sensor computes
+// from, plus the value it last emitted.
+//
+// Temperature, humidity, wind speed and pressure each arrive on their own
+// upstream data point, so two of them are routinely written at the same time.
+// Recomputing from the unguarded struct could mix a fresh humidity with a
+// temperature that is being overwritten, publishing a number that was never
+// measured.
+type climateState struct {
+	mu   sync.Mutex
+	in   climateInputs
+	emit emitState
+}
+
+// update applies mut to the guarded inputs and returns the consistent snapshot
+// the caller's formula must compute from. Recomputing from the live struct
+// after releasing the lock would reintroduce the torn read.
+func (st *climateState) update(mut func(*climateInputs)) climateInputs {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	mut(&st.in)
+	return st.in
+}
+
+func (st *climateState) setTemperature(v float64) climateInputs {
+	return st.update(func(in *climateInputs) { in.temperature, in.hasTemperature = v, true })
+}
+
+func (st *climateState) setHumidity(v float64) climateInputs {
+	return st.update(func(in *climateInputs) { in.humidity, in.hasHumidity = v, true })
+}
+
+func (st *climateState) setWindSpeed(v float64) climateInputs {
+	return st.update(func(in *climateInputs) { in.windSpeed, in.hasWindSpeed = v, true })
+}
+
+func (st *climateState) setPressure(v float64) climateInputs {
+	return st.update(func(in *climateInputs) { in.pressureHPa, in.hasPressure = v, true })
 }
 
 // --- DewPoint sensor ---
@@ -79,9 +149,7 @@ func feedSink(sink *generic.Sensor[float64], value float64, ok bool, prev *float
 type DewPointSensor struct {
 	*generic.Sensor[float64]
 	sourceSink
-	in      climateInputs
-	last    float64
-	hasLast bool
+	climateState
 }
 
 // NewDewPointSensor constructs the sensor with no central / channel
@@ -105,22 +173,20 @@ func NewDewPointSensorWithIdentity(centralName, channelAddress string) *DewPoint
 
 // OnTemperature feeds a temperature observation and recomputes.
 func (s *DewPointSensor) OnTemperature(v float64) {
-	s.in.temperature, s.in.hasTemperature = v, true
-	s.recompute()
+	s.recompute(s.setTemperature(v))
 }
 
 // OnHumidity feeds a humidity observation and recomputes.
 func (s *DewPointSensor) OnHumidity(v float64) {
-	s.in.humidity, s.in.hasHumidity = v, true
-	s.recompute()
+	s.recompute(s.setHumidity(v))
 }
 
-func (s *DewPointSensor) recompute() {
-	if !s.in.hasTemperature || !s.in.hasHumidity {
+func (s *DewPointSensor) recompute(in climateInputs) {
+	if !in.hasTemperature || !in.hasHumidity {
 		return
 	}
-	v, ok := DewPoint(s.in.temperature, s.in.humidity)
-	feedSink(s.Sensor, v, ok, &s.last, &s.hasLast, s.sources)
+	v, ok := DewPoint(in.temperature, in.humidity)
+	s.emit.feed(s.Sensor, v, ok, s.snapshotSources())
 }
 
 // --- DewPointSpread sensor ---
@@ -137,9 +203,7 @@ func (s *DewPointSensor) recompute() {
 type DewPointSpreadSensor struct {
 	*generic.Sensor[float64]
 	sourceSink
-	in      climateInputs
-	last    float64
-	hasLast bool
+	climateState
 }
 
 // NewDewPointSpreadSensor constructs the sensor with no central
@@ -161,22 +225,20 @@ func NewDewPointSpreadSensorWithIdentity(centralName, channelAddress string) *De
 
 // OnTemperature feeds a temperature observation.
 func (s *DewPointSpreadSensor) OnTemperature(v float64) {
-	s.in.temperature, s.in.hasTemperature = v, true
-	s.recompute()
+	s.recompute(s.setTemperature(v))
 }
 
 // OnHumidity feeds a humidity observation.
 func (s *DewPointSpreadSensor) OnHumidity(v float64) {
-	s.in.humidity, s.in.hasHumidity = v, true
-	s.recompute()
+	s.recompute(s.setHumidity(v))
 }
 
-func (s *DewPointSpreadSensor) recompute() {
-	if !s.in.hasTemperature || !s.in.hasHumidity {
+func (s *DewPointSpreadSensor) recompute(in climateInputs) {
+	if !in.hasTemperature || !in.hasHumidity {
 		return
 	}
-	v, ok := DewPointSpread(s.in.temperature, s.in.humidity)
-	feedSink(s.Sensor, v, ok, &s.last, &s.hasLast, s.sources)
+	v, ok := DewPointSpread(in.temperature, in.humidity)
+	s.emit.feed(s.Sensor, v, ok, s.snapshotSources())
 }
 
 // --- FrostPoint sensor ---
@@ -193,9 +255,7 @@ func (s *DewPointSpreadSensor) recompute() {
 type FrostPointSensor struct {
 	*generic.Sensor[float64]
 	sourceSink
-	in      climateInputs
-	last    float64
-	hasLast bool
+	climateState
 }
 
 // NewFrostPointSensor constructs the sensor with no central / channel
@@ -217,22 +277,20 @@ func NewFrostPointSensorWithIdentity(centralName, channelAddress string) *FrostP
 
 // OnTemperature feeds a temperature observation.
 func (s *FrostPointSensor) OnTemperature(v float64) {
-	s.in.temperature, s.in.hasTemperature = v, true
-	s.recompute()
+	s.recompute(s.setTemperature(v))
 }
 
 // OnHumidity feeds a humidity observation.
 func (s *FrostPointSensor) OnHumidity(v float64) {
-	s.in.humidity, s.in.hasHumidity = v, true
-	s.recompute()
+	s.recompute(s.setHumidity(v))
 }
 
-func (s *FrostPointSensor) recompute() {
-	if !s.in.hasTemperature || !s.in.hasHumidity {
+func (s *FrostPointSensor) recompute(in climateInputs) {
+	if !in.hasTemperature || !in.hasHumidity {
 		return
 	}
-	v, ok := FrostPoint(s.in.temperature, s.in.humidity)
-	feedSink(s.Sensor, v, ok, &s.last, &s.hasLast, s.sources)
+	v, ok := FrostPoint(in.temperature, in.humidity)
+	s.emit.feed(s.Sensor, v, ok, s.snapshotSources())
 }
 
 // --- VaporConcentration sensor ---
@@ -249,9 +307,7 @@ func (s *FrostPointSensor) recompute() {
 type VaporConcentrationSensor struct {
 	*generic.Sensor[float64]
 	sourceSink
-	in      climateInputs
-	last    float64
-	hasLast bool
+	climateState
 }
 
 // NewVaporConcentrationSensor constructs the sensor with no central
@@ -273,22 +329,20 @@ func NewVaporConcentrationSensorWithIdentity(centralName, channelAddress string)
 
 // OnTemperature feeds a temperature observation.
 func (s *VaporConcentrationSensor) OnTemperature(v float64) {
-	s.in.temperature, s.in.hasTemperature = v, true
-	s.recompute()
+	s.recompute(s.setTemperature(v))
 }
 
 // OnHumidity feeds a humidity observation.
 func (s *VaporConcentrationSensor) OnHumidity(v float64) {
-	s.in.humidity, s.in.hasHumidity = v, true
-	s.recompute()
+	s.recompute(s.setHumidity(v))
 }
 
-func (s *VaporConcentrationSensor) recompute() {
-	if !s.in.hasTemperature || !s.in.hasHumidity {
+func (s *VaporConcentrationSensor) recompute(in climateInputs) {
+	if !in.hasTemperature || !in.hasHumidity {
 		return
 	}
-	v, ok := VaporConcentration(s.in.temperature, s.in.humidity)
-	feedSink(s.Sensor, v, ok, &s.last, &s.hasLast, s.sources)
+	v, ok := VaporConcentration(in.temperature, in.humidity)
+	s.emit.feed(s.Sensor, v, ok, s.snapshotSources())
 }
 
 // --- Enthalpy sensor ---
@@ -306,9 +360,7 @@ func (s *VaporConcentrationSensor) recompute() {
 type EnthalpySensor struct {
 	*generic.Sensor[float64]
 	sourceSink
-	in      climateInputs
-	last    float64
-	hasLast bool
+	climateState
 }
 
 // NewEnthalpySensor constructs the sensor with no central / channel
@@ -330,32 +382,29 @@ func NewEnthalpySensorWithIdentity(centralName, channelAddress string) *Enthalpy
 
 // OnTemperature feeds a temperature observation.
 func (s *EnthalpySensor) OnTemperature(v float64) {
-	s.in.temperature, s.in.hasTemperature = v, true
-	s.recompute()
+	s.recompute(s.setTemperature(v))
 }
 
 // OnHumidity feeds a humidity observation.
 func (s *EnthalpySensor) OnHumidity(v float64) {
-	s.in.humidity, s.in.hasHumidity = v, true
-	s.recompute()
+	s.recompute(s.setHumidity(v))
 }
 
 // OnPressure feeds a barometric pressure observation (hPa).
 func (s *EnthalpySensor) OnPressure(v float64) {
-	s.in.pressureHPa, s.in.hasPressure = v, true
-	s.recompute()
+	s.recompute(s.setPressure(v))
 }
 
-func (s *EnthalpySensor) recompute() {
-	if !s.in.hasTemperature || !s.in.hasHumidity {
+func (s *EnthalpySensor) recompute(in climateInputs) {
+	if !in.hasTemperature || !in.hasHumidity {
 		return
 	}
 	p := DefaultPressureHPa
-	if s.in.hasPressure {
-		p = s.in.pressureHPa
+	if in.hasPressure {
+		p = in.pressureHPa
 	}
-	v, ok := Enthalpy(s.in.temperature, s.in.humidity, p)
-	feedSink(s.Sensor, v, ok, &s.last, &s.hasLast, s.sources)
+	v, ok := Enthalpy(in.temperature, in.humidity, p)
+	s.emit.feed(s.Sensor, v, ok, s.snapshotSources())
 }
 
 // --- ApparentTemperature sensor ---
@@ -372,9 +421,7 @@ func (s *EnthalpySensor) recompute() {
 type ApparentTemperatureSensor struct {
 	*generic.Sensor[float64]
 	sourceSink
-	in      climateInputs
-	last    float64
-	hasLast bool
+	climateState
 }
 
 // NewApparentTemperatureSensor constructs the sensor with no central
@@ -396,28 +443,25 @@ func NewApparentTemperatureSensorWithIdentity(centralName, channelAddress string
 
 // OnTemperature feeds a temperature observation.
 func (s *ApparentTemperatureSensor) OnTemperature(v float64) {
-	s.in.temperature, s.in.hasTemperature = v, true
-	s.recompute()
+	s.recompute(s.setTemperature(v))
 }
 
 // OnHumidity feeds a humidity observation.
 func (s *ApparentTemperatureSensor) OnHumidity(v float64) {
-	s.in.humidity, s.in.hasHumidity = v, true
-	s.recompute()
+	s.recompute(s.setHumidity(v))
 }
 
 // OnWindSpeed feeds a wind-speed observation (km/h).
 func (s *ApparentTemperatureSensor) OnWindSpeed(v float64) {
-	s.in.windSpeed, s.in.hasWindSpeed = v, true
-	s.recompute()
+	s.recompute(s.setWindSpeed(v))
 }
 
-func (s *ApparentTemperatureSensor) recompute() {
-	if !s.in.hasTemperature || !s.in.hasHumidity || !s.in.hasWindSpeed {
+func (s *ApparentTemperatureSensor) recompute(in climateInputs) {
+	if !in.hasTemperature || !in.hasHumidity || !in.hasWindSpeed {
 		return
 	}
-	v, ok := ApparentTemperature(s.in.temperature, s.in.humidity, s.in.windSpeed)
-	feedSink(s.Sensor, v, ok, &s.last, &s.hasLast, s.sources)
+	v, ok := ApparentTemperature(in.temperature, in.humidity, in.windSpeed)
+	s.emit.feed(s.Sensor, v, ok, s.snapshotSources())
 }
 
 // DerivedFloatSensorUnit returns the canonical unit
@@ -489,7 +533,7 @@ func (s *DewPointSensor) CalculatedParameter() hmenum.CalculatedParameter {
 
 // IsRefreshed reports whether the sensor has emitted at least one
 // computed value.
-func (s *DewPointSensor) IsRefreshed() bool { return s.hasLast }
+func (s *DewPointSensor) IsRefreshed() bool { return s.emit.refreshed() }
 
 // CalculatedParameter — DewPointSpread.
 func (s *DewPointSpreadSensor) CalculatedParameter() hmenum.CalculatedParameter {
@@ -497,7 +541,7 @@ func (s *DewPointSpreadSensor) CalculatedParameter() hmenum.CalculatedParameter 
 }
 
 // IsRefreshed — DewPointSpread.
-func (s *DewPointSpreadSensor) IsRefreshed() bool { return s.hasLast }
+func (s *DewPointSpreadSensor) IsRefreshed() bool { return s.emit.refreshed() }
 
 // CalculatedParameter — FrostPoint.
 func (s *FrostPointSensor) CalculatedParameter() hmenum.CalculatedParameter {
@@ -505,7 +549,7 @@ func (s *FrostPointSensor) CalculatedParameter() hmenum.CalculatedParameter {
 }
 
 // IsRefreshed — FrostPoint.
-func (s *FrostPointSensor) IsRefreshed() bool { return s.hasLast }
+func (s *FrostPointSensor) IsRefreshed() bool { return s.emit.refreshed() }
 
 // CalculatedParameter — VaporConcentration.
 func (s *VaporConcentrationSensor) CalculatedParameter() hmenum.CalculatedParameter {
@@ -513,7 +557,7 @@ func (s *VaporConcentrationSensor) CalculatedParameter() hmenum.CalculatedParame
 }
 
 // IsRefreshed — VaporConcentration.
-func (s *VaporConcentrationSensor) IsRefreshed() bool { return s.hasLast }
+func (s *VaporConcentrationSensor) IsRefreshed() bool { return s.emit.refreshed() }
 
 // CalculatedParameter — Enthalpy.
 func (s *EnthalpySensor) CalculatedParameter() hmenum.CalculatedParameter {
@@ -521,7 +565,7 @@ func (s *EnthalpySensor) CalculatedParameter() hmenum.CalculatedParameter {
 }
 
 // IsRefreshed — Enthalpy.
-func (s *EnthalpySensor) IsRefreshed() bool { return s.hasLast }
+func (s *EnthalpySensor) IsRefreshed() bool { return s.emit.refreshed() }
 
 // CalculatedParameter — ApparentTemperature.
 func (s *ApparentTemperatureSensor) CalculatedParameter() hmenum.CalculatedParameter {
@@ -529,4 +573,4 @@ func (s *ApparentTemperatureSensor) CalculatedParameter() hmenum.CalculatedParam
 }
 
 // IsRefreshed — ApparentTemperature.
-func (s *ApparentTemperatureSensor) IsRefreshed() bool { return s.hasLast }
+func (s *ApparentTemperatureSensor) IsRefreshed() bool { return s.emit.refreshed() }

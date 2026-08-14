@@ -85,6 +85,11 @@ centrals:
 // address a central through one escaped topic segment, so two names
 // that collapse onto the same segment share every state topic and make
 // every inbound command ambiguous.
+//
+// The second half pins that the set-level rule keeps its own voice: a
+// name is also rejected on its own for being unroutable south-bound, and
+// the two rejections have to read differently or an operator cannot tell
+// which rule they tripped.
 func TestParseCollidingCentralTopicSegmentRejected(t *testing.T) {
 	buf := []byte(`
 centrals:
@@ -95,18 +100,29 @@ centrals:
     host: h2
     interfaces: [HmIP-RF]
 `)
-	if _, err := Parse(buf); err == nil {
+	_, err := Parse(buf)
+	if err == nil {
 		t.Fatal("two central names that escape to the same topic segment must be rejected")
 	}
-	// A name that merely needs escaping stays legal.
-	ok := []byte(`
+	if !strings.Contains(err.Error(), "topic segment") {
+		t.Errorf("the collision rejection must name the topic segment, got: %v", err)
+	}
+
+	single := []byte(`
 centrals:
   - name: Wohn Zimmer
     host: h1
     interfaces: [HmIP-RF]
 `)
-	if _, err := Parse(ok); err != nil {
-		t.Fatalf("a central name with a space is a legal configuration: %v", err)
+	_, err = Parse(single)
+	if err == nil {
+		t.Fatal("a central name outside the callback-URL allowlist must be rejected on its own")
+	}
+	if !strings.Contains(err.Error(), "callback URL") {
+		t.Errorf("the unroutable-name rejection must name the callback URL, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "topic segment") {
+		t.Errorf("the two central-name rules must not share one message, got: %v", err)
 	}
 }
 
@@ -635,10 +651,12 @@ func TestInterfaceSpecRPCTypeContradictingDerivedTransport(t *testing.T) {
 }
 
 // TestInterfaceSpecRemotePathValidation pins that a remote_path which the
-// XML-RPC endpoint composer cannot use fails at config load instead of at
-// the first RPC. POSTing to the bare "/" crashes the CCU's putParamset
-// handler, and a path without a leading slash would silently glue itself
-// onto the port.
+// XML-RPC endpoint composer cannot use — or which would re-point the call
+// off the configured host — fails at config load instead of at the first
+// RPC. POSTing to the bare "/" crashes the CCU's putParamset handler, a
+// path without a leading slash would silently glue itself onto the port,
+// and a value carrying a scheme, an authority, a query, a fragment or a dot
+// segment addresses a different endpoint than the operator named.
 func TestInterfaceSpecRemotePathValidation(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -648,8 +666,14 @@ func TestInterfaceSpecRemotePathValidation(t *testing.T) {
 	}{
 		{name: "unset", path: "", ok: true},
 		{name: "absolute path", path: "/rpc", ok: true},
+		{name: "nested absolute path", path: "/proxy/ccu/RPC2", ok: true},
 		{name: "missing leading slash", path: "rpc"},
 		{name: "bare root", path: "/"},
+		{name: "protocol-relative authority", path: "//evil.example/RPC2"},
+		{name: "dot segments", path: "/../../RPC2"},
+		{name: "query string", path: "/RPC2?x=1"},
+		{name: "fragment", path: "/RPC2#frag"},
+		{name: "absolute URL", path: "http://evil.example/RPC2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

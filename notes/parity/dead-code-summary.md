@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 4ccc5f22
-HEAD: 4ccc5f22
+Generated: 34914e43
+HEAD: 34914e43
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28470 |
-| Reachable | 5017 |
-| Whitelisted | 20465 |
+| Total Exported | 28518 |
+| Reachable | 5015 |
+| Whitelisted | 20515 |
 | **Unreachable** | **2988** |
 
 ## Top-20 Packages by Dead Code

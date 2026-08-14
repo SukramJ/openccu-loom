@@ -396,7 +396,7 @@ func ListFunctions(idx DeviceIndex) http.HandlerFunc {
 		counts := map[string]int{}
 		if idx != nil {
 			for _, d := range idx.Devices() {
-				for _, f := range d.Functions {
+				for _, f := range d.Functions() {
 					counts[f]++
 				}
 			}
@@ -418,7 +418,7 @@ func ListRooms(idx DeviceIndex) http.HandlerFunc {
 		counts := map[string]int{}
 		if idx != nil {
 			for _, d := range idx.Devices() {
-				for _, r := range d.Rooms {
+				for _, r := range d.Rooms() {
 					counts[r]++
 				}
 			}
@@ -673,7 +673,7 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		Type:         ch.Type,
 		TypeLabel:    channelTypeLabel(labels, ch.Type),
 		Category:     ch.Type,
-		Name:         ch.Name,
+		Name:         ch.Name(),
 		ParamsetKey:  string(ch.ParamsetIn),
 		ParamsetKeys: channelParamsetKeys(ch),
 		DataPoints:   ch.Len(),
@@ -690,11 +690,11 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		}
 	}
 	s.Room = ch.Room()
-	if len(ch.Rooms) > 0 {
-		s.Rooms = ch.Rooms
+	if rooms := ch.Rooms(); len(rooms) > 0 {
+		s.Rooms = rooms
 	}
-	if len(ch.Functions) > 0 {
-		s.Functions = ch.Functions
+	if functions := ch.Functions(); len(functions) > 0 {
+		s.Functions = functions
 	}
 	s.IsCustomDpPrimary = ch.IsCustomDPPrimaryChannel()
 	// Operator per-channel overrides (G12): surfaced so the SPA can badge a
@@ -894,8 +894,8 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 		Updatable:                  d.Updatable,
 		UpdateAvailable:            d.UpdateAvailable(),
 		UpdateStatus:               string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
-		Rooms:                      d.Rooms,
-		Functions:                  d.Functions,
+		Rooms:                      d.Rooms(),
+		Functions:                  d.Functions(),
 		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
 		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
 		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),

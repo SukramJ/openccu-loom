@@ -39,6 +39,18 @@ func (f *fakeChecker) GetParamset(_ context.Context, ch string, _ hmenum.Paramse
 	return map[string]any{}, nil
 }
 
+// consistencyCentral is the central name every coordinator in this file is
+// built for; the registry keys below are derived from it.
+const consistencyCentral = "ccu1"
+
+// wireKey returns the canonical `<central>-<iface>` id the hydration pipeline
+// keys the description and paramset registries by. The tests register under it
+// (and pass it to the check) because that is what production does — registering
+// under the bare interface made the whole check a no-op that still looked green.
+func wireKey(iface hmenum.Interface) hmenum.Interface {
+	return hmenum.Interface(consistencyCentral + "-" + string(iface))
+}
+
 // buildCoordinator builds a minimal DeviceCoordinator populated with the
 // given descriptions and MASTER paramsets so CheckParamsetConsistency can
 // run without a real CCU.
@@ -53,13 +65,13 @@ func buildCoordinator(
 	psReg := registry.NewParamsetRegistry()
 
 	for i := range descs {
-		descReg.Put(iface, descs[i])
+		descReg.Put(wireKey(iface), descs[i])
 	}
 	for ch, ps := range paramsets {
-		psReg.Put(iface, ch, hmenum.ParamsetKeyMaster, ps)
+		psReg.Put(wireKey(iface), ch, hmenum.ParamsetKeyMaster, ps)
 	}
 
-	return NewDeviceCoordinator("ccu1", bus, devReg, descReg, psReg, nil)
+	return NewDeviceCoordinator(consistencyCentral, bus, devReg, descReg, psReg, nil)
 }
 
 // ─── Test 1: nil checker returns error ───────────────────────────────────────
@@ -67,7 +79,7 @@ func buildCoordinator(
 func TestCheckParamsetConsistencyNilCheckerReturnsError(t *testing.T) {
 	t.Parallel()
 	coord := buildCoordinator(hmenum.InterfaceHmIPRF, nil, nil)
-	_, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, nil, nil)
+	_, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), nil, nil)
 	if err == nil {
 		t.Fatal("expected error for nil checker")
 	}
@@ -88,7 +100,7 @@ func TestCheckParamsetConsistencySkipsNonHmIPInterfaces(t *testing.T) {
 		"BID0001:1": ps,
 	})
 	checker := &fakeChecker{perChannel: map[string]map[string]any{}}
-	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceBidCosRF, []string{"BID0001"}, checker)
+	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceBidCosRF, wireKey(hmenum.InterfaceBidCosRF), []string{"BID0001"}, checker)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +129,7 @@ func TestCheckParamsetConsistencyAllParametersPresent(t *testing.T) {
 	checker := &fakeChecker{perChannel: map[string]map[string]any{
 		"HMIP0001:1": {"CHANNEL_OPERATION_MODE": 0},
 	}}
-	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0001"}, checker)
+	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"HMIP0001"}, checker)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -145,7 +157,7 @@ func TestCheckParamsetConsistencyMissingParameterDetected(t *testing.T) {
 	checker := &fakeChecker{perChannel: map[string]map[string]any{
 		"HMIP0002:1": {"PARAM_A": 1},
 	}}
-	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0002"}, checker)
+	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"HMIP0002"}, checker)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,8 +167,8 @@ func TestCheckParamsetConsistencyMissingParameterDetected(t *testing.T) {
 	if results[0].DeviceAddress != "HMIP0002" {
 		t.Errorf("DeviceAddress=%q, want HMIP0002", results[0].DeviceAddress)
 	}
-	if results[0].InterfaceID != string(hmenum.InterfaceHmIPRF) {
-		t.Errorf("InterfaceID=%q, want %s", results[0].InterfaceID, hmenum.InterfaceHmIPRF)
+	if results[0].InterfaceID != string(wireKey(hmenum.InterfaceHmIPRF)) {
+		t.Errorf("InterfaceID=%q, want %s", results[0].InterfaceID, wireKey(hmenum.InterfaceHmIPRF))
 	}
 	found := false
 	for _, mp := range results[0].MissingParameters {
@@ -189,7 +201,7 @@ func TestCheckParamsetConsistencyOperationsZeroParamsIgnored(t *testing.T) {
 	checker := &fakeChecker{perChannel: map[string]map[string]any{
 		"HMIP0003:1": {"VISIBLE": 1},
 	}}
-	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0003"}, checker)
+	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"HMIP0003"}, checker)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -213,7 +225,7 @@ func TestCheckParamsetConsistencyFetchErrorSkipsChannel(t *testing.T) {
 		"HMIP0004:1": ps,
 	})
 	checker := &fakeChecker{err: errors.New("tcp timeout")}
-	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0004"}, checker)
+	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"HMIP0004"}, checker)
 	if err != nil {
 		t.Fatalf("unexpected outer error: %v", err)
 	}
@@ -229,7 +241,7 @@ func TestCheckParamsetConsistencyEmptyDeviceListIsNoop(t *testing.T) {
 	t.Parallel()
 	coord := buildCoordinator(hmenum.InterfaceHmIPRF, nil, nil)
 	checker := &fakeChecker{perChannel: map[string]map[string]any{}}
-	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, []string{}, checker)
+	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{}, checker)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -263,7 +275,7 @@ func TestCheckParamsetConsistencyMultiDeviceIndependence(t *testing.T) {
 		"HMIP0010:1": {"P": 1},
 		"HMIP0011:1": {},
 	}}
-	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0010", "HMIP0011"}, checker)
+	results, err := coord.CheckParamsetConsistency(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"HMIP0010", "HMIP0011"}, checker)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -294,7 +306,7 @@ func TestScheduleParamsetConsistencyCheckCallbackReceivesResults(t *testing.T) {
 	}}
 
 	done := make(chan []ParamsetInconsistency, 1)
-	coord.ScheduleParamsetConsistencyCheck(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0020"}, checker,
+	coord.ScheduleParamsetConsistencyCheck(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"HMIP0020"}, checker,
 		func(results []ParamsetInconsistency) {
 			done <- results
 		})
@@ -337,7 +349,7 @@ func TestScheduleParamsetConsistencyCheckStopWaitsForInFlightGoroutine(t *testin
 	})
 	checker := &blockingChecker{release: make(chan struct{})}
 
-	coord.ScheduleParamsetConsistencyCheck(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0030"}, checker, nil)
+	coord.ScheduleParamsetConsistencyCheck(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"HMIP0030"}, checker, nil)
 
 	stopDone := make(chan struct{})
 	go func() {
@@ -384,7 +396,7 @@ func TestScheduleParamsetConsistencyCheckRecoversFromPanic(t *testing.T) {
 		"HMIP0031:1": ps,
 	})
 
-	coord.ScheduleParamsetConsistencyCheck(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0031"}, panicChecker{}, nil)
+	coord.ScheduleParamsetConsistencyCheck(context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF), []string{"HMIP0031"}, panicChecker{}, nil)
 
 	// Stop must return promptly: the panic must be recovered inside the
 	// goroutine (not propagate and crash the test binary) and the WaitGroup

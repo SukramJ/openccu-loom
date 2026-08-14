@@ -52,6 +52,7 @@ func init() {
 	// has materialised.
 	payload.RegisterGlobalScalarArgKey("set_position", "position")
 	payload.RegisterGlobalScalarArgKey("set_tilt", "tilt")
+	payload.RegisterGlobalScalarArgKey(serviceCoverCommand, argCoverCommand)
 }
 
 // Predefined capability presets mirror the reference stack's cover

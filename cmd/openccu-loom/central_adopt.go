@@ -211,13 +211,17 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	if hubReadyTrigger != nil {
 		keep(subscribeHubReadyTrigger(unit.EventBus, hubReadyTrigger))
 	}
-	// Every north-bound collaborator that snapshots the registry at boot and
-	// registered itself through addCentralHook: measurement history, the
-	// outbound webhook, the WS system-status / device-lifecycle /
-	// device-trigger / optimistic-rollback subscribers, the REST
-	// system-status buffer, the MQTT system-status plane, session-recorder
-	// persistence and the incident recorder. They are mutually independent,
-	// so registration order is the attach order.
+	// Every collaborator that snapshots the registry at boot and registered
+	// itself through addCentralHook: measurement history, the outbound
+	// webhook, the WS system-status / device-lifecycle / device-trigger /
+	// optimistic-rollback subscribers, the REST system-status buffer, the
+	// MQTT system-status plane, session-recorder persistence, the incident
+	// recorder, and the values-cache flusher's dirty tracker + removal
+	// eviction. They are mutually independent, so registration order is the
+	// attach order. All of them run before AddCentral launches the bring-up,
+	// so the very first value the central reports already has its listener —
+	// which for the values cache is what makes it dirty in time for the next
+	// flush tick instead of only at graceful shutdown.
 	for _, hook := range extraHooks {
 		keep(hook(unit))
 	}

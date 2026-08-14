@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // SetChannelTeam assigns a channel to a team channel via the CCU's
@@ -49,7 +50,12 @@ func (a *DeviceAdminDomain) TeamCandidates(ctx context.Context, deviceAddr strin
 	if !dev.Interface.SupportsTeams() {
 		return []hmapi.TeamCandidate{}, nil
 	}
-	target, ok := unit.DescRegistry.Get(dev.Interface, channelAddress)
+	// The description registry is keyed by the canonical wire id
+	// (`<central>-<iface>`) — the callback path and the warm-boot hydration
+	// both write under it. Looking the target channel up with the bare
+	// interface misses on every named central, which returned an empty
+	// candidate list with HTTP 200 and made the team unassignable from the UI.
+	target, ok := unit.DescRegistry.Get(hmenum.Interface(dev.InterfaceID), channelAddress)
 	if !ok || target.TeamTag == "" {
 		return []hmapi.TeamCandidate{}, nil
 	}
@@ -68,8 +74,8 @@ func (a *DeviceAdminDomain) TeamCandidates(ctx context.Context, deviceAddr strin
 			continue
 		}
 		name := t.Address
-		if ch := unit.GetChannel(t.Address); ch != nil && ch.Name != "" {
-			name = ch.Name
+		if ch := unit.GetChannel(t.Address); ch != nil && ch.Name() != "" {
+			name = ch.Name()
 		}
 		out = append(out, hmapi.TeamCandidate{
 			Address: t.Address,

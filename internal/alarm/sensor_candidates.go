@@ -107,8 +107,8 @@ func (s *Service) SensorCandidates(ctx context.Context) []SensorCandidate {
 					cand.ChannelNo = ch.Number
 					cand.ChannelName = ch.NameData().ChannelName
 					cand.ChannelType = ch.Type
-					cand.Rooms = append([]string(nil), ch.Rooms...)
-					cand.Functions = append([]string(nil), ch.Functions...)
+					cand.Rooms = ch.Rooms()
+					cand.Functions = ch.Functions()
 					cand.ValueList = append([]string(nil), dp.ParameterData().ValueList...)
 					if zoneID, ok := enrolled[dpKey(centralName, cand.InterfaceID, ch.Address, cand.Parameter)]; ok {
 						cand.Enrolled = true

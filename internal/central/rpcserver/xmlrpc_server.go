@@ -12,22 +12,14 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
-
-// validCentralNameRE constrains the central name segment of the
-// `/RPC2/<central_name>` callback URL. The allowlist matches the same
-// charset accepted by [config.ParseCentralName] (alphanumerics, dash,
-// underscore) and is enforced as a hard gate in [resolveCentralForPath]
-// to prevent path traversal (`..`), encoded slashes (`%2f`), or any
-// other multi-segment shape from misrouting between centrals.
-var validCentralNameRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // XMLRPCServer hosts the shared XML-RPC HTTP callback listener. One
 // listener per daemon — multiple centrals register themselves by name
@@ -279,7 +271,7 @@ func (s *XMLRPCServer) resolveCentralForPath(p string) (string, bool) {
 // routeFromPath extracts `<central_name>` from `/RPC2/<central_name>`.
 // Returns ("", false) for any path shape that is not exactly one
 // segment after the `/RPC2/` prefix or that contains characters outside
-// the [validCentralNameRE] allowlist. This is the gate that keeps
+// the [hmtypes.IsValidCentralName] allowlist. This is the gate that keeps
 // path-traversal (`/RPC2/..`, `/RPC2/%2e%2e`) and encoded-slash
 // segments (`/RPC2/ccu1%2fother`) from misrouting between centrals.
 func routeFromPath(p string) (string, bool) {
@@ -291,7 +283,10 @@ func routeFromPath(p string) (string, bool) {
 	if rest == "" || strings.Contains(rest, "/") {
 		return "", false
 	}
-	if !validCentralNameRE.MatchString(rest) {
+	// The allowlist is shared with every boundary that accepts a central
+	// name ([hmtypes.ValidateCentralName]), so the segment announced in the
+	// callback URL and the segment matched here cannot drift apart.
+	if !hmtypes.IsValidCentralName(rest) {
 		return "", false
 	}
 	return rest, true

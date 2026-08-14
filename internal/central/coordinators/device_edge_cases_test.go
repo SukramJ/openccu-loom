@@ -337,6 +337,60 @@ func TestStoreDelayedDescriptionsParentKnownChannelsMissing(t *testing.T) {
 	}
 }
 
+// TestStoreDelayedDescriptionsIsIdempotentPerAddress pins that a repeated
+// announcement of the same device replaces its pending descriptions instead
+// of stacking a second copy on top of them.
+//
+// The daemon answers listDevices with an empty array, so the CCU re-announces
+// its COMPLETE inventory through newDevices after every reconnect. With an
+// append-only inbox each reconnect added another full copy of the fleet that
+// nothing ever removes — on a large installation that is thousands of
+// descriptions per reconnect, retained for the lifetime of the process.
+func TestStoreDelayedDescriptionsIsIdempotentPerAddress(t *testing.T) {
+	t.Parallel()
+	dc, _, _, _, _ := newDCFull(t)
+
+	batch := []hmproto.DeviceDescription{
+		{Address: "HEQ0128279", Type: "HM-Sec-SC"},
+		{Address: "HEQ0128279:0", Parent: "HEQ0128279", Type: "MAINTENANCE"},
+		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT"},
+	}
+
+	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceBidCosRF, batch)
+	first := len(dc.delayedDescs[string(hmenum.InterfaceBidCosRF)]["HEQ0128279"])
+	if first != len(batch) {
+		t.Fatalf("first announcement stored %d descriptions, want %d", first, len(batch))
+	}
+
+	// The CCU re-announces the same inventory after a reconnect.
+	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceBidCosRF, batch)
+	if got := len(dc.delayedDescs[string(hmenum.InterfaceBidCosRF)]["HEQ0128279"]); got != first {
+		t.Fatalf("re-announcement grew the delayed inbox to %d descriptions, want %d — "+
+			"the inbox must be keyed by address, not appended to", got, first)
+	}
+
+	// A changed description for an already-pending address must win.
+	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceBidCosRF, []hmproto.DeviceDescription{
+		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT", Firmware: "2.0"},
+	})
+	stored := dc.delayedDescs[string(hmenum.InterfaceBidCosRF)]["HEQ0128279"]
+	if len(stored) != first {
+		t.Fatalf("update of a pending address grew the inbox to %d, want %d", len(stored), first)
+	}
+	var found bool
+	for _, d := range stored {
+		if d.Address == "HEQ0128279:1" {
+			found = true
+			if d.Firmware != "2.0" {
+				t.Errorf("re-announced description was not replaced: firmware=%q, want %q", d.Firmware, "2.0")
+			}
+		}
+	}
+	if !found {
+		t.Error("HEQ0128279:1 must stay in the delayed inbox after the update")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Stub helpers (local to this file)
 // ---------------------------------------------------------------------------

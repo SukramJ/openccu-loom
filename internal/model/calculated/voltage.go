@@ -5,6 +5,7 @@ package calculated
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -28,6 +29,14 @@ type OperatingVoltageLevelSensor struct {
 	*generic.Sensor[float64]
 	sourceSink
 
+	// mu guards every field below. The two writers are structurally different
+	// and never share a goroutine: LOW_BAT_LIMIT arrives from the MASTER
+	// paramset (a poller read-back or an operator-triggered refresh) while
+	// OPERATING_VOLTAGE arrives on the callback dispatch. Reading the reference
+	// pair without the lock lets a level be computed from a fresh limit against
+	// a stale maximum, which publishes a wrong battery percentage.
+	mu sync.Mutex
+
 	operatingVoltage float64
 	hasOperating     bool
 
@@ -42,8 +51,16 @@ type OperatingVoltageLevelSensor struct {
 	// battery table.
 	battery *BatteryConfig
 
-	last    float64
-	hasLast bool
+	emit emitState
+}
+
+// voltageInputs is the consistent snapshot [OperatingVoltageLevelSensor.recompute]
+// computes from. It is taken under the lock so the live voltage and the
+// reference pair it is measured against always belong to the same instant.
+type voltageInputs struct {
+	operatingVoltage float64
+	lowBatLimit      float64
+	voltageMax       float64
 }
 
 // NewOperatingVoltageLevelSensor constructs the sensor with no central
@@ -71,29 +88,92 @@ func NewOperatingVoltageLevelSensorWithIdentity(centralName, channelAddress stri
 // [AdditionalInformation] so it reflects the current operator-configured
 // value (not just the factory default).
 func (s *OperatingVoltageLevelSensor) SetReferences(lowBatLimit, voltageMax float64) {
+	s.mu.Lock()
+	in, ready := s.setReferencesLocked(lowBatLimit, voltageMax)
+	s.mu.Unlock()
+	if ready {
+		s.recompute(in)
+	}
+}
+
+// setReferencesLocked stores the reference pair and returns the snapshot to
+// recompute from. The caller must hold s.mu.
+func (s *OperatingVoltageLevelSensor) setReferencesLocked(lowBatLimit, voltageMax float64) (voltageInputs, bool) {
 	if voltageMax <= lowBatLimit {
 		s.hasRefs = false
-		return
+		return voltageInputs{}, false
 	}
 	s.lowBatLimit = lowBatLimit
 	s.voltageMax = voltageMax
 	s.hasRefs = true
-	s.recompute()
+	return s.inputsLocked()
+}
+
+// inputsLocked returns the snapshot to recompute from, or ok == false while an
+// input is still missing. The caller must hold s.mu.
+func (s *OperatingVoltageLevelSensor) inputsLocked() (voltageInputs, bool) {
+	if !s.hasOperating || !s.hasRefs {
+		return voltageInputs{}, false
+	}
+	return voltageInputs{
+		operatingVoltage: s.operatingVoltage,
+		lowBatLimit:      s.lowBatLimit,
+		voltageMax:       s.voltageMax,
+	}, true
+}
+
+// applyLowBatLimit re-applies the operator-configured LOW_BAT_LIMIT against the
+// voltage maximum the battery table supplied. Both are handled in one critical
+// section: a MASTER re-read racing a live OPERATING_VOLTAGE push must never
+// pair a new limit with a maximum read a moment earlier. Stays inert until the
+// battery table has supplied a maximum.
+func (s *OperatingVoltageLevelSensor) applyLowBatLimit(lowBatLimit float64) {
+	s.mu.Lock()
+	if s.voltageMax <= 0 {
+		s.mu.Unlock()
+		return
+	}
+	in, ready := s.setReferencesLocked(lowBatLimit, s.voltageMax)
+	s.mu.Unlock()
+	if ready {
+		s.recompute(in)
+	}
+}
+
+// setBatteryConfig stores the per-model battery configuration resolved at
+// subscribe time, so [AdditionalInformation] can surface cell type and
+// quantity and the reference pair has a maximum to measure against.
+func (s *OperatingVoltageLevelSensor) setBatteryConfig(cfg BatteryConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.voltageMax = cfg.VoltageMax()
+	s.battery = &cfg
+}
+
+// setLowBatLimitDefault stores the factory default read from the MASTER
+// LOW_BAT_LIMIT descriptor.
+func (s *OperatingVoltageLevelSensor) setLowBatLimitDefault(v float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lowBatLimitDefault = v
+	s.hasLowBatDefault = true
 }
 
 // OnOperatingVoltage feeds a live OPERATING_VOLTAGE value.
 func (s *OperatingVoltageLevelSensor) OnOperatingVoltage(v float64) {
+	s.mu.Lock()
 	s.operatingVoltage = v
 	s.hasOperating = true
-	s.recompute()
+	in, ready := s.inputsLocked()
+	s.mu.Unlock()
+	if ready {
+		s.recompute(in)
+	}
 }
 
-func (s *OperatingVoltageLevelSensor) recompute() {
-	if !s.hasOperating || !s.hasRefs {
-		return
-	}
-	v, ok := OperatingVoltageLevel(s.operatingVoltage, s.lowBatLimit, s.voltageMax)
-	feedSink(s.Sensor, v, ok, &s.last, &s.hasLast, s.sources)
+func (s *OperatingVoltageLevelSensor) recompute(in voltageInputs) {
+	v, ok := OperatingVoltageLevel(in.operatingVoltage, in.lowBatLimit, in.voltageMax)
+	s.emit.feed(s.Sensor, v, ok, s.snapshotSources())
 }
 
 // CalculatedParameter returns the calculated parameter id this sensor
@@ -104,7 +184,7 @@ func (s *OperatingVoltageLevelSensor) CalculatedParameter() hmenum.CalculatedPar
 
 // IsRefreshed reports whether the sensor has emitted at least one
 // computed level.
-func (s *OperatingVoltageLevelSensor) IsRefreshed() bool { return s.hasLast }
+func (s *OperatingVoltageLevelSensor) IsRefreshed() bool { return s.emit.refreshed() }
 
 // AdditionalInformation key constants mirror
 // `operating_voltage_level.py:22-26` string constants.
@@ -129,6 +209,8 @@ const (
 //	"Low Battery Limit Default" → string formatted as "<V>V"
 //	"Voltage max" → string formatted as "<V>V"
 func (s *OperatingVoltageLevelSensor) AdditionalInformation() map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.battery == nil {
 		return nil
 	}
@@ -145,6 +227,8 @@ func (s *OperatingVoltageLevelSensor) AdditionalInformation() map[string]any {
 // LOW_BAT_LIMIT parameter descriptor. Returns (0, false) when no default has
 // been resolved yet.
 func (s *OperatingVoltageLevelSensor) LowBatLimitDefault() (float64, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.lowBatLimitDefault, s.hasLowBatDefault
 }
 

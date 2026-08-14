@@ -4,6 +4,8 @@
 package calculated
 
 import (
+	"sync"
+
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -37,6 +39,11 @@ type DerivedBinarySensor struct {
 
 	calcParam hmenum.CalculatedParameter
 
+	// mu guards the dedup slots below. OnLabel runs on whichever goroutine
+	// delivered the upstream enum update — a device that relays a peer's alarm
+	// can deliver two labels at once — while IsRefreshed is read from
+	// north-bound payload assembly.
+	mu      sync.Mutex
 	last    bool
 	hasLast bool
 }
@@ -84,7 +91,11 @@ func (s *DerivedBinarySensor) CalculatedParameter() hmenum.CalculatedParameter {
 
 // IsRefreshed reports whether the sensor has classified at least one
 // upstream label.
-func (s *DerivedBinarySensor) IsRefreshed() bool { return s.hasLast }
+func (s *DerivedBinarySensor) IsRefreshed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hasLast
+}
 
 // StateUncertain aggregates over the registered source DPs via the
 // embedded [sourceSink]. When [Subscribe] was called and the channel
@@ -250,11 +261,15 @@ func (s *DerivedBinarySensor) OnLabel(label string) {
 	if !ok {
 		return
 	}
+	// The compare-and-set stays atomic; OnEvent fans out to subscribers and must
+	// not run under the sensor lock.
+	s.mu.Lock()
 	if s.hasLast && s.last == value {
+		s.mu.Unlock()
 		return
 	}
-	s.last = value
-	s.hasLast = true
+	s.last, s.hasLast = value, true
+	s.mu.Unlock()
 	s.OnEvent(value)
 }
 

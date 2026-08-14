@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // SetupService backs the first-run onboarding endpoints. The SPA renders the
@@ -204,6 +205,13 @@ func validateSetup(req *setupRequest) string {
 		req.CCU.Interfaces = ifaces
 		if req.CCU.Name == "" || req.CCU.Host == "" || len(req.CCU.Interfaces) == 0 {
 			return "ccu requires name, host, and at least one interface"
+		}
+		// The wizard prefills this from the CCU's SSDP friendly name, which
+		// routinely contains spaces. The name ends up as a path segment of
+		// the callback URL, so an unroutable one produces a first-run install
+		// that never receives a single event.
+		if err := hmtypes.ValidateCentralName(req.CCU.Name); err != nil {
+			return "ccu." + err.Error()
 		}
 	}
 	if req.MQTT != nil {

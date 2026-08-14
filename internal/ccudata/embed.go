@@ -107,7 +107,16 @@ func readEmbeddedGzipJSON(name string) (map[string]map[string]string, error) {
 //
 // Custom entries win over extract entries — the whole point of the
 // curated folder is to patch upstream gaps.
+//
+// Merging mutates t.ParameterValues, which the value-only reverse index
+// is derived from, so the index is re-derived on every exit — including
+// the error path, where some files may already have been merged. Without
+// that a curated value label is unreachable through the stage-4 fallback
+// in [Translations.ParameterValue], which is exactly the gap the curated
+// folder exists to close.
 func overlayCustomTranslations(t *Translations) error {
+	defer t.rebuildValueIndices()
+
 	names, err := openccudata.ReadDir("translation_custom")
 	if err != nil {
 		// Directory absent is fine — custom is optional. Only a

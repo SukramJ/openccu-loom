@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.25.0
+  version: 5.26.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4877,13 +4877,13 @@ paths:
   /diagnostics:
     get:
       operationId: diagnosticsDump
-      summary: Composite diagnostics dump (health + interfaces + incidents + log-levels)
+      summary: Composite diagnostics dump (health + interfaces + incidents + metrics + log-levels)
       description: |
         Single ship-the-state artefact for support / agent escalation
         (ADR 0017). One JSON envelope carrying build info, health
         components + score, per-client detail, configured-interface
-        list, recent incidents, system-status ring buffer, and
-        log-level overrides.
+        list, recent incidents, system-status ring buffer, per-central
+        metrics counters, and log-level overrides.
 
         **Two consumer planes — disjoint:**
 
@@ -4901,6 +4901,12 @@ paths:
         ring) that have no useful Prometheus representation; the
         Prometheus surface emits time-series that the JSON envelope
         does not aggregate.
+
+        The `metrics` block holds one typed snapshot per central, keyed
+        by central name — RPC, callback-server, event-bus, cache,
+        health, recovery, model and service counters as the daemon's
+        per-CCU aggregator sees them. It carries counters only, names
+        no device, and is therefore unaffected by `anonymize`.
 
         Hashes device-address-shaped fields with a 12-hex sha256
         prefix by default; pass `?anonymize=0` explicitly when
@@ -11698,9 +11704,11 @@ components:
           type: string
           description: >
             URL path override for XML-RPC requests, for a CCU reached through a
-            reverse proxy that exposes it elsewhere. Must be an absolute path and
-            may not be the bare "/". Empty means "use backend default" ("/RPC2",
-            "/groups" for VirtualDevices).
+            reverse proxy that exposes it elsewhere. Must be an absolute path on
+            the configured host: it may not be the bare "/", may not start with
+            "//", and may not carry a scheme, a query, a fragment or a ".."
+            segment. Empty means "use backend default" ("/RPC2", "/groups" for
+            VirtualDevices).
         rpc_type:
           type: string
           enum: ["", xmlrpc, binrpc, jsonrpc]

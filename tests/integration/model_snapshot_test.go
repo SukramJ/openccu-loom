@@ -325,8 +325,8 @@ func (s *snapshotDumper) dumpDevice(d *device.Device) snapshotDevice {
 }
 
 func (s *snapshotDumper) dumpChannel(ch *device.Channel) snapshotChannel {
-	rooms := append([]string{}, ch.Rooms...)
-	functions := append([]string{}, ch.Functions...)
+	rooms := ch.Rooms()
+	functions := ch.Functions()
 	sort.Strings(rooms)
 	sort.Strings(functions)
 
@@ -351,7 +351,7 @@ func (s *snapshotDumper) dumpChannel(ch *device.Channel) snapshotChannel {
 		Number:               ch.Number,
 		Type:                 ch.Type,
 		TypeLabel:            typeLabel,
-		Name:                 ch.Name,
+		Name:                 ch.Name(),
 		Rooms:                rooms,
 		Functions:            functions,
 		GroupNo:              ch.GroupNo,

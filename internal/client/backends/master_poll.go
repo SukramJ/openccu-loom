@@ -93,7 +93,8 @@ func (p *MasterPoller) SchedulePoll(address string, key hmenum.ParamsetKey) {
 	// SchedulePoll call or by the deferred cleanup in run() — the
 	// gosec G118 lint can't see the indirection so we annotate.
 	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel called via entry.cancel in run()/SchedulePoll; see #20
-	p.scheduled[pk] = &pollEntry{cancel: cancel}
+	entry := &pollEntry{cancel: cancel}
+	p.scheduled[pk] = entry
 	interval := p.Interval
 	if interval <= 0 {
 		interval = 2 * time.Second
@@ -101,20 +102,28 @@ func (p *MasterPoller) SchedulePoll(address string, key hmenum.ParamsetKey) {
 	p.wg.Add(1)
 	p.mu.Unlock()
 
-	go p.run(ctx, pk, interval)
+	go p.run(ctx, pk, entry, interval)
 }
 
 // run waits for the configured interval (or cancellation) and then
-// performs the get + dispatch.
-func (p *MasterPoller) run(ctx context.Context, pk pollKey, interval time.Duration) {
+// performs the get + dispatch. mine is the entry this goroutine was
+// started for; the map slot may already belong to a replacement.
+func (p *MasterPoller) run(ctx context.Context, pk pollKey, mine *pollEntry, interval time.Duration) {
 	defer p.wg.Done()
 	defer func() {
+		// Release this goroutine's own context resources even on natural
+		// completion — keeps gosec G118 happy and avoids the timer
+		// goroutine inside ctx lingering until GC.
+		mine.cancel()
 		p.mu.Lock()
-		if entry, ok := p.scheduled[pk]; ok && entry.cancel != nil {
-			// Release the context resources even on natural
-			// completion — keeps gosec G118 happy and avoids the
-			// timer goroutine inside ctx lingering until GC.
-			entry.cancel()
+		// Only drop the slot while it still holds our own entry. A
+		// deduplicating SchedulePoll cancels this goroutine and installs a
+		// replacement under the same key; the cancelled goroutine wakes
+		// immediately while the replacement is still sleeping out the
+		// interval, so cancelling whatever sits in the slot would abort the
+		// very poll the caller just asked for and the MASTER read-back would
+		// never happen.
+		if entry, ok := p.scheduled[pk]; ok && entry == mine {
 			delete(p.scheduled, pk)
 		}
 		p.mu.Unlock()
