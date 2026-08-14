@@ -54,6 +54,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   way the XML-RPC callback listener already did, and unbinds the socket
   if it ever does have to give up.
 
+- **A heating schedule no longer changes shape when it is merely
+  reloaded.** Reading a climate week profile picks the temperature that
+  fills most of the day as the day's base; that segment is then implicit
+  and only the remaining ones are listed as periods. When two
+  temperatures share the day evenly — a 12 h / 12 h day-and-night
+  schedule is the common case — the winner was whichever one an
+  unordered lookup happened to visit first, so the same untouched CCU
+  data could come back with either half listed, differing between two
+  reloads of the same channel. The earliest of the tied temperatures now
+  wins every time, so the schedule the UI and the REST API show stays
+  put and no longer produces a phantom difference on the next save.
+
 ## [0.59.0]
 
 ### Added
