@@ -135,6 +135,21 @@ type ValueWriter interface {
 		parameter hmenum.Parameter, value any, priority hmenum.CommandPriority) error
 }
 
+// ParamsetValueWriter is the optional extension a [ValueWriter] carries
+// when it can write several parameters of one paramset in a single call.
+//
+// It is what lets a data point reach the device atomically where the
+// semantics require it — a bounded switch-on has to carry its auto-off
+// in the same write, or the two travel as separate radio transmissions
+// out of a duty-cycle budget the following stop command needs. Writers
+// without the capability keep working; the data point falls back to an
+// ordered pair of single writes.
+type ParamsetValueWriter interface {
+	ValueWriter
+	PutParamset(ctx context.Context, centralName, interfaceID, channelAddress string,
+		paramsetKey hmenum.ParamsetKey, values map[string]any, priority hmenum.CommandPriority) error
+}
+
 // NewDataPointWriterAdapter wires the adapter. `writer` may be nil
 // when the daemon runs read-only (e.g. during setup).
 func NewDataPointWriterAdapter(r *central.Registry, w ValueWriter) *DataPointWriterAdapter {

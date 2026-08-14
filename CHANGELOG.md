@@ -60,6 +60,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A timed switch-on reaches the device as one radio message again.**
+  Switching something on for a bounded time writes two things: how long
+  it may stay on, and that it is on now. Both belong in the same
+  message — the device then applies its own auto-off even if the daemon
+  dies in the next second, and the pair costs one transmission instead
+  of two out of a duty-cycle budget a following stop command competes
+  for. The daemon has a collector that exists to bundle exactly this,
+  but the duration was written straight past it, so the collector only
+  ever saw the switch-on and the pair left as two separate calls.
+  Verified on the wire against a real HMIP-PS before the fix, where it
+  showed as two `setValue` calls five milliseconds apart. Ramp and
+  on-time durations on dimmers took the same detour and are bundled
+  now too. Separately, the writer every data point is handed could not
+  write a parameter set at all, which left the atomic path unreachable
+  even where nothing opened a collector; it can now.
+
 - **A second CCU no longer loses its virtual-remote entities.** A few
   address classes are identical on every CCU — the virtual remotes, the
   internal devices, the hub itself — so what separates their entities is

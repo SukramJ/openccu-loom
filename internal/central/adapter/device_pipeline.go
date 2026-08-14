@@ -1508,7 +1508,7 @@ func (p *DevicePipeline) hydrateDeviceRoot(
 	interfaceID string,
 	d *device.Device,
 	b backends.Operations,
-	bw *boundWriter,
+	bw generic.Writer,
 	logger *slog.Logger,
 ) {
 	if d == nil || b == nil {
@@ -1545,7 +1545,7 @@ func (p *DevicePipeline) hydrateChannel(
 	d *device.Device,
 	ch *device.Channel,
 	b backends.Operations,
-	bw *boundWriter,
+	bw generic.Writer,
 	logger *slog.Logger,
 ) {
 	p.hydrateParamset(ctx, interfaceID, ch, b, bw, hmenum.ParamsetKeyValues, logger)
@@ -1588,7 +1588,7 @@ func (p *DevicePipeline) hydrateParamset(
 	interfaceID string,
 	ch *device.Channel,
 	b backends.Operations,
-	bw *boundWriter,
+	bw generic.Writer,
 	key hmenum.ParamsetKey,
 	logger *slog.Logger,
 ) {

@@ -79,6 +79,18 @@ func (s *Switch) SetOnTime(ctx context.Context, d time.Duration, priority hmenum
 	if seconds < 0 {
 		seconds = 0
 	}
+	// Route through the collector when the caller opened one, so ON_TIME
+	// travels in the same wire call as the STATE it qualifies. Writing it
+	// directly is what split a bounded switch-on into two radio
+	// transmissions even though the caller had staged them together.
+	if coll := CollectorFromContext(ctx); coll != nil {
+		if err := coll.AddParam(
+			s.Key.ChannelAddress, s.Key.ParamsetKey, string(hmenum.ParameterOnTime), seconds, 0,
+		); err == nil {
+			return nil
+		}
+		// A consumed collector falls through to the direct write.
+	}
 	if err := s.Writer.SetValue(
 		ctx,
 		s.Key.ChannelAddress,
@@ -111,6 +123,23 @@ func (s *Switch) turnOnWithTimer(ctx context.Context, explicit *time.Duration, p
 	// interprets ON_TIME=0 as a timer-cancel, so we must carry it through.
 	if onTime == nil || *onTime < 0 {
 		return s.Set(ctx, true, priority)
+	}
+	// A collector in the context owns the bundling: staging both values
+	// lets it decide the wire shape, and it is the only path that can
+	// also fold in whatever else the caller staged for this channel.
+	// Trying the writer's paramset capability first would bypass it and
+	// send this pair on its own.
+	if coll := CollectorFromContext(ctx); coll != nil {
+		errOn := coll.AddParam(s.Key.ChannelAddress, s.Key.ParamsetKey,
+			string(hmenum.ParameterOnTime), onTime.Seconds(), 0)
+		errState := coll.Add(s, true, 0)
+		if errOn == nil && errState == nil {
+			// Send stages the optimistic value and keeps the rollback
+			// closure; applying it here would drop that closure and
+			// show the switch as on before the wire call happened.
+			return nil
+		}
+		// A consumed collector falls through to the direct paths below.
 	}
 	// Atomic ON_TIME + STATE via put_paramset when supported.
 	if pw, ok := s.Writer.(ParamsetWriter); ok {

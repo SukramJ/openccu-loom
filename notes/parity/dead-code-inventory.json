@@ -1,6 +1,6 @@
 {
-  "generated": "67539d03",
-  "head": "67539d03",
+  "generated": "5e5e386c",
+  "head": "5e5e386c",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28281,
+    "total_exported": 28287,
     "reachable": 4999,
-    "whitelisted": 20308,
-    "unreachable": 2974
+    "whitelisted": 20312,
+    "unreachable": 2976
   },
   "by_package": [
     {
@@ -37,7 +37,7 @@
     {
       "package": "internal/central/adapter",
       "unreachable_funcs": 4,
-      "unreachable_types": 92,
+      "unreachable_types": 94,
       "unreachable_other": 48
     },
     {
@@ -3169,14 +3169,14 @@
       "package": "internal/central/adapter",
       "identifier": "ErrNoWriter",
       "file": "internal/central/adapter/devices.go",
-      "line": 146,
+      "line": 161,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrNoWriter",
       "file": "internal/central/adapter/devices.go",
-      "line": 146,
+      "line": 161,
       "kind": "var"
     },
     {
@@ -3527,6 +3527,20 @@
       "identifier": "ParameterLabelAdapter",
       "file": "internal/central/adapter/labels.go",
       "line": 15,
+      "kind": "type"
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "ParamsetValueWriter",
+      "file": "internal/central/adapter/devices.go",
+      "line": 147,
+      "kind": "type"
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "ParamsetValueWriter",
+      "file": "internal/central/adapter/devices.go",
+      "line": 147,
       "kind": "type"
     },
     {
@@ -8258,14 +8272,14 @@
       "package": "internal/model/custom/light",
       "identifier": "HSColor",
       "file": "internal/model/custom/light/light.go",
-      "line": 868,
+      "line": 894,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "HSColor",
       "file": "internal/model/custom/light/light.go",
-      "line": 868,
+      "line": 894,
       "kind": "type"
     },
     {
@@ -8370,14 +8384,14 @@
       "package": "internal/model/custom/light",
       "identifier": "StateChangeArgsFull",
       "file": "internal/model/custom/light/light.go",
-      "line": 856,
+      "line": 882,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/light",
       "identifier": "StateChangeArgsFull",
       "file": "internal/model/custom/light/light.go",
-      "line": 856,
+      "line": 882,
       "kind": "type"
     },
     {
@@ -33668,6 +33682,20 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestBoundWriterCarriesTheParamsetCapability",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/bound_writer_paramset_test.go",
+      "line": 93
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestBoundWriterFallsBackWhenTheWriterCannotParamset",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/bound_writer_paramset_test.go",
+      "line": 120
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestBoundWriterSetValueNilWriterPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/adapter_multi_unit_test.go",
@@ -35485,6 +35513,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/schedule_coerce_test.go",
       "line": 81
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCollectorBundlesTheBoundedSwitchOn",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/bound_writer_paramset_test.go",
+      "line": 154
     },
     {
       "package": "internal/central/adapter",
@@ -54944,7 +54979,7 @@
       "identifier": "TestBINRPCServerAddrIsAvailableBeforeServe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 367
+      "line": 369
     },
     {
       "package": "internal/central/rpcserver",
@@ -55028,7 +55063,7 @@
       "identifier": "TestBINRPCServerRequiresNonEmptyAddr",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 447
+      "line": 449
     },
     {
       "package": "internal/central/rpcserver",
@@ -55088,6 +55123,13 @@
     },
     {
       "package": "internal/central/rpcserver",
+      "identifier": "TestBindFixedPortSurvivesALostRace",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/rpcserver/effective_port_test.go",
+      "line": 533
+    },
+    {
+      "package": "internal/central/rpcserver",
       "identifier": "TestDispatchDeleteDevicesWrongArity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/xmlrpc_dispatch_test.go",
@@ -55126,21 +55168,21 @@
       "identifier": "TestEffectivePortIsStableAcrossMultipleAddrCalls",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 306
+      "line": 308
     },
     {
       "package": "internal/central/rpcserver",
       "identifier": "TestInitCallURLContainsEffectiveBINRPCPort",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 223
+      "line": 225
     },
     {
       "package": "internal/central/rpcserver",
       "identifier": "TestInitCallURLContainsEffectivePortNotConfiguredZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 178
+      "line": 180
     },
     {
       "package": "internal/central/rpcserver",
@@ -55336,7 +55378,7 @@
       "identifier": "TestXMLRPCServerAddrIsAvailableBeforeServe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 336
+      "line": 338
     },
     {
       "package": "internal/central/rpcserver",
@@ -55399,7 +55441,7 @@
       "identifier": "TestXMLRPCServerLoopbackOnlyWhenHostIsLoopback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 397
+      "line": 399
     },
     {
       "package": "internal/central/rpcserver",
@@ -55420,7 +55462,7 @@
       "identifier": "TestXMLRPCServerRequiresNonEmptyAddr",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 437
+      "line": 439
     },
     {
       "package": "internal/central/rpcserver",
@@ -55448,14 +55490,14 @@
       "identifier": "TestXMLRPCServerStopAndRestartExposesUpdatedEffectivePort",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 263
+      "line": 265
     },
     {
       "package": "internal/central/rpcserver",
       "identifier": "TestXMLRPCServerTwoPortZeroBindsGetDifferentPorts",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 40
+      "line": 41
     },
     {
       "package": "internal/central/rpcserver",
@@ -55469,7 +55511,7 @@
       "identifier": "TestXMLRPCServerWithFixedPortReturnsThatPort",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/rpcserver/effective_port_test.go",
-      "line": 78
+      "line": 79
     },
     {
       "package": "internal/central/rpcserver",

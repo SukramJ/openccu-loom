@@ -171,6 +171,22 @@ func (w *ValueWriter) SetValue(
 	})
 }
 
+// PutParamset writes several parameters of one paramset in a single
+// call, with the same defaults [ValueWriter.SetValue] applies.
+//
+// It exists so a data point whose semantics require one atomic write
+// can have it: a bounded switch-on carries its device-side auto-off in
+// the same message as the switch-on, rather than spending a second
+// radio transmission out of the duty-cycle budget the following stop
+// command needs.
+func (w *ValueWriter) PutParamset(
+	ctx context.Context, centralName, interfaceID, channelAddress string,
+	paramsetKey hmenum.ParamsetKey, values map[string]any, priority hmenum.CommandPriority,
+) error {
+	return w.PutParamsetWithOptions(ctx, centralName, interfaceID, channelAddress, paramsetKey, values,
+		WriteOptions{Priority: priority})
+}
+
 // Backend returns the operations bound to (central, interface).
 func (w *ValueWriter) Backend(centralName, interfaceID string) (backends.Operations, bool) {
 	w.mu.RLock()

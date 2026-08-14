@@ -785,11 +785,9 @@ func (l *Light) BrightnessPct() (pct int, observed bool) {
 // The duration is encoded into ON_TIME_VALUE / ON_TIME_UNIT pairs.
 func (l *Light) SetOnTime(ctx context.Context, w custom.Writer, addr string, d time.Duration, priority hmenum.CommandPriority) error {
 	value, unit := custom.EncodeTimerDuration(d)
-	if err := w.SetValue(custom.EnsureContext(ctx), addr, hmenum.ParameterOnTimeValue, value, priority); err != nil {
-		return fmt.Errorf("light: ON_TIME_VALUE: %w", err)
-	}
-	if err := w.SetValue(custom.EnsureContext(ctx), addr, hmenum.ParameterOnTimeUnit, unit, priority); err != nil {
-		return fmt.Errorf("light: ON_TIME_UNIT: %w", err)
+	if err := stageTimerPair(ctx, w, addr,
+		hmenum.ParameterOnTimeValue, value, hmenum.ParameterOnTimeUnit, unit, priority); err != nil {
+		return fmt.Errorf("light: ON_TIME: %w", err)
 	}
 	return nil
 }
@@ -797,13 +795,41 @@ func (l *Light) SetOnTime(ctx context.Context, w custom.Writer, addr string, d t
 // SetRampTime sets the RAMP_TIME parameter on the light's channel.
 func (l *Light) SetRampTime(ctx context.Context, w custom.Writer, addr string, d time.Duration, priority hmenum.CommandPriority) error {
 	value, unit := custom.EncodeTimerDuration(d)
-	if err := w.SetValue(custom.EnsureContext(ctx), addr, hmenum.ParameterRampTimeValue, value, priority); err != nil {
-		return fmt.Errorf("light: RAMP_TIME_VALUE: %w", err)
-	}
-	if err := w.SetValue(custom.EnsureContext(ctx), addr, hmenum.ParameterRampTimeUnit, unit, priority); err != nil {
-		return fmt.Errorf("light: RAMP_TIME_UNIT: %w", err)
+	if err := stageTimerPair(ctx, w, addr,
+		hmenum.ParameterRampTimeValue, value, hmenum.ParameterRampTimeUnit, unit, priority); err != nil {
+		return fmt.Errorf("light: RAMP_TIME: %w", err)
 	}
 	return nil
+}
+
+// stageTimerPair writes a value/unit parameter pair, through the
+// collector when the caller opened one.
+//
+// These pairs qualify the level they accompany and are meaningless
+// apart from it, so they belong in the same wire call: a dimmer that
+// receives its level and its ramp time as separate messages ramps from
+// whatever the previous command left behind. The pair carries no
+// observable state of its own, which is why it is staged as bare
+// parameters rather than as data points.
+func stageTimerPair(
+	ctx context.Context, w custom.Writer, addr string,
+	valueParam hmenum.Parameter, value any,
+	unitParam hmenum.Parameter, unit any,
+	priority hmenum.CommandPriority,
+) error {
+	ctx = custom.EnsureContext(ctx)
+	if coll := generic.CollectorFromContext(ctx); coll != nil {
+		errValue := coll.AddParam(addr, hmenum.ParamsetKeyValues, string(valueParam), value, 0)
+		errUnit := coll.AddParam(addr, hmenum.ParamsetKeyValues, string(unitParam), unit, 0)
+		if errValue == nil && errUnit == nil {
+			return nil
+		}
+		// A consumed collector falls through to direct writes.
+	}
+	if err := w.SetValue(ctx, addr, valueParam, value, priority); err != nil {
+		return err
+	}
+	return w.SetValue(ctx, addr, unitParam, unit, priority)
 }
 
 // NamePostfix returns the suffix appended to a light's data-point name
