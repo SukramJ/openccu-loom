@@ -1,6 +1,6 @@
 {
-  "generated": "79a4cba9",
-  "head": "79a4cba9",
+  "generated": "6375fdc0",
+  "head": "6375fdc0",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28611,
+    "total_exported": 28621,
     "reachable": 4860,
-    "whitelisted": 20598,
+    "whitelisted": 20608,
     "unreachable": 3153
   },
   "by_package": [
@@ -3566,7 +3566,7 @@
       "package": "internal/central/adapter",
       "identifier": "MQTTCommandSink",
       "file": "internal/central/adapter/mqtt_sink.go",
-      "line": 29,
+      "line": 32,
       "kind": "type"
     },
     {
@@ -8844,14 +8844,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "ErrInvalidSoundfileIndex",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 29,
+      "line": 31,
       "kind": "var"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ErrInvalidSoundfileIndex",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 29,
+      "line": 31,
       "kind": "var"
     },
     {
@@ -8900,14 +8900,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "PlayConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 228,
+      "line": 266,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "PlayConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 228,
+      "line": 266,
       "kind": "type"
     },
     {
@@ -8998,14 +8998,14 @@
       "package": "internal/model/custom/siren",
       "identifier": "SoundPlayerConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 91,
+      "line": 93,
       "kind": "type"
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "SoundPlayerConfig",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 91,
+      "line": 93,
       "kind": "type"
     },
     {
@@ -14927,7 +14927,7 @@
       "package": "internal/north/mqtt",
       "identifier": "Bridge",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 444,
+      "line": 454,
       "kind": "type"
     },
     {
@@ -14990,28 +14990,28 @@
       "package": "internal/north/mqtt",
       "identifier": "ChannelInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 341,
+      "line": 351,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ChannelInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 341,
+      "line": 351,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ChannelNamer",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 350,
+      "line": 360,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ChannelNamer",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 350,
+      "line": 360,
       "kind": "type"
     },
     {
@@ -15095,28 +15095,28 @@
       "package": "internal/north/mqtt",
       "identifier": "ConnectivityPublisher",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 1266,
+      "line": 1276,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ConnectivityPublisher",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 1266,
+      "line": 1276,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CustomDPNamingInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 388,
+      "line": 398,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CustomDPNamingInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 388,
+      "line": 398,
       "kind": "type"
     },
     {
@@ -15263,14 +15263,14 @@
       "package": "internal/north/mqtt",
       "identifier": "IgnoreMultipleChannelsForNameInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 401,
+      "line": 411,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "IgnoreMultipleChannelsForNameInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 401,
+      "line": 411,
       "kind": "type"
     },
     {
@@ -15319,14 +15319,14 @@
       "package": "internal/north/mqtt",
       "identifier": "ParameterLabeler",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 421,
+      "line": 431,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ParameterLabeler",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 421,
+      "line": 431,
       "kind": "type"
     },
     {
@@ -15424,14 +15424,14 @@
       "package": "internal/north/mqtt",
       "identifier": "SubDeviceInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 361,
+      "line": 371,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "SubDeviceInspector",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 361,
+      "line": 371,
       "kind": "type"
     },
     {
@@ -34681,6 +34681,13 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestALocalisedChoiceResolvesBackToItsWireToken",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/selection_label_roundtrip_test.go",
+      "line": 78
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestAcceptInboxDeviceKeepsADeferredDevicePendingWhenTheCCURefuses",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/device_admin_deferred_accept_test.go",
@@ -43228,6 +43235,13 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestInvokeChannelServiceResolvesALocalisedTone",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/selection_label_roundtrip_test.go",
+      "line": 130
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestIsBinarySensorBool",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/uischema_pure_test.go",
@@ -49063,6 +49077,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/adapter_multi_unit_test.go",
       "line": 13155
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestSelectionLabelsAreLeftAloneWithoutALabeler",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/selection_label_roundtrip_test.go",
+      "line": 109
     },
     {
       "package": "internal/central/adapter",
@@ -85154,28 +85175,28 @@
       "identifier": "ConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 206
+      "line": 244
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ConvertPlayRepetitionsIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 206
+      "line": 244
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ConvertSoundfileIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 34
+      "line": 36
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "ConvertSoundfileIndex",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 34
+      "line": 36
     },
     {
       "package": "internal/model/custom/siren",
@@ -85210,14 +85231,14 @@
       "identifier": "NewSoundPlayer",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 97
+      "line": 99
     },
     {
       "package": "internal/model/custom/siren",
       "identifier": "NewSoundPlayer",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/siren/sound.go",
-      "line": 97
+      "line": 99
     },
     {
       "package": "internal/model/custom/siren",
@@ -85858,6 +85879,13 @@
     },
     {
       "package": "internal/model/custom/siren",
+      "identifier": "TestSirenTurnOnAcceptsTheFieldNamesHomeAssistantSends",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/siren/ha_command_fields_test.go",
+      "line": 28
+    },
+    {
+      "package": "internal/model/custom/siren",
       "identifier": "TestSirenTurnOnForwardsAcousticAndOptical",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
@@ -86380,6 +86408,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/custom/siren/siren_test.go",
       "line": 1301
+    },
+    {
+      "package": "internal/model/custom/siren",
+      "identifier": "TestSoundPlayerTurnOnAcceptsTheFieldNamesHomeAssistantSends",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/siren/ha_command_fields_test.go",
+      "line": 76
+    },
+    {
+      "package": "internal/model/custom/siren",
+      "identifier": "TestSoundfileLabelResolvesArithmetically",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/custom/siren/ha_command_fields_test.go",
+      "line": 114
     },
     {
       "package": "internal/model/custom/siren",
@@ -124473,14 +124515,14 @@
       "identifier": "ValueListLabeler",
       "reason": "the event bridge asserts its labeler against this interface (b.labels.(mqtt.ValueListLabeler)) before stamping localised enum options, and the labeler the daemon wires in satisfies it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 438
+      "line": 448
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ValueListLabeler",
       "reason": "the event bridge asserts its labeler against this interface (b.labels.(mqtt.ValueListLabeler)) before stamping localised enum options, and the labeler the daemon wires in satisfies it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 438
+      "line": 448
     },
     {
       "package": "internal/north/mqtt",
@@ -151872,6 +151914,34 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/parameter/validate.go",
       "line": 28
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "LocalisableSelection",
+      "reason": "constructed inside the LocalisableSelections implementations of the siren, sound-player and effect-light custom data points, which production reaches through a payload.LocalisableSelections interface assertion in the event bridge and the MQTT command sink; the analyzer's callgraph does not resolve values produced behind an interface assertion",
+      "file": "internal/payload/localisable_selection.go",
+      "line": 16
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "LocalisableSelection",
+      "reason": "constructed inside the LocalisableSelections implementations of the siren, sound-player and effect-light custom data points, which production reaches through a payload.LocalisableSelections interface assertion in the event bridge and the MQTT command sink; the analyzer's callgraph does not resolve values produced behind an interface assertion",
+      "file": "internal/payload/localisable_selection.go",
+      "line": 16
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "LocalisableSelections",
+      "reason": "asserted against in EventBridge.selectionLabelsFor and MQTTCommandSink.resolveSelectionLabels before either localises a list or resolves a label back to its wire token, and the siren, sound-player and effect-light custom data points satisfy it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
+      "file": "internal/payload/localisable_selection.go",
+      "line": 36
+    },
+    {
+      "package": "internal/payload",
+      "identifier": "LocalisableSelections",
+      "reason": "asserted against in EventBridge.selectionLabelsFor and MQTTCommandSink.resolveSelectionLabels before either localises a list or resolves a label back to its wire token, and the siren, sound-player and effect-light custom data points satisfy it; a type reached only through an interface assertion, which the analyzer's callgraph does not resolve",
+      "file": "internal/payload/localisable_selection.go",
+      "line": 36
     },
     {
       "package": "internal/payload",

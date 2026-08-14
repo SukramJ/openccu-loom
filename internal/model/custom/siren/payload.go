@@ -98,7 +98,17 @@ func (s *Siren) registerSirenServices() {
 			dur := time.Duration(d * float64(time.Second))
 			cfg.Duration = dur
 		}
+		// `tone` is what Home Assistant's MQTT siren sends back for the
+		// entry the operator picked out of `available_tones`. The
+		// handler read only the domain name, so every tone chosen in HA
+		// was dropped and the siren fired with its default — which, on
+		// an HmIP-ASIR, is the label that silences it. The domain name
+		// keeps precedence: it is what the REST and WebSocket surfaces
+		// send, and an automation written against it must not change
+		// meaning.
 		if v, err := payload.ParamString(params, "acoustic_selection"); err == nil {
+			cfg.AcousticSelection = &v
+		} else if v, err := payload.ParamString(params, "tone"); err == nil {
 			cfg.AcousticSelection = &v
 		}
 		if v, err := payload.ParamString(params, "optical_selection"); err == nil {
@@ -362,8 +372,19 @@ func (sp *SoundPlayer) registerSoundPlayerServices() {
 		cfg := PlayConfig{RepetitionsIndex: RepetitionsIndexNotSet}
 		if idx, err := payload.ParamInt32(params, "soundfile_index"); err == nil {
 			cfg.SoundfileIndex = int(idx)
+		} else if label, err := payload.ParamString(params, "tone"); err == nil {
+			// The player advertises its soundfiles as `available_tones`,
+			// so HA returns the chosen one by label while the handler
+			// expected an index — the choice never reached the device.
+			if i, ok := sp.soundfileIndexFor(label); ok {
+				cfg.SoundfileIndex = i
+			}
 		}
 		if v, err := payload.ParamFloat64(params, "volume"); err == nil {
+			cfg.Volume = v
+		} else if v, err := payload.ParamFloat64(params, "volume_level"); err == nil {
+			// HA's name for the same thing, sent whenever
+			// support_volume_set is advertised.
 			cfg.Volume = v
 		}
 		if d, err := payload.ParamFloat64(params, "duration"); err == nil {
@@ -380,4 +401,32 @@ func (sp *SoundPlayer) registerSoundPlayerServices() {
 	sp.RegisterService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return sp.TurnOff(ctx, priority)
 	})
+}
+
+// LocalisableSelections implements [payload.LocalisableSelections]: the
+// tone list a siren advertises is the VALUE_LIST of its acoustic-alarm
+// selection, and Home Assistant returns the operator's pick as `tone`.
+func (s *Siren) LocalisableSelections() []payload.LocalisableSelection {
+	if s == nil || len(s.AvailableTones()) == 0 {
+		return nil
+	}
+	return []payload.LocalisableSelection{{
+		BodyKey:   "available_tones",
+		ArgKey:    "tone",
+		Parameter: string(hmenum.ParameterAcousticAlarmSelection),
+	}}
+}
+
+// LocalisableSelections implements [payload.LocalisableSelections]. The
+// player advertises its soundfiles as tones, so the same field carries a
+// different parameter's VALUE_LIST.
+func (sp *SoundPlayer) LocalisableSelections() []payload.LocalisableSelection {
+	if sp == nil || len(sp.AvailableSoundfiles()) == 0 {
+		return nil
+	}
+	return []payload.LocalisableSelection{{
+		BodyKey:   "available_tones",
+		ArgKey:    "tone",
+		Parameter: string(hmenum.ParameterSoundfile),
+	}}
 }

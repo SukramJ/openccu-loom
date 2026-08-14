@@ -514,6 +514,7 @@ func makeMQTTSubscriberBuilder(
 	collector *metrics.MqttCollector,
 	alarmSink *alarmMQTTSink,
 	addonUpdater *addonupdate.Updater,
+	selectionLabels mqtt.ValueListLabeler,
 	logger *slog.Logger,
 ) SubscriberBuilder {
 	return func(ctx context.Context, client mqtt.Client, bridge *mqtt.Bridge) (func(), error) {
@@ -530,7 +531,10 @@ func makeMQTTSubscriberBuilder(
 		if err := birthSync.Start(ctx); err != nil {
 			return nil, fmt.Errorf("birth_sync.Start: %w", err)
 		}
-		sink := adapter.NewMQTTCommandSink(reg, valueWriter)
+		// The labeler turns a localised siren tone or light effect the
+		// operator picked in HA back into the wire token the device
+		// speaks; without it those commands resolve to nothing.
+		sink := adapter.NewMQTTCommandSink(reg, valueWriter).WithSelectionLabeler(selectionLabels)
 		wpAdapter := scheduleWeekProfileSink{sd: schedulesDomain}
 		cmdSub := mqtt.NewCommandSubscriber(sub, bridge.Topics(), sink, logger).
 			WithCDPSink(sink).

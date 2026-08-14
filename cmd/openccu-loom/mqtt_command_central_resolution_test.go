@@ -70,7 +70,7 @@ func TestMQTTSubscriberBuilderResolvesEscapedCentralSegment(t *testing.T) {
 	writer := clientpkg.NewValueWriter()
 	writer.Register(centralName, "HmIP-RF", ops)
 
-	build := makeMQTTSubscriberBuilder(ctx, reg, writer, nil, nil, nil, nil, supervisorLogger())
+	build := makeMQTTSubscriberBuilder(ctx, reg, writer, nil, nil, nil, nil, nil, supervisorLogger())
 	noop := mqtt.NewNoopClient()
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base: base, CentralName: centralName, RawEnabled: true,

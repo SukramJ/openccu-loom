@@ -129,3 +129,20 @@ func presetModeTemplates(slugs, labels []string) (valueTemplate, commandTemplate
 	command.WriteString(`} %}{{ m.get(value, value) }}`)
 	return state.String(), command.String()
 }
+
+// applySelectionLabels replaces the discovery-body lists a custom data
+// point declared as localisable with the labels the event carries.
+//
+// Length equality is the guard: the labels are index-aligned with the
+// VALUE_LIST, and a body list of a different length is a list the
+// builder filtered or reordered. Substituting there would silently
+// rename entries, which is worse than leaving them as tokens.
+func applySelectionLabels(body map[string]any, labels map[string][]string) {
+	for key, localised := range labels {
+		current, ok := presetModeSlugs(body[key])
+		if !ok || len(current) != len(localised) {
+			continue
+		}
+		body[key] = append([]string(nil), localised...)
+	}
+}

@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -142,6 +144,42 @@ func (sp *SoundPlayer) AvailableLights() []string { return nil }
 // (typically "SOUNDFILE_001" .. "SOUNDFILE_189").
 func (sp *SoundPlayer) AvailableSoundfiles() []string {
 	return append([]string(nil), sp.availableSF...)
+}
+
+// soundfileIndexFor resolves a SOUNDFILE label back to the file index.
+//
+// The inverse is arithmetic, not positional: [ConvertSoundfileIndex]
+// builds the label as SOUNDFILE_%03d, so the number in the label *is*
+// the index. Deriving it from the position in the VALUE_LIST would
+// agree only for a gapless list starting at 001 and would otherwise
+// play a different file than the operator picked.
+//
+// Membership is still required — a label the device does not offer has
+// no business being sent, and rejecting it here keeps a typo from
+// becoming a plausible-looking index.
+func (sp *SoundPlayer) soundfileIndexFor(label string) (int, bool) {
+	if sp == nil || label == "" {
+		return 0, false
+	}
+	known := false
+	for _, v := range sp.availableSF {
+		if v == label {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return 0, false
+	}
+	digits, found := strings.CutPrefix(label, "SOUNDFILE_")
+	if !found {
+		return 0, false
+	}
+	idx, err := strconv.Atoi(digits)
+	if err != nil || idx < minSoundfileIndex || idx > maxSoundfileIndex {
+		return 0, false
+	}
+	return idx, true
 }
 
 // AvailableRepetitions returns the labels of accepted REPETITIONS

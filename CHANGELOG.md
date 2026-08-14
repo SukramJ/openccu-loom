@@ -53,6 +53,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A tone picked in Home Assistant now reaches the siren.** The siren
+  advertises its tone list, so HA renders a selector and sends the choice
+  back as `tone` — and the command handler read only the domain's own
+  name for it. Every tone chosen in HA was dropped without a trace and
+  the siren fired with its default, which on an HmIP-ASIR is the value
+  that silences it. The MP3 player had the same gap: its tone list is
+  soundfile labels and the handler expected a numeric index, so the
+  chosen file never played. Both accept the names HA sends now, and the
+  original names keep working unchanged.
+
+- **Siren tones and light effects are readable over MQTT.** They reached
+  Home Assistant as raw wire tokens — `FREQUENCY_RISING`,
+  `SLOW_COLOR_CHANGE` — because a discovered entity has no translation
+  file behind it. Both lists are localised now, and a label the operator
+  picks is resolved back to the token the device speaks on the way in.
+  The raw token stays valid on the command path, so an automation written
+  against `FREQUENCY_RISING` keeps working and one written against the
+  label works too.
+
 - **Two flush-mount switch actuators are recognised properly.** The
   HmIP-FS6 resolved to no device profile at all, so it appeared only as a
   raw state value instead of a switch you can operate as one. And on the
