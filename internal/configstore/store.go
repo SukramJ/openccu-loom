@@ -260,7 +260,19 @@ type EffectiveResult struct {
 // of starting from defaults, so the daemon's existing YAML-driven
 // wiring continues to work for everything the operator has not yet
 // changed in the SPA.
+//
+// The merge is ALL-OR-NOTHING: it runs against a scratch copy and is
+// committed into cfg only once every section and every central row has been
+// layered successfully. On error the caller's config is exactly what it
+// handed in — the YAML tier, defaults intact. A section can fail for reasons
+// that are not exotic (a sealed row whose master key is gone, a row whose
+// JSON no longer matches its struct after a downgrade), and merging in
+// AllSections order means an abort in the middle would otherwise leave the
+// daemon running on a config that is part DB tier, part YAML tier, and never
+// defaulted or validated: an auth scheme the operator disabled in the SPA
+// would come back up because its section is layered after the failing one.
 func (s *Store) OverlayInto(ctx context.Context, cfg *config.Config) (map[string]FieldSource, error) {
+	staged := config.Clone(cfg)
 	srcs := make(map[string]FieldSource)
 	// north.rest.listen is bootstrap-tier: the value already in cfg came from
 	// the YAML/OPENCCU_LOOM_REST_LISTEN bootstrap layer, so attribute it to
@@ -268,21 +280,22 @@ func (s *Store) OverlayInto(ctx context.Context, cfg *config.Config) (map[string
 	// neither overwrite the value nor flip the source pill to db.
 	srcs["north.rest.listen"] = SourceBootstrap
 	if s.sections != nil {
-		if err := s.layerSections(ctx, cfg, srcs); err != nil {
+		if err := s.layerSections(ctx, staged, srcs); err != nil {
 			return nil, err
 		}
 	}
 	if s.centrals != nil {
-		if err := s.layerCentrals(ctx, cfg, srcs); err != nil {
+		if err := s.layerCentrals(ctx, staged, srcs); err != nil {
 			return nil, err
 		}
 	}
-	s.resolveEnvSecrets(cfg, srcs)
+	s.resolveEnvSecrets(staged, srcs)
 	// A stored section may omit fields (e.g. north.mqtt without
 	// topic_base) that the base config had defaulted before the overlay
 	// clobbered the whole sub-tree. Re-fill defaults so a partial section
 	// does not leave a required field at its zero value.
-	cfg.ApplyDefaults()
+	staged.ApplyDefaults()
+	*cfg = *staged
 	return srcs, nil
 }
 
@@ -301,8 +314,10 @@ func (s *Store) OverlayInto(ctx context.Context, cfg *config.Config) (map[string
 // compares this result against the running config — the restart-pending
 // provider above all — then reads that gap as a pending change.
 //
-// Returns an error only on JSON-decode failures of malformed
-// section rows; missing sections fall back to defaults silently.
+// Returns an error when a section row cannot be read or applied: a
+// malformed payload, a row whose JSON no longer matches its struct, or a
+// sealed value the section store cannot open because the master key is
+// unavailable. Missing sections fall back to defaults silently.
 func (s *Store) Effective(ctx context.Context) (*EffectiveResult, error) {
 	cfg := s.baseClone()
 	srcs := s.bootstrapTierSources(cfg)
@@ -320,6 +335,34 @@ func (s *Store) Effective(ctx context.Context) (*EffectiveResult, error) {
 	s.resolveEnvSecrets(cfg, srcs)
 	cfg.ApplyDefaults()
 	return &EffectiveResult{Config: cfg, Sources: srcs}, nil
+}
+
+// PlaintextSecretsAllowed reports whether the operator opted into storing a
+// central's CCU password in the clear, i.e. the `security` section's
+// allow_plaintext_secrets flag. It is read live (not cached) so a change the
+// operator saves in the SPA governs the very next write.
+//
+// Everything that persists a central row consults this through the centrals
+// store: when no at-rest master key is available (ADR 0027's degraded
+// fallback), the password would land in the database as cleartext, and the
+// documented default is to refuse that write rather than perform it silently.
+//
+// Every failure mode — no section store, an unreadable row (a sealed value
+// whose key is gone), malformed JSON — reports false: the safe default is the
+// documented one, and consent must be positively expressed.
+func (s *Store) PlaintextSecretsAllowed(ctx context.Context) bool {
+	if s.sections == nil {
+		return false
+	}
+	row, err := s.sections.Get(ctx, string(SectionSecurity))
+	if err != nil {
+		return false
+	}
+	var v SecurityConfig
+	if err := json.Unmarshal(row.ValueJSON, &v); err != nil {
+		return false
+	}
+	return v.AllowPlaintextSecrets
 }
 
 // baseClone returns a fresh copy of the pinned YAML/env base, or the
@@ -559,8 +602,9 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 		}
 		return nil
 	case SectionSecurity:
-		// security section has no runtime config.Config target;
-		// it is consumed by the central-CRUD handlers directly.
+		// The security section has no runtime config.Config target: it is
+		// read on demand through [Store.PlaintextSecretsAllowed], which the
+		// centrals store consults before it persists a cleartext password.
 		return nil
 	default:
 		return fmt.Errorf("configstore: unknown section %q", sec)
@@ -680,6 +724,15 @@ func (s *Store) SeedSectionsFromConfig(ctx context.Context, cfg *config.Config, 
 // layerCentrals materialises the centrals table into
 // [config.Config.Centrals]. Disabled rows are silently skipped so
 // the operator can park a CCU without removing it.
+//
+// The tier rule keys on the presence of ROWS, not of enabled rows: an empty
+// table means the DB tier is unused and the YAML `centrals:` list stays
+// authoritative, while a table that holds only parked rows is in use and
+// authoritative — it means "no central", not "fall back to the config file".
+// Anything else makes disabling the last CCU in the SPA reconnect to it on
+// the next restart, because the YAML entry the first-run seed copied into
+// the table is still there. Mirrors the auth-side tier rule in
+// enabledCentralRows (cmd/openccu-loom/ccu_auth_wiring.go).
 func (s *Store) layerCentrals(ctx context.Context, cfg *config.Config, srcs map[string]FieldSource) error {
 	rows, err := s.centrals.List(ctx)
 	if err != nil {
@@ -700,10 +753,8 @@ func (s *Store) layerCentrals(ctx context.Context, cfg *config.Config, srcs map[
 		}
 		out = append(out, cc)
 	}
-	if len(out) > 0 {
-		cfg.Centrals = out
-		srcs["centrals"] = SourceDB
-	}
+	cfg.Centrals = out
+	srcs["centrals"] = SourceDB
 	return nil
 }
 

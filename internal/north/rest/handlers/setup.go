@@ -148,6 +148,13 @@ func Setup(s *SetupService) http.HandlerFunc {
 			return
 		}
 		if err := finalizeSetup(r.Context(), s, &req); err != nil {
+			// A CCU password that cannot be encrypted at rest is refused by
+			// the centrals store. That is the operator's configuration, not a
+			// server fault, so it answers as a client error naming the knob.
+			if writeCentralSecretRefusal(w, r, err) {
+				slog.WarnContext(r.Context(), "setup.finalize.refused", slog.String("err", err.Error()))
+				return
+			}
 			slog.ErrorContext(r.Context(), "setup.finalize.fail", slog.String("err", err.Error()))
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Setup finalization failed", err)
 			return

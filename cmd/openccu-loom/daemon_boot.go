@@ -49,6 +49,13 @@ type auditOverlay struct {
 	// as a metric. Only meaningful when db != nil.
 	secretsAvailable bool
 
+	// overlayErr holds the failure of the boot-time DB-tier overlay, if any.
+	// A failed overlay leaves the daemon running on the config file alone —
+	// every section the operator edited in the SPA is not in effect — and the
+	// same failure makes GET /api/v1/config fail, so there is no in-UI repair
+	// path. The daemon surfaces it on /health rather than in one log line.
+	overlayErr error
+
 	// yamlBase is the config as loaded from YAML/env, captured before
 	// OverlayInto mutates it with the DB-tier sections. Re-assembling the
 	// effective config for a reload has to start here rather than from
@@ -175,6 +182,23 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		ov.configStore = configstore.New(bootstrapCfg, ov.sqSections, ov.sqCentrals,
 			configstore.WithEnvLookup(os.Getenv),
 			configstore.WithBaseConfig(ov.yamlBase))
+		// Let the centrals store enforce the operator's plaintext-secret
+		// choice: with no master key resolved, a CCU password would be written
+		// to the database in the clear, and security.allow_plaintext_secrets
+		// says whether that is acceptable. The store is the choke point every
+		// persisting path shares (SPA CRUD, onboarding wizard, live adopt,
+		// YAML seed), so the gate belongs there rather than at each caller.
+		ov.sqCentrals.SetPlaintextSecretPolicy(ov.configStore.PlaintextSecretsAllowed)
+		// Drop section rows written under an older schema version before
+		// anything reads them: their JSON no longer matches the structs it
+		// would be unmarshalled into, which fails the whole overlay. The
+		// operator re-saves the affected sections in the SPA; until then the
+		// YAML/compiled-in values apply.
+		if n, err := ov.sqSections.WipeOutdatedSections(ctx); err != nil {
+			logger.Warn("configstore.wipe_outdated", slog.String("err", err.Error()))
+		} else if n > 0 {
+			logger.Info("configstore.wipe_outdated", slog.Int64("sections", n))
+		}
 		// First-run seed: copy the YAML-loaded config sections into the DB
 		// once (no-op when any section row exists). Secrets are sealed by the
 		// section store's transform hook. Runs before OverlayInto so the DB is
@@ -184,9 +208,19 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		} else if n > 0 {
 			logger.Info("configstore.seed", slog.Int("sections", n))
 		}
+		// OverlayInto is all-or-nothing, so on failure cfg is still the YAML
+		// tier the daemon loaded — every SPA-side edit is silently not in
+		// effect. That is worth an error, not a warning: GET /api/v1/config
+		// fails the same way, so the operator has no in-UI repair path and
+		// needs the log (and the /health component recorded from ov) to find
+		// out at all. Validate unconditionally: the config the daemon is about
+		// to run on deserves the check whichever tier it came from.
 		if _, err := ov.configStore.OverlayInto(ctx, cfg); err != nil {
-			logger.Warn("configstore.overlay", slog.String("err", err.Error()))
-		} else if err := cfg.Validate(); err != nil {
+			ov.overlayErr = err
+			logger.Error("configstore.overlay", slog.String("err", err.Error()),
+				slog.String("effect", "database config sections are not in effect; running on the config file"))
+		}
+		if err := cfg.Validate(); err != nil {
 			logger.Warn("configstore.overlay.validate", slog.String("err", err.Error()))
 		}
 		// Replay the persisted audit history into the in-memory read

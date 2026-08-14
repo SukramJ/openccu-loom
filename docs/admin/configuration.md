@@ -672,10 +672,18 @@ given count after each successful run.
 | `security.allow_plaintext_secrets` | bool | `false` | — | no |
 
 When `false` (default and recommended) the daemon refuses to persist a
-central's password in cleartext — it must be encryptable with the
-master key (see [Secrets](#secrets)). Set it `true` only in a
-throwaway/dev environment where no at-rest key is available; the
-password is then stored in plaintext in the database.
+central's password it cannot encrypt with the master key (see
+[Secrets](#secrets)). While a master key is available the flag changes
+nothing — the password is sealed either way. It matters only in the
+degraded case: if no key can be resolved (`secret.key` lost after a
+restore, `OPENCCU_LOOM_SECRET_KEY` unset, read-only data directory),
+saving a CCU password is rejected with `400 Password cannot be stored`
+instead of writing the credential to the database in the clear.
+
+Set it `true` only in a throwaway/dev environment where no at-rest key
+is available; the password is then stored in plaintext in the database.
+The better fix is to restore the master key — `/health` reports
+`config.secrets` as degraded while one is missing.
 
 ## Validating a config file
 

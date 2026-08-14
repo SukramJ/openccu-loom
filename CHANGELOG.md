@@ -200,6 +200,43 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`security.allow_plaintext_secrets` now governs what it documents.**
+  The setting promised that the daemon refuses to persist a CCU password
+  in cleartext, and no code read it. When the at-rest master key could
+  not be resolved — `secret.key` missing after a restore, a read-only
+  data directory — the daemon logged one warning and wrote every CCU
+  password into the database in the clear, at the default that says it
+  will not. Saving a central in that state is now rejected with `400`
+  naming the setting, on every path that persists one (the CCUs view,
+  the onboarding wizard, live adoption, the config-file seed), and an
+  operator who wants the old behaviour can still opt in by saving the
+  `security` section with the flag set. With a master key present
+  nothing changes: the password is sealed either way.
+
+- **A config section that cannot be read no longer half-applies the
+  rest.** The boot-time merge of the database config sections walked
+  them in order and aborted on the first failure, after writing the
+  earlier ones into the running config and before the defaulting pass —
+  so a single unreadable section (a sealed value whose master key is
+  gone, a row from a newer version) left the daemon on a config that was
+  part database, part config file, never defaulted or validated. An auth
+  scheme the operator had switched off in the SPA came back up because
+  its section was merged after the failing one. The merge is
+  all-or-nothing now: on failure the daemon runs on the config file
+  exactly as loaded, says so at error level, and reports `config.overlay`
+  as degraded on `/health` — the same failure also makes
+  `GET /api/v1/config` fail, so there is no in-UI hint otherwise.
+
+- **Disabling the last CCU keeps it disabled across a restart.** A
+  centrals table in which every row is parked read as "the database has
+  nothing to say about centrals", so the daemon fell back to the
+  `centrals:` list in the config file — the very entry the first-run
+  seed had copied into that table — and reconnected to the CCU the
+  operator had just parked. `GET /api/v1/config` agreed with the wrong
+  answer, attributing the resurrected central to the config file. A
+  table with rows is now authoritative whether or not any of them is
+  enabled; an empty table still leaves the config file in charge.
+
 - **`bootstrap.allow_first_run_setup: false` now closes the onboarding
   surface it names.** The toggle has been documented as a hardening
   control since the first release and no code ever read it. An operator

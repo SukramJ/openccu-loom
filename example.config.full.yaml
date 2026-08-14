@@ -721,11 +721,13 @@ persistence:
 # =============================================================================
 #
 # security:
-#   # When true, SPA/DB-created central rows may store a plaintext CCU
-#   # password (password_plain column) instead of an env-variable
-#   # reference. Default false — production daemons resolve every central
-#   # secret from the environment; this knob exists for test rigs and
-#   # one-off dev installs.  [default: false]
+#   # When true, a central row may store a CCU password that cannot be
+#   # encrypted at rest — i.e. when no master key was resolved. Default
+#   # false: the daemon then rejects the save instead of writing the
+#   # credential to the database in the clear. With a master key present
+#   # the flag changes nothing (the password is sealed either way); this
+#   # knob exists for test rigs and one-off dev installs.
+#   # [default: false]
 #   allow_plaintext_secrets: false
 
 
