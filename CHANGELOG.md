@@ -33,6 +33,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Changing only a user's role now works.** The Config UI leaves the
+  password field blank when an admin just moves an account between roles,
+  and the daemon answered that request with "password is required" — the
+  one surface that offers a role change could not perform one. A role-only
+  update now changes the role and keeps the stored password, so the user
+  keeps signing in with the credentials they already have. The lockout
+  guard is unchanged: demoting the only remaining admin is still refused.
+  A role that actually changed now also revokes the account's live
+  sessions **and** its API tokens, because a token carries the role it was
+  minted with and would otherwise keep the pre-demotion privileges usable.
+  A password reset that names no role no longer moves the account to one.
+
+- **A deleted account no longer keeps a usable API token.** Tokens issued
+  through `POST /api/v1/auth/tokens` were stored under the exact spelling
+  of the subject that was typed and only in the in-memory store, while the
+  purge that runs when the account is deleted addressed the canonical
+  spelling in the database alone. Both halves are fixed: the token is
+  bound to the canonical subject, and the purge now covers every store a
+  bearer token can authenticate against.
+
 - **A radio interface that disappears from the CCU is now reported as
   unreachable.** The CCU answers with the interfaces it currently serves,
   so an interface that dies signals it by dropping out of that answer

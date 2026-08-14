@@ -1272,7 +1272,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.UserAdmin != nil {
 				pr.With(admin).Get("/users", handlers.ListUsersV2(d.UserAdmin))
 				pr.With(admin).Post("/users", handlers.CreateUser(d.UserAdmin, d.AuditRecorder))
-				pr.With(admin).Patch("/users/{subject}", handlers.UpdateUser(d.UserAdmin, d.AuditRecorder, d.SessionRevoker))
+				pr.With(admin).Patch("/users/{subject}", handlers.UpdateUser(d.UserAdmin, d.AuditRecorder, d.SessionRevoker, d.TokenPurger))
 				pr.With(admin).Delete("/users/{subject}", handlers.DeleteUser(d.UserAdmin, d.AuditRecorder, d.SessionRevoker, d.TokenPurger))
 			}
 			if d.TokenAdmin != nil {

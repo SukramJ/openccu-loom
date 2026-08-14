@@ -44,6 +44,40 @@ type ChainedTokenStore struct {
 	Secondary TokenStore
 }
 
+// SubjectTokenPurger is a token store that can drop every token bound to
+// a subject. [ChainedTokenStore] dispatches on it so a member that cannot
+// purge is skipped instead of blocking the members that can.
+type SubjectTokenPurger interface {
+	DeleteBySubject(ctx context.Context, subject string) (int, error)
+}
+
+// DeleteBySubject purges the subject's tokens from every member that
+// supports it and returns the total removed. The chain — not either
+// member alone — is the set of stores that can authenticate a bearer
+// token, so purging only the primary leaves the account a live
+// credential in the fallback store: authentication falls through to it
+// the moment the durable store misses, which is exactly what a purge of
+// the durable store produces.
+//
+// The first error is returned once every member has been tried, so one
+// failing store cannot leave the others un-purged.
+func (c ChainedTokenStore) DeleteBySubject(ctx context.Context, subject string) (int, error) {
+	total := 0
+	var firstErr error
+	for _, member := range []TokenStore{c.Primary, c.Secondary} {
+		purger, ok := member.(SubjectTokenPurger)
+		if !ok || purger == nil {
+			continue
+		}
+		n, err := purger.DeleteBySubject(ctx, subject)
+		total += n
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return total, firstErr
+}
+
 // AuthenticateToken delegates to Primary; on ErrUnauthenticated it
 // retries against Secondary.
 func (c ChainedTokenStore) AuthenticateToken(ctx context.Context, token string) (Identity, error) {

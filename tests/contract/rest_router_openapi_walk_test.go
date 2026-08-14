@@ -495,6 +495,7 @@ func (fakeConfigAdminService) DeleteSection(context.Context, configstore.Section
 type fakeUserAdminService struct{}
 
 func (fakeUserAdminService) Put(context.Context, string, string, auth.Role) error { return nil }
+func (fakeUserAdminService) SetRole(context.Context, string, auth.Role) error     { return nil }
 func (fakeUserAdminService) Delete(context.Context, string) error                 { return nil }
 func (fakeUserAdminService) List(context.Context) ([]sqlite.UserRow, error)       { return nil, nil }
 func (fakeUserAdminService) Count(context.Context) (int, error)                   { return 0, nil }

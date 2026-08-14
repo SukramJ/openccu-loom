@@ -63,6 +63,10 @@ type restMountDeps struct {
 	sqCentrals *sqlitestore.CentralsStore
 	sqSections *sqlitestore.ConfigSectionStore
 	sqTokens   *sqlitestore.TokenStore
+	// tokenPurger drops a subject's bearer tokens from every store that
+	// can authenticate one — the durable table and the in-memory fallback
+	// alike — when the account behind them changes role or is removed.
+	tokenPurger handlers.TokenPurger
 	// sessions backs the credential-change session-revocation hooks
 	// (password change / user update / user delete).
 	sessions *auth.SessionStore
@@ -303,7 +307,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		UserAdmin:         d.userSvc,
 		SelfPassword:      d.passwordSvc,
 		SessionRevoker:    d.sessions,
-		TokenPurger:       d.sqTokens,
+		TokenPurger:       d.tokenPurger,
 		Preferences:       d.prefSvc,
 		Diagrams:          d.diagramSvc,
 		Areas:             d.areaSvc,

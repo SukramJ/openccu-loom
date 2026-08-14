@@ -767,6 +767,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		sqCentrals:              sqCentrals,
 		sqSections:              sqSections,
 		sqTokens:                sqTokens,
+		tokenPurger:             rw.tokenPurger,
 		sessions:                sessions,
 		matter:                  matter,
 		reload:                  deps,

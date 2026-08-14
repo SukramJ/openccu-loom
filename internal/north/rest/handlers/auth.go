@@ -137,7 +137,12 @@ func CreateToken(d *AuthDeps) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid body", err.Error()))
 			return
 		}
-		req.Subject = strings.TrimSpace(req.Subject)
+		// Bind the token to the spelling every other credential surface is
+		// keyed on. Stored raw, a token issued for "Bob" survives the purge
+		// that the deletion of the "bob" account runs, and the identity it
+		// resolves to matches neither that account's sessions nor its audit
+		// notes.
+		req.Subject = auth.CanonicalSubject(req.Subject)
 		req.Role = strings.TrimSpace(req.Role)
 		if req.Subject == "" {
 			problem.Write(w, http.StatusUnprocessableEntity,

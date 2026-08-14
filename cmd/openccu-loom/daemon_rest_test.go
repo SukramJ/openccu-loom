@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -211,5 +212,75 @@ func TestWireRESTRegistersTheChainedTokenStoreOnTheWSHub(t *testing.T) {
 	}
 	if id.Subject != "spa" || id.Role != auth.RoleAdmin {
 		t.Errorf("identity = %+v, want subject=spa role=admin", id)
+	}
+}
+
+// TestWireRESTPurgeCoversTheLegacyTokenStore pins that the purger the
+// user-delete route is handed drops a subject's tokens from *both* stores
+// a bearer credential can authenticate against.
+//
+// The bearer chain falls back to the in-memory store whenever SQLite
+// misses, and the legacy POST /auth/tokens route writes only there. A
+// purger that knows the durable table alone therefore leaves a deleted
+// account holding a live token — the deletion of its SQLite rows is the
+// very condition that sends the next request to the fallback. The subject
+// is minted with a different casing on purpose: the account can only be
+// addressed by its canonical spelling.
+func TestWireRESTPurgeCoversTheLegacyTokenStore(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "purge.db")))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	sqTokens := sqlitestore.NewTokenStore(db)
+	durable, err := sqTokens.Create(ctx, sqlitestore.CreateInput{Subject: "bob", Role: auth.RoleAdmin})
+	if err != nil {
+		t.Fatalf("mint durable token: %v", err)
+	}
+
+	memTokens := auth.NewMemoryTokenStore(nil)
+	w := wireREST(ctx, restWiringDeps{
+		cfg:        config.Default(),
+		logger:     slog.New(slog.DiscardHandler),
+		auditDB:    db,
+		sqUsers:    sqlitestore.NewUserStore(db),
+		sqTokens:   sqTokens,
+		sqCentrals: sqlitestore.NewCentralsStore(db),
+		users:      auth.NewMemoryUserStore(),
+		tokens:     memTokens,
+	})
+	if w.tokenPurger == nil {
+		t.Fatal("wireREST: no token purger for the user-delete route")
+	}
+
+	// Mint through the legacy route, exactly as an operator would.
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/tokens",
+		strings.NewReader(`{"subject":"Bob","role":"admin"}`))
+	res := httptest.NewRecorder()
+	handlers.CreateToken(w.auth).ServeHTTP(res, req)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("CreateToken status = %d, want %d (%s)", res.Code, http.StatusCreated, res.Body.String())
+	}
+	var legacy handlers.CreateTokenResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &legacy); err != nil {
+		t.Fatalf("unmarshal create response: %v", err)
+	}
+
+	n, err := w.tokenPurger.DeleteBySubject(ctx, "bob")
+	if err != nil {
+		t.Fatalf("DeleteBySubject: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("purged %d tokens, want both the durable and the legacy one", n)
+	}
+	if _, err := memTokens.AuthenticateToken(ctx, legacy.Token); err == nil {
+		t.Error("the legacy token still authenticates after its account was purged")
+	}
+	if _, err := sqTokens.AuthenticateToken(ctx, durable.Token); err == nil {
+		t.Error("the durable token still authenticates after its account was purged")
 	}
 }

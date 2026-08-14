@@ -23,15 +23,18 @@ import (
 
 // fakeUserAdminService is an in-memory UserAdminService for tests.
 type fakeUserAdminService struct {
-	users  []sqlite.UserRow
-	putErr error
-	delErr error
+	users      []sqlite.UserRow
+	putCalls   []string
+	putErr     error
+	setRoleErr error
+	delErr     error
 }
 
 func (f *fakeUserAdminService) Put(_ context.Context, subject, _ string, role auth.Role) error {
 	if f.putErr != nil {
 		return f.putErr
 	}
+	f.putCalls = append(f.putCalls, subject)
 	now := time.Now().UTC()
 	for i, u := range f.users {
 		if u.Subject == subject {
@@ -47,6 +50,31 @@ func (f *fakeUserAdminService) Put(_ context.Context, subject, _ string, role au
 		UpdatedAt: now,
 	})
 	return nil
+}
+
+func (f *fakeUserAdminService) SetRole(_ context.Context, subject string, role auth.Role) error {
+	if f.setRoleErr != nil {
+		return f.setRoleErr
+	}
+	for i, u := range f.users {
+		if u.Subject == subject {
+			f.users[i].Role = role
+			f.users[i].UpdatedAt = time.Now().UTC()
+			return nil
+		}
+	}
+	return sqlite.ErrUserNotFound
+}
+
+// roleOf reports the stored role of subject, or the empty role when the
+// subject is unknown.
+func (f *fakeUserAdminService) roleOf(subject string) auth.Role {
+	for _, u := range f.users {
+		if u.Subject == subject {
+			return u.Role
+		}
+	}
+	return ""
 }
 
 func (f *fakeUserAdminService) Delete(_ context.Context, subject string) error {
@@ -264,7 +292,7 @@ func TestUpdateUser_Happy(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/admin/users/bob", body)
 	req = withChiParam(req, "subject", "bob")
 	w := httptest.NewRecorder()
-	UpdateUser(svc, audit.NoopRecorder(), revoker).ServeHTTP(w, req)
+	UpdateUser(svc, audit.NoopRecorder(), revoker, &fakeTokenPurger{}).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -282,7 +310,7 @@ func TestUpdateUser_NotFound_Returns404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/admin/users/ghost", body)
 	req = withChiParam(req, "subject", "ghost")
 	w := httptest.NewRecorder()
-	UpdateUser(svc, nil, revoker).ServeHTTP(w, req)
+	UpdateUser(svc, nil, revoker, &fakeTokenPurger{}).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
@@ -300,7 +328,7 @@ func TestUpdateUser_InvalidRole_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/admin/users/bob", body)
 	req = withChiParam(req, "subject", "bob")
 	w := httptest.NewRecorder()
-	UpdateUser(svc, nil, revoker).ServeHTTP(w, req)
+	UpdateUser(svc, nil, revoker, &fakeTokenPurger{}).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -330,7 +358,7 @@ func TestUpdateUser_RevokesSessionIssuedWithDifferentCasing(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/admin/users/markus", body)
 	req = withChiParam(req, "subject", "markus")
 	w := httptest.NewRecorder()
-	UpdateUser(svc, audit.NoopRecorder(), sessions).ServeHTTP(w, req)
+	UpdateUser(svc, audit.NoopRecorder(), sessions, &fakeTokenPurger{}).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -352,13 +380,124 @@ func TestUpdateUser_LastAdmin_Returns409(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/admin/users/admin", body)
 	req = withChiParam(req, "subject", "admin")
 	w := httptest.NewRecorder()
-	UpdateUser(svc, audit.NoopRecorder(), revoker).ServeHTTP(w, req)
+	UpdateUser(svc, audit.NoopRecorder(), revoker, &fakeTokenPurger{}).ServeHTTP(w, req)
 
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
 	}
 	if len(revoker.revokeBySubjectCalls) != 0 {
 		t.Errorf("expected no revocation when the write was refused, got %v", revoker.revokeBySubjectCalls)
+	}
+}
+
+// TestUpdateUser_RoleOnlyBodyChangesTheRole drives the body the SPA sends
+// when the operator edits the role and leaves the password field blank.
+// The account keeps its stored hash, so the update must not demand a
+// password: refusing the body with 400 makes a role change impossible from
+// the only surface that offers one.
+func TestUpdateUser_RoleOnlyBodyChangesTheRole(t *testing.T) {
+	t.Parallel()
+	svc := newFakeUserSvc()
+	revoker := &fakeSessionRevoker{}
+	tokens := &fakeTokenPurger{}
+	body := strings.NewReader(`{"role":"viewer"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/admin/users/bob", body)
+	req = withChiParam(req, "subject", "bob")
+	w := httptest.NewRecorder()
+	UpdateUser(svc, audit.NoopRecorder(), revoker, tokens).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(svc.putCalls) != 0 {
+		t.Errorf("a role-only update must not rewrite the password, got Put calls %v", svc.putCalls)
+	}
+	if got := svc.roleOf("bob"); got != auth.RoleViewer {
+		t.Errorf("role after update = %q, want viewer", got)
+	}
+	// A demotion the old session outlives is the hole the full update
+	// closes; the role-only path must close it too.
+	if len(revoker.revokeBySubjectCalls) != 1 || revoker.revokeBySubjectCalls[0] != "bob" {
+		t.Errorf("expected RevokeBySubject(bob) exactly once, got %v", revoker.revokeBySubjectCalls)
+	}
+	// A bearer token carries the role it was minted with, so a demotion
+	// that leaves it alive keeps the pre-demotion privileges usable.
+	if len(tokens.deleteBySubjectCalls) != 1 || tokens.deleteBySubjectCalls[0] != "bob" {
+		t.Errorf("expected DeleteBySubject(bob) exactly once, got %v", tokens.deleteBySubjectCalls)
+	}
+}
+
+// TestUpdateUser_RoleOnlyLastAdmin_Returns409 pins that the role-only path
+// runs through the same last-admin guard as the full update: demoting the
+// only admin must stay refused, not become possible by omitting the
+// password.
+func TestUpdateUser_RoleOnlyLastAdmin_Returns409(t *testing.T) {
+	t.Parallel()
+	svc := newFakeUserSvc()
+	svc.setRoleErr = sqlite.ErrLastAdmin
+	revoker := &fakeSessionRevoker{}
+	tokens := &fakeTokenPurger{}
+	body := strings.NewReader(`{"role":"viewer"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/admin/users/admin", body)
+	req = withChiParam(req, "subject", "admin")
+	w := httptest.NewRecorder()
+	UpdateUser(svc, audit.NoopRecorder(), revoker, tokens).ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(revoker.revokeBySubjectCalls) != 0 {
+		t.Errorf("expected no revocation when the write was refused, got %v", revoker.revokeBySubjectCalls)
+	}
+	if len(tokens.deleteBySubjectCalls) != 0 {
+		t.Errorf("expected no token purge when the write was refused, got %v", tokens.deleteBySubjectCalls)
+	}
+}
+
+// TestUpdateUser_PasswordOnlyBodyKeepsTheRole covers the other half of the
+// documented "omitted fields leave the user unchanged" contract: a reset
+// that names no role must not silently move the account to one.
+func TestUpdateUser_PasswordOnlyBodyKeepsTheRole(t *testing.T) {
+	t.Parallel()
+	svc := newFakeUserSvc()
+	revoker := &fakeSessionRevoker{}
+	tokens := &fakeTokenPurger{}
+	body := strings.NewReader(`{"password":"newpass"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/admin/users/bob", body)
+	req = withChiParam(req, "subject", "bob")
+	w := httptest.NewRecorder()
+	UpdateUser(svc, audit.NoopRecorder(), revoker, tokens).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := svc.roleOf("bob"); got != auth.RoleOperator {
+		t.Errorf("role after password reset = %q, want the unchanged operator", got)
+	}
+	// The role did not change, so the subject's API tokens keep the
+	// privileges they were minted with and must survive.
+	if len(tokens.deleteBySubjectCalls) != 0 {
+		t.Errorf("expected no token purge for a password-only update, got %v", tokens.deleteBySubjectCalls)
+	}
+}
+
+// TestUpdateUser_EmptyBody_Returns400 pins that a body naming neither
+// field is refused instead of reporting a success that changed nothing.
+func TestUpdateUser_EmptyBody_Returns400(t *testing.T) {
+	t.Parallel()
+	svc := newFakeUserSvc()
+	revoker := &fakeSessionRevoker{}
+	body := strings.NewReader(`{}`)
+	req := httptest.NewRequest(http.MethodPatch, "/admin/users/bob", body)
+	req = withChiParam(req, "subject", "bob")
+	w := httptest.NewRecorder()
+	UpdateUser(svc, audit.NoopRecorder(), revoker, &fakeTokenPurger{}).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(revoker.revokeBySubjectCalls) != 0 {
+		t.Errorf("expected no revocation on 400, got %v", revoker.revokeBySubjectCalls)
 	}
 }
 

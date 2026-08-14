@@ -240,6 +240,90 @@ func TestUserStorePutRefusesToDemoteLastAdmin(t *testing.T) {
 	}
 }
 
+// TestUserStoreSetRoleKeepsThePassword pins the operation behind a
+// role-only update: the admin who moves an account between roles does not
+// know its password, so the stored hash has to survive the change and the
+// user must keep signing in with the credentials they already have.
+func TestUserStoreSetRoleKeepsThePassword(t *testing.T) {
+	s := newUserStore(t)
+	ctx := context.Background()
+
+	if err := s.Put(ctx, "keeper", "pw", auth.RoleAdmin); err != nil {
+		t.Fatalf("Put admin: %v", err)
+	}
+	if err := s.Put(ctx, "bob", "bobpw", auth.RoleOperator); err != nil {
+		t.Fatalf("Put bob: %v", err)
+	}
+
+	// Address the account the way a path parameter arrives — the store
+	// folds it, so a differently-spelled subject still hits the row.
+	if err := s.SetRole(ctx, "Bob", auth.RoleViewer); err != nil {
+		t.Fatalf("SetRole: %v", err)
+	}
+
+	id, err := s.AuthenticateBasic(ctx, "bob", "bobpw")
+	if err != nil {
+		t.Fatalf("the old password stopped working after a role change: %v", err)
+	}
+	if id.Role != auth.RoleViewer {
+		t.Errorf("authenticated role=%q want viewer", id.Role)
+	}
+}
+
+// TestUserStoreSetRoleRefusesToDemoteLastAdmin pins that the role-only
+// path runs through the same lockout guard as Put: demoting the only
+// admin would leave the daemon with no account able to reach an admin
+// route, and no admin-only API to recover with.
+func TestUserStoreSetRoleRefusesToDemoteLastAdmin(t *testing.T) {
+	s := newUserStore(t)
+	ctx := context.Background()
+
+	if err := s.Put(ctx, "onlyadmin", "pw", auth.RoleAdmin); err != nil {
+		t.Fatalf("Put admin: %v", err)
+	}
+	if err := s.Put(ctx, "viewer", "pw", auth.RoleViewer); err != nil {
+		t.Fatalf("Put viewer: %v", err)
+	}
+
+	if err := s.SetRole(ctx, "OnlyAdmin", auth.RoleViewer); !errors.Is(err, ErrLastAdmin) {
+		t.Fatalf("SetRole demoting last admin: want ErrLastAdmin, got %v", err)
+	}
+	rows, err := s.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, r := range rows {
+		if r.Subject == "onlyadmin" && r.Role != auth.RoleAdmin {
+			t.Errorf("onlyadmin role=%q want admin (write must not have landed)", r.Role)
+		}
+	}
+	// A second admin unblocks the demotion.
+	if err := s.Put(ctx, "second", "pw", auth.RoleAdmin); err != nil {
+		t.Fatalf("Put second admin: %v", err)
+	}
+	if err := s.SetRole(ctx, "onlyadmin", auth.RoleViewer); err != nil {
+		t.Fatalf("SetRole with a second admin present: %v", err)
+	}
+}
+
+// TestUserStoreSetRoleUnknownSubject verifies that a role change for an
+// account that does not exist reports the miss instead of creating one.
+func TestUserStoreSetRoleUnknownSubject(t *testing.T) {
+	s := newUserStore(t)
+	ctx := context.Background()
+
+	if err := s.SetRole(ctx, "ghost", auth.RoleViewer); !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("SetRole unknown subject: want ErrUserNotFound, got %v", err)
+	}
+	n, err := s.Count(ctx)
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("Count=%d want 0 (a miss must not insert a row)", n)
+	}
+}
+
 // TestUserStoreDeleteHappyPath verifies that Delete removes the user.
 func TestUserStoreDeleteHappyPath(t *testing.T) {
 	s := newUserStore(t)
