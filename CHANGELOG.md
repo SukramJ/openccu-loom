@@ -53,6 +53,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Week-program presets on thermostats are readable over MQTT.** A
+  thermostat's preset list mixes two kinds of entry. Home Assistant
+  defines `boost`, `eco`, `comfort` and `away` and shows them in the
+  language of the HA instance; `week_program_1` … `week_program_6` are
+  this daemon's own, so HA printed the slug and the dropdown read
+  `week_program_3` next to translated neighbours. The week programs now
+  carry a label, and the payload carries the templates that map the label
+  back to the slug the device speaks — without them the entity would
+  report a state absent from its own option list and send a label to a
+  command that only knows slugs. The standard presets are deliberately
+  left as slugs: replacing them would take away HA's own translation and
+  freeze one language into a retained discovery payload.
+
 - **The stale-paramset check now runs on a CCU the daemon has never seen
   before.** After a firmware update the CCU's HmIP service can keep serving
   descriptor files that list parameters the device no longer has, and the

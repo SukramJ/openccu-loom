@@ -9,6 +9,7 @@
   "channel.parameter": "Parameter",
   "channel.title": "Channel",
   "channel.value": "Value",
+  "climate.preset.week_program": "Week program {n}",
   "config.centrals": "Centrals",
   "config.locale": "Locale",
   "config.title": "Configuration",

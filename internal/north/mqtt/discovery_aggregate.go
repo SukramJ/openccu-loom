@@ -201,6 +201,11 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	if body == nil {
 		return "", "", "", nil, false
 	}
+	// The climate preset list leaves the domain as slugs; the ones HA
+	// cannot translate get labels here, where the catalogues are.
+	if HAComponent(comp) == HAComponentClimate {
+		d.localiseClimatePresets(body)
+	}
 	objectID = d.channelObjectID(ev, comp)
 	uniqueID, scoped := d.channelUniqueID(ev, comp)
 	if !scoped {
