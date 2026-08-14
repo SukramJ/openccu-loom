@@ -195,6 +195,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   icon and room until the bridge was removed and re-added by hand.
   Numbers now advance and a released one stays retired.
 
+- **A vendor-specific Matter message is no longer mistaken for an
+  Interaction Model one.** The protocol header put the protocol id where
+  the wire carries the vendor id and vice versa. Both fields are absent
+  from the traffic the bridge normally sees, so nothing showed until a
+  controller sent a vendor-qualified message: its vendor id was then read
+  as the protocol id, and a payload the bridge does not implement was fed
+  into the Interaction Model dispatcher instead of being rejected. The
+  header now follows the field order every other Matter stack uses.
+
 ### Security
 
 - **A Matter write is authorized where it lands.** A write whose path
