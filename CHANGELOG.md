@@ -166,7 +166,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   could drive it there deliberately. Deadlines now expire and are
   dropped with the session that registered them.
 
+- **A Matter controller that already holds events no longer gets them
+  all again.** A read or subscribe can carry "the lowest event number I
+  still want", which controllers send on every reconnect so they receive
+  only what they missed. The bridge read that number out of the wrong
+  field of the request, so it always came out as zero and the filter had
+  no effect: every reconnect replayed the whole buffered event history —
+  up to 112 records — and lock operations or switch presses the
+  controller had already seen arrived a second time.
+
 ### Security
+
+- **A Matter write is authorized where it lands.** A write whose path
+  left out the attribute or the cluster was checked once, against the
+  default privilege for the un-expanded path, and then applied to every
+  attribute of the cluster it resolved to. A controller holding only
+  Operate — a guest ecosystem, a shared-home account — could target the
+  Access Control cluster this way and rewrite the access rules
+  themselves, which requires Administer. Such a write is now refused
+  outright, as the Matter specification requires; a write that names
+  every endpoint is authorized separately at each endpoint it reaches,
+  so it can no longer touch endpoints the controller's own access rules
+  do not cover.
 
 - **A Matter controller is bound to the fabric its certificate names.**
   Verifying a controller's operational certificate proved it chained to

@@ -133,14 +133,16 @@ func readEventFilterArray(dec *tlv.Decoder) ([]EventMinimumNumber, error) {
 //
 // Matter §10.6.9 EventFilterIB:
 //
-//	tag 1 = NodeID (uint64, optional)
-//	tag 2 = EventMin (uint64, mandatory)
+//	tag 0 = NodeID (uint64, optional)
+//	tag 1 = EventMin (uint64, mandatory)
 //
-// Mirrors chip src/app/ReadHandler.cpp ProcessEventFilters.
+// Mirrors matter.js packages/types/src/protocol/types/TlvEventFilter.ts:16-17
+// (`nodeId: TlvOptionalField(0, TlvNodeId)`, `eventMin: TlvField(1,
+// TlvUInt64)`) and chip src/app/ReadHandler.cpp ProcessEventFilters.
 func readEventFilterFields(dec *tlv.Decoder) (EventMinimumNumber, error) {
 	const (
-		tagEventFilterNodeID   uint8 = 1
-		tagEventFilterEventMin uint8 = 2
+		tagEventFilterNodeID   uint8 = 0
+		tagEventFilterEventMin uint8 = 1
 	)
 
 	var f EventMinimumNumber
