@@ -253,8 +253,7 @@ func runCacheClearOffline(
 			sum.errors = append(sum.errors, fmt.Sprintf("master[%s/%s]: %v", central, wireIface, errM))
 		}
 		// The device-scoped deletes do not report row counts; leave them at 0.
-		printSummary(stdout, sum, true)
-		return nil
+		return finishOfflineClear(stdout, sum)
 	}
 
 	units, err := resolveOfflineUnits(kind, central, iface, cfg)
@@ -276,7 +275,24 @@ func runCacheClearOffline(
 		}
 	}
 
+	return finishOfflineClear(stdout, sum)
+}
+
+// finishOfflineClear prints the offline roll-up and turns any collected
+// per-store failure into a returned error, so both offline exit paths report
+// the same way and cannot drift apart.
+//
+// A clear that could not delete some rows must not exit 0: the operator only
+// sees the failure lines when a human reads stdout, while a maintenance script
+// or an ExecStartPre hook checks the exit code alone and would proceed with a
+// cache that is still populated. This mirrors the daemon's own reset service,
+// which fails the request when its report carries errors, and which the online
+// path already surfaces as a non-2xx response.
+func finishOfflineClear(stdout io.Writer, sum clearSummary) error {
 	printSummary(stdout, sum, true)
+	if len(sum.errors) > 0 {
+		return fmt.Errorf("cache clear (offline, scope=%s): %s", sum.scope, strings.Join(sum.errors, "; "))
+	}
 	return nil
 }
 

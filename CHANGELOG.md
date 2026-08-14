@@ -174,6 +174,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   once, when the configuration is loaded, so every consumer of it —
   including the retained-topic cleanup — agrees.
 
+- **`hmcli cache clear --offline` fails when it could not clear.** A
+  delete that the database rejected — a locked file, a table missing
+  after an interrupted migration, a read-only data directory — was
+  printed as an `error:` line on standard output and then followed by
+  exit code 0. Anything that reads the exit code instead of the text —
+  a maintenance script, an `ExecStartPre` hook, a CI job — treated the
+  run as done and the next daemon start read the cache it believed was
+  gone. The offline clear now exits 1 and names every store that
+  failed, matching what the daemon-side clear already reports over
+  REST.
+
 ## [0.58.6]
 
 ### Security
