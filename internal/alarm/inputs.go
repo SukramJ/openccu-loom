@@ -78,6 +78,22 @@ func (s *Service) attachUnit(u *central.Unit) {
 		events.Subscribe(u.EventBus, func(e hmevent.SysvarChangedEvent) {
 			s.sysvarMirror.onInbound(name, e)
 		}),
+		// The southbound bring-up is readiness-gated, so the device
+		// model arrives long after the alarm service starts — on a
+		// co-booting CCU, tens of seconds after. The reconcile pass at
+		// Start therefore asks an empty registry and finds no sounding
+		// siren to adopt or stop (S4). This is the second look, taken
+		// when the model is actually there.
+		//
+		// No seed from Unit.IsSouthboundReady is needed for the
+		// already-ready case: both callers of attachUnit reconcile
+		// immediately afterwards, which is what covers a central whose
+		// event fired before this subscription existed.
+		events.Subscribe(u.EventBus, func(_ hmevent.CentralSouthboundReadyEvent) {
+			ctx := context.Background()
+			s.reconcile(ctx)
+			s.engine.ReevaluateSensors(ctx)
+		}),
 	}
 	s.mu.Lock()
 	s.unsubs[name] = append(s.unsubs[name], unsubs...)

@@ -171,8 +171,12 @@ var bootOrderSubsystems = []bootOrderSubsystem{
 // a fresh boot, so asserting non-emptiness would pin a lie:
 //
 //   - /api/v1/alarm/zones — a zone exists only once an operator creates
-//     one. The alarm engine's own boot order is covered by its
-//     integration tests.
+//     one. The alarm engine's own boot order is pinned by
+//     TestReconcileActsOnASirenThatWasAlreadySoundingWhenTheModelArrived
+//     in internal/alarm, which is where it has to live: the state S4
+//     reconciliation reads becomes observed through the bulk value seed,
+//     a ReGa script whose body the simulated CCU never evaluates, so a
+//     siren that is already sounding cannot be expressed here.
 //   - /api/v1/security/faults — a fault stands only when something is
 //     actually wrong; the simulated fleet is healthy.
 //   - /api/v1/security → zones — populated from the alarm engine, which

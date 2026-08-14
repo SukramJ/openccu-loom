@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 5e5e386c
-HEAD: 5e5e386c
+Generated: b81d091b
+HEAD: b81d091b
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28287 |
+| Total Exported | 28288 |
 | Reachable | 4999 |
-| Whitelisted | 20312 |
+| Whitelisted | 20313 |
 | **Unreachable** | **2976** |
 
 ## Top-20 Packages by Dead Code
