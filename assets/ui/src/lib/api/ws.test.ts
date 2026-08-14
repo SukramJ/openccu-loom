@@ -128,6 +128,38 @@ describe("connectEvents event normalisation", () => {
     ).toEqual([]);
   });
 
+  it("normalises device.availability_changed into the device_availability shape", () => {
+    expect(
+      received({
+        type: "device.availability_changed",
+        payload: {
+          central: "ccu1",
+          interface_id: "HmIP-RF",
+          device_address: "ABC0000001",
+          available: false,
+        },
+      }),
+    ).toEqual([
+      {
+        type: "device_availability",
+        payload: {
+          central: "ccu1",
+          address: "ABC0000001",
+          available: false,
+        },
+      },
+    ]);
+  });
+
+  it("drops an availability frame without an address rather than emitting a broken payload", () => {
+    expect(
+      received({
+        type: "device.availability_changed",
+        payload: { central: "ccu1", available: true },
+      }),
+    ).toEqual([]);
+  });
+
   it("passes an unnormalised broadcast through with its wire type", () => {
     expect(
       received({ type: "hub.service_message", payload: { count: 3 } }),

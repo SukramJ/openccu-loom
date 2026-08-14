@@ -61,6 +61,21 @@ func deviceEventProbes() []deviceEventProbe {
 			},
 		},
 		{
+			name:    "availability",
+			address: "AVAIL000001",
+			topic:   ws.DeviceLifecycleTopic,
+			publish: func(u *central.Unit, a string) {
+				events.Publish(u.EventBus, hmevent.DeviceLifecycleEvent{
+					Base:        hmevent.NewBase(),
+					CentralName: u.Name(),
+					InterfaceID: "HmIP-RF",
+					Address:     a,
+					Subtype:     hmenum.DeviceLifecycleSubtypeAvailabilityChanged,
+					Available:   false,
+				})
+			},
+		},
+		{
 			name:    "optimistic rollback",
 			address: "ROLL0000001",
 			topic:   func(a string) string { return ws.DataPointTopic(a, 1, "STATE") },

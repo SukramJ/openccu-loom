@@ -307,6 +307,14 @@
     },
     {
       "category": "devices",
+      "description": "Server-pushed: a device's effective reachability flipped (its interface lost the connection, or the device itself reported UNREACH / STICKY_UNREACH). Rides the same device.{address}.lifecycle topic as device.created — subscribers route by envelope `type`.",
+      "kind": "broadcast",
+      "name": "device.availability_changed",
+      "topic": "device.{address}.lifecycle",
+      "payload": "DeviceAvailabilityChangedPayload"
+    },
+    {
+      "category": "devices",
       "description": "Server-pushed: a new device was observed in the registry (added via CCU pairing, cache reload, or initial-snapshot import).",
       "kind": "broadcast",
       "name": "device.created",

@@ -772,33 +772,39 @@ func (b *EventBridge) publishDeviceSnapshot(ctx context.Context, centralName str
 }
 
 // markAvailability publishes the per-device availability topic, but
-// only when the desired state differs from the last published state.
+// only when the desired state differs from the last published state,
+// and reports whether that transition happened.
 // Without this gate every value-change event would re-publish "online"
 // (and any UNREACH parameter would re-publish whatever it just
 // computed) — broker spam plus retained-topic churn. With it the topic
 // flips exactly on transitions: boot → offline; first observed DP →
 // online; UNREACH true → offline; UNREACH false → online.
 //
+// The gate runs before the MQTT wiring is consulted so it stays the single
+// answer to "did this device's availability just change" for every plane,
+// including deployments with no broker at all.
+//
 // Errors are swallowed at debug level — the broker not having the
 // device-availability topic is a degraded-but-not-fatal state.
-func (b *EventBridge) markAvailability(ctx context.Context, centralName, iface, deviceAddr string, online bool) {
-	if b.mqtt == nil {
-		return
-	}
-	bridge := b.mqtt.Bridge()
-	if bridge == nil {
-		return
-	}
+func (b *EventBridge) markAvailability(ctx context.Context, centralName, iface, deviceAddr string, online bool) bool {
 	key := centralName + "|" + iface + "|" + deviceAddr
 	if prev, ok := b.availabilityCache.Load(key); ok {
 		// availabilityCache only ever stores bool values written by this
 		// method, so the assertion cannot fail.
 		if prevBool, _ := prev.(bool); prevBool == online {
-			return
+			return false
 		}
 	}
 	b.availabilityCache.Store(key, online)
+	if b.mqtt == nil {
+		return true
+	}
+	bridge := b.mqtt.Bridge()
+	if bridge == nil {
+		return true
+	}
 	_ = bridge.PublishAvailability(ctx, centralName, iface, deviceAddr, online)
+	return true
 }
 
 // isReachabilityParameter reports whether a parameter change implies
@@ -1068,6 +1074,12 @@ func (b *EventBridge) onValueChanged(centralName string, e hmevent.DataPointValu
 func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
 	b.publishValueChangedWS(centralName, envKind, e)
 	if b.mqtt == nil {
+		// No broker to publish to, but the availability transition this
+		// value may carry still has to reach the bus consumers — the
+		// WebSocket device-lifecycle plane and the Matter reachability
+		// forward exist in a deployment without MQTT too.
+		deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
+		b.refreshDeviceAvailability(b.lifetimeCtx, centralName, inferInterface(e.Key), deviceAddr, e.Key.Parameter)
 		return
 	}
 	f := b.fanout.Load()
@@ -1322,26 +1334,59 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 	b.publishCustomDPState(ctx, centralName, iface, deviceAddr, channelNo, ch)
 	b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, channelNo, ch)
 
-	// Re-publish device availability when a reachability-relevant
-	// parameter just flipped. The Device.Available() result is
-	// derived from the same parameter the model just absorbed, so
-	// reading it here gives the post-update view.
-	if isReachabilityParameter(e.Key.Parameter) {
-		if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
-			b.markAvailability(ctx, centralName, iface, deviceAddr, dev.Available())
-		}
-	} else {
+	b.refreshDeviceAvailability(ctx, centralName, iface, deviceAddr, e.Key.Parameter)
+}
+
+// refreshDeviceAvailability re-evaluates a device's effective availability
+// after one of its data points absorbed a value, publishes the retained MQTT
+// availability topic on a real transition and announces the same transition on
+// the owning central's bus.
+//
+// Both effects hang off ONE transition gate (the availability cache in
+// [EventBridge.markAvailability]) on purpose: a second gate would let whichever
+// consumer looked first swallow the flip for the other, and the two planes
+// would then disagree about the same device.
+//
+// The bus announcement is what carries a per-device reachability change north
+// beyond MQTT — the WebSocket device-lifecycle plane and the Matter
+// reachability forward both read it. Only the interface-level forced-
+// availability path published it before, so a single device the CCU stopped
+// reaching never reached those consumers at all.
+func (b *EventBridge) refreshDeviceAvailability(ctx context.Context, centralName, iface, deviceAddr, parameter string) {
+	dev := lookupDeviceObject(b.registry, deviceAddr)
+	if dev == nil {
+		return
+	}
+	online := dev.Available()
+	if !isReachabilityParameter(parameter) {
 		// Any non-reachability value change implies the device just
 		// produced data — flip it to online if we previously held
 		// the cache at offline (cache-gated, so the broker only
 		// sees the transition publish, not every event). This is
 		// what unfreezes a device that booted before any DP was
 		// observed: the first real value-change event ushers the
-		// device into the available state.
-		if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil && dev.Available() {
-			b.markAvailability(ctx, centralName, iface, deviceAddr, true)
+		// device into the available state. A device the model still
+		// holds as unreachable keeps that state until the
+		// reachability parameter itself says otherwise.
+		if !online {
+			return
 		}
 	}
+	if !b.markAvailability(ctx, centralName, iface, deviceAddr, online) {
+		return
+	}
+	u, ok := b.registry.Get(centralName)
+	if !ok || u == nil || u.EventBus == nil {
+		return
+	}
+	events.Publish(u.EventBus, hmevent.DeviceLifecycleEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: centralName,
+		InterfaceID: iface,
+		Address:     deviceAddr,
+		Subtype:     hmenum.DeviceLifecycleSubtypeAvailabilityChanged,
+		Available:   online,
+	})
 }
 
 // buildPublishEvent composes the [mqtt.Event] used by the bridge for

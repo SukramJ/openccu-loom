@@ -39,7 +39,8 @@ export type EventStream = {
 // Wire shape the daemon sends. Distinct from the SPA-facing
 // EventEnvelope so the normaliser below is the single place that
 // reshapes server events into the discriminator the rest of the SPA
-// already consumes ("data_point", "custom_data_point", "sysvar").
+// already consumes ("data_point", "custom_data_point", "sysvar",
+// "device_availability").
 type WireEnvelope = {
   topic?: string;
   type?: string;
@@ -159,6 +160,27 @@ function normalizeEvent(raw: unknown): EventEnvelope | null {
         central: p.central ?? "",
         name: p.name,
         value: p.value,
+      },
+    };
+  }
+  if (type === "device.availability_changed" && wire.payload) {
+    const p = wire.payload as {
+      central?: string;
+      device_address?: string;
+      available?: boolean;
+    };
+    if (
+      typeof p.device_address !== "string" ||
+      typeof p.available !== "boolean"
+    ) {
+      return null;
+    }
+    return {
+      type: "device_availability",
+      payload: {
+        central: p.central ?? "",
+        address: p.device_address,
+        available: p.available,
       },
     };
   }

@@ -2218,6 +2218,7 @@ export interface paths {
          *     - `hub.install_mode_changed` → [InstallModeChangedPayload](#/components/schemas/InstallModeChangedPayload)
          *     - `device.created` → [DeviceCreatedPayload](#/components/schemas/DeviceCreatedPayload)
          *     - `device.removed` → [DeviceRemovedPayload](#/components/schemas/DeviceRemovedPayload)
+         *     - `device.availability_changed` → [DeviceAvailabilityChangedPayload](#/components/schemas/DeviceAvailabilityChangedPayload)
          *     - `matter.*` broadcasts: see `wsapi.json` (payload schemas TBD).
          */
         get: {
@@ -8634,6 +8635,22 @@ export interface components {
             central: string;
             interface_id: string;
             device_address: string;
+        };
+        /**
+         * @description Payload of a `device.availability_changed` broadcast. Topic
+         *     pattern `device.{address}.lifecycle` — same topic as
+         *     `device.created`; subscribers route by the envelope `type`
+         *     field. Fires when a device's effective reachability flips,
+         *     either because its interface lost the connection to the CCU or
+         *     because the device itself reported UNREACH / STICKY_UNREACH.
+         *     `available` carries the post-transition state and matches the
+         *     `available` field of the device's REST summary.
+         */
+        DeviceAvailabilityChangedPayload: {
+            central: string;
+            interface_id: string;
+            device_address: string;
+            available: boolean;
         };
         /**
          * @description Payload of a `datapoint.optimistic_rolled_back` broadcast. Rides

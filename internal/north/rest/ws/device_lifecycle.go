@@ -30,18 +30,38 @@ type DeviceRemovedPayload struct {
 	DeviceAddress string `json:"device_address"`
 }
 
-// DeviceLifecycleTopic returns the canonical topic for both create
-// and remove events on a single device. The envelope `type` field
-// disambiguates (`device.created` vs `device.removed`) so the
-// subscriber sees both kinds on one subscription pattern
-// (`device.<addr>.lifecycle`).
+// DeviceAvailabilityChangedPayload is the WebSocket payload published
+// on the `device.<addr>.lifecycle` topic when a device's effective
+// reachability flips. Mirrors the
+// [hmenum.DeviceLifecycleSubtypeAvailabilityChanged] variant of
+// [hmevent.DeviceLifecycleEvent].
+type DeviceAvailabilityChangedPayload struct {
+	Central       string `json:"central"`
+	InterfaceID   string `json:"interface_id"`
+	DeviceAddress string `json:"device_address"`
+	Available     bool   `json:"available"`
+}
+
+// broadcastDeviceAvailabilityChanged is the envelope `type` of the
+// availability frame. It has no [hmevent.EventType] of its own: the
+// domain carries every device lifecycle transition on one event with a
+// sub-type discriminator, while WebSocket consumers route on `type`
+// alone and must be able to tell an availability flip from a creation.
+const broadcastDeviceAvailabilityChanged = "device.availability_changed"
+
+// DeviceLifecycleTopic returns the canonical topic for the create,
+// remove and availability events on a single device. The envelope
+// `type` field disambiguates (`device.created` vs `device.removed` vs
+// `device.availability_changed`) so the subscriber sees every kind on
+// one subscription pattern (`device.<addr>.lifecycle`).
 func DeviceLifecycleTopic(deviceAddr string) string {
 	return "device." + deviceAddr + ".lifecycle"
 }
 
 // DeviceLifecycleSubscriber bridges per-central
-// [hmevent.DeviceCreatedEvent] and [hmevent.DeviceRemovedEvent] from
-// the domain bus to the WebSocket [*Hub]. Mirrors
+// [hmevent.DeviceCreatedEvent], [hmevent.DeviceRemovedEvent] and the
+// availability sub-type of [hmevent.DeviceLifecycleEvent] from the
+// domain bus to the WebSocket [*Hub]. Mirrors
 // [HubEventsSubscriber] in shape; runs alongside it so each event
 // family gets a focused subscriber and failure of one path cannot
 // starve the other.
@@ -112,7 +132,28 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
 			},
 		})
 	})
-	return unwireAll([]func(){unsubCreated, unsubRemoved})
+	// Availability rides the same topic as create/remove. The domain
+	// publishes every lifecycle transition on one event; only the
+	// availability sub-type needs a north-bound frame here, because the
+	// creation and deletion sub-types have their own dedicated events
+	// (subscribed above) and relaying them would double each frame.
+	unsubAvailability := events.Subscribe(bus, func(e hmevent.DeviceLifecycleEvent) {
+		if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
+			return
+		}
+		hub.Publish(Event{
+			Topic: DeviceLifecycleTopic(e.Address),
+			Type:  broadcastDeviceAvailabilityChanged,
+			When:  e.Timestamp(),
+			Payload: DeviceAvailabilityChangedPayload{
+				Central:       centralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.Address,
+				Available:     e.Available,
+			},
+		})
+	})
+	return unwireAll([]func(){unsubCreated, unsubRemoved, unsubAvailability})
 }
 
 // Stop drops all event-bus subscriptions Start attached. Subscriptions handed

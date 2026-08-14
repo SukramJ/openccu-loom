@@ -19,6 +19,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   block holds counters only and names no device, so it is unaffected by
   `anonymize`. (REST API 5.26.0)
 
+- **A device that becomes unreachable now reaches the Config UI while you
+  are looking at it.** The daemon published every per-device availability
+  transition on its internal bus, but nothing carried it north: the MQTT
+  availability topic flipped, while the WebSocket stream stayed silent and
+  the device list only learned about the change on a full reload. A new
+  `device.availability_changed` broadcast rides the existing
+  `device.{address}.lifecycle` topic, and the SPA applies it in place — the
+  status column and the available / unavailable filter follow a device that
+  drops out. The transition is announced for both causes: an interface that
+  loses its connection to the CCU, and a device that reports UNREACH or
+  STICKY_UNREACH on its own. (REST API 5.27.0)
+
 ### Fixed
 
 - **A radio interface that disappears from the CCU is now reported as

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.26.0
+  version: 5.27.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2108,6 +2108,7 @@ paths:
         - `hub.install_mode_changed` → [InstallModeChangedPayload](#/components/schemas/InstallModeChangedPayload)
         - `device.created` → [DeviceCreatedPayload](#/components/schemas/DeviceCreatedPayload)
         - `device.removed` → [DeviceRemovedPayload](#/components/schemas/DeviceRemovedPayload)
+        - `device.availability_changed` → [DeviceAvailabilityChangedPayload](#/components/schemas/DeviceAvailabilityChangedPayload)
         - `matter.*` broadcasts: see `wsapi.json` (payload schemas TBD).
       responses:
         "101":
@@ -11263,6 +11264,24 @@ components:
         central: { type: string }
         interface_id: { type: string }
         device_address: { type: string }
+
+    DeviceAvailabilityChangedPayload:
+      type: object
+      description: |
+        Payload of a `device.availability_changed` broadcast. Topic
+        pattern `device.{address}.lifecycle` — same topic as
+        `device.created`; subscribers route by the envelope `type`
+        field. Fires when a device's effective reachability flips,
+        either because its interface lost the connection to the CCU or
+        because the device itself reported UNREACH / STICKY_UNREACH.
+        `available` carries the post-transition state and matches the
+        `available` field of the device's REST summary.
+      required: [central, interface_id, device_address, available]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        device_address: { type: string }
+        available: { type: boolean }
 
     OptimisticRollbackPayload:
       type: object

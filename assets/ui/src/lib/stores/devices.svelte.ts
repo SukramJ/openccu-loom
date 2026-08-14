@@ -1,7 +1,11 @@
 import { api, ApiError } from "$lib/api/client";
 import { t } from "$lib/i18n";
-import { onResync } from "./events.svelte";
-import type { DeviceSummary } from "$lib/api/types";
+import { onResync, subscribe } from "./events.svelte";
+import type {
+  DeviceAvailabilityEvent,
+  DeviceSummary,
+  EventEnvelope,
+} from "$lib/api/types";
 import { authStore } from "./auth.svelte";
 
 /**
@@ -62,14 +66,35 @@ function createDeviceStore() {
     }
   }
 
-  // The daemon has no per-device availability broadcast, so the list has
-  // no finer-grained live update than a full reload: it re-reads on the
-  // daemon's resync signal (the boot snapshot writes MQTT's retained
-  // topics instead of replaying every data point into the stream, so
-  // without this the list keeps what it read before the restart).
+  // Two live inputs:
+  //
+  //  - `device.availability_changed` patches one device in place, so the
+  //    availability column and the available/unavailable filter follow a
+  //    device that goes unreachable instead of waiting for a reload.
+  //  - the daemon's resync signal reloads the whole list (the boot
+  //    snapshot writes MQTT's retained topics instead of replaying every
+  //    data point into the stream, so without this the list keeps what it
+  //    read before the restart).
   function ensureStream() {
     if (unsub) return;
-    unsub = onResync(() => void refresh());
+    const unsubEvents = subscribe(applyEvent);
+    const unsubResync = onResync(() => void refresh());
+    unsub = () => {
+      unsubEvents();
+      unsubResync();
+    };
+  }
+
+  function applyEvent(ev: EventEnvelope) {
+    if (ev.type !== "device_availability") return;
+    // The fallback variant of EventEnvelope widens payload to
+    // `unknown`, so narrow explicitly before indexing.
+    const p = ev.payload as DeviceAvailabilityEvent;
+    const i = items.findIndex((d) => d.address === p.address);
+    if (i < 0) return;
+    // $state arrays are reactive on index assignment; no spread
+    // needed for the mutation to propagate.
+    items[i] = { ...items[i], available: p.available };
   }
 
   return {

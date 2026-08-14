@@ -19,9 +19,19 @@ vi.mock("$lib/api/client", () => ({
 }));
 
 // Stub out the events store — we don't want a live WebSocket in unit tests.
+// The stub records the handlers the store registers so a test can drive a
+// broadcast into it the way the WS pump would.
+const wsPump = vi.hoisted(() => ({
+  handlers: [] as ((ev: unknown) => void)[],
+}));
 vi.mock("$lib/stores/events.svelte", () => ({
   onResync: () => () => {},
-  subscribe: vi.fn(() => () => {}),
+  subscribe: vi.fn((h: (ev: unknown) => void) => {
+    wsPump.handlers.push(h);
+    return () => {
+      wsPump.handlers = wsPump.handlers.filter((x) => x !== h);
+    };
+  }),
 }));
 
 // Mock authStore.probe — called on 401.
@@ -39,7 +49,7 @@ import { api } from "$lib/api/client";
 import { deviceStore } from "./devices.svelte";
 
 function makePage(
-  items: { address: string }[],
+  items: { address: string; available?: boolean }[],
   total: number,
 ) {
   return { items, total };
@@ -132,5 +142,42 @@ describe("deviceStore.refresh — pagination", () => {
     await deviceStore.refresh();
     expect(deviceStore.items).toHaveLength(210);
     expect(listDevicesMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("deviceStore — live availability", () => {
+  it("applies a device_availability broadcast without refetching the list", async () => {
+    listDevicesMock.mockResolvedValueOnce(
+      makePage([{ address: "ABC123", available: true }], 1),
+    );
+    await deviceStore.refresh();
+    deviceStore.ensureStream();
+
+    expect(wsPump.handlers).toHaveLength(1);
+    wsPump.handlers[0]({
+      type: "device_availability",
+      payload: { central: "ccu1", address: "ABC123", available: false },
+    });
+
+    expect(deviceStore.items[0].available).toBe(false);
+    // A live frame must not trigger a full reload — that is what the
+    // resync signal is for.
+    expect(listDevicesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores an availability frame for a device the list does not hold", async () => {
+    listDevicesMock.mockResolvedValueOnce(
+      makePage([{ address: "ABC123", available: true }], 1),
+    );
+    await deviceStore.refresh();
+    deviceStore.ensureStream();
+
+    wsPump.handlers[0]({
+      type: "device_availability",
+      payload: { central: "ccu1", address: "OTHER1", available: false },
+    });
+
+    expect(deviceStore.items).toHaveLength(1);
+    expect(deviceStore.items[0].available).toBe(true);
   });
 });
