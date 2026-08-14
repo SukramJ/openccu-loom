@@ -548,15 +548,19 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 	return stack
 }
 
-// buildLWTTopic assembles the retained LWT/online topic for the
-// bridge. Mirrors mqtt.TopicBuilder.BridgeStatus without requiring
-// bridge instantiation first.
+// buildLWTTopic assembles the retained LWT topic the broker writes
+// `offline` to when the daemon's link dies.
+//
+// It calls mqtt.TopicBuilder.BridgeStatus rather than reproducing its
+// shape, because the will has to land on exactly the topic the bridge
+// writes its `online` counterpart to, and the will is built before a
+// bridge exists. Reproducing the shape re-derived it from the raw
+// `topic_base`, so a configured trailing slash left a retained
+// `offline` on `<base>//bridge/status` that nothing ever overwrote —
+// and every entity that names the bridge status as an availability
+// source stayed unavailable.
 func buildLWTTopic(cfg *config.Config) string {
-	base := cfg.North.MQTT.TopicBase
-	if base == "" {
-		base = "openccu-loom"
-	}
-	return base + "/bridge/status"
+	return mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).BridgeStatus()
 }
 
 // bridgeHealthSupplier returns a closure the MQTT bridge invokes on

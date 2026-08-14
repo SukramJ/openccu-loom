@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
@@ -102,6 +103,41 @@ func TestHubPlaneTopicsRoundTrip(t *testing.T) {
 	for topic := range published {
 		if !declared[topic] {
 			t.Logf("published but not declared: %q (no entity is created for it)", topic)
+		}
+	}
+}
+
+// TestHubSystemTopicsShareTheCentralSegmentOfTheRestOfThePlane asserts
+// that the three central-wide metric sensors live in the same per-CCU
+// subtree as every other topic of that CCU.
+//
+// The round-trip guard above cannot see this: declaration and publish
+// both go through [TopicBuilder.systemTopic], so the two agree with
+// each other no matter how the segment is spelled. What broke was the
+// spelling against the rest of the plane — the metric topics
+// lower-cased the central while `hub/status`, `hub/info` and the
+// sysvar topics escape it with [naming.TopicSafe]. One CCU then
+// occupied two subtrees, and an operator subscribing the documented
+// `<base>/<central>/#` (docs/mqtt-topic-schema.md) never received the
+// health sensors. The prefix is therefore compared against a second,
+// independent producer rather than against a literal.
+func TestHubSystemTopicsShareTheCentralSegmentOfTheRestOfThePlane(t *testing.T) {
+	t.Parallel()
+	const (
+		base    = "openccu-loom"
+		central = "Haus CCÜ"
+	)
+	topics := NewTopicBuilder(base)
+	// naming.MQTTHubStatus is the plane's other producer of the per-CCU
+	// prefix; every hub topic of this CCU starts with it.
+	prefix := strings.TrimSuffix(naming.MQTTHubStatus(base, central), "hub/status")
+	for _, topic := range []string{
+		topics.HubSystemHealthScore(central),
+		topics.HubConnectionLatency(central),
+		topics.HubLastEventAge(central),
+	} {
+		if !strings.HasPrefix(topic, prefix) {
+			t.Errorf("%q is outside the CCU subtree %q — a consumer subscribing the documented per-CCU wildcard never sees it", topic, prefix+"#")
 		}
 	}
 }

@@ -60,6 +60,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A `topic_base` with a trailing slash no longer takes every alarm and
+  security entity offline.** The broker's last-will was assembled from
+  the configured topic base verbatim, while the bridge publishes its
+  `online` counterpart from the normalised base — with `topic_base:
+  "loom/"` the retained `offline` landed on `loom//bridge/status` and
+  nothing ever overwrote it. Every alarm panel and every Security &
+  Safety entity names that topic as an availability source and requires
+  all sources to be online, so all of them stayed permanently
+  unavailable in Home Assistant. The will and the status topic are now
+  built by the same builder, and the availability source both planes
+  declare goes through it as well.
+
 - **A CCU added while the daemon is running reports its system status.**
   The `<base>/<CCU>/system/status` topic an operator's alerting watches
   for interface degradation was published by a subscriber that walked
