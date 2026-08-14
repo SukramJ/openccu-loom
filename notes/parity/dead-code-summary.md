@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: f5237dbb
-HEAD: f5237dbb
+Generated: b9e43966
+HEAD: b9e43966
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28315 |
-| Reachable | 5003 |
-| Whitelisted | 20338 |
-| **Unreachable** | **2974** |
+| Total Exported | 28341 |
+| Reachable | 5006 |
+| Whitelisted | 20358 |
+| **Unreachable** | **2977** |
 
 ## Top-20 Packages by Dead Code
 
@@ -168,8 +168,8 @@ HEAD: f5237dbb
 | internal/north/filter | 0 | 1 | 0 |
 | internal/north/matter/bridge | 0 | 51 | 38 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
-| internal/north/matter/endpoint | 0 | 9 | 0 |
-| internal/north/matter/im | 0 | 74 | 14 |
+| internal/north/matter/endpoint | 0 | 8 | 0 |
+| internal/north/matter/im | 0 | 78 | 14 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/mdns | 0 | 8 | 4 |
 | internal/north/matter/schema | 0 | 0 | 8 |

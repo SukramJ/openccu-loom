@@ -1,6 +1,6 @@
 {
-  "generated": "f5237dbb",
-  "head": "f5237dbb",
+  "generated": "b9e43966",
+  "head": "b9e43966",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28315,
-    "reachable": 4839,
-    "whitelisted": 20338,
-    "unreachable": 3138
+    "total_exported": 28341,
+    "reachable": 4841,
+    "whitelisted": 20358,
+    "unreachable": 3142
   },
   "by_package": [
     {
@@ -487,7 +487,7 @@
     {
       "package": "internal/north/matter/im",
       "unreachable_funcs": 0,
-      "unreachable_types": 74,
+      "unreachable_types": 78,
       "unreachable_other": 14
     },
     {
@@ -10951,14 +10951,14 @@
       "package": "internal/north/matter/bridge",
       "identifier": "CommissioningAdvertisement",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1284,
+      "line": 1307,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "CommissioningAdvertisement",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1284,
+      "line": 1307,
       "kind": "type"
     },
     {
@@ -11350,14 +11350,14 @@
       "package": "internal/north/matter/bridge",
       "identifier": "PartsListProviderSetter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 943,
+      "line": 947,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "PartsListProviderSetter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 943,
+      "line": 947,
       "kind": "type"
     },
     {
@@ -11707,7 +11707,7 @@
       "package": "internal/north/matter/endpoint",
       "identifier": "Endpoint",
       "file": "internal/north/matter/endpoint/types.go",
-      "line": 66,
+      "line": 67,
       "kind": "type"
     },
     {
@@ -11728,14 +11728,14 @@
       "package": "internal/north/matter/endpoint",
       "identifier": "Snapshot",
       "file": "internal/north/matter/endpoint/types.go",
-      "line": 19,
+      "line": 20,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "Snapshot",
       "file": "internal/north/matter/endpoint/types.go",
-      "line": 19,
+      "line": 20,
       "kind": "type"
     },
     {
@@ -11756,7 +11756,7 @@
       "package": "internal/north/matter/endpoint",
       "identifier": "Topology",
       "file": "internal/north/matter/endpoint/types.go",
-      "line": 289,
+      "line": 344,
       "kind": "type"
     },
     {
@@ -11798,7 +11798,7 @@
       "package": "internal/north/matter/im",
       "identifier": "AttributeReport",
       "file": "internal/north/matter/im/read.go",
-      "line": 278,
+      "line": 280,
       "kind": "type"
     },
     {
@@ -11847,14 +11847,14 @@
       "package": "internal/north/matter/im",
       "identifier": "AttributeValueWriter",
       "file": "internal/north/matter/im/read.go",
-      "line": 296,
+      "line": 298,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "AttributeValueWriter",
       "file": "internal/north/matter/im/read.go",
-      "line": 296,
+      "line": 298,
       "kind": "type"
     },
     {
@@ -11883,6 +11883,20 @@
       "identifier": "AttributeWritePrivilegeProvider",
       "file": "internal/north/matter/im/dispatcher.go",
       "line": 97,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/matter/im",
+      "identifier": "AuthorizingWriter",
+      "file": "internal/north/matter/im/dispatcher.go",
+      "line": 127,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/matter/im",
+      "identifier": "AuthorizingWriter",
+      "file": "internal/north/matter/im/dispatcher.go",
+      "line": 127,
       "kind": "type"
     },
     {
@@ -11931,14 +11945,14 @@
       "package": "internal/north/matter/im",
       "identifier": "CommandInvokePrivilegeProvider",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 114,
+      "line": 146,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "CommandInvokePrivilegeProvider",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 114,
+      "line": 146,
       "kind": "type"
     },
     {
@@ -11994,14 +12008,14 @@
       "package": "internal/north/matter/im",
       "identifier": "Dispatcher",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 142,
+      "line": 174,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "Dispatcher",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 142,
+      "line": 174,
       "kind": "type"
     },
     {
@@ -12155,14 +12169,14 @@
       "package": "internal/north/matter/im",
       "identifier": "EventReadAuthorizer",
       "file": "internal/north/matter/im/read.go",
-      "line": 638,
+      "line": 640,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "EventReadAuthorizer",
       "file": "internal/north/matter/im/read.go",
-      "line": 638,
+      "line": 640,
       "kind": "type"
     },
     {
@@ -12218,14 +12232,14 @@
       "package": "internal/north/matter/im",
       "identifier": "InvokeResult",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 188,
+      "line": 220,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "InvokeResult",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 188,
+      "line": 220,
       "kind": "type"
     },
     {
@@ -12260,21 +12274,21 @@
       "package": "internal/north/matter/im",
       "identifier": "ReadResult",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 163,
+      "line": 195,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "ReadResult",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 163,
+      "line": 195,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "ReportData",
       "file": "internal/north/matter/im/read.go",
-      "line": 258,
+      "line": 260,
       "kind": "type"
     },
     {
@@ -12349,6 +12363,20 @@
     },
     {
       "package": "internal/north/matter/im",
+      "identifier": "WriteAuthorizer",
+      "file": "internal/north/matter/im/dispatcher.go",
+      "line": 115,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/matter/im",
+      "identifier": "WriteAuthorizer",
+      "file": "internal/north/matter/im/dispatcher.go",
+      "line": 115,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/matter/im",
       "identifier": "WriteRequest",
       "file": "internal/north/matter/im/write.go",
       "line": 34,
@@ -12372,14 +12400,14 @@
       "package": "internal/north/matter/im",
       "identifier": "WriteResult",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 174,
+      "line": 206,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "WriteResult",
       "file": "internal/north/matter/im/dispatcher.go",
-      "line": 174,
+      "line": 206,
       "kind": "type"
     },
     {
@@ -13121,35 +13149,35 @@
       "package": "internal/north/matter/secure/operational",
       "identifier": "Entry",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 229,
+      "line": 254,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "ErrSessionExhausted",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 376,
+      "line": 408,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "ErrSessionExhausted",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 376,
+      "line": 408,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "ErrSessionNotFound",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 379,
+      "line": 411,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "ErrSessionNotFound",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 379,
+      "line": 411,
       "kind": "var"
     },
     {
@@ -13324,14 +13352,14 @@
       "package": "internal/north/matter/secure/sigma",
       "identifier": "Initiator",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 165,
+      "line": 170,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "Initiator",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 165,
+      "line": 170,
       "kind": "type"
     },
     {
@@ -13352,14 +13380,14 @@
       "package": "internal/north/matter/secure/sigma",
       "identifier": "PeerFabricIDExtractor",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 41,
+      "line": 46,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "PeerFabricIDExtractor",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 41,
+      "line": 46,
       "kind": "type"
     },
     {
@@ -13394,35 +13422,35 @@
       "package": "internal/north/matter/secure/sigma",
       "identifier": "Responder",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 340,
+      "line": 345,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "ResumptionRecord",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 109,
+      "line": 114,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "ResumptionRecord",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 109,
+      "line": 114,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "ResumptionStore",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 140,
+      "line": 145,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "ResumptionStore",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 140,
+      "line": 145,
       "kind": "type"
     },
     {
@@ -13464,7 +13492,7 @@
       "package": "internal/north/matter/secure/sigma",
       "identifier": "Sigma1ProcessResult",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 147,
+      "line": 152,
       "kind": "type"
     },
     {
@@ -26494,7 +26522,7 @@
       "identifier": "TestMatterStatusAdapter_WithStore_EmptyFabrics",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_status_live_test.go",
-      "line": 64
+      "line": 71
     },
     {
       "package": "cmd/openccu-loom",
@@ -102563,7 +102591,7 @@
       "identifier": "TestAttachAggregatorClusters_WithStartedBridge_TopologyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 580
+      "line": 581
     },
     {
       "package": "internal/north/matter/bridge",
@@ -102605,7 +102633,7 @@
       "identifier": "TestAttachRootClusters_WithStartedBridge_TopologyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 569
+      "line": 570
     },
     {
       "package": "internal/north/matter/bridge",
@@ -102655,6 +102683,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/event_acl_test.go",
       "line": 85
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestBridgeStart_AckPumpReclaimsExpiredTimedDeadlines",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/timed_deadline_reclamation_test.go",
+      "line": 94
     },
     {
       "package": "internal/north/matter/bridge",
@@ -104359,6 +104394,13 @@
     },
     {
       "package": "internal/north/matter/bridge",
+      "identifier": "TestDispatchTimedRequest_ReclaimsExpiredDeadlines",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/timed_deadline_reclamation_test.go",
+      "line": 48
+    },
+    {
+      "package": "internal/north/matter/bridge",
       "identifier": "TestDispatchTimedRequest_ReplyIsMRPReliable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_reliability_test.go",
@@ -104562,10 +104604,10 @@
     },
     {
       "package": "internal/north/matter/bridge",
-      "identifier": "TestEndpointCount_StartedBridge_AtLeastRoot",
+      "identifier": "TestEndpointCount_StartedBridgeWithoutSources_IsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 495
+      "line": 496
     },
     {
       "package": "internal/north/matter/bridge",
@@ -104628,7 +104670,7 @@
       "identifier": "TestHandleDatagram_TooShortDoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 556
+      "line": 557
     },
     {
       "package": "internal/north/matter/bridge",
@@ -104677,14 +104719,14 @@
       "identifier": "TestHandlerContext_NilCtx_ReturnsBackground",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 531
+      "line": 532
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestHandlerContext_StartedBridge_ReturnsNonNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 542
+      "line": 543
     },
     {
       "package": "internal/north/matter/bridge",
@@ -104692,6 +104734,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/securechannel_close_parity_test.go",
       "line": 123
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestInboundCloseSessionStatusReport_DropsTimedDeadlines",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/timed_deadline_reclamation_test.go",
+      "line": 142
     },
     {
       "package": "internal/north/matter/bridge",
@@ -105416,17 +105465,24 @@
     },
     {
       "package": "internal/north/matter/bridge",
+      "identifier": "TestReassemble_BridgedEndpointCountExcludesRootAndAggregator",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/bridge_reassemble_test.go",
+      "line": 264
+    },
+    {
+      "package": "internal/north/matter/bridge",
       "identifier": "TestReassemble_ButtonGroupPressEventsFlowOnce",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_reassemble_test.go",
-      "line": 56
+      "line": 57
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReassemble_ReapsSubscriptionsForRemovedEndpoints",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_reassemble_test.go",
-      "line": 162
+      "line": 163
     },
     {
       "package": "internal/north/matter/bridge",
@@ -105454,14 +105510,14 @@
       "identifier": "TestReplyTimedStatus_NilSrc_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 507
+      "line": 508
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestReplyTimedStatus_WithSrc_DoesNotPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/bridge_helpers_test.go",
-      "line": 519
+      "line": 520
     },
     {
       "package": "internal/north/matter/bridge",
@@ -108058,14 +108114,14 @@
       "identifier": "NewIdentify",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/core/identify.go",
-      "line": 89
+      "line": 100
     },
     {
       "package": "internal/north/matter/cluster/core",
       "identifier": "NewIdentify",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/core/identify.go",
-      "line": 89
+      "line": 100
     },
     {
       "package": "internal/north/matter/cluster/core",
@@ -112199,6 +112255,13 @@
     },
     {
       "package": "internal/north/matter/eligibility",
+      "identifier": "TestDPKeyProbesHaveProductionImplementations",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/eligibility/eligibility_internal_test.go",
+      "line": 22
+    },
+    {
+      "package": "internal/north/matter/eligibility",
       "identifier": "TestEcosystemForVendorFallsBackToUnknown",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/eligibility/compat_internal_test.go",
@@ -112230,14 +112293,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 123
+      "line": 125
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 123
+      "line": 125
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -112440,35 +112503,49 @@
       "identifier": "TestHandleInvokeRequest_AdministerPrivilegeNotBlockedByGate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
-      "line": 311
+      "line": 329
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestHandleInvokeRequest_EnforcesElevatedInvokePrivilege",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
-      "line": 263
+      "line": 281
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestHandleWriteRequest_AdministerPrivilegeNotBlockedByGate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
-      "line": 289
+      "line": 307
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestHandleWriteRequest_EnforcesElevatedWritePrivilege",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
-      "line": 237
+      "line": 255
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestHandleWriteRequest_OperateAttributeNotBlockedByPrivilegeGate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
-      "line": 338
+      "line": 356
+    },
+    {
+      "package": "internal/north/matter/endpoint",
+      "identifier": "TestHandleWriteRequest_RejectsWildcardAttributePath",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
+      "line": 386
+    },
+    {
+      "package": "internal/north/matter/endpoint",
+      "identifier": "TestHandleWriteRequest_WildcardEndpointAuthorizesEveryResolvedEndpoint",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
+      "line": 437
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -112483,6 +112560,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
       "line": 894
+    },
+    {
+      "package": "internal/north/matter/endpoint",
+      "identifier": "TestInvoke_IdentifyTimeSurvivesToTheNextDispatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/endpoint/dispatcher_identify_test.go",
+      "line": 44
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -112776,14 +112860,14 @@
       "identifier": "TestTopologyDispatcher_MinInvokePrivilege",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
-      "line": 174
+      "line": 192
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "TestTopologyDispatcher_MinWritePrivilege",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_write_invoke_privilege_test.go",
-      "line": 123
+      "line": 141
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -112882,6 +112966,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/endpoint/dispatcher_test.go",
       "line": 621
+    },
+    {
+      "package": "internal/north/matter/endpoint",
+      "identifier": "TestWrite_IdentifyTimeSurvivesToTheNextDispatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/endpoint/dispatcher_identify_test.go",
+      "line": 71
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -113077,7 +113168,7 @@
       "identifier": "TestConcreteEventPath_WildcardHelpers",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/im/event_filter_read_test.go",
-      "line": 117
+      "line": 187
     },
     {
       "package": "internal/north/matter/im",
@@ -113239,6 +113330,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/im/eventlog_test.go",
       "line": 219
+    },
+    {
+      "package": "internal/north/matter/im",
+      "identifier": "TestHandleReadEventRequest_AppliesEventMinFromWire",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/im/event_filter_read_test.go",
+      "line": 160
     },
     {
       "package": "internal/north/matter/im",
@@ -113578,24 +113676,31 @@
     },
     {
       "package": "internal/north/matter/im",
+      "identifier": "TestReadEventFilterArray_DecodesPeerWireLayout",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/im/event_filter_read_test.go",
+      "line": 138
+    },
+    {
+      "package": "internal/north/matter/im",
       "identifier": "TestReadEventFilterArray_MultipleFilters",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/im/event_filter_read_test.go",
-      "line": 98
+      "line": 99
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "TestReadEventFilterArray_NoNodeID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/im/event_filter_read_test.go",
-      "line": 74
+      "line": 75
     },
     {
       "package": "internal/north/matter/im",
       "identifier": "TestReadEventFilterArray_SingleFilter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/im/event_filter_read_test.go",
-      "line": 49
+      "line": 50
     },
     {
       "package": "internal/north/matter/im",
@@ -115338,42 +115443,42 @@
       "identifier": "GenerateResumptionID",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 1008
+      "line": 1086
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "GenerateResumptionID",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 1008
+      "line": 1086
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "NewManager",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 383
+      "line": 415
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "NewManager",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 383
+      "line": 415
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "SessionInfo",
       "reason": "returned by Manager.Sessions, which the daemon's matterSessionLister calls on every GET /api/v1/matter/sessions; a data struct whose fields the REST layer copies out, which the analyzer's type heuristic (reachable only via its own methods) cannot see used",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 1039
+      "line": 1141
     },
     {
       "package": "internal/north/matter/secure/operational",
       "identifier": "SessionInfo",
       "reason": "returned by Manager.Sessions, which the daemon's matterSessionLister calls on every GET /api/v1/matter/sessions; a data struct whose fields the REST layer copies out, which the analyzer's type heuristic (reachable only via its own methods) cannot see used",
       "file": "internal/north/matter/secure/operational/manager.go",
-      "line": 1039
+      "line": 1141
     },
     {
       "package": "internal/north/matter/secure/operational",
@@ -115388,6 +115493,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/operational/internal_test.go",
       "line": 60
+    },
+    {
+      "package": "internal/north/matter/secure/operational",
+      "identifier": "TestAllocateID_EvictsOldestPlaceholderWhenExhausted",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/operational/manager_session_id_lifecycle_test.go",
+      "line": 160
     },
     {
       "package": "internal/north/matter/secure/operational",
@@ -115433,10 +115545,24 @@
     },
     {
       "package": "internal/north/matter/secure/operational",
+      "identifier": "TestOpenFromPaseWithID_ClosesSessionOccupyingTheID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/operational/manager_session_id_lifecycle_test.go",
+      "line": 80
+    },
+    {
+      "package": "internal/north/matter/secure/operational",
       "identifier": "TestOpenFromPase_ExhaustedIDSpaceReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/operational/internal_test.go",
       "line": 183
+    },
+    {
+      "package": "internal/north/matter/secure/operational",
+      "identifier": "TestOpenFromSigmaWithID_ClosesForeignSessionOccupyingTheID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/operational/manager_session_id_lifecycle_test.go",
+      "line": 39
     },
     {
       "package": "internal/north/matter/secure/operational",
@@ -115465,6 +115591,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/operational/manager_close_parity_test.go",
       "line": 131
+    },
+    {
+      "package": "internal/north/matter/secure/operational",
+      "identifier": "TestReapIdle_ReclaimsAbandonedPlaceholderIDs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/operational/manager_session_id_lifecycle_test.go",
+      "line": 113
     },
     {
       "package": "internal/north/matter/secure/operational",
@@ -115646,28 +115779,28 @@
       "identifier": "NewInitiator",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 189
+      "line": 194
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "NewInitiator",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 189
+      "line": 194
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "NewResponder",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 478
+      "line": 487
     },
     {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "NewResponder",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/secure/sigma/protocol.go",
-      "line": 478
+      "line": 487
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -115783,10 +115916,10 @@
     },
     {
       "package": "internal/north/matter/secure/sigma",
-      "identifier": "TestProcessSigma3_FabricIDExtractorError_SkipsCheck",
+      "identifier": "TestProcessSigma3_FabricIDExtractorError_Rejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/protocol_fabricid_test.go",
-      "line": 91
+      "line": 93
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -115801,6 +115934,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/sigma/protocol_fabricid_test.go",
       "line": 69
+    },
+    {
+      "package": "internal/north/matter/secure/sigma",
+      "identifier": "TestResponderResetForNewSigma1_ClearsPeerCATs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/sigma/responder_reset_test.go",
+      "line": 54
+    },
+    {
+      "package": "internal/north/matter/secure/sigma",
+      "identifier": "TestResponderResetForNewSigma1_RenewsSessionID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/sigma/responder_reset_test.go",
+      "line": 82
+    },
+    {
+      "package": "internal/north/matter/secure/sigma",
+      "identifier": "TestResponderSigma1Replay_KeepsSessionID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/sigma/responder_reset_test.go",
+      "line": 117
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -117613,28 +117767,28 @@
       "identifier": "TestHeaderExtensionThenProtocolHeader",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 324
+      "line": 344
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "TestHeaderMessageExtensionLengthOverflow",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 349
+      "line": 369
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "TestHeaderMessageExtensionRoundTrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 297
+      "line": 317
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "TestHeaderMessageExtensionTruncatedLength",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 364
+      "line": 384
     },
     {
       "package": "internal/north/matter/transport/message",
@@ -117683,14 +117837,14 @@
       "identifier": "TestHeaderTruncatedDestGroup",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 441
+      "line": 475
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "TestHeaderTruncatedDestNodeID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 427
+      "line": 461
     },
     {
       "package": "internal/north/matter/transport/message",
@@ -117732,35 +117886,42 @@
       "identifier": "TestProtocolHeaderSecuredExtensionLengthOverflow",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 402
+      "line": 422
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "TestProtocolHeaderSecuredExtensionRoundTrip",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 375
+      "line": 395
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "TestProtocolHeaderTruncated",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 273
+      "line": 293
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "TestProtocolHeaderTruncatedAckCounter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 282
+      "line": 302
+    },
+    {
+      "package": "internal/north/matter/transport/message",
+      "identifier": "TestProtocolHeaderTruncatedProtocolIDAfterVendor",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/transport/message/message_test.go",
+      "line": 449
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "TestProtocolHeaderTruncatedVendorID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 415
+      "line": 437
     },
     {
       "package": "internal/north/matter/transport/message",
@@ -117774,14 +117935,21 @@
       "identifier": "TestProtocolHeaderWithSecuredExt",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 456
+      "line": 490
     },
     {
       "package": "internal/north/matter/transport/message",
-      "identifier": "TestProtocolHeaderWithVendorRoundTrip",
+      "identifier": "TestProtocolHeaderWithVendorDecodesWireOrder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/message/message_test.go",
-      "line": 251
+      "line": 279
+    },
+    {
+      "package": "internal/north/matter/transport/message",
+      "identifier": "TestProtocolHeaderWithVendorEncodesWireOrder",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/transport/message/message_test.go",
+      "line": 268
     },
     {
       "package": "internal/north/matter/transport/message",
@@ -117802,14 +117970,14 @@
       "identifier": "UnmarshalProtocolHeader",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/transport/message/message.go",
-      "line": 366
+      "line": 378
     },
     {
       "package": "internal/north/matter/transport/message",
       "identifier": "UnmarshalProtocolHeader",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/transport/message/message.go",
-      "line": 366
+      "line": 378
     },
     {
       "package": "internal/north/matter/transport/mrp",
