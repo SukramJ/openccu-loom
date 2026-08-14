@@ -105,6 +105,10 @@ var relevantMasterParamsetsByDevice = map[string]ModelMasterEntry{
 		Channels:   channelSet(1),
 		Parameters: channelOperationModeSet,
 	},
+	"HmIP-FSI6": {
+		Channels:   channelSet(1),
+		Parameters: channelOperationModeSet,
+	},
 	"HmIP-HEATING": {
 		Channels:   channelSet(1),
 		Parameters: climateMasterParameters,

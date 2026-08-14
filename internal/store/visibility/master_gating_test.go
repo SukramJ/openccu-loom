@@ -337,3 +337,30 @@ func TestMasterGatingConcurrentSafe(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestMasterGatingFSIInputChannelExposesOperationMode pins the MASTER
+// whitelist for the two 6 A flush-mount switch actuators, which differ in
+// exactly the way that decides this: HmIP-FSI6 carries a
+// MULTI_MODE_INPUT_TRANSMITTER on channel 1, so its CHANNEL_OPERATION_MODE
+// must be configurable (push-button, switch, normally-open, normally-closed)
+// or the input cannot be set up at all. HmIP-FS6 has a plain
+// SWITCH_TRANSMITTER there and nothing to configure, so the default skip is
+// correct for it.
+//
+// The whitelist matches on a model prefix in the table, not the other way
+// round, so the longer HmIP-FSI16 entry does not cover HmIP-FSI6 — each
+// needs its own entry.
+func TestMasterGatingFSIInputChannelExposesOperationMode(t *testing.T) {
+	t.Parallel()
+	d := NewParameterDecider(nil)
+	opMode := hmenum.ParameterChannelOperationMode
+
+	for _, model := range []string{"HmIP-FSI6", "HmIP-FSI16"} {
+		if d.IsParameterIgnored(model, "X", 1, hmenum.ParamsetKeyMaster, opMode) {
+			t.Errorf("%s channel 1 is a multi-mode input: CHANNEL_OPERATION_MODE must be visible", model)
+		}
+	}
+	if !d.IsParameterIgnored("HmIP-FS6", "X", 1, hmenum.ParamsetKeyMaster, opMode) {
+		t.Error("HmIP-FS6 channel 1 is a plain switch transmitter: CHANNEL_OPERATION_MODE has nothing to configure")
+	}
+}
