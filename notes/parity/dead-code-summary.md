@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: b259abbe
-HEAD: b259abbe
+Generated: a76022da
+HEAD: a76022da
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28565 |
-| Reachable | 5019 |
-| Whitelisted | 20558 |
-| **Unreachable** | **2988** |
+| Total Exported | 28605 |
+| Reachable | 5024 |
+| Whitelisted | 20592 |
+| **Unreachable** | **2989** |
 
 ## Top-20 Packages by Dead Code
 
@@ -25,7 +25,7 @@ HEAD: b259abbe
 | internal/payload | 4 | 236 | 6 |
 | pkg/hmerr | 4 | 5 | 32 |
 | internal/audit | 2 | 22 | 2 |
-| internal/auth | 2 | 24 | 4 |
+| internal/auth | 2 | 23 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
@@ -87,10 +87,10 @@ HEAD: b259abbe
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 97 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 97 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 94 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 94 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 104 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 104 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 101 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 101 |
 
 ## Full By-Package Breakdown
 
@@ -105,7 +105,7 @@ HEAD: b259abbe
 | internal/payload | 4 | 236 | 6 |
 | pkg/hmerr | 4 | 5 | 32 |
 | internal/audit | 2 | 22 | 2 |
-| internal/auth | 2 | 24 | 4 |
+| internal/auth | 2 | 23 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
@@ -127,7 +127,7 @@ HEAD: b259abbe
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/backup/sbk | 0 | 2 | 4 |
 | internal/build | 0 | 0 | 8 |
-| internal/central | 0 | 24 | 2 |
+| internal/central | 0 | 26 | 2 |
 | internal/central/cachereset | 0 | 18 | 0 |
 | internal/central/coordinators | 0 | 109 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
