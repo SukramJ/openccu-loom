@@ -104,7 +104,7 @@ func TestWireIncidentRecorder_NilCache_ContinueBranch(t *testing.T) {
 	}
 
 	logger := slog.New(slog.DiscardHandler)
-	_, closer := wireIncidentRecorder(db, reg, logger)
+	_, _, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 }
 
@@ -128,7 +128,7 @@ func TestWireSessionRecorderPersistence_NilRecorder_ContinueBranch(t *testing.T)
 	}
 
 	logger := slog.New(slog.DiscardHandler)
-	closer := wireSessionRecorderPersistence(db, reg, logger)
+	_, closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer != nil {
 		closer()
 	}

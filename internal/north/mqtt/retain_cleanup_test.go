@@ -6,9 +6,13 @@ package mqtt
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	pload "github.com/SukramJ/openccu-loom/internal/payload"
 )
 
 // TestLegacyAggregateStateMatcherPositiveCases pins what counts as a
@@ -450,5 +454,165 @@ func TestRunRawOrphanCleanupOnce_EvictsUnpublishedBucketTopics(t *testing.T) {
 		if evictedSet[topic] {
 			t.Errorf("topic %q was incorrectly evicted", topic)
 		}
+	}
+}
+
+// TestRunDiscoveryOrphanCleanupOnce_NonSlugCentralName pins the sweep's
+// scoping prefix against the spellings its own producers put on the
+// wire.
+//
+// Node ids are slugged (`naming.DiscoverySlug`): `CCU Küche` becomes
+// `ccu_kueche`. The sweep used to rebuild the prefix by hand with
+// `strings.ToLower`, yielding `ccu küche_`, which matches nothing — so
+// the once-per-boot cleanup was a complete no-op for every central
+// whose name is not already a bare ASCII slug, and retired entities
+// kept being re-created by Home Assistant on every restart.
+//
+// The legacy row covers the configs an older build retained under
+// `strings.ToLower(naming.TopicSafe(name))`; they must stay reachable
+// so they can be swept once.
+func TestRunDiscoveryOrphanCleanupOnce_NonSlugCentralName(t *testing.T) {
+	t.Parallel()
+	const centralName = "CCU Küche"
+	var (
+		deviceOrphan = "homeassistant/switch/" + naming.DiscoverySlug(centralName) + "_0001d3c99c1234/state/config"
+		hubOrphan    = "homeassistant/sensor/" + hubNodeID(centralName, "system") + "/connection_latency/config"
+		legacyOrphan = "homeassistant/switch/" + strings.ToLower(naming.TopicSafe(centralName)) + "_0001d3c99c9999/state/config"
+		liveTopic    = "homeassistant/switch/" + naming.DiscoverySlug(centralName) + "_0001d3c99c1234/level/config"
+		foreign      = "homeassistant/light/zigbee2mqtt_0x1234/state/config"
+	)
+	if naming.DiscoverySlug(centralName) == strings.ToLower(centralName) {
+		t.Fatalf("fixture central %q is invariant under the slug and cannot detect the drift", centralName)
+	}
+
+	mc := &mockRetainClient{retained: []retainedMsg{
+		{topic: deviceOrphan, payload: []byte(`{}`)},
+		{topic: hubOrphan, payload: []byte(`{}`)},
+		{topic: legacyOrphan, payload: []byte(`{}`)},
+		{topic: liveTopic, payload: []byte(`{}`)},
+		{topic: foreign, payload: []byte(`{}`)},
+	}}
+	b := NewBridge(BridgeConfig{
+		Base: "openccu-loom", HADiscoveryEnabled: true, CentralName: centralName,
+	}, mc)
+	b.mu.Lock()
+	b.declared[liveTopic] = []byte(`{}`)
+	b.mu.Unlock()
+
+	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), 50*time.Millisecond); err != nil {
+		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
+	}
+	evicted := map[string]bool{}
+	for _, topic := range mc.evicted() {
+		evicted[topic] = true
+	}
+	for _, topic := range []string{deviceOrphan, hubOrphan, legacyOrphan} {
+		if !evicted[topic] {
+			t.Errorf("orphan %q survived the sweep — the phantom entity is re-created on every restart", topic)
+		}
+	}
+	if evicted[liveTopic] {
+		t.Errorf("the sweep evicted a declared entity: %q", liveTopic)
+	}
+	if evicted[foreign] {
+		t.Errorf("the sweep evicted another integration's config: %q", foreign)
+	}
+}
+
+// TestRawOrphanCandidateMatcherEscapesCentralName: the raw plane writes
+// the central name TopicSafe-escaped, so the sweep has to compare
+// against the escaped spelling. Matching the configured name verbatim
+// made the raw orphan pass miss every topic of a central whose name
+// contains a space.
+func TestRawOrphanCandidateMatcherEscapesCentralName(t *testing.T) {
+	t.Parallel()
+	const (
+		base        = "openccu-loom"
+		centralName = "Wohn Zimmer"
+	)
+	topic := base + "/" + naming.TopicSafe(centralName) + "/HmIP-RF/0001ABCD/1/values/STATE"
+	if !RawOrphanCandidateMatcher(base, centralName, topic) {
+		t.Fatalf("the escaped topic %q of central %q was not recognised as this daemon's", topic, centralName)
+	}
+	// Another central's subtree stays out of scope.
+	if RawOrphanCandidateMatcher(base, "Schlaf Zimmer", topic) {
+		t.Error("a foreign central's topic matched")
+	}
+}
+
+// filteringRetainClient is [mockRetainClient] with a broker's actual
+// subscribe semantics: it replays a retained message only to a subscription
+// whose filter matches it. The non-filtering double cannot see a wrong
+// subscribe filter at all, which is exactly the defect below.
+type filteringRetainClient struct {
+	mockRetainClient
+}
+
+func (m *filteringRetainClient) Subscribe(_ context.Context, filter string, _ QoS, handler MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
+	m.mu.Lock()
+	retained := make([]retainedMsg, len(m.retained))
+	copy(retained, m.retained)
+	m.mu.Unlock()
+	for _, msg := range retained {
+		if !mqttFilterMatches(filter, msg.topic) {
+			continue
+		}
+		handler(&Message{Topic: msg.topic, Payload: msg.payload, Retain: true})
+	}
+	return SubscribeResult{}, nil
+}
+
+// TestRunRawOrphanCleanupOnceSweepsTheTopicsTheBridgeWrote pins that the raw
+// orphan sweep looks where the raw plane actually publishes.
+//
+// The sweep derives its subscribe filter and its candidate matcher from the
+// configured topic base, while every publisher goes through the topic builder,
+// which trims the base's slashes. An operator who writes `topic_base` with a
+// trailing slash therefore had a sweep that subscribed to a prefix nothing
+// writes: it reported zero evicted on every boot and retained topics from a
+// previous build kept feeding stale values forever.
+//
+// The fixture asserts against a topic the bridge itself wrote, not a
+// hand-built literal, so the two halves cannot drift apart again.
+func TestRunRawOrphanCleanupOnceSweepsTheTopicsTheBridgeWrote(t *testing.T) {
+	t.Parallel()
+
+	const (
+		configuredBase = "home/hm/"
+		central        = "Wohn Zimmer"
+		iface          = "HmIP-RF"
+		addr           = "0001ABCD"
+	)
+	mc := &filteringRetainClient{}
+	b := NewBridge(BridgeConfig{Base: configuredBase, CentralName: central, RawEnabled: true}, mc)
+
+	ctx := context.Background()
+	live := pload.TopicSlot{Address: addr, Channel: 1, Bucket: pload.BucketValues, Parameter: "STATE"}
+	if err := b.PublishSlotState(ctx, central, iface, live, pload.PerDPState{Value: true, Available: true}); err != nil {
+		t.Fatalf("PublishSlotState: %v", err)
+	}
+	liveTopic := b.topics.SlotState(central, iface, live)
+	// The orphan is a sibling of the live topic — same device, a parameter
+	// this build no longer publishes.
+	stale := pload.TopicSlot{Address: addr, Channel: 8, Bucket: pload.BucketMaster, Parameter: "01_WP_WEEKDAY"}
+	orphanTopic := b.topics.SlotState(central, iface, stale)
+
+	mc.mu.Lock()
+	mc.retained = []retainedMsg{
+		{topic: liveTopic, payload: []byte(`{"value":true}`)},
+		{topic: orphanTopic, payload: []byte(`{"value":1}`)},
+	}
+	mc.mu.Unlock()
+
+	n, err := b.RunRawOrphanCleanupOnce(ctx, central, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunRawOrphanCleanupOnce: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("evicted = %d, want 1 — the sweep never reached the topics the bridge wrote", n)
+	}
+	evicted := mc.evicted()
+	if len(evicted) != 1 || evicted[0] != orphanTopic {
+		t.Fatalf("evicted = %v, want [%s]", evicted, orphanTopic)
 	}
 }

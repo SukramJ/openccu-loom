@@ -81,6 +81,51 @@ centrals:
 	}
 }
 
+// TestParseCollidingCentralTopicSegmentRejected: north-bound planes
+// address a central through one escaped topic segment, so two names
+// that collapse onto the same segment share every state topic and make
+// every inbound command ambiguous.
+//
+// The second half pins that the set-level rule keeps its own voice: a
+// name is also rejected on its own for being unroutable south-bound, and
+// the two rejections have to read differently or an operator cannot tell
+// which rule they tripped.
+func TestParseCollidingCentralTopicSegmentRejected(t *testing.T) {
+	buf := []byte(`
+centrals:
+  - name: Wohn Zimmer
+    host: h1
+    interfaces: [HmIP-RF]
+  - name: Wohn+Zimmer
+    host: h2
+    interfaces: [HmIP-RF]
+`)
+	_, err := Parse(buf)
+	if err == nil {
+		t.Fatal("two central names that escape to the same topic segment must be rejected")
+	}
+	if !strings.Contains(err.Error(), "topic segment") {
+		t.Errorf("the collision rejection must name the topic segment, got: %v", err)
+	}
+
+	single := []byte(`
+centrals:
+  - name: Wohn Zimmer
+    host: h1
+    interfaces: [HmIP-RF]
+`)
+	_, err = Parse(single)
+	if err == nil {
+		t.Fatal("a central name outside the callback-URL allowlist must be rejected on its own")
+	}
+	if !strings.Contains(err.Error(), "callback URL") {
+		t.Errorf("the unroutable-name rejection must name the callback URL, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "topic segment") {
+		t.Errorf("the two central-name rules must not share one message, got: %v", err)
+	}
+}
+
 func TestParseInvalidLogLevel(t *testing.T) {
 	buf := []byte(`logging: {level: lol, format: json}`)
 	if _, err := Parse(buf); err == nil || !strings.Contains(err.Error(), "logging.level") {
@@ -330,6 +375,47 @@ north:
 	}
 }
 
+func TestMQTTTopicBaseSlashesTrimmed(t *testing.T) {
+	// A base written with slashes has to arrive canonical: the topic builder
+	// trims them for every declared topic, while consumers that concatenate
+	// the raw base (last will, retained-cleanup subscribe filters) do not, so
+	// an untrimmed base publishes the offline signal and the retain sweep onto
+	// topics nothing declares.
+	buf := []byte(minimalCentralYAML + `
+north:
+  mqtt:
+    enabled: true
+    broker_url: tcp://192.168.1.5:1883
+    topic_base: /loom/
+`)
+	cfg, err := Parse(buf)
+	if err != nil {
+		t.Fatalf("slash-bearing topic_base should be accepted: %v", err)
+	}
+	if cfg.North.MQTT.TopicBase != "loom" {
+		t.Fatalf("expected canonical topic_base 'loom', got: %q", cfg.North.MQTT.TopicBase)
+	}
+}
+
+func TestMQTTTopicBaseOnlySlashesFallsBackToDefault(t *testing.T) {
+	// Trimming a base of nothing but slashes leaves an empty string, which the
+	// validator rejects; the default has to fill it as if it were unset.
+	buf := []byte(minimalCentralYAML + `
+north:
+  mqtt:
+    enabled: true
+    broker_url: tcp://192.168.1.5:1883
+    topic_base: "/"
+`)
+	cfg, err := Parse(buf)
+	if err != nil {
+		t.Fatalf("slash-only topic_base should fall back to the default: %v", err)
+	}
+	if cfg.North.MQTT.TopicBase != "openccu-loom" {
+		t.Fatalf("expected default topic_base 'openccu-loom', got: %q", cfg.North.MQTT.TopicBase)
+	}
+}
+
 func TestMQTTBrokerURLMissingHost(t *testing.T) {
 	// Scheme present but no host (e.g. "tcp:///").
 	buf := []byte(minimalCentralYAML + `
@@ -526,73 +612,82 @@ centrals:
 	}
 }
 
-// TestInterfaceSpecRPCTypeMustMatchTheInterfaceTransport pins that rpc_type is
-// a pin, not a selector. The transport is derived from the interface name
-// everywhere in the daemon, so a contradicting value can only ever be a
-// misunderstanding — it is refused at load with an actionable message instead
-// of being persisted and shown in the UI while governing nothing.
-func TestInterfaceSpecRPCTypeMustMatchTheInterfaceTransport(t *testing.T) {
+// TestInterfaceSpecRPCTypeContradictingDerivedTransport pins that a
+// syntactically valid rpc_type which the daemon cannot honour is rejected
+// at config load. The transport is derived from the interface — CUxD is
+// BIN-RPC, everything else XML-RPC — and no per-interface knob overrides
+// that. Accepting a contradicting value left the operator believing the
+// daemon spoke a protocol it never selected.
+func TestInterfaceSpecRPCTypeContradictingDerivedTransport(t *testing.T) {
 	t.Parallel()
-	cases := []struct {
-		name    string
-		spec    InterfaceSpec
-		wantErr bool
+	for _, tc := range []struct {
+		name string
+		spec InterfaceSpec
+		ok   bool
 	}{
-		{name: "xmlrpc on an XML-RPC interface", spec: InterfaceSpec{Name: "HmIP-RF", RPCType: "xmlrpc"}},
-		{name: "binrpc on CUxD", spec: InterfaceSpec{Name: "CUxD", RPCType: "binrpc"}},
-		{name: "empty derives", spec: InterfaceSpec{Name: "CUxD"}},
-		{name: "binrpc on an XML-RPC interface", spec: InterfaceSpec{Name: "HmIP-RF", RPCType: "binrpc"}, wantErr: true},
-		{name: "xmlrpc on CUxD", spec: InterfaceSpec{Name: "CUxD", RPCType: "xmlrpc"}, wantErr: true},
-	}
-	for _, tc := range cases {
+		{name: "binrpc on an XML-RPC interface", spec: InterfaceSpec{Name: "BidCos-RF", RPCType: "binrpc"}},
+		{name: "xmlrpc on CUxD", spec: InterfaceSpec{Name: "CUxD", RPCType: "xmlrpc"}},
+		{name: "xmlrpc agrees with the derived transport", spec: InterfaceSpec{Name: "BidCos-RF", RPCType: "xmlrpc"}, ok: true},
+		{name: "binrpc agrees with the derived transport", spec: InterfaceSpec{Name: "CUxD", RPCType: "binrpc"}, ok: true},
+		{name: "unset derives silently", spec: InterfaceSpec{Name: "CUxD"}, ok: true},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			err := tc.spec.Validate(0)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("Validate(%+v) = nil, want an error", tc.spec)
-				}
-				if !strings.Contains(err.Error(), "rpc_type") {
-					t.Errorf("error should mention 'rpc_type', got: %v", err)
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("Validate: unexpected error: %v", err)
 				}
 				return
 			}
-			if err != nil {
-				t.Fatalf("Validate(%+v): %v", tc.spec, err)
+			if err == nil {
+				t.Fatal("expected rpc_type to be rejected")
+			}
+			if !strings.Contains(err.Error(), "rpc_type") {
+				t.Errorf("error should mention 'rpc_type', got: %v", err)
 			}
 		})
 	}
 }
 
-// TestInterfaceSpecRemotePathShape pins the shape of the URL-path override.
-// The value is interpolated into the composed XML-RPC endpoint, so anything
-// that can re-point the request off the configured host — a scheme, an
-// authority, a dot segment — or that turns the endpoint into a malformed URL
-// is refused at load, where the operator can still see why.
-func TestInterfaceSpecRemotePathShape(t *testing.T) {
+// TestInterfaceSpecRemotePathValidation pins that a remote_path which the
+// XML-RPC endpoint composer cannot use — or which would re-point the call
+// off the configured host — fails at config load instead of at the first
+// RPC. POSTing to the bare "/" crashes the CCU's putParamset handler, a
+// path without a leading slash would silently glue itself onto the port,
+// and a value carrying a scheme, an authority, a query, a fragment or a dot
+// segment addresses a different endpoint than the operator named.
+func TestInterfaceSpecRemotePathValidation(t *testing.T) {
 	t.Parallel()
-	cases := []struct {
-		path    string
-		wantErr bool
+	for _, tc := range []struct {
+		name string
+		path string
+		ok   bool
 	}{
-		{path: ""},
-		{path: "/RPC2b"},
-		{path: "/proxy/ccu/RPC2"},
-		{path: "RPC2b", wantErr: true},
-		{path: "//evil.example/RPC2", wantErr: true},
-		{path: "/../../RPC2", wantErr: true},
-		{path: "/RPC2?x=1", wantErr: true},
-		{path: "/RPC2#frag", wantErr: true},
-		{path: "http://evil.example/RPC2", wantErr: true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.path, func(t *testing.T) {
+		{name: "unset", path: "", ok: true},
+		{name: "absolute path", path: "/rpc", ok: true},
+		{name: "nested absolute path", path: "/proxy/ccu/RPC2", ok: true},
+		{name: "missing leading slash", path: "rpc"},
+		{name: "bare root", path: "/"},
+		{name: "protocol-relative authority", path: "//evil.example/RPC2"},
+		{name: "dot segments", path: "/../../RPC2"},
+		{name: "query string", path: "/RPC2?x=1"},
+		{name: "fragment", path: "/RPC2#frag"},
+		{name: "absolute URL", path: "http://evil.example/RPC2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			err := InterfaceSpec{Name: "HmIP-RF", RemotePath: tc.path}.Validate(0)
-			if tc.wantErr != (err != nil) {
-				t.Fatalf("Validate(remote_path=%q) = %v, wantErr=%v", tc.path, err, tc.wantErr)
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("Validate: unexpected error: %v", err)
+				}
+				return
 			}
-			if tc.wantErr && !strings.Contains(err.Error(), "remote_path") {
+			if err == nil {
+				t.Fatal("expected remote_path to be rejected")
+			}
+			if !strings.Contains(err.Error(), "remote_path") {
 				t.Errorf("error should mention 'remote_path', got: %v", err)
 			}
 		})

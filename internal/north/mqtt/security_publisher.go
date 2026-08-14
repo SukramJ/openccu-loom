@@ -147,7 +147,7 @@ func (p *SecurityMQTTPublisher) Stop() {
 	// the case the second source exists to distinguish.
 	if b := p.wiring.Bridge(); b != nil {
 		_ = b.client.Publish(context.Background(),
-			securityAvailabilityTopic(b.cfg.Base), []byte("offline"), b.cfg.QoS.State, true)
+			securityAvailabilityTopic(b.topics.Base), []byte("offline"), b.cfg.QoS.State, true)
 	}
 	close(p.stopCh)
 	<-p.doneCh
@@ -272,9 +272,13 @@ func (p *SecurityMQTTPublisher) onNotification(e hmevent.SecurityNotificationEve
 	p.enqueue(securityMsg{topic: securityStateTopic(p.base(), key), payload: body, retained: true})
 }
 
+// base is the topic prefix of every security topic. It reads the topic
+// builder's normalised base, like the alarm plane beside it, so the
+// plane cannot end up one slash away from the topics the rest of the
+// bridge publishes on.
 func (p *SecurityMQTTPublisher) base() string {
 	if b := p.wiring.Bridge(); b != nil {
-		return b.cfg.Base
+		return b.topics.Base
 	}
 	return ""
 }

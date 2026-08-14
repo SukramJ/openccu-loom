@@ -43,7 +43,15 @@ func alarmCommandTopic(base, zone string) string { return base + "/alarm/" + zon
 
 // alarmBridgeStatusTopic is the retained bridge LWT topic the panel's
 // availability list references as the first (transport-level) source.
-func alarmBridgeStatusTopic(base string) string { return base + "/bridge/status" }
+// The security plane declares the same source.
+//
+// It goes through the topic builder instead of assembling the topic a
+// second time: the bridge publishes its status on the builder's
+// normalised base, and with `availability_mode: "all"` an availability
+// source that differs from it by a single slash never receives a
+// payload, which leaves every entity of both planes unavailable
+// forever rather than costing one value.
+func alarmBridgeStatusTopic(base string) string { return NewTopicBuilder(base).BridgeStatus() }
 
 // alarmDeviceBlock is the single synthetic HA device that groups every
 // zone panel (and the master panel) under one card.

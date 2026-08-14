@@ -77,7 +77,13 @@
   }
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  // Guards against a tick that is already inside its `await load()` when
+  // the component unmounts: stopPoll() can only cancel the pending
+  // setTimeout it knows about, not a reschedule an in-flight tick makes
+  // after the component is gone.
+  let pollStopped = false;
   function stopPoll() {
+    pollStopped = true;
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -86,12 +92,13 @@
   // Poll every 5s while any central reports an install in progress.
   function ensurePoll() {
     if (pollTimer) return;
+    pollStopped = false;
     const tick = async () => {
+      pollTimer = null;
       await load();
+      if (pollStopped) return;
       if (entries.some((e) => e.in_progress)) {
         pollTimer = setTimeout(tick, 5000);
-      } else {
-        pollTimer = null;
       }
     };
     pollTimer = setTimeout(tick, 5000);

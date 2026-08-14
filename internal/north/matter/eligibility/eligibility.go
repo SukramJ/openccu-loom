@@ -285,28 +285,32 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 	}
 }
 
+// The capability probes [dpKey] performs on a candidate source. They are
+// named rather than written inline so each rung can be asserted against the
+// data-point types the model actually materialises: a probe no production
+// type satisfies is a permanently dead rung whose key derivation silently
+// never happens.
+type (
+	dataPointKeyed interface{ DataPointKey() hmtypes.DataPointKey }
+	dataPointNamed interface{ Name() string }
+)
+
 // dpKey resolves the per-DP component of the candidate key tuple
 // `(central, device, channel, kind, dp_key)`. The 5-tuple must be
 // unique within a channel — so the heuristic prefers
 // [hmtypes.DataPointKey.Parameter] (uniquely identifies the parameter
-// slot a DP occupies on a paramset), then `Profile()` (custom DPs
-// declare their profile name), then `Name()`. The "unknown" fallback
-// is only reached for sources that expose none of these — which is a
+// slot a DP occupies on a paramset), then `Name()`. The "unknown"
+// fallback is only reached for sources that expose neither — which is a
 // bug elsewhere; we still want a stable string so the candidate list
 // renders, but we tag it with the Go type so the operator sees *which*
 // type to investigate rather than a pile of identical "unknown" rows.
 func dpKey(src any) string {
-	if k, ok := src.(interface{ DataPointKey() hmtypes.DataPointKey }); ok {
+	if k, ok := src.(dataPointKeyed); ok {
 		if p := k.DataPointKey().Parameter; p != "" {
 			return p
 		}
 	}
-	if named, ok := src.(interface{ Profile() string }); ok {
-		if p := named.Profile(); p != "" {
-			return p
-		}
-	}
-	if named, ok := src.(interface{ Name() string }); ok {
+	if named, ok := src.(dataPointNamed); ok {
 		if n := named.Name(); n != "" {
 			return n
 		}

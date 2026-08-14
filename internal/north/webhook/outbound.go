@@ -191,10 +191,16 @@ func (o *Outbound) Start(_ context.Context) error {
 }
 
 // subscribeCentral attaches the three event handlers for one central and
-// records their unsubscribe funcs.
+// records their unsubscribe funcs. Caller holds o.mu.
 func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
-	o.unsubs = append(
-		o.unsubs,
+	o.unsubs = append(o.unsubs, o.centralSubscriptions(bus, name)...)
+}
+
+// centralSubscriptions attaches the three per-central handlers and returns
+// their unsubscribe funcs without recording them, so a caller that owns the
+// teardown (the live-adopt path) can detach exactly what it attached.
+func (o *Outbound) centralSubscriptions(bus *events.Bus, name string) []func() {
+	return []func(){
 		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
 			o.onDataPoint(name, e)
 		}),
@@ -204,7 +210,36 @@ func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
 		events.Subscribe(bus, func(e hmevent.IncidentRecordedEvent) {
 			o.onIncident(name, e)
 		}),
-	)
+	}
+}
+
+// AttachCentral subscribes one central adopted after Start and returns the
+// detach. It returns nil when the bridge is not running, the central carries
+// no bus, or the central is outside the configured allow-list.
+//
+// Start only ever walked the registry as it stood at boot, so a CCU adopted at
+// runtime delivered no webhook at all — not for its data points, not for its
+// status changes, not for its reliability incidents — until a daemon restart
+// turned it into a boot-time central. Nothing failed and nothing logged.
+func (o *Outbound) AttachCentral(u *central.Unit) func() {
+	if o == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.started {
+		return nil
+	}
+	name := u.Name()
+	if !o.centralAllowed(name) {
+		return nil
+	}
+	unsubs := o.centralSubscriptions(u.EventBus, name)
+	return func() {
+		for _, unsub := range unsubs {
+			unsub()
+		}
+	}
 }
 
 // subscribeAlarm attaches the alarm-plane handlers to the daemon-level
@@ -251,15 +286,35 @@ func (o *Outbound) onSecurityNotification(e hmevent.SecurityNotificationEvent) {
 	})
 }
 
-// onSecurityFaultChanged forwards a fault opening or closing.
+// onSecurityFaultChanged forwards a fault opening, clearing or being
+// acknowledged.
+//
+// An acknowledgement is its own verb, not a repeat of the raise. The
+// domain publishes it with Open still true — the condition is unchanged,
+// the operator has merely stopped needing to be told — so a verb derived
+// from Open alone would deliver a body indistinguishable from the
+// original raise and make a messenger integration re-announce the fault
+// because somebody pressed acknowledge. Acknowledged rides along as an
+// explicit flag as well, so a consumer that branches on the verb and one
+// that branches on the flag both work; this mirrors the WebSocket
+// broadcast, which carries open and acknowledged side by side.
+//
+// FaultID is the identity: two `raised` bodies for one class are either
+// the same standing fault reported twice or two independent faults, and
+// nothing else in the payload tells them apart.
 func (o *Outbound) onSecurityFaultChanged(e hmevent.SecurityFaultChangedEvent) {
 	verb := "cleared"
-	if e.Open {
+	switch {
+	case e.Acknowledged:
+		verb = "acknowledged"
+	case e.Open:
 		verb = "raised"
 	}
+	openCount := e.OpenCount
 	o.enqueueAlarm(string(hmevent.EventTypeSecurityFaultChanged), alarmPayload{
-		Class: string(e.Class), Cause: verb, Severity: string(e.Severity),
-		Note: string(e.Reason), EntryID: int64(e.OpenCount),
+		FaultID: e.FaultID, Class: string(e.Class), Cause: verb,
+		Severity: string(e.Severity), Note: string(e.Reason),
+		Acknowledged: e.Acknowledged, OpenCount: &openCount,
 		Sources: alarmSources([]hmevent.SecuritySourceRef{e.Source}),
 	})
 }
@@ -681,6 +736,18 @@ type alarmPayload struct {
 	I18nKey  string            `json:"i18n_key,omitempty"`
 	Args     map[string]string `json:"args,omitempty"`
 	Link     string            `json:"link,omitempty"`
+	// FaultID identifies the standing fault a fault_changed event is
+	// about, so raise, acknowledge and clear can be correlated and two
+	// independent faults of one class stay distinguishable.
+	FaultID string `json:"fault_id,omitempty"`
+	// Acknowledged marks an acknowledgement rather than a state change:
+	// the condition still stands. Absent means "not an acknowledgement".
+	Acknowledged bool `json:"acknowledged,omitempty"`
+	// OpenCount is the standing fault count after the change. A pointer
+	// because zero is the meaningful "nothing stands any more" answer a
+	// clear delivers, and an omitted field would say it silently — the
+	// same reason Healthy is a pointer.
+	OpenCount *int `json:"open_count,omitempty"`
 }
 
 // alarmSourcePayload is the webhook projection of a contributing data

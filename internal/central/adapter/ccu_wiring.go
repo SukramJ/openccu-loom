@@ -1394,6 +1394,20 @@ func interfacePortOverride(cc config.CentralConfig, iface hmenum.Interface) int 
 	return 0
 }
 
+// interfaceRemotePathOverride resolves an operator-configured URL-path
+// override for iface from the per-interface [config.InterfaceSpec]. Returns
+// "" when unset, so the caller keeps the backend default. The value is
+// checked for shape at config load ([config.InterfaceSpec.Validate]), so
+// anything non-empty arriving here is an absolute path.
+func interfaceRemotePathOverride(cc config.CentralConfig, iface hmenum.Interface) string {
+	for _, s := range cc.Interfaces {
+		if s.Name == string(iface) && s.RemotePath != "" {
+			return s.RemotePath
+		}
+	}
+	return ""
+}
+
 // interfaceURL composes the XML-RPC endpoint for (central, interface)
 // using the SPECIFICATION §7.2 detection ports. CUxD is BIN-RPC only
 // and therefore rejected here — callers that want CUxD must wire the
@@ -1437,16 +1451,4 @@ func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, erro
 		path = ov
 	}
 	return fmt.Sprintf("%s://%s:%d%s", scheme, cc.Host, port, path), nil
-}
-
-// interfaceRemotePathOverride resolves the operator-configured URL path for
-// iface from the per-interface [config.InterfaceSpec.RemotePath]. Returns ""
-// when no override is set, so the caller keeps the CCU's own routing default.
-func interfaceRemotePathOverride(cc config.CentralConfig, iface hmenum.Interface) string {
-	for _, s := range cc.Interfaces {
-		if s.Name == string(iface) && s.RemotePath != "" {
-			return s.RemotePath
-		}
-	}
-	return ""
 }

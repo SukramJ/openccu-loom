@@ -6,6 +6,7 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
@@ -484,6 +485,13 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 		legacy = NewLegacyTopicBuilder(cfg.LegacyAlias.Base)
 	}
 	topics := NewTopicBuilder(cfg.Base)
+	// Adopt the builder's normalised base as the bridge's own. cfg.Base is
+	// the operator's raw `north.mqtt.topic_base`, while every publisher goes
+	// through the builder, which trims the slashes and fills in the default.
+	// The few call sites that assemble a prefix from cfg.Base directly, the
+	// retained-orphan sweeps in particular, would otherwise look for topics
+	// on a prefix nothing writes the moment a trailing slash is configured.
+	cfg.Base = topics.Base
 	// Auto-wire the default HA Discovery builder when discovery is
 	// enabled but no builder was injected. Without this the
 	// `cfg.HADiscoveryEnabled && cfg.DiscoveryBuilder != nil` gate in
@@ -726,12 +734,24 @@ func (b *Bridge) RepublishDiscovery(ctx context.Context) error {
 	snapshot := make(map[string][]byte, len(b.declared))
 	maps.Copy(snapshot, b.declared)
 	b.mu.Unlock()
+	// Best-effort per topic: a breaker that is open for one entity must not
+	// abort the replay for every entity behind it, which would leave most of
+	// the fleet unavailable after a broker restart. Every failure is still
+	// reported, joined, so the caller can log the whole picture.
+	var errs []error
 	for topic, payload := range snapshot {
+		// A cancelled context is a shutdown, not a per-topic failure: stop
+		// rather than turning every remaining topic into an error.
+		if err := ctx.Err(); err != nil {
+			errs = append(errs, err)
+			break
+		}
 		if err := b.client.Publish(ctx, topic, payload, b.cfg.QoS.Discovery, true); err != nil {
-			return err
+			b.incPublishErrors()
+			errs = append(errs, fmt.Errorf("republish %s: %w", topic, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // AnnounceOnline publishes the "online" LWT counterpart and a
@@ -889,7 +909,7 @@ func (b *Bridge) PublishSourceState(ctx context.Context, centralName, iface, add
 		centralName = b.cfg.CentralName
 	}
 	topic := b.topics.AggregatedState(centralName, iface, address, channel)
-	return b.client.Publish(ctx, topic, payloadBytes, b.cfg.QoS.State, true)
+	return b.publishRawRetained(ctx, topic, payloadBytes)
 }
 
 // --- ADR 0011 publish helpers (per-DP topology) -----------------------
@@ -958,13 +978,19 @@ func (b *Bridge) PublishSlotConfig(ctx context.Context, centralName, iface strin
 	topic := b.topics.SlotConfig(centralName, iface, slot)
 	b.mu.Lock()
 	previous, declared := b.configCache[topic]
+	b.mu.Unlock()
 	if declared && bytesEqual(previous, body) {
-		b.mu.Unlock()
 		return nil
 	}
+	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
+		return err
+	}
+	// Cache only what the broker accepted — see [Bridge.publishDiscovery]
+	// for why an attempted-but-failed publish must not suppress the retry.
+	b.mu.Lock()
 	b.configCache[topic] = body
 	b.mu.Unlock()
-	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
+	return nil
 }
 
 // PublishSlotState publishes a [pload.PerDPState] JSON wrapper at the slot's
@@ -1597,6 +1623,24 @@ func (b *Bridge) rememberRawTopic(topic string) {
 	b.mu.Unlock()
 }
 
+// publishRawRetained writes body to a retained raw-plane topic and records
+// the topic in the address-scoped index — but only once the broker accepted
+// it, so a failed publish leaves no claim behind.
+//
+// Every device-scoped retained publisher must go through this rather than
+// calling the client directly: [Bridge.RetractRawStateForDevice] finds a
+// topic only through that index, and the boot-time orphan sweep recognises
+// only the `<iface>/<addr>/<ch>/<bucket>/<PARAM>` shape. A publisher that
+// skips the bookkeeping therefore leaves its retained payload on the broker
+// forever after the device is unpaired.
+func (b *Bridge) publishRawRetained(ctx context.Context, topic string, body []byte) error {
+	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
+		return err
+	}
+	b.rememberRawTopic(topic)
+	return nil
+}
+
 // RetractRawStateForDevice clears every retained raw-plane topic this
 // bridge has published for deviceAddress: the per-data-point state
 // topics tracked in rawTopics (canonical PerDPState, custom-DP slot
@@ -1645,7 +1689,6 @@ func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, object
 	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
 	b.mu.Lock()
 	previous, declared := b.declared[topic]
-	b.declared[topic] = payload
 	b.mu.Unlock()
 	// Deduplicate identical payloads — bytes.Equal would alloc
 	// nothing on a typical stable schema.
@@ -1656,6 +1699,15 @@ func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, object
 		b.incPublishErrors()
 		return err
 	}
+	// Record what the broker accepted, never what was merely attempted.
+	// The production publisher sits behind a publish-only circuit breaker,
+	// so a broker outage during the boot snapshot fails every discovery
+	// publish; caching the payload anyway would make the next identical
+	// payload hit the dedup gate above and publish nothing, leaving the
+	// entity absent from Home Assistant until the operator restarts it.
+	b.mu.Lock()
+	b.declared[topic] = payload
+	b.mu.Unlock()
 	b.incDiscoverySent()
 	return nil
 }

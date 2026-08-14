@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.23.0
+  version: 5.26.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2148,7 +2148,9 @@ paths:
         and optional MQTT broker collected by the SPA onboarding wizard.
         Unauthenticated by necessity (no admin exists yet) but hard-gated: once
         any authentication source exists it returns 409, so a second admin can
-        never be registered through this endpoint. On success the SPA returns to
+        never be registered through this endpoint. An operator who closed the
+        surface with `bootstrap.allow_first_run_setup: false` gets 403 instead,
+        regardless of how many users exist. On success the SPA returns to
         the login screen and the operator signs in with the new admin account.
       tags: [setup]
       security: []
@@ -2196,6 +2198,11 @@ paths:
       responses:
         "204": { description: Onboarding completed }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: First-run onboarding disabled by bootstrap.allow_first_run_setup
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -6291,6 +6298,11 @@ paths:
     post:
       operationId: createUser
       summary: Create a new user (admin)
+      description: |
+        Create-only. Returns 409 Conflict when the username already
+        exists (compared case-insensitively — usernames are stored
+        lower-cased); change an existing account through
+        PATCH /users/{subject}, which also revokes its live sessions.
       tags: [user-admin]
       security:
         - basicAuth: []
@@ -6309,6 +6321,11 @@ paths:
               schema: { $ref: "#/components/schemas/UserSummary" }
         "400":
           $ref: "#/components/responses/BadRequest"
+        "409":
+          description: A user with this name already exists
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /users/{subject}:
@@ -6320,6 +6337,10 @@ paths:
     patch:
       operationId: patchUser
       summary: Update user password or role (admin)
+      description: |
+        Returns 409 Conflict when the change would demote the last admin
+        account. The daemon enforces at least one admin at all times.
+        Every live session of the subject is revoked on success.
       tags: [user-admin]
       security:
         - basicAuth: []
@@ -6337,6 +6358,11 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: Cannot demote the last admin account
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
     delete:
       operationId: deleteUser
@@ -10052,7 +10078,7 @@ components:
         enabled: { type: boolean, description: "Bridge feature flag" }
         listening: { type: boolean, description: "UDP listener bound" }
         listen_addr: { type: string, description: "Effective UDP listen address" }
-        endpoint_count: { type: integer, description: "Bridged-endpoint count (excluding root)" }
+        endpoint_count: { type: integer, description: "Bridged-endpoint count (excludes the root and Aggregator endpoints)" }
         fabric_count: { type: integer, description: "Commissioned fabrics" }
         enabled_count: { type: integer, description: "Allowlist entries with enabled=true" }
         advertising: { type: boolean, description: "mDNS records emitted" }
@@ -11340,7 +11366,7 @@ components:
         endpoint_count:
           type: integer
           minimum: 0
-          description: "Number of endpoints in the assembled topology, including the root + Aggregator."
+          description: "Bridged-endpoint count of the assembled topology (excludes the root and Aggregator endpoints)."
 
     # ─── Wave-C live-edit schemas ─────────────────────────────────────
 
@@ -11676,11 +11702,24 @@ components:
           description: Overrides the default XML-RPC/BIN-RPC port. 0 or absent means "use backend default".
         remote_path:
           type: string
-          description: URL path override for XML-RPC requests. Empty means "use backend default".
+          description: >
+            URL path override for XML-RPC requests, for a CCU reached through a
+            reverse proxy that exposes it elsewhere. Must be an absolute path on
+            the configured host: it may not be the bare "/", may not start with
+            "//", and may not carry a scheme, a query, a fragment or a ".."
+            segment. Empty means "use backend default" ("/RPC2", "/groups" for
+            VirtualDevices).
         rpc_type:
           type: string
           enum: ["", xmlrpc, binrpc, jsonrpc]
-          description: Transport selector. Empty means "derive from interface name".
+          description: >
+            Restates the transport the interface name already implies (CUxD is
+            binrpc, every other interface xmlrpc). The transport is not selectable
+            per interface: a value contradicting the derived one is rejected at
+            config load. Empty means "derive from interface name". `jsonrpc` is
+            accepted by the schema for compatibility but names no transport the
+            daemon can drive, so it is rejected at config load like any other
+            contradiction.
 
     VisibilityConfig:
       type: object

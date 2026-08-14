@@ -180,29 +180,29 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// when active, captured sessions survive a daemon restart.
 	// production-replay path. Closer is chained into shutdown. Shares
 	// auditDB (ov.db) rather than opening its own handle — see openLoomDB.
-	if recorderPersistTeardown := wireSessionRecorderPersistence(auditDB, reg, logger); recorderPersistTeardown != nil { //nolint:contextcheck // persist tickers outlive this call; their lifecycle is owned by the returned closer, not the boot ctx
-		defer recorderPersistTeardown()
-	}
+	sessionRecorderCentralHook, recorderPersistTeardown := wireSessionRecorderPersistence(auditDB, reg, logger) //nolint:contextcheck // persist tickers outlive this call; their lifecycle is owned by the returned closer, not the boot ctx
+	defer recorderPersistTeardown()
 	// Wire SQLite-backed incident recording into every central's
 	// CacheCoordinator. CallbackHandlers reads the recorder lazily from
 	// CacheCoordinator.GetIncidentRecorder(), so no separate handler-level
 	// wiring step is needed. Degrades gracefully when auditDB is nil. Shares
 	// auditDB (ov.db) rather than opening its own handle — see openLoomDB.
-	incidentStore, incidentTeardown := wireIncidentRecorder(auditDB, reg, logger)
+	incidentStore, incidentCentralHook, incidentTeardown := wireIncidentRecorder(auditDB, reg, logger)
 	defer incidentTeardown()
 
 	// Audit every program run the daemon triggers, so a program reported as
 	// running twice can be attributed to the daemon or ruled out.
-	defer wireProgramExecuteAudit(reg, auditRec, logger)()
+	programAuditCentralHook, programAuditTeardown := wireProgramExecuteAudit(reg, auditRec, logger)
+	defer programAuditTeardown()
 
 	// Seed every central's health tracker (synthetic "started" sample,
 	// primary-interface pin, event-bus / audit / scheduler gauges) and wire
 	// its metrics aggregator. Extracted into seedCentralHealthAndMetrics
 	// (daemon_wiring.go).
-	seedCentralHealthAndMetrics(reg, cfg, auditDurableStats, logger)
+	centralHealthSeed := seedCentralHealthAndMetrics(reg, cfg, auditDurableStats, logger)
 
 	// --- shared infrastructure ---------------------------------
-	si, sharedInfraTeardown := wireSharedInfrastructure(ctx, cfg, logger, reg, deps)
+	si, sharedInfraTeardown := wireSharedInfrastructure(ctx, cfg, logger, reg, deps, channelFlagsOverlay)
 	defer sharedInfraTeardown()
 	metricsReg := si.metricsReg
 	healthTracker := si.healthTracker
@@ -210,6 +210,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// when the SQLite store that holds them is in use.
 	if ov.db != nil {
 		recordSecretHealth(healthTracker, metricsReg, ov.secretsAvailable)
+		// Surface a failed DB-tier overlay: the daemon then runs on the config
+		// file alone, with every SPA-side section edit silently inactive.
+		recordConfigOverlayHealth(healthTracker, metricsReg, ov.overlayErr)
 	}
 	// Teach the reload path how to re-derive the effective config, so a
 	// REST-triggered reload picks up section edits the SPA persisted to the
@@ -230,14 +233,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	valueWriter := si.valueWriter
 	mqttCollector := si.mqttCollector
 	mqttSup := si.mqttSup
-	// G12: let the (re)built MQTT bridge skip operator-hidden channels, so a
-	// hidden channel disappears from the MQTT plane like it does from the REST
-	// operation list and Matter. The overlay is keyed on (central, address).
-	if mqttSup != nil {
-		mqttSup.SetChannelHidden(func(central, channelAddress string) bool {
-			return channelFlagsOverlay.Get(central, channelAddress).Hidden
-		})
-	}
 	mqttWiring := si.mqttWiring
 	// Firmware polling jobs arrive in a second registration pass: their
 	// hooks resolve CCU backends through the ValueWriter, which does not
@@ -496,10 +491,32 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.
 	centralOrch.setHubReadyTrigger(sb.hubReadyTrigger)
-	// A runtime-adopted central must be tracked by the values-cache flusher and
-	// its eviction handler the same way a boot-time central is; otherwise no
-	// periodic tick ever persists its data points.
-	centralOrch.setValuesCacheCentralHook(sb.valuesCacheCentralHook)
+	// The health/metrics seed runs before the adopted unit is registered, so
+	// it is installed on its own seam rather than through addCentralHook.
+	centralOrch.setCentralSeed(centralHealthSeed)
+	// Every collaborator that subscribed by walking the registry once at boot
+	// registers a per-central hook here, so a CCU adopted at runtime is wired
+	// like a boot-time one instead of coming up live but unheard. The
+	// north-bound WS/REST/MQTT subscribers register further down, next to the
+	// call that builds them.
+	centralOrch.addCentralHook(sb.historyCentralHook)
+	// Without this the adopted CCU is skipped by every periodic flush tick —
+	// its values reach SQLite only through the graceful-shutdown flush, so a
+	// SIGKILL or host reboot loses everything it observed since adoption.
+	centralOrch.addCentralHook(sb.valuesCacheCentralHook)
+	centralOrch.addCentralHook(sessionRecorderCentralHook)
+	centralOrch.addCentralHook(incidentCentralHook)
+	centralOrch.addCentralHook(programAuditCentralHook)
+	centralOrch.addCentralHook(func(u *central.Unit) func() {
+		return webhookOutbound.AttachCentral(u)
+	})
+	// `backup.schedule` applies daemon-wide, so an adopted CCU must get the
+	// same scheduler job the boot loop above registered. Job registration has
+	// no unwire — the job dies with the unit's scheduler.
+	centralOrch.addCentralHook(func(u *central.Unit) func() {
+		registerScheduledBackupJobFor(u, cfg, backupAdapter, logger)
+		return nil
+	})
 
 	// --- adapters ----------------------------------------------
 	devicesAdapter := adapter.NewDevicesAdapter(reg).WithWriter(valueWriter)
@@ -543,6 +560,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		logger:         logger,
 		reg:            reg,
 		auditBuf:       auditBuf,
+		auditRec:       auditRec,
 		auditDB:        auditDB,
 		healthTracker:  healthTracker,
 		configStore:    configStore,
@@ -556,6 +574,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		authMw:         authMw,
 		restResolve:    restResolve,
 		sessionResolve: sessionResolve,
+		wsHub:          wsHub,
 	})
 	restStatusMetrics := rw.statusMetrics
 	restAuth := rw.auth
@@ -704,16 +723,22 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, hubEventsCentralHook, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, securitySvc, cfg.Locale, cfg.North.REST.PublicURL, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, northboundCentralHook, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, securitySvc, cfg.Locale, cfg.North.REST.PublicURL, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
 	// Installed here rather than next to the Matter/alarm hooks above because
-	// the subscriber it closes over is built by the call right above. Runtime
+	// the subscribers it closes over are built by the call right above. Runtime
 	// adoption is driven over REST, which is not listening yet, so no central
 	// can be adopted before this point.
-	centralOrch.setHubEventsCentralHook(hubEventsCentralHook)
+	centralOrch.addCentralHook(northboundCentralHook)
 	centralOrch.setEventSourceCentralHook(func(u *central.Unit) func() {
 		return eventSourceFeed.StartCentral(u)
 	})
+
+	// Adopt-completeness observation point: every per-central hook is now
+	// registered. The guard test adopts through this orchestrator and asserts
+	// a runtime-adopted CCU comes up wired like a boot-time one. No-op in
+	// production (deps/hook nil).
+	deps.NotifyCentralOrchestrator(centralOrch)
 
 	// --- REST --------------------------------------------------
 	// Build + mount the REST router/server (and optional mDNS advertiser).
@@ -729,6 +754,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// of the UI router so it works whenever REST is up, even with the
 	// diagnostic UI disabled.
 	noUsers := firstRunProbe(cfg, sqUsers, sqCentrals)
+	warnOnDormantOnboarding(ctx, cfg, sqUsers, sqCentrals, logger)
 
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS

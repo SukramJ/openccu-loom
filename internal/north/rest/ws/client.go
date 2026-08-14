@@ -6,6 +6,7 @@ package ws
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"log/slog"
 	"net"
@@ -42,6 +43,11 @@ const pingInterval = 30 * time.Second
 // readTimeout is the deadline for each frame read — the client must
 // respond to server pings within this window.
 const readTimeout = 60 * time.Second
+
+// closeFlushTimeout bounds how long [client.failConnection] waits for the
+// writer goroutine to emit the close frame. Normal completion is immediate;
+// the bound only matters when the peer has stopped reading.
+const closeFlushTimeout = 5 * time.Second
 
 // client owns one WebSocket connection: its subscriptions, an
 // outbound queue, and the goroutines reading/writing frames.
@@ -426,10 +432,26 @@ type outboundOp struct {
 	Topics    []string `json:"topics,omitempty"`
 }
 
-// readPump reads inbound frames and updates subscriptions. Runs
-// until the connection closes or the client misbehaves.
+// readPump reads inbound frames, assembles fragmented messages and updates
+// subscriptions. Runs until the connection closes or the client misbehaves.
+//
+// Message assembly is the frame loop's job, not readFrame's: RFC 6455 §5.4
+// lets a client split one logical message across a non-final data frame plus
+// any number of continuations, and a client library that fragments above some
+// size threshold is entitled to do so without negotiating anything. Handling
+// only complete text frames meant such a client's `call` failed
+// json.Unmarshal on the first half while the continuation matched no case at
+// all — the command never ran and the caller waited forever for a `result`
+// that could not come.
 func (c *client) readPump() {
 	defer c.close()
+	// fragOpcode is the data opcode of the message currently being
+	// assembled, or 0 when none is open. opContinuation is 0x0 and is never
+	// stored here, so zero is unambiguous.
+	var (
+		fragOpcode byte
+		fragBuf    []byte
+	)
 	for {
 		_ = c.conn.SetReadDeadline(time.Now().Add(readTimeout))
 		f, err := readFrame(c.br)
@@ -437,37 +459,117 @@ func (c *client) readPump() {
 			return
 		}
 		switch f.opcode {
-		case opText:
-			var msg inboundMessage
-			if err := json.Unmarshal(f.payload, &msg); err != nil {
-				c.logger.Warn("ws.malformed", slog.String("err", err.Error()))
+		case opText, opBinary:
+			if fragOpcode != 0 {
+				// RFC 6455 §5.4: only control frames may be interleaved
+				// into a fragmented message.
+				c.failConnection(closeProtocolError, "data frame interleaved into a fragmented message")
+				return
+			}
+			if !f.fin {
+				fragOpcode = f.opcode
+				fragBuf = f.payload
 				continue
 			}
-			switch msg.Op {
-			case "subscribe":
-				if msg.Classify != nil {
-					c.setClassify(*msg.Classify)
-				}
-				c.subscribe(msg.Topics)
-				c.sendAck("subscribed", msg.Topics)
-				if msg.Since != nil {
-					c.replayFrom(*msg.Since)
-				}
-			case "unsubscribe":
-				c.unsubscribe(msg.Topics)
-				c.sendAck("unsubscribed", msg.Topics)
-			case "pong":
-				// heartbeat ack — nothing to do
-			case "reauth":
-				c.reauth(msg.Token)
-			case "call":
-				c.handleCommand(msg)
+			if !c.dispatchMessage(f.opcode, f.payload) {
+				return
+			}
+		case opContinuation:
+			if fragOpcode == 0 {
+				c.failConnection(closeProtocolError, "continuation frame without an open message")
+				return
+			}
+			if len(fragBuf)+len(f.payload) > maxPayload {
+				c.failConnection(closeMessageTooBig, "assembled message too large")
+				return
+			}
+			fragBuf = append(fragBuf, f.payload...)
+			if !f.fin {
+				continue
+			}
+			opcode, payload := fragOpcode, fragBuf
+			fragOpcode, fragBuf = 0, nil
+			if !c.dispatchMessage(opcode, payload) {
+				return
 			}
 		case opPing:
 			c.enqueueCtrl(opPong, f.payload)
+		case opPong:
+			// Control-frame heartbeat ack. The documented client heartbeat is
+			// the JSON {"op":"pong"} text frame; a peer that answers our ping
+			// at the protocol level instead needs nothing done, and saying so
+			// keeps it out of the unsupported-opcode branch below.
 		case opClose:
 			return
+		default:
+			c.failConnection(closeUnsupportedData, "unsupported opcode")
+			return
 		}
+	}
+}
+
+// dispatchMessage handles one fully assembled client message. Reports whether
+// the read loop may continue: a message the wire contract does not admit
+// fails the connection and returns false.
+//
+// The wire contract is text JSON (assets/wsapi.json). A binary message is
+// rejected with 1003 rather than silently discarded, so a client that sends
+// one learns why instead of waiting on a reply that never comes.
+func (c *client) dispatchMessage(opcode byte, payload []byte) bool {
+	if opcode != opText {
+		c.failConnection(closeUnsupportedData, "binary messages are not supported")
+		return false
+	}
+	var msg inboundMessage
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		c.logger.Warn("ws.malformed", slog.String("err", err.Error()))
+		return true
+	}
+	switch msg.Op {
+	case "subscribe":
+		if msg.Classify != nil {
+			c.setClassify(*msg.Classify)
+		}
+		c.subscribe(msg.Topics)
+		c.sendAck("subscribed", msg.Topics)
+		if msg.Since != nil {
+			c.replayFrom(*msg.Since)
+		}
+	case "unsubscribe":
+		c.unsubscribe(msg.Topics)
+		c.sendAck("unsubscribed", msg.Topics)
+	case "pong":
+		// heartbeat ack — nothing to do
+	case "reauth":
+		c.reauth(msg.Token)
+	case "call":
+		c.handleCommand(msg)
+	}
+	return true
+}
+
+// failConnection queues a close frame carrying code and reason, then waits
+// for the writer goroutine to put it on the wire before the connection is
+// dropped (RFC 6455 §7.1.1: the server may close the underlying connection
+// once it has sent a Close frame).
+//
+// The wait is what makes the status code observable at all: writePump
+// returns after writing a close frame and its own deferred close tears the
+// socket down, which is what closes c.closed. Bounding it keeps a stalled
+// peer from pinning the read goroutine.
+func (c *client) failConnection(code uint16, reason string) {
+	c.logger.Debug("ws.protocol_error",
+		slog.Int("code", int(code)),
+		slog.String("reason", reason))
+	payload := make([]byte, 2, 2+len(reason))
+	binary.BigEndian.PutUint16(payload, code)
+	payload = append(payload, reason...)
+	c.enqueueCtrl(opClose, payload)
+	timer := time.NewTimer(closeFlushTimeout)
+	defer timer.Stop()
+	select {
+	case <-c.closed:
+	case <-timer.C:
 	}
 }
 
@@ -534,6 +636,13 @@ func (c *client) writePump() {
 			c.noteDrained()
 		case msg := <-c.ctrl:
 			if err := c.rawWrite(msg.op, msg.payload); err != nil {
+				return
+			}
+			if msg.op == opClose {
+				// A close frame is the last thing this connection sends.
+				// Returning here runs the deferred close, which is also what
+				// releases [client.failConnection] — so the status code is
+				// flushed before the socket goes away.
 				return
 			}
 		case <-ticker.C:

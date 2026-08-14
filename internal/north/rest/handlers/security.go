@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -291,8 +290,13 @@ func PutSecuritySourceOverride(d SecurityDomain, rec audit.Recorder) http.Handle
 			writeSecurityUnavailable(w, r)
 			return
 		}
-		ref, err := url.PathUnescape(chi.URLParam(r, "ref"))
-		if err != nil || ref == "" {
+		// The router decodes the path exactly once (the rest package's
+		// decodedPathRouting middleware), so chi hands over the final
+		// value. Decoding again here rejects a ref carrying a literal
+		// '%' and silently rewrites one whose component still looks like
+		// an escape.
+		ref := chi.URLParam(r, "ref")
+		if ref == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "Invalid source reference", ""))
 			return
@@ -316,7 +320,7 @@ func PutSecuritySourceOverride(d SecurityDomain, rec audit.Recorder) http.Handle
 		if in.Included != nil {
 			included = *in.Included
 		}
-		err = d.SetSourceOverride(r.Context(), parts[0], parts[1], parts[2], parts[3],
+		err := d.SetSourceOverride(r.Context(), parts[0], parts[1], parts[2], parts[3],
 			hmenum.SecurityClass(in.Class), included, in.Note)
 		switch {
 		case err == nil:

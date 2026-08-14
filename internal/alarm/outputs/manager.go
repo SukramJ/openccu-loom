@@ -17,6 +17,7 @@ import (
 	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // Config wires a Manager.
@@ -46,9 +47,28 @@ type Config struct {
 	Notify NotificationSink
 }
 
+// Notification is one notification output's fire signal.
+//
+// It carries everything a delivery plane needs to render the alert,
+// because the sink runs inside the engine's fire path: the manager
+// invokes it with the engine lock held (engine.OutputPort), so an
+// implementation that resolved the zone name or the incident sources
+// off the engine would deadlock the alarm system on the first
+// notification output an operator enrols.
+type Notification struct {
+	Row      sqlitestore.AlarmOutputRow
+	Config   OutputConfig
+	Incident sqlitestore.AlarmIncident
+	// ZoneName and Sources are the engine's snapshot of the zone at
+	// fire time (engine.FireOptions).
+	ZoneName string
+	Sources  []hmevent.SecuritySourceRef
+}
+
 // NotificationSink consumes one notification output firing for an
-// incident. Implementations must not call back into the manager.
-type NotificationSink func(row sqlitestore.AlarmOutputRow, cfg OutputConfig, incident sqlitestore.AlarmIncident)
+// incident. Implementations must not call back into the manager, and
+// must not call an engine verb (see [Notification]).
+type NotificationSink func(n Notification)
 
 // instance is one enrolled output with its parsed configuration.
 type instance struct {
@@ -201,7 +221,10 @@ func (m *Manager) FireCycle(ctx context.Context, zoneID string, incident sqlites
 			// to the enrolled delivery planes. Never stop-tracked and
 			// never cancelled by a later silence.
 			if m.notify != nil {
-				m.notify(inst.row, inst.cfg, incident)
+				m.notify(Notification{
+					Row: inst.row, Config: inst.cfg, Incident: incident,
+					ZoneName: opts.ZoneName, Sources: opts.Sources,
+				})
 			}
 		case hmenum.AlarmOutputClassSysvarMirror, hmenum.AlarmOutputClassChirp:
 			// The sysvar mirror is state-driven, chirps have their
@@ -408,17 +431,15 @@ func (m *Manager) fireAlarmLight(ctx context.Context, inst *instance, incidentID
 	return nil
 }
 
-// classEligible applies the policy filter of the cycle.
+// classEligible applies the class filters of the cycle. The
+// restrictions intersect: a degraded pre-alarm cycle fires only what
+// both admit.
 func classEligible(class hmenum.AlarmOutputClass, opts engine.FireOptions) bool {
-	if opts.Degraded {
-		// Restart-loop breaker: optical + light + notification only.
-		switch class {
-		case hmenum.AlarmOutputClassOpticalSiren, hmenum.AlarmOutputClassAlarmLight,
-			hmenum.AlarmOutputClassNotification, hmenum.AlarmOutputClassSysvarMirror:
-			return true
-		default:
-			return false
-		}
+	if opts.Degraded && !degradedClass(class) {
+		return false
+	}
+	if opts.PreAlarm && !preAlarmClass(class) {
+		return false
 	}
 	if opts.Policy.Silent && class.Acoustic() {
 		return false
@@ -427,6 +448,37 @@ func classEligible(class hmenum.AlarmOutputClass, opts engine.FireOptions) bool 
 		return false
 	}
 	return true
+}
+
+// degradedClass reports whether the class survives the restart-loop
+// breaker: optical + light + notification only.
+func degradedClass(class hmenum.AlarmOutputClass) bool {
+	switch class {
+	case hmenum.AlarmOutputClassOpticalSiren, hmenum.AlarmOutputClassAlarmLight,
+		hmenum.AlarmOutputClassNotification, hmenum.AlarmOutputClassSysvarMirror:
+		return true
+	default:
+		return false
+	}
+}
+
+// preAlarmClass reports whether the class belongs to the pre-alarm
+// phase (chirp + notification + light, plus the state-driven sysvar
+// mirror so the mirrored state stays consistent).
+//
+// Every siren class is excluded on purpose. The pre-alarm window exists
+// so a resident can silence a false alarm before the sirens sound; a
+// phase that already fires them is not a warning window, and it burns
+// the incident's acoustic budget twice over — once at second 0 and
+// again when the phase escalates.
+func preAlarmClass(class hmenum.AlarmOutputClass) bool {
+	switch class {
+	case hmenum.AlarmOutputClassChirp, hmenum.AlarmOutputClassNotification,
+		hmenum.AlarmOutputClassAlarmLight, hmenum.AlarmOutputClassSysvarMirror:
+		return true
+	default:
+		return false
+	}
 }
 
 // journalFault records a driver fault (fail-visible, S7).

@@ -21,8 +21,8 @@ import (
 const (
 	loginRateBurst   = 5
 	loginRatePerSec  = 1.0
-	loginLimiterCap  = 4096             // soft cap before an idle sweep runs
-	loginLimiterIdle = 10 * time.Minute // evict buckets idle longer than this
+	loginLimiterCap  = 4096             // hard ceiling on live per-IP buckets
+	loginLimiterIdle = 10 * time.Minute // reclaim prefers buckets idle longer than this
 )
 
 // LoginRateLimiter is a per-client-IP token bucket guarding the pre-auth
@@ -30,8 +30,11 @@ const (
 // middleware cannot cover this surface: it keys on a resolved auth identity,
 // which is absent before login, so every unauthenticated attempt shares one
 // "anonymous" bucket — a global throttle, not per-source brute-force
-// protection. Keyed by client IP with idle eviction so a source rotating
-// through addresses cannot grow the table without bound.
+// protection. Keyed by client IP; the backing table is hard-bounded at
+// loginLimiterCap buckets, so a source rotating through an address range —
+// an IPv6 /64 offers 2^64 of them, all able to complete a handshake — cannot
+// grow it. Rotation still buys the attacker a fresh burst per address; the
+// bound is about the daemon's memory, not about defeating rotation.
 type LoginRateLimiter struct {
 	store *keyedLimiterStore
 }

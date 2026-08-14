@@ -31,9 +31,22 @@ import (
 // declaration (the non-retained `<base>/alarm/<zone>/event` stream,
 // which HA reaches through the raw plane rather than through a
 // discovered entity) is reported via t.Logf only.
+//
+// The table runs twice, once with the trailing slash an operator may
+// configure on `topic_base`. Every panel names the bridge-status topic
+// as its first availability source while the bridge publishes that
+// status through its topic builder, which trims the base — one slash of
+// disagreement takes every panel down rather than one value, because
+// `availability_mode` is "all".
 func TestAlarmPlaneTopicsRoundTrip(t *testing.T) {
 	t.Parallel()
-	const base = "gh"
+	for _, base := range []string{"gh", "gh/"} {
+		alarmPlaneTopicsRoundTrip(t, base)
+	}
+}
+
+func alarmPlaneTopicsRoundTrip(t *testing.T, base string) {
+	t.Helper()
 	zones := []string{"eg", "og"}
 
 	declared := map[string]bool{}
@@ -69,34 +82,20 @@ func TestAlarmPlaneTopicsRoundTrip(t *testing.T) {
 
 	for topic := range declared {
 		if !published[topic] {
-			t.Errorf("declared but never published/subscribed: %q — a consumer creates this entity "+
-				"and it either stays unavailable forever (state) or its commands vanish silently (command)", topic)
+			t.Errorf("base %q: declared but never published/subscribed: %q — a consumer creates this entity "+
+				"and it either stays unavailable forever (state) or its commands vanish silently (command)", base, topic)
 		}
 	}
 	for topic := range published {
-		if !declared[topic] && !alarmUndeclaredByDesign[topic] {
-			t.Logf("published but not declared: %q (no entity is created for it)", topic)
+		if !declared[topic] {
+			t.Logf("base %q: published but not declared: %q (no entity is created for it)", base, topic)
 		}
 	}
 }
 
-// alarmUndeclaredByDesign lists topics that are published/wired but
-// intentionally carry no discovery declaration of their own: the
-// per-panel availability topic is referenced from the nested
-// `availability` list, not as a top-level `state_topic`/
-// `json_attributes_topic`/`command_topic` field, and the non-retained
-// event stream is consumed off the raw plane directly.
-var alarmUndeclaredByDesign = map[string]bool{
-	"gh/alarm/eg/availability":     true,
-	"gh/alarm/og/availability":     true,
-	"gh/alarm/master/availability": true,
-	"gh/alarm/eg/event":            true,
-	"gh/alarm/og/event":            true,
-	"gh/alarm/master/event":        true,
-}
-
 // collectAlarmDeclaredTopics extracts the top-level state_topic and
-// command_topic fields from one alarm-panel discovery payload into out.
+// command_topic fields plus every availability source from one
+// alarm-panel discovery payload into out.
 func collectAlarmDeclaredTopics(t *testing.T, item DiscoveryItem, out map[string]bool) {
 	t.Helper()
 	if !item.OK {
@@ -111,6 +110,7 @@ func collectAlarmDeclaredTopics(t *testing.T, item DiscoveryItem, out map[string
 			out[v] = true
 		}
 	}
+	collectAvailabilityTopics(t, body, out)
 }
 
 // alarmPublishedTopics is the set of topics the alarm plane actually
@@ -128,8 +128,13 @@ func collectAlarmDeclaredTopics(t *testing.T, item DiscoveryItem, out map[string
 // matching edit on the other side, is what makes this test fail.
 func alarmPublishedTopics(base string, zones []string) map[string]bool {
 	out := map[string]bool{
-		base + "/alarm/" + alarmMasterZone + "/state": true,
-		base + "/alarm/" + alarmMasterZone + "/set":   true,
+		base + "/alarm/" + alarmMasterZone + "/state":        true,
+		base + "/alarm/" + alarmMasterZone + "/set":          true,
+		base + "/alarm/" + alarmMasterZone + "/availability": true,
+		// The bridge writes its retained status through the topic
+		// builder, so the published side is spelled the way the bridge
+		// spells it — not the way the plane's own helper does.
+		NewTopicBuilder(base).BridgeStatus(): true,
 		// Restated literally, not via alarmTriggeredMotionTopic: calling
 		// the same helper on both sides would move them in lockstep and
 		// the comparison could never fail. Mirrors what
@@ -141,6 +146,10 @@ func alarmPublishedTopics(base string, zones []string) map[string]bool {
 		// Mirrors CommandSubscriber.Start's `base+"/alarm/+/set"` wildcard.
 		out[base+"/alarm/"+zone+"/set"] = true
 		out[base+"/alarm/"+zone+"/triggered-motion"] = true
+		// Mirrors AlarmMQTTPublisher.reconcile's per-zone availability
+		// write, restated literally for the same reason as the command
+		// half above.
+		out[base+"/alarm/"+zone+"/availability"] = true
 	}
 	return out
 }

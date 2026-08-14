@@ -440,7 +440,18 @@ func (s *Service) onAlarmStateChanged(e hmevent.AlarmStateChangedEvent) {
 		z.IncidentID = 0
 	}
 	s.agg.zones[e.ZoneID] = z
-	if e.To != hmenum.AlarmZoneStateTriggered {
+	// classSince is keyed by class alone, globally across zones, while
+	// the state machine runs per zone. Releasing the entry on any
+	// transition out of triggered therefore wiped the start time of an
+	// incident running somewhere else: the snapshot kept reporting the
+	// intrusion active with a since of zero, and every consumer painted
+	// a running break-in as having begun at the Unix epoch. Both
+	// producers of the entry have to be spent before it is released —
+	// no zone still triggered, and no intrusion source still active,
+	// which is the same guard the wire path applies in onDataPoint.
+	if e.To != hmenum.AlarmZoneStateTriggered &&
+		!s.agg.anyZoneTriggered() &&
+		!s.agg.classState(hmenum.SecurityClassIntrusion).Active {
 		delete(s.agg.classSince, hmenum.SecurityClassIntrusion)
 	}
 	snap := s.agg.snapshot()

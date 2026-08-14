@@ -14,6 +14,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -22,11 +23,11 @@ import (
 )
 
 // errCentralNotLive is returned by [centralOrchestrator.removeCentral] when
-// name is not currently live-managed (never adopted at runtime, or already
-// removed). Callers that only want to guarantee "not live anymore" — the
-// REST decorator's Delete — treat this as a tolerated no-op rather than a
-// hard failure, since a disabled / never-adopted central still needs its
-// persisted row deleted.
+// name is live nowhere: neither adopted at runtime nor present in the shared
+// registry (never configured, disabled at boot, or already removed). Callers
+// that only want to guarantee "not live anymore" — the REST decorator's
+// Delete — treat this as a tolerated no-op rather than a hard failure, since
+// such a central still needs its persisted row deleted.
 var errCentralNotLive = errors.New("central_adopt: central not live-managed")
 
 // centralHandle is what [centralOrchestrator] tracks for one live-adopted
@@ -93,13 +94,6 @@ type centralOrchestrator struct {
 	// aggregate, without which a removed CCU leaves ghost sources
 	// pinning their hazard class permanently active.
 	securityHook func(u *central.Unit) (unwire func())
-	// hubEventsHook attaches an adopted central to the WebSocket
-	// hub-singleton broadcasts (alarm / service message counts, inbox,
-	// metrics, connectivity). Set via
-	// [centralOrchestrator.setHubEventsCentralHook]. Without it an adopted
-	// central would never push a hub change to any WS client, because the
-	// subscriber only walks the registry once at boot.
-	hubEventsHook func(u *central.Unit) (unwire func())
 	// eventSourceHook feeds an adopted central's model event sources from
 	// its device triggers. Set via
 	// [centralOrchestrator.setEventSourceCentralHook]. Without it the
@@ -107,19 +101,38 @@ type centralOrchestrator struct {
 	// trigger — indistinguishable from a fleet whose buttons nobody has
 	// pressed, because the feed only walks the registry once at boot.
 	eventSourceHook func(u *central.Unit) (unwire func())
+	// centralSeed primes a fresh unit's health tracker, gauges,
+	// observability recorder and metrics aggregator. Set via
+	// [centralOrchestrator.setCentralSeed]. The second argument is the
+	// central's `primary_interface` pin, which the adopted row carries and
+	// the boot config does not know about.
+	//
+	// It is a field of its own rather than one more entry in extraHooks
+	// because it is the one wiring that must run BEFORE the unit enters the
+	// shared registry: it writes unsynchronised Unit fields the serving
+	// handlers read, and the registry is what makes the unit observable.
+	centralSeed func(u *central.Unit, primaryInterface string)
 	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
 	// serial resolves. Set via [centralOrchestrator.setHubReadyTrigger] from the
 	// southbound wiring result so a runtime-adopted central publishes its
 	// serial-gated hub discovery the same way a boot-time central does. Nil when
 	// MQTT is not configured.
 	hubReadyTrigger func()
-	// valuesCacheHook registers an adopted central with the values-cache
-	// flusher's dirty tracker and its device-removal eviction. Set via
-	// [centralOrchestrator.setValuesCacheCentralHook]. Without it the adopted
-	// CCU is skipped by every periodic flush tick — its values reach SQLite
-	// only through the graceful-shutdown flush, so a SIGKILL or host reboot
-	// loses everything it observed since adoption.
-	valuesCacheHook func(u *central.Unit) (unwire func())
+	// extraHooks holds every additional per-central attach hook the
+	// composition root registered through
+	// [centralOrchestrator.addCentralHook], in registration order.
+	//
+	// It is an open list rather than one named field per collaborator because
+	// the named-field shape is what let this defect in: the daemon has a whole
+	// family of north-bound subscribers that snapshot the registry once at
+	// boot, exactly one of them (the WS hub-events subscriber) got a field,
+	// and the rest — measurement history, the outbound webhook, the WS
+	// system-status / device-lifecycle / device-trigger / optimistic-rollback
+	// subscribers, the REST system-status buffer, the MQTT system-status
+	// plane — were half-remembered and silently did nothing for an adopted
+	// central. A registrar cannot be half-remembered: a collaborator either
+	// registers its hook or it has none.
+	extraHooks []func(u *central.Unit) (unwire func())
 }
 
 // centralHooks is what [centralOrchestrator.attachCentralHooks] returns: one
@@ -147,10 +160,9 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	matterHook := o.matterHook
 	alarmHook := o.alarmHook
 	securityHook := o.securityHook
-	hubEventsHook := o.hubEventsHook
 	eventSourceHook := o.eventSourceHook
 	hubReadyTrigger := o.hubReadyTrigger
-	valuesCacheHook := o.valuesCacheHook
+	extraHooks := slices.Clone(o.extraHooks)
 	o.mu.Unlock()
 
 	var h centralHooks
@@ -186,22 +198,10 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	if securityHook != nil {
 		keep(securityHook(unit))
 	}
-	// Attach the WebSocket hub-singleton broadcasts. Before the southbound
-	// bring-up starts, so the first message/inbox change the central reports
-	// already has a listener.
-	if hubEventsHook != nil {
-		keep(hubEventsHook(unit))
-	}
 	// Feed the central's model event sources from its device triggers, so the
 	// first keypress it reports is recorded on the channel's event group.
 	if eventSourceHook != nil {
 		keep(eventSourceHook(unit))
-	}
-	// Register with the values-cache flusher + eviction. Before the bring-up
-	// starts, so the very first value the central reports already marks it
-	// dirty and the next tick persists it.
-	if valuesCacheHook != nil {
-		keep(valuesCacheHook(unit))
 	}
 	// Subscribe onto the hub-discovery ready pipeline so the serial-gated hub
 	// discovery (named central device + sysvars) publishes once the
@@ -211,7 +211,49 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	if hubReadyTrigger != nil {
 		keep(subscribeHubReadyTrigger(unit.EventBus, hubReadyTrigger))
 	}
+	// Every collaborator that snapshots the registry at boot and registered
+	// itself through addCentralHook: measurement history, the outbound
+	// webhook, the WS system-status / device-lifecycle / device-trigger /
+	// optimistic-rollback subscribers, the REST system-status buffer, the
+	// MQTT system-status plane, session-recorder persistence, the incident
+	// recorder, and the values-cache flusher's dirty tracker + removal
+	// eviction. They are mutually independent, so registration order is the
+	// attach order. All of them run before AddCentral launches the bring-up,
+	// so the very first value the central reports already has its listener —
+	// which for the values cache is what makes it dirty in time for the next
+	// flush tick instead of only at graceful shutdown.
+	for _, hook := range extraHooks {
+		keep(hook(unit))
+	}
 	return h
+}
+
+// addCentralHook registers a per-central attach hook the orchestrator runs for
+// every central it adopts at runtime, and whose returned unwire it tears down
+// again on remove. Nil-safe on both sides (a nil orchestrator means south-bound
+// never came up; a nil hook means the collaborator is disabled).
+//
+// Register one for every collaborator that subscribes to a central's EventBus
+// by walking the registry once: that walk sees only the centrals present at
+// boot, and nothing anywhere reports the ones it missed.
+func (o *centralOrchestrator) addCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil || hook == nil {
+		return
+	}
+	o.mu.Lock()
+	o.extraHooks = append(o.extraHooks, hook)
+	o.mu.Unlock()
+}
+
+// setCentralSeed installs the per-central health/metrics seed run on every
+// runtime-adopted central before it is registered. Nil-safe on both sides.
+func (o *centralOrchestrator) setCentralSeed(seed func(u *central.Unit, primaryInterface string)) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.centralSeed = seed
+	o.mu.Unlock()
 }
 
 // setAlarmCentralHook installs the per-central alarm wiring hook.
@@ -236,31 +278,8 @@ func (o *centralOrchestrator) setSecurityCentralHook(hook func(u *central.Unit) 
 	o.mu.Unlock()
 }
 
-// setHubEventsCentralHook installs the per-central WebSocket hub-events
-// wiring hook. Nil-safe on both sides, mirroring setAlarmCentralHook.
-func (o *centralOrchestrator) setHubEventsCentralHook(hook func(u *central.Unit) (unwire func())) {
-	if o == nil {
-		return
-	}
-	o.mu.Lock()
-	o.hubEventsHook = hook
-	o.mu.Unlock()
-}
-
-// setValuesCacheCentralHook installs the per-central values-cache hook
-// (dirty-tracker registration + removal eviction). Nil-safe on both sides,
-// mirroring setAlarmCentralHook.
-func (o *centralOrchestrator) setValuesCacheCentralHook(hook func(u *central.Unit) (unwire func())) {
-	if o == nil {
-		return
-	}
-	o.mu.Lock()
-	o.valuesCacheHook = hook
-	o.mu.Unlock()
-}
-
 // setEventSourceCentralHook installs the per-central event-source feed hook.
-// Nil-safe on both sides, mirroring setHubEventsCentralHook.
+// Nil-safe on both sides, mirroring setSecurityCentralHook.
 func (o *centralOrchestrator) setEventSourceCentralHook(hook func(u *central.Unit) (unwire func())) {
 	if o == nil {
 		return
@@ -368,6 +387,18 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	if err != nil {
 		return fmt.Errorf("central_adopt: new unit %s: %w", cc.Name, err)
 	}
+	// Seed health, gauges, observability and metrics BEFORE the unit becomes
+	// visible in the shared registry — those setters write fields the serving
+	// handlers read without synchronisation, and boot writes them while
+	// nothing is serving yet.
+	o.mu.Lock()
+	seed := o.centralSeed
+	o.mu.Unlock()
+	if seed != nil {
+		// The pin travels with the adopted config: it comes from the row the
+		// operator saved, which never reaches cfg.Centrals.
+		seed(unit, cc.PrimaryInterface)
+	}
 	if err := o.reg.Register(unit); err != nil {
 		return fmt.Errorf("central_adopt: register %s: %w", cc.Name, err)
 	}
@@ -454,9 +485,10 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 // subscribers, so HA/MQTT discovery configs for the removed central's devices
 // would never be retracted (orphaned entities). Mirrors centralBringUp.reinit's
 // teardown-then-clearModel ordering (internal/central/adapter/central_bringup.go).
-// Returns [errCentralNotLive] when name was never adopted through this
-// orchestrator (or was already removed) — the caller decides whether that is
-// fatal.
+// It tears a boot-time central down too: liveness is decided by the shared
+// registry, not by whether this orchestrator happened to adopt the central.
+// Returns [errCentralNotLive] only when the name is live nowhere — the caller
+// decides whether that is fatal.
 func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) error {
 	lock := o.lifecycleLock(name)
 	lock.Lock()
@@ -469,7 +501,24 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	}
 	o.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("%w: %s", errCentralNotLive, name)
+		// No handle, but the central may still be live: `handles` is written
+		// only by adoptCentral, so every central the boot path registered —
+		// the normal case once the daemon has been restarted after
+		// onboarding — was invisible here. removeCentral returned
+		// errCentralNotLive, both REST mutators tolerate that sentinel, and
+		// the persisted row was deleted (or flipped to disabled) while the
+		// CCU stayed fully live: registry entry, bring-up goroutines,
+		// callback routes, MQTT/WS publishing, scheduler jobs. The SPA showed
+		// it gone, a second DELETE answered 404, and only a restart made the
+		// deletion real.
+		//
+		// Fall back to the registry, which is the authority on liveness, and
+		// recover the interface list from the boot config so purgeCentralState
+		// still has something to purge. The per-central subscriptions ride the
+		// unit's EventBus and are dropped by Unit.Stop.
+		if h = o.bootHandle(name); h == nil {
+			return fmt.Errorf("%w: %s", errCentralNotLive, name)
+		}
 	}
 
 	o.bringUp.RemoveCentral(name)
@@ -499,6 +548,35 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore, h.cc, o.logger)
 	o.logger.Info("central.remove.live", slog.String("central", name))
 	return nil
+}
+
+// bootHandle synthesises the teardown handle for a central this orchestrator
+// never adopted but that IS live in the shared registry — i.e. one the boot
+// path registered. It returns nil when the name is not registered, which is
+// the only case that genuinely deserves [errCentralNotLive].
+//
+// The handle carries the boot config's interface list (what purgeCentralState
+// needs) and the event-bridge detach, which is keyed by name and therefore
+// reachable without an adopt-time closure. Everything else a boot-time central
+// subscribed rides its own EventBus and is dropped by Unit.Stop, which clears
+// every subscription.
+func (o *centralOrchestrator) bootHandle(name string) *centralHandle {
+	if _, live := o.reg.Get(name); !live {
+		return nil
+	}
+	h := &centralHandle{cc: config.CentralConfig{Name: name}}
+	if o.cfg != nil {
+		for i := range o.cfg.Centrals {
+			if o.cfg.Centrals[i].Name == name {
+				h.cc = o.cfg.Centrals[i]
+				break
+			}
+		}
+	}
+	if bridge := o.sbDeps.bridge; bridge != nil {
+		h.unwires = append(h.unwires, func() { bridge.DetachCentral(name) })
+	}
+	return h
 }
 
 // lifecycleLock returns the per-central adopt/remove serialization mutex,
@@ -560,16 +638,21 @@ func purgeCentralState(
 	logger *slog.Logger,
 ) {
 	for _, ifc := range cc.Interfaces {
+		// The cached rows are keyed by the canonical `<central>-<interface>`
+		// wire id the device pipeline stamps onto its devices, while the
+		// config names the interface bare — deleting under the bare name is
+		// an exact-match DELETE that matches nothing.
+		wireIface := cachereset.StoreInterfaceID(cc.Name, ifc.Name)
 		if valuesCacheStore != nil {
-			if _, err := valuesCacheStore.DeleteForInterface(ctx, cc.Name, ifc.Name); err != nil {
+			if _, err := valuesCacheStore.DeleteForInterface(ctx, cc.Name, wireIface); err != nil {
 				logger.Warn("central.remove.purge_values_cache",
-					slog.String("central", cc.Name), slog.String("interface", ifc.Name), slog.String("err", err.Error()))
+					slog.String("central", cc.Name), slog.String("interface", wireIface), slog.String("err", err.Error()))
 			}
 		}
 		if masterValuesStore != nil {
-			if _, err := masterValuesStore.DeleteForInterface(ctx, cc.Name, ifc.Name); err != nil {
+			if _, err := masterValuesStore.DeleteForInterface(ctx, cc.Name, wireIface); err != nil {
 				logger.Warn("central.remove.purge_master_values",
-					slog.String("central", cc.Name), slog.String("interface", ifc.Name), slog.String("err", err.Error()))
+					slog.String("central", cc.Name), slog.String("interface", wireIface), slog.String("err", err.Error()))
 			}
 		}
 	}

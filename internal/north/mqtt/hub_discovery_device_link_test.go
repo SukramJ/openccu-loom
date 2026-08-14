@@ -193,3 +193,37 @@ func TestHubEntityDeviceIdentifierIsLowercased(t *testing.T) {
 		t.Fatalf("identifier: got %q want %q", id, "openccu-loom_0001abcd")
 	}
 }
+
+// TestDeviceViaDeviceMatchesTheHubCardIdentifier asserts the two producers of
+// the central's device identifier agree byte-for-byte.
+//
+// Home Assistant resolves a parent only on an exact identifiers match, so a
+// per-device card whose `via_device` spells the central differently from the
+// hub card's `identifiers` loses the whole hierarchy: every physical device
+// floats at the top level instead of nesting under the CCU, and the sysvar /
+// program entities that ride the device-linked block lose their link too.
+//
+// The assertion compares the two producers rather than a literal, because a
+// literal only pins today's spelling — it is the disagreement that breaks HA.
+func TestDeviceViaDeviceMatchesTheHubCardIdentifier(t *testing.T) {
+	t.Parallel()
+
+	// A name the escaping actually rewrites: with a bare ASCII slug both
+	// spellings coincide and the comparison would be vacuous.
+	const central = "Haus CCÜ"
+
+	hubIDs, ok := hubDeviceBlock(central, HubInfo{})["identifiers"].([]string)
+	if !ok || len(hubIDs) != 1 {
+		t.Fatalf("hub card identifiers = %v, want exactly one", hubIDs)
+	}
+
+	desc := deviceDescriptor(Event{Central: central, DeviceAddress: "0001ABCD"}, "", false)
+	if got := desc["via_device"]; got != hubIDs[0] {
+		t.Fatalf("per-device via_device = %v, hub card identifier = %q — HA cannot resolve the parent", got, hubIDs[0])
+	}
+
+	linked := hubEntityDeviceBlock(central, "0001ABCD", HubInfo{})
+	if got := linked["via_device"]; got != hubIDs[0] {
+		t.Fatalf("device-linked hub entity via_device = %v, hub card identifier = %q", got, hubIDs[0])
+	}
+}

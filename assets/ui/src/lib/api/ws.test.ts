@@ -60,6 +60,81 @@ describe("connectEvents heartbeat", () => {
   });
 });
 
+describe("connectEvents event normalisation", () => {
+  // Every discriminator the EventEnvelope union names must be reachable
+  // from a real broadcast — a variant no wire type produces is a live
+  // feature that has never fired and looks identical to a working one.
+  function received(frame: unknown): unknown[] {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+    const out: unknown[] = [];
+    stream.onMessage((e) => out.push(e));
+    sock.emit("open");
+    sock.emit("message", { data: JSON.stringify(frame) });
+    stream.close();
+    return out;
+  }
+
+  it("normalises datapoint.value_changed into the data_point shape", () => {
+    expect(
+      received({
+        type: "datapoint.value_changed",
+        payload: {
+          central: "ccu1",
+          interface: "HmIP-RF",
+          device_address: "ABC0000001",
+          channel: 4,
+          parameter: "STATE",
+          value: true,
+        },
+      }),
+    ).toEqual([
+      {
+        type: "data_point",
+        payload: {
+          central: "ccu1",
+          interface: "HmIP-RF",
+          channel_address: "ABC0000001:4",
+          parameter: "STATE",
+          value: true,
+        },
+      },
+    ]);
+  });
+
+  it("normalises hub.sysvar_changed into the sysvar shape", () => {
+    expect(
+      received({
+        type: "hub.sysvar_changed",
+        payload: {
+          central: "ccu1",
+          name: "Anwesenheit",
+          value_type: "BOOL",
+          previous: false,
+          value: true,
+        },
+      }),
+    ).toEqual([
+      {
+        type: "sysvar",
+        payload: { central: "ccu1", name: "Anwesenheit", value: true },
+      },
+    ]);
+  });
+
+  it("drops a sysvar frame without a name rather than emitting a broken payload", () => {
+    expect(
+      received({ type: "hub.sysvar_changed", payload: { central: "ccu1" } }),
+    ).toEqual([]);
+  });
+
+  it("passes an unnormalised broadcast through with its wire type", () => {
+    expect(
+      received({ type: "hub.service_message", payload: { count: 3 } }),
+    ).toEqual([{ type: "hub.service_message", payload: { count: 3 } }]);
+  });
+});
+
 describe("connectEvents resync signal", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

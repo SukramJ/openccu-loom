@@ -17,7 +17,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   snapshot per central, so the support artefact the SPA downloads answers
   "how much is this CCU actually doing" without a Prometheus scraper. The
   block holds counters only and names no device, so it is unaffected by
-  `anonymize`. (REST API 5.23.0)
+  `anonymize`. (REST API 5.26.0)
 
 ### Fixed
 
@@ -65,62 +65,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reloads of the same channel. The earliest of the tied temperatures now
   wins every time, so the schedule the UI and the REST API show stays
   put and no longer produces a phantom difference on the next save.
-
-## [0.59.0]
-
-### Added
-
-- **Matter bridge diagnostics.** Three further views into what the
-  bridge is doing, reachable under **Matter → Diagnostics**:
-
-  *Discovery.* What the bridge actually announces over mDNS, and what
-  would keep a controller from finding it: missing service subtypes
-  (Apple and Google browse through those, so without them the bridge is
-  invisible to both while chip-tool finds it), addresses only reachable
-  inside a container, a commissioning port other than 5540 (Alexa uses
-  no other), an announcement without IPv6. Each of these leaves the
-  daemon looking correct — advertising succeeds and the log says so.
-
-  *Endpoints.* The assembled topology as a controller sees it, with
-  device types and clusters. Until now the only way to look at it was to
-  commission a controller and browse with chip-tool, so every "why is
-  this device missing" question started with a pairing step.
-
-  *Ecosystem compatibility.* Each paired fabric is classified by
-  controller vendor, and the exposed device types are checked against
-  what that ecosystem accepts — a valve Google and Alexa will not show,
-  a leak detector that makes Alexa drop the entire bridge, an endpoint
-  count past where Alexa becomes unreliable. The bridge cannot observe
-  any of this: it exposes the endpoint correctly and the ecosystem
-  silently omits it. (REST API 5.22.0)
-
-- **The bridge can say whether a Matter controller is still talking to
-  it.** `GET /api/v1/matter/sessions` lists every open secure session
-  with two separate ages: when the session last carried traffic in any
-  direction, and when the controller last sent something. The difference
-  is the point. A controller that goes away without closing its session
-  leaves it open and simply stops sending, so the bridge keeps reporting
-  into it — from every other angle that looks healthy, and in the
-  ecosystem it shows up only as entities that quietly stop updating.
-  Each session also reports how many subscriptions ride on it: a
-  commissioned controller holding none is connected but receiving
-  nothing.
-
-  The daemon has tracked all of this internally for the idle-session
-  reaper; none of it could be seen from outside. No key material is
-  exposed. (REST API 5.21.0)
-
-## [0.58.6]
-
-### Security
-
-- **Go toolchain 1.26.6.** The 1.26.5 standard library carries seven
-  advisories on code paths this daemon actually calls, across the XML
-  decoder the XML-RPC transport and SSDP discovery use, the ASN.1 decoder
-  behind Matter CSR generation, and `net/http`. All are fixed in 1.26.6;
-  `go.mod`, the builder image, and every workflow move together.
-
-### Fixed
 
 - **Curated value labels now reach the last translation fallback.** When a
   value has no label of its own for the parameter reporting it, the daemon
@@ -355,6 +299,835 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   only through the flush on a clean shutdown, so a container kill, an OOM
   kill or a power cut left its cache exactly as empty as it was at
   adoption, and the next start had nothing to restore for it.
+
+### Security
+
+- **A chunked request body is capped like any other.** The OpenAPI
+  request validator capped bodies whose length the client announced, and
+  `Transfer-Encoding: chunked` announces none: such a request streamed
+  into an unbounded read before authentication, CSRF or the login
+  brute-force limiter ever saw it, so an unauthenticated `POST
+  /api/v1/auth/login` could exhaust the daemon's memory with a
+  one-header change.
+
+- **Two per-request tables are now hard-bounded.** The login
+  brute-force limiter's per-IP table only evicted buckets idle for ten
+  minutes, so a source rotating through an address range — an IPv6 /64
+  offers 2^64 of them — grew it by one limiter per request without
+  limit. The `Idempotency-Key` response cache had no eviction at all:
+  its key carries a client-chosen header value, so a caller minting a
+  fresh key per request added one full cached response body per request
+  for the life of the process. Both are now capped; the response cache
+  additionally stops caching statuses that never reached a handler and
+  responses too large to be worth replaying.
+
+### Fixed
+
+- **A notification output no longer freezes the alarm system.** Enrolling
+  an output of class *notification* — the documented way to get a
+  messenger or webhook alert — was enough to stop the alarm engine dead
+  the first time the zone triggered. The alert was assembled from inside
+  the trigger itself and asked the engine for the zone it was already
+  triggering, which cannot answer until the trigger finishes. Everything
+  after that point stopped: no state change was published, no further
+  sensor event was handled, and *Disarm* and *Silence* never returned —
+  with the siren already sounding. The alert now carries the zone name
+  and the contributing detectors with it and asks the engine for nothing.
+
+- **A bound panic key raises an alarm.** Binding a keyfob long-press to
+  the `panic` action — a hold-up or medical key — produced nothing when
+  pressed: no incident, no siren, no notification, only a journal entry
+  saying the engine had no panic path. It had one; the router simply
+  never reached it. Every installation with a panic key was affected.
+
+- **The pre-alarm window is quiet again.** A zone with `pre_alarm_s`
+  configured is supposed to spend that window on the chime, the alarm
+  light and the notification so a resident can silence a false alarm
+  before the sirens sound. Instead every enrolled siren fired at full
+  volume from the first second and again when the window elapsed, which
+  also spent the incident's acoustic budget twice.
+
+- **An alarm report names the detector that caused it.** Three trigger
+  routes recorded no contributing data point: an expired entry delay —
+  the most common real intrusion path, a door opening while nobody
+  disarms — a sensor that stopped answering while armed, and a sensor
+  found open after a restart. For those incidents the source list stayed
+  empty everywhere: in the notification, in the `{sensor}` placeholders
+  of the rendered report, and in the after-the-fact audit.
+
+- **A lost radio interface reaches the alarm system.** When a CCU stopped
+  serving one of its interfaces, the alarm service compared the CCU's
+  own interface name against its internally qualified one and matched
+  nothing. Every window and door contact behind that radio kept
+  reporting its last known — usually closed — state while armed, and
+  losing every interface of a CCU never ran the zone's central-loss
+  policy. The per-data-point unreachable path still worked, which is why
+  the gap was invisible.
+
+- **A failed siren command turns the alarm health surface red.** A fire
+  that failed or a stop the watchdog could not verify was recorded on
+  `/api/v1/health` but published nowhere, so the MQTT alarm panels, the
+  SPA health surface, the outbound webhook and the Security overview all
+  kept reporting a healthy alarm system while a siren was stuck on.
+
+- **A WebSocket command split across several frames is executed.** A
+  client library is free to fragment a large message — most do above
+  some size threshold — and the daemon handled only whole frames: the
+  first half of such a command was logged as malformed JSON and the
+  remainder was discarded without a trace. The command never ran and no
+  answer was ever sent for its correlation id, so the caller waited
+  until it timed out. Fragmented messages are now reassembled, with the
+  assembled size held to the same 1 MiB ceiling a single frame has, and
+  a client that genuinely breaks the framing rules is closed with the
+  matching WebSocket status code instead of having its frames silently
+  dropped.
+
+- **A CCU added while the daemon is running reaches the outbound
+  webhook.** The webhook bridge subscribes its CCUs once, when it
+  starts. A CCU adopted afterwards over the admin API delivered nothing
+  at all — no value change, no interface status, no incident — while the
+  CCUs present at start-up kept delivering, so the endpoint looked
+  healthy and the new CCU looked idle. Removing a CCU now detaches it
+  again, too.
+
+- **Channel configuration export and import work.** `GET` and `POST
+  /api/v1/devices/{address}/channels/{n}/config/export|import` are
+  published in the OpenAPI spec and appear in the generated client, but
+  the daemon never assigned the backend they depend on: every build
+  answered `503 service_unready`, and no configuration could change
+  that. Both endpoints now route through the same gated paramset path
+  the REST paramset write uses, so an import cannot set a parameter that
+  a `PUT` would refuse — and the export offers exactly that set, which
+  is what makes the snapshot importable again.
+
+- **A CCU added while the daemon is running reports device triggers,
+  device lifecycle and optimistic rollbacks.** Three WebSocket
+  subscribers walked the configured CCUs once, at start-up. For a CCU
+  adopted afterwards over the admin API, every keypress on one of its
+  remotes and wall switches, every pairing and removal, and every rolled
+  back optimistic write was lost to every WebSocket client. The topics
+  are declared in `wsapi.json`, so clients subscribed and waited
+  forever; only a daemon restart repaired it.
+
+- **A WebSocket client resuming with a cursor from before a daemon
+  restart is told it lost events.** The sequence counter is
+  process-local and restarts at 0, so a reconnecting client's stored
+  cursor sits above everything the fresh daemon can produce. It received
+  `replay_done` carrying its own cursor back, concluded it had missed
+  nothing, never issued the documented `/snapshot` resync, and kept
+  rendering pre-restart device state. A cursor the daemon cannot place —
+  above its current top, or against a disabled replay buffer — now
+  yields `replay_lost`. (The bundled UI was unaffected: it never sends a
+  cursor.) (REST API 5.23.0)
+
+- **A security source override with a `%` in its name is applied to the
+  source it names.** The handler percent-decoded the reference a second
+  time on top of the router's own decode. A central name containing a
+  literal `%` was rejected as an invalid reference, and one whose
+  decoded form still looked like an escape was silently rewritten — so
+  the override landed on a different data point than the operator chose.
+
+- **A `topic_base` with a trailing slash no longer takes every alarm and
+  security entity offline.** The broker's last-will was assembled from
+  the configured topic base verbatim, while the bridge publishes its
+  `online` counterpart from the normalised base — with `topic_base:
+  "loom/"` the retained `offline` landed on `loom//bridge/status` and
+  nothing ever overwrote it. Every alarm panel and every Security &
+  Safety entity names that topic as an availability source and requires
+  all sources to be online, so all of them stayed permanently
+  unavailable in Home Assistant. The will and the status topic are now
+  built by the same builder, and the availability source both planes
+  declare goes through it as well.
+
+- **A CCU added while the daemon is running reports its system status.**
+  The `<base>/<CCU>/system/status` topic an operator's alerting watches
+  for interface degradation was published by a subscriber that walked
+  the configured CCUs once, at start-up. A CCU adopted afterwards over
+  the admin API was never subscribed, so its interfaces could go down in
+  silence — no MQTT event, no WebSocket broadcast, and nothing in
+  `GET /api/v1/system/status` — while the alerting kept working for the
+  CCUs present at boot. All three surfaces are attached when the CCU is
+  adopted now, and detached when it is removed.
+
+- **A removed device stops leaving retained topics behind.** Unpairing a
+  device cleared its per-data-point state but not its firmware-update,
+  week-profile, schedule, aggregate or combined-data-point topics: those
+  publishers never recorded what they had written, and no shape the
+  boot-time sweep recognises matches them. Raw-plane consumers kept
+  reading the gone device's last known profile and firmware state
+  indefinitely. Every device-scoped retained publisher records its topic
+  now, and only once the broker has accepted the publish.
+
+- **Entities missing after a broker outage during start-up.** Home
+  Assistant discovery configs were marked as published before the
+  publish was attempted, so a broker that was briefly unreachable — or a
+  circuit breaker that had opened — lost every config of that pass while
+  the daemon considered them all declared. The identical payload rebuilt
+  from the next value change was then suppressed as a duplicate, and the
+  entities stayed absent until Home Assistant itself was restarted. The
+  same held for the raw plane's `/config` companions. Both cache what
+  the broker accepted now, and the replay Home Assistant triggers on its
+  own restart continues past a failing topic instead of abandoning the
+  rest of the fleet.
+
+- **Choosing a heating profile no longer writes a phantom parameter to
+  the CCU.** The week-profile command topic has the same number of
+  levels as the legacy data-point command topic, and a broker delivers a
+  message to every matching subscription — so each profile change
+  switched the profile and additionally issued a CCU write for a
+  parameter named `week_profile`, which no channel has. One wasted wire
+  call and one warning per profile change.
+
+- **Devices nest under their CCU in Home Assistant again for CCU names
+  that are not bare slugs.** The card of each physical device pointed at
+  its parent CCU with a differently-spelled identifier than the one the
+  CCU's own card is registered under — the two spellings only coincide
+  while the name is plain ASCII without spaces. With a name like `Haus
+  CCU` the link could not resolve, so every device floated at the top
+  level of the Devices view instead of nesting, and the system
+  variables and programs bound to a device lost their link too.
+
+- **The raw-plane orphan sweep tolerates a `topic_base` with a trailing
+  slash.** Every publisher goes through the topic builder, which trims
+  the base's slashes; the sweep assembled its own prefix from the raw
+  configured value. With `topic_base: openccu-loom/` it therefore
+  subscribed to a prefix nothing writes and evicted nothing on every
+  boot, leaving retained topics of retired data points feeding stale
+  values forever.
+
+- **MQTT commands reach a CCU whose name contains a space.** Every topic
+  the daemon publishes escapes the CCU name — `Wohn Zimmer` becomes
+  `Wohn_Zimmer` — but the inbound handlers read that segment back
+  verbatim and looked it up as a configured name, which never matched.
+  Every MQTT write for such a CCU was dropped ("no backend") while its
+  state topics kept updating, so the plane looked healthy. Data points,
+  MASTER writes, system variables, programs, install mode, week
+  profiles, schedules, combined data points and custom-DP invokes all
+  resolve the segment back to the configured CCU now. Two CCU names that
+  escape to the same segment are ambiguous on the wire and are rejected
+  at start-up.
+
+- **System variables whose name contains a space are writable over
+  MQTT.** The command topic the daemon advertises for `Außen Temperatur`
+  is `…/hub/sysvars/Außen_Temperatur/set`; a write there was resolved
+  against the CCU's variable list verbatim, missed, and died as "unknown
+  sysvar" — while the entity kept rendering as writable. The escaped
+  segment now resolves back to the real variable, and the CCU-side write
+  carries its real name.
+
+- **The System-health and Connection-latency sensors report again for
+  CCUs whose name is not plain ASCII.** The two sensors declared one
+  state topic and the daemon published to another, so both stayed
+  unavailable forever while the Last-event-age sensor beside them
+  worked. All three now share one topic builder, and the central segment
+  of these three topics is spelled like every other topic on the plane
+  (escaped, case preserved) instead of lower-cased.
+
+- **The retained-discovery cleanup pass works for CCU names that are not
+  bare slugs.** The once-per-boot sweep that removes the configs of
+  entities this build no longer publishes derived its scope with a third
+  spelling of the CCU name, which matched neither the per-device nor the
+  hub configs it was meant to find. For a CCU named `CCU Küche` it
+  evicted nothing at all, so retired entities kept being re-created by
+  Home Assistant on every restart. Producers and sweep now share one
+  identifier normaliser, and the sweep also still recognises the
+  spelling earlier builds wrote, so those leftovers are cleaned up once.
+  The raw-plane sweep matches the escaped CCU name it actually
+  publishes under.
+
+- **A deleted alarm zone stops haunting Home Assistant.** The alarm
+  plane never told the orphan sweep that it had published, so its
+  retained panel configs were exempt from the sweep forever: a zone
+  removed while the daemon was down kept a permanently unavailable panel
+  in Home Assistant with no automatic way to clear it. The plane now
+  declares once the engine has really loaded its zone set — declaring
+  earlier, on the empty pass Start triggers, would have wiped the live
+  alarm surface instead.
+
+- **A CCU that reports its serial while values are flowing no longer
+  risks aborting the daemon.** The discovery builder's per-CCU metadata
+  map was written from the boot path, the snapshot pass and the hub
+  publisher's worker while the event path read it for every value event.
+  Go treats that as fatal, not as a benign race, and each additional CCU
+  widened the window.
+
+- **Acknowledging a fault no longer re-announces it as a new one.** On
+  the outbound webhook an acknowledgement arrived byte-identical to the
+  original raise — the condition still stands after an acknowledgement,
+  and the payload said only that — so a messenger integration fired
+  "smoke detector fault" a second time because somebody had pressed
+  acknowledge. The webhook body now names the transition (`raised`,
+  `acknowledged`, `cleared`), carries the acknowledgement as its own
+  flag, and includes the fault's id, so two reports of one standing
+  fault are no longer indistinguishable from two independent faults.
+  The standing-fault tally moves from `entry_id` — a journal entry id on
+  every other alarm event — to its own `open_count`, matching the
+  WebSocket broadcast of the same event.
+
+- **A running intrusion keeps its start time when another zone is
+  disarmed.** The security domain records when the intrusion class
+  became active once, for the whole installation, while the state
+  machine runs per zone. Any zone leaving the triggered state released
+  that single record — so in a multi-zone installation, disarming a
+  quiet zone while an incident ran in another one left the incident
+  reported as active with a start time of zero, and MQTT, the REST
+  snapshot and the Config UI all showed the break-in as having begun at
+  the Unix epoch. The start time is now released only once no zone is
+  triggered any more and no intrusion sensor is still active.
+
+- **A CCU added while the daemon runs is now wired like one that was
+  there at boot.** Adding a second CCU through the SPA brought it up,
+  its devices appeared, and its values flowed — while measurement
+  history for it stayed empty forever, no webhook was ever sent for it,
+  no `device.trigger`, `device.created` / `device.removed`,
+  `datapoint.optimistic_rolled_back` or `system.<central>.status`
+  WebSocket frame was emitted, its interface transitions never reached
+  `GET /system-status` or the MQTT system-status plane, no recorded
+  session was persisted and no reliability incident registered. Each of
+  those subscribes by walking the list of CCUs exactly once, at start.
+  Nothing failed and nothing logged, and a daemon restart made all of it
+  work — which made the gap read like a transient.
+
+- **A CCU added while the daemon runs is backed up, watched and
+  audited.** Three more wirings that ran once at boot and therefore
+  skipped it: its automatic backup — `backup.schedule` applies
+  daemon-wide, so the configured CCUs kept producing daily backups while
+  the added one produced none and pruned nothing, discoverable only by
+  noticing its backup list stayed empty, typically once a restore was
+  already needed; its health seed, its event-bus, audit and scheduler
+  gauges and its metrics aggregator, so its section of `/health` and the
+  diagnostics dump had nothing in it, which reads like an idle CCU
+  rather than an unwatched one; and the record of every program the
+  daemon runs on it, which is what tells a duplicate execution the
+  daemon sent from one the CCU produced on its own — for that CCU the
+  record was simply empty, while it worked for its neighbours.
+
+- **Issuing and revoking an API token leaves a trace.** Both entries
+  went to the in-memory ring only. With a database present the audit
+  view and its CSV export read exclusively from the database, so
+  `GET /api/v1/audit` returned rows that contained neither, and a
+  restart erased them entirely — the creation and revocation of a
+  credential were the two events with no record at all.
+
+- **A WebSocket connection can refresh its identity with a token from
+  the SPA.** The in-band `reauth` frame resolved the supplied token
+  against the tokens from the configuration file alone. A token minted
+  through the admin surface lives in the database, so it authenticated
+  the connection at upgrade time and was then rejected on refresh, which
+  closes the connection — a credential valid everywhere else dropped the
+  socket.
+
+- **A Matter controller that reuses a session id mid-handshake no longer
+  silences itself.** A session id reserved for an in-flight (or aborted)
+  CASE handshake resolved as an established session with nothing behind
+  it. A controller that echoed the id it read out of Sigma2 in an
+  ordinary encrypted packet made the receive path fault on the absent
+  session; the per-packet recovery swallowed it without a log line, so
+  the only symptom was a controller whose messages stopped arriving.
+
+- **Deleting or disabling a CCU takes effect without a restart.** For a
+  CCU the daemon had loaded at boot — the normal case after the
+  onboarding wizard, once the daemon has been restarted — `DELETE
+  /api/v1/admin/centrals/{name}` returned 204 and the entry vanished
+  from the list while the CCU stayed completely live: still polled,
+  still publishing to MQTT and WebSocket, still holding its callback
+  routes, still writing cache rows. A second delete answered 404. Only a
+  restart made the deletion real.
+
+- **"Clear caches and re-pull" clears something.** The scoped cache
+  clear (and `hmcli cache clear`, and the cache purge that runs when a
+  CCU is removed) addressed the cached rows by the bare interface name
+  from the config, while every row is stored under the CCU-qualified
+  interface id. Every delete matched zero rows: the report said
+  devices/paramsets/values/master = 0, no error was raised, and the
+  re-pull re-hydrated from exactly the stale rows the operator had asked
+  to discard. Both spellings are accepted now.
+
+- **`basic_enabled: false` / `bearer_enabled: false` switch the scheme
+  off.** Both gates were discarded on every deployment with a database —
+  which is every normal one — when the daemon layered its persistent
+  user and token stores onto the login chain. A disabled scheme kept
+  authenticating and granting the stored role, with no signal that the
+  setting had done nothing.
+
+- **A hidden channel disappears from MQTT too.** The per-channel
+  operator override took effect on REST and Matter, but the MQTT bridge
+  kept publishing the channel's state and its Home Assistant discovery
+  config: the gate was installed on the supervisor after the boot bridge
+  had already been built. It only began working after some unrelated
+  `north.mqtt.*` edit rebuilt the bridge, so the same installation
+  behaved differently before and after any MQTT config change.
+
+- **A daemon that cannot open its database serves REST instead of
+  exiting.** A missing or read-only `data_dir`, a failed migration or a
+  migration-lock timeout is logged and boot continues in a degraded,
+  REST-only mode — except the REST mount then dereferenced the absent
+  config service and took the process down with it.
+
+- **A CCU added while the daemon runs keeps its `primary_interface`.**
+  The pin decides which interface the CCU's primary-client health
+  verdict and score are computed from. It reached only the CCUs listed
+  in the configuration file, so for one added through the SPA the daemon
+  fell back to its built-in "an interface whose name contains HmIP-RF"
+  rule — which matches nothing on a wired-only or BidCos-only CCU.
+  `/health` and the health tile then reported that CCU against an
+  interface it does not have.
+
+- **The values-cache endpoints answer instead of crashing when the cache
+  is off.** With `persistence.values_cache.enabled: false`,
+  `GET /api/v1/admin/values-cache/stats` and both reset endpoints
+  panicked on every call — recovered into a 500 with a stack trace in
+  the log — because the absent store still passed the handler's
+  "is it wired" check. They now return the documented 503, and the
+  per-device reset no longer reports "device not found" about a device
+  it never looked for.
+
+- **Audit entries written just before shutdown survive it.** The audit
+  trail persists through a background queue. Shutdown closed the
+  database handle without stopping that queue first, so a burst of
+  changes followed by a restart lost whatever had not been written yet —
+  the trail ends mid-burst, with a warning line as the only trace. The
+  queue is now drained and its worker joined before the handle closes.
+
+- **The MQTT last will lands on the topic every entity listens to.** A
+  `topic_base` written with a leading or trailing slash — `loom/` — was
+  used verbatim for the last-will topic while every declared topic had
+  it trimmed. The broker then published `offline` to `loom//bridge/status`
+  while all entities watch `loom/bridge/status`: when the daemon died or
+  the connection dropped, Home Assistant kept every bridged entity
+  available with its last value, forever. The base is now normalised
+  once, when the configuration is loaded, so every consumer of it —
+  including the retained-topic cleanup — agrees.
+
+- **`hmcli cache clear --offline` fails when it could not clear.** A
+  delete that the database rejected — a locked file, a table missing
+  after an interrupted migration, a read-only data directory — was
+  printed as an `error:` line on standard output and then followed by
+  exit code 0. Anything that reads the exit code instead of the text —
+  a maintenance script, an `ExecStartPre` hook, a CI job — treated the
+  run as done and the next daemon start read the cache it believed was
+  gone. The offline clear now exits 1 and names every store that
+  failed, matching what the daemon-side clear already reports over
+  REST.
+
+- **A damaged encrypted backup is rejected with an error on 32-bit
+  builds too.** The reader for encrypted backups checks the length each
+  frame declares before it allocates for it, but compared that length as
+  a signed machine word. On the 32-bit builds — armv7 above all — a
+  declared length above 2 GiB wrapped negative and slipped through the
+  very check meant to stop it, so restoring a truncated or bit-flipped
+  archive ended in an allocation panic and a stack trace instead of the
+  descriptive "length exceeds bound" error the same file produces on
+  64-bit.
+
+- **The recurring add-on update check no longer stops after one stalled
+  request.** The release check and the tarball download went out on the
+  process-wide default HTTP client, which carries no request deadline at
+  all. A server that accepts the connection and then never answers — a
+  network partition, a transparent proxy that swallows the response —
+  parked the single goroutine that drives the daily check for the rest
+  of the daemon's uptime: no log line, no error, and no further check
+  until a restart. A stalled download had a louder consequence, latching
+  the updater in `downloading` so every later check or install answered
+  "busy". Both now use a client of their own with an explicit deadline,
+  and each check on the recurring cadence is additionally bounded on its
+  own so no single call can wedge the loop. The calls to an OIDC
+  provider (discovery, JWKS refresh, code exchange) ran unbounded on the
+  same shared client and are bounded now too.
+
+- **An API token now carries the same identity as the account it was
+  issued for.** Tokens were stored with whatever spelling the operator
+  typed into the subject field, while user accounts are keyed
+  lower-cased. A token issued for `Admin` therefore authenticated as a
+  different subject than a login as `admin`: the per-user preferences
+  and the privately owned diagrams of the two never met, and the audit
+  trail recorded them as separate actors. The subject is canonicalised
+  on write now — for freshly created tokens and for the ones migrated
+  out of the config file — the create response reports the spelling that
+  was stored rather than the one that was typed, and a migration folds
+  the rows an earlier version wrote.
+
+- **`security.allow_plaintext_secrets` now governs what it documents.**
+  The setting promised that the daemon refuses to persist a CCU password
+  in cleartext, and no code read it. When the at-rest master key could
+  not be resolved — `secret.key` missing after a restore, a read-only
+  data directory — the daemon logged one warning and wrote every CCU
+  password into the database in the clear, at the default that says it
+  will not. Saving a central in that state is now rejected with `400`
+  naming the setting, on every path that persists one (the CCUs view,
+  the onboarding wizard, live adoption, the config-file seed), and an
+  operator who wants the old behaviour can still opt in by saving the
+  `security` section with the flag set. With a master key present
+  nothing changes: the password is sealed either way.
+
+- **A config section that cannot be read no longer half-applies the
+  rest.** The boot-time merge of the database config sections walked
+  them in order and aborted on the first failure, after writing the
+  earlier ones into the running config and before the defaulting pass —
+  so a single unreadable section (a sealed value whose master key is
+  gone, a row from a newer version) left the daemon on a config that was
+  part database, part config file, never defaulted or validated. An auth
+  scheme the operator had switched off in the SPA came back up because
+  its section was merged after the failing one. The merge is
+  all-or-nothing now: on failure the daemon runs on the config file
+  exactly as loaded, says so at error level, and reports `config.overlay`
+  as degraded on `/health` — the same failure also makes
+  `GET /api/v1/config` fail, so there is no in-UI hint otherwise.
+
+- **Disabling the last CCU keeps it disabled across a restart.** A
+  centrals table in which every row is parked read as "the database has
+  nothing to say about centrals", so the daemon fell back to the
+  `centrals:` list in the config file — the very entry the first-run
+  seed had copied into that table — and reconnected to the CCU the
+  operator had just parked. `GET /api/v1/config` agreed with the wrong
+  answer, attributing the resurrected central to the config file. A
+  table with rows is now authoritative whether or not any of them is
+  enabled; an empty table still leaves the config file in charge.
+
+- **`bootstrap.allow_first_run_setup: false` now closes the onboarding
+  surface it names.** The toggle has been documented as a hardening
+  control since the first release and no code ever read it. An operator
+  who set it and later ended up with an empty users table — a restored
+  volume, a wiped data directory — still had `GET /api/v1/setup/status`
+  reporting first-run and `POST /api/v1/setup` accepting an anonymous
+  request, so anyone who could reach the listener registered themselves
+  as the admin. The probe now honours the flag, and the finalize call
+  answers `403` naming the setting instead of a `409` claiming an
+  account exists. The deliberate consequence, now documented and logged
+  at boot as `setup.onboarding.dormant`: with the flag false and no
+  authentication source at all there is no way in except editing the
+  YAML and restarting. (REST API 5.24.0)
+
+- **A per-interface `remote_path` reaches the CCU.** The override was
+  parsed, validated, stored, exported in the OpenAPI schema and rendered
+  in the config editor, while the endpoint composer hard-coded `/RPC2`
+  (`/groups` for VirtualDevices). Anyone whose CCU sits behind a reverse
+  proxy that exposes XML-RPC elsewhere watched every call 404 with no
+  hint that the configured path had been discarded. The composed URL now
+  honours it, and a path that is not absolute — or the bare `/`, which
+  crashes the CCU's putParamset handler — is rejected at config load
+  rather than at the first RPC.
+
+- **`rpc_type` no longer accepts a transport the daemon cannot use.**
+  The transport follows from the interface name (CUxD speaks BIN-RPC,
+  everything else XML-RPC) and nothing consulted the per-interface
+  value, so `rpc_type: binrpc` on BidCos-RF was accepted, saved, shown
+  as saved, and ignored. A value that contradicts the derived transport
+  is now a config error that names both; a value that agrees still
+  loads.
+
+- **A password reset now ends the sessions it is meant to end.** User
+  names are stored lower-cased, but a login reported back whatever
+  casing the person typed, and that spelling went into the session. An
+  admin can only address the account by its stored spelling, so
+  resetting the password of someone who had signed in as `Markus`
+  evicted nothing: the handler answered 204 while the old cookie kept
+  full access for the rest of the session lifetime. Deleting the account
+  behaved the same way, and left the subject's bearer tokens alive too.
+  A login now reports the stored name, and the session and token purges
+  match case-insensitively regardless.
+
+- **A CCU login is now the same principal however it is typed.** Logins
+  validated against a CCU's own user database reported the subject with
+  whatever casing the person entered, so signing in as `Markus` and as
+  `markus` produced two identities out of one CCU account: separate
+  per-user preferences, separate privately owned diagrams, two actors in
+  the audit trail, and an API token — stored canonically — that belonged
+  to neither. The CCU is still asked about the name as typed, since it
+  owns that namespace, but the identity the daemon files everything
+  under is the canonical one every other login path already reported.
+
+- **A channel-configuration edit can no longer drop the WebSocket
+  connection.** Staging a parameter whose value was a JSON array or
+  object — anything but the scalar a paramset actually holds — crashed
+  the command that stages it as soon as the same value was sent twice:
+  the two values were compared with an equality that only works on
+  scalars. The connection died mid-frame without being closed, so the
+  browser lost every live update until it reconnected and the daemon
+  leaked the writer goroutine behind it. Comparing two staged values now
+  copes with any shape, and a non-scalar value is refused up front with
+  a clear error instead of being staged and failing later against the
+  CCU.
+
+- **Creating a user can no longer overwrite one.** `POST /api/v1/users`
+  upserted: re-submitting an existing name silently rewrote that
+  account's password and role and answered 201 — without the session
+  revocation the update path performs, so an attacker's cookie kept the
+  old admin role after the "reset". The route is create-only now and
+  answers 409 for a name that exists (compared case-insensitively);
+  changes go through `PATCH /api/v1/users/{subject}`, which revokes.
+  (REST API 5.23.0)
+
+- **The last admin can no longer be demoted into a lockout.** Deleting
+  the only admin was refused, but changing its role to operator or
+  viewer was not — and a daemon with zero admins answers 403 on every
+  admin route, including the one that would create a new admin.
+  Recovery meant editing the database by hand. The user store now
+  refuses the demotion in the same transaction that counts the admins,
+  and both the API and the Users view report it.
+
+- **Deleting one entry from a map-valued setting sticks.** Trimming a
+  single key out of `north.rest.auth.ccu.role_mapping` (or
+  `north.ui.profiles`) was accepted with a success toast and then
+  quietly restored: the saved section was assembled by decoding the
+  request over the stored value, and decoding a JSON object into an
+  existing map only ever adds to it. So a CCU user level the operator
+  had just stopped mapping to admin kept mapping to admin. A key the
+  request carries is now authoritative; a key it omits still keeps its
+  stored value.
+
+- **The OIDC login start is no longer an unmetered allocator.**
+  `GET /api/v1/auth/oidc/start` needs no credentials and parks a PKCE
+  verifier plus nonce in memory for five minutes per call, with nothing
+  bounding how many. It now carries the same per-IP speed bump as the
+  login POST, and the in-flight flow table has a hard ceiling — which
+  also caps the scan every new flow performs while holding the lock, the
+  part that slowed down genuine logins.
+
+### Fixed
+
+- **The device page follows the device in the address bar.** Opening a
+  second device while a device page was already open — a pasted
+  `#/devices/<address>`, a deep link, browser back/forward between two
+  device pages — kept rendering the first device's data under the second
+  device's URL and breadcrumb. Every write issued from that page (rename,
+  delete, MASTER save, room or function assignment, link edit) went to
+  the device the operator was no longer looking at. The view now reloads
+  on the address it is given, and a response for a device that has since
+  been left is discarded instead of repainting the page.
+
+- **"Away" on an HmIP thermostat tile no longer switches to manual
+  heating.** The away segment of the mode row was sent as a mode, and
+  away is not one: the daemon's mode write only knows auto, heat, cool
+  and off, so the button silently wrote manual mode at the current
+  setpoint. It now triggers the away operation, is offered only for
+  devices that support away, and leaving away clears the away window
+  first, which a plain mode write does not.
+
+- **System-variable values update live again.** The daemon has been
+  pushing every system-variable change over the event stream, but the
+  SPA translated the frame to a shape nothing consumed, so the list only
+  ever showed what the last reload fetched.
+
+- **Charts, pickers and the device page discard superseded responses.**
+  The history chart, the multi-series diagram chart, the diagram series
+  picker and the system-variable channel picker each let a slower earlier
+  request overwrite the answer to a newer one — showing another range's
+  history, another device's channels, or a parameter list belonging to a
+  device the series no longer points at. Each fetch is now tied to the
+  selection it was started for. The history chart also stopped issuing
+  its initial request twice.
+
+- **Favorites no longer survive a user switch.** After a logout and a
+  login as somebody else in the same tab, the pinned devices, channels
+  and programs of the previous operator stayed on screen, and the first
+  star toggled wrote them into the new operator's own favorites. Pinned
+  items are now scoped to the identity they were loaded for, and so is
+  the per-user start page.
+
+- **The group editor dialog now closes on Escape and keeps keyboard focus
+  inside it.** Escape only ever reached the dialog's own root element,
+  so a keyboard user whose focus was still on the button that opened the
+  dialog — nothing inside it was ever focused — could not close it with
+  Escape, and Tab could cycle out to the page behind the modal. Opening
+  the dialog now moves focus in and restores it to the trigger on close,
+  mirroring the confirm dialog's existing pattern.
+
+- **The audit log and the device history tab discard superseded
+  responses.** Changing the audit log's date filters, or switching
+  channels on a device's History tab, before the previous request
+  returned could let the older, slower response overwrite the newer
+  one — an audit trail that silently disagreed with the visible filter,
+  or a history chart showing the previous channel's parameters under the
+  channel the picker still shows selected. Both are now tied to the
+  selection that started them.
+
+- **A CCU firmware-update poll no longer outlives the panel that started
+  it.** Navigating away from Settings → System while an install was
+  still in progress and a poll tick's fetch was in flight left that
+  fetch to reschedule itself after the component was gone, so the daemon
+  kept polling `GET /system/update` every five seconds with nothing left
+  to stop it.
+
+- **Two more missing translation keys.** The Rooms & Functions area save
+  confirmation and the Favorites program run button each referenced a
+  key neither catalogue defined, so both showed the raw key
+  (`areas.toast.rooms_saved`, `programs.execute`) instead of a
+  translated message.
+
+- **Hour-axis labels and the sunset/sunrise glyphs in the weekly
+  schedule strip now invert in dark mode**, matching every other
+  colour-bearing element in the same chart.
+
+- **A Matter controller can no longer take over another controller's
+  session slot.** The bridge reserves one secure-session id per CASE
+  exchange, and Apple Home opens a second session on an exchange it has
+  already used. The second session was registered under the id the first
+  one still held: the first controller's session disappeared from the
+  table with its keys live and its subscriptions still registered, so
+  the bridge kept serving them — encrypted for the wrong controller.
+  Each handshake now takes its own id, and a session that would displace
+  a live one is torn down properly first.
+
+- **Aborted Matter handshakes give their session id back.** A CASE
+  exchange that sent Sigma1 and never finished reserved one of the
+  65534 session ids for the lifetime of the daemon. Enough of them —
+  which a device on the same network can produce on its own — and every
+  further handshake was refused, including legitimate reconnects from an
+  already-paired controller, until a restart. Reserved ids now expire,
+  and an exhausted id space reclaims the oldest reservation instead of
+  failing.
+
+- **Matter announces the port it actually listens on.** With
+  `north.matter.listen` set to port `0` — the way to let the operating
+  system pick a free port, e.g. next to a second Matter bridge on the
+  same host — every mDNS record still named 5540. Commissioners resolved
+  the announcement and sent their first packet to a port nothing was
+  listening on, so pairing timed out against a perfectly valid QR code
+  while the log reported the announcement as successful, and a bridge
+  paired by direct addressing became unreachable after a restart.
+
+- **The Matter bridge no longer reports one bridged device too many.**
+  The endpoint count shown in the Matter view, published on the event
+  stream after every topology rebuild and logged at startup counted the
+  aggregator endpoint — bridge scaffolding, not a device. With nothing
+  exposed the SPA showed one bridged device; every other topology was
+  one too high. (REST API 5.22.1)
+
+- **An abandoned Matter timed write no longer leaks.** A controller that
+  announces a timed write or command and never sends it — a dropped
+  packet, a backgrounded app, a controller reboot — left the deadline
+  behind, and closing the session did not reclaim it either. The
+  bookkeeping only ever grew, for as long as the daemon ran, and a peer
+  could drive it there deliberately. Deadlines now expire and are
+  dropped with the session that registered them.
+
+- **A Matter controller that already holds events no longer gets them
+  all again.** A read or subscribe can carry "the lowest event number I
+  still want", which controllers send on every reconnect so they receive
+  only what they missed. The bridge read that number out of the wrong
+  field of the request, so it always came out as zero and the filter had
+  no effect: every reconnect replayed the whole buffered event history —
+  up to 112 records — and lock operations or switch presses the
+  controller had already seen arrived a second time.
+
+- **"Identify" on a bridged device does something again.** Identifying an
+  accessory from Apple Home, Google Home or chip-tool was acknowledged
+  with success and then had no effect whatsoever: the remaining identify
+  time read back as zero on the very next request, no controller ever saw
+  a countdown, and each attempt left a timer running in the background for
+  as long as the requested duration — up to eighteen hours, once per
+  attempt. The cluster is now bound to the endpoint, so it keeps the state
+  it was given across requests and across a topology rebuild, and it stops
+  when the device leaves the bridge.
+
+- **A removed device's Matter endpoint number is not handed to the next
+  device.** Endpoint numbers were reissued as soon as they were free, so
+  the first device bridged after a device was unpaired — or after a
+  channel was un-exposed — took over the number the old one had. Apple
+  Home and Google Home cache an accessory by its endpoint number and are
+  told nothing when the bridge's endpoint list has the same numbers as
+  before, so the new device showed up under the removed device's name,
+  icon and room until the bridge was removed and re-added by hand.
+  Numbers now advance and a released one stays retired.
+
+- **A vendor-specific Matter message is no longer mistaken for an
+  Interaction Model one.** The protocol header put the protocol id where
+  the wire carries the vendor id and vice versa. Both fields are absent
+  from the traffic the bridge normally sees, so nothing showed until a
+  controller sent a vendor-qualified message: its vendor id was then read
+  as the protocol id, and a payload the bridge does not implement was fed
+  into the Interaction Model dispatcher instead of being rejected. The
+  header now follows the field order every other Matter stack uses.
+
+### Security
+
+- **A Matter write is authorized where it lands.** A write whose path
+  left out the attribute or the cluster was checked once, against the
+  default privilege for the un-expanded path, and then applied to every
+  attribute of the cluster it resolved to. A controller holding only
+  Operate — a guest ecosystem, a shared-home account — could target the
+  Access Control cluster this way and rewrite the access rules
+  themselves, which requires Administer. Such a write is now refused
+  outright, as the Matter specification requires; a write that names
+  every endpoint is authorized separately at each endpoint it reaches,
+  so it can no longer touch endpoints the controller's own access rules
+  do not cover.
+
+- **A Matter controller is bound to the fabric its certificate names.**
+  Verifying a controller's operational certificate proved it chained to
+  the fabric's root, but never that the certificate was issued for THAT
+  fabric. Where two fabrics are provisioned from one certificate
+  authority, a controller could present its own fabric's certificate,
+  complete the handshake against another fabric, and read and write that
+  fabric's data. The check existed but could never run, because the
+  daemon's certificate verifier did not expose the fabric id it needed.
+
+- **A Matter session no longer inherits the previous controller's
+  authenticated tags.** CASE Authenticated Tags identify the
+  administrator group a controller belongs to, and access rules can be
+  written against them. When a second controller ran a handshake on an
+  exchange a first one had used, and its own certificate carried no
+  tags, the previous controller's tags stayed attached — so the new
+  session matched every rule written for the previous controller's
+  group.
+
+## [0.59.0]
+
+### Added
+
+- **Matter bridge diagnostics.** Three further views into what the
+  bridge is doing, reachable under **Matter → Diagnostics**:
+
+  *Discovery.* What the bridge actually announces over mDNS, and what
+  would keep a controller from finding it: missing service subtypes
+  (Apple and Google browse through those, so without them the bridge is
+  invisible to both while chip-tool finds it), addresses only reachable
+  inside a container, a commissioning port other than 5540 (Alexa uses
+  no other), an announcement without IPv6. Each of these leaves the
+  daemon looking correct — advertising succeeds and the log says so.
+
+  *Endpoints.* The assembled topology as a controller sees it, with
+  device types and clusters. Until now the only way to look at it was to
+  commission a controller and browse with chip-tool, so every "why is
+  this device missing" question started with a pairing step.
+
+  *Ecosystem compatibility.* Each paired fabric is classified by
+  controller vendor, and the exposed device types are checked against
+  what that ecosystem accepts — a valve Google and Alexa will not show,
+  a leak detector that makes Alexa drop the entire bridge, an endpoint
+  count past where Alexa becomes unreliable. The bridge cannot observe
+  any of this: it exposes the endpoint correctly and the ecosystem
+  silently omits it. (REST API 5.22.0)
+
+- **The bridge can say whether a Matter controller is still talking to
+  it.** `GET /api/v1/matter/sessions` lists every open secure session
+  with two separate ages: when the session last carried traffic in any
+  direction, and when the controller last sent something. The difference
+  is the point. A controller that goes away without closing its session
+  leaves it open and simply stops sending, so the bridge keeps reporting
+  into it — from every other angle that looks healthy, and in the
+  ecosystem it shows up only as entities that quietly stop updating.
+  Each session also reports how many subscriptions ride on it: a
+  commissioned controller holding none is connected but receiving
+  nothing.
+
+  The daemon has tracked all of this internally for the idle-session
+  reaper; none of it could be seen from outside. No key material is
+  exposed. (REST API 5.21.0)
+
+
+## [0.58.6]
+
+### Security
+
+- **Go toolchain 1.26.6.** The 1.26.5 standard library carries seven
+  advisories on code paths this daemon actually calls, across the XML
+  decoder the XML-RPC transport and SSDP discovery use, the ASN.1 decoder
+  behind Matter CSR generation, and `net/http`. All are fixed in 1.26.6;
+  `go.mod`, the builder image, and every workflow move together.
+
+### Fixed
 
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle

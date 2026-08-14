@@ -19,7 +19,17 @@ type valuesCacheHandlerAdapter struct {
 	store *sqlite.ValuesCacheStore
 }
 
-func newValuesCacheHandlerAdapter(s *sqlite.ValuesCacheStore) *valuesCacheHandlerAdapter {
+// newValuesCacheHandlerAdapter returns the handler-facing interface, not the
+// concrete adapter, so an absent store stays a true nil interface at the
+// consumer.
+//
+// The store is nil on the supported `persistence.values_cache.enabled: false`
+// setting. Handed back as a typed nil *valuesCacheHandlerAdapter it would be
+// boxed into a NON-nil handlers.ValuesCacheService: the handler's own
+// `svc == nil` guard would not fire, and the first call would dereference the
+// nil receiver — a panic per request on documented configuration, where the
+// operator should see the 503 the endpoint documents.
+func newValuesCacheHandlerAdapter(s *sqlite.ValuesCacheStore) handlers.ValuesCacheService {
 	if s == nil {
 		return nil
 	}
@@ -62,7 +72,11 @@ type deviceLookupAdapter struct {
 	reg *central.Registry
 }
 
-func newDeviceLookupAdapter(reg *central.Registry) *deviceLookupAdapter {
+// newDeviceLookupAdapter returns the handler-facing interface for the same
+// reason [newValuesCacheHandlerAdapter] does: boxed as a typed nil the absent
+// lookup passes the handler's nil check, and the per-device reset then answers
+// "device not found" for a device that exists — the lookup is simply unwired.
+func newDeviceLookupAdapter(reg *central.Registry) handlers.DeviceLookup {
 	if reg == nil {
 		return nil
 	}

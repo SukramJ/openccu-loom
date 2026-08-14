@@ -551,7 +551,7 @@ func TestWireIncidentRecorder_WithRegistryContainingCache_DoesNotPanic(t *testin
 	// a CacheCoordinator which has a SetIncidentRecorder method.
 	reg := buildTestRegistry(t, "ccu-01")
 	logger := slog.New(slog.DiscardHandler)
-	_, closer := wireIncidentRecorder(db, reg, logger)
+	_, _, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 	// If the Cache field is non-nil and SetIncidentRecorder is called, must not panic.
 }
@@ -619,7 +619,7 @@ func TestWireSessionRecorderPersistence_WithCentralHavingRecorder(t *testing.T) 
 	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-01")
 	logger := slog.New(slog.DiscardHandler)
-	closer := wireSessionRecorderPersistence(db, reg, logger)
+	_, closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}

@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: d0a8b203
-HEAD: d0a8b203
+Generated: cc41901d
+HEAD: cc41901d
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28345 |
-| Reachable | 4997 |
-| Whitelisted | 20372 |
-| **Unreachable** | **2976** |
+| Total Exported | 28518 |
+| Reachable | 5015 |
+| Whitelisted | 20515 |
+| **Unreachable** | **2988** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: d0a8b203
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 94 | 48 |
+| internal/central/adapter | 4 | 95 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -99,7 +99,7 @@ HEAD: d0a8b203
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 94 | 48 |
+| internal/central/adapter | 4 | 95 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -122,13 +122,13 @@ HEAD: d0a8b203
 | internal/alarm/codes | 0 | 13 | 0 |
 | internal/alarm/engine | 0 | 29 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
-| internal/alarm/outputs | 0 | 24 | 4 |
+| internal/alarm/outputs | 0 | 26 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/backup/sbk | 0 | 2 | 4 |
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 24 | 2 |
-| internal/central/cachereset | 0 | 20 | 0 |
+| internal/central/cachereset | 0 | 18 | 0 |
 | internal/central/coordinators | 0 | 109 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 10 | 4 |
@@ -168,8 +168,8 @@ HEAD: d0a8b203
 | internal/north/filter | 0 | 1 | 0 |
 | internal/north/matter/bridge | 0 | 51 | 38 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
-| internal/north/matter/endpoint | 0 | 9 | 0 |
-| internal/north/matter/im | 0 | 74 | 14 |
+| internal/north/matter/endpoint | 0 | 8 | 0 |
+| internal/north/matter/im | 0 | 78 | 14 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/mdns | 0 | 8 | 4 |
 | internal/north/matter/schema | 0 | 0 | 8 |
@@ -186,7 +186,7 @@ HEAD: d0a8b203
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 11 | 0 |
-| internal/north/mqtt | 0 | 86 | 4 |
+| internal/north/mqtt | 0 | 88 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |
@@ -199,7 +199,7 @@ HEAD: d0a8b203
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 108 | 28 |
+| internal/store/sqlite | 0 | 108 | 30 |
 | pkg/hmapi | 0 | 157 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

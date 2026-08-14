@@ -85,6 +85,61 @@ describe("DiagramSeriesPicker — device pick derives central/interface", () => 
     });
   });
 
+  it("discards the channel list of a device the operator moved off", async () => {
+    // The series' central / interface / channel address are emitted
+    // synchronously on the pick, so a late channel list for the previous
+    // device would offer channels that do not belong to the saved series.
+    const first: { resolve?: (v: unknown) => void } = {};
+    const second: { resolve?: (v: unknown) => void } = {};
+    mockListChannels.mockImplementation((addr: string) =>
+      addr === "ABC0000001"
+        ? new Promise((resolve) => (first.resolve = resolve))
+        : new Promise((resolve) => (second.resolve = resolve)),
+    );
+
+    const { getByText, container } = render(DiagramSeriesPicker, {
+      props: {
+        series: { central: "" },
+        index: 0,
+        onChange: vi.fn(),
+        onRemove: vi.fn(),
+      },
+    });
+
+    await fireEvent.click(getByText("Wohnzimmer"));
+    await waitFor(() =>
+      expect(mockListChannels).toHaveBeenCalledWith("ABC0000001"),
+    );
+    await fireEvent.click(getByText("Küche"));
+    await waitFor(() =>
+      expect(mockListChannels).toHaveBeenCalledWith("DEF0000002"),
+    );
+
+    const channelOptions = () =>
+      Array.from(
+        container.querySelectorAll(
+          'select[aria-label="diagrams.picker.channel"] option',
+        ),
+      ).map((o) => o.textContent?.trim());
+
+    second.resolve?.({
+      items: [
+        { address: "DEF0000002:1", number: 1, name: "Küche Kanal", type_label: "" },
+      ],
+    });
+    await waitFor(() => expect(channelOptions()).toContain("#1 Küche Kanal"));
+
+    first.resolve?.({
+      items: [
+        { address: "ABC0000001:9", number: 9, name: "Wohnzimmer Kanal", type_label: "" },
+      ],
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(channelOptions()).not.toContain("#9 Wohnzimmer Kanal");
+    expect(channelOptions()).toContain("#1 Küche Kanal");
+  });
+
   it("filters the device list by the search box", async () => {
     const { getByPlaceholderText, queryByText } = render(DiagramSeriesPicker, {
       props: {

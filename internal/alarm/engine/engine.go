@@ -140,9 +140,27 @@ type incidentCause struct {
 	Parameter      string `json:"parameter,omitempty"`
 }
 
+// pendingElapsedCause builds the cause of an expired entry delay from
+// the sensor that opened it, so the incident names the detector that
+// actually let the intruder in.
+//
+// The bare fallback is only for a pendingCause the zone no longer
+// knows (a sensor un-enrolled mid-countdown): it costs the source
+// ledger a row, which is better than attributing the incident to the
+// wrong data point. The caller holds the lock.
+func pendingElapsedCause(a *zone) incidentCause {
+	if s, ok := a.sensors[a.pendingCause]; ok {
+		return causeFromSensor(causeKindPendingElapsed, s.row)
+	}
+	return incidentCause{Kind: causeKindPendingElapsed, SensorID: a.pendingCause}
+}
+
 // causeFromSensor builds a cause document carrying the sensor's full
-// data-point identity, so a consumer can resolve the device behind an
-// alarm instead of only its display name.
+// data-point identity. Every cause that has a sensor behind it goes
+// through here: a cause assembled by hand from the id and the name
+// alone projects onto an empty source reference, which recordSource
+// drops — so the incident's source list and the ledger stay empty and
+// the report cannot say which detector fired.
 func causeFromSensor(kind string, row sqlitestore.AlarmSensorRow) incidentCause {
 	return incidentCause{
 		Kind:           kind,
@@ -311,6 +329,24 @@ func (e *Engine) Stop(ctx context.Context) {
 		e.persist(ctx, a)
 		a.cancelTimers()
 	}
+}
+
+// ZonesLoaded reports whether Start has finished loading the configured
+// zone set, i.e. whether an empty [Engine.Zones] means "no zones are
+// configured" rather than "the engine has not read its stores yet".
+//
+// Consumers that act on the ABSENCE of a zone need this: the MQTT
+// publisher reconciles once eagerly at start-up, and treating that
+// pre-load pass as authoritative would let the retained-config orphan
+// sweep classify every live alarm panel as a leftover and wipe the
+// plane.
+func (e *Engine) ZonesLoaded() bool {
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.started
 }
 
 // Zones returns snapshots of every managed zone, ordered by ID.
@@ -944,9 +980,7 @@ func (e *Engine) SetSensorAvailability(ctx context.Context, sensorID string, ava
 	// during arming or pending it would replace the running countdown
 	// (§5 documents no such edge), so those states warn instead.
 	if s.cfg.TriggerWhenUnavailable && a.state == hmenum.AlarmZoneStateArmed {
-		e.routeActivation(ctx, a, s, incidentCause{
-			Kind: causeKindUnavailable, SensorID: sensorID, SensorName: s.row.Name,
-		})
+		e.routeActivation(ctx, a, s, causeFromSensor(causeKindUnavailable, s.row))
 		return
 	}
 	e.journalFault(ctx, a, "sensor_unavailable_while_armed", nil, 0)
@@ -1079,9 +1113,7 @@ func (e *Engine) trigger(ctx context.Context, a *zone, cause incidentCause, opts
 	e.persist(ctx, a)
 	e.recordSource(ctx, a, a.incident.ID, cause)
 
-	if err := e.outputs.FireCycle(ctx, a.id, *a.incident, opts); err != nil {
-		e.journalFault(ctx, a, "output_fire_failed", err, a.incident.ID)
-	}
+	e.fireCycle(ctx, a, *a.incident, opts)
 	event := "triggered"
 	if preAlarm {
 		event = "pre_alarm_started"
@@ -1130,9 +1162,7 @@ func (e *Engine) onPreAlarmElapsed(ctx context.Context, a *zone) {
 	e.scheduleStateTimer(a, timerKindTrigger, dur)
 	e.persist(ctx, a)
 	if inc != nil {
-		if err := e.outputs.FireCycle(ctx, a.id, *inc, FireOptions{Policy: mcfg.Outputs}); err != nil {
-			e.journalFault(ctx, a, "output_fire_failed", err, inc.ID)
-		}
+		e.fireCycle(ctx, a, *inc, FireOptions{Policy: mcfg.Outputs})
 	}
 	incID := int64(0)
 	if inc != nil {
@@ -1176,9 +1206,7 @@ func (e *Engine) onTriggerElapsed(ctx context.Context, a *zone) {
 			}
 			e.scheduleStateTimer(a, timerKindTrigger, dur)
 			e.persist(ctx, a)
-			if err := e.outputs.FireCycle(ctx, a.id, *inc, FireOptions{Cycle: inc.RetriggerCycles, Policy: mcfg.Outputs}); err != nil {
-				e.journalFault(ctx, a, "output_fire_failed", err, inc.ID)
-			}
+			e.fireCycle(ctx, a, *inc, FireOptions{Cycle: inc.RetriggerCycles, Policy: mcfg.Outputs})
 			e.journalEntry(ctx, a, JournalEntry{
 				Class: hmenum.AlarmJournalClassTrigger, Event: "retrigger_cycle",
 				IncidentID: inc.ID, Details: map[string]any{"cycle": inc.RetriggerCycles},
@@ -1288,11 +1316,7 @@ func (e *Engine) onStateTimerFired(zoneID string, seq uint64) {
 		}
 	case timerKindEntry:
 		if a.state == hmenum.AlarmZoneStatePending {
-			cause := incidentCause{Kind: causeKindPendingElapsed, SensorID: a.pendingCause}
-			if s, ok := a.sensors[a.pendingCause]; ok {
-				cause.SensorName = s.row.Name
-			}
-			e.trigger(ctx, a, cause, FireOptions{})
+			e.trigger(ctx, a, pendingElapsedCause(a), FireOptions{})
 		}
 	case timerKindPreAlarm:
 		if a.state == hmenum.AlarmZoneStateTriggered && a.preAlarm {
@@ -1526,9 +1550,7 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *zone, causeKind string, po
 		// An incident is already running: add the class outputs (unless
 		// silenced) and journal, but do not disturb the running incident.
 		if a.incident != nil && !a.incident.Silenced {
-			if err := e.outputs.FireCycle(ctx, a.id, *a.incident, FireOptions{Policy: policy}); err != nil {
-				e.journalFault(ctx, a, "output_fire_failed", err, a.incident.ID)
-			}
+			e.fireCycle(ctx, a, *a.incident, FireOptions{Policy: policy})
 		}
 		incID := int64(0)
 		if a.incident != nil {
@@ -1578,9 +1600,7 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *zone, causeKind string, po
 	e.scheduleStateTimer(a, timerKindTrigger, dur)
 	e.persist(ctx, a)
 	e.recordSource(ctx, a, a.incident.ID, cause)
-	if err := e.outputs.FireCycle(ctx, a.id, *a.incident, FireOptions{Policy: policy}); err != nil {
-		e.journalFault(ctx, a, "output_fire_failed", err, a.incident.ID)
-	}
+	e.fireCycle(ctx, a, *a.incident, FireOptions{Policy: policy})
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassTrigger, Event: "triggered",
 		Actor: by, Source: source, IncidentID: a.incident.ID,

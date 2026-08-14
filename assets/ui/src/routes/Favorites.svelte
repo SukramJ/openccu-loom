@@ -328,7 +328,7 @@
                   disabled={runningProgram === fav.id}
                 >
                   <Icon name="mdi:play" class="mr-1" />
-                  {runningProgram === fav.id ? "…" : t("programs.execute")}
+                  {runningProgram === fav.id ? t("programs.running") : t("programs.run")}
                 </Button>
               </div>
             {/if}

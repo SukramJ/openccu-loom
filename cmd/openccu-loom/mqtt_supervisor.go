@@ -85,8 +85,14 @@ func newMQTTSupervisor(logger *slog.Logger, healthTracker *health.Tracker) *mqtt
 }
 
 // SetChannelHidden wires the operator-hidden-channel gate (G12) that every
-// (re)built bridge consults. Set once at composition time before the first
-// build; a nil fn disables the gate.
+// (re)built bridge consults. A nil fn disables the gate.
+//
+// The bridge captures the gate at build time and offers no setter afterwards,
+// so this MUST run before [mqttSupervisor.Start] — a gate installed later
+// reaches only the bridges a subsequent Swap builds, and the boot-built bridge
+// that lives for the whole daemon lifetime keeps publishing hidden channels.
+// [wireSharedInfrastructure] takes the overlay as a parameter for exactly that
+// reason.
 func (s *mqttSupervisor) SetChannelHidden(fn func(central, channelAddress string) bool) {
 	s.mu.Lock()
 	s.channelHidden = fn
@@ -363,8 +369,9 @@ func (s *mqttSupervisor) Shutdown(ctx context.Context) {
 func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mqttSwap, error) {
 	s.mu.Lock()
 	col := s.collector
+	hidden := s.channelHidden
 	s.mu.Unlock()
-	stack := buildMQTT(cfg, s.logger, col, s.channelHidden)
+	stack := buildMQTT(cfg, s.logger, col, hidden)
 	if stack == nil {
 		return nil, errors.New("mqtt.supervisor.build: buildMQTT returned nil with MQTT enabled")
 	}
@@ -531,6 +538,10 @@ func makeMQTTSubscriberBuilder(
 			WithCombinedDPSink(sink).
 			WithScheduleSwitchSink(sink).
 			WithInstallModeSink(sink).
+			// The `<central>` topic segment is TopicSafe-escaped on the
+			// way out; the registry is what turns it back into the
+			// configured name every sink is keyed on.
+			WithCentralNames(reg).
 			WithCollector(collector).
 			// Capture the daemon-lifetime ctx (not the per-Start/Swap ctx,
 			// which on a reload-triggered swap is request-scoped) so command

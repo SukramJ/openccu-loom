@@ -191,35 +191,46 @@ func registerFirmwareJobsFor(u *central.Unit, valueWriter *clientpkg.ValueWriter
 // one interval in — never at boot. Each central backs up its own CCU and (when
 // KeepLast > 0) prunes its own oldest backups.
 func registerScheduledBackupJobs(reg *central.Registry, cfg *config.Config, backupAdapter *adapter.BackupAdapter, logger *slog.Logger) {
-	if cfg == nil || cfg.Backup.Schedule <= 0 || backupAdapter == nil {
+	for _, u := range reg.List() {
+		registerScheduledBackupJobFor(u, cfg, backupAdapter, logger)
+	}
+}
+
+// registerScheduledBackupJobFor registers one central's automatic-backup job.
+// Factored out — mirroring registerStandardJobsFor / registerFirmwareJobsFor —
+// so the live CCU-adopt orchestrator registers it for a runtime-added central
+// too. Without that, `backup.schedule` applied daemon-wide but produced
+// nothing for an adopted CCU: no job, no error, no log line, and the absence
+// was only discoverable by noticing its backup list never filled — typically
+// when a restore was already needed.
+//
+// A disabled schedule or an absent adapter stays a no-op, so both the boot
+// loop and the adopt path can call it unconditionally.
+func registerScheduledBackupJobFor(u *central.Unit, cfg *config.Config, backupAdapter *adapter.BackupAdapter, logger *slog.Logger) {
+	if u == nil || cfg == nil || cfg.Backup.Schedule <= 0 || backupAdapter == nil {
 		return
 	}
-	for _, u := range reg.List() {
-		if u == nil {
-			continue
+	name := u.Name()
+	keepLast := cfg.Backup.KeepLast
+	run := func(ctx context.Context) error {
+		// Await create completion (synchronous) so the new backup is
+		// durably saved BEFORE pruning. The old detached trigger returned
+		// immediately, so Prune ran against the pre-create fleet and left
+		// KeepLast+1 in steady state.
+		if _, err := backupAdapter.CreateBackupForCentral(ctx, name); err != nil {
+			return err
 		}
-		name := u.Name()
-		keepLast := cfg.Backup.KeepLast
-		run := func(ctx context.Context) error {
-			// Await create completion (synchronous) so the new backup is
-			// durably saved BEFORE pruning. The old detached trigger returned
-			// immediately, so Prune ran against the pre-create fleet and left
-			// KeepLast+1 in steady state.
-			if _, err := backupAdapter.CreateBackupForCentral(ctx, name); err != nil {
-				return err
-			}
-			if keepLast > 0 {
-				return backupAdapter.Prune(ctx, name, keepLast)
-			}
-			return nil
+		if keepLast > 0 {
+			return backupAdapter.Prune(ctx, name, keepLast)
 		}
-		if err := u.Scheduler.Add(scheduler.Job{
-			Name:     "central.scheduled_backup",
-			Interval: cfg.Backup.Schedule,
-			Run:      run,
-		}); err != nil {
-			logger.Warn("scheduled_backup.register.failed",
-				slog.String("central", name), slog.String("err", err.Error()))
-		}
+		return nil
+	}
+	if err := u.Scheduler.Add(scheduler.Job{
+		Name:     "central.scheduled_backup",
+		Interval: cfg.Backup.Schedule,
+		Run:      run,
+	}); err != nil {
+		logger.Warn("scheduled_backup.register.failed",
+			slog.String("central", name), slog.String("err", err.Error()))
 	}
 }

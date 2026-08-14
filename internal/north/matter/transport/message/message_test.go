@@ -246,26 +246,46 @@ func TestProtocolHeaderWithAckRoundTrip(t *testing.T) {
 	}
 }
 
-// TestProtocolHeaderWithVendorRoundTrip covers a vendor-specific
-// protocol message.
-func TestProtocolHeaderWithVendorRoundTrip(t *testing.T) {
-	in := ProtocolHeader{
+// vendorProtocolHeaderFixture pins the wire bytes of a V-flagged protocol
+// header against the field order of Core Spec §4.4.3: exchange flags,
+// protocol opcode, exchange id, vendor id (only when V is set), protocol id.
+// A round-trip through Marshal/Unmarshal alone cannot see a symmetric
+// transposition of the two 16-bit fields, so the fixture is the assertion
+// that matters.
+var (
+	vendorProtocolHeaderFixture = []byte{0x10, 0x05, 0x03, 0x00, 0xF1, 0xFF, 0x04, 0x00}
+	vendorProtocolHeaderDecoded = ProtocolHeader{
 		Opcode:      0x05,
 		ExchangeID:  3,
 		ProtocolID:  4,
 		HasVendorID: true,
 		VendorID:    0xFFF1,
 	}
-	wire := in.Marshal()
-	if len(wire) != 6+2 {
-		t.Fatalf("len(wire)=%d, want 8", len(wire))
+)
+
+// TestProtocolHeaderWithVendorEncodesWireOrder locks the encode side of a
+// vendor-specific protocol message against the fixture.
+func TestProtocolHeaderWithVendorEncodesWireOrder(t *testing.T) {
+	wire := vendorProtocolHeaderDecoded.Marshal()
+	if !bytes.Equal(wire, vendorProtocolHeaderFixture) {
+		t.Fatalf("wire = % X, want % X", wire, vendorProtocolHeaderFixture)
 	}
-	out, _, err := UnmarshalProtocolHeader(wire)
+}
+
+// TestProtocolHeaderWithVendorDecodesWireOrder feeds the fixture bytes back
+// in: a peer's vendor-qualified header must not surface its vendor id as the
+// protocol id, or the bridge routes a vendor payload into the Interaction
+// Model dispatcher.
+func TestProtocolHeaderWithVendorDecodesWireOrder(t *testing.T) {
+	out, n, err := UnmarshalProtocolHeader(vendorProtocolHeaderFixture)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !reflect.DeepEqual(out, in) {
-		t.Errorf("got %+v, want %+v", out, in)
+	if n != len(vendorProtocolHeaderFixture) {
+		t.Errorf("consumed %d bytes, want %d", n, len(vendorProtocolHeaderFixture))
+	}
+	if !reflect.DeepEqual(out, vendorProtocolHeaderDecoded) {
+		t.Errorf("got %+v, want %+v", out, vendorProtocolHeaderDecoded)
 	}
 }
 
@@ -411,11 +431,25 @@ func TestProtocolHeaderSecuredExtensionLengthOverflow(t *testing.T) {
 	}
 }
 
-// TestProtocolHeaderTruncatedVendorID catches missing vendor bytes.
+// TestProtocolHeaderTruncatedVendorID catches missing vendor bytes. The
+// vendor id sits directly behind the exchange id, so a buffer that stops
+// inside it has five bytes.
 func TestProtocolHeaderTruncatedVendorID(t *testing.T) {
 	in := ProtocolHeader{HasVendorID: true, VendorID: 1, Opcode: 1, ProtocolID: 1}
 	wire := in.Marshal()
-	_, _, err := UnmarshalProtocolHeader(wire[:6])
+	_, _, err := UnmarshalProtocolHeader(wire[:5])
+	if !errors.Is(err, ErrTruncated) {
+		t.Fatalf("err = %v, want ErrTruncated", err)
+	}
+}
+
+// TestProtocolHeaderTruncatedProtocolIDAfterVendor catches a V-flagged
+// header whose vendor id is complete but whose protocol id is not: the
+// fixed six-byte pre-check is satisfied, yet eight bytes are required.
+func TestProtocolHeaderTruncatedProtocolIDAfterVendor(t *testing.T) {
+	in := ProtocolHeader{HasVendorID: true, VendorID: 1, Opcode: 1, ProtocolID: 1}
+	wire := in.Marshal()
+	_, _, err := UnmarshalProtocolHeader(wire[:7])
 	if !errors.Is(err, ErrTruncated) {
 		t.Fatalf("err = %v, want ErrTruncated", err)
 	}

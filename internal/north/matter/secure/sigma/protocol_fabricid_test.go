@@ -84,13 +84,15 @@ func TestProcessSigma3_FabricIDExtractorAbsent_SkipsCheck(t *testing.T) {
 	}
 }
 
-// TestProcessSigma3_FabricIDExtractorError_SkipsCheck confirms that an
-// extractor which errors (peer NOC carried no decodable fabric-id) is
-// treated as "unavailable" and does not fail the handshake, mirroring
-// the PeerNodeID / PeerCATs error handling.
-func TestProcessSigma3_FabricIDExtractorError_SkipsCheck(t *testing.T) {
+// TestProcessSigma3_FabricIDExtractorError_Rejected confirms that a
+// verifier which exposes the fabric-id surface but cannot read the
+// fabric-id out of a NOC it just accepted fails the handshake instead
+// of silently skipping the binding. matter.js compares the two
+// fabric-ids unconditionally (CaseServer.ts:304-306); a NOC without a
+// readable fabric-id is anomalous, not a licence to proceed.
+func TestProcessSigma3_FabricIDExtractorError_Rejected(t *testing.T) {
 	err := runSigma3WithResponderVerifier(t, 0x2A, fabricIDVerifier{fabricID: 0x99, err: errors.New("no fabric-id")})
-	if err != nil {
-		t.Fatalf("ProcessSigma3 with erroring fabric-id extractor: %v, want nil", err)
+	if !errors.Is(err, ErrFabricIDMismatch) {
+		t.Fatalf("ProcessSigma3 with erroring fabric-id extractor: err = %v, want ErrFabricIDMismatch", err)
 	}
 }

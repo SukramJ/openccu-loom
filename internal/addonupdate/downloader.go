@@ -14,6 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 )
 
 // DefaultStagePath is where the firmware's install_addon expects the
@@ -44,17 +48,33 @@ type Downloader struct {
 	StagePath string
 }
 
-// NewDownloader returns a Downloader wired to the default HTTP client
-// and [DefaultStagePath].
+// downloadTimeout bounds one asset GET end to end. It is generous
+// enough for the multi-arch tarball over a slow link, but finite: a
+// stalled CDN or half-open connection would otherwise leave the install
+// goroutine blocked with the state machine latched in StateDownloading,
+// which makes every later Check/Install return ErrBusy until the daemon
+// is restarted.
+const downloadTimeout = 10 * time.Minute
+
+// downloaderClient is the HTTP client every Downloader uses unless the
+// caller injects one. It owns its transport (see [internal/httpx]) so a
+// long-running download does not share a connection pool with the rest
+// of the daemon, and carries [downloadTimeout] as its request deadline.
+var downloaderClient = sync.OnceValue(func() *http.Client {
+	return httpx.NewClient(downloadTimeout)
+})
+
+// NewDownloader returns a Downloader wired to a bounded HTTP client of
+// its own and [DefaultStagePath].
 func NewDownloader() *Downloader {
-	return &Downloader{HTTPClient: http.DefaultClient, StagePath: DefaultStagePath}
+	return &Downloader{HTTPClient: downloaderClient(), StagePath: DefaultStagePath}
 }
 
 func (d *Downloader) httpClient() *http.Client {
 	if d.HTTPClient != nil {
 		return d.HTTPClient
 	}
-	return http.DefaultClient
+	return downloaderClient()
 }
 
 func (d *Downloader) stagePath() string {

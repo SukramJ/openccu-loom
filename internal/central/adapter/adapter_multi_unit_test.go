@@ -7548,62 +7548,57 @@ func TestInterfaceURL_InterfaceSpecPortOverride(t *testing.T) {
 	}
 }
 
-// TestInterfaceURL_InterfaceSpecRemotePathOverride pins that an
-// operator-configured remote_path reaches the composed XML-RPC endpoint. The
-// field validates, persists and shows up in the SPA, so a reverse-proxied CCU
-// that needs a non-standard path must actually be reachable through it —
-// otherwise the interface never connects and nothing points at the setting.
+// TestInterfaceURL_InterfaceSpecRemotePathOverride pins that the documented
+// per-interface remote_path override actually composes the endpoint. It was
+// parsed, validated, persisted and rendered in the SPA while the composer
+// hard-coded "/RPC2", so an operator whose CCU sits behind a reverse proxy on
+// another path saw every XML-RPC call 404 with no hint that the configured
+// value had been discarded.
 func TestInterfaceURL_InterfaceSpecRemotePathOverride(t *testing.T) {
 	t.Parallel()
-	cc := config.CentralConfig{
-		Host:       "192.168.1.1",
-		Interfaces: []config.InterfaceSpec{{Name: string(hmenum.InterfaceHmIPRF), RemotePath: "/RPC2b"}},
-	}
-	u, err := interfaceURL(cc, hmenum.InterfaceHmIPRF)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.HasSuffix(u, "/RPC2b") {
-		t.Errorf("interfaceURL = %q, want it to apply the Interfaces[].RemotePath override /RPC2b", u)
-	}
-}
-
-// TestInterfaceURL_RemotePathOverrideBeatsVirtualDevicesDefault verifies the
-// override also replaces the VirtualDevices-specific "/groups" default, not
-// only the "/RPC2" one.
-func TestInterfaceURL_RemotePathOverrideBeatsVirtualDevicesDefault(t *testing.T) {
-	t.Parallel()
-	cc := config.CentralConfig{
-		Host:       "192.168.1.1",
-		Interfaces: []config.InterfaceSpec{{Name: string(hmenum.InterfaceVirtualDevices), RemotePath: "/proxy/groups"}},
-	}
-	u, err := interfaceURL(cc, hmenum.InterfaceVirtualDevices)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.HasSuffix(u, "/proxy/groups") {
-		t.Errorf("interfaceURL = %q, want the /proxy/groups override", u)
-	}
-}
-
-// TestInterfaceURL_RemotePathOverrideIsPerInterface verifies the override is
-// scoped to the interface that carries it — pinning HmIP-RF must leave
-// BidCos-RF on the default endpoint.
-func TestInterfaceURL_RemotePathOverrideIsPerInterface(t *testing.T) {
-	t.Parallel()
-	cc := config.CentralConfig{
-		Host: "192.168.1.1",
-		Interfaces: []config.InterfaceSpec{
-			{Name: string(hmenum.InterfaceHmIPRF), RemotePath: "/RPC2b"},
-			{Name: string(hmenum.InterfaceBidCosRF)},
+	cases := []struct {
+		name  string
+		iface hmenum.Interface
+		specs []config.InterfaceSpec
+		want  string
+	}{
+		{
+			name:  "override replaces the /RPC2 default",
+			iface: hmenum.InterfaceHmIPRF,
+			specs: []config.InterfaceSpec{{Name: string(hmenum.InterfaceHmIPRF), RemotePath: "/rpc"}},
+			want:  "/rpc",
+		},
+		{
+			name:  "override replaces the VirtualDevices /groups default",
+			iface: hmenum.InterfaceVirtualDevices,
+			specs: []config.InterfaceSpec{{Name: string(hmenum.InterfaceVirtualDevices), RemotePath: "/proxy/groups"}},
+			want:  "/proxy/groups",
+		},
+		{
+			name:  "another interface's override does not leak",
+			iface: hmenum.InterfaceHmIPRF,
+			specs: []config.InterfaceSpec{{Name: string(hmenum.InterfaceBidCosRF), RemotePath: "/rpc"}},
+			want:  "/RPC2",
+		},
+		{
+			name:  "unset keeps the backend default",
+			iface: hmenum.InterfaceHmIPRF,
+			specs: []config.InterfaceSpec{{Name: string(hmenum.InterfaceHmIPRF)}},
+			want:  "/RPC2",
 		},
 	}
-	u, err := interfaceURL(cc, hmenum.InterfaceBidCosRF)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.HasSuffix(u, "/RPC2") {
-		t.Errorf("interfaceURL = %q, want BidCos-RF to keep the default /RPC2", u)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cc := config.CentralConfig{Host: "192.168.1.1", Interfaces: tc.specs}
+			u, err := interfaceURL(cc, tc.iface)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !strings.HasSuffix(u, tc.want) {
+				t.Errorf("interfaceURL = %q, want path %q", u, tc.want)
+			}
+		})
 	}
 }
 

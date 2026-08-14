@@ -187,8 +187,18 @@ func (s *Service) updateDeviceHealth(ctx context.Context, centralName string, ke
 // onConnectivity degrades and restores sensors per interface, and
 // escalates to the central-loss policy when every enrolled interface
 // of a central is gone.
+//
+// The event names the interface the way the CCU does ("BidCos-RF"),
+// while every routing key in this package is keyed by the wire id the
+// ingest pipeline stamps onto a data point ("<central>-BidCos-RF").
+// The two spaces are reconciled once, here at the boundary, so the
+// prefix match and the down-map agree: matching the bare name against
+// wire-keyed routing silently found nothing, which left every contact
+// on a lost radio reporting its last known state while armed and never
+// ran the zone's central-loss policy.
 func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChangedEvent) {
 	ctx := context.Background()
+	wireID := central.WireInterfaceID(centralName, hmenum.Interface(e.InterfaceID))
 	s.mu.Lock()
 	m, ok := s.ifaceDown[centralName]
 	if !ok {
@@ -196,12 +206,12 @@ func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChang
 		s.ifaceDown[centralName] = m
 	}
 	wasAllDown := s.allEnrolledDownLocked(centralName)
-	m[e.InterfaceID] = !e.Reachable
+	m[wireID] = !e.Reachable
 	nowAllDown := s.allEnrolledDownLocked(centralName)
 	// Collect the sensors of the affected interface.
 	var affected []string
 	for key, b := range s.dpIndex {
-		if strings.HasPrefix(key, centralName+"|"+e.InterfaceID+"|") {
+		if strings.HasPrefix(key, dpKeyPrefix(centralName, wireID)) {
 			affected = append(affected, b.id)
 		}
 	}
@@ -249,9 +259,17 @@ func (s *Service) allEnrolledDownLocked(centralName string) bool {
 	return true
 }
 
-// dpKey builds the routing key of a sensor data point.
+// dpKey builds the routing key of a sensor data point. interfaceID is
+// the wire id ("<central>-BidCos-RF"), the form an enrolled sensor row
+// and an inbound data-point event both carry.
 func dpKey(centralName, interfaceID, channelAddress, parameter string) string {
-	return centralName + "|" + interfaceID + "|" + channelAddress + "|" + parameter
+	return dpKeyPrefix(centralName, interfaceID) + channelAddress + "|" + parameter
+}
+
+// dpKeyPrefix builds the (central, interface) prefix shared by every
+// routing key of one interface.
+func dpKeyPrefix(centralName, interfaceID string) string {
+	return centralName + "|" + interfaceID + "|"
 }
 
 // devKey builds the routing key of a device.

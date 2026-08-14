@@ -479,14 +479,14 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	sessionLookup := matterbridge.NewOperationalSessionLookup(
 		func(id uint16) (*channel.Session, bool) {
 			entry, err := opMgr.Get(id)
-			if err != nil {
+			if err != nil || entry == nil {
 				return nil, false
 			}
 			return entry.Session, true
 		},
 	).WithFabricResolver(func(id uint16) (uint8, bool) {
 		entry, err := opMgr.Get(id)
-		if err != nil {
+		if err != nil || entry == nil {
 			return 0, false
 		}
 		return entry.FabricIndex(), true
@@ -842,6 +842,29 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				return nil
 			}
 			responder := sigma.NewResponder(id, ver, sessID)
+			// One CaseAdapter serves every handshake that arrives on its
+			// exchange, and Apple Home grafts a second CASE session (the
+			// iCloud Hub Companion fabric) onto the exchange it already
+			// used. Without a fresh id per handshake the second session
+			// would be registered in the slot the first peer's session
+			// occupies. matter.js takes the id inside each Sigma1
+			// handling instead
+			// (packages/protocol/src/session/case/CaseServer.ts:266).
+			responder.SetSessionIDRenewer(func(previous uint16) (uint16, bool) {
+				next, renewErr := opMgr.AllocateID()
+				if renewErr != nil {
+					logger.Warn("matter.bridge.case.session_id_renew",
+						slog.Int("previous_session_id", int(previous)),
+						slog.String("err", renewErr.Error()))
+					return 0, false
+				}
+				// Allocate before releasing so the new handshake can
+				// never be handed the id it is replacing. ReleaseID only
+				// drops placeholders, so a previous id that already
+				// carries an established session stays untouched.
+				opMgr.ReleaseID(previous)
+				return next, true
+			})
 			// Wire the multi-fabric destination resolver so the inbound
 			// Sigma1's DestinationID picks the correct identity at
 			// Sigma2-sign time — Bug G fix for Apple Multi-Admin pairing.
@@ -874,10 +897,17 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				resolvedFabric := fIdx
 				resolvedNode := id.NodeID
 				peerNodeID := uint64(0)
+				// The session id is read back from the responder rather
+				// than taken from the factory-time allocation: a second
+				// Sigma1 on this exchange renews it, and registering the
+				// session under the id the FIRST handshake announced
+				// would displace that peer's live session.
+				currentSessID := sessID
 				var peerCATs []uint32
 				if resp := adapter.SnapshotResponder(); resp != nil {
 					peerNodeID = resp.PeerNodeID()
 					peerCATs = resp.PeerCATs()
+					currentSessID = resp.SessionID()
 					// SessionFabricIndex returns the fabric the resolver
 					// landed on for this exchange — see [Responder.SessionFabricIndex].
 					if fi, nid, ok := resp.SessionIdentity(); ok {
@@ -885,9 +915,9 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 						resolvedNode = nid
 					}
 				}
-				entry, openErr := opMgr.OpenFromSigmaWithID(sessID, resolvedFabric, resolvedNode, peerNodeID, peerSessionID, peerCATs, keys)
+				entry, openErr := opMgr.OpenFromSigmaWithID(currentSessID, resolvedFabric, resolvedNode, peerNodeID, peerSessionID, peerCATs, keys)
 				if openErr != nil {
-					opMgr.ReleaseID(sessID)
+					opMgr.ReleaseID(currentSessID)
 					return openErr
 				}
 				// Carry the initiator's Sigma1 MRP hints onto the session

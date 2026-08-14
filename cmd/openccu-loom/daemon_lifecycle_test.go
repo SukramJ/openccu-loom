@@ -738,7 +738,7 @@ func TestWireIncidentRecorder_WithCentralAndDB(t *testing.T) {
 	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-inc")
 	logger := slog.New(slog.DiscardHandler)
-	_, closer := wireIncidentRecorder(db, reg, logger)
+	_, _, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 }
 
@@ -749,7 +749,7 @@ func TestWireSessionRecorderPersistence_WithCentral(t *testing.T) {
 	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-sess")
 	logger := slog.New(slog.DiscardHandler)
-	closer := wireSessionRecorderPersistence(db, reg, logger)
+	_, closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
@@ -765,7 +765,7 @@ func TestWireAuditPersistenceWithDB_NilDB(t *testing.T) {
 	t.Parallel()
 	buf := audit.NewBuffer(16)
 	logger := slog.New(slog.DiscardHandler)
-	got, _ := wireAuditPersistenceWithDB(nil, buf, logger)
+	got, _, _ := wireAuditPersistenceWithDB(nil, buf, logger)
 	if got == nil {
 		t.Fatal("expected non-nil fallback recorder when db is nil")
 	}
@@ -922,16 +922,17 @@ func TestWireAuditPersistenceWithDB_SharesHandleWithOtherWiring(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	reg := buildTestRegistry(t, "ccu-shared")
 
-	rec, _ := wireAuditPersistenceWithDB(db, buf, logger)
+	rec, _, stopSink := wireAuditPersistenceWithDB(db, buf, logger)
+	t.Cleanup(stopSink)
 	if rec == nil {
 		t.Fatal("expected non-nil recorder from shared DB")
 	}
 	rec.Record(audit.Entry{User: "lifecycle-test", Parameter: "p"})
 
-	_, incidentCloser := wireIncidentRecorder(db, reg, logger)
+	_, _, incidentCloser := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(incidentCloser)
 
-	sessionCloser := wireSessionRecorderPersistence(db, reg, logger)
+	_, sessionCloser := wireSessionRecorderPersistence(db, reg, logger)
 	t.Cleanup(sessionCloser)
 }
 

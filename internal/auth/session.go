@@ -187,13 +187,19 @@ func (s *SessionStore) RevokeBySubjectExcept(subject, keepSID string) int {
 }
 
 func (s *SessionStore) revokeBySubject(subject, keepSID string) int {
+	subject = CanonicalSubject(subject)
 	if subject == "" {
 		return 0
 	}
 	s.mu.Lock()
 	ids := make([]string, 0)
 	for id, sess := range s.items {
-		if sess.Identity.Subject == subject && id != keepSID {
+		// Compare canonically: a session issued before the identity
+		// boundary folded the subject (or by a provider that reports its
+		// own spelling) must still be reachable by the canonical name the
+		// admin surface uses, or a credential change silently evicts
+		// nothing.
+		if CanonicalSubject(sess.Identity.Subject) == subject && id != keepSID {
 			ids = append(ids, id)
 		}
 	}

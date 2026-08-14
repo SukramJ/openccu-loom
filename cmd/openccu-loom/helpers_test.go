@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 )
 
 // ── buildLWTTopic ────────────────────────────────────────────────────────────
@@ -30,6 +31,32 @@ func TestBuildLWTTopic_CustomBase(t *testing.T) {
 	want := "home/ccu/bridge/status"
 	if got != want {
 		t.Errorf("buildLWTTopic custom: got %q, want %q", got, want)
+	}
+}
+
+// TestBuildLWTTopicMatchesBridgeStatusTopic pins the will against the
+// topic the bridge itself publishes its status on.
+//
+// The two are a pair: the broker writes the retained `offline` will when
+// the daemon's link dies, and the bridge writes the retained `online`
+// counterpart on connect. They have to be the same topic, and they are
+// built in two different places — the will before the bridge exists, the
+// counterpart from the bridge's topic builder. A configured base with a
+// trailing slash made them diverge: the will landed on
+// `loom//bridge/status` while `online` landed on `loom/bridge/status`,
+// so the stale `offline` never got overwritten and every consumer that
+// uses the bridge status as an availability source (the alarm and
+// security planes declare it for every entity) treated the whole daemon
+// as permanently down.
+func TestBuildLWTTopicMatchesBridgeStatusTopic(t *testing.T) {
+	t.Parallel()
+	for _, base := range []string{"", "home/ccu", "loom/", "/loom", "/loom/"} {
+		cfg := config.Default()
+		cfg.North.MQTT.TopicBase = base
+		want := mqtt.NewTopicBuilder(base).BridgeStatus()
+		if got := buildLWTTopic(cfg); got != want {
+			t.Errorf("topic_base %q: will topic %q, bridge publishes %q", base, got, want)
+		}
 	}
 }
 

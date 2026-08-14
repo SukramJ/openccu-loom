@@ -379,10 +379,16 @@ func (p PathData) MQTTCustomDPServiceMethod(base, centralName, method string) st
 
 // DiscoveryNodeID returns the HA-Discovery `<node_id>` segment that
 // groups every entity belonging to one physical device. Format:
-// `<central-lower>_<address-lower>` — matching HA's convention that
+// `<central-slug>_<address-lower>` — matching HA's convention that
 // `node_id` distinguishes one device from another, not one
 // integration from another. When `central` is empty the node id
 // collapses to just the lower-cased address.
+//
+// The central segment goes through [DiscoverySlug], the same
+// normaliser the hub node ids and the retained-config orphan sweep
+// use: a name carrying a dot or an umlaut would otherwise reach the
+// wire in a spelling HA rejects, and in a spelling the sweep cannot
+// match — leaving retired entities retained forever.
 //
 // Empty when the PathData has no Address.
 func (p PathData) DiscoveryNodeID(centralName string) string {
@@ -393,7 +399,7 @@ func (p PathData) DiscoveryNodeID(centralName string) string {
 	if centralName == "" {
 		return addr
 	}
-	return strings.ToLower(TopicSafe(centralName)) + "_" + addr
+	return DiscoverySlug(centralName) + "_" + addr
 }
 
 // DiscoveryObjectID returns the HA-Discovery `<object_id>` segment

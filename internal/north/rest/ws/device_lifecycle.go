@@ -57,48 +57,66 @@ func NewDeviceLifecycleSubscriber(reg *central.Registry, hub *Hub) *DeviceLifecy
 }
 
 // Start attaches subscriptions to every registered central's event bus.
+// A central adopted later must be attached with
+// [DeviceLifecycleSubscriber.StartCentral].
 func (s *DeviceLifecycleSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.unsubs = append(s.unsubs, unwire)
 		}
-		centralName := u.Name()
-		hub := s.hub
-		unsubCreated := events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
-			hub.Publish(Event{
-				Topic: DeviceLifecycleTopic(e.Address),
-				Type:  string(hmevent.EventTypeDeviceCreated),
-				When:  e.Timestamp(),
-				Payload: DeviceCreatedPayload{
-					Central:       centralName,
-					InterfaceID:   e.InterfaceID,
-					DeviceAddress: e.Address,
-					Model:         e.Model,
-					Source:        e.Source,
-				},
-			})
-		})
-		unsubRemoved := events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
-			hub.Publish(Event{
-				Topic: DeviceLifecycleTopic(e.Address),
-				Type:  string(hmevent.EventTypeDeviceRemoved),
-				When:  e.Timestamp(),
-				Payload: DeviceRemovedPayload{
-					Central:       centralName,
-					InterfaceID:   e.InterfaceID,
-					DeviceAddress: e.Address,
-				},
-			})
-		})
-		s.unsubs = append(s.unsubs, unsubCreated, unsubRemoved)
 	}
 }
 
-// Stop drops all event-bus subscriptions.
+// StartCentral attaches this subscriber to a single central's event bus and
+// returns the unwire (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so a central
+// adopted at runtime emitted no `device.created` / `device.removed` frame for
+// any of its devices until the daemon was restarted.
+func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	hub := s.hub
+	unsubCreated := events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
+		hub.Publish(Event{
+			Topic: DeviceLifecycleTopic(e.Address),
+			Type:  string(hmevent.EventTypeDeviceCreated),
+			When:  e.Timestamp(),
+			Payload: DeviceCreatedPayload{
+				Central:       centralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.Address,
+				Model:         e.Model,
+				Source:        e.Source,
+			},
+		})
+	})
+	unsubRemoved := events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+		hub.Publish(Event{
+			Topic: DeviceLifecycleTopic(e.Address),
+			Type:  string(hmevent.EventTypeDeviceRemoved),
+			When:  e.Timestamp(),
+			Payload: DeviceRemovedPayload{
+				Central:       centralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.Address,
+			},
+		})
+	})
+	return unwireAll([]func(){unsubCreated, unsubRemoved})
+}
+
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (s *DeviceLifecycleSubscriber) Stop() {
 	for _, u := range s.unsubs {
 		u()

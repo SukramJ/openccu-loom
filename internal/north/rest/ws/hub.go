@@ -82,7 +82,13 @@ type Hub struct {
 	// token-rotation flow on every connected client. See the
 	// `Auth lifecycle on long-lived connections` section in
 	// docs/external-clients/topic-hierarchy.md.
-	tokens auth.TokenStore
+	//
+	// Guarded by tokensMu: the composition root registers it twice —
+	// once with the config-seeded in-memory store and again with the
+	// database-chained store once the stores exist — and the second
+	// registration can land while the listener is already accepting.
+	tokensMu sync.RWMutex
+	tokens   auth.TokenStore
 
 	// resyncSignals counts [Hub.SignalResync] calls so a wiring test
 	// can assert that a producer actually reaches this seam.
@@ -126,13 +132,26 @@ func (h *Hub) ResyncSignals() uint64 {
 }
 
 // SetTokenStore wires the bearer-token resolver the in-band reauth
-// op consults. Nil disables reauth (clients sending {op:"reauth"}
-// receive {op:"reauth_failed"} and stay connected with their
-// original identity).
-func (h *Hub) SetTokenStore(t auth.TokenStore) { h.tokens = t }
+// op consults. Nil disables reauth: a client sending {op:"reauth"}
+// then receives {op:"reauth_failed"} and the connection is closed —
+// see [client.reauth], which treats an unresolvable token and an
+// absent store alike, because both leave the connection's identity
+// unverifiable.
+//
+// The store must resolve every token the HTTP upgrade accepts. A
+// narrower one rejects a credential that is valid everywhere else.
+func (h *Hub) SetTokenStore(t auth.TokenStore) {
+	h.tokensMu.Lock()
+	h.tokens = t
+	h.tokensMu.Unlock()
+}
 
 // TokenStore returns the registered token resolver, or nil.
-func (h *Hub) TokenStore() auth.TokenStore { return h.tokens }
+func (h *Hub) TokenStore() auth.TokenStore {
+	h.tokensMu.RLock()
+	defer h.tokensMu.RUnlock()
+	return h.tokens
+}
 
 // NewHub returns an empty hub with a fresh [*Router].
 func NewHub() *Hub {
@@ -222,8 +241,11 @@ func (h *Hub) CurrentSeq() uint64 {
 
 // ReplayResult is what [Hub.Replay] returns. Events carries the
 // buffered events whose Seq > since and whose Topic matches
-// match(); Lost is true when since precedes the oldest buffered
-// Seq — the client then knows it must resync via /snapshot.
+// match(); Lost is true whenever the hub cannot place the cursor in
+// its own sequence space — since precedes the oldest buffered Seq,
+// exceeds the current top (a cursor from a previous daemon lifetime),
+// or replay is disabled altogether — and the client then knows it
+// must resync via /snapshot. OldestSeq is the anchor to resume from.
 type ReplayResult struct {
 	Events    []Event
 	Lost      bool
@@ -241,7 +263,22 @@ type ReplayResult struct {
 func (h *Hub) Replay(since uint64, match func(topic string) bool) ReplayResult {
 	h.seqMu.Lock()
 	defer h.seqMu.Unlock()
+	// seqNext is process-local and restarts at 0, so a cursor above the
+	// current top belongs to a previous daemon lifetime: the events it
+	// names cannot be reconstructed, and the envelope carries no epoch a
+	// client could notice the reset from. Reporting "caught up" here let
+	// a conforming client skip its /snapshot resync and keep rendering
+	// pre-restart state.
+	if since > h.seqNext {
+		return ReplayResult{Lost: true, OldestSeq: h.oldestBufferedSeqLocked()}
+	}
 	if len(h.replay) == 0 {
+		// A disabled buffer can never satisfy a resume — that is what
+		// SetReplayCapacity promises. An enabled-but-empty ring only
+		// means nothing has been published yet, which is not a gap.
+		if h.replayMx == 0 && since > 0 {
+			return ReplayResult{Lost: true, OldestSeq: h.seqNext}
+		}
 		return ReplayResult{}
 	}
 	oldest := h.replay[0].Seq
@@ -261,6 +298,16 @@ func (h *Hub) Replay(since uint64, match func(topic string) bool) ReplayResult {
 		out = append(out, e)
 	}
 	return ReplayResult{Events: out, OldestSeq: oldest}
+}
+
+// oldestBufferedSeqLocked returns the oldest replayable Seq, falling back
+// to the current top when the ring is empty, so a lost client always gets
+// a usable resume anchor. Callers hold h.seqMu.
+func (h *Hub) oldestBufferedSeqLocked() uint64 {
+	if len(h.replay) == 0 {
+		return h.seqNext
+	}
+	return h.replay[0].Seq
 }
 
 // ClientCount is the current subscribed connection count.

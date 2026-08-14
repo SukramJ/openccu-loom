@@ -87,12 +87,13 @@ func (d *TopologyDispatcher) SetACLLister(l ACLLister) {
 
 // Compile-time assertion: TopologyDispatcher satisfies im.Dispatcher
 // and the optional im.DataVersionReader + im.AttributeReadPrivilegeProvider
-// + im.ACLChecker interfaces.
+// + im.ACLChecker + im.AuthorizingWriter interfaces.
 var (
 	_ im.Dispatcher                     = (*TopologyDispatcher)(nil)
 	_ im.DataVersionReader              = (*TopologyDispatcher)(nil)
 	_ im.AttributeReadPrivilegeProvider = (*TopologyDispatcher)(nil)
 	_ im.ACLChecker                     = (*TopologyDispatcher)(nil)
+	_ im.AuthorizingWriter              = (*TopologyDispatcher)(nil)
 )
 
 // Read implements [im.Dispatcher]. Wildcards expand as follows:
@@ -162,8 +163,20 @@ func (d *TopologyDispatcher) Read(ctx context.Context, path im.ConcreteAttribute
 
 // Write implements [im.Dispatcher]. Wildcards expand the same way as
 // Read, but every match is dispatched separately and one
-// [im.WriteResult] is returned per match.
+// [im.WriteResult] is returned per match. Unauthorized callers must go
+// through [TopologyDispatcher.WriteAuthorized] — Write itself applies no
+// access control.
 func (d *TopologyDispatcher) Write(ctx context.Context, path im.ConcreteAttributePath, value im.AttributeValue) []im.WriteResult {
+	return d.WriteAuthorized(ctx, path, value, nil)
+}
+
+// WriteAuthorized implements [im.AuthorizingWriter]. It is
+// [TopologyDispatcher.Write] with an access-control gate evaluated at
+// every RESOLVED (endpoint, cluster, attribute) — the only place a
+// wildcard-endpoint write can be authorized, since the requested path
+// names no endpoint. authorize may be nil, which dispatches without a
+// gate.
+func (d *TopologyDispatcher) WriteAuthorized(ctx context.Context, path im.ConcreteAttributePath, value im.AttributeValue, authorize im.WriteAuthorizer) []im.WriteResult {
 	endpoints := d.resolveEndpoints(path)
 	if len(endpoints) == 0 {
 		return []im.WriteResult{{Path: path, Status: im.StatusUnsupportedEndpoint}}
@@ -216,6 +229,24 @@ func (d *TopologyDispatcher) Write(ctx context.Context, path im.ConcreteAttribut
 						results = append(results, im.WriteResult{Path: aPath, Status: im.StatusUnsupportedWrite})
 					}
 					continue
+				}
+
+				// Access-control gate at the RESOLVED location, evaluated
+				// after the writability verdict and before the value is
+				// applied — the order matter.js uses in
+				// ../matter.js/packages/protocol/src/action/server/AttributeWriteResponse.ts:324-343
+				// (`if (!attribute.limits.writable) return;` then
+				// `session.authorityAt(attribute.limits.writeLevel, location)`).
+				// A denied wildcard-endpoint location is skipped silently so
+				// the response discloses only authorized endpoints; a denied
+				// concrete path keeps the explicit status.
+				if authorize != nil {
+					if status := authorize(aPath.Endpoint, aPath.Cluster, aPath.Attribute); !status.IsSuccess() {
+						if path.HasEndpoint {
+							results = append(results, im.WriteResult{Path: aPath, Status: status})
+						}
+						continue
+					}
 				}
 
 				res := writeOne(ctx, srv, aPath, value)

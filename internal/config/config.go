@@ -19,6 +19,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -65,16 +66,20 @@ type InterfaceSpec struct {
 	// RemotePath overrides the URL path for XML-RPC requests.
 	// "" means "use the backend default" ("/RPC2" for HmIP-RF /
 	// BidCos-RF / BidCos-Wired, "/groups" for VirtualDevices).
-	// Operators with non-standard CCU routing can pin the value here.
-	// Must be an absolute path within the same host — see
-	// [InterfaceSpec.Validate].
+	// Operators with non-standard CCU routing — a reverse proxy in
+	// front of the CCU, say — can pin the value here. Must be an
+	// absolute path that stays on the configured host; the bare "/" is
+	// rejected because POSTing to it crashes the CCU's putParamset
+	// handler. See [InterfaceSpec.Validate].
 	RemotePath string `yaml:"remote_path,omitempty" json:"remote_path,omitempty" cfg:"expert"`
 
-	// RPCType pins the transport. Accepted values: "", "xmlrpc", "binrpc".
-	// "" derives it from the interface name, which is what the daemon does
-	// in every case: CUxD speaks BIN-RPC, every other interface XML-RPC.
-	// A value that contradicts the name is rejected at config load rather
-	// than persisted as a setting that governs nothing.
+	// RPCType states the transport explicitly. Accepted values: "",
+	// "xmlrpc", "binrpc". "" means "derive from the interface name",
+	// which is also what the daemon always does: CUxD speaks BIN-RPC,
+	// every other interface XML-RPC. The field therefore only ever
+	// confirms the derived transport — a value that contradicts it is
+	// rejected by [InterfaceSpec.Validate] rather than silently
+	// ignored, because no wiring path can honour it.
 	RPCType string `yaml:"rpc_type,omitempty" json:"rpc_type,omitempty" cfg:"expert"`
 }
 
@@ -115,64 +120,108 @@ func (s InterfaceSpec) Validate(idx int) error {
 	if s.Port != 0 && (s.Port < 1 || s.Port > 65535) {
 		return fmt.Errorf("config: interfaces[%d].port: out of range 1-65535: %d", idx, s.Port)
 	}
-	if err := validateRemotePath(idx, s.RemotePath); err != nil {
+	if err := s.validateRemotePath(idx); err != nil {
 		return err
 	}
-	return validateRPCType(idx, s.Name, s.RPCType)
+	return s.validateRPCType(idx)
 }
 
-// validateRemotePath constrains the URL-path override to a shape that can only
-// re-point the request within the same host. The value is interpolated into
-// the composed endpoint, so a typo that carries a scheme, a host, a query or a
-// dot segment would either build a malformed URL or silently address a
-// different endpoint than the operator meant.
-func validateRemotePath(idx int, path string) error {
-	if path == "" {
+// remotePathForbidden lists the substrings that would let the override leave
+// the configured host or stop being a plain path. The value is interpolated
+// into the composed endpoint, so a scheme or an authority silently addresses a
+// different server, and a query, a fragment or a dot segment either builds a
+// malformed URL or resolves somewhere the operator did not name.
+var remotePathForbidden = []string{"://", "?", "#", ".."}
+
+// validateRemotePath rejects a path the XML-RPC endpoint composer cannot
+// use, or that would re-point the request off the configured host. Failing
+// here means a typo surfaces at config load with the offending value in hand,
+// instead of as a 404 on every call once the interface tries to come up.
+func (s InterfaceSpec) validateRemotePath(idx int) error {
+	if s.RemotePath == "" {
 		return nil
 	}
-	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") {
-		return fmt.Errorf("config: interfaces[%d].remote_path: must be an absolute path starting with %q: %q", idx, "/", path)
+	if !strings.HasPrefix(s.RemotePath, "/") {
+		return fmt.Errorf(
+			"config: interfaces[%d].remote_path: %q must be an absolute path (start with \"/\")",
+			idx, s.RemotePath,
+		)
 	}
-	for _, bad := range []string{"://", "?", "#", ".."} {
-		if strings.Contains(path, bad) {
-			return fmt.Errorf("config: interfaces[%d].remote_path: must not contain %q: %q", idx, bad, path)
+	if s.RemotePath == "/" {
+		return fmt.Errorf(
+			"config: interfaces[%d].remote_path: the bare \"/\" is not usable — "+
+				"the CCU's putParamset handler crashes on it; name the real endpoint path",
+			idx,
+		)
+	}
+	if strings.HasPrefix(s.RemotePath, "//") {
+		return fmt.Errorf(
+			"config: interfaces[%d].remote_path: %q starts with \"//\", which a URL parser reads as an "+
+				"authority and not as a path on the configured host",
+			idx, s.RemotePath,
+		)
+	}
+	for _, bad := range remotePathForbidden {
+		if strings.Contains(s.RemotePath, bad) {
+			return fmt.Errorf(
+				"config: interfaces[%d].remote_path: %q must not contain %q — the value is a plain path on the "+
+					"configured host",
+				idx, s.RemotePath, bad,
+			)
 		}
 	}
 	return nil
 }
 
-// validateRPCType rejects an rpc_type that contradicts the transport the
-// interface name implies. The transport is derived from the name everywhere in
-// the daemon — CUxD speaks BIN-RPC, every other interface XML-RPC — so the
-// field can only ever confirm that derivation. Accepting a contradicting value
-// silently would leave an operator staring at a persisted setting that governs
-// nothing.
-func validateRPCType(idx int, name, rpcType string) error {
-	switch rpcType {
+// validateRPCType rejects a transport the daemon cannot select. The
+// transport follows from the interface (CUxD → BIN-RPC, everything else →
+// XML-RPC) and there is no wiring path that deviates, so a contradicting
+// value must fail loudly: silently ignoring it left operators reading a
+// persisted setting the daemon never applied.
+func (s InterfaceSpec) validateRPCType(idx int) error {
+	switch s.RPCType {
 	case "":
 		return nil
 	case "xmlrpc", "binrpc":
-	default:
-		return fmt.Errorf("config: interfaces[%d].rpc_type: invalid value %q (use xmlrpc or binrpc)", idx, rpcType)
-	}
-	want := "xmlrpc"
-	if name == string(hmenum.InterfaceCUxD) {
-		want = "binrpc"
-	}
-	if rpcType != want {
+		derived := "xmlrpc"
+		if hmenum.Interface(s.Name).IsBINRPC() {
+			derived = "binrpc"
+		}
+		if s.RPCType != derived {
+			return fmt.Errorf(
+				"config: interfaces[%d].rpc_type: %q contradicts the transport derived for interface %q (%s) — "+
+					"the transport is not selectable per interface; remove the key",
+				idx, s.RPCType, s.Name, derived,
+			)
+		}
+		return nil
+	case "jsonrpc":
+		// The value has always been in the north-bound schema, so it stays
+		// there and is refused here instead: no interface is served over
+		// JSON-RPC alone, and accepting it would restore the silent-ignore
+		// this validation exists to remove.
 		return fmt.Errorf(
-			"config: interfaces[%d].rpc_type: %q speaks %s, not %q — the transport follows the interface name; "+
-				"remove the field or set it to %q",
-			idx, name, want, rpcType, want,
+			"config: interfaces[%d].rpc_type: %q names no transport the daemon can drive "+
+				"(every interface is served over XML-RPC or BIN-RPC); remove the key",
+			idx, s.RPCType,
 		)
+	default:
+		return fmt.Errorf("config: interfaces[%d].rpc_type: invalid value %q (use xmlrpc or binrpc)", idx, s.RPCType)
 	}
-	return nil
 }
 
 // Config is the root daemon configuration.
 type Config struct {
-	Locale      string            `yaml:"locale" json:"locale" cfg:"basic"`
-	DataDir     string            `yaml:"data_dir" json:"data_dir" cfg:"basic"`
+	Locale  string `yaml:"locale" json:"locale" cfg:"basic"`
+	DataDir string `yaml:"data_dir" json:"data_dir" cfg:"basic"`
+	// Bootstrap mirrors the bootstrap tier's safety toggles (see
+	// [BootstrapSafety]). It is parsed here as well because the consumers
+	// of those toggles — above all the first-run onboarding probe — run
+	// off the full config; a value only [BootstrapConfig] can see would
+	// never reach them. Like data_dir and logging it stays owned by the
+	// YAML/env tier: the SPA cannot edit it and no config section carries
+	// it.
+	Bootstrap   BootstrapSafety   `yaml:"bootstrap,omitempty" json:"bootstrap,omitzero" cfg:"basic"`
 	CCUData     CCUDataConfig     `yaml:"ccu_data" json:"ccu_data" cfg:"expert"`
 	Logging     LoggingConfig     `yaml:"logging" json:"logging" cfg:"basic"`
 	Callback    CallbackConfig    `yaml:"callback" json:"callback" cfg:"expert"`
@@ -1758,6 +1807,16 @@ func (c *Config) applyDefaults() {
 	if c.North.REST.Listen == "" {
 		c.North.REST.Listen = ":8119"
 	}
+	// Canonicalise the MQTT topic base. The topic builder trims leading and
+	// trailing slashes for every topic it declares, while the consumers that
+	// concatenate the raw base do not — the last will and the retained-cleanup
+	// subscribe filters among them. A base the operator wrote as "loom/" then
+	// declares availability on `loom/bridge/status` while the broker holds the
+	// will on `loom//bridge/status`, so the offline signal lands where nothing
+	// listens and every bridged entity keeps its last retained value. Trim
+	// before the empty-check so a base of nothing but slashes falls back to the
+	// default instead of failing validation.
+	c.North.MQTT.TopicBase = strings.Trim(c.North.MQTT.TopicBase, "/")
 	if c.North.MQTT.TopicBase == "" {
 		c.North.MQTT.TopicBase = "openccu-loom"
 	}
@@ -1858,13 +1917,11 @@ func (c *Config) Validate() error {
 	if err := validateOperatorSurfaces(c); err != nil {
 		return err
 	}
-	names := make(map[string]struct{}, len(c.Centrals))
+	if err := validateCentralNames(c.Centrals); err != nil {
+		return err
+	}
 	for i := range c.Centrals {
 		cc := &c.Centrals[i]
-		if err := validateCentralName(i, cc.Name, names); err != nil {
-			return err
-		}
-		names[cc.Name] = struct{}{}
 		if cc.Host == "" {
 			return fmt.Errorf("config: centrals[%d].host: required", i)
 		}
@@ -1901,24 +1958,6 @@ func (c *Config) Validate() error {
 	return validateMQTT(&c.North.MQTT)
 }
 
-// validateCentralName checks one central's name: present, unique among the
-// names already seen, and inside the allowlist the XML-RPC callback router
-// matches on. The name becomes a path segment of the callback URL announced to
-// this CCU, so a name the router cannot match produces a daemon that looks
-// healthy and never receives a single push event.
-func validateCentralName(idx int, name string, seen map[string]struct{}) error {
-	if name == "" {
-		return fmt.Errorf("config: centrals[%d].name: required", idx)
-	}
-	if err := hmtypes.ValidateCentralName(name); err != nil {
-		return fmt.Errorf("config: centrals[%d].name: %w", idx, err)
-	}
-	if _, dup := seen[name]; dup {
-		return fmt.Errorf("config: duplicate central name %q", name)
-	}
-	return nil
-}
-
 // centralHostLabel matches one DNS label. Underscores are tolerated —
 // nonstandard, but common on home LANs — and hyphens must stay inside
 // the label.
@@ -1930,6 +1969,54 @@ var centralHostLabel = regexp.MustCompile(`^[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-
 // path, query, fragment, credentials, or an embedded port must be
 // rejected at this trust boundary rather than silently reshaping those
 // URLs. The TCP port has its own config field.
+// validateCentralNames enforces the two independent rules a central name
+// has to satisfy, in that order:
+//
+//   - The set has to be distinguishable: every central carries a name, no
+//     two centrals share one, and no two collapse onto the single escaped
+//     segment the north-bound planes address them through. Two names that
+//     collapse onto the same segment would share every state topic, and an
+//     inbound command on that segment could not be attributed to a CCU at
+//     all.
+//   - Every individual name has to be routable south-bound: it becomes a
+//     path segment of the XML-RPC callback URL announced to that CCU
+//     (`/RPC2/<central_name>`), so a name outside the allowlist the
+//     callback router matches on yields a daemon that looks healthy and
+//     never receives a single push event.
+//
+// The set-level rule runs first because an operator who trips both is
+// better served by learning that two CCUs are indistinguishable — that is
+// the failure that silently mixes one CCU's data into another's — before
+// being told how to spell either name.
+func validateCentralNames(centrals []CentralConfig) error {
+	names := make(map[string]struct{}, len(centrals))
+	segments := make(map[string]string, len(centrals))
+	for i := range centrals {
+		name := centrals[i].Name
+		if name == "" {
+			return fmt.Errorf("config: centrals[%d].name: required", i)
+		}
+		if _, dup := names[name]; dup {
+			return fmt.Errorf("config: duplicate central name %q", name)
+		}
+		names[name] = struct{}{}
+		seg := naming.TopicSafe(name)
+		if other, dup := segments[seg]; dup {
+			return fmt.Errorf(
+				"config: centrals[%d].name %q collides with %q in the north-bound topic segment %q: rename one of them",
+				i, name, other, seg,
+			)
+		}
+		segments[seg] = name
+	}
+	for i := range centrals {
+		if err := hmtypes.ValidateCentralName(centrals[i].Name); err != nil {
+			return fmt.Errorf("config: centrals[%d].name: %w", i, err)
+		}
+	}
+	return nil
+}
+
 func validateCentralHost(idx int, host string) error {
 	// IP literal, bare or bracketed (IPv6 URL form).
 	candidate := host

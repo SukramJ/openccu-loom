@@ -1143,6 +1143,7 @@ const EN: Catalog = {
   "config.source.short.default": "default",
   "config.field.locale": "UI language",
   "config.field.data_dir": "Data directory",
+  "config.field.bootstrap.allow_first_run_setup": "Allow first-run setup",
   "config.field.logging.level": "Log level",
   "config.field.logging.format": "Log format",
   "config.field.logging.overrides": "Per-subsystem level overrides",
@@ -1336,6 +1337,8 @@ const EN: Catalog = {
     "Default UI language for the very first SPA load. Operators can flip per-user via the Settings tab.",
   "config.help.data_dir":
     "Root for SQLite database, sessions, backups, logs. Must be writable; created on first start.",
+  "config.help.bootstrap.allow_first_run_setup":
+    "Keeps the unauthenticated onboarding surface (/setup) reachable while no authentication source exists. Set to false to keep it closed even on a database with zero users — the deliberate consequence is a lockout that only a YAML edit plus restart undoes. Bootstrap tier: edit the config file, not here.",
   "config.help.logging.level":
     "Filter threshold for the structured logger. debug exposes wire-level traces; info is the typical operator level.",
   "config.help.logging.format":
@@ -2033,6 +2036,8 @@ const EN: Catalog = {
   "users.password_changed": "Password changed.",
   "users.role_changed": "Role updated.",
   "users.last_admin_error": "Cannot remove the last admin.",
+  "users.last_admin_demote_error": "Cannot demote the last admin.",
+  "users.exists_error": "A user with this name already exists.",
   "users.change_password": "Change password",
   "users.change_password_title": "Change password for {subject}",
   "users.new_password": "New password",
@@ -3694,6 +3699,7 @@ const EN: Catalog = {
   "areas.rooms_dialog.empty":
     "No rooms known yet — assign a room to a device first.",
   "areas.rooms_dialog.current_area": "currently: {name}",
+  "areas.toast.rooms_saved": "Rooms assigned.",
   // --- Security & Safety domain (notes/concepts/security-safety-concept.md §7.8).
   //     Classifier-driven hazard/fault classes, a fault ledger and the
   //     classified data-point inventory. Runs independently of the alarm
@@ -4984,6 +4990,7 @@ const DE: Catalog = {
   "config.source.short.default": "default",
   "config.field.locale": "Oberflächensprache",
   "config.field.data_dir": "Daten-Verzeichnis",
+  "config.field.bootstrap.allow_first_run_setup": "Ersteinrichtung erlauben",
   "config.field.logging.level": "Log-Level",
   "config.field.logging.format": "Log-Format",
   "config.field.logging.overrides": "Pro-Subsystem-Levelüberschreibungen",
@@ -5181,6 +5188,8 @@ const DE: Catalog = {
     "Standard-Sprache der SPA beim ersten Aufruf. Operatoren können pro Benutzer in den Einstellungen umschalten.",
   "config.help.data_dir":
     "Verzeichnis für SQLite-Datenbank, Sessions, Backups, Logs. Muss schreibbar sein; wird beim ersten Start angelegt.",
+  "config.help.bootstrap.allow_first_run_setup":
+    "Hält die unauthentifizierte Ersteinrichtung (/setup) erreichbar, solange keine Anmeldequelle existiert. Auf false gesetzt bleibt sie auch bei leerer Benutzertabelle geschlossen — die beabsichtigte Folge ist eine Aussperrung, die nur eine YAML-Änderung mit Neustart aufhebt. Bootstrap-Ebene: in der Konfigurationsdatei ändern, nicht hier.",
   "config.help.logging.level":
     "Filter-Schwelle des strukturierten Loggers. debug zeigt Wire-Level-Traces; info ist der typische Operator-Level.",
   "config.help.logging.format":
@@ -5886,6 +5895,9 @@ const DE: Catalog = {
   "users.password_changed": "Passwort geändert.",
   "users.role_changed": "Rolle aktualisiert.",
   "users.last_admin_error": "Letzter Admin kann nicht entfernt werden.",
+  "users.last_admin_demote_error":
+    "Letzter Admin kann nicht herabgestuft werden.",
+  "users.exists_error": "Ein Benutzer mit diesem Namen existiert bereits.",
   "users.change_password": "Passwort ändern",
   "users.change_password_title": "Passwort ändern für {subject}",
   "users.new_password": "Neues Passwort",
@@ -7538,6 +7550,7 @@ const DE: Catalog = {
   "areas.rooms_dialog.empty":
     "Noch keine Räume bekannt — weise zunächst einem Gerät einen Raum zu.",
   "areas.rooms_dialog.current_area": "aktuell: {name}",
+  "areas.toast.rooms_saved": "Räume zugewiesen.",
   // --- Sicherheit & Sicherheitstechnik (notes/concepts/security-safety-concept.md
   //     §7.8). Klassifikator-gesteuerte Gefahren-/Störungsklassen, ein
   //     Störungs-Ledger und das klassifizierte Datenpunkt-Inventar. Läuft

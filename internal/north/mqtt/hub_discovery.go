@@ -106,7 +106,7 @@ func hubDeviceBlock(centralName string, info HubInfo) map[string]any {
 		model = info.Model
 	}
 	block := map[string]any{
-		"identifiers":  []string{"openccu-loom_central_" + safeLower(centralName)},
+		"identifiers":  []string{centralDeviceIdentifier(centralName)},
 		"name":         name,
 		"manufacturer": "eQ-3",
 		"model":        model,
@@ -141,7 +141,7 @@ func hubEntityDeviceBlock(centralName, deviceAddress string, info HubInfo) map[s
 	}
 	return map[string]any{
 		"identifiers": []string{physicalDeviceIdentifier(deviceAddress)},
-		"via_device":  "openccu-loom_central_" + safeLower(centralName),
+		"via_device":  centralDeviceIdentifier(centralName),
 	}
 }
 
@@ -159,79 +159,13 @@ func hubNodeID(centralName, kind string) string {
 	return safeLower(centralName) + "_" + kind
 }
 
-// safeLower turns name into an HA-Discovery-safe identifier suitable
-// for the `<node_id>` and `<object_id>` segments of
-// `homeassistant/<component>/<node_id>/<object_id>/config` as well as
-// the `unique_id` / device-identifier fields in the payload. HA only
-// accepts `[A-Za-z0-9_-]+` for these segments — `:`, umlauts, spaces,
-// and other punctuation that CCU sysvar names routinely carry
-// (`Watchdog:_CCU-Jack`, `s0_Sensoren_Hülle_EG`, …) get HA to drop
-// the discovery message with a warning, so the entity never appears.
-//
-// Rules:
-//   - German umlauts and ß are transliterated (ü→ue, ö→oe, ä→ae,
-//     ß→ss) before the case fold so meaningful identifiers survive
-//     the slug step (`Hülle` → `huelle` rather than `h_lle`).
-//   - All remaining bytes outside `[A-Za-z0-9_-]` collapse to a single
-//     `_`; runs are de-duplicated; leading/trailing `_` are trimmed.
-//   - Empty input or input that reduces to "" returns "x" so callers
-//     never emit a zero-length segment that HA would reject.
+// safeLower is the package-local spelling of the shared discovery slug
+// [naming.DiscoverySlug]. Hub node ids, object ids and identifier
+// fields, per-device node ids and the retained-config orphan sweep all
+// go through that one function, so a central name can never appear
+// under two different discovery spellings.
 func safeLower(s string) string {
-	if s == "" {
-		return "x"
-	}
-	var out strings.Builder
-	out.Grow(len(s))
-	prevUnderscore := false
-	emit := func(r rune) {
-		out.WriteRune(r)
-		prevUnderscore = r == '_'
-	}
-	flush := func() {
-		if !prevUnderscore {
-			out.WriteByte('_')
-			prevUnderscore = true
-		}
-	}
-	for _, r := range s {
-		switch r {
-		case 'ä':
-			emit('a')
-			emit('e')
-		case 'ö':
-			emit('o')
-			emit('e')
-		case 'ü':
-			emit('u')
-			emit('e')
-		case 'Ä':
-			emit('a')
-			emit('e')
-		case 'Ö':
-			emit('o')
-			emit('e')
-		case 'Ü':
-			emit('u')
-			emit('e')
-		case 'ß':
-			emit('s')
-			emit('s')
-		default:
-			switch {
-			case r >= 'A' && r <= 'Z':
-				emit(r + ('a' - 'A'))
-			case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_':
-				emit(r)
-			default:
-				flush()
-			}
-		}
-	}
-	res := strings.Trim(out.String(), "_")
-	if res == "" {
-		return "x"
-	}
-	return res
+	return naming.DiscoverySlug(s)
 }
 
 // hubSerial returns the per-central serial discriminator for hub
@@ -878,7 +812,7 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 	// uid/translation. The retained STATE topic stays at
 	// `/system/health_score` (publisher contract unchanged).
 	uniqueID := hubAggregateUniqueID(serial10, "system_health")
-	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/health_score"
+	topic := d.TopicBuilder.HubSystemHealthScore(centralName)
 	body := map[string]any{
 		"name":                        d.tr("discovery.system_health"),
 		"unique_id":                   uniqueID,
@@ -918,7 +852,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName st
 		return DiscoveryItem{}
 	}
 	uniqueID := hubAggregateUniqueID(serial10, "connection_latency")
-	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/latency"
+	topic := d.TopicBuilder.HubConnectionLatency(centralName)
 	body := map[string]any{
 		"name":                        d.tr("discovery.connection_latency"),
 		"unique_id":                   uniqueID,

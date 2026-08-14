@@ -328,6 +328,13 @@ type ProtocolHeader struct {
 }
 
 // Marshal encodes the protocol header into a fresh byte slice.
+//
+// Field order follows Core Spec §4.4.3: exchange flags, protocol opcode,
+// exchange id, vendor id (only when the V flag is set), protocol id, ack
+// counter (only when the A flag is set). The vendor id precedes the protocol
+// id because the two together form the 32-bit protocol identifier
+// vendorID*0x10000 + protocolID.
+// Mirrors matter.js packages/protocol/src/codec/MessageCodec.ts:encodePayloadHeader.
 func (h ProtocolHeader) Marshal() []byte {
 	buf := make([]byte, 0, 12)
 	flags := byte(0)
@@ -348,10 +355,10 @@ func (h ProtocolHeader) Marshal() []byte {
 	}
 	buf = append(buf, flags, h.Opcode)
 	buf = binary.LittleEndian.AppendUint16(buf, h.ExchangeID)
-	buf = binary.LittleEndian.AppendUint16(buf, h.ProtocolID)
 	if h.HasVendorID {
 		buf = binary.LittleEndian.AppendUint16(buf, h.VendorID)
 	}
+	buf = binary.LittleEndian.AppendUint16(buf, h.ProtocolID)
 	if h.HasAck {
 		buf = binary.LittleEndian.AppendUint32(buf, h.AckCounter)
 	}
@@ -363,10 +370,15 @@ func (h ProtocolHeader) Marshal() []byte {
 
 // UnmarshalProtocolHeader decodes a Matter Protocol Header. Returns
 // the header and bytes consumed.
+//
+// The vendor id sits between the exchange id and the protocol id, so a
+// V-flagged header needs eight fixed bytes rather than six; both 16-bit
+// reads therefore carry their own bounds check.
+// Mirrors matter.js packages/protocol/src/codec/MessageCodec.ts:decodePayloadHeader.
 func UnmarshalProtocolHeader(buf []byte) (ProtocolHeader, int, error) {
-	const fixed = 1 + 1 + 2 + 2 // flags + opcode + exchID + protID
-	if len(buf) < fixed {
-		return ProtocolHeader{}, 0, fmt.Errorf("%w: protocol header needs %d bytes, got %d", ErrTruncated, fixed, len(buf))
+	const base = 1 + 1 + 2 // flags + opcode + exchID
+	if len(buf) < base {
+		return ProtocolHeader{}, 0, fmt.Errorf("%w: protocol header needs %d bytes, got %d", ErrTruncated, base, len(buf))
 	}
 	flags := buf[0]
 	h := ProtocolHeader{
@@ -377,9 +389,8 @@ func UnmarshalProtocolHeader(buf []byte) (ProtocolHeader, int, error) {
 		HasVendorID:   flags&exchFlagVendor != 0,
 		Opcode:        buf[1],
 		ExchangeID:    binary.LittleEndian.Uint16(buf[2:]),
-		ProtocolID:    binary.LittleEndian.Uint16(buf[4:]),
 	}
-	pos := fixed
+	pos := base
 	if h.HasVendorID {
 		if len(buf) < pos+2 {
 			return ProtocolHeader{}, 0, fmt.Errorf("%w: vendor id", ErrTruncated)
@@ -387,6 +398,11 @@ func UnmarshalProtocolHeader(buf []byte) (ProtocolHeader, int, error) {
 		h.VendorID = binary.LittleEndian.Uint16(buf[pos:])
 		pos += 2
 	}
+	if len(buf) < pos+2 {
+		return ProtocolHeader{}, 0, fmt.Errorf("%w: protocol id", ErrTruncated)
+	}
+	h.ProtocolID = binary.LittleEndian.Uint16(buf[pos:])
+	pos += 2
 	if h.HasAck {
 		if len(buf) < pos+4 {
 			return ProtocolHeader{}, 0, fmt.Errorf("%w: ack counter", ErrTruncated)

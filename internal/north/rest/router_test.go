@@ -700,6 +700,34 @@ func TestRouter_OIDC_branch(t *testing.T) {
 	}
 }
 
+// TestRouter_OIDCStartRateLimited pins that the pre-auth OIDC start route
+// carries the same per-IP speed bump as the login POST. Every call mints a
+// PKCE verifier plus nonce that the daemon has to hold for the full state
+// TTL, so an unthrottled sweep grows the state map at the caller's rate.
+func TestRouter_OIDCStartRateLimited(t *testing.T) {
+	t.Parallel()
+	r := NewRouter(Deps{
+		StartedAt:      time.Now(),
+		OIDC:           &handlers.OIDCDeps{},
+		LoginRateLimit: middleware.NewLoginRateLimiter(),
+	})
+
+	limited := false
+	for range 20 {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/start", http.NoBody)
+		req.RemoteAddr = "203.0.113.7:5555"
+		r.ServeHTTP(rr, req)
+		if rr.Code == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Error("GET /auth/oidc/start is never rate limited")
+	}
+}
+
 // TestRouter_UISchema_route confirms the ui-schema route is registered when
 // the dep is wired and absent when it is nil.
 func TestRouter_UISchema_route(t *testing.T) {
@@ -1047,7 +1075,10 @@ func TestRouter_Capture_route(t *testing.T) {
 	}
 }
 
-// TestRouter_ValuesCache_route verifies admin/values-cache routes are guarded.
+// TestRouter_ValuesCache_route verifies the admin/values-cache routes are
+// mounted and report the disabled cache as 503 rather than as a 404 an
+// operator cannot tell apart from a mistyped URL. `service_unready` is what
+// assets/openapi.yaml documents for "cache feature disabled or store unwired".
 func TestRouter_ValuesCache_route(t *testing.T) {
 	t.Parallel()
 	withDep := NewRouter(Deps{StartedAt: time.Now(), ValuesCache: fakeValuesCacheService{}})
@@ -1056,12 +1087,14 @@ func TestRouter_ValuesCache_route(t *testing.T) {
 	}
 
 	withoutDep := NewRouter(Deps{StartedAt: time.Now()})
-	if code := routerGET(withoutDep, "/api/v1/admin/values-cache/stats"); code != http.StatusNotFound {
-		t.Fatalf("expected 404 without ValuesCache dep, got %d", code)
+	if code := routerGET(withoutDep, "/api/v1/admin/values-cache/stats"); code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 without ValuesCache dep, got %d", code)
 	}
 }
 
-// TestRouter_DeviceLookup_route verifies per-device reset is guarded by DeviceLookup.
+// TestRouter_DeviceLookup_route verifies per-device reset needs both the cache
+// and the lookup, and reports a missing one as 503 — never as a "device not
+// found" verdict about a device it never looked for.
 func TestRouter_DeviceLookup_route(t *testing.T) {
 	t.Parallel()
 	withBoth := NewRouter(Deps{
@@ -1078,8 +1111,8 @@ func TestRouter_DeviceLookup_route(t *testing.T) {
 	withoutLookup := NewRouter(Deps{StartedAt: time.Now(), ValuesCache: fakeValuesCacheService{}})
 	rr = httptest.NewRecorder()
 	withoutLookup.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/devices/A/values-cache/reset", http.NoBody))
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 without DeviceLookup dep, got %d", rr.Code)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 without DeviceLookup dep, got %d", rr.Code)
 	}
 }
 

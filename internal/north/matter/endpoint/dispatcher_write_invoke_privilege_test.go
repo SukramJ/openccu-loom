@@ -25,6 +25,24 @@ func (stubACLStore) ReplaceACL(_ context.Context, _ uint8, _ []store.ACLEntry) e
 
 var _ mattercore.ACLStoreFacade = stubACLStore{}
 
+// recordingACLStore is a [mattercore.ACLStoreFacade] that counts
+// ReplaceACL calls, so a test can assert that a denied write never
+// reached the persistent ACL table.
+type recordingACLStore struct {
+	replaced int
+}
+
+func (r *recordingACLStore) ListACL(_ context.Context, _ uint8) ([]store.ACLEntry, error) {
+	return nil, nil
+}
+
+func (r *recordingACLStore) ReplaceACL(_ context.Context, _ uint8, _ []store.ACLEntry) error {
+	r.replaced++
+	return nil
+}
+
+var _ mattercore.ACLStoreFacade = (*recordingACLStore)(nil)
+
 // stubOpCredsStore is a minimal [mattercore.StoreFacade] used only to
 // construct a real OperationalCredentials cluster server. Same rationale
 // as [stubACLStore]: MinInvokePrivilege dispatches on cmdID alone.
@@ -351,5 +369,111 @@ func TestHandleWriteRequest_OperateAttributeNotBlockedByPrivilegeGate(t *testing
 	}
 	if got := resp.Responses[0].Status.Status; got != im.StatusSuccess {
 		t.Errorf("Operate-fabric write to a non-elevated attribute: status = 0x%02X, want StatusSuccess (the fake cluster's write always succeeds)", got)
+	}
+}
+
+// TestHandleWriteRequest_RejectsWildcardAttributePath proves that a write
+// whose path omits the attribute id never reaches a cluster server. The
+// requested path carries no attribute, so no per-attribute write privilege
+// can be resolved before dispatch; an Operate-only subject would otherwise
+// pass a flat Operate gate and then have the value fanned out over every
+// attribute the cluster exposes — including AccessControl.ACL, which is
+// Administer-gated. Matter reserves wildcard paths for Read/Subscribe;
+// mirrors matter.js
+// packages/protocol/src/action/server/AttributeWriteResponse.ts:278-283
+// ("Wildcard path write must specify a clusterId and attributeId") and
+// :308-311 ("Wildcard path write must specify an attributeId").
+func TestHandleWriteRequest_RejectsWildcardAttributePath(t *testing.T) {
+	t.Parallel()
+	aclStore := &recordingACLStore{}
+	acl, err := mattercore.NewAccessControl(aclStore)
+	if err != nil {
+		t.Fatalf("NewAccessControl: %v", err)
+	}
+	topo := &Topology{
+		Endpoints: []*Endpoint{
+			{ID: 0, RootClusterServers: []interfaces.MatterClusterServer{acl}},
+			{ID: 1, DeviceType: 0x000E},
+		},
+		NodeLabel: "test", VendorID: 0xFFF1, ProductID: 0x8000,
+	}
+	d := NewTopologyDispatcher(topo)
+	d.SetACLLister(fakeACLLister{entries: []store.ACLEntry{caseEntry(1, store.PrivilegeOperate, nil)}})
+
+	// Wildcard attribute: endpoint + cluster named, attribute omitted.
+	wildcardAttr := im.ConcreteAttributePath{
+		Endpoint: 0, HasEndpoint: true,
+		Cluster: 0x001F, HasCluster: true,
+	}
+	entries := []mattercore.AccessControlEntryStruct{
+		{Privilege: 5, AuthMode: 2, Subjects: []uint64{0x0000000000010001}},
+	}
+	req := im.WriteRequest{
+		Writes: []im.AttributeWrite{
+			{Path: wildcardAttr, Value: im.AttributeValue{Value: entries}},
+		},
+	}
+	resp := im.HandleWriteRequest(privilegeEnforcementCtx(), d, req)
+	if aclStore.replaced != 0 {
+		t.Errorf("wildcard-attribute write from an Operate-only subject rewrote the ACL table (%d ReplaceACL calls); the Administer gate was bypassed", aclStore.replaced)
+	}
+	if len(resp.Responses) != 1 {
+		t.Fatalf("want 1 response, got %d", len(resp.Responses))
+	}
+	if got := resp.Responses[0].Status.Status; got != im.StatusInvalidAction {
+		t.Errorf("wildcard-attribute write: status = 0x%02X, want StatusInvalidAction (0x%02X)", got, im.StatusInvalidAction)
+	}
+}
+
+// TestHandleWriteRequest_WildcardEndpointAuthorizesEveryResolvedEndpoint
+// proves that a wildcard-endpoint write is authorized where it resolves,
+// not against the un-expanded request path. The subject's only ACE targets
+// endpoint 0, so the write must land on endpoint 0 and be silently skipped
+// on the bridged endpoint — a wildcard path discloses only authorized
+// locations. Mirrors matter.js
+// packages/protocol/src/action/server/AttributeWriteResponse.ts:324-343
+// (#writeAttributeForWildcard authorizes each resolved attribute at its own
+// location and returns without a status on denial).
+func TestHandleWriteRequest_WildcardEndpointAuthorizesEveryResolvedEndpoint(t *testing.T) {
+	t.Parallel()
+	rootSrv := &recordingServer{id: plainClusterID}
+	bridgedSrv := &recordingServer{id: plainClusterID}
+	topo := &Topology{
+		Endpoints: []*Endpoint{
+			{ID: 0, RootClusterServers: []interfaces.MatterClusterServer{rootSrv}},
+			{ID: 1, DeviceType: 0x000E},
+			{ID: 3, Source: recordingSource{srv: bridgedSrv}},
+		},
+		NodeLabel: "test", VendorID: 0xFFF1, ProductID: 0x8000,
+	}
+	d := NewTopologyDispatcher(topo)
+	onlyRoot := uint16(0)
+	d.SetACLLister(fakeACLLister{entries: []store.ACLEntry{
+		caseEntry(1, store.PrivilegeOperate, []store.ACLTarget{{Endpoint: &onlyRoot}}),
+	}})
+
+	// Wildcard endpoint, concrete cluster + attribute (Thermostat
+	// OccupiedHeatingSetpoint, access "RW VO").
+	wildcardEndpoint := im.ConcreteAttributePath{
+		Cluster: plainClusterID, HasCluster: true,
+		Attribute: 0x0012, HasAttribute: true,
+	}
+	req := im.WriteRequest{
+		Writes: []im.AttributeWrite{
+			{Path: wildcardEndpoint, Value: im.AttributeValue{Value: int16(2000)}},
+		},
+	}
+	resp := im.HandleWriteRequest(privilegeEnforcementCtx(), d, req)
+
+	if len(bridgedSrv.writeCalls) != 0 {
+		t.Errorf("wildcard-endpoint write reached endpoint 3 (calls=%v), which the subject's ACE targets do not cover", bridgedSrv.writeCalls)
+	}
+	if len(rootSrv.writeCalls) != 1 {
+		t.Errorf("wildcard-endpoint write on the authorized endpoint 0: calls=%v, want exactly one", rootSrv.writeCalls)
+	}
+	for _, r := range resp.Responses {
+		if r.Path.Endpoint != 0 {
+			t.Errorf("wildcard-endpoint write disclosed a status for the unauthorized endpoint %d", r.Path.Endpoint)
+		}
 	}
 }

@@ -341,10 +341,7 @@ func (e *Engine) restorePending(ctx context.Context, a *zone, timers []persisted
 	}
 	t := findTimer(timers, timerKindEntry)
 	if t == nil || time.UnixMilli(t.DeadlineMS).Sub(now) <= 0 {
-		cause := incidentCause{Kind: causeKindPendingElapsed, SensorID: a.pendingCause}
-		if s, ok := a.sensors[a.pendingCause]; ok {
-			cause.SensorName = s.row.Name
-		}
+		cause := pendingElapsedCause(a)
 		a.state = hmenum.AlarmZoneStateArmed // trigger() records the transition from an armed-side state
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassTrigger, Event: "pending_elapsed_while_down",
@@ -466,12 +463,10 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *zone, timers []persist
 	if degraded {
 		e.journalFault(ctx, a, "restart_loop_breaker_degraded", nil, inc.ID)
 	}
-	if err := e.outputs.FireCycle(ctx, a.id, *inc, FireOptions{
+	e.fireCycle(ctx, a, *inc, FireOptions{
 		Cycle: inc.RetriggerCycles, Degraded: degraded, Restored: true,
 		Policy: policy,
-	}); err != nil {
-		e.journalFault(ctx, a, "output_fire_failed", err, inc.ID)
-	}
+	})
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassTrigger, Event: "triggered_restored",
 		IncidentID: inc.ID,
@@ -595,9 +590,7 @@ func (e *Engine) reEvaluateAfterRestore(ctx context.Context, a *zone) {
 			Class: hmenum.AlarmJournalClassTrigger, Event: "activation_during_downtime",
 			Details: map[string]any{"sensor_id": id},
 		})
-		e.routeActivation(ctx, a, s, incidentCause{
-			Kind: causeKindDowntime, SensorID: id, SensorName: s.row.Name,
-		})
+		e.routeActivation(ctx, a, s, causeFromSensor(causeKindDowntime, s.row))
 	}
 }
 

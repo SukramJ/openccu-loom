@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -87,8 +88,12 @@ import (
 func TestDevicePlaneTopicsRoundTrip(t *testing.T) {
 	t.Parallel()
 	const (
-		base    = "gh"
-		central = "ccu"
+		base = "gh"
+		// A name the topic escaping actually rewrites. With a bare ASCII
+		// fixture a hand-assembled segment is indistinguishable from the
+		// shared builder's output, so the guard cannot see the drift it
+		// exists to catch.
+		central = "CCU Küche"
 		iface   = "HmIP-RF"
 		addr    = "ABCD1234"
 	)
@@ -288,8 +293,13 @@ func devicePublishedTopics(base, central, iface, addr string) map[string]bool {
 // and every `+` before it substituted by central/iface/addr. Built as
 // a plain string — see the doc comment on [devicePublishedTopics] for
 // why this must NOT call a [TopicBuilder] method instead.
+//
+// The central `+` is substituted with the escaped name, because that is the
+// segment a real publisher writes and therefore the only one the wildcard
+// can ever match. Substituting the raw name would make the mirror agree with
+// a discovery payload that had skipped the escaping.
 func devWildcardCommand(base, central, iface, addr string, channel int, segments ...string) string {
-	parts := append([]string{base, central, iface, addr, strconv.Itoa(channel)}, segments...)
+	parts := append([]string{base, naming.TopicSafe(central), iface, addr, strconv.Itoa(channel)}, segments...)
 	return strings.Join(parts, "/")
 }
 

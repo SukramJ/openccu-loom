@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
@@ -480,6 +481,45 @@ func (h *Hub) Sysvar(name string) (*Sysvar, bool) {
 	defer h.mu.RUnlock()
 	s, ok := h.sysvars[name]
 	return s, ok
+}
+
+// SysvarByTopicSegment resolves the `<name>` segment of a sysvar MQTT
+// topic back to the sysvar it was built from.
+//
+// The topic segment is [naming.TopicSafe]d, so a CCU sysvar named
+// `Außen Temperatur` is declared — and therefore written to — as
+// `Außen_Temperatur`. An exact map lookup on that segment misses, and
+// every command published to the topic the discovery payload itself
+// advertised was dropped as "unknown sysvar".
+//
+// The exact name is tried first (the common case, and the shape every
+// non-MQTT caller passes), then the unique sysvar whose escaped name
+// equals the segment. Two names that collapse onto the same segment
+// resolve to nothing: refusing an ambiguous write is safer than
+// picking one of the two at random.
+func (h *Hub) SysvarByTopicSegment(seg string) (*Sysvar, bool) {
+	if seg == "" {
+		return nil, false
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if s, ok := h.sysvars[seg]; ok {
+		return s, true
+	}
+	var (
+		found   *Sysvar
+		matches int
+	)
+	for name, s := range h.sysvars {
+		if naming.TopicSafe(name) == seg {
+			found = s
+			matches++
+		}
+	}
+	if matches != 1 {
+		return nil, false
+	}
+	return found, true
 }
 
 // Sysvars returns every registered sysvar sorted by Name.

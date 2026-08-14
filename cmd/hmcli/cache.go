@@ -243,15 +243,17 @@ func runCacheClearOffline(
 
 	ctx := context.Background()
 	if kind == cachereset.ScopeDevice {
-		if errV := valStore.DeleteDevice(ctx, central, iface, device); errV != nil {
-			sum.errors = append(sum.errors, fmt.Sprintf("values[%s/%s]: %v", central, iface, errV))
+		// The cached rows are keyed by the canonical `<central>-<interface>`
+		// id, not by the bare interface the operator types.
+		wireIface := cachereset.StoreInterfaceID(central, iface)
+		if errV := valStore.DeleteDevice(ctx, central, wireIface, device); errV != nil {
+			sum.errors = append(sum.errors, fmt.Sprintf("values[%s/%s]: %v", central, wireIface, errV))
 		}
-		if errM := masterStore.DeleteDevice(ctx, central, iface, device); errM != nil {
-			sum.errors = append(sum.errors, fmt.Sprintf("master[%s/%s]: %v", central, iface, errM))
+		if errM := masterStore.DeleteDevice(ctx, central, wireIface, device); errM != nil {
+			sum.errors = append(sum.errors, fmt.Sprintf("master[%s/%s]: %v", central, wireIface, errM))
 		}
 		// The device-scoped deletes do not report row counts; leave them at 0.
-		printSummary(stdout, sum, true)
-		return nil
+		return finishOfflineClear(stdout, sum)
 	}
 
 	units, err := resolveOfflineUnits(kind, central, iface, cfg)
@@ -273,7 +275,24 @@ func runCacheClearOffline(
 		}
 	}
 
+	return finishOfflineClear(stdout, sum)
+}
+
+// finishOfflineClear prints the offline roll-up and turns any collected
+// per-store failure into a returned error, so both offline exit paths report
+// the same way and cannot drift apart.
+//
+// A clear that could not delete some rows must not exit 0: the operator only
+// sees the failure lines when a human reads stdout, while a maintenance script
+// or an ExecStartPre hook checks the exit code alone and would proceed with a
+// cache that is still populated. This mirrors the daemon's own reset service,
+// which fails the request when its report carries errors, and which the online
+// path already surfaces as a non-2xx response.
+func finishOfflineClear(stdout io.Writer, sum clearSummary) error {
 	printSummary(stdout, sum, true)
+	if len(sum.errors) > 0 {
+		return fmt.Errorf("cache clear (offline, scope=%s): %s", sum.scope, strings.Join(sum.errors, "; "))
+	}
 	return nil
 }
 
@@ -316,10 +335,15 @@ func resolveOfflineDSN(kind cachereset.ScopeKind, cfgPath, dbOverride string) (d
 // resolveOfflineUnits expands a non-device scope into the (central, interface)
 // pairs to clear. global/central enumerate from the loaded config; interface
 // uses the explicit qualifiers and needs no config.
+//
+// Every unit's interface is normalized to the canonical
+// [cachereset.StoreInterfaceID]: the config names interfaces bare while every
+// cached row is keyed by the `<central>-<interface>` wire id, so deleting with
+// the config name matches nothing at all.
 func resolveOfflineUnits(kind cachereset.ScopeKind, central, iface string, cfg *config.Config) ([]ifaceUnit, error) {
 	switch kind {
 	case cachereset.ScopeInterface:
-		return []ifaceUnit{{central: central, iface: iface}}, nil
+		return []ifaceUnit{{central: central, iface: cachereset.StoreInterfaceID(central, iface)}}, nil
 	case cachereset.ScopeGlobal:
 		if cfg == nil {
 			return nil, errors.New("cache clear: --config required to enumerate centrals for scope=global")
@@ -328,7 +352,10 @@ func resolveOfflineUnits(kind cachereset.ScopeKind, central, iface string, cfg *
 		for i := range cfg.Centrals {
 			cc := &cfg.Centrals[i]
 			for j := range cc.Interfaces {
-				units = append(units, ifaceUnit{central: cc.Name, iface: cc.Interfaces[j].Name})
+				units = append(units, ifaceUnit{
+					central: cc.Name,
+					iface:   cachereset.StoreInterfaceID(cc.Name, cc.Interfaces[j].Name),
+				})
 			}
 		}
 		return units, nil
@@ -343,7 +370,10 @@ func resolveOfflineUnits(kind cachereset.ScopeKind, central, iface string, cfg *
 			}
 			units := make([]ifaceUnit, 0, len(cc.Interfaces))
 			for j := range cc.Interfaces {
-				units = append(units, ifaceUnit{central: cc.Name, iface: cc.Interfaces[j].Name})
+				units = append(units, ifaceUnit{
+					central: cc.Name,
+					iface:   cachereset.StoreInterfaceID(cc.Name, cc.Interfaces[j].Name),
+				})
 			}
 			return units, nil
 		}

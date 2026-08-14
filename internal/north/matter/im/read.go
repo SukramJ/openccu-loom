@@ -130,9 +130,11 @@ func UnmarshalReadRequestTLV(dec *tlv.Decoder) (ReadRequest, error) { //nolint:g
 			}
 			req.EventRequests = paths
 		case tagReadReqEventFilters:
-			// EventFilters: Array of EventFilterIB structs per Matter §10.6.4.
-			// Each entry carries NodeID (tag 1, optional) and EventMin (tag 2,
-			// mandatory). Mirrors chip src/app/ReadHandler.cpp:598 ProcessEventFilters.
+			// EventFilters: Array of EventFilterIB structs per Matter §10.6.9.
+			// Each entry carries NodeID (tag 0, optional) and EventMin (tag 1,
+			// mandatory) — matter.js
+			// packages/types/src/protocol/types/TlvEventFilter.ts:16-17.
+			// Mirrors chip src/app/ReadHandler.cpp:598 ProcessEventFilters.
 			if !el.IsContainer || el.Type != tlv.TypeArray {
 				// Malformed but non-fatal: skip the field.
 				if err := skipContainer(dec); err != nil {

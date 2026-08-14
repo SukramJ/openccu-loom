@@ -225,6 +225,31 @@ type ResumptionStore interface {
 // scenarios without tracking the CASE vs. PASE state machine.
 const SessionIdleTimeout = 5 * time.Minute
 
+// PlaceholderIDTTL is how long a session id staked by
+// [Manager.AllocateID] survives without the handshake that reserved it
+// reaching [Manager.OpenFromSigmaWithID]. Past it the reaper hands the
+// slot back.
+//
+// matter.js has no equivalent because it never reserves an id ahead of
+// the session: `getNextAvailableSessionId`
+// (packages/protocol/src/session/SessionManager.ts:490) is called at
+// the moment the secure session is created. Our CASE responder must
+// announce the id in Sigma2, one round-trip earlier, so an aborted
+// handshake leaves an id behind and something has to reclaim it —
+// otherwise a peer that opens exchanges and never answers Sigma2 walks
+// the daemon through all 65534 slots and every later CASE handshake,
+// legitimate ones included, is refused until a restart.
+//
+// The value must outlive every window in which the staked id can still
+// be claimed, because reclaiming one early would hand a live handshake
+// an id another session already owns. Two such windows exist: the
+// bridge's per-exchange CASE adapter TTL (60 s — past it the handshake
+// can never complete) and a commissioning window, whose PASE
+// placeholder is staked when the window opens and claimed only when
+// PASE completes, up to the spec maximum of 15 minutes later
+// (Matter §5.4.2.3).
+const PlaceholderIDTTL = 20 * time.Minute
+
 // Entry pairs a [channel.Session] with its operational metadata.
 type Entry struct {
 	// SessionID is the local 16-bit session identifier carried in
@@ -247,6 +272,13 @@ type Entry struct {
 	// HKDF-SHA256(IKM=Ke, info="SessionKeys") output; for CASE it
 	// comes from the Sigma key schedule.
 	AttestationChallenge []byte
+	// allocatedAt is when [Manager.AllocateID] staked this entry as a
+	// placeholder for an in-flight handshake. It stays zero for
+	// entries that were opened with a session directly. Guarded by the
+	// manager's mu (not the entry's) — written once at allocation and
+	// read by the reaper and the id allocator, both of which already
+	// hold that lock.
+	allocatedAt time.Time
 	// lastActivity is updated on every inbound Decrypt and outbound
 	// Encrypt call so the reaper can evict long-idle entries.
 	// Mirrors chip src/transport/SecureSession.h:240-248 MarkActive /
@@ -468,7 +500,9 @@ func (m *Manager) OpenFromSigma(fabricIndex uint8, localNodeID, peerNodeID uint6
 // constructing a Session under it. The caller is responsible for
 // passing the same id back to [Manager.OpenFromSigmaWithID] before
 // the slot is reaped — and for releasing the slot via [Manager.ReleaseID]
-// if the handshake aborts before reaching key derivation.
+// if the handshake aborts before reaching key derivation. A handshake
+// that does neither loses the slot to the reaper after
+// [PlaceholderIDTTL].
 //
 // CASE responders need to know their allocated id BEFORE Sigma2 is
 // built, because Sigma2.responderSessionID is what the commissioner
@@ -484,8 +518,10 @@ func (m *Manager) AllocateID() (uint16, error) {
 		return 0, err
 	}
 	// Stake a placeholder so concurrent allocators do not hand the
-	// same id out twice; OpenFromSigmaWithID overwrites it.
-	m.sessions[id] = &Entry{SessionID: id}
+	// same id out twice; OpenFromSigmaWithID overwrites it. The stamp
+	// is what lets the reaper tell an in-flight handshake from one
+	// that was abandoned — see [PlaceholderIDTTL].
+	m.sessions[id] = &Entry{SessionID: id, allocatedAt: time.Now()}
 	return id, nil
 }
 
@@ -542,9 +578,13 @@ func (m *Manager) OpenFromSigmaWithID(id uint16, fabricIndex uint8, localNodeID,
 	stale := m.collectStalePeerSessionsLocked(fabricIndex, peerNodeID)
 	// The pre-allocated id is in m.sessions as a placeholder Entry
 	// (Session==nil) — collectStalePeerSessionsLocked filters those
-	// out, so the placeholder survives. Overwrite it with the real
-	// entry next.
-	m.sessions[id] = entry
+	// out, so the placeholder survives until it is overwritten here. A
+	// LIVE session of a DIFFERENT peer can hold the slot too (the
+	// stale collection only removes this same (fabric, peer)); it goes
+	// through the eviction cascade rather than being dropped silently.
+	if occupant := m.installEntryLocked(id, entry); occupant != nil {
+		stale = append(stale, occupant)
+	}
 	m.mu.Unlock()
 	// Graceful CloseSession to the evicted stale session's peer before
 	// key zeroise — see OpenFromSigma for the matter.js provenance. No
@@ -642,19 +682,63 @@ func (m *Manager) OpenFromPaseWithID(id uint16, localNodeID, peerNodeID uint64, 
 		isPase:               true,
 	}
 	m.mu.Lock()
-	// The pre-allocated id is in m.sessions as a placeholder Entry
-	// (Session==nil). Overwrite it with the real entry.
-	m.sessions[id] = entry
+	displaced := m.installEntryLocked(id, entry)
 	m.mu.Unlock()
+	if displaced != nil {
+		m.notifyGracefulClose([]*Entry{displaced}, time.Time{})
+		closeStaleEntries([]*Entry{displaced})
+		m.fireOnSessionClose([]*Entry{displaced})
+	}
 	return entry, nil
 }
 
-// Get looks up a session by id.
+// installEntryLocked registers entry under id and returns the LIVE
+// session it displaced, if any, for the caller to run through the
+// close cascade outside the lock. Returns nil when the slot was free
+// or held only the placeholder [Manager.AllocateID] staked.
+//
+// A live occupant is never simply overwritten: dropping it from the
+// table leaves its key material live and its subscriptions registered
+// against an id that now belongs to somebody else, so the report pump
+// would keep serving the old peer's subscriptions under the new peer's
+// keys. Mirrors matter.js
+// packages/protocol/src/session/SessionManager.ts:490-508, where
+// getNextAvailableSessionId closes a session before reusing its id.
+//
+// The caller must hold m.mu in write mode.
+func (m *Manager) installEntryLocked(id uint16, entry *Entry) *Entry {
+	displaced := m.sessions[id]
+	m.sessions[id] = entry
+	if displaced == nil || displaced.Session == nil {
+		return nil
+	}
+	return displaced
+}
+
+// Get looks up an established session by id.
+//
+// An id that [Manager.AllocateID] has merely reserved — the CASE/PASE
+// handshake that claimed it has not reached key derivation, or aborted
+// before it — is reported as [ErrSessionNotFound]. The reservation is a
+// placeholder with no Session under it, and every caller of Get uses the
+// entry to reach that Session: handing the stub out reads to them as "a
+// usable session exists", so a peer that echoes its pre-allocated
+// responderSessionID back in an ordinary secure datagram makes the
+// receive path dereference a nil session and panic. The panic is
+// swallowed by the listener's per-datagram recover, so the only symptom
+// is a controller whose messages vanish.
+//
+// Mirrors matter.js packages/protocol/src/session/SessionManager.ts:513
+// getSession, whose map holds only constructed sessions — it reserves an
+// id by asserting getSession(id) is undefined rather than by staking a
+// stub, so a reserved id resolves to nothing there. The stub is ours
+// alone (it keeps two concurrent allocators apart); keeping it out of
+// Get restores the same observable contract.
 func (m *Manager) Get(sessionID uint16) (*Entry, error) {
 	m.mu.RLock()
 	entry, ok := m.sessions[sessionID]
 	m.mu.RUnlock()
-	if !ok {
+	if !ok || entry == nil || entry.Session == nil {
 		return nil, ErrSessionNotFound
 	}
 	return entry, nil
@@ -709,7 +793,11 @@ func (m *Manager) Close(sessionID uint16) error {
 	}
 	delete(m.sessions, sessionID)
 	m.mu.Unlock()
-	entry.Session.Close()
+	// A pre-allocated id whose handshake never reached key derivation has
+	// no Session under it; dropping the reservation is the whole teardown.
+	if entry.Session != nil {
+		entry.Session.Close()
+	}
 	m.fireOnSessionClose([]*Entry{entry})
 	m.fireReannounceIfPeerGone([]*Entry{entry})
 	return nil
@@ -925,12 +1013,24 @@ func (m *Manager) StartReaper(ctx context.Context, idleTimeout, poll time.Durati
 // is older than idleTimeout. Only entries with an established channel
 // and a non-zero last-activity time are considered.
 func (m *Manager) reapIdle(idleTimeout time.Duration) {
-	cutoff := time.Now().Add(-idleTimeout)
+	now := time.Now()
+	cutoff := now.Add(-idleTimeout)
+	placeholderCutoff := now.Add(-PlaceholderIDTTL)
 	m.mu.Lock()
 	var victims []*Entry
 	for id, e := range m.sessions {
 		if e.Session == nil {
-			continue // placeholder — handshake in progress
+			// Placeholder for a handshake that has not opened its
+			// session yet. Young ones belong to a handshake still in
+			// flight; past [PlaceholderIDTTL] nothing can claim the id
+			// any more, so it goes back into circulation. There is no
+			// session to close and no peer to notify — the entry is
+			// dropped silently rather than routed through the close
+			// cascade.
+			if !e.allocatedAt.IsZero() && e.allocatedAt.Before(placeholderCutoff) {
+				delete(m.sessions, id)
+			}
+			continue
 		}
 		la := e.LastActivity()
 		if la.IsZero() {
@@ -993,6 +1093,17 @@ func GenerateResumptionID() ([]byte, error) {
 
 // allocateIDLocked walks 1..0xFFFE for the next free session id. The
 // caller must hold m.mu in write mode.
+//
+// When every id is taken it reclaims the oldest placeholder — an id
+// staked for a handshake that never completed — rather than refusing
+// the allocation, so a burst of aborted handshakes cannot lock out
+// every later CASE exchange. Mirrors matter.js
+// packages/protocol/src/session/SessionManager.ts:504
+// (`getNextAvailableSessionId` falls back to `findOldestInactiveSession`
+// and reuses its id). We stop at placeholders and never evict a live
+// session here: closing one has to run its graceful-close cascade
+// outside this lock — see notes/parity/by_design.md
+// BD-Matter-CASE-IDExhaustionEvictsPlaceholdersOnly.
 func (m *Manager) allocateIDLocked() (uint16, error) {
 	const maxID = uint16(0xFFFE)
 	for range maxID {
@@ -1005,7 +1116,20 @@ func (m *Manager) allocateIDLocked() (uint16, error) {
 			return id, nil
 		}
 	}
-	return 0, ErrSessionExhausted
+	var oldest *Entry
+	for _, e := range m.sessions {
+		if e.Session != nil || e.allocatedAt.IsZero() {
+			continue
+		}
+		if oldest == nil || e.allocatedAt.Before(oldest.allocatedAt) {
+			oldest = e
+		}
+	}
+	if oldest == nil {
+		return 0, ErrSessionExhausted
+	}
+	delete(m.sessions, oldest.SessionID)
+	return oldest.SessionID, nil
 }
 
 // SessionInfo is a read-only view of one secure session, for operator

@@ -1,5 +1,6 @@
 import { api } from "$lib/api/client";
 import { foldedRouteTarget, isKnownLandingRoute, navSurfaceID } from "$lib/nav";
+import { authStore } from "./auth.svelte";
 import { surfacesStore } from "./surfaces.svelte";
 
 /**
@@ -20,24 +21,52 @@ const PREF_KEY = "start_route";
 
 function createStartRouteStore() {
   let route = $state<string>("");
-  let loaded = $state(false);
+  // Subject the loaded route belongs to; null while nothing is loaded.
+  // The store outlives a session, so after a logout/login in the same tab
+  // the route in memory is still the previous operator's until the reload
+  // for the new one lands.
+  let loadedFor = $state<string | null>(null);
+
+  // "" stands for "no identity" (auth disabled, or the boot probe has not
+  // answered yet) so the anonymous case still reaches a loaded state.
+  function subject(): string {
+    return authStore.identity?.subject ?? "";
+  }
+
+  // Whether a response started for `forSubject` still belongs to the
+  // session on screen. The boot sequence fires this load next to the auth
+  // probe, so the identity is routinely still unknown ("") when the
+  // request goes out; that answer was authenticated by the same session
+  // cookie the probe resolves and is adopted under whatever identity
+  // arrived meanwhile. Only a switch between two known operators
+  // invalidates a response.
+  function stillFor(forSubject: string): boolean {
+    return forSubject === "" || forSubject === subject();
+  }
 
   async function load(): Promise<void> {
+    const forSubject = subject();
+    // Never show the previous operator's start page while their successor's
+    // preference is in flight.
+    if (loadedFor !== null && loadedFor !== forSubject) route = "";
     try {
       const stored = await api.getPreference<string>(PREF_KEY);
+      if (!stillFor(forSubject)) return;
       route = typeof stored === "string" ? stored : "";
     } catch {
       // Preferences unavailable (persistence disabled, or the request
       // failed): fall back to the default landing route rather than
       // blocking the first paint.
+      if (!stillFor(forSubject)) return;
       route = "";
     } finally {
-      loaded = true;
+      if (stillFor(forSubject)) loadedFor = subject();
     }
   }
 
   async function set(next: string): Promise<void> {
     route = next;
+    loadedFor = subject();
     if (next === "") {
       await api.deletePreference(PREF_KEY);
       return;
@@ -72,8 +101,9 @@ function createStartRouteStore() {
     get route() {
       return route;
     },
+    /** True while `route` reflects the operator that is signed in now. */
     get loaded() {
-      return loaded;
+      return loadedFor === subject();
     },
     load,
     set,

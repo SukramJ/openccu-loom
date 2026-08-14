@@ -64,23 +64,29 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 		removedCentral  = "purge-central"
 		survivorCentral = "other-central"
 		ifaceName       = "HmIP-RF"
+		// The rows carry the canonical `<central>-<interface>` wire id the
+		// device pipeline stamps onto every device, while the config names the
+		// interface bare — purgeCentralState has to bridge the two or it
+		// deletes nothing at all.
+		removedIfaceID  = removedCentral + "-" + ifaceName
+		survivorIfaceID = survivorCentral + "-" + ifaceName
 	)
 
-	if err := valuesStore.SaveValue(ctx, removedCentral, ifaceName, "AAAA0001:1", "STATE", true, now, now); err != nil {
+	if err := valuesStore.SaveValue(ctx, removedCentral, removedIfaceID, "AAAA0001:1", "STATE", true, now, now); err != nil {
 		t.Fatalf("SaveValue(removed): %v", err)
 	}
-	if err := valuesStore.SaveValue(ctx, survivorCentral, ifaceName, "BBBB0001:1", "STATE", true, now, now); err != nil {
+	if err := valuesStore.SaveValue(ctx, survivorCentral, survivorIfaceID, "BBBB0001:1", "STATE", true, now, now); err != nil {
 		t.Fatalf("SaveValue(survivor): %v", err)
 	}
-	if err := masterStore.SaveParameter(ctx, removedCentral, ifaceName, "AAAA0001:1", "MASTER_PARAM", 1); err != nil {
+	if err := masterStore.SaveParameter(ctx, removedCentral, removedIfaceID, "AAAA0001:1", "MASTER_PARAM", 1); err != nil {
 		t.Fatalf("SaveParameter(removed): %v", err)
 	}
-	if err := masterStore.SaveParameter(ctx, survivorCentral, ifaceName, "BBBB0001:1", "MASTER_PARAM", 1); err != nil {
+	if err := masterStore.SaveParameter(ctx, survivorCentral, survivorIfaceID, "BBBB0001:1", "MASTER_PARAM", 1); err != nil {
 		t.Fatalf("SaveParameter(survivor): %v", err)
 	}
 	if err := historyStore.SaveBatch(ctx, []sqlitestore.MeasurementSample{
-		{CentralName: removedCentral, InterfaceID: ifaceName, ChannelAddress: "AAAA0001:1", Parameter: "STATE", TS: now, Value: 1},
-		{CentralName: survivorCentral, InterfaceID: ifaceName, ChannelAddress: "BBBB0001:1", Parameter: "STATE", TS: now, Value: 1},
+		{CentralName: removedCentral, InterfaceID: removedIfaceID, ChannelAddress: "AAAA0001:1", Parameter: "STATE", TS: now, Value: 1},
+		{CentralName: survivorCentral, InterfaceID: survivorIfaceID, ChannelAddress: "BBBB0001:1", Parameter: "STATE", TS: now, Value: 1},
 	}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
@@ -88,23 +94,23 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 	cc := config.CentralConfig{Name: removedCentral, Interfaces: []config.InterfaceSpec{{Name: ifaceName}}}
 	purgeCentralState(ctx, valuesStore, masterStore, historyStore, nil, cc, discardTestLogger())
 
-	if rows, err := valuesStore.LoadChannel(ctx, removedCentral, ifaceName, "AAAA0001:1"); err != nil {
+	if rows, err := valuesStore.LoadChannel(ctx, removedCentral, removedIfaceID, "AAAA0001:1"); err != nil {
 		t.Fatalf("LoadChannel(removed): %v", err)
 	} else if len(rows) != 0 {
 		t.Errorf("values_cache rows for %s survived purge: %d", removedCentral, len(rows))
 	}
-	if rows, err := valuesStore.LoadChannel(ctx, survivorCentral, ifaceName, "BBBB0001:1"); err != nil {
+	if rows, err := valuesStore.LoadChannel(ctx, survivorCentral, survivorIfaceID, "BBBB0001:1"); err != nil {
 		t.Fatalf("LoadChannel(survivor): %v", err)
 	} else if len(rows) != 1 {
 		t.Errorf("values_cache rows for %s = %d, want 1 (untouched)", survivorCentral, len(rows))
 	}
 
-	if values, found, err := masterStore.LoadChannel(ctx, removedCentral, ifaceName, "AAAA0001:1"); err != nil {
+	if values, found, err := masterStore.LoadChannel(ctx, removedCentral, removedIfaceID, "AAAA0001:1"); err != nil {
 		t.Fatalf("master LoadChannel(removed): %v", err)
 	} else if found {
 		t.Errorf("master_values row for %s survived purge: %v", removedCentral, values)
 	}
-	if values, found, err := masterStore.LoadChannel(ctx, survivorCentral, ifaceName, "BBBB0001:1"); err != nil {
+	if values, found, err := masterStore.LoadChannel(ctx, survivorCentral, survivorIfaceID, "BBBB0001:1"); err != nil {
 		t.Fatalf("master LoadChannel(survivor): %v", err)
 	} else if !found || len(values) != 1 {
 		t.Errorf("master_values row for %s = (found=%v, %v), want 1 value (untouched)", survivorCentral, found, values)

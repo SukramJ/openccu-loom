@@ -88,40 +88,55 @@ func (b *SystemStatusBuffer) SystemStatusEntries() []SystemStatusEntry {
 // Subscribe attaches the buffer to every central in reg so incoming
 // [hmevent.SystemStatusChangedEvent] values are appended automatically.
 // Returns a closer that removes all subscriptions. Safe to call once
-// after the bus is live.
+// after the bus is live. A central adopted later must be attached with
+// [SystemStatusBuffer.SubscribeCentral].
 func (b *SystemStatusBuffer) Subscribe(reg *central.Registry) (stop func()) {
 	if reg == nil {
 		return func() {}
 	}
 	var unsubs []func()
 	for _, u := range reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unsub := b.SubscribeCentral(u); unsub != nil {
+			unsubs = append(unsubs, unsub)
 		}
-		centralName := u.Name()
-		unsub := events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
-			b.append(SystemStatusEntry{
-				Central:            centralName,
-				Component:          e.Component,
-				Healthy:            e.Healthy,
-				Reason:             e.Reason,
-				InterfaceID:        e.InterfaceID,
-				ErrorCode:          e.ErrorCode,
-				CentralState:       e.CentralState,
-				ConnectionState:    e.ConnectionState,
-				DegradedInterfaces: e.DegradedInterfaces,
-				Issues:             e.Issues,
-				EventAt:            e.Timestamp(),
-			})
-		})
-		unsubs = append(unsubs, unsub)
 	}
 	return func() {
 		for _, u := range unsubs {
 			u()
 		}
 	}
+}
+
+// SubscribeCentral attaches the buffer to a single central's event bus and
+// returns the unsubscribe (nil when there was nothing to attach).
+//
+// Subscribe only ever walked the registry as it stood at boot, so the
+// interface up/down transitions of a central adopted at runtime never appeared
+// in `GET /api/v1/system-status` until the daemon was restarted.
+func (b *SystemStatusBuffer) SubscribeCentral(u *central.Unit) func() {
+	if b == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	return events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+		b.append(SystemStatusEntry{
+			Central:            centralName,
+			Component:          e.Component,
+			Healthy:            e.Healthy,
+			Reason:             e.Reason,
+			InterfaceID:        e.InterfaceID,
+			ErrorCode:          e.ErrorCode,
+			CentralState:       e.CentralState,
+			ConnectionState:    e.ConnectionState,
+			DegradedInterfaces: e.DegradedInterfaces,
+			Issues:             e.Issues,
+			EventAt:            e.Timestamp(),
+		})
+	})
 }
 
 // SystemStatusResponse is the body of `GET /api/v1/system/status`.

@@ -111,6 +111,31 @@ func (a *DevicesAdapter) CentralOf(address string) string {
 	return ""
 }
 
+// ChannelMeta implements handlers.ChannelInfoReader: it resolves the
+// device address, model, channel type and owning central for a channel
+// address, so the config-export endpoint can stamp them onto the
+// exported snapshot. Reports false when no central holds the channel.
+func (a *DevicesAdapter) ChannelMeta(channelAddress string) (deviceAddress, model, channelType, centralName string, ok bool) {
+	if a.registry == nil {
+		return "", "", "", "", false
+	}
+	devAddr := deviceAddressOf(channelAddress)
+	for _, u := range a.registry.List() {
+		dev, found := u.ModelRegistry.Get(devAddr)
+		if !found {
+			continue
+		}
+		ch := dev.Channel(channelAddress)
+		if ch == nil {
+			// The device exists but not that channel number — the export
+			// would name a channel the CCU does not have.
+			return "", "", "", "", false
+		}
+		return dev.Address, dev.Model, ch.Type, u.Name(), true
+	}
+	return "", "", "", "", false
+}
+
 // SerialSuffix delegates to the registry's central → serial-suffix mapping
 // so the device endpoints can stamp the canonical `unique_id` onto their
 // summaries. Empty string when the central is unknown.

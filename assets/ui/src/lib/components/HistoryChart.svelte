@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { getHistory, HistoryDisabledError } from "$lib/api/client";
   import type { HistoryBucket } from "$lib/api/client";
   import { t } from "$lib/i18n";
@@ -53,7 +52,13 @@
   ];
   let selectedHours = $state(24);
 
+  // Monotonic generation guarding the async fetch: a slow response for the
+  // range or data point the chart has since moved on from must never
+  // overwrite the one it now shows.
+  let loadGeneration = 0;
+
   async function load() {
+    const generation = ++loadGeneration;
     chartStatus = { kind: "loading" };
     const to = new Date();
     const from = new Date(to.getTime() - selectedHours * 60 * 60 * 1000);
@@ -67,12 +72,14 @@
         to: to.toISOString(),
         buckets: 200,
       });
+      if (generation !== loadGeneration) return;
       if (buckets.length === 0) {
         chartStatus = { kind: "empty" };
       } else {
         chartStatus = { kind: "data", buckets };
       }
     } catch (err) {
+      if (generation !== loadGeneration) return;
       if (err instanceof HistoryDisabledError) {
         chartStatus = { kind: "disabled" };
       } else {
@@ -84,11 +91,9 @@
     }
   }
 
-  onMount(() => {
-    void load();
-  });
-
-  // Re-fetch whenever the key props or the selected range changes.
+  // Re-fetch whenever the key props or the selected range changes. The
+  // effect's first run covers the initial fetch, so there is no separate
+  // onMount load (which would issue the same request twice).
   $effect(() => {
     void central;
     void interfaceId;

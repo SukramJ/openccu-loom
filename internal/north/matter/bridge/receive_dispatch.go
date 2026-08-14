@@ -496,10 +496,16 @@ func (b *Bridge) dispatchInvokeRequest(ctx context.Context, src *net.UDPAddr, re
 // or missing-prior-TimedRequest cases are rejected via
 // StatusResponse with the spec-mandated codes.
 func (b *Bridge) dispatchTimedRequest(src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, req im.TimedRequest) error {
-	deadline := time.Now().Add(time.Duration(req.TimeoutMs) * time.Millisecond)
+	now := time.Now()
+	deadline := now.Add(time.Duration(req.TimeoutMs) * time.Millisecond)
 	// Key on (sessionID, exchangeID) so a different session cannot
 	// consume a deadline registered by another session.
 	b.routing.timedDeadlines.Store(timedKey{sessionID: requestHdr.SessionID, exchangeID: proto.ExchangeID}, deadline)
+	// Reclaim abandoned deadlines at the site that creates them: a
+	// controller whose follow-up Write / Invoke never arrives leaves an
+	// entry nothing consumes, so the table would otherwise grow for the
+	// daemon's whole uptime. Amortised — see [timedSweepInterval].
+	b.routing.maybeSweepExpiredTimedDeadlines(now)
 	body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusSuccess})
 	if err != nil {
 		debugReplyError(b.logger, "encode_status", src, err)

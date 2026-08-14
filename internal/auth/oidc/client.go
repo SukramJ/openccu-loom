@@ -14,10 +14,27 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/httpx"
 )
+
+// providerTimeout bounds one call to the identity provider — discovery,
+// a JWKS refresh, a code exchange. A provider that accepts the
+// connection and never answers would otherwise hold a login request (or
+// a JWKS refresh serialising every token verification behind it) open
+// with no deadline of its own.
+const providerTimeout = 30 * time.Second
+
+// defaultHTTPClient is the client used when a caller passes none. It
+// owns its transport (see [internal/httpx]) rather than sharing the
+// process-wide default with unrelated callers, and carries
+// [providerTimeout] as its request deadline.
+var defaultHTTPClient = sync.OnceValue(func() *http.Client {
+	return httpx.NewClient(providerTimeout)
+})
 
 // Config describes one OIDC deployment the UI should accept.
 type Config struct {
@@ -39,7 +56,8 @@ type Client struct {
 	jwks      *JWKSCache
 }
 
-// New constructs a Client. httpClient may be nil (uses default).
+// New constructs a Client. httpClient may be nil, in which case the
+// package's own bounded client is used.
 func New(ctx context.Context, cfg Config, httpClient *http.Client) (*Client, error) {
 	if cfg.Issuer == "" || cfg.ClientID == "" || cfg.RedirectURL == "" {
 		return nil, errors.New("oidc: Issuer + ClientID + RedirectURL required")
@@ -51,7 +69,7 @@ func New(ctx context.Context, cfg Config, httpClient *http.Client) (*Client, err
 		cfg.Scopes = []string{"openid", "profile", "email"}
 	}
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = defaultHTTPClient()
 	}
 	prov, err := Discover(ctx, httpClient, cfg.Issuer)
 	if err != nil {

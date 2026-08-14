@@ -49,21 +49,32 @@
     return isNaN(d.getTime()) ? undefined : d.toISOString();
   }
 
+  // Monotonic generation guarding the async load path. Every call
+  // captures its own generation; a response that lands after a newer
+  // filter change has already started is discarded instead of applied,
+  // so a slow since-only response can never overwrite the narrower
+  // since+until result the operator is actually looking at.
+  let loadGeneration = 0;
+
   async function load() {
+    const generation = ++loadGeneration;
     loading = true;
     loadError = null;
     try {
-      entries = await api.listAudit({
+      const next = await api.listAudit({
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
         device: deviceFilter,
         since: toRFC3339(sinceLocal),
         until: toRFC3339(untilLocal),
       });
+      if (generation !== loadGeneration) return;
+      entries = next;
     } catch (err) {
+      if (generation !== loadGeneration) return;
       loadError = err instanceof ApiError ? err.message : String(err);
     } finally {
-      loading = false;
+      if (generation === loadGeneration) loading = false;
     }
   }
   onMount(load);

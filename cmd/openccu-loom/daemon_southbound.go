@@ -82,6 +82,10 @@ type southboundWiring struct {
 	// subscribes runtime-added centrals onto the same pipeline. Nil when MQTT is
 	// not configured.
 	hubReadyTrigger func()
+	// historyCentralHook subscribes one runtime-adopted central to the
+	// measurement recorder, which otherwise walks the registry only at boot.
+	// Nil when history recording is off.
+	historyCentralHook func(u *central.Unit) (unwire func())
 	// valuesCacheCentralHook registers a runtime-adopted central with the
 	// values-cache flusher's dirty tracker and its eviction subscription — the
 	// same two seams the boot-time wiring runs for every configured central.
@@ -269,12 +273,12 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// to genuine live wire value changes and persists a numeric
 	// time-series for SPA charts (no-op when history is off — nil store).
 	// See ADR 0040. Both helpers manage their own daemon-lifetime context.
-	evictor := adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger) //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
-	//nolint:contextcheck // these wiring helpers take no ctx; they bound their own internal contexts
+	evictor := adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger)                                                             //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
+	historyCentralHook, stopHistoryRecorder := wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the recorder bounds its own internal contexts; it takes no ctx
 	teardowns = append(
 		teardowns,
 		evictor.Stop,
-		wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger),
+		stopHistoryRecorder,
 	)
 	// Both subscribe per central, and both were wired from a one-shot walk of
 	// the registry at boot. A CCU adopted at runtime therefore never reached
@@ -466,6 +470,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		backupAdapter:          backupAdapter,
 		bringUpManager:         bringUpMgr,
 		hubReadyTrigger:        hubReadyTriggerFn,
+		historyCentralHook:     historyCentralHook,
 		valuesCacheCentralHook: valuesCacheCentralHook,
 	}
 	return result, teardown

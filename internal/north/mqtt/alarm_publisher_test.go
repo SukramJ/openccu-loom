@@ -62,6 +62,20 @@ type alarmPublisherFixture struct {
 // exist" behavior.
 func newAlarmPublisherFixture(t *testing.T) *alarmPublisherFixture {
 	t.Helper()
+	svc := newAlarmFixtureService(t)
+	bridge, mp := newTestBridge(t)
+	wiring := NewWiring(bridge, slog.Default())
+	pub := NewAlarmMQTTPublisher(svc, wiring, slog.Default())
+
+	return &alarmPublisherFixture{t: t, svc: svc, eng: svc.Engine(), pub: pub, mp: mp, base: "openccu-loom"}
+}
+
+// newAlarmFixtureService builds and starts a real [alarm.Service]
+// (engine + output manager + bus) over a migrated temporary SQLite
+// database — the same component shape production assembles, minus any
+// registered central.
+func newAlarmFixtureService(t *testing.T) *alarm.Service {
+	t.Helper()
 	ctx := context.Background()
 	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "alarm.db")))
 	if err != nil {
@@ -69,13 +83,11 @@ func newAlarmPublisherFixture(t *testing.T) *alarmPublisherFixture {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	stores := alarm.NewStores(db)
-	clk := clock.NewFake(alarmPublisherFixtureStart)
 	svc, err := alarm.NewService(alarm.Deps{
 		Settings: alarm.Settings{Enabled: true},
 		Registry: central.NewRegistry(),
-		Stores:   stores,
-		Clock:    clk,
+		Stores:   alarm.NewStores(db),
+		Clock:    clock.NewFake(alarmPublisherFixtureStart),
 		Logger:   slog.Default(),
 	})
 	if err != nil {
@@ -85,12 +97,7 @@ func newAlarmPublisherFixture(t *testing.T) *alarmPublisherFixture {
 		t.Fatalf("svc.Start: %v", err)
 	}
 	t.Cleanup(func() { _ = svc.Stop(context.Background()) })
-
-	bridge, mp := newTestBridge(t)
-	wiring := NewWiring(bridge, slog.Default())
-	pub := NewAlarmMQTTPublisher(svc, wiring, slog.Default())
-
-	return &alarmPublisherFixture{t: t, svc: svc, eng: svc.Engine(), pub: pub, mp: mp, base: "openccu-loom"}
+	return svc
 }
 
 // seedZone persists an zone row (full-mode, zero delays so Arm
@@ -692,5 +699,105 @@ func TestAlarmMQTTPublisher_NotificationOutputFallsBackToID(t *testing.T) {
 	}
 	if pay.Output != "notify2" {
 		t.Errorf("event output = %q, want notify2 (ID fallback for an unnamed output)", pay.Output)
+	}
+}
+
+// TestAlarmPlaneDeclaresSoItsOrphanedConfigsAreSwept asserts the effect,
+// not the call: a zone deleted while the daemon was down leaves a
+// retained discovery config that only the orphan sweep can reach —
+// `retractPanel` cannot, because `knownZones` starts empty on every
+// boot.
+//
+// The sweep skips a daemon-level plane until that plane declares, and
+// the alarm plane never did. Its entry in `daemonLevelNodeIDs` was
+// therefore dead: every stale `homeassistant/*/alarm/*/config` survived
+// forever and Home Assistant re-created a permanently unavailable panel
+// on every restart.
+func TestAlarmPlaneDeclaresSoItsOrphanedConfigsAreSwept(t *testing.T) {
+	t.Parallel()
+	const (
+		staleTopic = "homeassistant/alarm_control_panel/alarm/z-42/config"
+		liveTopic  = "homeassistant/alarm_control_panel/alarm/eg/config"
+	)
+	svc := newAlarmFixtureService(t)
+
+	// The broker still holds the config of a zone this build no longer
+	// knows, plus the one the live zone is about to re-declare.
+	mc := &mockRetainClient{retained: []retainedMsg{
+		{topic: staleTopic, payload: []byte(`{"name":"Gone"}`)},
+		{topic: liveTopic, payload: []byte(`{"name":"Erdgeschoss"}`)},
+	}}
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, mc).WithSubscriber(mc)
+	pub := NewAlarmMQTTPublisher(svc, NewWiring(bridge, slog.Default()), slog.Default())
+
+	// Seed the surviving zone, then let the publisher complete a
+	// reconcile against the loaded engine.
+	b, err := json.Marshal(zeroDelayFullMode())
+	if err != nil {
+		t.Fatalf("marshal zone config: %v", err)
+	}
+	now := time.Now().UnixMilli()
+	if err := svc.Stores().Zones.Upsert(context.Background(), sqlitestore.AlarmZoneRow{
+		ID: "eg", Name: "Erdgeschoss", ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		t.Fatalf("seed zone: %v", err)
+	}
+	if err := svc.Reload(context.Background()); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	pub.Start()
+	t.Cleanup(pub.Stop)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !bridge.planeDeclared(alarmDiscoveryNodeID) && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !bridge.planeDeclared(alarmDiscoveryNodeID) {
+		t.Fatal("the alarm plane never declared, so the orphan sweep skips it forever")
+	}
+
+	n, err := bridge.RunDiscoveryOrphanCleanupOnce(context.Background(), 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
+	}
+	evicted := map[string]bool{}
+	for _, topic := range mc.evicted() {
+		evicted[topic] = true
+	}
+	if !evicted[staleTopic] {
+		t.Errorf("stale alarm config %q survived the sweep (evicted=%d, topics=%v)", staleTopic, n, mc.evicted())
+	}
+	if evicted[liveTopic] {
+		t.Errorf("the sweep evicted the live zone's config %q", liveTopic)
+	}
+}
+
+// TestAlarmPlaneDoesNotDeclareBeforeTheEngineLoaded pins the gate on the
+// declaration: Start signals an eager reconcile, and on that pass the
+// engine may not have read its zone set yet. Declaring an empty plane
+// would let the sweep classify every live panel as an orphan and wipe
+// the alarm surface — the failure the gate exists to prevent.
+func TestAlarmPlaneDoesNotDeclareBeforeTheEngineLoaded(t *testing.T) {
+	t.Parallel()
+	svc := newAlarmFixtureService(t)
+	if err := svc.Stop(context.Background()); err != nil {
+		t.Fatalf("svc.Stop: %v", err)
+	}
+	if svc.Engine().ZonesLoaded() {
+		t.Fatal("a stopped engine reports its zone set as loaded")
+	}
+
+	bridge, _ := newTestBridge(t)
+	pub := NewAlarmMQTTPublisher(svc, NewWiring(bridge, slog.Default()), slog.Default())
+	pub.Start()
+	t.Cleanup(pub.Stop)
+
+	// Give the eager reconcile a chance to run before asserting.
+	time.Sleep(50 * time.Millisecond)
+	if bridge.planeDeclared(alarmDiscoveryNodeID) {
+		t.Fatal("the alarm plane declared before the engine loaded its zones; the sweep would wipe the live plane")
 	}
 }

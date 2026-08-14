@@ -207,3 +207,63 @@ describe("SystemUpdatePanel firmware download", () => {
     expect(screen.queryByText("firmware_download.title")).toBeNull();
   });
 });
+
+describe("SystemUpdatePanel poll-loop teardown", () => {
+  it("does not reschedule the poll once unmounted while a tick's fetch is in flight", async () => {
+    // Capture the poll's own setTimeout(tick, 5000) calls instead of letting
+    // them actually fire, so the test can drive the poll loop one tick at a
+    // time and unmount between "the tick is inside its await load()" and
+    // "the fetch settles" — the exact window stopPoll() cannot reach. Other
+    // delays (e.g. testing-library's internal findByText timeout) pass
+    // through to the real setTimeout so the rest of the test still works.
+    const scheduled: Array<() => void> = [];
+    const realSetTimeout = globalThis.setTimeout;
+    const setTimeoutSpy = vi
+      .spyOn(globalThis, "setTimeout")
+      .mockImplementation(((fn: () => void, delay?: number, ...rest: unknown[]) => {
+        if (delay === 5000) {
+          scheduled.push(fn);
+          return 0 as unknown as ReturnType<typeof setTimeout>;
+        }
+        return realSetTimeout(fn, delay, ...rest);
+      }) as unknown as typeof setTimeout);
+
+    try {
+      let resolveTickLoad: (v: unknown) => void = () => {};
+      const tickLoad = new Promise((resolve) => {
+        resolveTickLoad = resolve;
+      });
+      mockGetSystemUpdate
+        // onMount's own load() — resolves immediately with an install running.
+        .mockResolvedValueOnce([{ ...SINGLE_CENTRAL[0], in_progress: true }])
+        // The poll tick's load() — stays pending until the test resolves it.
+        .mockImplementationOnce(() => tickLoad);
+
+      const { unmount } = render(SystemUpdatePanel);
+      await screen.findByText("ccu_update.in_progress");
+
+      // ensurePoll() ran and scheduled exactly one tick.
+      expect(scheduled).toHaveLength(1);
+      const tick = scheduled.shift()!;
+
+      // Fire the tick: it clears pollTimer and starts its own await load(),
+      // which is now suspended on the still-pending tickLoad promise.
+      tick();
+      await Promise.resolve();
+
+      // The operator navigates away while that fetch is still outstanding.
+      unmount();
+
+      // The in-flight fetch now settles, resuming the tick past its await.
+      resolveTickLoad([{ ...SINGLE_CENTRAL[0], in_progress: true }]);
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+
+      // Without the pollStopped guard, the resumed tick would push a new
+      // setTimeout(tick, 5000) here even though the component is gone.
+      expect(scheduled).toHaveLength(0);
+      expect(mockGetSystemUpdate).toHaveBeenCalledTimes(2);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+});

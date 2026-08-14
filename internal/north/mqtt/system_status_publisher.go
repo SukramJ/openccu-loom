@@ -20,9 +20,7 @@ import (
 // non-retained (QoS 0) so consumers only see live events — a stale
 // retained payload would be misleading after a daemon restart.
 //
-// Mirrors the north-bound subscriber contract described in
-// ADR 0011 and
-// path.
+// Mirrors the north-bound subscriber contract described in ADR 0011.
 type SystemStatusPublisher struct {
 	reg    *central.Registry
 	wiring *Wiring
@@ -56,55 +54,72 @@ type systemStatusPayload struct {
 
 // Start attaches one subscription per registered central. Safe to call
 // multiple times — subsequent calls are no-ops if already started.
+// A central adopted later must be attached with
+// [SystemStatusPublisher.StartCentral].
 func (p *SystemStatusPublisher) Start() {
 	if p.reg == nil || p.wiring == nil {
 		return
 	}
 	for _, u := range p.reg.List() {
-		bus := u.EventBus
-		if bus == nil {
-			continue
+		if unsub := p.StartCentral(u); unsub != nil {
+			p.unsubs = append(p.unsubs, unsub)
 		}
-		centralName := u.Name()
-		unsub := events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
-			pay := systemStatusPayload{
-				CentralName:        centralName,
-				Component:          e.Component,
-				Healthy:            e.Healthy,
-				Reason:             e.Reason,
-				InterfaceID:        e.InterfaceID,
-				ErrorCode:          e.ErrorCode,
-				DegradedInterfaces: e.DegradedInterfaces,
-				Issues:             e.Issues,
-				EventAt:            e.Timestamp(),
-			}
-			b, err := json.Marshal(pay)
-			if err != nil {
-				p.logger.Warn("mqtt.system_status.marshal",
-					slog.String("central", centralName),
-					slog.String("err", err.Error()))
-				return
-			}
-			ctx := context.Background()
-			// Nil while MQTT is disabled at runtime — the Wiring stays alive
-			// and points its bridge nowhere. This runs from an event-bus
-			// handler, so an unguarded dereference would crash the daemon on
-			// the next status change rather than merely dropping a publish.
-			bridge := p.wiring.Bridge()
-			if bridge == nil {
-				return
-			}
-			if err := bridge.PublishSystemStatus(ctx, centralName, b); err != nil {
-				p.logger.Warn("mqtt.system_status.publish",
-					slog.String("central", centralName),
-					slog.String("err", err.Error()))
-			}
-		})
-		p.unsubs = append(p.unsubs, unsub)
 	}
 }
 
-// Stop drops all event-bus subscriptions.
+// StartCentral attaches this publisher to a single central's event bus and
+// returns the unsubscribe (nil when there was nothing to attach).
+//
+// Start only ever walked the registry as it stood at boot, so a central
+// adopted at runtime never published a single message on the MQTT
+// system-status plane until the daemon was restarted.
+func (p *SystemStatusPublisher) StartCentral(u *central.Unit) func() {
+	if p == nil || p.wiring == nil || u == nil {
+		return nil
+	}
+	bus := u.EventBus
+	if bus == nil {
+		return nil
+	}
+	centralName := u.Name()
+	return events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
+		pay := systemStatusPayload{
+			CentralName:        centralName,
+			Component:          e.Component,
+			Healthy:            e.Healthy,
+			Reason:             e.Reason,
+			InterfaceID:        e.InterfaceID,
+			ErrorCode:          e.ErrorCode,
+			DegradedInterfaces: e.DegradedInterfaces,
+			Issues:             e.Issues,
+			EventAt:            e.Timestamp(),
+		}
+		b, err := json.Marshal(pay)
+		if err != nil {
+			p.logger.Warn("mqtt.system_status.marshal",
+				slog.String("central", centralName),
+				slog.String("err", err.Error()))
+			return
+		}
+		ctx := context.Background()
+		// Nil while MQTT is disabled at runtime — the Wiring stays alive
+		// and points its bridge nowhere. This runs from an event-bus
+		// handler, so an unguarded dereference would crash the daemon on
+		// the next status change rather than merely dropping a publish.
+		bridge := p.wiring.Bridge()
+		if bridge == nil {
+			return
+		}
+		if err := bridge.PublishSystemStatus(ctx, centralName, b); err != nil {
+			p.logger.Warn("mqtt.system_status.publish",
+				slog.String("central", centralName),
+				slog.String("err", err.Error()))
+		}
+	})
+}
+
+// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
+// to a caller by StartCentral are that caller's to detach.
 func (p *SystemStatusPublisher) Stop() {
 	for _, u := range p.unsubs {
 		u()

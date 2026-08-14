@@ -509,6 +509,15 @@ see the [multi-CCU guide](../user/multi-ccu.md).
 | `visibility.un_ignore` | list | — | — | no |
 | `check_connection_interval` | duration | `30s` | — | no |
 
+`name` may contain only letters, digits, `-` and `_`. It becomes a path
+segment of the XML-RPC callback URL the daemon announces to that CCU, so
+a name outside that set produces a daemon that starts cleanly and never
+receives a single push event. Two names must also stay distinguishable
+after north-bound escaping (`+`, `#`, `/` and spaces become `_`), or the
+two CCUs would share every state topic and no inbound command could be
+attributed to either. Both rules are checked at config load, and the two
+rejections read differently so it is clear which one applies.
+
 `interfaces` accepts a short list of names or a long form with per-
 interface overrides:
 
@@ -526,13 +535,17 @@ centrals:
       - name: CUxD          # CUxD is reached over BIN-RPC
 ```
 
-`rpc_type` pins the transport and must agree with the interface name —
-CUxD speaks `binrpc`, every other interface `xmlrpc`. Leave it empty
-unless you want the pin; a contradicting value is refused at startup.
-`remote_path` overrides the URL path the XML-RPC calls of that interface
-go to (default `/RPC2`, `/groups` for VirtualDevices); set it only when
-a reverse proxy re-routes the interface, and give an absolute path on
-the same host. `json_rpc_port` defaults to `80` (plain) or `443`
+`rpc_type` is `xmlrpc` or `binrpc` and only ever restates what the
+interface name already implies — CUxD speaks BIN-RPC, every other
+interface XML-RPC. The transport is not selectable per interface, so a
+value that contradicts the derived one is rejected at config load
+instead of being silently ignored; leave the key out unless you want it
+documented in the file. `remote_path` overrides the URL path of the
+XML-RPC endpoint (`/RPC2`, or `/groups` for `VirtualDevices`) for a CCU
+behind a reverse proxy that exposes it elsewhere; it must be an
+absolute path on the same host — the bare `/`, a leading `//`, a scheme,
+a query, a fragment and a `..` segment are all rejected at config load.
+`json_rpc_port` defaults to `80` (plain) or `443`
 (TLS); set it when the CCU sits behind a non-standard proxy. Set
 `tls_insecure_skip_verify` only against a self-signed CCU on a trusted
 network. `check_connection_interval` of `0` uses the `30s` default; a
@@ -670,10 +683,18 @@ given count after each successful run.
 | `security.allow_plaintext_secrets` | bool | `false` | — | no |
 
 When `false` (default and recommended) the daemon refuses to persist a
-central's password in cleartext — it must be encryptable with the
-master key (see [Secrets](#secrets)). Set it `true` only in a
-throwaway/dev environment where no at-rest key is available; the
-password is then stored in plaintext in the database.
+central's password it cannot encrypt with the master key (see
+[Secrets](#secrets)). While a master key is available the flag changes
+nothing — the password is sealed either way. It matters only in the
+degraded case: if no key can be resolved (`secret.key` lost after a
+restore, `OPENCCU_LOOM_SECRET_KEY` unset, read-only data directory),
+saving a CCU password is rejected with `400 Password cannot be stored`
+instead of writing the credential to the database in the clear.
+
+Set it `true` only in a throwaway/dev environment where no at-rest key
+is available; the password is then stored in plaintext in the database.
+The better fix is to restore the master key — `/health` reports
+`config.secrets` as degraded while one is missing.
 
 ## Validating a config file
 
