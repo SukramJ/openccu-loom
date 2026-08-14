@@ -10,6 +10,7 @@ package adapter
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -105,16 +106,11 @@ func TestDeviceAdminDomain_SetChannelRooms_HappyPath(t *testing.T) {
 	if len(ch1.Rooms()) != 1 || ch1.Rooms()[0] != "Wohnzimmer" {
 		t.Fatalf("expected channel Rooms to be stamped to [Wohnzimmer], got %v", ch1.Rooms())
 	}
-	// dev.Rooms recomputes as the sorted union over every channel: channel 1
-	// now carries "Wohnzimmer", channel 2 still carries "Küche".
+	// The device rooms recompute as the sorted union over every channel:
+	// channel 1 now carries "Wohnzimmer", channel 2 still carries "Küche".
 	want := []string{"Küche", "Wohnzimmer"}
-	if len(dev.Rooms) != len(want) {
-		t.Fatalf("dev.Rooms = %v, want %v", dev.Rooms, want)
-	}
-	for i, w := range want {
-		if dev.Rooms[i] != w {
-			t.Fatalf("dev.Rooms = %v, want %v", dev.Rooms, want)
-		}
+	if got := dev.Rooms(); !slices.Equal(got, want) {
+		t.Fatalf("dev.Rooms() = %v, want %v", got, want)
 	}
 }
 
@@ -177,13 +173,8 @@ func TestDeviceAdminDomain_SetChannelFunctions_HappyPath(t *testing.T) {
 		t.Fatalf("expected channel Functions to be stamped to [Licht], got %v", ch1.Functions())
 	}
 	want := []string{"Heizung", "Licht"}
-	if len(dev.Functions) != len(want) {
-		t.Fatalf("dev.Functions = %v, want %v", dev.Functions, want)
-	}
-	for i, w := range want {
-		if dev.Functions[i] != w {
-			t.Fatalf("dev.Functions = %v, want %v", dev.Functions, want)
-		}
+	if got := dev.Functions(); !slices.Equal(got, want) {
+		t.Fatalf("dev.Functions() = %v, want %v", got, want)
 	}
 }
 

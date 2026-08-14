@@ -381,10 +381,10 @@ func fillDeviceIdentity(id *memberIdentity, dev *device.Device) {
 	// A channel often carries no room/function of its own; fall back to the
 	// device's assignment so every candidate can still be filtered by room.
 	if len(id.Rooms) == 0 {
-		id.Rooms = append([]string(nil), dev.Rooms...)
+		id.Rooms = dev.Rooms()
 	}
 	if len(id.Functions) == 0 {
-		id.Functions = append([]string(nil), dev.Functions...)
+		id.Functions = dev.Functions()
 	}
 }
 

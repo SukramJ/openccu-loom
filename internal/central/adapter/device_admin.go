@@ -348,7 +348,7 @@ func (a *DeviceAdminDomain) SetRooms(
 		if err := u.HubModel.SetDeviceRoomsRemote(ctx, address, rooms); err != nil {
 			return err
 		}
-		dev.Rooms = append([]string(nil), rooms...)
+		dev.SetRooms(rooms)
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -373,7 +373,7 @@ func (a *DeviceAdminDomain) SetFunctions(
 		if err := u.HubModel.SetDeviceFunctionsRemote(ctx, address, functions); err != nil {
 			return err
 		}
-		dev.Functions = append([]string(nil), functions...)
+		dev.SetFunctions(functions)
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -396,7 +396,7 @@ func (a *DeviceAdminDomain) SetChannelRooms(
 		},
 		func(dev *device.Device, ch *device.Channel) {
 			ch.SetRooms(rooms)
-			dev.Rooms = unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Rooms() })
+			dev.SetRooms(unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Rooms() }))
 		})
 }
 
@@ -411,7 +411,7 @@ func (a *DeviceAdminDomain) SetChannelFunctions(
 		},
 		func(dev *device.Device, ch *device.Channel) {
 			ch.SetFunctions(functions)
-			dev.Functions = unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Functions() })
+			dev.SetFunctions(unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Functions() }))
 		})
 }
 

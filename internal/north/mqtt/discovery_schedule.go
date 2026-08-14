@@ -335,10 +335,12 @@ func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string) map[str
 			desc[k] = v
 		}
 		// suggested_area fallback: copy the parent's room if present
-		// and not already set by the info map.
+		// and not already set by the info map. The parent device
+		// resolves the singular room behind its own lock, so it is
+		// asked rather than reflected over (see [deviceWithRoom]).
 		if _, has := desc["suggested_area"]; !has {
-			if r, ok := info["room"].(string); ok && r != "" {
-				desc["suggested_area"] = r
+			if dwr, ok := ev.Device.(deviceWithRoom); ok && dwr.Room() != "" {
+				desc["suggested_area"] = dwr.Room()
 			}
 		}
 	}

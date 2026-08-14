@@ -396,7 +396,7 @@ func ListFunctions(idx DeviceIndex) http.HandlerFunc {
 		counts := map[string]int{}
 		if idx != nil {
 			for _, d := range idx.Devices() {
-				for _, f := range d.Functions {
+				for _, f := range d.Functions() {
 					counts[f]++
 				}
 			}
@@ -418,7 +418,7 @@ func ListRooms(idx DeviceIndex) http.HandlerFunc {
 		counts := map[string]int{}
 		if idx != nil {
 			for _, d := range idx.Devices() {
-				for _, r := range d.Rooms {
+				for _, r := range d.Rooms() {
 					counts[r]++
 				}
 			}
@@ -894,8 +894,8 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 		Updatable:                  d.Updatable,
 		UpdateAvailable:            d.UpdateAvailable(),
 		UpdateStatus:               string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
-		Rooms:                      d.Rooms,
-		Functions:                  d.Functions,
+		Rooms:                      d.Rooms(),
+		Functions:                  d.Functions(),
 		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
 		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
 		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),

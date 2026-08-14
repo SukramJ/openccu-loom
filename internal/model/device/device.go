@@ -5,6 +5,7 @@ package device
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -72,28 +73,17 @@ type Config struct {
 // deliberately thinner than the Python reference — the wire layer
 // and value-cache concerns live elsewhere (client, store).
 type Device struct {
-	InterfaceID  string              `payload:"info"`
-	Interface    hmenum.Interface    `payload:"info"`
-	Address      string              `payload:"info,alt=serial_number"`
-	Model        string              `payload:"info"`
-	ModelLabel   string              `payload:"info,alt=model_label"`
-	ModelIcon    string              `payload:"info,alt=model_icon"`
-	SubModel     string              `payload:"info,alt=sub_model"`
-	Name         string              `payload:"info"`
-	Manufacturer hmenum.Manufacturer `payload:"info"`
-	ProductGroup hmenum.ProductGroup `payload:"info,alt=product_group"`
-	Rooms        []string            `payload:"info"`
-	Functions    []string            `payload:"info"`
-	// Room is the device's single canonical room assignment. Set only when
-	// [Rooms] contains exactly one entry; for zero or multi-room assignments it
-	// stays empty. Drives MQTT-Discovery's `suggested_area` (HA accepts only a
-	// single string) and any north-bound consumer that wants the unambiguous
-	// case without re-implementing the slice-collapsing logic.
-	Room string `payload:"info"`
-	// Function is the device's single canonical function (Gewerk)
-	// assignment, set under the same one-entry rule as [Room].
-	Function string                 `payload:"info"`
-	RxModes  []hmenum.CommandRxMode `payload:"config,alt=rx_modes"`
+	InterfaceID  string                 `payload:"info"`
+	Interface    hmenum.Interface       `payload:"info"`
+	Address      string                 `payload:"info,alt=serial_number"`
+	Model        string                 `payload:"info"`
+	ModelLabel   string                 `payload:"info,alt=model_label"`
+	ModelIcon    string                 `payload:"info,alt=model_icon"`
+	SubModel     string                 `payload:"info,alt=sub_model"`
+	Name         string                 `payload:"info"`
+	Manufacturer hmenum.Manufacturer    `payload:"info"`
+	ProductGroup hmenum.ProductGroup    `payload:"info,alt=product_group"`
+	RxModes      []hmenum.CommandRxMode `payload:"config,alt=rx_modes"`
 	// RxMode is the raw receive-mode bitmask from the CCU RX_MODE field.
 	// See [Config.RxMode]. A device with WAKEUP or LAZY_CONFIG set only
 	// applies pending configuration when it next wakes up, which lets a
@@ -125,6 +115,31 @@ type Device struct {
 	// IgnoreOnInitialLoad marks that the device model is in the "skip initial
 	// value poll" list.
 	IgnoreOnInitialLoad bool
+
+	// assignmentMu guards the operator-assigned room / function state
+	// below. It is deliberately independent of mu (which guards the
+	// channel map): the assignment accessors never touch a channel, so
+	// the two locks are never held simultaneously and no ordering
+	// constraint exists between them.
+	//
+	// rooms / functions carry the CCU operator's assignments for the whole
+	// device. The ingest pipeline seeds them at construction, and the
+	// device-admin path rewrites them from a REST / WebSocket handler
+	// goroutine long after the device went live, while north-bound readers
+	// (device list, snapshot export, MQTT discovery, MCP tools) are serving
+	// requests — as plain exported fields they were a torn slice-header
+	// read for every one of those readers.
+	//
+	// room / function are derived from them under the same lock: they hold
+	// the unambiguous single assignment (empty when none or several are
+	// assigned) that MQTT-Discovery's `suggested_area` needs, and a caller
+	// able to set them independently would let them drift from the set
+	// they summarise.
+	assignmentMu sync.RWMutex
+	rooms        []string
+	functions    []string
+	room         string
+	function     string
 
 	firmware     *Firmware
 	availability *Availability
@@ -182,7 +197,7 @@ type Device struct {
 // singleOrEmpty collapses a multi-value assignment slice into a
 // single canonical string when exactly one entry is present, and to
 // the empty string otherwise. Used to derive [Device.Room]
-// [Device.Function] from the broader [Rooms] / [Functions] slices
+// [Device.Function] from the broader [Device.Rooms] / [Device.Functions]
 // HA Discovery's `suggested_area` only accepts a single string, and
 // surfacing the multi-room ambiguity there would mis-attribute
 // devices that span rooms (e.g. a multi-channel actor wired into a
@@ -205,10 +220,10 @@ func New(cfg Config) *Device {
 		Name:                         cfg.Name,
 		Manufacturer:                 cfg.Manufacturer,
 		ProductGroup:                 cfg.ProductGroup,
-		Rooms:                        append([]string(nil), cfg.Rooms...),
-		Functions:                    append([]string(nil), cfg.Functions...),
-		Room:                         singleOrEmpty(cfg.Rooms),
-		Function:                     singleOrEmpty(cfg.Functions),
+		rooms:                        slices.Clone(cfg.Rooms),
+		functions:                    slices.Clone(cfg.Functions),
+		room:                         singleOrEmpty(cfg.Rooms),
+		function:                     singleOrEmpty(cfg.Functions),
 		RxModes:                      append([]hmenum.CommandRxMode(nil), cfg.RxModes...),
 		RxMode:                       cfg.RxMode,
 		Updatable:                    cfg.Updatable,
@@ -229,6 +244,58 @@ func New(cfg Config) *Device {
 		d.update = NewUpdate(d, nil, nil)
 	}
 	return d
+}
+
+// Rooms returns a copy of the device's assigned room names.
+func (d *Device) Rooms() []string {
+	d.assignmentMu.RLock()
+	defer d.assignmentMu.RUnlock()
+	return slices.Clone(d.rooms)
+}
+
+// SetRooms replaces the device's room assignments with a copy of rooms and
+// re-derives [Device.Room] from them.
+func (d *Device) SetRooms(rooms []string) {
+	d.assignmentMu.Lock()
+	d.rooms = slices.Clone(rooms)
+	d.room = singleOrEmpty(d.rooms)
+	d.assignmentMu.Unlock()
+}
+
+// Room returns the device's single canonical room assignment. It is set
+// only when exactly one room is assigned; for zero or multi-room
+// assignments it stays empty. Drives MQTT-Discovery's `suggested_area`
+// (Home Assistant accepts only a single string) and any north-bound
+// consumer that wants the unambiguous case without re-implementing the
+// slice-collapsing logic.
+func (d *Device) Room() string {
+	d.assignmentMu.RLock()
+	defer d.assignmentMu.RUnlock()
+	return d.room
+}
+
+// Functions returns a copy of the device's assigned function (Gewerk) names.
+func (d *Device) Functions() []string {
+	d.assignmentMu.RLock()
+	defer d.assignmentMu.RUnlock()
+	return slices.Clone(d.functions)
+}
+
+// SetFunctions replaces the device's function assignments with a copy of
+// functions and re-derives [Device.Function] from them.
+func (d *Device) SetFunctions(functions []string) {
+	d.assignmentMu.Lock()
+	d.functions = slices.Clone(functions)
+	d.function = singleOrEmpty(d.functions)
+	d.assignmentMu.Unlock()
+}
+
+// Function returns the device's single canonical function (Gewerk)
+// assignment, resolved under the same one-entry rule as [Device.Room].
+func (d *Device) Function() string {
+	d.assignmentMu.RLock()
+	defer d.assignmentMu.RUnlock()
+	return d.function
 }
 
 // Firmware returns the firmware tracker.
@@ -284,10 +351,10 @@ func (d *Device) Info() payload.InfoPayload {
 		Name:          d.Name,
 		Manufacturer:  string(d.Manufacturer),
 		ProductGroup:  string(d.ProductGroup),
-		Rooms:         append([]string(nil), d.Rooms...),
-		Functions:     append([]string(nil), d.Functions...),
-		Room:          d.Room,
-		Function:      d.Function,
+		Rooms:         d.Rooms(),
+		Functions:     d.Functions(),
+		Room:          d.Room(),
+		Function:      d.Function(),
 		IseID:         d.IseID,
 		SchemaVersion: d.SchemaVersion,
 		HasSubDevices: d.HasSubDevices(),

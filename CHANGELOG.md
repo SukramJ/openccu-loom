@@ -32,6 +32,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Close / Stop operations, so a blind still drives both axes through its
   combined parameter and an inverted cover still inverts.
 
+- **Changing a device's rooms or functions no longer risks a garbled
+  device list.** Both assignments were plain fields on the device: the
+  admin write rewrote them from one request while another request read
+  them for the device list, the snapshot export, MQTT discovery or an MCP
+  tool. A reader could observe a half-written list — the new length
+  against the old entries — and in the worst case read past its end. Both
+  sets now live behind the model's lock and every reader receives its own
+  copy. The single area Home Assistant is told to suggest is derived
+  under the same lock, so it follows a room reassignment instead of
+  keeping whatever the device carried at boot.
+
 - **CUxD push callbacks no longer stop for good after a transient accept
   failure.** The BIN-RPC callback listener ended its accept loop on any
   error, including the recoverable ones a busy host produces — a peer

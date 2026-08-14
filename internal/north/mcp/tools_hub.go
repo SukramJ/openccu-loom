@@ -391,7 +391,7 @@ func registerListRooms(s *mcpsdk.Server, d Deps) {
 		Name:        "list_rooms",
 		Description: "List the configured rooms with the number of devices assigned to each, optionally scoped to one central via central_name.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listRoomsOut, error) {
-		rooms := countGroups(d, in.CentralName, func(dev *device.Device) []string { return dev.Rooms })
+		rooms := countGroups(d, in.CentralName, func(dev *device.Device) []string { return dev.Rooms() })
 		return nil, listRoomsOut{Rooms: rooms}, nil
 	})
 }
@@ -401,7 +401,7 @@ func registerListFunctions(s *mcpsdk.Server, d Deps) {
 		Name:        "list_functions",
 		Description: "List the configured functions (Gewerke) with the number of devices assigned to each, optionally scoped to one central via central_name.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listFunctionsOut, error) {
-		funcs := countGroups(d, in.CentralName, func(dev *device.Device) []string { return dev.Functions })
+		funcs := countGroups(d, in.CentralName, func(dev *device.Device) []string { return dev.Functions() })
 		return nil, listFunctionsOut{Functions: funcs}, nil
 	})
 }

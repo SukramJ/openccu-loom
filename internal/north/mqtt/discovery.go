@@ -1172,9 +1172,9 @@ func entityName(ev Event) any {
 // Anything outside this set causes HA to reject the entire discovery
 // message with `extra keys not allowed @ data['device'][...]` — the
 // device's `payload:"info"` partition contains HM-specific fields
-// (`interface`, `interfaceid`, `model_icon`, `model_label`, `rooms`,
-// `functions`, `product_group`) that must therefore be filtered out
-// before the block leaves this package.
+// (`interface`, `interfaceid`, `model_icon`, `model_label`,
+// `product_group`) that must therefore be filtered out before the block
+// leaves this package.
 var haDeviceFields = map[string]struct{}{
 	"identifiers":       {},
 	"connections":       {},
@@ -1214,6 +1214,15 @@ func isMotionDeviceClass(dc string) bool {
 // interface keeps the mqtt package free of the model import.
 type deviceWithSwVersion interface {
 	SwVersion() string
+}
+
+// deviceWithRoom is the narrow read-side contract the device-block
+// builder uses to extract the device's single canonical room for HA's
+// `suggested_area`. The device model derives it from the operator's room
+// assignment behind its own lock, so the block builder asks for it instead
+// of reflecting over a field that a concurrent request may be rewriting.
+type deviceWithRoom interface {
+	Room() string
 }
 
 // deviceWithSubDevices is the narrow read-side contract used to decide
@@ -1297,8 +1306,8 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 		// produce no suggested_area: HA accepts only a single string
 		// there, and silently picking any entry from a multi-room
 		// list mis-attributes devices that span rooms.
-		if r, ok := info["room"].(string); ok {
-			room = r
+		if dwr, ok := ev.Device.(deviceWithRoom); ok {
+			room = dwr.Room()
 		}
 		// Capture the translated, human-readable model label for the
 		// model_id fallback below. Filtered out of the main loop
@@ -1355,11 +1364,11 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 	}
 	// Stamp suggested_area from the device's singular room when the
 	// model has resolved exactly one assignment. Multi-room devices
-	// (Device.Room == "") produce no suggested_area on purpose — HA
-	// only accepts a single string and an arbitrary pick would
-	// mis-attribute the device. The `room` field itself is not part
-	// of haDeviceFields (HA would reject the bare key), so this is
-	// the only path the per-device room reaches HA Discovery.
+	// (the model resolves no singular room) produce no suggested_area
+	// on purpose — HA only accepts a single string and an arbitrary
+	// pick would mis-attribute the device. The room is not part of
+	// haDeviceFields (HA would reject the bare key), so this is the
+	// only path the per-device room reaches HA Discovery.
 	if _, has := desc["suggested_area"]; !has && room != "" {
 		desc["suggested_area"] = room
 	}

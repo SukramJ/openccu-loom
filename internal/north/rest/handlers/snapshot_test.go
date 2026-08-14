@@ -61,8 +61,8 @@ func TestSnapshot_WithDevicesAndHub_Returns200(t *testing.T) {
 		InterfaceID: "HmIP-RF@ccu01",
 		Name:        "My Switch",
 	})
-	d.Rooms = []string{"Office"}
-	d.Functions = []string{"Lighting"}
+	d.SetRooms([]string{"Office"})
+	d.SetFunctions([]string{"Lighting"})
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
 
 	h := hub.NewHub("ccu01")
@@ -134,7 +134,7 @@ func TestSnapshot_Anonymise_QueryParam(t *testing.T) {
 		InterfaceID: "HmIP-RF@ccu01",
 		Name:        "My Private Switch",
 	})
-	d.Rooms = []string{"Bedroom"}
+	d.SetRooms([]string{"Bedroom"})
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?anonymize=1", http.NoBody)
@@ -156,6 +156,13 @@ func TestSnapshot_Anonymise_QueryParam(t *testing.T) {
 	}
 	if len(env.Rooms) == 1 && env.Rooms[0].Name == "Bedroom" {
 		t.Error("room name must be anonymised, but original name was returned")
+	}
+	// The anonymiser tokenises the summary's room list in place. The
+	// summary must therefore own that slice: while it aliased the live
+	// device, downloading an anonymised support snapshot renamed the
+	// operator's rooms inside the running daemon.
+	if got := d.Rooms(); len(got) != 1 || got[0] != "Bedroom" {
+		t.Errorf("live device rooms = %v, want [Bedroom] — the anonymiser wrote through into the model", got)
 	}
 }
 
@@ -391,9 +398,9 @@ func TestSnapshotSysvars_NilHub(t *testing.T) {
 func TestSnapshotRooms_MultipleDevices(t *testing.T) {
 	t.Parallel()
 	d1 := newTestDevice("A1", "M1")
-	d1.Rooms = []string{"Kitchen", "Hall"}
+	d1.SetRooms([]string{"Kitchen", "Hall"})
 	d2 := newTestDevice("A2", "M2")
-	d2.Rooms = []string{"Kitchen"}
+	d2.SetRooms([]string{"Kitchen"})
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"A1": d1, "A2": d2}}
 	rooms := snapshotRooms(idx)
 	if len(rooms) != 2 {
@@ -409,9 +416,9 @@ func TestSnapshotRooms_MultipleDevices(t *testing.T) {
 func TestSnapshotFunctions_MultipleDevices(t *testing.T) {
 	t.Parallel()
 	d1 := newTestDevice("A1", "M1")
-	d1.Functions = []string{"Lighting"}
+	d1.SetFunctions([]string{"Lighting"})
 	d2 := newTestDevice("A2", "M2")
-	d2.Functions = []string{"Lighting", "Security"}
+	d2.SetFunctions([]string{"Lighting", "Security"})
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"A1": d1, "A2": d2}}
 	fns := snapshotFunctions(idx)
 	if len(fns) != 2 {
@@ -655,12 +662,12 @@ func TestSnapshot_CentralScope(t *testing.T) {
 	officeAddr := "OFFC0002"
 
 	dHome := newSnapshotDevice(homeAddr, "SWITCH")
-	dHome.Rooms = []string{"Living Room"}
-	dHome.Functions = []string{"Lighting"}
+	dHome.SetRooms([]string{"Living Room"})
+	dHome.SetFunctions([]string{"Lighting"})
 
 	dOffice := newSnapshotDevice(officeAddr, "SWITCH")
-	dOffice.Rooms = []string{"Meeting Room"}
-	dOffice.Functions = []string{"Lighting"}
+	dOffice.SetRooms([]string{"Meeting Room"})
+	dOffice.SetFunctions([]string{"Lighting"})
 
 	devIdx := &multiCentralSnapshotIndex{
 		devices: map[string]*device.Device{

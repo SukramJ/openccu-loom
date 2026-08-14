@@ -408,7 +408,7 @@ func snapshotDeviceChannels(idx DeviceIndex, devs []*device.Device, labels Param
 func snapshotRooms(idx DeviceIndex) []RoomEntry {
 	counts := map[string]int{}
 	for _, d := range idx.Devices() {
-		for _, r := range d.Rooms {
+		for _, r := range d.Rooms() {
 			counts[r]++
 		}
 	}
@@ -425,7 +425,7 @@ func snapshotRooms(idx DeviceIndex) []RoomEntry {
 func snapshotFunctions(idx DeviceIndex) []FunctionEntry {
 	counts := map[string]int{}
 	for _, d := range idx.Devices() {
-		for _, f := range d.Functions {
+		for _, f := range d.Functions() {
 			counts[f]++
 		}
 	}
