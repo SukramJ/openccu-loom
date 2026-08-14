@@ -609,6 +609,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	centralOrch.setMatterCentralHook(matter.centralHook)
 	centralOrch.setAlarmCentralHook(alarmCentralHook(alarmSvc))
 	centralOrch.setSecurityCentralHook(securityCentralHook(securitySvc))
+	// The outbound webhook subscribes its centrals when the north-bound
+	// registry starts it (PhaseLate) and never looks at the registry again,
+	// so a runtime-adopted CCU needs the same explicit attach every other
+	// per-central plane gets.
+	centralOrch.setWebhookCentralHook(func(u *central.Unit) func() {
+		return webhookOutbound.StartCentral(u)
+	})
 	// Matter's ordered teardown is owned by the north-bound registry (it
 	// stops after REST, before the webhook). Only registered when enabled —
 	// a disabled bridge yields a no-op matterStop and is not a surface. The

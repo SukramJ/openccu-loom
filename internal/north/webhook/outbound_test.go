@@ -533,3 +533,93 @@ func TestOutboundDisabledIsNoop(t *testing.T) {
 		t.Errorf("expected 0 POSTs for disabled bridge, got %d", ft.count())
 	}
 }
+
+// TestOutboundStartCentralDeliversForARuntimeAdoptedCentral pins the
+// per-central seam: Start walks the registry exactly once, so a CCU adopted
+// after the daemon is up reaches the operator's endpoint only when the
+// composition root attaches it explicitly. Without the seam every datapoint,
+// status change and incident that CCU reports is dropped silently while the
+// boot-time CCUs keep delivering — the endpoint looks healthy and the new CCU
+// looks idle.
+func TestOutboundStartCentralDeliversForARuntimeAdoptedCentral(t *testing.T) {
+	t.Parallel()
+	boot := makeCentral(t, "ccuA")
+	reg := makeRegistry(t, boot)
+	ft := &fakeTransport{}
+	cfg := config.NorthWebhook{Enabled: true, URL: "http://hook.test"}
+	o := NewOutbound(
+		reg, cfg, nil,
+		WithHTTPClient(&http.Client{Transport: ft}),
+		WithBackoff(instantBackoff()),
+		WithClock(fixedClock),
+	)
+	if err := o.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+
+	adopted := makeCentral(t, "ccuB")
+	if err := reg.Register(adopted); err != nil {
+		t.Fatalf("reg.Register(ccuB): %v", err)
+	}
+
+	unwire := o.StartCentral(adopted)
+	if unwire == nil {
+		t.Fatal("StartCentral returned no unwire for an adopted central")
+	}
+
+	events.Publish(adopted.EventBus, datapointEvent("HmIP-RF", "DEF:1", "STATE",
+		hmtypes.BoolValue(true), hmtypes.NoneValue()))
+	waitForCount(t, ft, 1, 2*time.Second)
+
+	var env envelope
+	if err := json.Unmarshal(ft.get(0).body, &env); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	if env.Central != "ccuB" {
+		t.Fatalf("delivery central = %q, want ccuB", env.Central)
+	}
+
+	// The unwire must detach again, or a central removed at runtime keeps
+	// POSTing on a bus that outlives its teardown.
+	unwire()
+	before := ft.count()
+	events.Publish(adopted.EventBus, datapointEvent("HmIP-RF", "DEF:1", "STATE",
+		hmtypes.BoolValue(false), hmtypes.BoolValue(true)))
+	time.Sleep(200 * time.Millisecond)
+	if ft.count() != before {
+		t.Errorf("got %d POST(s) after the unwire, want no change from %d", ft.count(), before)
+	}
+}
+
+// TestOutboundStartCentralHonoursTheCentralAllowList proves the runtime seam
+// applies the same operator filter the boot-time walk does — an adopted CCU
+// outside north.webhook.centrals must stay silent.
+func TestOutboundStartCentralHonoursTheCentralAllowList(t *testing.T) {
+	t.Parallel()
+	boot := makeCentral(t, "ccuA")
+	reg := makeRegistry(t, boot)
+	ft := &fakeTransport{}
+	cfg := config.NorthWebhook{Enabled: true, URL: "http://hook.test", Centrals: []string{"ccuA"}}
+	o := NewOutbound(
+		reg, cfg, nil,
+		WithHTTPClient(&http.Client{Transport: ft}),
+		WithBackoff(instantBackoff()),
+		WithClock(fixedClock),
+	)
+	if err := o.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+
+	adopted := makeCentral(t, "ccuB")
+	if unwire := o.StartCentral(adopted); unwire != nil {
+		t.Fatal("StartCentral attached a central excluded by the allow-list")
+	}
+	events.Publish(adopted.EventBus, datapointEvent("HmIP-RF", "DEF:1", "STATE",
+		hmtypes.BoolValue(true), hmtypes.NoneValue()))
+	time.Sleep(200 * time.Millisecond)
+	if ft.count() != 0 {
+		t.Errorf("got %d POST(s) for an excluded central, want 0", ft.count())
+	}
+}

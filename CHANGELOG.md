@@ -79,6 +79,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A WebSocket command split across several frames is executed.** A
+  client library is free to fragment a large message — most do above
+  some size threshold — and the daemon handled only whole frames: the
+  first half of such a command was logged as malformed JSON and the
+  remainder was discarded without a trace. The command never ran and no
+  answer was ever sent for its correlation id, so the caller waited
+  until it timed out. Fragmented messages are now reassembled, with the
+  assembled size held to the same 1 MiB ceiling a single frame has, and
+  a client that genuinely breaks the framing rules is closed with the
+  matching WebSocket status code instead of having its frames silently
+  dropped.
+
+- **A CCU added while the daemon is running reaches the outbound
+  webhook.** The webhook bridge subscribes its CCUs once, when it
+  starts. A CCU adopted afterwards over the admin API delivered nothing
+  at all — no value change, no interface status, no incident — while the
+  CCUs present at start-up kept delivering, so the endpoint looked
+  healthy and the new CCU looked idle. Removing a CCU now detaches it
+  again, too.
+
 - **Channel configuration export and import work.** `GET` and `POST
   /api/v1/devices/{address}/channels/{n}/config/export|import` are
   published in the OpenAPI spec and appear in the generated client, but

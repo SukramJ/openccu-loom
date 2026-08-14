@@ -107,6 +107,12 @@ type centralOrchestrator struct {
 	// CCU's interface degradation reaches none of those surfaces, because
 	// each of their subscribers only walks the registry once at boot.
 	sysStatusHook func(u *central.Unit) (unwire func())
+	// webhookHook attaches an adopted central to the outbound webhook
+	// bridge. Set via [centralOrchestrator.setWebhookCentralHook]. Without it
+	// none of the adopted CCU's datapoints, status changes or incidents ever
+	// reach the operator's endpoint, because the bridge walks the registry
+	// once when it starts. Nil while the webhook is disabled.
+	webhookHook func(u *central.Unit) (unwire func())
 	// deviceEventsHook attaches an adopted central to the WebSocket
 	// device-event planes: triggers, device lifecycle, and optimistic
 	// rollbacks. Set via [centralOrchestrator.setDeviceEventsCentralHook].
@@ -156,6 +162,7 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	securityHook := o.securityHook
 	hubEventsHook := o.hubEventsHook
 	sysStatusHook := o.sysStatusHook
+	webhookHook := o.webhookHook
 	deviceEventsHook := o.deviceEventsHook
 	eventSourceHook := o.eventSourceHook
 	hubReadyTrigger := o.hubReadyTrigger
@@ -205,6 +212,12 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	// state this central reports is already carried north.
 	if sysStatusHook != nil {
 		keep(sysStatusHook(unit))
+	}
+	// Attach the outbound webhook before the bring-up starts, so the first
+	// event this central reports is carried to the operator's endpoint the
+	// same way a boot-time central's is.
+	if webhookHook != nil {
+		keep(webhookHook(unit))
 	}
 	// Attach the WebSocket device-event planes (trigger, lifecycle,
 	// optimistic rollback) before the bring-up starts, so the devices this
@@ -270,6 +283,17 @@ func (o *centralOrchestrator) setSysStatusCentralHook(hook func(u *central.Unit)
 	}
 	o.mu.Lock()
 	o.sysStatusHook = hook
+	o.mu.Unlock()
+}
+
+// setWebhookCentralHook installs the per-central outbound-webhook wiring
+// hook. Nil-safe on both sides, mirroring setSysStatusCentralHook.
+func (o *centralOrchestrator) setWebhookCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.webhookHook = hook
 	o.mu.Unlock()
 }
 
