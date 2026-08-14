@@ -115,7 +115,8 @@ func TestWireRESTTokenAuditReachesTheDurableTrail(t *testing.T) {
 
 	logger := slog.New(slog.DiscardHandler)
 	buf := audit.NewBuffer(500)
-	rec, _ := wireAuditPersistenceWithDB(db, buf, logger)
+	rec, _, stopSink := wireAuditPersistenceWithDB(db, buf, logger)
+	t.Cleanup(stopSink)
 
 	w := wireREST(ctx, restWiringDeps{
 		cfg:        config.Default(),

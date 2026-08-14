@@ -28,6 +28,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -85,7 +86,14 @@ func TestAdoptedCentralIsWiredLikeABootTimeCentral(t *testing.T) {
 	}
 
 	const adopted = "ccu-adopted"
-	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig(adopted)); err != nil {
+	adoptedCfg := unreachableTestCentralConfig(adopted)
+	// The adopted row carries its own primary interface — a wired-only or
+	// BidCos-only CCU has no HmIP-RF for the tracker's fallback heuristic to
+	// find. It reaches the daemon through the centrals table, not through
+	// cfg.Centrals, so a seed that resolves the pin from the boot config alone
+	// leaves this CCU scored against an interface it does not have.
+	adoptedCfg.PrimaryInterface = "HmIP-Wired"
+	if err := orch.adoptCentral(ctx, adoptedCfg); err != nil {
 		t.Fatalf("adoptCentral(%s): %v", adopted, err)
 	}
 	unit, ok := orch.reg.Get(adopted)
@@ -115,6 +123,16 @@ func TestAdoptedCentralIsWiredLikeABootTimeCentral(t *testing.T) {
 		if _, found := gauges[name]; !found {
 			t.Errorf("the adopted central is missing the %q health gauge", name)
 		}
+	}
+
+	// The primary-interface pin, asserted through the verdict it decides:
+	// with the pin in force a healthy HmIP-Wired client makes the central's
+	// primary client healthy. Unpinned, the tracker falls back to its HmIP-RF
+	// preference, finds no such component on this CCU, and reports the primary
+	// client as down — a wrong verdict on /health and the SPA health tile.
+	unit.Health.Record(adopted+"-HmIP-Wired", health.Sample{Healthy: true})
+	if !unit.Health.PrimaryClientHealthy() {
+		t.Error("the adopted central's primary interface is not pinned to its configured HmIP-Wired")
 	}
 
 	// The incident recorder: reliability incidents resolve it lazily off the

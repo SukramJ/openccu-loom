@@ -8,6 +8,7 @@ import (
 	gosql "database/sql"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
@@ -176,12 +177,22 @@ func wireIncidentRecorder(
 // [openLoomDB] in the composition root; this function never opens or closes
 // it. A nil db (persistence disabled, or the shared open failed) degrades to
 // the buffered Recorder unchanged, matching the previous no-DB behaviour.
-func wireAuditPersistenceWithDB(db *gosql.DB, buf *audit.Buffer, logger *slog.Logger) (audit.Recorder, *audit.DurableSinkStats) {
+//
+// The third return value stops the sink's worker: it drains whatever is still
+// queued through the sink and joins the goroutine. The caller MUST run it
+// before closing db — the drain writes through that handle — and must not run
+// it while producers are still recording, because an unconsumed queue makes
+// them wait out the block timeout. It is safe to call more than once.
+//
+//nolint:gocritic // unnamedResult: mirrors audit.NewDurableSink's own (sink, stats, stop) shape
+func wireAuditPersistenceWithDB(
+	db *gosql.DB, buf *audit.Buffer, logger *slog.Logger,
+) (audit.Recorder, *audit.DurableSinkStats, func()) {
 	if db == nil || buf == nil {
-		return buf, nil
+		return buf, nil, func() {}
 	}
 	store := sqlite.NewAuditStore(db)
-	durableSink, durableStats, _ := audit.NewDurableSink(store.Append, audit.DurableSinkOptions{
+	durableSink, durableStats, stopSink := audit.NewDurableSink(store.Append, audit.DurableSinkOptions{
 		Capacity:     256,
 		BlockTimeout: 2 * time.Second,
 		Logger:       logger,
@@ -190,5 +201,5 @@ func wireAuditPersistenceWithDB(db *gosql.DB, buf *audit.Buffer, logger *slog.Lo
 	// global) so concurrent daemon instances — e.g. parallel reload
 	// tests — never race on shared state. The health tracker reads it
 	// per-daemon in daemon.go.
-	return audit.NewPersistedRecorder(buf, durableSink, logger), durableStats
+	return audit.NewPersistedRecorder(buf, durableSink, logger), durableStats, sync.OnceFunc(stopSink)
 }

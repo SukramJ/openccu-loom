@@ -765,7 +765,7 @@ func TestWireAuditPersistenceWithDB_NilDB(t *testing.T) {
 	t.Parallel()
 	buf := audit.NewBuffer(16)
 	logger := slog.New(slog.DiscardHandler)
-	got, _ := wireAuditPersistenceWithDB(nil, buf, logger)
+	got, _, _ := wireAuditPersistenceWithDB(nil, buf, logger)
 	if got == nil {
 		t.Fatal("expected non-nil fallback recorder when db is nil")
 	}
@@ -922,7 +922,8 @@ func TestWireAuditPersistenceWithDB_SharesHandleWithOtherWiring(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	reg := buildTestRegistry(t, "ccu-shared")
 
-	rec, _ := wireAuditPersistenceWithDB(db, buf, logger)
+	rec, _, stopSink := wireAuditPersistenceWithDB(db, buf, logger)
+	t.Cleanup(stopSink)
 	if rec == nil {
 		t.Fatal("expected non-nil recorder from shared DB")
 	}

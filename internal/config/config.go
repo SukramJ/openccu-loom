@@ -1707,6 +1707,16 @@ func (c *Config) applyDefaults() {
 	if c.North.REST.Listen == "" {
 		c.North.REST.Listen = ":8119"
 	}
+	// Canonicalise the MQTT topic base. The topic builder trims leading and
+	// trailing slashes for every topic it declares, while the consumers that
+	// concatenate the raw base do not — the last will and the retained-cleanup
+	// subscribe filters among them. A base the operator wrote as "loom/" then
+	// declares availability on `loom/bridge/status` while the broker holds the
+	// will on `loom//bridge/status`, so the offline signal lands where nothing
+	// listens and every bridged entity keeps its last retained value. Trim
+	// before the empty-check so a base of nothing but slashes falls back to the
+	// default instead of failing validation.
+	c.North.MQTT.TopicBase = strings.Trim(c.North.MQTT.TopicBase, "/")
 	if c.North.MQTT.TopicBase == "" {
 		c.North.MQTT.TopicBase = "openccu-loom"
 	}

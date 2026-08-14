@@ -139,6 +139,41 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   REST-only mode — except the REST mount then dereferenced the absent
   config service and took the process down with it.
 
+- **A CCU added while the daemon runs keeps its `primary_interface`.**
+  The pin decides which interface the CCU's primary-client health
+  verdict and score are computed from. It reached only the CCUs listed
+  in the configuration file, so for one added through the SPA the daemon
+  fell back to its built-in "an interface whose name contains HmIP-RF"
+  rule — which matches nothing on a wired-only or BidCos-only CCU.
+  `/health` and the health tile then reported that CCU against an
+  interface it does not have.
+
+- **The values-cache endpoints answer instead of crashing when the cache
+  is off.** With `persistence.values_cache.enabled: false`,
+  `GET /api/v1/admin/values-cache/stats` and both reset endpoints
+  panicked on every call — recovered into a 500 with a stack trace in
+  the log — because the absent store still passed the handler's
+  "is it wired" check. They now return the documented 503, and the
+  per-device reset no longer reports "device not found" about a device
+  it never looked for.
+
+- **Audit entries written just before shutdown survive it.** The audit
+  trail persists through a background queue. Shutdown closed the
+  database handle without stopping that queue first, so a burst of
+  changes followed by a restart lost whatever had not been written yet —
+  the trail ends mid-burst, with a warning line as the only trace. The
+  queue is now drained and its worker joined before the handle closes.
+
+- **The MQTT last will lands on the topic every entity listens to.** A
+  `topic_base` written with a leading or trailing slash — `loom/` — was
+  used verbatim for the last-will topic while every declared topic had
+  it trimmed. The broker then published `offline` to `loom//bridge/status`
+  while all entities watch `loom/bridge/status`: when the daemon died or
+  the connection dropped, Home Assistant kept every bridged entity
+  available with its last value, forever. The base is now normalised
+  once, when the configuration is loaded, so every consumer of it —
+  including the retained-topic cleanup — agrees.
+
 ## [0.58.6]
 
 ### Security

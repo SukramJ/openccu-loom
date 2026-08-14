@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 )
 
 // ── buildLWTTopic ────────────────────────────────────────────────────────────
@@ -30,6 +31,24 @@ func TestBuildLWTTopic_CustomBase(t *testing.T) {
 	want := "home/ccu/bridge/status"
 	if got != want {
 		t.Errorf("buildLWTTopic custom: got %q, want %q", got, want)
+	}
+}
+
+// TestBuildLWTTopic_SlashBearingBaseMatchesDeclaredTopic pins the will topic
+// against the topic every declaring surface uses instead of against a
+// hand-written string: the online publish and every discovery availability
+// entry go through [mqtt.TopicBuilder.BridgeStatus], which trims the base. A
+// hand-assembled will topic drifts from it for a base the operator wrote with
+// a slash, so the broker fires `offline` onto a topic nothing subscribes to
+// and every bridged entity stays available with a stale value forever.
+func TestBuildLWTTopic_SlashBearingBaseMatchesDeclaredTopic(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.MQTT.TopicBase = "loom/"
+	got := buildLWTTopic(cfg)
+	want := mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).BridgeStatus()
+	if got != want {
+		t.Errorf("buildLWTTopic slash-bearing base: got %q, want the declared %q", got, want)
 	}
 }
 

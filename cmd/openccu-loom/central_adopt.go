@@ -103,13 +103,15 @@ type centralOrchestrator struct {
 	eventSourceHook func(u *central.Unit) (unwire func())
 	// centralSeed primes a fresh unit's health tracker, gauges,
 	// observability recorder and metrics aggregator. Set via
-	// [centralOrchestrator.setCentralSeed].
+	// [centralOrchestrator.setCentralSeed]. The second argument is the
+	// central's `primary_interface` pin, which the adopted row carries and
+	// the boot config does not know about.
 	//
 	// It is a field of its own rather than one more entry in extraHooks
 	// because it is the one wiring that must run BEFORE the unit enters the
 	// shared registry: it writes unsynchronised Unit fields the serving
 	// handlers read, and the registry is what makes the unit observable.
-	centralSeed func(u *central.Unit)
+	centralSeed func(u *central.Unit, primaryInterface string)
 	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
 	// serial resolves. Set via [centralOrchestrator.setHubReadyTrigger] from the
 	// southbound wiring result so a runtime-adopted central publishes its
@@ -241,7 +243,7 @@ func (o *centralOrchestrator) addCentralHook(hook func(u *central.Unit) (unwire 
 
 // setCentralSeed installs the per-central health/metrics seed run on every
 // runtime-adopted central before it is registered. Nil-safe on both sides.
-func (o *centralOrchestrator) setCentralSeed(seed func(u *central.Unit)) {
+func (o *centralOrchestrator) setCentralSeed(seed func(u *central.Unit, primaryInterface string)) {
 	if o == nil {
 		return
 	}
@@ -389,7 +391,9 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	seed := o.centralSeed
 	o.mu.Unlock()
 	if seed != nil {
-		seed(unit)
+		// The pin travels with the adopted config: it comes from the row the
+		// operator saved, which never reaches cfg.Centrals.
+		seed(unit, cc.PrimaryInterface)
 	}
 	if err := o.reg.Register(unit); err != nil {
 		return fmt.Errorf("central_adopt: register %s: %w", cc.Name, err)

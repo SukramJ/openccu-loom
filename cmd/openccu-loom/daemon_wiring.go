@@ -30,17 +30,36 @@ import (
 // audit / scheduler gauges, and no observability recorder — its section of
 // `/health` and the diagnostics dump simply had nothing in it, which reads
 // like a CCU that is idle rather than one nobody is watching.
+//
+// The seed takes the primary interface as an argument rather than resolving it
+// from cfg: a runtime-adopted central is described by its row in the centrals
+// table, which cfg.Centrals never gains, so a by-name lookup finds nothing and
+// silently drops the operator's pin.
 func seedCentralHealthAndMetrics(
 	reg *central.Registry, cfg *config.Config, auditDurableStats *audit.DurableSinkStats, logger *slog.Logger,
-) (centralSeed func(u *central.Unit)) {
+) (centralSeed func(u *central.Unit, primaryInterface string)) {
 	obsRecorder := observability.LogRecorder{Logger: logger.With(slog.String("component", "observability"))}
-	centralSeed = func(u *central.Unit) {
-		seedCentralHealthAndMetricsFor(u, cfg, auditDurableStats, obsRecorder, logger)
+	centralSeed = func(u *central.Unit, primaryInterface string) {
+		seedCentralHealthAndMetricsFor(u, primaryInterface, auditDurableStats, obsRecorder, logger)
 	}
 	for _, u := range reg.List() {
-		centralSeed(u)
+		centralSeed(u, configuredPrimaryInterface(cfg, u.Name()))
 	}
 	return centralSeed
+}
+
+// configuredPrimaryInterface returns the `primary_interface` the boot config
+// pins for name, or "" when the operator left it at its default.
+func configuredPrimaryInterface(cfg *config.Config, name string) string {
+	if cfg == nil {
+		return ""
+	}
+	for i := range cfg.Centrals {
+		if cfg.Centrals[i].Name == name {
+			return cfg.Centrals[i].PrimaryInterface
+		}
+	}
+	return ""
 }
 
 // seedCentralHealthAndMetricsFor primes one central. Split out of
@@ -51,7 +70,7 @@ func seedCentralHealthAndMetrics(
 // the shared registry — the point at which anything else can observe it.
 func seedCentralHealthAndMetricsFor(
 	u *central.Unit,
-	cfg *config.Config,
+	primaryInterface string,
 	auditDurableStats *audit.DurableSinkStats,
 	obsRecorder observability.Recorder,
 	logger *slog.Logger,
@@ -68,16 +87,11 @@ func seedCentralHealthAndMetricsFor(
 	// Multi-CCU setups with HmIP-Wired-only or BidCos-only
 	// installations rely on this to score the right interface
 	// as the central's primary.
-	if cfg != nil {
-		for i := range cfg.Centrals {
-			if cfg.Centrals[i].Name == u.Name() && cfg.Centrals[i].PrimaryInterface != "" {
-				u.Health.SetPrimaryInterface(cfg.Centrals[i].PrimaryInterface)
-				logger.Info("health.primary_interface.pinned",
-					slog.String("central", u.Name()),
-					slog.String("interface", cfg.Centrals[i].PrimaryInterface))
-				break
-			}
-		}
+	if primaryInterface != "" {
+		u.Health.SetPrimaryInterface(primaryInterface)
+		logger.Info("health.primary_interface.pinned",
+			slog.String("central", u.Name()),
+			slog.String("interface", primaryInterface))
 	}
 
 	// Surface the event-bus deferred high-water gauge through the

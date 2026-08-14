@@ -560,15 +560,14 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 	return stack
 }
 
-// buildLWTTopic assembles the retained LWT/online topic for the
-// bridge. Mirrors mqtt.TopicBuilder.BridgeStatus without requiring
-// bridge instantiation first.
+// buildLWTTopic returns the retained LWT/online topic for the bridge,
+// before a bridge exists to ask. It delegates to the same builder the online
+// publish and every discovery availability entry use rather than re-assembling
+// the string: a second assembly drifts from the declared topic the moment the
+// base needs normalising, and the will is the one topic whose divergence stays
+// invisible until the daemon is already gone.
 func buildLWTTopic(cfg *config.Config) string {
-	base := cfg.North.MQTT.TopicBase
-	if base == "" {
-		base = "openccu-loom"
-	}
-	return base + "/bridge/status"
+	return mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).BridgeStatus()
 }
 
 // bridgeHealthSupplier returns a closure the MQTT bridge invokes on
