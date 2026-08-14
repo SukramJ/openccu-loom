@@ -8,7 +8,9 @@ import type {
   MatterSessionsResponse,
 } from "$lib/api/matter-types";
 
-let sessions: MatterSessionsResponse = { sessions: [] };
+const emptyTable = { live: 0, reserved: 0, capacity: 65534, free: 65534 };
+
+let sessions: MatterSessionsResponse = { sessions: [], occupancy: emptyTable };
 let mdns: MatterMdnsDiagnostics = { advertising: true, services: [], findings: [] };
 let endpoints: MatterEndpointsResponse = { endpoints: [] };
 let compat: MatterCompatibility = { ecosystems: [], endpoint_count: 0, findings: [] };
@@ -26,7 +28,7 @@ import MatterDiagnostics from "./MatterDiagnostics.svelte";
 
 describe("MatterDiagnostics", () => {
   beforeEach(() => {
-    sessions = { sessions: [] };
+    sessions = { sessions: [], occupancy: emptyTable };
     mdns = { advertising: true, services: [], findings: [] };
     endpoints = { endpoints: [] };
     compat = { ecosystems: [], endpoint_count: 0, findings: [] };
@@ -74,6 +76,7 @@ describe("MatterDiagnostics", () => {
           peer_idle_seconds: 2400,
         },
       ],
+      occupancy: emptyTable,
     };
 
     render(MatterDiagnostics);
@@ -99,10 +102,22 @@ describe("MatterDiagnostics", () => {
           peer_idle_seconds: 1,
         },
       ],
+      occupancy: emptyTable,
     };
 
     render(MatterDiagnostics);
     expect(await screen.findByText(/receiving nothing|empfängt aber nichts/i)).toBeTruthy();
+  });
+
+  // An id staked by a CASE handshake that never completed holds its slot
+  // for twenty minutes and shows up in no session row. Without this line a
+  // session table filling up looks exactly like a quiet bridge, right up
+  // to the point where the next controller is refused.
+  it("reports the session-table occupancy including ids reserved by incomplete handshakes", async () => {
+    sessions = { sessions: [], occupancy: { live: 2, reserved: 5, capacity: 65534, free: 65527 } };
+
+    render(MatterDiagnostics);
+    expect(await screen.findByText(/5 reserved|5 reserviert/i)).toBeTruthy();
   });
 
   it("reports an ecosystem incompatibility for the paired controllers", async () => {

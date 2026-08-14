@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.28.0
+  version: 5.29.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5768,6 +5768,10 @@ paths:
         closing — the shape that otherwise shows up only as entities going
         stale in the ecosystem.
 
+        The `occupancy` block answers the other half: how much of the
+        session-id space the listed sessions leave free, including the ids
+        held by handshakes that never became sessions.
+
         No key material is exposed.
       tags: [matter]
       responses:
@@ -10036,13 +10040,40 @@ components:
           type: integer
           description: "Seconds since last_peer_activity — the controller-liveness signal"
 
+    MatterSessionOccupancy:
+      type: object
+      required: [live, reserved, capacity, free]
+      description: |
+        Usage of the bridge's 16-bit session-id space.
+
+        `reserved` is the field the session list cannot supply: a CASE
+        handshake announces its session id in Sigma2 one round trip before
+        the session exists, and an id staked by a handshake that never
+        completes holds its slot for twenty minutes without appearing as a
+        session. A space filling up with those looks like a quiet bridge
+        from every other view, until the next controller is refused.
+      properties:
+        live:
+          type: integer
+          description: "Sessions with key material installed"
+        reserved:
+          type: integer
+          description: "Ids staked by a handshake that has not completed"
+        capacity:
+          type: integer
+          description: "Size of the allocator's id space (ids 1..0xFFFE)"
+        free:
+          type: integer
+          description: "Ids held by neither a live session nor a staked handshake"
+
     MatterSessionList:
       type: object
-      required: [sessions]
+      required: [sessions, occupancy]
       properties:
         sessions:
           type: array
           items: { $ref: "#/components/schemas/MatterSession" }
+        occupancy: { $ref: "#/components/schemas/MatterSessionOccupancy" }
 
     MatterSetupPayload:
       type: object

@@ -4680,6 +4680,10 @@ export interface paths {
          *     closing — the shape that otherwise shows up only as entities going
          *     stale in the ecosystem.
          *
+         *     The `occupancy` block answers the other half: how much of the
+         *     session-id space the listed sessions leave free, including the ids
+         *     held by handshakes that never became sessions.
+         *
          *     No key material is exposed.
          */
         get: operations["listMatterSessions"];
@@ -7691,8 +7695,29 @@ export interface components {
             /** @description Seconds since last_peer_activity — the controller-liveness signal */
             peer_idle_seconds: number;
         };
+        /**
+         * @description Usage of the bridge's 16-bit session-id space.
+         *
+         *     `reserved` is the field the session list cannot supply: a CASE
+         *     handshake announces its session id in Sigma2 one round trip before
+         *     the session exists, and an id staked by a handshake that never
+         *     completes holds its slot for twenty minutes without appearing as a
+         *     session. A space filling up with those looks like a quiet bridge
+         *     from every other view, until the next controller is refused.
+         */
+        MatterSessionOccupancy: {
+            /** @description Sessions with key material installed */
+            live: number;
+            /** @description Ids staked by a handshake that has not completed */
+            reserved: number;
+            /** @description Size of the allocator's id space (ids 1..0xFFFE) */
+            capacity: number;
+            /** @description Ids held by neither a live session nor a staked handshake */
+            free: number;
+        };
         MatterSessionList: {
             sessions: components["schemas"]["MatterSession"][];
+            occupancy: components["schemas"]["MatterSessionOccupancy"];
         };
         MatterSetupPayload: {
             discriminator: number;

@@ -31,6 +31,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   loses its connection to the CCU, and a device that reports UNREACH or
   STICKY_UNREACH on its own. (REST API 5.27.0)
 
+- **A Matter controller that resumes its session is no longer invisible.**
+  CASE resumption re-establishes a session from a cached secret in one
+  round trip, and until now nothing recorded that it happened: the daemon
+  logged the same establishment line as a full handshake, so an operator
+  report could not say whether a controller resumed, which cached record it
+  resumed from, or what the resume did to the session table. Running at
+  `logging.level: debug` now emits one `matter.bridge.case.session_resumed`
+  record per resume, carrying the resumption id the controller presented,
+  the id handed back for its next resume, the session id before and after,
+  and the sessions the install displaced. The record is built only when
+  debug logging is on, so the handshake path is unchanged otherwise.
+
+  `GET /api/v1/matter/sessions` gained an `occupancy` block — live sessions,
+  ids still reserved by handshakes that never completed, the capacity of the
+  16-bit id space and what is left of it — and the Matter diagnostics view
+  shows the same line above the controller table. A reserved id appears in
+  no session row and holds its slot for twenty minutes, so a space filling
+  up used to look exactly like a quiet bridge until the next controller was
+  refused. (REST API 5.29.0)
+
 ### Fixed
 
 - **One person signing in through the identity provider is now one

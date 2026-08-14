@@ -24,5 +24,11 @@
       "idle_seconds": 120,
       "peer_idle_seconds": 2400
     }
-  ]
+  ],
+  "occupancy": {
+    "live": 2,
+    "reserved": 1,
+    "capacity": 65534,
+    "free": 65531
+  }
 }

@@ -11,6 +11,7 @@ package bridge
 // Sigma3 retransmits.
 
 import (
+	"bytes"
 	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -589,4 +590,47 @@ func TestCaseAdapter_FreshSigma1_AfterPriorEstablishResetsGuard(t *testing.T) {
 	// responder's, but the reset-of-established assertion is already
 	// proven by reaching this point without panicking and by the
 	// responder accepting the new Sigma1.
+}
+
+// TestCaseAdapter_ProcessSigma1_ResumeInfoReadableInsideOnEstablished
+// pins the ordering the daemon's session-open callback depends on.
+//
+// The callback is the only place that holds every fact about a resume at
+// once — the fabric it landed on, the peer, and the session id it is
+// about to register. It lifts the resumption record off the responder
+// through [CaseAdapter.SnapshotResponder]; if the record were only
+// stamped after the callback returned, the resume would be logged as a
+// full handshake and the one question this observability exists to
+// answer would stay unanswerable.
+func TestCaseAdapter_ProcessSigma1_ResumeInfoReadableInsideOnEstablished(t *testing.T) {
+	t.Parallel()
+	ipk := newCaseTestIPK(t)
+	respID := newCaseTestIdentity(t, 0xBBBB, 1, ipk)
+	responder := sigma.NewResponder(respID, caseTestVerifier{}, 0x2001)
+
+	sigma1Bytes, secret, rid := buildResumeSigma1(t)
+	responder.SetResumptionStore(&fakeResumptionStore{id: rid, secret: secret})
+
+	a := NewCaseAdapter(responder)
+	var seen sigma.ResumeInfo
+	a.SetOnSessionEstablished(func(_ sigma.SessionKeys, _ uint16) error {
+		if resp := a.SnapshotResponder(); resp != nil {
+			seen = resp.ResumeInfo()
+		}
+		return nil
+	})
+
+	if _, _, err := a.ProcessSigma1(sigma1Bytes); err != nil {
+		t.Fatalf("ProcessSigma1: %v", err)
+	}
+	if !seen.Resumed {
+		t.Fatal("the session-open callback could not tell it was serving a resume")
+	}
+	if !bytes.Equal(seen.PresentedResumptionID, rid) {
+		t.Errorf("presented resumption id = %x, want %x", seen.PresentedResumptionID, rid)
+	}
+	if seen.SessionIDBefore != 0x2001 || seen.SessionIDAfter != 0x2001 {
+		t.Errorf("session id before/after = %#x/%#x, want the responder's id unchanged (0x2001)",
+			seen.SessionIDBefore, seen.SessionIDAfter)
+	}
 }

@@ -40,8 +40,24 @@ export type MatterSession = {
   peer_idle_seconds: number;
 };
 
+/**
+ * Usage of the bridge's 16-bit session-id space.
+ *
+ * `reserved` is the count the session list cannot show: a CASE handshake
+ * announces its session id one round trip before the session exists, so an
+ * id staked by a handshake that never completes holds its slot without ever
+ * appearing as a session.
+ */
+export type MatterSessionOccupancy = {
+  live: number;
+  reserved: number;
+  capacity: number;
+  free: number;
+};
+
 export type MatterSessionsResponse = {
   sessions: MatterSession[];
+  occupancy: MatterSessionOccupancy;
 };
 
 export type MatterMdnsService = {

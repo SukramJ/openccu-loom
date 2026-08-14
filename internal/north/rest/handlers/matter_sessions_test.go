@@ -13,10 +13,17 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 
-// stubSessionLister returns a fixed session set.
-type stubSessionLister struct{ sessions []handlers.MatterSessionInfo }
+// stubSessionLister returns a fixed session set and occupancy.
+type stubSessionLister struct {
+	sessions  []handlers.MatterSessionInfo
+	occupancy handlers.MatterSessionOccupancy
+}
 
 func (s stubSessionLister) MatterSessions() []handlers.MatterSessionInfo { return s.sessions }
+
+func (s stubSessionLister) MatterSessionOccupancy() handlers.MatterSessionOccupancy {
+	return s.occupancy
+}
 
 // TestMatterSessionsReportsPerPeerIdleAge pins the field the whole
 // endpoint exists for.
@@ -116,5 +123,43 @@ func TestMatterSessionsDistinguishesCommissioningSessions(t *testing.T) {
 	}
 	if body.Sessions[1].IsPASE {
 		t.Error("the operational session must not report is_pase")
+	}
+}
+
+// TestMatterSessionsReportsSessionTableOccupancy pins the second half of
+// the diagnostics answer.
+//
+// The session list alone cannot distinguish a bridge that is idle from
+// one whose 16-bit id space is filling up with handshakes that never
+// completed: a staked id holds its slot for twenty minutes and never
+// appears as a session. An operator report has to be able to say how
+// much of the space is live, how much is reserved, and how much is left.
+func TestMatterSessionsReportsSessionTableOccupancy(t *testing.T) {
+	t.Parallel()
+
+	lister := stubSessionLister{
+		sessions: []handlers.MatterSessionInfo{
+			{SessionID: 7, FabricIndex: 1, LastActivity: time.Now(), LastPeerActivity: time.Now()},
+		},
+		occupancy: handlers.MatterSessionOccupancy{Live: 1, Reserved: 3, Capacity: 65534, Free: 65530},
+	}
+
+	rec := httptest.NewRecorder()
+	handlers.MatterSessions(lister)(rec, httptest.NewRequest(http.MethodGet, "/api/v1/matter/sessions", http.NoBody))
+
+	var body handlers.MatterSessionList
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Occupancy.Live != 1 {
+		t.Errorf("occupancy.live = %d, want 1", body.Occupancy.Live)
+	}
+	if body.Occupancy.Reserved != 3 {
+		t.Errorf("occupancy.reserved = %d, want 3 — ids staked by handshakes that never completed are "+
+			"invisible in the session list and are exactly what exhausts the space", body.Occupancy.Reserved)
+	}
+	if body.Occupancy.Capacity != 65534 || body.Occupancy.Free != 65530 {
+		t.Errorf("occupancy capacity/free = %d/%d, want 65534/65530",
+			body.Occupancy.Capacity, body.Occupancy.Free)
 	}
 }
