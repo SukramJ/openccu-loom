@@ -304,3 +304,36 @@ func TestIdentify_MatterAttributesContainsBothAttrs(t *testing.T) {
 		}
 	}
 }
+
+// TestIdentify_CloseStopsTheCountdownAndIsIdempotent pins the disposal
+// contract the endpoint layer relies on: once the endpoint hosting an
+// Identify server disappears, Close() must terminate its countdown and no
+// later write may resurrect it — otherwise a stray goroutine ticks for the
+// remaining IdentifyTime (up to 65535 s ≈ 18 h). Close is also called from
+// more than one teardown path, so it must tolerate repeats.
+// Mirrors matter.js
+// packages/node/src/behaviors/identify/IdentifyServer.ts [Symbol.asyncDispose].
+func TestIdentify_CloseStopsTheCountdownAndIsIdempotent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	id := core.NewIdentify()
+
+	if _, err := id.MatterInvoke(ctx, 0x00, uint16(600), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterInvoke(Identify): %v", err)
+	}
+	id.Close()
+	id.Close() // idempotent — a second teardown must not panic.
+
+	// The attribute stays writable (the cluster is not an error surface
+	// after disposal) but the countdown must not restart.
+	if err := id.MatterWrite(ctx, 0x0000, uint16(5), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite(IdentifyTime) after Close: %v", err)
+	}
+	got, ok := id.MatterRead(0x0000)
+	if !ok {
+		t.Fatal("MatterRead(IdentifyTime) reported the attribute as absent after Close")
+	}
+	if got != uint16(5) {
+		t.Fatalf("IdentifyTime = %v, want uint16(5)", got)
+	}
+}

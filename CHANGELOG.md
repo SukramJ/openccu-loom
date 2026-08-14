@@ -175,6 +175,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   up to 112 records — and lock operations or switch presses the
   controller had already seen arrived a second time.
 
+- **"Identify" on a bridged device does something again.** Identifying an
+  accessory from Apple Home, Google Home or chip-tool was acknowledged
+  with success and then had no effect whatsoever: the remaining identify
+  time read back as zero on the very next request, no controller ever saw
+  a countdown, and each attempt left a timer running in the background for
+  as long as the requested duration — up to eighteen hours, once per
+  attempt. The cluster is now bound to the endpoint, so it keeps the state
+  it was given across requests and across a topology rebuild, and it stops
+  when the device leaves the bridge.
+
 ### Security
 
 - **A Matter write is authorized where it lands.** A write whose path

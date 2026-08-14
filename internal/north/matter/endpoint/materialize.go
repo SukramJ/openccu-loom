@@ -271,7 +271,14 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 	// front of the source / measurement clusters, keeps it discoverable
 	// at the lowest cluster ID and ensures the ServerList builder picks
 	// it up automatically.
-	identify := mattercore.NewIdentify()
+	//
+	// The instance comes from the endpoint, not from this call: Identify
+	// is the one bridged cluster server that owns mutable state
+	// (IdentifyTime plus its countdown), and this function returns a
+	// freshly materialised set on EVERY dispatch. A per-call instance
+	// would acknowledge the write and then be discarded, so IdentifyTime
+	// would read 0 forever while a stray countdown goroutine ticked on.
+	identify := ep.identifyServer()
 
 	clusters := make([]interfaces.MatterClusterServer, 0, len(inner)+1)
 	clusters = append(clusters, identify)

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -143,64 +144,88 @@ type Endpoint struct {
 	// optional) in `packages/node/src/endpoints/aggregator.ts`.
 	AggregatorClusterServers []interfaces.MatterClusterServer
 
-	// versions is the shared per-cluster DataVersion tracker set for a
-	// BRIDGED endpoint (keyed by cluster id). Bridged cluster servers are
-	// materialised fresh on every dispatch (see [ClusterServers]) and the
-	// *Endpoint struct itself is rebuilt on every [Assembler.Assemble], so
-	// an instance-embedded tracker would install a new random initial
+	// state holds everything a BRIDGED endpoint must keep BETWEEN
+	// dispatches: the per-cluster DataVersion trackers and the stateful
+	// Identify cluster server. Bridged cluster servers are materialised
+	// fresh on every dispatch (see [ClusterServers]) and the *Endpoint
+	// struct itself is rebuilt on every [Assembler.Assemble], so
+	// instance-embedded state is discarded the moment a dispatch returns:
+	// an embedded DataVersion tracker would install a new random initial
 	// version after every reassembly — controllers' DataVersionFilters
 	// then never match and Apple re-transfers every endpoint on each
-	// re-subscribe. The set is owned by the assembler's [versionRegistry]
-	// and keyed there by the endpoint's stable [Endpoint.SourceKey], so
-	// the SAME (device, channel, dp) keeps ONE tracker set across every
-	// reassembly for the process lifetime: an already-paired endpoint's
-	// DataVersion survives an UNRELATED topology change (a sibling
-	// endpoint added / removed), and only a state change on the endpoint
-	// itself bumps it. Mirrors matter.js
+	// re-subscribe — and an embedded Identify would report IdentifyTime=0
+	// on the read that follows its own successful write.
+	//
+	// The state is owned by the assembler's [endpointStateRegistry] and
+	// keyed there by the endpoint's stable [Endpoint.SourceKey], so the
+	// SAME (device, channel, dp) keeps ONE state across every reassembly
+	// for as long as it stays in the topology: an already-paired
+	// endpoint's DataVersion survives an UNRELATED topology change (a
+	// sibling endpoint added / removed), and only a state change on the
+	// endpoint itself bumps it. Mirrors matter.js
 	// packages/node/src/behavior/state/managed/Datasource.ts:349 (version
 	// sampled once per behavior lifetime, bound to the endpoint's own
 	// lifecycle) / :949 (increment per committed change). nil for the
 	// root + aggregator endpoints (they keep their reattached
-	// instance-hosted trackers) and for bare test-constructed endpoints —
-	// [Endpoint.clusterTracker] then lazily installs a private set so the
-	// endpoint still tracks a version in isolation.
-	versionsMu sync.Mutex
-	versions   *clusterVersionSet
+	// instance-hosted servers and trackers) and for bare
+	// test-constructed endpoints — [Endpoint.endpointState] then lazily
+	// installs a private state so the endpoint still behaves correctly
+	// in isolation.
+	stateMu sync.Mutex
+	state   *endpointState
+}
+
+// endpointState returns (lazily creating) the state bound to this
+// endpoint. Safe for concurrent use.
+func (e *Endpoint) endpointState() *endpointState {
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
+	if e.state == nil {
+		e.state = newEndpointState()
+	}
+	return e.state
 }
 
 // clusterTracker returns (lazily creating) the DataVersion tracker for
-// clusterID. Assembler-built bridged endpoints share the tracker set the
-// [versionRegistry] keyed by [Endpoint.SourceKey], so the version
-// survives reassembly; a bare endpoint (versions nil) gets a private
-// set. Safe for concurrent use.
+// clusterID. Assembler-built bridged endpoints share the state the
+// [endpointStateRegistry] keyed by [Endpoint.SourceKey], so the version
+// survives reassembly; a bare endpoint gets a private state. Safe for
+// concurrent use.
 func (e *Endpoint) clusterTracker(clusterID uint32) *hmtypes.DataVersionTracker {
-	e.versionsMu.Lock()
-	if e.versions == nil {
-		e.versions = newClusterVersionSet()
-	}
-	set := e.versions
-	e.versionsMu.Unlock()
-	return set.tracker(clusterID)
+	return e.endpointState().tracker(clusterID)
 }
 
-// clusterVersionSet is a shared, concurrency-safe set of per-cluster
-// DataVersion trackers keyed by cluster id. One set is bound to one
-// stable endpoint identity for the process lifetime; the same set is
-// handed to every *Endpoint the assembler rebuilds for that identity so
-// the version survives reassembly. Two *Endpoint instances — the
-// outgoing topology still serving in-flight reads and the incoming one —
-// may reference the same set concurrently, hence the internal mutex.
-type clusterVersionSet struct {
+// identifyServer returns the endpoint's Identify (0x0003) cluster server.
+// Unlike the read-through cluster servers, Identify owns mutable state
+// (IdentifyTime + its once-per-second countdown), so exactly ONE instance
+// serves every dispatch for a given endpoint identity — a per-dispatch
+// instance would answer the write with Success, be discarded, and let the
+// follow-up read report 0 while its countdown goroutine ticked on in the
+// background. Mirrors matter.js, where IdentifyServer is one behavior
+// instance owned by the endpoint
+// (packages/node/src/behaviors/identify/IdentifyServer.ts).
+func (e *Endpoint) identifyServer() *mattercore.Identify {
+	return e.endpointState().identifyServer()
+}
+
+// endpointState is the concurrency-safe state bound to one stable
+// endpoint identity for as long as that identity is part of the
+// topology. The same state is handed to every *Endpoint the assembler
+// rebuilds for that identity. Two *Endpoint instances — the outgoing
+// topology still serving in-flight reads and the incoming one — may
+// reference it concurrently, hence the internal mutex.
+type endpointState struct {
 	mu       sync.Mutex
 	trackers map[uint32]*hmtypes.DataVersionTracker
+	identify *mattercore.Identify
 }
 
-func newClusterVersionSet() *clusterVersionSet {
-	return &clusterVersionSet{trackers: make(map[uint32]*hmtypes.DataVersionTracker)}
+func newEndpointState() *endpointState {
+	return &endpointState{trackers: make(map[uint32]*hmtypes.DataVersionTracker)}
 }
 
 // tracker returns (lazily creating) the tracker for clusterID.
-func (s *clusterVersionSet) tracker(clusterID uint32) *hmtypes.DataVersionTracker {
+func (s *endpointState) tracker(clusterID uint32) *hmtypes.DataVersionTracker {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := s.trackers[clusterID]
@@ -211,52 +236,82 @@ func (s *clusterVersionSet) tracker(clusterID uint32) *hmtypes.DataVersionTracke
 	return t
 }
 
-// versionRegistry maps a stable endpoint identity ([store.EndpointKey])
-// to its [clusterVersionSet]. It is owned by the [Assembler] and lives
-// across every [Assembler.Assemble], so a bridged endpoint that persists
-// through a reassembly reuses its existing tracker set (stable
-// DataVersion) while a genuinely new endpoint gets a fresh set (fresh
-// random-seeded version). [store.EndpointKey] is the natural key: it is
-// the matter_endpoints primary key — deterministic from the model-side
+// identifyServer returns (lazily creating) the Identify cluster server.
+func (s *endpointState) identifyServer() *mattercore.Identify {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.identify == nil {
+		s.identify = mattercore.NewIdentify()
+	}
+	return s.identify
+}
+
+// close releases the state's stateful cluster servers. Called when the
+// endpoint identity leaves the topology so a running Identify countdown
+// does not keep ticking on an endpoint nobody can address any more
+// (IdentifyTime tops out at 65535 s).
+func (s *endpointState) close() {
+	s.mu.Lock()
+	identify := s.identify
+	s.mu.Unlock()
+	if identify != nil {
+		identify.Close()
+	}
+}
+
+// endpointStateRegistry maps a stable endpoint identity
+// ([store.EndpointKey]) to its [endpointState]. It is owned by the
+// [Assembler] and lives across every [Assembler.Assemble], so a bridged
+// endpoint that persists through a reassembly reuses its existing state
+// (stable DataVersion, uninterrupted Identify) while a genuinely new
+// endpoint gets a fresh one (fresh random-seeded version).
+// [store.EndpointKey] is the natural key: it is the matter_endpoints
+// primary key — deterministic from the model-side
 // {central, device, channel, dp} identity (stable across reassembly for
 // the same source) and unique per source (two devices never collide). In
 // memory only; a full daemon restart re-randomizes, which matches
 // matter.js re-seeding the Datasource version on reboot.
-type versionRegistry struct {
-	mu   sync.Mutex
-	sets map[store.EndpointKey]*clusterVersionSet
+type endpointStateRegistry struct {
+	mu     sync.Mutex
+	states map[store.EndpointKey]*endpointState
 }
 
-func newVersionRegistry() *versionRegistry {
-	return &versionRegistry{sets: make(map[store.EndpointKey]*clusterVersionSet)}
+func newEndpointStateRegistry() *endpointStateRegistry {
+	return &endpointStateRegistry{states: make(map[store.EndpointKey]*endpointState)}
 }
 
-// setFor returns the tracker set for key, creating it on first use. The
+// stateFor returns the state for key, creating it on first use. The
 // returned pointer is stable for key across the registry's lifetime.
-func (r *versionRegistry) setFor(key store.EndpointKey) *clusterVersionSet {
+func (r *endpointStateRegistry) stateFor(key store.EndpointKey) *endpointState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	s := r.sets[key]
+	s := r.states[key]
 	if s == nil {
-		s = newClusterVersionSet()
-		r.sets[key] = s
+		s = newEndpointState()
+		r.states[key] = s
 	}
 	return s
 }
 
-// retain drops every tracker set whose key is absent from keep. Called
-// after each assembly with the set of keys the assembly produced, so a
-// removed / de-exposed endpoint releases its version — a later re-add
-// then gets a fresh random-seeded one, matching matter.js destroying the
-// Datasource on endpoint removal. Bounds registry growth to the live
-// topology.
-func (r *versionRegistry) retain(keep map[store.EndpointKey]struct{}) {
+// retain drops every state whose key is absent from keep, closing it.
+// Called after each assembly with the set of keys the assembly produced,
+// so a removed / de-exposed endpoint releases its version — a later
+// re-add then gets a fresh random-seeded one, matching matter.js
+// destroying the Datasource on endpoint removal — and stops its Identify
+// countdown, matching matter.js disposing the IdentifyServer behavior.
+// Bounds registry growth to the live topology.
+func (r *endpointStateRegistry) retain(keep map[store.EndpointKey]struct{}) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	for k := range r.sets {
+	var dropped []*endpointState
+	for k, s := range r.states {
 		if _, ok := keep[k]; !ok {
-			delete(r.sets, k)
+			dropped = append(dropped, s)
+			delete(r.states, k)
 		}
+	}
+	r.mu.Unlock()
+	for _, s := range dropped {
+		s.close()
 	}
 }
 
