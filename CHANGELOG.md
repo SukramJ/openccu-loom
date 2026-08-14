@@ -60,6 +60,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A siren that fails to fire no longer does so quietly.** An output
+  command that fails — an activation during an incident, a stop, an
+  operator's test — now records a journal entry *and* a health signal
+  naming the output. Two paths were silent before. A failed test fire
+  reported HTTP 502 to whoever pressed the button and left nothing
+  behind, while successful tests were journalled, so the record of a
+  siren sweep listed only the outputs that worked. And a failed
+  activation during a real incident was journalled but never touched
+  health, so `/api/v1/health` kept reporting the alarm domain healthy
+  while a siren had not gone off. A test fire the daemon refuses by
+  design — a smoke-detector sounder, where each activation costs
+  irreplaceable battery life — is deliberately not reported as a
+  degradation.
+
+- **A successful siren test is no longer filed as a fault.** Every test
+  fire was journalled under the `fault` class, so an operator filtering
+  for faults saw one per test that worked, burying the failures the
+  filter exists to surface. They are filed under `test`, which the
+  journal has always had.
+
 - **A siren still sounding after a restart is dealt with again.** The
   alarm engine reads the live state of every enrolled siren when it
   starts and reconciles: one whose zone is armed is adopted as a
