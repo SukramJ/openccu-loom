@@ -538,6 +538,10 @@ func makeMQTTSubscriberBuilder(
 			WithCombinedDPSink(sink).
 			WithScheduleSwitchSink(sink).
 			WithInstallModeSink(sink).
+			// The `<central>` topic segment is TopicSafe-escaped on the
+			// way out; the registry is what turns it back into the
+			// configured name every sink is keyed on.
+			WithCentralNames(reg).
 			WithCollector(collector).
 			// Capture the daemon-lifetime ctx (not the per-Start/Swap ctx,
 			// which on a reload-triggered swap is request-scoped) so command

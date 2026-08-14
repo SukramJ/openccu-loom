@@ -6,7 +6,280 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **A chunked request body is capped like any other.** The OpenAPI
+  request validator capped bodies whose length the client announced, and
+  `Transfer-Encoding: chunked` announces none: such a request streamed
+  into an unbounded read before authentication, CSRF or the login
+  brute-force limiter ever saw it, so an unauthenticated `POST
+  /api/v1/auth/login` could exhaust the daemon's memory with a
+  one-header change.
+
+- **Two per-request tables are now hard-bounded.** The login
+  brute-force limiter's per-IP table only evicted buckets idle for ten
+  minutes, so a source rotating through an address range — an IPv6 /64
+  offers 2^64 of them — grew it by one limiter per request without
+  limit. The `Idempotency-Key` response cache had no eviction at all:
+  its key carries a client-chosen header value, so a caller minting a
+  fresh key per request added one full cached response body per request
+  for the life of the process. Both are now capped; the response cache
+  additionally stops caching statuses that never reached a handler and
+  responses too large to be worth replaying.
+
 ### Fixed
+
+- **A notification output no longer freezes the alarm system.** Enrolling
+  an output of class *notification* — the documented way to get a
+  messenger or webhook alert — was enough to stop the alarm engine dead
+  the first time the zone triggered. The alert was assembled from inside
+  the trigger itself and asked the engine for the zone it was already
+  triggering, which cannot answer until the trigger finishes. Everything
+  after that point stopped: no state change was published, no further
+  sensor event was handled, and *Disarm* and *Silence* never returned —
+  with the siren already sounding. The alert now carries the zone name
+  and the contributing detectors with it and asks the engine for nothing.
+
+- **A bound panic key raises an alarm.** Binding a keyfob long-press to
+  the `panic` action — a hold-up or medical key — produced nothing when
+  pressed: no incident, no siren, no notification, only a journal entry
+  saying the engine had no panic path. It had one; the router simply
+  never reached it. Every installation with a panic key was affected.
+
+- **The pre-alarm window is quiet again.** A zone with `pre_alarm_s`
+  configured is supposed to spend that window on the chime, the alarm
+  light and the notification so a resident can silence a false alarm
+  before the sirens sound. Instead every enrolled siren fired at full
+  volume from the first second and again when the window elapsed, which
+  also spent the incident's acoustic budget twice.
+
+- **An alarm report names the detector that caused it.** Three trigger
+  routes recorded no contributing data point: an expired entry delay —
+  the most common real intrusion path, a door opening while nobody
+  disarms — a sensor that stopped answering while armed, and a sensor
+  found open after a restart. For those incidents the source list stayed
+  empty everywhere: in the notification, in the `{sensor}` placeholders
+  of the rendered report, and in the after-the-fact audit.
+
+- **A lost radio interface reaches the alarm system.** When a CCU stopped
+  serving one of its interfaces, the alarm service compared the CCU's
+  own interface name against its internally qualified one and matched
+  nothing. Every window and door contact behind that radio kept
+  reporting its last known — usually closed — state while armed, and
+  losing every interface of a CCU never ran the zone's central-loss
+  policy. The per-data-point unreachable path still worked, which is why
+  the gap was invisible.
+
+- **A failed siren command turns the alarm health surface red.** A fire
+  that failed or a stop the watchdog could not verify was recorded on
+  `/api/v1/health` but published nowhere, so the MQTT alarm panels, the
+  SPA health surface, the outbound webhook and the Security overview all
+  kept reporting a healthy alarm system while a siren was stuck on.
+
+- **A WebSocket command split across several frames is executed.** A
+  client library is free to fragment a large message — most do above
+  some size threshold — and the daemon handled only whole frames: the
+  first half of such a command was logged as malformed JSON and the
+  remainder was discarded without a trace. The command never ran and no
+  answer was ever sent for its correlation id, so the caller waited
+  until it timed out. Fragmented messages are now reassembled, with the
+  assembled size held to the same 1 MiB ceiling a single frame has, and
+  a client that genuinely breaks the framing rules is closed with the
+  matching WebSocket status code instead of having its frames silently
+  dropped.
+
+- **A CCU added while the daemon is running reaches the outbound
+  webhook.** The webhook bridge subscribes its CCUs once, when it
+  starts. A CCU adopted afterwards over the admin API delivered nothing
+  at all — no value change, no interface status, no incident — while the
+  CCUs present at start-up kept delivering, so the endpoint looked
+  healthy and the new CCU looked idle. Removing a CCU now detaches it
+  again, too.
+
+- **Channel configuration export and import work.** `GET` and `POST
+  /api/v1/devices/{address}/channels/{n}/config/export|import` are
+  published in the OpenAPI spec and appear in the generated client, but
+  the daemon never assigned the backend they depend on: every build
+  answered `503 service_unready`, and no configuration could change
+  that. Both endpoints now route through the same gated paramset path
+  the REST paramset write uses, so an import cannot set a parameter that
+  a `PUT` would refuse — and the export offers exactly that set, which
+  is what makes the snapshot importable again.
+
+- **A CCU added while the daemon is running reports device triggers,
+  device lifecycle and optimistic rollbacks.** Three WebSocket
+  subscribers walked the configured CCUs once, at start-up. For a CCU
+  adopted afterwards over the admin API, every keypress on one of its
+  remotes and wall switches, every pairing and removal, and every rolled
+  back optimistic write was lost to every WebSocket client. The topics
+  are declared in `wsapi.json`, so clients subscribed and waited
+  forever; only a daemon restart repaired it.
+
+- **A WebSocket client resuming with a cursor from before a daemon
+  restart is told it lost events.** The sequence counter is
+  process-local and restarts at 0, so a reconnecting client's stored
+  cursor sits above everything the fresh daemon can produce. It received
+  `replay_done` carrying its own cursor back, concluded it had missed
+  nothing, never issued the documented `/snapshot` resync, and kept
+  rendering pre-restart device state. A cursor the daemon cannot place —
+  above its current top, or against a disabled replay buffer — now
+  yields `replay_lost`. (The bundled UI was unaffected: it never sends a
+  cursor.) (REST API 5.23.0)
+
+- **A security source override with a `%` in its name is applied to the
+  source it names.** The handler percent-decoded the reference a second
+  time on top of the router's own decode. A central name containing a
+  literal `%` was rejected as an invalid reference, and one whose
+  decoded form still looked like an escape was silently rewritten — so
+  the override landed on a different data point than the operator chose.
+
+- **A `topic_base` with a trailing slash no longer takes every alarm and
+  security entity offline.** The broker's last-will was assembled from
+  the configured topic base verbatim, while the bridge publishes its
+  `online` counterpart from the normalised base — with `topic_base:
+  "loom/"` the retained `offline` landed on `loom//bridge/status` and
+  nothing ever overwrote it. Every alarm panel and every Security &
+  Safety entity names that topic as an availability source and requires
+  all sources to be online, so all of them stayed permanently
+  unavailable in Home Assistant. The will and the status topic are now
+  built by the same builder, and the availability source both planes
+  declare goes through it as well.
+
+- **A CCU added while the daemon is running reports its system status.**
+  The `<base>/<CCU>/system/status` topic an operator's alerting watches
+  for interface degradation was published by a subscriber that walked
+  the configured CCUs once, at start-up. A CCU adopted afterwards over
+  the admin API was never subscribed, so its interfaces could go down in
+  silence — no MQTT event, no WebSocket broadcast, and nothing in
+  `GET /api/v1/system/status` — while the alerting kept working for the
+  CCUs present at boot. All three surfaces are attached when the CCU is
+  adopted now, and detached when it is removed.
+
+- **A removed device stops leaving retained topics behind.** Unpairing a
+  device cleared its per-data-point state but not its firmware-update,
+  week-profile, schedule, aggregate or combined-data-point topics: those
+  publishers never recorded what they had written, and no shape the
+  boot-time sweep recognises matches them. Raw-plane consumers kept
+  reading the gone device's last known profile and firmware state
+  indefinitely. Every device-scoped retained publisher records its topic
+  now, and only once the broker has accepted the publish.
+
+- **Entities missing after a broker outage during start-up.** Home
+  Assistant discovery configs were marked as published before the
+  publish was attempted, so a broker that was briefly unreachable — or a
+  circuit breaker that had opened — lost every config of that pass while
+  the daemon considered them all declared. The identical payload rebuilt
+  from the next value change was then suppressed as a duplicate, and the
+  entities stayed absent until Home Assistant itself was restarted. The
+  same held for the raw plane's `/config` companions. Both cache what
+  the broker accepted now, and the replay Home Assistant triggers on its
+  own restart continues past a failing topic instead of abandoning the
+  rest of the fleet.
+
+- **Choosing a heating profile no longer writes a phantom parameter to
+  the CCU.** The week-profile command topic has the same number of
+  levels as the legacy data-point command topic, and a broker delivers a
+  message to every matching subscription — so each profile change
+  switched the profile and additionally issued a CCU write for a
+  parameter named `week_profile`, which no channel has. One wasted wire
+  call and one warning per profile change.
+
+- **Devices nest under their CCU in Home Assistant again for CCU names
+  that are not bare slugs.** The card of each physical device pointed at
+  its parent CCU with a differently-spelled identifier than the one the
+  CCU's own card is registered under — the two spellings only coincide
+  while the name is plain ASCII without spaces. With a name like `Haus
+  CCU` the link could not resolve, so every device floated at the top
+  level of the Devices view instead of nesting, and the system
+  variables and programs bound to a device lost their link too.
+
+- **The raw-plane orphan sweep tolerates a `topic_base` with a trailing
+  slash.** Every publisher goes through the topic builder, which trims
+  the base's slashes; the sweep assembled its own prefix from the raw
+  configured value. With `topic_base: openccu-loom/` it therefore
+  subscribed to a prefix nothing writes and evicted nothing on every
+  boot, leaving retained topics of retired data points feeding stale
+  values forever.
+
+- **MQTT commands reach a CCU whose name contains a space.** Every topic
+  the daemon publishes escapes the CCU name — `Wohn Zimmer` becomes
+  `Wohn_Zimmer` — but the inbound handlers read that segment back
+  verbatim and looked it up as a configured name, which never matched.
+  Every MQTT write for such a CCU was dropped ("no backend") while its
+  state topics kept updating, so the plane looked healthy. Data points,
+  MASTER writes, system variables, programs, install mode, week
+  profiles, schedules, combined data points and custom-DP invokes all
+  resolve the segment back to the configured CCU now. Two CCU names that
+  escape to the same segment are ambiguous on the wire and are rejected
+  at start-up.
+
+- **System variables whose name contains a space are writable over
+  MQTT.** The command topic the daemon advertises for `Außen Temperatur`
+  is `…/hub/sysvars/Außen_Temperatur/set`; a write there was resolved
+  against the CCU's variable list verbatim, missed, and died as "unknown
+  sysvar" — while the entity kept rendering as writable. The escaped
+  segment now resolves back to the real variable, and the CCU-side write
+  carries its real name.
+
+- **The System-health and Connection-latency sensors report again for
+  CCUs whose name is not plain ASCII.** The two sensors declared one
+  state topic and the daemon published to another, so both stayed
+  unavailable forever while the Last-event-age sensor beside them
+  worked. All three now share one topic builder, and the central segment
+  of these three topics is spelled like every other topic on the plane
+  (escaped, case preserved) instead of lower-cased.
+
+- **The retained-discovery cleanup pass works for CCU names that are not
+  bare slugs.** The once-per-boot sweep that removes the configs of
+  entities this build no longer publishes derived its scope with a third
+  spelling of the CCU name, which matched neither the per-device nor the
+  hub configs it was meant to find. For a CCU named `CCU Küche` it
+  evicted nothing at all, so retired entities kept being re-created by
+  Home Assistant on every restart. Producers and sweep now share one
+  identifier normaliser, and the sweep also still recognises the
+  spelling earlier builds wrote, so those leftovers are cleaned up once.
+  The raw-plane sweep matches the escaped CCU name it actually
+  publishes under.
+
+- **A deleted alarm zone stops haunting Home Assistant.** The alarm
+  plane never told the orphan sweep that it had published, so its
+  retained panel configs were exempt from the sweep forever: a zone
+  removed while the daemon was down kept a permanently unavailable panel
+  in Home Assistant with no automatic way to clear it. The plane now
+  declares once the engine has really loaded its zone set — declaring
+  earlier, on the empty pass Start triggers, would have wiped the live
+  alarm surface instead.
+
+- **A CCU that reports its serial while values are flowing no longer
+  risks aborting the daemon.** The discovery builder's per-CCU metadata
+  map was written from the boot path, the snapshot pass and the hub
+  publisher's worker while the event path read it for every value event.
+  Go treats that as fatal, not as a benign race, and each additional CCU
+  widened the window.
+
+- **Acknowledging a fault no longer re-announces it as a new one.** On
+  the outbound webhook an acknowledgement arrived byte-identical to the
+  original raise — the condition still stands after an acknowledgement,
+  and the payload said only that — so a messenger integration fired
+  "smoke detector fault" a second time because somebody had pressed
+  acknowledge. The webhook body now names the transition (`raised`,
+  `acknowledged`, `cleared`), carries the acknowledgement as its own
+  flag, and includes the fault's id, so two reports of one standing
+  fault are no longer indistinguishable from two independent faults.
+  The standing-fault tally moves from `entry_id` — a journal entry id on
+  every other alarm event — to its own `open_count`, matching the
+  WebSocket broadcast of the same event.
+
+- **A running intrusion keeps its start time when another zone is
+  disarmed.** The security domain records when the intrusion class
+  became active once, for the whole installation, while the state
+  machine runs per zone. Any zone leaving the triggered state released
+  that single record — so in a multi-zone installation, disarming a
+  quiet zone while an incident ran in another one left the incident
+  reported as active with a start time of zero, and MQTT, the REST
+  snapshot and the Config UI all showed the break-in as having begun at
+  the Unix epoch. The start time is now released only once no zone is
+  triggered any more and no intrusion sensor is still active.
 
 - **A CCU added while the daemon runs is now wired like one that was
   there at boot.** Adding a second CCU through the SPA brought it up,

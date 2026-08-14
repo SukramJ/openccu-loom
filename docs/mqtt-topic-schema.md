@@ -29,6 +29,14 @@ degenerate case with one entry under that segment.
 > Notation: `<base>` is the configured `mqtt.topic_base` (default
 > `openccu-loom`). `<central>` is the CCU name from the daemon config
 > (e.g. `GoOtto`). `<iface>` is the interface ID (e.g. `HmIP-RF`).
+>
+> Every name-derived segment (`<central>`, `<name>`, `<key>`, …) is
+> escaped for MQTT: a space, `+`, `#` and `/` each become `_`, so a CCU
+> configured as `Wohn Zimmer` appears as `Wohn_Zimmer`. Case is
+> preserved. The daemon resolves the escaped segment back to the
+> configured name on inbound commands, so two configured names must not
+> collapse onto the same segment — the daemon rejects such a
+> configuration at start-up.
 > `<addr>` is the device address (e.g. `000C9709AEF157`). `<ch>` is
 > the channel number. `<param>` is the wire-parameter name. `<zone>`
 > is an alarm-zone id, or the reserved pseudo-zone id `master`.

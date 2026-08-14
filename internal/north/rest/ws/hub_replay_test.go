@@ -112,6 +112,57 @@ func TestSetReplayCapacity_Zero_DisablesBuffer(t *testing.T) {
 	if h.CurrentSeq() != 1 {
 		t.Fatalf("CurrentSeq = %d, want 1", h.CurrentSeq())
 	}
+	// SetReplayCapacity promises a disabled buffer answers every resume
+	// with replay_lost. Reporting "caught up" instead tells the client it
+	// missed nothing while replay is off entirely.
+	if lost := h.Replay(1, nil); !lost.Lost {
+		t.Fatal("disabled buffer must report Lost for a since > 0 resume")
+	}
+}
+
+// TestReplayCursorAboveTopIsLost pins the daemon-restart shape. seqNext
+// is process-local and starts at 0, so a reconnecting client's
+// pre-restart cursor sits above everything the fresh hub can produce.
+// Answering replay_done with the client's own cursor let it skip the
+// /snapshot resync and keep rendering pre-restart state.
+func TestReplayCursorAboveTopIsLost(t *testing.T) {
+	t.Parallel()
+	t.Run("empty ring", func(t *testing.T) {
+		t.Parallel()
+		h := NewHub()
+		res := h.Replay(48211, nil)
+		if !res.Lost {
+			t.Fatal("a cursor above the current top must be Lost")
+		}
+		if res.OldestSeq != 0 {
+			t.Fatalf("OldestSeq = %d, want 0 (nothing buffered yet)", res.OldestSeq)
+		}
+	})
+	t.Run("partially filled ring", func(t *testing.T) {
+		t.Parallel()
+		h := NewHub()
+		for range 3 {
+			h.Publish(Event{Topic: "a", Type: "t", When: time.Now()})
+		}
+		res := h.Replay(48211, nil)
+		if !res.Lost {
+			t.Fatal("a cursor above the current top must be Lost")
+		}
+		if res.OldestSeq != 1 {
+			t.Fatalf("OldestSeq = %d, want 1", res.OldestSeq)
+		}
+	})
+}
+
+// TestReplayFreshHubAtCursorZeroIsCaughtUp keeps the legitimate case
+// out of the new gap branch: a client that never received an event
+// resumes at 0 against a hub that never published one.
+func TestReplayFreshHubAtCursorZeroIsCaughtUp(t *testing.T) {
+	t.Parallel()
+	h := NewHub()
+	if res := h.Replay(0, nil); res.Lost {
+		t.Fatal("since=0 against a fresh hub is not a gap")
+	}
 }
 
 func TestSetReplayCapacity_Shrink_TruncatesExisting(t *testing.T) {

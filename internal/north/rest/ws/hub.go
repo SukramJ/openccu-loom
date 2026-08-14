@@ -241,8 +241,11 @@ func (h *Hub) CurrentSeq() uint64 {
 
 // ReplayResult is what [Hub.Replay] returns. Events carries the
 // buffered events whose Seq > since and whose Topic matches
-// match(); Lost is true when since precedes the oldest buffered
-// Seq — the client then knows it must resync via /snapshot.
+// match(); Lost is true whenever the hub cannot place the cursor in
+// its own sequence space — since precedes the oldest buffered Seq,
+// exceeds the current top (a cursor from a previous daemon lifetime),
+// or replay is disabled altogether — and the client then knows it
+// must resync via /snapshot. OldestSeq is the anchor to resume from.
 type ReplayResult struct {
 	Events    []Event
 	Lost      bool
@@ -260,7 +263,22 @@ type ReplayResult struct {
 func (h *Hub) Replay(since uint64, match func(topic string) bool) ReplayResult {
 	h.seqMu.Lock()
 	defer h.seqMu.Unlock()
+	// seqNext is process-local and restarts at 0, so a cursor above the
+	// current top belongs to a previous daemon lifetime: the events it
+	// names cannot be reconstructed, and the envelope carries no epoch a
+	// client could notice the reset from. Reporting "caught up" here let
+	// a conforming client skip its /snapshot resync and keep rendering
+	// pre-restart state.
+	if since > h.seqNext {
+		return ReplayResult{Lost: true, OldestSeq: h.oldestBufferedSeqLocked()}
+	}
 	if len(h.replay) == 0 {
+		// A disabled buffer can never satisfy a resume — that is what
+		// SetReplayCapacity promises. An enabled-but-empty ring only
+		// means nothing has been published yet, which is not a gap.
+		if h.replayMx == 0 && since > 0 {
+			return ReplayResult{Lost: true, OldestSeq: h.seqNext}
+		}
 		return ReplayResult{}
 	}
 	oldest := h.replay[0].Seq
@@ -280,6 +298,16 @@ func (h *Hub) Replay(since uint64, match func(topic string) bool) ReplayResult {
 		out = append(out, e)
 	}
 	return ReplayResult{Events: out, OldestSeq: oldest}
+}
+
+// oldestBufferedSeqLocked returns the oldest replayable Seq, falling back
+// to the current top when the ring is empty, so a lost client always gets
+// a usable resume anchor. Callers hold h.seqMu.
+func (h *Hub) oldestBufferedSeqLocked() uint64 {
+	if len(h.replay) == 0 {
+		return h.seqNext
+	}
+	return h.replay[0].Seq
 }
 
 // ClientCount is the current subscribed connection count.

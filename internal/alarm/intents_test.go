@@ -387,17 +387,17 @@ func TestIntentsRemote_SilenceBindingDispatchesWithoutAFault(t *testing.T) {
 	h.wantNoJournalEvent("code_permission_denied")
 }
 
-// TestIntentsRemote_PanicBindingCurrentlyNeverReachesTheEngine pins a
-// real interface-signature mismatch: *engine.Engine.PanicTrigger takes
-// five parameters (ctx, zoneID, silent, by, source) but the intent
-// router's panicTriggerer interface declares only three (ctx, zoneID,
-// silent). Go interface satisfaction requires an exact method
-// signature, so the type assertion in dispatchPanic always fails and a
-// remote panic key never reaches the engine's always-on panic path — it
-// always journals errPanicUnsupported instead. This test documents the
-// CURRENT behavior; once the signatures are reconciled it should be
-// rewritten to assert the zone actually enters triggered.
-func TestIntentsRemote_PanicBindingCurrentlyNeverReachesTheEngine(t *testing.T) {
+// TestIntentsRemote_PanicBindingTriggersTheBoundZone pins the panic
+// key end to end: a hold-up or medical key is bound to a zone, the
+// operator presses it, and the zone enters triggered independently of
+// its arm state (notes/concepts/alarm-concept.md §7).
+//
+// The verb is called directly rather than through an optional port.
+// Discovering it by interface assertion made a signature drift invisible
+// — the assertion simply failed at runtime, and every bound panic key
+// journaled "engine has no panic path" instead of raising an alarm, on
+// every installation.
+func TestIntentsRemote_PanicBindingTriggersTheBoundZone(t *testing.T) {
 	src := &fakeCodeSource{rows: []CodeRow{{
 		ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
 		Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_LONG", Action: "panic", ZoneID: "eg"},
@@ -408,8 +408,43 @@ func TestIntentsRemote_PanicBindingCurrentlyNeverReachesTheEngine(t *testing.T) 
 
 	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressLong, hmtypes.BoolValue(true)))
 
+	if got := h.zoneState("eg"); got != hmenum.AlarmZoneStateTriggered {
+		t.Fatalf("zone state = %s, want triggered — a bound panic key must reach the engine's always-on path", got)
+	}
+	h.wantNoJournalEvent("code_action_failed")
+	// The trigger is attributed to the key's identity, not to the engine.
+	entries, err := h.svc.Stores().Journal.Query(h.ctx, sqlitestore.AlarmJournalFilter{})
+	if err != nil {
+		t.Fatalf("query journal: %v", err)
+	}
+	for i := range entries {
+		if entries[i].Event == "triggered" {
+			if entries[i].Actor != "Remote" || entries[i].Source != "remote" {
+				t.Fatalf("panic trigger attributed to actor=%q source=%q, want Remote/remote",
+					entries[i].Actor, entries[i].Source)
+			}
+			return
+		}
+	}
+	t.Fatalf("no triggered journal entry; got %v", h.journalEvents())
+}
+
+// TestIntentsRemote_PanicBindingWithoutAZoneJournalsAFault pins the one
+// remaining fault branch of the panic path: a binding that names no
+// zone cannot address the engine, and must say so visibly (S7).
+func TestIntentsRemote_PanicBindingWithoutAZoneJournalsAFault(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
+		Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_LONG", Action: "panic"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedZone("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressLong, hmtypes.BoolValue(true)))
+
 	if got := h.zoneState("eg"); got != hmenum.AlarmZoneStateDisarmed {
-		t.Fatalf("zone state = %s, want disarmed — the panic action is currently a no-op on the engine", got)
+		t.Fatalf("zone state = %s, want disarmed", got)
 	}
 	h.wantJournalEvent("code_action_failed")
 }

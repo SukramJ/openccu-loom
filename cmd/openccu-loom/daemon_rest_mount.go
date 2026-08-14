@@ -261,6 +261,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		DPWriter:                d.dpWriterAdapter,
 		CustomDPWriter:          d.customDPDispatcher,
 		Paramsets:               d.paramsetsDomain,
+		ConfigExport:            adapter.NewConfigExportDomain(d.reg, d.paramsetsDomain),
+		ConfigChannelMeta:       d.devicesAdapter,
 		ParameterDeterminer:     d.parameterDeterminer,
 		Hub:                     d.hubAdapter,
 		WebhookInboundEnabled:   cfg.North.Webhook.Inbound.Enabled,

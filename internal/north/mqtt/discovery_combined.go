@@ -168,8 +168,7 @@ func (b *Bridge) PublishCombinedTimerState(
 		seconds = 0
 	}
 	topic := b.topics.CombinedState(centralName, iface, address, channel, kind)
-	payload := []byte(formatSeconds(seconds))
-	return b.client.Publish(ctx, topic, payload, b.cfg.QoS.State, true)
+	return b.publishRawRetained(ctx, topic, []byte(formatSeconds(seconds)))
 }
 
 // formatSeconds renders a seconds value as a decimal string with no
@@ -312,5 +311,5 @@ func (b *Bridge) PublishCombinedSensorState(
 		centralName = b.cfg.CentralName
 	}
 	topic := b.topics.CombinedState(centralName, iface, address, channel, kind)
-	return b.client.Publish(ctx, topic, []byte(jsonState), b.cfg.QoS.State, true)
+	return b.publishRawRetained(ctx, topic, []byte(jsonState))
 }

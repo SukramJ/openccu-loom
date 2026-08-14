@@ -24,15 +24,31 @@ const (
 	finBit byte = 0x80
 	rsvBit byte = 0x70
 	opMask byte = 0x0F
+	// ctrlBit distinguishes control opcodes (0x8-0xF) from data opcodes
+	// (0x0-0x7) — RFC 6455 §5.5.
+	ctrlBit byte = 0x8
 
 	maskBit byte = 0x80
 	lenMask byte = 0x7F
 )
 
-// maxPayload is the largest frame the server reads in one shot.
-// Clients only ever send small control frames (subscribe / pong), so
-// a tight cap keeps us safe from runaway allocations.
+// maxPayload is the largest payload the server accepts, both per frame and
+// per assembled message: a client that fragments a large `call` must not be
+// able to walk past the cap one frame at a time. It bounds the allocation a
+// single connection can drive.
 const maxPayload = 1 << 20 // 1 MiB
+
+// maxControlPayload is the RFC 6455 §5.5 ceiling for a control frame.
+const maxControlPayload = 125
+
+// Close status codes the server emits when it fails a connection
+// (RFC 6455 §7.4.1). Without them a client sees a bare TCP teardown and
+// cannot tell a protocol violation from a network drop.
+const (
+	closeProtocolError   uint16 = 1002
+	closeUnsupportedData uint16 = 1003
+	closeMessageTooBig   uint16 = 1009
+)
 
 // frame is one decoded WebSocket frame.
 type frame struct {
@@ -55,6 +71,19 @@ func readFrame(r *bufio.Reader) (frame, error) {
 	opcode := header[0] & opMask
 	masked := header[1]&maskBit != 0
 	length := int64(header[1] & lenMask)
+
+	if opcode&ctrlBit != 0 {
+		// RFC 6455 §5.5: control frames MUST NOT be fragmented and carry at
+		// most 125 payload bytes. Accepting a non-final control frame would
+		// let a ping masquerade as the start of a message and corrupt the
+		// reassembly state readPump keeps across frames.
+		if !fin {
+			return frame{}, errors.New("ws: control frame must not be fragmented")
+		}
+		if length > maxControlPayload {
+			return frame{}, errors.New("ws: control frame payload too large")
+		}
+	}
 
 	switch length {
 	case 126:

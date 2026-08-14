@@ -488,6 +488,22 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		p.retractPanel(ctx, b, base, alarmMasterZone)
 		p.masterKnown = false
 	}
+
+	// The alarm plane has now published every panel the engine knows
+	// about, so its retained configs are eligible for the orphan sweep —
+	// the mechanism that clears the config of a zone deleted while the
+	// daemon was down, which `retractPanel` cannot reach because
+	// `knownZones` starts empty on every boot.
+	//
+	// Gated on the engine having loaded: Start signals one eager
+	// reconcile, and on that pass `eng.Zones()` can still be empty
+	// because the engine has not read its stores yet. Declaring then
+	// would present an empty plane to the sweep, which would classify
+	// every live panel as an orphan and wipe the alarm surface — the
+	// exact failure the declaration gate exists to prevent.
+	if b.cfg.HADiscoveryEnabled && eng.ZonesLoaded() {
+		b.MarkPlaneDeclared(alarmDiscoveryNodeID)
+	}
 }
 
 // retractPanel clears the retained discovery, state, and availability of a

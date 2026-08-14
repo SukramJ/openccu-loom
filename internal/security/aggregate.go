@@ -143,6 +143,21 @@ func (a *aggregate) classState(c hmenum.SecurityClass) security.ClassState {
 	return st
 }
 
+// anyZoneTriggered reports whether an incident is still running in any
+// zone. The caller holds the lock.
+//
+// The intrusion timeline is global while the zone state machine is per
+// zone, so a global timeline may only be released once every zone has
+// left the triggered state.
+func (a *aggregate) anyZoneTriggered() bool {
+	for id := range a.zones {
+		if a.zones[id].State == hmenum.AlarmZoneStateTriggered {
+			return true
+		}
+	}
+	return false
+}
+
 // severity folds the whole domain onto one value. The caller holds the
 // lock.
 //

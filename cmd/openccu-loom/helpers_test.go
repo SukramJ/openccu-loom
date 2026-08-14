@@ -34,21 +34,29 @@ func TestBuildLWTTopic_CustomBase(t *testing.T) {
 	}
 }
 
-// TestBuildLWTTopic_SlashBearingBaseMatchesDeclaredTopic pins the will topic
-// against the topic every declaring surface uses instead of against a
-// hand-written string: the online publish and every discovery availability
-// entry go through [mqtt.TopicBuilder.BridgeStatus], which trims the base. A
-// hand-assembled will topic drifts from it for a base the operator wrote with
-// a slash, so the broker fires `offline` onto a topic nothing subscribes to
-// and every bridged entity stays available with a stale value forever.
-func TestBuildLWTTopic_SlashBearingBaseMatchesDeclaredTopic(t *testing.T) {
+// TestBuildLWTTopicMatchesBridgeStatusTopic pins the will against the
+// topic the bridge itself publishes its status on.
+//
+// The two are a pair: the broker writes the retained `offline` will when
+// the daemon's link dies, and the bridge writes the retained `online`
+// counterpart on connect. They have to be the same topic, and they are
+// built in two different places — the will before the bridge exists, the
+// counterpart from the bridge's topic builder. A configured base with a
+// trailing slash made them diverge: the will landed on
+// `loom//bridge/status` while `online` landed on `loom/bridge/status`,
+// so the stale `offline` never got overwritten and every consumer that
+// uses the bridge status as an availability source (the alarm and
+// security planes declare it for every entity) treated the whole daemon
+// as permanently down.
+func TestBuildLWTTopicMatchesBridgeStatusTopic(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.North.MQTT.TopicBase = "loom/"
-	got := buildLWTTopic(cfg)
-	want := mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).BridgeStatus()
-	if got != want {
-		t.Errorf("buildLWTTopic slash-bearing base: got %q, want the declared %q", got, want)
+	for _, base := range []string{"", "home/ccu", "loom/", "/loom", "/loom/"} {
+		cfg := config.Default()
+		cfg.North.MQTT.TopicBase = base
+		want := mqtt.NewTopicBuilder(base).BridgeStatus()
+		if got := buildLWTTopic(cfg); got != want {
+			t.Errorf("topic_base %q: will topic %q, bridge publishes %q", base, got, want)
+		}
 	}
 }
 

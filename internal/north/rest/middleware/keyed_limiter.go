@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -18,11 +19,15 @@ type keyedLimiterEntry struct {
 	lastUse time.Time
 }
 
-// keyedLimiterStore is a bounded, per-key [rate.Limiter] cache with
-// idle-eviction. Backs both [RateLimit] (keyed by resolved identity)
-// and [LoginRateLimiter] (keyed by client IP) — the two call sites
-// differ only in their key space, refill rate/burst, and GC
-// threshold/idle-window, so those are the constructor parameters.
+// keyedLimiterStore is a hard-bounded, per-key [rate.Limiter] cache
+// with idle-eviction. Backs both [RateLimit] (keyed by resolved
+// identity) and [LoginRateLimiter] (keyed by client IP) — the two call
+// sites differ only in their key space, refill rate/burst, and
+// capacity/idle-window, so those are the constructor parameters.
+//
+// The table never exceeds cap entries: idle buckets go first, and a
+// table of nothing but fresh keys sheds its oldest entries instead of
+// growing (see [keyedLimiterStore.reclaimLocked]).
 type keyedLimiterStore struct {
 	limit rate.Limit
 	burst int
@@ -34,9 +39,9 @@ type keyedLimiterStore struct {
 }
 
 // newKeyedLimiterStore builds a store whose limiters refill at limit
-// with the given burst. capacity is the soft size threshold that
-// triggers an inline idle-sweep on the next get; idle is how long an
-// unused bucket survives before that sweep evicts it.
+// with the given burst. capacity is the hard ceiling on the number of
+// live buckets; idle is how long an unused bucket survives before the
+// reclaim pass prefers it as a victim.
 func newKeyedLimiterStore(limit rate.Limit, burst, capacity int, idle time.Duration) *keyedLimiterStore {
 	return &keyedLimiterStore{
 		limit:   limit,
@@ -47,9 +52,8 @@ func newKeyedLimiterStore(limit rate.Limit, burst, capacity int, idle time.Durat
 	}
 }
 
-// get returns (or creates) the limiter for key. Opportunistically
-// evicts buckets idle longer than s.idle once the table grows beyond
-// s.cap — an inline O(n) sweep bounded by the active key count.
+// get returns (or creates) the limiter for key, keeping the table at or
+// below s.cap entries at all times.
 func (s *keyedLimiterStore) get(key string) *rate.Limiter {
 	now := time.Now()
 	s.mu.Lock()
@@ -58,16 +62,50 @@ func (s *keyedLimiterStore) get(key string) *rate.Limiter {
 		e.lastUse = now
 		return e.lim
 	}
-	if len(s.buckets) > s.cap {
-		for k, e := range s.buckets {
-			if now.Sub(e.lastUse) > s.idle {
-				delete(s.buckets, k)
-			}
-		}
+	if len(s.buckets) >= s.cap {
+		s.reclaimLocked(now)
 	}
 	lim := rate.NewLimiter(s.limit, s.burst)
 	s.buckets[key] = &keyedLimiterEntry{lim: lim, lastUse: now}
 	return lim
+}
+
+// reclaimLocked frees room for at least one new bucket. It first drops
+// every bucket idle longer than s.idle; if that leaves the table still
+// at capacity — every key is fresh, which is exactly what an address
+// rotation produces — it evicts the oldest entries by last use.
+//
+// The idle sweep alone bounded nothing: the real ceiling was (rate of
+// distinct keys) x (idle window), both attacker-controlled for the
+// IP-keyed login limiter. Evicting an entry only costs its holder a
+// fresh burst, which is the same outcome unbounded growth already had,
+// while memory is now pinned at s.cap entries.
+//
+// Eviction is batched so the O(n) pass amortises to a small constant per
+// insert instead of running on every request once the table sits at cap.
+func (s *keyedLimiterStore) reclaimLocked(now time.Time) {
+	for k, e := range s.buckets {
+		if now.Sub(e.lastUse) > s.idle {
+			delete(s.buckets, k)
+		}
+	}
+	if len(s.buckets) < s.cap {
+		return
+	}
+	batch := max(s.cap/8, 1)
+	type aged struct {
+		key     string
+		lastUse time.Time
+	}
+	entries := make([]aged, 0, len(s.buckets))
+	for k, e := range s.buckets {
+		entries = append(entries, aged{key: k, lastUse: e.lastUse})
+	}
+	slices.SortFunc(entries, func(a, b aged) int { return a.lastUse.Compare(b.lastUse) })
+	drop := min(batch, len(entries))
+	for _, e := range entries[:drop] {
+		delete(s.buckets, e.key)
+	}
 }
 
 // retryAfterSeconds computes the integer seconds a caller must wait

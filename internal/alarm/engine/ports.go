@@ -71,6 +71,16 @@ type FireOptions struct {
 	// at trigger time. The engine owns the configuration; the driver
 	// layer only filters by it.
 	Policy OutputPolicy
+	// ZoneName and Sources snapshot the zone at fire time: its display
+	// name and the data points that have contributed to the incident so
+	// far, oldest first.
+	//
+	// They travel with the cycle instead of being looked up because the
+	// driver's notification sink runs with the engine lock held (see
+	// [OutputPort]) — a sink that asked the engine for either one would
+	// self-deadlock on the first notification output an operator enrols.
+	ZoneName string
+	Sources  []hmevent.SecuritySourceRef
 }
 
 // ChirpKind names the confirmation/feedback chirp classes

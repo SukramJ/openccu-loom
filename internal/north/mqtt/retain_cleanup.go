@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // RetainCleanup implements a one-shot orphan-clear
@@ -400,6 +402,40 @@ var daemonLevelNodeIDs = map[string]bool{
 	securityDiscoveryNodeID: true,
 }
 
+// discoveryNodePrefixes returns every `<central>_` node-id prefix the
+// orphan sweep has to accept for one central.
+//
+// Both producers — [naming.PathData.DiscoveryNodeID] for per-device
+// configs and [hubNodeID] for hub configs — now slug the central name
+// through [naming.DiscoverySlug], so the canonical prefix is the first
+// entry. The second is the spelling earlier builds put on the wire
+// (`strings.ToLower(naming.TopicSafe(name))`), kept so the configs an
+// older daemon retained under a name carrying a dot or an umlaut are
+// still reachable and can be swept once. Deriving the prefix by hand
+// (`strings.ToLower(name)`) matched neither, which made the whole pass
+// a silent no-op for every central whose name is not already a slug.
+func discoveryNodePrefixes(centralName string) []string {
+	if centralName == "" {
+		return nil
+	}
+	canonical := naming.DiscoverySlug(centralName) + "_"
+	prefixes := []string{canonical}
+	if legacy := strings.ToLower(naming.TopicSafe(centralName)) + "_"; legacy != canonical {
+		prefixes = append(prefixes, legacy)
+	}
+	return prefixes
+}
+
+// hasAnyPrefix reports whether s starts with any of the prefixes.
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // RunDiscoveryOrphanCleanupOnce subscribes to `homeassistant/#` for a
 // short snapshot window, accumulates every retained HA-Discovery
 // config topic that targets a node_id this daemon owns, then evicts
@@ -433,15 +469,15 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 	if !ok {
 		return 0, errCleanupClientLacksSubscribe
 	}
-	centralName := strings.ToLower(b.resolvedCentral(""))
-	if centralName == "" {
+	rawCentral := b.resolvedCentral("")
+	if rawCentral == "" {
 		// Without a central name we cannot scope the orphan filter to
 		// our own node_id namespace; refuse rather than risk wiping
 		// another integration's discovery configs.
 		return 0, nil
 	}
 	prefix := "homeassistant/"
-	nodePrefix := centralName + "_"
+	nodePrefixes := discoveryNodePrefixes(rawCentral)
 
 	var (
 		mu      sync.Mutex
@@ -459,7 +495,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 		}
 		nodeID := strings.ToLower(parts[1])
 		switch {
-		case strings.HasPrefix(nodeID, nodePrefix):
+		case hasAnyPrefix(nodeID, nodePrefixes):
 		case daemonLevelNodeIDs[nodeID]:
 			// A daemon-level plane is only swept once it has declared.
 			//
@@ -522,6 +558,20 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 	return len(orphans), nil
 }
 
+// rawCentralPrefix returns the `<base>/<central>/` prefix the raw plane
+// publishes every per-data-point topic under. One definition for both halves
+// of the orphan sweep — the subscribe filter and the candidate matcher — so
+// they cannot look in different places.
+//
+// The base is trimmed and the central name escaped exactly as
+// [naming.PathData.MQTTState] does when it writes those topics. Both had
+// drifted: a `topic_base` written with a trailing slash and a CCU whose name
+// carries a space each produced a sweep that collected nothing at all, so
+// retained topics from a previous build kept feeding stale values forever.
+func rawCentralPrefix(topicBase, centralName string) string {
+	return strings.Trim(topicBase, "/") + "/" + naming.TopicSafe(centralName) + "/"
+}
+
 // RawOrphanCandidateMatcher reports whether topic is a per-DP bucket topic
 // (state or its /config companion) of the given central under topicBase:
 //
@@ -532,11 +582,16 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 // channel id. The reserved hub subtree (`<central>/hub/...`) never matches.
 // Exposed for unit testing — production consumes it via
 // [Bridge.RunRawOrphanCleanupOnce].
+//
+// centralName is the configured name; the comparison escapes it through
+// [naming.TopicSafe] because that is what every publisher writes into
+// the topic. Matching the raw name instead made the sweep miss every
+// topic of a central whose name contains a space.
 func RawOrphanCandidateMatcher(topicBase, centralName, topic string) bool {
 	if topicBase == "" || centralName == "" {
 		return false
 	}
-	prefix := topicBase + "/" + centralName + "/"
+	prefix := rawCentralPrefix(topicBase, centralName)
 	if !strings.HasPrefix(topic, prefix) {
 		return false
 	}
@@ -625,7 +680,7 @@ func (b *Bridge) RunRawOrphanCleanupOnce(ctx context.Context, centralName string
 		mu.Unlock()
 	}
 
-	filter := b.cfg.Base + "/" + centralName + "/#"
+	filter := rawCentralPrefix(b.cfg.Base, centralName) + "#"
 	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.State, LegacyHandler(handler)); err != nil {
 		return 0, err
 	}

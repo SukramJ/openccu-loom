@@ -13,6 +13,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -368,5 +369,126 @@ func TestReadiness_SensorBothUnreachableAndLowBatteryDetailsVsBlockers(t *testin
 	}
 	if !wantUnreachable || !wantLowBattery {
 		t.Errorf("Details reasons = %v, want both unreachable and low_battery", reasons)
+	}
+}
+
+// TestSources_EntryDelayExpiryRecordsTheSensorThatOpenedTheCountdown
+// covers the most common real intrusion path: a delayed door trips, the
+// resident does not disarm, and the entry countdown expires.
+//
+// The trigger that follows carries a cause built at timer-expiry time
+// rather than from the sensor activation, and a cause without the
+// sensor's data-point identity projects onto an empty source reference,
+// which recordSource drops silently. The incident then names no
+// detector anywhere: the ledger stays empty, AlarmTriggeredEvent.Sources
+// is nil, and the report's sensor placeholders render blank — for the
+// single case an after-the-fact audit most needs to answer.
+func TestSources_EntryDelayExpiryRecordsTheSensorThatOpenedTheCountdown(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	ledger := &fakeSourceLedger{}
+	h.startWithLedger(ledger)
+	h.armFull()
+
+	h.eng.HandleSensorEvent(h.ctx, "door", true)
+	h.wantState("eg", hmenum.AlarmZoneStatePending)
+	h.advance(15 * time.Second)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+	sources := h.eng.IncidentSources("eg")
+	if len(sources) != 1 {
+		t.Fatalf("IncidentSources len=%d want 1 after an entry-delay expiry: %+v", len(sources), sources)
+	}
+	if sources[0].Ref != refFor("door") {
+		t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("door"))
+	}
+	if got := ledger.refs(); len(got) != 1 || got[0] != refFor("door") {
+		t.Errorf("ledger refs = %v, want [%s]", got, refFor("door"))
+	}
+}
+
+// TestSources_UnavailableWhileArmedRecordsTheSensorThatWentAway covers
+// the same cause-without-identity defect on the trigger-when-unavailable
+// route: a sensor that stops answering while armed is itself the
+// contributing data point, so the incident must name it.
+func TestSources_UnavailableWhileArmedRecordsTheSensorThatWentAway(t *testing.T) {
+	h := newHarness(t)
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
+	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+		Modes:                  []hmenum.AlarmMode{hmenum.AlarmModeFull},
+		TriggerWhenUnavailable: true,
+	})
+	ledger := &fakeSourceLedger{}
+	h.startWithLedger(ledger)
+	h.armFull()
+
+	h.eng.SetSensorAvailability(h.ctx, "window", false)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+	sources := h.eng.IncidentSources("eg")
+	if len(sources) != 1 {
+		t.Fatalf("IncidentSources len=%d want 1 after an unavailable-while-armed trigger: %+v", len(sources), sources)
+	}
+	if sources[0].Ref != refFor("window") {
+		t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("window"))
+	}
+	if ledger.count() != 1 {
+		t.Errorf("ledger rows = %d, want 1", ledger.count())
+	}
+}
+
+// TestSources_DowntimeActivationRecordsTheSensorFoundOpenOnRestore
+// covers the third cause built by hand: a window opened while the
+// daemon was down is detected by the restore's fresh-value read, and
+// the incident it raises must name that window.
+func TestSources_DowntimeActivationRecordsTheSensorFoundOpenOnRestore(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	h.start()
+	h.armFull()
+
+	// The window opens while the daemon is down; the restart re-reads it.
+	h.eng.Stop(h.ctx)
+	h.freshPorts(h.clk.Now().Add(time.Minute))
+	h.reader.set("window", true)
+	ledger := &fakeSourceLedger{}
+	h.startWithLedger(ledger)
+
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+	sources := h.eng.IncidentSources("eg")
+	if len(sources) != 1 {
+		t.Fatalf("IncidentSources len=%d want 1 after a downtime activation: %+v", len(sources), sources)
+	}
+	if sources[0].Ref != refFor("window") {
+		t.Errorf("sources[0].Ref = %q, want %q", sources[0].Ref, refFor("window"))
+	}
+	if ledger.count() != 1 {
+		t.Errorf("ledger rows = %d, want 1", ledger.count())
+	}
+}
+
+// TestSources_FireCycleCarriesTheZoneSnapshot pins the other end of the
+// notification path: the driver's notification sink runs with the
+// engine lock held (engine.OutputPort), so the zone name and the
+// incident's sources have to arrive with the cycle. A sink that asked
+// the engine for either one instead would self-deadlock the alarm
+// system on the first notification output an operator enrols.
+func TestSources_FireCycleCarriesTheZoneSnapshot(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	ledger := &fakeSourceLedger{}
+	h.startWithLedger(ledger)
+	h.armFull()
+
+	h.eng.HandleSensorEvent(h.ctx, "window", true)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+	fire := h.outputs.lastFire(t)
+	if fire.Opts.ZoneName != "Erdgeschoss" {
+		t.Errorf("FireOptions.ZoneName = %q, want Erdgeschoss", fire.Opts.ZoneName)
+	}
+	if len(fire.Opts.Sources) != 1 || fire.Opts.Sources[0].Ref != refFor("window") {
+		t.Errorf("FireOptions.Sources = %+v, want exactly the window source %q",
+			fire.Opts.Sources, refFor("window"))
 	}
 }

@@ -202,10 +202,12 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// central's actual serial. Only stamp once the serial has resolved so we
 	// never clobber a serial another path already stamped with an empty one.
 	//
-	// The stamp is queued rather than applied here so it lands on the same
-	// goroutine as the discovery builds that read it back — the builder's
-	// per-central map is not synchronised, and every build below runs on the
-	// worker.
+	// The stamp is queued rather than applied here so it is ordered
+	// BEFORE the discovery builds that read it back: every build below
+	// runs on the worker, so a stamp applied inline could land after a
+	// payload that already read the empty serial. (The builder's map is
+	// itself synchronised — other goroutines stamp it too — so this
+	// queueing is about ordering, not about data-race safety.)
 	if hi := hubInfoFromUnit(u); hi.Serial != "" {
 		p.publish(func() { disco.SetHubInfoFor(centralName, hi) })
 	}

@@ -18,6 +18,27 @@ import (
 // pins this at 5 minutes.
 const IdempotencyTTL = 5 * time.Minute
 
+const (
+	// idempotencyCacheCap bounds the number of live cache slots. The key
+	// is `METHOD path subject Idempotency-Key` and the header value is
+	// client-chosen, so a caller minting a fresh UUID per request would
+	// otherwise add one full cached response body per request for the
+	// lifetime of the process. The TTL alone governs replay freshness,
+	// never memory: nothing re-reads a key that is never retried.
+	idempotencyCacheCap = 1024
+
+	// idempotencyPendingCeiling is the wall-clock ceiling on an in-flight
+	// reservation. Slots are normally released by complete/release, so
+	// this only catches a wedged handler — without it a stuck request
+	// could pin a slot forever and survive every sweep.
+	idempotencyPendingCeiling = 15 * time.Minute
+
+	// idempotencyBodyLimit caps the response body a slot may retain, so
+	// one large mutation response cannot amplify the table's footprint.
+	// A larger response simply is not replayable; the retry re-runs.
+	idempotencyBodyLimit = 64 << 10
+)
+
 // Idempotency caches the last response per (method + path + resolved
 // identity + Idempotency-Key) tuple. Only mutating methods are
 // cached; GET falls through.
@@ -35,6 +56,12 @@ const IdempotencyTTL = 5 * time.Minute
 // instead of either double-executing the mutation or blocking. This
 // mirrors the "in-flight" half of the Idempotency-Key contract
 // without adding cross-request blocking to the hot path.
+//
+// The table is hard-bounded at [idempotencyCacheCap] slots. Its key
+// carries a client-chosen header value, so nothing else limits how many
+// distinct keys a caller mints; a request that finds no free slot runs
+// uncached, which the published contract covers ("evicted under memory
+// pressure ... flow through as fresh requests").
 func Idempotency() func(http.Handler) http.Handler {
 	return idempotencyMiddleware(newIdempotencyCache())
 }
@@ -70,6 +97,14 @@ func idempotencyMiddleware(cache *idempotencyCache) func(http.Handler) http.Hand
 				problem.Write(w, http.StatusConflict,
 					problem.New(problem.TypeConflict, r, "Request already in flight",
 						"a request with this Idempotency-Key is already being processed; retry once it completes"))
+				return
+			case cacheStateBypass:
+				// The table is full of still-fresh slots. Run the request
+				// uncached rather than evicting somebody else's result:
+				// a retry then re-executes, which the published contract
+				// already allows for a key "evicted under memory
+				// pressure", while replaying a wrong response never is.
+				next.ServeHTTP(w, r)
 				return
 			case cacheStateMiss:
 				// First request for this key — fall through, execute the
@@ -132,6 +167,10 @@ const (
 	cacheStateMiss cacheState = iota
 	cacheStateHit
 	cacheStatePending
+	// cacheStateBypass means no slot could be claimed because the table
+	// is at capacity and holds nothing reclaimable. The caller runs the
+	// handler without recording a result.
+	cacheStateBypass
 )
 
 type idempotencyCache struct {
@@ -149,6 +188,10 @@ func newIdempotencyCache() *idempotencyCache {
 // so the caller can reject the duplicate; anything else (absent or
 // expired) is claimed as pending on behalf of the caller and reported
 // as a miss, so exactly one request proceeds to execute the handler.
+//
+// Claiming a slot is what bounds the table: at capacity the reclaimable
+// entries go first, and a table of nothing but live slots answers
+// [cacheStateBypass] rather than growing.
 func (c *idempotencyCache) reserve(id string) (idempotentEntry, cacheState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -161,16 +204,64 @@ func (c *idempotencyCache) reserve(id string) (idempotentEntry, cacheState) {
 		}
 		delete(c.items, id)
 	}
-	c.items[id] = idempotentEntry{pending: true, at: c.now()}
+	now := c.now()
+	if len(c.items) >= idempotencyCacheCap {
+		c.sweepLocked(now)
+		if len(c.items) >= idempotencyCacheCap {
+			return idempotentEntry{}, cacheStateBypass
+		}
+	}
+	c.items[id] = idempotentEntry{pending: true, at: now}
 	return idempotentEntry{}, cacheStateMiss
 }
 
+// sweepLocked drops every slot that can no longer serve a replay: a
+// completed entry past [IdempotencyTTL], and a reservation whose handler
+// has been in flight past [idempotencyPendingCeiling]. Callers hold c.mu.
+//
+// It runs only when the table is at capacity, so its O(n) cost is paid
+// once per flood rather than once per request.
+func (c *idempotencyCache) sweepLocked(now time.Time) {
+	for id, e := range c.items {
+		ttl := IdempotencyTTL
+		if e.pending {
+			ttl = idempotencyPendingCeiling
+		}
+		if now.Sub(e.at) > ttl {
+			delete(c.items, id)
+		}
+	}
+}
+
 // complete stores the finished response and clears the pending flag.
+//
+// A response nothing can meaningfully deduplicate does not earn a slot:
+// a status the request never got past the router or the auth chain for
+// carries no mutation to replay, and an oversized body would let one
+// call dominate the table. Both drop the reservation instead, so a
+// retry of the same key re-executes rather than answering 409 forever.
 func (c *idempotencyCache) complete(id string, e idempotentEntry) {
+	if !isReplayableStatus(e.status) || len(e.body) > idempotencyBodyLimit {
+		c.release(id)
+		return
+	}
 	e.at = c.now()
 	c.mu.Lock()
 	c.items[id] = e
 	c.mu.Unlock()
+}
+
+// isReplayableStatus reports whether a response is worth caching. The
+// rejected statuses are produced before any handler mutated anything —
+// an unauthenticated or misrouted request has nothing to deduplicate,
+// and caching them is what lets a pre-auth flood fill the table.
+func isReplayableStatus(status int) bool {
+	switch status {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound,
+		http.StatusMethodNotAllowed, http.StatusTooManyRequests:
+		return false
+	}
+	return true
 }
 
 // release drops a pending reservation without recording a result —

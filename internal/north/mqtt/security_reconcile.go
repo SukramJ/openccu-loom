@@ -117,7 +117,7 @@ func (p *SecurityMQTTPublisher) publishDiscoveryOnce(snap security.Snapshot) {
 		p.mu.Unlock()
 		return
 	}
-	base := b.cfg.Base
+	base := b.topics.Base
 	device := p.tr8("discovery.security_system", "Security & Safety")
 	ctx := context.Background()
 
@@ -172,7 +172,7 @@ func (p *SecurityMQTTPublisher) retractGone(snap security.Snapshot) {
 		return
 	}
 	ctx := context.Background()
-	base := b.cfg.Base
+	base := b.topics.Base
 
 	p.mu.Lock()
 	var goneClasses []hmenum.SecurityClass

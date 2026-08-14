@@ -25,7 +25,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
-	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -150,11 +149,17 @@ func NewService(deps Deps) (*Service, error) {
 		Resolver: resolver,
 		// Notification outputs fan out onto the alarm bus; MQTT,
 		// webhook, and WS pick the event up per their plane flag.
-		Notify:                 s.notifyOutputFired,
-		Ledger:                 deps.Stores.Incidents,
-		Journal:                s.journal,
-		Rows:                   deps.Stores.Outputs,
-		Health:                 deps.Health,
+		Notify:  s.notifyOutputFired,
+		Ledger:  deps.Stores.Incidents,
+		Journal: s.journal,
+		Rows:    deps.Stores.Outputs,
+		// The fan-out wrapper, not deps.Health: the driver layer is the
+		// only producer of alarm health transitions, and a failed fire or
+		// an unverified stop has to reach the alarm bus as well as the
+		// daemon tracker. Passing the inner callback here leaves every
+		// live surface reporting a healthy alarm system while a siren is
+		// stuck on.
+		Health:                 s.health,
 		Logger:                 logger,
 		DefaultSirenDuration:   time.Duration(deps.Settings.DefaultSirenSeconds) * time.Second,
 		MaxAcousticPerIncident: time.Duration(deps.Settings.MaxAcousticPerIncidentSeconds) * time.Second,
@@ -524,39 +529,31 @@ func (s *Service) DetachCentral(name string) {
 // notifyOutputFired publishes one notification output's fire signal
 // on the alarm bus (outputs.NotificationSink); MQTT, webhook, and WS
 // pick it up per their plane flag.
-func (s *Service) notifyOutputFired(row sqlitestore.AlarmOutputRow, cfg outputs.OutputConfig, incident sqlitestore.AlarmIncident) {
-	zoneName := ""
-	if s.engine != nil {
-		zones := s.engine.Zones()
-		for i := range zones {
-			if zones[i].ID == row.ZoneID {
-				zoneName = zones[i].Name
-				break
-			}
-		}
-	}
-	var sources []hmevent.SecuritySourceRef
+//
+// It runs inside the engine's fire path, with the engine lock held, so
+// it resolves nothing from the engine: the zone name and the incident
+// sources travel with the cycle instead (engine.FireOptions). Reading
+// them back off the engine here self-deadlocks the whole alarm system —
+// the trigger holds the lock the read would need, and every later verb,
+// Disarm and Silence included, blocks behind it with the siren already
+// sounding.
+func (s *Service) notifyOutputFired(n outputs.Notification) {
 	cause := ""
-	if s.engine != nil {
-		// Read from the engine's in-memory accumulator rather than the
-		// ledger table: a notification must not wait on a query.
-		sources = s.engine.IncidentSources(row.ZoneID)
-	}
-	if len(sources) > 0 {
-		cause = incidentCauseKind(incident.CauseJSON)
+	if len(n.Sources) > 0 {
+		cause = incidentCauseKind(n.Incident.CauseJSON)
 	}
 	events.Publish(s.bus, hmevent.AlarmNotificationEvent{
 		Base:       hmevent.NewBaseAt(s.clk.Now()),
-		ZoneID:     row.ZoneID,
-		ZoneName:   zoneName,
-		OutputID:   row.ID,
-		OutputName: row.Name,
-		IncidentID: incident.ID,
-		Mode:       incident.Mode,
-		MQTT:       cfg.NotifyMQTTEnabled(),
-		Webhook:    cfg.NotifyWebhookEnabled(),
+		ZoneID:     n.Row.ZoneID,
+		ZoneName:   n.ZoneName,
+		OutputID:   n.Row.ID,
+		OutputName: n.Row.Name,
+		IncidentID: n.Incident.ID,
+		Mode:       n.Incident.Mode,
+		MQTT:       n.Config.NotifyMQTTEnabled(),
+		Webhook:    n.Config.NotifyWebhookEnabled(),
 		Cause:      cause,
-		Sources:    sources,
+		Sources:    n.Sources,
 	})
 }
 

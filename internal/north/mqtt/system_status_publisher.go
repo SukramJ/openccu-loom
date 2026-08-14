@@ -20,9 +20,7 @@ import (
 // non-retained (QoS 0) so consumers only see live events — a stale
 // retained payload would be misleading after a daemon restart.
 //
-// Mirrors the north-bound subscriber contract described in
-// ADR 0011 and
-// path.
+// Mirrors the north-bound subscriber contract described in ADR 0011.
 type SystemStatusPublisher struct {
 	reg    *central.Registry
 	wiring *Wiring
