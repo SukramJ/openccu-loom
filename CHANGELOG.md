@@ -337,6 +337,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   outlived the bridge and published into a torn-down stack. A pass that
   starts after teardown now warms nothing up.
 
+- **A reconnect no longer multiplies week-profile, schedule, firmware and
+  timer updates.** Every broker reconnect, every CCU that clears its
+  readiness gate and every hot-plugged device re-walks the model and wired
+  another callback onto the same week profiles, schedules, firmware
+  trackers and combined data points. After the third reconnect a single
+  profile change wrote its MQTT topic three times, and the list of
+  callbacks waiting to be released grew for as long as the daemon ran.
+  Each callback is now installed once per object: a reconnect that hands
+  back the same objects changes nothing, while a device re-read that
+  rebuilds a channel subscribes the rebuilt objects and releases the
+  callbacks on the ones they replaced — so a re-read does not silently
+  stop the updates either. A device that leaves the CCU releases its
+  callbacks with it.
+
 - **A CCU added while the daemon runs gets its values persisted.** The
   periodic value-cache flush and the row cleanup after an unpair both
   subscribe per CCU, and both did so once at startup: a CCU adopted later
