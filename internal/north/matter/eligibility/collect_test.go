@@ -49,7 +49,6 @@ type mappableDP struct {
 }
 
 func (d *mappableDP) DataPointKey() hmtypes.DataPointKey { return d.key }
-func (d *mappableDP) Profile() string                    { return d.key.Parameter }
 func (d *mappableDP) MatterDeviceType() uint16           { return d.devType }
 func (d *mappableDP) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: d.cluster}}
@@ -63,23 +62,6 @@ type opaqueDP struct {
 }
 
 func (o *opaqueDP) DataPointKey() hmtypes.DataPointKey { return o.key }
-
-// profileOnlyDP implements Profile() but not DataPointKey.Parameter,
-// so dpKey falls through to the Profile() branch.
-type profileOnlyDP struct {
-	profileName string
-	devType     uint16
-	cluster     uint32
-}
-
-func (p *profileOnlyDP) DataPointKey() hmtypes.DataPointKey {
-	return hmtypes.DataPointKey{} // Parameter is empty
-}
-func (p *profileOnlyDP) Profile() string          { return p.profileName }
-func (p *profileOnlyDP) MatterDeviceType() uint16 { return p.devType }
-func (p *profileOnlyDP) MatterClusterServers() []interfaces.MatterClusterServer {
-	return []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: p.cluster}}
-}
 
 // TestCollectCandidates_NilDevice verifies that a nil device entry is
 // silently skipped and does not panic.
@@ -211,33 +193,8 @@ func TestCollectCandidates_OpaqueDP_Skipped(t *testing.T) {
 	}
 }
 
-// TestCollectCandidates_ProfileDPKey verifies the Profile() dpKey fallback
-// path when DataPointKey().Parameter is empty.
-func TestCollectCandidates_ProfileDPKey(t *testing.T) {
-	t.Parallel()
-	d := device.New(device.Config{
-		Address: "E1:0",
-		Name:    "Light",
-	})
-	ch := d.AddChannel("E1:1", 1, "DIMMER", hmenum.ParamsetKeyValues)
-	dp := &profileOnlyDP{
-		profileName: "OnOffLight",
-		devType:     0x0100,
-		cluster:     0x0006,
-	}
-	ch.SetCustomDataPoint(dp)
-
-	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
-	if len(got) != 1 {
-		t.Fatalf("expected 1 candidate, got %d", len(got))
-	}
-	if got[0].Key.DPKey != "OnOffLight" {
-		t.Errorf("DPKey = %q, want %q", got[0].Key.DPKey, "OnOffLight")
-	}
-}
-
-// namedDP implements AttachableDataPoint + Name() but no DataPointKey.Parameter
-// and no Profile() — exercises the Name() fallback branch in dpKey.
+// namedDP implements AttachableDataPoint + Name() but no
+// DataPointKey.Parameter — exercises the Name() fallback branch in dpKey.
 type namedDP struct {
 	name    string
 	devType uint16
@@ -251,7 +208,7 @@ func (n *namedDP) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{&fakeClusterServer{clusterID: n.cluster}}
 }
 
-// unknownDP has no DataPointKey.Parameter, no Profile(), no Name().
+// unknownDP has no DataPointKey.Parameter and no Name().
 // dpKey falls through to the "unknown(%T)" branch.
 type unknownDP struct {
 	devType uint16
