@@ -32,11 +32,16 @@ var ErrFabricIDMismatch = errors.New("sigma: peer NOC fabric-id does not match r
 // The chain verification in [PeerVerifier.VerifyAndExtractPubKey] only
 // proves the peer NOC links back to the fabric root; it does NOT bind
 // the NOC subject fabric-id, which Matter §6.5.6.1 carries as a
-// distinct subject DN attribute. matter.js validates the two
-// separately and rejects a fabric-id mismatch before the transcript
-// signature check. Verifiers that do not implement this surface (test
-// fixtures / single-fabric rigs) skip the check, matching the existing
-// [PeerNodeIDExtractor] / [PeerCATsExtractor] optional-surface pattern.
+// distinct subject DN attribute. Two fabrics provisioned from one
+// trust root would otherwise accept each other's operational
+// certificates. matter.js validates the two separately and rejects a
+// fabric-id mismatch before the transcript signature check.
+//
+// The daemon's production verifier implements this surface; only
+// protocol-layer test rigs that hand the responder a certificate-less
+// verifier leave it unimplemented, and those skip the check. A
+// verifier that DOES implement it but fails to read the fabric-id
+// rejects the handshake — matter.js has no "unavailable" path here.
 // Mirrors matter.js packages/protocol/src/session/case/CaseServer.ts:299-306.
 type PeerFabricIDExtractor interface {
 	PeerFabricIDFromNOC(noc []byte) (uint64, error)
@@ -358,6 +363,10 @@ type Responder struct {
 	sessionID        uint16
 	resumptionStore  ResumptionStore
 	identityResolver IdentityResolver
+	// sessionIDRenewer, when wired, supplies a fresh local session id
+	// every time the responder resets for a NEW Sigma1 — see
+	// [Responder.SetSessionIDRenewer].
+	sessionIDRenewer func(previous uint16) (uint16, bool)
 	// sessionParams, when non-nil and non-empty, is emitted as Sigma2
 	// context-tag 5 (responderSessionParams).
 	sessionParams *SessionParameters
@@ -484,6 +493,41 @@ func NewResponder(identity *Identity, verifier PeerVerifier, sessionID uint16) *
 // attempts Sigma2_Resume before falling through to Full Sigma.
 func (r *Responder) SetResumptionStore(s ResumptionStore) {
 	r.resumptionStore = s
+}
+
+// SessionID returns the local session id the responder announces in
+// Sigma2 for the handshake it is currently serving. Callers that open
+// the operational session after Sigma3 MUST read it here rather than
+// remember the id the responder was constructed with: a second Sigma1
+// on the same exchange renews it (see
+// [Responder.SetSessionIDRenewer]).
+func (r *Responder) SessionID() uint16 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.sessionID
+}
+
+// SetSessionIDRenewer wires the local session-id source used when a
+// NEW Sigma1 arrives on a responder that already served one. It is
+// called with the id currently announced and returns the replacement;
+// ok==false keeps the current id.
+//
+// matter.js takes the responder session id inside each Sigma1
+// handling (packages/protocol/src/session/case/CaseServer.ts:266
+// `getNextAvailableSessionId`), so every handshake gets its own id
+// even when several run over one exchange. Our per-exchange
+// CaseAdapter instead allocates once at construction, which made the
+// second handshake register its session in the slot the first peer's
+// session still occupied. Daemons therefore wire this to the
+// operational manager's allocator; leaving it nil keeps the
+// constructor-time id (single-handshake test rigs).
+//
+// The callback runs while the responder's own lock is held, so it must
+// not call back into the responder.
+func (r *Responder) SetSessionIDRenewer(fn func(previous uint16) (uint16, bool)) {
+	r.mu.Lock()
+	r.sessionIDRenewer = fn
+	r.mu.Unlock()
 }
 
 // SetSessionParameters wires the responder's preferred MRP tuning
@@ -782,6 +826,23 @@ func (r *Responder) processSigma1Locked(sigma1Bytes []byte) (Sigma2, error) { //
 		r.initEphPub = nil
 		r.peerSessionID = 0
 		r.peerNodeID = 0
+		// CASE Authenticated Tags and the MRP hints are peer-supplied
+		// state. ProcessSigma3 re-assigns the tags only when the NEXT
+		// peer's NOC actually carries some, so keeping them here would
+		// hand the previous peer's tags to the next session's ACL
+		// subject set — a peer with no tag of its own would be matched
+		// by every CAT-scoped ACE written for its predecessor.
+		r.peerCATs = nil
+		r.peerSessionParams = nil
+		// Take a fresh local session id for the new handshake: the one
+		// already announced may be occupied by the session the first
+		// handshake established, and registering the second peer under
+		// it would displace the first without tearing it down.
+		if r.sessionIDRenewer != nil {
+			if next, ok := r.sessionIDRenewer(r.sessionID); ok {
+				r.sessionID = next
+			}
+		}
 		r.sigma2 = Sigma2{}
 		r.sigma2Bytes = nil
 		r.shared = nil
@@ -952,16 +1013,19 @@ func (r *Responder) ProcessSigma3(sigma3Bytes []byte) error {
 	// not that its subject fabric-id equals the fabric we signed Sigma2
 	// under. matter.js checks the two separately and rejects a mismatch
 	// BEFORE the transcript signature check. Verifiers that do not
-	// expose the fabric-id (test fixtures) skip the check, and an
-	// extractor error is treated as "unavailable" — mirroring the
-	// PeerNodeID / PeerCATs optional-surface handling below.
+	// expose the fabric-id (protocol-layer test rigs) skip the check;
+	// a verifier that exposes it but cannot read the fabric-id out of
+	// a NOC it just accepted describes an anomalous certificate, and
+	// matter.js has no path that proceeds without the comparison.
 	// Mirrors matter.js packages/protocol/src/session/case/CaseServer.ts:299-306.
-	if extractor, ok := r.verifier.(PeerFabricIDExtractor); ok {
-		if peerFabricID, ferr := extractor.PeerFabricIDFromNOC(tbe3.InitiatorNOC); ferr == nil && r.identity != nil {
-			if peerFabricID != r.identity.FabricID {
-				return fmt.Errorf("%w: NOC fabric-id 0x%016X != responder fabric-id 0x%016X",
-					ErrFabricIDMismatch, peerFabricID, r.identity.FabricID)
-			}
+	if extractor, ok := r.verifier.(PeerFabricIDExtractor); ok && r.identity != nil {
+		peerFabricID, ferr := extractor.PeerFabricIDFromNOC(tbe3.InitiatorNOC)
+		if ferr != nil {
+			return fmt.Errorf("%w: peer NOC fabric-id unreadable: %w", ErrFabricIDMismatch, ferr)
+		}
+		if peerFabricID != r.identity.FabricID {
+			return fmt.Errorf("%w: NOC fabric-id 0x%016X != responder fabric-id 0x%016X",
+				ErrFabricIDMismatch, peerFabricID, r.identity.FabricID)
 		}
 	}
 	// Lift the peer's NodeID out of the verified NOC if the

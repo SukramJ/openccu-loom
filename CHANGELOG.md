@@ -123,6 +123,45 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   schedule strip now invert in dark mode**, matching every other
   colour-bearing element in the same chart.
 
+- **A Matter controller can no longer take over another controller's
+  session slot.** The bridge reserves one secure-session id per CASE
+  exchange, and Apple Home opens a second session on an exchange it has
+  already used. The second session was registered under the id the first
+  one still held: the first controller's session disappeared from the
+  table with its keys live and its subscriptions still registered, so
+  the bridge kept serving them — encrypted for the wrong controller.
+  Each handshake now takes its own id, and a session that would displace
+  a live one is torn down properly first.
+
+- **Aborted Matter handshakes give their session id back.** A CASE
+  exchange that sent Sigma1 and never finished reserved one of the
+  65534 session ids for the lifetime of the daemon. Enough of them —
+  which a device on the same network can produce on its own — and every
+  further handshake was refused, including legitimate reconnects from an
+  already-paired controller, until a restart. Reserved ids now expire,
+  and an exhausted id space reclaims the oldest reservation instead of
+  failing.
+
+### Security
+
+- **A Matter controller is bound to the fabric its certificate names.**
+  Verifying a controller's operational certificate proved it chained to
+  the fabric's root, but never that the certificate was issued for THAT
+  fabric. Where two fabrics are provisioned from one certificate
+  authority, a controller could present its own fabric's certificate,
+  complete the handshake against another fabric, and read and write that
+  fabric's data. The check existed but could never run, because the
+  daemon's certificate verifier did not expose the fabric id it needed.
+
+- **A Matter session no longer inherits the previous controller's
+  authenticated tags.** CASE Authenticated Tags identify the
+  administrator group a controller belongs to, and access rules can be
+  written against them. When a second controller ran a handshake on an
+  exchange a first one had used, and its own certificate carried no
+  tags, the previous controller's tags stayed attached — so the new
+  session matched every rule written for the previous controller's
+  group.
+
 ## [0.58.6]
 
 ### Security
