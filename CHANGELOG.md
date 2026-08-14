@@ -60,6 +60,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Saving a device setting twice in quick succession no longer leaves the
+  old value on screen.** Classic HomeMatic interfaces do not report MASTER
+  changes back, so the daemon reads the paramset again a couple of seconds
+  after each write. A second save inside that window replaced the pending
+  read — and then the replaced one, on its way out, cancelled its own
+  replacement. Neither read happened, so the device had the new setting
+  while the daemon, the API and the UI kept showing the previous one until
+  a later single write or a restart corrected it.
+
+- **A CCU reconnect can no longer make a supported operation look
+  unsupported.** The set of things an interface can do is re-probed when the
+  connection comes back, on a different goroutine from the ones asking about
+  it — a backup, a firmware update, or the ingest of a newly announced
+  device. The hand-off between them was unsynchronised, so on the 32- and
+  64-bit ARM builds a request landing in that instant could read a
+  half-published profile and be turned away, or a device that does support
+  push callbacks could be recorded as one that does not.
+
 - **The daemon stops hoarding device announcements nobody can read.** It
   answers the CCU's `listDevices` with an empty array, so after every
   reconnect the CCU re-announces its complete inventory — and every one

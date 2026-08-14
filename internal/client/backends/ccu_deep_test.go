@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -501,6 +502,46 @@ func TestCcuBackendCapabilitiesIncludeRPCCallback(t *testing.T) {
 	if !caps.ListDevices {
 		t.Error("ListDevices must be true for KindCCU")
 	}
+}
+
+// TestCcuBackendCapabilitiesConcurrentWithReinitialize pins that the probed
+// capability profile is published safely. Initialize is not boot-only:
+// InterfaceClient.ReinitProxy re-probes on the connection-recovery goroutine
+// after every reconnect, while Capabilities() gates roughly two dozen
+// north-bound operations from REST/WS/MQTT handler goroutines and from the
+// device-ingest pipeline. Without an ordered publish a reader can observe the
+// fresh pointer before the struct behind it, and a supported operation is
+// rejected as unsupported. Run under -race to see the unsynchronised publish.
+func TestCcuBackendCapabilitiesConcurrentWithReinitialize(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackendForInterface(hmenum.InterfaceBidCosRF, &fakeCaller{}, &fakeCaller{}, nil)
+	if err := b.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+
+	const rounds = 200
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for range rounds {
+			if err := b.Initialize(context.Background()); err != nil {
+				t.Errorf("Initialize: %v", err)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range rounds {
+			if caps := b.Capabilities(); !caps.ListDevices || !caps.RPCCallback {
+				t.Errorf("Capabilities during re-probe: ListDevices=%v RPCCallback=%v, want both true",
+					caps.ListDevices, caps.RPCCallback)
+				return
+			}
+		}
+	}()
+	wg.Wait()
 }
 
 func TestCcuBackendKindIsKindCCU(t *testing.T) {
