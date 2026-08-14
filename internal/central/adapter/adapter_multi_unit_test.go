@@ -15554,7 +15554,7 @@ func TestDevicePipelineWithMasterRefreshHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	p := NewDevicePipeline(c).WithMasterRefreshHook(func(addr string, key hmenum.ParamsetKey) {})
+	p := NewDevicePipeline(c).WithMasterRefreshHook("ccu-test-BidCos-RF", func(addr string, key hmenum.ParamsetKey) {})
 	if p == nil {
 		t.Fatal("WithMasterRefreshHook must return non-nil pipeline")
 	}
@@ -15566,9 +15566,9 @@ func TestDevicePipelineWithNilMasterRefreshHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	p := NewDevicePipeline(c).WithMasterRefreshHook(nil)
+	p := NewDevicePipeline(c).WithMasterRefreshHook("ccu-test-BidCos-RF", nil)
 	if p == nil {
-		t.Fatal("WithMasterRefreshHook(nil) must return non-nil pipeline")
+		t.Fatal("WithMasterRefreshHook with a nil hook must return non-nil pipeline")
 	}
 }
 

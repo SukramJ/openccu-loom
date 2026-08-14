@@ -179,6 +179,54 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   device-trigger plane derived its entity id from that empty name, which
   made the ids of two CCUs collide.
 
+- **Home Assistant gets one connectivity sensor per radio, and it works.**
+  The sensor declared at startup pointed at a state topic nothing ever
+  wrote, because the declaration used the internal, central-scoped
+  interface id while the reachability updates are published under the
+  name the CCU itself reports. The entity stayed unavailable for good,
+  and the first reachability change created a second one next to it.
+
+- **A device paired while the daemon runs reads its configuration back
+  through its own radio.** After a configuration write, classic
+  HomeMatic devices need a delayed re-read to keep the cached values
+  honest, and that read is bound to one interface's connection. Devices
+  materialised at runtime were all given the connection of whichever
+  interface was configured last: on a CCU running HmIP-RF and BidCos-RF
+  together, a new HmIP device sent its re-reads through the BidCos
+  connection, where the CCU rejects them and the failures count against
+  that interface's circuit breaker. In the reverse configuration the
+  re-read was skipped entirely.
+
+- **The HmIP paramset-consistency check looks at real data again.** The
+  post-start sweep that detects stale descriptor files left behind by an
+  HmIP firmware update looked its channels up under the bare interface
+  name while the caches are keyed by the central-scoped one. Every lookup
+  missed, so the sweep compared nothing, reported no problem and logged
+  nothing — it has been blind, while looking healthy, since it was added.
+
+- **Text values read at startup keep their umlauts.** The bulk value read
+  the daemon issues at startup percent-decodes the strings the CCU
+  returns but skipped the ISO-8859-1 conversion every other CCU-script
+  reader applies. A string data point holding `Spüle` was stored as
+  invalid UTF-8 and rendered as `Sp?le` on MQTT, REST and in the SPA
+  until the device happened to report the value again.
+
+- **Shutdown no longer races the schedule warm-up it is waiting for.**
+  Stopping the north-bound event bridge waits for its background
+  schedule loads to finish, but a broker reconnect landing in that window
+  could start another one — Go detects that as a wait-group misuse and
+  aborts the process, and in the timings it does not detect, the load
+  outlived the bridge and published into a torn-down stack. A pass that
+  starts after teardown now warms nothing up.
+
+- **A CCU added while the daemon runs gets its values persisted.** The
+  periodic value-cache flush and the row cleanup after an unpair both
+  subscribe per CCU, and both did so once at startup: a CCU adopted later
+  was skipped by every flush tick from then on. Its values reached disk
+  only through the flush on a clean shutdown, so a container kill, an OOM
+  kill or a power cut left its cache exactly as empty as it was at
+  adoption, and the next start had nothing to restore for it.
+
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle
   and are still attempted while the circuit breaker for a struggling CCU

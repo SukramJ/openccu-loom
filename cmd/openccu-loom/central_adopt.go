@@ -113,6 +113,13 @@ type centralOrchestrator struct {
 	// serial-gated hub discovery the same way a boot-time central does. Nil when
 	// MQTT is not configured.
 	hubReadyTrigger func()
+	// valuesCacheHook registers an adopted central with the values-cache
+	// flusher's dirty tracker and its device-removal eviction. Set via
+	// [centralOrchestrator.setValuesCacheCentralHook]. Without it the adopted
+	// CCU is skipped by every periodic flush tick — its values reach SQLite
+	// only through the graceful-shutdown flush, so a SIGKILL or host reboot
+	// loses everything it observed since adoption.
+	valuesCacheHook func(u *central.Unit) (unwire func())
 }
 
 // centralHooks is what [centralOrchestrator.attachCentralHooks] returns: one
@@ -143,6 +150,7 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	hubEventsHook := o.hubEventsHook
 	eventSourceHook := o.eventSourceHook
 	hubReadyTrigger := o.hubReadyTrigger
+	valuesCacheHook := o.valuesCacheHook
 	o.mu.Unlock()
 
 	var h centralHooks
@@ -189,6 +197,12 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	if eventSourceHook != nil {
 		keep(eventSourceHook(unit))
 	}
+	// Register with the values-cache flusher + eviction. Before the bring-up
+	// starts, so the very first value the central reports already marks it
+	// dirty and the next tick persists it.
+	if valuesCacheHook != nil {
+		keep(valuesCacheHook(unit))
+	}
 	// Subscribe onto the hub-discovery ready pipeline so the serial-gated hub
 	// discovery (named central device + sysvars) publishes once the
 	// readiness-gated bring-up resolves the serial — the same path a boot-time
@@ -230,6 +244,18 @@ func (o *centralOrchestrator) setHubEventsCentralHook(hook func(u *central.Unit)
 	}
 	o.mu.Lock()
 	o.hubEventsHook = hook
+	o.mu.Unlock()
+}
+
+// setValuesCacheCentralHook installs the per-central values-cache hook
+// (dirty-tracker registration + removal eviction). Nil-safe on both sides,
+// mirroring setAlarmCentralHook.
+func (o *centralOrchestrator) setValuesCacheCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.valuesCacheHook = hook
 	o.mu.Unlock()
 }
 

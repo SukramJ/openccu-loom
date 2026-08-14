@@ -521,6 +521,14 @@ func (p *HubMQTTPublisher) wireInstallMode(
 // parity: the connectivity binary_sensor exists per interface at setup,
 // not only after the first reachability change. Connection-latency is
 // aggregated central-wide and seeded from the Metrics block instead.
+//
+// The seed keys on the BARE interface name, not on the `<central>-<iface>`
+// wire id the client coordinator is registered under: the state half of this
+// entity rides ConnectivityChangedEvent, whose InterfaceID is the name the
+// CCU itself reports from `Interface.listInterfaces`. Seeding under the wire
+// id declared a state topic nothing ever writes — a permanently unavailable
+// entity per radio — and the first reachability change then added a second,
+// live pair under the bare name.
 func seedConnectivityDiscovery(
 	ctx context.Context,
 	u *central.Unit,
@@ -533,7 +541,13 @@ func seedConnectivityDiscovery(
 		return
 	}
 	for _, entry := range u.Clients.List() {
-		iface := entry.InterfaceID
+		if entry == nil {
+			continue
+		}
+		iface := string(entry.Interface)
+		if iface == "" {
+			iface = string(BareInterfaceFromWireID(centralName, entry.InterfaceID))
+		}
 		if iface == "" {
 			continue
 		}

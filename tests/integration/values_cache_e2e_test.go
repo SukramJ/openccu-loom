@@ -140,9 +140,9 @@ func TestValuesCache_FlushAndRestoreRoundtrip(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	closer := adapter.WireValuesCacheFlusher(reg, vcStore, 5*time.Millisecond, logger)
+	flusher := adapter.WireValuesCacheFlusher(reg, vcStore, 5*time.Millisecond, logger)
 	time.Sleep(50 * time.Millisecond)
-	closer() // blocks until the shutdown flush completes
+	flusher.Stop() // blocks until the shutdown flush completes
 
 	// Verify at least one row landed in the store.
 	st, err := vcStore.Stats(context.Background())
@@ -329,9 +329,9 @@ done:
 		t.Fatalf("reg.Register: %v", err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	closer := adapter.WireValuesCacheFlusher(reg, vcStore, 5*time.Millisecond, logger)
+	flusher := adapter.WireValuesCacheFlusher(reg, vcStore, 5*time.Millisecond, logger)
 	time.Sleep(50 * time.Millisecond)
-	closer()
+	flusher.Stop()
 
 	// ── second run: restore, verify A=cache, then simulate fetch_all ─────────
 	vcStore2 := vcOpenDB(t, dbPath)

@@ -87,12 +87,20 @@ type DevicePipeline struct {
 	// CCU function ("Gewerk") the entity is assigned to. Sourced from
 	// Subsection.getAll during hub wiring. Nil tolerated.
 	functions map[string][]string
-	// masterRefreshHook is wired per (central, interface) for classic HM
-	// interfaces (BidCos-RF, BidCos-Wired, VirtualDevices, CUxD). When
-	// non-nil, it is installed on every channel via
-	// [device.Channel.SetMasterRefreshHook] during hydration. HmIP
-	// channels leave this nil — they use the CONFIG_PENDING event path.
-	masterRefreshHook func(addr string, key hmenum.ParamsetKey)
+	// masterRefreshHooks resolves the post-MASTER-write hook for the
+	// interface a channel is being hydrated for. Classic HM interfaces
+	// (BidCos-RF, BidCos-Wired, VirtualDevices, CUxD) each wire their own
+	// poller, which is bound to that interface's backend; HmIP interfaces
+	// register nothing and their channels stay hookless because the
+	// CONFIG_PENDING event path covers them.
+	//
+	// It is a per-interface map and not a single hook because one pipeline
+	// serves every interface of a central: a scalar hook was overwritten by
+	// each interface in turn, and the hot-plug ingestor — built after the
+	// whole interface loop — then stamped whichever interface happened to be
+	// wired last onto every device paired at runtime, sending its MASTER
+	// read-backs through the wrong backend.
+	masterRefreshHooks *masterRefreshHookSet
 
 	// cdpLightLastBrightness / cdpUseGroupChannelForCover are the
 	// per-central custom-DP rendering toggles stamped onto each device
@@ -166,7 +174,47 @@ func NewDevicePipeline(u *central.Unit) *DevicePipeline {
 		cdpUseGroupChannelForCover: true,
 		cdpEnableFirmwareCheck:     true,
 		ingestMu:                   &sync.Mutex{},
+		masterRefreshHooks:         newMasterRefreshHookSet(),
 	}
+}
+
+// masterRefreshHookSet holds one post-MASTER-write hook per interface wire
+// id. It is a pointer field on [DevicePipeline] so the shallow copies
+// [DevicePipeline.scopedTo] hands the hot-plug path share the same set, and
+// it carries its own lock because a background interface activation retry can
+// hydrate while a later interface is still being wired.
+type masterRefreshHookSet struct {
+	mu      sync.RWMutex
+	byIface map[string]func(addr string, key hmenum.ParamsetKey)
+}
+
+func newMasterRefreshHookSet() *masterRefreshHookSet {
+	return &masterRefreshHookSet{byIface: make(map[string]func(addr string, key hmenum.ParamsetKey))}
+}
+
+// set registers (or, with a nil fn, clears) the hook for one interface.
+func (s *masterRefreshHookSet) set(interfaceID string, fn func(addr string, key hmenum.ParamsetKey)) {
+	if s == nil || interfaceID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if fn == nil {
+		delete(s.byIface, interfaceID)
+		return
+	}
+	s.byIface[interfaceID] = fn
+}
+
+// get returns the hook registered for interfaceID, or nil when the interface
+// has none (every HmIP interface, and any interface not yet wired).
+func (s *masterRefreshHookSet) get(interfaceID string) func(addr string, key hmenum.ParamsetKey) {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.byIface[interfaceID]
 }
 
 // scopedTo returns a shallow copy of the pipeline whose interface-wide
@@ -261,15 +309,23 @@ func (p *DevicePipeline) WithFunctions(functions map[string][]string) *DevicePip
 	return p
 }
 
-// WithMasterRefreshHook wires the post-MASTER-write hook for classic HM
-// interfaces. The hook is installed on every channel during hydration via
-// [device.Channel.SetMasterRefreshHook] so that a successful
+// WithMasterRefreshHook wires the post-MASTER-write hook of ONE interface,
+// keyed by its wire id. The hook is installed on every channel that interface
+// hydrates via [device.Channel.SetMasterRefreshHook] so that a successful
 // [device.Channel.Set] / [device.Channel.SetMany] with
 // [hmenum.ParamsetKeyMaster] schedules a delayed read-back via
-// [backends.MasterPoller]. Pass nil to clear (HmIP pipelines leave this
+// [backends.MasterPoller]. Pass nil to clear (HmIP interfaces leave this
 // unset — they use the CONFIG_PENDING signal instead).
-func (p *DevicePipeline) WithMasterRefreshHook(fn func(addr string, key hmenum.ParamsetKey)) *DevicePipeline {
-	p.masterRefreshHook = fn
+//
+// The poller behind fn dispatches through one interface's backend, so the
+// registration has to name the interface it belongs to: the same pipeline
+// hydrates every interface of the central and later hot-plugs devices for any
+// of them.
+func (p *DevicePipeline) WithMasterRefreshHook(interfaceID string, fn func(addr string, key hmenum.ParamsetKey)) *DevicePipeline {
+	if p.masterRefreshHooks == nil {
+		p.masterRefreshHooks = newMasterRefreshHookSet()
+	}
+	p.masterRefreshHooks.set(interfaceID, fn)
 	return p
 }
 
@@ -1134,10 +1190,15 @@ func (p *DevicePipeline) seedValues(
 		// the key already is above; skipping it left values such as an
 		// IP_ADDRESS data point's "172.18.4.40" seeded into the model as
 		// the literal "172%2E18%2E4%2E40".
+		//
+		// Decoding goes through the package's canonical ReGa decoder, not a
+		// bare unescape: the CCU emits ISO-8859-1, so "Sp%FCle" unescapes to
+		// a raw 0xFC byte that is invalid UTF-8. The value is seeded into the
+		// live model and re-encoded by every north-bound plane, where
+		// json.Marshal replaces it with U+FFFD — irreversible corruption of a
+		// value the hub path renders correctly.
 		if s, ok := v.(string); ok {
-			if decoded, err := url.QueryUnescape(s); err == nil {
-				v = decoded
-			}
+			v = decodeRegaField(s)
 		}
 		if setter, ok := dp.(interface{ OnWireValue(any) bool }); ok && setter.OnWireValue(v) {
 			applied++
@@ -1563,9 +1624,9 @@ func (p *DevicePipeline) hydrateDeviceRoot(
 		root.SetWriter(&channelWriterAdapter{bw: bw, backend: b})
 		root.SetRefresher(b)
 	}
-	if p.masterRefreshHook != nil {
-		root.SetMasterRefreshHook(p.masterRefreshHook)
-	}
+	// Always assign: a re-ingest of an interface that lost its poller must
+	// clear the stale hook rather than keep the previous generation's.
+	root.SetMasterRefreshHook(p.masterRefreshHooks.get(interfaceID))
 }
 
 func (p *DevicePipeline) hydrateChannel(
@@ -1595,11 +1656,11 @@ func (p *DevicePipeline) hydrateChannel(
 		ch.SetWriter(&channelWriterAdapter{bw: bw, backend: b})
 		ch.SetRefresher(b)
 	}
-	// Wire the post-MASTER-write hook for classic HM interfaces. The hook
-	// is nil for HmIP channels (CONFIG_PENDING covers their refresh path).
-	if p.masterRefreshHook != nil {
-		ch.SetMasterRefreshHook(p.masterRefreshHook)
-	}
+	// Wire the post-MASTER-write hook of the interface this channel belongs
+	// to. It is nil for HmIP channels (CONFIG_PENDING covers their refresh
+	// path); assigning unconditionally also clears a hook left over from an
+	// earlier generation of the same interface.
+	ch.SetMasterRefreshHook(p.masterRefreshHooks.get(interfaceID))
 }
 
 // hydrateParamset loads one paramset (VALUES or MASTER) for the

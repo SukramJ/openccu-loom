@@ -1414,10 +1414,15 @@ func interfaceForChannel(unit *central.Unit, channelAddress string) string {
 }
 
 // decodeRegaField URL-decodes a field emitted by the get_service_messages,
-// get_alarm_messages, get_inbox_devices and get_program_descriptions ReGa
-// scripts, which percent-encode human-readable strings (names, device names,
-// descriptions, rule summaries). On a decode error the raw value is returned
-// unchanged so a single malformed field never drops the whole message.
+// get_alarm_messages, get_inbox_devices, get_program_descriptions and
+// fetch_all_device_data ReGa scripts, which percent-encode human-readable
+// strings (names, device names, descriptions, rule summaries, string-valued
+// data points). On a decode error the raw value is returned unchanged so a
+// single malformed field never drops the whole message.
+//
+// Every ReGa consumer must go through this function rather than calling
+// url.QueryUnescape directly — the Latin-1 transcode below is the half that
+// is easy to forget and impossible to repair once the value has been seeded.
 func decodeRegaField(s string) string {
 	if s == "" {
 		return ""

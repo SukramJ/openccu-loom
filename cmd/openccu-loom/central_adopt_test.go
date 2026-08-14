@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -140,19 +141,28 @@ func TestEvictModelRemovesDevicesDescriptionsAndParamsets(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 
+	// Keyed exactly as the hydration pipeline keys it: the canonical
+	// `<central>-<iface>` wire id, which the device also carries as its
+	// InterfaceID. Building the device with the bare interface in both fields
+	// makes the test pass for any keying bug.
+	wireID := adapter.WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
-		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
+		InterfaceID: wireID, Interface: hmenum.InterfaceHmIPRF,
 		Address: "AAAA0001", Model: "HmIP-STH", Name: "Sensor",
 	})
 	d.AddChannel("AAAA0001:1", 1, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	unit.ModelRegistry.Put(d)
-	unit.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "AAAA0001"})
-	unit.ParamsetReg.Add(hmenum.InterfaceHmIPRF, "AAAA0001:1", hmenum.ParamsetKeyValues,
+	unit.DeviceRegistry.Put(registry.DeviceEntry{
+		Interface: hmenum.Interface(wireID), Address: "AAAA0001", Model: "HmIP-STH",
+	})
+	unit.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{Address: "AAAA0001"})
+	unit.ParamsetReg.Add(hmenum.Interface(wireID), "AAAA0001:1", hmenum.ParamsetKeyValues,
 		hmproto.Paramset{"STATE": {Type: hmenum.ParameterTypeBool}}, "HmIP-STH")
 
-	if unit.ModelRegistry.Len() == 0 || unit.DescRegistry.Len() == 0 || unit.ParamsetReg.Len() == 0 {
-		t.Fatalf("precondition: registries must be populated (model=%d desc=%d paramset=%d)",
-			unit.ModelRegistry.Len(), unit.DescRegistry.Len(), unit.ParamsetReg.Len())
+	if unit.ModelRegistry.Len() == 0 || unit.DescRegistry.Len() == 0 ||
+		unit.ParamsetReg.Len() == 0 || unit.DeviceRegistry.Len() == 0 {
+		t.Fatalf("precondition: registries must be populated (model=%d desc=%d paramset=%d device=%d)",
+			unit.ModelRegistry.Len(), unit.DescRegistry.Len(), unit.ParamsetReg.Len(), unit.DeviceRegistry.Len())
 	}
 
 	evictModel(unit)
@@ -165,6 +175,9 @@ func TestEvictModelRemovesDevicesDescriptionsAndParamsets(t *testing.T) {
 	}
 	if got := unit.ParamsetReg.Len(); got != 0 {
 		t.Errorf("paramset registry not evicted: Len() = %d, want 0", got)
+	}
+	if got := unit.DeviceRegistry.Len(); got != 0 {
+		t.Errorf("device registry not evicted: Len() = %d, want 0 (a removed CCU keeps counting on /api/v1/info)", got)
 	}
 }
 

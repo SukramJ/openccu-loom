@@ -8,11 +8,15 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // hubDiscoveryFixture mirrors [hubMQTTFixture] but turns HA discovery ON so the
@@ -172,5 +176,77 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 	}
 	if uid, _ := body["unique_id"].(string); !strings.Contains(uid, "5a4993d962") {
 		t.Fatalf("sysvar unique_id missing serial after re-Start: %q", uid)
+	}
+}
+
+// TestConnectivityDiscoveryStateTopicIsPublished is the declared-vs-published
+// round trip for the per-interface connectivity binary_sensor: the topic the
+// boot-time seed names in `state_topic` must be a topic the reachability path
+// actually writes.
+//
+// The two halves live in different identifier spaces. The client coordinator
+// is keyed by the `<central>-<iface>` wire id, while ConnectivityChangedEvent
+// carries the bare interface name the CCU reports. Seeding from the wire id
+// declared `.../ccu-01-HmIP-RF` and published `.../HmIP-RF`, so the entity HA
+// created at boot stayed unavailable forever and the first reachability change
+// added a second one next to it.
+func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
+	t.Parallel()
+	c, pub, publisher := hubDiscoveryFixture(t)
+	c.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001F5A4993D962"})
+
+	// Registered exactly as the southbound wiring does it (ccu_wiring.go):
+	// the wire id is the registry key, the bare enum rides alongside.
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
+		Interface:   hmenum.InterfaceHmIPRF,
+	}); err != nil {
+		t.Fatalf("Clients.Register: %v", err)
+	}
+
+	publisher.Start(context.Background())
+	defer publisher.Stop()
+	publisher.Flush()
+
+	body := discoveryConfigFor(pub, "homeassistant/", "connectivity")
+	if body == nil {
+		t.Fatalf("no connectivity discovery seeded; topics=%v", publishedTopics(pub))
+	}
+	stateTopic, _ := body["state_topic"].(string)
+	if stateTopic == "" {
+		t.Fatalf("connectivity discovery has no state_topic: %v", body)
+	}
+
+	// The reachability path: the reconciler publishes the CCU's own interface
+	// name (Interface.listInterfaces), never the wire id.
+	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
+		Base:        hmevent.NewBaseAt(time.Now()),
+		CentralName: "ccu-01",
+		InterfaceID: string(hmenum.InterfaceHmIPRF),
+		Reachable:   true,
+	})
+	publisher.Flush()
+
+	found := false
+	for _, topic := range publishedTopics(pub) {
+		if topic == stateTopic {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("declared state_topic %q is never published; topics=%v", stateTopic, publishedTopics(pub))
+	}
+
+	// And exactly one connectivity entity per radio — a seed under a second
+	// identifier space leaves the operator with a dead duplicate.
+	configs := 0
+	for _, p := range pub.Published() {
+		if strings.Contains(p.Topic, "connectivity") && strings.HasSuffix(p.Topic, "/config") {
+			configs++
+		}
+	}
+	if configs != 1 {
+		t.Fatalf("published %d connectivity discovery configs, want exactly 1; topics=%v", configs, publishedTopics(pub))
 	}
 }

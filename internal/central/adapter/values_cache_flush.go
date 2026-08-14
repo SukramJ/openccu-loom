@@ -176,13 +176,96 @@ func (t *dirtyTracker) SwapClean(centralName string) (dirtyClaim, bool) {
 	return claim, true
 }
 
+// Forget drops centralName from the tracker, so a removed CCU stops being
+// claimed on every tick. Unknown names are a no-op.
+func (t *dirtyTracker) Forget(centralName string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.centrals, centralName)
+}
+
+// ValuesCacheFlusher is the handle [WireValuesCacheFlusher] returns. It owns
+// the periodic flush + GC goroutine and the per-central dirty tracking.
+//
+// The per-central half is a seam rather than a one-shot loop because the
+// registry is not a fixed set: a CCU adopted at runtime never appeared in the
+// boot-time snapshot, so it was never registered with the tracker, never
+// marked dirty, and skipped by every tick for the rest of the daemon's life —
+// its values reached SQLite only through the graceful-shutdown flush, which a
+// SIGKILL, an OOM kill or a host reboot never runs.
+type ValuesCacheFlusher struct {
+	tracker *dirtyTracker
+
+	mu     sync.Mutex
+	unsubs []func()
+
+	cancel context.CancelFunc
+	done   chan struct{}
+	once   sync.Once
+}
+
+// StartCentral registers one central with the dirty tracker and subscribes its
+// EventBus so subsequent value / source changes mark it dirty. It is the seam
+// the composition root calls for a runtime-adopted CCU, and the same call the
+// boot-time wiring makes for every configured one — production exercises one
+// path, not two.
+//
+// The returned closure releases the subscriptions and drops the central from
+// the tracker; it is nil-safe and idempotent. Nil receiver / unit / bus are
+// no-ops so a disabled cache needs no guard at the call site.
+func (f *ValuesCacheFlusher) StartCentral(u *central.Unit) func() {
+	if f == nil || u == nil || u.EventBus == nil {
+		return func() {}
+	}
+	name := u.Name()
+	f.tracker.Register(name)
+	bus := u.EventBus
+	unsubVal := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+		f.tracker.Mark(name, e.Key.ChannelAddress, e.Key.Parameter)
+	})
+	unsubSrc := events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
+		f.tracker.Mark(name, e.ChannelAddress, e.Parameter)
+	})
+	f.mu.Lock()
+	f.unsubs = append(f.unsubs, unsubVal, unsubSrc)
+	f.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			unsubVal()
+			unsubSrc()
+			f.tracker.Forget(name)
+		})
+	}
+}
+
+// Stop cancels the periodic goroutine, waits for the final shutdown flush and
+// releases every subscription. Idempotent and nil-safe.
+func (f *ValuesCacheFlusher) Stop() {
+	if f == nil {
+		return
+	}
+	f.once.Do(func() {
+		f.cancel()
+		<-f.done
+		f.mu.Lock()
+		unsubs := f.unsubs
+		f.unsubs = nil
+		f.mu.Unlock()
+		for _, u := range unsubs {
+			u()
+		}
+	})
+}
+
 // WireValuesCacheFlusher starts a background goroutine that flushes
 // the wire-DP snapshot of every central into the persistent cache
 // every `interval`. interval == 0 falls back to
 // [DefaultValuesCacheFlushInterval]. Pass a nil store or nil registry
-// to disable.
+// to disable — the returned handle is nil and every method on it is a no-op.
 //
-// The flusher also runs once on shutdown — the returned closer
+// The flusher also runs once on shutdown — [ValuesCacheFlusher.Stop]
 // blocks until the final flush has completed, so the cache survives
 // a graceful daemon stop without missing the last interval's worth
 // of updates.
@@ -194,9 +277,9 @@ func (t *dirtyTracker) SwapClean(centralName string) (dirtyClaim, bool) {
 //
 // Tick cost: each central subscribes its own EventBus for
 // DataPointValueChangedEvent + DataPointSourceChangedEvent and
-// marks itself dirty when one fires. The flusher walks only the
-// dirty centrals, claims their flag via SwapClean, and skips the
-// rest. Quiet daemons therefore pay only the per-tick noop cost.
+// marks itself dirty when one fires (see [ValuesCacheFlusher.StartCentral]).
+// The flusher walks only the dirty centrals, claims their flag via SwapClean,
+// and skips the rest. Quiet daemons therefore pay only the per-tick noop cost.
 //
 // The same goroutine also drives the dead-row garbage collector on a
 // much lower-frequency second ticker (see [gcTickInterval]): every GC
@@ -210,37 +293,26 @@ func WireValuesCacheFlusher(
 	store *sqlite.ValuesCacheStore,
 	interval time.Duration,
 	logger *slog.Logger,
-) func() {
+) *ValuesCacheFlusher {
 	if reg == nil || store == nil {
-		return func() {}
+		return nil
 	}
 	if interval <= 0 {
 		interval = DefaultValuesCacheFlushInterval
 	}
 
-	tracker := newDirtyTracker()
-	var unsubs []func()
+	ctx, cancel := context.WithCancel(context.Background())
+	f := &ValuesCacheFlusher{
+		tracker: newDirtyTracker(),
+		cancel:  cancel,
+		done:    make(chan struct{}),
+	}
 	for _, unit := range reg.List() {
-		if unit == nil || unit.EventBus == nil {
-			continue
-		}
-		name := unit.Name()
-		tracker.Register(name)
-		bus := unit.EventBus
-		unsubVal := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
-			tracker.Mark(name, e.Key.ChannelAddress, e.Key.Parameter)
-		})
-		unsubSrc := events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
-			tracker.Mark(name, e.ChannelAddress, e.Parameter)
-		})
-		unsubs = append(unsubs, unsubVal, unsubSrc)
+		f.StartCentral(unit)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-
 	go func() {
-		defer close(done)
+		defer close(f.done)
 		flushTicker := time.NewTicker(interval)
 		defer flushTicker.Stop()
 		// The GC ticker shares this goroutine rather than spawning a
@@ -261,23 +333,14 @@ func WireValuesCacheFlusher(
 				flushOnce(context.Background(), reg, store, nil, logger, "shutdown")
 				return
 			case <-flushTicker.C:
-				flushOnce(ctx, reg, store, tracker, logger, "tick")
+				flushOnce(ctx, reg, store, f.tracker, logger, "tick")
 			case <-gcTicker.C:
 				gcOnce(ctx, reg, store, logger)
 			}
 		}
 	}()
 
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			cancel()
-			<-done
-			for _, u := range unsubs {
-				u()
-			}
-		})
-	}
+	return f
 }
 
 // valuesCacheSaver is the subset of [*sqlite.ValuesCacheStore] flushOnce

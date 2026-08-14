@@ -203,10 +203,12 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 	}, logger)
 
 	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
+	// Keyed by wireID: the poller reads through CUxD's own backend, and the
+	// pipeline it is registered on serves every interface of the central.
 	if poller != nil {
-		pipeline.WithMasterRefreshHook(poller.SchedulePoll)
+		pipeline.WithMasterRefreshHook(wireID, poller.SchedulePoll)
 	} else {
-		pipeline.WithMasterRefreshHook(nil)
+		pipeline.WithMasterRefreshHook(wireID, nil)
 	}
 
 	if err := pipeline.IngestFromBackend(ctx, wireID, iface, backend, writer, runner, logger); err != nil {

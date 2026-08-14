@@ -496,6 +496,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.
 	centralOrch.setHubReadyTrigger(sb.hubReadyTrigger)
+	// A runtime-adopted central must be tracked by the values-cache flusher and
+	// its eviction handler the same way a boot-time central is; otherwise no
+	// periodic tick ever persists its data points.
+	centralOrch.setValuesCacheCentralHook(sb.valuesCacheCentralHook)
 
 	// --- adapters ----------------------------------------------
 	devicesAdapter := adapter.NewDevicesAdapter(reg).WithWriter(valueWriter)

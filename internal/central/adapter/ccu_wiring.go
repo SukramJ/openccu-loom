@@ -1049,13 +1049,16 @@ func wireInterface(
 
 	// For classic HM interfaces (BidCos-RF, BidCos-Wired, VirtualDevices,
 	// CUxD), construct a MasterPoller and wire its SchedulePoll as the
-	// post-MASTER-write hook on every channel. HmIP interfaces use the
-	// CONFIG_PENDING event path instead and get a nil hook (no polling).
+	// post-MASTER-write hook on every channel of THIS interface. HmIP
+	// interfaces use the CONFIG_PENDING event path instead and register
+	// nothing (no polling). The registration is keyed by wireID because the
+	// poller reads through this interface's backend and the pipeline is
+	// shared by every interface of the central.
 	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
 	if poller != nil {
-		pipeline.WithMasterRefreshHook(poller.SchedulePoll)
+		pipeline.WithMasterRefreshHook(wireID, poller.SchedulePoll)
 	} else {
-		pipeline.WithMasterRefreshHook(nil)
+		pipeline.WithMasterRefreshHook(wireID, nil)
 	}
 
 	// Pull the device snapshot and hydrate data points, then announce the
@@ -1105,7 +1108,7 @@ func wireInterface(
 			if len(deviceAddrs) > 0 {
 				//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx (60s timeout)
 				unit.Devices.ScheduleParamsetConsistencyCheck(
-					context.Background(), iface, deviceAddrs, backend,
+					context.Background(), iface, hmenum.Interface(wireID), deviceAddrs, backend,
 					func(inconsistencies []coordinators.ParamsetInconsistency) {
 						for _, inc := range inconsistencies {
 							logger.Warn("wire.paramset_inconsistency",

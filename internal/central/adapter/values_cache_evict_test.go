@@ -96,8 +96,8 @@ func TestWireValuesCacheEviction_DeletesDeviceAKeepsDeviceB(t *testing.T) {
 	saveRowsForDevice(t, store, centralName, ifaceID, devA, []string{"STATE", "RSSI_DEVICE"})
 	saveRowsForDevice(t, store, centralName, ifaceID, devB, []string{"TEMPERATURE", "HUMIDITY"})
 
-	closer := WireValuesCacheEviction(reg, store, nil)
-	t.Cleanup(closer)
+	evictor := WireValuesCacheEviction(reg, store, nil)
+	t.Cleanup(evictor.Stop)
 
 	// Publish removal for device A only.
 	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
@@ -126,10 +126,10 @@ func TestWireValuesCacheEviction_DeletesDeviceAKeepsDeviceB(t *testing.T) {
 	}
 }
 
-// TestWireValuesCacheEviction_CloserUnsubscribes verifies that the returned
-// closer unsubscribes the handler so that a subsequent publish does not delete
+// TestWireValuesCacheEviction_StopUnsubscribes verifies that Stop
+// unsubscribes the handler so that a subsequent publish does not delete
 // cache rows (and must not panic or leak).
-func TestWireValuesCacheEviction_CloserUnsubscribes(t *testing.T) {
+func TestWireValuesCacheEviction_StopUnsubscribes(t *testing.T) {
 	t.Parallel()
 
 	store := freshValuesCacheStoreForAdapter(t)
@@ -143,8 +143,8 @@ func TestWireValuesCacheEviction_CloserUnsubscribes(t *testing.T) {
 
 	saveRowsForDevice(t, store, centralName, ifaceID, devC, []string{"STATE"})
 
-	closer := WireValuesCacheEviction(reg, store, nil)
-	closer() // unsubscribe before any publish
+	evictor := WireValuesCacheEviction(reg, store, nil)
+	evictor.Stop() // unsubscribe before any publish
 
 	// Publish removal — the handler must no longer be active.
 	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
@@ -161,12 +161,12 @@ func TestWireValuesCacheEviction_CloserUnsubscribes(t *testing.T) {
 		t.Errorf("after unsubscribe: expected 1 row (no delete), got %d", n)
 	}
 
-	// Calling closer again must not panic (idempotent).
-	closer()
+	// Calling Stop again must not panic (idempotent).
+	evictor.Stop()
 }
 
 // TestWireValuesCacheEviction_NilGuards verifies that a nil store or nil
-// registry returns a safe no-op closer that can be called without panic.
+// registry yields a handle whose methods are safe no-ops.
 func TestWireValuesCacheEviction_NilGuards(t *testing.T) {
 	t.Parallel()
 
@@ -186,13 +186,13 @@ func TestWireValuesCacheEviction_NilGuards(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			closer := WireValuesCacheEviction(tc.reg, tc.store, nil)
-			if closer == nil {
-				t.Fatal("WireValuesCacheEviction returned nil closer")
-			}
-			// Must not panic.
-			closer()
-			closer() // idempotent
+			evictor := WireValuesCacheEviction(tc.reg, tc.store, nil)
+			// Must not panic, including on the nil handle a disabled cache
+			// yields — the composition root calls Stop / StartCentral
+			// unconditionally.
+			evictor.Stop()
+			evictor.Stop() // idempotent
+			evictor.StartCentral(nil)()
 		})
 	}
 }

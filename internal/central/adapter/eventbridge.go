@@ -76,7 +76,15 @@ type EventBridge struct {
 	// a broker publish — so it cannot stall dispatch.
 	startMu sync.Mutex
 	started bool
-	unsubs  []func()
+	// stopping is set while detach() tears the bridge down and cleared by the
+	// next Start. It orders [EventBridge.beginBackgroundLoad] against
+	// goroutineWG.Wait(): both the flag write and every Add happen under
+	// startMu, so an Add can never land on a counter Wait() is already parked
+	// on. Separate from started because PublishInitialSnapshot is a supported
+	// call on a bridge that was never started, and must still warm schedules
+	// up there.
+	stopping bool
+	unsubs   []func()
 	// attached holds the subscriptions of centrals adopted after Start,
 	// keyed by central name so a removed central can be detached again.
 	// Start-time centrals live in unsubs; both are released by detach.
@@ -183,6 +191,9 @@ func (b *EventBridge) Start(ctx context.Context) {
 	// can cancel them early (via stopCancel) and then drain via goroutineWG.
 	//nolint:contextcheck // background goroutines must survive Start's ctx; stopCancel is invoked by Stop()
 	b.lifetimeCtx, b.stopCancel = context.WithCancel(ctx)
+	// The previous detach() closed the background-load gate; a running bridge
+	// re-opens it.
+	b.stopping = false
 	if b.registry == nil {
 		return
 	}
@@ -230,6 +241,33 @@ func (b *EventBridge) addUnsub(unsub func()) {
 	}
 	b.unsubs = append(b.unsubs, unsub)
 	b.startMu.Unlock()
+}
+
+// beginBackgroundLoad registers one background warm-up goroutine with the
+// bridge's wait group and reports whether the caller may start it.
+//
+// The Add must be ordered against teardown, not merely happen before it: a
+// snapshot pass runs on the MQTT lifecycle's reconnect goroutine and on the
+// fan-out worker, neither of which detach() stops before it calls
+// goroutineWG.Wait(). An Add landing on a zero counter that Wait is parked on
+// is "sync: WaitGroup misuse: Add called concurrently with Wait" — a panic
+// that takes the daemon down during shutdown; in the interleavings the runtime
+// does not catch, the goroutine simply outlives Stop and publishes into a
+// torn-down stack. Taking startMu here puts the Add on the same lock as the
+// stopping flag, so it either happens before detach closed the gate (and Wait
+// waits for it) or not at all. The scheduler solves the identical problem the
+// same way (internal/scheduler/scheduler.go).
+//
+// A caller that gets false must not spawn the goroutine — and must not call
+// goroutineWG.Done() either.
+func (b *EventBridge) beginBackgroundLoad() bool {
+	b.startMu.Lock()
+	defer b.startMu.Unlock()
+	if b.stopping {
+		return false
+	}
+	b.goroutineWG.Add(1)
+	return true
 }
 
 // AttachCentral subscribes a central that joined the registry AFTER
@@ -410,6 +448,11 @@ func (b *EventBridge) detach() {
 	}
 	stopCancel := b.stopCancel
 	b.started = false
+	// Close the background-load gate before releasing the lock: from here on
+	// beginBackgroundLoad refuses to Add, so the Wait() at the end of this
+	// function cannot race an Add issued by a snapshot pass running on the
+	// MQTT lifecycle goroutine, which detach does not stop.
+	b.stopping = true
 	b.startMu.Unlock()
 
 	fanout := b.fanout.Swap(nil)
@@ -2448,14 +2491,16 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 		b.addUnsub(scheduleUnsub)
 		// Background load: deliberately decoupled from any request
 		// context — the goroutine outlives the function call and a
-		// cancelled request must not abort the warm-up fetch.
-		b.goroutineWG.Add(1)
-		SafeGo("eventbridge.climate_schedule_load", func() { //nolint:contextcheck // background goroutine bounded by b.lifetimeCtx; Stop() cancels and drains; see #20
-			defer b.goroutineWG.Done()
-			loadCtx, cancel := context.WithTimeout(b.lifetimeCtx, 30*time.Second)
-			defer cancel()
-			_, _ = cp.Load(loadCtx)
-		})
+		// cancelled request must not abort the warm-up fetch. Skipped once
+		// the bridge is tearing down (see beginBackgroundLoad).
+		if b.beginBackgroundLoad() {
+			SafeGo("eventbridge.climate_schedule_load", func() { //nolint:contextcheck // background goroutine bounded by b.lifetimeCtx; Stop() cancels and drains; see #20
+				defer b.goroutineWG.Done()
+				loadCtx, cancel := context.WithTimeout(b.lifetimeCtx, 30*time.Second)
+				defer cancel()
+				_, _ = cp.Load(loadCtx)
+			})
+		}
 	}
 
 	// Wire live updates: when the profile pointer changes (via CCU push
@@ -2589,13 +2634,14 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 	// Profile's OnChange, which we subscribe to below for re-publishing.
 	if sp := wp.Simple(); sp != nil {
 		capturedSP := sp
-		b.goroutineWG.Add(1)
-		SafeGo("eventbridge.simple_schedule_load", func() { //nolint:contextcheck // background goroutine bounded by b.lifetimeCtx; Stop() cancels and drains; see #20
-			defer b.goroutineWG.Done()
-			loadCtx, cancel := context.WithTimeout(b.lifetimeCtx, 30*time.Second)
-			defer cancel()
-			_, _ = capturedSP.Load(loadCtx)
-		})
+		if b.beginBackgroundLoad() {
+			SafeGo("eventbridge.simple_schedule_load", func() { //nolint:contextcheck // background goroutine bounded by b.lifetimeCtx; Stop() cancels and drains; see #20
+				defer b.goroutineWG.Done()
+				loadCtx, cancel := context.WithTimeout(b.lifetimeCtx, 30*time.Second)
+				defer cancel()
+				_, _ = capturedSP.Load(loadCtx)
+			})
+		}
 		// Re-publish the Zeitplan attrs whenever the Simple schedule
 		// changes (Load + Save both fire OnChange). Captured locals
 		// avoid the loop-closure pitfall.
