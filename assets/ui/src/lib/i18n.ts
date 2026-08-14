@@ -1606,8 +1606,8 @@ const EN: Catalog = {
   "config.help.centrals.interfaces": "Managed in the CCUs tab.",
   "config.help.centrals.interfaces.name": "Managed in the CCUs tab.",
   "config.help.centrals.interfaces.port": "Managed in the CCUs tab.",
-  "config.help.centrals.interfaces.remote_path": "Managed in the CCUs tab.",
-  "config.help.centrals.interfaces.rpc_type": "Managed in the CCUs tab.",
+  "config.help.centrals.interfaces.remote_path": "URL path this interface's XML-RPC requests are sent to. Leave empty for the CCU default (/RPC2, or /groups for VirtualDevices); set an absolute path only when a reverse proxy re-routes the interface.",
+  "config.help.centrals.interfaces.rpc_type": "Transport of this interface. It follows the interface name — CUxD speaks BIN-RPC, every other interface XML-RPC — so this only confirms that derivation; a contradicting value is rejected when the configuration is loaded.",
   "config.help.centrals.check_connection_interval":
     "How often the daemon pings the CCU in the background; zero uses the compiled-in default of 30 s, negative disables the check entirely.",
   "config.help.centrals.behavior.delay_new_device_creation":
@@ -2097,6 +2097,7 @@ const EN: Catalog = {
   "centrals.confirm_delete_body":
     'Remove CCU "{name}"? Devices managed by this CCU will become unavailable.',
   "centrals.field.name": "Name",
+  "centrals.field.name_hint": "Letters, digits, - and _ only — the name becomes part of the callback URL the CCU pushes events to.",
   "centrals.field.host": "Host",
   "centrals.field.interfaces": "Interfaces",
   "centrals.field.interfaces_hint":
@@ -2148,6 +2149,7 @@ const EN: Catalog = {
   "centrals.field.tls_insecure_warn":
     "Disables certificate chain + hostname checks. Use only against CCUs with self-signed certificates on a trusted network.",
   "centrals.error.no_interface": "Pick at least one interface.",
+  "centrals.error.invalid_name": "The name may only contain letters, digits, - and _.",
   "sysvars.title": "System variables",
   "sysvars.empty": "No variables.",
   "sysvars.col.name": "Name",
@@ -5449,8 +5451,8 @@ const DE: Catalog = {
   "config.help.centrals.interfaces": "Im CCUs-Tab verwaltet.",
   "config.help.centrals.interfaces.name": "Im CCUs-Tab verwaltet.",
   "config.help.centrals.interfaces.port": "Im CCUs-Tab verwaltet.",
-  "config.help.centrals.interfaces.remote_path": "Im CCUs-Tab verwaltet.",
-  "config.help.centrals.interfaces.rpc_type": "Im CCUs-Tab verwaltet.",
+  "config.help.centrals.interfaces.remote_path": "URL-Pfad, an den die XML-RPC-Aufrufe dieser Schnittstelle gehen. Leer lassen für den CCU-Standard (/RPC2, bei VirtualDevices /groups); einen absoluten Pfad nur setzen, wenn ein Reverse-Proxy die Schnittstelle umleitet.",
+  "config.help.centrals.interfaces.rpc_type": "Transport dieser Schnittstelle. Er ergibt sich aus dem Schnittstellennamen — CUxD spricht BIN-RPC, alle anderen XML-RPC — dieses Feld bestätigt das nur; ein widersprüchlicher Wert wird beim Laden der Konfiguration abgelehnt.",
   "config.help.centrals.check_connection_interval":
     "Wie oft der Daemon die CCU im Hintergrund anpingt; 0 = Compiler-Standard von 30 s, negativ = Prüfung deaktiviert.",
   "config.help.centrals.behavior.delay_new_device_creation":
@@ -5949,6 +5951,7 @@ const DE: Catalog = {
   "centrals.confirm_delete_body":
     'CCU "{name}" wirklich entfernen? Geräte dieser CCU werden nicht mehr erreichbar sein.',
   "centrals.field.name": "Name",
+  "centrals.field.name_hint": "Nur Buchstaben, Ziffern, - und _ — der Name wird Teil der Callback-URL, an die die CCU Ereignisse sendet.",
   "centrals.field.host": "Host",
   "centrals.field.interfaces": "Interfaces",
   "centrals.field.interfaces_hint":
@@ -6001,6 +6004,7 @@ const DE: Catalog = {
   "centrals.field.tls_insecure_warn":
     "Deaktiviert Zertifikatsketten- und Hostnamen-Prüfung. Nur bei CCUs mit selbst-signierten Zertifikaten in vertrauenswürdigen Netzen einsetzen.",
   "centrals.error.no_interface": "Mindestens eine Schnittstelle auswählen.",
+  "centrals.error.invalid_name": "Der Name darf nur Buchstaben, Ziffern, - und _ enthalten.",
   "sysvars.title": "Systemvariablen",
   "sysvars.empty": "Keine Variablen.",
   "sysvars.col.name": "Name",

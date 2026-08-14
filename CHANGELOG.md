@@ -60,6 +60,65 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A CCU whose name is not a valid URL segment is refused at the door.**
+  A central name becomes a path segment of the callback URL the daemon
+  announces to that CCU, and the callback router only accepts letters,
+  digits, `-` and `_`. Nothing enforced that on the way in, so a CCU
+  adopted from discovery as `CCU Wohnzimmer` produced a daemon that
+  started cleanly, looked healthy on REST and in the SPA, and never
+  received a single push event. The allowlist is now shared between the
+  two sides and enforced at config load, in the admin API, in the store
+  and in the onboarding wizard; the SPA states the rule next to the field
+  and sanitises the name it prefills from a discovered CCU.
+
+- **HmIP devices pick up a completed configuration write again.** After
+  a MASTER paramset write, the CCU signals completion with
+  `CONFIG_PENDING` going true → false, which is what triggers the
+  week-profile reload, the operation-mode visibility re-apply and the
+  targeted MASTER read that keeps the on-disk cache current. The handler
+  compared the interface id the CCU echoes back against the bare
+  interface name, so it matched on no configured CCU at all and every one
+  of those steps was silently skipped. HmIP has no polling fallback, so
+  nothing else covered it.
+
+- **The replace-device dialog lists candidates again.** The candidate
+  lookup resolved the southbound backend with the bare interface name
+  while the registry is keyed by the central-scoped one, so
+  `GET /api/v1/devices/{address}/replace-candidates` and the matching
+  WebSocket command returned an empty list with HTTP 200 on every
+  interface and every CCU — no device could ever be selected for
+  replacement.
+
+- **Firmware updates show their progress again.** The firmware refresh
+  looked device descriptions up under the bare interface name while the
+  description registry is keyed by the central-scoped one, so a device
+  whose available version or update state changed on the CCU kept the
+  values it was created with at boot. The MQTT update entity and the SPA
+  firmware view stayed frozen for the life of the daemon.
+
+- **A per-interface `remote_path` now reaches the wire.** The field
+  validated, persisted and showed up in the UI while nothing read it, so
+  a reverse-proxied CCU kept being addressed on `/RPC2` and never
+  connected. It is honoured, and shape-checked at load so a typo cannot
+  quietly point the interface somewhere else. `rpc_type` is documented
+  for what it is — a pin on the transport the interface name already
+  implies — and a contradicting value is now refused instead of silently
+  ignored.
+
+- **Two CCUs coming back together no longer risk taking the daemon with
+  them.** Each central wires its own backup restorer from its own
+  bring-up, and the map holding them was unguarded — two centrals
+  clearing their readiness gate in the same window could abort the
+  process with `concurrent map writes`, and a restore issued while a
+  central re-gated could do the same on the read side.
+
+- **CUxD no longer leaves a stale callback registration behind.** The
+  shutdown path asked the CCU to drop the registration on a context that
+  had already been cancelled, so the call never left the process. The old
+  registration survived, the next start added another, and CUxD then
+  delivered every event twice — each one acted on twice by MQTT, the
+  alarm intent routing and CCU program triggers.
+
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle
   and are still attempted while the circuit breaker for a struggling CCU

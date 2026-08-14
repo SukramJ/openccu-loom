@@ -107,10 +107,16 @@ type modelFirmwareStateReader struct {
 }
 
 // DeviceFirmwareStates implements [coordinators.FirmwareStateReader].
+//
+// iface is the canonical wire id (`<central>-<iface>`): the only caller drives
+// it from [registry.DeviceDescriptionRegistry.GetInterfaceIDs], which is keyed
+// by that id. Matching against the device's bare Interface instead would make
+// the returned set empty on every named central and turn the state-gated
+// refresh into a silent no-op.
 func (r modelFirmwareStateReader) DeviceFirmwareStates(iface hmenum.Interface) map[string]hmenum.DeviceFirmwareState {
 	out := map[string]hmenum.DeviceFirmwareState{}
 	for _, dev := range r.reg.List() {
-		if dev == nil || dev.Interface != iface || dev.Firmware() == nil {
+		if dev == nil || dev.InterfaceID != string(iface) || dev.Firmware() == nil {
 			continue
 		}
 		out[dev.Address] = dev.Firmware().Info().UpdateState
@@ -133,7 +139,11 @@ func applyFirmwareFromDescriptions(u *central.Unit) {
 		if dev == nil || dev.Firmware() == nil {
 			continue
 		}
-		dd, ok := u.DescRegistry.Get(dev.Interface, dev.Address)
+		// The description registry is keyed by the canonical wire id
+		// (`<central>-<iface>`) — that is what the callback handlers and the
+		// hydration path Put under. The device's bare Interface is the
+		// operator-facing form and misses every entry on a named central.
+		dd, ok := u.DescRegistry.Get(hmenum.Interface(dev.InterfaceID), dev.Address)
 		if !ok {
 			continue
 		}

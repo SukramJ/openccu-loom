@@ -87,8 +87,13 @@ func wireConfigPendingHook(
 		return
 	}
 	unit.Events.SetOnConfigSettled(func(interfaceID, deviceAddress string) {
-		iface := hmenum.Interface(interfaceID)
-		if !isHmIPInterface(iface) {
+		// interfaceID arrives in the canonical wire form
+		// (`<central>-<iface>`, see [CallbackHandlers.Event]); the rest of
+		// this closure keeps it that way because the backend registry is
+		// keyed by it. Only the product-family discrimination needs the bare
+		// interface, so derive it rather than casting the wire id — the cast
+		// never matched on a named central and silenced the whole handler.
+		if !isHmIPInterface(BareInterfaceFromWireID(unit.Name(), interfaceID)) {
 			return
 		}
 		dev, ok := unit.ModelRegistry.Get(deviceAddress)

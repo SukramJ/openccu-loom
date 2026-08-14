@@ -7548,6 +7548,65 @@ func TestInterfaceURL_InterfaceSpecPortOverride(t *testing.T) {
 	}
 }
 
+// TestInterfaceURL_InterfaceSpecRemotePathOverride pins that an
+// operator-configured remote_path reaches the composed XML-RPC endpoint. The
+// field validates, persists and shows up in the SPA, so a reverse-proxied CCU
+// that needs a non-standard path must actually be reachable through it —
+// otherwise the interface never connects and nothing points at the setting.
+func TestInterfaceURL_InterfaceSpecRemotePathOverride(t *testing.T) {
+	t.Parallel()
+	cc := config.CentralConfig{
+		Host:       "192.168.1.1",
+		Interfaces: []config.InterfaceSpec{{Name: string(hmenum.InterfaceHmIPRF), RemotePath: "/RPC2b"}},
+	}
+	u, err := interfaceURL(cc, hmenum.InterfaceHmIPRF)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(u, "/RPC2b") {
+		t.Errorf("interfaceURL = %q, want it to apply the Interfaces[].RemotePath override /RPC2b", u)
+	}
+}
+
+// TestInterfaceURL_RemotePathOverrideBeatsVirtualDevicesDefault verifies the
+// override also replaces the VirtualDevices-specific "/groups" default, not
+// only the "/RPC2" one.
+func TestInterfaceURL_RemotePathOverrideBeatsVirtualDevicesDefault(t *testing.T) {
+	t.Parallel()
+	cc := config.CentralConfig{
+		Host:       "192.168.1.1",
+		Interfaces: []config.InterfaceSpec{{Name: string(hmenum.InterfaceVirtualDevices), RemotePath: "/proxy/groups"}},
+	}
+	u, err := interfaceURL(cc, hmenum.InterfaceVirtualDevices)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(u, "/proxy/groups") {
+		t.Errorf("interfaceURL = %q, want the /proxy/groups override", u)
+	}
+}
+
+// TestInterfaceURL_RemotePathOverrideIsPerInterface verifies the override is
+// scoped to the interface that carries it — pinning HmIP-RF must leave
+// BidCos-RF on the default endpoint.
+func TestInterfaceURL_RemotePathOverrideIsPerInterface(t *testing.T) {
+	t.Parallel()
+	cc := config.CentralConfig{
+		Host: "192.168.1.1",
+		Interfaces: []config.InterfaceSpec{
+			{Name: string(hmenum.InterfaceHmIPRF), RemotePath: "/RPC2b"},
+			{Name: string(hmenum.InterfaceBidCosRF)},
+		},
+	}
+	u, err := interfaceURL(cc, hmenum.InterfaceBidCosRF)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasSuffix(u, "/RPC2") {
+		t.Errorf("interfaceURL = %q, want BidCos-RF to keep the default /RPC2", u)
+	}
+}
+
 // TestInterfacePortOverride_Precedence locks the override precedence:
 // Interfaces[].Port (Config-UI) > Ports map > central-wide Port > none.
 func TestInterfacePortOverride_Precedence(t *testing.T) {

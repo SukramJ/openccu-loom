@@ -834,7 +834,13 @@ centrals:
       # Short form: interface name only
       - HmIP-RF
       - BidCos-RF
-      # Long form: full control over port, remote_path, and rpc_type
+      # Long form: full control over port, remote_path, and rpc_type.
+      # remote_path overrides the URL path the interface's XML-RPC calls go
+      # to (default /RPC2, /groups for VirtualDevices) — set it only for a
+      # reverse-proxied CCU, as an absolute path on the same host.
+      # rpc_type pins the transport and must agree with the interface name:
+      # CUxD is binrpc, every other interface xmlrpc. A contradicting value
+      # is refused at startup.
       # - name: VirtualDevices
       #   port: 9292
       #   remote_path: /groups

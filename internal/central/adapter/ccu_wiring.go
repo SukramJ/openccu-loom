@@ -1301,17 +1301,7 @@ ingestLoop:
 		if poller != nil {
 			poller.Close()
 		}
-		if callbackURL != "" {
-			//nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx
-			deinitCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			if err := backend.Deinit(deinitCtx, callbackURL); err != nil {
-				logger.Debug("wire.deinit",
-					slog.String("central", centralName),
-					slog.String("interface", deinitID),
-					slog.String("err", err.Error()))
-			}
-			cancel()
-		}
+		deinitOnShutdown(backend, callbackURL, centralName, deinitID, logger)
 		writer.Deregister(centralName, ifaceID)
 		if unit.Clients != nil {
 			unit.Clients.Remove(ifaceID)
@@ -1432,11 +1422,28 @@ func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, erro
 	// endpoint, /groups is the VirtualDevices variant. POSTing to the
 	// bare "/" path causes the CCU's putParamset handler to crash
 	// internally (Vert.x NPE or fault -5) while reads still succeed —
-	// keep paths explicit. Operators with non-standard CCU routing
-	// can override via the per-interface remote_path config field.
+	// keep paths explicit.
 	path := "/RPC2"
 	if iface == hmenum.InterfaceVirtualDevices {
 		path = "/groups"
 	}
+	// A reverse-proxied or otherwise non-standard-routed CCU is reached
+	// through the operator's own path; the value is shape-validated at config
+	// load ([config.InterfaceSpec.Validate]).
+	if ov := interfaceRemotePathOverride(cc, iface); ov != "" {
+		path = ov
+	}
 	return fmt.Sprintf("%s://%s:%d%s", scheme, cc.Host, port, path), nil
+}
+
+// interfaceRemotePathOverride resolves the operator-configured URL path for
+// iface from the per-interface [config.InterfaceSpec.RemotePath]. Returns ""
+// when no override is set, so the caller keeps the CCU's own routing default.
+func interfaceRemotePathOverride(cc config.CentralConfig, iface hmenum.Interface) string {
+	for _, s := range cc.Interfaces {
+		if s.Name == string(iface) && s.RemotePath != "" {
+			return s.RemotePath
+		}
+	}
+	return ""
 }

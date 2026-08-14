@@ -188,6 +188,49 @@ describe("CentralsAdmin — discovered CCUs", () => {
     expect(addBtn).toBeUndefined();
   });
 
+  it("adopting a discovered CCU sanitises its friendly name into a routable central name", async () => {
+    // An SSDP friendly name routinely carries spaces. The name becomes a path
+    // segment of the callback URL the daemon announces to the CCU, and the
+    // callback router only accepts [A-Za-z0-9_-] — an unsanitised prefill
+    // yields a central that never receives a single push event.
+    mockListDiscovered.mockResolvedValue([
+      makeCCU({
+        host: "192.168.0.11",
+        suggested_host: "192.168.0.11",
+        serial: "SER-10",
+        name: "CCU Wohnzimmer",
+        already_configured: false,
+      }),
+    ]);
+
+    const { container } = render(CentralsAdmin);
+
+    let adoptBtn: HTMLElement | undefined;
+    await waitFor(() => {
+      const buttons = Array.from(container.querySelectorAll("button"));
+      adoptBtn = buttons.find(
+        (b) => b.textContent?.trim() === "discovery.add",
+      ) as HTMLElement | undefined;
+      if (!adoptBtn) throw new Error("Adopt button not found");
+    });
+    await fireEvent.click(adoptBtn!);
+
+    const saveBtn = await waitFor(() => {
+      const btn = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+        (b) => b.textContent?.trim() === "common.save",
+      );
+      if (!btn) throw new Error("Save button not found");
+      return btn;
+    });
+    await fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockCreateCentral).toHaveBeenCalledOnce();
+      const payload = mockCreateCentral.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.name).toBe("CCU-Wohnzimmer");
+    });
+  });
+
   it("adopting a discovered CCU pre-fills host from suggested_host and carries serial into createCentralV2", async () => {
     mockListDiscovered.mockResolvedValue([
       makeCCU({

@@ -60,12 +60,15 @@ func newReplaceUnit(t *testing.T, name string) (unit *central.Unit, reg *central
 	return unit, reg
 }
 
-// registerReplaceClient wires a client entry for ifaceID/iface onto unit
+// registerReplaceClient wires a client entry for iface onto unit
 // (mirrors registerCentralWithClient in groups_test.go) so
-// DeviceAdminDomain.replaceInterfaces walks it.
-func registerReplaceClient(t *testing.T, unit *central.Unit, ifaceID string, iface hmenum.Interface) {
+// DeviceAdminDomain.replaceInterfaces walks it. The entry's InterfaceID is
+// the canonical wire id the production wiring registers, so the resolution
+// the domain performs is the one the daemon performs.
+func registerReplaceClient(t *testing.T, unit *central.Unit, iface hmenum.Interface) {
 	t.Helper()
-	ic := newTestInterfaceClient(t, unit.Name(), ifaceID, 5)
+	ifaceID := WireInterfaceID(unit.Name(), iface)
+	ic := newTestInterfaceClient(t, unit.Name(), string(iface), 5)
 	if err := unit.Clients.Register(&coordinators.ClientEntry{
 		InterfaceID: ifaceID,
 		Interface:   iface,
@@ -86,7 +89,7 @@ func registerReplaceClient(t *testing.T, unit *central.Unit, ifaceID string, ifa
 func TestReplaceCandidatesFiltersKnownDevicesAndChannels(t *testing.T) {
 	t.Parallel()
 	unit, reg := newReplaceUnit(t, "ccu-01")
-	registerReplaceClient(t, unit, "BidCos-RF", hmenum.InterfaceBidCosRF)
+	registerReplaceClient(t, unit, hmenum.InterfaceBidCosRF)
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	fake.listResult = []hmproto.DeviceDescription{
@@ -95,10 +98,10 @@ func TestReplaceCandidatesFiltersKnownDevicesAndChannels(t *testing.T) {
 		{Address: "CAND002", Type: "HM-LC-Sw1"}, // never accepted — must be dropped
 	}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", "BidCos-RF", fake)
+	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
 
 	unit.ModelRegistry.Put(device.New(device.Config{
-		InterfaceID: "BidCos-RF", Interface: hmenum.InterfaceBidCosRF,
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), Interface: hmenum.InterfaceBidCosRF,
 		Address: "CAND001", Model: "HM-Sec-SC", Name: "Fenster",
 	}))
 
@@ -120,7 +123,7 @@ func TestReplaceCandidatesFiltersKnownDevicesAndChannels(t *testing.T) {
 func TestReplaceCandidatesModelMatchesFlag(t *testing.T) {
 	t.Parallel()
 	unit, reg := newReplaceUnit(t, "ccu-01")
-	registerReplaceClient(t, unit, "BidCos-RF", hmenum.InterfaceBidCosRF)
+	registerReplaceClient(t, unit, hmenum.InterfaceBidCosRF)
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	fake.listResult = []hmproto.DeviceDescription{
@@ -128,13 +131,13 @@ func TestReplaceCandidatesModelMatchesFlag(t *testing.T) {
 		{Address: "CAND002", Type: "HM-LC-Sw1"},
 	}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", "BidCos-RF", fake)
+	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
 
 	unit.ModelRegistry.Put(device.New(device.Config{
-		InterfaceID: "BidCos-RF", Interface: hmenum.InterfaceBidCosRF, Address: "CAND001", Model: "HM-Sec-SC",
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), Interface: hmenum.InterfaceBidCosRF, Address: "CAND001", Model: "HM-Sec-SC",
 	}))
 	unit.ModelRegistry.Put(device.New(device.Config{
-		InterfaceID: "BidCos-RF", Interface: hmenum.InterfaceBidCosRF, Address: "CAND002", Model: "HM-LC-Sw1",
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), Interface: hmenum.InterfaceBidCosRF, Address: "CAND002", Model: "HM-LC-Sw1",
 	}))
 	// The new (inbox) device is HM-Sec-SC: CAND001 is an exact-model match,
 	// CAND002 is a CCU-approved but cross-type compatible swap.
@@ -164,8 +167,8 @@ func TestReplaceCandidatesModelMatchesFlag(t *testing.T) {
 func TestReplaceCandidatesTolerantOfPerInterfaceListError(t *testing.T) {
 	t.Parallel()
 	unit, reg := newReplaceUnit(t, "ccu-01")
-	registerReplaceClient(t, unit, "BidCos-RF", hmenum.InterfaceBidCosRF)
-	registerReplaceClient(t, unit, "BidCos-Wired", hmenum.InterfaceBidCosWired)
+	registerReplaceClient(t, unit, hmenum.InterfaceBidCosRF)
+	registerReplaceClient(t, unit, hmenum.InterfaceBidCosWired)
 
 	failing := &replaceRecordingOperations{
 		fakeOperations: &fakeOperations{kind: backends.KindCCU},
@@ -175,11 +178,11 @@ func TestReplaceCandidatesTolerantOfPerInterfaceListError(t *testing.T) {
 	ok.listResult = []hmproto.DeviceDescription{{Address: "CAND001", Type: "HM-Sec-SC"}}
 
 	w := client.NewValueWriter()
-	w.Register("ccu-01", "BidCos-RF", failing)
-	w.Register("ccu-01", "BidCos-Wired", ok)
+	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), failing)
+	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosWired), ok)
 
 	unit.ModelRegistry.Put(device.New(device.Config{
-		InterfaceID: "BidCos-Wired", Interface: hmenum.InterfaceBidCosWired, Address: "CAND001", Model: "HM-Sec-SC",
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosWired), Interface: hmenum.InterfaceBidCosWired, Address: "CAND001", Model: "HM-Sec-SC",
 	}))
 
 	domain := NewDeviceAdminDomain(reg, w)
@@ -198,9 +201,9 @@ func TestReplaceCandidatesTolerantOfPerInterfaceListError(t *testing.T) {
 func TestReplaceCandidatesCentralResolution(t *testing.T) {
 	t.Parallel()
 	unit, reg := newReplaceUnit(t, "ccu-01")
-	registerReplaceClient(t, unit, "BidCos-RF", hmenum.InterfaceBidCosRF)
+	registerReplaceClient(t, unit, hmenum.InterfaceBidCosRF)
 	w := client.NewValueWriter()
-	w.Register("ccu-01", "BidCos-RF", &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}})
+	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}})
 	domain := NewDeviceAdminDomain(reg, w)
 
 	if _, err := domain.ReplaceCandidates(context.Background(), "", "NEW001"); err != nil {
@@ -232,14 +235,14 @@ func TestReplaceDeviceEligibleInterfaceCallsBackend(t *testing.T) {
 	unit, reg := newReplaceUnit(t, "ccu-01")
 
 	dev := device.New(device.Config{
-		InterfaceID: "BidCos-RF", Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC",
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC",
 	})
 	unit.ModelRegistry.Put(dev)
 	unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC"})
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", "BidCos-RF", fake)
+	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	if err := domain.ReplaceDevice(context.Background(), "", "OLD001", "NEW001"); err != nil {
@@ -259,14 +262,14 @@ func TestReplaceDeviceIneligibleInterfaceRejectedBeforeWireCall(t *testing.T) {
 	unit, reg := newReplaceUnit(t, "ccu-01")
 
 	dev := device.New(device.Config{
-		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF, Address: "OLD001", Model: "HmIP-STH",
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF), Interface: hmenum.InterfaceHmIPRF, Address: "OLD001", Model: "HmIP-STH",
 	})
 	unit.ModelRegistry.Put(dev)
 	unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "OLD001", Model: "HmIP-STH"})
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", "HmIP-RF", fake)
+	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	err := domain.ReplaceDevice(context.Background(), "", "OLD001", "NEW001")
@@ -304,7 +307,7 @@ func TestReplaceDeviceSucceedsWhenEagerRefreshFails(t *testing.T) {
 	unit, reg := newReplaceUnit(t, "ccu-01")
 
 	dev := device.New(device.Config{
-		InterfaceID: "BidCos-RF", Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC",
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC",
 	})
 	unit.ModelRegistry.Put(dev)
 	// Deliberately do NOT register OLD001 in unit.DeviceRegistry, so the
@@ -312,7 +315,7 @@ func TestReplaceDeviceSucceedsWhenEagerRefreshFails(t *testing.T) {
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	w := client.NewValueWriter()
-	w.Register("ccu-01", "BidCos-RF", fake)
+	w.Register("ccu-01", WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	if err := domain.ReplaceDevice(context.Background(), "", "OLD001", "NEW001"); err != nil {

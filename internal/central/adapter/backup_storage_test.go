@@ -1229,3 +1229,62 @@ func TestMintBackupIDConcurrentMintsForTheSameCentralAreAllDistinct(t *testing.T
 		t.Fatalf("expected %d distinct ids from %d concurrent mints, got %d: %v", n, n, len(ids), ids)
 	}
 }
+
+// concurrentRestorer is a stateless [BackupRestorer] for the concurrency
+// test: stubBackupRestorer records its arguments and would itself race,
+// masking the adapter-side race under test.
+type concurrentRestorer struct{ jobID string }
+
+func (r concurrentRestorer) Restore(_ context.Context, _ string, _ io.Reader) (string, error) {
+	return r.jobID, nil
+}
+
+// TestBackupAdapterRestorerWiringIsConcurrencySafe reproduces the multi-CCU
+// bring-up race: every configured central wires its own restorer from its own
+// gated bring-up goroutine, and it re-wires on every re-gate after a CCU
+// reboot, while the REST restore handler reads the same map. Two CCUs coming
+// back together after a power outage clear their readiness gate inside the
+// same poll window, so the two writes land concurrently and the runtime aborts
+// the daemon with "concurrent map writes" — during bring-up, when an operator
+// can least diagnose it. A restore issued while a second central re-gates hits
+// the read side of the same map.
+func TestBackupAdapterRestorerWiringIsConcurrencySafe(t *testing.T) {
+	t.Parallel()
+
+	names := []string{"alpha", "beta", "gamma", "delta"}
+	reg := newMultiCentralRegistryForBackupTest(t, names...)
+	a := NewBackupAdapter(reg)
+
+	idAlpha := formatBackupID("alpha", time.Now())
+	a.SetStorage(&stubBackupStorage{content: map[string]string{idAlpha: validBackupArchive(t)}})
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for _, name := range names {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for range 50 {
+				a.SetRestorerForCentral(name, concurrentRestorer{jobID: name + "-job"})
+			}
+		}()
+	}
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for range 50 {
+				_, _ = a.Restore(context.Background(), idAlpha)
+				_ = a.RestorerForCentral("beta")
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if a.RestorerForCentral("gamma") == nil {
+		t.Fatal("every central's restorer must survive the concurrent wiring")
+	}
+}

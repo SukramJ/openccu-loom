@@ -67,7 +67,14 @@ type BackupAdapter struct {
 	// [BackupAdapter.SetRestorerForCentral]. Restore prefers the entry
 	// keyed by the backup id's resolved owning central.
 	restorers map[string]BackupRestorer
-	logger    *slog.Logger
+	// restorersMu guards restorer and restorers. Both are written from the
+	// per-central gated bring-up goroutines — one per configured central,
+	// re-running on every re-gate after a CCU reboot — and read from the
+	// REST restore handler, so the map has as many concurrent writers as
+	// the installation has CCUs plus concurrent readers.
+	restorersMu sync.RWMutex
+
+	logger *slog.Logger
 
 	// locksMu guards locks; locks holds one mutex per central so that a
 	// scheduled create and a manual trigger for the same central never run
@@ -383,8 +390,19 @@ func (a *BackupAdapter) ownerCentralName(id string) string {
 // configured central when there is exactly one, which is the ordinary
 // installation, and refuses with [hmerr.ErrRestoreTargetAmbiguous] when
 // there are several.
+//
+// The whole decision runs under a single read lock: a bring-up goroutine
+// wiring another central's restorer between the sole-restorer check and the
+// central count would otherwise produce a verdict that matches neither state.
+// The owning-central lookup is done before the lock because it only reads the
+// registry, which has its own.
 func (a *BackupAdapter) resolveRestorer(id string) (BackupRestorer, error) {
-	if owner := a.ownerCentralName(id); owner != "" {
+	owner := a.ownerCentralName(id)
+
+	a.restorersMu.RLock()
+	defer a.restorersMu.RUnlock()
+
+	if owner != "" {
 		return a.restorers[owner], nil
 	}
 	// An explicitly installed single restorer wins over everything below:
@@ -392,20 +410,20 @@ func (a *BackupAdapter) resolveRestorer(id string) (BackupRestorer, error) {
 	if a.restorer != nil {
 		return a.restorer, nil
 	}
-	if r := a.soleRestorer(); r != nil {
+	if r := a.soleRestorerLocked(); r != nil {
 		return r, nil
 	}
-	if a.countCentrals() > 1 {
+	if n := a.countCentralsLocked(); n > 1 {
 		return nil, fmt.Errorf("%w: an uploaded backup names no central and %d are configured; "+
 			"restore it from that central's own backup list",
-			hmerr.ErrRestoreTargetAmbiguous, a.countCentrals())
+			hmerr.ErrRestoreTargetAmbiguous, n)
 	}
 	return nil, nil
 }
 
-// soleRestorer returns the restorer of the only configured central, or
-// nil when zero or several are configured.
-func (a *BackupAdapter) soleRestorer() BackupRestorer {
+// soleRestorerLocked returns the restorer of the only configured central, or
+// nil when zero or several are configured. Caller holds restorersMu.
+func (a *BackupAdapter) soleRestorerLocked() BackupRestorer {
 	if len(a.restorers) != 1 {
 		return nil
 	}
@@ -415,8 +433,9 @@ func (a *BackupAdapter) soleRestorer() BackupRestorer {
 	return nil
 }
 
-// countCentrals reports how many centrals could be a restore target.
-func (a *BackupAdapter) countCentrals() int {
+// countCentralsLocked reports how many centrals could be a restore target.
+// Caller holds restorersMu.
+func (a *BackupAdapter) countCentralsLocked() int {
 	if len(a.restorers) > 0 {
 		return len(a.restorers)
 	}

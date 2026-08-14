@@ -237,6 +237,8 @@ func (a *BackupAdapter) SetStorage(s BackupStorage) *BackupAdapter {
 // [BackupAdapter.Restore] for an unresolvable id then return
 // [ErrRestoreUnsupported]. Returns the receiver for chaining.
 func (a *BackupAdapter) SetRestorer(r BackupRestorer) *BackupAdapter {
+	a.restorersMu.Lock()
+	defer a.restorersMu.Unlock()
 	a.restorer = r
 	return a
 }
@@ -251,6 +253,8 @@ func (a *BackupAdapter) SetRestorerForCentral(centralName string, r BackupRestor
 	if centralName == "" {
 		return a
 	}
+	a.restorersMu.Lock()
+	defer a.restorersMu.Unlock()
 	if a.restorers == nil {
 		a.restorers = make(map[string]BackupRestorer)
 	}
@@ -265,6 +269,8 @@ func (a *BackupAdapter) Restorer() BackupRestorer {
 	if a == nil {
 		return nil
 	}
+	a.restorersMu.RLock()
+	defer a.restorersMu.RUnlock()
 	return a.restorer
 }
 
@@ -275,6 +281,8 @@ func (a *BackupAdapter) RestorerForCentral(centralName string) BackupRestorer {
 	if a == nil {
 		return nil
 	}
+	a.restorersMu.RLock()
+	defer a.restorersMu.RUnlock()
 	return a.restorers[centralName]
 }
 

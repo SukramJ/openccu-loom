@@ -526,6 +526,79 @@ centrals:
 	}
 }
 
+// TestInterfaceSpecRPCTypeMustMatchTheInterfaceTransport pins that rpc_type is
+// a pin, not a selector. The transport is derived from the interface name
+// everywhere in the daemon, so a contradicting value can only ever be a
+// misunderstanding — it is refused at load with an actionable message instead
+// of being persisted and shown in the UI while governing nothing.
+func TestInterfaceSpecRPCTypeMustMatchTheInterfaceTransport(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		spec    InterfaceSpec
+		wantErr bool
+	}{
+		{name: "xmlrpc on an XML-RPC interface", spec: InterfaceSpec{Name: "HmIP-RF", RPCType: "xmlrpc"}},
+		{name: "binrpc on CUxD", spec: InterfaceSpec{Name: "CUxD", RPCType: "binrpc"}},
+		{name: "empty derives", spec: InterfaceSpec{Name: "CUxD"}},
+		{name: "binrpc on an XML-RPC interface", spec: InterfaceSpec{Name: "HmIP-RF", RPCType: "binrpc"}, wantErr: true},
+		{name: "xmlrpc on CUxD", spec: InterfaceSpec{Name: "CUxD", RPCType: "xmlrpc"}, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.spec.Validate(0)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Validate(%+v) = nil, want an error", tc.spec)
+				}
+				if !strings.Contains(err.Error(), "rpc_type") {
+					t.Errorf("error should mention 'rpc_type', got: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Validate(%+v): %v", tc.spec, err)
+			}
+		})
+	}
+}
+
+// TestInterfaceSpecRemotePathShape pins the shape of the URL-path override.
+// The value is interpolated into the composed XML-RPC endpoint, so anything
+// that can re-point the request off the configured host — a scheme, an
+// authority, a dot segment — or that turns the endpoint into a malformed URL
+// is refused at load, where the operator can still see why.
+func TestInterfaceSpecRemotePathShape(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		path    string
+		wantErr bool
+	}{
+		{path: ""},
+		{path: "/RPC2b"},
+		{path: "/proxy/ccu/RPC2"},
+		{path: "RPC2b", wantErr: true},
+		{path: "//evil.example/RPC2", wantErr: true},
+		{path: "/../../RPC2", wantErr: true},
+		{path: "/RPC2?x=1", wantErr: true},
+		{path: "/RPC2#frag", wantErr: true},
+		{path: "http://evil.example/RPC2", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			t.Parallel()
+			err := InterfaceSpec{Name: "HmIP-RF", RemotePath: tc.path}.Validate(0)
+			if tc.wantErr != (err != nil) {
+				t.Fatalf("Validate(remote_path=%q) = %v, wantErr=%v", tc.path, err, tc.wantErr)
+			}
+			if tc.wantErr && !strings.Contains(err.Error(), "remote_path") {
+				t.Errorf("error should mention 'remote_path', got: %v", err)
+			}
+		})
+	}
+}
+
 // TestInterfaceSpecMultiCCUValidate verifies that two centrals can each
 // list different interface sets, and that duplicate interface names within
 // one central are valid (same name, different overrides is allowed by

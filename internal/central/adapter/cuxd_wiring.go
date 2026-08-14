@@ -276,12 +276,10 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		}
 	}
 
+	//nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx; see deinitOnShutdown
 	closer := func() {
 		if binrpcCallbackServer != nil {
-			if err := backend.Deinit(ctx, callbackURL); err != nil {
-				logger.Debug("wire.deinit.shutdown",
-					slog.String("interface", initID), slog.String("err", err.Error()))
-			}
+			deinitOnShutdown(backend, callbackURL, cc.Name, initID, logger)
 			binrpcCallbackServer.Deregister(initID)
 			if legacyID := LegacyInitInterfaceID(unit.InstanceName(), cc.Name, iface); legacyID != initID {
 				binrpcCallbackServer.Deregister(legacyID)

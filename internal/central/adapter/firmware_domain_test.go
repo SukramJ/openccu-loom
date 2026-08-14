@@ -316,27 +316,32 @@ func TestRefreshCentralFirmwareDataByState_NoInterfacesNoFetch(t *testing.T) {
 
 // TestModelFirmwareStateReader_DeviceFirmwareStates verifies that
 // DeviceFirmwareStates returns only the devices matching the requested
-// interface, each mapped to its current firmware update state.
+// interface, each mapped to its current firmware update state. The requested
+// identifier is the canonical wire id the description registry hands the
+// coordinator, not the bare interface.
 func TestModelFirmwareStateReader_DeviceFirmwareStates(t *testing.T) {
 	t.Parallel()
 
 	reg := registry.NewModelRegistry()
+	hmipWireID := WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF)
 
 	hmipDev := device.New(device.Config{
-		Interface: hmenum.InterfaceHmIPRF,
-		Address:   "0007ABCD",
-		Firmware:  device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate},
+		InterfaceID: hmipWireID,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0007ABCD",
+		Firmware:    device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate},
 	})
 	bidcosDev := device.New(device.Config{
-		Interface: hmenum.InterfaceBidCosRF,
-		Address:   "0008ABCD",
-		Firmware:  device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateUpToDate},
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF),
+		Interface:   hmenum.InterfaceBidCosRF,
+		Address:     "0008ABCD",
+		Firmware:    device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateUpToDate},
 	})
 	reg.Put(hmipDev)
 	reg.Put(bidcosDev)
 
 	reader := modelFirmwareStateReader{reg: reg}
-	states := reader.DeviceFirmwareStates(hmenum.InterfaceHmIPRF)
+	states := reader.DeviceFirmwareStates(hmenum.Interface(hmipWireID))
 
 	if len(states) != 1 {
 		t.Fatalf("states = %v, want exactly 1 entry for HmIP-RF", states)
@@ -350,5 +355,89 @@ func TestModelFirmwareStateReader_DeviceFirmwareStates(t *testing.T) {
 	}
 	if _, present := states["0008ABCD"]; present {
 		t.Error("BidCos device must not appear in the HmIP-RF result set")
+	}
+}
+
+// ─── wire-id keying ──────────────────────────────────────────────────────────
+
+// TestApplyFirmwareFromDescriptionsResolvesByWireInterfaceID pins the key the
+// description registry is actually populated with. A device carries two
+// identifier spaces — the bare `Interface` for the operator surfaces and the
+// canonical `InterfaceID` (`<central>-<iface>`) the registries are keyed by —
+// and they only differ once the central has a name. Looking the description up
+// under the bare interface misses every entry, so a CCU-side firmware change
+// never reaches the model and the SPA / MQTT update entity keeps the values the
+// device was materialised with at boot.
+func TestApplyFirmwareFromDescriptionsResolvesByWireInterfaceID(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-wire"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	wireID := WireInterfaceID(c.Name(), hmenum.InterfaceHmIPRF)
+
+	dev := device.New(device.Config{
+		InterfaceID: wireID,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0009ABCD",
+		Model:       "HmIP-PSM",
+		Firmware: device.FirmwareInfo{
+			Current:     "1.2.2",
+			Updatable:   true,
+			UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate,
+		},
+	})
+	c.ModelRegistry.Put(dev)
+
+	c.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{
+		Address:             "0009ABCD",
+		Type:                "HmIP-PSM",
+		Firmware:            "1.4.10",
+		AvailableFirmware:   "1.4.12",
+		FirmwareUpdateState: "READY_FOR_UPDATE",
+	})
+
+	applyFirmwareFromDescriptions(c)
+
+	info := dev.Firmware().Info()
+	if info.Current != "1.4.10" || info.Available != "1.4.12" {
+		t.Errorf("firmware = %+v, want current 1.4.10 / available 1.4.12", info)
+	}
+}
+
+// TestRefreshCentralFirmwareDataByStateReachesBackendOnNamedCentral drives the
+// state-gated sweep through its real entry point on a central whose name makes
+// the wire id differ from the bare interface. The gate has to see the device's
+// READY_FOR_UPDATE state, otherwise the description re-pull never reaches the
+// CCU at all.
+func TestRefreshCentralFirmwareDataByStateReachesBackendOnNamedCentral(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-bystate-wire"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	wireID := WireInterfaceID(c.Name(), hmenum.InterfaceHmIPRF)
+
+	c.ModelRegistry.Put(device.New(device.Config{
+		InterfaceID: wireID,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "000BABCD",
+		Model:       "HmIP-PSM",
+		Firmware:    device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate},
+	}))
+	c.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{Address: "000BABCD"})
+
+	fake := &listRecordingOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	w := clientpkg.NewValueWriter()
+	w.Register(c.Name(), wireID, fake)
+
+	if err := RefreshCentralFirmwareDataByState(context.Background(), c, w,
+		[]hmenum.DeviceFirmwareState{hmenum.DeviceFirmwareStateReadyForUpdate}); err != nil {
+		t.Fatalf("RefreshCentralFirmwareDataByState: %v", err)
+	}
+	if fake.calls == 0 {
+		t.Fatal("the state gate must match the device, so the description re-pull reaches the backend")
 	}
 }

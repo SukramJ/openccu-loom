@@ -20,6 +20,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // orDefault returns *p, or def when p is nil. Shared by the many
@@ -65,10 +66,15 @@ type InterfaceSpec struct {
 	// "" means "use the backend default" ("/RPC2" for HmIP-RF /
 	// BidCos-RF / BidCos-Wired, "/groups" for VirtualDevices).
 	// Operators with non-standard CCU routing can pin the value here.
+	// Must be an absolute path within the same host — see
+	// [InterfaceSpec.Validate].
 	RemotePath string `yaml:"remote_path,omitempty" json:"remote_path,omitempty" cfg:"expert"`
 
-	// RPCType selects the transport explicitly. Accepted values: "",
-	// "xmlrpc", "binrpc". "" means "derive from interface name".
+	// RPCType pins the transport. Accepted values: "", "xmlrpc", "binrpc".
+	// "" derives it from the interface name, which is what the daemon does
+	// in every case: CUxD speaks BIN-RPC, every other interface XML-RPC.
+	// A value that contradicts the name is rejected at config load rather
+	// than persisted as a setting that governs nothing.
 	RPCType string `yaml:"rpc_type,omitempty" json:"rpc_type,omitempty" cfg:"expert"`
 }
 
@@ -109,11 +115,56 @@ func (s InterfaceSpec) Validate(idx int) error {
 	if s.Port != 0 && (s.Port < 1 || s.Port > 65535) {
 		return fmt.Errorf("config: interfaces[%d].port: out of range 1-65535: %d", idx, s.Port)
 	}
-	switch s.RPCType {
-	case "", "xmlrpc", "binrpc":
-		// valid
+	if err := validateRemotePath(idx, s.RemotePath); err != nil {
+		return err
+	}
+	return validateRPCType(idx, s.Name, s.RPCType)
+}
+
+// validateRemotePath constrains the URL-path override to a shape that can only
+// re-point the request within the same host. The value is interpolated into
+// the composed endpoint, so a typo that carries a scheme, a host, a query or a
+// dot segment would either build a malformed URL or silently address a
+// different endpoint than the operator meant.
+func validateRemotePath(idx int, path string) error {
+	if path == "" {
+		return nil
+	}
+	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") {
+		return fmt.Errorf("config: interfaces[%d].remote_path: must be an absolute path starting with %q: %q", idx, "/", path)
+	}
+	for _, bad := range []string{"://", "?", "#", ".."} {
+		if strings.Contains(path, bad) {
+			return fmt.Errorf("config: interfaces[%d].remote_path: must not contain %q: %q", idx, bad, path)
+		}
+	}
+	return nil
+}
+
+// validateRPCType rejects an rpc_type that contradicts the transport the
+// interface name implies. The transport is derived from the name everywhere in
+// the daemon — CUxD speaks BIN-RPC, every other interface XML-RPC — so the
+// field can only ever confirm that derivation. Accepting a contradicting value
+// silently would leave an operator staring at a persisted setting that governs
+// nothing.
+func validateRPCType(idx int, name, rpcType string) error {
+	switch rpcType {
+	case "":
+		return nil
+	case "xmlrpc", "binrpc":
 	default:
-		return fmt.Errorf("config: interfaces[%d].rpc_type: invalid value %q (use xmlrpc or binrpc)", idx, s.RPCType)
+		return fmt.Errorf("config: interfaces[%d].rpc_type: invalid value %q (use xmlrpc or binrpc)", idx, rpcType)
+	}
+	want := "xmlrpc"
+	if name == string(hmenum.InterfaceCUxD) {
+		want = "binrpc"
+	}
+	if rpcType != want {
+		return fmt.Errorf(
+			"config: interfaces[%d].rpc_type: %q speaks %s, not %q — the transport follows the interface name; "+
+				"remove the field or set it to %q",
+			idx, name, want, rpcType, want,
+		)
 	}
 	return nil
 }
@@ -1810,11 +1861,8 @@ func (c *Config) Validate() error {
 	names := make(map[string]struct{}, len(c.Centrals))
 	for i := range c.Centrals {
 		cc := &c.Centrals[i]
-		if cc.Name == "" {
-			return fmt.Errorf("config: centrals[%d].name: required", i)
-		}
-		if _, dup := names[cc.Name]; dup {
-			return fmt.Errorf("config: duplicate central name %q", cc.Name)
+		if err := validateCentralName(i, cc.Name, names); err != nil {
+			return err
 		}
 		names[cc.Name] = struct{}{}
 		if cc.Host == "" {
@@ -1851,6 +1899,24 @@ func (c *Config) Validate() error {
 		h.Retention = HistoryRetentionFloor
 	}
 	return validateMQTT(&c.North.MQTT)
+}
+
+// validateCentralName checks one central's name: present, unique among the
+// names already seen, and inside the allowlist the XML-RPC callback router
+// matches on. The name becomes a path segment of the callback URL announced to
+// this CCU, so a name the router cannot match produces a daemon that looks
+// healthy and never receives a single push event.
+func validateCentralName(idx int, name string, seen map[string]struct{}) error {
+	if name == "" {
+		return fmt.Errorf("config: centrals[%d].name: required", idx)
+	}
+	if err := hmtypes.ValidateCentralName(name); err != nil {
+		return fmt.Errorf("config: centrals[%d].name: %w", idx, err)
+	}
+	if _, dup := seen[name]; dup {
+		return fmt.Errorf("config: duplicate central name %q", name)
+	}
+	return nil
 }
 
 // centralHostLabel matches one DNS label. Underscores are tolerated —
