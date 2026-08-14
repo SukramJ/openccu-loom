@@ -44,6 +44,25 @@ still open, trust this file plus `CHANGELOG.md`.
   per [`docs/matter-parity-contract.md`](../../docs/matter-parity-contract.md).*
   *Plan: [`notes/plans/A1-matter-im-depth.md`](A1-matter-im-depth.md).*
 
+- **CASE resume and the session id it reuses.** *Blocked on hardware, not on
+  effort.* The resume fast path (`Responder.tryResume`,
+  `internal/north/matter/secure/sigma/protocol.go`) keeps the session id the
+  responder already announced, where matter.js allocates a fresh one
+  (`packages/protocol/src/session/case/CaseServer.ts` `#resume` calls
+  `getNextAvailableSessionId`). Both answers carry a real risk: reusing an id
+  can conflate the peer's previous message counters and subscriptions with the
+  new session, and renewing one burns an id per **MRP retransmit** of a resume
+  Sigma1, which would drain the 16-bit space on a lossy network. Neither can be
+  settled from the spec text — both failure shapes are interop failures that
+  look fine in isolation — so it needs a capture from a live controller across a
+  bridge restart or a partition. The observability that makes such a capture
+  readable already shipped (a debug record per resume, an `occupancy` block on
+  `GET /api/v1/matter/sessions` and in the Matter diagnostics view, and a resume
+  row in the live-controller brief). What remains open is the decision itself,
+  the retransmit-idempotence guard either answer needs, and the
+  `by_design.md` entry recording the divergence.
+  *Plan: [`notes/plans/matter-case-resume-session-id.md`](matter-case-resume-session-id.md).*
+
 ### REST API
 
 - **Two pagination envelopes across list endpoints.** `/devices` returns
@@ -117,6 +136,28 @@ reason — so they are not re-proposed without new information:
 - **`LinkCoordinator.SetLinkInfo` / `GetLinkInfo` wiring.** Deferred —
   the backend supports both, but no consumer exists. Wire them only
   together with a REST/WS caller that needs them.
+- **Boot-order e2e coverage for the central-registry observer.** Deferred —
+  `central.Registry.OnRegister` and its guard shipped, and the ordering
+  guarantees (replay over the centrals already registered, attach in
+  registration order, unwire in reverse, attach before `Unit.Start` on adopt)
+  are pinned in package and composition-root tests. Extending
+  `tests/e2e/boot_order_test.go` as well, as the plan's risk section suggested,
+  is the one remaining hardening; it is not scheduled. The order-sensitive
+  hooks that stayed named on `centralOrchestrator` are a decision, not a
+  leftover — see
+  [`central-registry-observer.md`](central-registry-observer.md) and
+  [`CLAUDE.md`](../../CLAUDE.md) §"Walking the central registry once is
+  walking it at boot".
+- **Issuer-scoped identity for federated logins (`iss` + `sub`).** Deferred —
+  the OIDC subject is folded and a federated principal is scoped by scheme, so
+  the reported revocation defect is closed. Re-keying the identity on the
+  issuer plus `sub` is the architecturally cleaner answer, but it rewrites the
+  subject of every existing federated session and every audit row that
+  references one, and it needs a migration for the audit trail. Revisit only
+  with that migration; the residual it would also close — an API token carries
+  no scheme, so a token minted for a federated subject is purged with a local
+  account of the same name — is recorded in
+  [`oidc-subject-canonicalisation.md`](oidc-subject-canonicalisation.md).
 
 ## Depth-parity execution plan (aiohomematic)
 
