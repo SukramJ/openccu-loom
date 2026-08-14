@@ -228,7 +228,11 @@ func (d *decryptReader) nextFrame() error {
 	}
 	final := hdr[0]&frameFinalFlag != 0
 	ctLen := binary.BigEndian.Uint32(hdr[1:])
-	if int(ctLen) > streamChunkSize+d.c.aead.Overhead() {
+	// The declared length comes from an untrusted stream and is compared in
+	// uint64: narrowing it to int wraps to a negative number where int is 32
+	// bits, which would slip an absurd length past this bound and panic in
+	// make() below instead of returning the error.
+	if uint64(ctLen) > uint64(streamChunkSize)+uint64(d.c.aead.Overhead()) { //nolint:gosec // Overhead is the GCM tag size, never negative
 		return fmt.Errorf("secret: frame %d length %d exceeds bound", d.counter, ctLen)
 	}
 	ct := make([]byte, ctLen)

@@ -60,7 +60,7 @@ type JWKSCache struct {
 // loom:reachable:reason="used by OIDC auth middleware to verify JWT signatures against the provider's keyset"
 func NewJWKSCache(url string, client *http.Client) *JWKSCache {
 	if client == nil {
-		client = http.DefaultClient
+		client = defaultHTTPClient()
 	}
 	return &JWKSCache{URL: url, TTL: 15 * time.Minute, Client: client, now: time.Now, keys: make(map[string]JSONWebKey)}
 }

@@ -100,6 +100,26 @@ func TestSessionRevokeBySubjectExceptPreservesNamedSession(t *testing.T) {
 	}
 }
 
+// TestSessionRevokeBySubjectIgnoresSubjectCasing verifies that a
+// credential change made against the canonical (lower-cased) subject
+// still evicts a session issued under a differently-cased spelling.
+// Anything else lets a stolen cookie outlive the password reset that was
+// meant to kill it.
+func TestSessionRevokeBySubjectIgnoresSubjectCasing(t *testing.T) {
+	store := NewSessionStore()
+	sess, err := store.Issue(Identity{Subject: "Markus"})
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	if n := store.RevokeBySubject("markus"); n != 1 {
+		t.Fatalf("RevokeBySubject count=%d want 1", n)
+	}
+	if store.Lookup(sess.ID) != nil {
+		t.Error("session for differently-cased subject survived the revocation")
+	}
+}
+
 // TestSessionRevokeBySubjectEmptySubjectNoOp verifies that an empty
 // subject is a no-op — it must never wipe every session in the store.
 func TestSessionRevokeBySubjectEmptySubjectNoOp(t *testing.T) {

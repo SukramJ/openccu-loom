@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // --- system.health ---
@@ -171,6 +172,35 @@ func TestSessionSetThenChangesReportsDirty(t *testing.T) {
 	delta := c["changes"].(map[string]any)
 	if delta["BOOST_MODE"] != true {
 		t.Fatalf("delta=%+v", delta)
+	}
+}
+
+// A CCU paramset value is always a scalar, so a JSON array or object in
+// `config.session.set` is client error, not data. It is rejected at the
+// boundary instead of being staged and failing much later against the CCU.
+func TestSessionSetRejectsNonScalarValue(t *testing.T) {
+	backend := &stubBackend{openInitial: map[string]any{"BOOST_MODE": false}}
+	r, store := newSessionRouter(t, backend)
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+
+	for _, value := range []any{[]any{1, 2}, map[string]any{"a": 1}} {
+		setArgs, _ := json.Marshal(map[string]any{
+			"central_name":    "test",
+			"channel_address": "addr:1",
+			"paramset_key":    "MASTER",
+			"parameter":       "BOOST_MODE",
+			"value":           value,
+		})
+		res := r.Dispatch(opCtx(), "config.session.set", setArgs)
+		if res.Error == nil {
+			t.Fatalf("value %v must be rejected, got %+v", value, res.Data)
+		}
+		if res.Error.Code != CommandErrorBadRequest {
+			t.Fatalf("code=%q want %q", res.Error.Code, CommandErrorBadRequest)
+		}
+	}
+	if s := store.Get(configui.SessionKey{CentralName: "test", ChannelAddress: "addr:1", ParamsetKey: hmenum.ParamsetKeyMaster}); s == nil || s.IsDirty() {
+		t.Fatal("a rejected value must not be staged into the session")
 	}
 }
 

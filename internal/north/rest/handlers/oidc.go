@@ -49,6 +49,15 @@ type oidcState struct {
 
 const oidcStateTTL = 5 * time.Minute
 
+// maxOIDCStates caps the in-flight authorization flows the daemon holds.
+// /auth/oidc/start is pre-auth, and an entry it mints is only reclaimed by
+// the TTL sweep, so without a ceiling the map grows at the caller's request
+// rate for the whole [oidcStateTTL] window — and every insert scans it under
+// the lock, so genuine logins degrade along with it. The cap is far above
+// any real concurrency (a login completes in seconds) and turns an
+// unbounded allocation into a bounded one.
+const maxOIDCStates = 4096
+
 // oidcStateCookieName carries the flow's state value in the initiating
 // browser so the callback can prove it is the same agent that started the
 // flow. Without this binding an attacker could complete a flow, capture a
@@ -81,6 +90,22 @@ func (d *OIDCDeps) putState(verifier, nonce string) (string, error) {
 		if now.Sub(e.created) > oidcStateTTL {
 			delete(d.states, k)
 		}
+	}
+	// A flood of abandoned flows stays inside the TTL, so the sweep alone
+	// cannot bound the map. Evict the oldest entries instead: a genuine
+	// login completes within seconds, so the entry closest to expiry is
+	// the one least likely to still be wanted.
+	for len(d.states) >= maxOIDCStates {
+		oldest, found := "", false
+		for k, e := range d.states {
+			if !found || e.created.Before(d.states[oldest].created) {
+				oldest, found = k, true
+			}
+		}
+		if !found {
+			break
+		}
+		delete(d.states, oldest)
 	}
 	d.states[key] = oidcState{verifier: verifier, nonce: nonce, created: now}
 	d.mu.Unlock()

@@ -214,3 +214,37 @@ func TestCheckerLatestReleasePrefersSha256Sidecar(t *testing.T) {
 		})
 	}
 }
+
+// TestNewCheckerClientIsBoundedAndOwnsItsTransport pins the two
+// properties the periodic check depends on: the GitHub request carries a
+// deadline of its own (a server that accepts the connection and never
+// answers must not pin the cadence goroutine for the daemon's uptime),
+// and the client does not share the process-wide default transport.
+func TestNewCheckerClientIsBoundedAndOwnsItsTransport(t *testing.T) {
+	t.Parallel()
+
+	clients := map[string]*http.Client{
+		"NewChecker":              NewChecker().HTTPClient,
+		"zero-value httpClient()": (&Checker{}).httpClient(),
+	}
+	for name, client := range clients {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if client == nil {
+				t.Fatal("client is nil")
+			}
+			if client == http.DefaultClient {
+				t.Fatal("client is http.DefaultClient: no request deadline and the shared default transport")
+			}
+			if client.Timeout <= 0 {
+				t.Errorf("client.Timeout = %v, want a positive deadline", client.Timeout)
+			}
+			if client.Transport == nil {
+				t.Error("client.Transport is nil: falls back to the shared http.DefaultTransport")
+			}
+			if client.Transport == http.DefaultTransport {
+				t.Error("client.Transport is http.DefaultTransport: connection pool shared with unrelated callers")
+			}
+		})
+	}
+}

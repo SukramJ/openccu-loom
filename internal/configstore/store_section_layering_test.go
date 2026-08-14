@@ -163,6 +163,69 @@ func TestNestedSectionRowsStillCarryTheirOwnValues(t *testing.T) {
 	}
 }
 
+// TestApplySectionReplacesMapValuedFields pins the overlay rule for maps:
+// a key the payload carries is authoritative, so the payload's map
+// replaces the stored one instead of merging into it. Go's encoding/json
+// keeps the entries of a non-nil destination map, which made deleting a
+// single entry impossible through the section PUT — the operator saw a
+// success and the entry back on the next load.
+func TestApplySectionReplacesMapValuedFields(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.North.REST.Auth.CCU.RoleMapping = map[string]string{"8": "admin", "1": "admin"}
+	cfg.North.REST.Auth.CCU.MinUserLevel = 2
+
+	if err := ApplySectionToConfig(SectionCCUAuth, []byte(`{"role_mapping":{"8":"admin"}}`), cfg); err != nil {
+		t.Fatalf("ApplySectionToConfig: %v", err)
+	}
+	got := cfg.North.REST.Auth.CCU.RoleMapping
+	if len(got) != 1 || got["8"] != "admin" {
+		t.Errorf("role_mapping=%v, want exactly {8:admin}", got)
+	}
+	// A key the payload omits still keeps its stored value.
+	if cfg.North.REST.Auth.CCU.MinUserLevel != 2 {
+		t.Errorf("min_user_level=%d, want the stored 2", cfg.North.REST.Auth.CCU.MinUserLevel)
+	}
+}
+
+// TestApplySectionKeepsMapWhenPayloadOmitsIt is the other half of the
+// rule: an absent key means "no opinion", so the stored map survives.
+func TestApplySectionKeepsMapWhenPayloadOmitsIt(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.North.REST.Auth.CCU.RoleMapping = map[string]string{"8": "admin"}
+
+	if err := ApplySectionToConfig(SectionCCUAuth, []byte(`{"min_user_level":3}`), cfg); err != nil {
+		t.Fatalf("ApplySectionToConfig: %v", err)
+	}
+	if len(cfg.North.REST.Auth.CCU.RoleMapping) != 1 {
+		t.Errorf("role_mapping=%v, want the stored map untouched", cfg.North.REST.Auth.CCU.RoleMapping)
+	}
+}
+
+// TestApplySectionReplacesNestedMapValuedFields covers a map that sits
+// below the section root: north.ui.profiles maps a profile name to the
+// per-surface states, and dropping a profile must not resurrect it.
+func TestApplySectionReplacesNestedMapValuedFields(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.North.UI.Profiles = map[string]map[string]config.SurfaceState{
+		config.ProfileStandalone: {"devices": config.SurfaceHidden},
+		config.ProfileEmbedded:   {"devices": config.SurfaceHidden},
+	}
+
+	raw := []byte(`{"profiles":{"` + config.ProfileStandalone + `":{"devices":"hidden"}}}`)
+	if err := ApplySectionToConfig(SectionUI, raw, cfg); err != nil {
+		t.Fatalf("ApplySectionToConfig: %v", err)
+	}
+	if _, still := cfg.North.UI.Profiles[config.ProfileEmbedded]; still {
+		t.Errorf("profiles=%v, want the dropped profile gone", cfg.North.UI.Profiles)
+	}
+}
+
 // TestForeignRelPathsCoverEveryNestedSection keeps the strip list derived from
 // AllSections rather than hand-maintained: a section added underneath another
 // one is stripped from its parent automatically.

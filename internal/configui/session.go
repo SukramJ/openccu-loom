@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"sync"
 
@@ -81,10 +82,28 @@ func (s *Session) CanRedo() bool {
 	return len(s.redoStack) > 0
 }
 
+// valuesEqual compares two paramset values without assuming they are
+// comparable. CCU paramsets only ever carry scalars, but the value of a
+// staged change reaches the session verbatim from a WebSocket client, so a
+// JSON array or object arrives as an uncomparable []any / map[string]any.
+// Go's == panics on two of those, which used to kill the connection
+// mid-frame; deep equality is the only safe answer for them.
+func valuesEqual(a, b any) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	ta, tb := reflect.TypeOf(a), reflect.TypeOf(b)
+	if ta != tb {
+		return false
+	}
+	if !ta.Comparable() {
+		return reflect.DeepEqual(a, b)
+	}
+	return a == b
+}
+
 // IsDirty reports whether the current values differ from the initial
-// snapshot. Compares per-parameter via Go's == on `any` (which is
-// fine for the scalar types CCU paramsets carry); maps/slices would
-// need deep equality but never appear as paramset values.
+// snapshot.
 func (s *Session) IsDirty() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -96,7 +115,7 @@ func (s *Session) dirtyLocked() bool {
 		return true
 	}
 	for k, v := range s.currentValues {
-		if iv, ok := s.initialValues[k]; !ok || iv != v {
+		if iv, ok := s.initialValues[k]; !ok || !valuesEqual(iv, v) {
 			return true
 		}
 	}
@@ -119,7 +138,7 @@ func (s *Session) Set(parameter string, value any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	old, ok := s.currentValues[parameter]
-	if ok && old == value {
+	if ok && valuesEqual(old, value) {
 		return
 	}
 	s.undoStack = append(s.undoStack, undoEntry{Parameter: parameter, OldValue: old, NewValue: value})
@@ -187,7 +206,7 @@ func (s *Session) Changes() map[string]any {
 	defer s.mu.Unlock()
 	out := make(map[string]any)
 	for k, v := range s.currentValues {
-		if iv, ok := s.initialValues[k]; !ok || iv != v {
+		if iv, ok := s.initialValues[k]; !ok || !valuesEqual(iv, v) {
 			out[k] = v
 		}
 	}
@@ -202,7 +221,7 @@ func (s *Session) ChangedParameters() []ParameterChange {
 	out := make([]ParameterChange, 0)
 	for k, cur := range s.currentValues {
 		init, ok := s.initialValues[k]
-		if !ok || init != cur {
+		if !ok || !valuesEqual(init, cur) {
 			out = append(out, ParameterChange{Parameter: k, From: init, To: cur})
 		}
 	}
@@ -325,7 +344,7 @@ func (s *Session) ValidateChanges(constraints []CrossValidationConstraint) []Val
 	s.mu.Lock()
 	changes := make(map[string]any)
 	for k, v := range s.currentValues {
-		if iv, ok := s.initialValues[k]; !ok || iv != v {
+		if iv, ok := s.initialValues[k]; !ok || !valuesEqual(iv, v) {
 			changes[k] = v
 		}
 	}

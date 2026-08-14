@@ -26,6 +26,13 @@
 // this reason, with a comment naming the flaky parallel test that
 // exposed it, while eight other call sites kept the default. A rule
 // without a guard decays back to a comment.
+//
+// It also rejects http.DefaultClient and the http.Get/Post/Head/PostForm
+// convenience wrappers that dispatch through it. They are the same
+// defect written shorter — the shared transport plus no request deadline
+// at all — and while the guard only matched composite literals, four
+// call sites (the add-on update checker and downloader, the OIDC
+// discovery/JWKS/exchange fallbacks) carried it unnoticed.
 
 package contract
 
@@ -55,7 +62,9 @@ var httpClientOwnershipExempt = map[string]string{
 }
 
 // TestEveryHTTPClientOwnsItsTransport fails on any composite literal of
-// type http.Client that omits the Transport field.
+// type http.Client that omits the Transport field, on any reference to
+// http.DefaultClient, and on the http package's request helpers that
+// dispatch through it.
 func TestEveryHTTPClientOwnsItsTransport(t *testing.T) {
 	t.Parallel()
 
@@ -88,7 +97,7 @@ func TestEveryHTTPClientOwnsItsTransport(t *testing.T) {
 			if _, ok := httpClientOwnershipExempt[rel]; ok {
 				return nil
 			}
-			offenders = append(offenders, bareHTTPClientLiterals(t, path, rel)...)
+			offenders = append(offenders, unownedHTTPClientUses(t, path, rel)...)
 			return nil
 		})
 		if err != nil {
@@ -97,19 +106,30 @@ func TestEveryHTTPClientOwnsItsTransport(t *testing.T) {
 	}
 
 	if len(offenders) > 0 {
-		t.Fatalf("%d http.Client literal(s) without an explicit Transport:\n\n%s\n\n"+
+		t.Fatalf("%d HTTP client use(s) on the process-wide default transport:\n\n%s\n\n"+
 			"A nil Transport uses the process-wide http.DefaultTransport, which couples\n"+
 			"independent callers through one connection pool — closing idle connections on\n"+
-			"it breaks requests other callers have in flight.\n"+
+			"it breaks requests other callers have in flight. http.DefaultClient (and the\n"+
+			"http.Get/Post/Head/PostForm helpers that dispatch through it) additionally\n"+
+			"carry no request deadline, so a server that accepts the connection and never\n"+
+			"answers blocks the caller for the daemon's remaining uptime.\n"+
 			"Use httpx.NewClient(timeout), or set Transport: httpx.NewTransport() when the\n"+
 			"transport needs customising.",
 			len(offenders), strings.Join(offenders, "\n"))
 	}
 }
 
-// bareHTTPClientLiterals returns one entry per `http.Client{…}` literal
-// in path that has no Transport field.
-func bareHTTPClientLiterals(t *testing.T, path, rel string) []string {
+// defaultDispatchHelpers are the http package functions that issue a
+// request through http.DefaultClient, and therefore inherit both its
+// shared transport and its absent deadline.
+var defaultDispatchHelpers = map[string]bool{
+	"Get": true, "Post": true, "Head": true, "PostForm": true,
+}
+
+// unownedHTTPClientUses returns one entry per `http.Client{…}` literal in
+// path that has no Transport field, per reference to http.DefaultClient,
+// and per call to one of [defaultDispatchHelpers].
+func unownedHTTPClientUses(t *testing.T, path, rel string) []string {
 	t.Helper()
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
@@ -117,32 +137,51 @@ func bareHTTPClientLiterals(t *testing.T, path, rel string) []string {
 		t.Fatalf("parse %s: %v", rel, err)
 	}
 	var found []string
+	report := func(n ast.Node, what string) {
+		found = append(found, fmt.Sprintf("  %s:%d (%s)", rel, fset.Position(n.Pos()).Line, what))
+	}
 	ast.Inspect(file, func(n ast.Node) bool {
-		lit, ok := n.(*ast.CompositeLit)
-		if !ok {
-			return true
-		}
-		sel, ok := lit.Type.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != "Client" {
-			return true
-		}
-		pkg, ok := sel.X.(*ast.Ident)
-		if !ok || pkg.Name != "http" {
-			return true
-		}
-		for _, elt := range lit.Elts {
-			kv, ok := elt.(*ast.KeyValueExpr)
-			if !ok {
-				continue
-			}
-			if key, ok := kv.Key.(*ast.Ident); ok && key.Name == "Transport" {
+		switch node := n.(type) {
+		case *ast.CompositeLit:
+			if !isHTTPSelector(node.Type, "Client") {
 				return true
 			}
+			for _, elt := range node.Elts {
+				kv, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if key, ok := kv.Key.(*ast.Ident); ok && key.Name == "Transport" {
+					return true
+				}
+			}
+			report(node, "http.Client literal without a Transport")
+		case *ast.CallExpr:
+			sel, ok := node.Fun.(*ast.SelectorExpr)
+			if !ok || !defaultDispatchHelpers[sel.Sel.Name] {
+				return true
+			}
+			if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "http" {
+				report(node, "http."+sel.Sel.Name+" dispatches through http.DefaultClient")
+			}
+		case *ast.SelectorExpr:
+			if isHTTPSelector(node, "DefaultClient") {
+				report(node, "http.DefaultClient")
+			}
 		}
-		found = append(found, fmt.Sprintf("  %s:%d", rel, fset.Position(lit.Pos()).Line))
 		return true
 	})
 	return found
+}
+
+// isHTTPSelector reports whether expr is the selector `http.<name>`.
+func isHTTPSelector(expr ast.Expr, name string) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != name {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "http"
 }
 
 // findRepoRootForHTTPGuard walks up from the test's directory to the

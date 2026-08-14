@@ -567,6 +567,80 @@ centrals:
 	}
 }
 
+// TestInterfaceSpecRPCTypeContradictingDerivedTransport pins that a
+// syntactically valid rpc_type which the daemon cannot honour is rejected
+// at config load. The transport is derived from the interface — CUxD is
+// BIN-RPC, everything else XML-RPC — and no per-interface knob overrides
+// that. Accepting a contradicting value left the operator believing the
+// daemon spoke a protocol it never selected.
+func TestInterfaceSpecRPCTypeContradictingDerivedTransport(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		spec InterfaceSpec
+		ok   bool
+	}{
+		{name: "binrpc on an XML-RPC interface", spec: InterfaceSpec{Name: "BidCos-RF", RPCType: "binrpc"}},
+		{name: "xmlrpc on CUxD", spec: InterfaceSpec{Name: "CUxD", RPCType: "xmlrpc"}},
+		{name: "xmlrpc agrees with the derived transport", spec: InterfaceSpec{Name: "BidCos-RF", RPCType: "xmlrpc"}, ok: true},
+		{name: "binrpc agrees with the derived transport", spec: InterfaceSpec{Name: "CUxD", RPCType: "binrpc"}, ok: true},
+		{name: "unset derives silently", spec: InterfaceSpec{Name: "CUxD"}, ok: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.spec.Validate(0)
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("Validate: unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected rpc_type to be rejected")
+			}
+			if !strings.Contains(err.Error(), "rpc_type") {
+				t.Errorf("error should mention 'rpc_type', got: %v", err)
+			}
+		})
+	}
+}
+
+// TestInterfaceSpecRemotePathValidation pins that a remote_path which the
+// XML-RPC endpoint composer cannot use fails at config load instead of at
+// the first RPC. POSTing to the bare "/" crashes the CCU's putParamset
+// handler, and a path without a leading slash would silently glue itself
+// onto the port.
+func TestInterfaceSpecRemotePathValidation(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		path string
+		ok   bool
+	}{
+		{name: "unset", path: "", ok: true},
+		{name: "absolute path", path: "/rpc", ok: true},
+		{name: "missing leading slash", path: "rpc"},
+		{name: "bare root", path: "/"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := InterfaceSpec{Name: "HmIP-RF", RemotePath: tc.path}.Validate(0)
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("Validate: unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected remote_path to be rejected")
+			}
+			if !strings.Contains(err.Error(), "remote_path") {
+				t.Errorf("error should mention 'remote_path', got: %v", err)
+			}
+		})
+	}
+}
+
 // TestInterfaceSpecMultiCCUValidate verifies that two centrals can each
 // list different interface sets, and that duplicate interface names within
 // one central are valid (same name, different overrides is allowed by

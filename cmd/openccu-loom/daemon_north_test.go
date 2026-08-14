@@ -81,6 +81,17 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			// The hardening toggle wins over the genuine-first-run state:
+			// an operator who closed the surface keeps it closed even on a
+			// database with zero users (wiped volume, restored blank DB).
+			name:           "onboarding closed by bootstrap.allow_first_run_setup",
+			localUserCount: 0,
+			mutate: func(c *config.Config) {
+				c.Bootstrap.AllowFirstRunSetup = ptrBool(false)
+			},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {

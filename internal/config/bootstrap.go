@@ -70,17 +70,31 @@ type BootstrapListen struct {
 	REST string `yaml:"rest" cfg:"basic"`
 }
 
-// BootstrapSafety bundles startup-only safety toggles.
+// BootstrapSafety bundles startup-only safety toggles. It is carried by
+// both config tiers: [BootstrapConfig] reads it before the database is
+// open, [Config] carries the same block so the daemon's first-run probe
+// — which runs off the full config — can see it.
 type BootstrapSafety struct {
 	// AllowFirstRunSetup controls whether the unauthenticated
 	// `/setup` surface is reachable. The default (true) is the only
 	// sensible value on a fresh install — the operator MUST create
-	// the first admin user via this surface. Once that user exists
-	// the toggle stays effectively a no-op until the SPA's "factory
-	// reset" path explicitly clears the users table. Operators with
-	// strict hardening requirements can flip this to false to keep
+	// the first admin user via this surface. Once a user exists the
+	// toggle makes no difference: the first-run probe already refuses
+	// as soon as any authentication source is configured. Operators
+	// with strict hardening requirements can flip it to false to keep
 	// `/setup` dormant even on a database with zero users.
-	AllowFirstRunSetup *bool `yaml:"allow_first_run_setup,omitempty" cfg:"basic"`
+	//
+	// Deliberate consequence: with the toggle false and no
+	// authentication source at all, there is no way into the daemon
+	// except editing the YAML back and restarting. That lockout is
+	// the point of the flag.
+	AllowFirstRunSetup *bool `yaml:"allow_first_run_setup,omitempty" json:"allow_first_run_setup,omitempty" cfg:"basic"`
+}
+
+// FirstRunSetupAllowed returns the effective allow_first_run_setup
+// value, defaulting to true when unset.
+func (s BootstrapSafety) FirstRunSetupAllowed() bool {
+	return orDefault(s.AllowFirstRunSetup, true)
 }
 
 // DefaultBootstrap returns a BootstrapConfig populated with safe
@@ -184,10 +198,7 @@ func (b *BootstrapConfig) Validate() error {
 // FirstRunSetupAllowed returns the effective allow_first_run_setup
 // value, defaulting to true when unset.
 func (b *BootstrapConfig) FirstRunSetupAllowed() bool {
-	if b.Bootstrap.AllowFirstRunSetup == nil {
-		return true
-	}
-	return *b.Bootstrap.AllowFirstRunSetup
+	return b.Bootstrap.FirstRunSetupAllowed()
 }
 
 // ErrBootstrapMissing wraps a not-found error from [LoadBootstrap].

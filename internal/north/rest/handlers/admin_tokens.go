@@ -72,7 +72,12 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
-		if body.Subject == "" {
+		// Report the spelling the store keys the token on, not the one the
+		// operator typed: the response feeds the token list and the audit
+		// note, and the identity this token later produces carries the
+		// canonical form.
+		subject := auth.CanonicalSubject(body.Subject)
+		if subject == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing subject", "subject is required"))
 			return
@@ -89,7 +94,7 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 			expiresAt = &exp
 		}
 		res, err := svc.Create(r.Context(), sqlite.CreateInput{
-			Subject:   body.Subject,
+			Subject:   subject,
 			Role:      body.Role,
 			ExpiresAt: expiresAt,
 		})
@@ -102,13 +107,13 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 			rec.Record(audit.Entry{
 				User:   actor,
 				Action: audit.ActionTokenCreate,
-				Note:   "subject=" + body.Subject + " role=" + string(body.Role) + " fingerprint=" + res.Fingerprint,
+				Note:   "subject=" + subject + " role=" + string(body.Role) + " fingerprint=" + res.Fingerprint,
 			})
 		}
 		JSON(w, http.StatusCreated, createTokenResponse{
 			Token:       res.Token,
 			Fingerprint: res.Fingerprint,
-			Subject:     body.Subject,
+			Subject:     subject,
 			Role:        body.Role,
 			ExpiresAt:   expiresAt,
 		})

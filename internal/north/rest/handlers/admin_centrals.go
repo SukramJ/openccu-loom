@@ -44,6 +44,21 @@ func maskCentralRow(row sqlite.CentralRow) sqlite.CentralRow {
 	return row
 }
 
+// writeCentralSecretRefusal answers a store refusal to persist a CCU
+// password that cannot be encrypted at rest, reporting whether it handled
+// err. The condition is the operator's configuration — no master key plus
+// `security.allow_plaintext_secrets: false` — so it is a 400 naming the knob
+// to change, not a 500 that invites a retry of a write that will never
+// succeed.
+func writeCentralSecretRefusal(w http.ResponseWriter, r *http.Request, err error) bool {
+	if !errors.Is(err, sqlite.ErrPlaintextSecretNotAllowed) {
+		return false
+	}
+	problem.Write(w, http.StatusBadRequest,
+		problem.New(problem.TypeValidation, r, "Password cannot be stored", err.Error()))
+	return true
+}
+
 // ListCentrals handles GET /admin/centrals. Returns every central row
 // sorted by name.
 func ListCentrals(svc CentralAdminService) http.HandlerFunc {
@@ -111,6 +126,9 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			row.PasswordPlain = ""
 		}
 		if err := svc.Put(r.Context(), row); err != nil {
+			if writeCentralSecretRefusal(w, r, err) {
+				return
+			}
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central creation failed", err)
 			return
 		}
@@ -162,6 +180,9 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			row.PasswordPlain = existing.PasswordPlain
 		}
 		if err := svc.Put(r.Context(), row); err != nil {
+			if writeCentralSecretRefusal(w, r, err) {
+				return
+			}
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central update failed", err)
 			return
 		}

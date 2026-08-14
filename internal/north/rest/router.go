@@ -686,7 +686,16 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		r.Get("/setup/status", handlers.SetupStatus(d.Setup))
 		r.Post("/setup", handlers.Setup(d.Setup))
 		if d.OIDC != nil {
-			r.Get("/auth/oidc/start", handlers.OIDCStart(d.OIDC))
+			// The start route is pre-auth and mints server-held state on
+			// every call, so it gets the same per-IP speed bump as the login
+			// POST. The callback consumes state instead of creating it and
+			// needs no limiter. Nil limiter ⇒ plain handler (test fixtures).
+			start := handlers.OIDCStart(d.OIDC)
+			if d.LoginRateLimit != nil {
+				r.With(d.LoginRateLimit.Middleware()).Get("/auth/oidc/start", start)
+			} else {
+				r.Get("/auth/oidc/start", start)
+			}
 			r.Get("/auth/oidc/callback", handlers.OIDCCallback(d.OIDC))
 		}
 

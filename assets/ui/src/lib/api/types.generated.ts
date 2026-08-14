@@ -2287,7 +2287,7 @@ export interface paths {
         put?: never;
         /**
          * Finalize first-run onboarding
-         * @description Atomically persists the admin account, locale preference, optional CCU, and optional MQTT broker collected by the SPA onboarding wizard. Unauthenticated by necessity (no admin exists yet) but hard-gated: once any authentication source exists it returns 409, so a second admin can never be registered through this endpoint. On success the SPA returns to the login screen and the operator signs in with the new admin account.
+         * @description Atomically persists the admin account, locale preference, optional CCU, and optional MQTT broker collected by the SPA onboarding wizard. Unauthenticated by necessity (no admin exists yet) but hard-gated: once any authentication source exists it returns 409, so a second admin can never be registered through this endpoint. An operator who closed the surface with `bootstrap.allow_first_run_setup: false` gets 403 instead, regardless of how many users exist. On success the SPA returns to the login screen and the operator signs in with the new admin account.
          */
         post: operations["setup"];
         delete?: never;
@@ -5009,7 +5009,13 @@ export interface paths {
         /** List all users (admin) */
         get: operations["listUsersV2"];
         put?: never;
-        /** Create a new user (admin) */
+        /**
+         * Create a new user (admin)
+         * @description Create-only. Returns 409 Conflict when the username already
+         *     exists (compared case-insensitively — usernames are stored
+         *     lower-cased); change an existing account through
+         *     PATCH /users/{subject}, which also revokes its live sessions.
+         */
         post: operations["createUser"];
         delete?: never;
         options?: never;
@@ -5038,7 +5044,12 @@ export interface paths {
         delete: operations["deleteUser"];
         options?: never;
         head?: never;
-        /** Update user password or role (admin) */
+        /**
+         * Update user password or role (admin)
+         * @description Returns 409 Conflict when the change would demote the last admin
+         *     account. The daemon enforces at least one admin at all times.
+         *     Every live session of the subject is revoked on success.
+         */
         patch: operations["patchUser"];
         trace?: never;
     };
@@ -8981,10 +8992,10 @@ export interface components {
             name: string;
             /** @description Overrides the default XML-RPC/BIN-RPC port. 0 or absent means "use backend default". */
             port?: number;
-            /** @description URL path override for XML-RPC requests. Empty means "use backend default". */
+            /** @description URL path override for XML-RPC requests, for a CCU reached through a reverse proxy that exposes it elsewhere. Must be an absolute path and may not be the bare "/". Empty means "use backend default" ("/RPC2", "/groups" for VirtualDevices). */
             remote_path?: string;
             /**
-             * @description Transport selector. Empty means "derive from interface name".
+             * @description Restates the transport the interface name already implies (CUxD is binrpc, every other interface xmlrpc). The transport is not selectable per interface: a value contradicting the derived one is rejected at config load. Empty means "derive from interface name". `jsonrpc` is accepted by the schema for compatibility but names no transport the daemon can drive, so it is rejected at config load like any other contradiction.
              * @enum {string}
              */
             rpc_type?: "" | "xmlrpc" | "binrpc" | "jsonrpc";
@@ -11331,6 +11342,15 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            /** @description First-run onboarding disabled by bootstrap.allow_first_run_setup */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
@@ -15845,6 +15865,15 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            /** @description A user with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };
@@ -15904,6 +15933,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            /** @description Cannot demote the last admin account */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };

@@ -7548,6 +7548,60 @@ func TestInterfaceURL_InterfaceSpecPortOverride(t *testing.T) {
 	}
 }
 
+// TestInterfaceURL_InterfaceSpecRemotePathOverride pins that the documented
+// per-interface remote_path override actually composes the endpoint. It was
+// parsed, validated, persisted and rendered in the SPA while the composer
+// hard-coded "/RPC2", so an operator whose CCU sits behind a reverse proxy on
+// another path saw every XML-RPC call 404 with no hint that the configured
+// value had been discarded.
+func TestInterfaceURL_InterfaceSpecRemotePathOverride(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		iface hmenum.Interface
+		specs []config.InterfaceSpec
+		want  string
+	}{
+		{
+			name:  "override replaces the /RPC2 default",
+			iface: hmenum.InterfaceHmIPRF,
+			specs: []config.InterfaceSpec{{Name: string(hmenum.InterfaceHmIPRF), RemotePath: "/rpc"}},
+			want:  "/rpc",
+		},
+		{
+			name:  "override replaces the VirtualDevices /groups default",
+			iface: hmenum.InterfaceVirtualDevices,
+			specs: []config.InterfaceSpec{{Name: string(hmenum.InterfaceVirtualDevices), RemotePath: "/proxy/groups"}},
+			want:  "/proxy/groups",
+		},
+		{
+			name:  "another interface's override does not leak",
+			iface: hmenum.InterfaceHmIPRF,
+			specs: []config.InterfaceSpec{{Name: string(hmenum.InterfaceBidCosRF), RemotePath: "/rpc"}},
+			want:  "/RPC2",
+		},
+		{
+			name:  "unset keeps the backend default",
+			iface: hmenum.InterfaceHmIPRF,
+			specs: []config.InterfaceSpec{{Name: string(hmenum.InterfaceHmIPRF)}},
+			want:  "/RPC2",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cc := config.CentralConfig{Host: "192.168.1.1", Interfaces: tc.specs}
+			u, err := interfaceURL(cc, tc.iface)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !strings.HasSuffix(u, tc.want) {
+				t.Errorf("interfaceURL = %q, want path %q", u, tc.want)
+			}
+		})
+	}
+}
+
 // TestInterfacePortOverride_Precedence locks the override precedence:
 // Interfaces[].Port (Config-UI) > Ports map > central-wide Port > none.
 func TestInterfacePortOverride_Precedence(t *testing.T) {

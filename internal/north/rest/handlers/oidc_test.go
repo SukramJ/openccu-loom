@@ -444,3 +444,38 @@ func TestOIDCDeps_PutState_SweepsExpiredEntries(t *testing.T) {
 		t.Fatal("expired state must be swept on the next putState insert")
 	}
 }
+
+// TestOIDCDeps_PutState_IsBoundedIndependentlyOfTheTTL pins the ceiling on
+// the in-flight state map. /auth/oidc/start is pre-auth, so anyone can
+// mint states; the TTL sweep reclaims nothing before five minutes, which
+// let the map grow at the caller's request rate — and every insert scans
+// it under the lock, so genuine logins slow down with it. The oldest flow
+// is dropped instead, because a real login completes in seconds.
+func TestOIDCDeps_PutState_IsBoundedIndependentlyOfTheTTL(t *testing.T) {
+	t.Parallel()
+	d := NewOIDCDeps(nil, nil, nil)
+	fakeNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	d.now = func() time.Time { return fakeNow }
+
+	var newest string
+	for i := range maxOIDCStates + 500 {
+		// Advance well inside the TTL so nothing is reclaimed by the sweep.
+		d.now = func() time.Time { return fakeNow.Add(time.Duration(i) * time.Millisecond) }
+		key, err := d.putState("v", "n")
+		if err != nil {
+			t.Fatalf("putState %d: %v", i, err)
+		}
+		newest = key
+	}
+
+	d.mu.Lock()
+	n := len(d.states)
+	d.mu.Unlock()
+	if n > maxOIDCStates {
+		t.Fatalf("states=%d, want at most %d", n, maxOIDCStates)
+	}
+	// A flow started at the cap must still be completable.
+	if _, _, ok := d.consumeState(newest); !ok {
+		t.Error("the most recent flow was dropped instead of the oldest")
+	}
+}

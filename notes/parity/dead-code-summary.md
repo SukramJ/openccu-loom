@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: f5237dbb
-HEAD: f5237dbb
+Generated: bc8ae09e
+HEAD: bc8ae09e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28315 |
-| Reachable | 5003 |
-| Whitelisted | 20338 |
-| **Unreachable** | **2974** |
+| Total Exported | 28365 |
+| Reachable | 5007 |
+| Whitelisted | 20382 |
+| **Unreachable** | **2976** |
 
 ## Top-20 Packages by Dead Code
 
@@ -199,7 +199,7 @@ HEAD: f5237dbb
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 108 | 28 |
+| internal/store/sqlite | 0 | 108 | 30 |
 | pkg/hmapi | 0 | 157 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
