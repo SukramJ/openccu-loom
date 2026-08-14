@@ -8995,10 +8995,10 @@ export interface components {
             /** @description URL path override for XML-RPC requests, for a CCU reached through a reverse proxy that exposes it elsewhere. Must be an absolute path and may not be the bare "/". Empty means "use backend default" ("/RPC2", "/groups" for VirtualDevices). */
             remote_path?: string;
             /**
-             * @description Restates the transport the interface name already implies (CUxD is binrpc, every other interface xmlrpc). The transport is not selectable per interface: a value contradicting the derived one is rejected at config load. Empty means "derive from interface name".
+             * @description Restates the transport the interface name already implies (CUxD is binrpc, every other interface xmlrpc). The transport is not selectable per interface: a value contradicting the derived one is rejected at config load. Empty means "derive from interface name". `jsonrpc` is accepted by the schema for compatibility but names no transport the daemon can drive, so it is rejected at config load like any other contradiction.
              * @enum {string}
              */
-            rpc_type?: "" | "xmlrpc" | "binrpc";
+            rpc_type?: "" | "xmlrpc" | "binrpc" | "jsonrpc";
         };
         /** @description Per-central visibility overrides. */
         VisibilityConfig: {

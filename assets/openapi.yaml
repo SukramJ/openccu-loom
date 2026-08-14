@@ -11703,12 +11703,15 @@ components:
             "/groups" for VirtualDevices).
         rpc_type:
           type: string
-          enum: ["", xmlrpc, binrpc]
+          enum: ["", xmlrpc, binrpc, jsonrpc]
           description: >
             Restates the transport the interface name already implies (CUxD is
             binrpc, every other interface xmlrpc). The transport is not selectable
             per interface: a value contradicting the derived one is rejected at
-            config load. Empty means "derive from interface name".
+            config load. Empty means "derive from interface name". `jsonrpc` is
+            accepted by the schema for compatibility but names no transport the
+            daemon can drive, so it is rejected at config load like any other
+            contradiction.
 
     VisibilityConfig:
       type: object

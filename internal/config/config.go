@@ -169,6 +169,16 @@ func (s InterfaceSpec) validateRPCType(idx int) error {
 			)
 		}
 		return nil
+	case "jsonrpc":
+		// The value has always been in the north-bound schema, so it stays
+		// there and is refused here instead: no interface is served over
+		// JSON-RPC alone, and accepting it would restore the silent-ignore
+		// this validation exists to remove.
+		return fmt.Errorf(
+			"config: interfaces[%d].rpc_type: %q names no transport the daemon can drive "+
+				"(every interface is served over XML-RPC or BIN-RPC); remove the key",
+			idx, s.RPCType,
+		)
 	default:
 		return fmt.Errorf("config: interfaces[%d].rpc_type: invalid value %q (use xmlrpc or binrpc)", idx, s.RPCType)
 	}
