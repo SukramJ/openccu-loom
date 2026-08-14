@@ -49,6 +49,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ func TestAddNewDeviceManuallyNoDelayedDescriptions(t *testing.T) {
 	dc, _, devs, _, _ := newDCFull(t)
 
 	var acceptorCalled bool
-	acceptFn := func(_ context.Context, _ hmenum.Interface, _ string) error {
+	acceptFn := func(_ context.Context, _ hmtypes.WireInterfaceID, _ string) error {
 		acceptorCalled = true
 		return nil
 	}
@@ -75,7 +76,7 @@ func TestAddNewDeviceManuallyNoDelayedDescriptions(t *testing.T) {
 	// No StoreDelayedDeviceDescriptions call → delayedDescs is empty.
 	err := dc.AddNewDevicesManually(
 		context.Background(),
-		hmenum.InterfaceBidCosRF,
+		wireKey(hmenum.InterfaceBidCosRF),
 		map[string]string{"VCU0000001": ""},
 		acceptFn,
 	)
@@ -105,14 +106,14 @@ func TestAddNewDeviceManuallyPartialBatchContinues(t *testing.T) {
 	created := collectCreated(bus)
 
 	// Only VCU0000001 has delayed descriptions; VCU9999999 has none.
-	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceBidCosRF, []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
 		{Address: "VCU0000001", Type: "HM-Test"},
 		{Address: "VCU0000001:0", Parent: "VCU0000001", Type: "MAINTENANCE"},
 	})
 
 	err := dc.AddNewDevicesManually(
 		context.Background(),
-		hmenum.InterfaceBidCosRF,
+		wireKey(hmenum.InterfaceBidCosRF),
 		map[string]string{
 			"VCU9999999": "", // missing — should be skipped, not fatal
 			"VCU0000001": "",
@@ -127,7 +128,7 @@ func TestAddNewDeviceManuallyPartialBatchContinues(t *testing.T) {
 	if devs.Len() != 1 {
 		t.Fatalf("expected 1 device, got %d", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceBidCosRF, "VCU0000001"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceBidCosRF), "VCU0000001"); !ok {
 		t.Error("VCU0000001 must be in DeviceRegistry after partial batch")
 	}
 	if len(*created) != 1 || (*created)[0].Address != "VCU0000001" {
@@ -154,13 +155,13 @@ func TestRefreshFirmwareDataByStateNilStateReaderIsNoop(t *testing.T) {
 	dc, _, devs, descs, _ := newDCFull(t)
 
 	// Seed one device so the registry is non-empty.
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address:  "VCU0000001",
 		Type:     "HmIP-X",
 		Firmware: "1.0",
 	})
 	devs.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireKey(hmenum.InterfaceHmIPRF),
 		Address:   "VCU0000001",
 		Model:     "HmIP-X",
 	})
@@ -176,7 +177,7 @@ func TestRefreshFirmwareDataByStateNilStateReaderIsNoop(t *testing.T) {
 		context.Background(),
 		fetcher,
 		nil, // stateReader is nil
-		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
 		[]hmenum.DeviceFirmwareState{hmenum.DeviceFirmwareStateNewFirmwareAvailable},
 	)
 	if err != nil {
@@ -201,13 +202,13 @@ func TestRefreshFirmwareDataByStateFetcherUpdatesDescriptions(t *testing.T) {
 	dc, _, devs, descs, _ := newDCFull(t)
 
 	// Seed existing device with firmware 1.0.
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address:  "VCU0000001",
 		Type:     "HmIP-X",
 		Firmware: "1.0",
 	})
 	devs.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireKey(hmenum.InterfaceHmIPRF),
 		Address:   "VCU0000001",
 		Model:     "HmIP-X",
 	})
@@ -230,7 +231,7 @@ func TestRefreshFirmwareDataByStateFetcherUpdatesDescriptions(t *testing.T) {
 		context.Background(),
 		fetcher,
 		stateReader,
-		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
 		[]hmenum.DeviceFirmwareState{hmenum.DeviceFirmwareStateNewFirmwareAvailable},
 	)
 	if err != nil {
@@ -238,7 +239,7 @@ func TestRefreshFirmwareDataByStateFetcherUpdatesDescriptions(t *testing.T) {
 	}
 
 	// Description registry must now reflect firmware 2.0.
-	got, ok := descs.Get(hmenum.InterfaceHmIPRF, "VCU0000001")
+	got, ok := descs.Get(wireKey(hmenum.InterfaceHmIPRF), "VCU0000001")
 	if !ok {
 		t.Fatal("VCU0000001 must still be in description registry after refresh")
 	}
@@ -264,17 +265,17 @@ func TestHandleNewDevicesMissingParentIsStored(t *testing.T) {
 	created := collectCreated(bus)
 
 	// Device description has no PARENT (top-level device entry).
-	dc.HandleNewDevices(context.Background(), hmenum.InterfaceBidCosRF, []hmproto.DeviceDescription{
+	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
 		{Address: "HEQ0128279", Type: "HM-Sec-SC"}, // no Parent
 	})
 
 	if devs.Len() != 1 {
 		t.Fatalf("expected 1 device in registry, got %d", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceBidCosRF, "HEQ0128279"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279"); !ok {
 		t.Error("HEQ0128279 must be in DeviceRegistry")
 	}
-	if got, ok := descs.Get(hmenum.InterfaceBidCosRF, "HEQ0128279"); !ok {
+	if got, ok := descs.Get(wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279"); !ok {
 		t.Error("HEQ0128279 must be in DescriptionRegistry")
 	} else if got.Parent != "" {
 		t.Errorf("Parent=%q, want empty for top-level device", got.Parent)
@@ -300,18 +301,18 @@ func TestStoreDelayedDescriptionsParentKnownChannelsMissing(t *testing.T) {
 	dc, _, devs, descs, _ := newDCFull(t)
 
 	// Parent device already known (exists in registries).
-	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{
 		Address: "HEQ0128279",
 		Type:    "HM-Sec-SC",
 	})
 	devs.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceBidCosRF,
+		Interface: wireKey(hmenum.InterfaceBidCosRF),
 		Address:   "HEQ0128279",
 		Model:     "HM-Sec-SC",
 	})
 
 	// CCU sends newDevices with channel descriptions (factory reset).
-	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceBidCosRF, []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
 		{Address: "HEQ0128279:0", Parent: "HEQ0128279", Type: "MAINTENANCE"},
 		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT"},
 	})
@@ -320,7 +321,7 @@ func TestStoreDelayedDescriptionsParentKnownChannelsMissing(t *testing.T) {
 	// using the parent address as key.
 	err := dc.AddNewDevicesManually(
 		context.Background(),
-		hmenum.InterfaceBidCosRF,
+		wireKey(hmenum.InterfaceBidCosRF),
 		map[string]string{"HEQ0128279": ""},
 		nil,
 	)
@@ -329,10 +330,10 @@ func TestStoreDelayedDescriptionsParentKnownChannelsMissing(t *testing.T) {
 	}
 
 	// The channel descriptions must now be in the description registry.
-	if _, ok := descs.Get(hmenum.InterfaceBidCosRF, "HEQ0128279:0"); !ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279:0"); !ok {
 		t.Error("channel HEQ0128279:0 must be stored after AddNewDevicesManually")
 	}
-	if _, ok := descs.Get(hmenum.InterfaceBidCosRF, "HEQ0128279:1"); !ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279:1"); !ok {
 		t.Error("channel HEQ0128279:1 must be stored after AddNewDevicesManually")
 	}
 }
@@ -356,24 +357,24 @@ func TestStoreDelayedDescriptionsIsIdempotentPerAddress(t *testing.T) {
 		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT"},
 	}
 
-	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceBidCosRF, batch)
-	first := len(dc.delayedDescs[string(hmenum.InterfaceBidCosRF)]["HEQ0128279"])
+	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), batch)
+	first := len(dc.delayedDescs[string(wireKey(hmenum.InterfaceBidCosRF))]["HEQ0128279"])
 	if first != len(batch) {
 		t.Fatalf("first announcement stored %d descriptions, want %d", first, len(batch))
 	}
 
 	// The CCU re-announces the same inventory after a reconnect.
-	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceBidCosRF, batch)
-	if got := len(dc.delayedDescs[string(hmenum.InterfaceBidCosRF)]["HEQ0128279"]); got != first {
+	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), batch)
+	if got := len(dc.delayedDescs[string(wireKey(hmenum.InterfaceBidCosRF))]["HEQ0128279"]); got != first {
 		t.Fatalf("re-announcement grew the delayed inbox to %d descriptions, want %d — "+
 			"the inbox must be keyed by address, not appended to", got, first)
 	}
 
 	// A changed description for an already-pending address must win.
-	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceBidCosRF, []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
 		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT", Firmware: "2.0"},
 	})
-	stored := dc.delayedDescs[string(hmenum.InterfaceBidCosRF)]["HEQ0128279"]
+	stored := dc.delayedDescs[string(wireKey(hmenum.InterfaceBidCosRF))]["HEQ0128279"]
 	if len(stored) != first {
 		t.Fatalf("update of a pending address grew the inbox to %d, want %d", len(stored), first)
 	}
@@ -402,7 +403,7 @@ type fakeFirmwareStateReader struct {
 	states map[string]hmenum.DeviceFirmwareState
 }
 
-func (r *fakeFirmwareStateReader) DeviceFirmwareStates(_ hmenum.Interface) map[string]hmenum.DeviceFirmwareState {
+func (r *fakeFirmwareStateReader) DeviceFirmwareStates(_ hmtypes.WireInterfaceID) map[string]hmenum.DeviceFirmwareState {
 	return r.states
 }
 
@@ -414,7 +415,7 @@ type stubListerHooked struct {
 	onListDevices func()
 }
 
-func (s *stubListerHooked) ListDevices(ctx context.Context, iface hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+func (s *stubListerHooked) ListDevices(ctx context.Context, iface hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
 	if s.onListDevices != nil {
 		s.onListDevices()
 	}

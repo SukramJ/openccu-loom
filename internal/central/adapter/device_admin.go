@@ -14,7 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -104,7 +104,7 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string, re
 		// and the persistence sink was never asked to drop the SQLite rows —
 		// which the next boot then rehydrated into a device the CCU no longer
 		// reports. Snapshot the channels before RemoveDevice tears them down.
-		iface := hmenum.Interface(dev.InterfaceID)
+		iface := hmtypes.ParseWireInterfaceID(dev.InterfaceID)
 		channels := dev.Channels()
 		u.RemoveDevice(address)
 		u.DeviceRegistry.Remove(iface, address)

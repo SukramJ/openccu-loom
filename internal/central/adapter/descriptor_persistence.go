@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // DescriptorStores bundles the SQLite-backed descriptor persistence.
@@ -63,11 +64,11 @@ func newDescriptorSink(centralName string, stores DescriptorStores, logger *slog
 	}
 }
 
-func devHashKey(iface hmenum.Interface, address string) string {
+func devHashKey(iface hmtypes.WireInterfaceID, address string) string {
 	return string(iface) + "\x00" + address
 }
 
-func psHashKey(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey) string {
+func psHashKey(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey) string {
 	return string(iface) + "\x00" + channelAddress + "\x00" + string(psKey)
 }
 
@@ -90,7 +91,7 @@ func (s *descriptorSink) forget(m map[string]string, key string) {
 }
 
 // PutDescription implements [registry.DescriptionSink].
-func (s *descriptorSink) PutDescription(iface hmenum.Interface, desc hmproto.DeviceDescription) {
+func (s *descriptorSink) PutDescription(iface hmtypes.WireInterfaceID, desc hmproto.DeviceDescription) {
 	if s.stores.Devices == nil {
 		return
 	}
@@ -120,7 +121,7 @@ func (s *descriptorSink) PutDescription(iface hmenum.Interface, desc hmproto.Dev
 }
 
 // DeleteDescription implements [registry.DescriptionSink].
-func (s *descriptorSink) DeleteDescription(iface hmenum.Interface, address string) {
+func (s *descriptorSink) DeleteDescription(iface hmtypes.WireInterfaceID, address string) {
 	if s.stores.Devices == nil {
 		return
 	}
@@ -134,7 +135,7 @@ func (s *descriptorSink) DeleteDescription(iface hmenum.Interface, address strin
 }
 
 // PutParamset implements [registry.ParamsetSink].
-func (s *descriptorSink) PutParamset(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset) {
+func (s *descriptorSink) PutParamset(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset) {
 	if s.stores.Paramsets == nil {
 		return
 	}
@@ -162,7 +163,7 @@ func (s *descriptorSink) PutParamset(iface hmenum.Interface, channelAddress stri
 }
 
 // DeleteChannelParamsets implements [registry.ParamsetSink].
-func (s *descriptorSink) DeleteChannelParamsets(iface hmenum.Interface, channelAddress string) {
+func (s *descriptorSink) DeleteChannelParamsets(iface hmtypes.WireInterfaceID, channelAddress string) {
 	if s.stores.Paramsets == nil {
 		return
 	}
@@ -223,7 +224,7 @@ func WireDescriptorPersistence(ctx context.Context, unit *central.Unit, stores D
 			}
 			for i := range recs {
 				rec := &recs[i]
-				iface := hmenum.Interface(rec.InterfaceID)
+				iface := hmtypes.ParseWireInterfaceID(rec.InterfaceID)
 				unit.DescRegistry.Put(iface, rec.Description)
 				// Seed the change-detection hash so the boot re-pull's
 				// identical Put does not rewrite the row.
@@ -240,7 +241,7 @@ func WireDescriptorPersistence(ctx context.Context, unit *central.Unit, stores D
 		}
 		for i := range recs {
 			rec := &recs[i]
-			iface := hmenum.Interface(rec.InterfaceID)
+			iface := hmtypes.ParseWireInterfaceID(rec.InterfaceID)
 			// Put, not Add: rows were persisted post-normalisation and
 			// post-patching, so re-applying patches here would double-patch.
 			unit.ParamsetReg.Put(iface, rec.ChannelAddress, rec.ParamsetKey, rec.Paramset)

@@ -121,7 +121,7 @@ func TestInitialPullDetectsAddedDevice(t *testing.T) {
 
 	if _, err := dc.InitialPull(context.Background(), listerOf(
 		device("AA", "HmIP-X", "1.0"),
-	), hmenum.InterfaceHmIPRF); err != nil {
+	), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	if devs.Len() != 1 {
@@ -131,7 +131,7 @@ func TestInitialPullDetectsAddedDevice(t *testing.T) {
 	rep, err := dc.InitialPull(context.Background(), listerOf(
 		device("AA", "HmIP-X", "1.0"),
 		device("BB", "HmIP-Y", "2.0"),
-	), hmenum.InterfaceHmIPRF)
+	), wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestInitialPullCombinedDiff(t *testing.T) {
 		device("AA", "HmIP-X", "1.0"),
 		device("BB", "HmIP-Y", "1.0"),
 		device("CC", "HmIP-Z", "1.0"),
-	), hmenum.InterfaceHmIPRF); err != nil {
+	), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	if devs.Len() != 3 {
@@ -172,7 +172,7 @@ func TestInitialPullCombinedDiff(t *testing.T) {
 		device("AA", "HmIP-X", "1.0"),
 		device("BB", "HmIP-Y", "2.0"), // firmware bumped
 		device("DD", "HmIP-W", "1.0"), // new
-	), hmenum.InterfaceHmIPRF)
+	), wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,10 +189,10 @@ func TestInitialPullCombinedDiff(t *testing.T) {
 	if devs.Len() != 3 {
 		t.Fatalf("devs=%d after combined diff, want 3", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "CC"); ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "CC"); ok {
 		t.Fatal("CC should have been removed from DeviceRegistry")
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "DD"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "DD"); !ok {
 		t.Fatal("DD should be in DeviceRegistry after add")
 	}
 }
@@ -207,12 +207,12 @@ func TestInitialPullReportInterfaceField(t *testing.T) {
 
 	rep, err := dc.InitialPull(context.Background(), listerOf(
 		device("AA", "HmIP-X", "1.0"),
-	), hmenum.InterfaceBidCosRF)
+	), wireKey(hmenum.InterfaceBidCosRF))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.Interface != hmenum.InterfaceBidCosRF {
-		t.Fatalf("PullReport.Interface=%v, want %v", rep.Interface, hmenum.InterfaceBidCosRF)
+	if rep.Interface != wireKey(hmenum.InterfaceBidCosRF) {
+		t.Fatalf("PullReport.Interface=%v, want %v", rep.Interface, wireKey(hmenum.InterfaceBidCosRF))
 	}
 }
 
@@ -233,14 +233,14 @@ func TestInitialPullEmptyResponseClearsRegistry(t *testing.T) {
 		device("A4", "HmIP-X", "1.0"),
 		device("A5", "HmIP-X", "1.0"),
 	)
-	if _, err := dc.InitialPull(context.Background(), full, hmenum.InterfaceHmIPRF); err != nil {
+	if _, err := dc.InitialPull(context.Background(), full, wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	if devs.Len() != 5 {
 		t.Fatalf("seeded devs=%d, want 5", devs.Len())
 	}
 
-	rep, err := dc.InitialPull(context.Background(), listerOf(), hmenum.InterfaceHmIPRF)
+	rep, err := dc.InitialPull(context.Background(), listerOf(), wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,13 +270,13 @@ func TestInitialPullMultiInterfaceIsolation(t *testing.T) {
 	// Seed HmIP-RF with device A.
 	if _, err := dc.InitialPull(ctx, listerOf(
 		device("AA", "HmIP-X", "1.0"),
-	), hmenum.InterfaceHmIPRF); err != nil {
+	), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	// Seed BidCos-RF with device B.
 	if _, err := dc.InitialPull(ctx, listerOf(
 		device("BB", "HmIP-Y", "1.0"),
-	), hmenum.InterfaceBidCosRF); err != nil {
+	), wireKey(hmenum.InterfaceBidCosRF)); err != nil {
 		t.Fatal(err)
 	}
 	if devs.Len() != 2 {
@@ -284,7 +284,7 @@ func TestInitialPullMultiInterfaceIsolation(t *testing.T) {
 	}
 
 	// Remove all from HmIP-RF: B on BidCos-RF must survive.
-	rep, err := dc.InitialPull(ctx, listerOf(), hmenum.InterfaceHmIPRF)
+	rep, err := dc.InitialPull(ctx, listerOf(), wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestInitialPullMultiInterfaceIsolation(t *testing.T) {
 	if devs.Len() != 1 {
 		t.Fatalf("devs=%d after HmIP-RF cleared, want 1 (BidCos-RF device)", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceBidCosRF, "BB"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceBidCosRF), "BB"); !ok {
 		t.Fatal("BB on BidCos-RF must not be removed when HmIP-RF is cleared")
 	}
 }
@@ -312,14 +312,14 @@ func TestRefreshAfterPairAddsSingleDevice(t *testing.T) {
 	// Seed the registry with one existing device.
 	if _, err := dc.InitialPull(ctx, listerOf(
 		device("OLD", "HmIP-X", "1.0"),
-	), hmenum.InterfaceHmIPRF); err != nil {
+	), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	// RefreshAfterPair with lister that includes both old and new.
 	rep, err := dc.RefreshAfterPair(ctx, listerOf(
 		device("OLD", "HmIP-X", "1.0"),
 		device("NEW", "HmIP-Y", "2.0"),
-	), hmenum.InterfaceHmIPRF)
+	), wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,10 +329,10 @@ func TestRefreshAfterPairAddsSingleDevice(t *testing.T) {
 	if devs.Len() != 2 {
 		t.Fatalf("devs=%d after pair, want 2", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "NEW"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "NEW"); !ok {
 		t.Fatal("NEW device not in registry after RefreshAfterPair")
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "OLD"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "OLD"); !ok {
 		t.Fatal("OLD device missing after RefreshAfterPair")
 	}
 	// Only NEW should fire a DeviceCreatedEvent (OLD was already known).
@@ -355,27 +355,27 @@ func TestRefreshAfterUnpairRemovesSingleDevice(t *testing.T) {
 	if _, err := dc.InitialPull(ctx, listerOf(
 		device("KEEP", "HmIP-X", "1.0"),
 		device("DROP", "HmIP-Y", "1.0"),
-	), hmenum.InterfaceHmIPRF); err != nil {
+	), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	if devs.Len() != 2 {
 		t.Fatalf("seeded devs=%d, want 2", devs.Len())
 	}
 
-	wasRemoved := dc.RefreshAfterUnpair(ctx, hmenum.InterfaceHmIPRF, "DROP")
+	wasRemoved := dc.RefreshAfterUnpair(ctx, wireKey(hmenum.InterfaceHmIPRF), "DROP")
 	if !wasRemoved {
 		t.Fatal("RefreshAfterUnpair must return true for a known device")
 	}
 	if devs.Len() != 1 {
 		t.Fatalf("devs=%d after unpair, want 1", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "DROP"); ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "DROP"); ok {
 		t.Fatal("DROP still in DeviceRegistry after unpair")
 	}
-	if _, ok := descs.Get(hmenum.InterfaceHmIPRF, "DROP"); ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceHmIPRF), "DROP"); ok {
 		t.Fatal("DROP still in DeviceDescriptionRegistry after unpair")
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "KEEP"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "KEEP"); !ok {
 		t.Fatal("KEEP wrongly removed by RefreshAfterUnpair")
 	}
 	if len(*removed) != 1 || (*removed)[0].Address != "DROP" {
@@ -396,10 +396,10 @@ func TestSameDescriptionDifferentTypeMeansUpdate(t *testing.T) {
 	}
 
 	dc, _, _, _, _ := newDCFull(t)
-	if _, err := dc.InitialPull(context.Background(), listerOf(a), hmenum.InterfaceHmIPRF); err != nil {
+	if _, err := dc.InitialPull(context.Background(), listerOf(a), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
-	rep, err := dc.InitialPull(context.Background(), listerOf(b), hmenum.InterfaceHmIPRF)
+	rep, err := dc.InitialPull(context.Background(), listerOf(b), wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,10 +446,10 @@ func TestSameDescriptionDifferentChildrenOrderMeansUpdate(t *testing.T) {
 	}
 
 	dc, _, _, _, _ := newDCFull(t)
-	if _, err := dc.InitialPull(context.Background(), listerOf(a), hmenum.InterfaceHmIPRF); err != nil {
+	if _, err := dc.InitialPull(context.Background(), listerOf(a), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
-	rep, err := dc.InitialPull(context.Background(), listerOf(b), hmenum.InterfaceHmIPRF)
+	rep, err := dc.InitialPull(context.Background(), listerOf(b), wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +472,7 @@ func TestInitialPullChannelDescUpdateCountedSeparately(t *testing.T) {
 	if _, err := dc.InitialPull(ctx, listerOf(
 		device("AA", "HmIP-X", "1.0", "AA:0"),
 		channel("AA:0", "AA", "MAINTENANCE"),
-	), hmenum.InterfaceHmIPRF); err != nil {
+	), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	if devs.Len() != 1 {
@@ -483,7 +483,7 @@ func TestInitialPullChannelDescUpdateCountedSeparately(t *testing.T) {
 	rep, err := dc.InitialPull(ctx, listerOf(
 		device("AA", "HmIP-X", "1.0", "AA:0"),
 		channel("AA:0", "AA", "NEW_CHANNEL_TYPE"),
-	), hmenum.InterfaceHmIPRF)
+	), wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -506,7 +506,7 @@ func TestHandleNewDevicesTopLevelVsChannel(t *testing.T) {
 	dc, bus, devs, descs, _ := newDCFull(t)
 	created := collectCreated(bus)
 
-	dc.HandleNewDevices(context.Background(), hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		device("AA", "HmIP-X", "1.0", "AA:0", "AA:1"),
 		channel("AA:0", "AA", "MAINTENANCE"),
 		channel("AA:1", "AA", "CLIMATECONTROL"),
@@ -533,7 +533,7 @@ func TestHandleDeleteDevicesEmitsEvents(t *testing.T) {
 	removed := collectRemoved(bus)
 	ctx := context.Background()
 
-	dc.HandleNewDevices(ctx, hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.HandleNewDevices(ctx, wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		device("AA", "HmIP-X", "1.0", "AA:0"),
 		channel("AA:0", "AA", "MAINTENANCE"),
 		device("BB", "HmIP-Y", "1.0"),
@@ -542,15 +542,15 @@ func TestHandleDeleteDevicesEmitsEvents(t *testing.T) {
 		t.Fatalf("seeded devs=%d, want 2", devs.Len())
 	}
 
-	dc.HandleDeleteDevices(ctx, hmenum.InterfaceHmIPRF, []string{"AA", "AA:0"})
+	dc.HandleDeleteDevices(ctx, wireKey(hmenum.InterfaceHmIPRF), []string{"AA", "AA:0"})
 
 	if devs.Len() != 1 {
 		t.Fatalf("devs=%d after delete AA, want 1 (BB remains)", devs.Len())
 	}
-	if _, ok := descs.Get(hmenum.InterfaceHmIPRF, "AA"); ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceHmIPRF), "AA"); ok {
 		t.Fatal("AA description should be deleted")
 	}
-	if _, ok := descs.Get(hmenum.InterfaceHmIPRF, "AA:0"); ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceHmIPRF), "AA:0"); ok {
 		t.Fatal("AA:0 description should be deleted")
 	}
 	// Only the top-level device emits a DeviceRemovedEvent; channel
@@ -570,7 +570,7 @@ func TestHandleDeleteDevicesUnknownAddressIsNoop(t *testing.T) {
 	var count atomic.Int32
 	events.Subscribe(bus, func(_ hmevent.DeviceRemovedEvent) { count.Add(1) })
 
-	dc.HandleDeleteDevices(context.Background(), hmenum.InterfaceHmIPRF, []string{"GHOST"})
+	dc.HandleDeleteDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []string{"GHOST"})
 	if count.Load() != 0 {
 		t.Fatal("deleting unknown address must not emit DeviceRemovedEvent")
 	}
@@ -588,7 +588,7 @@ func TestCheckForNewDeviceAddressesAllNewOnEmptyRegistry(t *testing.T) {
 		device("AA", "HmIP-X", "1.0"),
 		channel("AA:0", "AA", "MAINTENANCE"),
 	}
-	got := dc.CheckForNewDeviceAddresses(hmenum.InterfaceHmIPRF, snapshot)
+	got := dc.CheckForNewDeviceAddresses(wireKey(hmenum.InterfaceHmIPRF), snapshot)
 	if len(got) != 2 {
 		t.Fatalf("all-new snapshot: got %v, want [AA AA:0]", got)
 	}
@@ -609,14 +609,14 @@ func TestCheckForNewDeviceAddressesAllKnownReturnsEmpty(t *testing.T) {
 	if _, err := dc.InitialPull(ctx, listerOf(
 		device("AA", "HmIP-X", "1.0"),
 		channel("AA:0", "AA", "MAINTENANCE"),
-	), hmenum.InterfaceHmIPRF); err != nil {
+	), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := []hmproto.DeviceDescription{
 		device("AA", "HmIP-X", "1.0"),
 		channel("AA:0", "AA", "MAINTENANCE"),
 	}
-	got := dc.CheckForNewDeviceAddresses(hmenum.InterfaceHmIPRF, snapshot)
+	got := dc.CheckForNewDeviceAddresses(wireKey(hmenum.InterfaceHmIPRF), snapshot)
 	if len(got) != 0 {
 		t.Fatalf("all-known snapshot: got %v, want empty", got)
 	}
@@ -629,9 +629,9 @@ func TestCheckForNewDeviceAddressesAllKnownReturnsEmpty(t *testing.T) {
 func TestDeviceRegistryClear(t *testing.T) {
 	t.Parallel()
 	r := registry.NewDeviceRegistry()
-	r.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A"})
-	r.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "B"})
-	r.Put(registry.DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "C"})
+	r.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceHmIPRF), Address: "A"})
+	r.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceHmIPRF), Address: "B"})
+	r.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceBidCosRF), Address: "C"})
 	if r.Len() != 3 {
 		t.Fatalf("before Clear: len=%d want 3", r.Len())
 	}
@@ -639,7 +639,7 @@ func TestDeviceRegistryClear(t *testing.T) {
 	if r.Len() != 0 {
 		t.Fatalf("after Clear: len=%d want 0", r.Len())
 	}
-	if _, ok := r.Get(hmenum.InterfaceHmIPRF, "A"); ok {
+	if _, ok := r.Get(wireKey(hmenum.InterfaceHmIPRF), "A"); ok {
 		t.Fatal("entry A survived Clear")
 	}
 }
@@ -651,14 +651,14 @@ func TestDeviceRegistryClear(t *testing.T) {
 func TestDeviceRegistryRemoveIdempotent(t *testing.T) {
 	t.Parallel()
 	r := registry.NewDeviceRegistry()
-	r.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A"})
-	if !r.Remove(hmenum.InterfaceHmIPRF, "A") {
+	r.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceHmIPRF), Address: "A"})
+	if !r.Remove(wireKey(hmenum.InterfaceHmIPRF), "A") {
 		t.Fatal("Remove existing must return true")
 	}
-	if r.Remove(hmenum.InterfaceHmIPRF, "A") {
+	if r.Remove(wireKey(hmenum.InterfaceHmIPRF), "A") {
 		t.Fatal("Remove missing must return false")
 	}
-	if r.Remove(hmenum.InterfaceHmIPRF, "GHOST") {
+	if r.Remove(wireKey(hmenum.InterfaceHmIPRF), "GHOST") {
 		t.Fatal("Remove never-existing must return false")
 	}
 }
@@ -670,9 +670,9 @@ func TestDeviceRegistryRemoveIdempotent(t *testing.T) {
 func TestDeviceRegistryListSortOrder(t *testing.T) {
 	t.Parallel()
 	r := registry.NewDeviceRegistry()
-	r.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "ZZZ"})
-	r.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "AAA"})
-	r.Put(registry.DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "MMM"})
+	r.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceHmIPRF), Address: "ZZZ"})
+	r.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceHmIPRF), Address: "AAA"})
+	r.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceBidCosRF), Address: "MMM"})
 
 	list := r.List()
 	if len(list) != 3 {
@@ -702,7 +702,7 @@ func TestConcurrentRefreshAfterUnpairExactlyOneWins(t *testing.T) {
 
 	if _, err := dc.InitialPull(ctx, listerOf(
 		device("AA", "HmIP-X", "1.0"),
-	), hmenum.InterfaceHmIPRF); err != nil {
+	), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -713,7 +713,7 @@ func TestConcurrentRefreshAfterUnpairExactlyOneWins(t *testing.T) {
 	for i := range n {
 		go func() {
 			defer wg.Done()
-			results[i] = dc.RefreshAfterUnpair(ctx, hmenum.InterfaceHmIPRF, "AA")
+			results[i] = dc.RefreshAfterUnpair(ctx, wireKey(hmenum.InterfaceHmIPRF), "AA")
 		}()
 	}
 	wg.Wait()
@@ -749,7 +749,7 @@ func TestInitialPullPullReportStableUnderOrder(t *testing.T) {
 	run := func(order []string) map[string]bool {
 		dc, bus, _, _, _ := newDCFull(t)
 		created := collectCreated(bus)
-		if _, err := dc.InitialPull(ctx, listerOf(makeDescs(order)...), hmenum.InterfaceHmIPRF); err != nil {
+		if _, err := dc.InitialPull(ctx, listerOf(makeDescs(order)...), wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 			t.Fatalf("pull err=%v", err)
 		}
 		set := make(map[string]bool, len(*created))
@@ -784,20 +784,20 @@ func TestInitialPullPullReportStableUnderOrder(t *testing.T) {
 func TestDeviceDescriptionRegistryAllIsolation(t *testing.T) {
 	t.Parallel()
 	r := registry.NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "A"})
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "B"})
-	r.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "C"})
+	r.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{Address: "A"})
+	r.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{Address: "B"})
+	r.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{Address: "C"})
 
-	hmip := r.All(hmenum.InterfaceHmIPRF)
+	hmip := r.All(wireKey(hmenum.InterfaceHmIPRF))
 	if len(hmip) != 2 {
 		t.Fatalf("All(HmIP-RF)=%d, want 2", len(hmip))
 	}
-	bidcos := r.All(hmenum.InterfaceBidCosRF)
+	bidcos := r.All(wireKey(hmenum.InterfaceBidCosRF))
 	if len(bidcos) != 1 || bidcos[0].Address != "C" {
 		t.Fatalf("All(BidCos-RF)=%v, want [C]", bidcos)
 	}
 	// Unknown interface → empty.
-	unknown := r.All(hmenum.InterfaceCUxD)
+	unknown := r.All(wireKey(hmenum.InterfaceCUxD))
 	if len(unknown) != 0 {
 		t.Fatalf("All(CUxD)=%v, want empty", unknown)
 	}
@@ -819,7 +819,7 @@ func TestHandleNewDevicesEmitsDataFetchCompletedEvent(t *testing.T) {
 		mu.Unlock()
 	})
 
-	dc.HandleNewDevices(context.Background(), hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		device("AA", "HmIP-X", "1.0", "AA:0"),
 		channel("AA:0", "AA", "MAINTENANCE"),
 	})
@@ -840,8 +840,8 @@ func TestHandleNewDevicesEmitsDataFetchCompletedEvent(t *testing.T) {
 	if ev.Count != 1 {
 		t.Fatalf("DataFetchCompletedEvent.Count=%d, want 1 (only top-level devices)", ev.Count)
 	}
-	if ev.InterfaceID != string(hmenum.InterfaceHmIPRF) {
-		t.Fatalf("DataFetchCompletedEvent.InterfaceID=%q, want %q", ev.InterfaceID, hmenum.InterfaceHmIPRF)
+	if ev.InterfaceID != string(wireKey(hmenum.InterfaceHmIPRF)) {
+		t.Fatalf("DataFetchCompletedEvent.InterfaceID=%q, want %q", ev.InterfaceID, wireKey(hmenum.InterfaceHmIPRF))
 	}
 	if ev.CentralName != "c1" {
 		t.Fatalf("DataFetchCompletedEvent.CentralName=%q, want %q", ev.CentralName, "c1")
@@ -857,7 +857,7 @@ func TestHandleNewDevicesNoEventOnEmptySlice(t *testing.T) {
 	var count atomic.Int32
 	events.Subscribe(bus, func(_ hmevent.DataFetchCompletedEvent) { count.Add(1) })
 
-	dc.HandleNewDevices(context.Background(), hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{})
+	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{})
 	if count.Load() != 0 {
 		t.Fatal("empty descriptions must not emit DataFetchCompletedEvent")
 	}
@@ -883,7 +883,7 @@ func TestHandleNewDevicesCacheWorkerMarksDirty(t *testing.T) {
 
 	// Trigger HandleNewDevices — this should emit DataFetchCompletedEvent
 	// which the CacheCoordinator receives and marks dirty.
-	dc.HandleNewDevices(context.Background(), hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		device("BB", "HmIP-Y", "1.0"),
 	})
 

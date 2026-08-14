@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // replaceRecordingOperations wraps fakeOperations (defined in
@@ -238,7 +239,7 @@ func TestReplaceDeviceEligibleInterfaceCallsBackend(t *testing.T) {
 		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceBidCosRF), Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC",
 	})
 	unit.ModelRegistry.Put(dev)
-	unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC"})
+	unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: hmtypes.ParseWireInterfaceID(dev.InterfaceID), Address: "OLD001", Model: "HM-Sec-SC"})
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	w := client.NewValueWriter()
@@ -265,7 +266,7 @@ func TestReplaceDeviceIneligibleInterfaceRejectedBeforeWireCall(t *testing.T) {
 		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF), Interface: hmenum.InterfaceHmIPRF, Address: "OLD001", Model: "HmIP-STH",
 	})
 	unit.ModelRegistry.Put(dev)
-	unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "OLD001", Model: "HmIP-STH"})
+	unit.DeviceRegistry.Put(registry.DeviceEntry{Interface: hmtypes.ParseWireInterfaceID(dev.InterfaceID), Address: "OLD001", Model: "HmIP-STH"})
 
 	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 	w := client.NewValueWriter()

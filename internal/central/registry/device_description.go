@@ -9,13 +9,13 @@ package registry
 import (
 	"sync"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // DeviceDescriptionKey locates a description inside the registry.
 type DeviceDescriptionKey struct {
-	Interface hmenum.Interface
+	Interface hmtypes.WireInterfaceID
 	Address   string
 }
 
@@ -26,9 +26,9 @@ type DeviceDescriptionKey struct {
 // registry lock, and must treat persistence as best-effort.
 type DescriptionSink interface {
 	// PutDescription persists the normalised description.
-	PutDescription(iface hmenum.Interface, desc hmproto.DeviceDescription)
+	PutDescription(iface hmtypes.WireInterfaceID, desc hmproto.DeviceDescription)
 	// DeleteDescription removes the persisted description.
-	DeleteDescription(iface hmenum.Interface, address string)
+	DeleteDescription(iface hmtypes.WireInterfaceID, address string)
 }
 
 // DeviceDescriptionRegistry caches device descriptions per interface.
@@ -56,7 +56,7 @@ func (r *DeviceDescriptionRegistry) SetSink(s DescriptionSink) {
 
 // Put stores desc under (iface, desc.Address). The description is
 // normalised before storage.
-func (r *DeviceDescriptionRegistry) Put(iface hmenum.Interface, desc hmproto.DeviceDescription) {
+func (r *DeviceDescriptionRegistry) Put(iface hmtypes.WireInterfaceID, desc hmproto.DeviceDescription) {
 	normalised := hmproto.NormalizeDevice(desc)
 	r.mu.Lock()
 	r.items[DeviceDescriptionKey{Interface: iface, Address: normalised.Address}] = normalised
@@ -68,7 +68,7 @@ func (r *DeviceDescriptionRegistry) Put(iface hmenum.Interface, desc hmproto.Dev
 }
 
 // Get returns the stored description and reports whether it exists.
-func (r *DeviceDescriptionRegistry) Get(iface hmenum.Interface, address string) (hmproto.DeviceDescription, bool) {
+func (r *DeviceDescriptionRegistry) Get(iface hmtypes.WireInterfaceID, address string) (hmproto.DeviceDescription, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	d, ok := r.items[DeviceDescriptionKey{Interface: iface, Address: address}]
@@ -76,7 +76,7 @@ func (r *DeviceDescriptionRegistry) Get(iface hmenum.Interface, address string) 
 }
 
 // Delete removes a description. Returns true when the entry was present.
-func (r *DeviceDescriptionRegistry) Delete(iface hmenum.Interface, address string) bool {
+func (r *DeviceDescriptionRegistry) Delete(iface hmtypes.WireInterfaceID, address string) bool {
 	r.mu.Lock()
 	key := DeviceDescriptionKey{Interface: iface, Address: address}
 	_, ok := r.items[key]
@@ -92,7 +92,7 @@ func (r *DeviceDescriptionRegistry) Delete(iface hmenum.Interface, address strin
 }
 
 // All returns a snapshot of descriptions for iface, ordered by address.
-func (r *DeviceDescriptionRegistry) All(iface hmenum.Interface) []hmproto.DeviceDescription {
+func (r *DeviceDescriptionRegistry) All(iface hmtypes.WireInterfaceID) []hmproto.DeviceDescription {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]hmproto.DeviceDescription, 0, len(r.items))
@@ -121,7 +121,7 @@ func (r *DeviceDescriptionRegistry) Len() int {
 
 // GetAddresses returns the set of all cached addresses for iface,
 // or all addresses when iface is the zero value.
-func (r *DeviceDescriptionRegistry) GetAddresses(iface hmenum.Interface) []string {
+func (r *DeviceDescriptionRegistry) GetAddresses(iface hmtypes.WireInterfaceID) []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var out []string
@@ -136,7 +136,7 @@ func (r *DeviceDescriptionRegistry) GetAddresses(iface hmenum.Interface) []strin
 // GetDeviceWithChannels returns the device description plus all channel
 // descriptions for (iface, deviceAddress). If the device description
 // is not found the returned map is empty.
-func (r *DeviceDescriptionRegistry) GetDeviceWithChannels(iface hmenum.Interface, deviceAddress string) map[string]hmproto.DeviceDescription {
+func (r *DeviceDescriptionRegistry) GetDeviceWithChannels(iface hmtypes.WireInterfaceID, deviceAddress string) map[string]hmproto.DeviceDescription {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make(map[string]hmproto.DeviceDescription)
@@ -158,14 +158,14 @@ func (r *DeviceDescriptionRegistry) GetDeviceWithChannels(iface hmenum.Interface
 
 // GetInterfaceIDs returns the distinct interface values that have at
 // least one cached description.
-func (r *DeviceDescriptionRegistry) GetInterfaceIDs() []hmenum.Interface {
+func (r *DeviceDescriptionRegistry) GetInterfaceIDs() []hmtypes.WireInterfaceID {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	seen := make(map[hmenum.Interface]struct{})
+	seen := make(map[hmtypes.WireInterfaceID]struct{})
 	for k := range r.items {
 		seen[k.Interface] = struct{}{}
 	}
-	out := make([]hmenum.Interface, 0, len(seen))
+	out := make([]hmtypes.WireInterfaceID, 0, len(seen))
 	for iface := range seen {
 		out = append(out, iface)
 	}
@@ -188,7 +188,7 @@ func (r *DeviceDescriptionRegistry) GetModel(deviceAddress string) string {
 }
 
 // HasDeviceDescriptions reports whether any descriptions are cached for iface.
-func (r *DeviceDescriptionRegistry) HasDeviceDescriptions(iface hmenum.Interface) bool {
+func (r *DeviceDescriptionRegistry) HasDeviceDescriptions(iface hmtypes.WireInterfaceID) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for k := range r.items {

@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ConfigurationCoordinator centralises the read paths north-bound adapters
@@ -65,7 +66,7 @@ func NewConfigurationCoordinator(
 // downstream code may interpret an empty ValueList as "no constraint"
 // even though no descriptor was found.
 func (c *ConfigurationCoordinator) GetParameterData(
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	channelAddress string,
 	paramsetKey hmenum.ParamsetKey,
 	parameter string,
@@ -94,7 +95,7 @@ func (c *ConfigurationCoordinator) GetParameterData(
 // Patches override individual parameters — the returned map is a fresh copy,
 // safe to mutate by the caller.
 func (c *ConfigurationCoordinator) GetChannelParamset(
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	channelAddress string,
 	paramsetKey hmenum.ParamsetKey,
 ) (hmproto.Paramset, bool) {
@@ -122,7 +123,7 @@ func (c *ConfigurationCoordinator) GetChannelParamset(
 // HasParameter reports whether the parameter is declared on the given channel
 // + paramset (registry or patch).
 func (c *ConfigurationCoordinator) HasParameter(
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	channelAddress string,
 	paramsetKey hmenum.ParamsetKey,
 	parameter string,
@@ -208,7 +209,7 @@ type MaintenanceData struct {
 // GetAllParamsetDescriptions returns every cached paramset description for a
 // specific channel, keyed by paramset key.
 func (c *ConfigurationCoordinator) GetAllParamsetDescriptions(
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	channelAddress string,
 ) map[hmenum.ParamsetKey]hmproto.Paramset {
 	if c.paramsets == nil {
@@ -219,7 +220,7 @@ func (c *ConfigurationCoordinator) GetAllParamsetDescriptions(
 
 // GetConfigurableDevices returns every device that has at least one channel
 // with configurable paramset parameters.
-func (c *ConfigurationCoordinator) GetConfigurableDevices(iface hmenum.Interface) []ConfigurableDevice {
+func (c *ConfigurationCoordinator) GetConfigurableDevices(iface hmtypes.WireInterfaceID) []ConfigurableDevice {
 	channels := c.ConfigurableChannels(iface)
 	if len(channels) == 0 {
 		return nil
@@ -257,7 +258,7 @@ func (c *ConfigurationCoordinator) GetConfigurableDevices(iface hmenum.Interface
 // paramset carries at least one parameter. Sorted by channel address
 // for deterministic UI rendering.
 func (c *ConfigurationCoordinator) ConfigurableChannels(
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 ) []ConfigurableChannel {
 	if c.descriptions == nil || c.paramsets == nil {
 		return nil

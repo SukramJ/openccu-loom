@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // fakeParamsetSink is a [ParamsetSink] recorder used to assert that
@@ -22,24 +23,24 @@ type fakeParamsetSink struct {
 }
 
 type fakeParamsetPut struct {
-	iface          hmenum.Interface
+	iface          hmtypes.WireInterfaceID
 	channelAddress string
 	psKey          hmenum.ParamsetKey
 	ps             hmproto.Paramset
 }
 
 type fakeParamsetChannelDelete struct {
-	iface          hmenum.Interface
+	iface          hmtypes.WireInterfaceID
 	channelAddress string
 }
 
-func (f *fakeParamsetSink) PutParamset(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset) {
+func (f *fakeParamsetSink) PutParamset(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.puts = append(f.puts, fakeParamsetPut{iface: iface, channelAddress: channelAddress, psKey: psKey, ps: ps})
 }
 
-func (f *fakeParamsetSink) DeleteChannelParamsets(iface hmenum.Interface, channelAddress string) {
+func (f *fakeParamsetSink) DeleteChannelParamsets(iface hmtypes.WireInterfaceID, channelAddress string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deletes = append(f.deletes, fakeParamsetChannelDelete{iface: iface, channelAddress: channelAddress})
@@ -65,7 +66,7 @@ func TestParamsetRegistryAddFiresSinkWithNormalisedParamset(t *testing.T) {
 	raw := hmproto.Paramset{
 		"LEVEL": {Type: hmenum.ParameterTypeFloat, Unit: "  % "},
 	}
-	r.Add(hmenum.InterfaceHmIPRF, "VCU1:1", hmenum.ParamsetKeyValues, raw, "HmIP-PS")
+	r.Add(wireHmIPRF, "VCU1:1", hmenum.ParamsetKeyValues, raw, "HmIP-PS")
 
 	if got := sink.putCount(); got != 1 {
 		t.Fatalf("PutParamset called %d times, want 1", got)
@@ -73,7 +74,7 @@ func TestParamsetRegistryAddFiresSinkWithNormalisedParamset(t *testing.T) {
 	sink.mu.Lock()
 	got := sink.puts[0]
 	sink.mu.Unlock()
-	if got.iface != hmenum.InterfaceHmIPRF || got.channelAddress != "VCU1:1" || got.psKey != hmenum.ParamsetKeyValues {
+	if got.iface != wireHmIPRF || got.channelAddress != "VCU1:1" || got.psKey != hmenum.ParamsetKeyValues {
 		t.Fatalf("sink call=%+v want {HmIP-RF VCU1:1 VALUES ...}", got)
 	}
 	want := hmproto.NormalizeParamset(raw)
@@ -90,7 +91,7 @@ func TestParamsetRegistryPutFiresSinkWithNormalisedParamset(t *testing.T) {
 	raw := hmproto.Paramset{
 		"STATE": {Type: hmenum.ParameterTypeBool, Unit: " bool "},
 	}
-	r.Put(hmenum.InterfaceHmIPRF, "VCU2:1", hmenum.ParamsetKeyMaster, raw)
+	r.Put(wireHmIPRF, "VCU2:1", hmenum.ParamsetKeyMaster, raw)
 
 	if got := sink.putCount(); got != 1 {
 		t.Fatalf("PutParamset called %d times, want 1", got)
@@ -106,12 +107,12 @@ func TestParamsetRegistryPutFiresSinkWithNormalisedParamset(t *testing.T) {
 
 func TestParamsetRegistryDeleteChannelFiresSinkExactlyOnce(t *testing.T) {
 	r := NewParamsetRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"A": {}})
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{"B": {}})
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"A": {}})
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{"B": {}})
 	sink := &fakeParamsetSink{}
 	r.SetSink(sink)
 
-	r.DeleteChannel(hmenum.InterfaceHmIPRF, "CH:1")
+	r.DeleteChannel(wireHmIPRF, "CH:1")
 
 	if got := sink.deleteCount(); got != 1 {
 		t.Fatalf("DeleteChannelParamsets called %d times, want exactly 1 despite 2 stored paramset keys", got)
@@ -119,18 +120,18 @@ func TestParamsetRegistryDeleteChannelFiresSinkExactlyOnce(t *testing.T) {
 	sink.mu.Lock()
 	got := sink.deletes[0]
 	sink.mu.Unlock()
-	if got.iface != hmenum.InterfaceHmIPRF || got.channelAddress != "CH:1" {
+	if got.iface != wireHmIPRF || got.channelAddress != "CH:1" {
 		t.Errorf("delete call=%+v want {HmIP-RF CH:1}", got)
 	}
 }
 
 func TestParamsetRegistryDeleteSingleFiresNoSinkCall(t *testing.T) {
 	r := NewParamsetRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, "CH:2", hmenum.ParamsetKeyValues, hmproto.Paramset{"A": {}})
+	r.Put(wireHmIPRF, "CH:2", hmenum.ParamsetKeyValues, hmproto.Paramset{"A": {}})
 	sink := &fakeParamsetSink{}
 	r.SetSink(sink)
 
-	if !r.Delete(hmenum.InterfaceHmIPRF, "CH:2", hmenum.ParamsetKeyValues) {
+	if !r.Delete(wireHmIPRF, "CH:2", hmenum.ParamsetKeyValues) {
 		t.Fatal("Delete must report true for an existing entry")
 	}
 	if got := sink.putCount(); got != 0 {
@@ -146,14 +147,14 @@ func TestParamsetRegistrySetSinkNilDetaches(t *testing.T) {
 	sink := &fakeParamsetSink{}
 	r.SetSink(sink)
 
-	r.Put(hmenum.InterfaceHmIPRF, "CH:3", hmenum.ParamsetKeyValues, hmproto.Paramset{"A": {}})
+	r.Put(wireHmIPRF, "CH:3", hmenum.ParamsetKeyValues, hmproto.Paramset{"A": {}})
 	if got := sink.putCount(); got != 1 {
 		t.Fatalf("PutParamset called %d times before detach, want 1", got)
 	}
 
 	r.SetSink(nil)
-	r.Put(hmenum.InterfaceHmIPRF, "CH:4", hmenum.ParamsetKeyValues, hmproto.Paramset{"B": {}})
-	r.DeleteChannel(hmenum.InterfaceHmIPRF, "CH:3")
+	r.Put(wireHmIPRF, "CH:4", hmenum.ParamsetKeyValues, hmproto.Paramset{"B": {}})
+	r.DeleteChannel(wireHmIPRF, "CH:3")
 
 	if got := sink.putCount(); got != 1 {
 		t.Fatalf("PutParamset called %d times after SetSink(nil), want unchanged 1", got)

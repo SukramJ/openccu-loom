@@ -7,30 +7,30 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 func TestDeviceDescriptionRegistryPutGet(t *testing.T) {
 	r := NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "ABC"})
-	d, ok := r.Get(hmenum.InterfaceHmIPRF, "ABC")
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "ABC"})
+	d, ok := r.Get(wireHmIPRF, "ABC")
 	if !ok || d.Address != "ABC" {
 		t.Fatalf("Get returned %+v ok=%v", d, ok)
 	}
-	if !r.Delete(hmenum.InterfaceHmIPRF, "ABC") {
+	if !r.Delete(wireHmIPRF, "ABC") {
 		t.Fatal("Delete should report true for existing entry")
 	}
-	if r.Delete(hmenum.InterfaceHmIPRF, "ABC") {
+	if r.Delete(wireHmIPRF, "ABC") {
 		t.Fatal("Delete should report false for missing entry")
 	}
 }
 
 func TestDeviceDescriptionRegistryAllFiltersByInterface(t *testing.T) {
 	r := NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "X"})
-	r.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "Y"})
-	all := r.All(hmenum.InterfaceHmIPRF)
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "X"})
+	r.Put(wireBidCosRF, hmproto.DeviceDescription{Address: "Y"})
+	all := r.All(wireHmIPRF)
 	if len(all) != 1 || all[0].Address != "X" {
 		t.Fatalf("All=%+v", all)
 	}
@@ -41,8 +41,8 @@ func TestDeviceDescriptionRegistryLen(t *testing.T) {
 	if r.Len() != 0 {
 		t.Fatalf("expected Len=0, got %d", r.Len())
 	}
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "D1"})
-	r.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "D2"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "D1"})
+	r.Put(wireBidCosRF, hmproto.DeviceDescription{Address: "D2"})
 	if r.Len() != 2 {
 		t.Fatalf("expected Len=2, got %d", r.Len())
 	}
@@ -50,7 +50,7 @@ func TestDeviceDescriptionRegistryLen(t *testing.T) {
 
 func TestDeviceDescriptionRegistryGetMiss(t *testing.T) {
 	r := NewDeviceDescriptionRegistry()
-	_, ok := r.Get(hmenum.InterfaceHmIPRF, "NOPE")
+	_, ok := r.Get(wireHmIPRF, "NOPE")
 	if ok {
 		t.Fatal("expected Get to return ok=false for unknown address")
 	}
@@ -58,8 +58,8 @@ func TestDeviceDescriptionRegistryGetMiss(t *testing.T) {
 
 func TestDeviceDescriptionRegistryAllEmpty(t *testing.T) {
 	r := NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "Z"})
-	all := r.All(hmenum.InterfaceHmIPRF) // different interface
+	r.Put(wireBidCosRF, hmproto.DeviceDescription{Address: "Z"})
+	all := r.All(wireHmIPRF) // different interface
 	if len(all) != 0 {
 		t.Fatalf("expected empty slice for non-matching interface, got %v", all)
 	}
@@ -71,9 +71,9 @@ func TestDeviceDescriptionRegistryConcurrent(t *testing.T) {
 	const n = 20
 	for range n {
 		wg.Go(func() {
-			r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "shared"})
-			_, _ = r.Get(hmenum.InterfaceHmIPRF, "shared")
-			_ = r.All(hmenum.InterfaceHmIPRF)
+			r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "shared"})
+			_, _ = r.Get(wireHmIPRF, "shared")
+			_ = r.All(wireHmIPRF)
 			_ = r.Len()
 		})
 	}
@@ -83,11 +83,11 @@ func TestDeviceDescriptionRegistryConcurrent(t *testing.T) {
 func TestDeviceDescriptionRegistryGetAddresses(t *testing.T) {
 	t.Parallel()
 	r := NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "A"})
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "B"})
-	r.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "C"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "A"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "B"})
+	r.Put(wireBidCosRF, hmproto.DeviceDescription{Address: "C"})
 
-	addrs := r.GetAddresses(hmenum.InterfaceHmIPRF)
+	addrs := r.GetAddresses(wireHmIPRF)
 	if len(addrs) != 2 {
 		t.Fatalf("GetAddresses(HmIP-RF) len=%d want 2", len(addrs))
 	}
@@ -101,11 +101,11 @@ func TestDeviceDescriptionRegistryGetAddresses(t *testing.T) {
 func TestDeviceDescriptionRegistryGetDeviceWithChannels(t *testing.T) {
 	t.Parallel()
 	r := NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "DEV", Children: []string{"DEV:1", "DEV:2"}})
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "DEV:1", Parent: "DEV"})
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "DEV:2", Parent: "DEV"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "DEV", Children: []string{"DEV:1", "DEV:2"}})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "DEV:1", Parent: "DEV"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "DEV:2", Parent: "DEV"})
 
-	m := r.GetDeviceWithChannels(hmenum.InterfaceHmIPRF, "DEV")
+	m := r.GetDeviceWithChannels(wireHmIPRF, "DEV")
 	if len(m) != 3 {
 		t.Fatalf("GetDeviceWithChannels len=%d want 3 (device + 2 channels)", len(m))
 	}
@@ -117,7 +117,7 @@ func TestDeviceDescriptionRegistryGetDeviceWithChannels(t *testing.T) {
 	}
 
 	// unknown device
-	m2 := r.GetDeviceWithChannels(hmenum.InterfaceHmIPRF, "UNKNOWN")
+	m2 := r.GetDeviceWithChannels(wireHmIPRF, "UNKNOWN")
 	if len(m2) != 0 {
 		t.Fatal("unknown device must return empty map")
 	}
@@ -126,18 +126,18 @@ func TestDeviceDescriptionRegistryGetDeviceWithChannels(t *testing.T) {
 func TestDeviceDescriptionRegistryGetInterfaceIDs(t *testing.T) {
 	t.Parallel()
 	r := NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "X"})
-	r.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "Y"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "X"})
+	r.Put(wireBidCosRF, hmproto.DeviceDescription{Address: "Y"})
 
 	ids := r.GetInterfaceIDs()
 	if len(ids) != 2 {
 		t.Fatalf("GetInterfaceIDs len=%d want 2", len(ids))
 	}
-	seen := make(map[hmenum.Interface]bool)
+	seen := make(map[hmtypes.WireInterfaceID]bool)
 	for _, id := range ids {
 		seen[id] = true
 	}
-	if !seen[hmenum.InterfaceHmIPRF] || !seen[hmenum.InterfaceBidCosRF] {
+	if !seen[wireHmIPRF] || !seen[wireBidCosRF] {
 		t.Error("expected both interfaces to be returned")
 	}
 }
@@ -145,8 +145,8 @@ func TestDeviceDescriptionRegistryGetInterfaceIDs(t *testing.T) {
 func TestDeviceDescriptionRegistryGetModel(t *testing.T) {
 	t.Parallel()
 	r := NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "VCU001", Type: "HM-CC-RT-DN"})
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "VCU001:1", Parent: "VCU001", Type: "HM-CC-RT-DN"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "VCU001", Type: "HM-CC-RT-DN"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "VCU001:1", Parent: "VCU001", Type: "HM-CC-RT-DN"})
 
 	model := r.GetModel("VCU001")
 	if model != "HM-CC-RT-DN" {
@@ -166,14 +166,14 @@ func TestDeviceDescriptionRegistryGetModel(t *testing.T) {
 func TestDeviceDescriptionRegistryHasDeviceDescriptions(t *testing.T) {
 	t.Parallel()
 	r := NewDeviceDescriptionRegistry()
-	if r.HasDeviceDescriptions(hmenum.InterfaceHmIPRF) {
+	if r.HasDeviceDescriptions(wireHmIPRF) {
 		t.Fatal("HasDeviceDescriptions must return false for empty registry")
 	}
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "Z"})
-	if !r.HasDeviceDescriptions(hmenum.InterfaceHmIPRF) {
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "Z"})
+	if !r.HasDeviceDescriptions(wireHmIPRF) {
 		t.Fatal("HasDeviceDescriptions must return true after Put")
 	}
-	if r.HasDeviceDescriptions(hmenum.InterfaceBidCosRF) {
+	if r.HasDeviceDescriptions(wireBidCosRF) {
 		t.Fatal("HasDeviceDescriptions must return false for interface with no entries")
 	}
 }

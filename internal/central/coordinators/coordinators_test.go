@@ -110,7 +110,7 @@ func TestDeviceCoordinatorChecksForNewDeviceAddresses(t *testing.T) {
 	dc := NewDeviceCoordinator("main", bus, devs, descs, ps, nil)
 
 	// Seed registry with one known device.
-	dc.HandleNewDevices(context.Background(), hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "ABC0001"},
 		{Address: "ABC0001:1", Parent: "ABC0001"},
 	})
@@ -122,14 +122,14 @@ func TestDeviceCoordinatorChecksForNewDeviceAddresses(t *testing.T) {
 		{Address: "DEF0002"},
 		{Address: "DEF0002:0", Parent: "DEF0002"},
 	}
-	got := dc.CheckForNewDeviceAddresses(hmenum.InterfaceHmIPRF, snapshot)
+	got := dc.CheckForNewDeviceAddresses(wireKey(hmenum.InterfaceHmIPRF), snapshot)
 	if len(got) != 2 || got[0] != "DEF0002" || got[1] != "DEF0002:0" {
 		t.Fatalf("expected [DEF0002 DEF0002:0], got %v", got)
 	}
 
 	// All known → empty result.
 	allKnown := []hmproto.DeviceDescription{{Address: "ABC0001"}, {Address: "ABC0001:1"}}
-	if got := dc.CheckForNewDeviceAddresses(hmenum.InterfaceHmIPRF, allKnown); len(got) != 0 {
+	if got := dc.CheckForNewDeviceAddresses(wireKey(hmenum.InterfaceHmIPRF), allKnown); len(got) != 0 {
 		t.Fatalf("all-known snapshot should produce empty result, got %v", got)
 	}
 }
@@ -172,7 +172,7 @@ func TestDeviceCoordinatorRegistersAndRemoves(t *testing.T) {
 	ps := registry.NewParamsetRegistry()
 	dc := NewDeviceCoordinator("main", bus, devs, descs, ps, nil)
 
-	dc.HandleNewDevices(context.Background(), hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "A"},
 		{Address: "A:1", Parent: "A"},
 	})
@@ -182,7 +182,7 @@ func TestDeviceCoordinatorRegistersAndRemoves(t *testing.T) {
 	if created.Load() != 1 {
 		t.Fatalf("created=%d, only the top-level device should fire", created.Load())
 	}
-	dc.HandleDeleteDevices(context.Background(), hmenum.InterfaceHmIPRF, []string{"A"})
+	dc.HandleDeleteDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []string{"A"})
 	if removed.Load() != 1 {
 		t.Fatalf("removed=%d", removed.Load())
 	}

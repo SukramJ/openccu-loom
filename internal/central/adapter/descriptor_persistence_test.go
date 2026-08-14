@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 func TestWireDescriptorPersistenceRoundTripsPutAndDelete(t *testing.T) {
@@ -33,25 +34,30 @@ func TestWireDescriptorPersistenceRoundTripsPutAndDelete(t *testing.T) {
 		Paramsets: sqlite.NewParamsetStore(db),
 	}
 
+	// The registries are keyed by the canonical wire id, and the sink writes
+	// that id into the interface column — build it the way production does so
+	// the store assertions below cannot pass against a bare-interface key.
+	wireID := hmtypes.NewWireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
+
 	// Empty database: hydration must report zero counts and still install
 	// the sinks (asserted implicitly below via the subsequent Put/Add).
 	if devices, paramsets := WireDescriptorPersistence(ctx, unit, stores, nil); devices != 0 || paramsets != 0 {
 		t.Fatalf("hydration on empty db=(%d,%d), want (0,0)", devices, paramsets)
 	}
 
-	unit.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	unit.DescRegistry.Put(wireID, hmproto.DeviceDescription{
 		Address:  "VCU1",
 		Type:     "HmIP-PS",
 		Children: []string{"VCU1:1"},
 	})
-	unit.ParamsetReg.Add(hmenum.InterfaceHmIPRF, "VCU1:1", hmenum.ParamsetKeyValues, hmproto.Paramset{
+	unit.ParamsetReg.Add(wireID, "VCU1:1", hmenum.ParamsetKeyValues, hmproto.Paramset{
 		"STATE": {
 			Type:       hmenum.ParameterTypeBool,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
 		},
 	}, "HmIP-PS")
 
-	devRec, err := stores.Devices.Get(ctx, "ccu-desc", "HmIP-RF", "VCU1")
+	devRec, err := stores.Devices.Get(ctx, "ccu-desc", wireID.String(), "VCU1")
 	if err != nil {
 		t.Fatalf("Devices.Get after Put: %v", err)
 	}
@@ -62,7 +68,7 @@ func TestWireDescriptorPersistenceRoundTripsPutAndDelete(t *testing.T) {
 		t.Errorf("persisted device Type=%q want HmIP-PS", devRec.Description.Type)
 	}
 
-	psRec, err := stores.Paramsets.Get(ctx, "ccu-desc", "HmIP-RF", "VCU1:1", hmenum.ParamsetKeyValues)
+	psRec, err := stores.Paramsets.Get(ctx, "ccu-desc", wireID.String(), "VCU1:1", hmenum.ParamsetKeyValues)
 	if err != nil {
 		t.Fatalf("Paramsets.Get after Add: %v", err)
 	}
@@ -74,15 +80,15 @@ func TestWireDescriptorPersistenceRoundTripsPutAndDelete(t *testing.T) {
 	}
 
 	// Registry-side deletes must mirror through the sink into SQLite.
-	if !unit.DescRegistry.Delete(hmenum.InterfaceHmIPRF, "VCU1") {
+	if !unit.DescRegistry.Delete(wireID, "VCU1") {
 		t.Fatal("DescRegistry.Delete must report true for the existing entry")
 	}
-	if _, err := stores.Devices.Get(ctx, "ccu-desc", "HmIP-RF", "VCU1"); !errors.Is(err, sqlite.ErrDeviceNotFound) {
+	if _, err := stores.Devices.Get(ctx, "ccu-desc", wireID.String(), "VCU1"); !errors.Is(err, sqlite.ErrDeviceNotFound) {
 		t.Fatalf("Devices.Get after registry Delete: got %v, want ErrDeviceNotFound", err)
 	}
 
-	unit.ParamsetReg.DeleteChannel(hmenum.InterfaceHmIPRF, "VCU1:1")
-	if _, err := stores.Paramsets.Get(ctx, "ccu-desc", "HmIP-RF", "VCU1:1", hmenum.ParamsetKeyValues); !errors.Is(err, sqlite.ErrParamsetNotFound) {
+	unit.ParamsetReg.DeleteChannel(wireID, "VCU1:1")
+	if _, err := stores.Paramsets.Get(ctx, "ccu-desc", wireID.String(), "VCU1:1", hmenum.ParamsetKeyValues); !errors.Is(err, sqlite.ErrParamsetNotFound) {
 		t.Fatalf("Paramsets.Get after registry DeleteChannel: got %v, want ErrParamsetNotFound", err)
 	}
 }
@@ -114,12 +120,13 @@ func TestWireDescriptorPersistenceWarmBootHydratesAndCreatesDevice(t *testing.T)
 		t.Fatalf("first-boot hydration=(%d,%d), want (0,0) for an empty db", devices, paramsets)
 	}
 
-	unit1.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	wireID := hmtypes.NewWireInterfaceID(unit1.Name(), hmenum.InterfaceHmIPRF)
+	unit1.DescRegistry.Put(wireID, hmproto.DeviceDescription{
 		Address:  "VCU2",
 		Type:     "HmIP-PS",
 		Children: []string{"VCU2:1"},
 	})
-	unit1.ParamsetReg.Add(hmenum.InterfaceHmIPRF, "VCU2:1", hmenum.ParamsetKeyValues, hmproto.Paramset{
+	unit1.ParamsetReg.Add(wireID, "VCU2:1", hmenum.ParamsetKeyValues, hmproto.Paramset{
 		"STATE": {
 			Type:       hmenum.ParameterTypeBool,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
@@ -140,17 +147,17 @@ func TestWireDescriptorPersistenceWarmBootHydratesAndCreatesDevice(t *testing.T)
 		t.Fatalf("warm-boot paramset hydration count=%d, want 1", paramsets)
 	}
 
-	if desc, ok := unit2.DescRegistry.Get(hmenum.InterfaceHmIPRF, "VCU2"); !ok || desc.Type != "HmIP-PS" {
+	if desc, ok := unit2.DescRegistry.Get(wireID, "VCU2"); !ok || desc.Type != "HmIP-PS" {
 		t.Fatalf("DescRegistry.Get after hydration=%+v ok=%v, want HmIP-PS", desc, ok)
 	}
-	if ps, ok := unit2.ParamsetReg.Get(hmenum.InterfaceHmIPRF, "VCU2:1", hmenum.ParamsetKeyValues); !ok || len(ps) == 0 {
+	if ps, ok := unit2.ParamsetReg.Get(wireID, "VCU2:1", hmenum.ParamsetKeyValues); !ok || len(ps) == 0 {
 		t.Fatalf("ParamsetReg.Get after hydration=%+v ok=%v, want a non-empty paramset", ps, ok)
 	}
 
 	if err := unit2.Devices.CheckAndCreateDevicesFromCache(ctx); err != nil {
 		t.Fatalf("CheckAndCreateDevicesFromCache: %v", err)
 	}
-	if !unit2.DeviceRegistry.Has(hmenum.InterfaceHmIPRF, "VCU2") {
+	if !unit2.DeviceRegistry.Has(wireID, "VCU2") {
 		t.Fatal("VCU2 must be materialised in DeviceRegistry after warm-boot cache restore")
 	}
 }

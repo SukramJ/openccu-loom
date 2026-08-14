@@ -36,6 +36,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // centralScopedValuesCache returns deps.ValuesCache when the filter
@@ -1108,7 +1109,7 @@ func wireInterface(
 			if len(deviceAddrs) > 0 {
 				//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx (60s timeout)
 				unit.Devices.ScheduleParamsetConsistencyCheck(
-					context.Background(), iface, hmenum.Interface(wireID), deviceAddrs, backend,
+					context.Background(), iface, hmtypes.ParseWireInterfaceID(wireID), deviceAddrs, backend,
 					func(inconsistencies []coordinators.ParamsetInconsistency) {
 						for _, inc := range inconsistencies {
 							logger.Warn("wire.paramset_inconsistency",

@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ─── stubs ───────────────────────────────────────────────────────────────────
@@ -27,7 +28,7 @@ type stubLinkPeerFetcher struct {
 	err   error
 }
 
-func (s *stubLinkPeerFetcher) GetLinkPeers(_ context.Context, _ hmenum.Interface, channelAddress string) ([]string, error) {
+func (s *stubLinkPeerFetcher) GetLinkPeers(_ context.Context, _ hmtypes.WireInterfaceID, channelAddress string) ([]string, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -39,7 +40,7 @@ type stubFirmwareStateReader struct {
 	states map[string]hmenum.DeviceFirmwareState // address → state
 }
 
-func (s *stubFirmwareStateReader) DeviceFirmwareStates(_ hmenum.Interface) map[string]hmenum.DeviceFirmwareState {
+func (s *stubFirmwareStateReader) DeviceFirmwareStates(_ hmtypes.WireInterfaceID) map[string]hmenum.DeviceFirmwareState {
 	return s.states
 }
 
@@ -50,7 +51,7 @@ type stubDeviceFetcher struct {
 	calls int
 }
 
-func (s *stubDeviceFetcher) ListDevices(_ context.Context, _ hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+func (s *stubDeviceFetcher) ListDevices(_ context.Context, _ hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
 	s.calls++
 	return s.descs, s.err
 }
@@ -70,7 +71,7 @@ func newDCForW10(t *testing.T) (*DeviceCoordinator, *events.Bus, *registry.Devic
 func seedDevice(
 	devs *registry.DeviceRegistry,
 	descs *registry.DeviceDescriptionRegistry,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	deviceAddr, channelAddr string,
 ) {
 	devs.Put(registry.DeviceEntry{
@@ -97,7 +98,7 @@ func TestRefreshDeviceLinkPeersPublishesEvent(t *testing.T) {
 	t.Parallel()
 	dc, bus, devs, descs := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 	seedDevice(devs, descs, iface, "ABC123", "ABC123:1")
 
 	fetcher := &stubLinkPeerFetcher{
@@ -130,7 +131,7 @@ func TestRefreshDeviceLinkPeersNilFetcherIsNoOp(t *testing.T) {
 	t.Parallel()
 	dc, bus, devs, descs := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 	seedDevice(devs, descs, iface, "ABC123", "ABC123:1")
 
 	var called int
@@ -150,7 +151,7 @@ func TestRefreshDeviceLinkPeersUnknownDeviceIsNoOp(t *testing.T) {
 	t.Parallel()
 	dc, bus, _, _ := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 	fetcher := &stubLinkPeerFetcher{peers: map[string][]string{"GHOST:1": {"X"}}}
 
 	var called int
@@ -170,7 +171,7 @@ func TestRefreshDeviceLinkPeersFetcherErrorSkipsChannel(t *testing.T) {
 	t.Parallel()
 	dc, bus, devs, descs := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 	devs.Put(registry.DeviceEntry{Interface: iface, Address: "D1"})
 	descs.Put(iface, hmproto.DeviceDescription{Address: "D1"})
 	descs.Put(iface, hmproto.DeviceDescription{Address: "D1:1", Parent: "D1"})
@@ -201,7 +202,7 @@ func TestRefreshFirmwareDataByStateCallsFetcherForMatchingDevice(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _ := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 
 	devFetcher := &stubDeviceFetcher{descs: nil}
 	stateReader := &stubFirmwareStateReader{
@@ -233,7 +234,7 @@ func TestRefreshFirmwareDataByStateNoMatchDoesNotCallFetcher(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _ := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 
 	devFetcher := &stubDeviceFetcher{}
 	stateReader := &stubFirmwareStateReader{
@@ -265,7 +266,7 @@ func TestRefreshFirmwareDataByStateNilFetcherReturnsError(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _ := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 	stateReader := &stubFirmwareStateReader{}
 
 	err := dc.RefreshFirmwareDataByState(
@@ -286,7 +287,7 @@ func TestRefreshFirmwareDataByStateNilReaderIsNoOp(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _ := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 	devFetcher := &stubDeviceFetcher{}
 
 	err := dc.RefreshFirmwareDataByState(
@@ -310,7 +311,7 @@ func TestRefreshFirmwareDataByStateEmptyStatesIsNoOp(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _ := newDCForW10(t)
 
-	const iface = hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 	devFetcher := &stubDeviceFetcher{}
 	stateReader := &stubFirmwareStateReader{
 		states: map[string]hmenum.DeviceFirmwareState{

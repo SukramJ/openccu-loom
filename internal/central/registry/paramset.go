@@ -14,7 +14,7 @@ import (
 
 // ParamsetKey locates a paramset inside the registry.
 type ParamsetKey struct {
-	Interface      hmenum.Interface
+	Interface      hmtypes.WireInterfaceID
 	ChannelAddress string
 	ParamsetKey    hmenum.ParamsetKey
 }
@@ -32,9 +32,9 @@ type addrParamCacheKey struct {
 // persistence as best-effort.
 type ParamsetSink interface {
 	// PutParamset persists the normalised (and patched) paramset.
-	PutParamset(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset)
+	PutParamset(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset)
 	// DeleteChannelParamsets removes every persisted paramset of the channel.
-	DeleteChannelParamsets(iface hmenum.Interface, channelAddress string)
+	DeleteChannelParamsets(iface hmtypes.WireInterfaceID, channelAddress string)
 }
 
 // ParamsetRegistry caches paramset descriptions per channel/key.
@@ -100,7 +100,7 @@ func (r *ParamsetRegistry) ApplyPatches(deviceType, channelAddress string, psKey
 // device-type–specific patches, and updates the secondary index.
 // The deviceType parameter carries the device TYPE field from
 // DeviceDescription (e.g. "HM-CC-VG-1") for patch matching.
-func (r *ParamsetRegistry) Add(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset, deviceType string) {
+func (r *ParamsetRegistry) Add(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset, deviceType string) {
 	normalised := hmproto.NormalizeParamset(ps)
 	if r.patchRegistry != nil {
 		r.patchRegistry.ApplyParamset(deviceType, channelAddress, psKey, normalised)
@@ -119,7 +119,7 @@ func (r *ParamsetRegistry) Add(iface hmenum.Interface, channelAddress string, ps
 // Put stores ps under the composite key. Paramset is normalised before
 // storage so hashes computed after Put stay stable.
 // For new call sites prefer Add() which also applies patches.
-func (r *ParamsetRegistry) Put(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset) {
+func (r *ParamsetRegistry) Put(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset) {
 	normalised := hmproto.NormalizeParamset(ps)
 	r.mu.Lock()
 	r.items[ParamsetKey{Interface: iface, ChannelAddress: channelAddress, ParamsetKey: psKey}] = normalised
@@ -132,7 +132,7 @@ func (r *ParamsetRegistry) Put(iface hmenum.Interface, channelAddress string, ps
 }
 
 // Get returns the paramset and reports whether it exists.
-func (r *ParamsetRegistry) Get(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey) (hmproto.Paramset, bool) {
+func (r *ParamsetRegistry) Get(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey) (hmproto.Paramset, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	ps, ok := r.items[ParamsetKey{Interface: iface, ChannelAddress: channelAddress, ParamsetKey: psKey}]
@@ -144,7 +144,7 @@ func (r *ParamsetRegistry) Get(iface hmenum.Interface, channelAddress string, ps
 // unknown on the given interface.
 //
 // get_channel_paramset_descriptions().
-func (r *ParamsetRegistry) GetChannelParamsetDescriptions(iface hmenum.Interface, channelAddress string) map[hmenum.ParamsetKey]hmproto.Paramset {
+func (r *ParamsetRegistry) GetChannelParamsetDescriptions(iface hmtypes.WireInterfaceID, channelAddress string) map[hmenum.ParamsetKey]hmproto.Paramset {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make(map[hmenum.ParamsetKey]hmproto.Paramset)
@@ -160,7 +160,7 @@ func (r *ParamsetRegistry) GetChannelParamsetDescriptions(iface hmenum.Interface
 // channel + paramset. ok is false when any part of the path is absent.
 //
 // get_parameter_data().
-func (r *ParamsetRegistry) GetParameterData(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey, parameter string) (hmproto.ParameterData, bool) {
+func (r *ParamsetRegistry) GetParameterData(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey, parameter string) (hmproto.ParameterData, bool) {
 	ps, ok := r.Get(iface, channelAddress, psKey)
 	if !ok {
 		return hmproto.ParameterData{}, false
@@ -173,7 +173,7 @@ func (r *ParamsetRegistry) GetParameterData(iface hmenum.Interface, channelAddre
 // Returns an empty tuple when the channel has no stored paramsets.
 //
 // get_paramset_keys().
-func (r *ParamsetRegistry) GetParamsetKeys(iface hmenum.Interface, channelAddress string) []hmenum.ParamsetKey {
+func (r *ParamsetRegistry) GetParamsetKeys(iface hmtypes.WireInterfaceID, channelAddress string) []hmenum.ParamsetKey {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var keys []hmenum.ParamsetKey
@@ -190,7 +190,7 @@ func (r *ParamsetRegistry) GetParamsetKeys(iface hmenum.Interface, channelAddres
 // paramset key on the given interface.
 //
 // get_channel_addresses_by_paramset_key().
-func (r *ParamsetRegistry) GetChannelAddressesByParamsetKey(iface hmenum.Interface, deviceAddress string) map[hmenum.ParamsetKey][]string {
+func (r *ParamsetRegistry) GetChannelAddressesByParamsetKey(iface hmtypes.WireInterfaceID, deviceAddress string) map[hmenum.ParamsetKey][]string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make(map[hmenum.ParamsetKey][]string)
@@ -210,7 +210,7 @@ func (r *ParamsetRegistry) GetChannelAddressesByParamsetKey(iface hmenum.Interfa
 // HasInterfaceID reports whether any paramset is stored for interfaceID.
 //
 // has_interface_id().
-func (r *ParamsetRegistry) HasInterfaceID(iface hmenum.Interface) bool {
+func (r *ParamsetRegistry) HasInterfaceID(iface hmtypes.WireInterfaceID) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for k := range r.items {
@@ -225,7 +225,7 @@ func (r *ParamsetRegistry) HasInterfaceID(iface hmenum.Interface) bool {
 // paramset. Returns false for any missing part of the path.
 //
 // has_parameter().
-func (r *ParamsetRegistry) HasParameter(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey, parameter string) bool {
+func (r *ParamsetRegistry) HasParameter(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey, parameter string) bool {
 	_, ok := r.GetParameterData(iface, channelAddress, psKey, parameter)
 	return ok
 }
@@ -263,7 +263,7 @@ func (r *ParamsetRegistry) RegisterAdditionalParameter(channelAddress, parameter
 }
 
 // Delete removes a paramset entry. Returns true when it existed.
-func (r *ParamsetRegistry) Delete(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey) bool {
+func (r *ParamsetRegistry) Delete(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	key := ParamsetKey{Interface: iface, ChannelAddress: channelAddress, ParamsetKey: psKey}
@@ -276,7 +276,7 @@ func (r *ParamsetRegistry) Delete(iface hmenum.Interface, channelAddress string,
 
 // DeleteChannel removes every paramset bound to the given channel and
 // cleans up the secondary index entries for that channel.
-func (r *ParamsetRegistry) DeleteChannel(iface hmenum.Interface, channelAddress string) {
+func (r *ParamsetRegistry) DeleteChannel(iface hmtypes.WireInterfaceID, channelAddress string) {
 	r.mu.Lock()
 	for k := range r.items {
 		if k.Interface == iface && k.ChannelAddress == channelAddress {

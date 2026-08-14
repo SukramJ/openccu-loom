@@ -19,7 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // errCentralNotLive is returned by [centralOrchestrator.removeCentral] when
@@ -606,7 +606,7 @@ func evictModel(u *central.Unit) {
 		return
 	}
 	for _, d := range u.ModelRegistry.List() {
-		iface := hmenum.Interface(d.InterfaceID)
+		iface := hmtypes.ParseWireInterfaceID(d.InterfaceID)
 		if u.DescRegistry != nil {
 			u.DescRegistry.Delete(iface, d.Address)
 		}

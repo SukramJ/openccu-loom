@@ -12,10 +12,13 @@ import (
 )
 
 const (
-	testIface   = hmenum.InterfaceHmIPRF
 	testChannel = "ABC0001:1"
 	testParam   = "LEVEL"
 )
+
+// testIface is the registry key the coordinator is exercised with — the wire
+// id, not the bare interface name.
+var testIface = wireKey(hmenum.InterfaceHmIPRF)
 
 // newTestConfCoord builds a coordinator seeded with one channel and one
 // VALUES paramset containing a single LEVEL parameter.

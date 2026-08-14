@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // buildTestQueryFacade returns a QueryFacade backed by a ModelRegistry
@@ -24,8 +25,10 @@ func buildTestQueryFacade(devs ...*device.Device) *central.QueryFacade {
 			continue
 		}
 		modelReg.Put(d)
+		// The device registry is keyed by the wire id the ingest pipeline
+		// stamps on the device, not by the bare interface name.
 		devReg.Put(registry.DeviceEntry{
-			Interface: d.Interface,
+			Interface: hmtypes.ParseWireInterfaceID(d.InterfaceID),
 			Address:   d.Address,
 		})
 	}

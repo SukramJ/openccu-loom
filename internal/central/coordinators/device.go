@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // DeviceLister is the south-bound contract the coordinator calls during the
@@ -26,7 +27,7 @@ import (
 // both the top-level device entries and their child channels; the lister
 // wraps that round-trip per interface.
 type DeviceLister interface {
-	ListDevices(ctx context.Context, iface hmenum.Interface) ([]hmproto.DeviceDescription, error)
+	ListDevices(ctx context.Context, iface hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error)
 }
 
 // DeviceCoordinator reconciles device-level events against the
@@ -103,7 +104,7 @@ func (c *DeviceCoordinator) Stop() {
 // counts are independent — a device that gained a new channel registers
 // as one Updated entry, not as Created + Removed.
 type PullReport struct {
-	Interface hmenum.Interface
+	Interface hmtypes.WireInterfaceID
 	// Created counts top-level device entries that were not previously
 	// known to the registry.
 	Created int
@@ -122,7 +123,7 @@ type PullReport struct {
 // The pipeline is intentionally idempotent: re-running it after a successful
 // pull is a no-op (Created/Updated/Removed all 0). That invariant is the unit
 // of work the contract test pins.
-func (c *DeviceCoordinator) InitialPull(ctx context.Context, lister DeviceLister, iface hmenum.Interface) (PullReport, error) {
+func (c *DeviceCoordinator) InitialPull(ctx context.Context, lister DeviceLister, iface hmtypes.WireInterfaceID) (PullReport, error) {
 	return observability.InstrumentValue(ctx, c.recorder, "device_coordinator.initial_pull", observability.ScopeCoordinator,
 		func(ctx context.Context) (PullReport, error) {
 			rep := PullReport{Interface: iface}
@@ -141,7 +142,7 @@ func (c *DeviceCoordinator) InitialPull(ctx context.Context, lister DeviceLister
 // applyPull merges snapshot into the registry. Pre-existing entries
 // missing from the snapshot are dropped + emitted as DeviceRemovedEvent
 // so subscribers (MQTT discovery, audit log) can react.
-func (c *DeviceCoordinator) applyPull(iface hmenum.Interface, snapshot []hmproto.DeviceDescription, rep *PullReport) {
+func (c *DeviceCoordinator) applyPull(iface hmtypes.WireInterfaceID, snapshot []hmproto.DeviceDescription, rep *PullReport) {
 	seen := make(map[string]struct{}, len(snapshot))
 	for i := range snapshot {
 		desc := snapshot[i]
@@ -203,7 +204,7 @@ func (c *DeviceCoordinator) applyPull(iface hmenum.Interface, snapshot []hmproto
 // registry. The function is a thin wrapper over InitialPull (full
 // re-pull is cheaper than a targeted single-device pull on the CCU
 // Side and matches what
-func (c *DeviceCoordinator) RefreshAfterPair(ctx context.Context, lister DeviceLister, iface hmenum.Interface) (PullReport, error) {
+func (c *DeviceCoordinator) RefreshAfterPair(ctx context.Context, lister DeviceLister, iface hmtypes.WireInterfaceID) (PullReport, error) {
 	return observability.InstrumentValue(ctx, c.recorder, "device_coordinator.refresh_after_pair", observability.ScopeCoordinator,
 		func(ctx context.Context) (PullReport, error) {
 			return c.InitialPull(ctx, lister, iface)
@@ -213,7 +214,7 @@ func (c *DeviceCoordinator) RefreshAfterPair(ctx context.Context, lister DeviceL
 // RefreshAfterUnpair drops the device + every channel under it and
 // emits the matching removal event. Idempotent: dropping a missing
 // address is a no-op (returns false).
-func (c *DeviceCoordinator) RefreshAfterUnpair(ctx context.Context, iface hmenum.Interface, address string) bool {
+func (c *DeviceCoordinator) RefreshAfterUnpair(ctx context.Context, iface hmtypes.WireInterfaceID, address string) bool {
 	removed := false
 	_ = observability.Instrument(ctx, c.recorder, "device_coordinator.refresh_after_unpair", observability.ScopeCoordinator,
 		func(ctx context.Context) error {
@@ -268,7 +269,7 @@ func sameDescription(a, b hmproto.DeviceDescription) bool {
 // via IdentifyMissingDeviceDescriptions before storing — these correspond
 // to factory-reset re-pair scenarios where a known device reappears with
 // channel addresses the cache has never seen.
-func (c *DeviceCoordinator) HandleNewDevices(_ context.Context, iface hmenum.Interface, descriptions []hmproto.DeviceDescription) {
+func (c *DeviceCoordinator) HandleNewDevices(_ context.Context, iface hmtypes.WireInterfaceID, descriptions []hmproto.DeviceDescription) {
 	// Identify descriptions missing from the cache before storing them,
 	// so factory-reset re-pair scenarios are detected correctly.
 	missing := c.IdentifyMissingDeviceDescriptions(iface, descriptions)
@@ -327,7 +328,7 @@ func (c *DeviceCoordinator) HandleNewDevices(_ context.Context, iface hmenum.Int
 // Unlike CheckForNewDeviceAddresses (which checks the top-level device
 // registry), this method checks the description cache directly so both
 // device-level and channel-level addresses are covered.
-func (c *DeviceCoordinator) IdentifyMissingDeviceDescriptions(iface hmenum.Interface, descs []hmproto.DeviceDescription) []hmproto.DeviceDescription {
+func (c *DeviceCoordinator) IdentifyMissingDeviceDescriptions(iface hmtypes.WireInterfaceID, descs []hmproto.DeviceDescription) []hmproto.DeviceDescription {
 	all := c.descs.All(iface)
 	known := make(map[string]struct{}, len(all))
 	for i := range all {
@@ -348,7 +349,7 @@ func (c *DeviceCoordinator) IdentifyMissingDeviceDescriptions(iface hmenum.Inter
 //
 // The returned slice contains both top-level device addresses and child
 // channel addresses. Order matches the wire snapshot.
-func (c *DeviceCoordinator) CheckForNewDeviceAddresses(iface hmenum.Interface, snapshot []hmproto.DeviceDescription) []string {
+func (c *DeviceCoordinator) CheckForNewDeviceAddresses(iface hmtypes.WireInterfaceID, snapshot []hmproto.DeviceDescription) []string {
 	allKnown := c.descs.All(iface)
 	known := make(map[string]struct{}, len(allKnown))
 	for i := range allKnown {
@@ -396,7 +397,7 @@ type VirtualRemoteEntry struct {
 // all virtual-remote devices registered for iface. Returns nil when
 // there are none. This is the original string-slice variant preserved
 // for backward compatibility; new code should prefer [GetVirtualRemotes].
-func (c *DeviceCoordinator) GetVirtualRemoteAddresses(iface hmenum.Interface) []string {
+func (c *DeviceCoordinator) GetVirtualRemoteAddresses(iface hmtypes.WireInterfaceID) []string {
 	all := c.descs.All(iface)
 	var out []string
 	for i := range all {
@@ -411,7 +412,7 @@ func (c *DeviceCoordinator) GetVirtualRemoteAddresses(iface hmenum.Interface) []
 // GetVirtualRemotes returns enriched [VirtualRemoteEntry] values for every
 // virtual-remote device registered for iface. Returns nil when there are
 // none.
-func (c *DeviceCoordinator) GetVirtualRemotes(iface hmenum.Interface) []VirtualRemoteEntry {
+func (c *DeviceCoordinator) GetVirtualRemotes(iface hmtypes.WireInterfaceID) []VirtualRemoteEntry {
 	all := c.descs.All(iface)
 	var out []VirtualRemoteEntry
 	for i := range all {
@@ -432,7 +433,7 @@ func (c *DeviceCoordinator) GetVirtualRemotes(iface hmenum.Interface) []VirtualR
 // IdentifyChannel performs a simple substring-match lookup over all channel
 // addresses for iface and returns the first address that contains text.
 // Returns ("", false) when text is empty or no match is found.
-func (c *DeviceCoordinator) IdentifyChannel(iface hmenum.Interface, text string) (string, bool) {
+func (c *DeviceCoordinator) IdentifyChannel(iface hmtypes.WireInterfaceID, text string) (string, bool) {
 	if text == "" {
 		return "", false
 	}
@@ -449,7 +450,7 @@ func (c *DeviceCoordinator) IdentifyChannel(iface hmenum.Interface, text string)
 // The device is located by its top-level address; child channel addresses are
 // derived from the description registry and combined into one
 // HandleDeleteDevices call.
-func (c *DeviceCoordinator) DeleteDevice(ctx context.Context, iface hmenum.Interface, deviceAddress string) {
+func (c *DeviceCoordinator) DeleteDevice(ctx context.Context, iface hmtypes.WireInterfaceID, deviceAddress string) {
 	// Collect device address + all child channel addresses.
 	allDescs := c.descs.All(iface)
 	addresses := make([]string, 0, len(allDescs)+1)
@@ -464,7 +465,7 @@ func (c *DeviceCoordinator) DeleteDevice(ctx context.Context, iface hmenum.Inter
 }
 
 // HandleDeleteDevices removes records for the given addresses.
-func (c *DeviceCoordinator) HandleDeleteDevices(_ context.Context, iface hmenum.Interface, addresses []string) {
+func (c *DeviceCoordinator) HandleDeleteDevices(_ context.Context, iface hmtypes.WireInterfaceID, addresses []string) {
 	for _, addr := range addresses {
 		c.paramsets.DeleteChannel(iface, addr)
 		c.descs.Delete(iface, addr)
@@ -509,7 +510,7 @@ func (c *DeviceCoordinator) HandleDeleteDevices(_ context.Context, iface hmenum.
 // goroutine.
 func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) error {
 	type newDeviceEntry struct {
-		iface hmenum.Interface
+		iface hmtypes.WireInterfaceID
 		addr  string
 		model string
 	}
@@ -560,7 +561,7 @@ func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) 
 // fresh descriptions from the CCU.
 type DeviceDescriptionFetcher interface {
 	// ListDevices returns all device and channel descriptions for iface.
-	ListDevices(ctx context.Context, iface hmenum.Interface) ([]hmproto.DeviceDescription, error)
+	ListDevices(ctx context.Context, iface hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error)
 }
 
 // RefreshDeviceDescriptionsAndCreateMissingDevices re-pulls all descriptions
@@ -574,7 +575,7 @@ type DeviceDescriptionFetcher interface {
 func (c *DeviceCoordinator) RefreshDeviceDescriptionsAndCreateMissingDevices(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 ) error {
 	if fetcher == nil {
 		return errors.New("device_coordinator: refresh_device_descriptions: fetcher is nil")
@@ -652,7 +653,7 @@ var channelReloadParamsetKeys = []hmenum.ParamsetKey{
 func (c *DeviceCoordinator) ReloadChannelConfig(
 	ctx context.Context,
 	fetcher ChannelParamsetFetcher,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	channelAddress string,
 	deviceModel string,
 ) error {
@@ -708,9 +709,9 @@ func (c *DeviceCoordinator) ReloadChannelConfig(
 // layer can call acceptDeviceInInbox on the CCU client.
 func (c *DeviceCoordinator) AddNewDevicesManually(
 	ctx context.Context,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	addressNames map[string]string,
-	deviceAcceptor func(ctx context.Context, iface hmenum.Interface, address string) error,
+	deviceAcceptor func(ctx context.Context, iface hmtypes.WireInterfaceID, address string) error,
 ) error {
 	ifaceID := string(iface)
 	// locked tracks whether the deferred unlock still owns the lock: the
@@ -817,7 +818,7 @@ const maxDelayedDevicesPerInterface = 1024
 // the CCU re-announces its complete inventory after every reconnect — an
 // append-only inbox grew by another full copy of the fleet each time and
 // nothing but the manual-accept flow ever removed anything.
-func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmenum.Interface, descriptions []hmproto.DeviceDescription) {
+func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmtypes.WireInterfaceID, descriptions []hmproto.DeviceDescription) {
 	ifaceID := string(iface)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -889,7 +890,7 @@ type ParamsetInconsistency struct {
 func (c *DeviceCoordinator) CheckParamsetConsistency(
 	ctx context.Context,
 	iface hmenum.Interface,
-	ifaceKey hmenum.Interface,
+	ifaceKey hmtypes.WireInterfaceID,
 	deviceAddresses []string,
 	checker ParamsetConsistencyChecker,
 ) ([]ParamsetInconsistency, error) {
@@ -981,7 +982,7 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 func (c *DeviceCoordinator) ReaddDevice(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	deviceAddresses []string,
 ) error {
 	if fetcher == nil {
@@ -1023,7 +1024,7 @@ type LinkPeerFetcher interface {
 	// GetLinkPeers returns the peer channel addresses linked to
 	// channelAddress on the given interface. Returns an empty slice
 	// (not an error) when no peers are configured.
-	GetLinkPeers(ctx context.Context, iface hmenum.Interface, channelAddress string) ([]string, error)
+	GetLinkPeers(ctx context.Context, iface hmtypes.WireInterfaceID, channelAddress string) ([]string, error)
 }
 
 // RefreshDeviceLinkPeers re-fetches the link peer addresses for every channel
@@ -1036,7 +1037,7 @@ type LinkPeerFetcher interface {
 func (c *DeviceCoordinator) RefreshDeviceLinkPeers(
 	ctx context.Context,
 	fetcher LinkPeerFetcher,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	deviceAddress string,
 ) {
 	if fetcher == nil {
@@ -1090,7 +1091,7 @@ type FirmwareStateReader interface {
 	// DeviceFirmwareStates returns a map of device address →
 	// DeviceFirmwareState for all devices on iface. Addresses missing
 	// from the map are treated as DeviceFirmwareStateUnknown.
-	DeviceFirmwareStates(iface hmenum.Interface) map[string]hmenum.DeviceFirmwareState
+	DeviceFirmwareStates(iface hmtypes.WireInterfaceID) map[string]hmenum.DeviceFirmwareState
 }
 
 // RefreshFirmwareDataByState filters all known devices on iface to
@@ -1107,7 +1108,7 @@ func (c *DeviceCoordinator) RefreshFirmwareDataByState(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,
 	stateReader FirmwareStateReader,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	states []hmenum.DeviceFirmwareState,
 ) error {
 	if fetcher == nil {
@@ -1176,7 +1177,7 @@ func (c *DeviceCoordinator) RefreshFirmwareData(ctx context.Context, fetcher Dev
 func (c *DeviceCoordinator) ReplaceDevice(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	oldAddr, newAddr string,
 ) error {
 	if fetcher == nil {
@@ -1231,7 +1232,7 @@ func (c *DeviceCoordinator) ReplaceDevice(
 //
 // Called by the adapter layer when a firmware update completes
 // (DeviceFirmwareStateChanged event with To == DeviceFirmwareStateUpToDate).
-func (c *DeviceCoordinator) InvalidateFirmwareCache(iface hmenum.Interface, deviceAddress string) {
+func (c *DeviceCoordinator) InvalidateFirmwareCache(iface hmtypes.WireInterfaceID, deviceAddress string) {
 	allDescs := c.descs.All(iface)
 	for i := range allDescs {
 		d := allDescs[i]
@@ -1253,7 +1254,7 @@ func (c *DeviceCoordinator) InvalidateFirmwareCache(iface hmenum.Interface, devi
 func (c *DeviceCoordinator) RefreshDeviceDescriptions(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	refreshOnlyExisting bool,
 ) error {
 	if fetcher == nil {
@@ -1278,7 +1279,7 @@ func (c *DeviceCoordinator) RefreshDeviceDescriptions(
 // returns the addresses of devices that have no MASTER or VALUES paramset
 // entries in the paramset registry. These are devices that were created from
 // cache or a partial pull and still need a full paramset fetch.
-func (c *DeviceCoordinator) IdentifyDevicesMissingParamsets(iface hmenum.Interface) []string {
+func (c *DeviceCoordinator) IdentifyDevicesMissingParamsets(iface hmtypes.WireInterfaceID) []string {
 	allDescs := c.descs.All(iface)
 	var missing []string
 	for i := range allDescs {
@@ -1324,7 +1325,7 @@ func (c *DeviceCoordinator) SetDeviceNameOverrideChecker(ch DeviceNameOverrideCh
 // Called by the device-lifecycle path when a [hmevent.DeviceCreatedEvent]
 // arrives for a new device. The rename callback is wired by the adapter
 // layer and typically calls the domain model's rename path.
-func (c *DeviceCoordinator) RenameNewDeviceFromOverride(iface hmenum.Interface, deviceAddress string, renameCallback func(address, name string)) {
+func (c *DeviceCoordinator) RenameNewDeviceFromOverride(iface hmtypes.WireInterfaceID, deviceAddress string, renameCallback func(address, name string)) {
 	c.mu.Lock()
 	ch := c.nameOverrideChecker
 	c.mu.Unlock()
@@ -1357,7 +1358,7 @@ func (c *DeviceCoordinator) RenameNewDeviceFromOverride(iface hmenum.Interface, 
 func (c *DeviceCoordinator) ScheduleParamsetConsistencyCheck(
 	ctx context.Context,
 	iface hmenum.Interface,
-	ifaceKey hmenum.Interface,
+	ifaceKey hmtypes.WireInterfaceID,
 	deviceAddresses []string,
 	checker ParamsetConsistencyChecker,
 	onResult func([]ParamsetInconsistency),

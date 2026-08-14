@@ -525,7 +525,7 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 	for i, v := range descs {
 		raw[i] = xmlRPCValueToGo(v)
 	}
-	iface := hmenum.Interface(interfaceID)
+	iface := hmtypes.ParseWireInterfaceID(interfaceID)
 	descriptions := backends.ParseDeviceDescriptions(raw)
 	if len(descriptions) == 0 {
 		return nil
@@ -594,7 +594,7 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 	if hint != hintFirmware || h.unit == nil || h.unit.Devices == nil {
 		return nil
 	}
-	iface := hmenum.Interface(interfaceID)
+	iface := hmtypes.ParseWireInterfaceID(interfaceID)
 	h.unit.Devices.InvalidateFirmwareCache(iface, address)
 	if h.writer == nil {
 		return nil
@@ -638,7 +638,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 		return nil
 	}
 	fetcher := &callbackDescFetcher{ops: b}
-	iface := hmenum.Interface(interfaceID)
+	iface := hmtypes.ParseWireInterfaceID(interfaceID)
 	h.wg.Go(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
@@ -671,7 +671,7 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 		return nil
 	}
 	fetcher := &callbackDescFetcher{ops: b}
-	iface := hmenum.Interface(interfaceID)
+	iface := hmtypes.ParseWireInterfaceID(interfaceID)
 	h.wg.Go(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
@@ -696,7 +696,7 @@ type callbackDescFetcher struct {
 }
 
 // ListDevices implements [coordinators.DeviceDescriptionFetcher].
-func (f *callbackDescFetcher) ListDevices(ctx context.Context, _ hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+func (f *callbackDescFetcher) ListDevices(ctx context.Context, _ hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
 	return f.ops.ListDevices(ctx)
 }
 

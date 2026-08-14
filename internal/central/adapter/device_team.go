@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // SetChannelTeam assigns a channel to a team channel via the CCU's
@@ -55,7 +55,7 @@ func (a *DeviceAdminDomain) TeamCandidates(ctx context.Context, deviceAddr strin
 	// both write under it. Looking the target channel up with the bare
 	// interface misses on every named central, which returned an empty
 	// candidate list with HTTP 200 and made the team unassignable from the UI.
-	target, ok := unit.DescRegistry.Get(hmenum.Interface(dev.InterfaceID), channelAddress)
+	target, ok := unit.DescRegistry.Get(hmtypes.ParseWireInterfaceID(dev.InterfaceID), channelAddress)
 	if !ok || target.TeamTag == "" {
 		return []hmapi.TeamCandidate{}, nil
 	}

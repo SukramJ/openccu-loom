@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // FirmwareDomain is the live implementation of the firmware-refresh
@@ -113,7 +114,7 @@ type modelFirmwareStateReader struct {
 // by that id. Matching against the device's bare Interface instead would make
 // the returned set empty on every named central and turn the state-gated
 // refresh into a silent no-op.
-func (r modelFirmwareStateReader) DeviceFirmwareStates(iface hmenum.Interface) map[string]hmenum.DeviceFirmwareState {
+func (r modelFirmwareStateReader) DeviceFirmwareStates(iface hmtypes.WireInterfaceID) map[string]hmenum.DeviceFirmwareState {
 	out := map[string]hmenum.DeviceFirmwareState{}
 	for _, dev := range r.reg.List() {
 		if dev == nil || dev.InterfaceID != string(iface) || dev.Firmware() == nil {
@@ -143,7 +144,7 @@ func applyFirmwareFromDescriptions(u *central.Unit) {
 		// (`<central>-<iface>`) — that is what the callback handlers and the
 		// hydration path Put under. The device's bare Interface is the
 		// operator-facing form and misses every entry on a named central.
-		dd, ok := u.DescRegistry.Get(hmenum.Interface(dev.InterfaceID), dev.Address)
+		dd, ok := u.DescRegistry.Get(hmtypes.ParseWireInterfaceID(dev.InterfaceID), dev.Address)
 		if !ok {
 			continue
 		}
@@ -170,7 +171,7 @@ type writerDescFetcher struct {
 var _ coordinators.DeviceDescriptionFetcher = (*writerDescFetcher)(nil)
 
 // ListDevices satisfies [coordinators.DeviceDescriptionFetcher].
-func (f *writerDescFetcher) ListDevices(ctx context.Context, iface hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+func (f *writerDescFetcher) ListDevices(ctx context.Context, iface hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
 	backend, ok := f.writer.Backend(f.central, string(iface))
 	if !ok {
 		return nil, fmt.Errorf("firmware-domain: no backend for %s/%s", f.central, iface)

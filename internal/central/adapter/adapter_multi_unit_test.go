@@ -298,11 +298,11 @@ func buildLinksWithDataFixture(t *testing.T, links []hmproto.LinkDescription) *L
 	dev.AddChannel("DEV020:1", 1, "KEY", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV020",
 		Model:     "HmIP-KEY4",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "DEV020",
 		Type:    "HmIP-KEY4",
 	})
@@ -410,11 +410,11 @@ func buildParamsetBoost10Fixture(t *testing.T) *ParamsetsDomain {
 	dev.AddChannel("DEV021:1", 1, "CLIMATECONTROL_RECEIVER", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV021",
 		Model:     "HmIP-eTRV-3",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "DEV021",
 		Type:    "HmIP-eTRV-3",
 	})
@@ -654,7 +654,7 @@ func buildUISchemaBoost11Fixture(t *testing.T) (*UISchemaAdapter, *central.Regis
 	dev.AddChannel("DEV050:1", 1, "CLIMATECONTROL_RECEIVER", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV050",
 		Model:     "HmIP-STH",
 	})
@@ -938,11 +938,11 @@ func TestParamsetsDomain_PutLinkParamset_HappyPath_WithChannel(t *testing.T) {
 	dev.AddChannel("DEV061:1", 1, "KEY", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV061",
 		Model:     "HmIP-KEY4",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "DEV061",
 		Type:    "HmIP-KEY4",
 	})
@@ -1197,11 +1197,11 @@ func buildBoost12Fixture(t *testing.T) (*central.Registry, *client.ValueWriter, 
 	dev.AddChannel("SCHED100:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyMaster)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "SCHED100",
 		Model:     "HmIP-eTRV-3",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "SCHED100",
 		Type:    "HmIP-eTRV-3",
 	})
@@ -1632,11 +1632,11 @@ func buildBoost13Fixture(t *testing.T) *boost13Fixture {
 	dev.AddChannel("WIREDEV01:1", 1, "CLIMATECONTROL_RECEIVER", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: hmtypes.ParseWireInterfaceID(wireID),
 		Address:   "WIREDEV01",
 		Model:     "HmIP-STH",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(hmtypes.ParseWireInterfaceID(wireID), hmproto.DeviceDescription{
 		Address: "WIREDEV01",
 		Type:    "HmIP-STH",
 	})
@@ -1902,11 +1902,11 @@ func TestGetLinkParamset_WithDevice_NoBackend(t *testing.T) {
 	dev.AddChannel("GLPDEV:1", 1, "KEY_TRANSCEIVER", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "GLPDEV",
 		Model:     "HmIP-KEY4",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "GLPDEV",
 		Type:    "HmIP-KEY4",
 	})
@@ -1940,11 +1940,11 @@ func TestGetLinkParamset_WithBackend_ReturnsNil(t *testing.T) {
 	dev.AddChannel("GLPDEV2:1", 1, "KEY_TRANSCEIVER", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "GLPDEV2",
 		Model:     "HmIP-KEY4",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "GLPDEV2",
 		Type:    "HmIP-KEY4",
 	})
@@ -2395,11 +2395,11 @@ func buildRefreshAfterPutFixture(t *testing.T) (*ParamsetsDomain, *configFakeOpe
 	dev.AddChannel("RAPDEV01:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "RAPDEV01",
 		Model:     "HmIP-PSM",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "RAPDEV01",
 		Type:    "HmIP-PSM",
 	})
@@ -12353,11 +12353,11 @@ func buildLinksFixture(t *testing.T) (
 	dev.AddChannel("DEV001:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV001",
 		Model:     "HmIP-PS",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "DEV001",
 		Type:    "HmIP-PS",
 	})
@@ -13042,11 +13042,11 @@ func buildBoost7Fixture(t *testing.T) *boost7Fixture {
 	dev.AddChannel("DEV002:1", 1, "CLIMATECONTROL_RECEIVER", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV002",
 		Model:     "HmIP-STH",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "DEV002",
 		Type:    "HmIP-STH",
 	})
@@ -13481,11 +13481,11 @@ func buildBoost8Fixture(t *testing.T, paramsetData map[string]any, paramsetErr e
 	dev.AddChannel("DEV003:1", 1, "CLIMATECONTROL_RECEIVER", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV003",
 		Model:     "HmIP-eTRV-3",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "DEV003",
 		Type:    "HmIP-eTRV-3",
 	})
@@ -14047,11 +14047,11 @@ func buildBoost9Fixture(t *testing.T) (
 	dev.AddChannel("DEV004:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV004",
 		Model:     "HmIP-PS",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "DEV004",
 		Type:    "HmIP-PS",
 	})
@@ -14404,11 +14404,11 @@ func buildCentralLinksBoost9Fixture(t *testing.T) *CentralLinksDomain {
 	dev.AddChannel("DEV006:1", 1, "KEY", hmenum.ParamsetKeyValues)
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "DEV006",
 		Model:     "HmIP-KEY4",
 	})
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "DEV006",
 		Type:    "HmIP-KEY4",
 	})

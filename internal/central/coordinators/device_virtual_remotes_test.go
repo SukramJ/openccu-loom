@@ -20,10 +20,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // newDCWithDescs populates a DeviceCoordinator with the given descriptions.
-func newDCWithDescs(t *testing.T, iface hmenum.Interface, descs ...hmproto.DeviceDescription) *DeviceCoordinator {
+func newDCWithDescs(t *testing.T, iface hmtypes.WireInterfaceID, descs ...hmproto.DeviceDescription) *DeviceCoordinator {
 	t.Helper()
 	bus := events.NewBus()
 	devs := registry.NewDeviceRegistry()
@@ -43,11 +44,11 @@ func newDCWithDescs(t *testing.T, iface hmenum.Interface, descs ...hmproto.Devic
 func TestGetVirtualRemotesNonVrcTypeIsExcluded(t *testing.T) {
 	t.Parallel()
 	dc := newDCWithDescs(
-		t, hmenum.InterfaceHmIPRF,
+		t, wireKey(hmenum.InterfaceHmIPRF),
 		hmproto.DeviceDescription{Address: "AA", Type: "HmIP-SW"},
 		hmproto.DeviceDescription{Address: "AA:0", Parent: "AA", Type: "MAINTENANCE"},
 	)
-	remotes := dc.GetVirtualRemotes(hmenum.InterfaceHmIPRF)
+	remotes := dc.GetVirtualRemotes(wireKey(hmenum.InterfaceHmIPRF))
 	if len(remotes) != 0 {
 		t.Fatalf("GetVirtualRemotes must return empty for non-VRC devices, got %d", len(remotes))
 	}
@@ -56,7 +57,7 @@ func TestGetVirtualRemotesNonVrcTypeIsExcluded(t *testing.T) {
 func TestGetVirtualRemotesFound(t *testing.T) {
 	t.Parallel()
 	dc := newDCWithDescs(
-		t, hmenum.InterfaceHmIPRF,
+		t, wireKey(hmenum.InterfaceHmIPRF),
 		hmproto.DeviceDescription{
 			Address:  "VRT0001",
 			Type:     "HM-RCV-50",
@@ -65,7 +66,7 @@ func TestGetVirtualRemotesFound(t *testing.T) {
 		hmproto.DeviceDescription{Address: "VRT0001:1", Parent: "VRT0001", Type: "VRC"},
 		hmproto.DeviceDescription{Address: "VRT0001:2", Parent: "VRT0001", Type: "VRC"},
 	)
-	remotes := dc.GetVirtualRemotes(hmenum.InterfaceHmIPRF)
+	remotes := dc.GetVirtualRemotes(wireKey(hmenum.InterfaceHmIPRF))
 	if len(remotes) != 1 {
 		t.Fatalf("GetVirtualRemotes must return 1 entry for VRC device, got %d", len(remotes))
 	}
@@ -83,12 +84,12 @@ func TestGetVirtualRemotesFound(t *testing.T) {
 func TestGetVirtualRemotesMultipleDevices(t *testing.T) {
 	t.Parallel()
 	dc := newDCWithDescs(
-		t, hmenum.InterfaceHmIPRF,
+		t, wireKey(hmenum.InterfaceHmIPRF),
 		hmproto.DeviceDescription{Address: "VRT0001", Type: "HM-RCV-50"},
 		hmproto.DeviceDescription{Address: "VRT0002", Type: "HM-RCV-50"},
 		hmproto.DeviceDescription{Address: "NOTVRV", Type: "HmIP-SW"},
 	)
-	remotes := dc.GetVirtualRemotes(hmenum.InterfaceHmIPRF)
+	remotes := dc.GetVirtualRemotes(wireKey(hmenum.InterfaceHmIPRF))
 	if len(remotes) != 2 {
 		t.Fatalf("GetVirtualRemotes must return 2, got %d", len(remotes))
 	}
@@ -101,10 +102,10 @@ func TestGetVirtualRemotesMultipleDevices(t *testing.T) {
 func TestIdentifyChannelBySubstringNotFound(t *testing.T) {
 	t.Parallel()
 	dc := newDCWithDescs(
-		t, hmenum.InterfaceHmIPRF,
+		t, wireKey(hmenum.InterfaceHmIPRF),
 		hmproto.DeviceDescription{Address: "AA:1", Parent: "AA", Type: "SWITCH"},
 	)
-	addr, ok := dc.IdentifyChannel(hmenum.InterfaceHmIPRF, "ZZ")
+	addr, ok := dc.IdentifyChannel(wireKey(hmenum.InterfaceHmIPRF), "ZZ")
 	if ok {
 		t.Fatalf("IdentifyChannel with no match must return false, got %q", addr)
 	}
@@ -113,10 +114,10 @@ func TestIdentifyChannelBySubstringNotFound(t *testing.T) {
 func TestIdentifyChannelBySubstringMatch(t *testing.T) {
 	t.Parallel()
 	dc := newDCWithDescs(
-		t, hmenum.InterfaceHmIPRF,
+		t, wireKey(hmenum.InterfaceHmIPRF),
 		hmproto.DeviceDescription{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SENSOR"},
 	)
-	addr, ok := dc.IdentifyChannel(hmenum.InterfaceHmIPRF, "HEQ0128279")
+	addr, ok := dc.IdentifyChannel(wireKey(hmenum.InterfaceHmIPRF), "HEQ0128279")
 	if !ok {
 		t.Fatal("IdentifyChannel must match substring")
 	}
@@ -128,10 +129,10 @@ func TestIdentifyChannelBySubstringMatch(t *testing.T) {
 func TestIdentifyChannelBySubstringEmptyText(t *testing.T) {
 	t.Parallel()
 	dc := newDCWithDescs(
-		t, hmenum.InterfaceHmIPRF,
+		t, wireKey(hmenum.InterfaceHmIPRF),
 		hmproto.DeviceDescription{Address: "AA:1", Parent: "AA", Type: "SWITCH"},
 	)
-	addr, ok := dc.IdentifyChannel(hmenum.InterfaceHmIPRF, "")
+	addr, ok := dc.IdentifyChannel(wireKey(hmenum.InterfaceHmIPRF), "")
 	if ok || addr != "" {
 		t.Fatalf("empty text must return ('', false), got (%q, %v)", addr, ok)
 	}
@@ -147,7 +148,7 @@ func TestDeleteDeviceIncludesChannels(t *testing.T) {
 	removed := collectRemoved(bus)
 	ctx := context.Background()
 
-	dc.HandleNewDevices(ctx, hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.HandleNewDevices(ctx, wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		device("AA", "HmIP-X", "1.0", "AA:0", "AA:1"),
 		channel("AA:0", "AA", "MAINTENANCE"),
 		channel("AA:1", "AA", "SENSOR"),
@@ -156,16 +157,16 @@ func TestDeleteDeviceIncludesChannels(t *testing.T) {
 		t.Fatalf("seeded devs=%d, want 1", devs.Len())
 	}
 
-	dc.DeleteDevice(ctx, hmenum.InterfaceHmIPRF, "AA")
+	dc.DeleteDevice(ctx, wireKey(hmenum.InterfaceHmIPRF), "AA")
 
 	if devs.Len() != 0 {
 		t.Fatalf("devs after delete=%d, want 0", devs.Len())
 	}
 	// Channels must also be gone from descriptions.
-	if _, ok := descs.Get(hmenum.InterfaceHmIPRF, "AA:0"); ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceHmIPRF), "AA:0"); ok {
 		t.Fatal("AA:0 should have been deleted")
 	}
-	if _, ok := descs.Get(hmenum.InterfaceHmIPRF, "AA:1"); ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceHmIPRF), "AA:1"); ok {
 		t.Fatal("AA:1 should have been deleted")
 	}
 	// Exactly one DeviceRemovedEvent for the top-level device.
@@ -180,7 +181,7 @@ func TestDeleteDeviceNotFoundIsNoop(t *testing.T) {
 	ctx := context.Background()
 
 	// Empty registry — delete must not panic or return error.
-	dc.DeleteDevice(ctx, hmenum.InterfaceHmIPRF, "GHOST")
+	dc.DeleteDevice(ctx, wireKey(hmenum.InterfaceHmIPRF), "GHOST")
 	if devs.Len() != 0 {
 		t.Fatalf("devs=%d, want 0", devs.Len())
 	}
@@ -193,7 +194,7 @@ func TestDeleteDeviceNotFoundIsNoop(t *testing.T) {
 func TestCheckForNewDeviceAddressesAllDescriptionsPresent(t *testing.T) {
 	t.Parallel()
 	dc := newDCWithDescs(
-		t, hmenum.InterfaceHmIPRF,
+		t, wireKey(hmenum.InterfaceHmIPRF),
 		hmproto.DeviceDescription{Address: "HEQ0128279", Type: "HM-Sec-SC"},
 		hmproto.DeviceDescription{Address: "HEQ0128279:0", Parent: "HEQ0128279", Type: "MAINTENANCE"},
 		hmproto.DeviceDescription{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT"},
@@ -203,7 +204,7 @@ func TestCheckForNewDeviceAddressesAllDescriptionsPresent(t *testing.T) {
 		{Address: "HEQ0128279:0", Parent: "HEQ0128279", Type: "MAINTENANCE"},
 		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT"},
 	}
-	got := dc.CheckForNewDeviceAddresses(hmenum.InterfaceHmIPRF, snapshot)
+	got := dc.CheckForNewDeviceAddresses(wireKey(hmenum.InterfaceHmIPRF), snapshot)
 	if len(got) != 0 {
 		t.Fatalf("all present → want empty, got %v", got)
 	}
@@ -213,7 +214,7 @@ func TestCheckForNewDeviceAddressesMixedChannels(t *testing.T) {
 	t.Parallel()
 	// DEV001 channels present; DEV002 channels missing.
 	dc := newDCWithDescs(
-		t, hmenum.InterfaceHmIPRF,
+		t, wireKey(hmenum.InterfaceHmIPRF),
 		hmproto.DeviceDescription{Address: "DEV001", Type: "HM-A"},
 		hmproto.DeviceDescription{Address: "DEV001:0", Parent: "DEV001", Type: "MAINTENANCE"},
 		hmproto.DeviceDescription{Address: "DEV001:1", Parent: "DEV001", Type: "SENSOR"},
@@ -225,7 +226,7 @@ func TestCheckForNewDeviceAddressesMixedChannels(t *testing.T) {
 		{Address: "DEV002:0", Parent: "DEV002", Type: "MAINTENANCE"},
 		{Address: "DEV002:1", Parent: "DEV002", Type: "SENSOR"},
 	}
-	got := dc.CheckForNewDeviceAddresses(hmenum.InterfaceHmIPRF, snapshot)
+	got := dc.CheckForNewDeviceAddresses(wireKey(hmenum.InterfaceHmIPRF), snapshot)
 	// Only DEV002 channels are unknown.
 	if len(got) != 2 {
 		t.Fatalf("want 2 new addresses, got %v", got)

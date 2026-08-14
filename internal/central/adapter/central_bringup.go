@@ -13,7 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // centralBringUp owns one central's south-bound bring-up as a restartable
@@ -202,7 +202,7 @@ func (b *centralBringUp) clearModel() {
 		return
 	}
 	for _, d := range b.unit.ModelRegistry.List() {
-		iface := hmenum.Interface(d.InterfaceID)
+		iface := hmtypes.ParseWireInterfaceID(d.InterfaceID)
 		if b.unit.DescRegistry != nil {
 			b.unit.DescRegistry.Delete(iface, d.Address)
 		}

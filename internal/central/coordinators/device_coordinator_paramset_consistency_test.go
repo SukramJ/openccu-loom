@@ -39,18 +39,6 @@ func (f *fakeChecker) GetParamset(_ context.Context, ch string, _ hmenum.Paramse
 	return map[string]any{}, nil
 }
 
-// consistencyCentral is the central name every coordinator in this file is
-// built for; the registry keys below are derived from it.
-const consistencyCentral = "ccu1"
-
-// wireKey returns the canonical `<central>-<iface>` id the hydration pipeline
-// keys the description and paramset registries by. The tests register under it
-// (and pass it to the check) because that is what production does — registering
-// under the bare interface made the whole check a no-op that still looked green.
-func wireKey(iface hmenum.Interface) hmenum.Interface {
-	return hmenum.Interface(consistencyCentral + "-" + string(iface))
-}
-
 // buildCoordinator builds a minimal DeviceCoordinator populated with the
 // given descriptions and MASTER paramsets so CheckParamsetConsistency can
 // run without a real CCU.
@@ -71,7 +59,7 @@ func buildCoordinator(
 		psReg.Put(wireKey(iface), ch, hmenum.ParamsetKeyMaster, ps)
 	}
 
-	return NewDeviceCoordinator(consistencyCentral, bus, devReg, descReg, psReg, nil)
+	return NewDeviceCoordinator(testCentralName, bus, devReg, descReg, psReg, nil)
 }
 
 // ─── Test 1: nil checker returns error ───────────────────────────────────────

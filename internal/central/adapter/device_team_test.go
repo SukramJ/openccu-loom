@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // teamRecordingOperations wraps fakeOperations with controllable
@@ -47,11 +48,11 @@ func teamDomainWith(t *testing.T, iface hmenum.Interface, fake backends.Operatio
 	})
 	unit.ModelRegistry.Put(dev)
 	unit.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.Interface(wireID), Address: "SD001", Model: "HM-Sec-SD",
+		Interface: hmtypes.ParseWireInterfaceID(wireID), Address: "SD001", Model: "HM-Sec-SD",
 	})
 	// The target channel description carries the team tag the candidate
 	// filter matches on.
-	unit.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{
+	unit.DescRegistry.Put(hmtypes.ParseWireInterfaceID(wireID), hmproto.DeviceDescription{
 		Address: "SD001:1", Parent: "SD001", TeamTag: "SMOKE", Team: "TEAM:1",
 	})
 	w := client.NewValueWriter()

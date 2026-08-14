@@ -23,6 +23,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ---------------------------------------------------------------------------
@@ -59,12 +60,12 @@ func TestCheckAndCreateDevicesFromCacheCreatesNewDevices(t *testing.T) {
 	created := collectCreated(bus)
 
 	// Seed the description registry directly (simulates persisted cache).
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address:  "AA",
 		Type:     "HmIP-X",
 		Firmware: "1.0",
 	})
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address: "AA:0",
 		Parent:  "AA",
 		Type:    "MAINTENANCE",
@@ -81,7 +82,7 @@ func TestCheckAndCreateDevicesFromCacheCreatesNewDevices(t *testing.T) {
 	if devs.Len() != 1 {
 		t.Fatalf("DeviceRegistry len=%d after cache restore, want 1", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "AA"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "AA"); !ok {
 		t.Fatal("AA must be in DeviceRegistry after cache restore")
 	}
 	if len(*created) != 1 || (*created)[0].Address != "AA" {
@@ -98,7 +99,7 @@ func TestCheckAndCreateDevicesFromCacheIsIdempotent(t *testing.T) {
 	var count atomic.Int32
 	events.Subscribe(bus, func(_ hmevent.DeviceCreatedEvent) { count.Add(1) })
 
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address: "BB",
 		Type:    "HmIP-Y",
 	})
@@ -145,13 +146,13 @@ func TestCheckAndCreateDevicesFromCacheSubscriberCallingBackDoesNotDeadlock(t *t
 	t.Parallel()
 	dc, bus, devs, descs, _ := newDCFull(t)
 
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address: "AA",
 		Type:    "HmIP-X",
 	})
 
 	events.Subscribe(bus, func(_ hmevent.DeviceCreatedEvent) {
-		dc.RenameNewDeviceFromOverride(hmenum.InterfaceHmIPRF, "AA", func(string, string) {})
+		dc.RenameNewDeviceFromOverride(wireKey(hmenum.InterfaceHmIPRF), "AA", func(string, string) {})
 	})
 
 	done := make(chan error, 1)
@@ -184,8 +185,8 @@ func TestRefreshDeviceDescriptionsAndCreateMissingDevices(t *testing.T) {
 	created := collectCreated(bus)
 
 	// Seed with one pre-existing device.
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "OLD", Type: "HmIP-A"})
-	devs.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "OLD", Model: "HmIP-A"})
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{Address: "OLD", Type: "HmIP-A"})
+	devs.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceHmIPRF), Address: "OLD", Model: "HmIP-A"})
 
 	fetcher := &stubLister{snapshot: []hmproto.DeviceDescription{
 		{Address: "OLD", Type: "HmIP-A"},
@@ -194,7 +195,7 @@ func TestRefreshDeviceDescriptionsAndCreateMissingDevices(t *testing.T) {
 	}}
 
 	if err := dc.RefreshDeviceDescriptionsAndCreateMissingDevices(
-		context.Background(), fetcher, hmenum.InterfaceHmIPRF,
+		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +203,7 @@ func TestRefreshDeviceDescriptionsAndCreateMissingDevices(t *testing.T) {
 	if devs.Len() != 2 {
 		t.Fatalf("devs=%d after refresh, want 2", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "NEW"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "NEW"); !ok {
 		t.Fatal("NEW must be in DeviceRegistry after refresh")
 	}
 	// Only NEW fires a created event; OLD already existed.
@@ -218,7 +219,7 @@ func TestRefreshDeviceDescriptionsNilFetcherErrors(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _, _ := newDCFull(t)
 	if err := dc.RefreshDeviceDescriptionsAndCreateMissingDevices(
-		context.Background(), nil, hmenum.InterfaceHmIPRF,
+		context.Background(), nil, wireKey(hmenum.InterfaceHmIPRF),
 	); err == nil {
 		t.Fatal("nil fetcher must return error")
 	}
@@ -229,7 +230,7 @@ func TestRefreshDeviceDescriptionsFetcherErrorPropagates(t *testing.T) {
 	dc, _, _, _, _ := newDCFull(t)
 	fetcher := &stubLister{err: errors.New("network error")}
 	err := dc.RefreshDeviceDescriptionsAndCreateMissingDevices(
-		context.Background(), fetcher, hmenum.InterfaceHmIPRF,
+		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF),
 	)
 	if err == nil {
 		t.Fatal("fetcher error must propagate")
@@ -246,20 +247,20 @@ func TestAddNewDevicesManuallyAcceptsDelayedDescriptions(t *testing.T) {
 	created := collectCreated(bus)
 
 	// Simulate a newDevices callback storing delayed descriptions.
-	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X"},
 		{Address: "AA:0", Parent: "AA", Type: "MAINTENANCE"},
 	})
 
 	var accepted []string
-	acceptFn := func(_ context.Context, _ hmenum.Interface, address string) error {
+	acceptFn := func(_ context.Context, _ hmtypes.WireInterfaceID, address string) error {
 		accepted = append(accepted, address)
 		return nil
 	}
 
 	if err := dc.AddNewDevicesManually(
 		context.Background(),
-		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
 		map[string]string{"AA": "My Device"},
 		acceptFn,
 	); err != nil {
@@ -269,7 +270,7 @@ func TestAddNewDevicesManuallyAcceptsDelayedDescriptions(t *testing.T) {
 	if devs.Len() != 1 {
 		t.Fatalf("devs=%d, want 1", devs.Len())
 	}
-	if _, ok := devs.Get(hmenum.InterfaceHmIPRF, "AA"); !ok {
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "AA"); !ok {
 		t.Fatal("AA must be in DeviceRegistry")
 	}
 	if len(*created) != 1 || (*created)[0].Source != hmenum.SourceOfDeviceCreationManual {
@@ -286,7 +287,7 @@ func TestAddNewDevicesManuallyUnknownAddressIsSkipped(t *testing.T) {
 
 	if err := dc.AddNewDevicesManually(
 		context.Background(),
-		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
 		map[string]string{"GHOST": ""},
 		nil,
 	); err != nil {
@@ -301,14 +302,14 @@ func TestStoreDelayedAndManualCleansUpEmptyInterfaceEntry(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _, _ := newDCFull(t)
 
-	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X"},
 	})
 
 	// Accept the only delayed device.
 	if err := dc.AddNewDevicesManually(
 		context.Background(),
-		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
 		map[string]string{"AA": ""},
 		nil,
 	); err != nil {
@@ -319,7 +320,7 @@ func TestStoreDelayedAndManualCleansUpEmptyInterfaceEntry(t *testing.T) {
 	dc2, bus2, devs2, _, _ := newDCFull(t)
 	var count atomic.Int32
 	events.Subscribe(bus2, func(_ hmevent.DeviceCreatedEvent) { count.Add(1) })
-	_ = dc2.AddNewDevicesManually(context.Background(), hmenum.InterfaceHmIPRF,
+	_ = dc2.AddNewDevicesManually(context.Background(), wireKey(hmenum.InterfaceHmIPRF),
 		map[string]string{"AA": ""}, nil)
 	if devs2.Len() != 0 || count.Load() != 0 {
 		t.Fatal("second AddNewDevicesManually on empty delayed should be a no-op")
@@ -327,7 +328,7 @@ func TestStoreDelayedAndManualCleansUpEmptyInterfaceEntry(t *testing.T) {
 
 	// Verify the original dc's delayed map is empty for the interface.
 	dc.mu.Lock()
-	_, stillExists := dc.delayedDescs[string(hmenum.InterfaceHmIPRF)]
+	_, stillExists := dc.delayedDescs[string(wireKey(hmenum.InterfaceHmIPRF))]
 	dc.mu.Unlock()
 	if stillExists {
 		t.Fatal("delayed map for interface must be cleaned up after all devices accepted")
@@ -538,18 +539,18 @@ func TestAddNewDevicesManuallyPublishesOutsideTheCoordinatorLock(t *testing.T) {
 	var reentered atomic.Bool
 	unsub := events.Subscribe(bus, func(hmevent.DeviceCreatedEvent) {
 		// A read that takes the coordinator's own lock.
-		dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceHmIPRF, nil)
+		dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), nil)
 		reentered.Store(true)
 	})
 	defer unsub()
 
-	dc.StoreDelayedDeviceDescriptions(hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "REENT0001", Type: "HmIP-STH"},
 	})
 
 	done := make(chan error, 1)
 	go func() {
-		done <- dc.AddNewDevicesManually(context.Background(), hmenum.InterfaceHmIPRF,
+		done <- dc.AddNewDevicesManually(context.Background(), wireKey(hmenum.InterfaceHmIPRF),
 			map[string]string{"REENT0001": "Sensor"}, nil)
 	}()
 
