@@ -22,6 +22,13 @@ const (
 	DefaultJitterMax     = time.Hour
 )
 
+// DefaultCheckTimeout bounds one cadence tick. The loop runs every check
+// on a single goroutine, so a check that never returns stops the cadence
+// for the daemon's remaining uptime. The bound is enforced here and not
+// only inside the HTTP client so an injected client without a deadline
+// cannot wedge the loop either.
+const DefaultCheckTimeout = 2 * time.Minute
+
 // PeriodicChecker drives the boot-delayed, jittered recurring
 // addon-update check (ADR 0057 §4) on its own goroutine. It does not
 // use [internal/scheduler].Scheduler directly: that scheduler's Job
@@ -40,6 +47,9 @@ type PeriodicChecker struct {
 	// JitterMax bounds the +/- random offset applied to Interval on
 	// every recurring cycle. Zero uses [DefaultJitterMax].
 	JitterMax time.Duration
+	// CheckTimeout bounds a single check. Zero uses
+	// [DefaultCheckTimeout]; negative disables the bound.
+	CheckTimeout time.Duration
 	// Clock is the time source for delays/timers. Nil uses the real
 	// wall clock.
 	Clock clock.Clock
@@ -113,6 +123,13 @@ func (p *PeriodicChecker) jitterMax() time.Duration {
 	return DefaultJitterMax
 }
 
+func (p *PeriodicChecker) checkTimeout() time.Duration {
+	if p.CheckTimeout != 0 {
+		return p.CheckTimeout
+	}
+	return DefaultCheckTimeout
+}
+
 func (p *PeriodicChecker) logger() *slog.Logger {
 	if p.Logger != nil {
 		return p.Logger
@@ -157,6 +174,11 @@ func (p *PeriodicChecker) run(ctx context.Context) {
 func (p *PeriodicChecker) checkOnce(ctx context.Context) {
 	if p.Updater == nil {
 		return
+	}
+	if timeout := p.checkTimeout(); timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
 	}
 	if err := p.Updater.Check(ctx); err != nil {
 		p.logger().Warn("addon_update.periodic_check_failed", slog.String("err", err.Error()))

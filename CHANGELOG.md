@@ -200,6 +200,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The recurring add-on update check no longer stops after one stalled
+  request.** The release check and the tarball download went out on the
+  process-wide default HTTP client, which carries no request deadline at
+  all. A server that accepts the connection and then never answers — a
+  network partition, a transparent proxy that swallows the response —
+  parked the single goroutine that drives the daily check for the rest
+  of the daemon's uptime: no log line, no error, and no further check
+  until a restart. A stalled download had a louder consequence, latching
+  the updater in `downloading` so every later check or install answered
+  "busy". Both now use a client of their own with an explicit deadline,
+  and each check on the recurring cadence is additionally bounded on its
+  own so no single call can wedge the loop. The calls to an OIDC
+  provider (discovery, JWKS refresh, code exchange) ran unbounded on the
+  same shared client and are bounded now too.
+
 - **An API token now carries the same identity as the account it was
   issued for.** Tokens were stored with whatever spelling the operator
   typed into the subject field, while user accounts are keyed
