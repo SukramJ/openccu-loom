@@ -68,6 +68,7 @@ export type EventEnvelope =
   | { type: "data_point"; payload: DataPointChangedEvent }
   | { type: "custom_data_point"; payload: CustomDataPointStateEvent }
   | { type: "sysvar"; payload: SysvarChangedEvent }
+  | { type: "device_availability"; payload: DeviceAvailabilityEvent }
   | { type: string; payload: unknown };
 
 // DataPointChangedEvent is the SPA's internal normalized shape produced by
@@ -93,6 +94,16 @@ export type CustomDataPointStateEvent = {
   name: string;
   kind?: string;
   state: Record<string, unknown>;
+};
+
+// DeviceAvailabilityEvent is the SPA's normalized shape from ws.ts
+// normalizeEvent(), produced from the daemon's `device.availability_changed`
+// broadcast (wire: DeviceAvailabilityChangedPayload). The wire payload also
+// carries interface_id, which no SPA surface keys on.
+export type DeviceAvailabilityEvent = {
+  central: string;
+  address: string;
+  available: boolean;
 };
 
 // SysvarChangedEvent is the SPA's normalized shape. The wire payload

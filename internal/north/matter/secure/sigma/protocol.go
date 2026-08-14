@@ -376,6 +376,10 @@ type Responder struct {
 
 	random       [RandomSize]byte
 	resumptionID []byte
+	// resume records what the Sigma2_Resume fast path did for the
+	// session the responder currently holds. Observability only —
+	// nothing in the handshake reads it back. See [ResumeInfo].
+	resume ResumeInfo
 
 	sigma1Bytes   []byte
 	initEphPub    []byte   // initiator ephemeral pub key parsed from Sigma1
@@ -404,6 +408,56 @@ func (r *Responder) PeerSessionID() uint16 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.peerSessionID
+}
+
+// ResumeInfo describes the CASE resumption fast path
+// ([Responder.ProcessSigma1WithResume]) for the session a responder
+// currently holds. Resumed is false for a session established through
+// Full Sigma and for a responder that has processed nothing yet.
+//
+// It exists because the resume branch is the one part of CASE whose
+// correctness cannot be settled without a live controller. matter.js
+// takes a fresh session id for a resumed session
+// (packages/protocol/src/session/case/CaseServer.ts:#resume calls
+// `getNextAvailableSessionId()` before creating the secure session); we
+// keep the id the responder already announced. Renewing it here would
+// allocate one id per MRP retransmit of a resume Sigma1, reusing it
+// risks conflating the peer's previous message counters with the new
+// session — and which failure a certified controller actually provokes
+// is an interop question, not a unit-test one. Recording both ids makes
+// the current behaviour readable from an operator report instead of
+// only from the source. matter.js logs a resumed session for the same
+// reason (NodeSession.ts:412 `logNew(logger, "Resumed", …)`).
+//
+// loom:reachable:reason="returned by Responder.ResumeInfo, which the daemon's CASE session-established callback reads on every resume before it logs the record; a data struct whose fields the logging path copies out, which the analyzer's type heuristic (reachable only via its own methods) cannot see used"
+type ResumeInfo struct {
+	// Resumed reports whether the session came from Sigma2_Resume
+	// rather than Full Sigma.
+	Resumed bool
+	// PresentedResumptionID is the id the initiator sent in Sigma1 —
+	// it names the cached record the controller resumed from.
+	PresentedResumptionID []byte
+	// IssuedResumptionID is the fresh id shipped in Sigma2_Resume for
+	// the initiator's next resume.
+	IssuedResumptionID []byte
+	// SessionIDBefore and SessionIDAfter are the responder's local
+	// session id around the resume. They are equal while the resume
+	// path reuses the id; keeping both means a future change to that
+	// choice shows up in the record without touching the caller.
+	SessionIDBefore uint16
+	SessionIDAfter  uint16
+}
+
+// ResumeInfo returns a copy of the resumption record for the session the
+// responder currently holds. Safe to call from a session-established
+// callback: the record is stamped before the fast path returns.
+func (r *Responder) ResumeInfo() ResumeInfo {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := r.resume
+	out.PresentedResumptionID = append([]byte(nil), r.resume.PresentedResumptionID...)
+	out.IssuedResumptionID = append([]byte(nil), r.resume.IssuedResumptionID...)
+	return out
 }
 
 // PeerSessionParameters returns the initiator's MRP tuning hints from
@@ -619,6 +673,10 @@ func (r *Responder) ProcessSigma1WithResume(sigma1Bytes []byte) (Sigma1ProcessRe
 //
 // KDF / MIC logic mirrors matter.js CaseServer.ts::#resume lines 139-213.
 func (r *Responder) tryResume(sigma1 Sigma1) (Sigma1ProcessResult, bool, error) {
+	// Captured before anything can change it so [ResumeInfo] can report
+	// what the fast path did with the session id rather than only what
+	// it ended up being.
+	sessionIDBefore := r.sessionID
 	rec, err := r.resumptionStore.GetByID(sigma1.ResumptionID)
 	if err != nil || rec == nil {
 		// Unknown id → fall through to Full Sigma.
@@ -725,6 +783,16 @@ func (r *Responder) tryResume(sigma1 Sigma1) (Sigma1ProcessResult, bool, error) 
 	r.resumptionID = freshResumptionID
 	r.keys = keys
 	r.state = responderStateFinished
+	// Stamp the record BEFORE returning: the caller fires its
+	// session-established callback on the way out of the fast path, and
+	// that callback is where the daemon reads it.
+	r.resume = ResumeInfo{
+		Resumed:               true,
+		PresentedResumptionID: append([]byte(nil), sigma1.ResumptionID...),
+		IssuedResumptionID:    append([]byte(nil), freshResumptionID...),
+		SessionIDBefore:       sessionIDBefore,
+		SessionIDAfter:        r.sessionID,
+	}
 
 	s2r := Sigma2Resume{
 		ResumptionID:       freshResumptionID,
@@ -822,6 +890,11 @@ func (r *Responder) processSigma1Locked(sigma1Bytes []byte) (Sigma2, error) { //
 		r.ephPubBytes = nil
 		r.random = [RandomSize]byte{}
 		r.resumptionID = nil
+		// The resume record describes the session the responder holds
+		// now. Apple Home grafts a full handshake onto an exchange that
+		// already carried a resumed session; keeping the old record
+		// would report that session as resumed too.
+		r.resume = ResumeInfo{}
 		r.sigma1Bytes = nil
 		r.initEphPub = nil
 		r.peerSessionID = 0

@@ -35,23 +35,19 @@ func wsEventsOnTopic(h *ws.Hub, topic string) []ws.Event {
 	return h.Replay(0, func(got string) bool { return got == topic }).Events
 }
 
-// TestWireSystemStatusSubscribersCentralHookAttachesCentral verifies the
-// composition root hands back a usable per-central hook: every north-bound
-// subscriber it stands up walks the registry once at wiring time, so without
-// this hook a central that appears later is never subscribed and none of its
-// hub singletons reach a client.
-func TestWireSystemStatusSubscribersCentralHookAttachesCentral(t *testing.T) {
+// TestWireSystemStatusSubscribersReachesACentralRegisteredLater verifies that
+// the north-bound subscribers the composition root stands up attach to a
+// central that joins the registry afterwards. They used to walk the registry
+// once at wiring time, so a central that appeared later was never subscribed
+// and none of its hub singletons reached a client.
+func TestWireSystemStatusSubscribersReachesACentralRegisteredLater(t *testing.T) {
 	t.Parallel()
 
 	reg := central.NewRegistry()
 	wsHub := ws.NewHub()
 
-	_, centralHook, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger())
+	_, teardown := wireSystemStatusSubscribers(reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger())
 	t.Cleanup(teardown)
-
-	if centralHook == nil {
-		t.Fatal("wireSystemStatusSubscribers returned a nil per-central hook")
-	}
 
 	unit, err := central.New(central.Config{Name: "late-central"})
 	if err != nil {
@@ -60,12 +56,6 @@ func TestWireSystemStatusSubscribersCentralHookAttachesCentral(t *testing.T) {
 	if err := reg.Register(unit); err != nil {
 		t.Fatalf("reg.Register: %v", err)
 	}
-
-	unwire := centralHook(unit)
-	if unwire == nil {
-		t.Fatal("per-central hook returned a nil unwire for a central with a hub model")
-	}
-	t.Cleanup(unwire)
 
 	unit.HubModel.ServiceMessages.Replace([]hubmodel.ServiceMessage{{ID: "SM1", Name: "Low battery"}})
 
@@ -82,9 +72,9 @@ func TestWireSystemStatusSubscribersCentralHookAttachesCentral(t *testing.T) {
 // TestAdoptCentralWiresHubEventsBroadcasts is the end-to-end proof through
 // the production adopt path: a central adopted at runtime (the same call the
 // REST centrals admin API drives) must push its hub singletons — service /
-// alarm message counts, inbox, connectivity — to WebSocket clients. Without
-// the hook installed on the orchestrator it stays silent forever, which the
-// first half of this test pins so the assertion cannot go vacuous.
+// alarm message counts, inbox, connectivity — to WebSocket clients. Before the
+// subscriber joined the registry observer it stayed silent forever, which the
+// last half of this test reproduces so the assertion cannot go vacuous.
 func TestAdoptCentralWiresHubEventsBroadcasts(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -94,24 +84,8 @@ func TestAdoptCentralWiresHubEventsBroadcasts(t *testing.T) {
 
 	wsHub := ws.NewHub()
 	subscriber := ws.NewHubEventsSubscriber(reg, wsHub)
-	subscriber.Start() // boot-time walk: the registry is empty at this point
+	subscriber.Start() // the registry is empty at this point
 	t.Cleanup(subscriber.Stop)
-
-	// No hook installed yet — this is what a runtime-adopted central used to
-	// get: registered, live, and unheard.
-	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("unhooked")); err != nil {
-		t.Fatalf("adoptCentral(unhooked): %v", err)
-	}
-	unhooked, ok := reg.Get("unhooked")
-	if !ok {
-		t.Fatal("adopted central 'unhooked' not present in the registry")
-	}
-	unhooked.HubModel.ServiceMessages.Replace([]hubmodel.ServiceMessage{{ID: "SM1", Name: "Low battery"}})
-	if got := wsEventsOnTopic(wsHub, ws.ServiceMessagesTopic("unhooked")); len(got) != 0 {
-		t.Fatalf("broadcasts without the hub-events hook = %d, want 0", len(got))
-	}
-
-	orch.addCentralHook(func(u *central.Unit) func() { return subscriber.StartCentral(u) })
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("hooked")); err != nil {
 		t.Fatalf("adoptCentral(hooked): %v", err)
@@ -138,12 +112,6 @@ func TestAdoptCentralWiresHubEventsBroadcasts(t *testing.T) {
 		t.Errorf("count = %d, want 2", p.Count)
 	}
 
-	// The unhooked central must still be silent: the hook attaches exactly
-	// the central it is called with, not every registry member.
-	if got := wsEventsOnTopic(wsHub, ws.ServiceMessagesTopic("unhooked")); len(got) != 0 {
-		t.Errorf("broadcasts for the central adopted before the hook = %d, want 0", len(got))
-	}
-
 	if err := orch.removeCentral(ctx, "hooked"); err != nil {
 		t.Fatalf("removeCentral(hooked): %v", err)
 	}
@@ -159,29 +127,22 @@ func TestAdoptCentralWiresHubEventsBroadcasts(t *testing.T) {
 		t.Errorf("broadcasts after removeCentral = %d, want %d (subscriptions leaked past removal)", after, before)
 	}
 
+	// Negative control: with the subscriber stopped, a central adopted
+	// afterwards is unheard — the state every runtime adopt used to be in.
+	subscriber.Stop()
+	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("unhooked")); err != nil {
+		t.Fatalf("adoptCentral(unhooked): %v", err)
+	}
+	unhooked, ok := reg.Get("unhooked")
+	if !ok {
+		t.Fatal("adopted central 'unhooked' not present in the registry")
+	}
+	unhooked.HubModel.ServiceMessages.Replace([]hubmodel.ServiceMessage{{ID: "SM1", Name: "Low battery"}})
+	if got := wsEventsOnTopic(wsHub, ws.ServiceMessagesTopic("unhooked")); len(got) != 0 {
+		t.Fatalf("broadcasts after the subscriber stopped = %d, want 0", len(got))
+	}
+
 	if err := orch.removeCentral(ctx, "unhooked"); err != nil {
 		t.Fatalf("removeCentral(unhooked): %v", err)
-	}
-}
-
-// TestAddCentralHookNilSafe pins the nil-tolerant registrar contract the
-// composition root relies on: a nil orchestrator (southbound never came up)
-// and a nil hook must both be no-ops rather than panics.
-func TestAddCentralHookNilSafe(t *testing.T) {
-	t.Parallel()
-
-	var nilOrch *centralOrchestrator
-	nilOrch.addCentralHook(func(*central.Unit) func() { return nil })
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	orch := buildLiveTestOrchestrator(ctx, t, central.NewRegistry(), &config.Config{})
-	orch.addCentralHook(nil)
-
-	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("no-hook")); err != nil {
-		t.Fatalf("adoptCentral with a nil per-central hook: %v", err)
-	}
-	if err := orch.removeCentral(ctx, "no-hook"); err != nil {
-		t.Fatalf("removeCentral: %v", err)
 	}
 }

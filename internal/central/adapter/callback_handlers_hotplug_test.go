@@ -18,14 +18,14 @@ import (
 )
 
 // hotplugIngestorCall records the arguments of one invocation of a fake
-// hot-plug ingestor installed via [CallbackHandlers.SetHotplugIngestor].
+// hot-plug ingestor installed via [central.Unit.SetDeviceIngestFn].
 type hotplugIngestorCall struct {
 	interfaceID  string
 	descriptions []hmproto.DeviceDescription
 }
 
 // fakeHotplugIngestor is a test double for the function NewDevices hands to
-// [CallbackHandlers.SetHotplugIngestor]. entered closes on the first call so
+// [central.Unit.SetDeviceIngestFn]. entered closes on the first call so
 // a test can observe "ingest is running" before it completes. When release is
 // non-nil the call blocks on it (or on ctx cancellation) before recording
 // itself on calls, letting a test hold the ingest open to check ordering or
@@ -75,7 +75,7 @@ func waitForCreatedEvent(t *testing.T, counter *atomic.Int32, timeout time.Durat
 }
 
 // TestNewDevicesInvokesInstalledHotplugIngestorAsynchronously verifies that a
-// hot-plug ingestor installed via SetHotplugIngestor is invoked in the
+// hot-plug ingestor installed via SetDeviceIngestFn is invoked in the
 // background with the parsed device descriptions and the canonical
 // (instance-stripped) interface id, not the raw wire triple NewDevices
 // receives.
@@ -89,7 +89,7 @@ func TestNewDevicesInvokesInstalledHotplugIngestorAsynchronously(t *testing.T) {
 	defer h.Stop()
 
 	fake := newFakeHotplugIngestor()
-	h.SetHotplugIngestor(fake.ingest)
+	c.SetDeviceIngestFn(fake.ingest)
 
 	// The raw wire id carries the instance-name prefix; the ingestor must see
 	// the stripped canonical form used everywhere else in the model.
@@ -134,7 +134,7 @@ func TestNewDevicesEventFiresOnlyAfterIngestorReturns(t *testing.T) {
 
 	fake := newFakeHotplugIngestor()
 	fake.release = make(chan struct{})
-	h.SetHotplugIngestor(fake.ingest)
+	c.SetDeviceIngestFn(fake.ingest)
 
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)
@@ -169,7 +169,7 @@ func TestNewDevicesEventFiresOnlyAfterIngestorReturns(t *testing.T) {
 // TestNewDevicesWithoutIngestorStillHandlesNewDevices verifies that
 // NewDevices degrades to registry-and-event bookkeeping only when no
 // ingestor has been installed (the pre-wiring window the doc comment on
-// SetHotplugIngestor describes) — HandleNewDevices still runs and the
+// SetDeviceIngestFn describes) — HandleNewDevices still runs and the
 // DeviceCreatedEvent still fires.
 func TestNewDevicesWithoutIngestorStillHandlesNewDevices(t *testing.T) {
 	t.Parallel()
@@ -185,7 +185,7 @@ func TestNewDevicesWithoutIngestorStillHandlesNewDevices(t *testing.T) {
 
 	h := NewCallbackHandlers(c, nil)
 	defer h.Stop()
-	// No SetHotplugIngestor call: hotplugIngest stays nil.
+	// No SetDeviceIngestFn call: hotplugIngest stays nil.
 
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)
@@ -199,9 +199,9 @@ func TestNewDevicesWithoutIngestorStillHandlesNewDevices(t *testing.T) {
 // TestNewDevicesDeferredCreationSkipsIngestorAndEvent verifies that
 // delayNewDeviceCreation mode bypasses both the hot-plug ingestor and
 // HandleNewDevices — the descriptions only land in the delayed-inbox store.
-// It then drives AddNewDevicesManually (the inbox-accept path) to prove the
-// descriptions really reached the delayed queue, not just that no event
-// fired for an unrelated reason.
+// It then drives the inbox-accept path to prove the descriptions really
+// reached the deferred queue, not just that no event fired for an
+// unrelated reason.
 func TestNewDevicesDeferredCreationSkipsIngestorAndEvent(t *testing.T) {
 	t.Parallel()
 	c, err := central.New(central.Config{Name: "ccu-deferred"})
@@ -219,7 +219,7 @@ func TestNewDevicesDeferredCreationSkipsIngestorAndEvent(t *testing.T) {
 	h.SetDelayNewDeviceCreation(true)
 
 	fake := newFakeHotplugIngestor()
-	h.SetHotplugIngestor(fake.ingest)
+	c.SetDeviceIngestFn(fake.ingest)
 
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)
@@ -235,14 +235,17 @@ func TestNewDevicesDeferredCreationSkipsIngestorAndEvent(t *testing.T) {
 		t.Fatalf("DeviceCreatedEvent fired in delayed mode (count=%d)", got)
 	}
 
-	// Prove the description actually reached the delayed-inbox queue: the
-	// manual-accept path only finds it there.
-	err = c.Devices.AddNewDevicesManually(context.Background(), "HmIP-RF", map[string]string{"DELAY001": "Sensor"}, nil)
+	// Prove the description actually reached the deferred-creation queue:
+	// the accept path only finds it there.
+	accepted, err := AcceptPendingDevice(context.Background(), c, "DELAY001")
 	if err != nil {
-		t.Fatalf("AddNewDevicesManually: %v", err)
+		t.Fatalf("AcceptPendingDevice: %v", err)
+	}
+	if !accepted {
+		t.Fatal("the accept path found nothing in the deferred queue; NewDevices did not store the description")
 	}
 	if !waitForCreatedEvent(t, &created, 2*time.Second) {
-		t.Fatal("AddNewDevicesManually found nothing in the delayed queue; NewDevices did not store the description")
+		t.Fatal("accepting the deferred device published no DeviceCreatedEvent")
 	}
 }
 
@@ -267,7 +270,7 @@ func TestNewDevicesIngestorErrorStillHandlesNewDevices(t *testing.T) {
 
 	fake := newFakeHotplugIngestor()
 	fake.err = errors.New("simulated ingest failure")
-	h.SetHotplugIngestor(fake.ingest)
+	c.SetDeviceIngestFn(fake.ingest)
 
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)
@@ -300,7 +303,7 @@ func TestStopDrainsInFlightHotplugIngestGoroutine(t *testing.T) {
 	fake := newFakeHotplugIngestor()
 	// Never closed: only ctx cancellation (via Stop) can unblock this call.
 	fake.release = make(chan struct{})
-	h.SetHotplugIngestor(fake.ingest)
+	c.SetDeviceIngestFn(fake.ingest)
 
 	if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 		t.Fatalf("NewDevices: %v", err)

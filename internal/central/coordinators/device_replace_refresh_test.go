@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ---------------------------------------------------------------------------
@@ -37,27 +38,27 @@ func TestRefreshFirmwareDataRefreshesAllInterfaces(t *testing.T) {
 	dc, _, devs, descs, _ := newDCFull(t)
 
 	// Seed two devices on two different interfaces.
-	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
 		Address:  "VCU0000001",
 		Type:     "HmIP-PS",
 		Firmware: "1.0",
 	})
-	devs.Put(registry.DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "VCU0000001", Model: "HmIP-PS"})
+	devs.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceHmIPRF), Address: "VCU0000001", Model: "HmIP-PS"})
 
-	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{
 		Address:  "HEQ0000001",
 		Type:     "HM-Sec-SC",
 		Firmware: "1.0",
 	})
-	devs.Put(registry.DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "HEQ0000001", Model: "HM-Sec-SC"})
+	devs.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceBidCosRF), Address: "HEQ0000001", Model: "HM-Sec-SC"})
 
 	// Fetcher returns updated firmware 2.0 for both.
 	fetcher := &multiIfaceLister{
-		byIface: map[hmenum.Interface][]hmproto.DeviceDescription{
-			hmenum.InterfaceHmIPRF: {
+		byIface: map[hmtypes.WireInterfaceID][]hmproto.DeviceDescription{
+			wireKey(hmenum.InterfaceHmIPRF): {
 				{Address: "VCU0000001", Type: "HmIP-PS", Firmware: "2.0"},
 			},
-			hmenum.InterfaceBidCosRF: {
+			wireKey(hmenum.InterfaceBidCosRF): {
 				{Address: "HEQ0000001", Type: "HM-Sec-SC", Firmware: "2.0"},
 			},
 		},
@@ -68,11 +69,11 @@ func TestRefreshFirmwareDataRefreshesAllInterfaces(t *testing.T) {
 	}
 
 	// Both descriptions must reflect firmware 2.0.
-	got1, ok := descs.Get(hmenum.InterfaceHmIPRF, "VCU0000001")
+	got1, ok := descs.Get(wireKey(hmenum.InterfaceHmIPRF), "VCU0000001")
 	if !ok || got1.Firmware != "2.0" {
 		t.Errorf("HmIP-RF firmware=%q, want 2.0", got1.Firmware)
 	}
-	got2, ok := descs.Get(hmenum.InterfaceBidCosRF, "HEQ0000001")
+	got2, ok := descs.Get(wireKey(hmenum.InterfaceBidCosRF), "HEQ0000001")
 	if !ok || got2.Firmware != "2.0" {
 		t.Errorf("BidCos-RF firmware=%q, want 2.0", got2.Firmware)
 	}
@@ -108,7 +109,7 @@ func TestReplaceDeviceNilFetcherErrors(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _, _ := newDCFull(t)
 
-	err := dc.ReplaceDevice(context.Background(), nil, hmenum.InterfaceBidCosRF, "OLD001", "NEW001")
+	err := dc.ReplaceDevice(context.Background(), nil, wireKey(hmenum.InterfaceBidCosRF), "OLD001", "NEW001")
 	if err == nil {
 		t.Fatal("expected error for nil fetcher, got nil")
 	}
@@ -123,7 +124,7 @@ func TestReplaceDeviceUnknownOldAddressErrors(t *testing.T) {
 
 	fetcher := &stubLister{snapshot: []hmproto.DeviceDescription{{Address: "NEW001", Type: "HM-Sec-SC", Firmware: "1.0"}}}
 
-	err := dc.ReplaceDevice(context.Background(), fetcher, hmenum.InterfaceBidCosRF, "OLD001", "NEW001")
+	err := dc.ReplaceDevice(context.Background(), fetcher, wireKey(hmenum.InterfaceBidCosRF), "OLD001", "NEW001")
 	if err == nil {
 		t.Fatal("expected error for unknown old address, got nil")
 	}
@@ -142,16 +143,16 @@ func TestReplaceDeviceEvictsOldAndIngestsNew(t *testing.T) {
 	removed := collectRemoved(bus)
 
 	// Seed old device with its MASTER paramset.
-	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{
+	descs.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{
 		Address:  "OLD001",
 		Type:     "HM-Sec-SC",
 		Firmware: "1.0",
 		Children: []string{"OLD001:0", "OLD001:1"},
 	})
-	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "OLD001:0", Parent: "OLD001", Type: "MAINTENANCE"})
-	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "OLD001:1", Parent: "OLD001", Type: "SHUTTER_CONTACT"})
-	devs.Put(registry.DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC"})
-	psets.Put(hmenum.InterfaceBidCosRF, "OLD001:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{})
+	descs.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{Address: "OLD001:0", Parent: "OLD001", Type: "MAINTENANCE"})
+	descs.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{Address: "OLD001:1", Parent: "OLD001", Type: "SHUTTER_CONTACT"})
+	devs.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceBidCosRF), Address: "OLD001", Model: "HM-Sec-SC"})
+	psets.Put(wireKey(hmenum.InterfaceBidCosRF), "OLD001:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{})
 
 	// Fetcher returns the replacement device.
 	fetcher := &stubLister{
@@ -161,26 +162,26 @@ func TestReplaceDeviceEvictsOldAndIngestsNew(t *testing.T) {
 		},
 	}
 
-	if err := dc.ReplaceDevice(context.Background(), fetcher, hmenum.InterfaceBidCosRF, "OLD001", "NEW001"); err != nil {
+	if err := dc.ReplaceDevice(context.Background(), fetcher, wireKey(hmenum.InterfaceBidCosRF), "OLD001", "NEW001"); err != nil {
 		t.Fatalf("ReplaceDevice: %v", err)
 	}
 
 	// Old device must be gone.
-	if devs.Has(hmenum.InterfaceBidCosRF, "OLD001") {
+	if devs.Has(wireKey(hmenum.InterfaceBidCosRF), "OLD001") {
 		t.Error("OLD001 must be removed from device registry")
 	}
-	if _, ok := descs.Get(hmenum.InterfaceBidCosRF, "OLD001"); ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceBidCosRF), "OLD001"); ok {
 		t.Error("OLD001 description must be evicted")
 	}
-	if _, ok := descs.Get(hmenum.InterfaceBidCosRF, "OLD001:0"); ok {
+	if _, ok := descs.Get(wireKey(hmenum.InterfaceBidCosRF), "OLD001:0"); ok {
 		t.Error("OLD001:0 channel description must be evicted")
 	}
-	if _, ok := psets.Get(hmenum.InterfaceBidCosRF, "OLD001:0", hmenum.ParamsetKeyMaster); ok {
+	if _, ok := psets.Get(wireKey(hmenum.InterfaceBidCosRF), "OLD001:0", hmenum.ParamsetKeyMaster); ok {
 		t.Error("OLD001:0 paramset must be evicted")
 	}
 
 	// New device must be registered.
-	if !devs.Has(hmenum.InterfaceBidCosRF, "NEW001") {
+	if !devs.Has(wireKey(hmenum.InterfaceBidCosRF), "NEW001") {
 		t.Error("NEW001 must be in device registry after replace")
 	}
 
@@ -201,26 +202,26 @@ func TestReplaceDeviceCrossTypeProceeds(t *testing.T) {
 	dc, _, devs, descs, _ := newDCFull(t)
 
 	// Old device: HM-Sec-SC.
-	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "OLD001", Type: "HM-Sec-SC", Firmware: "1.0"})
-	devs.Put(registry.DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC"})
+	descs.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{Address: "OLD001", Type: "HM-Sec-SC", Firmware: "1.0"})
+	devs.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceBidCosRF), Address: "OLD001", Model: "HM-Sec-SC"})
 
 	// New device already cached with a different model. The CCU (rfd /
 	// hs485d) owns the type-compatibility check and legitimately approves
 	// compatible cross-type swaps, so the coordinator proceeds rather
 	// than reject a swap the CCU already performed.
-	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "NEW001", Type: "HM-LC-Sw1", Firmware: "1.0"})
+	descs.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{Address: "NEW001", Type: "HM-LC-Sw1", Firmware: "1.0"})
 
 	fetcher := &stubLister{snapshot: []hmproto.DeviceDescription{{Address: "NEW001", Type: "HM-LC-Sw1", Firmware: "1.0"}}}
 
-	if err := dc.ReplaceDevice(context.Background(), fetcher, hmenum.InterfaceBidCosRF, "OLD001", "NEW001"); err != nil {
+	if err := dc.ReplaceDevice(context.Background(), fetcher, wireKey(hmenum.InterfaceBidCosRF), "OLD001", "NEW001"); err != nil {
 		t.Fatalf("cross-type replace must proceed, got error: %v", err)
 	}
 
 	// OLD001 is evicted; NEW001 is ingested from the fetcher snapshot.
-	if devs.Has(hmenum.InterfaceBidCosRF, "OLD001") {
+	if devs.Has(wireKey(hmenum.InterfaceBidCosRF), "OLD001") {
 		t.Error("OLD001 must be removed after a successful replace")
 	}
-	if !devs.Has(hmenum.InterfaceBidCosRF, "NEW001") {
+	if !devs.Has(wireKey(hmenum.InterfaceBidCosRF), "NEW001") {
 		t.Error("NEW001 must be registered after a successful replace")
 	}
 }
@@ -232,11 +233,11 @@ func TestReplaceDeviceCrossTypeProceeds(t *testing.T) {
 // multiIfaceLister is a DeviceDescriptionFetcher that returns per-interface
 // snapshots, allowing different descriptions per interface.
 type multiIfaceLister struct {
-	byIface map[hmenum.Interface][]hmproto.DeviceDescription
+	byIface map[hmtypes.WireInterfaceID][]hmproto.DeviceDescription
 	err     error
 }
 
-func (m *multiIfaceLister) ListDevices(_ context.Context, iface hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+func (m *multiIfaceLister) ListDevices(_ context.Context, iface hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
 	if m.err != nil {
 		return nil, m.err
 	}

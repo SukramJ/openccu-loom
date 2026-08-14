@@ -167,6 +167,33 @@ func TestChangeOwnPassword_NoLocalPassword_Returns409(t *testing.T) {
 	}
 }
 
+// TestChangeOwnPassword_FederatedIdentity_Returns409 pins that a caller
+// signed in through the external identity provider cannot rewrite the
+// password of the local account whose name happens to fold to the same
+// string. The two are different principals; the provider owns the
+// credentials of the one holding this session.
+func TestChangeOwnPassword_FederatedIdentity_Returns409(t *testing.T) {
+	t.Parallel()
+	svc := newFakeSelfPasswordSvc()
+	revoker := &fakeSessionRevoker{}
+	body := strings.NewReader(`{"current_password":"correct","new_password":"brandnew"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/auth/me/password", body)
+	req = withIdentity(req, auth.Identity{Subject: "alice", Role: auth.RoleOperator, Scheme: auth.SchemeOIDC})
+	w := httptest.NewRecorder()
+
+	ChangeOwnPassword(svc, audit.NoopRecorder(), revoker).ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.users["alice"].password != "correct" {
+		t.Error("the local account's password was rewritten by a federated caller")
+	}
+	if len(revoker.revokeBySubjectExceptCalls) != 0 {
+		t.Error("the local account's sessions were revoked by a federated caller")
+	}
+}
+
 func TestChangeOwnPassword_NoIdentityInContext_Returns401(t *testing.T) {
 	t.Parallel()
 	svc := newFakeSelfPasswordSvc()

@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // LinksDomain is the high-level facade REST + SPA code uses to list, add, and
@@ -65,7 +66,7 @@ func (d *LinksDomain) ListLinks(ctx context.Context, deviceAddress, locale strin
 	if err != nil {
 		return nil, err
 	}
-	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	backend, ok := d.writer.Backend(c.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return nil, fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
 	}
@@ -184,7 +185,7 @@ func (d *LinksDomain) ListAllLinks(ctx context.Context, centralName, locale stri
 		// across CCUs, so a global key must not collapse them.
 		seen := make(map[string]struct{})
 		for _, ifaceID := range d.linkInterfaceIDs(unit) {
-			backend, ok := d.writer.Backend(unit.Name(), ifaceID)
+			backend, ok := d.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(ifaceID))
 			if !ok {
 				continue
 			}
@@ -269,7 +270,7 @@ func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddres
 	if err != nil {
 		return err
 	}
-	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	backend, ok := d.writer.Backend(c.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
 	}
@@ -306,7 +307,7 @@ func (d *LinksDomain) SetLinkInfo(ctx context.Context, senderAddress, receiverAd
 	if err != nil {
 		return err
 	}
-	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	backend, ok := d.writer.Backend(c.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
 	}
@@ -330,7 +331,7 @@ func (d *LinksDomain) RemoveLink(ctx context.Context, senderAddress, receiverAdd
 	if err != nil {
 		return err
 	}
-	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	backend, ok := d.writer.Backend(c.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
 	}
@@ -354,7 +355,7 @@ func (d *LinksDomain) GetLinkParamset(ctx context.Context, channelAddress, peerA
 	if err != nil {
 		return nil, err
 	}
-	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	backend, ok := d.writer.Backend(c.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return nil, fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
 	}
@@ -368,7 +369,7 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 	if err != nil {
 		return err
 	}
-	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	backend, ok := d.writer.Backend(c.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
 	}
@@ -396,7 +397,7 @@ func (d *LinksDomain) ActivateLink(ctx context.Context, receiverChannelAddress, 
 	if err != nil {
 		return err
 	}
-	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	backend, ok := d.writer.Backend(c.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
 	}

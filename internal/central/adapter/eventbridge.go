@@ -89,6 +89,14 @@ type EventBridge struct {
 	// keyed by central name so a removed central can be detached again.
 	// Start-time centrals live in unsubs; both are released by detach.
 	attached map[string][]func()
+	// liveSubs holds the callbacks the snapshot passes wire onto model
+	// objects (week profiles, schedules, firmware trackers, combined data
+	// points), keyed by the model slot they belong to and carrying the
+	// identity of the object each one sits on. See eventbridge_live_subs.go
+	// for why identity — and not the address — decides whether a pass
+	// subscribes. Guarded by startMu like the two slices above; released by
+	// detach.
+	liveSubs map[liveSubKey]liveSub
 
 	// fanout decouples the live value-change MQTT publish work from the bus
 	// dispatch goroutine (see mqtt_fanout.go). Created in Start, drained by a
@@ -211,36 +219,6 @@ func (b *EventBridge) Start(ctx context.Context) {
 	for _, u := range b.registry.List() {
 		b.unsubs = append(b.unsubs, b.subscribeUnit(u)...)
 	}
-}
-
-// addUnsub records one subscription released by [EventBridge.detach].
-//
-// The snapshot publishers call it from whichever goroutine drove their pass —
-// the MQTT lifecycle's reconnect loop runs PublishInitialSnapshot, the fan-out
-// worker runs PublishCentralSnapshot for a central that just cleared its
-// readiness gate, and the boot goroutine runs both — so the slice needs the
-// same lock detach() reads it under. Appending unlocked lost whole passes of
-// subscriptions to the last writer's slice header, leaving live OnChange
-// handlers publishing into a bridge that had already been torn down.
-//
-// Only the append happens under startMu; the caller's broker I/O never does,
-// so a slow publish cannot stall Start/Stop.
-//
-// A pass that finishes after detach() has already drained the slice releases
-// its subscription immediately instead of recording it — otherwise it would
-// register a callback nobody will ever release.
-func (b *EventBridge) addUnsub(unsub func()) {
-	if unsub == nil {
-		return
-	}
-	b.startMu.Lock()
-	if !b.started {
-		b.startMu.Unlock()
-		unsub()
-		return
-	}
-	b.unsubs = append(b.unsubs, unsub)
-	b.startMu.Unlock()
 }
 
 // beginBackgroundLoad registers one background warm-up goroutine with the
@@ -446,6 +424,15 @@ func (b *EventBridge) detach() {
 		unsubs = append(unsubs, subs...)
 		delete(b.attached, name)
 	}
+	// The model-object callbacks the snapshot passes wired go with them:
+	// they publish into this bridge, so a torn-down bridge must not leave
+	// them sitting on live week profiles and firmware trackers.
+	for key, sub := range b.liveSubs {
+		if sub.unsub != nil {
+			unsubs = append(unsubs, sub.unsub)
+		}
+		delete(b.liveSubs, key)
+	}
 	stopCancel := b.stopCancel
 	b.started = false
 	// Close the background-load gate before releasing the lock: from here on
@@ -520,7 +507,15 @@ func (b *EventBridge) onSourceChanged(centralName string, e hmevent.DataPointSou
 // consumers) until the next boot's orphan-cleanup pass. Called from the
 // DeviceRemovedEvent subscription wired in Start.
 func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemovedEvent) {
-	if b == nil || b.mqtt == nil {
+	if b == nil {
+		return
+	}
+	// The device's week profiles, schedules and firmware tracker are gone
+	// from the model, so no later snapshot pass can reach them to take
+	// their callbacks over. Release them here or they stay installed for
+	// the life of the daemon.
+	b.releaseLiveSubsForDevice(e.CentralName, e.Address)
+	if b.mqtt == nil {
 		return
 	}
 	bridge := b.mqtt.Bridge()
@@ -772,33 +767,39 @@ func (b *EventBridge) publishDeviceSnapshot(ctx context.Context, centralName str
 }
 
 // markAvailability publishes the per-device availability topic, but
-// only when the desired state differs from the last published state.
+// only when the desired state differs from the last published state,
+// and reports whether that transition happened.
 // Without this gate every value-change event would re-publish "online"
 // (and any UNREACH parameter would re-publish whatever it just
 // computed) — broker spam plus retained-topic churn. With it the topic
 // flips exactly on transitions: boot → offline; first observed DP →
 // online; UNREACH true → offline; UNREACH false → online.
 //
+// The gate runs before the MQTT wiring is consulted so it stays the single
+// answer to "did this device's availability just change" for every plane,
+// including deployments with no broker at all.
+//
 // Errors are swallowed at debug level — the broker not having the
 // device-availability topic is a degraded-but-not-fatal state.
-func (b *EventBridge) markAvailability(ctx context.Context, centralName, iface, deviceAddr string, online bool) {
-	if b.mqtt == nil {
-		return
-	}
-	bridge := b.mqtt.Bridge()
-	if bridge == nil {
-		return
-	}
+func (b *EventBridge) markAvailability(ctx context.Context, centralName, iface, deviceAddr string, online bool) bool {
 	key := centralName + "|" + iface + "|" + deviceAddr
 	if prev, ok := b.availabilityCache.Load(key); ok {
 		// availabilityCache only ever stores bool values written by this
 		// method, so the assertion cannot fail.
 		if prevBool, _ := prev.(bool); prevBool == online {
-			return
+			return false
 		}
 	}
 	b.availabilityCache.Store(key, online)
+	if b.mqtt == nil {
+		return true
+	}
+	bridge := b.mqtt.Bridge()
+	if bridge == nil {
+		return true
+	}
 	_ = bridge.PublishAvailability(ctx, centralName, iface, deviceAddr, online)
+	return true
 }
 
 // isReachabilityParameter reports whether a parameter change implies
@@ -1068,6 +1069,12 @@ func (b *EventBridge) onValueChanged(centralName string, e hmevent.DataPointValu
 func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
 	b.publishValueChangedWS(centralName, envKind, e)
 	if b.mqtt == nil {
+		// No broker to publish to, but the availability transition this
+		// value may carry still has to reach the bus consumers — the
+		// WebSocket device-lifecycle plane and the Matter reachability
+		// forward exist in a deployment without MQTT too.
+		deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
+		b.refreshDeviceAvailability(b.lifetimeCtx, centralName, inferInterface(e.Key), deviceAddr, e.Key.Parameter)
 		return
 	}
 	f := b.fanout.Load()
@@ -1322,26 +1329,59 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 	b.publishCustomDPState(ctx, centralName, iface, deviceAddr, channelNo, ch)
 	b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, channelNo, ch)
 
-	// Re-publish device availability when a reachability-relevant
-	// parameter just flipped. The Device.Available() result is
-	// derived from the same parameter the model just absorbed, so
-	// reading it here gives the post-update view.
-	if isReachabilityParameter(e.Key.Parameter) {
-		if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
-			b.markAvailability(ctx, centralName, iface, deviceAddr, dev.Available())
-		}
-	} else {
+	b.refreshDeviceAvailability(ctx, centralName, iface, deviceAddr, e.Key.Parameter)
+}
+
+// refreshDeviceAvailability re-evaluates a device's effective availability
+// after one of its data points absorbed a value, publishes the retained MQTT
+// availability topic on a real transition and announces the same transition on
+// the owning central's bus.
+//
+// Both effects hang off ONE transition gate (the availability cache in
+// [EventBridge.markAvailability]) on purpose: a second gate would let whichever
+// consumer looked first swallow the flip for the other, and the two planes
+// would then disagree about the same device.
+//
+// The bus announcement is what carries a per-device reachability change north
+// beyond MQTT — the WebSocket device-lifecycle plane and the Matter
+// reachability forward both read it. Only the interface-level forced-
+// availability path published it before, so a single device the CCU stopped
+// reaching never reached those consumers at all.
+func (b *EventBridge) refreshDeviceAvailability(ctx context.Context, centralName, iface, deviceAddr, parameter string) {
+	dev := lookupDeviceObject(b.registry, deviceAddr)
+	if dev == nil {
+		return
+	}
+	online := dev.Available()
+	if !isReachabilityParameter(parameter) {
 		// Any non-reachability value change implies the device just
 		// produced data — flip it to online if we previously held
 		// the cache at offline (cache-gated, so the broker only
 		// sees the transition publish, not every event). This is
 		// what unfreezes a device that booted before any DP was
 		// observed: the first real value-change event ushers the
-		// device into the available state.
-		if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil && dev.Available() {
-			b.markAvailability(ctx, centralName, iface, deviceAddr, true)
+		// device into the available state. A device the model still
+		// holds as unreachable keeps that state until the
+		// reachability parameter itself says otherwise.
+		if !online {
+			return
 		}
 	}
+	if !b.markAvailability(ctx, centralName, iface, deviceAddr, online) {
+		return
+	}
+	u, ok := b.registry.Get(centralName)
+	if !ok || u == nil || u.EventBus == nil {
+		return
+	}
+	events.Publish(u.EventBus, hmevent.DeviceLifecycleEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: centralName,
+		InterfaceID: iface,
+		Address:     deviceAddr,
+		Subtype:     hmenum.DeviceLifecycleSubtypeAvailabilityChanged,
+		Available:   online,
+	})
 }
 
 // buildPublishEvent composes the [mqtt.Event] used by the bridge for
@@ -2421,8 +2461,9 @@ type unitReporter interface {
 // In addition to the one-shot publish this method wires a live
 // OnChange subscription so subsequent profile-pointer updates (fired
 // by subscribeProfilePointer) automatically push a fresh state to the
-// broker. The unsubscribe function is appended to b.unsubs so Stop()
-// cleans it up.
+// broker. It goes through [EventBridge.subscribeOnce], so re-running the
+// pass over the same week profile does not stack a second callback on
+// it, and Stop() releases what is installed.
 func (b *EventBridge) publishWeekProfileSnapshot(
 	ctx context.Context,
 	centralName, iface string,
@@ -2476,19 +2517,25 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 	if cp := wp.Climate(); cp != nil {
 		// Re-publish the custom-DP state whenever the climate
 		// schedule changes (Load + Save both publish() through the
-		// Profile generic). The unsubscribe is appended to b.unsubs
-		// so Stop() tears it down with the rest of the bridge.
+		// Profile generic). The subscription is keyed on the profile
+		// object so a repeated pass over the same one does not stack a
+		// second callback, and [EventBridge.detach] tears it down with
+		// the rest of the bridge.
 		// Use context.Background() because [weekprofile.Profile.Load]
 		// fires the callback synchronously inside the goroutine
 		// below, and any later Save (from the UI) will likewise be
 		// triggered from a request context that may already be
 		// closed by the time the callback runs.
-		scheduleUnsub := cp.OnChange(func(_, _ *schedule.Climate) { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
-			SafeGo("eventbridge.climate_dp_state", func() {
-				b.publishCustomDPState(context.Background(), centralName, iface, d.Address, channelNo, ch)
+		b.subscribeOnce(liveSubKey{
+			central: centralName, iface: iface, device: d.Address,
+			channel: channelNo, kind: liveSubClimateSchedule,
+		}, cp, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+			return cp.OnChange(func(_, _ *schedule.Climate) {
+				SafeGo("eventbridge.climate_dp_state", func() {
+					b.publishCustomDPState(context.Background(), centralName, iface, d.Address, channelNo, ch)
+				})
 			})
 		})
-		b.addUnsub(scheduleUnsub)
 		// Background load: deliberately decoupled from any request
 		// context — the goroutine outlives the function call and a
 		// cancelled request must not abort the warm-up fetch. Skipped once
@@ -2514,13 +2561,23 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 	capturedChannel := channelNo
 	capturedWP := wp
 
-	unsub := capturedWP.OnChange(func() {
-		_ = bridge.PublishWeekProfileState(
-			ctx, capturedCentral, capturedIface, capturedAddr, capturedChannel,
-			capturedWP.CurrentProfile(),
-		)
+	b.subscribeOnce(liveSubKey{
+		central: centralName, iface: iface, device: d.Address,
+		channel: channelNo, kind: liveSubWeekProfilePointer,
+	}, capturedWP, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+		return capturedWP.OnChange(func() {
+			// Not the snapshot pass's ctx: the subscription survives the
+			// pass (it is keyed on the profile object, so later passes
+			// leave it in place), and the broker-reconnect pass runs on a
+			// context that is cancelled when that connection ends.
+			// Publishing on it would silently drop every later pointer
+			// change. The sibling callbacks below make the same choice.
+			_ = bridge.PublishWeekProfileState(
+				context.Background(), capturedCentral, capturedIface, capturedAddr, capturedChannel,
+				capturedWP.CurrentProfile(),
+			)
+		})
 	})
-	b.addUnsub(unsub)
 }
 
 // publishUpdateSnapshot publishes the HA-Discovery `update` entity and
@@ -2530,8 +2587,9 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 // In addition to the one-shot publish this method wires a live
 // OnChange subscription on the Firmware tracker so subsequent
 // firmware-state transitions (CCU push → FirmwareInfo.Set) automatically
-// re-publish the state topic. The unsubscribe function is appended to
-// b.unsubs so Stop() cleans it up.
+// re-publish the state topic. It goes through
+// [EventBridge.subscribeOnce], so a repeated pass over the same tracker
+// leaves the single callback in place and Stop() releases it.
 func (b *EventBridge) publishUpdateSnapshot(
 	ctx context.Context,
 	centralName, iface string,
@@ -2571,14 +2629,22 @@ func (b *EventBridge) publishUpdateSnapshot(
 	capturedIface := iface
 	capturedAddr := d.Address
 	capturedUpd := upd
+	fw := d.Firmware()
 
-	unsub := d.Firmware().OnChange(func(_ device.FirmwareInfo) {
-		_ = bridge.PublishUpdateState(
-			ctx, capturedCentral, capturedIface, capturedAddr,
-			capturedUpd.State(),
-		)
+	// A re-ingest reuses the device object (and with it the firmware
+	// tracker), so this subscribes once and stays; only a device that left
+	// the model and came back gets a fresh one.
+	b.subscribeOnce(liveSubKey{
+		central: centralName, iface: iface, device: d.Address,
+		kind: liveSubFirmware,
+	}, fw, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+		return fw.OnChange(func(_ device.FirmwareInfo) {
+			_ = bridge.PublishUpdateState(
+				context.Background(), capturedCentral, capturedIface, capturedAddr,
+				capturedUpd.State(),
+			)
+		})
 	})
-	b.addUnsub(unsub)
 }
 
 // publishCombinedDPSnapshot publishes HA-Discovery entities for every
@@ -2595,7 +2661,8 @@ func (b *EventBridge) publishUpdateSnapshot(
 //
 // Wires a live OnChange subscription on the ProfileDataPoint so
 // subsequent schedule-enabled / current-profile updates re-publish the
-// attrs topic. The unsubscribe is appended to b.unsubs.
+// attrs topic — once per data-point object, via
+// [EventBridge.subscribeOnce].
 func (b *EventBridge) publishScheduleEntitySnapshot(
 	ctx context.Context,
 	centralName, iface string,
@@ -2650,13 +2717,17 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 		capAddr := d.Address
 		capCh := channelNo
 		capWP := wp
-		unsubSimple := sp.OnChange(func(_, _ *schedule.Simple) { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
-			b.publishScheduleEntityPayload(
-				context.Background(),
-				capCentral, capIface, capAddr, capCh, capWP,
-			)
+		b.subscribeOnce(liveSubKey{
+			central: centralName, iface: iface, device: d.Address,
+			channel: channelNo, kind: liveSubSimpleSchedule,
+		}, sp, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+			return sp.OnChange(func(_, _ *schedule.Simple) {
+				b.publishScheduleEntityPayload(
+					context.Background(),
+					capCentral, capIface, capAddr, capCh, capWP,
+				)
+			})
 		})
-		b.addUnsub(unsubSimple)
 	}
 
 	// Wire-read sync: when the WEEK_PROGRAM_CHANNEL_LOCKS bitfield
@@ -2680,8 +2751,12 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 			if raw, observed := anyDP.RawValue(); observed {
 				applyLocks(raw)
 			}
-			unsubLocks := anyDP.OnAnyUpdate(func(_, next any) { applyLocks(next) })
-			b.addUnsub(unsubLocks)
+			b.subscribeOnce(liveSubKey{
+				central: centralName, iface: iface, device: d.Address,
+				channel: channelNo, kind: liveSubChannelLocks,
+			}, anyDP, func() func() {
+				return anyDP.OnAnyUpdate(func(_, next any) { applyLocks(next) })
+			})
 		}
 	}
 
@@ -2692,13 +2767,17 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 	capturedAddr := d.Address
 	capturedCh := channelNo
 	capturedWP := wp
-	unsub := capturedWP.OnChange(func() { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
-		b.publishScheduleEntityPayload(
-			context.Background(),
-			capturedCentral, capturedIface, capturedAddr, capturedCh, capturedWP,
-		)
+	b.subscribeOnce(liveSubKey{
+		central: centralName, iface: iface, device: d.Address,
+		channel: channelNo, kind: liveSubScheduleEntity,
+	}, capturedWP, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+		return capturedWP.OnChange(func() {
+			b.publishScheduleEntityPayload(
+				context.Background(),
+				capturedCentral, capturedIface, capturedAddr, capturedCh, capturedWP,
+			)
+		})
 	})
-	b.addUnsub(unsub)
 }
 
 // simpleScheduleEntriesJSON encodes the wp.Simple() schedule entries
@@ -2851,16 +2930,20 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 	capturedAddr := d.Address
 	capturedCh := scheduleChannelNo
 	capturedWP := wp
-	unsub := capturedWP.OnChange(func() { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
-		state := capturedWP.ScheduleEnabled()
-		for k, v := range state {
-			_ = bridge.PublishScheduleSwitchState(
-				context.Background(),
-				capturedCentral, capturedIface, capturedAddr, capturedCh, k, v,
-			)
-		}
+	b.subscribeOnce(liveSubKey{
+		central: centralName, iface: iface, device: d.Address,
+		channel: scheduleChannelNo, kind: liveSubScheduleSwitch,
+	}, capturedWP, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+		return capturedWP.OnChange(func() {
+			state := capturedWP.ScheduleEnabled()
+			for k, v := range state {
+				_ = bridge.PublishScheduleSwitchState(
+					context.Background(),
+					capturedCentral, capturedIface, capturedAddr, capturedCh, k, v,
+				)
+			}
+		})
 	})
-	b.addUnsub(unsub)
 }
 
 // orderedTargetKeys returns the keys of channels in canonical
@@ -2985,8 +3068,8 @@ func (b *EventBridge) publishScheduleEntityPayload(
 // remain attachable scaffolding without an MQTT discovery surface).
 //
 // Wires a live OnUpdate subscription so subsequent CCU-driven seconds
-// changes re-publish the state topic. The unsubscribe is appended to
-// b.unsubs so Stop() tears it down.
+// changes re-publish the state topic — once per combined data-point
+// object, via [EventBridge.subscribeOnce], which Stop() tears down.
 func (b *EventBridge) publishCombinedDPSnapshot(
 	ctx context.Context,
 	centralName, iface string,
@@ -3053,14 +3136,21 @@ func (b *EventBridge) publishCombinedTimer(
 	capturedIface := iface
 	capturedAddr := d.Address
 	capturedChannel := channelNo
-	unsub := timer.OnUpdate(func(_, next float64) { //nolint:contextcheck // OnUpdate callback fires asynchronously; the snapshot ctx may already be done
-		_ = bridge.PublishCombinedTimerState(
-			context.Background(),
-			capturedCentral, capturedIface, capturedAddr, capturedChannel,
-			"duration", next,
-		)
+	// A channel can carry more than one Timer; the wire parameter each one
+	// wraps keeps their subscriptions apart.
+	b.subscribeOnce(liveSubKey{
+		central: centralName, iface: iface, device: d.Address,
+		channel: channelNo, kind: liveSubCombinedTimer,
+		variant: string(timer.ValueParameter),
+	}, timer, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+		return timer.OnUpdate(func(_, next float64) {
+			_ = bridge.PublishCombinedTimerState(
+				context.Background(),
+				capturedCentral, capturedIface, capturedAddr, capturedChannel,
+				"duration", next,
+			)
+		})
 	})
-	b.addUnsub(unsub)
 }
 
 // publishCombinedLevelSensor wires the HA sensor entity and live state for a
@@ -3095,15 +3185,19 @@ func (b *EventBridge) publishCombinedLevelSensor(
 	capturedIface := iface
 	capturedAddr := d.Address
 	capturedChannel := channelNo
-	unsub := lc.OnUpdate(func(_, next combined.LevelComposite) { //nolint:contextcheck // OnUpdate callback fires asynchronously; the snapshot ctx may already be done
-		payload := encodeLevelCompositeJSON(next)
-		_ = bridge.PublishCombinedSensorState(
-			context.Background(),
-			capturedCentral, capturedIface, capturedAddr, capturedChannel,
-			"level_combined", payload,
-		)
+	b.subscribeOnce(liveSubKey{
+		central: centralName, iface: iface, device: d.Address,
+		channel: channelNo, kind: liveSubCombinedLevel,
+	}, lc, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+		return lc.OnUpdate(func(_, next combined.LevelComposite) {
+			body := encodeLevelCompositeJSON(next)
+			_ = bridge.PublishCombinedSensorState(
+				context.Background(),
+				capturedCentral, capturedIface, capturedAddr, capturedChannel,
+				"level_combined", body,
+			)
+		})
 	})
-	b.addUnsub(unsub)
 }
 
 // publishCombinedHSColorSensor wires the HA sensor entity and live state for
@@ -3138,15 +3232,19 @@ func (b *EventBridge) publishCombinedHSColorSensor(
 	capturedIface := iface
 	capturedAddr := d.Address
 	capturedChannel := channelNo
-	unsub := hs.OnUpdate(func(_, next combined.HS) { //nolint:contextcheck // OnUpdate callback fires asynchronously; the snapshot ctx may already be done
-		payload := encodeHSJSON(next)
-		_ = bridge.PublishCombinedSensorState(
-			context.Background(),
-			capturedCentral, capturedIface, capturedAddr, capturedChannel,
-			"hs_color", payload,
-		)
+	b.subscribeOnce(liveSubKey{
+		central: centralName, iface: iface, device: d.Address,
+		channel: channelNo, kind: liveSubCombinedHSColor,
+	}, hs, func() func() { //nolint:contextcheck // the callback outlives the pass that wired it; the snapshot ctx may already be done
+		return hs.OnUpdate(func(_, next combined.HS) {
+			body := encodeHSJSON(next)
+			_ = bridge.PublishCombinedSensorState(
+				context.Background(),
+				capturedCentral, capturedIface, capturedAddr, capturedChannel,
+				"hs_color", body,
+			)
+		})
 	})
-	b.addUnsub(unsub)
 }
 
 // combinedTimerLabel resolves the user-facing label for a combined Timer

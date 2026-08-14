@@ -250,6 +250,11 @@ const SessionIdleTimeout = 5 * time.Minute
 // (Matter §5.4.2.3).
 const PlaceholderIDTTL = 20 * time.Minute
 
+// SessionIDSpace is the number of session ids the allocator can hand
+// out: [1, 0xFFFE]. Id 0 is reserved by Matter for unsecured traffic and
+// the allocator never issues 0xFFFF.
+const SessionIDSpace = 0xFFFE
+
 // Entry pairs a [channel.Session] with its operational metadata.
 type Entry struct {
 	// SessionID is the local 16-bit session identifier carried in
@@ -1105,7 +1110,7 @@ func GenerateResumptionID() ([]byte, error) {
 // outside this lock — see notes/parity/by_design.md
 // BD-Matter-CASE-IDExhaustionEvictsPlaceholdersOnly.
 func (m *Manager) allocateIDLocked() (uint16, error) {
-	const maxID = uint16(0xFFFE)
+	const maxID = uint16(SessionIDSpace)
 	for range maxID {
 		id := m.nextID
 		m.nextID++
@@ -1161,6 +1166,79 @@ type SessionInfo struct {
 	// away without closing its session.
 	LastActivity     time.Time
 	LastPeerActivity time.Time
+}
+
+// SessionTableOccupancy is how much of the session-id space the bridge
+// currently holds, split by what holds it.
+//
+// The split is the point. A reserved id is one [Manager.AllocateID]
+// staked for a handshake that announced it in Sigma2 and never reached
+// key derivation; it appears in no session list, survives for
+// [PlaceholderIDTTL], and is the only shape in which the 16-bit space
+// actually drains. Reporting it as a session would claim a controller is
+// connected; leaving it out entirely hides the drain.
+//
+// loom:reachable:reason="returned by Manager.Occupancy, which the daemon's matterSessionLister calls on every GET /api/v1/matter/sessions; a data struct whose fields the REST layer copies out, which the analyzer's type heuristic (reachable only via its own methods) cannot see used"
+type SessionTableOccupancy struct {
+	// Live counts sessions with key material installed.
+	Live int
+	// Reserved counts ids staked by a handshake that has not completed.
+	Reserved int
+	// Capacity is the size of the allocator's id space.
+	Capacity int
+}
+
+// Free returns the ids neither a live session nor a staked handshake
+// holds. Never negative.
+func (o SessionTableOccupancy) Free() int {
+	free := o.Capacity - o.Live - o.Reserved
+	if free < 0 {
+		return 0
+	}
+	return free
+}
+
+// Occupancy returns a snapshot of the session table's id usage.
+func (m *Manager) Occupancy() SessionTableOccupancy {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	occ := SessionTableOccupancy{Capacity: SessionIDSpace}
+	for _, e := range m.sessions {
+		switch {
+		case e == nil:
+			continue
+		case e.Session == nil:
+			occ.Reserved++
+		default:
+			occ.Live++
+		}
+	}
+	return occ
+}
+
+// SessionIDsForPeer returns the ids of the live sessions currently bound
+// to (fabricIndex, peerNodeID), ordered by id. Staked ids are excluded:
+// they carry no peer.
+//
+// Because opening a session evicts that peer's earlier sessions
+// ([Manager.collectStalePeerSessionsLocked]), the ids this reports
+// immediately before an open are the ones the open displaces — which is
+// what the CASE resume record needs, since a resume that reuses the
+// announced session id displaces the very session it is resuming.
+func (m *Manager) SessionIDsForPeer(fabricIndex uint8, peerNodeID uint64) []uint16 {
+	m.mu.RLock()
+	var out []uint16
+	for _, e := range m.sessions {
+		if e == nil || e.Session == nil {
+			continue
+		}
+		if e.FabricIndex() == fabricIndex && e.Session.PeerNodeID() == peerNodeID {
+			out = append(out, e.SessionID)
+		}
+	}
+	m.mu.RUnlock()
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }
 
 // Sessions returns a snapshot of every open session, ordered by session

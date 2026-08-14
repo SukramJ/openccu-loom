@@ -198,8 +198,10 @@ func (t *dirtyTracker) Forget(centralName string) {
 type ValuesCacheFlusher struct {
 	tracker *dirtyTracker
 
-	mu     sync.Mutex
-	unsubs []func()
+	// removeObserver detaches the registry observer and every per-central
+	// subscription it attached. It replaces a hand-kept slice: the registry
+	// already owns that ledger, and one ledger cannot disagree with itself.
+	removeObserver func()
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -207,10 +209,9 @@ type ValuesCacheFlusher struct {
 }
 
 // StartCentral registers one central with the dirty tracker and subscribes its
-// EventBus so subsequent value / source changes mark it dirty. It is the seam
-// the composition root calls for a runtime-adopted CCU, and the same call the
-// boot-time wiring makes for every configured one — production exercises one
-// path, not two.
+// EventBus so subsequent value / source changes mark it dirty. It is the
+// observer the registry runs per central, for boot-time and runtime-adopted
+// CCUs alike — production exercises one path, not two.
 //
 // The returned closure releases the subscriptions and drops the central from
 // the tracker; it is nil-safe and idempotent. Nil receiver / unit / bus are
@@ -228,10 +229,6 @@ func (f *ValuesCacheFlusher) StartCentral(u *central.Unit) func() {
 	unsubSrc := events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
 		f.tracker.Mark(name, e.ChannelAddress, e.Parameter)
 	})
-	f.mu.Lock()
-	f.unsubs = append(f.unsubs, unsubVal, unsubSrc)
-	f.mu.Unlock()
-
 	var once sync.Once
 	return func() {
 		once.Do(func() {
@@ -251,12 +248,8 @@ func (f *ValuesCacheFlusher) Stop() {
 	f.once.Do(func() {
 		f.cancel()
 		<-f.done
-		f.mu.Lock()
-		unsubs := f.unsubs
-		f.unsubs = nil
-		f.mu.Unlock()
-		for _, u := range unsubs {
-			u()
+		if f.removeObserver != nil {
+			f.removeObserver()
 		}
 	})
 }
@@ -309,9 +302,10 @@ func WireValuesCacheFlusher(
 		cancel:  cancel,
 		done:    make(chan struct{}),
 	}
-	for _, unit := range reg.List() {
-		f.StartCentral(unit)
-	}
+	// Attach before the loop starts so the very first value a central reports
+	// — a boot-time one or one adopted at runtime — already marks the cache
+	// dirty in time for the next flush tick, instead of only at shutdown.
+	f.removeObserver = reg.OnRegister(f.StartCentral)
 
 	go func() {
 		defer close(f.done)

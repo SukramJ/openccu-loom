@@ -24,9 +24,18 @@ type Scheme string
 const (
 	SchemeBasic   Scheme = "basic"
 	SchemeBearer  Scheme = "bearer"
-	SchemeSession Scheme = "session" // session-cookie auth, set by the session and OIDC login flow
+	SchemeSession Scheme = "session" // session-cookie auth, set by the local login flow
+	SchemeOIDC    Scheme = "oidc"    // session-cookie auth for a principal an external provider vouched for
 	SchemeIngress Scheme = "ingress" // HA Ingress auth passthrough (ADR 0044)
 )
+
+// Federated reports whether the scheme identifies a principal an external
+// identity provider vouched for rather than one the daemon's own user store
+// owns. Subject-keyed controls over local accounts must not reach a
+// federated principal: an external login name that folds to the same string
+// as a local account belongs to a different person, and the daemon holds no
+// authority over their credentials.
+func (s Scheme) Federated() bool { return s == SchemeOIDC }
 
 // Role is the coarse-grained permission level.
 type Role string
@@ -98,6 +107,7 @@ type MemoryTokenStore struct {
 func NewMemoryTokenStore(tokens map[string]Identity) *MemoryTokenStore {
 	cp := make(map[string]tokenEntry, len(tokens))
 	for raw, id := range tokens {
+		id.Subject = CanonicalSubject(id.Subject)
 		cp[tokenID(raw)] = tokenEntry{fingerprint: tokenFingerprint(raw), identity: id}
 	}
 	return &MemoryTokenStore{tokens: cp}
@@ -178,7 +188,13 @@ func (s *MemoryTokenStore) List() []TokenSummary {
 //
 // The raw token is hashed immediately; only the short display
 // fingerprint is retained so a heap dump cannot reveal active secrets.
+//
+// The subject is folded to its canonical spelling before it is stored:
+// a token bound to "Bob" would be invisible to every subject-keyed
+// operation — the purge behind an account deletion above all — that
+// addresses the account as "bob".
 func (s *MemoryTokenStore) Put(token string, id Identity) string {
+	id.Subject = CanonicalSubject(id.Subject)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tokens == nil {
@@ -187,6 +203,28 @@ func (s *MemoryTokenStore) Put(token string, id Identity) string {
 	tid := tokenID(token)
 	s.tokens[tid] = tokenEntry{fingerprint: tokenFingerprint(token), identity: id}
 	return tid
+}
+
+// DeleteBySubject removes every token bound to subject and returns the
+// number removed. It is the in-memory half of the purge an account
+// deletion triggers: a token this store still resolves keeps
+// authenticating requests for a user who no longer exists, because the
+// bearer chain falls back to it when the durable store misses.
+func (s *MemoryTokenStore) DeleteBySubject(_ context.Context, subject string) (int, error) {
+	subject = CanonicalSubject(subject)
+	if s == nil || subject == "" {
+		return 0, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for id, entry := range s.tokens {
+		if CanonicalSubject(entry.identity.Subject) == subject {
+			delete(s.tokens, id)
+			n++
+		}
+	}
+	return n, nil
 }
 
 // DeleteByID removes the token whose [TokenSummary.ID] matches id.

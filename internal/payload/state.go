@@ -323,6 +323,10 @@ type InboxDeviceRow struct {
 	Serial       string `json:"serial"`
 	FirstSeen    int64  `json:"first_seen"`
 	Manufacturer string `json:"manufacturer"`
+	// PendingCreation marks a device the daemon parked because
+	// `delay_new_device_creation` is enabled: it exists on the CCU but
+	// carries no data points here until an operator accepts it.
+	PendingCreation bool `json:"pending_creation"`
 }
 
 // InboxState is the live device-inbox aggregate snapshot.

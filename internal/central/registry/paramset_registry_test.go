@@ -16,12 +16,12 @@ import (
 func TestParamsetRegistry(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "ABC:1", hmenum.ParamsetKeyValues, ps)
-	got, ok := r.Get(hmenum.InterfaceHmIPRF, "ABC:1", hmenum.ParamsetKeyValues)
+	r.Put(wireHmIPRF, "ABC:1", hmenum.ParamsetKeyValues, ps)
+	got, ok := r.Get(wireHmIPRF, "ABC:1", hmenum.ParamsetKeyValues)
 	if !ok || len(got) != 1 {
 		t.Fatalf("Get=%v ok=%v", got, ok)
 	}
-	r.DeleteChannel(hmenum.InterfaceHmIPRF, "ABC:1")
+	r.DeleteChannel(wireHmIPRF, "ABC:1")
 	if r.Len() != 0 {
 		t.Fatal("DeleteChannel must purge all paramsets for that channel")
 	}
@@ -30,8 +30,8 @@ func TestParamsetRegistry(t *testing.T) {
 func TestParamsetRegistryDeleteHit(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
-	if !r.Delete(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues) {
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
+	if !r.Delete(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues) {
 		t.Fatal("Delete should return true for existing entry")
 	}
 	if r.Len() != 0 {
@@ -41,7 +41,7 @@ func TestParamsetRegistryDeleteHit(t *testing.T) {
 
 func TestParamsetRegistryDeleteMiss(t *testing.T) {
 	r := NewParamsetRegistry()
-	if r.Delete(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues) {
+	if r.Delete(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues) {
 		t.Fatal("Delete should return false for non-existent entry")
 	}
 }
@@ -49,14 +49,14 @@ func TestParamsetRegistryDeleteMiss(t *testing.T) {
 func TestParamsetRegistryDeleteChannelMultiple(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"X": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "CH:0", hmenum.ParamsetKeyValues, ps)
-	r.Put(hmenum.InterfaceHmIPRF, "CH:0", hmenum.ParamsetKeyMaster, ps)
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
-	r.DeleteChannel(hmenum.InterfaceHmIPRF, "CH:0")
+	r.Put(wireHmIPRF, "CH:0", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "CH:0", hmenum.ParamsetKeyMaster, ps)
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
+	r.DeleteChannel(wireHmIPRF, "CH:0")
 	if r.Len() != 1 {
 		t.Fatalf("expected 1 paramset remaining after DeleteChannel, got %d", r.Len())
 	}
-	_, ok := r.Get(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues)
+	_, ok := r.Get(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues)
 	if !ok {
 		t.Fatal("entry for CH:1 should still be present")
 	}
@@ -69,8 +69,8 @@ func TestParamsetRegistryConcurrent(t *testing.T) {
 	const n = 20
 	for range n {
 		wg.Go(func() {
-			r.Put(hmenum.InterfaceHmIPRF, "ADDR:1", hmenum.ParamsetKeyValues, ps)
-			_, _ = r.Get(hmenum.InterfaceHmIPRF, "ADDR:1", hmenum.ParamsetKeyValues)
+			r.Put(wireHmIPRF, "ADDR:1", hmenum.ParamsetKeyValues, ps)
+			_, _ = r.Get(wireHmIPRF, "ADDR:1", hmenum.ParamsetKeyValues)
 			_ = r.Len()
 		})
 	}
@@ -80,11 +80,11 @@ func TestParamsetRegistryConcurrent(t *testing.T) {
 func TestParamsetRegistryGetChannelAddressesByParamsetKey(t *testing.T) {
 	t.Parallel()
 	r := NewParamsetRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, "DEV:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": hmproto.ParameterData{}})
-	r.Put(hmenum.InterfaceHmIPRF, "DEV:2", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": hmproto.ParameterData{}})
-	r.Put(hmenum.InterfaceHmIPRF, "DEV:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{"MODE": hmproto.ParameterData{}})
+	r.Put(wireHmIPRF, "DEV:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": hmproto.ParameterData{}})
+	r.Put(wireHmIPRF, "DEV:2", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": hmproto.ParameterData{}})
+	r.Put(wireHmIPRF, "DEV:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{"MODE": hmproto.ParameterData{}})
 
-	m := r.GetChannelAddressesByParamsetKey(hmenum.InterfaceHmIPRF, "DEV")
+	m := r.GetChannelAddressesByParamsetKey(wireHmIPRF, "DEV")
 	valAddrs := m[hmenum.ParamsetKeyValues]
 	if len(valAddrs) != 2 {
 		t.Fatalf("VALUES channels len=%d want 2", len(valAddrs))
@@ -99,13 +99,13 @@ func TestGetChannelAddressesByParamsetKey(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"X": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
 
-	r.Put(hmenum.InterfaceHmIPRF, "DEVXYZ:0", hmenum.ParamsetKeyValues, ps)
-	r.Put(hmenum.InterfaceHmIPRF, "DEVXYZ:1", hmenum.ParamsetKeyValues, ps)
-	r.Put(hmenum.InterfaceHmIPRF, "DEVXYZ:1", hmenum.ParamsetKeyMaster, ps)
+	r.Put(wireHmIPRF, "DEVXYZ:0", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEVXYZ:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEVXYZ:1", hmenum.ParamsetKeyMaster, ps)
 	// Different device — must not appear.
-	r.Put(hmenum.InterfaceHmIPRF, "OTHER:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "OTHER:1", hmenum.ParamsetKeyValues, ps)
 
-	result := r.GetChannelAddressesByParamsetKey(hmenum.InterfaceHmIPRF, "DEVXYZ")
+	result := r.GetChannelAddressesByParamsetKey(wireHmIPRF, "DEVXYZ")
 	if len(result[hmenum.ParamsetKeyValues]) != 2 {
 		t.Fatalf("VALUES: expected 2 channel addresses, got %v", result[hmenum.ParamsetKeyValues])
 	}
@@ -119,7 +119,7 @@ func TestGetChannelAddressesByParamsetKey(t *testing.T) {
 
 func TestGetChannelAddressesByParamsetKeyEmptyForUnknownDevice(t *testing.T) {
 	r := NewParamsetRegistry()
-	result := r.GetChannelAddressesByParamsetKey(hmenum.InterfaceHmIPRF, "GHOST")
+	result := r.GetChannelAddressesByParamsetKey(wireHmIPRF, "GHOST")
 	if len(result) != 0 {
 		t.Fatalf("expected empty map, got %v", result)
 	}
@@ -128,10 +128,10 @@ func TestGetChannelAddressesByParamsetKeyEmptyForUnknownDevice(t *testing.T) {
 func TestParamsetRegistryGetChannelParamsetDescriptions(t *testing.T) {
 	t.Parallel()
 	r := NewParamsetRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"A": {}})
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{"B": {}})
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"A": {}})
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{"B": {}})
 
-	descs := r.GetChannelParamsetDescriptions(hmenum.InterfaceHmIPRF, "CH:1")
+	descs := r.GetChannelParamsetDescriptions(wireHmIPRF, "CH:1")
 	if len(descs) != 2 {
 		t.Fatalf("GetChannelParamsetDescriptions len=%d want 2", len(descs))
 	}
@@ -140,7 +140,7 @@ func TestParamsetRegistryGetChannelParamsetDescriptions(t *testing.T) {
 	}
 
 	// unknown channel
-	empty := r.GetChannelParamsetDescriptions(hmenum.InterfaceHmIPRF, "UNKNOWN:9")
+	empty := r.GetChannelParamsetDescriptions(wireHmIPRF, "UNKNOWN:9")
 	if len(empty) != 0 {
 		t.Fatal("unknown channel must return empty map")
 	}
@@ -151,10 +151,10 @@ func TestGetChannelParamsetDescriptions(t *testing.T) {
 	psV := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
 	psM := hmproto.Paramset{"TEMP": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
 
-	r.Put(hmenum.InterfaceHmIPRF, "ABC:1", hmenum.ParamsetKeyValues, psV)
-	r.Put(hmenum.InterfaceHmIPRF, "ABC:1", hmenum.ParamsetKeyMaster, psM)
+	r.Put(wireHmIPRF, "ABC:1", hmenum.ParamsetKeyValues, psV)
+	r.Put(wireHmIPRF, "ABC:1", hmenum.ParamsetKeyMaster, psM)
 
-	result := r.GetChannelParamsetDescriptions(hmenum.InterfaceHmIPRF, "ABC:1")
+	result := r.GetChannelParamsetDescriptions(wireHmIPRF, "ABC:1")
 	if len(result) != 2 {
 		t.Fatalf("expected 2 paramset keys, got %d", len(result))
 	}
@@ -168,7 +168,7 @@ func TestGetChannelParamsetDescriptions(t *testing.T) {
 
 func TestGetChannelParamsetDescriptionsUnknownChannel(t *testing.T) {
 	r := NewParamsetRegistry()
-	result := r.GetChannelParamsetDescriptions(hmenum.InterfaceHmIPRF, "NOPE:1")
+	result := r.GetChannelParamsetDescriptions(wireHmIPRF, "NOPE:1")
 	if len(result) != 0 {
 		t.Fatalf("expected empty map for unknown channel, got %v", result)
 	}
@@ -177,10 +177,10 @@ func TestGetChannelParamsetDescriptionsUnknownChannel(t *testing.T) {
 func TestParamsetRegistryGetParameterData(t *testing.T) {
 	t.Parallel()
 	r := NewParamsetRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues,
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues,
 		hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}})
 
-	pd, ok := r.GetParameterData(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "LEVEL")
+	pd, ok := r.GetParameterData(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "LEVEL")
 	if !ok {
 		t.Fatal("GetParameterData: existing parameter must return ok=true")
 	}
@@ -188,7 +188,7 @@ func TestParamsetRegistryGetParameterData(t *testing.T) {
 		t.Fatalf("GetParameterData Type=%v want Float", pd.Type)
 	}
 
-	_, ok2 := r.GetParameterData(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "MISSING")
+	_, ok2 := r.GetParameterData(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "MISSING")
 	if ok2 {
 		t.Fatal("GetParameterData: absent parameter must return ok=false")
 	}
@@ -199,9 +199,9 @@ func TestGetParameterData(t *testing.T) {
 	ps := hmproto.Paramset{
 		"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Unit: "%"},
 	}
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
 
-	pd, ok := r.GetParameterData(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "LEVEL")
+	pd, ok := r.GetParameterData(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "LEVEL")
 	if !ok {
 		t.Fatal("expected ok=true for existing parameter")
 	}
@@ -212,7 +212,7 @@ func TestGetParameterData(t *testing.T) {
 
 func TestGetParameterDataMissing(t *testing.T) {
 	r := NewParamsetRegistry()
-	_, ok := r.GetParameterData(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "NOSUCH")
+	_, ok := r.GetParameterData(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "NOSUCH")
 	if ok {
 		t.Fatal("expected ok=false for missing parameter")
 	}
@@ -221,15 +221,15 @@ func TestGetParameterDataMissing(t *testing.T) {
 func TestParamsetRegistryGetParamsetKeys(t *testing.T) {
 	t.Parallel()
 	r := NewParamsetRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, hmproto.Paramset{})
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{})
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, hmproto.Paramset{})
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyMaster, hmproto.Paramset{})
 
-	keys := r.GetParamsetKeys(hmenum.InterfaceHmIPRF, "CH:1")
+	keys := r.GetParamsetKeys(wireHmIPRF, "CH:1")
 	if len(keys) != 2 {
 		t.Fatalf("GetParamsetKeys len=%d want 2", len(keys))
 	}
 	// unknown channel
-	noKeys := r.GetParamsetKeys(hmenum.InterfaceHmIPRF, "NONE:9")
+	noKeys := r.GetParamsetKeys(wireHmIPRF, "NONE:9")
 	if len(noKeys) != 0 {
 		t.Fatal("GetParamsetKeys for unknown channel must return empty slice")
 	}
@@ -238,10 +238,10 @@ func TestParamsetRegistryGetParamsetKeys(t *testing.T) {
 func TestGetParamsetKeys(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"X": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "DEV:0", hmenum.ParamsetKeyValues, ps)
-	r.Put(hmenum.InterfaceHmIPRF, "DEV:0", hmenum.ParamsetKeyMaster, ps)
+	r.Put(wireHmIPRF, "DEV:0", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEV:0", hmenum.ParamsetKeyMaster, ps)
 
-	keys := r.GetParamsetKeys(hmenum.InterfaceHmIPRF, "DEV:0")
+	keys := r.GetParamsetKeys(wireHmIPRF, "DEV:0")
 	if len(keys) != 2 {
 		t.Fatalf("expected 2 keys, got %v", keys)
 	}
@@ -249,7 +249,7 @@ func TestGetParamsetKeys(t *testing.T) {
 
 func TestGetParamsetKeysEmpty(t *testing.T) {
 	r := NewParamsetRegistry()
-	keys := r.GetParamsetKeys(hmenum.InterfaceHmIPRF, "GHOST:1")
+	keys := r.GetParamsetKeys(wireHmIPRF, "GHOST:1")
 	if len(keys) != 0 {
 		t.Fatalf("expected no keys for unknown channel, got %v", keys)
 	}
@@ -258,14 +258,14 @@ func TestGetParamsetKeysEmpty(t *testing.T) {
 func TestParamsetRegistryHasInterfaceID(t *testing.T) {
 	t.Parallel()
 	r := NewParamsetRegistry()
-	if r.HasInterfaceID(hmenum.InterfaceHmIPRF) {
+	if r.HasInterfaceID(wireHmIPRF) {
 		t.Fatal("HasInterfaceID must return false for empty registry")
 	}
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, hmproto.Paramset{})
-	if !r.HasInterfaceID(hmenum.InterfaceHmIPRF) {
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, hmproto.Paramset{})
+	if !r.HasInterfaceID(wireHmIPRF) {
 		t.Fatal("HasInterfaceID must return true after Put")
 	}
-	if r.HasInterfaceID(hmenum.InterfaceBidCosRF) {
+	if r.HasInterfaceID(wireBidCosRF) {
 		t.Fatal("HasInterfaceID must return false for interface with no entries")
 	}
 }
@@ -273,12 +273,12 @@ func TestParamsetRegistryHasInterfaceID(t *testing.T) {
 func TestHasInterfaceID(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"Y": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
 
-	if !r.HasInterfaceID(hmenum.InterfaceHmIPRF) {
+	if !r.HasInterfaceID(wireHmIPRF) {
 		t.Fatal("HasInterfaceID must return true for known interface")
 	}
-	if r.HasInterfaceID(hmenum.InterfaceBidCosRF) {
+	if r.HasInterfaceID(wireBidCosRF) {
 		t.Fatal("HasInterfaceID must return false for unknown interface")
 	}
 }
@@ -286,13 +286,13 @@ func TestHasInterfaceID(t *testing.T) {
 func TestParamsetRegistryHasParameter(t *testing.T) {
 	t.Parallel()
 	r := NewParamsetRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues,
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues,
 		hmproto.Paramset{"STATE": {}})
 
-	if !r.HasParameter(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "STATE") {
+	if !r.HasParameter(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "STATE") {
 		t.Fatal("HasParameter must return true for existing parameter")
 	}
-	if r.HasParameter(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "NOPE") {
+	if r.HasParameter(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "NOPE") {
 		t.Fatal("HasParameter must return false for missing parameter")
 	}
 }
@@ -300,12 +300,12 @@ func TestParamsetRegistryHasParameter(t *testing.T) {
 func TestHasParameter(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, ps)
 
-	if !r.HasParameter(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "LEVEL") {
+	if !r.HasParameter(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "LEVEL") {
 		t.Fatal("HasParameter must return true for existing parameter")
 	}
-	if r.HasParameter(hmenum.InterfaceHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "NOPE") {
+	if r.HasParameter(wireHmIPRF, "CH:1", hmenum.ParamsetKeyValues, "NOPE") {
 		t.Fatal("HasParameter must return false for absent parameter")
 	}
 }
@@ -313,15 +313,15 @@ func TestHasParameter(t *testing.T) {
 func TestParamsetRegistryIsInMultipleChannels(t *testing.T) {
 	t.Parallel()
 	r := NewParamsetRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, "DEV:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": {}})
-	r.Put(hmenum.InterfaceHmIPRF, "DEV:2", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": {}})
+	r.Put(wireHmIPRF, "DEV:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": {}})
+	r.Put(wireHmIPRF, "DEV:2", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": {}})
 
 	if !r.IsInMultipleChannels("DEV:1", "LEVEL") {
 		t.Fatal("IsInMultipleChannels must return true when parameter appears in 2 channels")
 	}
 
 	// single channel
-	r.Put(hmenum.InterfaceHmIPRF, "DEV2:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"ONLY": {}})
+	r.Put(wireHmIPRF, "DEV2:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"ONLY": {}})
 	if r.IsInMultipleChannels("DEV2:1", "ONLY") {
 		t.Fatal("IsInMultipleChannels must return false for parameter in only 1 channel")
 	}
@@ -337,8 +337,8 @@ func TestIsInMultipleChannels(t *testing.T) {
 	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
 
 	// LEVEL on two different channels of the same device.
-	r.Put(hmenum.InterfaceHmIPRF, "DEV001:1", hmenum.ParamsetKeyValues, ps)
-	r.Put(hmenum.InterfaceHmIPRF, "DEV001:2", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEV001:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEV001:2", hmenum.ParamsetKeyValues, ps)
 
 	if !r.IsInMultipleChannels("DEV001:1", "LEVEL") {
 		t.Fatal("LEVEL should be detected as in multiple channels")
@@ -348,7 +348,7 @@ func TestIsInMultipleChannels(t *testing.T) {
 func TestIsInMultipleChannelsFalseForSingleChannel(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "DEV002:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEV002:1", hmenum.ParamsetKeyValues, ps)
 
 	if r.IsInMultipleChannels("DEV002:1", "LEVEL") {
 		t.Fatal("LEVEL should NOT be in multiple channels when only one channel has it")
@@ -371,9 +371,9 @@ func TestParamsetRegistryAddAppliesPatch(t *testing.T) {
 	ps := hmproto.Paramset{
 		"ENERGY_COUNTER": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Unit: ""},
 	}
-	r.Add(hmenum.InterfaceHmIPRF, "VCU001:1", hmenum.ParamsetKeyValues, ps, "HM-ES-PMSw1-Pl")
+	r.Add(wireHmIPRF, "VCU001:1", hmenum.ParamsetKeyValues, ps, "HM-ES-PMSw1-Pl")
 
-	got, ok := r.Get(hmenum.InterfaceHmIPRF, "VCU001:1", hmenum.ParamsetKeyValues)
+	got, ok := r.Get(wireHmIPRF, "VCU001:1", hmenum.ParamsetKeyValues)
 	if !ok {
 		t.Fatal("Add: paramset not found after Add")
 	}
@@ -402,9 +402,9 @@ func TestParamsetRegistryAddPatchesHMCCVG1(t *testing.T) {
 		},
 	}
 	// Channel 1 of HM-CC-VG-1 — must trigger the channel_no=1 scoped patch.
-	r.Add(hmenum.InterfaceHmIPRF, "VCU0000001:1", hmenum.ParamsetKeyValues, ps, "HM-CC-VG-1")
+	r.Add(wireHmIPRF, "VCU0000001:1", hmenum.ParamsetKeyValues, ps, "HM-CC-VG-1")
 
-	got, ok := r.Get(hmenum.InterfaceHmIPRF, "VCU0000001:1", hmenum.ParamsetKeyValues)
+	got, ok := r.Get(wireHmIPRF, "VCU0000001:1", hmenum.ParamsetKeyValues)
 	if !ok {
 		t.Fatal("paramset not found")
 	}
@@ -432,9 +432,9 @@ func TestParamsetRegistryAddPatchChannelNoScopingSkipsOtherChannel(t *testing.T)
 		},
 	}
 	// Channel 2 — the patch is scoped to channel 1, so it must not fire.
-	r.Add(hmenum.InterfaceHmIPRF, "VCU0000001:2", hmenum.ParamsetKeyValues, ps, "HM-CC-VG-1")
+	r.Add(wireHmIPRF, "VCU0000001:2", hmenum.ParamsetKeyValues, ps, "HM-CC-VG-1")
 
-	got, ok := r.Get(hmenum.InterfaceHmIPRF, "VCU0000001:2", hmenum.ParamsetKeyValues)
+	got, ok := r.Get(wireHmIPRF, "VCU0000001:2", hmenum.ParamsetKeyValues)
 	if !ok {
 		t.Fatal("paramset not found")
 	}
@@ -459,9 +459,9 @@ func TestParamsetRegistryAddDeviceTypePreFilter(t *testing.T) {
 		},
 	}
 	// HM-CC-RT-DN is a different device — no patch must fire.
-	r.Add(hmenum.InterfaceHmIPRF, "VCU0000001:1", hmenum.ParamsetKeyValues, ps, "HM-CC-RT-DN")
+	r.Add(wireHmIPRF, "VCU0000001:1", hmenum.ParamsetKeyValues, ps, "HM-CC-RT-DN")
 
-	got, ok := r.Get(hmenum.InterfaceHmIPRF, "VCU0000001:1", hmenum.ParamsetKeyValues)
+	got, ok := r.Get(wireHmIPRF, "VCU0000001:1", hmenum.ParamsetKeyValues)
 	if !ok {
 		t.Fatal("paramset not found")
 	}
@@ -477,9 +477,9 @@ func TestParamsetRegistryAddNoPatchRegistry(t *testing.T) {
 	ps := hmproto.Paramset{
 		"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Unit: "  % "},
 	}
-	r.Add(hmenum.InterfaceHmIPRF, "VCU002:1", hmenum.ParamsetKeyValues, ps, "SomeModel")
+	r.Add(wireHmIPRF, "VCU002:1", hmenum.ParamsetKeyValues, ps, "SomeModel")
 
-	got, ok := r.Get(hmenum.InterfaceHmIPRF, "VCU002:1", hmenum.ParamsetKeyValues)
+	got, ok := r.Get(wireHmIPRF, "VCU002:1", hmenum.ParamsetKeyValues)
 	if !ok {
 		t.Fatal("paramset not found")
 	}
@@ -492,7 +492,7 @@ func TestRegisterAdditionalParameter(t *testing.T) {
 	r := NewParamsetRegistry()
 	// Only one paramset stored for DEV004:1 initially.
 	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "DEV004:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEV004:1", hmenum.ParamsetKeyValues, ps)
 
 	// Register an additional parameter on channel 2 (e.g. for a calculated DP).
 	r.RegisterAdditionalParameter("DEV004:2", "LEVEL")
@@ -516,14 +516,14 @@ func TestRegisterAdditionalParameterNoopForDeviceAddress(t *testing.T) {
 func TestAddressParamCacheCleanedOnDeleteChannel(t *testing.T) {
 	r := NewParamsetRegistry()
 	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(hmenum.InterfaceHmIPRF, "DEVCLEAN:1", hmenum.ParamsetKeyValues, ps)
-	r.Put(hmenum.InterfaceHmIPRF, "DEVCLEAN:2", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEVCLEAN:1", hmenum.ParamsetKeyValues, ps)
+	r.Put(wireHmIPRF, "DEVCLEAN:2", hmenum.ParamsetKeyValues, ps)
 
 	// LEVEL is in two channels → multiple.
 	if !r.IsInMultipleChannels("DEVCLEAN:1", "LEVEL") {
 		t.Fatal("pre-condition: LEVEL must be in multiple channels")
 	}
-	r.DeleteChannel(hmenum.InterfaceHmIPRF, "DEVCLEAN:2")
+	r.DeleteChannel(wireHmIPRF, "DEVCLEAN:2")
 	// After removing channel 2, only channel 1 remains → not multiple.
 	if r.IsInMultipleChannels("DEVCLEAN:1", "LEVEL") {
 		t.Fatal("after DeleteChannel, LEVEL must not be in multiple channels")
@@ -545,7 +545,7 @@ func TestParamsetRegistryConcurrentAdd(t *testing.T) {
 			if i%2 == 0 {
 				addr = "CONCURRENT:2"
 			}
-			r.Add(hmenum.InterfaceHmIPRF, addr, hmenum.ParamsetKeyValues, ps, "SomeModel")
+			r.Add(wireHmIPRF, addr, hmenum.ParamsetKeyValues, ps, "SomeModel")
 			_ = r.IsInMultipleChannels("CONCURRENT:1", "LEVEL")
 		}(i)
 	}

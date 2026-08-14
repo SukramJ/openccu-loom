@@ -664,6 +664,13 @@
             {#if centrals.length > 1 && d.central}
               <Badge variant="muted">{d.central}</Badge>
             {/if}
+            {#if d.pending_creation}
+              <!-- The daemon parked this device (delay_new_device_creation):
+                   it has no data points here until it is accepted. -->
+              <Badge variant="warning" title={t("inbox.pending_creation_hint")}>
+                {t("inbox.pending_creation_badge")}
+              </Badge>
+            {/if}
           {:else if col.key === "model"}
             <Badge variant="muted">{d.model}</Badge>
             {#if d.manufacturer}

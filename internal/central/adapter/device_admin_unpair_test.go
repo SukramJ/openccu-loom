@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // fakeOperations is a minimal backends.Operations stub. Every method
@@ -265,21 +266,21 @@ func buildUnpairFixture(t *testing.T, backendErr error) (
 	})
 	c.ModelRegistry.Put(dev)
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.Interface(unpairWireID),
+		Interface: hmtypes.ParseWireInterfaceID(unpairWireID),
 		Address:   "0001ABCD",
 		Model:     "HmIP-STH",
 	})
-	c.DescRegistry.Put(hmenum.Interface(unpairWireID), hmproto.DeviceDescription{Address: "0001ABCD", Type: "HmIP-STH"})
-	c.ParamsetReg.Put(hmenum.Interface(unpairWireID), "0001ABCD", hmenum.ParamsetKeyValues, hmproto.Paramset{})
+	c.DescRegistry.Put(hmtypes.ParseWireInterfaceID(unpairWireID), hmproto.DeviceDescription{Address: "0001ABCD", Type: "HmIP-STH"})
+	c.ParamsetReg.Put(hmtypes.ParseWireInterfaceID(unpairWireID), "0001ABCD", hmenum.ParamsetKeyValues, hmproto.Paramset{})
 	// A real device carries its paramsets per channel, never on the device
 	// root alone — that is the shape the ingest pipeline registers.
 	for chNo, chAddr := range unpairChannelAddresses {
 		dev.AddChannel(chAddr, chNo, "MAINTENANCE", hmenum.ParamsetKeyValues)
-		c.DescRegistry.Put(hmenum.Interface(unpairWireID), hmproto.DeviceDescription{
+		c.DescRegistry.Put(hmtypes.ParseWireInterfaceID(unpairWireID), hmproto.DeviceDescription{
 			Address: chAddr, Parent: "0001ABCD", Type: "MAINTENANCE",
 		})
-		c.ParamsetReg.Put(hmenum.Interface(unpairWireID), chAddr, hmenum.ParamsetKeyValues, hmproto.Paramset{})
-		c.ParamsetReg.Put(hmenum.Interface(unpairWireID), chAddr, hmenum.ParamsetKeyMaster, hmproto.Paramset{})
+		c.ParamsetReg.Put(hmtypes.ParseWireInterfaceID(unpairWireID), chAddr, hmenum.ParamsetKeyValues, hmproto.Paramset{})
+		c.ParamsetReg.Put(hmtypes.ParseWireInterfaceID(unpairWireID), chAddr, hmenum.ParamsetKeyMaster, hmproto.Paramset{})
 	}
 
 	fake = &fakeOperations{kind: backends.KindCCU, deleteDeviceErr: backendErr}
@@ -314,14 +315,14 @@ func TestUnpairDeviceHappyPath(t *testing.T) {
 	if _, ok := c.ModelRegistry.Get("0001ABCD"); ok {
 		t.Error("device still in ModelRegistry after unpair")
 	}
-	if _, ok := c.DeviceRegistry.Get(hmenum.Interface(unpairWireID), "0001ABCD"); ok {
+	if _, ok := c.DeviceRegistry.Get(hmtypes.ParseWireInterfaceID(unpairWireID), "0001ABCD"); ok {
 		t.Error("device still in DeviceRegistry after unpair")
 	}
-	if _, ok := c.DescRegistry.Get(hmenum.Interface(unpairWireID), "0001ABCD"); ok {
+	if _, ok := c.DescRegistry.Get(hmtypes.ParseWireInterfaceID(unpairWireID), "0001ABCD"); ok {
 		t.Error("description still in DescRegistry after unpair")
 	}
 	for _, chAddr := range unpairChannelAddresses {
-		if _, ok := c.DescRegistry.Get(hmenum.Interface(unpairWireID), chAddr); ok {
+		if _, ok := c.DescRegistry.Get(hmtypes.ParseWireInterfaceID(unpairWireID), chAddr); ok {
 			t.Errorf("channel description %s still in DescRegistry after unpair", chAddr)
 		}
 	}
@@ -402,7 +403,7 @@ func TestUnpairDeviceBackendUnsupportedPropagatesAndDoesNotClearRegistries(t *te
 	if _, ok := c.ModelRegistry.Get("0001ABCD"); !ok {
 		t.Error("ModelRegistry must not be cleared when backend returns ErrUnsupported")
 	}
-	if _, ok := c.DeviceRegistry.Get(hmenum.Interface(unpairWireID), "0001ABCD"); !ok {
+	if _, ok := c.DeviceRegistry.Get(hmtypes.ParseWireInterfaceID(unpairWireID), "0001ABCD"); !ok {
 		t.Error("DeviceRegistry must not be cleared when backend returns ErrUnsupported")
 	}
 }

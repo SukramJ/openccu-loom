@@ -98,6 +98,56 @@ func (s *UserStore) Put(ctx context.Context, subject, password string, role auth
 	return tx.Commit()
 }
 
+// SetRole changes a user's role and leaves the stored password hash
+// untouched. It is the write behind a role-only update: [UserStore.Put]
+// needs a plaintext password to hash, which an admin who only moves an
+// account between roles never has.
+//
+// Returns [ErrUserNotFound] when the subject has no row and
+// [ErrLastAdmin] when the change would leave the table with zero admins —
+// the same lockout guard [UserStore.Put] and [UserStore.Delete] apply,
+// and for the same reason it lives inside the transaction: two concurrent
+// demotions must not each observe the admin the other is removing.
+func (s *UserStore) SetRole(ctx context.Context, subject string, role auth.Role) error {
+	subject = auth.CanonicalSubject(subject)
+	if subject == "" {
+		return errors.New("sqlite: user subject required")
+	}
+	if role == "" {
+		return errors.New("sqlite: user role required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite: users set role: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var current string
+	err = tx.QueryRowContext(ctx, `SELECT role FROM users WHERE subject = ?`, subject).Scan(&current)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("sqlite: users set role: select: %w", err)
+	}
+	if current == string(auth.RoleAdmin) && role != auth.RoleAdmin {
+		var adminCount int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM users WHERE role = ?`, string(auth.RoleAdmin)).Scan(&adminCount); err != nil {
+			return fmt.Errorf("sqlite: users set role: admin count: %w", err)
+		}
+		if adminCount <= 1 {
+			return ErrLastAdmin
+		}
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE users SET role = ?, updated_at = ? WHERE subject = ?`,
+		string(role), time.Now().UTC(), subject); err != nil {
+		return fmt.Errorf("sqlite: users set role: exec: %w", err)
+	}
+	return tx.Commit()
+}
+
 // Delete removes a user. Refuses to remove the last admin so the
 // daemon never locks itself out.
 func (s *UserStore) Delete(ctx context.Context, subject string) error {

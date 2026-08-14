@@ -290,14 +290,24 @@ func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string, expectedN
 // path into nested objects (e.g. Keycloak's "realm_access.roles"). When the
 // claim yields several role names the highest-privilege match wins
 // (admin > operator > viewer); an unmapped or absent claim yields Viewer.
+// The subject is normally "preferred_username", which OpenID Connect Core
+// §5.1 declares neither stable nor unique — providers emit whatever casing
+// the directory holds, so the same person can sign in twice and end up with
+// two subjects, splitting the audit trail and every subject-keyed lookup.
+// It is therefore folded to the single spelling the rest of the daemon uses.
+// The identity is marked federated so a local account whose name folds to
+// the same string stays a separate principal.
 func (c *Client) IdentityFrom(claims *IDClaims) auth.Identity {
-	subject := claims.PreferredUser
+	subject := auth.CanonicalSubject(claims.PreferredUser)
 	if subject == "" {
+		// "sub" is opaque and case-sensitive (OpenID Connect Core §2): two
+		// principals may differ in casing alone, so it passes through
+		// byte-for-byte. The asymmetry with preferred_username is deliberate.
 		subject = claims.Subject
 	}
 	return auth.Identity{
 		Subject: subject,
-		Scheme:  auth.SchemeSession,
+		Scheme:  auth.SchemeOIDC,
 		Role:    c.roleFromClaims(claims),
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // TestCentralBringUp_ConcurrentReinitIsSerialized guards against two clears
@@ -76,10 +77,10 @@ func TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries(t *test
 	d.AddChannel("AAAA0001:1", 1, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	unit.ModelRegistry.Put(d)
 	unit.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.Interface(wireID), Address: "AAAA0001", Model: "HmIP-STH",
+		Interface: hmtypes.ParseWireInterfaceID(wireID), Address: "AAAA0001", Model: "HmIP-STH",
 	})
-	unit.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{Address: "AAAA0001"})
-	unit.ParamsetReg.Add(hmenum.Interface(wireID), "AAAA0001:1", hmenum.ParamsetKeyValues,
+	unit.DescRegistry.Put(hmtypes.ParseWireInterfaceID(wireID), hmproto.DeviceDescription{Address: "AAAA0001"})
+	unit.ParamsetReg.Add(hmtypes.ParseWireInterfaceID(wireID), "AAAA0001:1", hmenum.ParamsetKeyValues,
 		hmproto.Paramset{"STATE": {Type: hmenum.ParameterTypeBool}}, "HmIP-STH")
 
 	if unit.DescRegistry.Len() == 0 || unit.ParamsetReg.Len() == 0 || unit.DeviceRegistry.Len() == 0 {
@@ -527,7 +528,7 @@ func TestBringUpManagerAddCentralWiresDescriptorPersistence(t *testing.T) {
 		t.Fatalf("central.New (seed): %v", err)
 	}
 	WireDescriptorPersistence(ctx, seed, stores, nil)
-	seed.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	seed.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address:  "VCU7",
 		Type:     "HmIP-PS",
 		Children: []string{"VCU7:1"},
@@ -561,13 +562,13 @@ func TestBringUpManagerAddCentralWiresDescriptorPersistence(t *testing.T) {
 	}
 
 	// Effect 1 — hydration: the adopted Unit starts warm.
-	if desc, ok := unit.DescRegistry.Get(hmenum.InterfaceHmIPRF, "VCU7"); !ok || desc.Type != "HmIP-PS" {
+	if desc, ok := unit.DescRegistry.Get(wireHmIPRF, "VCU7"); !ok || desc.Type != "HmIP-PS" {
 		t.Fatalf("adopted central did not hydrate its description registry: got %+v ok=%v; "+
 			"it will re-inventory the whole CCU over the radio on every restart", desc, ok)
 	}
 
 	// Effect 2 — mirroring: what the adopted central learns is persisted.
-	unit.ParamsetReg.Add(hmenum.InterfaceHmIPRF, "VCU7:1", hmenum.ParamsetKeyValues, hmproto.Paramset{
+	unit.ParamsetReg.Add(wireHmIPRF, "VCU7:1", hmenum.ParamsetKeyValues, hmproto.Paramset{
 		"STATE": {
 			Type:       hmenum.ParameterTypeBool,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,

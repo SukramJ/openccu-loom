@@ -250,6 +250,7 @@ list does not drift from reality.
 | `device.trigger` | `device.{address}.channels.{channel}.trigger` | [`DeviceTriggerPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `device.created` | `device.{address}.lifecycle` | [`DeviceCreatedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `device.removed` | `device.{address}.lifecycle` | [`DeviceRemovedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `device.availability_changed` | `device.{address}.lifecycle` | [`DeviceAvailabilityChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `central.state_changed` | `central.{name}.state` | [`CentralStateChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `system.status_changed` | `system.{central}.status` | [`SystemStatusChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `hub.sysvar_changed` | `hub.{central}.sysvars.{name}` | [`SysvarChangedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |

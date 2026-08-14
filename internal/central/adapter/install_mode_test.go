@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // installFakeOps extends fakeOperations with SetInstallMode call recording.
@@ -49,7 +50,7 @@ func buildInstallModeFixture(t *testing.T, centralName string, iface hmenum.Inte
 	}
 	fake := &installFakeOps{}
 	w := clientpkg.NewValueWriter()
-	w.Register(centralName, WireInterfaceID(centralName, iface), fake)
+	w.Register(centralName, hmtypes.NewWireInterfaceID(centralName, iface), fake)
 	return c, w, fake
 }
 
@@ -186,8 +187,8 @@ func buildWireFixture(t *testing.T) (*central.Unit, *clientpkg.ValueWriter) {
 	}
 
 	w := clientpkg.NewValueWriter()
-	w.Register(centralName, WireInterfaceID(centralName, hmenum.InterfaceHmIPRF), &installFakeOps{})
-	w.Register(centralName, WireInterfaceID(centralName, hmenum.InterfaceVirtualDevices), &installFakeOps{})
+	w.Register(centralName, hmtypes.NewWireInterfaceID(centralName, hmenum.InterfaceHmIPRF), &installFakeOps{})
+	w.Register(centralName, hmtypes.NewWireInterfaceID(centralName, hmenum.InterfaceVirtualDevices), &installFakeOps{})
 
 	return c, w
 }

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // fakeDescriptionSink is a [DescriptionSink] recorder used to assert that
@@ -22,22 +22,22 @@ type fakeDescriptionSink struct {
 }
 
 type fakeDescriptionPut struct {
-	iface hmenum.Interface
+	iface hmtypes.WireInterfaceID
 	desc  hmproto.DeviceDescription
 }
 
 type fakeDescriptionDelete struct {
-	iface   hmenum.Interface
+	iface   hmtypes.WireInterfaceID
 	address string
 }
 
-func (f *fakeDescriptionSink) PutDescription(iface hmenum.Interface, desc hmproto.DeviceDescription) {
+func (f *fakeDescriptionSink) PutDescription(iface hmtypes.WireInterfaceID, desc hmproto.DeviceDescription) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.puts = append(f.puts, fakeDescriptionPut{iface: iface, desc: desc})
 }
 
-func (f *fakeDescriptionSink) DeleteDescription(iface hmenum.Interface, address string) {
+func (f *fakeDescriptionSink) DeleteDescription(iface hmtypes.WireInterfaceID, address string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deletes = append(f.deletes, fakeDescriptionDelete{iface: iface, address: address})
@@ -61,7 +61,7 @@ func TestDeviceDescriptionRegistryPutFiresSinkWithNormalisedDescription(t *testi
 	r.SetSink(sink)
 
 	raw := hmproto.DeviceDescription{Address: "  VCU1  ", Type: " HmIP-PS "}
-	r.Put(hmenum.InterfaceHmIPRF, raw)
+	r.Put(wireHmIPRF, raw)
 
 	if got := sink.putCount(); got != 1 {
 		t.Fatalf("PutDescription called %d times, want 1", got)
@@ -70,8 +70,8 @@ func TestDeviceDescriptionRegistryPutFiresSinkWithNormalisedDescription(t *testi
 	sink.mu.Lock()
 	got := sink.puts[0]
 	sink.mu.Unlock()
-	if got.iface != hmenum.InterfaceHmIPRF {
-		t.Errorf("sink iface=%v want %v", got.iface, hmenum.InterfaceHmIPRF)
+	if got.iface != wireHmIPRF {
+		t.Errorf("sink iface=%v want %v", got.iface, wireHmIPRF)
 	}
 	if !reflect.DeepEqual(got.desc, want) {
 		t.Errorf("sink desc=%+v want normalised %+v", got.desc, want)
@@ -80,11 +80,11 @@ func TestDeviceDescriptionRegistryPutFiresSinkWithNormalisedDescription(t *testi
 
 func TestDeviceDescriptionRegistryDeleteFiresSinkOnHit(t *testing.T) {
 	r := NewDeviceDescriptionRegistry()
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "VCU2"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "VCU2"})
 	sink := &fakeDescriptionSink{}
 	r.SetSink(sink)
 
-	if !r.Delete(hmenum.InterfaceHmIPRF, "VCU2") {
+	if !r.Delete(wireHmIPRF, "VCU2") {
 		t.Fatal("Delete must report true for an existing entry")
 	}
 	if got := sink.deleteCount(); got != 1 {
@@ -93,7 +93,7 @@ func TestDeviceDescriptionRegistryDeleteFiresSinkOnHit(t *testing.T) {
 	sink.mu.Lock()
 	got := sink.deletes[0]
 	sink.mu.Unlock()
-	if got.iface != hmenum.InterfaceHmIPRF || got.address != "VCU2" {
+	if got.iface != wireHmIPRF || got.address != "VCU2" {
 		t.Errorf("delete call=%+v want {HmIP-RF VCU2}", got)
 	}
 }
@@ -103,7 +103,7 @@ func TestDeviceDescriptionRegistryDeleteMissingFiresNoSinkCall(t *testing.T) {
 	sink := &fakeDescriptionSink{}
 	r.SetSink(sink)
 
-	if r.Delete(hmenum.InterfaceHmIPRF, "GHOST") {
+	if r.Delete(wireHmIPRF, "GHOST") {
 		t.Fatal("Delete must report false for a missing entry")
 	}
 	if got := sink.deleteCount(); got != 0 {
@@ -119,14 +119,14 @@ func TestDeviceDescriptionRegistrySetSinkNilDetaches(t *testing.T) {
 	sink := &fakeDescriptionSink{}
 	r.SetSink(sink)
 
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "VCU3"})
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "VCU3"})
 	if got := sink.putCount(); got != 1 {
 		t.Fatalf("PutDescription called %d times before detach, want 1", got)
 	}
 
 	r.SetSink(nil)
-	r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "VCU4"})
-	r.Delete(hmenum.InterfaceHmIPRF, "VCU3")
+	r.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "VCU4"})
+	r.Delete(wireHmIPRF, "VCU3")
 
 	if got := sink.putCount(); got != 1 {
 		t.Fatalf("PutDescription called %d times after SetSink(nil), want unchanged 1", got)

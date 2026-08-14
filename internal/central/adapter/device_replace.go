@@ -12,8 +12,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ReplaceCandidates lists the already-paired devices the new (inbox)
@@ -36,7 +36,7 @@ func (a *DeviceAdminDomain) ReplaceCandidates(ctx context.Context, centralName, 
 		// (`<central>-<iface>`); the bare interface only ever reaches the
 		// operator-facing DTO. Resolving with the bare form misses every
 		// entry and silently yields an empty candidate list.
-		backend, ok := a.writer.Backend(unit.Name(), entry.InterfaceID)
+		backend, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(entry.InterfaceID))
 		if !ok {
 			slog.Default().Debug("device_replace.no_backend",
 				slog.String("central", unit.Name()),
@@ -93,7 +93,7 @@ func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldA
 	if !dev.Interface.SupportsReplace() {
 		return fmt.Errorf("replace device: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 	}
-	backend, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+	backend, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, unit.Name(), dev.InterfaceID)
 	}
@@ -106,7 +106,7 @@ func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldA
 		// the registries, which are keyed by the canonical wire id — the bare
 		// interface finds nothing and turns the eager refresh into a
 		// permanent "old device not found".
-		if rerr := unit.Devices.ReplaceDevice(ctx, fetcher, hmenum.Interface(dev.InterfaceID), oldAddress, newAddress); rerr != nil {
+		if rerr := unit.Devices.ReplaceDevice(ctx, fetcher, hmtypes.ParseWireInterfaceID(dev.InterfaceID), oldAddress, newAddress); rerr != nil {
 			// The CCU swap already happened and is irreversible; the eager
 			// model refresh is best-effort. The CCU's own replaceDevice
 			// callback reconciles the model authoritatively (and treats the
@@ -175,9 +175,10 @@ func (a *DeviceAdminDomain) inboxModelOf(unit *central.Unit, newAddress string) 
 	if unit.HubModel == nil || unit.HubModel.Inbox == nil {
 		return ""
 	}
-	for _, d := range unit.HubModel.Inbox.List() {
-		if d.Address == newAddress {
-			return d.Model
+	inbox := unit.HubModel.Inbox.List()
+	for i := range inbox {
+		if inbox[i].Address == newAddress {
+			return inbox[i].Model
 		}
 	}
 	return ""

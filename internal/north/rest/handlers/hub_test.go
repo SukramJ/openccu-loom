@@ -1023,6 +1023,43 @@ func TestListInbox_WithEntries(t *testing.T) {
 	}
 }
 
+// TestListInbox_MarksDeferredDevices pins that a device the daemon parked
+// (delay_new_device_creation) is listed alongside the CCU's own inbox and
+// carries the marker the SPA needs to tell the two apart: the deferred one
+// has no data points until it is accepted.
+func TestListInbox_MarksDeferredDevices(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Inbox.Replace([]hub.InboxDevice{
+		{Address: "0003001122", Model: "HmIP-PS", Interface: "HmIP-RF"},
+	})
+	h.Inbox.SetPendingCreation([]hub.InboxDevice{
+		{Address: "0004005566", Model: "HmIP-STH", Interface: "HmIP-RF"},
+	})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	ListInbox(idx).ServeHTTP(w, req)
+
+	var body []InboxDeviceDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected both pending sources, got %d entries: %+v", len(body), body)
+	}
+	byAddress := map[string]InboxDeviceDTO{}
+	for _, e := range body {
+		byAddress[e.Address] = e
+	}
+	if byAddress["0003001122"].PendingCreation {
+		t.Error("a CCU inbox entry must not be flagged pending_creation")
+	}
+	if !byAddress["0004005566"].PendingCreation {
+		t.Error("a deferred device must be flagged pending_creation")
+	}
+}
+
 // --- GetInstallMode happy path ---
 
 // --- GetInterface happy path ---

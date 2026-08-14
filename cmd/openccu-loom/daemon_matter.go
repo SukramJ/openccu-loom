@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -904,16 +905,27 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				// would displace that peer's live session.
 				currentSessID := sessID
 				var peerCATs []uint32
+				var resumeInfo sigma.ResumeInfo
 				if resp := adapter.SnapshotResponder(); resp != nil {
 					peerNodeID = resp.PeerNodeID()
 					peerCATs = resp.PeerCATs()
 					currentSessID = resp.SessionID()
+					resumeInfo = resp.ResumeInfo()
 					// SessionFabricIndex returns the fabric the resolver
 					// landed on for this exchange — see [Responder.SessionFabricIndex].
 					if fi, nid, ok := resp.SessionIdentity(); ok {
 						resolvedFabric = fi
 						resolvedNode = nid
 					}
+				}
+				// What a resume displaces can only be read before the
+				// install performs it. Guarded by the level check so a
+				// bridge running at info never walks the session table on
+				// the handshake path.
+				var displacedByResume []uint16
+				logResume := resumeInfo.Resumed && logger.Enabled(ctx, slog.LevelDebug)
+				if logResume {
+					displacedByResume = opMgr.SessionIDsForPeer(resolvedFabric, peerNodeID)
 				}
 				entry, openErr := opMgr.OpenFromSigmaWithID(currentSessID, resolvedFabric, resolvedNode, peerNodeID, peerSessionID, peerCATs, keys)
 				if openErr != nil {
@@ -934,6 +946,9 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 					slog.Uint64("node_id", resolvedNode),
 					slog.Uint64("peer_node_id", peerNodeID),
 					slog.Int("peer_session_id", int(peerSessionID)))
+				if logResume {
+					logCaseResume(logger, resumeInfo, resolvedFabric, peerNodeID, displacedByResume, opMgr.Occupancy())
+				}
 				// Persist ECDH shared secret + resumption ID so
 				// Sigma2_Resume can short-circuit the full Sigma1-3
 				// handshake on the peer's next reconnect (matter.js
@@ -944,7 +959,12 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 					rid := resp.ResumptionID()
 					secret := resp.ECDHSharedSecret()
 					if len(rid) > 0 && len(secret) > 0 {
-						if persistErr := opMgr.PersistResumption(context.Background(), resolvedFabric, peerNodeID, rid, secret, peerCATs); persistErr != nil {
+						// A fresh context on purpose: the record is what lets
+						// the peer's next Sigma1 fast-path, and dropping the
+						// write because the daemon context happened to be
+						// cancelled mid-handshake would cost that peer a full
+						// handshake on every later reconnect.
+						if persistErr := opMgr.PersistResumption(context.Background(), resolvedFabric, peerNodeID, rid, secret, peerCATs); persistErr != nil { //nolint:contextcheck // deliberate: see comment above
 							logger.Debug("matter.bridge.case.resumption_persist_failed",
 								slog.Int("session_id", int(entry.SessionID)),
 								slog.String("err", persistErr.Error()))
@@ -3558,6 +3578,67 @@ func (l matterSessionLister) MatterSessions() []handlers.MatterSessionInfo {
 		})
 	}
 	return out
+}
+
+// MatterSessionOccupancy implements [handlers.MatterSessionLister]. It
+// reads the id space from the allocator itself rather than counting the
+// session list: an id staked for a handshake that never completed is not
+// a session and would otherwise stay invisible right up to the point
+// where the space refuses the next controller.
+func (l matterSessionLister) MatterSessionOccupancy() handlers.MatterSessionOccupancy {
+	if l.op == nil {
+		return handlers.MatterSessionOccupancy{}
+	}
+	occ := l.op.Occupancy()
+	return handlers.MatterSessionOccupancy{
+		Live:     occ.Live,
+		Reserved: occ.Reserved,
+		Capacity: occ.Capacity,
+		Free:     occ.Free(),
+	}
+}
+
+// logCaseResume records one CASE resumption at debug level.
+//
+// The resume fast path is the one CASE branch whose behaviour cannot be
+// validated without a live controller: it establishes a session from a
+// cached secret and keeps the session id the responder already
+// announced, where matter.js takes a fresh one
+// (packages/protocol/src/session/case/CaseServer.ts:#resume calls
+// getNextAvailableSessionId). Reusing the id risks conflating the peer's
+// previous message counters with the new session; renewing it burns one
+// id per MRP retransmit of the resume Sigma1. Which one a certified
+// controller actually provokes shows up across a network partition or a
+// bridge restart, not in a test — so what ships is the record that lets
+// an operator report answer it: the cached record the controller
+// resumed from, the session id on both sides of the resume, and the
+// sessions the install displaced. matter.js logs a resumed session for
+// the same reason (packages/protocol/src/session/NodeSession.ts:412
+// logNew(logger, "Resumed", …)); we keep it at debug because it fires
+// on the wire path, once per resume.
+//
+// displaced are the peer's live session ids read immediately before the
+// install — every one of them is evicted by it.
+func logCaseResume(logger *slog.Logger, info sigma.ResumeInfo, fabricIndex uint8, peerNodeID uint64, displaced []uint16, occ operational.SessionTableOccupancy) {
+	if logger == nil || !info.Resumed {
+		return
+	}
+	ids := make([]string, 0, len(displaced))
+	for _, id := range displaced {
+		ids = append(ids, strconv.Itoa(int(id)))
+	}
+	logger.Debug("matter.bridge.case.session_resumed",
+		slog.String("presented_resumption_id", hex.EncodeToString(info.PresentedResumptionID)),
+		slog.String("issued_resumption_id", hex.EncodeToString(info.IssuedResumptionID)),
+		slog.Int("session_id_before", int(info.SessionIDBefore)),
+		slog.Int("session_id_after", int(info.SessionIDAfter)),
+		slog.Bool("session_id_renewed", info.SessionIDBefore != info.SessionIDAfter),
+		slog.Int("fabric_index", int(fabricIndex)),
+		slog.Uint64("peer_node_id", peerNodeID),
+		slog.Int("displaced_session_count", len(displaced)),
+		slog.String("displaced_session_ids", strings.Join(ids, ",")),
+		slog.Int("sessions_live", occ.Live),
+		slog.Int("sessions_reserved", occ.Reserved))
 }
 
 // matterMdnsReporter reads the live advertiser and runs the mDNS

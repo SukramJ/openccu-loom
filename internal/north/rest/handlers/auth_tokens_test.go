@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -88,6 +89,48 @@ func TestCreateToken_OversizedBodyReturns413(t *testing.T) {
 	CreateToken(d).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/auth/tokens", bytes.NewReader(body)))
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413 for oversized body, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestCreateToken_StoresTheCanonicalSubject pins that a token minted
+// here is bound to the same spelling of the subject every other
+// credential surface is keyed on. Stored raw, a token issued for "Bob"
+// is invisible to the purge that runs when the "bob" account is deleted,
+// so a deleted user keeps a live bearer credential; the identity it
+// resolves to also fails to match sessions and audit rows.
+func TestCreateToken_StoresTheCanonicalSubject(t *testing.T) {
+	t.Parallel()
+	d := newAuthDeps()
+	body, _ := json.Marshal(CreateTokenRequest{Subject: "  Bob  ", Role: "operator"})
+	w := httptest.NewRecorder()
+	CreateToken(d).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/auth/tokens", bytes.NewReader(body)))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	var created CreateTokenResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if created.Subject != "bob" {
+		t.Errorf("response subject=%q, want the stored spelling bob", created.Subject)
+	}
+	entries := d.Tokens.List()
+	if len(entries) != 1 {
+		t.Fatalf("List len=%d want 1", len(entries))
+	}
+	if entries[0].Subject != "bob" {
+		t.Errorf("stored subject=%q, want bob", entries[0].Subject)
+	}
+	// The purge the account deletion triggers must find it.
+	n, err := d.Tokens.DeleteBySubject(context.Background(), "bob")
+	if err != nil {
+		t.Fatalf("DeleteBySubject: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("DeleteBySubject removed %d tokens, want 1", n)
+	}
+	if _, err := d.Tokens.AuthenticateToken(context.Background(), created.Token); err == nil {
+		t.Error("the token still authenticates after its account was purged")
 	}
 }
 

@@ -29,6 +29,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // reloaderWireID is the canonical `<central>-<iface>` id the registries are
@@ -216,7 +217,7 @@ func TestReloadDeviceConfigFetchesSingleDeviceDescription(t *testing.T) {
 	// second, bare key space is invisible to every other reader and is what
 	// makes the periodic firmware sweep ask the value writer for a backend
 	// that cannot exist.
-	if _, ok := unit.DescRegistry.Get(hmenum.Interface(reloaderWireID), "0001ABCD"); !ok {
+	if _, ok := unit.DescRegistry.Get(hmtypes.ParseWireInterfaceID(reloaderWireID), "0001ABCD"); !ok {
 		t.Error("reloaded device description not stored under the wire interface id")
 	}
 	for _, got := range unit.DescRegistry.GetInterfaceIDs() {
@@ -417,7 +418,7 @@ func TestBackendLinkPeerFetcher_ForwardsChannelAddress(t *testing.T) {
 	}
 	fetcher := &backendLinkPeerFetcher{ops: fake}
 
-	got, err := fetcher.GetLinkPeers(context.Background(), hmenum.InterfaceHmIPRF, "0001ABCD:1")
+	got, err := fetcher.GetLinkPeers(context.Background(), wireHmIPRF, "0001ABCD:1")
 	if err != nil {
 		t.Fatalf("GetLinkPeers: %v", err)
 	}
@@ -444,7 +445,7 @@ func TestBackendLinkPeerFetcher_IgnoresIfaceArg(t *testing.T) {
 	}
 	fetcher := &backendLinkPeerFetcher{ops: fake}
 
-	_, err := fetcher.GetLinkPeers(context.Background(), hmenum.InterfaceHmIPRF, "CHAN:3")
+	_, err := fetcher.GetLinkPeers(context.Background(), wireHmIPRF, "CHAN:3")
 	if err != nil {
 		t.Fatalf("GetLinkPeers: %v", err)
 	}
@@ -508,12 +509,12 @@ func TestReloadDeviceConfigInvokesLinkPeerRefresh(t *testing.T) {
 
 	// Seed the DeviceRegistry so RefreshDeviceLinkPeers can find the device.
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.Interface(reloaderWireID),
+		Interface: hmtypes.ParseWireInterfaceID(reloaderWireID),
 		Address:   "0001ABCD",
 		Model:     "HmIP-STH",
 	})
 	// Seed a channel description so the coordinator walks at least one channel.
-	c.DescRegistry.Put(hmenum.Interface(reloaderWireID), hmproto.DeviceDescription{
+	c.DescRegistry.Put(hmtypes.ParseWireInterfaceID(reloaderWireID), hmproto.DeviceDescription{
 		Address: "0001ABCD:1", Type: "SWITCH_VIRTUAL_RECEIVER", Parent: "0001ABCD",
 	})
 

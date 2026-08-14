@@ -664,3 +664,97 @@ func TestResumptionSaltUsesLocalResumptionID(t *testing.T) {
 		t.Fatal("AttestationChallenge slice mismatch")
 	}
 }
+
+// TestSigma_Resume_ResumeInfoRecordsWhatTheFastPathDid pins the record
+// the resume fast path leaves behind for the operator surface.
+//
+// Whether a resumed session must carry a NEW session id is the one CASE
+// question that cannot be settled without a live controller: reusing the
+// id risks conflating the peer's old message counters with the new
+// session, renewing it burns an id per MRP retransmit of the resume
+// Sigma1. Today the responder reuses it. [Responder.ResumeInfo] is what
+// makes that choice visible in an operator report instead of only in the
+// source, so the two ids and the resumption ids it carries are the
+// contract — not an incidental detail.
+func TestSigma_Resume_ResumeInfoRecordsWhatTheFastPathDid(t *testing.T) {
+	sigma1Bytes, sharedSecret, rid := buildValidSigma1WithResume(t)
+
+	store := newStubStore()
+	store.put(&ResumptionRecord{SharedSecret: sharedSecret, ResumptionID: rid})
+
+	responder := NewResponder(newTestIdentity(t, 0xBBBB, 1, fabricIPK()), testVerifier{}, 0x2001)
+	responder.SetResumptionStore(store)
+
+	if info := responder.ResumeInfo(); info.Resumed {
+		t.Fatal("a responder that has processed nothing must not report a resume")
+	}
+
+	result, err := responder.ProcessSigma1WithResume(sigma1Bytes)
+	if err != nil {
+		t.Fatalf("ProcessSigma1WithResume: %v", err)
+	}
+	if !result.IsResume() {
+		t.Fatal("expected the Sigma2_Resume fast path")
+	}
+
+	info := responder.ResumeInfo()
+	if !info.Resumed {
+		t.Fatal("ResumeInfo.Resumed is false after a Sigma2_Resume — the operator surface cannot tell " +
+			"a resumed session from a full handshake")
+	}
+	if !bytes.Equal(info.PresentedResumptionID, rid) {
+		t.Errorf("PresentedResumptionID = %x, want the id the initiator sent (%x) — it names the cached "+
+			"record the controller resumed from", info.PresentedResumptionID, rid)
+	}
+	if !bytes.Equal(info.IssuedResumptionID, result.Sigma2Resume.ResumptionID) {
+		t.Errorf("IssuedResumptionID = %x, want the id shipped in Sigma2_Resume (%x)",
+			info.IssuedResumptionID, result.Sigma2Resume.ResumptionID)
+	}
+	if info.SessionIDBefore != 0x2001 || info.SessionIDAfter != 0x2001 {
+		t.Errorf("session id before/after = %#x/%#x, want 0x2001/0x2001 — the resume path reuses the id, "+
+			"and both values are what an operator report needs to confirm that",
+			info.SessionIDBefore, info.SessionIDAfter)
+	}
+
+	// The accessor must hand out copies: the daemon logs these bytes
+	// while the responder keeps serving the same exchange.
+	info.PresentedResumptionID[0] ^= 0xFF
+	if bytes.Equal(responder.ResumeInfo().PresentedResumptionID, info.PresentedResumptionID) {
+		t.Error("ResumeInfo aliases the responder's resumption id — a caller can corrupt handshake state")
+	}
+}
+
+// TestSigma_Resume_ResumeInfoClearedByAFullHandshake pins that the
+// resume record describes the session the responder holds NOW. Apple
+// Home grafts a second CASE session onto an exchange that already
+// carried one, so a responder that resumed can go on to run a full
+// Sigma1; reporting the stale resume there would tell an operator the
+// current session was resumed when it was not.
+func TestSigma_Resume_ResumeInfoClearedByAFullHandshake(t *testing.T) {
+	sigma1Bytes, sharedSecret, rid := buildValidSigma1WithResume(t)
+	store := newStubStore()
+	store.put(&ResumptionRecord{SharedSecret: sharedSecret, ResumptionID: rid})
+
+	ipk := fabricIPK()
+	responder := NewResponder(newTestIdentity(t, 0xBBBB, 1, ipk), testVerifier{}, 0x2001)
+	responder.SetResumptionStore(store)
+
+	if _, err := responder.ProcessSigma1WithResume(sigma1Bytes); err != nil {
+		t.Fatalf("ProcessSigma1WithResume: %v", err)
+	}
+	if !responder.ResumeInfo().Resumed {
+		t.Fatal("precondition: the first Sigma1 must have taken the resume path")
+	}
+
+	initiator := NewInitiator(newTestIdentity(t, 0xAAAA, 1, ipk), testVerifier{}, 0x1001, [32]byte{0xDE, 0xAD})
+	full, err := initiator.GenerateSigma1()
+	if err != nil {
+		t.Fatalf("GenerateSigma1: %v", err)
+	}
+	if _, err := responder.ProcessSigma1WithResume(full); err != nil {
+		t.Fatalf("ProcessSigma1WithResume (full): %v", err)
+	}
+	if info := responder.ResumeInfo(); info.Resumed {
+		t.Errorf("ResumeInfo still reports a resume (%+v) after a full Sigma1 reset the responder", info)
+	}
+}

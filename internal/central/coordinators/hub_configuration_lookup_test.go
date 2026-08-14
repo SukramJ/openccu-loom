@@ -240,7 +240,7 @@ func TestHubCoordinatorPublishInstallModeRefreshedPublishesEvent(t *testing.T) {
 func TestConfigurationCoordinatorGetAllParamsetDescriptionsNilParamsets(t *testing.T) {
 	t.Parallel()
 	c := NewConfigurationCoordinator(nil, nil, nil)
-	got := c.GetAllParamsetDescriptions(hmenum.InterfaceHmIPRF, "VCU001:1")
+	got := c.GetAllParamsetDescriptions(wireKey(hmenum.InterfaceHmIPRF), "VCU001:1")
 	if got != nil {
 		t.Fatalf("want nil when paramsets registry is nil, got %v", got)
 	}
@@ -253,7 +253,7 @@ func TestConfigurationCoordinatorGetAllParamsetDescriptionsReturnsMap(t *testing
 	devReg := registry.NewDeviceRegistry()
 	c := NewConfigurationCoordinator(descReg, psReg, devReg)
 	// No entries stored — expect empty non-nil map.
-	got := c.GetAllParamsetDescriptions(hmenum.InterfaceHmIPRF, "VCU001:1")
+	got := c.GetAllParamsetDescriptions(wireKey(hmenum.InterfaceHmIPRF), "VCU001:1")
 	// Empty result is valid; just ensure no panic.
 	_ = got
 }
@@ -265,7 +265,7 @@ func TestConfigurationCoordinatorGetAllParamsetDescriptionsReturnsMap(t *testing
 func TestConfigurationCoordinatorGetConfigurableDevicesNilDescriptions(t *testing.T) {
 	t.Parallel()
 	c := NewConfigurationCoordinator(nil, nil, nil)
-	got := c.GetConfigurableDevices(hmenum.InterfaceHmIPRF)
+	got := c.GetConfigurableDevices(wireKey(hmenum.InterfaceHmIPRF))
 	if got != nil {
 		t.Fatalf("want nil when descriptions is nil, got %v", got)
 	}
@@ -277,7 +277,7 @@ func TestConfigurationCoordinatorGetConfigurableDevicesEmpty(t *testing.T) {
 	psReg := registry.NewParamsetRegistry()
 	devReg := registry.NewDeviceRegistry()
 	c := NewConfigurationCoordinator(descReg, psReg, devReg)
-	got := c.GetConfigurableDevices(hmenum.InterfaceHmIPRF)
+	got := c.GetConfigurableDevices(wireKey(hmenum.InterfaceHmIPRF))
 	if len(got) != 0 {
 		t.Fatalf("want 0 configurable devices for empty registry, got %d", len(got))
 	}

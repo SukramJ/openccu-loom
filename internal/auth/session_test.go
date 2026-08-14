@@ -120,6 +120,57 @@ func TestSessionRevokeBySubjectIgnoresSubjectCasing(t *testing.T) {
 	}
 }
 
+// TestSessionRevokeBySubjectSparesFederatedPrincipals verifies that a
+// credential change on the local account "markus" leaves a session held by
+// an externally-vouched principal whose name folds to the same string
+// untouched. The two authenticate against different authorities and are
+// different people; the daemon's user store has no say over the external
+// one, so revoking it on a local password reset would log out a stranger.
+func TestSessionRevokeBySubjectSparesFederatedPrincipals(t *testing.T) {
+	store := NewSessionStore()
+	local, err := store.Issue(Identity{Subject: "markus", Scheme: SchemeBasic})
+	if err != nil {
+		t.Fatalf("issue local: %v", err)
+	}
+	federated, err := store.Issue(Identity{Subject: "markus", Scheme: SchemeOIDC})
+	if err != nil {
+		t.Fatalf("issue federated: %v", err)
+	}
+
+	if n := store.RevokeBySubject("markus"); n != 1 {
+		t.Fatalf("RevokeBySubject count=%d want 1 (local only)", n)
+	}
+	if store.Lookup(local.ID) != nil {
+		t.Error("local session survived the revocation")
+	}
+	if store.Lookup(federated.ID) == nil {
+		t.Error("federated session evicted by a local credential change")
+	}
+}
+
+// TestSessionMiddlewarePreservesFederatedScheme verifies that the scheme a
+// federated session was minted with reaches the request. Overwriting it
+// with the generic cookie scheme would erase the only marker that tells a
+// local principal from an external one carrying the same name.
+func TestSessionMiddlewarePreservesFederatedScheme(t *testing.T) {
+	store := NewSessionStore()
+	sess, err := store.Issue(Identity{Subject: "markus", Scheme: SchemeOIDC})
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	var seen Identity
+	handler := SessionMiddleware(store)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen, _ = IdentityFrom(r.Context())
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: sess.ID})
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	if seen.Scheme != SchemeOIDC {
+		t.Fatalf("scheme = %q, want %q", seen.Scheme, SchemeOIDC)
+	}
+}
+
 // TestSessionRevokeBySubjectEmptySubjectNoOp verifies that an empty
 // subject is a no-op — it must never wipe every session in the store.
 func TestSessionRevokeBySubjectEmptySubjectNoOp(t *testing.T) {

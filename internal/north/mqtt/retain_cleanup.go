@@ -34,13 +34,106 @@ import (
 type RetainCleanup struct {
 	bridge *Bridge
 
+	// retiredMetrics holds the exact retained topics of the retired
+	// metric spelling (see [retiredMetricTopics]). A set of literal
+	// topics rather than a matcher, because whether one of them is an
+	// orphan or a live topic depends on the configured central names,
+	// which are resolved once when the pass is constructed.
+	retiredMetrics map[string]bool
+
 	mu       sync.Mutex
 	worklist []string // retained topic names earmarked for eviction
 }
 
 // NewRetainCleanup constructs a cleanup pass for the given bridge.
 func NewRetainCleanup(b *Bridge) *RetainCleanup {
-	return &RetainCleanup{bridge: b}
+	c := &RetainCleanup{bridge: b}
+	if b == nil {
+		return c
+	}
+	retired := retiredMetricTopics(b.topics, b.cleanupCentralNames())
+	if len(retired) > 0 {
+		c.retiredMetrics = make(map[string]bool, len(retired))
+		for _, topic := range retired {
+			c.retiredMetrics[topic] = true
+		}
+	}
+	return c
+}
+
+// retiredMetricTopics returns the central-wide metric topics that no
+// publisher writes any more, for the given set of configured centrals.
+//
+// The three metric sensors used to put a lower-cased central into their
+// topic while every other topic on the plane escapes it through
+// [naming.TopicSafe]. The two spellings are the identical string for a
+// plain lower-case ASCII CCU name and differ for every other one, so the
+// old topics are orphans only in the deployments the change actually
+// moved. Comparing per central is what makes the sweep safe: for a CCU
+// named `ccu1` the "old" topic IS the live one, and clearing it would
+// blank a value the daemon publishes.
+//
+// The same collision exists across centrals — one CCU's retired spelling
+// can be another CCU's live topic — which is why every candidate is
+// checked against the live topics of ALL configured centrals, not only
+// against its own.
+func retiredMetricTopics(topics *TopicBuilder, centralNames []string) []string {
+	if topics == nil || len(centralNames) == 0 {
+		return nil
+	}
+	live := make(map[string]bool, 3*len(centralNames))
+	for _, name := range centralNames {
+		if name == "" {
+			continue
+		}
+		for _, topic := range topics.systemMetricTopics(name) {
+			live[topic] = true
+		}
+	}
+	var out []string
+	seen := make(map[string]bool, len(live))
+	for _, name := range centralNames {
+		if name == "" {
+			continue
+		}
+		for _, topic := range topics.systemMetricTopics(name) {
+			retired := retiredMetricSpelling(topics.Base, name, topic)
+			if retired == "" || live[retired] || seen[retired] {
+				continue
+			}
+			seen[retired] = true
+			out = append(out, retired)
+		}
+	}
+	return out
+}
+
+// RetiredMetricTopics returns the metric topics [Bridge.RunRetainCleanupOnce]
+// would clear if the broker still held them: the retired spelling of every
+// configured central, minus every spelling that is some central's live topic.
+//
+// Exported so the composition root can pin that the bridge it builds knows
+// the whole set of configured centrals. With only the default central
+// reaching it the sweep stays silent for every other CCU, which is
+// indistinguishable from a correctly guarded sweep — both clear nothing.
+func (b *Bridge) RetiredMetricTopics() []string {
+	if b == nil {
+		return nil
+	}
+	return retiredMetricTopics(b.topics, b.cleanupCentralNames())
+}
+
+// retiredMetricSpelling rewrites one current metric topic into the shape
+// the earlier build wrote: same base, same metric leaf, central segment
+// lower-cased instead of escaped. The leaf is taken from the live topic
+// so this cannot name a metric the builder does not publish, and stays
+// correct when a fourth metric joins the group.
+func retiredMetricSpelling(base, centralName, liveTopic string) string {
+	slash := strings.LastIndex(liveTopic, "/")
+	if slash < 0 {
+		return ""
+	}
+	return base + "/" + strings.ToLower(centralName) + "/system/" + liveTopic[slash+1:]
 }
 
 // LegacyAggregateStateMatcher reports whether topic matches the
@@ -254,7 +347,8 @@ func ProgramTriggerMirrorMatcher(topicBase, topic string) bool {
 //     longer parses)
 //
 // plus the retired program-trigger state mirror (see
-// [ProgramTriggerMirrorMatcher]).
+// [ProgramTriggerMirrorMatcher]) and the retired lower-cased spelling of
+// the central-wide metric topics (see [retiredMetricTopics]).
 func (c *RetainCleanup) collect(topic string, _ []byte, _ bool) {
 	if c.bridge == nil {
 		return
@@ -263,7 +357,8 @@ func (c *RetainCleanup) collect(topic string, _ []byte, _ bool) {
 	if LegacyDataPointStateMatcher(base, topic) ||
 		LegacySlotStateMatcher(base, topic) ||
 		LegacyAggregateStateMatcher(base, topic) ||
-		ProgramTriggerMirrorMatcher(base, topic) {
+		ProgramTriggerMirrorMatcher(base, topic) ||
+		c.retiredMetrics[topic] {
 		c.mu.Lock()
 		c.worklist = append(c.worklist, topic)
 		c.mu.Unlock()

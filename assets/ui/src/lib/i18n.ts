@@ -868,6 +868,9 @@ const EN: Catalog = {
     "Inbox empty. Enable pairing mode on the device list to see new candidates.",
   "inbox.accept": "Accept",
   "inbox.accepted": "{name} accepted.",
+  "inbox.pending_creation_badge": "Awaiting approval",
+  "inbox.pending_creation_hint":
+    "Deferred device creation is enabled: this device exists on the CCU but has no data points here until you accept it.",
   "inbox.serial": "S/N",
   "inbox.first_seen": "First seen",
   "inbox.accept_dialog.title": "Accept device",
@@ -1614,7 +1617,7 @@ const EN: Catalog = {
   "config.help.centrals.check_connection_interval":
     "How often the daemon pings the CCU in the background; zero uses the compiled-in default of 30 s, negative disables the check entirely.",
   "config.help.centrals.behavior.delay_new_device_creation":
-    "Defer creation of a newly-paired device until its description is complete, avoiding half-formed entities during pairing; default false.",
+    "Hold a newly-paired device back until you accept it: it is listed in the inbox and only gets data points once accepted; default false.",
   "config.help.centrals.behavior.enable_device_firmware_check":
     "Surface a firmware-update entity for every device that reports available firmware; default true.",
   "config.help.centrals.behavior.enable_program_scan":
@@ -2990,6 +2993,7 @@ const EN: Catalog = {
   "matter.diag.sessions": "Connected controllers",
   "matter.diag.sessions_hint": "How long each controller has been quiet. A controller that goes away without disconnecting leaves its session open and simply stops sending.",
   "matter.diag.no_sessions": "No controller is connected right now.",
+  "matter.diag.sessions_occupancy": "Session ids: {live} live · {reserved} reserved for handshakes in progress · {free} of {capacity} free",
   "matter.diag.col_session": "Session",
   "matter.diag.col_fabric": "Fabric",
   "matter.diag.col_peer_idle": "Controller quiet for",
@@ -4715,6 +4719,9 @@ const DE: Catalog = {
     "Posteingang ist leer. Aktiviere den Anlernmodus auf der Geräte-Seite, um neue Geräte zu sehen.",
   "inbox.accept": "Übernehmen",
   "inbox.accepted": "{name} übernommen.",
+  "inbox.pending_creation_badge": "Wartet auf Freigabe",
+  "inbox.pending_creation_hint":
+    "Verzögerte Geräteanlage ist aktiv: Das Gerät existiert auf der CCU, hat hier aber erst nach der Übernahme Datenpunkte.",
   "inbox.serial": "SN",
   "inbox.first_seen": "Erstmals",
   "inbox.accept_dialog.title": "Gerät übernehmen",
@@ -5465,7 +5472,7 @@ const DE: Catalog = {
   "config.help.centrals.check_connection_interval":
     "Wie oft der Daemon die CCU im Hintergrund anpingt; 0 = Compiler-Standard von 30 s, negativ = Prüfung deaktiviert.",
   "config.help.centrals.behavior.delay_new_device_creation":
-    "Neu angekoppelte Geräte erst anlegen, wenn ihre Beschreibung vollständig ist — verhindert halb-fertige Entitäten während des Pairings. Standard: aus.",
+    "Neu angelernte Geräte zurückhalten, bis du sie übernimmst: Sie stehen im Posteingang und bekommen erst nach der Übernahme Datenpunkte. Standard: aus.",
   "config.help.centrals.behavior.enable_device_firmware_check":
     "Für jedes Gerät, das Firmware-Updates meldet, eine Firmware-Update-Entität anzeigen. Standard: an.",
   "config.help.centrals.behavior.enable_program_scan":
@@ -6862,6 +6869,7 @@ const DE: Catalog = {
   "matter.diag.sessions": "Verbundene Controller",
   "matter.diag.sessions_hint": "Wie lange jeder Controller schon still ist. Ein Controller, der verschwindet ohne sich abzumelden, lässt seine Sitzung offen und sendet einfach nichts mehr.",
   "matter.diag.no_sessions": "Zurzeit ist kein Controller verbunden.",
+  "matter.diag.sessions_occupancy": "Sitzungs-IDs: {live} aktiv · {reserved} für laufende Handshakes reserviert · {free} von {capacity} frei",
   "matter.diag.col_session": "Sitzung",
   "matter.diag.col_fabric": "Fabric",
   "matter.diag.col_peer_idle": "Controller still seit",

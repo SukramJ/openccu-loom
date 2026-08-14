@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ─── nil-guard ───────────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ func TestWriterDescFetcherListDevices_HappyPath(t *testing.T) {
 	w.Register("ccu-01", "HmIP-RF", fake)
 
 	f := &writerDescFetcher{writer: w, central: "ccu-01"}
-	got, err := f.ListDevices(context.Background(), hmenum.InterfaceHmIPRF)
+	got, err := f.ListDevices(context.Background(), wireHmIPRF)
 	if err != nil {
 		t.Fatalf("ListDevices: %v", err)
 	}
@@ -76,7 +77,7 @@ func TestWriterDescFetcherListDevices_MissingBackend(t *testing.T) {
 	w := clientpkg.NewValueWriter()
 	f := &writerDescFetcher{writer: w, central: "ccu-01"}
 
-	_, err := f.ListDevices(context.Background(), hmenum.InterfaceHmIPRF)
+	_, err := f.ListDevices(context.Background(), wireHmIPRF)
 	if err == nil {
 		t.Fatal("expected error when backend is not registered")
 	}
@@ -113,11 +114,11 @@ func buildFirmwareDomainFixture(t *testing.T) (*FirmwareDomain, *listRecordingOp
 
 	// Seed the description registry so the coordinator's GetInterfaceIDs()
 	// returns HmIP-RF and the firmware sweep reaches the backend.
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address: "0002ABCD", Type: "HmIP-PSM",
 	})
 	c.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.InterfaceHmIPRF,
+		Interface: wireHmIPRF,
 		Address:   "0002ABCD",
 		Model:     "HmIP-PSM",
 	})
@@ -174,7 +175,7 @@ func TestApplyFirmwareFromDescriptions_UpdatesFromFreshDescription(t *testing.T)
 	})
 	c.ModelRegistry.Put(dev)
 
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{
 		Address:             "0004ABCD",
 		Type:                "HmIP-PSM",
 		Firmware:            "1.4.10",
@@ -276,7 +277,7 @@ func TestRefreshCentralFirmwareDataByState_StateGateShortCircuits(t *testing.T) 
 
 	// Seed the description registry so GetInterfaceIDs() returns HmIP-RF and
 	// the outer per-interface loop actually runs.
-	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "0006ABCD"})
+	c.DescRegistry.Put(wireHmIPRF, hmproto.DeviceDescription{Address: "0006ABCD"})
 
 	fake := &listRecordingOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
 	w := clientpkg.NewValueWriter()
@@ -341,7 +342,7 @@ func TestModelFirmwareStateReader_DeviceFirmwareStates(t *testing.T) {
 	reg.Put(bidcosDev)
 
 	reader := modelFirmwareStateReader{reg: reg}
-	states := reader.DeviceFirmwareStates(hmenum.Interface(hmipWireID))
+	states := reader.DeviceFirmwareStates(hmtypes.ParseWireInterfaceID(hmipWireID))
 
 	if len(states) != 1 {
 		t.Fatalf("states = %v, want exactly 1 entry for HmIP-RF", states)
@@ -390,7 +391,7 @@ func TestApplyFirmwareFromDescriptionsResolvesByWireInterfaceID(t *testing.T) {
 	})
 	c.ModelRegistry.Put(dev)
 
-	c.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{
+	c.DescRegistry.Put(hmtypes.ParseWireInterfaceID(wireID), hmproto.DeviceDescription{
 		Address:             "0009ABCD",
 		Type:                "HmIP-PSM",
 		Firmware:            "1.4.10",
@@ -427,11 +428,11 @@ func TestRefreshCentralFirmwareDataByStateReachesBackendOnNamedCentral(t *testin
 		Model:       "HmIP-PSM",
 		Firmware:    device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate},
 	}))
-	c.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{Address: "000BABCD"})
+	c.DescRegistry.Put(hmtypes.ParseWireInterfaceID(wireID), hmproto.DeviceDescription{Address: "000BABCD"})
 
 	fake := &listRecordingOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
 	w := clientpkg.NewValueWriter()
-	w.Register(c.Name(), wireID, fake)
+	w.Register(c.Name(), hmtypes.ParseWireInterfaceID(wireID), fake)
 
 	if err := RefreshCentralFirmwareDataByState(context.Background(), c, w,
 		[]hmenum.DeviceFirmwareState{hmenum.DeviceFirmwareStateReadyForUpdate}); err != nil {

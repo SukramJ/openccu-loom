@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ---------------------------------------------------------------------------
@@ -29,7 +30,7 @@ func seedChannel(
 	t *testing.T,
 	descs *registry.DeviceDescriptionRegistry,
 	pss *registry.ParamsetRegistry,
-	iface hmenum.Interface,
+	iface hmtypes.WireInterfaceID,
 	deviceAddr, channelAddr, channelType string,
 	sets map[hmenum.ParamsetKey]hmproto.Paramset,
 ) string {
@@ -62,11 +63,11 @@ func TestConfigurationMultiInterfaceRegistryIsolation(t *testing.T) {
 
 	const chAddr = "SHARED:1"
 
-	seedChannel(t, descs, ps, hmenum.InterfaceHmIPRF, "SHARED", chAddr, "TYPE_A",
+	seedChannel(t, descs, ps, wireKey(hmenum.InterfaceHmIPRF), "SHARED", chAddr, "TYPE_A",
 		map[hmenum.ParamsetKey]hmproto.Paramset{
 			hmenum.ParamsetKeyValues: {"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}},
 		})
-	seedChannel(t, descs, ps, hmenum.InterfaceBidCosRF, "SHARED", chAddr, "TYPE_B",
+	seedChannel(t, descs, ps, wireKey(hmenum.InterfaceBidCosRF), "SHARED", chAddr, "TYPE_B",
 		map[hmenum.ParamsetKey]hmproto.Paramset{
 			hmenum.ParamsetKeyValues: {"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeInteger}},
 		})
@@ -74,7 +75,7 @@ func TestConfigurationMultiInterfaceRegistryIsolation(t *testing.T) {
 	cc := NewConfigurationCoordinator(descs, ps, devs)
 
 	// Without any patch, each interface sees its own registry value.
-	pd, ok := cc.GetParameterData(hmenum.InterfaceHmIPRF, chAddr, hmenum.ParamsetKeyValues, "LEVEL")
+	pd, ok := cc.GetParameterData(wireKey(hmenum.InterfaceHmIPRF), chAddr, hmenum.ParamsetKeyValues, "LEVEL")
 	if !ok {
 		t.Fatal("GetParameterData HmIPRF: expected ok=true")
 	}
@@ -82,7 +83,7 @@ func TestConfigurationMultiInterfaceRegistryIsolation(t *testing.T) {
 		t.Fatalf("HmIPRF LEVEL type=%v want FLOAT (registry)", pd.Type)
 	}
 
-	pd2, ok2 := cc.GetParameterData(hmenum.InterfaceBidCosRF, chAddr, hmenum.ParamsetKeyValues, "LEVEL")
+	pd2, ok2 := cc.GetParameterData(wireKey(hmenum.InterfaceBidCosRF), chAddr, hmenum.ParamsetKeyValues, "LEVEL")
 	if !ok2 {
 		t.Fatal("GetParameterData BidCosRF: expected ok=true")
 	}
@@ -91,7 +92,7 @@ func TestConfigurationMultiInterfaceRegistryIsolation(t *testing.T) {
 	}
 
 	// A different channel address on either interface must still be a miss.
-	if _, ok3 := cc.GetParameterData(hmenum.InterfaceHmIPRF, "MISSING:9", hmenum.ParamsetKeyValues, "LEVEL"); ok3 {
+	if _, ok3 := cc.GetParameterData(wireKey(hmenum.InterfaceHmIPRF), "MISSING:9", hmenum.ParamsetKeyValues, "LEVEL"); ok3 {
 		t.Fatal("unknown channel must return ok=false")
 	}
 }

@@ -282,6 +282,31 @@ for seams nobody has classified. They are separate on purpose — merging
 them would let "we looked and it is fine" and "we have not looked" wear
 the same face.
 
+#### Walking the central registry once is walking it at boot
+
+A subsystem that subscribes to every central it finds in
+`central.Registry.List()` sees only the CCUs present when it ran. A CCU
+adopted at runtime is silent on that plane until the daemon restarts, and
+nothing anywhere reports it — the boot walk is correct, its tests are green,
+and the gap is invisible. Thirteen instances were found by hand in one audit.
+
+Do not write the walk. Register a `central.Registry.OnRegister` observer
+instead: it replays over every central already registered and runs again for
+every central registered afterwards, and its unwire is run when that central
+leaves the registry. Boot and runtime adopt become one registration, so
+there is no second half to forget — which is what the previous shape
+(a boot walk plus a hook registered on the orchestrator) kept losing.
+
+The exception is a subsystem whose attach order relative to the south-bound
+bring-up is load-bearing. Those keep a named seam on `centralOrchestrator`
+(`setMatterCentralHook`, `setAlarmCentralHook`, …) that runs at a defined
+point in `adoptCentral`, and the composition root calls it with a
+`*central.Unit`.
+
+Guard: `TestEveryRegistryWalkerHasAnAdoptSeam` (`tests/contract/`), with
+`registryWalkersWithoutAdoptSeam` as its ratchet for the walkers that
+deliberately re-run the whole walk instead.
+
 #### A lifecycle test uses the production order
 
 If production starts a service and *then* feeds it asynchronously, the

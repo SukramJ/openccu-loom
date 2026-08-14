@@ -292,6 +292,47 @@ describe("Inbox — accept dialog config payload", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Deferred device creation — the pending-approval marker
+// ---------------------------------------------------------------------------
+// A device the daemon parked (delay_new_device_creation) is listed on the
+// same inbox surface as a CCU inbox entry, but it carries no data points
+// until it is accepted. The badge is the only thing telling those two
+// states apart, so it is pinned here.
+
+describe("Inbox — deferred device creation", () => {
+  it("marks a device the daemon is holding back", async () => {
+    mockListInbox.mockResolvedValue([
+      { address: "0009ABCD", model: "HmIP-STH", central: "", pending_creation: true },
+    ]);
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.pending_creation_badge")).toBeInTheDocument();
+    });
+  });
+
+  it("does not mark a plain CCU inbox entry", async () => {
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.accept")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("inbox.pending_creation_badge")).toBeNull();
+  });
+
+  it("accepts a deferred device through the same endpoint", async () => {
+    mockListInbox.mockResolvedValue([
+      { address: "0009ABCD", model: "HmIP-STH", central: "", pending_creation: true },
+    ]);
+    await openDialog();
+    await fireEvent.click(submitButton());
+    await waitFor(() => {
+      expect(mockAcceptInboxDevice).toHaveBeenCalledTimes(1);
+    });
+    expect(mockAcceptInboxDevice.mock.calls[0][0]).toBe("0009ABCD");
+    expect(mockToastSuccess).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Guided device replace — isReplaceable gating + confirm/submit flow
 // ---------------------------------------------------------------------------
 // Mirrors the accept-dialog coverage above: Inbox.svelte's replace dialog

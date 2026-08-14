@@ -67,7 +67,7 @@ func TestReloadChannelConfigPullsAllParamsetKindsAndStores(t *testing.T) {
 	}
 
 	if err := dc.ReloadChannelConfig(
-		context.Background(), fetcher, hmenum.InterfaceHmIPRF, "ABC0001:1", "HmIP-STH",
+		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", "HmIP-STH",
 	); err != nil {
 		t.Fatalf("ReloadChannelConfig: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestReloadChannelConfigPullsAllParamsetKindsAndStores(t *testing.T) {
 		t.Fatalf("expected one MASTER value read, got %v", fetcher.valueCalls)
 	}
 	// The re-pulled MASTER description was stored in the registry.
-	stored, ok := ps.Get(hmenum.InterfaceHmIPRF, "ABC0001:1", hmenum.ParamsetKeyMaster)
+	stored, ok := ps.Get(wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", hmenum.ParamsetKeyMaster)
 	if !ok {
 		t.Fatal("MASTER paramset not stored after reload")
 	}
@@ -93,7 +93,7 @@ func TestReloadChannelConfigPullsAllParamsetKindsAndStores(t *testing.T) {
 func TestReloadChannelConfigNilFetcherReturnsError(t *testing.T) {
 	dc, _ := newReloadChannelCoordinator()
 	if err := dc.ReloadChannelConfig(
-		context.Background(), nil, hmenum.InterfaceHmIPRF, "ABC0001:1", "",
+		context.Background(), nil, wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", "",
 	); err == nil {
 		t.Fatal("expected error for nil fetcher")
 	}
@@ -103,7 +103,7 @@ func TestReloadChannelConfigEmptyChannelReturnsError(t *testing.T) {
 	dc, _ := newReloadChannelCoordinator()
 	fetcher := &channelParamsetFetcherStub{}
 	if err := dc.ReloadChannelConfig(
-		context.Background(), fetcher, hmenum.InterfaceHmIPRF, "", "",
+		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF), "", "",
 	); err == nil {
 		t.Fatal("expected error for empty channel address")
 	}
@@ -119,7 +119,7 @@ func TestReloadChannelConfigAllDescriptionsFailReturnsError(t *testing.T) {
 		},
 	}
 	if err := dc.ReloadChannelConfig(
-		context.Background(), fetcher, hmenum.InterfaceHmIPRF, "ABC0001:1", "",
+		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", "",
 	); err == nil {
 		t.Fatal("expected error when every paramset description fetch fails")
 	}
@@ -136,11 +136,11 @@ func TestReloadChannelConfigMasterValueErrorIsNonFatal(t *testing.T) {
 	// A MASTER value-read failure must not abort: the descriptions were
 	// already refreshed and stored.
 	if err := dc.ReloadChannelConfig(
-		context.Background(), fetcher, hmenum.InterfaceHmIPRF, "ABC0001:1", "",
+		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", "",
 	); err != nil {
 		t.Fatalf("MASTER value read error should be non-fatal, got %v", err)
 	}
-	if _, ok := ps.Get(hmenum.InterfaceHmIPRF, "ABC0001:1", hmenum.ParamsetKeyMaster); !ok {
+	if _, ok := ps.Get(wireKey(hmenum.InterfaceHmIPRF), "ABC0001:1", hmenum.ParamsetKeyMaster); !ok {
 		t.Fatal("descriptions should be stored even when MASTER value read fails")
 	}
 }

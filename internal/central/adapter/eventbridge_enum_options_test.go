@@ -220,7 +220,7 @@ func publishEnumDiscoveryWith(t *testing.T, values []string, labeler mqtt.Parame
 	if init, ok := dp.(namingInitializer); ok {
 		init.SetNameData(device.BuildDataPointName(ch, setPointModeParameter, ""))
 		init.SetPathData(naming.NewDataPointPathData(
-			hmenum.InterfaceHmIPRF, ch.Address, ch.Number, naming.BucketValues, setPointModeParameter,
+			"", hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF), ch.Address, ch.Number, naming.BucketValues, setPointModeParameter,
 		))
 		init.SetIsInMultipleChannels(ch.IsParameterInMultipleChannels(setPointModeParameter))
 	}

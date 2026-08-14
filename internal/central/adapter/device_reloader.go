@@ -13,7 +13,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -50,7 +49,7 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 		if !ok {
 			continue
 		}
-		b, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+		b, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return fmt.Errorf("device_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
 		}
@@ -60,7 +59,7 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 		// Passing the bare interface writes a second, duplicate key space that
 		// no other reader ever finds, and leaves RefreshDeviceLinkPeers looking
 		// for descriptions that are not there.
-		iface := hmenum.Interface(dev.InterfaceID)
+		iface := hmtypes.ParseWireInterfaceID(dev.InterfaceID)
 		fetcher := &singleDeviceDescFetcher{ops: b, address: deviceAddress}
 		if err := unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, iface); err != nil {
 			return err
@@ -103,13 +102,13 @@ func (a *DeviceReloaderAdapter) ReloadChannelConfig(ctx context.Context, channel
 		if !ok {
 			continue
 		}
-		b, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+		b, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return fmt.Errorf("channel_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
 		}
 		// The paramset + description registries are keyed by the canonical
 		// wire id, not the bare interface — see ReloadDeviceConfig.
-		iface := hmenum.Interface(dev.InterfaceID)
+		iface := hmtypes.ParseWireInterfaceID(dev.InterfaceID)
 		// Re-pull the channel's paramset descriptions + MASTER values.
 		if err := unit.Devices.ReloadChannelConfig(ctx, b, iface, channelAddress, dev.Model); err != nil {
 			return err
@@ -135,7 +134,7 @@ type backendDescFetcher struct {
 }
 
 // ListDevices satisfies coordinators.DeviceDescriptionFetcher.
-func (f *backendDescFetcher) ListDevices(ctx context.Context, _ hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+func (f *backendDescFetcher) ListDevices(ctx context.Context, _ hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
 	return f.ops.ListDevices(ctx)
 }
 
@@ -148,7 +147,7 @@ type backendLinkPeerFetcher struct {
 }
 
 // GetLinkPeers satisfies coordinators.LinkPeerFetcher.
-func (f *backendLinkPeerFetcher) GetLinkPeers(ctx context.Context, _ hmenum.Interface, channelAddress string) ([]string, error) {
+func (f *backendLinkPeerFetcher) GetLinkPeers(ctx context.Context, _ hmtypes.WireInterfaceID, channelAddress string) ([]string, error) {
 	return f.ops.GetLinkPeers(ctx, channelAddress)
 }
 
@@ -169,7 +168,7 @@ type singleDeviceDescFetcher struct {
 // GetDeviceDescription. A failure at the device level is propagated; a
 // failure fetching an individual channel is logged and skipped so that one
 // unreachable channel cannot abort the entire reload.
-func (f *singleDeviceDescFetcher) ListDevices(ctx context.Context, _ hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+func (f *singleDeviceDescFetcher) ListDevices(ctx context.Context, _ hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
 	rawDevice, err := f.ops.GetDeviceDescription(ctx, f.address)
 	if err != nil {
 		return nil, fmt.Errorf("device_reloader: GetDeviceDescription %s: %w", f.address, err)

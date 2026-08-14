@@ -410,7 +410,7 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		// the bare enum: it classifies the radio technology, not a registry
 		// key.
 		p.unit.DeviceRegistry.Put(registry.DeviceEntry{
-			Interface:    hmenum.Interface(interfaceID),
+			Interface:    hmtypes.ParseWireInterfaceID(interfaceID),
 			Address:      dd.Address,
 			Model:        dd.Type,
 			ProductGroup: hmenum.ProductGroupForModel(dd.Type, iface),
@@ -1712,7 +1712,7 @@ func (p *DevicePipeline) hydrateParamset(
 		// below stays untouched; the registry's secondary index has no
 		// production reader, so entity naming
 		// (Channel.IsParameterInMultipleChannels) is unaffected.
-		reg.Put(hmenum.Interface(interfaceID), ch.Address, key, paramset)
+		reg.Put(hmtypes.ParseWireInterfaceID(interfaceID), ch.Address, key, paramset)
 	}
 
 	for name := range paramset {
@@ -1821,7 +1821,8 @@ func (p *DevicePipeline) hydrateParamset(
 				bucket = naming.BucketMaster
 			}
 			init.SetPathData(naming.NewDataPointPathData(
-				hmenum.Interface(interfaceID), ch.Address, ch.Number, bucket, name,
+				p.unit.Name(), hmtypes.ParseWireInterfaceID(interfaceID),
+				ch.Address, ch.Number, bucket, name,
 			))
 			init.SetIsInMultipleChannels(ch.IsParameterInMultipleChannels(name))
 		}

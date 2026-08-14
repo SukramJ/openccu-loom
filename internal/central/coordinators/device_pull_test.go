@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // P0-3: DeviceCoordinator owns the initial-pull pipeline. The diff
@@ -27,7 +28,7 @@ type stubLister struct {
 	calls    int
 }
 
-func (s *stubLister) ListDevices(_ context.Context, _ hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+func (s *stubLister) ListDevices(_ context.Context, _ hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
 	s.calls++
 	if s.err != nil {
 		return nil, s.err
@@ -59,7 +60,7 @@ func TestInitialPullCreatesDevicesAndChannels(t *testing.T) {
 		{Address: "0001ABCD:1", Type: "CLIMATECONTROL_RT_TRANSCEIVER", Parent: "0001ABCD"},
 	}}
 
-	rep, err := dc.InitialPull(context.Background(), lister, hmenum.InterfaceHmIPRF)
+	rep, err := dc.InitialPull(context.Background(), lister, wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatalf("pull err=%v", err)
 	}
@@ -80,10 +81,10 @@ func TestInitialPullIsIdempotent(t *testing.T) {
 	lister := &stubLister{snapshot: []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X"},
 	}}
-	if _, err := dc.InitialPull(context.Background(), lister, hmenum.InterfaceHmIPRF); err != nil {
+	if _, err := dc.InitialPull(context.Background(), lister, wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
-	rep, err := dc.InitialPull(context.Background(), lister, hmenum.InterfaceHmIPRF)
+	rep, err := dc.InitialPull(context.Background(), lister, wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,13 +99,13 @@ func TestInitialPullDetectsModelChange(t *testing.T) {
 	first := &stubLister{snapshot: []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X", Firmware: "1.0"},
 	}}
-	if _, err := dc.InitialPull(context.Background(), first, hmenum.InterfaceHmIPRF); err != nil {
+	if _, err := dc.InitialPull(context.Background(), first, wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	second := &stubLister{snapshot: []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X", Firmware: "1.1"},
 	}}
-	rep, err := dc.InitialPull(context.Background(), second, hmenum.InterfaceHmIPRF)
+	rep, err := dc.InitialPull(context.Background(), second, wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,13 +125,13 @@ func TestInitialPullEmitsRemovedForVanishedDevices(t *testing.T) {
 		{Address: "AA", Type: "HmIP-X"},
 		{Address: "BB", Type: "HmIP-Y"},
 	}}
-	if _, err := dc.InitialPull(context.Background(), full, hmenum.InterfaceHmIPRF); err != nil {
+	if _, err := dc.InitialPull(context.Background(), full, wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
 	shrunk := &stubLister{snapshot: []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X"},
 	}}
-	rep, err := dc.InitialPull(context.Background(), shrunk, hmenum.InterfaceHmIPRF)
+	rep, err := dc.InitialPull(context.Background(), shrunk, wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +147,7 @@ func TestInitialPullSurfacesListerError(t *testing.T) {
 	t.Parallel()
 	dc, _ := newDC(t)
 	lister := &stubLister{err: errors.New("offline")}
-	if _, err := dc.InitialPull(context.Background(), lister, hmenum.InterfaceHmIPRF); err == nil {
+	if _, err := dc.InitialPull(context.Background(), lister, wireKey(hmenum.InterfaceHmIPRF)); err == nil {
 		t.Fatal("expected error from lister")
 	}
 }
@@ -154,7 +155,7 @@ func TestInitialPullSurfacesListerError(t *testing.T) {
 func TestInitialPullNilLister(t *testing.T) {
 	t.Parallel()
 	dc, _ := newDC(t)
-	if _, err := dc.InitialPull(context.Background(), nil, hmenum.InterfaceHmIPRF); err == nil {
+	if _, err := dc.InitialPull(context.Background(), nil, wireKey(hmenum.InterfaceHmIPRF)); err == nil {
 		t.Fatal("expected error for nil lister")
 	}
 }
@@ -165,7 +166,7 @@ func TestRefreshAfterPairReusesPullPath(t *testing.T) {
 	lister := &stubLister{snapshot: []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X"},
 	}}
-	rep, err := dc.RefreshAfterPair(context.Background(), lister, hmenum.InterfaceHmIPRF)
+	rep, err := dc.RefreshAfterPair(context.Background(), lister, wireKey(hmenum.InterfaceHmIPRF))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,13 +188,13 @@ func TestRefreshAfterUnpairDropsDevice(t *testing.T) {
 	lister := &stubLister{snapshot: []hmproto.DeviceDescription{
 		{Address: "AA", Type: "HmIP-X"},
 	}}
-	if _, err := dc.InitialPull(context.Background(), lister, hmenum.InterfaceHmIPRF); err != nil {
+	if _, err := dc.InitialPull(context.Background(), lister, wireKey(hmenum.InterfaceHmIPRF)); err != nil {
 		t.Fatal(err)
 	}
-	if !dc.RefreshAfterUnpair(context.Background(), hmenum.InterfaceHmIPRF, "AA") {
+	if !dc.RefreshAfterUnpair(context.Background(), wireKey(hmenum.InterfaceHmIPRF), "AA") {
 		t.Fatal("expected removal=true")
 	}
-	if dc.RefreshAfterUnpair(context.Background(), hmenum.InterfaceHmIPRF, "AA") {
+	if dc.RefreshAfterUnpair(context.Background(), wireKey(hmenum.InterfaceHmIPRF), "AA") {
 		t.Fatal("second unpair must be a no-op (return false)")
 	}
 	if len(removed) != 1 || removed[0].Address != "AA" {

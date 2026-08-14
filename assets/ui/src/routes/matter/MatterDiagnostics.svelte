@@ -13,11 +13,13 @@
     MatterEndpointInfo,
     MatterMdnsDiagnostics,
     MatterSession,
+    MatterSessionOccupancy,
   } from "$lib/api/matter-types";
 
   let loading = $state(true);
   let error = $state<string | null>(null);
   let sessions = $state<MatterSession[]>([]);
+  let occupancy = $state<MatterSessionOccupancy | null>(null);
   let mdns = $state<MatterMdnsDiagnostics | null>(null);
   let endpoints = $state<MatterEndpointInfo[]>([]);
   let compat = $state<MatterCompatibility | null>(null);
@@ -33,6 +35,7 @@
         api.matterCompatibility(),
       ]);
       sessions = s.sessions;
+      occupancy = s.occupancy;
       mdns = m;
       endpoints = e.endpoints;
       compat = c;
@@ -132,6 +135,19 @@
       <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
         {t("matter.diag.sessions_hint")}
       </p>
+      <!-- An id staked by a CASE handshake that never completed holds its
+           slot for twenty minutes and appears in no row below, so a table
+           filling up is invisible without this line. -->
+      {#if occupancy}
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {t("matter.diag.sessions_occupancy", {
+            live: occupancy.live,
+            reserved: occupancy.reserved,
+            free: occupancy.free,
+            capacity: occupancy.capacity,
+          })}
+        </p>
+      {/if}
       {#if sessions.length === 0}
         <div class="mt-3">
           <EmptyState message={t("matter.diag.no_sessions")} />

@@ -180,19 +180,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// when active, captured sessions survive a daemon restart.
 	// production-replay path. Closer is chained into shutdown. Shares
 	// auditDB (ov.db) rather than opening its own handle — see openLoomDB.
-	sessionRecorderCentralHook, recorderPersistTeardown := wireSessionRecorderPersistence(auditDB, reg, logger) //nolint:contextcheck // persist tickers outlive this call; their lifecycle is owned by the returned closer, not the boot ctx
+	recorderPersistTeardown := wireSessionRecorderPersistence(auditDB, reg, logger) //nolint:contextcheck // persist tickers outlive this call; their lifecycle is owned by the returned closer, not the boot ctx
 	defer recorderPersistTeardown()
 	// Wire SQLite-backed incident recording into every central's
 	// CacheCoordinator. CallbackHandlers reads the recorder lazily from
 	// CacheCoordinator.GetIncidentRecorder(), so no separate handler-level
 	// wiring step is needed. Degrades gracefully when auditDB is nil. Shares
 	// auditDB (ov.db) rather than opening its own handle — see openLoomDB.
-	incidentStore, incidentCentralHook, incidentTeardown := wireIncidentRecorder(auditDB, reg, logger)
+	incidentStore, incidentTeardown := wireIncidentRecorder(auditDB, reg, logger)
 	defer incidentTeardown()
 
 	// Audit every program run the daemon triggers, so a program reported as
 	// running twice can be attributed to the daemon or ruled out.
-	programAuditCentralHook, programAuditTeardown := wireProgramExecuteAudit(reg, auditRec, logger)
+	programAuditTeardown := wireProgramExecuteAudit(reg, auditRec, logger)
 	defer programAuditTeardown()
 
 	// Seed every central's health tracker (synthetic "started" sample,
@@ -471,7 +471,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Automatic scheduled CCU backups (opt-in via cfg.Backup.Schedule). Wired
 	// here, after the storage-backed backupAdapter exists; the scheduler is
 	// already running, so the first backup fires one interval in, not at boot.
-	registerScheduledBackupJobs(reg, cfg, backupAdapter, logger)
+	stopBackupJobWiring := registerScheduledBackupJobs(reg, cfg, backupAdapter, logger)
+	defer stopBackupJobWiring()
 	// Cache-reset service (ADR 0042) — drives POST /admin/cache/clear.
 	// Nil when south-bound never came up (no re-init manager); the route
 	// then stays unmounted.
@@ -491,32 +492,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.
 	centralOrch.setHubReadyTrigger(sb.hubReadyTrigger)
-	// The health/metrics seed runs before the adopted unit is registered, so
-	// it is installed on its own seam rather than through addCentralHook.
+	// The health/metrics seed runs before the adopted unit enters the shared
+	// registry — it writes unsynchronised Unit fields the serving handlers
+	// read — so it cannot ride the registry observer and keeps its own seam.
 	centralOrch.setCentralSeed(centralHealthSeed)
-	// Every collaborator that subscribed by walking the registry once at boot
-	// registers a per-central hook here, so a CCU adopted at runtime is wired
-	// like a boot-time one instead of coming up live but unheard. The
-	// north-bound WS/REST/MQTT subscribers register further down, next to the
-	// call that builds them.
-	centralOrch.addCentralHook(sb.historyCentralHook)
-	// Without this the adopted CCU is skipped by every periodic flush tick —
-	// its values reach SQLite only through the graceful-shutdown flush, so a
-	// SIGKILL or host reboot loses everything it observed since adoption.
-	centralOrch.addCentralHook(sb.valuesCacheCentralHook)
-	centralOrch.addCentralHook(sessionRecorderCentralHook)
-	centralOrch.addCentralHook(incidentCentralHook)
-	centralOrch.addCentralHook(programAuditCentralHook)
-	centralOrch.addCentralHook(func(u *central.Unit) func() {
-		return webhookOutbound.AttachCentral(u)
-	})
-	// `backup.schedule` applies daemon-wide, so an adopted CCU must get the
-	// same scheduler job the boot loop above registered. Job registration has
-	// no unwire — the job dies with the unit's scheduler.
-	centralOrch.addCentralHook(func(u *central.Unit) func() {
-		registerScheduledBackupJobFor(u, cfg, backupAdapter, logger)
-		return nil
-	})
 
 	// --- adapters ----------------------------------------------
 	devicesAdapter := adapter.NewDevicesAdapter(reg).WithWriter(valueWriter)
@@ -723,13 +702,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, northboundCentralHook, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, securitySvc, cfg.Locale, cfg.North.REST.PublicURL, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, securitySvc, cfg.Locale, cfg.North.REST.PublicURL, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
-	// Installed here rather than next to the Matter/alarm hooks above because
-	// the subscribers it closes over are built by the call right above. Runtime
-	// adoption is driven over REST, which is not listening yet, so no central
-	// can be adopted before this point.
-	centralOrch.addCentralHook(northboundCentralHook)
 	centralOrch.setEventSourceCentralHook(func(u *central.Unit) func() {
 		return eventSourceFeed.StartCentral(u)
 	})
@@ -767,6 +741,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		sqCentrals:              sqCentrals,
 		sqSections:              sqSections,
 		sqTokens:                sqTokens,
+		tokenPurger:             rw.tokenPurger,
 		sessions:                sessions,
 		matter:                  matter,
 		reload:                  deps,

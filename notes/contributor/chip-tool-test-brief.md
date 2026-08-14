@@ -170,6 +170,20 @@ With a live subscription from T7:
   subscription resumes its cadence and continues emitting `ReportData`
   without a fresh `SubscribeRequest` from the controller (subscriptions
   survive a daemon bounce; chip-tool `subscribe` keeps reporting).
+- **CASE resumption (Sigma1-Resume):** cannot be provoked on demand — the
+  controller resumes when its own cached record says so, which is why this
+  row is observed rather than driven. Run the daemon with `logging.level:
+  debug` across the restart and collect every
+  `matter.bridge.case.session_resumed` record: it carries the resumption id
+  the controller presented, the session id before and after the resume, and
+  the sessions the install displaced. Pair it with
+  `GET /api/v1/matter/sessions`, whose `occupancy` block reports how many
+  ids are live and how many are still staked by handshakes that never
+  completed. Whether a resumed session must carry a *new* session id is
+  open: we keep the announced id, matter.js takes a fresh one
+  (`packages/protocol/src/session/case/CaseServer.ts` `#resume`). A capture
+  showing the controller's behaviour across several resumes is what settles
+  it.
 
 ---
 

@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // CentralLinksDomain implements interfaces.CentralLinksService. The CCU uses
@@ -132,7 +133,7 @@ func (c *CentralLinksDomain) metadataReaderFor(u *central.Unit, dev *device.Devi
 	if c.writer == nil {
 		return nil, false
 	}
-	backend, ok := c.writer.Backend(u.Name(), dev.InterfaceID)
+	backend, ok := c.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return nil, false
 	}
@@ -191,7 +192,7 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress, chann
 			}
 			channels = []*device.Channel{ch}
 		}
-		backend, ok := c.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := c.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return hmapi.CentralLinksReport{}, fmt.Errorf("%w: %s/%s", ErrNoCentralLinkBackend, u.Name(), dev.InterfaceID)
 		}

@@ -85,34 +85,24 @@ func (b *SystemStatusBuffer) SystemStatusEntries() []SystemStatusEntry {
 	return out
 }
 
-// Subscribe attaches the buffer to every central in reg so incoming
+// Subscribe attaches the buffer to every central in reg — those registered
+// now and every one registered later — so incoming
 // [hmevent.SystemStatusChangedEvent] values are appended automatically.
-// Returns a closer that removes all subscriptions. Safe to call once
-// after the bus is live. A central adopted later must be attached with
-// [SystemStatusBuffer.SubscribeCentral].
+// Returns a closer that removes all subscriptions.
 func (b *SystemStatusBuffer) Subscribe(reg *central.Registry) (stop func()) {
 	if reg == nil {
 		return func() {}
 	}
-	var unsubs []func()
-	for _, u := range reg.List() {
-		if unsub := b.SubscribeCentral(u); unsub != nil {
-			unsubs = append(unsubs, unsub)
-		}
-	}
-	return func() {
-		for _, u := range unsubs {
-			u()
-		}
-	}
+	return reg.OnRegister(b.SubscribeCentral)
 }
 
 // SubscribeCentral attaches the buffer to a single central's event bus and
-// returns the unsubscribe (nil when there was nothing to attach).
+// returns the unsubscribe (nil when there was nothing to attach). It is the
+// observer the registry runs per central.
 //
-// Subscribe only ever walked the registry as it stood at boot, so the
-// interface up/down transitions of a central adopted at runtime never appeared
-// in `GET /api/v1/system-status` until the daemon was restarted.
+// Subscribe used to walk the registry as it stood at boot, so the interface
+// up/down transitions of a central adopted at runtime never appeared in
+// `GET /api/v1/system-status` until the daemon was restarted.
 func (b *SystemStatusBuffer) SubscribeCentral(u *central.Unit) func() {
 	if b == nil || u == nil {
 		return nil

@@ -48,9 +48,12 @@ func DeviceTriggerTopic(deviceAddr string, channel int) string {
 // [DeviceLifecycleSubscriber] in shape; runs alongside it so each event
 // family gets a focused subscriber.
 type DeviceTriggerSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
-	unsubs []func()
+	reg *central.Registry
+	hub *Hub
+	// remove detaches the registry observer Start installed, together with
+	// every per-central subscription it attached — see the field on
+	// [SystemStatusSubscriber] for the full ownership rule.
+	remove func()
 }
 
 // NewDeviceTriggerSubscriber returns a subscriber bound to reg and hub.
@@ -58,24 +61,20 @@ func NewDeviceTriggerSubscriber(reg *central.Registry, hub *Hub) *DeviceTriggerS
 	return &DeviceTriggerSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
-// A central adopted later must be attached with
-// [DeviceTriggerSubscriber.StartCentral].
+// Start subscribes to every central the registry holds now and to every one
+// registered later.
 func (s *DeviceTriggerSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	for _, u := range s.reg.List() {
-		if unwire := s.StartCentral(u); unwire != nil {
-			s.unsubs = append(s.unsubs, unwire)
-		}
-	}
+	s.remove = s.reg.OnRegister(s.StartCentral)
 }
 
 // StartCentral attaches this subscriber to a single central's event bus and
-// returns the unwire (nil when there was nothing to attach).
+// returns the unwire (nil when there was nothing to attach). It is the
+// observer the registry runs per central.
 //
-// Start only ever walked the registry as it stood at boot, so pressing a
+// Start used to walk the registry as it stood at boot, so pressing a
 // button on a device of a central adopted at runtime published a
 // DeviceTriggerEvent nobody consumed: no `device.trigger` frame was ever
 // emitted, and every client keying on it stayed silent until a restart.
@@ -111,11 +110,11 @@ func (s *DeviceTriggerSubscriber) StartCentral(u *central.Unit) func() {
 	})
 }
 
-// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
-// to a caller by StartCentral are that caller's to detach.
+// Stop removes the registry observer and drops every subscription it
+// attached — including the ones for centrals adopted after Start.
 func (s *DeviceTriggerSubscriber) Stop() {
-	for _, u := range s.unsubs {
-		u()
+	if s.remove != nil {
+		s.remove()
+		s.remove = nil
 	}
-	s.unsubs = nil
 }

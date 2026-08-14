@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // DeviceEntry is the registry's light-weight view of an active device.
@@ -15,7 +16,7 @@ import (
 // tracks identity and classification so coordinators don't need to
 // import the model package to route events.
 type DeviceEntry struct {
-	Interface    hmenum.Interface
+	Interface    hmtypes.WireInterfaceID
 	Address      string
 	Model        string
 	Manufacturer hmenum.Manufacturer
@@ -29,7 +30,7 @@ func (e DeviceEntry) Key() DeviceKey {
 
 // DeviceKey locates a device in the registry.
 type DeviceKey struct {
-	Interface hmenum.Interface
+	Interface hmtypes.WireInterfaceID
 	Address   string
 }
 
@@ -52,7 +53,7 @@ func (r *DeviceRegistry) Put(e DeviceEntry) {
 }
 
 // Get returns the entry for (iface, address).
-func (r *DeviceRegistry) Get(iface hmenum.Interface, address string) (DeviceEntry, bool) {
+func (r *DeviceRegistry) Get(iface hmtypes.WireInterfaceID, address string) (DeviceEntry, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	e, ok := r.items[DeviceKey{Interface: iface, Address: address}]
@@ -60,7 +61,7 @@ func (r *DeviceRegistry) Get(iface hmenum.Interface, address string) (DeviceEntr
 }
 
 // Remove deletes the entry and reports whether it was present.
-func (r *DeviceRegistry) Remove(iface hmenum.Interface, address string) bool {
+func (r *DeviceRegistry) Remove(iface hmtypes.WireInterfaceID, address string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	key := DeviceKey{Interface: iface, Address: address}
@@ -104,7 +105,7 @@ func (r *DeviceRegistry) Clear() {
 }
 
 // Has reports whether a device is registered for (iface, address).
-func (r *DeviceRegistry) Has(iface hmenum.Interface, address string) bool {
+func (r *DeviceRegistry) Has(iface hmtypes.WireInterfaceID, address string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	_, ok := r.items[DeviceKey{Interface: iface, Address: address}]
@@ -131,7 +132,7 @@ func (r *DeviceRegistry) Models() []string {
 }
 
 // Addresses returns all known device addresses registered for iface, sorted.
-func (r *DeviceRegistry) Addresses(iface hmenum.Interface) []string {
+func (r *DeviceRegistry) Addresses(iface hmtypes.WireInterfaceID) []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var out []string

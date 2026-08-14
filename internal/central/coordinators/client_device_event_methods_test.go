@@ -77,7 +77,7 @@ func TestAvailableAllSemantic(t *testing.T) {
 
 func TestInvalidateFirmwareCacheEvictsEntries(t *testing.T) {
 	dc, _, _, descs, _ := newDCFull(t)
-	iface := hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 
 	descs.Put(iface, device("ADDR001", "MODEL", "1.0", "ADDR001:0"))
 	descs.Put(iface, channel("ADDR001:0", "ADDR001", "MODEL"))
@@ -98,7 +98,7 @@ func TestInvalidateFirmwareCacheEvictsEntries(t *testing.T) {
 
 func TestRefreshDeviceDescriptionsOnlyExisting(t *testing.T) {
 	dc, _, _, descs, _ := newDCFull(t)
-	iface := hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 
 	descs.Put(iface, device("ADDR001", "OLD_MODEL", "1.0"))
 
@@ -124,7 +124,7 @@ func TestRefreshDeviceDescriptionsOnlyExisting(t *testing.T) {
 
 func TestRefreshDeviceDescriptionsAllWhenFalse(t *testing.T) {
 	dc, _, _, descs, _ := newDCFull(t)
-	iface := hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 
 	descs.Put(iface, device("ADDR001", "OLD_MODEL", "1.0"))
 
@@ -147,7 +147,7 @@ func TestRefreshDeviceDescriptionsAllWhenFalse(t *testing.T) {
 
 func TestIdentifyDevicesMissingParamsets(t *testing.T) {
 	dc, _, _, descs, psets := newDCFull(t)
-	iface := hmenum.InterfaceHmIPRF
+	iface := wireKey(hmenum.InterfaceHmIPRF)
 
 	descs.Put(iface, channel("ADDR001:0", "ADDR001", "MODEL"))
 	descs.Put(iface, channel("ADDR001:1", "ADDR001", "MODEL"))
@@ -169,7 +169,7 @@ func TestRenameNewDeviceFromOverrideAppliesName(t *testing.T) {
 	dc.SetDeviceNameOverrideChecker(overrider)
 
 	var renamed string
-	dc.RenameNewDeviceFromOverride(hmenum.InterfaceHmIPRF, "ADDR001", func(addr, name string) {
+	dc.RenameNewDeviceFromOverride(wireKey(hmenum.InterfaceHmIPRF), "ADDR001", func(addr, name string) {
 		renamed = name
 	})
 	if renamed != "Bücherregal" {
@@ -184,7 +184,7 @@ func TestRenameNewDeviceFromOverrideNoMatchIsNoOp(t *testing.T) {
 	dc.SetDeviceNameOverrideChecker(overrider)
 
 	var called bool
-	dc.RenameNewDeviceFromOverride(hmenum.InterfaceHmIPRF, "ADDR999", func(_, _ string) {
+	dc.RenameNewDeviceFromOverride(wireKey(hmenum.InterfaceHmIPRF), "ADDR999", func(_, _ string) {
 		called = true
 	})
 	if called {

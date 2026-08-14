@@ -49,9 +49,14 @@ func SystemStatusTopic(centralName string) string {
 //
 // Start/Stop manage the subscription lifetime.
 type SystemStatusSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
-	unsubs []func()
+	reg *central.Registry
+	hub *Hub
+	// remove detaches the registry observer Start installed, together with
+	// every per-central subscription it attached. It needs no lock because
+	// exactly one goroutine ever touches it: the composition root sets it in
+	// Start before any server is listening and runs it in Stop after every
+	// server has stopped.
+	remove func()
 }
 
 // NewSystemStatusSubscriber returns a subscriber bound to reg and hub.
@@ -59,28 +64,24 @@ func NewSystemStatusSubscriber(reg *central.Registry, hub *Hub) *SystemStatusSub
 	return &SystemStatusSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
-// Safe to call from the daemon composition root after the bus is ready.
-// A central adopted later must be attached with
-// [SystemStatusSubscriber.StartCentral].
+// Start subscribes to every central the registry holds now and to every one
+// registered later. Safe to call from the daemon composition root after the
+// bus is ready.
 func (s *SystemStatusSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	for _, u := range s.reg.List() {
-		if unwire := s.StartCentral(u); unwire != nil {
-			s.unsubs = append(s.unsubs, unwire)
-		}
-	}
+	s.remove = s.reg.OnRegister(s.StartCentral)
 }
 
 // StartCentral attaches this subscriber to a single central's event bus and
-// returns the unwire (nil when there was nothing to attach).
+// returns the unwire (nil when there was nothing to attach). It is the
+// observer the registry runs per central.
 //
-// Start only ever walked the registry as it stood at boot, so a central
-// adopted at runtime emitted no `system.<central>.status` frame at all: its
-// interface up/down transitions never reached a WebSocket client until the
-// daemon was restarted.
+// Start used to walk the registry as it stood at boot, so a central adopted at
+// runtime emitted no `system.<central>.status` frame at all: its interface
+// up/down transitions never reached a WebSocket client until the daemon was
+// restarted.
 func (s *SystemStatusSubscriber) StartCentral(u *central.Unit) func() {
 	if s == nil || s.hub == nil || u == nil {
 		return nil
@@ -115,11 +116,11 @@ func (s *SystemStatusSubscriber) StartCentral(u *central.Unit) func() {
 	})
 }
 
-// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
-// to a caller by StartCentral are that caller's to detach.
+// Stop removes the registry observer and drops every subscription it
+// attached — including the ones for centrals adopted after Start.
 func (s *SystemStatusSubscriber) Stop() {
-	for _, u := range s.unsubs {
-		u()
+	if s.remove != nil {
+		s.remove()
+		s.remove = nil
 	}
-	s.unsubs = nil
 }

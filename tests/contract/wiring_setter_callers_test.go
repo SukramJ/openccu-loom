@@ -252,9 +252,9 @@ func injectsCollaborator(fn *types.Func) bool {
 	// Demanding a single parameter — which this did — made the guard
 	// blind to the keyed form, and in a daemon that is multi-CCU by
 	// design the keyed form is the common one, not the exception:
-	// ValueWriter.RegisterIC(centralName, interfaceID string, ic
-	// icSetterLike) never had a production caller, and the guard could
-	// not see it because of the two strings in front.
+	// ValueWriter.RegisterIC(centralName, interfaceID, ic icSetterLike)
+	// never had a production caller, and the guard could not see it
+	// because of the two scoping keys in front.
 	collaborators := 0
 	for i := range sig.Params().Len() {
 		switch {

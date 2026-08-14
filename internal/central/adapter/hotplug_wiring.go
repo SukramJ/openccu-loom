@@ -15,9 +15,9 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
-// newHotplugIngestor builds the NewDevices materialiser a central's
-// callback handlers hand freshly announced devices to (see
-// [CallbackHandlers.SetHotplugIngestor]). It runs the same pipeline
+// newHotplugIngestor builds the materialiser a central hands freshly
+// announced devices to — both the newDevices callback and the accept of
+// a deferred device (see [central.Unit.SetDeviceIngestFn]). It runs the same pipeline
 // sequence as the interface bring-up, scoped to the devices the model
 // does not know yet, and then applies the per-device post-ingest wiring
 // the bring-up performs outside the pipeline (value loader, hub links,

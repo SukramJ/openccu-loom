@@ -146,7 +146,7 @@ func (w *ValueWriter) SetValueWithOptions(
 	// PurgeAddresses: cancel pending retry chains for the listed addresses
 	// BEFORE issuing the new wire write.
 	w.mu.RLock()
-	key := valueWriterKey{Central: centralName, Interface: interfaceID}
+	key := keyFor(centralName, interfaceID)
 	b, bOK := w.backends[key]
 	ic := w.icSetters[key]
 	resolved := resolveBus(w.busResolver, w.bus, centralName)
@@ -269,7 +269,7 @@ func (w *ValueWriter) PutParamsetWithOptions(
 	}
 
 	w.mu.RLock()
-	ppKey := valueWriterKey{Central: centralName, Interface: interfaceID}
+	ppKey := keyFor(centralName, interfaceID)
 	b, bOK := w.backends[ppKey]
 	ic := w.icSetters[ppKey]
 	resolved := resolveBus(w.busResolver, w.bus, centralName)

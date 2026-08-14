@@ -256,6 +256,10 @@ type InboxDeviceDTO struct {
 	Serial       string `json:"serial,omitempty"`
 	Manufacturer string `json:"manufacturer,omitempty"`
 	FirstSeen    int64  `json:"first_seen,omitempty"`
+	// PendingCreation marks an entry this daemon is holding back
+	// (`delay_new_device_creation`): the device exists on the CCU but has
+	// no data points here until the accept materialises it.
+	PendingCreation bool `json:"pending_creation,omitempty"`
 }
 
 // AlarmMessageDTO is one entry in the alarm-messages list.
@@ -1044,15 +1048,18 @@ func ListInbox(idx HubIndex) http.HandlerFunc {
 			if nh.Hub == nil || nh.Hub.Inbox == nil {
 				continue
 			}
-			for _, e := range nh.Hub.Inbox.List() {
+			inbox := nh.Hub.Inbox.List()
+			for i := range inbox {
+				e := &inbox[i]
 				out = append(out, InboxDeviceDTO{
-					Central:      nh.Central,
-					Address:      e.Address,
-					Model:        e.Model,
-					Interface:    e.Interface,
-					Serial:       e.Serial,
-					Manufacturer: e.Manufacturer,
-					FirstSeen:    e.FirstSeen,
+					Central:         nh.Central,
+					Address:         e.Address,
+					Model:           e.Model,
+					Interface:       e.Interface,
+					Serial:          e.Serial,
+					Manufacturer:    e.Manufacturer,
+					FirstSeen:       e.FirstSeen,
+					PendingCreation: e.PendingCreation,
 				})
 			}
 		}

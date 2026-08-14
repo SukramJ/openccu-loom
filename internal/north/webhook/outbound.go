@@ -70,11 +70,18 @@ type Outbound struct {
 
 	mu      sync.Mutex
 	started bool
-	unsubs  []func()
-	queue   chan delivery
-	baseCtx context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	// unsubs holds the daemon-level plane subscriptions (alarm, security).
+	// The per-central ones are the registry observer's, torn down through
+	// removeObserver.
+	unsubs []func()
+	// removeObserver detaches the registry observer Start installed, and with
+	// it every per-central subscription — including the centrals adopted
+	// while the bridge was running.
+	removeObserver func()
+	queue          chan delivery
+	baseCtx        context.Context
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
 
 	dropped atomic.Int64 // deliveries discarded because the queue was full
 	failed  atomic.Int64 // deliveries that exhausted all retries
@@ -148,13 +155,14 @@ func (o *Outbound) SetSecurityBus(bus *events.Bus) {
 // Name implements bridge.Service.
 func (o *Outbound) Name() string { return "webhook-outbound" }
 
-// Start subscribes one handler set per allowed central and spawns the
-// delivery worker. It is a no-op (returns nil) when the bridge is disabled,
-// has no URL, or is already started — so the daemon can always register it.
+// Start subscribes one handler set per allowed central — those registered now
+// and every one adopted later — and spawns the delivery worker. It is a no-op
+// (returns nil) when the bridge is disabled, has no URL, or is already started
+// — so the daemon can always register it.
 func (o *Outbound) Start(_ context.Context) error {
 	o.mu.Lock()
-	defer o.mu.Unlock()
 	if o.started || !o.cfg.Enabled || o.cfg.URL == "" || o.reg == nil {
+		o.mu.Unlock()
 		return nil
 	}
 	o.baseCtx, o.cancel = context.WithCancel(context.Background())
@@ -165,35 +173,38 @@ func (o *Outbound) Start(_ context.Context) error {
 	// race the worker's range.
 	go o.worker(o.queue)
 
-	for _, u := range o.reg.List() {
-		if u == nil || u.EventBus == nil {
-			continue
-		}
-		name := u.Name()
-		if !o.centralAllowed(name) {
-			continue
-		}
-		o.subscribeCentral(u.EventBus, name)
-	}
-	centralSubs := len(o.unsubs)
 	if o.securityBus != nil {
 		o.subscribeSecurity(o.securityBus)
 	}
 	if o.alarmBus != nil {
 		o.subscribeAlarm(o.alarmBus)
 	}
+	// AttachCentral refuses to subscribe until the bridge reports started, so
+	// the flag has to be set before the observer replays over the centrals
+	// already registered.
 	o.started = true
+	alarmWired := o.alarmBus != nil
+	o.mu.Unlock()
+
+	// The observer is registered without o.mu held: AttachCentral takes the
+	// same mutex for every central it wires.
+	var centrals atomic.Int64
+	remove := o.reg.OnRegister(func(u *central.Unit) func() {
+		unwire := o.AttachCentral(u)
+		if unwire != nil {
+			centrals.Add(1)
+		}
+		return unwire
+	})
+	o.mu.Lock()
+	o.removeObserver = remove
+	o.mu.Unlock()
+
 	o.logger.Info("webhook.outbound.started",
 		slog.String("url", o.cfg.URL),
-		slog.Int("centrals", centralSubs/3),
-		slog.Bool("alarm", o.alarmBus != nil))
+		slog.Int64("centrals", centrals.Load()),
+		slog.Bool("alarm", alarmWired))
 	return nil
-}
-
-// subscribeCentral attaches the three event handlers for one central and
-// records their unsubscribe funcs. Caller holds o.mu.
-func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
-	o.unsubs = append(o.unsubs, o.centralSubscriptions(bus, name)...)
 }
 
 // centralSubscriptions attaches the three per-central handlers and returns
@@ -213,11 +224,12 @@ func (o *Outbound) centralSubscriptions(bus *events.Bus, name string) []func() {
 	}
 }
 
-// AttachCentral subscribes one central adopted after Start and returns the
-// detach. It returns nil when the bridge is not running, the central carries
-// no bus, or the central is outside the configured allow-list.
+// AttachCentral subscribes one central and returns the detach. It is the
+// observer the registry runs per central. It returns nil when the bridge is
+// not running, the central carries no bus, or the central is outside the
+// configured allow-list.
 //
-// Start only ever walked the registry as it stood at boot, so a CCU adopted at
+// Start used to walk the registry as it stood at boot, so a CCU adopted at
 // runtime delivered no webhook at all — not for its data points, not for its
 // status changes, not for its reliability incidents — until a daemon restart
 // turned it into a boot-time central. Nothing failed and nothing logged.
@@ -329,12 +341,20 @@ func (o *Outbound) Stop(_ context.Context) error {
 	}
 	unsubs := o.unsubs
 	o.unsubs = nil
+	removeObserver := o.removeObserver
+	o.removeObserver = nil
 	o.started = false
 	cancel := o.cancel
 	queue := o.queue
 	o.queue = nil
 	o.mu.Unlock()
 
+	// Outside the mutex: the observer's unwires are plain unsubscribes, but
+	// the registry runs them under its own wiring lock and AttachCentral
+	// takes o.mu.
+	if removeObserver != nil {
+		removeObserver()
+	}
 	for _, u := range unsubs {
 		u()
 	}

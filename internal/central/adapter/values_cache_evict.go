@@ -28,16 +28,17 @@ type ValuesCacheEvictor struct {
 	store  *sqlite.ValuesCacheStore
 	logger *slog.Logger
 
-	mu     sync.Mutex
-	unsubs []func()
-	once   sync.Once
+	// removeObserver detaches the registry observer and every per-central
+	// subscription it attached.
+	removeObserver func()
+	once           sync.Once
 }
 
 // StartCentral subscribes one central's EventBus to DeviceRemovedEvent. It is
-// the seam the composition root calls for a runtime-adopted CCU and the same
-// call the boot-time wiring makes for every configured one: a central that
-// joined after wiring time would otherwise keep every unpaired device's rows
-// forever, since nothing else on the removal path touches the store.
+// the observer the registry runs per central, for boot-time and
+// runtime-adopted CCUs alike: a central that joined after wiring time would
+// otherwise keep every unpaired device's rows forever, since nothing else on
+// the removal path touches the store.
 //
 // The returned closure releases the subscription; nil-safe and idempotent.
 func (e *ValuesCacheEvictor) StartCentral(u *central.Unit) func() {
@@ -56,10 +57,6 @@ func (e *ValuesCacheEvictor) StartCentral(u *central.Unit) func() {
 				slog.String("err", err.Error()))
 		}
 	})
-	e.mu.Lock()
-	e.unsubs = append(e.unsubs, unsub)
-	e.mu.Unlock()
-
 	var once sync.Once
 	return func() { once.Do(unsub) }
 }
@@ -70,12 +67,8 @@ func (e *ValuesCacheEvictor) Stop() {
 		return
 	}
 	e.once.Do(func() {
-		e.mu.Lock()
-		unsubs := e.unsubs
-		e.unsubs = nil
-		e.mu.Unlock()
-		for _, u := range unsubs {
-			u()
+		if e.removeObserver != nil {
+			e.removeObserver()
 		}
 	})
 }
@@ -97,8 +90,6 @@ func WireValuesCacheEviction(
 		return nil
 	}
 	e := &ValuesCacheEvictor{store: store, logger: logger}
-	for _, unit := range reg.List() {
-		e.StartCentral(unit)
-	}
+	e.removeObserver = reg.OnRegister(e.StartCentral)
 	return e
 }

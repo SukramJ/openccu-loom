@@ -39,18 +39,6 @@ func (f *fakeChecker) GetParamset(_ context.Context, ch string, _ hmenum.Paramse
 	return map[string]any{}, nil
 }
 
-// consistencyCentral is the central name every coordinator in this file is
-// built for; the registry keys below are derived from it.
-const consistencyCentral = "ccu1"
-
-// wireKey returns the canonical `<central>-<iface>` id the hydration pipeline
-// keys the description and paramset registries by. The tests register under it
-// (and pass it to the check) because that is what production does — registering
-// under the bare interface made the whole check a no-op that still looked green.
-func wireKey(iface hmenum.Interface) hmenum.Interface {
-	return hmenum.Interface(consistencyCentral + "-" + string(iface))
-}
-
 // buildCoordinator builds a minimal DeviceCoordinator populated with the
 // given descriptions and MASTER paramsets so CheckParamsetConsistency can
 // run without a real CCU.
@@ -71,7 +59,7 @@ func buildCoordinator(
 		psReg.Put(wireKey(iface), ch, hmenum.ParamsetKeyMaster, ps)
 	}
 
-	return NewDeviceCoordinator(consistencyCentral, bus, devReg, descReg, psReg, nil)
+	return NewDeviceCoordinator(testCentralName, bus, devReg, descReg, psReg, nil)
 }
 
 // ─── Test 1: nil checker returns error ───────────────────────────────────────
@@ -411,5 +399,46 @@ func TestScheduleParamsetConsistencyCheckRecoversFromPanic(t *testing.T) {
 	case <-done:
 	case <-time.After(eventWaitTimeout):
 		t.Fatal("Stop hung after the background goroutine panicked")
+	}
+}
+
+// TestCheckParamsetConsistencyRunsWithoutDeviceDescriptions pins the check on
+// the registry shape a first-ever boot produces: the paramset registry is
+// filled by the hydration pass that fetched the descriptions, while the
+// device-description registry stays empty until the CCU announces its devices
+// over the callback — which happens after init(), long after the check is
+// scheduled.
+//
+// Enumerating the device's channels from the description registry made the
+// whole check a no-op in exactly that window: no channels, no comparison, a
+// clean bill of health for a device it never looked at. The channels the check
+// is about are the ones that HAVE a cached MASTER description, so the paramset
+// registry is the registry that knows them.
+func TestCheckParamsetConsistencyRunsWithoutDeviceDescriptions(t *testing.T) {
+	t.Parallel()
+	ps := hmproto.Paramset{
+		"PARAM_A": {Operations: hmenum.OperationsRead | hmenum.OperationsWrite},
+		"PARAM_B": {Operations: hmenum.OperationsRead},
+	}
+	// No descriptions — the cold-boot shape.
+	coord := buildCoordinator(hmenum.InterfaceHmIPRF, nil, map[string]hmproto.Paramset{
+		"HMIP0009:1": ps,
+	})
+	checker := &fakeChecker{perChannel: map[string]map[string]any{
+		"HMIP0009:1": {"PARAM_A": 1},
+	}}
+	results, err := coord.CheckParamsetConsistency(
+		context.Background(), hmenum.InterfaceHmIPRF, wireKey(hmenum.InterfaceHmIPRF),
+		[]string{"HMIP0009"}, checker,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 inconsistency without device descriptions, got %d — "+
+			"the check found no channel to compare", len(results))
+	}
+	if got := results[0].MissingParameters; len(got) != 1 || got[0] != "HMIP0009:1:PARAM_B" {
+		t.Errorf("MissingParameters=%v, want [HMIP0009:1:PARAM_B]", got)
 	}
 }

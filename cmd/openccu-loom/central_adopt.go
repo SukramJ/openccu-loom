@@ -19,7 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // errCentralNotLive is returned by [centralOrchestrator.removeCentral] when
@@ -107,10 +107,10 @@ type centralOrchestrator struct {
 	// central's `primary_interface` pin, which the adopted row carries and
 	// the boot config does not know about.
 	//
-	// It is a field of its own rather than one more entry in extraHooks
-	// because it is the one wiring that must run BEFORE the unit enters the
-	// shared registry: it writes unsynchronised Unit fields the serving
-	// handlers read, and the registry is what makes the unit observable.
+	// It is a field of its own rather than a registry observer because it is
+	// the one wiring that must run BEFORE the unit enters the shared
+	// registry: it writes unsynchronised Unit fields the serving handlers
+	// read, and the registry is what makes the unit observable.
 	centralSeed func(u *central.Unit, primaryInterface string)
 	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
 	// serial resolves. Set via [centralOrchestrator.setHubReadyTrigger] from the
@@ -118,21 +118,6 @@ type centralOrchestrator struct {
 	// serial-gated hub discovery the same way a boot-time central does. Nil when
 	// MQTT is not configured.
 	hubReadyTrigger func()
-	// extraHooks holds every additional per-central attach hook the
-	// composition root registered through
-	// [centralOrchestrator.addCentralHook], in registration order.
-	//
-	// It is an open list rather than one named field per collaborator because
-	// the named-field shape is what let this defect in: the daemon has a whole
-	// family of north-bound subscribers that snapshot the registry once at
-	// boot, exactly one of them (the WS hub-events subscriber) got a field,
-	// and the rest — measurement history, the outbound webhook, the WS
-	// system-status / device-lifecycle / device-trigger / optimistic-rollback
-	// subscribers, the REST system-status buffer, the MQTT system-status
-	// plane — were half-remembered and silently did nothing for an adopted
-	// central. A registrar cannot be half-remembered: a collaborator either
-	// registers its hook or it has none.
-	extraHooks []func(u *central.Unit) (unwire func())
 }
 
 // centralHooks is what [centralOrchestrator.attachCentralHooks] returns: one
@@ -152,6 +137,11 @@ type centralHooks struct {
 // domain before its southbound bring-up starts, so the first event it reports
 // already has a listener. Each hook is nil while its subsystem is disabled.
 //
+// Everything that merely needs "one call per central" rides
+// [central.Registry.OnRegister] instead and is already attached by the time
+// this runs — reg.Register happens earlier in adoptCentral. What is left here
+// are the hooks whose attach order relative to the bring-up is load-bearing.
+//
 // Order is load-bearing where noted; the block is extracted from adoptCentral
 // so the sequence reads as one thing and the caller stays inside its
 // statement budget.
@@ -162,7 +152,6 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	securityHook := o.securityHook
 	eventSourceHook := o.eventSourceHook
 	hubReadyTrigger := o.hubReadyTrigger
-	extraHooks := slices.Clone(o.extraHooks)
 	o.mu.Unlock()
 
 	var h centralHooks
@@ -211,38 +200,7 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	if hubReadyTrigger != nil {
 		keep(subscribeHubReadyTrigger(unit.EventBus, hubReadyTrigger))
 	}
-	// Every collaborator that snapshots the registry at boot and registered
-	// itself through addCentralHook: measurement history, the outbound
-	// webhook, the WS system-status / device-lifecycle / device-trigger /
-	// optimistic-rollback subscribers, the REST system-status buffer, the
-	// MQTT system-status plane, session-recorder persistence, the incident
-	// recorder, and the values-cache flusher's dirty tracker + removal
-	// eviction. They are mutually independent, so registration order is the
-	// attach order. All of them run before AddCentral launches the bring-up,
-	// so the very first value the central reports already has its listener —
-	// which for the values cache is what makes it dirty in time for the next
-	// flush tick instead of only at graceful shutdown.
-	for _, hook := range extraHooks {
-		keep(hook(unit))
-	}
 	return h
-}
-
-// addCentralHook registers a per-central attach hook the orchestrator runs for
-// every central it adopts at runtime, and whose returned unwire it tears down
-// again on remove. Nil-safe on both sides (a nil orchestrator means south-bound
-// never came up; a nil hook means the collaborator is disabled).
-//
-// Register one for every collaborator that subscribes to a central's EventBus
-// by walking the registry once: that walk sees only the centrals present at
-// boot, and nothing anywhere reports the ones it missed.
-func (o *centralOrchestrator) addCentralHook(hook func(u *central.Unit) (unwire func())) {
-	if o == nil || hook == nil {
-		return
-	}
-	o.mu.Lock()
-	o.extraHooks = append(o.extraHooks, hook)
-	o.mu.Unlock()
 }
 
 // setCentralSeed installs the per-central health/metrics seed run on every
@@ -606,7 +564,7 @@ func evictModel(u *central.Unit) {
 		return
 	}
 	for _, d := range u.ModelRegistry.List() {
-		iface := hmenum.Interface(d.InterfaceID)
+		iface := hmtypes.ParseWireInterfaceID(d.InterfaceID)
 		if u.DescRegistry != nil {
 			u.DescRegistry.Delete(iface, d.Address)
 		}

@@ -33,7 +33,7 @@ import (
 //
 // The assertions are on the effect (the frame arrives, the buffer fills), and
 // the events are published on the adopted unit's own bus — the test never
-// calls the hook itself.
+// attaches a subscriber itself.
 func TestAdoptCentralWiresNorthboundSubscribers(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -42,11 +42,10 @@ func TestAdoptCentralWiresNorthboundSubscribers(t *testing.T) {
 	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
 
 	wsHub := ws.NewHub()
-	sysStatusBuf, centralHook, teardown := wireSystemStatusSubscribers(
+	sysStatusBuf, teardown := wireSystemStatusSubscribers(
 		reg, wsHub, nil, nil, nil, nil, nil, "", "", discardTestLogger(),
 	)
 	t.Cleanup(teardown)
-	orch.addCentralHook(centralHook)
 
 	const name = "adopted"
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig(name)); err != nil {

@@ -19,7 +19,142 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   block holds counters only and names no device, so it is unaffected by
   `anonymize`. (REST API 5.26.0)
 
+- **A device that becomes unreachable now reaches the Config UI while you
+  are looking at it.** The daemon published every per-device availability
+  transition on its internal bus, but nothing carried it north: the MQTT
+  availability topic flipped, while the WebSocket stream stayed silent and
+  the device list only learned about the change on a full reload. A new
+  `device.availability_changed` broadcast rides the existing
+  `device.{address}.lifecycle` topic, and the SPA applies it in place — the
+  status column and the available / unavailable filter follow a device that
+  drops out. The transition is announced for both causes: an interface that
+  loses its connection to the CCU, and a device that reports UNREACH or
+  STICKY_UNREACH on its own. (REST API 5.27.0)
+
+- **A Matter controller that resumes its session is no longer invisible.**
+  CASE resumption re-establishes a session from a cached secret in one
+  round trip, and until now nothing recorded that it happened: the daemon
+  logged the same establishment line as a full handshake, so an operator
+  report could not say whether a controller resumed, which cached record it
+  resumed from, or what the resume did to the session table. Running at
+  `logging.level: debug` now emits one `matter.bridge.case.session_resumed`
+  record per resume, carrying the resumption id the controller presented,
+  the id handed back for its next resume, the session id before and after,
+  and the sessions the install displaced. The record is built only when
+  debug logging is on, so the handshake path is unchanged otherwise.
+
+  `GET /api/v1/matter/sessions` gained an `occupancy` block — live sessions,
+  ids still reserved by handshakes that never completed, the capacity of the
+  16-bit id space and what is left of it — and the Matter diagnostics view
+  shows the same line above the controller table. A reserved id appears in
+  no session row and holds its slot for twenty minutes, so a space filling
+  up used to look exactly like a quiet bridge until the next controller was
+  refused. (REST API 5.29.0)
+
 ### Fixed
+
+- **The stale-paramset check now runs on a CCU the daemon has never seen
+  before.** After a firmware update the CCU's HmIP service can keep serving
+  descriptor files that list parameters the device no longer has, and the
+  daemon checks for that on every bring-up. The check enumerated the device's
+  channels from the device-description cache, which on a first-ever start is
+  still empty at that point — the CCU only announces its devices moments
+  later — so it examined nothing and reported a clean bill of health. It now
+  reads the channels from the paramset cache the hydration pass has just
+  filled, which is also the cache the comparison is against, and so reports
+  the same findings on a first start as on every later one.
+
+- **One person signing in through the identity provider is now one
+  principal.** The session subject came from `preferred_username` — a claim
+  the OpenID Connect spec guarantees to be neither stable nor unique, and
+  that directories return in whatever casing they happen to hold. Signing in
+  as `Markus@example.com` and later as `markus@example.com` produced two
+  subjects, so the audit trail attributed one person's actions to two
+  identities and every subject-keyed lookup split in two. That claim is now
+  trimmed and lower-cased, exactly like a local login name. The `sub` claim,
+  used when the provider omits `preferred_username`, is still passed through
+  byte-for-byte: it is opaque and case-sensitive, so folding it could merge
+  two different people.
+
+  A federated login is now also explicitly a **different principal** from a
+  local account that happens to carry the same name. Such a session reports
+  `scheme: oidc` on `GET /api/v1/auth/me` (a value the API has always
+  declared), it can no longer change the local account's password through
+  `PATCH /api/v1/auth/me/password` (409 — the provider owns those
+  credentials), and deleting or resetting that local account no longer ends
+  it. Ending a federated session remains the provider's job, plus the
+  session TTL. CSRF protection is unchanged: the session still rides a
+  browser cookie and still requires the double-submit token.
+
+  OIDC sessions that already existed when the daemon was upgraded keep the
+  spelling and the local-account treatment they were issued with; they are
+  not invalidated on upgrade and simply expire within their remaining TTL
+  (12 h by default).
+
+- **A CCU added while the daemon is running is now wired the same way a
+  CCU present at boot is — structurally, not by remembering to.** Every
+  subsystem that works per CCU used to attach itself by walking the list of
+  configured CCUs once during start-up, which left a CCU adopted afterwards
+  silent on that plane until the next restart: no measurement history, no
+  webhook deliveries, no WebSocket status or device-trigger frames, no MQTT
+  system-status messages, no scheduled backups, no reliability incidents.
+  Those subsystems now register themselves once with the CCU registry, which
+  wires them for the CCUs already present and for every CCU added later, and
+  unwires them again when a CCU is removed. The second registration step that
+  had to be remembered per subsystem — and that was the actual defect — no
+  longer exists.
+
+- **`delay_new_device_creation` now has the operator surface it promises.**
+  The toggle held a newly paired device back — and there it ended: the
+  announced descriptions were parked in memory, no list showed them, and
+  nothing ever emptied the queue, so the device stayed without a single
+  data point until the daemon was restarted. Accepting it in the Config UI
+  only flipped the flag on the CCU. Devices held back this way are now
+  listed in the inbox (`GET /api/v1/inbox`, the WS `inbox.list` command,
+  the MQTT inbox sensor and the SPA inbox view) with an "awaiting approval"
+  marker, an open Config UI learns about a newly paired one through the
+  existing `hub.<central>.inbox` broadcast, and accepting it
+  (`POST /api/v1/devices/{addr}/accept`, WS `inbox.accept`) hands the
+  parked descriptions to the same materialiser a hot-plugged device runs
+  through — so the accepted device arrives with its channels, data points
+  and values. A failed materialisation leaves the device listed so the
+  accept can be retried. The queue also no longer fills with the whole
+  installation: the CCU re-announces its complete inventory after every
+  reconnect, and descriptions that add nothing are ignored. (REST API
+  5.28.0)
+
+- **Changing only a user's role now works.** The Config UI leaves the
+  password field blank when an admin just moves an account between roles,
+  and the daemon answered that request with "password is required" — the
+  one surface that offers a role change could not perform one. A role-only
+  update now changes the role and keeps the stored password, so the user
+  keeps signing in with the credentials they already have. The lockout
+  guard is unchanged: demoting the only remaining admin is still refused.
+  A role that actually changed now also revokes the account's live
+  sessions **and** its API tokens, because a token carries the role it was
+  minted with and would otherwise keep the pre-demotion privileges usable.
+  A password reset that names no role no longer moves the account to one.
+
+- **A deleted account no longer keeps a usable API token.** Tokens issued
+  through `POST /api/v1/auth/tokens` were stored under the exact spelling
+  of the subject that was typed and only in the in-memory store, while the
+  purge that runs when the account is deleted addressed the canonical
+  spelling in the database alone. Both halves are fixed: the token is
+  bound to the canonical subject, and the purge now covers every store a
+  bearer token can authenticate against.
+
+- **A radio interface that disappears from the CCU is now reported as
+  unreachable.** The CCU answers with the interfaces it currently serves,
+  so an interface that dies signals it by dropping out of that answer
+  rather than by an explicit flag. The reconciliation pass looked only at
+  the entries it received, so a vanished interface kept its last known
+  state indefinitely: its MQTT connectivity sensor stayed on, the REST hub
+  data points still called it reachable, and the alarm domain kept
+  trusting every sensor behind it while armed. The pass now compares each
+  answer against the previous one, emits exactly one unreachable event for
+  an interface that left, and a reachable one when it returns. A failed or
+  empty answer — an unreachable or rebooting CCU — counts as no
+  information, so a CCU restart does not report every interface as lost.
 
 - **A cover's Open and Close buttons in Home Assistant move the cover
   again.** Home Assistant gives an MQTT cover one command topic and tells
@@ -291,6 +426,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   aborts the process, and in the timings it does not detect, the load
   outlived the bridge and published into a torn-down stack. A pass that
   starts after teardown now warms nothing up.
+
+- **A reconnect no longer multiplies week-profile, schedule, firmware and
+  timer updates.** Every broker reconnect, every CCU that clears its
+  readiness gate and every hot-plugged device re-walks the model and wired
+  another callback onto the same week profiles, schedules, firmware
+  trackers and combined data points. After the third reconnect a single
+  profile change wrote its MQTT topic three times, and the list of
+  callbacks waiting to be released grew for as long as the daemon ran.
+  Each callback is now installed once per object: a reconnect that hands
+  back the same objects changes nothing, while a device re-read that
+  rebuilds a channel subscribes the rebuilt objects and releases the
+  callbacks on the ones they replaced — so a re-read does not silently
+  stop the updates either. A device that leaves the CCU releases its
+  callbacks with it.
 
 - **A CCU added while the daemon runs gets its values persisted.** The
   periodic value-cache flush and the row cleanup after an unpair both
@@ -1071,6 +1220,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tags, the previous controller's tags stayed attached — so the new
   session matched every rule written for the previous controller's
   group.
+
+- **The frozen health-score, latency and last-event-age topics of a
+  renamed CCU subtree are cleaned up.** The three central-wide metric
+  sensors used to lower-case the CCU name into their topic while every
+  other topic on the plane escapes it; correcting that left the values on
+  the old topics behind, retained on the broker and never updated again,
+  so a dashboard or automation subscribing them kept reading a health
+  score from the previous build. The opt-in retained-cleanup pass now
+  clears them — but only where the two spellings actually differ. For a
+  CCU whose name needs no escaping the old and the new topic are the same
+  string, and for those deployments (and for any topic another configured
+  CCU publishes to) the pass does nothing at all, so no live value is
+  ever blanked.
 
 ## [0.59.0]
 

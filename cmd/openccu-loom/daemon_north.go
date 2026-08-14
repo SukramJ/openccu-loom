@@ -570,8 +570,13 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		},
 	})
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
-		Base:               cfg.North.MQTT.TopicBase,
-		CentralName:        pickFirstCentral(cfg),
+		Base:        cfg.North.MQTT.TopicBase,
+		CentralName: pickFirstCentral(cfg),
+		// The retained sweeps compare candidate topics against the live
+		// topics of every configured CCU, not just the default one — a
+		// retired spelling of one CCU's name can be another CCU's live
+		// topic, and clearing that would blank a value in use.
+		CentralNames:       configuredCentralNames(cfg),
 		RawEnabled:         cfg.North.MQTT.RawEnabled,
 		HADiscoveryEnabled: cfg.North.MQTT.DiscoveryEnabled,
 		SubDevicesEnabled:  cfg.North.MQTT.SubDevicesEnabled,

@@ -36,6 +36,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // centralScopedValuesCache returns deps.ValuesCache when the filter
@@ -466,10 +467,10 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		if runner != nil {
 			ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
 		}
-		cbHandlers.SetHotplugIngestor(newHotplugIngestor(
+		unit.SetDeviceIngestFn(newHotplugIngestor(
 			unit, pipeline, writer, runner, backendsByInterface.operations, ddLoader, logger,
 		))
-		addCloser(func() { cbHandlers.SetHotplugIngestor(nil) })
+		addCloser(func() { unit.SetDeviceIngestFn(nil) })
 	}
 
 	// Late-binding handlers: resolve the primary client/backend at call time.
@@ -839,7 +840,7 @@ func wireInterface(
 	}
 
 	// Register the backend so REST / MQTT command paths can dispatch.
-	writer.Register(cc.Name, wireID, backend)
+	writer.Register(cc.Name, hmtypes.ParseWireInterfaceID(wireID), backend)
 
 	// Also expose the backend through the per-central registry so the
 	// CONFIG_PENDING hook can resolve it at event-fire time. The hook
@@ -1108,7 +1109,7 @@ func wireInterface(
 			if len(deviceAddrs) > 0 {
 				//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx (60s timeout)
 				unit.Devices.ScheduleParamsetConsistencyCheck(
-					context.Background(), iface, hmenum.Interface(wireID), deviceAddrs, backend,
+					context.Background(), iface, hmtypes.ParseWireInterfaceID(wireID), deviceAddrs, backend,
 					func(inconsistencies []coordinators.ParamsetInconsistency) {
 						for _, inc := range inconsistencies {
 							logger.Warn("wire.paramset_inconsistency",
@@ -1305,7 +1306,7 @@ ingestLoop:
 			poller.Close()
 		}
 		deinitOnShutdown(backend, callbackURL, centralName, deinitID, logger)
-		writer.Deregister(centralName, ifaceID)
+		writer.Deregister(centralName, hmtypes.ParseWireInterfaceID(ifaceID))
 		if unit.Clients != nil {
 			unit.Clients.Remove(ifaceID)
 		}

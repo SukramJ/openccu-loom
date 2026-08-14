@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,6 +93,48 @@ func TestBuildMQTT_BrokerPath_CleanupPassesGetASubscriber(t *testing.T) {
 	_, err := bridge.RunRetainCleanupOnce(ctx, 50*time.Millisecond)
 	if errors.Is(err, mqtt.ErrCleanupNeedsSubscriber) {
 		t.Fatal("bridge has no subscribe-capable client wired — retain cleanup is a silent no-op in production")
+	}
+}
+
+// TestBuildMQTT_RetainedSweepKnowsEveryConfiguredCentral pins that the
+// composition root hands the bridge the whole set of configured CCUs,
+// not just the default one.
+//
+// The retained sweep only clears a topic that no configured central
+// publishes to, so a bridge that knows one CCU out of three leaves the
+// other two's orphaned metric topics on the broker forever — and reports
+// the same "nothing to clear" as a correctly guarded sweep would. The
+// assertion is on the sweep's candidate set, and it names the SECOND
+// central, which can only appear once the full list travelled.
+func TestBuildMQTT_RetainedSweepKnowsEveryConfiguredCentral(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.MQTT.Enabled = true
+	cfg.North.MQTT.BrokerURL = "tcp://192.0.2.1:1883" // unreachable but valid URL
+	cfg.North.MQTT.ClientID = "openccu-loom-test"
+	cfg.North.MQTT.RawEnabled = true
+	cfg.North.MQTT.TopicBase = "openccu-loom"
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}, {Name: "Haus CCÜ"}}
+
+	got := buildMQTT(cfg, slog.Default(), nil, nil)
+	if got == nil {
+		t.Fatal("expected non-nil stack")
+	}
+	bridge := got.wiring.Bridge()
+	if bridge == nil {
+		t.Fatal("expected non-nil bridge")
+	}
+	want := "openccu-loom/" + strings.ToLower("Haus CCÜ") + "/system/health_score"
+	candidates := bridge.RetiredMetricTopics()
+	if !slices.Contains(candidates, want) {
+		t.Fatalf("retained-sweep candidates %v do not cover %q — the orphaned metric topics of every central but the first stay on the broker", candidates, want)
+	}
+	// The first central's name is unchanged by the escaping: its "old"
+	// spelling IS its live topic and must never be a candidate.
+	for _, topic := range candidates {
+		if strings.Contains(topic, "/ccu-01/") {
+			t.Fatalf("candidate %q is a live topic of ccu-01 — clearing it blanks a value in use", topic)
+		}
 	}
 }
 

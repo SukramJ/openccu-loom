@@ -18,21 +18,21 @@ import (
 // the fan-out worker that publishes a central the moment its readiness-gated
 // bring-up completes (PublishCentralSnapshot).
 //
-// Both walk the same devices and record the OnChange subscriptions they wire
-// so Stop() can release them. Appending to that slice without the lock detach()
-// reads it under loses whole passes to the last writer's slice header: the
-// dropped subscriptions are never released, so their handlers keep publishing
-// into a torn-down bridge for the rest of the process lifetime. Under -race the
-// same window is a reported data race.
+// Both walk the same devices and wire the same callbacks, and both must end up
+// in the registry detach() reads under startMu. A pass whose bookkeeping is
+// lost leaves a handler publishing into a torn-down bridge for the rest of the
+// process lifetime; under -race the same window is a reported data race.
 //
-// The assertion is count-based rather than call-based: every subscription a
-// pass wires must still be there for Stop() to release.
+// The two assertions are the whole contract: every pass over the same objects
+// converges on ONE installed subscription (they are keyed by object identity —
+// see eventbridge_live_subs.go), and Stop() finds and releases it.
 func TestSnapshotPassesRecordEverySubscriptionUnderConcurrency(t *testing.T) {
 	t.Parallel()
 
 	reg, dev := registryWithDevice(t)
 	// An updatable device gets a firmware-state OnChange subscription wired on
-	// every snapshot pass — one recorded unsub per pass, deterministically.
+	// every snapshot pass — one subscription for the single device, no matter
+	// how many passes run.
 	dev.Firmware().Set(device.FirmwareInfo{Current: "1.0.0", Updatable: true})
 	dev.AttachUpdate(nil, nil)
 
@@ -45,8 +45,6 @@ func TestSnapshotPassesRecordEverySubscriptionUnderConcurrency(t *testing.T) {
 
 	eb := NewEventBridge(reg, nil, mqtt.NewWiring(bridge, nil))
 	eb.Start(context.Background())
-
-	before := eb.unsubCount()
 
 	const passes = 40
 	var wg sync.WaitGroup
@@ -62,22 +60,21 @@ func TestSnapshotPassesRecordEverySubscriptionUnderConcurrency(t *testing.T) {
 	})
 	wg.Wait()
 
-	// Each pass wires exactly one firmware subscription for the single device.
-	if got, want := eb.unsubCount()-before, 2*passes; got < want {
-		t.Fatalf("recorded %d subscriptions across %d snapshot passes, want %d — "+
-			"concurrent passes lost appends to an unsynchronised slice", got, 2*passes, want)
+	if got := eb.liveSubCount(); got != 1 {
+		t.Fatalf("%d subscriptions recorded across %d concurrent snapshot passes over one "+
+			"firmware tracker, want 1", got, 2*passes)
 	}
 
 	eb.Stop()
-	if got := eb.unsubCount(); got != 0 {
+	if got := eb.liveSubCount(); got != 0 {
 		t.Fatalf("Stop left %d subscriptions unreleased", got)
 	}
 }
 
 // TestSnapshotAfterStopReleasesItsOwnSubscriptions pins the second half of the
 // contract: a snapshot pass that finishes after the bridge was torn down must
-// release what it wired instead of recording it, otherwise it leaves handlers
-// publishing into a stopped bridge with nothing left to release them.
+// not leave a handler behind, otherwise it publishes into a stopped bridge
+// with nothing left to release it.
 func TestSnapshotAfterStopReleasesItsOwnSubscriptions(t *testing.T) {
 	t.Parallel()
 
@@ -98,15 +95,7 @@ func TestSnapshotAfterStopReleasesItsOwnSubscriptions(t *testing.T) {
 
 	eb.PublishInitialSnapshot(context.Background())
 
-	if got := eb.unsubCount(); got != 0 {
+	if got := eb.liveSubCount(); got != 0 {
 		t.Fatalf("post-Stop snapshot recorded %d subscriptions nobody will release", got)
 	}
-}
-
-// unsubCount reports how many subscriptions the bridge currently holds for
-// teardown. Test-only accessor: the slice is guarded by startMu.
-func (b *EventBridge) unsubCount() int {
-	b.startMu.Lock()
-	defer b.startMu.Unlock()
-	return len(b.unsubs)
 }

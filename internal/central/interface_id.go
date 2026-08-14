@@ -3,7 +3,10 @@
 
 package central
 
-import "github.com/SukramJ/openccu-loom/pkg/hmenum"
+import (
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+)
 
 // WireInterfaceID returns the canonical, host-independent interface
 // identifier used EVERYWHERE inside the daemon: on
@@ -23,15 +26,13 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 // An empty centralName yields the bare interface (used by tests and
 // tooling).
 //
-// The rule lives in the central domain rather than in the southbound
-// adapter because domains above the adapter need it too: anything that
-// receives a bare CCU interface name (the connectivity probe reports
-// "BidCos-RF") and has to reconcile it with wire-keyed state must spell
-// the id the same way. A second, private join would be the same rule
-// written twice, and the copy that drifts is silent.
+// The join itself lives in [hmtypes.NewWireInterfaceID], next to the type the
+// per-central registries are keyed by: a second, private join would be the same
+// rule written twice, and the copy that drifts is silent. This function stays
+// because the plain string form is what device.Device.InterfaceID, the backend
+// registry, ping/pong and the MQTT topics carry — reach for
+// [hmtypes.NewWireInterfaceID] directly wherever a registry key is wanted, so
+// the compiler keeps the two identifier spaces apart.
 func WireInterfaceID(centralName string, iface hmenum.Interface) string {
-	if centralName == "" {
-		return string(iface)
-	}
-	return centralName + "-" + string(iface)
+	return hmtypes.NewWireInterfaceID(centralName, iface).String()
 }

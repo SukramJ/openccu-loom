@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // SearchWiredDevices triggers a wired-bus scan on the given interface of
@@ -30,7 +31,7 @@ func (a *DeviceAdminDomain) SearchWiredDevices(ctx context.Context, centralName,
 	if err != nil {
 		return 0, err
 	}
-	backend, ok := a.writer.Backend(unit.Name(), WireInterfaceID(unit.Name(), iface))
+	backend, ok := a.writer.Backend(unit.Name(), hmtypes.NewWireInterfaceID(unit.Name(), iface))
 	if !ok {
 		return 0, fmt.Errorf("%w: %s/%s", hmerr.ErrUnknownCentral, unit.Name(), interfaceID)
 	}

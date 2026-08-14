@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // SetChannelTeam assigns a channel to a team channel via the CCU's
@@ -29,7 +29,7 @@ func (a *DeviceAdminDomain) SetChannelTeam(ctx context.Context, deviceAddr strin
 	if !dev.Interface.SupportsTeams() {
 		return fmt.Errorf("set team: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 	}
-	backend, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+	backend, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, unit.Name(), dev.InterfaceID)
 	}
@@ -55,11 +55,11 @@ func (a *DeviceAdminDomain) TeamCandidates(ctx context.Context, deviceAddr strin
 	// both write under it. Looking the target channel up with the bare
 	// interface misses on every named central, which returned an empty
 	// candidate list with HTTP 200 and made the team unassignable from the UI.
-	target, ok := unit.DescRegistry.Get(hmenum.Interface(dev.InterfaceID), channelAddress)
+	target, ok := unit.DescRegistry.Get(hmtypes.ParseWireInterfaceID(dev.InterfaceID), channelAddress)
 	if !ok || target.TeamTag == "" {
 		return []hmapi.TeamCandidate{}, nil
 	}
-	backend, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+	backend, ok := a.writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 	if !ok {
 		return nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, unit.Name(), dev.InterfaceID)
 	}

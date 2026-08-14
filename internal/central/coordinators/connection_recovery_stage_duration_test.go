@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -305,7 +306,7 @@ func newTestDevCoord(t *testing.T) *DeviceCoordinator {
 	return NewDeviceCoordinator("c1", bus, devReg, descReg, paramReg, nil)
 }
 
-func seedDeviceDescs(t *testing.T, coord *DeviceCoordinator, iface hmenum.Interface, descs []hmproto.DeviceDescription) {
+func seedDeviceDescs(t *testing.T, coord *DeviceCoordinator, iface hmtypes.WireInterfaceID, descs []hmproto.DeviceDescription) {
 	t.Helper()
 	coord.HandleNewDevices(context.Background(), iface, descs)
 }
@@ -315,10 +316,10 @@ func seedDeviceDescs(t *testing.T, coord *DeviceCoordinator, iface hmenum.Interf
 func TestGetVirtualRemotesEmpty(t *testing.T) {
 	t.Parallel()
 	coord := newTestDevCoord(t)
-	if got := coord.GetVirtualRemoteAddresses(hmenum.InterfaceBidCosRF); len(got) != 0 {
+	if got := coord.GetVirtualRemoteAddresses(wireKey(hmenum.InterfaceBidCosRF)); len(got) != 0 {
 		t.Fatalf("GetVirtualRemoteAddresses: expected empty, got %v", got)
 	}
-	if got := coord.GetVirtualRemotes(hmenum.InterfaceBidCosRF); len(got) != 0 {
+	if got := coord.GetVirtualRemotes(wireKey(hmenum.InterfaceBidCosRF)); len(got) != 0 {
 		t.Fatalf("GetVirtualRemotes: expected empty, got %v", got)
 	}
 }
@@ -329,7 +330,7 @@ func TestGetVirtualRemotesEmpty(t *testing.T) {
 func TestGetVirtualRemoteAddressesReturnsVirtualTypes(t *testing.T) {
 	t.Parallel()
 	coord := newTestDevCoord(t)
-	iface := hmenum.InterfaceBidCosRF
+	iface := wireKey(hmenum.InterfaceBidCosRF)
 	descs := []hmproto.DeviceDescription{
 		{Address: "VRT0001", Type: "HM-RCV-50", Children: []string{"VRT0001:1"}},
 		{Address: "VRT0001:1", Type: "HM-RCV-50", Parent: "VRT0001"},
@@ -348,7 +349,7 @@ func TestGetVirtualRemoteAddressesReturnsVirtualTypes(t *testing.T) {
 func TestGetVirtualRemotesReturnsVirtualTypes(t *testing.T) {
 	t.Parallel()
 	coord := newTestDevCoord(t)
-	iface := hmenum.InterfaceBidCosRF
+	iface := wireKey(hmenum.InterfaceBidCosRF)
 	descs := []hmproto.DeviceDescription{
 		{Address: "VRT0001", Type: "HM-RCV-50", Children: []string{"VRT0001:1"}},
 		{Address: "VRT0001:1", Type: "HM-RCV-50", Parent: "VRT0001"},
@@ -375,7 +376,7 @@ func TestGetVirtualRemotesReturnsVirtualTypes(t *testing.T) {
 func TestIdentifyChannelFindsMatch(t *testing.T) {
 	t.Parallel()
 	coord := newTestDevCoord(t)
-	iface := hmenum.InterfaceBidCosRF
+	iface := wireKey(hmenum.InterfaceBidCosRF)
 	descs := []hmproto.DeviceDescription{
 		{Address: "ABC0001234", Type: "HM-ES-TX-WM", Children: []string{"ABC0001234:1"}},
 		{Address: "ABC0001234:1", Type: "POWERMETER_SUBMITTER", Parent: "ABC0001234"},
@@ -394,7 +395,7 @@ func TestIdentifyChannelFindsMatch(t *testing.T) {
 func TestIdentifyChannelNoMatchReturnsNotFound(t *testing.T) {
 	t.Parallel()
 	coord := newTestDevCoord(t)
-	_, found := coord.IdentifyChannel(hmenum.InterfaceBidCosRF, "NOTHERE")
+	_, found := coord.IdentifyChannel(wireKey(hmenum.InterfaceBidCosRF), "NOTHERE")
 	if found {
 		t.Fatal("expected not found")
 	}
@@ -404,7 +405,7 @@ func TestIdentifyChannelNoMatchReturnsNotFound(t *testing.T) {
 func TestIdentifyChannelEmptyTextReturnsFalse(t *testing.T) {
 	t.Parallel()
 	coord := newTestDevCoord(t)
-	_, found := coord.IdentifyChannel(hmenum.InterfaceBidCosRF, "")
+	_, found := coord.IdentifyChannel(wireKey(hmenum.InterfaceBidCosRF), "")
 	if found {
 		t.Fatal("empty text must return not found")
 	}

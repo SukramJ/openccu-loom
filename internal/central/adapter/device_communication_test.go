@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // comTestRecordingOperations wraps fakeOperations (defined in
@@ -93,7 +94,7 @@ func TestTestDeviceCommunicationUnsupportedInterfaceRejectedBeforeWireCall(t *te
 
 			fake := &comTestRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
 			w := client.NewValueWriter()
-			w.Register("ccu-01", tc.interfaceID, fake)
+			w.Register("ccu-01", hmtypes.ParseWireInterfaceID(tc.interfaceID), fake)
 
 			domain := NewDeviceAdminDomain(reg, w)
 			_, err := domain.TestDeviceCommunication(context.Background(), "ABC0002")

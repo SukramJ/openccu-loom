@@ -2218,6 +2218,7 @@ export interface paths {
          *     - `hub.install_mode_changed` → [InstallModeChangedPayload](#/components/schemas/InstallModeChangedPayload)
          *     - `device.created` → [DeviceCreatedPayload](#/components/schemas/DeviceCreatedPayload)
          *     - `device.removed` → [DeviceRemovedPayload](#/components/schemas/DeviceRemovedPayload)
+         *     - `device.availability_changed` → [DeviceAvailabilityChangedPayload](#/components/schemas/DeviceAvailabilityChangedPayload)
          *     - `matter.*` broadcasts: see `wsapi.json` (payload schemas TBD).
          */
         get: {
@@ -2611,6 +2612,12 @@ export interface paths {
          *     was removed on the CCU — e.g. the virtual backing device of a
          *     heating group), the response is a 404 and the daemon drops the
          *     stale entry from its inbox view.
+         *
+         *     An entry flagged `pending_creation` is additionally held back by
+         *     this daemon (`central.behavior.delay_new_device_creation`);
+         *     accepting it hands the parked descriptions to the same
+         *     materialiser a hot-plugged device runs through, so the device
+         *     arrives with its channels, data points and values.
          */
         post: operations["acceptInboxDevice"];
         delete?: never;
@@ -4672,6 +4679,10 @@ export interface paths {
          *     the bridge kept reporting is a controller that went away without
          *     closing — the shape that otherwise shows up only as entities going
          *     stale in the ecosystem.
+         *
+         *     The `occupancy` block answers the other half: how much of the
+         *     session-id space the listed sessions leave free, including the ids
+         *     held by handshakes that never became sessions.
          *
          *     No key material is exposed.
          */
@@ -7684,8 +7695,29 @@ export interface components {
             /** @description Seconds since last_peer_activity — the controller-liveness signal */
             peer_idle_seconds: number;
         };
+        /**
+         * @description Usage of the bridge's 16-bit session-id space.
+         *
+         *     `reserved` is the field the session list cannot supply: a CASE
+         *     handshake announces its session id in Sigma2 one round trip before
+         *     the session exists, and an id staked by a handshake that never
+         *     completes holds its slot for twenty minutes without appearing as a
+         *     session. A space filling up with those looks like a quiet bridge
+         *     from every other view, until the next controller is refused.
+         */
+        MatterSessionOccupancy: {
+            /** @description Sessions with key material installed */
+            live: number;
+            /** @description Ids staked by a handshake that has not completed */
+            reserved: number;
+            /** @description Size of the allocator's id space (ids 1..0xFFFE) */
+            capacity: number;
+            /** @description Ids held by neither a live session nor a staked handshake */
+            free: number;
+        };
         MatterSessionList: {
             sessions: components["schemas"]["MatterSession"][];
+            occupancy: components["schemas"]["MatterSessionOccupancy"];
         };
         MatterSetupPayload: {
             discriminator: number;
@@ -8636,6 +8668,22 @@ export interface components {
             device_address: string;
         };
         /**
+         * @description Payload of a `device.availability_changed` broadcast. Topic
+         *     pattern `device.{address}.lifecycle` — same topic as
+         *     `device.created`; subscribers route by the envelope `type`
+         *     field. Fires when a device's effective reachability flips,
+         *     either because its interface lost the connection to the CCU or
+         *     because the device itself reported UNREACH / STICKY_UNREACH.
+         *     `available` carries the post-transition state and matches the
+         *     `available` field of the device's REST summary.
+         */
+        DeviceAvailabilityChangedPayload: {
+            central: string;
+            interface_id: string;
+            device_address: string;
+            available: boolean;
+        };
+        /**
          * @description Payload of a `datapoint.optimistic_rolled_back` broadcast. Rides
          *     the same `device.{address}.channels.{channel}.data_points.{parameter}`
          *     topic as `datapoint.value_changed`; subscribers route by the
@@ -9447,6 +9495,15 @@ export interface components {
             manufacturer?: string;
             /** Format: int64 */
             first_seen?: number;
+            /**
+             * @description True when the daemon itself is holding the device back:
+             *     with `central.behavior.delay_new_device_creation` enabled the
+             *     announced descriptions are parked until an operator accepts
+             *     them, so the device exists on the CCU but has no data points
+             *     here yet. Accepting it (POST /devices/{addr}/accept) also
+             *     materialises it.
+             */
+            pending_creation?: boolean;
         };
         /**
          * @description One already-paired device a new (inbox) device may replace,

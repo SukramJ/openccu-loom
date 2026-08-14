@@ -35,13 +35,12 @@ func hubEventsOnTopic(h *Hub, topic string) []Event {
 	return h.Replay(0, func(got string) bool { return got == topic }).Events
 }
 
-// TestHubEventsSubscriberStartCentralAttachesRuntimeAdoptedCentral is the
-// regression proof for a central adopted after boot: [HubEventsSubscriber.Start]
-// only walks the registry as it stands at boot time, so a later arrival gets
-// no subscriptions at all and its hub singletons never reach a WebSocket
-// client. Attaching it explicitly via StartCentral must produce the same
-// broadcast a boot-time central produces.
-func TestHubEventsSubscriberStartCentralAttachesRuntimeAdoptedCentral(t *testing.T) {
+// TestHubEventsSubscriberAttachesACentralRegisteredAfterStart is the
+// regression proof for a central adopted after boot: Start used to walk the
+// registry as it stood at boot time, so a later arrival got no subscriptions
+// at all and its hub singletons never reached a WebSocket client. Joining the
+// registry must now produce the same broadcast a boot-time central produces.
+func TestHubEventsSubscriberAttachesACentralRegisteredAfterStart(t *testing.T) {
 	t.Parallel()
 
 	h := NewHub()
@@ -52,21 +51,6 @@ func TestHubEventsSubscriberStartCentralAttachesRuntimeAdoptedCentral(t *testing
 	t.Cleanup(sub.Stop)
 
 	adopted := registerHubEventsCentral(t, reg, "adopted")
-
-	// Registration alone attaches nothing: this is the defect the explicit
-	// per-central wiring exists to fix.
-	adopted.HubModel.ServiceMessages.Replace([]hub.ServiceMessage{
-		{ID: "SM1", Name: "Low battery"},
-	})
-	if got := hubEventsOnTopic(h, ServiceMessagesTopic("adopted")); len(got) != 0 {
-		t.Fatalf("broadcasts before StartCentral = %d, want 0 (registry membership must not subscribe by itself)", len(got))
-	}
-
-	unwire := sub.StartCentral(adopted)
-	if unwire == nil {
-		t.Fatal("StartCentral returned a nil unwire for a central with a hub model and an event bus")
-	}
-	t.Cleanup(unwire)
 
 	adopted.HubModel.ServiceMessages.Replace([]hub.ServiceMessage{
 		{ID: "SM1", Name: "Low battery"},
@@ -107,11 +91,6 @@ func TestHubEventsSubscriberStartCentralAttachesEventBusSubscriptions(t *testing
 	t.Cleanup(sub.Stop)
 
 	adopted := registerHubEventsCentral(t, reg, "adopted")
-	unwire := sub.StartCentral(adopted)
-	if unwire == nil {
-		t.Fatal("StartCentral returned a nil unwire")
-	}
-	t.Cleanup(unwire)
 
 	events.Publish(adopted.EventBus, hmevent.ConnectivityChangedEvent{
 		CentralName: "adopted",
@@ -132,11 +111,11 @@ func TestHubEventsSubscriberStartCentralAttachesEventBusSubscriptions(t *testing
 	}
 }
 
-// TestHubEventsSubscriberStartCentralUnwireDetaches verifies the returned
-// unwire really detaches: the live-remove path relies on it, and a
-// subscription that outlives its central would keep broadcasting for a
-// central no client can resolve any more.
-func TestHubEventsSubscriberStartCentralUnwireDetaches(t *testing.T) {
+// TestHubEventsSubscriberUnregisterDetaches verifies that leaving the registry
+// really detaches: the live-remove path relies on it, and a subscription that
+// outlives its central would keep broadcasting for a central no client can
+// resolve any more.
+func TestHubEventsSubscriberUnregisterDetaches(t *testing.T) {
 	t.Parallel()
 
 	h := NewHub()
@@ -147,17 +126,15 @@ func TestHubEventsSubscriberStartCentralUnwireDetaches(t *testing.T) {
 	t.Cleanup(sub.Stop)
 
 	adopted := registerHubEventsCentral(t, reg, "adopted")
-	unwire := sub.StartCentral(adopted)
-	if unwire == nil {
-		t.Fatal("StartCentral returned a nil unwire")
-	}
 
 	adopted.HubModel.Messages.Replace([]hub.AlarmMessage{{ID: "1", Name: "Alarm A"}})
 	if got := hubEventsOnTopic(h, AlarmMessagesTopic("adopted")); len(got) != 1 {
 		t.Fatalf("broadcasts while wired = %d, want 1", len(got))
 	}
 
-	unwire()
+	if !reg.Unregister("adopted") {
+		t.Fatal("Unregister reported the central was not present")
+	}
 
 	adopted.HubModel.Messages.Replace([]hub.AlarmMessage{
 		{ID: "1", Name: "Alarm A"},
@@ -170,16 +147,16 @@ func TestHubEventsSubscriberStartCentralUnwireDetaches(t *testing.T) {
 	})
 
 	if got := hubEventsOnTopic(h, AlarmMessagesTopic("adopted")); len(got) != 1 {
-		t.Errorf("hub-model broadcasts after unwire = %d, want 1 (no further broadcast)", len(got))
+		t.Errorf("hub-model broadcasts after Unregister = %d, want 1 (no further broadcast)", len(got))
 	}
 	if got := hubEventsOnTopic(h, ConnectivityTopic("adopted", "HmIP-RF")); len(got) != 0 {
-		t.Errorf("event-bus broadcasts after unwire = %d, want 0", len(got))
+		t.Errorf("event-bus broadcasts after Unregister = %d, want 0", len(got))
 	}
 }
 
 // TestHubEventsSubscriberStartCentralNilUnitIsNoop pins nil-safety: the
-// adopt path calls the hook unconditionally, so a nil unit must yield a nil
-// unwire instead of panicking.
+// registry runs the observer for whatever it is handed, so a nil unit must
+// yield a nil unwire instead of panicking.
 func TestHubEventsSubscriberStartCentralNilUnitIsNoop(t *testing.T) {
 	t.Parallel()
 
@@ -213,7 +190,10 @@ func TestHubEventsSubscriberStartCentralWithoutEventBusWiresHubModel(t *testing.
 	sub.Start()
 	t.Cleanup(sub.Stop)
 
-	busless := registerHubEventsCentral(t, reg, "busless")
+	busless, err := central.New(central.Config{Name: "busless"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
 	busless.EventBus = nil
 
 	unwire := sub.StartCentral(busless)
@@ -239,11 +219,11 @@ func TestHubEventsSubscriberStartCentralWithoutEventBusWiresHubModel(t *testing.
 	}
 }
 
-// TestHubEventsSubscriberStopAfterPerCentralUnwireIsSafe covers the teardown
-// interleaving the adopt path creates: a per-central unwire may already have
-// run when the process-wide Stop drains the boot-time subscriptions. Stop
-// must neither panic nor detach a foreign consumer of the same hub model.
-func TestHubEventsSubscriberStopAfterPerCentralUnwireIsSafe(t *testing.T) {
+// TestHubEventsSubscriberStopAfterUnregisterIsSafe covers the teardown
+// interleaving the adopt path creates: a central may already have left the
+// registry when the process-wide Stop runs. Stop must neither panic nor
+// detach a foreign consumer of the same hub model.
+func TestHubEventsSubscriberStopAfterUnregisterIsSafe(t *testing.T) {
 	t.Parallel()
 
 	h := NewHub()
@@ -253,10 +233,6 @@ func TestHubEventsSubscriberStopAfterPerCentralUnwireIsSafe(t *testing.T) {
 	sub.Start()
 
 	adopted := registerHubEventsCentral(t, reg, "adopted")
-	unwire := sub.StartCentral(adopted)
-	if unwire == nil {
-		t.Fatal("StartCentral returned a nil unwire")
-	}
 
 	// A consumer registered after the subscriber's own hooks: an unwire that
 	// dropped the wrong slot would silently take this one down with it.
@@ -264,9 +240,9 @@ func TestHubEventsSubscriberStopAfterPerCentralUnwireIsSafe(t *testing.T) {
 	stopForeign := adopted.HubModel.Inbox.OnUpdate(func([]hub.InboxDevice) { foreign++ })
 	t.Cleanup(stopForeign)
 
-	unwire()
+	reg.Unregister("adopted")
 	sub.Stop()
-	sub.Stop() // idempotent: the adopt path may unwire and stop in either order
+	sub.Stop() // idempotent: remove and stop may run in either order
 
 	adopted.HubModel.Inbox.Replace([]hub.InboxDevice{{Address: "ADDR1", Name: "New device"}})
 	boot.HubModel.Inbox.Replace([]hub.InboxDevice{{Address: "ADDR2", Name: "Another device"}})
@@ -275,7 +251,7 @@ func TestHubEventsSubscriberStopAfterPerCentralUnwireIsSafe(t *testing.T) {
 		t.Errorf("foreign hub-model consumer fired %d times, want 1 (Stop must not detach it)", foreign)
 	}
 	if got := hubEventsOnTopic(h, InboxTopic("adopted")); len(got) != 0 {
-		t.Errorf("broadcasts for the unwired central = %d, want 0", len(got))
+		t.Errorf("broadcasts for the unregistered central = %d, want 0", len(got))
 	}
 	if got := hubEventsOnTopic(h, InboxTopic("home")); len(got) != 0 {
 		t.Errorf("broadcasts for the boot central after Stop = %d, want 0", len(got))

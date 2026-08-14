@@ -818,13 +818,17 @@ func (w *wsHubQuery) InboxDevices(_ context.Context) ([]map[string]any, error) {
 	}
 	entries := h.Inbox.List()
 	out := make([]map[string]any, 0, len(entries))
-	for _, e := range entries {
+	for i := range entries {
+		e := &entries[i]
 		out = append(out, map[string]any{
 			"address":      e.Address,
 			"model":        e.Model,
 			"serial":       e.Serial,
 			"manufacturer": e.Manufacturer,
 			"first_seen":   e.FirstSeen,
+			// pending_creation marks a device this daemon parked because
+			// delay_new_device_creation is on; accepting it materialises it.
+			"pending_creation": e.PendingCreation,
 		})
 	}
 	return out, nil
@@ -937,7 +941,7 @@ func (w *wsDeviceQuery) GetParamsetDescription(ctx context.Context, key configui
 		if !ok {
 			continue
 		}
-		backend, ok := w.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := w.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return nil, fmt.Errorf("ws: no backend for %s/%s", u.Name(), dev.InterfaceID)
 		}

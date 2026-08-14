@@ -89,6 +89,19 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeDeviceCreated)"},
 		WireValue: string(hmevent.EventTypeDeviceCreated),
 	},
+	// The availability frame has no hmevent.EventType of its own: the
+	// domain carries every device-lifecycle transition on one event with
+	// a sub-type discriminator, so the wire identity is a ws-package-local
+	// constant pinned via Tokens.
+	"device.availability_changed": {
+		Files: []string{"internal/north/rest/ws/device_lifecycle.go"},
+		Tokens: []string{
+			"hub.Publish(Event{",
+			"hmenum.DeviceLifecycleSubtypeAvailabilityChanged",
+			`broadcastDeviceAvailabilityChanged = "device.availability_changed"`,
+		},
+		WireValue: "device.availability_changed",
+	},
 	"device.removed": {
 		Files:     []string{"internal/north/rest/ws/device_lifecycle.go"},
 		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeDeviceRemoved)"},

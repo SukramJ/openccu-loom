@@ -221,7 +221,7 @@ func stampPipelineNaming(t *testing.T, dev *device.Device, number int) {
 	}
 	init.SetNameData(device.BuildDataPointName(ch, frostProtectionParameter, ""))
 	init.SetPathData(naming.NewDataPointPathData(
-		hmenum.InterfaceHmIPRF, ch.Address, ch.Number, naming.BucketValues, frostProtectionParameter,
+		"", hmtypes.NewWireInterfaceID("", hmenum.InterfaceHmIPRF), ch.Address, ch.Number, naming.BucketValues, frostProtectionParameter,
 	))
 	init.SetIsInMultipleChannels(ch.IsParameterInMultipleChannels(frostProtectionParameter))
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 func discardTestLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
@@ -159,10 +160,10 @@ func TestEvictModelRemovesDevicesDescriptionsAndParamsets(t *testing.T) {
 	d.AddChannel("AAAA0001:1", 1, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	unit.ModelRegistry.Put(d)
 	unit.DeviceRegistry.Put(registry.DeviceEntry{
-		Interface: hmenum.Interface(wireID), Address: "AAAA0001", Model: "HmIP-STH",
+		Interface: hmtypes.ParseWireInterfaceID(wireID), Address: "AAAA0001", Model: "HmIP-STH",
 	})
-	unit.DescRegistry.Put(hmenum.Interface(wireID), hmproto.DeviceDescription{Address: "AAAA0001"})
-	unit.ParamsetReg.Add(hmenum.Interface(wireID), "AAAA0001:1", hmenum.ParamsetKeyValues,
+	unit.DescRegistry.Put(hmtypes.ParseWireInterfaceID(wireID), hmproto.DeviceDescription{Address: "AAAA0001"})
+	unit.ParamsetReg.Add(hmtypes.ParseWireInterfaceID(wireID), "AAAA0001:1", hmenum.ParamsetKeyValues,
 		hmproto.Paramset{"STATE": {Type: hmenum.ParameterTypeBool}}, "HmIP-STH")
 
 	if unit.ModelRegistry.Len() == 0 || unit.DescRegistry.Len() == 0 ||

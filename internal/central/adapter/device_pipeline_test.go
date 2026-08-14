@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -62,7 +63,7 @@ func TestDevicePipelineIngestsDeviceAndChannels(t *testing.T) {
 	if !d.Updatable {
 		t.Fatal("updatable flag not propagated")
 	}
-	if entry, ok := c.DeviceRegistry.Get(hmenum.InterfaceHmIPRF, "0001ABCD"); !ok || entry.Model != "HmIP-STH" {
+	if entry, ok := c.DeviceRegistry.Get(wireHmIPRF, "0001ABCD"); !ok || entry.Model != "HmIP-STH" {
 		t.Fatalf("registry entry=%+v ok=%v", entry, ok)
 	}
 }
@@ -863,7 +864,7 @@ func TestHydrateStoresParamsetDescriptionsInRegistry(t *testing.T) {
 	}
 	found := false
 	for _, ch := range d.Channels() {
-		descs := c.ParamsetReg.GetChannelParamsetDescriptions(hmenum.InterfaceHmIPRF, ch.Address)
+		descs := c.ParamsetReg.GetChannelParamsetDescriptions(wireHmIPRF, ch.Address)
 		if ps, ok := descs[hmenum.ParamsetKeyValues]; ok {
 			if _, ok := ps["STATE"]; ok {
 				found = true
@@ -1123,5 +1124,141 @@ func TestDevicePipeline_RestoreValuesFromCache_SkipsEdgeTriggerParameters(t *tes
 		if _, observed := reader.RawValue(); !observed {
 			t.Error("STATE was not restored — the exclusion must be scoped to edge-trigger parameters")
 		}
+	}
+}
+
+// TestDevicePipelineKeysRegistriesByTheStampedWireID pins the agreement
+// between the two things the ingest pipeline produces for one device: the
+// InterfaceID it stamps on the model, and the key it writes its registry rows
+// under. Production hands the pipeline the canonical `<central>-<iface>` wire
+// id — the only form the CCU callback path can produce — so a row written
+// under the bare interface name is one no consumer ever resolves: the device
+// appears twice after a hot-plug, the firmware refresh finds no description,
+// the team-candidate list comes back empty.
+//
+// The named central is the whole point. With an unnamed one the two forms are
+// the same string and the test would pass against either producer.
+func TestDevicePipelineKeysRegistriesByTheStampedWireID(t *testing.T) {
+	t.Parallel()
+
+	c, _ := central.New(central.Config{Name: "ccu-wirekey"})
+	wireID := WireInterfaceID(c.Name(), hmenum.InterfaceHmIPRF)
+	p := NewDevicePipeline(c)
+
+	b := backendWithParams("AABBCC90", "HmIP-STH", "SOME_CHANNEL", map[string]hmproto.ParameterData{
+		"STATE": {
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	})
+	if err := p.IngestFromBackend(
+		context.Background(), wireID, hmenum.InterfaceHmIPRF,
+		b, &fakeWriter{}, nil, slog.Default(),
+	); err != nil {
+		t.Fatalf("IngestFromBackend: %v", err)
+	}
+
+	dev, ok := c.ModelRegistry.Get("AABBCC90")
+	if !ok {
+		t.Fatal("device missing from the model registry")
+	}
+	if dev.InterfaceID != wireID {
+		t.Fatalf("device InterfaceID=%q, want the wire id %q", dev.InterfaceID, wireID)
+	}
+
+	// Resolve the way every consumer does: through the id the device carries.
+	key := hmtypes.ParseWireInterfaceID(dev.InterfaceID)
+	if entry, ok := c.DeviceRegistry.Get(key, "AABBCC90"); !ok || entry.Model != "HmIP-STH" {
+		t.Fatalf("DeviceRegistry.Get(%q)=%+v ok=%v; the pipeline keyed the entry "+
+			"under something no consumer looks up", key, entry, ok)
+	}
+	foundParamset := false
+	for _, ch := range dev.Channels() {
+		if _, ok := c.ParamsetReg.Get(key, ch.Address, hmenum.ParamsetKeyValues); ok {
+			foundParamset = true
+		}
+	}
+	if !foundParamset {
+		t.Fatalf("ParamsetReg holds no VALUES description under %q for any hydrated channel", key)
+	}
+
+	// And nothing under the bare interface: that key space has no reader.
+	bare := hmtypes.WireInterfaceID(hmenum.InterfaceHmIPRF)
+	if _, ok := c.DeviceRegistry.Get(bare, "AABBCC90"); ok {
+		t.Fatalf("DeviceRegistry also holds an entry under the bare interface %q — "+
+			"the same device is registered twice", bare)
+	}
+}
+
+// TestHydrateStampsVirtDevPathRootsOnANamedCentral pins the `virtdev/` path
+// roots of a virtual-remote data point through the real hydration path, on a
+// central that has a name — which every configured central does.
+//
+// The interface reaches the path-data constructor as the canonical
+// `<central>-<interface>` wire id, so a root selection that compared it
+// against the bare `VirtualDevices` constant never matched in a running
+// daemon; it only matched in unit tests that handed the constant in directly.
+// Asserting through IngestFromBackend is what makes the difference visible:
+// the pipeline decides which id it passes, not the test.
+func TestHydrateStampsVirtDevPathRootsOnANamedCentral(t *testing.T) {
+	t.Parallel()
+
+	const centralName = "ccu-virt"
+	c, _ := central.New(central.Config{Name: centralName})
+	p := NewDevicePipeline(c).WithVisibility(newProductionVisibilityGate())
+	wireID := WireInterfaceID(centralName, hmenum.InterfaceVirtualDevices)
+
+	b := &paramsetFakeOps{
+		listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
+			return []hmproto.DeviceDescription{
+				{Address: "INT0000001", Type: "HM-RCV-50"},
+				{Address: "INT0000001:1", Parent: "INT0000001", Type: "VIRTUAL_KEY"},
+			}, nil
+		},
+		getParamsetDescriptionFn: func(_ context.Context, _ string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			if key != hmenum.ParamsetKeyValues {
+				return nil, nil
+			}
+			return map[string]hmproto.ParameterData{
+				"PRESS_SHORT": {
+					Type:       hmenum.ParameterTypeAction,
+					Operations: hmenum.OperationsWrite | hmenum.OperationsEvent,
+				},
+			}, nil
+		},
+		getParamsetFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+			return map[string]any{}, nil
+		},
+	}
+
+	if err := p.IngestFromBackend(
+		context.Background(), wireID, hmenum.InterfaceVirtualDevices,
+		b, &fakeWriter{}, nil, slog.Default(),
+	); err != nil {
+		t.Fatalf("IngestFromBackend: %v", err)
+	}
+
+	dev, ok := c.ModelRegistry.Get("INT0000001")
+	if !ok {
+		t.Fatal("virtual device missing from the model registry")
+	}
+	ch := dev.Channel("INT0000001:1")
+	if ch == nil {
+		t.Fatal("channel INT0000001:1 not hydrated")
+	}
+	dp := ch.Parameter("PRESS_SHORT")
+	if dp == nil {
+		t.Fatal("PRESS_SHORT data point not hydrated")
+	}
+	pather, ok := dp.(interface{ PathData() naming.PathData })
+	if !ok {
+		t.Fatalf("%T carries no path data — the pipeline could not stamp it either", dp)
+	}
+	pd := pather.PathData()
+	if pd.SetPath != "virtdev/set/INT0000001:1/1/values/PRESS_SHORT" {
+		t.Errorf("SetPath = %q, want the virtdev root", pd.SetPath)
+	}
+	if pd.StatePath != "virtdev/status/INT0000001:1/1/values/PRESS_SHORT" {
+		t.Errorf("StatePath = %q, want the virtdev root", pd.StatePath)
 	}
 }

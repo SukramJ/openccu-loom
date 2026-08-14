@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // searchRecordingOperations wraps fakeOperations (defined in
@@ -44,7 +45,7 @@ func TestSearchWiredDevicesBidCosWiredCallsBackend(t *testing.T) {
 
 	fake := &searchRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}, found: 3}
 	w := client.NewValueWriter()
-	w.Register(unit.Name(), WireInterfaceID(unit.Name(), hmenum.InterfaceBidCosWired), fake)
+	w.Register(unit.Name(), hmtypes.NewWireInterfaceID(unit.Name(), hmenum.InterfaceBidCosWired), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	count, err := domain.SearchWiredDevices(context.Background(), "", "BidCos-Wired")
@@ -69,7 +70,7 @@ func TestSearchWiredDevicesNonWiredInterfaceRejectedBeforeWireCall(t *testing.T)
 
 	fake := &searchRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}, found: 9}
 	w := client.NewValueWriter()
-	w.Register(unit.Name(), WireInterfaceID(unit.Name(), hmenum.InterfaceBidCosRF), fake)
+	w.Register(unit.Name(), hmtypes.NewWireInterfaceID(unit.Name(), hmenum.InterfaceBidCosRF), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	_, err := domain.SearchWiredDevices(context.Background(), "", "BidCos-RF")
@@ -134,7 +135,7 @@ func TestSearchWiredDevicesBackendErrorPropagates(t *testing.T) {
 	sentinel := errors.New("hs485d unreachable")
 	fake := &searchRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}, err: sentinel}
 	w := client.NewValueWriter()
-	w.Register(unit.Name(), WireInterfaceID(unit.Name(), hmenum.InterfaceBidCosWired), fake)
+	w.Register(unit.Name(), hmtypes.NewWireInterfaceID(unit.Name(), hmenum.InterfaceBidCosWired), fake)
 
 	domain := NewDeviceAdminDomain(reg, w)
 	count, err := domain.SearchWiredDevices(context.Background(), "", "BidCos-Wired")

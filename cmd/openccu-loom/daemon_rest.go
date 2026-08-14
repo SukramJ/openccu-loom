@@ -72,6 +72,11 @@ type restWiring struct {
 	userAdmin     handlers.UserAdminService
 	tokenAdmin    handlers.TokenAdminService
 	centralAdmin  handlers.CentralAdminService
+	// tokenPurger drops every bearer token bound to a subject, across
+	// both the durable and the in-memory token store. The user-delete
+	// route reads it so a removed account keeps no live credential in
+	// either.
+	tokenPurger handlers.TokenPurger
 	// authMw and authResolve carry the (possibly swapped) auth
 	// middleware + REST resolver back to the caller. They equal the
 	// input values when SQLite persistence is unavailable.
@@ -145,6 +150,14 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	ccuStore := buildCCUAuthStore(cfg, d.reg, d.sqCentrals, logger)
 	ccuPrimary := ccuAuthPrimary(cfg.North.REST.Auth.CCU)
 
+	// The chain, not either store alone, is the set of stores a bearer
+	// token can authenticate against: the durable one plus the in-memory
+	// one the legacy POST /auth/tokens still writes into. It is therefore
+	// also what an account deletion has to purge — purging only the
+	// durable store leaves the deleted user a live credential in the
+	// fallback the bearer chain reaches the moment SQLite misses.
+	chainedTokens := auth.ChainedTokenStore{Primary: d.sqTokens, Secondary: d.tokens}
+
 	if d.auditDB != nil && d.healthTracker != nil {
 		stopProbe := sqlitestore.StartHealthProbe(ctx, d.auditDB, d.healthTracker, sqlitestore.DefaultProbeInterval)
 		_ = stopProbe // daemon shutdown handled by the parent context cancel
@@ -198,7 +211,6 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 		// an ungated rebuild would discard `basic_enabled: false` /
 		// `bearer_enabled: false` in essentially every deployment and
 		// keep serving the scheme the operator switched off.
-		chainedTokens := auth.ChainedTokenStore{Primary: d.sqTokens, Secondary: d.tokens}
 		authMw = gatedAuthMiddleware(
 			cfg,
 			loginChainWithCCU(d.sqUsers, d.users, ccuStore, ccuPrimary),
@@ -299,6 +311,7 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 		userAdmin:     userAdminSvc,
 		tokenAdmin:    tokenAdminSvc,
 		centralAdmin:  centralAdminSvc,
+		tokenPurger:   chainedTokens,
 		authMw:        authMw,
 		authResolve:   restResolve,
 	}

@@ -25,6 +25,11 @@ type UserAdminService interface {
 	// Returns [sqlite.ErrLastAdmin] when the write would demote the only
 	// remaining admin.
 	Put(ctx context.Context, subject, password string, role auth.Role) error
+	// SetRole changes a user's role and keeps the stored password hash.
+	// Returns [sqlite.ErrUserNotFound] when the subject is unknown and
+	// [sqlite.ErrLastAdmin] when the change would demote the only
+	// remaining admin.
+	SetRole(ctx context.Context, subject string, role auth.Role) error
 	// Delete removes a user. Returns [sqlite.ErrUserNotFound] when the
 	// subject is unknown and [sqlite.ErrLastAdmin] when removing the
 	// subject would leave zero admins.
@@ -176,13 +181,22 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 	}
 }
 
-// UpdateUser handles PATCH /admin/users/{subject}. Requires both
-// password and role in the request body to perform a full upsert.
+// UpdateUser handles PATCH /admin/users/{subject}. Both body fields are
+// optional and an omitted field leaves that half of the account
+// unchanged, as the published request schema states: a body carrying
+// only a role changes the role and keeps the stored password hash, a
+// body carrying only a password keeps the current role. A body naming
+// neither is refused rather than answered with a success that changed
+// nothing.
+//
 // Returns 404 when the subject does not exist and 409 when the change
 // would demote the last admin. On success every existing session for the
 // subject is revoked so a password reset or role change cannot be
-// outrun by a still-cached session.
-func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker) http.HandlerFunc {
+// outrun by a still-cached session. A role that actually changed also
+// purges the subject's bearer tokens: a token carries the role it was
+// minted with, so leaving it alive would keep the pre-demotion
+// privileges usable long after the demotion.
+func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker, tokens TokenPurger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Fold the path parameter to the spelling the store and the
 		// session map are keyed on, so the revocation below cannot miss.
@@ -199,9 +213,11 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User list failed", err)
 			return
 		}
+		currentRole := auth.Role("")
 		found := false
 		for _, u := range users {
 			if auth.CanonicalSubject(u.Subject) == subject {
+				currentRole = u.Role
 				found = true
 				break
 			}
@@ -218,36 +234,63 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
-		if body.Password == "" {
+		if body.Password == "" && body.Role == "" {
 			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeValidation, r, "Missing password", "password is required"))
+				problem.New(problem.TypeValidation, r, "Nothing to update",
+					"at least one of password or role is required"))
 			return
 		}
-		if !validRole(body.Role) {
+		if body.Role != "" && !validRole(body.Role) {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Invalid role",
 					"role must be one of: admin, operator, viewer"))
 			return
 		}
-		if err := svc.Put(r.Context(), subject, body.Password, body.Role); err != nil {
-			if errors.Is(err, sqlite.ErrLastAdmin) {
+		// An omitted role keeps the stored one, so a password reset never
+		// moves the account to a role the caller did not ask for.
+		newRole := body.Role
+		if newRole == "" {
+			newRole = currentRole
+		}
+
+		if body.Password == "" {
+			// Role-only: the account keeps the hash it already has. Going
+			// through Put would require a password the caller never sent.
+			err = svc.SetRole(r.Context(), subject, newRole)
+		} else {
+			err = svc.Put(r.Context(), subject, body.Password, newRole)
+		}
+		if err != nil {
+			switch {
+			case errors.Is(err, sqlite.ErrLastAdmin):
 				problem.Write(w, http.StatusConflict,
 					problem.New(problem.TypeConflict, r, "Cannot demote last admin",
 						"at least one admin user must remain"))
-				return
+			case errors.Is(err, sqlite.ErrUserNotFound):
+				// The row vanished between the lookup above and the write.
+				problem.Write(w, http.StatusNotFound,
+					problem.New(problem.TypeNotFound, r, "User not found", subject))
+			default:
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User update failed", err)
 			}
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User update failed", err)
 			return
 		}
 		if revoker != nil {
 			revoker.RevokeBySubject(subject)
+		}
+		if tokens != nil && newRole != currentRole {
+			if _, perr := tokens.DeleteBySubject(r.Context(), subject); perr != nil {
+				// The role change itself succeeded; a purge miss is logged by
+				// the store layer and must not turn it into a 500.
+				_ = perr
+			}
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
 			rec.Record(audit.Entry{
 				User:   actor,
 				Action: audit.ActionUserUpdate,
-				Note:   "subject=" + subject + " role=" + string(body.Role),
+				Note:   "subject=" + subject + " role=" + string(newRole),
 			})
 		}
 		w.WriteHeader(http.StatusNoContent)

@@ -383,13 +383,15 @@ func (i *Inbox) State() payload.StatePayload {
 	}
 	devices := i.List()
 	rows := make([]payload.InboxDeviceRow, len(devices))
-	for j, d := range devices {
+	for j := range devices {
+		d := &devices[j]
 		rows[j] = payload.InboxDeviceRow{
-			Address:      d.Address,
-			Model:        d.Model,
-			Serial:       d.Serial,
-			FirstSeen:    d.FirstSeen,
-			Manufacturer: d.Manufacturer,
+			Address:         d.Address,
+			Model:           d.Model,
+			Serial:          d.Serial,
+			FirstSeen:       d.FirstSeen,
+			Manufacturer:    d.Manufacturer,
+			PendingCreation: d.PendingCreation,
 		}
 	}
 	return &payload.InboxState{

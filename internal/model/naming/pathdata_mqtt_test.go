@@ -5,8 +5,6 @@ package naming
 
 import (
 	"testing"
-
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // helpers shared by the MQTT-topic tests.
@@ -16,22 +14,22 @@ const (
 )
 
 func newChannelPD() PathData {
-	return NewChannelPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 2)
+	return NewChannelPathData(wireHmIPRF, "VCU1234567", 2)
 }
 
 func newDevicePD() PathData {
-	return NewDevicePathData(hmenum.InterfaceHmIPRF, "VCU1234567")
+	return NewDevicePathData(wireHmIPRF, "VCU1234567")
 }
 
 func newCustomPD() PathData {
-	return NewCustomDPPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 2, "climate")
+	return NewCustomDPPathData(wireHmIPRF, "VCU1234567", 2, "climate")
 }
 
 // --- NewChannelPathData ---
 
 func TestNewChannelPathData_Empty(t *testing.T) {
 	t.Parallel()
-	if got := NewChannelPathData(hmenum.InterfaceHmIPRF, "", 0); !got.IsZero() {
+	if got := NewChannelPathData(wireHmIPRF, "", 0); !got.IsZero() {
 		t.Errorf("empty address must yield zero, got %+v", got)
 	}
 }
@@ -39,7 +37,7 @@ func TestNewChannelPathData_Empty(t *testing.T) {
 func TestNewChannelPathData_Populated(t *testing.T) {
 	t.Parallel()
 	pd := newChannelPD()
-	if pd.Address != "VCU1234567" || pd.ChannelNo != 2 || pd.Interface != hmenum.InterfaceHmIPRF {
+	if pd.Address != "VCU1234567" || pd.ChannelNo != 2 || pd.Interface != wireHmIPRF {
 		t.Errorf("unexpected fields: %+v", pd)
 	}
 	if pd.Bucket != "" || pd.Kind != "" {
@@ -51,7 +49,7 @@ func TestNewChannelPathData_Populated(t *testing.T) {
 
 func TestNewDevicePathData_Empty(t *testing.T) {
 	t.Parallel()
-	if got := NewDevicePathData(hmenum.InterfaceHmIPRF, ""); !got.IsZero() {
+	if got := NewDevicePathData(wireHmIPRF, ""); !got.IsZero() {
 		t.Errorf("empty address must yield zero, got %+v", got)
 	}
 }
@@ -68,14 +66,14 @@ func TestNewDevicePathData_Populated(t *testing.T) {
 
 func TestNewCustomDPPathData_EmptyAddress(t *testing.T) {
 	t.Parallel()
-	if got := NewCustomDPPathData(hmenum.InterfaceHmIPRF, "", 0, "climate"); !got.IsZero() {
+	if got := NewCustomDPPathData(wireHmIPRF, "", 0, "climate"); !got.IsZero() {
 		t.Errorf("empty address must yield zero, got %+v", got)
 	}
 }
 
 func TestNewCustomDPPathData_EmptyKind(t *testing.T) {
 	t.Parallel()
-	if got := NewCustomDPPathData(hmenum.InterfaceHmIPRF, "VCU1", 0, ""); !got.IsZero() {
+	if got := NewCustomDPPathData(wireHmIPRF, "VCU1", 0, ""); !got.IsZero() {
 		t.Errorf("empty kind must yield zero, got %+v", got)
 	}
 }
@@ -292,7 +290,7 @@ func TestMQTTCustomDPState(t *testing.T) {
 func TestMQTTCustomDPState_WrongBucket(t *testing.T) {
 	t.Parallel()
 	// PathData with BucketValues — not custom — must return empty.
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 2, BucketValues, "climate")
+	pd := NewDataPointPathData("", wireHmIPRF, "VCU1234567", 2, BucketValues, "climate")
 	if got := pd.MQTTCustomDPState(testBase, testCentral); got != "" {
 		t.Errorf("non-custom bucket must return empty, got %q", got)
 	}
@@ -469,7 +467,7 @@ func TestMQTTTopics_BaseSlashTrimmed(t *testing.T) {
 // central, so the sweep could match neither.
 func TestDiscoveryNodeIDSlugsTheCentralName(t *testing.T) {
 	t.Parallel()
-	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "0001ABCD", 1, BucketValues, "STATE")
+	pd := NewDataPointPathData("", wireHmIPRF, "0001ABCD", 1, BucketValues, "STATE")
 	for _, tc := range []struct{ central, want string }{
 		{"ccu-01", "ccu-01_0001abcd"},
 		{"Wohn Zimmer", "wohn_zimmer_0001abcd"},

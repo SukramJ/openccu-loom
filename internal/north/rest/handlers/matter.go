@@ -278,16 +278,34 @@ type MatterSessionResponse struct {
 	PeerIdleSeconds  int64  `json:"peer_idle_seconds"`
 }
 
-// MatterSessionList is the body of GET /api/v1/matter/sessions.
-type MatterSessionList struct {
-	Sessions []MatterSessionResponse `json:"sessions"`
+// MatterSessionOccupancy is how much of the bridge's 16-bit session-id
+// space is in use, as the diagnostics surface reports it.
+//
+// Reserved is the field the session list cannot supply: an id staked by
+// a CASE handshake that announced it and never completed holds its slot
+// for twenty minutes without ever becoming a session. A space filling up
+// with those looks, from every other view, exactly like a quiet bridge —
+// until the next controller is refused.
+type MatterSessionOccupancy struct {
+	Live     int `json:"live"`
+	Reserved int `json:"reserved"`
+	Capacity int `json:"capacity"`
+	Free     int `json:"free"`
 }
 
-// MatterSessionLister reports the bridge's open secure sessions.
-// Implemented by the daemon over the operational session manager plus
-// the subscription manager's per-session counts.
+// MatterSessionList is the body of GET /api/v1/matter/sessions.
+type MatterSessionList struct {
+	Sessions  []MatterSessionResponse `json:"sessions"`
+	Occupancy MatterSessionOccupancy  `json:"occupancy"`
+}
+
+// MatterSessionLister reports the bridge's open secure sessions and the
+// occupancy of the id space they are allocated from. Implemented by the
+// daemon over the operational session manager plus the subscription
+// manager's per-session counts.
 type MatterSessionLister interface {
 	MatterSessions() []MatterSessionInfo
+	MatterSessionOccupancy() MatterSessionOccupancy
 }
 
 // MatterSessions serves GET /api/v1/matter/sessions.
@@ -297,6 +315,10 @@ type MatterSessionLister interface {
 // idle age is the load-bearing field — a controller that vanished
 // without closing its session leaves the session open and only stops
 // sending, so local activity keeps moving while peer activity does not.
+//
+// The occupancy block answers the other half: how much of the session-id
+// space the listed sessions leave free, including the ids held by
+// handshakes that never became sessions.
 func MatterSessions(l MatterSessionLister) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if l == nil {
@@ -323,7 +345,7 @@ func MatterSessions(l MatterSessionLister) http.HandlerFunc {
 				PeerIdleSeconds:  int64(now.Sub(s.LastPeerActivity).Seconds()),
 			})
 		}
-		JSON(w, http.StatusOK, MatterSessionList{Sessions: out})
+		JSON(w, http.StatusOK, MatterSessionList{Sessions: out, Occupancy: l.MatterSessionOccupancy()})
 	}
 }
 

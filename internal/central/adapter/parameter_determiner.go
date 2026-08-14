@@ -21,6 +21,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ErrNoDetermineBackend is returned when no backend can be resolved for
@@ -65,7 +66,7 @@ func (a *ParameterDeterminerAdapter) DetermineParameter(
 		if !ok {
 			continue
 		}
-		b, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		b, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return nil, fmt.Errorf("%w: %s/%s", ErrNoDetermineBackend, u.Name(), dev.InterfaceID)
 		}

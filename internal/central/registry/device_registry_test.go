@@ -6,30 +6,28 @@ package registry
 import (
 	"sync"
 	"testing"
-
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestDeviceRegistrySorted(t *testing.T) {
 	r := NewDeviceRegistry()
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "B"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "C"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "B"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "A"})
+	r.Put(DeviceEntry{Interface: wireBidCosRF, Address: "C"})
 	list := r.List()
 	if len(list) != 3 {
 		t.Fatalf("len=%d", len(list))
 	}
 	// BidCos-RF sorts before HmIP-RF lexicographically.
-	if list[0].Interface != hmenum.InterfaceBidCosRF {
+	if list[0].Interface != wireBidCosRF {
 		t.Fatalf("first=%s", list[0].Interface)
 	}
 }
 
 func TestDeviceRegistryGetHit(t *testing.T) {
 	r := NewDeviceRegistry()
-	entry := DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "DEV001"}
+	entry := DeviceEntry{Interface: wireHmIPRF, Address: "DEV001"}
 	r.Put(entry)
-	got, ok := r.Get(hmenum.InterfaceHmIPRF, "DEV001")
+	got, ok := r.Get(wireHmIPRF, "DEV001")
 	if !ok {
 		t.Fatal("expected Get to return ok=true")
 	}
@@ -40,7 +38,7 @@ func TestDeviceRegistryGetHit(t *testing.T) {
 
 func TestDeviceRegistryGetMiss(t *testing.T) {
 	r := NewDeviceRegistry()
-	_, ok := r.Get(hmenum.InterfaceHmIPRF, "UNKNOWN")
+	_, ok := r.Get(wireHmIPRF, "UNKNOWN")
 	if ok {
 		t.Fatal("expected Get to return ok=false for unknown key")
 	}
@@ -48,11 +46,11 @@ func TestDeviceRegistryGetMiss(t *testing.T) {
 
 func TestDeviceRegistryRemove(t *testing.T) {
 	r := NewDeviceRegistry()
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "X"})
-	if !r.Remove(hmenum.InterfaceHmIPRF, "X") {
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "X"})
+	if !r.Remove(wireHmIPRF, "X") {
 		t.Fatal("Remove should return true for existing entry")
 	}
-	if r.Remove(hmenum.InterfaceHmIPRF, "X") {
+	if r.Remove(wireHmIPRF, "X") {
 		t.Fatal("Remove should return false for already-removed entry")
 	}
 }
@@ -62,8 +60,8 @@ func TestDeviceRegistryLen(t *testing.T) {
 	if r.Len() != 0 {
 		t.Fatalf("expected Len=0, got %d", r.Len())
 	}
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "B"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "A"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "B"})
 	if r.Len() != 2 {
 		t.Fatalf("expected Len=2, got %d", r.Len())
 	}
@@ -71,8 +69,8 @@ func TestDeviceRegistryLen(t *testing.T) {
 
 func TestDeviceRegistryClear(t *testing.T) {
 	r := NewDeviceRegistry()
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "B"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "A"})
+	r.Put(DeviceEntry{Interface: wireBidCosRF, Address: "B"})
 	r.Clear()
 	if r.Len() != 0 {
 		t.Fatalf("expected Len=0 after Clear, got %d", r.Len())
@@ -84,9 +82,9 @@ func TestDeviceRegistryClear(t *testing.T) {
 
 func TestDeviceRegistryPutOverwrites(t *testing.T) {
 	r := NewDeviceRegistry()
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A", Model: "OLD"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A", Model: "NEW"})
-	got, ok := r.Get(hmenum.InterfaceHmIPRF, "A")
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "A", Model: "OLD"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "A", Model: "NEW"})
+	got, ok := r.Get(wireHmIPRF, "A")
 	if !ok || got.Model != "NEW" {
 		t.Fatalf("expected Model=NEW after overwrite, got ok=%v model=%s", ok, got.Model)
 	}
@@ -103,8 +101,8 @@ func TestDeviceRegistryConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "concurrent"})
-			_, _ = r.Get(hmenum.InterfaceHmIPRF, "concurrent")
+			r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "concurrent"})
+			_, _ = r.Get(wireHmIPRF, "concurrent")
 			_ = r.List()
 			_ = r.Len()
 		}(i)
@@ -114,7 +112,7 @@ func TestDeviceRegistryConcurrent(t *testing.T) {
 
 func TestDeviceRegistryHas(t *testing.T) {
 	r := NewDeviceRegistry()
-	e := DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "DEV001", Model: "HM-CC-RT-DN"}
+	e := DeviceEntry{Interface: wireHmIPRF, Address: "DEV001", Model: "HM-CC-RT-DN"}
 	if r.Has(e.Interface, e.Address) {
 		t.Fatal("Has must return false for unknown entry")
 	}
@@ -133,9 +131,9 @@ func TestDeviceRegistryModels(t *testing.T) {
 	if m := r.Models(); len(m) != 0 {
 		t.Fatalf("Models on empty registry should return empty, got %v", m)
 	}
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A", Model: "MODEL-X"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "B", Model: "MODEL-Y"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "C", Model: "MODEL-X"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "A", Model: "MODEL-X"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "B", Model: "MODEL-Y"})
+	r.Put(DeviceEntry{Interface: wireBidCosRF, Address: "C", Model: "MODEL-X"})
 
 	models := r.Models()
 	if len(models) != 2 {
@@ -148,7 +146,7 @@ func TestDeviceRegistryModels(t *testing.T) {
 
 func TestDeviceRegistryModelsSkipsEmpty(t *testing.T) {
 	r := NewDeviceRegistry()
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A", Model: ""})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "A", Model: ""})
 	if m := r.Models(); len(m) != 0 {
 		t.Fatalf("Models must skip empty model string, got %v", m)
 	}
@@ -156,14 +154,14 @@ func TestDeviceRegistryModelsSkipsEmpty(t *testing.T) {
 
 func TestDeviceRegistryAddresses(t *testing.T) {
 	r := NewDeviceRegistry()
-	if a := r.Addresses(hmenum.InterfaceHmIPRF); len(a) != 0 {
+	if a := r.Addresses(wireHmIPRF); len(a) != 0 {
 		t.Fatalf("Addresses on empty registry should return empty, got %v", a)
 	}
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "Z001"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceHmIPRF, Address: "A001"})
-	r.Put(DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "A001"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "Z001"})
+	r.Put(DeviceEntry{Interface: wireHmIPRF, Address: "A001"})
+	r.Put(DeviceEntry{Interface: wireBidCosRF, Address: "A001"})
 
-	addrs := r.Addresses(hmenum.InterfaceHmIPRF)
+	addrs := r.Addresses(wireHmIPRF)
 	if len(addrs) != 2 {
 		t.Fatalf("Addresses(HmIPRF)=%v, want 2", addrs)
 	}
@@ -172,7 +170,7 @@ func TestDeviceRegistryAddresses(t *testing.T) {
 		t.Fatalf("Addresses(HmIPRF)=%v, want [A001, Z001]", addrs)
 	}
 	// Other interface unaffected.
-	if a := r.Addresses(hmenum.InterfaceBidCosRF); len(a) != 1 {
+	if a := r.Addresses(wireBidCosRF); len(a) != 1 {
 		t.Fatalf("Addresses(BidCosRF)=%v, want 1", a)
 	}
 }

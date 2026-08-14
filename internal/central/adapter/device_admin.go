@@ -14,7 +14,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -48,7 +49,7 @@ func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, 
 		if !ok {
 			continue
 		}
-		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
@@ -86,7 +87,7 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string, re
 		if !ok {
 			continue
 		}
-		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
@@ -104,7 +105,7 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string, re
 		// and the persistence sink was never asked to drop the SQLite rows —
 		// which the next boot then rehydrated into a device the CCU no longer
 		// reports. Snapshot the channels before RemoveDevice tears them down.
-		iface := hmenum.Interface(dev.InterfaceID)
+		iface := hmtypes.ParseWireInterfaceID(dev.InterfaceID)
 		channels := dev.Channels()
 		u.RemoveDevice(address)
 		u.DeviceRegistry.Remove(iface, address)
@@ -155,19 +156,28 @@ func (a *DeviceAdminDomain) RenameChannel(ctx context.Context, deviceAddr string
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddr)
 }
 
-// AcceptInboxDevice promotes a pending device from the hub inbox
-// into the running registry. The Rega script flips the device's
-// `ReadyConfig` flag; the periodic ListDevices sweep picks the new
-// pairing up afterwards. We additionally call ListDevices once
-// here so the SPA sees the registry update without having to wait
-// for the sweep.
+// AcceptInboxDevice promotes a pending device into the running
+// registry. Two things can hold a device back and the operator sees
+// both as one inbox entry, so the accept handles both:
+//
+//   - The CCU's own inbox: the Rega script flips the device's
+//     `ReadyConfig` flag; the periodic ListDevices sweep picks the new
+//     pairing up afterwards. We additionally call ListDevices once here
+//     so the SPA sees the registry update without having to wait for
+//     the sweep.
+//   - The daemon's deferred-creation queue (`delay_new_device_creation`):
+//     the announced descriptions are parked until this call materialises
+//     them. Accepting only on the CCU left such a device without a
+//     single data point until the next daemon restart.
 //
 // opts carries optional first-time configuration (name, rooms,
 // functions) applied best-effort against the accepting central right
-// after the promotion. Those follow-up steps run only once the accept
-// itself succeeded; if any of them fails the returned error wraps
-// [interfaces.ErrAcceptConfigIncomplete] so the caller can tell the
-// device WAS accepted and only the configuration needs to be re-applied.
+// after the promotion, and before the deferred materialisation so the
+// new device is built with its final name. Those follow-up steps run
+// only once the accept itself succeeded; if any of them fails the
+// returned error wraps [interfaces.ErrAcceptConfigIncomplete] so the
+// caller can tell the device WAS accepted and only the configuration
+// needs to be re-applied.
 func (a *DeviceAdminDomain) AcceptInboxDevice(
 	ctx context.Context, address string, opts interfaces.AcceptInboxOptions,
 ) error {
@@ -179,14 +189,33 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 		if u.HubModel == nil {
 			continue
 		}
+		_, deferred := pendingInterfaceOf(u, address)
 		if err := u.HubModel.AcceptInboxDeviceRemote(ctx, address); err != nil {
 			if errors.Is(err, interfaces.ErrInboxDeviceNotFound) {
+				if deferred {
+					// The CCU has already configured the device; only this
+					// daemon is still holding it back. That is a complete
+					// accept, not a stale entry.
+					return a.finishAccept(ctx, u, address, opts)
+				}
 				// This central no longer has the device in its inbox (it
 				// settled or was removed on the CCU). Drop the stale entry so
 				// the SPA updates immediately, and remember it in case no
 				// other central holds the device either.
 				u.HubModel.Inbox.Remove(address)
 				notInInbox = true
+			}
+			if deferred {
+				if errors.Is(err, hub.ErrNoInboxAccepter) {
+					// This central has no CCU-side inbox at all (a backend
+					// without the pairing concept). Only the deferred queue
+					// holds the device, so accepting it here is the whole job.
+					return a.finishAccept(ctx, u, address, opts)
+				}
+				// The CCU-side accept failed on the very central that parked
+				// the device. Materialising it now would hide that failure,
+				// so surface it and leave the entry pending.
+				return fmt.Errorf("accept inbox device %s: %w", address, err)
 			}
 			// Try the next central — the inbox may live on another CCU.
 			continue
@@ -196,19 +225,12 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 		// eventually pick up the new device anyway.
 		if a.writer != nil {
 			if dev, ok := u.ModelRegistry.Get(address); ok {
-				if backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID); ok {
+				if backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID)); ok {
 					_, _ = backend.ListDevices(ctx)
 				}
 			}
 		}
-		// Apply the optional first-time configuration on the same central
-		// that accepted the device. The accept has already happened, so a
-		// follow-up failure is wrapped (never swallowed) to signal a
-		// partial success.
-		if err := applyInitialConfig(ctx, u, address, opts); err != nil {
-			return fmt.Errorf("%w: %w", interfaces.ErrAcceptConfigIncomplete, err)
-		}
-		return nil
+		return a.finishAccept(ctx, u, address, opts)
 	}
 	if notInInbox {
 		// At least one central reported the device gone and none accepted it:
@@ -217,6 +239,25 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 		return fmt.Errorf("%w: device %s", interfaces.ErrInboxDeviceNotFound, address)
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// finishAccept runs the two steps that follow a successful promotion on
+// the accepting central: the optional first-time configuration and the
+// materialisation of a deferred device. The materialisation runs even
+// when the configuration failed — the device was accepted either way,
+// and leaving it parked would strand it — but a configuration failure is
+// still reported so the operator re-applies it.
+func (a *DeviceAdminDomain) finishAccept(
+	ctx context.Context, u *central.Unit, address string, opts interfaces.AcceptInboxOptions,
+) error {
+	configErr := applyInitialConfig(ctx, u, address, opts)
+	if _, err := AcceptPendingDevice(ctx, u, address); err != nil {
+		return err
+	}
+	if configErr != nil {
+		return fmt.Errorf("%w: %w", interfaces.ErrAcceptConfigIncomplete, configErr)
+	}
+	return nil
 }
 
 // applyInitialConfig runs the optional first-time configuration steps
@@ -280,7 +321,7 @@ func (a *DeviceAdminDomain) RestoreDeviceConfig(ctx context.Context, address str
 		if !dev.Interface.SupportsConfigRestore() {
 			return fmt.Errorf("restore config: interface %s: %w", dev.Interface, backends.ErrUnsupported)
 		}
-		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID))
 		if !ok {
 			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}

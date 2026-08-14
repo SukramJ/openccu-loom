@@ -4,7 +4,6 @@
 package ws
 
 import (
-	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -195,11 +194,13 @@ type HubEventsSubscriber struct {
 	reg *central.Registry
 	hub *Hub
 
-	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
-	// touch the slice at all - it hands its unwire back to the caller, so
-	// the runtime-adopt path owns its own detach.
-	mu     sync.Mutex
-	unsubs []func()
+	// remove detaches the registry observer Start installed, together with
+	// every per-central subscription it attached — see the field on
+	// [SystemStatusSubscriber] for the full ownership rule. A lock here
+	// would guard a Start/Stop overlap that cannot occur: the composition
+	// root runs Start before any server listens and Stop after every server
+	// has stopped.
+	remove func()
 }
 
 // NewHubEventsSubscriber returns a subscriber bound to reg and hub.
@@ -207,19 +208,13 @@ func NewHubEventsSubscriber(reg *central.Registry, hub *Hub) *HubEventsSubscribe
 	return &HubEventsSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
-// A central adopted later must be attached with [HubEventsSubscriber.StartCentral].
+// Start subscribes to every central the registry holds now and to every one
+// registered later.
 func (s *HubEventsSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	for _, u := range s.reg.List() {
-		if unwire := s.StartCentral(u); unwire != nil {
-			s.mu.Lock()
-			s.unsubs = append(s.unsubs, unwire)
-			s.mu.Unlock()
-		}
-	}
+	s.remove = s.reg.OnRegister(s.StartCentral)
 }
 
 // StartCentral attaches this subscriber's hub-model and event-bus
@@ -529,16 +524,12 @@ func (s *HubEventsSubscriber) hubModelSubscriptions(centralName string, hm *hubm
 	return unsubs
 }
 
-// Stop drops every subscription this subscriber attached from Start:
-// both the event-bus handlers and the hub-model change callbacks.
-// Subscriptions handed to a caller by StartCentral are that caller's to
-// detach.
+// Stop removes the registry observer and drops every subscription it
+// attached — both the event-bus handlers and the hub-model change callbacks,
+// for boot-time and adopted centrals alike.
 func (s *HubEventsSubscriber) Stop() {
-	s.mu.Lock()
-	unsubs := s.unsubs
-	s.unsubs = nil
-	s.mu.Unlock()
-	for _, u := range unsubs {
-		u()
+	if s.remove != nil {
+		s.remove()
+		s.remove = nil
 	}
 }

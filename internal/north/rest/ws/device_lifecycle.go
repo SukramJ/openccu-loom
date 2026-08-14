@@ -30,25 +30,48 @@ type DeviceRemovedPayload struct {
 	DeviceAddress string `json:"device_address"`
 }
 
-// DeviceLifecycleTopic returns the canonical topic for both create
-// and remove events on a single device. The envelope `type` field
-// disambiguates (`device.created` vs `device.removed`) so the
-// subscriber sees both kinds on one subscription pattern
-// (`device.<addr>.lifecycle`).
+// DeviceAvailabilityChangedPayload is the WebSocket payload published
+// on the `device.<addr>.lifecycle` topic when a device's effective
+// reachability flips. Mirrors the
+// [hmenum.DeviceLifecycleSubtypeAvailabilityChanged] variant of
+// [hmevent.DeviceLifecycleEvent].
+type DeviceAvailabilityChangedPayload struct {
+	Central       string `json:"central"`
+	InterfaceID   string `json:"interface_id"`
+	DeviceAddress string `json:"device_address"`
+	Available     bool   `json:"available"`
+}
+
+// broadcastDeviceAvailabilityChanged is the envelope `type` of the
+// availability frame. It has no [hmevent.EventType] of its own: the
+// domain carries every device lifecycle transition on one event with a
+// sub-type discriminator, while WebSocket consumers route on `type`
+// alone and must be able to tell an availability flip from a creation.
+const broadcastDeviceAvailabilityChanged = "device.availability_changed"
+
+// DeviceLifecycleTopic returns the canonical topic for the create,
+// remove and availability events on a single device. The envelope
+// `type` field disambiguates (`device.created` vs `device.removed` vs
+// `device.availability_changed`) so the subscriber sees every kind on
+// one subscription pattern (`device.<addr>.lifecycle`).
 func DeviceLifecycleTopic(deviceAddr string) string {
 	return "device." + deviceAddr + ".lifecycle"
 }
 
 // DeviceLifecycleSubscriber bridges per-central
-// [hmevent.DeviceCreatedEvent] and [hmevent.DeviceRemovedEvent] from
-// the domain bus to the WebSocket [*Hub]. Mirrors
+// [hmevent.DeviceCreatedEvent], [hmevent.DeviceRemovedEvent] and the
+// availability sub-type of [hmevent.DeviceLifecycleEvent] from the
+// domain bus to the WebSocket [*Hub]. Mirrors
 // [HubEventsSubscriber] in shape; runs alongside it so each event
 // family gets a focused subscriber and failure of one path cannot
 // starve the other.
 type DeviceLifecycleSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
-	unsubs []func()
+	reg *central.Registry
+	hub *Hub
+	// remove detaches the registry observer Start installed, together with
+	// every per-central subscription it attached — see the field on
+	// [SystemStatusSubscriber] for the full ownership rule.
+	remove func()
 }
 
 // NewDeviceLifecycleSubscriber returns a subscriber bound to reg and hub.
@@ -56,24 +79,20 @@ func NewDeviceLifecycleSubscriber(reg *central.Registry, hub *Hub) *DeviceLifecy
 	return &DeviceLifecycleSubscriber{reg: reg, hub: hub}
 }
 
-// Start attaches subscriptions to every registered central's event bus.
-// A central adopted later must be attached with
-// [DeviceLifecycleSubscriber.StartCentral].
+// Start subscribes to every central the registry holds now and to every one
+// registered later.
 func (s *DeviceLifecycleSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	for _, u := range s.reg.List() {
-		if unwire := s.StartCentral(u); unwire != nil {
-			s.unsubs = append(s.unsubs, unwire)
-		}
-	}
+	s.remove = s.reg.OnRegister(s.StartCentral)
 }
 
 // StartCentral attaches this subscriber to a single central's event bus and
-// returns the unwire (nil when there was nothing to attach).
+// returns the unwire (nil when there was nothing to attach). It is the
+// observer the registry runs per central.
 //
-// Start only ever walked the registry as it stood at boot, so a central
+// Start used to walk the registry as it stood at boot, so a central
 // adopted at runtime emitted no `device.created` / `device.removed` frame for
 // any of its devices until the daemon was restarted.
 func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
@@ -112,14 +131,35 @@ func (s *DeviceLifecycleSubscriber) StartCentral(u *central.Unit) func() {
 			},
 		})
 	})
-	return unwireAll([]func(){unsubCreated, unsubRemoved})
+	// Availability rides the same topic as create/remove. The domain
+	// publishes every lifecycle transition on one event; only the
+	// availability sub-type needs a north-bound frame here, because the
+	// creation and deletion sub-types have their own dedicated events
+	// (subscribed above) and relaying them would double each frame.
+	unsubAvailability := events.Subscribe(bus, func(e hmevent.DeviceLifecycleEvent) {
+		if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
+			return
+		}
+		hub.Publish(Event{
+			Topic: DeviceLifecycleTopic(e.Address),
+			Type:  broadcastDeviceAvailabilityChanged,
+			When:  e.Timestamp(),
+			Payload: DeviceAvailabilityChangedPayload{
+				Central:       centralName,
+				InterfaceID:   e.InterfaceID,
+				DeviceAddress: e.Address,
+				Available:     e.Available,
+			},
+		})
+	})
+	return unwireAll([]func(){unsubCreated, unsubRemoved, unsubAvailability})
 }
 
-// Stop drops all event-bus subscriptions Start attached. Subscriptions handed
-// to a caller by StartCentral are that caller's to detach.
+// Stop removes the registry observer and drops every subscription it
+// attached — including the ones for centrals adopted after Start.
 func (s *DeviceLifecycleSubscriber) Stop() {
-	for _, u := range s.unsubs {
-		u()
+	if s.remove != nil {
+		s.remove()
+		s.remove = nil
 	}
-	s.unsubs = nil
 }

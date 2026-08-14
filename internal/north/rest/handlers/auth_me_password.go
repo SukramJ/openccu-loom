@@ -37,8 +37,9 @@ type changeOwnPasswordRequest struct {
 // this requires no admin role but does require the caller to prove
 // knowledge of the current password, and it never changes the role.
 //
-// Accounts without a local password (OIDC / bearer-token identities)
-// have no row to verify against and receive 409.
+// Accounts without a local password receive 409: a federated identity is
+// refused up front (the provider owns its credentials), and a bearer-token
+// identity has no row to verify against.
 //
 // On a successful change every *other* session for the caller is revoked
 // (the caller's own session is preserved) so a change made in response to
@@ -55,6 +56,16 @@ func ChangeOwnPassword(svc SelfPasswordService, rec audit.Recorder, revoker Sess
 		if !ok || ident.Subject == "" {
 			problem.Write(w, http.StatusUnauthorized,
 				problem.New(problem.TypeUnauthorized, r, "Not authenticated", ""))
+			return
+		}
+		if ident.Scheme.Federated() {
+			// The external provider owns this principal's credentials. Were
+			// the request to proceed, a login name that folds to the same
+			// string as a local account would let its holder rewrite that
+			// account's password and evict its sessions.
+			problem.Write(w, http.StatusConflict,
+				problem.New(problem.TypeConflict, r, "No local password",
+					"this account is managed by the identity provider"))
 			return
 		}
 

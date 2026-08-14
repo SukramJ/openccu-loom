@@ -8,6 +8,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // WireInterfaceID returns the canonical, host-independent interface
@@ -111,11 +112,9 @@ func CanonicalInterfaceID(instanceName, centralName, id string) string {
 // central-name prefix from a canonical `<central>-<iface>` id and returns
 // the bare interface. An id without the prefix (empty central name) is
 // returned unchanged.
+//
+// The strip itself lives on [hmtypes.WireInterfaceID] next to the join, so the
+// two halves of the rule cannot drift apart.
 func BareInterfaceFromWireID(centralName, wireID string) hmenum.Interface {
-	if centralName != "" {
-		if bare, ok := strings.CutPrefix(wireID, centralName+"-"); ok {
-			return hmenum.Interface(bare)
-		}
-	}
-	return hmenum.Interface(wireID)
+	return hmtypes.ParseWireInterfaceID(wireID).Bare(centralName)
 }

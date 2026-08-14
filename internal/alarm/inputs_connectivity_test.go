@@ -13,8 +13,10 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -23,6 +25,11 @@ import (
 // connectivityTestStart keeps the fake clock past the engine's
 // clock-plausibility epoch, as the other alarm harnesses do.
 var connectivityTestStart = time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+
+const (
+	connectivityTestCentral = "ccu"
+	connectivityTestZone    = "eg"
+)
 
 // TestOnConnectivityDegradesTheSensorsOfTheLostInterface pins the alarm
 // service against the identifier space the connectivity event actually
@@ -41,9 +48,89 @@ var connectivityTestStart = time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 func TestOnConnectivityDegradesTheSensorsOfTheLostInterface(t *testing.T) {
 	t.Parallel()
 
+	svc, unit := armedConnectivityService(t)
+
+	// One radio goes away. Only the sensors behind it degrade.
+	events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
+		Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
+		InterfaceID: string(hmenum.InterfaceBidCosRF), Reachable: false,
+	})
+	waitForJournalEvent(t, svc, "sensor_unavailable_while_armed",
+		"a lost interface must degrade the sensors enrolled behind it")
+
+	// The second radio follows: every enrolled interface of the central
+	// is now down, which is the central-loss escalation.
+	events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
+		Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
+		InterfaceID: string(hmenum.InterfaceHmIPRF), Reachable: false,
+	})
+	waitForJournalEvent(t, svc, "central_lost_while_armed",
+		"losing every enrolled interface must run the zone's central-loss policy")
+}
+
+// TestVanishedInterfaceEscalatesThroughTheReconciler crosses the seam
+// between the producer of the connectivity event and this domain.
+//
+// The CCU's interface list carries a lost radio by dropping it from the
+// answer, and the reconciler is what turns that absence into a
+// ConnectivityChangedEvent. Publishing the event by hand — as the test
+// above does — proves this domain reacts, never that a radio which
+// genuinely disappears reaches it. The escalation is the reason it
+// matters: an armed zone whose interfaces are all gone must run its
+// central-loss policy rather than keep trusting the last known values.
+func TestVanishedInterfaceEscalatesThroughTheReconciler(t *testing.T) {
+	t.Parallel()
+
+	svc, unit := armedConnectivityService(t)
+
+	var probed []coordinators.InterfaceReachability
+	reconciler := &coordinators.Reconciler{
+		CentralName:  connectivityTestCentral,
+		Bus:          unit.EventBus,
+		Connectivity: hub.NewConnectivity(),
+		Connect: coordinators.ProbeFunc(func(_ context.Context) ([]coordinators.InterfaceReachability, error) {
+			return probed, nil
+		}),
+	}
+	// VirtualDevices carries no enrolled sensor and never leaves the
+	// answer: an empty answer is the CCU-is-away case the reconciler
+	// deliberately reads as "no information".
+	serves := func(ids ...string) []coordinators.InterfaceReachability {
+		out := make([]coordinators.InterfaceReachability, 0, len(ids)+1)
+		for _, id := range ids {
+			out = append(out, coordinators.InterfaceReachability{InterfaceID: id, Reachable: true})
+		}
+		return append(out, coordinators.InterfaceReachability{
+			InterfaceID: string(hmenum.InterfaceVirtualDevices), Reachable: true,
+		})
+	}
+	reconcile := func(ids ...string) {
+		t.Helper()
+		probed = serves(ids...)
+		if err := reconciler.Reconcile(context.Background()); err != nil {
+			t.Fatalf("reconcile: %v", err)
+		}
+	}
+
+	reconcile(string(hmenum.InterfaceBidCosRF), string(hmenum.InterfaceHmIPRF))
+	reconcile(string(hmenum.InterfaceHmIPRF))
+	waitForJournalEvent(t, svc, "sensor_unavailable_while_armed",
+		"an interface that drops out of the CCU's interface list must degrade its sensors")
+
+	reconcile()
+	waitForJournalEvent(t, svc, "central_lost_while_armed",
+		"losing every enrolled interface from the list must run the zone's central-loss policy")
+}
+
+// armedConnectivityService brings up an alarm service with two sensors
+// on two radios of one central, arms the zone, and returns the service
+// plus the central whose bus the connectivity events ride.
+func armedConnectivityService(t *testing.T) (*Service, *central.Unit) {
+	t.Helper()
+
 	const (
-		centralName = "ccu"
-		zoneID      = "eg"
+		centralName = connectivityTestCentral
+		zoneID      = connectivityTestZone
 	)
 
 	dsn := sqlitestore.FileDSN(filepath.Join(t.TempDir(), "alarm-connectivity.db"))
@@ -117,23 +204,7 @@ func TestOnConnectivityDegradesTheSensorsOfTheLostInterface(t *testing.T) {
 	if _, err := svc.Engine().Arm(ctx, zoneID, engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
-
-	// One radio goes away. Only the sensors behind it degrade.
-	events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
-		Base: hmevent.NewBase(), CentralName: centralName,
-		InterfaceID: string(hmenum.InterfaceBidCosRF), Reachable: false,
-	})
-	waitForJournalEvent(t, svc, "sensor_unavailable_while_armed",
-		"a lost interface must degrade the sensors enrolled behind it")
-
-	// The second radio follows: every enrolled interface of the central
-	// is now down, which is the central-loss escalation.
-	events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
-		Base: hmevent.NewBase(), CentralName: centralName,
-		InterfaceID: string(hmenum.InterfaceHmIPRF), Reachable: false,
-	})
-	waitForJournalEvent(t, svc, "central_lost_while_armed",
-		"losing every enrolled interface must run the zone's central-loss policy")
+	return svc, unit
 }
 
 // waitForJournalEvent polls the alarm journal until event appears, or

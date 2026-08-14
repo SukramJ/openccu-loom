@@ -163,7 +163,7 @@ func publishVirtualRemoteDiscovery(t *testing.T, centralName, address, serial st
 		if init, ok := dp.(namingInitializer); ok {
 			init.SetNameData(device.BuildDataPointName(ch, string(dp.Parameter()), ""))
 			init.SetPathData(naming.NewDataPointPathData(
-				hmenum.InterfaceBidCosRF, ch.Address, ch.Number, naming.BucketValues, string(dp.Parameter()),
+				"", hmtypes.NewWireInterfaceID("", hmenum.InterfaceBidCosRF), ch.Address, ch.Number, naming.BucketValues, string(dp.Parameter()),
 			))
 			init.SetIsInMultipleChannels(false)
 		}
