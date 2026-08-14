@@ -489,14 +489,15 @@ func TestEndpointCount_NilTopology_ReturnsZero(t *testing.T) {
 	}
 }
 
-// TestEndpointCount_StartedBridge_AtLeastRoot verifies that after Start
-// there is at least the root endpoint (count >= 0 since endpointCount
-// subtracts root).
-func TestEndpointCount_StartedBridge_AtLeastRoot(t *testing.T) {
+// TestEndpointCount_StartedBridgeWithoutSources_IsZero verifies that a
+// bridge started against an empty snapshot reports zero bridged
+// endpoints: the assembler still seeds the root and the aggregator, and
+// neither is a bridged device.
+func TestEndpointCount_StartedBridgeWithoutSources_IsZero(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
-	if got := b.endpointCount(); got < 0 {
-		t.Errorf("started bridge: want >=0, got %d", got)
+	if got := b.endpointCount(); got != 0 {
+		t.Errorf("started bridge without sources: want 0, got %d", got)
 	}
 }
 

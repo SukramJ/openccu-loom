@@ -57,6 +57,13 @@ func TestMatterStatusAdapter_WithLiveBridge_Enabled(t *testing.T) {
 	if !resp.Advertising {
 		t.Error("expected Advertising=true from matterStatusConfig")
 	}
+	// The exposure allowlist is empty (the shipped default), so the
+	// assembled topology is root + Aggregator and nothing else. The
+	// operator-facing count must be 0 — the SPA renders this number as
+	// "bridged Matter devices".
+	if resp.EndpointCount != 0 {
+		t.Errorf("empty allowlist: EndpointCount = %d, want 0", resp.EndpointCount)
+	}
 }
 
 // TestMatterStatusAdapter_WithStore_FabricCount exercises the store

@@ -758,13 +758,16 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 		}
 	}
 
-	count := 0
-	if n := len(topology.Endpoints); n > 0 {
-		count = n - 1
-	}
+	// Topology.Bridged() is the authoritative bridged set: the assembler
+	// always seeds root (EP 0) AND aggregator (EP 1), so any arithmetic
+	// on len(Endpoints) drifts the moment a structural tier is added or
+	// removed. The count leaves the daemon as the SPA-facing
+	// `matter.endpoint_assembled` payload, so an off-by-one shows up as
+	// a bridged device that does not exist.
+	count := len(topology.Bridged())
 	b.logger.Info("matter.bridge.reassembled",
 		slog.Int("bridged_endpoints", count),
-		slog.Int("total_with_root", len(topology.Endpoints)))
+		slog.Int("total_endpoints", len(topology.Endpoints)))
 
 	if hook != nil {
 		hook(count)
@@ -774,8 +777,9 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 
 // SetOnReassembled wires the post-Reassemble hook. The bridge calls
 // the supplied closure with the freshly-assembled bridged-endpoint
-// count (excluding the root) after every successful reassembly —
-// initial Start, manual Reassemble, and any allowlist-driven re-build.
+// count (excluding the root and the aggregator) after every successful
+// reassembly — initial Start, manual Reassemble, and any
+// allowlist-driven re-build.
 // Pass nil to detach.
 func (b *Bridge) SetOnReassembled(fn func(endpointCount int)) {
 	b.mu.Lock()
@@ -1142,19 +1146,38 @@ func (b *Bridge) LocalAddr() string {
 	return b.listener.LocalAddr().String()
 }
 
+// effectiveUDPPort returns the port the UDP listener is actually bound
+// to, falling back to the configured (or default) port before Start.
+//
+// `north.matter.listen: ":0"` is a valid configuration — the OS then
+// assigns an ephemeral port, and advertising the 5540 default instead
+// points every commissioner's SRV lookup at a port nothing listens on.
+// Mirrors matter.js packages/node/src/behavior/system/network/
+// ServerNetworkRuntime.ts:234 (`addTransports` writes the bound
+// `ipv6Interface.port` into `network.operationalPort`) which
+// ServerNetworkRuntime.ts:89 then reads when it constructs the
+// MdnsAdvertiser.
+func (b *Bridge) effectiveUDPPort() int {
+	b.mu.RLock()
+	listener := b.listener
+	b.mu.RUnlock()
+	if listener != nil {
+		if addr := listener.LocalAddr(); addr != nil && addr.Port > 0 {
+			return addr.Port
+		}
+	}
+	return udpPort(b.cfg.Listen)
+}
+
 // endpointCount returns the count of bridged endpoints (excludes the
-// root). Used only for logging.
+// root and the aggregator). Used only for logging.
 func (b *Bridge) endpointCount() int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	if b.topology == nil {
 		return 0
 	}
-	// Subtract 1 for the root endpoint.
-	if len(b.topology.Endpoints) == 0 {
-		return 0
-	}
-	return len(b.topology.Endpoints) - 1
+	return len(b.topology.Bridged())
 }
 
 // handleDatagram is the inbound path for every Matter UDP datagram.
@@ -1223,7 +1246,7 @@ func (b *Bridge) AnnounceFabric(ctx context.Context, compressedFabricID [8]byte,
 	svc := mdns.BuildOperationalService(mdns.OperationalServiceConfig{
 		CompressedFabricID: compressedFabricID,
 		NodeID:             nodeID,
-		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535; see #20
+		Port:               uint16(b.effectiveUDPPort()), //nolint:gosec // the bound / parsed port is ≤ 65535; see #20
 		// HostName empty → advertiser uses the OS LocalHostName so the
 		// SRV target resolves via macOS Bonjour / Linux avahi A/AAAA.
 		HostName: "",
@@ -1262,7 +1285,7 @@ func (b *Bridge) WithdrawFabric(ctx context.Context, compressedFabricID [8]byte,
 	svc := mdns.BuildOperationalService(mdns.OperationalServiceConfig{
 		CompressedFabricID: compressedFabricID,
 		NodeID:             nodeID,
-		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535; see #20
+		Port:               uint16(b.effectiveUDPPort()), //nolint:gosec // the bound / parsed port is ≤ 65535; see #20
 		HostName:           "",
 	})
 	if err := b.advertiser.Withdraw(wCtx, svc.InstanceName, svc.ServiceType); err != nil {
@@ -1327,7 +1350,7 @@ func (b *Bridge) AnnounceCommissioning(ctx context.Context, params Commissioning
 		PairingHint:        params.PairingHint,
 		PairingInstruction: params.PairingInstruction,
 		RotatingID:         params.RotatingID,
-		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535; see #20
+		Port:               uint16(b.effectiveUDPPort()), //nolint:gosec // the bound / parsed port is ≤ 65535; see #20
 		// HostName empty → advertiser uses the OS LocalHostName so the
 		// SRV target resolves via macOS Bonjour / Linux avahi A/AAAA.
 		HostName: "",

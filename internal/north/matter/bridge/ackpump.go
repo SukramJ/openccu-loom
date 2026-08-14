@@ -282,6 +282,14 @@ func (b *Bridge) runAckPump(ctx context.Context) {
 			if outbound != nil {
 				b.tickOutboundReliable(outbound, now)
 			}
+			// A peer that abandons its timed interaction and then goes
+			// quiet never reaches the registration-site sweep, so the
+			// pump owns the idle case. Amortised to one Range per
+			// [timedSweepInterval], not one per tick.
+			if n := b.routing.maybeSweepExpiredTimedDeadlines(now); n > 0 {
+				b.logger.Debug("matter.im.timed.deadlines_reclaimed",
+					slog.Int("entries", n))
+			}
 		}
 	}
 }

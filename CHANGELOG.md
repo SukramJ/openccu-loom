@@ -142,6 +142,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and an exhausted id space reclaims the oldest reservation instead of
   failing.
 
+- **Matter announces the port it actually listens on.** With
+  `north.matter.listen` set to port `0` — the way to let the operating
+  system pick a free port, e.g. next to a second Matter bridge on the
+  same host — every mDNS record still named 5540. Commissioners resolved
+  the announcement and sent their first packet to a port nothing was
+  listening on, so pairing timed out against a perfectly valid QR code
+  while the log reported the announcement as successful, and a bridge
+  paired by direct addressing became unreachable after a restart.
+
+- **The Matter bridge no longer reports one bridged device too many.**
+  The endpoint count shown in the Matter view, published on the event
+  stream after every topology rebuild and logged at startup counted the
+  aggregator endpoint — bridge scaffolding, not a device. With nothing
+  exposed the SPA showed one bridged device; every other topology was
+  one too high. (REST API 5.22.1)
+
+- **An abandoned Matter timed write no longer leaks.** A controller that
+  announces a timed write or command and never sends it — a dropped
+  packet, a backgrounded app, a controller reboot — left the deadline
+  behind, and closing the session did not reclaim it either. The
+  bookkeeping only ever grew, for as long as the daemon ran, and a peer
+  could drive it there deliberately. Deadlines now expire and are
+  dropped with the session that registered them.
+
 ### Security
 
 - **A Matter controller is bound to the fabric its certificate names.**

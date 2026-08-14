@@ -3,7 +3,18 @@
 
 package bridge
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// timedSweepInterval bounds how often the expiry sweep walks
+// [exchangeRouting.timedDeadlines]. A TimedRequest timeout is a
+// uint16 millisecond value (Matter §8.7), so no deadline can sit more
+// than ~66 s in the future and an interval of one minute keeps the
+// table proportional to the interactions actually in flight.
+const timedSweepInterval = time.Minute
 
 // timedKey is the composite key for [exchangeRouting.timedDeadlines].
 // Using a struct{sessionID, exchangeID uint16} instead of a bare
@@ -49,11 +60,25 @@ type exchangeRouting struct {
 	// wall-clock deadline a TimedRequest established. The follow-up
 	// Write / Invoke (req.TimedRequest=true) must arrive before the
 	// deadline expires; otherwise the IM dispatcher rejects with
-	// TIMEOUT (0x94) per Matter §8.7. Map is concurrency-safe and
-	// pruned on consumption / expiry.
+	// TIMEOUT (0x94) per Matter §8.7. Map is concurrency-safe.
+	//
+	// Reclamation has three paths, because an interaction that is
+	// simply abandoned reaches none of the first one: consumption in
+	// [Bridge.checkTimedGate], the expiry sweep
+	// ([exchangeRouting.maybeSweepExpiredTimedDeadlines], driven from
+	// the registration site and from the bridge's ack pump), and the
+	// session-teardown drop
+	// ([exchangeRouting.dropSessionTimedDeadlines]).
 	//
 	// map[timedKey]time.Time
 	timedDeadlines sync.Map
+
+	// lastTimedSweep is the wall-clock nanosecond stamp of the last
+	// expiry sweep over timedDeadlines, so the sweep amortises to at
+	// most one full Range per [timedSweepInterval] no matter how many
+	// TimedRequests or pump ticks arrive in between. Zero means "never
+	// swept", which lets the first caller sweep immediately.
+	lastTimedSweep atomic.Int64
 
 	// subTargets maps an active subscription ID to the routing
 	// metadata the ongoing-report pump needs to ship a fresh
@@ -87,4 +112,58 @@ type exchangeRouting struct {
 	//
 	// map[mrp.ExchangeKey]chan struct{}
 	statusResponseWaits sync.Map
+}
+
+// maybeSweepExpiredTimedDeadlines runs the expiry sweep at most once
+// per [timedSweepInterval] and reports how many entries it reclaimed.
+// Callers pass the time they already hold, so the sweep costs a single
+// atomic load on the common path.
+func (r *exchangeRouting) maybeSweepExpiredTimedDeadlines(now time.Time) int {
+	last := r.lastTimedSweep.Load()
+	nowNanos := now.UnixNano()
+	if nowNanos-last < int64(timedSweepInterval) {
+		return 0
+	}
+	if !r.lastTimedSweep.CompareAndSwap(last, nowNanos) {
+		// A concurrent caller claimed this sweep slot; one Range is
+		// enough.
+		return 0
+	}
+	return r.sweepExpiredTimedDeadlines(now)
+}
+
+// sweepExpiredTimedDeadlines deletes every timed deadline that elapsed
+// before now and reports how many entries it reclaimed. An elapsed
+// deadline is unambiguously garbage: [Bridge.checkTimedGate] rejects
+// the follow-up Write / Invoke with TIMEOUT once it passes, so nothing
+// downstream can ever consume the entry again. matter.js arms one
+// per-exchange timer instead (MessageExchange.ts:1009); a table plus a
+// periodic sweep costs one Range a minute rather than one goroutine
+// per in-flight timed interaction.
+func (r *exchangeRouting) sweepExpiredTimedDeadlines(now time.Time) int {
+	reclaimed := 0
+	r.timedDeadlines.Range(func(k, v any) bool {
+		deadline, ok := v.(time.Time)
+		if !ok || now.After(deadline) {
+			r.timedDeadlines.Delete(k)
+			reclaimed++
+		}
+		return true
+	})
+	return reclaimed
+}
+
+// dropSessionTimedDeadlines deletes every timed deadline registered by
+// sessionID. An exchange cannot outlive its session — matter.js lets
+// the exchange's timer die
+// with the exchange (MessageExchange.ts:1143 close) and the exchange
+// die with the session — so a peer that rotates sessions must not be
+// able to leave one entry behind per abandoned interaction.
+func (r *exchangeRouting) dropSessionTimedDeadlines(sessionID uint16) {
+	r.timedDeadlines.Range(func(k, _ any) bool {
+		if key, ok := k.(timedKey); ok && key.sessionID == sessionID {
+			r.timedDeadlines.Delete(k)
+		}
+		return true
+	})
 }

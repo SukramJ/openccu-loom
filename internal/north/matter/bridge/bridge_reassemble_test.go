@@ -8,6 +8,7 @@ package bridge
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -250,5 +251,88 @@ func TestReassemble_ReapsSubscriptionsForRemovedEndpoints(t *testing.T) {
 	}
 	if !sub.IsClosed() {
 		t.Error("subscription for endpoint=5 should be closed after endpoint removal")
+	}
+}
+
+// TestReassemble_BridgedEndpointCountExcludesRootAndAggregator pins the
+// count [Bridge.reassembleLocked] hands to the onReassembled hook — the
+// value the daemon publishes as the `matter.endpoint_assembled`
+// `endpoint_count` field the SPA renders. The assembler always seeds the
+// topology with the root (EP 0) and the Aggregator (EP 1), so with the
+// shipped empty allowlist the operator must see zero bridged devices,
+// not one.
+func TestReassemble_BridgedEndpointCountExcludesRootAndAggregator(t *testing.T) {
+	t.Parallel()
+
+	dev := device.New(device.Config{Address: "BTN0002", Name: "Taster"})
+	ch := dev.AddChannel("BTN0002:1", 1, "KEY", hmenum.ParamsetKeyValues)
+	ch.Put(pressButtonDP("BTN0002:1", hmenum.ParameterPressShort))
+
+	var withDevice bool
+	snapshotter := func(_ context.Context) []endpointpkg.Snapshot {
+		if !withDevice {
+			return nil
+		}
+		return []endpointpkg.Snapshot{{
+			CentralName:   "ccu1",
+			Devices:       []*device.Device{dev},
+			ModelComplete: true,
+		}}
+	}
+
+	b, err := New(
+		NewFakeStore(),
+		snapshotter,
+		mdns.NewNoop(),
+		Config{
+			Listen:    ":0",
+			VendorID:  0x1234,
+			ProductID: 0x5678,
+			NodeLabel: "endpoint-count-test",
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	var reported atomic.Int64
+	reported.Store(-1)
+	b.SetOnReassembled(func(n int) { reported.Store(int64(n)) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer stopCancel()
+		_ = b.Stop(stopCtx)
+	})
+	if err := b.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if got := reported.Load(); got != 0 {
+		t.Errorf("empty topology: hook reported %d bridged endpoints, want 0", got)
+	}
+	if got := b.endpointCount(); got != 0 {
+		t.Errorf("empty topology: endpointCount() = %d, want 0", got)
+	}
+
+	withDevice = true
+	if err := b.Reassemble(ctx); err != nil {
+		t.Fatalf("Reassemble: %v", err)
+	}
+	topo := b.Topology()
+	if topo == nil {
+		t.Fatal("no topology after Reassemble")
+	}
+	want := len(topo.Bridged())
+	if want == 0 {
+		t.Fatal("expected at least one bridged endpoint for the button device")
+	}
+	if got := reported.Load(); got != int64(want) {
+		t.Errorf("hook reported %d bridged endpoints, want %d (Topology.Bridged())", got, want)
+	}
+	if got := b.endpointCount(); got != want {
+		t.Errorf("endpointCount() = %d, want %d (Topology.Bridged())", got, want)
 	}
 }
