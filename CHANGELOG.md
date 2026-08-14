@@ -307,6 +307,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Go treats that as fatal, not as a benign race, and each additional CCU
   widened the window.
 
+- **Acknowledging a fault no longer re-announces it as a new one.** On
+  the outbound webhook an acknowledgement arrived byte-identical to the
+  original raise — the condition still stands after an acknowledgement,
+  and the payload said only that — so a messenger integration fired
+  "smoke detector fault" a second time because somebody had pressed
+  acknowledge. The webhook body now names the transition (`raised`,
+  `acknowledged`, `cleared`), carries the acknowledgement as its own
+  flag, and includes the fault's id, so two reports of one standing
+  fault are no longer indistinguishable from two independent faults.
+  The standing-fault tally moves from `entry_id` — a journal entry id on
+  every other alarm event — to its own `open_count`, matching the
+  WebSocket broadcast of the same event.
+
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle
   and are still attempted while the circuit breaker for a struggling CCU
