@@ -422,11 +422,10 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 // entries that DefaultDataPoints exposes.
 const GeneratedDefaultDataPointCount = {count}
 
-// DefaultDataPoints mirrors
-// Profile authors inherit these
-// generic data points unless [ProfileConfig.IncludeDefaultDataPoints] is
-// false. Tuple keys in the source are expanded so each channel offset
-// is its own map entry.
+// DefaultDataPoints is the per-channel-offset table of generic data
+// points every profile inherits unless
+// [ProfileConfig.IncludeDefaultDataPoints] is false. Tuple keys in the
+// source are expanded so each channel offset is its own map entry.
 var DefaultDataPoints = map[int][]hmenum.Parameter{{
 {entries}}}
 """

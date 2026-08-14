@@ -53,6 +53,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Two flush-mount switch actuators are recognised properly.** The
+  HmIP-FS6 resolved to no device profile at all, so it appeared only as a
+  raw state value instead of a switch you can operate as one. And on the
+  HmIP-FSI6, the operating mode of its wired input — push-button, switch,
+  normally-open or normally-closed — was hidden, so the input could not be
+  set up from the UI at all. Both now behave like the rest of their family.
+
 - **Week-program presets on thermostats are readable over MQTT.** A
   thermostat's preset list mixes two kinds of entry. Home Assistant
   defines `boost`, `eco`, `comfort` and `away` and shows them in the
