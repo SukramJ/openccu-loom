@@ -677,7 +677,7 @@
     },
     {
       "category": "inbox",
-      "description": "Promote a paired-but-unconfigured inbox device into the active device set. Optional first-time configuration (name, include_channels, rooms, functions) is applied best-effort right after the accept; omit them to only accept.",
+      "description": "Promote a paired-but-unconfigured inbox device into the active device set. A device parked by delay_new_device_creation is materialised at the same time. Optional first-time configuration (name, include_channels, rooms, functions) is applied best-effort right after the accept; omit them to only accept.",
       "name": "inbox.accept",
       "args": {
         "device_address": "string",
@@ -689,7 +689,7 @@
     },
     {
       "category": "inbox",
-      "description": "List devices the CCU has seen in pairing mode that have not yet been accepted.",
+      "description": "List devices waiting for acceptance: those the CCU has seen in pairing mode and, when delay_new_device_creation is enabled, those this daemon parked (flagged pending_creation).",
       "name": "inbox.list"
     },
     {

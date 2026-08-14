@@ -4,7 +4,7 @@
 // device_coordinator_cache_restore_test.go covers:
 // DeviceCoordinator.CheckAndCreateDevicesFromCache,
 // DeviceCoordinator.RefreshDeviceDescriptionsAndCreateMissingDevices,
-// DeviceCoordinator.AddNewDevicesManually + StoreDelayedDeviceDescriptions,
+// DeviceCoordinator deferred-creation queue (store / list / take / accept),
 // DeviceCoordinator.CheckParamsetConsistency,
 // DeviceCoordinator.ScheduleParamsetConsistencyCheck.
 
@@ -23,7 +23,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
-	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ---------------------------------------------------------------------------
@@ -238,10 +237,11 @@ func TestRefreshDeviceDescriptionsFetcherErrorPropagates(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AddNewDevicesManually + StoreDelayedDeviceDescriptions
+// StoreDelayedDeviceDescriptions + PendingDevices +
+// TakeDelayedDeviceDescriptions + HandleAcceptedDevices
 // ---------------------------------------------------------------------------
 
-func TestAddNewDevicesManuallyAcceptsDelayedDescriptions(t *testing.T) {
+func TestAcceptedDelayedDescriptionsReachTheRegistryAsManual(t *testing.T) {
 	t.Parallel()
 	dc, bus, devs, _, _ := newDCFull(t)
 	created := collectCreated(bus)
@@ -252,20 +252,16 @@ func TestAddNewDevicesManuallyAcceptsDelayedDescriptions(t *testing.T) {
 		{Address: "AA:0", Parent: "AA", Type: "MAINTENANCE"},
 	})
 
-	var accepted []string
-	acceptFn := func(_ context.Context, _ hmtypes.WireInterfaceID, address string) error {
-		accepted = append(accepted, address)
-		return nil
+	pending := dc.PendingDevices()
+	if len(pending) != 1 || pending[0].Address != "AA" || pending[0].Model != "HmIP-X" {
+		t.Fatalf("pending=%+v, want one AA/HmIP-X entry", pending)
 	}
 
-	if err := dc.AddNewDevicesManually(
-		context.Background(),
-		wireKey(hmenum.InterfaceHmIPRF),
-		map[string]string{"AA": "My Device"},
-		acceptFn,
-	); err != nil {
-		t.Fatal(err)
+	descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "AA")
+	if len(descs) != 2 {
+		t.Fatalf("taken descriptions=%d, want the device and its channel", len(descs))
 	}
+	dc.HandleAcceptedDevices(wireKey(hmenum.InterfaceHmIPRF), descs)
 
 	if devs.Len() != 1 {
 		t.Fatalf("devs=%d, want 1", devs.Len())
@@ -276,29 +272,58 @@ func TestAddNewDevicesManuallyAcceptsDelayedDescriptions(t *testing.T) {
 	if len(*created) != 1 || (*created)[0].Source != hmenum.SourceOfDeviceCreationManual {
 		t.Fatalf("created=%+v, want 1 MANUAL event", *created)
 	}
-	if len(accepted) != 1 || accepted[0] != "AA" {
-		t.Fatalf("acceptor called with %v, want [AA]", accepted)
+	if pending := dc.PendingDevices(); len(pending) != 0 {
+		t.Fatalf("pending=%+v after the accept, want empty", pending)
 	}
 }
 
-func TestAddNewDevicesManuallyUnknownAddressIsSkipped(t *testing.T) {
+func TestTakeDelayedDeviceDescriptionsUnknownAddressYieldsNothing(t *testing.T) {
 	t.Parallel()
 	dc, _, devs, _, _ := newDCFull(t)
 
-	if err := dc.AddNewDevicesManually(
-		context.Background(),
-		wireKey(hmenum.InterfaceHmIPRF),
-		map[string]string{"GHOST": ""},
-		nil,
-	); err != nil {
-		t.Fatal(err)
+	if descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "GHOST"); descs != nil {
+		t.Fatalf("descs=%+v, want nil for an address that was never parked", descs)
 	}
 	if devs.Len() != 0 {
 		t.Fatal("unknown address must not create a device")
 	}
 }
 
-func TestStoreDelayedAndManualCleansUpEmptyInterfaceEntry(t *testing.T) {
+func TestStoreDelayedSkipsAReannouncementOfAKnownDevice(t *testing.T) {
+	t.Parallel()
+	dc, _, devs, descs, _ := newDCFull(t)
+	iface := wireKey(hmenum.InterfaceHmIPRF)
+	known := []hmproto.DeviceDescription{
+		{Address: "AA", Type: "HmIP-X"},
+		{Address: "AA:0", Parent: "AA", Type: "MAINTENANCE"},
+	}
+	for _, d := range known {
+		descs.Put(iface, d)
+	}
+	devs.Put(registry.DeviceEntry{Interface: iface, Address: "AA", Model: "HmIP-X"})
+
+	// The daemon answers listDevices with an empty array, so the CCU
+	// re-announces its whole inventory after every reconnect. Parking
+	// devices that exist here long since would present the entire fleet to
+	// the operator as waiting for approval.
+	dc.StoreDelayedDeviceDescriptions(iface, known)
+
+	if pending := dc.PendingDevices(); len(pending) != 0 {
+		t.Fatalf("pending=%+v, want empty — the device is already created", pending)
+	}
+
+	// A known device announcing a channel the cache has never seen is the
+	// factory-reset re-pair: that one still needs an operator decision.
+	dc.StoreDelayedDeviceDescriptions(iface, []hmproto.DeviceDescription{
+		{Address: "AA:4", Parent: "AA", Type: "SHUTTER_CONTACT"},
+	})
+	pending := dc.PendingDevices()
+	if len(pending) != 1 || pending[0].Address != "AA" || pending[0].Model != "HmIP-X" {
+		t.Fatalf("pending=%+v, want the re-paired AA/HmIP-X", pending)
+	}
+}
+
+func TestStoreDelayedAndAcceptCleansUpEmptyInterfaceEntry(t *testing.T) {
 	t.Parallel()
 	dc, _, _, _, _ := newDCFull(t)
 
@@ -307,31 +332,19 @@ func TestStoreDelayedAndManualCleansUpEmptyInterfaceEntry(t *testing.T) {
 	})
 
 	// Accept the only delayed device.
-	if err := dc.AddNewDevicesManually(
-		context.Background(),
-		wireKey(hmenum.InterfaceHmIPRF),
-		map[string]string{"AA": ""},
-		nil,
-	); err != nil {
-		t.Fatal(err)
+	if descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "AA"); len(descs) != 1 {
+		t.Fatalf("taken descriptions=%d, want 1", len(descs))
 	}
 
-	// The delayed entry must be cleaned up: try accepting again — no events.
-	dc2, bus2, devs2, _, _ := newDCFull(t)
-	var count atomic.Int32
-	events.Subscribe(bus2, func(_ hmevent.DeviceCreatedEvent) { count.Add(1) })
-	_ = dc2.AddNewDevicesManually(context.Background(), wireKey(hmenum.InterfaceHmIPRF),
-		map[string]string{"AA": ""}, nil)
-	if devs2.Len() != 0 || count.Load() != 0 {
-		t.Fatal("second AddNewDevicesManually on empty delayed should be a no-op")
-	}
-
-	// Verify the original dc's delayed map is empty for the interface.
+	// Verify the delayed map is empty for the interface.
 	dc.mu.Lock()
 	_, stillExists := dc.delayedDescs[string(wireKey(hmenum.InterfaceHmIPRF))]
 	dc.mu.Unlock()
 	if stillExists {
 		t.Fatal("delayed map for interface must be cleaned up after all devices accepted")
+	}
+	if descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "AA"); descs != nil {
+		t.Fatalf("second take returned %+v, want nil", descs)
 	}
 }
 
@@ -517,7 +530,7 @@ func TestScheduleParamsetConsistencyCheckCallsCallback(t *testing.T) {
 	}
 }
 
-// TestAddNewDevicesManuallyPublishesOutsideTheCoordinatorLock pins that
+// TestHandleAcceptedDevicesPublishesOutsideTheCoordinatorLock pins that
 // DeviceCreatedEvent handlers do not run under the DeviceCoordinator's
 // mutex.
 //
@@ -531,7 +544,7 @@ func TestScheduleParamsetConsistencyCheckCallsCallback(t *testing.T) {
 //
 // The handler here calls back into the coordinator, which is exactly
 // what the old code could not survive.
-func TestAddNewDevicesManuallyPublishesOutsideTheCoordinatorLock(t *testing.T) {
+func TestHandleAcceptedDevicesPublishesOutsideTheCoordinatorLock(t *testing.T) {
 	t.Parallel()
 
 	dc, bus, _, _, _ := newDCFull(t)
@@ -548,19 +561,17 @@ func TestAddNewDevicesManuallyPublishesOutsideTheCoordinatorLock(t *testing.T) {
 		{Address: "REENT0001", Type: "HmIP-STH"},
 	})
 
-	done := make(chan error, 1)
+	done := make(chan struct{})
 	go func() {
-		done <- dc.AddNewDevicesManually(context.Background(), wireKey(hmenum.InterfaceHmIPRF),
-			map[string]string{"REENT0001": "Sensor"}, nil)
+		descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceHmIPRF), "REENT0001")
+		dc.HandleAcceptedDevices(wireKey(hmenum.InterfaceHmIPRF), descs)
+		close(done)
 	}()
 
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("AddNewDevicesManually: %v", err)
-		}
+	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("AddNewDevicesManually deadlocked: a DeviceCreatedEvent handler ran under the coordinator lock")
+		t.Fatal("the accept path deadlocked: a DeviceCreatedEvent handler ran under the coordinator lock")
 	}
 	if !reentered.Load() {
 		t.Fatal("handler never ran; the test would pass vacuously")

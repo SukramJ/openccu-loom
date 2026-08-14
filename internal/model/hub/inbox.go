@@ -35,10 +35,22 @@ type InboxDevice struct {
 	// FirstSeen is a Unix-second timestamp set by the coordinator on
 	// first detection (Go extension, not in Python model).
 	FirstSeen int64
+	// PendingCreation marks an entry the daemon itself is holding back:
+	// with `delay_new_device_creation` enabled the announced device
+	// descriptions are parked until an operator accepts them, so the
+	// device exists on the CCU but has no data points here yet. Entries
+	// reported by the CCU's own inbox carry false.
+	PendingCreation bool
 }
 
-// Inbox aggregates the "pending device" view exposed by the CCU's
-// system variables. The hub coordinator populates it; the UI reads
+// Inbox aggregates the "pending device" view an operator has to act on.
+// It has two sources: the CCU's own inbox (devices paired but not yet
+// configured, delivered by the hub coordinator through [Inbox.Replace])
+// and the daemon's deferred-creation queue (devices announced over
+// newDevices while `delay_new_device_creation` is enabled, delivered
+// through [Inbox.SetPendingCreation]). Both mean the same thing to an
+// operator — "this device is waiting for you" — so they share one
+// aggregate and therefore one REST/WS/MQTT surface. The UI reads
 // `Count()` / `List()` to surface pairing candidates.
 //
 // Inbox embeds [datapoint.BaseDataPointFields] mirroring
@@ -53,8 +65,13 @@ type Inbox struct {
 	// operations go through Hub.AcceptInboxDeviceRemote.
 	payload.ServiceRegistry
 
-	mu        sync.RWMutex
+	mu sync.RWMutex
+	// devices holds the CCU-reported inbox; pending holds the daemon's
+	// own deferred-creation queue. They are kept apart so a CCU sweep
+	// never drops a deferred entry the CCU does not know about (and
+	// vice versa).
 	devices   map[string]InboxDevice
+	pending   map[string]InboxDevice
 	observed  bool
 	callbacks []func([]InboxDevice)
 }
@@ -71,46 +88,101 @@ func NewInboxWithCentral(centralName string) *Inbox {
 	return &Inbox{
 		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "", "inbox"),
 		devices:             make(map[string]InboxDevice),
+		pending:             make(map[string]InboxDevice),
 	}
 }
 
-// Count is the number of pending devices.
+// Count is the number of pending devices across both sources.
 func (i *Inbox) Count() int {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	return len(i.devices)
+	return len(i.merged())
 }
 
-// Observed reports whether the coordinator has ever delivered a set.
+// Observed reports whether the hub coordinator has ever delivered a
+// CCU-side set. It stays false while only the daemon's deferred queue
+// carries entries: it gates the MQTT publish of the aggregate, which
+// must not start before the CCU sweep has established a baseline.
 func (i *Inbox) Observed() bool {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
 	return i.observed
 }
 
-// List returns the pending devices sorted by address.
+// List returns the pending devices of both sources, sorted by address.
 func (i *Inbox) List() []InboxDevice {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	out := make([]InboxDevice, 0, len(i.devices))
-	for _, d := range i.devices {
-		out = append(out, d)
+	merged := i.merged()
+	out := make([]InboxDevice, 0, len(merged))
+	for addr := range merged {
+		out = append(out, merged[addr])
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Address < out[b].Address })
 	return out
 }
 
-// Replace swaps the whole pending-devices set. Fires subscribers when
-// the set actually changed.
+// merged joins the CCU-reported entries with the daemon's deferred ones.
+// The CCU entry wins on a collision because it carries the richer
+// metadata (serial, manufacturer, first-seen), but it inherits the
+// PendingCreation marker so the operator sees that accepting the device
+// also has to materialise it here. Callers hold i.mu.
+func (i *Inbox) merged() map[string]InboxDevice {
+	out := make(map[string]InboxDevice, len(i.devices)+len(i.pending))
+	for addr := range i.pending {
+		out[addr] = i.pending[addr]
+	}
+	for addr := range i.devices {
+		d := i.devices[addr]
+		if _, deferred := i.pending[addr]; deferred {
+			d.PendingCreation = true
+		}
+		out[addr] = d
+	}
+	return out
+}
+
+// Replace swaps the CCU-reported pending-devices set. Fires subscribers
+// when the merged set actually changed.
 func (i *Inbox) Replace(devices []InboxDevice) {
-	i.mu.Lock()
 	next := make(map[string]InboxDevice, len(devices))
-	for _, d := range devices {
+	for j := range devices {
+		next[devices[j].Address] = devices[j]
+	}
+	i.swap(func() bool {
+		changed := !i.observed || !sameInbox(i.devices, next)
+		i.devices = next
+		i.observed = true
+		return changed
+	})
+}
+
+// SetPendingCreation swaps the daemon-side deferred-creation queue: the
+// devices whose descriptions arrived over newDevices while
+// `delay_new_device_creation` is enabled and that no operator has
+// accepted yet. Fires subscribers when the merged set actually changed,
+// which is what drives the `hub.<central>.inbox` broadcast so an open
+// SPA sees a newly paired device without polling.
+func (i *Inbox) SetPendingCreation(devices []InboxDevice) {
+	next := make(map[string]InboxDevice, len(devices))
+	for j := range devices {
+		d := devices[j]
+		d.PendingCreation = true
 		next[d.Address] = d
 	}
-	changed := !i.observed || !sameInbox(i.devices, next)
-	i.devices = next
-	i.observed = true
+	i.swap(func() bool {
+		changed := !sameInbox(i.pending, next)
+		i.pending = next
+		return changed
+	})
+}
+
+// swap applies a mutation to one of the two source sets under the lock
+// and notifies subscribers with the merged snapshot when it reported a
+// change. Handlers run outside the lock so a subscriber may read back.
+func (i *Inbox) swap(mutate func() bool) {
+	i.mu.Lock()
+	changed := mutate()
 	cbs := make([]func([]InboxDevice), len(i.callbacks))
 	copy(cbs, i.callbacks)
 	i.mu.Unlock()
@@ -125,26 +197,22 @@ func (i *Inbox) Replace(devices []InboxDevice) {
 	}
 }
 
-// Remove drops a single pending device by address, firing subscribers only
+// Remove drops a single pending device by address from both sources,
+// firing subscribers only
 // when the entry was actually present. It reconciles a stale entry the CCU no
 // longer knows (e.g. an accept that reported the device gone) immediately,
 // without waiting for the next full inbox sweep.
 func (i *Inbox) Remove(address string) {
-	i.mu.Lock()
-	if _, ok := i.devices[address]; !ok {
-		i.mu.Unlock()
-		return
-	}
-	delete(i.devices, address)
-	cbs := make([]func([]InboxDevice), len(i.callbacks))
-	copy(cbs, i.callbacks)
-	i.mu.Unlock()
-	snap := i.List()
-	for _, cb := range cbs {
-		if cb != nil {
-			cb(snap)
+	i.swap(func() bool {
+		_, known := i.devices[address]
+		_, deferred := i.pending[address]
+		if !known && !deferred {
+			return false
 		}
-	}
+		delete(i.devices, address)
+		delete(i.pending, address)
+		return true
+	})
 }
 
 // OnUpdate registers a change handler. Returns an idempotent
@@ -195,9 +263,9 @@ func sameInbox(a, b map[string]InboxDevice) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for addr, left := range a {
+	for addr := range a {
 		right, ok := b[addr]
-		if !ok || left != right {
+		if !ok || a[addr] != right {
 			return false
 		}
 	}

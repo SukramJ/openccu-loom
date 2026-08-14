@@ -1657,9 +1657,11 @@ type CentralBehavior struct {
 	// notes/parity/by_design.md for the divergence rationale).
 	EnableDeviceFirmwareCheck *bool `yaml:"enable_device_firmware_check,omitempty" json:"enable_device_firmware_check,omitempty" cfg:"expert"`
 
-	// DelayNewDeviceCreation (default false) defers creation of a
-	// newly-paired device until its description is complete, avoiding
-	// half-formed entities during pairing. Reference stack key:
+	// DelayNewDeviceCreation (default false) holds a newly-paired device
+	// back until an operator accepts it: the announced descriptions are
+	// parked, the device is listed on the inbox surface (REST GET /inbox,
+	// WS inbox.list, the SPA inbox view) and only the accept
+	// (POST /devices/{addr}/accept) materialises it. Reference stack key:
 	// delay_new_device_creation.
 	DelayNewDeviceCreation *bool `yaml:"delay_new_device_creation,omitempty" json:"delay_new_device_creation,omitempty" cfg:"expert"`
 }

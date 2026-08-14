@@ -175,9 +175,10 @@ func (a *DeviceAdminDomain) inboxModelOf(unit *central.Unit, newAddress string) 
 	if unit.HubModel == nil || unit.HubModel.Inbox == nil {
 		return ""
 	}
-	for _, d := range unit.HubModel.Inbox.List() {
-		if d.Address == newAddress {
-			return d.Model
+	inbox := unit.HubModel.Inbox.List()
+	for i := range inbox {
+		if inbox[i].Address == newAddress {
+			return inbox[i].Model
 		}
 	}
 	return ""

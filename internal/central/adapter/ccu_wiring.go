@@ -467,10 +467,10 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		if runner != nil {
 			ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
 		}
-		cbHandlers.SetHotplugIngestor(newHotplugIngestor(
+		unit.SetDeviceIngestFn(newHotplugIngestor(
 			unit, pipeline, writer, runner, backendsByInterface.operations, ddLoader, logger,
 		))
-		addCloser(func() { cbHandlers.SetHotplugIngestor(nil) })
+		addCloser(func() { unit.SetDeviceIngestFn(nil) })
 	}
 
 	// Late-binding handlers: resolve the primary client/backend at call time.

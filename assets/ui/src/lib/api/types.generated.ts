@@ -2612,6 +2612,12 @@ export interface paths {
          *     was removed on the CCU — e.g. the virtual backing device of a
          *     heating group), the response is a 404 and the daemon drops the
          *     stale entry from its inbox view.
+         *
+         *     An entry flagged `pending_creation` is additionally held back by
+         *     this daemon (`central.behavior.delay_new_device_creation`);
+         *     accepting it hands the parked descriptions to the same
+         *     materialiser a hot-plugged device runs through, so the device
+         *     arrives with its channels, data points and values.
          */
         post: operations["acceptInboxDevice"];
         delete?: never;
@@ -9464,6 +9470,15 @@ export interface components {
             manufacturer?: string;
             /** Format: int64 */
             first_seen?: number;
+            /**
+             * @description True when the daemon itself is holding the device back:
+             *     with `central.behavior.delay_new_device_creation` enabled the
+             *     announced descriptions are parked until an operator accepts
+             *     them, so the device exists on the CCU but has no data points
+             *     here yet. Accepting it (POST /devices/{addr}/accept) also
+             *     materialises it.
+             */
+            pending_creation?: boolean;
         };
         /**
          * @description One already-paired device a new (inbox) device may replace,

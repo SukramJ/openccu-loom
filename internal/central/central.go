@@ -32,6 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
 // Config configures a [*Unit]. Required fields: Name.
@@ -947,6 +948,31 @@ func (u *Unit) SetAcceptInboxFn(fn func(ctx context.Context, address string) err
 	u.services.mu.Lock()
 	u.services.acceptInboxFn = fn
 	u.services.mu.Unlock()
+}
+
+// SetDeviceIngestFn wires the materialiser that turns announced device
+// descriptions into domain devices. The wiring installs it once the
+// device pipeline and the per-interface backends exist. Pass nil to
+// detach.
+func (u *Unit) SetDeviceIngestFn(fn func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error) {
+	u.services.mu.Lock()
+	u.services.deviceIngestFn = fn
+	u.services.mu.Unlock()
+}
+
+// IngestDevices materialises the given descriptions into the domain
+// model. An announcement that arrives before the wiring installed the
+// materialiser is silently skipped rather than rejected: the interface
+// bring-up materialises those devices anyway. Errors from the
+// materialiser itself are propagated.
+func (u *Unit) IngestDevices(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error {
+	u.services.mu.RLock()
+	fn := u.services.deviceIngestFn
+	u.services.mu.RUnlock()
+	if fn == nil {
+		return nil
+	}
+	return fn(ctx, interfaceID, descriptions)
 }
 
 // CreateBackup triggers a backup on the CCU and returns the downloaded

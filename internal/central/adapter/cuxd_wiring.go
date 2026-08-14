@@ -232,7 +232,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 			ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
 		}
 		cuxdBackend := backend
-		cbHandlers.SetHotplugIngestor(newHotplugIngestor(
+		unit.SetDeviceIngestFn(newHotplugIngestor(
 			unit, pipeline, writer, runner,
 			func(string) backends.Operations { return cuxdBackend },
 			ddLoader, logger,

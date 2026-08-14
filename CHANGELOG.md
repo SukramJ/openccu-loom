@@ -33,6 +33,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`delay_new_device_creation` now has the operator surface it promises.**
+  The toggle held a newly paired device back — and there it ended: the
+  announced descriptions were parked in memory, no list showed them, and
+  nothing ever emptied the queue, so the device stayed without a single
+  data point until the daemon was restarted. Accepting it in the Config UI
+  only flipped the flag on the CCU. Devices held back this way are now
+  listed in the inbox (`GET /api/v1/inbox`, the WS `inbox.list` command,
+  the MQTT inbox sensor and the SPA inbox view) with an "awaiting approval"
+  marker, an open Config UI learns about a newly paired one through the
+  existing `hub.<central>.inbox` broadcast, and accepting it
+  (`POST /api/v1/devices/{addr}/accept`, WS `inbox.accept`) hands the
+  parked descriptions to the same materialiser a hot-plugged device runs
+  through — so the accepted device arrives with its channels, data points
+  and values. A failed materialisation leaves the device listed so the
+  accept can be retried. The queue also no longer fills with the whole
+  installation: the CCU re-announces its complete inventory after every
+  reconnect, and descriptions that add nothing are ignored. (REST API
+  5.28.0)
+
 - **Changing only a user's role now works.** The Config UI leaves the
   password field blank when an admin just moves an account between roles,
   and the daemon answered that request with "password is required" — the

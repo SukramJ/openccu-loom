@@ -277,7 +277,27 @@ func (c *DeviceCoordinator) HandleNewDevices(_ context.Context, iface hmtypes.Wi
 	for i := range missing {
 		missingSet[missing[i].Address] = struct{}{}
 	}
+	c.ingestDescriptions(iface, descriptions, func(address string) hmenum.SourceOfDeviceCreation {
+		if _, wasMissing := missingSet[address]; wasMissing {
+			// Device address was unknown to the cache: factory-reset
+			// re-pair path. Use Refresh source so north-bound adapters
+			// can distinguish re-pairs from genuine new devices.
+			return hmenum.SourceOfDeviceCreationRefresh
+		}
+		return hmenum.SourceOfDeviceCreationNew
+	})
+}
 
+// ingestDescriptions stores the descriptions, registers every top-level
+// device and publishes one [hmevent.DeviceCreatedEvent] per device with
+// the source the caller derives per address. It carries the shared body
+// of [DeviceCoordinator.HandleNewDevices] and
+// [DeviceCoordinator.HandleAcceptedDevices].
+func (c *DeviceCoordinator) ingestDescriptions(
+	iface hmtypes.WireInterfaceID,
+	descriptions []hmproto.DeviceDescription,
+	sourceOf func(address string) hmenum.SourceOfDeviceCreation,
+) {
 	deviceCount := 0
 	for i := range descriptions {
 		desc := descriptions[i]
@@ -289,20 +309,13 @@ func (c *DeviceCoordinator) HandleNewDevices(_ context.Context, iface hmtypes.Wi
 				Model:     desc.Type,
 			}
 			c.devices.Put(entry)
-			source := hmenum.SourceOfDeviceCreationNew
-			if _, wasMissing := missingSet[desc.Address]; wasMissing {
-				// Device address was unknown to the cache: factory-reset
-				// re-pair path. Use Refresh source so north-bound adapters
-				// can distinguish re-pairs from genuine new devices.
-				source = hmenum.SourceOfDeviceCreationRefresh
-			}
 			events.Publish(c.bus, hmevent.DeviceCreatedEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: c.centralName,
 				InterfaceID: string(iface),
 				Address:     desc.Address,
 				Model:       desc.Type,
-				Source:      source,
+				Source:      sourceOf(desc.Address),
 			})
 			deviceCount++
 		}
@@ -698,106 +711,98 @@ func (c *DeviceCoordinator) ReloadChannelConfig(
 	return nil
 }
 
-// AddNewDevicesManually accepts devices that have been announced via
-// newDevices callbacks but are still in the "delayed" (pending-accept) queue.
-// The caller provides an address→name map; for each address the stored
-// descriptions are moved into the active registry and a DeviceCreatedEvent
-// with source MANUAL is emitted.
-//
-// Addresses missing from the delayed queue are logged and skipped. The
-// deviceAcceptor callback, if provided, is invoked per address so the adapter
-// layer can call acceptDeviceInInbox on the CCU client.
-func (c *DeviceCoordinator) AddNewDevicesManually(
-	ctx context.Context,
-	iface hmtypes.WireInterfaceID,
-	addressNames map[string]string,
-	deviceAcceptor func(ctx context.Context, iface hmtypes.WireInterfaceID, address string) error,
-) error {
-	ifaceID := string(iface)
-	// locked tracks whether the deferred unlock still owns the lock: the
-	// publish tail below releases it early so handlers never run under it.
-	c.mu.Lock()
-	locked := true
-	defer func() {
-		if locked {
-			c.mu.Unlock()
-		}
-	}()
+// PendingDevice identifies one device parked in the deferred-creation
+// queue: announced over a newDevices callback while
+// `delay_new_device_creation` is enabled, waiting for an operator to
+// accept it.
+type PendingDevice struct {
+	// Interface is the canonical wire interface id the device was
+	// announced on.
+	Interface hmtypes.WireInterfaceID
+	// Address is the top-level device address.
+	Address string
+	// Model is the device type the CCU reported.
+	Model string
+}
 
-	ifaceDelayed, ok := c.delayedDescs[ifaceID]
-	if !ok || len(ifaceDelayed) == 0 {
-		c.logger.Warn("AddNewDevicesManually: no delayed descriptions for interface",
-			"interface", ifaceID)
+// PendingDevices returns a snapshot of the deferred-creation queue,
+// sorted by interface and address, so the north-bound inbox surface can
+// show what is waiting for an operator. Only top-level devices are
+// listed; their channels stay in the queue and are materialised
+// together with the device on accept.
+func (c *DeviceCoordinator) PendingDevices() []PendingDevice {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []PendingDevice
+	for ifaceID, byAddress := range c.delayedDescs {
+		iface := hmtypes.WireInterfaceID(ifaceID)
+		for address, descs := range byAddress {
+			model := ""
+			for i := range descs {
+				if descs[i].Address == address && descs[i].IsDevice() {
+					model = descs[i].Type
+					break
+				}
+			}
+			if model == "" && c.descs != nil {
+				// A known device re-announcing new channels parks no
+				// device-level description; the cached one carries the model.
+				if cached, ok := c.descs.Get(iface, address); ok {
+					model = cached.Type
+				}
+			}
+			out = append(out, PendingDevice{Interface: iface, Address: address, Model: model})
+		}
+	}
+	slices.SortFunc(out, func(a, b PendingDevice) int {
+		if a.Interface != b.Interface {
+			return strings.Compare(string(a.Interface), string(b.Interface))
+		}
+		return strings.Compare(a.Address, b.Address)
+	})
+	return out
+}
+
+// TakeDelayedDeviceDescriptions removes the parked descriptions of one
+// device from the deferred-creation queue and returns them, so the
+// caller can run the same materialisation the immediate path runs. A
+// device that is not (or no longer) parked yields nil, which is how a
+// caller tells "nothing to accept here" from "accepted".
+//
+// The descriptions are handed out, not registered: registration and the
+// DeviceCreatedEvent happen in [DeviceCoordinator.HandleAcceptedDevices]
+// after the device has been materialised, so a north-bound subscriber
+// resolves the device in the model when the event fires.
+func (c *DeviceCoordinator) TakeDelayedDeviceDescriptions(
+	iface hmtypes.WireInterfaceID, address string,
+) []hmproto.DeviceDescription {
+	ifaceID := string(iface)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	byAddress, ok := c.delayedDescs[ifaceID]
+	if !ok {
 		return nil
 	}
-
-	var toProcess []hmproto.DeviceDescription
-	for address := range addressNames {
-		dds, found := ifaceDelayed[address]
-		if !found {
-			c.logger.Warn("AddNewDevicesManually: no delayed description for address",
-				"address", address, "interface", ifaceID)
-			continue
-		}
-		delete(ifaceDelayed, address)
-
-		// Optionally accept on the CCU side.
-		if deviceAcceptor != nil {
-			if err := deviceAcceptor(ctx, iface, address); err != nil {
-				c.logger.Warn("AddNewDevicesManually: accept device failed",
-					"address", address, "error", err)
-				// Non-fatal: continue with local registration.
-			}
-		}
-		toProcess = append(toProcess, dds...)
+	descs, found := byAddress[address]
+	if !found {
+		return nil
 	}
-
-	// Clean up empty interface entry.
-	if len(ifaceDelayed) == 0 {
+	delete(byAddress, address)
+	if len(byAddress) == 0 {
 		delete(c.delayedDescs, ifaceID)
 	}
+	return descs
+}
 
-	if len(toProcess) == 0 {
-		return nil
-	}
-
-	// Register descriptions, then publish OUTSIDE the coordinator lock.
-	//
-	// The bus dispatches synchronously on the caller's goroutine, and this
-	// event's handlers do real work — the event bridge publishes the
-	// device's whole MQTT snapshot to the broker, the security domain
-	// rebuilds its index. Publishing under c.mu therefore held a
-	// non-reentrant coordinator lock across foreign handler code including
-	// network I/O: any handler that reaches back into the DeviceCoordinator
-	// self-deadlocks the daemon, and until one does, a slow broker stalls
-	// every other caller of this coordinator.
-	created := make([]hmevent.DeviceCreatedEvent, 0, len(toProcess))
-	for i := range toProcess {
-		d := toProcess[i]
-		c.descs.Put(iface, d)
-		if !d.IsDevice() {
-			continue
-		}
-		c.devices.Put(registry.DeviceEntry{
-			Interface: iface,
-			Address:   d.Address,
-			Model:     d.Type,
-		})
-		created = append(created, hmevent.DeviceCreatedEvent{
-			Base:        hmevent.NewBase(),
-			CentralName: c.centralName,
-			InterfaceID: ifaceID,
-			Address:     d.Address,
-			Model:       d.Type,
-			Source:      hmenum.SourceOfDeviceCreationManual,
-		})
-	}
-	c.mu.Unlock()
-	locked = false
-	for _, e := range created {
-		events.Publish(c.bus, e)
-	}
-	return nil
+// HandleAcceptedDevices performs the registry bookkeeping and event
+// publication for devices an operator accepted out of the
+// deferred-creation queue. It is [DeviceCoordinator.HandleNewDevices]
+// with the creation source pinned to MANUAL, which is what north-bound
+// consumers use to tell an operator-driven accept from a hot-plug.
+func (c *DeviceCoordinator) HandleAcceptedDevices(iface hmtypes.WireInterfaceID, descriptions []hmproto.DeviceDescription) {
+	c.ingestDescriptions(iface, descriptions, func(string) hmenum.SourceOfDeviceCreation {
+		return hmenum.SourceOfDeviceCreationManual
+	})
 }
 
 // maxDelayedDevicesPerInterface bounds the number of distinct devices the
@@ -809,7 +814,7 @@ const maxDelayedDevicesPerInterface = 1024
 
 // StoreDelayedDeviceDescriptions stores device descriptions that have been
 // received via a newDevices callback but not yet manually accepted. The
-// descriptions are keyed by device address so AddNewDevicesManually can look
+// descriptions are keyed by device address so the accept flow can look
 // them up later.
 //
 // The store is idempotent per description address: a re-announcement replaces
@@ -818,6 +823,14 @@ const maxDelayedDevicesPerInterface = 1024
 // the CCU re-announces its complete inventory after every reconnect — an
 // append-only inbox grew by another full copy of the fleet each time and
 // nothing but the manual-accept flow ever removed anything.
+//
+// A description that adds nothing — its device exists and the description
+// itself is already cached — is skipped for the same reason: the
+// re-announcement after a reconnect covers the whole fleet, and parking it
+// would present every device in the installation to the operator as "waiting
+// for approval". A known device announcing an address the cache has never
+// seen (the factory-reset re-pair) is still parked: that one does need an
+// operator decision.
 func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmtypes.WireInterfaceID, descriptions []hmproto.DeviceDescription) {
 	ifaceID := string(iface)
 	c.mu.Lock()
@@ -832,6 +845,11 @@ func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmtypes.WireInt
 		key := d.Parent
 		if key == "" {
 			key = d.Address
+		}
+		if c.devices != nil && c.devices.Has(iface, key) && c.descs != nil {
+			if _, cached := c.descs.Get(iface, d.Address); cached {
+				continue
+			}
 		}
 		entry, known := pending[key]
 		if !known && len(pending) >= maxDelayedDevicesPerInterface {
@@ -848,6 +866,9 @@ func (c *DeviceCoordinator) StoreDelayedDeviceDescriptions(iface hmtypes.WireInt
 			continue
 		}
 		pending[key] = append(entry, d)
+	}
+	if len(pending) == 0 {
+		delete(c.delayedDescs, ifaceID)
 	}
 }
 

@@ -567,7 +567,7 @@ modelled. All are hot-reloadable and default to sensible values:
 | `behavior.program_markers` | list | — | Marker tokens steering how programs arrive (`HX`/`INTERNAL`) |
 | `behavior.sysvar_scan_interval` | duration | `30s` | Per-central sysvar-refresh cadence; `0` selects the default, values below `3s` are rejected |
 | `behavior.enable_device_firmware_check` | bool | `true` | Expose per-device firmware-update entities |
-| `behavior.delay_new_device_creation` | bool | `false` | Defer a newly-paired device until its description is complete |
+| `behavior.delay_new_device_creation` | bool | `false` | Hold a newly-paired device back until an operator accepts it from the inbox; until then it is listed there (flagged `pending_creation`) and has no data points |
 
 ### `persistence`
 

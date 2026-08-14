@@ -53,89 +53,64 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// AddNewDevicesManually — no delayed descriptions
+// Accept flow — empty deferred queue
 // ---------------------------------------------------------------------------
 
-// TestAddNewDeviceManuallyNoDelayedDescriptions verifies that when there are
-// no delayed descriptions for the requested interface, AddNewDevicesManually
-// returns without creating any device or calling the acceptor.
-//
-// Mirrors: test_add_new_device_manually_no_client.
-// Python skips when client doesn't exist; Go skips when delayedDescs is
-// empty for the interface. Both guard the actual device-creation path.
-func TestAddNewDeviceManuallyNoDelayedDescriptions(t *testing.T) {
+// TestTakeDelayedDescriptionsOnAnEmptyQueueCreatesNothing verifies that a
+// request to accept a device that was never parked yields no descriptions
+// and creates no device, so an accept for an address on a different
+// interface (or a repeat of an accept that already ran) is a no-op.
+func TestTakeDelayedDescriptionsOnAnEmptyQueueCreatesNothing(t *testing.T) {
 	t.Parallel()
 	dc, _, devs, _, _ := newDCFull(t)
 
-	var acceptorCalled bool
-	acceptFn := func(_ context.Context, _ hmtypes.WireInterfaceID, _ string) error {
-		acceptorCalled = true
-		return nil
-	}
-
 	// No StoreDelayedDeviceDescriptions call → delayedDescs is empty.
-	err := dc.AddNewDevicesManually(
-		context.Background(),
-		wireKey(hmenum.InterfaceBidCosRF),
-		map[string]string{"VCU0000001": ""},
-		acceptFn,
-	)
-	if err != nil {
-		t.Fatalf("AddNewDevicesManually: unexpected error: %v", err)
+	if descs := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), "VCU0000001"); descs != nil {
+		t.Fatalf("descs=%+v, want nil when the deferred queue is empty", descs)
 	}
 	if devs.Len() != 0 {
 		t.Errorf("no device must be created when delayed queue is empty, devs=%d", devs.Len())
 	}
-	if acceptorCalled {
-		t.Error("acceptor must not be called when no delayed descriptions exist")
-	}
 }
 
 // ---------------------------------------------------------------------------
-// AddNewDevicesManually — partial batch continues
+// Accept flow - one address at a time
 // ---------------------------------------------------------------------------
 
-// TestAddNewDeviceManuallyPartialBatchContinues verifies that a missing
-// delayed description for one address does not abort the entire batch —
-// remaining addresses with descriptions are still processed.
-//
-// Mirrors: test_add_new_device_manually_partial_batch_continues.
-func TestAddNewDeviceManuallyPartialBatchContinues(t *testing.T) {
+// TestAcceptingOneDeviceLeavesTheOtherPending verifies that accepting a
+// single parked device takes only that device out of the deferred queue: an
+// operator accepts device by device, and the rest must stay listed as
+// waiting.
+func TestAcceptingOneDeviceLeavesTheOtherPending(t *testing.T) {
 	t.Parallel()
 	dc, bus, devs, _, _ := newDCFull(t)
 	created := collectCreated(bus)
 
-	// Only VCU0000001 has delayed descriptions; VCU9999999 has none.
 	dc.StoreDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), []hmproto.DeviceDescription{
 		{Address: "VCU0000001", Type: "HM-Test"},
 		{Address: "VCU0000001:0", Parent: "VCU0000001", Type: "MAINTENANCE"},
+		{Address: "VCU0000002", Type: "HM-Test"},
 	})
 
-	err := dc.AddNewDevicesManually(
-		context.Background(),
-		wireKey(hmenum.InterfaceBidCosRF),
-		map[string]string{
-			"VCU9999999": "", // missing — should be skipped, not fatal
-			"VCU0000001": "",
-		},
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("AddNewDevicesManually: %v", err)
-	}
+	taken := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), "VCU0000001")
+	dc.HandleAcceptedDevices(wireKey(hmenum.InterfaceBidCosRF), taken)
 
-	// VCU0000001 must still be registered.
+	// VCU0000001 must be registered.
 	if devs.Len() != 1 {
 		t.Fatalf("expected 1 device, got %d", devs.Len())
 	}
 	if _, ok := devs.Get(wireKey(hmenum.InterfaceBidCosRF), "VCU0000001"); !ok {
-		t.Error("VCU0000001 must be in DeviceRegistry after partial batch")
+		t.Error("VCU0000001 must be in DeviceRegistry after the accept")
 	}
 	if len(*created) != 1 || (*created)[0].Address != "VCU0000001" {
 		t.Errorf("created events=%+v, want single VCU0000001", *created)
 	}
 	if (*created)[0].Source != hmenum.SourceOfDeviceCreationManual {
 		t.Errorf("source=%v, want MANUAL", (*created)[0].Source)
+	}
+	pending := dc.PendingDevices()
+	if len(pending) != 1 || pending[0].Address != "VCU0000002" {
+		t.Errorf("pending=%+v, want VCU0000002 still waiting", pending)
 	}
 }
 
@@ -292,7 +267,7 @@ func TestHandleNewDevicesMissingParentIsStored(t *testing.T) {
 // TestStoreDelayedDescriptionsParentKnownChannelsMissing verifies the
 // factory-reset scenario: when a parent device is already known but channel
 // descriptions arrive via newDevices, StoreDelayedDeviceDescriptions keys
-// them by Parent so AddNewDevicesManually can retrieve them later under the
+// them by Parent so the accept flow can retrieve them later under the
 // parent address.
 //
 // Mirrors: test_parent_known_but_channels_missing_factory_reset_scenario.
@@ -317,24 +292,20 @@ func TestStoreDelayedDescriptionsParentKnownChannelsMissing(t *testing.T) {
 		{Address: "HEQ0128279:1", Parent: "HEQ0128279", Type: "SHUTTER_CONTACT"},
 	})
 
-	// Both channel descriptions must be retrievable via AddNewDevicesManually
+	// Both channel descriptions must be retrievable through the accept flow
 	// using the parent address as key.
-	err := dc.AddNewDevicesManually(
-		context.Background(),
-		wireKey(hmenum.InterfaceBidCosRF),
-		map[string]string{"HEQ0128279": ""},
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("AddNewDevicesManually: %v", err)
+	taken := dc.TakeDelayedDeviceDescriptions(wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279")
+	if len(taken) != 2 {
+		t.Fatalf("taken descriptions=%d, want both channels", len(taken))
 	}
+	dc.HandleAcceptedDevices(wireKey(hmenum.InterfaceBidCosRF), taken)
 
 	// The channel descriptions must now be in the description registry.
 	if _, ok := descs.Get(wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279:0"); !ok {
-		t.Error("channel HEQ0128279:0 must be stored after AddNewDevicesManually")
+		t.Error("channel HEQ0128279:0 must be stored after the accept")
 	}
 	if _, ok := descs.Get(wireKey(hmenum.InterfaceBidCosRF), "HEQ0128279:1"); !ok {
-		t.Error("channel HEQ0128279:1 must be stored after AddNewDevicesManually")
+		t.Error("channel HEQ0128279:1 must be stored after the accept")
 	}
 }
 

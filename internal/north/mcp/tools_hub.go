@@ -258,6 +258,10 @@ type inboxDeviceSummary struct {
 	Serial       string `json:"serial,omitempty"`
 	Manufacturer string `json:"manufacturer,omitempty"`
 	Central      string `json:"central"`
+	// PendingCreation marks a device the daemon parked because
+	// delay_new_device_creation is enabled; it exists on the CCU but has
+	// no data points here until it is accepted.
+	PendingCreation bool `json:"pending_creation,omitempty"`
 }
 
 type listInboxOut struct {
@@ -267,7 +271,7 @@ type listInboxOut struct {
 func registerListInbox(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_inbox",
-		Description: "List devices in the CCU inbox — newly detected devices not yet accepted into the configuration — optionally scoped to one central via central_name.",
+		Description: "List devices waiting for acceptance — newly detected devices in the CCU inbox plus any this daemon parked because delay_new_device_creation is enabled (pending_creation) — optionally scoped to one central via central_name.",
 	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in centralScopeIn) (*mcpsdk.CallToolResult, listInboxOut, error) {
 		out := listInboxOut{Devices: []inboxDeviceSummary{}}
 		for _, c := range centralsToScan(d, in.CentralName) {
@@ -275,15 +279,18 @@ func registerListInbox(s *mcpsdk.Server, d Deps) {
 			if h == nil || h.Inbox == nil {
 				continue
 			}
-			for _, dev := range h.Inbox.List() {
+			inbox := h.Inbox.List()
+			for i := range inbox {
+				dev := &inbox[i]
 				out.Devices = append(out.Devices, inboxDeviceSummary{
-					Address:      dev.Address,
-					Name:         dev.Name,
-					Model:        dev.Model,
-					Interface:    dev.Interface,
-					Serial:       dev.Serial,
-					Manufacturer: dev.Manufacturer,
-					Central:      c,
+					Address:         dev.Address,
+					Name:            dev.Name,
+					Model:           dev.Model,
+					Interface:       dev.Interface,
+					Serial:          dev.Serial,
+					Manufacturer:    dev.Manufacturer,
+					Central:         c,
+					PendingCreation: dev.PendingCreation,
 				})
 			}
 		}

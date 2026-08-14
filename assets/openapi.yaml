@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.27.0
+  version: 5.28.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2608,6 +2608,12 @@ paths:
         was removed on the CCU — e.g. the virtual backing device of a
         heating group), the response is a 404 and the daemon drops the
         stale entry from its inbox view.
+
+        An entry flagged `pending_creation` is additionally held back by
+        this daemon (`central.behavior.delay_new_device_creation`);
+        accepting it hands the parked descriptions to the same
+        materialiser a hot-plugged device runs through, so the device
+        arrives with its channels, data points and values.
       tags: [devices]
       security:
         - basicAuth: []
@@ -12338,6 +12344,15 @@ components:
         serial: { type: string }
         manufacturer: { type: string }
         first_seen: { type: integer, format: int64 }
+        pending_creation:
+          type: boolean
+          description: |
+            True when the daemon itself is holding the device back:
+            with `central.behavior.delay_new_device_creation` enabled the
+            announced descriptions are parked until an operator accepts
+            them, so the device exists on the CCU but has no data points
+            here yet. Accepting it (POST /devices/{addr}/accept) also
+            materialises it.
 
     ReplaceCandidate:
       type: object

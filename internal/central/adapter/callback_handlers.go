@@ -61,18 +61,6 @@ type CallbackHandlers struct {
 	// entities right away. Set per-central via [SetDelayNewDeviceCreation].
 	delayNewDeviceCreation bool
 
-	// hotplugMu guards hotplugIngest. The handler is registered with the
-	// callback server before the central's device pipeline exists, so the
-	// ingestor arrives later via [SetHotplugIngestor] while callbacks may
-	// already be firing.
-	hotplugMu sync.RWMutex
-	// hotplugIngest materialises freshly announced devices into the
-	// domain model (paramset hydration, custom DPs, value seeding). Nil
-	// until the wiring installs it; NewDevices then degrades to the
-	// registry-and-event bookkeeping only. interfaceID is the canonical
-	// wire id (`<central>-<iface>`).
-	hotplugIngest func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error
-
 	// selfReloadSem is a non-blocking semaphore (buffered channel) that
 	// caps the number of concurrent self-reload goroutines at
 	// selfReloadConcurrency. A value-flood from the CCU can otherwise
@@ -117,25 +105,6 @@ func (h *CallbackHandlers) SetWriter(w *clientpkg.ValueWriter) {
 // entities immediately.
 func (h *CallbackHandlers) SetDelayNewDeviceCreation(delay bool) {
 	h.delayNewDeviceCreation = delay
-}
-
-// SetHotplugIngestor installs the hot-plug materialiser NewDevices hands
-// freshly announced devices to. The wiring builds it once the device
-// pipeline and the per-interface backends exist — callbacks arriving
-// before that fall back to registry bookkeeping only (the interface
-// bring-up materialises those devices anyway).
-func (h *CallbackHandlers) SetHotplugIngestor(fn func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error) {
-	h.hotplugMu.Lock()
-	h.hotplugIngest = fn
-	h.hotplugMu.Unlock()
-}
-
-// hotplugIngestor returns the currently installed hot-plug materialiser,
-// or nil when the wiring has not provided one yet.
-func (h *CallbackHandlers) hotplugIngestor() func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error {
-	h.hotplugMu.RLock()
-	defer h.hotplugMu.RUnlock()
-	return h.hotplugIngest
 }
 
 // incidentRecorder returns the incident recorder wired to the central's
@@ -531,14 +500,18 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 		return nil
 	}
 	if h.delayNewDeviceCreation {
-		// Defer entity creation: the operator accepts the device from
-		// the inbox once its description is complete. The inbox is only
-		// filled here because AddNewDevicesManually is the sole path that
+		// Defer entity creation: the device waits on the inbox surface
+		// until an operator accepts it. The inbox is only
+		// filled here because the accept flow is the sole path that
 		// empties it — with immediate creation the descriptions go to the
 		// hot-plug ingestor below, and a stored copy would never be read
 		// again while the CCU keeps re-announcing its whole inventory on
 		// every reconnect.
 		h.unit.Devices.StoreDelayedDeviceDescriptions(iface, descriptions)
+		// Publish the queue on the operator's inbox surface. Without this
+		// the deferred device is invisible: it exists on the CCU, has no
+		// data points here, and nothing tells anyone it is waiting.
+		PublishPendingDevices(h.unit)
 		h.logger.Info("callback.new_devices.deferred",
 			slog.String("interface", interfaceID),
 			slog.Int("count", len(descriptions)))
@@ -547,12 +520,10 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 	h.wg.Go(func() { //nolint:contextcheck // background ingest uses h.ctx — the callback ctx dies when the RPC response is written
 		bgCtx, cancel := context.WithTimeout(h.ctx, newDevicesIngestTimeout)
 		defer cancel()
-		if ingest := h.hotplugIngestor(); ingest != nil {
-			if err := ingest(bgCtx, interfaceID, descriptions); err != nil {
-				h.logger.Warn("callback.new_devices.ingest_failed",
-					slog.String("interface", interfaceID),
-					slog.String("err", err.Error()))
-			}
+		if err := h.unit.IngestDevices(bgCtx, interfaceID, descriptions); err != nil {
+			h.logger.Warn("callback.new_devices.ingest_failed",
+				slog.String("interface", interfaceID),
+				slog.String("err", err.Error()))
 		}
 		// Registry + description-cache bookkeeping and the (at-least-once)
 		// DeviceCreatedEvent — after materialisation, see doc comment.
