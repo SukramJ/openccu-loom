@@ -50,6 +50,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.58.6]
 
+### Security
+
+- **Go toolchain 1.26.6.** The 1.26.5 standard library carries seven
+  advisories on code paths this daemon actually calls, across the XML
+  decoder the XML-RPC transport and SSDP discovery use, the ASN.1 decoder
+  behind Matter CSR generation, and `net/http`. All are fixed in 1.26.6;
+  `go.mod`, the builder image, and every workflow move together.
+
 ### Fixed
 
 - **A second CCU no longer loses its virtual-remote entities.** A few
