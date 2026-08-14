@@ -27,7 +27,7 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.26.5"
+  GO_VERSION: "1.26.6"
   PYTHON_VERSION: "3.14"
   # Representative smoke subset. Spans climate / switch+meter / cover / sensor
   # across the HmIP-RF, BidCos-RF and HmIP-Wired transports, and deliberately
