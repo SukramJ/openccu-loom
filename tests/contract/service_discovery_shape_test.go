@@ -25,8 +25,12 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	mqtt "github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -83,13 +87,13 @@ func (f *contractFakeCDPSink) InvokeCustomDP(_ context.Context, _, _, _, _ strin
 }
 
 func (f *contractFakeCDPSink) InvokeChannelService(_ context.Context,
-	central, iface, device string, channel int,
+	central, iface, deviceAddress string, channel int,
 	method string, params map[string]any, _ hmenum.CommandPriority,
 ) error {
 	f.calls++
 	f.central = central
 	f.iface = iface
-	f.device = device
+	f.device = deviceAddress
 	f.channel = channel
 	f.method = method
 	f.params = params
@@ -753,4 +757,165 @@ func TestServiceDiscoveryShape_TopicSegmentContract(t *testing.T) {
 
 func (f *contractFakeSink) SetProgramEnabled(_ context.Context, _, _ string, _ bool) error {
 	return nil
+}
+
+// --- TestServiceDiscoveryShape_Cover_OpenCloseStop -------------------------
+
+// coverCommandWriter records every wire write a cover performs so the
+// round-trip below can assert which parameter an HA button reached.
+type coverCommandWriter struct {
+	mu    sync.Mutex
+	calls []coverWireCall
+}
+
+type coverWireCall struct {
+	param hmenum.Parameter
+	value any
+}
+
+func (w *coverCommandWriter) SetValue(_ context.Context, _ string,
+	parameter hmenum.Parameter, value any, _ hmenum.CommandPriority,
+) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.calls = append(w.calls, coverWireCall{parameter, value})
+	return nil
+}
+
+func (w *coverCommandWriter) take() []coverWireCall {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := w.calls
+	w.calls = nil
+	return out
+}
+
+// coverInvokeSink mirrors [adapter.MQTTCommandSink.InvokeChannelService]:
+// it resolves the channel's custom DP and calls Source.Invoke. The
+// resolution step is the only part stubbed out — the dispatch this test
+// is about is the real one.
+type coverInvokeSink struct {
+	src interface {
+		Invoke(ctx context.Context, name string, params map[string]any, priority hmenum.CommandPriority) error
+	}
+	err error
+}
+
+func (s *coverInvokeSink) InvokeCustomDP(_ context.Context, _, _, _, _ string,
+	_ map[string]any, _ hmenum.CommandPriority,
+) error {
+	return nil
+}
+
+func (s *coverInvokeSink) InvokeChannelService(ctx context.Context,
+	_, _, _ string, _ int,
+	method string, params map[string]any, priority hmenum.CommandPriority,
+) error {
+	s.err = s.src.Invoke(ctx, method, params, priority)
+	return s.err
+}
+
+// mqttFilterMatches reports whether topic matches an MQTT wildcard
+// filter built from `+` single-level wildcards.
+func mqttFilterMatches(filter, topic string) bool {
+	fParts := strings.Split(filter, "/")
+	tParts := strings.Split(topic, "/")
+	if len(fParts) != len(tParts) {
+		return false
+	}
+	for i, fp := range fParts {
+		if fp != "+" && fp != tParts[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestServiceDiscoveryShape_Cover_OpenCloseStop walks HA's three cover
+// buttons from the discovery payload the bridge publishes to the wire
+// write the daemon performs.
+//
+// HA has exactly one command_topic per cover entity and distinguishes
+// Open / Close / Stop by payload alone. A command_topic aimed at a wire
+// parameter therefore turns two of the three buttons into writes of that
+// one parameter: payload_open on the boolean STOP action halts the cover
+// instead of raising it, and payload_close writes STOP=false, which the
+// actuator ignores.
+func TestServiceDiscoveryShape_Cover_OpenCloseStop(t *testing.T) {
+	t.Parallel()
+
+	const (
+		base    = "openccu-loom"
+		central = "ccu"
+		iface   = "HmIP-RF"
+		devAddr = "COVER0002"
+		chNo    = 3
+		chAddr  = devAddr + ":3"
+	)
+	w := &coverCommandWriter{}
+	d := device.New(device.Config{InterfaceID: iface, Address: devAddr})
+	ch := d.AddChannel(chAddr, chNo, "BLIND_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	rtPutFloat(ch, chAddr, hmenum.ParameterLevel, w)
+	c := cover.New(cover.Config{
+		Channel:      ch,
+		Writer:       w,
+		Capabilities: custom.CoverCapabilities{SupportsPosition: true, SupportsStop: true},
+	})
+
+	tb := mqtt.NewTopicBuilder(base)
+	db := mqtt.NewDefaultDiscoveryBuilder(tb, central)
+	_, _, _, buf, ok := db.Build(mqtt.Event{
+		Central: central, Interface: iface, DeviceAddress: devAddr, ChannelNo: chNo,
+		ChannelAddress: chAddr, ChannelType: "BLIND_VIRTUAL_RECEIVER",
+		Category: hmenum.DataPointCategoryCover, Source: c,
+	})
+	if !ok {
+		t.Fatal("Build returned ok=false for the cover aggregate")
+	}
+	var disc map[string]any
+	if err := json.Unmarshal(buf, &disc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	cmdTopic := requireStringField(t, disc, "command_topic")
+
+	// The subscriber's service-method wildcard, reproduced independently
+	// so a drift on either side fails the comparison.
+	const svcFilter = base + "/+/+/+/+/custom/+/set/+"
+	if !mqttFilterMatches(svcFilter, cmdTopic) {
+		t.Fatalf("command_topic %q does not match the service-method subscription %q — "+
+			"HA's cover buttons reach the broker and are dropped there", cmdTopic, svcFilter)
+	}
+
+	invoke := &coverInvokeSink{src: c}
+	sub, noop := newSubscriberWithNoop(t, &contractFakeSink{}, nil)
+	sub.WithCDPSink(invoke)
+
+	cases := []struct {
+		field string
+		param hmenum.Parameter
+		value any
+	}{
+		{"payload_open", hmenum.ParameterLevel, 1.0},
+		{"payload_close", hmenum.ParameterLevel, 0.0},
+		{"payload_stop", hmenum.ParameterStop, true},
+	}
+	for _, tc := range cases {
+		token := requireStringField(t, disc, tc.field)
+		w.take()
+		if !noop.DeliverInbound(svcFilter, cmdTopic, []byte(token)) {
+			t.Fatalf("%s: no subscriber registered for %q", tc.field, svcFilter)
+		}
+		sub.WaitIdle()
+		if invoke.err != nil {
+			t.Fatalf("%s (%q): invoke failed: %v", tc.field, token, invoke.err)
+		}
+		calls := w.take()
+		if len(calls) != 1 {
+			t.Fatalf("%s (%q): %d wire writes, want exactly 1: %+v", tc.field, token, len(calls), calls)
+		}
+		if calls[0].param != tc.param || calls[0].value != tc.value {
+			t.Errorf("%s (%q) wrote %v=%v, want %v=%v",
+				tc.field, token, calls[0].param, calls[0].value, tc.param, tc.value)
+		}
+	}
 }

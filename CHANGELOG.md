@@ -21,6 +21,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A cover's Open and Close buttons in Home Assistant move the cover
+  again.** Home Assistant gives an MQTT cover one command topic and tells
+  Open, Close and Stop apart by the payload alone, but discovery pointed
+  that topic at the STOP parameter. Pressing Open wrote a truthy value
+  there — the cover halted instead of raising — and pressing Close wrote
+  a falsy one, which the actuator ignores entirely; only the position
+  slider ever moved a shutter or blind. The topic now addresses a cover
+  command service that maps the three payloads back onto the real Open /
+  Close / Stop operations, so a blind still drives both axes through its
+  combined parameter and an inverted cover still inverts.
+
 - **CUxD push callbacks no longer stop for good after a transient accept
   failure.** The BIN-RPC callback listener ended its accept loop on any
   error, including the recoverable ones a busy host produces — a peer

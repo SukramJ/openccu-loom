@@ -5,6 +5,8 @@ package cover
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -90,6 +92,29 @@ func (c *Cover) State() payload.StatePayload {
 	return out
 }
 
+// serviceCoverCommand is the service method that carries the motion
+// command Home Assistant multiplexes onto a cover entity's single
+// `command_topic`. An MQTT cover has exactly one command topic for the
+// Open / Close / Stop buttons and distinguishes them by payload alone,
+// so no per-operation topic can serve them and no wire parameter can
+// either: LEVEL cannot express STOP and STOP cannot express a position.
+const serviceCoverCommand = "cover_command"
+
+// argCoverCommand is the scalar-argument key [serviceCoverCommand]
+// expects. A bare MQTT payload is wrapped under it by the bridge before
+// the invoke reaches the handler.
+const argCoverCommand = "command"
+
+// The command tokens advertised as payload_open / payload_close /
+// payload_stop. Spelled as words rather than as wire values so a payload
+// that lands on the wrong topic cannot be mistaken for a level or a
+// boolean.
+const (
+	commandTokenOpen  = "OPEN"
+	commandTokenClose = "CLOSE"
+	commandTokenStop  = "STOP"
+)
+
 // registerCoverServices wires the cover operations onto the
 // ServiceRegistry promoted via *generic.Float.
 func (c *Cover) registerCoverServices() {
@@ -109,6 +134,32 @@ func (c *Cover) registerCoverServices() {
 		}
 		return c.SetPosition(ctx, v, priority)
 	})
+	c.RegisterServiceWithArg(serviceCoverCommand, argCoverCommand, c.invokeCoverCommand)
+}
+
+// invokeCoverCommand routes one of the [commandTokenOpen] /
+// [commandTokenClose] / [commandTokenStop] tokens onto the matching
+// operation.
+//
+// Dispatch goes back through the registry instead of calling
+// c.Open / c.Close / c.Stop directly: a [Blind] shares this registry and
+// replaces those three entries with handlers that drive both axes
+// through the combined parameter. Calling the Cover methods here would
+// silently pin every HA cover button to the LEVEL-only path.
+func (c *Cover) invokeCoverCommand(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+	raw, err := payload.ParamString(params, argCoverCommand)
+	if err != nil {
+		return err
+	}
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case commandTokenOpen:
+		return c.Invoke(ctx, "open", nil, priority)
+	case commandTokenClose:
+		return c.Invoke(ctx, "close", nil, priority)
+	case commandTokenStop:
+		return c.Invoke(ctx, "stop", nil, priority)
+	}
+	return fmt.Errorf("%w: %s=%q", payload.ErrServiceInvalidParam, argCoverCommand, raw)
 }
 
 // --- Blind ---
@@ -329,30 +380,30 @@ func subDPKeysAsStrings(keys []hmtypes.DataPointKey) []string {
 // HADiscoveryPayload returns the HA Cover-platform-specific payload
 // skeleton. Position reads come from the aggregated state topic via
 // value_json.current_position. set_position uses the service-method
-// command topic (unique, 1:1 with the set_position service). The
-// open/close/stop multiplex on a single HA command_topic cannot be
-// expressed as a single service-method call, so command_topic falls
-// back to the wire-parameter topic for STOP (the only boolean stop
-// actuator on this channel). payload_open/payload_close remain on the
-// LEVEL wire-parameter command topic via set_position_topic.
+// command topic (unique, 1:1 with the set_position service).
 //
-// Per ADR 0010: service-method topics for unambiguous calls (set_position);
-// wire-parameter fallback for the HA-native open/close/stop multiplexing.
+// HA's cover platform publishes payload_open / payload_close /
+// payload_stop to one shared command_topic, so that topic points at
+// [serviceCoverCommand] — the service method that multiplexes the three
+// tokens back onto Open / Close / Stop. No wire parameter can carry all
+// three: LEVEL cannot express a stop, and STOP is a fire-once boolean
+// action that turns an "open" payload into a halt and swallows a "close"
+// payload entirely.
+//
+// Per ADR 0010: service-method topics for calls that reduce to one
+// domain operation.
 func (c *Cover) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
 	if c == nil || ctx == nil {
 		return "", nil
 	}
 	stateTopic := ctx.CustomDPStateTopic()
 	body = map[string]any{
-		"device_class": VariantString(c.Variant),
-		"optimistic":   false,
-		// HA cover platform: command_topic carries open/close/stop payloads.
-		// stop has no natural single-service-method mapping for the HA payload
-		// multiplexing, so we stay on the wire-parameter command topic for STOP.
-		"command_topic": ctx.WireParameterCommandTopic("STOP"),
-		"payload_open":  "1",
-		"payload_close": "0",
-		"payload_stop":  "true",
+		"device_class":  VariantString(c.Variant),
+		"optimistic":    false,
+		"command_topic": ctx.ServiceMethodCommandTopic(serviceCoverCommand),
+		"payload_open":  commandTokenOpen,
+		"payload_close": commandTokenClose,
+		"payload_stop":  commandTokenStop,
 		// State reads from aggregated topic via value_json.state.
 		"state_topic":    stateTopic,
 		"value_template": "{{ value_json.state }}",

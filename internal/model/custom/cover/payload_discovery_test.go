@@ -4,6 +4,7 @@
 package cover
 
 import (
+	"context"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -110,6 +111,84 @@ func TestCoverHADiscoveryPayload_NoPositionWithoutCapability(t *testing.T) {
 	}
 }
 
+// TestCoverHADiscoveryPayload_CommandTopicDrivesOpenCloseStop pins that
+// HA's three cover buttons reach the cover's Open / Close / Stop
+// operations. HA publishes payload_open / payload_close / payload_stop to
+// the one `command_topic` an MQTT cover entity has, so that topic must
+// accept all three tokens: aimed at a wire parameter instead, the "open"
+// payload writes a truthy value to the boolean STOP action and halts the
+// cover, while the "close" payload writes STOP=false, which the actuator
+// ignores entirely.
+func TestCoverHADiscoveryPayload_CommandTopicDrivesOpenCloseStop(t *testing.T) {
+	t.Parallel()
+	w := &putWriter{}
+	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsPosition: true, SupportsStop: true})
+	ctx := discoveryCtx{}
+	_, body := c.HADiscoveryPayload(ctx)
+
+	// The method name is part of the published contract — HA writes to the
+	// topic derived from it — so it is pinned literally here.
+	const method = "cover_command"
+	if got, _ := body["command_topic"].(string); got != ctx.ServiceMethodCommandTopic(method) {
+		t.Fatalf("command_topic = %q, want the %q service-method topic %q",
+			got, method, ctx.ServiceMethodCommandTopic(method))
+	}
+
+	cases := []struct {
+		field string
+		param hmenum.Parameter
+		value any
+	}{
+		{"payload_open", hmenum.ParameterLevel, 1.0},
+		{"payload_close", hmenum.ParameterLevel, 0.0},
+		{"payload_stop", hmenum.ParameterStop, true},
+	}
+	for _, tc := range cases {
+		token, _ := body[tc.field].(string)
+		if token == "" {
+			t.Fatalf("%s missing from the discovery payload", tc.field)
+		}
+		w.mu.Lock()
+		w.calls = nil
+		w.mu.Unlock()
+		// The MQTT bridge wraps a bare payload under the method's globally
+		// registered scalar-argument key before invoking the service.
+		params := map[string]any{payload.GlobalScalarArgKey(method): token}
+		if err := c.Invoke(context.Background(), method, params, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("%s (%q): %v", tc.field, token, err)
+		}
+		w.mu.Lock()
+		calls := append([]setCall(nil), w.calls...)
+		w.mu.Unlock()
+		if len(calls) != 1 {
+			t.Fatalf("%s (%q): %d wire writes, want exactly 1: %+v", tc.field, token, len(calls), calls)
+		}
+		if calls[0].param != tc.param || calls[0].value != tc.value {
+			t.Errorf("%s (%q) wrote %v=%v, want %v=%v",
+				tc.field, token, calls[0].param, calls[0].value, tc.param, tc.value)
+		}
+	}
+}
+
+// TestCoverInvoke_UnknownCommandTokenRejected pins that an unrecognised
+// token on the multiplexed command topic fails loudly instead of being
+// coerced into one of the three motions.
+func TestCoverInvoke_UnknownCommandTokenRejected(t *testing.T) {
+	t.Parallel()
+	w := &putWriter{}
+	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{SupportsPosition: true, SupportsStop: true})
+	err := c.Invoke(context.Background(), "cover_command",
+		map[string]any{"command": "TILT"}, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("unknown command token must return an error")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.calls) != 0 {
+		t.Errorf("unknown command token wrote to the wire: %+v", w.calls)
+	}
+}
+
 // --- Blind ---
 
 func TestBlindHADiscoveryPayload_NilReceiverReturnsNil(t *testing.T) {
@@ -157,6 +236,40 @@ func TestBlindHADiscoveryPayload_TiltKeys(t *testing.T) {
 	wantTiltCmd := ctx.ServiceMethodCommandTopic("set_tilt")
 	if v, _ := body["tilt_command_topic"].(string); v != wantTiltCmd {
 		t.Errorf("tilt_command_topic = %q, want %q", v, wantTiltCmd)
+	}
+}
+
+// TestBlindHADiscoveryPayload_CommandTopicUsesBlindOverrides pins that the
+// multiplexed cover command reaches the Blind's own Open / Close — not the
+// inherited Cover ones. A Blind drives both axes through the combined
+// parameter (LEVEL_COMBINED for HM, COMBINED_PARAMETER for HmIP); a plain
+// LEVEL write leaves the slats where they were.
+func TestBlindHADiscoveryPayload_CommandTopicUsesBlindOverrides(t *testing.T) {
+	t.Parallel()
+	w := &putWriter{}
+	b := newBlindRig(t, "HmIP-BBL:3", w, custom.CoverCapabilities{SupportsPosition: true, SupportsTilt: true}, BlindKindHM)
+	ctx := discoveryCtx{}
+	_, body := b.HADiscoveryPayload(ctx)
+
+	const method = "cover_command"
+	if got, _ := body["command_topic"].(string); got != ctx.ServiceMethodCommandTopic(method) {
+		t.Fatalf("command_topic = %q, want %q", got, ctx.ServiceMethodCommandTopic(method))
+	}
+	token, _ := body["payload_open"].(string)
+	if token == "" {
+		t.Fatal("payload_open missing from the discovery payload")
+	}
+	params := map[string]any{payload.GlobalScalarArgKey(method): token}
+	if err := b.Invoke(context.Background(), method, params, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("Invoke(%q, %q): %v", method, token, err)
+	}
+	cc := w.combinedCalls()
+	if len(cc) != 1 {
+		t.Fatalf("payload_open produced %d combined writes, want 1 (Blind.Open was bypassed)", len(cc))
+	}
+	// level=1.0 → int(1.0*100*2)=200=0xc8; tilt held at 0 → "0xc8,0x00".
+	if got, _ := cc[0].value.(string); got != "0xc8,0x00" {
+		t.Errorf("LEVEL_COMBINED = %v, want %q", cc[0].value, "0xc8,0x00")
 	}
 }
 
