@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: bc8ae09e
-HEAD: bc8ae09e
+Generated: 7a7d54af
+HEAD: 7a7d54af
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28365 |
-| Reachable | 5007 |
-| Whitelisted | 20382 |
-| **Unreachable** | **2976** |
+| Total Exported | 28391 |
+| Reachable | 5010 |
+| Whitelisted | 20402 |
+| **Unreachable** | **2979** |
 
 ## Top-20 Packages by Dead Code
 
@@ -168,8 +168,8 @@ HEAD: bc8ae09e
 | internal/north/filter | 0 | 1 | 0 |
 | internal/north/matter/bridge | 0 | 51 | 38 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
-| internal/north/matter/endpoint | 0 | 9 | 0 |
-| internal/north/matter/im | 0 | 74 | 14 |
+| internal/north/matter/endpoint | 0 | 8 | 0 |
+| internal/north/matter/im | 0 | 78 | 14 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/mdns | 0 | 8 | 4 |
 | internal/north/matter/schema | 0 | 0 | 8 |

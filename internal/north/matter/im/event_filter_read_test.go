@@ -11,8 +11,9 @@ import (
 
 // buildReadRequestWithEventFilters builds a minimal ReadRequest TLV that
 // contains only an EventFilters array at context tag 2. Each filter is
-// encoded as a struct (anon tag inside array) with tag 1=NodeID and tag
-// 2=EventMin per Matter §10.6.4 EventFilterIB.
+// encoded as a struct (anon tag inside array) with tag 0=NodeID and tag
+// 1=EventMin, matching matter.js
+// packages/types/src/protocol/types/TlvEventFilter.ts:16-17.
 func buildReadRequestWithEventFilters(t *testing.T, filters []EventMinimumNumber) []byte {
 	t.Helper()
 	enc := tlv.NewEncoder()
@@ -21,9 +22,9 @@ func buildReadRequestWithEventFilters(t *testing.T, filters []EventMinimumNumber
 	for _, f := range filters {
 		enc.StartStruct(tlv.AnonymousTag()) // struct inside array → anonymous
 		if f.HasNodeID {
-			enc.PutUint(tlv.ContextTag(1), f.NodeID)
+			enc.PutUint(tlv.ContextTag(0), f.NodeID)
 		}
-		enc.PutUint(tlv.ContextTag(2), f.EventMin)
+		enc.PutUint(tlv.ContextTag(1), f.EventMin)
 		if err := enc.EndContainer(); err != nil {
 			t.Fatalf("EndContainer filter struct: %v", err)
 		}
@@ -110,6 +111,75 @@ func TestReadEventFilterArray_MultipleFilters(t *testing.T) {
 	}
 	if len(req.EventFilters) != 3 {
 		t.Fatalf("EventFilters: got %d, want 3", len(req.EventFilters))
+	}
+}
+
+// eventFilterWireFixture is a ReadRequestMessage carrying a single
+// EventFilterIB with eventMin=40, as a peer encodes it. Written out by
+// hand so the tag numbers are pinned independently of our own encoder —
+// an encoder/decoder pair that shifts both halves together would keep a
+// round-trip test green while every real controller's filter is misread.
+//
+//	15          struct, anonymous            — ReadRequestMessage
+//	36 02       array, context tag 2         — EventFilters
+//	15          struct, anonymous            — EventFilterIB
+//	24 01 28    uint8, context tag 1, 40     — eventMin
+//	18 18 18    end of struct/array/struct
+//
+// Tag layout per matter.js
+// packages/types/src/protocol/types/TlvEventFilter.ts:16-17
+// (`nodeId: TlvOptionalField(0, …)`, `eventMin: TlvField(1, …)`).
+var eventFilterWireFixture = []byte{0x15, 0x36, 0x02, 0x15, 0x24, 0x01, 0x28, 0x18, 0x18, 0x18}
+
+// TestReadEventFilterArray_DecodesPeerWireLayout decodes the literal
+// fixture above. Before the tag numbers were corrected, EventMin (real
+// context tag 1) landed in NodeID and EventMin stayed 0, so every
+// filtered read replayed the whole event buffer.
+func TestReadEventFilterArray_DecodesPeerWireLayout(t *testing.T) {
+	t.Parallel()
+	req, err := UnmarshalReadRequestTLV(tlv.NewDecoder(eventFilterWireFixture))
+	if err != nil {
+		t.Fatalf("UnmarshalReadRequestTLV: %v", err)
+	}
+	if len(req.EventFilters) != 1 {
+		t.Fatalf("EventFilters: got %d, want 1", len(req.EventFilters))
+	}
+	got := req.EventFilters[0]
+	if got.EventMin != 40 {
+		t.Errorf("EventMin = %d, want 40 (context tag 1)", got.EventMin)
+	}
+	if got.HasNodeID {
+		t.Errorf("NodeID = %d (HasNodeID=true), want absent — the fixture carries no context tag 0", got.NodeID)
+	}
+}
+
+// TestHandleReadEventRequest_AppliesEventMinFromWire crosses the whole
+// seam the tag numbers sit on: a peer-encoded EventFilterIB with
+// eventMin=40 must make the read return only records with Number >= 40,
+// rather than replaying every buffered event on each reconnect.
+func TestHandleReadEventRequest_AppliesEventMinFromWire(t *testing.T) {
+	t.Parallel()
+	req, err := UnmarshalReadRequestTLV(tlv.NewDecoder(eventFilterWireFixture))
+	if err != nil {
+		t.Fatalf("UnmarshalReadRequestTLV: %v", err)
+	}
+	// A wildcard event path — the filter, not the path, does the gating.
+	req.EventRequests = []ConcreteEventPath{{}}
+
+	log := NewEventLog()
+	log.SeedNumber(38)
+	for range 4 { // numbers 39, 40, 41, 42
+		log.Append(EventRecord{Priority: EventPriorityInfo, Endpoint: 2, Cluster: 0x0045, EventID: 0x00})
+	}
+
+	reports := HandleReadEventRequest(req, log)
+	if len(reports) != 3 {
+		t.Fatalf("reports: got %d, want 3 (numbers 40..42)", len(reports))
+	}
+	for _, r := range reports {
+		if r.Number < 40 {
+			t.Errorf("report Number %d is below the requested EventMin 40; the controller already holds it", r.Number)
+		}
 	}
 }
 

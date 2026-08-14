@@ -60,11 +60,13 @@ export type Paginated<T> = {
   total: number;
 };
 
-/** Shape of the WS envelope the daemon publishes on /api/v1/events. */
+/** Shape of the WS envelope the daemon publishes on /api/v1/events.
+ *  Every named variant is produced by ws.ts normalizeEvent() from a real
+ *  broadcast; the trailing catch-all carries the wire type and payload of
+ *  everything the SPA consumes unnormalized. */
 export type EventEnvelope =
   | { type: "data_point"; payload: DataPointChangedEvent }
   | { type: "custom_data_point"; payload: CustomDataPointStateEvent }
-  | { type: "device_available"; payload: DeviceAvailableEvent }
   | { type: "sysvar"; payload: SysvarChangedEvent }
   | { type: string; payload: unknown };
 
@@ -91,12 +93,6 @@ export type CustomDataPointStateEvent = {
   name: string;
   kind?: string;
   state: Record<string, unknown>;
-};
-
-export type DeviceAvailableEvent = {
-  central: string;
-  address: string;
-  available: boolean;
 };
 
 // SysvarChangedEvent is the SPA's normalized shape. The wire payload

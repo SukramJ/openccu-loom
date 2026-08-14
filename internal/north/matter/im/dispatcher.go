@@ -102,6 +102,38 @@ type AttributeWritePrivilegeProvider interface {
 	MinWritePrivilege(endpoint uint16, clusterID, attrID uint32) uint8
 }
 
+// WriteAuthorizer decides whether the requesting subject may write the
+// RESOLVED (endpoint, cluster, attribute). It returns [StatusSuccess]
+// when access is granted and a denial status (typically
+// [StatusUnsupportedAccess]) otherwise.
+//
+// A wildcard-endpoint write carries no endpoint on the requested path,
+// so the only place its privilege can be evaluated is where the path
+// resolves. Authorizing the un-expanded request instead would check a
+// zero-value endpoint and then apply the value to every endpoint the
+// wildcard reaches.
+type WriteAuthorizer func(endpoint uint16, clusterID, attrID uint32) StatusCode
+
+// AuthorizingWriter is an optional interface a [Dispatcher] may implement
+// so [HandleWriteRequest] can gate every location a wildcard-endpoint
+// write expands to BEFORE the value is applied. Post-hoc filtering of the
+// returned results is not sufficient: a write mutates cluster state (and
+// drives device commands) inside the expansion loop.
+//
+// Mirrors matter.js
+// packages/protocol/src/action/server/AttributeWriteResponse.ts:324-343
+// (#writeAttributeForWildcard authorizes the resolved attribute at its own
+// location and returns without emitting a status on denial).
+type AuthorizingWriter interface {
+	// WriteAuthorized behaves like [Dispatcher.Write] but consults
+	// authorize for every resolved (endpoint, cluster, attribute) before
+	// the value is applied. A denied location on a wildcard-endpoint path
+	// is skipped silently (Matter §8.4.3.2 — a wildcard interaction
+	// discloses only authorized paths); a denied concrete path yields the
+	// denial status. A nil authorize dispatches exactly like Write.
+	WriteAuthorized(ctx context.Context, path ConcreteAttributePath, value AttributeValue, authorize WriteAuthorizer) []WriteResult
+}
+
 // CommandInvokePrivilegeProvider is an optional interface a [Dispatcher]
 // may implement to signal that a specific (endpoint, cluster, command)
 // requires a higher invoke privilege than the default Operate (3).

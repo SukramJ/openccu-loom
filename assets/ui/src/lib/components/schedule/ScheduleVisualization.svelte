@@ -118,7 +118,7 @@
           x={x}
           y={HEADER_HEIGHT - 4}
           text-anchor="middle"
-          class="fill-slate-500 text-[9px]"
+          class="fill-slate-500 text-[9px] dark:fill-slate-400"
         >
           {String(h).padStart(2, "0")}
         </text>
@@ -182,7 +182,7 @@
             <text
               text-anchor="middle"
               dominant-baseline="central"
-              class="fill-amber-700 text-[10px]"
+              class="fill-amber-700 text-[10px] dark:fill-amber-300"
             >
               ☾
             </text>
@@ -191,7 +191,7 @@
             <text
               text-anchor="middle"
               dominant-baseline="central"
-              class="fill-amber-700 text-[10px]"
+              class="fill-amber-700 text-[10px] dark:fill-amber-300"
             >
               ☼
             </text>

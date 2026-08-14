@@ -61,12 +61,20 @@
     return s.label || s.parameter || s.channel_address || s.central;
   }
 
+  // Monotonic generation guarding the async batch: a slower earlier batch
+  // must never overwrite the results of the range or series list the chart
+  // has since moved on to. The series list is snapshotted with it so the
+  // zip below cannot pair a response with a definition from a newer prop.
+  let loadGeneration = 0;
+
   async function load() {
+    const generation = ++loadGeneration;
+    const defs = [...series];
     loading = true;
     const to = new Date();
     const from = new Date(to.getTime() - selectedHours * 60 * 60 * 1000);
     const settled = await Promise.allSettled(
-      series.map((s) =>
+      defs.map((s) =>
         getHistory({
           central: s.central,
           interfaceId: s.interface_id ?? "",
@@ -78,8 +86,9 @@
         }),
       ),
     );
+    if (generation !== loadGeneration) return;
     results = settled.map((r, i) => {
-      const def = series[i];
+      const def = defs[i];
       const color = PALETTE[i % PALETTE.length];
       if (r.status === "fulfilled") {
         return { def, color, buckets: r.value };

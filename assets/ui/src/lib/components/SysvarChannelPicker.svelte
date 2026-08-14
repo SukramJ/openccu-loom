@@ -46,17 +46,27 @@
       .slice(0, 80),
   );
 
+  // Monotonic generation guarding the channel fetch: a response for a
+  // device the operator has already moved off must never fill the dropdown
+  // that now belongs to another device, or the assignment they pick from it
+  // names a channel of the wrong device.
+  let loadGeneration = 0;
+
   async function pickDevice(addr: string) {
     selectedDevice = addr;
+    channels = [];
     loadingChannels = true;
+    const generation = ++loadGeneration;
     try {
       const res = await api.listChannels(addr);
+      if (generation !== loadGeneration) return;
       channels = res.items ?? [];
     } catch {
+      if (generation !== loadGeneration) return;
       channels = [];
       toastStore.error(t("sysvars.channel.load_failed"));
     } finally {
-      loadingChannels = false;
+      if (generation === loadGeneration) loadingChannels = false;
     }
   }
 

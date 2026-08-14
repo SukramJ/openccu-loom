@@ -70,6 +70,9 @@ vi.mock("$lib/api/client", () => ({
     setDeviceFunctions: vi.fn(),
     listDataPoints: vi.fn().mockResolvedValue([]),
   },
+  // Module-load hook of the auth store, which the favorites store imports
+  // to scope pinned items to the signed-in operator.
+  setUnauthorizedHandler: vi.fn(),
   ApiError: class ApiError extends Error {
     status: number;
     constructor(status: number, _body: unknown, message: string) {
@@ -186,6 +189,73 @@ describe("DeviceDetail — loading", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
     });
+  });
+});
+
+describe("DeviceDetail — device switch", () => {
+  // The router keeps one instance alive across two `#/devices/<address>`
+  // hashes, so the view has to follow the prop. If it does not, every write
+  // action on the page (rename, delete, MASTER save) targets the device the
+  // operator started on while the URL claims the one they navigated to.
+  const kitchen = () =>
+    baseDevice({ address: "0002BEEF", name: "Küche Thermostat" });
+
+  it("reloads and re-renders when the address prop changes", async () => {
+    mockGetDevice.mockImplementation((addr: string) =>
+      Promise.resolve(addr === "0001ABCD" ? baseDevice() : kitchen()),
+    );
+
+    const { rerender } = render(DeviceDetail, {
+      props: { address: "0001ABCD", locale: "en" },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getAllByText("Wohnzimmer Thermostat").length,
+      ).toBeGreaterThan(0),
+    );
+
+    await rerender({ address: "0002BEEF" });
+
+    await waitFor(() =>
+      expect(mockGetDevice).toHaveBeenCalledWith("0002BEEF"),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByText("Küche Thermostat").length).toBeGreaterThan(0),
+    );
+    expect(
+      screen.queryByText("Wohnzimmer Thermostat"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("discards a late response for the device that was navigated away from", async () => {
+    let resolveFirst!: (v: unknown) => void;
+    mockGetDevice.mockImplementation((addr: string) =>
+      addr === "0001ABCD"
+        ? new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+        : Promise.resolve(kitchen()),
+    );
+
+    const { rerender } = render(DeviceDetail, {
+      props: { address: "0001ABCD", locale: "en" },
+    });
+    await waitFor(() => expect(mockGetDevice).toHaveBeenCalledWith("0001ABCD"));
+
+    await rerender({ address: "0002BEEF" });
+    await waitFor(() =>
+      expect(screen.getAllByText("Küche Thermostat").length).toBeGreaterThan(0),
+    );
+
+    // The abandoned first request lands afterwards; it must not repaint the
+    // page with the device the operator already left.
+    resolveFirst(baseDevice());
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(
+      screen.queryByText("Wohnzimmer Thermostat"),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("Küche Thermostat").length).toBeGreaterThan(0);
   });
 });
 

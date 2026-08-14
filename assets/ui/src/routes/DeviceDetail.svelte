@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import type { DeviceDetail } from "$lib/api/types";
   import { api, ApiError } from "$lib/api/client";
   import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
@@ -92,15 +92,22 @@
     }
   }
 
+  // Monotonic generation guarding the history data-point fetch. A
+  // response for a channel the operator has already switched away from
+  // must never overwrite the newer channel's data points.
+  let historyDPsGeneration = 0;
+
   // Load data points for the history measurement chart when the
   // history tab opens. We pick the first user channel with numeric DPs.
   async function loadHistoryDPs(channelNo: number) {
     if (!detail) return;
+    const generation = ++historyDPsGeneration;
     historyDPsLoading = true;
     historyDPs = [];
     historyParameter = null;
     try {
       const dps = await api.listDataPoints(detail.address, channelNo);
+      if (generation !== historyDPsGeneration) return;
       // Only numeric parameters (FLOAT / INTEGER) make sense to chart.
       historyDPs = dps.filter(
         (dp) => dp.type === "FLOAT" || dp.type === "INTEGER",
@@ -109,9 +116,10 @@
         historyParameter = historyDPs[0].parameter;
       }
     } catch {
+      if (generation !== historyDPsGeneration) return;
       historyDPs = [];
     } finally {
-      historyDPsLoading = false;
+      if (generation === historyDPsGeneration) historyDPsLoading = false;
     }
   }
 
@@ -167,12 +175,21 @@
   let roomOptions = $state<string[]>([]);
   let functionOptions = $state<string[]>([]);
 
-  async function load() {
+  // Monotonic generation guarding the device fetch. A response for the
+  // device the operator has already navigated away from must never land
+  // on the page that now shows another one.
+  let loadGeneration = 0;
+
+  async function load(addr: string) {
+    const generation = ++loadGeneration;
     error = null;
     try {
-      detail = await api.getDevice(address);
+      const next = await api.getDevice(addr);
+      if (generation !== loadGeneration) return;
+      detail = next;
       void probeSchedule();
     } catch (err) {
+      if (generation !== loadGeneration) return;
       error =
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
@@ -182,8 +199,36 @@
     }
   }
 
+  // Reload whenever the router points this view at another device. The
+  // route branch that renders this component stays mounted while only the
+  // `address` prop changes (a pasted `#/devices/<other>` hash, a deep link
+  // followed with the app already open, browser back/forward between two
+  // device pages), so an onMount-only fetch would leave the page showing
+  // the first device while the URL claims the second — and every write
+  // action on it (rename, delete, MASTER save) would target the device the
+  // operator is no longer looking at.
+  $effect(() => {
+    const addr = address;
+    untrack(() => {
+      // Drop the previous device first: the whole detail body is gated on
+      // `detail`, so its children (channel panels, links, CDP tiles)
+      // unmount and remount for the new address instead of keeping the
+      // state they loaded for the old one.
+      detail = null;
+      error = null;
+      scheduleSupported = null;
+      renaming = false;
+      renameChannelNo = null;
+      deleteDialogOpen = false;
+      commTestResult = null;
+      historyChannelNo = null;
+      historyParameter = null;
+      historyDPs = [];
+      void load(addr);
+    });
+  });
+
   onMount(() => {
-    void load();
     void loadRoomFunctionCatalogs();
   });
 
@@ -302,7 +347,7 @@
       await api.renameDevice(address, next, renameIncludeChannels);
       toastStore.success(t("device.renamed"));
       renaming = false;
-      await load();
+      await load(address);
     } catch (err) {
       toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -332,7 +377,7 @@
       await api.renameChannel(address, renameChannelNo, next);
       toastStore.success(t("channel.renamed"));
       cancelRenameChannel();
-      await load();
+      await load(address);
     } catch (err) {
       toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -622,7 +667,7 @@
 <section class="@container mx-auto max-w-6xl px-4 py-6 sm:px-6">
   {#if error}
     <div class="mb-4">
-      <ErrorState message={error} onRetry={load} />
+      <ErrorState message={error} onRetry={() => void load(address)} />
     </div>
   {:else if !detail}
     <LoadingState />

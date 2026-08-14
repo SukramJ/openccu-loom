@@ -7709,7 +7709,7 @@ export interface components {
             listening: boolean;
             /** @description Effective UDP listen address */
             listen_addr?: string;
-            /** @description Bridged-endpoint count (excluding root) */
+            /** @description Bridged-endpoint count (excludes the root and Aggregator endpoints) */
             endpoint_count: number;
             /** @description Commissioned fabrics */
             fabric_count: number;
@@ -8713,7 +8713,7 @@ export interface components {
          *     fabric list.
          */
         MatterEndpointAssembledPayload: {
-            /** @description Number of endpoints in the assembled topology, including the root + Aggregator. */
+            /** @description Bridged-endpoint count of the assembled topology (excludes the root and Aggregator endpoints). */
             endpoint_count: number;
         };
         /** @description Descriptor for one config field exposed by the schema endpoint. */

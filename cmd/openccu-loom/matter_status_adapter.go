@@ -39,11 +39,12 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 	res.ListenAddr = r.bridge.LocalAddr()
 	res.Listening = res.ListenAddr != ""
 	if topo := r.bridge.Topology(); topo != nil {
-		// Topology.Endpoints includes the root; subtract 1 for the
-		// caller-facing "bridged endpoint" count.
-		if n := len(topo.Endpoints); n > 0 {
-			res.EndpointCount = n - 1
-		}
+		// Topology.Endpoints carries the two structural endpoints (root
+		// EP 0 + Aggregator EP 1) on top of the bridged devices;
+		// Bridged() is the only authoritative source for the
+		// caller-facing count, and the SPA renders it as "bridged Matter
+		// devices".
+		res.EndpointCount = len(topo.Bridged())
 	}
 	if r.cfg != nil {
 		res.Advertising = r.cfg.advertising

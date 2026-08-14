@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { SysvarEntry } from "$lib/api/types";
+  import { subscribe } from "$lib/stores/events.svelte";
+  import type { SysvarChangedEvent, SysvarEntry } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -308,7 +309,22 @@
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    void load();
+    // Live values. The daemon pushes every system-variable change on the
+    // event stream; without this the table shows the values of the last
+    // REST read until the operator hits reload, even though the frames
+    // are already arriving.
+    return subscribe((ev) => {
+      if (ev.type !== "sysvar") return;
+      const p = ev.payload as SysvarChangedEvent;
+      const i = sysvars.findIndex(
+        (sv) => sv.name === p.name && (sv.central ?? "") === p.central,
+      );
+      if (i < 0) return;
+      sysvars[i] = { ...sysvars[i], value: p.value };
+    });
+  });
 
   const centrals = $derived.by(() => {
     const set = new Set<string>();
