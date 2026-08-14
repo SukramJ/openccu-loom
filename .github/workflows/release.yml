@@ -12,7 +12,7 @@ permissions:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.26.5"
+  GO_VERSION: "1.26.6"
   NODE_VERSION: "24"
   # Toggle the CCU/RaspberryMatic add-on packaging + upload. Set to
   # "false" to skip it for a release (or override per repo via the

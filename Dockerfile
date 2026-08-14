@@ -24,7 +24,7 @@ COPY assets/ui/ ./
 RUN npm run build
 
 # --- Stage 2: build the Go binary ------------------------------------------
-FROM golang:1.26.5-alpine AS builder
+FROM golang:1.26.6-alpine AS builder
 WORKDIR /src
 
 # Cache module downloads separately so unrelated source edits don't
