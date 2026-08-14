@@ -24,9 +24,18 @@ type Scheme string
 const (
 	SchemeBasic   Scheme = "basic"
 	SchemeBearer  Scheme = "bearer"
-	SchemeSession Scheme = "session" // session-cookie auth, set by the session and OIDC login flow
+	SchemeSession Scheme = "session" // session-cookie auth, set by the local login flow
+	SchemeOIDC    Scheme = "oidc"    // session-cookie auth for a principal an external provider vouched for
 	SchemeIngress Scheme = "ingress" // HA Ingress auth passthrough (ADR 0044)
 )
+
+// Federated reports whether the scheme identifies a principal an external
+// identity provider vouched for rather than one the daemon's own user store
+// owns. Subject-keyed controls over local accounts must not reach a
+// federated principal: an external login name that folds to the same string
+// as a local account belongs to a different person, and the daemon holds no
+// authority over their credentials.
+func (s Scheme) Federated() bool { return s == SchemeOIDC }
 
 // Role is the coarse-grained permission level.
 type Role string

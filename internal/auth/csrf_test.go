@@ -81,6 +81,17 @@ func TestCSRFSafeMethodPasses(t *testing.T) {
 	}
 }
 
+// TestCSRFFederatedSessionNotExempt pins that a session minted through the
+// external identity provider keeps the double-submit defence. It rides the
+// same browser-ambient cookie as any other session, so exempting it would
+// open every mutating endpoint to cross-site requests.
+func TestCSRFFederatedSessionNotExempt(t *testing.T) {
+	t.Parallel()
+	if csrfSchemeExempt(SchemeOIDC) {
+		t.Error("SchemeOIDC is cookie-borne and must not be CSRF-exempt")
+	}
+}
+
 // TestHasBearerAuthHeader directly unit-tests the hasBearerAuthHeader helper.
 func TestHasBearerAuthHeader(t *testing.T) {
 	cases := []struct {

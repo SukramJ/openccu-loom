@@ -33,6 +33,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **One person signing in through the identity provider is now one
+  principal.** The session subject came from `preferred_username` — a claim
+  the OpenID Connect spec guarantees to be neither stable nor unique, and
+  that directories return in whatever casing they happen to hold. Signing in
+  as `Markus@example.com` and later as `markus@example.com` produced two
+  subjects, so the audit trail attributed one person's actions to two
+  identities and every subject-keyed lookup split in two. That claim is now
+  trimmed and lower-cased, exactly like a local login name. The `sub` claim,
+  used when the provider omits `preferred_username`, is still passed through
+  byte-for-byte: it is opaque and case-sensitive, so folding it could merge
+  two different people.
+
+  A federated login is now also explicitly a **different principal** from a
+  local account that happens to carry the same name. Such a session reports
+  `scheme: oidc` on `GET /api/v1/auth/me` (a value the API has always
+  declared), it can no longer change the local account's password through
+  `PATCH /api/v1/auth/me/password` (409 — the provider owns those
+  credentials), and deleting or resetting that local account no longer ends
+  it. Ending a federated session remains the provider's job, plus the
+  session TTL. CSRF protection is unchanged: the session still rides a
+  browser cookie and still requires the double-submit token.
+
+  OIDC sessions that already existed when the daemon was upgraded keep the
+  spelling and the local-account treatment they were issued with; they are
+  not invalidated on upgrade and simply expire within their remaining TTL
+  (12 h by default).
+
 - **A CCU added while the daemon is running is now wired the same way a
   CCU present at boot is — structurally, not by remembering to.** Every
   subsystem that works per CCU used to attach itself by walking the list of

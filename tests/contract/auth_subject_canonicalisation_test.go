@@ -20,6 +20,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/auth/ccuauth"
+	"github.com/SukramJ/openccu-loom/internal/auth/oidc"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -89,6 +90,33 @@ func TestEveryUserStoreReportsCanonicalSubject(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestOIDCLoginReportsCanonicalSubject pins the remaining login path. The
+// external provider names the principal with "preferred_username", a claim
+// OpenID Connect Core §5.1 declares neither stable nor unique — directories
+// hand back whatever casing they hold, so one person signing in twice would
+// otherwise be filed as two. The "sub" fallback is exempt on purpose: it is
+// opaque and case-sensitive (§2), so folding it could merge two principals
+// that differ in casing alone.
+func TestOIDCLoginReportsCanonicalSubject(t *testing.T) {
+	client := &oidc.Client{}
+
+	for _, typed := range []string{"Frank", "FRANK", "fRaNk", " frank "} {
+		id := client.IdentityFrom(&oidc.IDClaims{PreferredUser: typed})
+		if id.Subject != "frank" {
+			t.Errorf("IdentityFrom(preferred_username=%q) subject = %q, want %q",
+				typed, id.Subject, "frank")
+		}
+		if id.Scheme != auth.SchemeOIDC {
+			t.Errorf("IdentityFrom(preferred_username=%q) scheme = %q, want %q",
+				typed, id.Scheme, auth.SchemeOIDC)
+		}
+	}
+
+	if id := client.IdentityFrom(&oidc.IDClaims{Subject: "AbC123"}); id.Subject != "AbC123" {
+		t.Errorf("IdentityFrom(sub=%q) subject = %q, want it verbatim", "AbC123", id.Subject)
 	}
 }
 

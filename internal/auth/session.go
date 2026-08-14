@@ -170,11 +170,12 @@ func (s *SessionStore) Revoke(sid string) {
 	s.persistBest("delete", func(ctx context.Context) error { return s.persist.DeleteSession(ctx, sid) })
 }
 
-// RevokeBySubject removes every session belonging to subject and returns
-// the number evicted. It is the invalidation hook for credential changes:
-// a password change, role change, or account deletion must not leave a
-// stolen or stale session usable for the remainder of its TTL. No-op for
-// an empty subject.
+// RevokeBySubject removes every session of the local account subject and
+// returns the number evicted. It is the invalidation hook for credential
+// changes: a password change, role change, or account deletion must not
+// leave a stolen or stale session usable for the remainder of its TTL.
+// Sessions of federated principals are left alone — see [Scheme.Federated].
+// No-op for an empty subject.
 func (s *SessionStore) RevokeBySubject(subject string) int {
 	return s.revokeBySubject(subject, "")
 }
@@ -194,6 +195,12 @@ func (s *SessionStore) revokeBySubject(subject, keepSID string) int {
 	s.mu.Lock()
 	ids := make([]string, 0)
 	for id, sess := range s.items {
+		// A federated principal is not the local account of the same name:
+		// the external provider owns their credentials, so a local password
+		// reset or account deletion has no say over their session.
+		if sess.Identity.Scheme.Federated() {
+			continue
+		}
 		// Compare canonically: a session issued before the identity
 		// boundary folded the subject (or by a provider that reports its
 		// own spelling) must still be reachable by the canonical name the
@@ -253,7 +260,15 @@ func SessionMiddleware(store *SessionStore) func(http.Handler) http.Handler {
 				if c, err := r.Cookie(SessionCookieName); err == nil && c.Value != "" {
 					if sess := store.Lookup(c.Value); sess != nil { //nolint:contextcheck // Lookup is ctx-free by API contract; its best-effort persist uses a background ctx
 						id := sess.Identity
-						id.Scheme = SchemeSession
+						if !id.Scheme.Federated() {
+							// The stored scheme records the credential the
+							// session was minted from; the request presented a
+							// cookie. A federated session keeps its own scheme
+							// so subject-keyed controls downstream can tell an
+							// external principal from the local account of the
+							// same name.
+							id.Scheme = SchemeSession
+						}
 						ctx := context.WithValue(r.Context(), keyIdentity, id)
 						r = r.WithContext(ctx)
 					}

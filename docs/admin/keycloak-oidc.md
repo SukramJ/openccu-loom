@@ -111,8 +111,12 @@ to `admin` / `operator` / `viewer` under **Users → _user_ → Attributes**.
 OpenCCU-Loom always requests exactly `openid profile email` (this is fixed and
 not configurable). Keycloak's default `profile` and `email` client scopes
 already supply `preferred_username`, `name`, and `email`, so no extra scope
-setup is needed. The session subject is `preferred_username` when present,
-otherwise the `sub` claim.
+setup is needed. The session subject is `preferred_username` when present
+(trimmed and lower-cased, so a realm that stores `Frank` and a login typed as
+`frank` end up as one principal), otherwise the `sub` claim verbatim — that
+one is opaque and case-sensitive. A Keycloak principal stays separate from a
+local OpenCCU-Loom account of the same name; see
+[Authentication](auth.md#oidc-single-sign-on).
 
 ## 4. Configure OpenCCU-Loom
 

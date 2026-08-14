@@ -216,6 +216,14 @@ Step by step:
    `operator` → `operator`, everything else → `viewer`. When the claim
    carries several roles the highest one wins. The session subject is
    `preferred_username` when present, otherwise the `sub` claim.
+   `preferred_username` is trimmed and lower-cased so the same person always
+   gets the same subject whatever casing the directory returns; `sub` is
+   passed through unchanged because it is an opaque, case-sensitive
+   identifier. A federated login is a **separate principal** from a local
+   account of the same name: its session reports `scheme: oidc`, it cannot
+   change a local password through `PATCH /auth/me/password`, and deleting
+   or resetting the local account does not end it. Ending a federated
+   session is the provider's job (plus the session TTL).
 
     !!! note
         For a provider-specific walkthrough — client, redirect URI, and
