@@ -143,63 +143,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   failed, matching what the daemon-side clear already reports over
   REST.
 
-## [0.59.0]
-
-### Added
-
-- **Matter bridge diagnostics.** Three further views into what the
-  bridge is doing, reachable under **Matter → Diagnostics**:
-
-  *Discovery.* What the bridge actually announces over mDNS, and what
-  would keep a controller from finding it: missing service subtypes
-  (Apple and Google browse through those, so without them the bridge is
-  invisible to both while chip-tool finds it), addresses only reachable
-  inside a container, a commissioning port other than 5540 (Alexa uses
-  no other), an announcement without IPv6. Each of these leaves the
-  daemon looking correct — advertising succeeds and the log says so.
-
-  *Endpoints.* The assembled topology as a controller sees it, with
-  device types and clusters. Until now the only way to look at it was to
-  commission a controller and browse with chip-tool, so every "why is
-  this device missing" question started with a pairing step.
-
-  *Ecosystem compatibility.* Each paired fabric is classified by
-  controller vendor, and the exposed device types are checked against
-  what that ecosystem accepts — a valve Google and Alexa will not show,
-  a leak detector that makes Alexa drop the entire bridge, an endpoint
-  count past where Alexa becomes unreliable. The bridge cannot observe
-  any of this: it exposes the endpoint correctly and the ecosystem
-  silently omits it. (REST API 5.22.0)
-
-- **The bridge can say whether a Matter controller is still talking to
-  it.** `GET /api/v1/matter/sessions` lists every open secure session
-  with two separate ages: when the session last carried traffic in any
-  direction, and when the controller last sent something. The difference
-  is the point. A controller that goes away without closing its session
-  leaves it open and simply stops sending, so the bridge keeps reporting
-  into it — from every other angle that looks healthy, and in the
-  ecosystem it shows up only as entities that quietly stop updating.
-  Each session also reports how many subscriptions ride on it: a
-  commissioned controller holding none is connected but receiving
-  nothing.
-
-  The daemon has tracked all of this internally for the idle-session
-  reaper; none of it could be seen from outside. No key material is
-  exposed. (REST API 5.21.0)
-
-
-## [0.58.6]
-
-### Security
-
-- **Go toolchain 1.26.6.** The 1.26.5 standard library carries seven
-  advisories on code paths this daemon actually calls, across the XML
-  decoder the XML-RPC transport and SSDP discovery use, the ASN.1 decoder
-  behind Matter CSR generation, and `net/http`. All are fixed in 1.26.6;
-  `go.mod`, the builder image, and every workflow move together.
-
-### Fixed
-
 - **A damaged encrypted backup is rejected with an error on 32-bit
   builds too.** The reader for encrypted backups checks the length each
   frame declares before it allocates for it, but compared that length as
@@ -373,6 +316,63 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   login POST, and the in-flight flow table has a hard ceiling — which
   also caps the scan every new flow performs while holding the lock, the
   part that slowed down genuine logins.
+
+## [0.59.0]
+
+### Added
+
+- **Matter bridge diagnostics.** Three further views into what the
+  bridge is doing, reachable under **Matter → Diagnostics**:
+
+  *Discovery.* What the bridge actually announces over mDNS, and what
+  would keep a controller from finding it: missing service subtypes
+  (Apple and Google browse through those, so without them the bridge is
+  invisible to both while chip-tool finds it), addresses only reachable
+  inside a container, a commissioning port other than 5540 (Alexa uses
+  no other), an announcement without IPv6. Each of these leaves the
+  daemon looking correct — advertising succeeds and the log says so.
+
+  *Endpoints.* The assembled topology as a controller sees it, with
+  device types and clusters. Until now the only way to look at it was to
+  commission a controller and browse with chip-tool, so every "why is
+  this device missing" question started with a pairing step.
+
+  *Ecosystem compatibility.* Each paired fabric is classified by
+  controller vendor, and the exposed device types are checked against
+  what that ecosystem accepts — a valve Google and Alexa will not show,
+  a leak detector that makes Alexa drop the entire bridge, an endpoint
+  count past where Alexa becomes unreliable. The bridge cannot observe
+  any of this: it exposes the endpoint correctly and the ecosystem
+  silently omits it. (REST API 5.22.0)
+
+- **The bridge can say whether a Matter controller is still talking to
+  it.** `GET /api/v1/matter/sessions` lists every open secure session
+  with two separate ages: when the session last carried traffic in any
+  direction, and when the controller last sent something. The difference
+  is the point. A controller that goes away without closing its session
+  leaves it open and simply stops sending, so the bridge keeps reporting
+  into it — from every other angle that looks healthy, and in the
+  ecosystem it shows up only as entities that quietly stop updating.
+  Each session also reports how many subscriptions ride on it: a
+  commissioned controller holding none is connected but receiving
+  nothing.
+
+  The daemon has tracked all of this internally for the idle-session
+  reaper; none of it could be seen from outside. No key material is
+  exposed. (REST API 5.21.0)
+
+
+## [0.58.6]
+
+### Security
+
+- **Go toolchain 1.26.6.** The 1.26.5 standard library carries seven
+  advisories on code paths this daemon actually calls, across the XML
+  decoder the XML-RPC transport and SSDP discovery use, the ASN.1 decoder
+  behind Matter CSR generation, and `net/http`. All are fixed in 1.26.6;
+  `go.mod`, the builder image, and every workflow move together.
+
+### Fixed
 
 - **A siren stop now actually beats the queue it is supposed to beat.**
   Stop commands are marked critical so they skip the command throttle
