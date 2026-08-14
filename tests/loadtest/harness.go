@@ -321,6 +321,19 @@ func (w backendValueWriter) SetValue(
 // reflect over maps/slices/scalars.
 type xmlrpcBackendCaller struct{ client *xmlrpc.Client }
 
+// CallAt satisfies the priority-carrying half of [backends.Caller]. The
+// load harness drives XML-RPC, which has no wire representation for a
+// command priority: the priority steers the reliability stack in front
+// of the transport, not the request itself, so the harness records it
+// nowhere and forwards the call unchanged. The method is required
+// rather than optional on purpose — an optional one falls back
+// silently, which is how a dropped priority stayed invisible before.
+func (c *xmlrpcBackendCaller) CallAt(
+	ctx context.Context, _ hmenum.CommandPriority, method string, args ...any,
+) (any, error) {
+	return c.Call(ctx, method, args...)
+}
+
 func (c *xmlrpcBackendCaller) Call(ctx context.Context, method string, args ...any) (any, error) {
 	params := make([]xmlrpc.Value, 0, len(args))
 	for _, arg := range args {

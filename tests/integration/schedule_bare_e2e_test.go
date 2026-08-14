@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 func TestScheduleBareSchemaRoundTrip(t *testing.T) {
@@ -32,7 +33,7 @@ func TestScheduleBareSchemaRoundTrip(t *testing.T) {
 
 	backend := backends.NewCcuBackend(h.caller, nil, nil)
 	w := client.NewValueWriter()
-	w.Register(h.central.Name(), dev.InterfaceID, backend)
+	w.Register(h.central.Name(), hmtypes.ParseWireInterfaceID(dev.InterfaceID), backend)
 	reg := central.NewRegistry()
 	if err := reg.Register(h.central); err != nil {
 		t.Fatalf("registry.Register: %v", err)
