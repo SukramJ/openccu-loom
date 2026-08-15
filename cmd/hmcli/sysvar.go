@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -63,7 +62,7 @@ func cmdSysvarList(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	var items []sysvarSummary
@@ -129,7 +128,7 @@ func cmdSysvarGet(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	var sv sysvarSummary
@@ -177,7 +176,7 @@ func cmdSysvarSet(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	body := sysvarSetRequest{Value: coerceValue(rawVal)}
@@ -204,7 +203,7 @@ func cmdSysvarFetch(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	path := "/api/v1/sysvars/fetch"

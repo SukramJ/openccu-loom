@@ -147,10 +147,14 @@ Surfaces (all drive the same operation):
 - **Config UI** — a "Clear CCU cache" action (with a confirmation dialog).
 - **REST** — `POST /api/v1/admin/cache/clear` with `{"kind":"global", …}`.
 - **WebSocket** — the `ccu.cache_clear` command (same scope arguments).
-- **CLI** — `hmcli cache clear --scope …`. Add `--offline` to clear the
-  persisted rows directly against the database when the daemon is down or
-  wedged; an offline clear cannot re-pull, so the next daemon start performs
-  the readiness-gated bring-up.
+- **CLI** — `hmcli cache clear --scope …`. Authenticate with `--token` or with
+  `--user`/`--password`, exactly as the other command groups do. Add
+  `--offline` to clear the persisted rows directly against the database when
+  the daemon is down or wedged; an offline clear cannot re-pull, so the next
+  daemon start performs the readiness-gated bring-up. Offline mode never
+  creates a database: a `--db` path (or a `data_dir` resolved against the
+  wrong working directory) that does not exist is an error, not an empty
+  success.
 
 ## Where this data lives
 

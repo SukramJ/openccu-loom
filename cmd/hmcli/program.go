@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -72,7 +71,7 @@ func cmdProgramList(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	var items []programSummary
@@ -137,7 +136,7 @@ func cmdProgramGet(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	var p programSummary
@@ -183,7 +182,7 @@ func cmdProgramRun(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	if err := client.sendJSON(ctx, http.MethodPost, "/api/v1/programs/"+url.PathEscape(id)+"/execute", nil, nil); err != nil {
@@ -224,7 +223,7 @@ func cmdProgramSetActive(args []string, stdout, stderr io.Writer, active bool) e
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	body := setProgramActiveRequest{Active: active}

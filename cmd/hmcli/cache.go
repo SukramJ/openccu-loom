@@ -61,8 +61,15 @@ func cmdCacheClear(args []string, stdout, stderr io.Writer) error {
 	iface := fs.String("interface", "", "interface name (required for scope=interface/device)")
 	device := fs.String("device", "", "device address (required for scope=device)")
 	offline := fs.Bool("offline", false, "clear persisted rows directly against SQLite instead of calling the daemon")
-	url := fs.String("url", defaultHost, "daemon base URL (online mode)")
+	// --host is the spelling every other REST-backed group uses (see
+	// connFlags.bind); both names write the same target so an operator's
+	// muscle memory is not a parse error.
+	target := defaultHost
+	fs.StringVar(&target, "url", defaultHost, "daemon base URL (online mode)")
+	fs.StringVar(&target, "host", defaultHost, "alias for --url")
 	token := fs.String("token", "", "API bearer token (online mode; or set "+envToken+")")
+	user := fs.String("user", "", "basic-auth username (online mode)")
+	password := fs.String("password", "", "basic-auth password (online mode; or set "+envPassword+")")
 	cacert := fs.String("cacert", "", "path to a PEM CA bundle to trust for TLS (online mode)")
 	insecure := fs.Bool("insecure", false, "skip TLS certificate verification (online mode; dangerous, off by default)")
 	cfgPath := fs.String("config", "", "config file path (offline mode; required for scope=global/central)")
@@ -111,7 +118,28 @@ func cmdCacheClear(args []string, stdout, stderr io.Writer) error {
 	if *offline {
 		return runCacheClearOffline(kind, *central, *iface, *device, *cfgPath, *dbPath, stdout)
 	}
-	return runCacheClearOnline(kind, *central, *iface, *device, *url, *token, *cacert, *insecure, stdout, stderr)
+	return runCacheClearOnline(kind, *central, *iface, *device, cacheClearConn{
+		baseURL:  target,
+		token:    *token,
+		user:     *user,
+		password: *password,
+		cacert:   *cacert,
+		insecure: *insecure,
+	}, stdout, stderr)
+}
+
+// cacheClearConn carries the online path's connection settings. It mirrors
+// [connFlags] — including basic auth, which this group needs as much as the
+// others: a daemon with `north.rest.auth.users` and bearer auth switched off
+// authenticates the very operator who is allowed to clear caches by username
+// and password only.
+type cacheClearConn struct {
+	baseURL  string
+	token    string
+	user     string
+	password string
+	cacert   string
+	insecure bool
 }
 
 // clearSummary is the human-facing roll-up the CLI prints after a clear. It is
@@ -132,16 +160,18 @@ type clearSummary struct {
 // stderr and returns a non-nil error so the process exits non-zero.
 func runCacheClearOnline(
 	kind cachereset.ScopeKind,
-	central, iface, device, baseURL, token, cacert string,
-	insecure bool,
+	central, iface, device string,
+	conn cacheClearConn,
 	stdout, stderr io.Writer,
 ) error {
-	// Fill the token from the environment / a prompt so it need not appear on
-	// the command line, then warn if it would cross a plaintext link.
-	token, _, _ = resolveCredentials(token, "", "", os.Stdin, stderr)
-	warnIfPlaintextCredentials(baseURL, token, "", stderr)
+	// Fill the credentials from the environment / a prompt so they need not
+	// appear on the command line, then warn if they would cross a plaintext
+	// link.
+	token, user, password := resolveCredentials(conn.token, conn.user, conn.password, os.Stdin, stderr)
+	baseURL := conn.baseURL
+	warnIfPlaintextCredentials(baseURL, token, user, stderr)
 
-	tlsCfg, err := buildTLSConfig(cacert, insecure, stderr)
+	tlsCfg, err := buildTLSConfig(conn.cacert, conn.insecure, stderr)
 	if err != nil {
 		return fmt.Errorf("cache clear: %w", err)
 	}
@@ -173,8 +203,12 @@ func runCacheClearOnline(
 		return fmt.Errorf("cache clear: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
+	// Bearer wins over basic auth, mirroring [daemonClient.applyAuth].
+	switch {
+	case token != "":
 		req.Header.Set("Authorization", "Bearer "+token)
+	case user != "":
+		req.SetBasicAuth(user, password)
 	}
 
 	// Own transport, cloned so the stdlib defaults survive; see [httpx.NewTransport].
@@ -223,9 +257,18 @@ func runCacheClearOffline(
 	central, iface, device, cfgPath, dbOverride string,
 	stdout io.Writer,
 ) error {
-	dsn, cfg, err := resolveOfflineDSN(kind, cfgPath, dbOverride)
+	dsn, dbFile, cfg, err := resolveOfflineDSN(kind, cfgPath, dbOverride)
 	if err != nil {
 		return err
+	}
+	// SQLite creates a missing file and [sqlite.Open] then migrates it, so a
+	// mistyped --db or a DataDir resolved against the wrong working directory
+	// would produce a brand-new empty database, delete nothing from the real
+	// one, and still exit 0 — the one signal a maintenance script or an
+	// ExecStartPre hook has. Refuse instead.
+	if _, statErr := os.Stat(dbFile); statErr != nil {
+		return fmt.Errorf("cache clear: no database at %s: %w "+
+			"(offline mode never creates one — check --db / data_dir and the working directory)", dbFile, statErr)
 	}
 
 	openCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -299,37 +342,38 @@ func finishOfflineClear(stdout io.Writer, sum clearSummary) error {
 // ifaceUnit is one (central, interface) the offline clear loop deletes at.
 type ifaceUnit struct{ central, iface string }
 
-// resolveOfflineDSN derives the SQLite DSN for offline mode. --db wins when
-// set; otherwise the DSN is computed from the config DataDir (default ./var),
-// mirroring the daemon's values_cache wiring. Config is loaded whenever a path
-// is given so the global/central scopes can enumerate interfaces from it.
-func resolveOfflineDSN(kind cachereset.ScopeKind, cfgPath, dbOverride string) (dsn string, cfg *config.Config, err error) {
+// resolveOfflineDSN derives the SQLite DSN for offline mode, together with the
+// database file path it points at (the caller checks that the file exists —
+// see [runCacheClearOffline]). --db wins when set; otherwise the path is
+// computed from the config DataDir (default ./var), mirroring the daemon's
+// values_cache wiring. Config is loaded whenever a path is given so the
+// global/central scopes can enumerate interfaces from it.
+func resolveOfflineDSN(kind cachereset.ScopeKind, cfgPath, dbOverride string) (dsn, dbFile string, cfg *config.Config, err error) {
 	needsConfig := kind == cachereset.ScopeGlobal || kind == cachereset.ScopeCentral
 	if dbOverride == "" && cfgPath == "" {
-		return "", nil, errors.New("cache clear: offline mode requires --config or --db")
+		return "", "", nil, errors.New("cache clear: offline mode requires --config or --db")
 	}
 	if needsConfig && cfgPath == "" {
-		return "", nil, fmt.Errorf("cache clear: offline scope=%s requires --config to enumerate interfaces", kind)
+		return "", "", nil, fmt.Errorf("cache clear: offline scope=%s requires --config to enumerate interfaces", kind)
 	}
 
 	if cfgPath != "" {
 		cfg, err = config.Load(cfgPath)
 		if err != nil {
-			return "", nil, fmt.Errorf("cache clear: load config: %w", err)
+			return "", "", nil, fmt.Errorf("cache clear: load config: %w", err)
 		}
 	}
 
 	if dbOverride != "" {
-		dsn = sqlite.FileDSN(dbOverride)
-		return dsn, cfg, nil
+		return sqlite.FileDSN(dbOverride), dbOverride, cfg, nil
 	}
 
 	dataDir := cfg.DataDir
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn = sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
-	return dsn, cfg, nil
+	dbFile = filepath.Join(dataDir, "openccu-loom.db")
+	return sqlite.FileDSN(dbFile), dbFile, cfg, nil
 }
 
 // resolveOfflineUnits expands a non-device scope into the (central, interface)
