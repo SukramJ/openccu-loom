@@ -51,8 +51,13 @@ func noteKeyFor(note string) string { return healthNoteKeys[note] }
 // cannot drive the service-availability verdict to 503)
 //
 // After every Record call a [hmevent.ConnectionHealthChangedEvent] is
-// published on the bus so north-bound subscribers (metrics, REST/WS, MQTT)
-// can react to health state changes without polling the tracker.
+// published on the bus as recovery telemetry. It has no consumer today, and
+// that is deliberate: every north-bound health surface reads the tracker this
+// function feeds, which is the authoritative verdict — the event only repeats
+// what the tracker already knows. The silence is declared in the contract
+// suite's consumerless-event ratchet; a future subscriber that needs
+// FailureReason / ConsecutiveFailures has to fill them here first, because the
+// publish below leaves both at their zero value.
 //
 // Returns a closer that drops every subscription. Safe to call multiple times
 // — the registered closures are idempotent.
@@ -72,8 +77,8 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 	}
 	record := func(interfaceID string, healthy bool, note string) {
 		tr.Record(component(interfaceID), health.Sample{Healthy: healthy, Note: note, NoteKey: noteKeyFor(note)})
-		// Publish a ConnectionHealthChangedEvent so north-bound
-		// subscribers observe every health transition without polling.
+		// Recovery telemetry for the bus; the tracker above is what every
+		// health surface reads. See the doc comment on WireHealth.
 		events.Publish(bus, hmevent.ConnectionHealthChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: centralName,
