@@ -571,6 +571,44 @@ func TestInstallModeSuffixBidcos(t *testing.T) {
 	}
 }
 
+// TestInstallModeDiscoveryIsDistinctPerPairingInterface pins that every
+// interface that can open a pairing window gets its own entity.
+//
+// The state and command topics are built per interface, but the entity
+// identity (discovery topic + unique_id) used to be derived from a
+// two-valued bucket, so BidCos-RF and BidCos-Wired produced one entity
+// with two different topic sets. Both payloads went to the same retained
+// discovery topic, the last publish won, and the surviving pairing button
+// opened the window on whichever bus happened to be published last — a
+// coin flip that could change on every restart.
+func TestInstallModeDiscoveryIsDistinctPerPairingInterface(t *testing.T) {
+	t.Parallel()
+	db := newHubBuilder()
+	type coords struct{ component, node, object string }
+	seenCoords := map[coords]string{}
+	seenIDs := map[string]string{}
+	for iface := range hmenum.InterfacesSupportingInstallMode {
+		for _, item := range []DiscoveryItem{
+			db.BuildInstallModeSensorDiscovery("ccu-01", string(iface)),
+			db.BuildInstallModeButtonDiscovery("ccu-01", string(iface)),
+		} {
+			if !item.OK {
+				t.Fatalf("%s: expected OK=true", iface)
+			}
+			c := coords{item.Component, item.NodeID, item.ObjectID}
+			if other, dup := seenCoords[c]; dup {
+				t.Fatalf("%s and %s share the discovery topic %v — one entity, two topic sets", iface, other, c)
+			}
+			seenCoords[c] = string(iface)
+			uid, _ := jsonMap(t, item)["unique_id"].(string)
+			if other, dup := seenIDs[uid]; dup {
+				t.Fatalf("%s and %s share unique_id %q", iface, other, uid)
+			}
+			seenIDs[uid] = string(iface)
+		}
+	}
+}
+
 func TestInstallModeDiscoveryEmptyIface(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
