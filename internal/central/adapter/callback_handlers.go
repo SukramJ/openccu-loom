@@ -537,17 +537,55 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 // the generous bound only reaps a hung CCU connection.
 const newDevicesIngestTimeout = 2 * time.Minute
 
-// DeleteDevices drops the listed devices from the model registry so
-// the REST / MQTT views stop advertising them.
+// DeleteDevices drops the listed devices from the model registry so the
+// REST / MQTT views stop advertising them, and from the description /
+// paramset / device registries so nothing survives the deletion.
+//
+// The registry half is what makes this the same operation the REST unpair
+// performs (see [DeviceAdminDomain.UnpairDevice]). Removing the model device
+// alone left the descriptions and paramsets of every channel behind, which the
+// persistence sinks keep in SQLite: the next boot rehydrated them and
+// materialised a device the CCU no longer reports, complete with its creation
+// event.
 func (h *CallbackHandlers) DeleteDevices(_ context.Context, interfaceID string, addresses []string) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.delete_devices",
 		slog.String("interface", interfaceID),
 		slog.Int("count", len(addresses)))
+	if h.unit == nil {
+		return nil
+	}
 	for _, addr := range addresses {
-		h.unit.RemoveDevice(addr)
+		h.dropDevice(hmtypes.ParseWireInterfaceID(interfaceID), addr)
 	}
 	return nil
+}
+
+// dropDevice removes one address from the model and from every registry that
+// mirrors it, including the persisted rows the registries' sinks own.
+//
+// The device's own stamped interface id wins over the callback's when the
+// device is known: the registries are keyed by the canonical `<central>-<iface>`
+// wire id the ingest stamped, and a mismatch there deletes nothing.
+func (h *CallbackHandlers) dropDevice(iface hmtypes.WireInterfaceID, address string) {
+	// Snapshot the channels before RemoveDevice tears them down — the
+	// description and paramset registries carry one entry per CHANNEL, not one
+	// per device, so the device address alone matches only the root entry.
+	var channels []*device.Channel
+	if dev, ok := h.unit.ModelRegistry.Get(address); ok && dev != nil {
+		channels = dev.Channels()
+		if dev.InterfaceID != "" {
+			iface = hmtypes.ParseWireInterfaceID(dev.InterfaceID)
+		}
+	}
+	h.unit.RemoveDevice(address)
+	h.unit.DeviceRegistry.Remove(iface, address)
+	h.unit.DescRegistry.Delete(iface, address)
+	h.unit.ParamsetReg.DeleteChannel(iface, address)
+	for _, ch := range channels {
+		h.unit.DescRegistry.Delete(iface, ch.Address)
+		h.unit.ParamsetReg.DeleteChannel(iface, ch.Address)
+	}
 }
 
 // UpdateDevice handles a firmware-update notification (hint=0) or a link

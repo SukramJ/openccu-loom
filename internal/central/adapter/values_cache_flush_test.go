@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -23,6 +24,9 @@ import (
 type fakeSaver struct {
 	mu      sync.Mutex
 	batches [][]sqlite.SaveEntry
+	// saveErr is returned by every SaveBatch call — the SQLITE_BUSY / disk-full
+	// class the flusher has to survive without losing the tick's claim.
+	saveErr error
 }
 
 func (f *fakeSaver) SaveBatch(_ context.Context, entries []sqlite.SaveEntry) error {
@@ -31,7 +35,21 @@ func (f *fakeSaver) SaveBatch(_ context.Context, entries []sqlite.SaveEntry) err
 	cp := make([]sqlite.SaveEntry, len(entries))
 	copy(cp, entries)
 	f.batches = append(f.batches, cp)
-	return nil
+	return f.saveErr
+}
+
+// writtenCentrals flattens every recorded batch into the set of central names
+// whose data points reached the store.
+func (f *fakeSaver) writtenCentrals() map[string]struct{} {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]struct{})
+	for _, batch := range f.batches {
+		for i := range batch {
+			out[batch[i].CentralName] = struct{}{}
+		}
+	}
+	return out
 }
 
 // writtenKeys flattens every recorded batch into the set of
@@ -124,7 +142,7 @@ func TestFlushOnce_DirtyKey_OnlyPersistsChangedKey(t *testing.T) {
 	tracker.Mark(centralName, "DEV:1", "STATE")
 
 	saver := &fakeSaver{}
-	flushOnce(context.Background(), reg, saver, tracker, nil, "tick")
+	flushOnce(context.Background(), reg, saver, tracker, nil, nil, "tick")
 
 	got := saver.writtenKeys()
 	if len(got) != 1 {
@@ -152,7 +170,7 @@ func TestFlushOnce_InvalidateAll_PersistsEveryLiveDP(t *testing.T) {
 	tracker.Register(centralName)
 
 	saver := &fakeSaver{}
-	flushOnce(context.Background(), reg, saver, tracker, nil, "tick")
+	flushOnce(context.Background(), reg, saver, tracker, nil, nil, "tick")
 
 	got := saver.writtenKeys()
 	if len(got) != 2 {
@@ -174,7 +192,7 @@ func TestFlushOnce_ShutdownWalksEveryCentralRegardlessOfTracker(t *testing.T) {
 	reg, _ := buildTwoLiveDPCentral(t)
 
 	saver := &fakeSaver{}
-	flushOnce(context.Background(), reg, saver, nil, nil, "shutdown")
+	flushOnce(context.Background(), reg, saver, nil, nil, nil, "shutdown")
 
 	got := saver.writtenKeys()
 	if len(got) != 2 {
@@ -229,7 +247,7 @@ func TestFlushOnce_NeverPersistsEdgeTriggerParameters(t *testing.T) {
 	tracker.Register(centralName)
 
 	saver := &fakeSaver{}
-	flushOnce(context.Background(), reg, saver, tracker, nil, "tick")
+	flushOnce(context.Background(), reg, saver, tracker, nil, nil, "tick")
 
 	got := saver.writtenKeys()
 	if _, ok := got["DEV:1|PRESS_SHORT"]; ok {
@@ -241,5 +259,110 @@ func TestFlushOnce_NeverPersistsEdgeTriggerParameters(t *testing.T) {
 		if _, ok := got[want]; !ok {
 			t.Errorf("writtenKeys = %v, want to contain %s", got, want)
 		}
+	}
+}
+
+// addLiveDPCentral registers one more central holding a single live VALUES data
+// point, so a flush test can attribute entries to the central they came from.
+func addLiveDPCentral(t *testing.T, reg *central.Registry, name string) {
+	t.Helper()
+	c, err := central.New(central.Config{Name: name})
+	if err != nil {
+		t.Fatalf("central.New(%s): %v", name, err)
+	}
+	dev := device.New(device.Config{
+		InterfaceID: "if1",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "OTHER",
+		Model:       "HmIP-PS",
+	})
+	c.ModelRegistry.Put(dev)
+	ch := dev.AddChannel("OTHER:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	state := generic.NewDataPoint[bool](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID: "if1", ChannelAddress: "OTHER:1",
+			ParamsetKey: hmenum.ParamsetKeyValues, Parameter: "STATE",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type: hmenum.ParameterTypeBool, Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	state.OnWireValue(true)
+	ch.Put(state)
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("reg.Register(%s): %v", name, err)
+	}
+}
+
+// TestFlushOnce_SkipsCentralsExcludedFromTheValuesCache pins the write half of
+// `persistence.values_cache.disabled_centrals`.
+//
+// The opt-out was applied only where a central RESTORES from the cache, so an
+// excluded CCU still had every data point serialised into SQLite on each tick
+// and on the shutdown flush — rows nothing ever reads back and the operator
+// asked not to keep.
+func TestFlushOnce_SkipsCentralsExcludedFromTheValuesCache(t *testing.T) {
+	t.Parallel()
+
+	reg, centralName := buildTwoLiveDPCentral(t)
+	const excluded = "excluded-central"
+	addLiveDPCentral(t, reg, excluded)
+	persists := func(name string) bool { return name != excluded }
+
+	tracker := newDirtyTracker()
+	tracker.Register(centralName)
+	tracker.Register(excluded)
+
+	saver := &fakeSaver{}
+	flushOnce(context.Background(), reg, saver, tracker, persists, nil, "tick")
+	if _, wrote := saver.writtenCentrals()[excluded]; wrote {
+		t.Errorf("tick flush persisted %q although the operator excluded it", excluded)
+	}
+	if _, wrote := saver.writtenCentrals()[centralName]; !wrote {
+		t.Errorf("tick flush skipped %q, which is not excluded", centralName)
+	}
+
+	// The shutdown flush ignores the dirty tracker entirely, so it needs the
+	// same gate — it is the path that writes every central in full.
+	shutdownSaver := &fakeSaver{}
+	flushOnce(context.Background(), reg, shutdownSaver, nil, persists, nil, "shutdown")
+	if _, wrote := shutdownSaver.writtenCentrals()[excluded]; wrote {
+		t.Errorf("shutdown flush persisted %q although the operator excluded it", excluded)
+	}
+}
+
+// TestFlushOnce_FailedWriteKeepsTheClaimForTheNextTick pins the retry.
+//
+// The claim is consumed before the write, so a SaveBatch that fails (a busy
+// SQLite file, a full disk) used to drop that tick's values for good: nothing
+// re-marks them, and the next boot then restores pre-failure readings. The
+// history recorder requeues on the same failure class; the values cache now
+// does too.
+func TestFlushOnce_FailedWriteKeepsTheClaimForTheNextTick(t *testing.T) {
+	t.Parallel()
+
+	reg, centralName := buildTwoLiveDPCentral(t)
+	tracker := newDirtyTracker()
+	tracker.Register(centralName)
+	// Drain the initial full-walk claim so the test observes exactly the key
+	// marked below.
+	if _, ok := tracker.SwapClean(centralName); !ok {
+		t.Fatal("SwapClean immediately after Register returned ok=false; want true (initial claim)")
+	}
+	tracker.Mark(centralName, "DEV:1", "STATE")
+
+	failing := &fakeSaver{saveErr: errors.New("database is locked")}
+	flushOnce(context.Background(), reg, failing, tracker, nil, nil, "tick")
+
+	// Next tick, no further value change: the failed claim must come back.
+	recovered := &fakeSaver{}
+	flushOnce(context.Background(), reg, recovered, tracker, nil, nil, "tick")
+
+	got := recovered.writtenKeys()
+	if _, ok := got["DEV:1|STATE"]; !ok {
+		t.Fatalf("writtenKeys after a failed write = %v, want DEV:1|STATE to be retried", got)
+	}
+	if _, ok := got["DEV:1|LEVEL"]; ok {
+		t.Errorf("writtenKeys = %v, LEVEL was never dirty — the retry must not widen the claim", got)
 	}
 }

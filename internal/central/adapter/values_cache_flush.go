@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -176,6 +177,32 @@ func (t *dirtyTracker) SwapClean(centralName string) (dirtyClaim, bool) {
 	return claim, true
 }
 
+// Restore merges a claim back into centralName's pending state after the write
+// it was taken for failed, so the next tick retries it instead of dropping the
+// values on the floor. Marks that arrived while the write was in flight are
+// kept — the claim is merged, never assigned. Unknown names are a no-op: a
+// central that left the registry meanwhile has nothing left to flush.
+func (t *dirtyTracker) Restore(centralName string, claim dirtyClaim) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	st, ok := t.centrals[centralName]
+	if !ok {
+		return
+	}
+	if claim.invalidateAll {
+		st.invalidateAll = true
+		st.keys = nil
+		return
+	}
+	if st.invalidateAll {
+		return
+	}
+	if st.keys == nil {
+		st.keys = make(map[dirtyKey]struct{}, len(claim.keys))
+	}
+	maps.Copy(st.keys, claim.keys)
+}
+
 // Forget drops centralName from the tracker, so a removed CCU stops being
 // claimed on every tick. Unknown names are a no-op.
 func (t *dirtyTracker) Forget(centralName string) {
@@ -198,6 +225,11 @@ func (t *dirtyTracker) Forget(centralName string) {
 type ValuesCacheFlusher struct {
 	tracker *dirtyTracker
 
+	// allow is the per-central opt-out predicate
+	// (`persistence.values_cache.disabled_centrals`). Nil means every central
+	// is persisted.
+	allow func(centralName string) bool
+
 	// removeObserver detaches the registry observer and every per-central
 	// subscription it attached. It replaces a hand-kept slice: the registry
 	// already owns that ledger, and one ledger cannot disagree with itself.
@@ -208,10 +240,33 @@ type ValuesCacheFlusher struct {
 	once   sync.Once
 }
 
+// ValuesCacheFlusherOption tunes [WireValuesCacheFlusher].
+type ValuesCacheFlusherOption func(*ValuesCacheFlusher)
+
+// WithValuesCacheCentralFilter restricts the flusher to the centrals the
+// predicate accepts.
+//
+// The same predicate already decides whether a central's pipeline *restores*
+// from the cache; without it here the write half ran for every central, so an
+// excluded CCU had its data points serialised into SQLite on every tick and
+// never read back — rows the operator explicitly asked not to keep.
+func WithValuesCacheCentralFilter(allow func(centralName string) bool) ValuesCacheFlusherOption {
+	return func(f *ValuesCacheFlusher) { f.allow = allow }
+}
+
+// persists reports whether centralName may be written to the values cache.
+func (f *ValuesCacheFlusher) persists(centralName string) bool {
+	return f == nil || f.allow == nil || f.allow(centralName)
+}
+
 // StartCentral registers one central with the dirty tracker and subscribes its
 // EventBus so subsequent value / source changes mark it dirty. It is the
 // observer the registry runs per central, for boot-time and runtime-adopted
 // CCUs alike — production exercises one path, not two.
+//
+// A central the operator excluded from the values cache is not registered and
+// not subscribed at all — there is nothing to track for a central that is
+// never written.
 //
 // The returned closure releases the subscriptions and drops the central from
 // the tracker; it is nil-safe and idempotent. Nil receiver / unit / bus are
@@ -221,6 +276,9 @@ func (f *ValuesCacheFlusher) StartCentral(u *central.Unit) func() {
 		return func() {}
 	}
 	name := u.Name()
+	if !f.persists(name) {
+		return func() {}
+	}
 	f.tracker.Register(name)
 	bus := u.EventBus
 	unsubVal := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
@@ -288,6 +346,7 @@ func WireValuesCacheFlusher(
 	store *sqlite.ValuesCacheStore,
 	interval time.Duration,
 	logger *slog.Logger,
+	opts ...ValuesCacheFlusherOption,
 ) *ValuesCacheFlusher {
 	if reg == nil || store == nil {
 		return nil
@@ -301,6 +360,11 @@ func WireValuesCacheFlusher(
 		tracker: newDirtyTracker(),
 		cancel:  cancel,
 		done:    make(chan struct{}),
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(f)
+		}
 	}
 	// Attach before the loop starts so the very first value a central reports
 	// — a boot-time one or one adopted at runtime — already marks the cache
@@ -326,10 +390,10 @@ func WireValuesCacheFlusher(
 				// not run on shutdown: it is a maintenance sweep, not
 				// part of the data-loss-prevention path the flush covers.
 				//nolint:contextcheck // shutdown path must not inherit the cancelled flusher ctx
-				flushOnce(context.Background(), reg, store, nil, logger, "shutdown")
+				flushOnce(context.Background(), reg, store, nil, f.persists, logger, "shutdown")
 				return
 			case <-flushTicker.C:
-				flushOnce(ctx, reg, store, f.tracker, logger, "tick")
+				flushOnce(ctx, reg, store, f.tracker, f.persists, logger, "tick")
 			case <-gcTicker.C:
 				gcOnce(ctx, reg, store, logger)
 			}
@@ -358,11 +422,21 @@ type valuesCacheSaver interface {
 // during the walk keeps the central dirty for the next tick. Passing
 // tracker == nil (shutdown path) walks every central in full regardless so
 // the final flush catches everything.
+//
+// persists is the per-central opt-out predicate; a nil predicate persists every
+// central. It gates both walks, because the shutdown flush ignores the tracker
+// and would otherwise write the centrals the operator excluded.
+//
+// A failed SaveBatch hands every claim it consumed back to the tracker: the
+// claim is taken before the write, so dropping it on error would lose that
+// tick's values until the data points happen to change again — turning the
+// cache's bounded crash-loss window into an unbounded one.
 func flushOnce(
 	ctx context.Context,
 	reg *central.Registry,
 	store valuesCacheSaver,
 	tracker *dirtyTracker,
+	persists func(centralName string) bool,
 	logger *slog.Logger,
 	trigger string,
 ) {
@@ -370,12 +444,16 @@ func flushOnce(
 		return
 	}
 	var entries []sqlite.SaveEntry
+	claimed := make(map[string]dirtyClaim)
 	walked := 0
 	for _, unit := range reg.List() {
 		if unit == nil || unit.ModelRegistry == nil {
 			continue
 		}
 		name := unit.Name()
+		if persists != nil && !persists(name) {
+			continue
+		}
 		if tracker == nil {
 			walked++
 			collectAllChannelEntries(name, unit, &entries)
@@ -385,6 +463,7 @@ func flushOnce(
 		if !dirty {
 			continue
 		}
+		claimed[name] = claim
 		walked++
 		if claim.invalidateAll {
 			collectAllChannelEntries(name, unit, &entries)
@@ -403,6 +482,9 @@ func flushOnce(
 		return
 	}
 	if err := store.SaveBatch(ctx, entries); err != nil {
+		for name, claim := range claimed {
+			tracker.Restore(name, claim)
+		}
 		if logger != nil {
 			logger.Warn("values_cache.flush_err",
 				slog.String("trigger", trigger),

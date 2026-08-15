@@ -5,10 +5,13 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
 // fixtureBareMonday returns a prefix-less MASTER paramset as carried by
@@ -177,6 +180,43 @@ func TestFindScheduleChannelDeviceRootBareSchema(t *testing.T) {
 	}
 	if no != device.ChannelNumberDevice {
 		t.Errorf("expected device-root channel %d, got %d", device.ChannelNumberDevice, no)
+	}
+}
+
+// TestPutClimateScheduleFailsWhenDescriptionUnreadable pins the MASTER
+// paramset description as a prerequisite of a schedule write.
+//
+// The description drives two decisions the surrounding code documents as
+// silent CCU-side rejections when they go the wrong way: the bare-vs-prefixed
+// schema for classic thermostats, and the filter that strips keys the device
+// does not advertise. Treating an unreadable description as "no filtering,
+// prefixed schema" therefore wrote a payload the CCU discards while the
+// operator was told the schedule saved, complete with an audit row.
+func TestPutClimateScheduleFailsWhenDescriptionUnreadable(t *testing.T) {
+	t.Parallel()
+	domain, backend := buildScheduleIOFixture(t, fixtureBareMonday())
+	descErr := errors.New("getParamsetDescription: read timeout")
+	backend.getParamsetDescriptionFn = func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+		return nil, descErr
+	}
+
+	sched := &hmapi.ClimateSchedule{
+		Kind: "climate",
+		Profiles: map[string]hmapi.ClimateProfile{
+			"P1": {Weekdays: map[string]hmapi.ClimateWeekday{
+				"MONDAY": {
+					BaseTemperature: 17.0,
+					Periods:         []hmapi.ClimatePeriod{{StartTime: "06:00", EndTime: "22:00", Temperature: 21.0}},
+				},
+			}},
+		},
+	}
+	err := domain.PutClimateSchedule(context.Background(), "0001ABCD", 1, sched)
+	if !errors.Is(err, descErr) {
+		t.Fatalf("PutClimateSchedule err = %v, want the description read error", err)
+	}
+	if n := backend.putCallCount(); n != 0 {
+		t.Errorf("PutParamset called %d times without a usable description, want 0", n)
 	}
 }
 

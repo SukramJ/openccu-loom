@@ -903,7 +903,10 @@ func (s *SchedulesDomain) PutClimateSchedule(
 	// which schedule fields the device advertises (unsupported keys are
 	// filtered out), and whether a climate device uses the bare
 	// (prefix-less) schema.
-	descKeys := scheduleDescKeys(ctx, backend, channelAddr)
+	descKeys, err := scheduleDescKeys(ctx, backend, channelAddr)
+	if err != nil {
+		return err
+	}
 	switch sched.Kind {
 	case "simple":
 		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain, highestScheduleGroup(descKeys))
@@ -1326,20 +1329,25 @@ func serializeClimateScheduleBare(sched *hmapi.ClimateSchedule) (map[string]any,
 }
 
 // scheduleDescKeys reads the MASTER paramset description of a channel
-// and returns its key set. Returns nil on error so callers treat an
-// unavailable description as "no filtering and prefixed schema".
+// and returns its key set.
+//
+// The error is propagated rather than folded into an empty key set: both
+// decisions the set drives — the bare-vs-prefixed schema and the
+// unsupported-field filter — degrade into writes the CCU discards silently, so
+// a caller that cannot read the description must fail loudly instead of
+// reporting a save it did not perform.
 func scheduleDescKeys(
 	ctx context.Context, backend paramsetBackend, channelAddr string,
-) map[string]struct{} {
+) (map[string]struct{}, error) {
 	desc, err := backend.GetParamsetDescription(ctx, channelAddr, hmenum.ParamsetKeyMaster)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("schedules: master paramset description of %s: %w", channelAddr, err)
 	}
 	keys := make(map[string]struct{}, len(desc))
 	for k := range desc {
 		keys[k] = struct{}{}
 	}
-	return keys
+	return keys, nil
 }
 
 // climateScheduleIsBare reports whether a device carries its climate
