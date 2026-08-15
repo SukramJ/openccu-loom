@@ -51,8 +51,16 @@ func (a *DevicesAdapter) Devices() []*device.Device {
 }
 
 // Device returns the first matching device across every central.
-// Device addresses are globally unique on a CCU, so the first hit
-// is canonical.
+//
+// An address is unique within one CCU but not across a registry holding
+// several: the virtual-remote roots (BidCoS-RF, BidCos-Wir, HmIP-RCV-1) and
+// the INT000* group devices repeat verbatim on every CCU, which is why the
+// routing keys namespace themselves per central (see internal/routingkey).
+// [central.Registry.List] walks in central-name order, so for those addresses
+// a multi-CCU daemon consistently resolves the first CCU by name while the
+// later ones stay unreachable through every address-keyed surface. Resolving
+// them correctly needs the central alongside the address, which the callers
+// of this facade do not carry today.
 func (a *DevicesAdapter) Device(address string) (*device.Device, bool) {
 	if a.registry == nil {
 		return nil, false
@@ -99,7 +107,10 @@ func (a *DevicesAdapter) RefreshDevices(ctx context.Context) error {
 }
 
 // CentralOf returns the name of the central that owns the device.
-// Empty string when the device is unknown.
+// Empty string when the device is unknown. It resolves by address and
+// therefore carries the same multi-CCU limitation as [DevicesAdapter.Device]:
+// an address that exists on several CCUs is attributed to the first one by
+// name.
 func (a *DevicesAdapter) CentralOf(address string) string {
 	if a.registry == nil {
 		return ""
@@ -188,7 +199,10 @@ var ErrNoWriter = errors.New("adapter: no value writer wired")
 
 // SetValue implements handlers.DataPointWriter. It walks every
 // central, finds the device that owns channelAddress, and dispatches
-// through the central's writer.
+// through the central's writer. The lookup is address-keyed, so it
+// inherits the multi-CCU limitation documented on [DevicesAdapter.Device]:
+// a channel whose address exists on several CCUs is written on the first
+// one by name.
 func (a *DataPointWriterAdapter) SetValue(
 	ctx context.Context, channelAddress string, parameter hmenum.Parameter,
 	value any, priority hmenum.CommandPriority,

@@ -821,6 +821,20 @@ func (t *Tracker) SetPrimaryInterface(name string) {
 	t.primaryInterface = name
 }
 
+// PrimaryInterface returns the bare interface name the operator pinned via
+// [Tracker.SetPrimaryInterface], or "" when no pin is configured. It is the
+// per-central home of that setting for boot-time and runtime-adopted CCUs
+// alike, so callers that need to know which interface speaks for the CCU read
+// it here rather than carrying a second copy of the configuration.
+func (t *Tracker) PrimaryInterface() string {
+	if t == nil {
+		return ""
+	}
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.primaryInterface
+}
+
 // ClientDetail returns a snapshot of the per-interface [ClientHealth]
 // for name. The second return value is false when no client has been
 // registered yet — registration happens implicitly on the first
