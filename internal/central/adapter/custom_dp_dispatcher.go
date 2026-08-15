@@ -352,7 +352,17 @@ func (d *CustomDPDispatcher) dispatchFixedColorLight(
 ) error {
 	switch op {
 	case "set_color":
-		// Accepts either a "slot" int or "hue"+"saturation" pair.
+		// Accepts a "label" (the COLOR enum name), a "slot" int, or a
+		// "hue"+"saturation" pair. A caller holding only the CCU descriptor
+		// must use "label": the descriptor's value list is ordered by the RGB
+		// bit pattern, so its index is not a [light.FixedColor].
+		if labelRaw, ok := p["label"]; ok {
+			label, ok2 := labelRaw.(string)
+			if !ok2 {
+				return fmt.Errorf("%w: label must be a string", hmapi.ErrBadParam)
+			}
+			return l.SetColorByName(ctx, label, prio)
+		}
 		if slotRaw, ok := p["slot"]; ok {
 			slot, err := toInt32(slotRaw)
 			if err != nil {

@@ -461,6 +461,20 @@ func (l *FixedColorLight) SetColor(ctx context.Context, c FixedColor, priority h
 	return nil
 }
 
+// SetColorByName commands a colour slot by its CCU enum name (e.g. "BLUE").
+// The COLOR descriptor a CCU reports orders its value list by the RGB bit
+// pattern, which is not the order [FixedColor] enumerates, so a caller that
+// only has the descriptor must address the slot by name rather than by index.
+// Returns an error when the name is not one of the eight known colours.
+func (l *FixedColorLight) SetColorByName(ctx context.Context, name string, priority hmenum.CommandPriority) error {
+	for c, n := range fixedColorNames {
+		if n == name {
+			return l.SetColor(ctx, c, priority)
+		}
+	}
+	return fmt.Errorf("fixedcolor: unknown color name %q", name)
+}
+
 // fixedColorNames maps [FixedColor] integer values to their CCU string
 // names, mirroring Python's StrEnum values (light.py:63-75).
 var fixedColorNames = map[FixedColor]string{

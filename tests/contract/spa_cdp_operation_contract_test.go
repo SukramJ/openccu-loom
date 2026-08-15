@@ -154,7 +154,7 @@ var acceptedOperations = map[string]widgetContract{
 		"set_brightness":        keySet("brightness"),
 		"set_level":             keySet("state", "brightness", "level"),
 		"set_on_time":           keySet("seconds", "duration"),
-		"set_color":             keySet("hue", "saturation", "slot"),
+		"set_color":             keySet("hue", "saturation", "slot", "label"),
 		"set_color_temperature": keySet("kelvin"),
 		"set_effect":            keySet("label", "index"),
 	},
