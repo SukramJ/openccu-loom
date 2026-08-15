@@ -242,11 +242,11 @@ func TestNaming_SecondaryChannel_NotPrimary(t *testing.T) {
 
 	// Primary channel: Number==GroupNo==3 (group master).
 	chPrimary := d.AddChannel("0001SEC:3", 3, "X", hmenum.ParamsetKeyValues)
-	chPrimary.GroupNo = 3
+	chPrimary.AssignGroupNumber(3)
 
 	// Secondary channel: Number==4, GroupNo==3 (slave in same group).
 	chSecondary := d.AddChannel("0001SEC:4", 4, "X", hmenum.ParamsetKeyValues)
-	chSecondary.GroupNo = 3
+	chSecondary.AssignGroupNumber(3)
 
 	sw := newTestSwitch("0001SEC:3")
 	swSec := newTestSwitch("0001SEC:4")

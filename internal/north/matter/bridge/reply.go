@@ -824,32 +824,38 @@ func defaultAttributeValueWriter(enc *tlv.Encoder, tag tlv.Tag, v im.AttributeVa
 	case []mattermeasure.AccuracyStruct:
 		// ElectricalPowerMeasurement.Accuracy (0x0090:0x0002) and
 		// ElectricalEnergyMeasurement.Accuracy (0x0091:0x0000) per
-		// Matter §2.13.6.3 / §2.14.6.1. Each entry is a struct:
+		// Matter §2.13.6.3 / §2.14.6.1. Each entry is a
+		// MeasurementAccuracyStruct:
 		//   [0] MeasurementType  enum16
 		//   [1] Measured         bool
-		//   [2] MinAccuracy      uint16 (percent-hundredths)
-		//   [3] MaxAccuracy      uint16 (percent-hundredths)
-		//   [4] AccuracyRanges   list[AccuracyRangeStruct]
-		// AccuracyRangeStruct (inner):
-		//   [0] RangeMin int64, [1] RangeMax int64
+		//   [2] MinMeasuredValue int64
+		//   [3] MaxMeasuredValue int64
+		//   [4] AccuracyRanges   list[MeasurementAccuracyRangeStruct]
+		// MeasurementAccuracyRangeStruct (inner):
+		//   [0] RangeMin int64, [1] RangeMax int64, [5] FixedMax uint64
+		// Tags 2/3 are the measurement range and are signed: an unsigned
+		// element makes chip's TLVReader::Get(int64_t&) return
+		// WRONG_TLV_TYPE and the whole attribute fails to decode.
 		// matter.js ref: packages/model/src/standard/elements/
-		// electrical-power-measurement.element.ts — AccuracyStruct.
+		// measurement-accuracy-struct.element.ts and
+		// measurement-accuracy-range-struct.element.ts.
 		enc.StartArray(tag)
 		for _, a := range x {
 			enc.StartStruct(tlv.AnonymousTag())
 			enc.PutUint16(tlv.ContextTag(0), a.MeasurementType)
 			enc.PutBool(tlv.ContextTag(1), a.Measured)
-			enc.PutUint16(tlv.ContextTag(2), a.MinAccuracy)
-			enc.PutUint16(tlv.ContextTag(3), a.MaxAccuracy)
+			enc.PutInt64(tlv.ContextTag(2), a.MinMeasuredValue)
+			enc.PutInt64(tlv.ContextTag(3), a.MaxMeasuredValue)
 			enc.StartArray(tlv.ContextTag(4))
 			for _, r := range a.AccuracyRanges {
 				enc.StartStruct(tlv.AnonymousTag())
 				enc.PutInt64(tlv.ContextTag(0), r.RangeMin)
 				enc.PutInt64(tlv.ContextTag(1), r.RangeMax)
+				enc.PutUint64(tlv.ContextTag(5), r.FixedMax)
 				_ = enc.EndContainer()
 			}
 			_ = enc.EndContainer() // AccuracyRanges array
-			_ = enc.EndContainer() // AccuracyStruct
+			_ = enc.EndContainer() // MeasurementAccuracyStruct
 		}
 		_ = enc.EndContainer() // outer list
 	case mattercore.StartUpEvent:

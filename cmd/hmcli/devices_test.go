@@ -6,9 +6,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -141,6 +143,61 @@ func TestDevicesListPrintsTotalCount(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "42") {
 		t.Errorf("expected total count 42 in output:\n%s", stdout.String())
+	}
+}
+
+// TestDevicesListWalksEveryPage pins that the CLI collects the whole fleet.
+// The daemon paginates /api/v1/devices with a default of 50 per page while
+// still reporting the un-sliced total, so a single unqualified request drops
+// every device past the first page without any visible sign.
+func TestDevicesListWalksEveryPage(t *testing.T) {
+	t.Parallel()
+	const total = 1100 // more than two full pages at the CLI's page size
+	all := make([]deviceSummary, 0, total)
+	for i := range total {
+		all = append(all, deviceSummary{
+			Address:   fmt.Sprintf("DEV%04d", i),
+			Model:     "HmIP-PS",
+			Name:      fmt.Sprintf("Device %d", i),
+			Interface: "HmIP-RF",
+			Available: true,
+		})
+	}
+	var pages int
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/devices": func(w http.ResponseWriter, r *http.Request) {
+			pages++
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			if page < 1 {
+				page = 1
+			}
+			// Mirror the daemon: an unqualified request pages by 50, and
+			// per_page above the cap falls back to the default.
+			if perPage < 1 || perPage > 500 {
+				perPage = 50
+			}
+			start := min((page-1)*perPage, total)
+			end := min(start+perPage, total)
+			writeJSON200(w, deviceListResponse{
+				Items: all[start:end], Total: total, Page: page, PerPage: perPage,
+			})
+		},
+	})
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"devices", "list", "--host", ts.URL, "--json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var got []deviceSummary
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("decode json output: %v", err)
+	}
+	if len(got) != total {
+		t.Fatalf("emitted %d devices, want %d (pages fetched: %d)", len(got), total, pages)
+	}
+	if got[total-1].Address != all[total-1].Address {
+		t.Errorf("last device = %q, want %q", got[total-1].Address, all[total-1].Address)
 	}
 }
 

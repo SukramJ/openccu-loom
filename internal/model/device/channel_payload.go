@@ -46,8 +46,8 @@ func (c *Channel) Info() payload.InfoPayload {
 		info.Functions = functions
 	}
 	info.Room = c.Room()
-	if c.GroupNo != 0 {
-		info.GroupNo = c.GroupNo
+	if groupNo := c.GroupNumber(); groupNo != 0 {
+		info.GroupNo = groupNo
 		info.IsGroupMaster = c.IsGroupMaster()
 		if c.IsInMultiGroup() {
 			info.IsInMultiGroup = true

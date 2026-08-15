@@ -77,10 +77,12 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 		// HubMetricsRefresh is deliberately NOT wired: no wiring installs
 		// the coordinator's inner Metrics hook (WireHub sets every other
 		// hook), so the job would fire every interval as a permanent
-		// no-op. The two hub metrics that exist are produced elsewhere —
-		// MetricSystemHealth by central.reconcile and
-		// MetricLastEventAgeSecs by hub.last_event_age_refresh. Wire the
-		// slot once a real CCU metrics fetch exists.
+		// no-op. Of the two hub metrics that exist only
+		// MetricLastEventAgeSecs has a producer (LastEventAgeRefresh
+		// below). MetricSystemHealth has none: central.reconcile's health
+		// stage needs a coordinators.SystemHealthProbe and no CCU call is
+		// known that yields the score. Wire both slots once a real CCU
+		// metrics fetch exists.
 		jobs.HubConnectivityRefresh = u.Hub.RefreshConnectivity
 		// Per-BidCos-interface duty-cycle / carrier-sense poll. Delegates
 		// through the HubCoordinator; the inner listBidcosInterfaces hook is

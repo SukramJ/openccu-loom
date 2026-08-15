@@ -274,6 +274,17 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
 	out := make([]*Endpoint, 0, 4)
 
+	// An operator-hidden channel projects no endpoint, mirroring the
+	// candidate enumeration that already drops it. Both gates are needed:
+	// hiding does not touch the persisted allowlist row, so without this
+	// one a channel exposed BEFORE it was hidden keeps its endpoint in
+	// every controller while vanishing from the allowlist surface that
+	// could switch it off — the exposure would only be revocable by
+	// un-hiding the channel first.
+	if ch.IsHidden() {
+		return out, nil
+	}
+
 	// Collapse a multi-channel custom-DP actor onto its primary endpoint by
 	// default: a switch / dimmer / cover / lock / siren / valve spans its
 	// primary channel plus extra virtual-receiver actor channels, and
@@ -346,14 +357,20 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		if !ok || meas.MatterMeasurementClass() == interfaces.MatterMeasurementNone {
 			continue
 		}
-		allowed, err := allow(store.DPKindMeasurement, key)
+		// The allowlist row is keyed by the kind the candidate
+		// enumeration emits for the source — "calculated" for every
+		// calculated DP, whichever Matter projection it ends up taking.
+		// Probing a different kind here can never match the row the
+		// operator switched on, so the exposure would stay inert while
+		// the UI reports it as enabled.
+		allowed, err := allow(store.DPKindCalculated, key)
 		if err != nil {
 			return nil, err
 		}
 		if !allowed {
 			continue
 		}
-		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindMeasurement, key, meas)
+		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindCalculated, key, meas)
 		if err != nil {
 			return nil, err
 		}

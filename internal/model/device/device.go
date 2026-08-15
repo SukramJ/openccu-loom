@@ -406,10 +406,14 @@ type triggerableDP interface {
 // self.generic_data_points and calls publish_data_point_updated_event() on
 // each one after the availability mode is updated.
 func (d *Device) SetForcedAvailability(v hmenum.ForcedDeviceAvailability) bool {
-	if d.availability.Forced() == v {
+	// One call, not a Forced()-compare followed by SetForced(): two
+	// event-bus writers (per-interface reconnect and system status)
+	// target the same device, and a split compare-then-store lets them
+	// interleave into a wrong verdict.
+	overrideChanged, changed := d.availability.setForced(v)
+	if !overrideChanged {
 		return false
 	}
-	changed := d.availability.SetForced(v)
 	// Re-fire update callbacks on every generic DP so subscribers observe the
 	// changed availability context. This matches the Python path that calls
 	// publish_data_point_updated_event() for each dp in generic_data_points.

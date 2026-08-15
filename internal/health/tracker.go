@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/clock"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // Status is the coarse-grained health verdict.
@@ -410,11 +411,39 @@ func PingPongComponent(interfaceID string) string {
 	return PingPongComponentPrefix + interfaceID
 }
 
+// ScopeSeparator joins a central name to a component name when several
+// per-central trackers are unioned into one snapshot
+// ("<central>/<component>"). Two CCUs run the same interface names, so an
+// unscoped union would collapse them onto one entry.
+const ScopeSeparator = "/"
+
+// unscopeComponent strips the "<central>/" prefix a unioned snapshot carries,
+// so the classification rules below can be written against the name the
+// recorder actually used.
+//
+// Every production caller of [ServiceAvailability] reads a unioned snapshot,
+// so without this the literal comparisons matched nothing: an unhealthy
+// per-central "central" heartbeat could not trip the critical rule, and the
+// ping/pong entry — excluded from the interface count precisely because
+// [Tracker.RecordQuality] caps it at DEGRADED — slipped back in and made
+// "every interface down" unreachable. The ping/pong prefix is checked first
+// because that name already contains a separator of its own.
+func unscopeComponent(name string) string {
+	if strings.HasPrefix(name, PingPongComponentPrefix) {
+		return name
+	}
+	if _, rest, ok := strings.Cut(name, ScopeSeparator); ok {
+		return rest
+	}
+	return name
+}
+
 // isCriticalComponent reports whether a component's failure means the daemon
 // cannot serve at all (mapped to HTTP 503), regardless of south-bound state:
 // the persistence layer (sqlite) and the central coordinator heartbeat. A
 // single interface or the MQTT bridge dropping only degrades service.
 func isCriticalComponent(name string) bool {
+	name = unscopeComponent(name)
 	return name == "sqlite" || name == "central"
 }
 
@@ -426,11 +455,22 @@ func isCriticalComponent(name string) bool {
 // are excluded — otherwise a degraded ping/pong signal would count toward the
 // "every interface down → 503" verdict it is meant to stay clear of.
 func isInterfaceComponent(name string) bool {
+	name = unscopeComponent(name)
 	switch name {
 	case "central", "mqtt", "sqlite":
 		return false
 	}
 	if strings.HasPrefix(name, PingPongComponentPrefix) {
+		return false
+	}
+	// Namespaced infrastructure entries ("startup.<central>", "hub.<central>")
+	// borrow the central's name and therefore its hyphens. A wire interface id
+	// never carries a dot — central names are letters, digits, "-" and "_",
+	// and no interface token contains one — so the dot separates the two.
+	// Without this a central named "ccu-main" contributed a permanently
+	// DEGRADED startup entry to the interface count, which again makes
+	// "every interface down" unreachable.
+	if strings.Contains(name, ".") {
 		return false
 	}
 	return strings.Contains(name, "-")
@@ -472,17 +512,11 @@ func (t *Tracker) ScoreInt() int {
 	return int(t.Score() * 100)
 }
 
-// CentralScore returns the aggregate score restricted to components
-// whose name carries `central` as a substring. Use this in multi-CCU
-// setups to render a per-CCU tile in the UI without leaking the
-// other CCU's health into the verdict. Returns 0 when no component
-// matches.
-//
-// Matching rule: case-sensitive substring. Wiring already prefixes
-// interface ids with the central name (e.g. `ccu-main-HmIP-RF`,
-// `hub.ccu-main`), so the substring match catches both the
-// transport-level entries and the per-bridge / per-store entries
-// that carry the same prefix.
+// CentralScore returns the aggregate score restricted to the components that
+// belong to centralName. Use this in multi-CCU setups to render a per-CCU tile
+// in the UI without leaking the other CCU's health into the verdict. Returns 0
+// when no component matches — callers cannot tell that apart from "every
+// matching component is unhealthy", so read [Overall] alongside it.
 func (t *Tracker) CentralScore(centralName string) float64 {
 	if centralName == "" {
 		return 0
@@ -492,7 +526,7 @@ func (t *Tracker) CentralScore(centralName string) float64 {
 	total := 0.0
 	count := 0
 	for name, raw := range t.components {
-		if !strings.Contains(name, centralName) {
+		if !componentBelongsToCentral(name, centralName) {
 			continue
 		}
 		c := t.applyStaleLocked(raw)
@@ -510,6 +544,39 @@ func (t *Tracker) CentralScore(centralName string) float64 {
 		return 0
 	}
 	return total / float64(count)
+}
+
+// componentBelongsToCentral reports whether a component name is scoped to
+// centralName. Wiring produces three shapes, all matched on a boundary:
+//
+//   - "<central>/<component>"  — the unioned multi-CCU snapshot
+//   - "<namespace>.<central>"  — startup.<central>, hub.<central>
+//   - "<central>-<interface>"  — the canonical wire interface id, optionally
+//     behind the "ping_pong/" quality prefix
+//
+// A plain substring test cannot do this. Central names may contain "-"
+// themselves, so "ccu" matched inside "ccu-test-HmIP-RF" and the neighbouring
+// CCU's health landed in this one's tile. The interface half is therefore
+// resolved against the known interface tokens: as [hmtypes.WireInterfaceID]
+// documents, the separator is an ordinary hyphen and two interface tokens
+// contain one, so the split is not recoverable from the id alone.
+func componentBelongsToCentral(name, centralName string) bool {
+	if centralName == "" {
+		return false
+	}
+	if strings.HasPrefix(name, centralName+ScopeSeparator) {
+		return true
+	}
+	// The ping/pong quality entry is named after the interface id it tracks.
+	name = strings.TrimPrefix(name, PingPongComponentPrefix)
+	if name == centralName || strings.HasSuffix(name, "."+centralName) {
+		return true
+	}
+	if bare, ok := strings.CutPrefix(name, centralName+"-"); ok {
+		_, known := hmenum.InterfacesSupportingRPCCallback[hmenum.Interface(bare)]
+		return known
+	}
+	return false
 }
 
 // CentralScoreInt is the integer convenience wrapper for

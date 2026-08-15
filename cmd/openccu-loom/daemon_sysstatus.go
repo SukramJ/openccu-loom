@@ -94,7 +94,9 @@ func wireSystemStatusSubscribers(
 	// The MQTT alarm publisher mirrors the daemon-level alarm engine onto
 	// the HA alarm_control_panel plane. Nil-safe: only wired when both the
 	// alarm service and MQTT wiring are present. It owns the FAILED_TO_ARM
-	// event, so the command sink's master-arm failure hook points at it.
+	// event, so both producers of a refused arm point their failure hook
+	// at it: the MQTT command sink for the master-arm fan-out, and the
+	// alarm service for the schedule chain's unattended auto-arm.
 	var mqttAlarm *mqtt.AlarmMQTTPublisher
 	if mqttWiring != nil && alarmSvc != nil {
 		mqttAlarm = mqtt.NewAlarmMQTTPublisher(alarmSvc, mqttWiring, logger)
@@ -102,6 +104,11 @@ func wireSystemStatusSubscribers(
 		if alarmSink != nil {
 			alarmSink.setArmFailureHook(mqttAlarm.PublishFailedToArm)
 		}
+		// An auto-arm the engine refuses is the one arm failure nobody is
+		// present to see: the operator issued no command and gets no
+		// return value, so without this hook the house silently stays
+		// unarmed with only a journal row to say so.
+		alarmSvc.SetArmFailureHook(mqttAlarm.PublishFailedToArm)
 		if mqttSup != nil {
 			// Re-seed the retained alarm plane after every broker
 			// (re)connect — a broker restart wipes the retained store

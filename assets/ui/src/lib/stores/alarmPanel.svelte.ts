@@ -1,7 +1,7 @@
 import { api, ApiError, friendlyError } from "$lib/api/client";
 import { t } from "$lib/i18n";
 import { toastStore } from "./toast.svelte";
-import { subscribe } from "./events.svelte";
+import { onResync, subscribe } from "./events.svelte";
 import { authStore } from "./auth.svelte";
 import type {
   AlarmZone,
@@ -87,6 +87,7 @@ function createAlarmPanelStore() {
   let lastLoaded = $state<Date | null>(null);
 
   let unsub: (() => void) | null = null;
+  let unsubResync: (() => void) | null = null;
   let ticker: ReturnType<typeof setInterval> | null = null;
 
   function zoneIndex(id: string): number {
@@ -145,6 +146,11 @@ function createAlarmPanelStore() {
 
   function ensureStream() {
     if (!unsub) unsub = subscribe(applyEvent);
+    // The resync signal means the stream cannot bring this client up to
+    // date — after a dropped-event gap or a reconnect, arm state, zone
+    // readiness and the journal head are whatever the last REST read saw
+    // and no alarm broadcast repairs them.
+    if (!unsubResync) unsubResync = onResync(() => void refresh());
     if (!ticker) {
       // 1 s local decay so a running ring keeps moving between WS ticks.
       ticker = setInterval(tick, 1000);
@@ -424,6 +430,8 @@ function createAlarmPanelStore() {
     close() {
       unsub?.();
       unsub = null;
+      unsubResync?.();
+      unsubResync = null;
       if (ticker) {
         clearInterval(ticker);
         ticker = null;

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -182,8 +183,16 @@ var _ im.StatusCodeError = climateSystemModeUnsupportedError{}
 
 // celsiusToMatter encodes an HM temperature (°C) into Matter's int16
 // 0.01°C convention. Saturates at int16 bounds rather than wrapping.
+//
+// The product is rounded, not truncated: a tenth-of-a-degree reading
+// such as 20.4 is 2039.9999999999998 in binary64, and truncating it
+// reports 20.39 °C — one hundredth below what every other surface shows
+// for the same reading. 54 of the 801 tenth-degree steps between −30 and
+// 50 °C land on that side of an exact hundredth. Matches
+// internal/north/matter/cluster/measurement celsiusToInt16, the encoder
+// behind the standalone TemperatureMeasurement endpoints.
 func celsiusToMatter(c float64) int16 {
-	v := c * 100
+	v := math.Round(c * 100)
 	if v > 32767 {
 		return 32767
 	}

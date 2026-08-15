@@ -183,7 +183,20 @@ func MatterCommissioningWindow(opener MatterCommissioningOpener, publisher Matte
 			return
 		}
 		response := MatterCommissioningWindowResponse(res)
-		publishMatterEvent(req.Context(), publisher, MatterTopicCommissioningWindowOpened, response)
+		// The broadcast reaches every subscribed WS client and the event
+		// plane applies no role filter — only this route is admin-gated.
+		// So the pairing credential stays in the HTTP response and the
+		// event carries just the discriminator and how long the window
+		// stays open, which is what a client needs to refresh its view.
+		// An ephemeral window mints its passcode per open, reachable
+		// through no read surface at all, so publishing it here would
+		// hand a viewer the credential that commissions the bridge onto
+		// a new fabric.
+		publishMatterEvent(req.Context(), publisher, MatterTopicCommissioningWindowOpened,
+			MatterCommissioningWindowResponse{
+				Discriminator:   response.Discriminator,
+				DurationSeconds: response.DurationSeconds,
+			})
 		JSON(w, http.StatusOK, response)
 	}
 }

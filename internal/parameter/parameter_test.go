@@ -43,6 +43,38 @@ func TestCoerceBoolAcceptsManyShapes(t *testing.T) {
 	}
 }
 
+// TestCoerceBoolAcceptsJSONDecodedNumber drives the shape the REST write
+// boundary actually produces: the handler decodes the request body with a
+// plain json.Decoder into an `any`, so `{"value": 1}` on a BOOL or ACTION
+// parameter arrives as a float64 — the CCU's own 1/0 spelling of a boolean,
+// and a contract-legal body since the schema declares the value untyped.
+func TestCoerceBoolAcceptsJSONDecodedNumber(t *testing.T) {
+	for _, ptype := range []hmenum.ParameterType{hmenum.ParameterTypeBool, hmenum.ParameterTypeAction} {
+		desc := hmproto.ParameterData{Type: ptype, Operations: hmenum.OperationsRead | hmenum.OperationsWrite}
+		for _, tc := range []struct {
+			body string
+			want bool
+		}{
+			{`{"value": 1}`, true},
+			{`{"value": 0}`, false},
+		} {
+			var body struct {
+				Value any `json:"value"`
+			}
+			if err := json.Unmarshal([]byte(tc.body), &body); err != nil {
+				t.Fatalf("decode %s: %v", tc.body, err)
+			}
+			v, err := Coerce(desc, body.Value)
+			if err != nil {
+				t.Fatalf("%s: Coerce(%s) returned %v", ptype, tc.body, err)
+			}
+			if v.Bool != tc.want {
+				t.Fatalf("%s: Coerce(%s) = %v, want %v", ptype, tc.body, v.Bool, tc.want)
+			}
+		}
+	}
+}
+
 func TestCoerceIntRangeCheck(t *testing.T) {
 	desc := hmproto.ParameterData{
 		Type:       hmenum.ParameterTypeInteger,

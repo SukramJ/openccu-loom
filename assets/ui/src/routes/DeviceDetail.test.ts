@@ -904,4 +904,112 @@ describe("DeviceDetail — remove device options dialog", () => {
       });
     });
   });
+
+  it("moves focus into the dialog and closes it on Escape", async () => {
+    await openDeleteDialog();
+
+    // Focus has to leave the "Remove" button behind the overlay, or
+    // assistive technology never enters the aria-modal dialog and a keyboard
+    // user has to tab through the whole page to reach Cancel.
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+
+    // Escape is handled on the window: the keydown is dispatched from the
+    // focused element, and a handler bound to the overlay div never sees it
+    // because the overlay is not on that element's ancestor chain.
+    await fireEvent.keyDown(document.activeElement as HTMLElement, {
+      key: "Escape",
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText("device.delete.mode_label"),
+      ).not.toBeInTheDocument();
+    });
+    expect(mockDeleteDevice).not.toHaveBeenCalled();
+  });
+});
+
+describe("DeviceDetail — room / function creation", () => {
+  async function openWithCatalogs() {
+    mockGetDevice.mockResolvedValue(baseDevice());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(mockListRooms).toHaveBeenCalled();
+    });
+  }
+
+  // Types a brand-new name into the device-level room combobox and clicks
+  // its "create" entry.
+  async function createRoomNamed(name: string) {
+    const input = await waitFor(() => {
+      const el = document.getElementById("device-rooms");
+      if (!el) throw new Error("room combobox not rendered");
+      return el as HTMLInputElement;
+    });
+    await fireEvent.input(input, { target: { value: name } });
+    const list = await waitFor(() => {
+      const el = document.getElementById("device-rooms-list");
+      if (!el) throw new Error("room combobox did not open");
+      return el;
+    });
+    await fireEvent.click(within(list).getByText("roomfn.create.room"));
+  }
+
+  it("surfaces a rejected room create instead of failing silently", async () => {
+    // The combobox discards the promise it gets back, so a rejection that is
+    // not caught here reaches nothing: no chip, no toast, no signal at all.
+    mockCreateRoom.mockRejectedValueOnce(new Error("room already exists"));
+    await openWithCatalogs();
+
+    await createRoomNamed("Keller");
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("room already exists");
+    });
+    expect(mockToastSuccess).not.toHaveBeenCalledWith("roomfn.created.room");
+  });
+
+  it("toasts success when the CCU accepts the new room", async () => {
+    await openWithCatalogs();
+
+    await createRoomNamed("Keller");
+
+    await waitFor(() => {
+      expect(mockCreateRoom).toHaveBeenCalledWith("Keller", undefined);
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("roomfn.created.room");
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+});
+
+describe("DeviceDetail — configure sub-tab deep link", () => {
+  it("honours a sub-tab prop that changes while the view stays mounted", async () => {
+    // App.svelte renders this component unkeyed, so following an externally
+    // supplied `#/devices/<other>?tab=links` with a device page already open
+    // only swaps the props — nothing remounts, and an onMount-only read of
+    // `sub` would leave the operator on the previously selected tab.
+    mockGetDevice.mockResolvedValue(
+      baseDevice({
+        channels: [{ address: "0001ABCD:1", number: 1, type: "SHUTTER_CONTACT" }],
+        channels_count: 1,
+      }),
+    );
+    const { rerender } = render(DeviceDetail, {
+      props: { address: "0001ABCD", locale: "en" },
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
+    });
+
+    await rerender({ address: "0002ABCD", sub: "links", locale: "en" });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: "device.subtab.links" }),
+      ).toHaveAttribute("aria-selected", "true");
+    });
+  });
 });

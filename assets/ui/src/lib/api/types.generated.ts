@@ -7527,8 +7527,11 @@ export interface components {
             subject: string;
             /** @enum {string} */
             role: "admin" | "operator" | "viewer";
-            /** @enum {string} */
-            scheme?: "basic" | "bearer" | "session" | "oidc";
+            /**
+             * @description How the request authenticated. `ingress` is the Home Assistant Ingress passthrough the add-on deployment uses.
+             * @enum {string}
+             */
+            scheme?: "basic" | "bearer" | "session" | "oidc" | "ingress";
         };
         UserListEntry: {
             username: string;
@@ -7965,6 +7968,17 @@ export interface components {
              * @description RFC3339Nano timestamp the CCU observed the change at.
              */
             modified_at: string;
+            /**
+             * @description Model category of the data point (`switch`, `sensor`, …).
+             *     Only sent to clients that subscribed with `classify: true`;
+             *     omitted otherwise.
+             */
+            category?: string;
+            /**
+             * @description North-bound type the category collapses into. Same
+             *     `classify: true` opt-in as `category`.
+             */
+            data_point_type?: string;
         };
         /**
          * @description Payload of a `custom_data_point.state_changed` broadcast. Topic
@@ -8289,10 +8303,10 @@ export interface components {
             /** @description Stable machine-readable cause token (sensor, adopted, central_lost, restored). */
             cause: string;
             /**
-             * @description Protection mode that was active at trigger time.
+             * @description Protection mode that was active at trigger time. `disarmed` for an always-on trigger (hazard detector, panic) that fires independently of the arm state.
              * @enum {string}
              */
-            mode?: "perimeter" | "full" | "night" | "vacation" | "custom";
+            mode?: "disarmed" | "perimeter" | "full" | "night" | "vacation" | "custom";
         };
         /**
          * @description Alarm-control-panel entity projection (model category
@@ -8364,7 +8378,7 @@ export interface components {
             /** @description Omitted for engine-global entries. */
             zone_id?: string;
             /** @enum {string} */
-            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config" | "maintenance";
             /** @description Stable machine-readable event token within the class. */
             event: string;
             /** @description Attribution; omitted when unattributed. */
@@ -10084,7 +10098,7 @@ export interface components {
              * @description Journal bucket used by the `class` query filter.
              * @enum {string}
              */
-            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config" | "maintenance";
             /** @description Stable machine-readable event token within the class (e.g. "armed", "force_armed", "silenced"). */
             event: string;
             /** @description Identity that caused the entry (operator account, keypad identity, code name, or an engine-internal actor); empty when unattributed. */
@@ -16814,7 +16828,7 @@ export interface operations {
                 /** @description Only return entries for this alarm zone id. */
                 zone?: string;
                 /** @description Only return entries in this journal class. */
-                class?: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+                class?: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config" | "maintenance";
                 /** @description Only return entries at-or-after this value (inclusive, RFC3339). Returns 400 if the value cannot be parsed. */
                 from?: string;
                 /** @description Only return entries strictly before this value (exclusive, RFC3339). Returns 400 if the value cannot be parsed. */

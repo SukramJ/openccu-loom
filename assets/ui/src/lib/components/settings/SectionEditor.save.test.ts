@@ -710,6 +710,27 @@ describe("SectionEditor.save — secret payload contract", () => {
     expect(payload.password).toBe("");
   });
 
+  it("never puts the mask sentinel into the input, so an appended edit stays clean", async () => {
+    mockGetConfigSectionResult = { public_url: "https://old.example.com", password: "***" };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const payload = await renderAndSave(
+      [PUBLIC_URL_FIELD, MQTT_PASSWORD_FIELD],
+      async (container) => {
+        const pw = container.querySelector(
+          'input[type="password"]',
+        ) as HTMLInputElement;
+        // A masked secret must render empty: the operator's caret lands after
+        // whatever the field holds, so a sentinel in the value is typed into
+        // the credential.
+        expect(pw.value).toBe("");
+        await fireEvent.input(pw, { target: { value: pw.value + "hunter2" } });
+      },
+    );
+
+    expect(payload.password).toBe("hunter2");
+  });
+
   it("omits untouched complex secrets the editor never renders", async () => {
     mockGetConfigSectionResult = {
       public_url: "https://old.example.com",

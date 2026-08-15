@@ -133,10 +133,10 @@ func TestSchedulerJobErrorIsLoggedNotPropagated(t *testing.T) {
 	}
 }
 
-// --- C-SCHED-2: OnStart / OnComplete lifecycle hooks ---
+// --- OnStart / OnComplete lifecycle hooks ---
 
 // TestJobOnStartCalledBeforeRun verifies that OnStart is invoked with
-// the job name before the job function runs. Closes C-SCHED-2.
+// the job name before the job function runs.
 func TestJobOnStartCalledBeforeRun(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil)
@@ -174,7 +174,6 @@ func TestJobOnStartCalledBeforeRun(t *testing.T) {
 
 // TestJobOnCompleteCalledAfterRun verifies that OnComplete fires after
 // each job invocation with the job name, duration and success flag.
-// Closes C-SCHED-2.
 func TestJobOnCompleteCalledAfterRun(t *testing.T) {
 	t.Parallel()
 	s := New(nil, nil)

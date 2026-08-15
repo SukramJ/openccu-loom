@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -269,6 +270,56 @@ func TestCacheClearOnlineSendsBearerToken(t *testing.T) {
 	}
 }
 
+func TestCacheClearOnlineSendsBasicAuthWhenNoToken(t *testing.T) {
+	t.Parallel()
+	var gotUser, gotPassword string
+	var gotOK bool
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUser, gotPassword, gotOK = r.BasicAuth()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"devices":0,"paramsets":0,"values":0,"master":0}`))
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{
+		"cache", "clear", "--scope", "global", "--host", ts.URL,
+		"--user", "alice", "--password", "s3cret",
+	}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run: %v\nstderr: %s", err, stderr.String())
+	}
+	if !gotOK {
+		t.Fatal("request carried no basic-auth credentials")
+	}
+	if gotUser != "alice" || gotPassword != "s3cret" {
+		t.Errorf("basic auth = %q/%q, want alice/s3cret", gotUser, gotPassword)
+	}
+}
+
+func TestCacheClearOnlinePrefersBearerOverBasicAuth(t *testing.T) {
+	t.Parallel()
+	var gotAuth string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"devices":0,"paramsets":0,"values":0,"master":0}`))
+	}))
+	defer ts.Close()
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{
+		"cache", "clear", "--scope", "global", "--url", ts.URL,
+		"--token", "secret-tok", "--user", "alice", "--password", "s3cret",
+	}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if gotAuth != "Bearer secret-tok" {
+		t.Errorf("Authorization=%q, want the bearer token to win", gotAuth)
+	}
+}
+
 // ─── offline scope → units expansion ──────────────────────────────────────────
 
 func TestResolveOfflineUnitsInterfaceNeedsNoConfig(t *testing.T) {
@@ -341,14 +392,14 @@ func TestResolveOfflineUnitsCentralEnumeratesItsInterfaces(t *testing.T) {
 
 func TestResolveOfflineDSNRequiresConfigOrDB(t *testing.T) {
 	t.Parallel()
-	if _, _, err := resolveOfflineDSN("interface", "", ""); err == nil {
+	if _, _, _, err := resolveOfflineDSN("interface", "", ""); err == nil {
 		t.Fatal("expected error: offline mode needs --config or --db")
 	}
 }
 
 func TestResolveOfflineDSNDBOverrideWins(t *testing.T) {
 	t.Parallel()
-	dsn, cfg, err := resolveOfflineDSN("interface", "", "/tmp/custom.db")
+	dsn, dbFile, cfg, err := resolveOfflineDSN("interface", "", "/tmp/custom.db")
 	if err != nil {
 		t.Fatalf("resolveOfflineDSN: %v", err)
 	}
@@ -358,11 +409,14 @@ func TestResolveOfflineDSNDBOverrideWins(t *testing.T) {
 	if !strings.Contains(dsn, "/tmp/custom.db") {
 		t.Errorf("dsn should use the override path, got %q", dsn)
 	}
+	if dbFile != "/tmp/custom.db" {
+		t.Errorf("db file = %q, want the override path", dbFile)
+	}
 }
 
 func TestResolveOfflineDSNGlobalNeedsConfigEvenWithDB(t *testing.T) {
 	t.Parallel()
-	if _, _, err := resolveOfflineDSN("global", "", "/tmp/custom.db"); err == nil {
+	if _, _, _, err := resolveOfflineDSN("global", "", "/tmp/custom.db"); err == nil {
 		t.Fatal("expected error: global scope cannot enumerate interfaces without config")
 	}
 }
@@ -440,6 +494,31 @@ func TestRunCacheClearOfflineDeviceScopeFailsWhenStoreDeletesFail(t *testing.T) 
 	}
 	if code := exitCodeFor(err); code != exitGeneral {
 		t.Errorf("exit code = %d, want %d", code, exitGeneral)
+	}
+}
+
+func TestRunCacheClearOfflineMissingDatabaseFailsWithoutCreatingOne(t *testing.T) {
+	t.Parallel()
+	// A parent directory that exists, so SQLite would happily create the file.
+	missing := filepath.Join(t.TempDir(), "typo.db")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{
+		"cache", "clear", "--offline",
+		"--scope", "interface", "--central", "ccu1", "--interface", "HmIP-RF",
+		"--db", missing,
+	}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected an error when the database does not exist")
+	}
+	if !strings.Contains(err.Error(), missing) {
+		t.Errorf("error should name the resolved path, got: %v", err)
+	}
+	if _, statErr := os.Stat(missing); statErr == nil {
+		t.Error("a fresh database was created at the wrong path")
+	}
+	if strings.Contains(stdout.String(), "Cache cleared") {
+		t.Errorf("a failed clear must not report success, got: %q", stdout.String())
 	}
 }
 

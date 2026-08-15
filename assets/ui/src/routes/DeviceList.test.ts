@@ -30,12 +30,16 @@ vi.mock("$lib/stores/devices.svelte", () => ({
   },
 }));
 
-// DeviceList reads centralStore.items for the per-central filter chips and
-// the "still initializing" banner; the multi-central UI is not under test
-// here, so an empty, inert fleet keeps that code path a no-op.
+// DeviceList reads centralStore.items for the per-central filter chips, the
+// "still initializing" banner and the reconciliation of a persisted central
+// filter. Most cases leave the fleet empty, which keeps those paths inert.
+let mockCentrals: unknown[] = [];
+
 vi.mock("$lib/stores/centrals.svelte", () => ({
   centralStore: {
-    items: [],
+    get items() {
+      return mockCentrals;
+    },
     loading: false,
     error: null,
     refresh: vi.fn().mockResolvedValue(undefined),
@@ -118,6 +122,7 @@ function makeDevice(overrides: Partial<DeviceSummary> = {}): DeviceSummary {
 beforeEach(() => {
   vi.clearAllMocks();
   mockItems = [];
+  mockCentrals = [];
   mockLoading = false;
   mockError = null;
   mockLastLoaded = null;
@@ -370,5 +375,41 @@ describe("DeviceList — last-updated footer", () => {
     mockLastLoaded = null;
     const { getByText } = render(DeviceList);
     expect(getByText("common.loading")).toBeTruthy();
+  });
+});
+
+describe("DeviceList — persisted central filter", () => {
+  it("clears a filter naming a CCU that is no longer configured", async () => {
+    // The operator filtered to "ccu2" and then removed (or renamed) that CCU
+    // in Settings. The select that could clear the filter is only rendered
+    // while two centrals have devices, so without reconciliation the list
+    // stays empty with no visible cause and no way back short of clearing
+    // localStorage.
+    mockCentrals = [{ name: "ccu1", readiness: { ready: true } }];
+    mockItems = [makeDevice({ address: "D1", name: "Still here", central: "ccu1" })];
+    deviceListFilters.centralFilter = "ccu2";
+
+    const { findAllByRole } = render(DeviceList);
+
+    const headings = await findAllByRole("heading", { level: 3 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0].textContent).toContain("Still here");
+    expect(deviceListFilters.centralFilter).toBe("");
+  });
+
+  it("keeps the filter while the named CCU is still configured but not yet loaded", () => {
+    // Cold start: the CCU is configured and inside its readiness-gated
+    // bring-up, so it has no devices yet. Dropping the filter here would
+    // silently widen the view the operator chose.
+    mockCentrals = [
+      { name: "ccu1", readiness: { ready: true } },
+      { name: "ccu2", readiness: { ready: false } },
+    ];
+    mockItems = [makeDevice({ address: "D1", name: "CCU1 device", central: "ccu1" })];
+    deviceListFilters.centralFilter = "ccu2";
+
+    render(DeviceList);
+
+    expect(deviceListFilters.centralFilter).toBe("ccu2");
   });
 });

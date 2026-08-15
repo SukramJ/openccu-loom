@@ -4,6 +4,8 @@
 package generic
 
 import (
+	"encoding/json"
+
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -118,8 +120,13 @@ func (d *DataPoint[T]) Config() payload.ConfigPayload {
 	if len(d.Descriptor.Max) > 0 {
 		cfg.Max = string(d.Descriptor.Max)
 	}
-	if len(d.Descriptor.Special) > 0 {
-		cfg.Special = []byte(d.Descriptor.Special)
+	// SPECIAL is embedded as raw JSON so the config topic carries the
+	// sentinel set itself. A descriptor whose blob never parsed keeps its
+	// bytes verbatim through normalization, and embedding those would make
+	// the whole payload unmarshalable — dropping the one field is better
+	// than losing the config topic.
+	if len(d.Descriptor.Special) > 0 && json.Valid(d.Descriptor.Special) {
+		cfg.Special = d.Descriptor.Special
 	}
 	if len(d.Descriptor.ValueList) > 0 {
 		vl := make([]string, len(d.Descriptor.ValueList))

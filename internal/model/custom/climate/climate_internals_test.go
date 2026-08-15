@@ -1463,6 +1463,31 @@ func TestCelsiusToMatterClamping(t *testing.T) {
 	}
 }
 
+// TestCelsiusToMatterRoundsTenthDegreeReadings pins the encoder against
+// the binary64 artefact of the multiplication: a tenth-of-a-degree
+// reading whose ×100 product lands just below an exact hundredth used to
+// truncate a hundredth away, reporting a temperature every other surface
+// showed one step higher. The listed inputs are the ones that reproduce.
+func TestCelsiusToMatterRoundsTenthDegreeReadings(t *testing.T) {
+	cases := []struct {
+		celsius float64
+		want    int16
+	}{
+		{20.4, 2040},
+		{16.9, 1690},
+		{8.2, 820},
+		{4.1, 410},
+		{-20.4, -2040},
+		{21.5, 2150},
+		{0, 0},
+	}
+	for _, c := range cases {
+		if got := celsiusToMatter(c.celsius); got != c.want {
+			t.Errorf("celsiusToMatter(%v) = %d, want %d", c.celsius, got, c.want)
+		}
+	}
+}
+
 func TestHumidityToMatterClamping(t *testing.T) {
 	if got := humidityToMatter(-1.0); got != 0 {
 		t.Errorf("humidityToMatter(-1) = %d, want 0", got)

@@ -368,6 +368,17 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 		// operator saved, which never reaches cfg.Centrals.
 		seed(unit, cc.PrimaryInterface)
 	}
+	// The un_ignore patterns travel with the adopted row the same way, and the
+	// only other reader of them is the boot walk over cfg.Centrals — which
+	// learns about this CCU one restart from now. Seed them BEFORE Register so
+	// the visibility observer that Register runs already finds the rows;
+	// without them every parameter the operator un-ignored on this CCU stays
+	// suppressed for the rest of the run.
+	if store := o.sbDeps.visibilityUnIgnoreStore; store != nil && len(cc.Visibility.UnIgnore) > 0 {
+		if err := store.SeedIfEmpty(ctx, cc.Name, cc.Visibility.UnIgnore); err != nil {
+			logger.Warn("visibility.unignore.seed_failed", slog.String("err", err.Error()))
+		}
+	}
 	if err := o.reg.Register(unit); err != nil {
 		return fmt.Errorf("central_adopt: register %s: %w", cc.Name, err)
 	}

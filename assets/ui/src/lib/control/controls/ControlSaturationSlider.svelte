@@ -73,6 +73,43 @@
     onChange(v);
   }
 
+  // An ARIA slider that takes focus has to be operable from the keyboard —
+  // the track has no native input behind it, so a focused thumb would
+  // otherwise be a dead end for keyboard and switch users. Saturation is a
+  // 0..1 fraction quantized to 1 %, so that is the arrow-key increment.
+  const KEY_STEP = 0.01;
+
+  function onKey(event: KeyboardEvent) {
+    if (disabled) return;
+    let next = value;
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowUp":
+        next = quantize(value + KEY_STEP);
+        break;
+      case "ArrowLeft":
+      case "ArrowDown":
+        next = quantize(value - KEY_STEP);
+        break;
+      case "PageUp":
+        next = quantize(value + KEY_STEP * 10);
+        break;
+      case "PageDown":
+        next = quantize(value - KEY_STEP * 10);
+        break;
+      case "Home":
+        next = 0;
+        break;
+      case "End":
+        next = 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    if (next !== value) onChange(next);
+  }
+
   const display = $derived(pendingValue ?? value);
   const percent = $derived(display * 100);
 </script>
@@ -92,6 +129,7 @@
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
   onpointercancel={onPointerUp}
+  onkeydown={onKey}
 >
   <div
     class="pointer-events-none absolute top-1/2 h-12 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-md ring-1 ring-black/20 dark:bg-slate-200 dark:ring-white/30"

@@ -730,6 +730,9 @@ func (p *DevicePipeline) finishIngest(
 	if err := p.hydrateDataPoints(ctx, interfaceID, b, writer, logger); err != nil {
 		return err
 	}
+	// Recompute the cached names now that every channel of the interface
+	// carries its data points — see [DevicePipeline.restampDataPointNames].
+	p.restampDataPointNames(interfaceID)
 	// Materialise custom data points for every device that belongs to
 	// this interface. The materializer walks the registered profiles
 	// (DefaultRegistry, populated via the [builtins] blank import) and
@@ -899,6 +902,51 @@ func (p *DevicePipeline) finishIngest(
 	// custom-DP, and event attachment step above.
 	p.finalizeChannelInit(interfaceID)
 	return nil
+}
+
+// restampDataPointNames recomputes the cached name quadruple and the
+// multi-channel flag for every data point of interfaceID.
+//
+// [device.BuildDataPointName] appends the disambiguating " chN" postfix
+// only when a *sibling* channel already exposes the same parameter, and
+// that answer is derived from the data points the channels currently
+// hold. hydrateParamset names a data point before it puts it on the
+// channel, and channels are hydrated one after another, so a
+// two-channel switch names both its STATE points while no sibling
+// carries STATE yet and both cache the same postfix-free name. The
+// third channel onwards sees two siblings and does get a postfix, which
+// is why the damage shows as asymmetric names rather than none.
+//
+// Re-stamping once the whole interface is hydrated — and still before
+// custom-DP materialisation, value seeding and any north-bound
+// subscription — is what makes the cached name agree with the live
+// recompute the REST data-point handler performs per request. MQTT
+// discovery reads the cache, REST recomputes, and the two must not
+// disagree about the name of the same data point.
+func (p *DevicePipeline) restampDataPointNames(interfaceID string) {
+	if p.unit == nil {
+		return
+	}
+	for _, d := range p.devicesFor(interfaceID) {
+		for _, ch := range d.Channels() {
+			restampChannelDataPointNames(ch, ch.DataPoints())
+			restampChannelDataPointNames(ch, ch.MasterDataPoints())
+		}
+	}
+}
+
+// restampChannelDataPointNames re-runs the name factory for dps, all of
+// which belong to ch.
+func restampChannelDataPointNames(ch *device.Channel, dps []device.ParameterDataPoint) {
+	for _, dp := range dps {
+		init, ok := dp.(namingInitializer)
+		if !ok {
+			continue
+		}
+		parameter := dp.DataPointKey().Parameter
+		init.SetNameData(device.BuildDataPointName(ch, parameter, ""))
+		init.SetIsInMultipleChannels(ch.IsParameterInMultipleChannels(parameter))
+	}
 }
 
 // finalizeChannelInit calls [device.Channel.FinalizeInit] on every channel
@@ -1718,6 +1766,13 @@ func (p *DevicePipeline) hydrateParamset(
 		reg.Put(hmtypes.ParseWireInterfaceID(interfaceID), ch.Address, key, paramset)
 	}
 
+	// Parameter-name set for the paired `<param>_STATUS` lookup below.
+	// Built once so the per-parameter detection stays O(1).
+	paramNames := make(map[string]struct{}, len(paramset))
+	for name := range paramset {
+		paramNames[name] = struct{}{}
+	}
+
 	for name := range paramset {
 		pd := paramset[name]
 
@@ -1788,9 +1843,16 @@ func (p *DevicePipeline) hydrateParamset(
 			continue
 		}
 		cfg := generic.Spec{
-			Key:           dpKey,
-			Descriptor:    pd,
-			Writer:        bw,
+			Key:        dpKey,
+			Descriptor: pd,
+			Writer:     bw,
+			// The device model drives the device-aware quantity lookup
+			// ([generic.DataPoint.Quantity]) and the signature the data
+			// point renders. Both documented it as pipeline-supplied while
+			// nothing set it, so every per-model override — HmIP-SWDO.STATE
+			// → window and its twelve siblings — resolved to QuantityNone
+			// and signatures collided across device models.
+			DeviceModel:   ch.Device().Model,
 			CentralName:   p.unit.Name(),
 			NoPushUpdates: !b.Capabilities().RPCCallback,
 		}
@@ -1809,6 +1871,20 @@ func (p *DevicePipeline) hydrateParamset(
 		dp := resolveDataPointWithUnIgnore(cfg, parameterIsUnIgnored)
 		if dp == nil {
 			continue
+		}
+		// Pair the data point with its `<param>_STATUS` sibling and cache
+		// that parameter's VALUE_LIST. The CCU reports a measurement's
+		// quality as an ENUM index on the paired parameter, and
+		// [generic.DataPoint.UpdateStatusFromWire] can only turn that index
+		// into a ParameterStatus with the list in hand — without it every
+		// OVERFLOW / UNDERFLOW / ERROR report is dropped and the base data
+		// point keeps publishing an unusable reading as available.
+		if statusName, hasStatus := generic.DetectStatusParameter(name, paramNames); hasStatus {
+			if sp, ok := dp.(interface {
+				SetStatusParameter(paramName string, valueList []string)
+			}); ok {
+				sp.SetStatusParameter(statusName, paramset[statusName].ValueList)
+			}
 		}
 		// Cluster 1 — Cache the presentation surface on the DP at construction
 		// time. Translation is intentionally not resolved here — the locale-aware

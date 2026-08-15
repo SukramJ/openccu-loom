@@ -138,14 +138,25 @@ const (
 	matterSmokeCOAlarmClusterRevision uint16 = 2
 
 	// SmokeCOAlarm AlarmStateEnum (spec 2.11.5.1):
-	// 0 = Normal, 1 = Warning, 2 = Critical.
+	// 0 = Normal, 1 = Warning, 2 = Critical. Carried by SmokeState,
+	// CoState and BatteryAlert — matter.js smoke-co-alarm-cluster.element.ts
+	// AlarmStateEnum.
 	matterSmokeAlarmNormal   uint8 = 0
 	matterSmokeAlarmWarning  uint8 = 1
 	matterSmokeAlarmCritical uint8 = 2
 
+	// ExpressedState (0x0000) has its own value space, ExpressedStateEnum:
+	// 0 = Normal, 1 = SmokeAlarm, 2 = CoAlarm, … — matter.js
+	// smoke-co-alarm-cluster.element.ts ExpressedStateEnum. It is NOT
+	// AlarmStateEnum: writing the AlarmStateEnum Critical(2) into it
+	// reports a carbon-monoxide alarm on a device with no CO sensor.
+	matterExpressedStateNormal     uint8 = 0
+	matterExpressedStateSmokeAlarm uint8 = 1
+
 	// SmokeCOAlarm FeatureMap bits (spec 2.11.4):
 	// bit 0 = SMOKE, bit 1 = CO. HM-SWSD reports smoke only.
 	matterSmokeCOFeatureSmoke uint32 = 1 << 0
+	matterSmokeCOFeatureCO    uint32 = 1 << 1
 )
 
 var (
@@ -413,6 +424,24 @@ func smokeStatusToAlarmState(st SmokeAlarmStatus) uint8 {
 	}
 }
 
+// smokeStatusToExpressedState maps the HM status onto ExpressedStateEnum.
+// The device has one sensor, so every non-normal state is expressed as
+// SmokeAlarm; the finer Warning/Critical distinction stays on SmokeState,
+// which is the attribute typed AlarmStateEnum.
+func smokeStatusToExpressedState(st SmokeAlarmStatus) uint8 {
+	if smokeStatusToAlarmState(st) == matterSmokeAlarmNormal {
+		return matterExpressedStateNormal
+	}
+
+	return matterExpressedStateSmokeAlarm
+}
+
+// featureMap reports the SmokeCOAlarm features this projection
+// advertises. HM-SWSD carries a smoke sensor only, so the CO bit stays
+// clear — and every CO-conformance attribute stays off the wire with
+// it (see MatterRead / MatterAttributes).
+func (s smokeCOServer) featureMap() uint32 { return matterSmokeCOFeatureSmoke }
+
 func (s smokeCOServer) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case matterAttrSmokeExpressedState:
@@ -423,8 +452,7 @@ func (s smokeCOServer) MatterRead(attrID uint32) (any, bool) {
 		if !ok {
 			return nil, true
 		}
-		// ExpressedState mirrors SmokeState for smoke-only devices.
-		return smokeStatusToAlarmState(st), true
+		return smokeStatusToExpressedState(st), true
 	case matterAttrSmokeState:
 		st, ok := s.s.Status()
 		if !ok {
@@ -432,8 +460,17 @@ func (s smokeCOServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return smokeStatusToAlarmState(st), true
 	case matterAttrCOState:
-		// HM-SWSD has no CO sensor — return Normal so Matter clients
-		// reading both attributes get a coherent picture.
+		// Conformance "CO" (smoke-co-alarm-cluster.element.ts CoState):
+		// the attribute exists only while the FeatureMap carries the CO
+		// bit. HM-SWSD has no CO sensor, so answering it anyway made a
+		// controller build a carbon-monoxide characteristic that reads
+		// Normal forever — feature-gated instead, so a future CO-capable
+		// device lights it up through featureMap alone. Mirrors
+		// matter.js SmokeCoAlarmServer.ts, which gates the same
+		// attribute on `this.features.coAlarm`.
+		if s.featureMap()&matterSmokeCOFeatureCO == 0 {
+			return nil, false
+		}
 		return matterSmokeAlarmNormal, true
 	case matterAttrBatteryAlert:
 		// Battery condition is exposed via Power Source cluster on the
@@ -453,7 +490,7 @@ func (s smokeCOServer) MatterRead(attrID uint32) (any, bool) {
 	case matterAttrTestInProgress:
 		return false, true
 	case matterAttrFeatureMap:
-		return matterSmokeCOFeatureSmoke, true
+		return s.featureMap(), true
 	case matterAttrClusterRevision:
 		return matterSmokeCOAlarmClusterRevision, true
 	default:
@@ -481,16 +518,31 @@ func (s smokeCOServer) MatterReportable() []uint32 {
 // server implements via MatterRead. Apple Home's HAP service rebuild
 // reads the full attribute set; without this the dispatcher falls back
 // to MatterReportable's two-attribute surface.
+//
+// The list is conformance-driven: SmokeState is "SMOKE" and CoState is
+// "CO", so each is enumerated only while its feature bit is set. The
+// dispatcher builds both the wildcard expansion and the synthesized
+// AttributeList straight from here, so an attribute listed against a
+// FeatureMap that does not carry its feature is a non-conformant pair on
+// every commissioner read.
 func (s smokeCOServer) MatterAttributes() []uint32 {
-	return []uint32{
-		matterAttrSmokeExpressedState,
-		matterAttrSmokeState,
-		matterAttrCOState,
+	fm := s.featureMap()
+	attrs := make([]uint32, 0, 7)
+	attrs = append(attrs, matterAttrSmokeExpressedState)
+	if fm&matterSmokeCOFeatureSmoke != 0 {
+		attrs = append(attrs, matterAttrSmokeState)
+	}
+	if fm&matterSmokeCOFeatureCO != 0 {
+		attrs = append(attrs, matterAttrCOState)
+	}
+
+	return append(
+		attrs,
 		matterAttrBatteryAlert,
 		matterAttrHardwareFaultAlert,
 		matterAttrEndOfServiceAlert,
 		matterAttrTestInProgress,
-	}
+	)
 }
 
 // matterWriteUint16 coerces an OnOff LT attribute-write value (OnTime /

@@ -123,7 +123,7 @@ func TestChannelInfoPayloadWithOptionals(t *testing.T) {
 	ch.SetName("Wohnzimmer")
 	ch.SetRooms([]string{"Wohnzimmer"})
 	ch.SetFunctions([]string{"Heizen"})
-	ch.GroupNo = 3 // is group master (GroupNo == Number)
+	ch.AssignGroupNumber(3) // is group master (GroupNo == Number)
 
 	info, ok := ch.Info().(*payload.ChannelInfo)
 	if !ok || info == nil {
@@ -155,7 +155,7 @@ func TestChannelInfoPayloadEmptyOptionalsAreOmitted(t *testing.T) {
 	ch.SetName("")
 	ch.SetRooms([]string{})
 	ch.SetFunctions([]string{})
-	ch.GroupNo = 0
+	// The channel stays ungrouped, so group_no must be omitted.
 
 	info, ok := ch.Info().(*payload.ChannelInfo)
 	if !ok || info == nil {
@@ -190,7 +190,7 @@ func TestChannelInfoPayloadGroupMaster(t *testing.T) {
 		Model:       "HmIP-TEST",
 	})
 	master := d.AddChannel("GRPDEV:5", 5, "TYPE_A", "")
-	master.GroupNo = 5
+	master.AssignGroupNumber(5)
 
 	infoMaster, ok := master.Info().(*payload.ChannelInfo)
 	if !ok || infoMaster == nil {
@@ -202,7 +202,7 @@ func TestChannelInfoPayloadGroupMaster(t *testing.T) {
 
 	// Member channel: GroupNo set but != Number.
 	member := d.AddChannel("GRPDEV:6", 6, "TYPE_A", "")
-	member.GroupNo = 5
+	member.AssignGroupNumber(5)
 
 	infoMember, ok := member.Info().(*payload.ChannelInfo)
 	if !ok || infoMember == nil {
@@ -260,11 +260,11 @@ func TestChannelInfoPayloadRoomFromGroupMaster(t *testing.T) {
 		Model:       "HmIP-TEST",
 	})
 	master := d.AddChannel("FALLBACKDEV:2", 2, "TYPE_A", "")
-	master.GroupNo = 2
+	master.AssignGroupNumber(2)
 	master.SetRooms([]string{"LivingRoom"})
 
 	member := d.AddChannel("FALLBACKDEV:3", 3, "TYPE_A", "")
-	member.GroupNo = 2 // belongs to group 2; master is FALLBACKDEV:2
+	member.AssignGroupNumber(2) // belongs to group 2; master is FALLBACKDEV:2
 
 	info, ok := member.Info().(*payload.ChannelInfo)
 	if !ok || info == nil {

@@ -40,10 +40,13 @@ type ConfigAdminService interface {
 
 // SchemaField is one entry of `GET /api/v1/config/schema`.
 type SchemaField struct {
-	Path            string `json:"path"`
-	Class           string `json:"class"`
-	GoType          string `json:"go_type"`
-	RestartRequired bool   `json:"restart_required,omitempty"`
+	Path   string `json:"path"`
+	Class  string `json:"class"`
+	GoType string `json:"go_type"`
+	// RestartRequired is emitted unconditionally: the published schema
+	// lists it among SchemaField's required members, so omitting the
+	// false case breaks every generated client that enforces them.
+	RestartRequired bool `json:"restart_required"`
 	// Default carries the daemon's effective default for the
 	// field — the value used when neither YAML nor SQLite nor an
 	// env-override supplies one. For most fields this is the Go
@@ -423,6 +426,82 @@ func restoreMaskedSecrets(current *config.Config, section configstore.Section, r
 	return out
 }
 
+// envSourcedSecretPaths returns the section-relative paths of the secrets
+// [configstore.Store.Effective] resolved from the process environment and
+// that the submitted payload carries no operator-supplied value for.
+//
+// The attribution comes from Effective itself, which stamps SourceEnv on the
+// fields it overlays. A secret the operator did type into the editor is left
+// out: that value is theirs, not the environment's, and persisting it is the
+// documented behaviour (the env var still wins at runtime).
+func envSourcedSecretPaths(section configstore.Section, sources map[string]configstore.FieldSource, submitted json.RawMessage) []string {
+	if len(sources) == 0 {
+		return nil
+	}
+	var payload map[string]any
+	// A payload that is not a JSON object carries no operator value for any
+	// secret, so every env-resolved one counts as untouched.
+	_ = json.Unmarshal(submitted, &payload)
+	prefix := string(section) + "."
+	var out []string
+	for full, goType := range secretPathTypes() {
+		if sources[full] != configstore.SourceEnv {
+			continue
+		}
+		rel, ok := strings.CutPrefix(full, prefix)
+		if !ok || owningSection(full) != section {
+			continue
+		}
+		if payload != nil && !secretPayloadIsPlaceholder(payload, rel, goType) {
+			continue
+		}
+		out = append(out, rel)
+	}
+	return out
+}
+
+// restoreSecretsFromRow rewrites the leaves of persist named by rels back to
+// the values the currently stored section row carries, dropping the key
+// entirely when the row has none. Used to undo an env-resolved secret that
+// the effective-config merge folded into the blob about to be persisted;
+// keeping the row's own value means enabling an env var never silently
+// deletes a password the operator saved through the editor earlier.
+func restoreSecretsFromRow(persist, stored json.RawMessage, rels []string) json.RawMessage {
+	var row map[string]any
+	if err := json.Unmarshal(persist, &row); err != nil || row == nil {
+		return persist
+	}
+	var storedMap map[string]any
+	_ = json.Unmarshal(stored, &storedMap) // absent row → every leaf is dropped
+	for _, rel := range rels {
+		if v, ok := lookupDeepAny(storedMap, rel); ok {
+			setDeepAny(row, rel, v)
+			continue
+		}
+		deleteDeepAny(row, rel)
+	}
+	out, err := json.Marshal(row)
+	if err != nil {
+		return persist
+	}
+	return out
+}
+
+// deleteDeepAny removes the leaf at path from m, leaving the parent objects in
+// place. A missing intermediate object is a no-op.
+func deleteDeepAny(m map[string]any, path string) {
+	parts := strings.Split(path, ".")
+	cur := m
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := cur[part].(map[string]any)
+		if !ok {
+			return
+		}
+		cur = next
+	}
+	delete(cur, parts[len(parts)-1])
+}
+
 // secretPayloadIsPlaceholder reports whether the value the payload carries at
 // rel means "unchanged" rather than an operator edit. See
 // [restoreMaskedSecrets] for the contract this implements.
@@ -579,6 +658,7 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		// stored value before validation/persistence, so a round-tripped "***"
 		// neither fails type-validation nor overwrites the secret.
 		current := cur.Config
+		submitted := raw
 		raw = restoreMaskedSecrets(current, section, raw)
 		if err := validateSection(section, raw); err != nil {
 			problem.Write(w, http.StatusBadRequest,
@@ -617,6 +697,22 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		// row a complete description of the section.
 		if merged, ok, mErr := configstore.MarshalSection(section, candidate); mErr == nil && ok {
 			persist = merged
+		}
+		// A secret the operator supplied only through the environment must not
+		// become a database row. Effective overlays OPENCCU_LOOM_* secrets onto
+		// the assembled config as its last step, so both restoreMaskedSecrets
+		// and the section marshal above carry that value into the blob — a save
+		// of any unrelated field in the same section would turn a deliberately
+		// ephemeral credential into durable state that travels in backups and
+		// leaves in cleartext through `config export`.
+		if rels := envSourcedSecretPaths(section, cur.Sources, submitted); len(rels) > 0 {
+			row, gErr := svc.GetSection(r.Context(), section)
+			if gErr != nil && !errors.Is(gErr, sqlite.ErrSectionNotFound) {
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal,
+					"Section save failed", gErr)
+				return
+			}
+			persist = restoreSecretsFromRow(persist, row.ValueJSON, rels)
 		}
 		updatedBy := identityFromCtx(r.Context())
 		row, err := svc.PutSection(r.Context(), section, persist, updatedBy)

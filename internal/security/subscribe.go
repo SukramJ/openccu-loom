@@ -5,6 +5,7 @@ package security
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -69,22 +70,96 @@ func (s *Service) attachUnit(u *central.Unit) {
 			s.log.Error("security: rebuild index", "central", name, "error", err)
 		}
 	}
-	afterReady := func() {
+	// The hot-plug events arrive in bursts, not singly: the CCU
+	// re-announces its whole inventory on every reconnect, so one
+	// reconnect publishes a DeviceCreatedEvent per device, back to back,
+	// on the bus dispatch goroutine. RebuildIndex is a whole-fleet pass
+	// — three store round trips plus every device × channel × data point
+	// of every central, ending in a state publish the MQTT plane
+	// reconciles against — so rebuilding per event turns a reconnect
+	// into N of them and stalls the event pipeline for the duration.
+	// Coalesce the burst into one rebuild once the announcements settle.
+	debounce := newRebuildDebouncer(indexRebuildDebounce, func() {
 		if u.IsSouthboundReady() {
 			rebuild()
 		}
-	}
+	})
 	unsubs := []func(){
 		events.Subscribe(u.EventBus, func(e hmevent.DataPointValueChangedEvent) {
 			s.onDataPoint(name, e)
 		}),
+		// The readiness event is the single boot signal, not a burst:
+		// rebuild straight away so the index is populated as early as
+		// the model allows.
 		events.Subscribe(u.EventBus, func(hmevent.CentralSouthboundReadyEvent) { rebuild() }),
-		events.Subscribe(u.EventBus, func(hmevent.DeviceCreatedEvent) { afterReady() }),
-		events.Subscribe(u.EventBus, func(hmevent.DeviceRemovedEvent) { afterReady() }),
+		events.Subscribe(u.EventBus, func(hmevent.DeviceCreatedEvent) { debounce.trigger() }),
+		events.Subscribe(u.EventBus, func(hmevent.DeviceRemovedEvent) { debounce.trigger() }),
+		debounce.stop,
 	}
 	s.mu.Lock()
 	s.centralUnsubs[name] = append(s.centralUnsubs[name], unsubs...)
 	s.mu.Unlock()
+}
+
+// indexRebuildDebounce is how long the hot-plug rebuild waits for the
+// announcement burst to settle. Long enough to fold a fleet-sized
+// re-announcement into one pass, short enough that a single device
+// paired by hand shows up while the operator is still looking at the
+// pairing dialog.
+const indexRebuildDebounce = 500 * time.Millisecond
+
+// rebuildDebouncer collapses a burst of triggers into one deferred run.
+// Its stop closure travels with the central's unsubscribe list, so a
+// detached central leaves no pending timer behind.
+type rebuildDebouncer struct {
+	delay time.Duration
+	run   func()
+
+	mu      sync.Mutex
+	timer   *time.Timer
+	stopped bool
+}
+
+func newRebuildDebouncer(delay time.Duration, run func()) *rebuildDebouncer {
+	return &rebuildDebouncer{delay: delay, run: run}
+}
+
+// trigger schedules a run, restarting the wait if one is already
+// pending. A trigger after stop is a no-op.
+func (d *rebuildDebouncer) trigger() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.stopped {
+		return
+	}
+	if d.timer == nil {
+		d.timer = time.AfterFunc(d.delay, d.fire)
+		return
+	}
+	d.timer.Reset(d.delay)
+}
+
+// fire runs the debounced work unless the debouncer was stopped after
+// the timer had already been released.
+func (d *rebuildDebouncer) fire() {
+	d.mu.Lock()
+	stopped := d.stopped
+	d.mu.Unlock()
+	if stopped {
+		return
+	}
+	d.run()
+}
+
+// stop cancels any pending run and refuses further triggers.
+func (d *rebuildDebouncer) stop() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.stopped = true
+	if d.timer != nil {
+		d.timer.Stop()
+		d.timer = nil
+	}
 }
 
 // onDataPoint folds a wire value change into the aggregate.

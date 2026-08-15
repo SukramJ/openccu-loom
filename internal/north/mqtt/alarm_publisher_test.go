@@ -759,7 +759,7 @@ func TestAlarmPlaneDeclaresSoItsOrphanedConfigsAreSwept(t *testing.T) {
 		t.Fatal("the alarm plane never declared, so the orphan sweep skips it forever")
 	}
 
-	n, err := bridge.RunDiscoveryOrphanCleanupOnce(context.Background(), 50*time.Millisecond)
+	n, err := bridge.RunDiscoveryOrphanCleanupOnce(context.Background(), "", 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
 	}

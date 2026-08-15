@@ -30,6 +30,7 @@ import importlib.util
 import json
 import logging
 import os
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -75,13 +76,52 @@ def _ensure_venv() -> None:
     # actually contains the openccu_data package.
     already_in_venv_marker = "_AIOHOMEMATIC_VENV_REEXEC_DONE"
     if os.environ.get(already_in_venv_marker) == "1":
+        _require_openccu_data(f"the re-exec target {sys.executable}")
         return
     for cand in candidates:
-        if os.path.exists(cand):
-            os.environ[already_in_venv_marker] = "1"
-            print(f"[snapshot] re-execing in aiohomematic venv: {cand}", file=sys.stderr)
-            os.execv(cand, [cand, *sys.argv])
-    # Fall through — let the caller see the ImportError below.
+        if not os.path.exists(cand):
+            continue
+        # Condition (c). A stale venv that has aiohomematic but no
+        # openccu_data re-execs into an interpreter that emits a snapshot
+        # with every label missing, and every label lookup downstream is
+        # wrapped in `except Exception: pass`, so the run stays silent.
+        probe = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [cand, "-c", "import openccu_data"],
+            capture_output=True,
+            check=False,
+        )
+        if probe.returncode != 0:
+            print(f"[snapshot] skipping {cand}: no openccu_data package", file=sys.stderr)
+            continue
+        os.environ[already_in_venv_marker] = "1"
+        print(f"[snapshot] re-execing in aiohomematic venv: {cand}", file=sys.stderr)
+        os.execv(cand, [cand, *sys.argv])
+    _require_openccu_data("the active interpreter and no candidate venv")
+
+
+def _require_openccu_data(where: str) -> None:
+    """
+    Abort when openccu_data is unavailable.
+
+    Without it aiohomematic's translation loader returns an empty extract and
+    logs the reason at DEBUG, below this script's WARNING level: the snapshot
+    is written, exits 0, and omits `parameter_label` / `type_label` /
+    `model_label` for every entry. The diff then reports thousands of phantom
+    label drifts that bury the real ones — the exact failure this guard exists
+    to prevent, so it is a hard error rather than a warning.
+    """
+    try:
+        import openccu_data  # noqa: F401
+    except ImportError:
+        print(
+            f"ERROR: openccu_data is not importable from {where}.\n"
+            "It ships with the aiohomematic venv; point AIOHOMEMATIC_VENV_PYTHON\n"
+            "at that interpreter, or install the reference stack from\n"
+            "script/requirements/reference-stack.txt. Refusing to emit a\n"
+            "label-less snapshot.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 _ensure_venv()

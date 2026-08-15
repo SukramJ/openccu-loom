@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -321,6 +322,74 @@ func TestSetAwayIPAtomicPutParamset(t *testing.T) {
 	}
 }
 
+// TestSetModeIPToleratesConcurrentProfileEvents runs the command path
+// (a north-bound goroutine) against the CCU event path (the callback
+// goroutine that records BOOST_MODE / SET_POINT_MODE) on one Climate.
+// setIPMode decides whether to bundle BOOST_MODE=false from the profile,
+// and read that field bare it was a data race with every event carrying
+// a profile. Only meaningful under -race; without it the loop simply
+// passes.
+func TestSetModeIPToleratesConcurrentProfileEvents(t *testing.T) {
+	t.Parallel()
+
+	w := &putWriter{}
+	r := newRig(t, "VCU0000050:4", KindIP, w, custom.ClimateCapabilities{
+		MinTemperature: 4.5, MaxTemperature: 30.5, SupportsBoost: true,
+	})
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				r.climate.OnProfile(ProfileBoost)
+				r.climate.OnProfile(ProfileNone)
+			}
+		}
+	}()
+
+	modes := []Mode{ModeHeat, ModeAuto}
+	for i := range 5000 {
+		if err := r.climate.SetMode(context.Background(), modes[i%len(modes)], hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("SetMode: %v", err)
+		}
+	}
+	close(stop)
+	wg.Wait()
+}
+
+// TestSetAwayIPEncodesUntilInLocalWallClock drives the path an external
+// REST/WS/MQTT client takes: `until` arrives as an RFC-3339 timestamp, so
+// its Location is the literal offset of the string — time.UTC for the
+// canonical trailing Z. PARTY_TIME_START is rendered from time.Now() in
+// the daemon's zone, so an unconverted end put the two halves of one
+// window in two zones and shortened it by the offset.
+func TestSetAwayIPEncodesUntilInLocalWallClock(t *testing.T) {
+	t.Parallel()
+
+	w := &putWriter{}
+	r := newRig(t, "VCU0000050:4", KindIP, w, custom.ClimateCapabilities{
+		MinTemperature: 4.5, MaxTemperature: 30.5, SupportsAway: true,
+	})
+	// Same instant, expressed in a zone the host is not in.
+	until := time.Now().Add(2 * time.Hour).In(foreignZone(t))
+	if err := r.climate.SetAway(context.Background(), until, 17.0, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.puts) != 1 {
+		t.Fatalf("expected 1 put_paramset, got %d", len(w.puts))
+	}
+	want := until.Local().Format("2006_01_02 15:04")
+	if got := w.puts[0][string(hmenum.ParameterPartyTimeEnd)]; got != want {
+		t.Errorf("PARTY_TIME_END = %v, want the local wall clock %q", got, want)
+	}
+}
+
 // TestBoostGatedOnCapabilityWithoutCap verifies that EnableBoost returns
 // ErrModeNotSupported when the capability is absent.
 func TestBoostGatedOnCapabilityWithoutCap(t *testing.T) {
@@ -596,8 +665,10 @@ func TestPartyModeCodeFormat(t *testing.T) {
 		MinTemperature: 4.5, MaxTemperature: 30.5, SupportsAway: true,
 	})
 
-	// Fixed end time to produce deterministic output.
-	end := time.Date(2025, 1, 16, 14, 45, 0, 0, time.UTC)
+	// Fixed end time to produce deterministic output. Built in time.Local
+	// because PARTY_MODE_SUBMIT carries a bare wall clock the CCU reads in
+	// its own zone — see TestPartyModeCodeRendersEndInLocalWallClock.
+	end := time.Date(2025, 1, 16, 14, 45, 0, 0, time.Local)
 	if err := r.climate.SetAway(context.Background(), end, 18.5, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}

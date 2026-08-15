@@ -18,6 +18,7 @@
   import { api, friendlyError } from "$lib/api/client";
   import type { CustomDPSummary, DataPointSummary } from "$lib/api/types";
   import { onResync, subscribe } from "$lib/stores/events.svelte";
+  import { enumValueToken } from "$lib/sensor-actor/classify";
   import { t } from "$lib/i18n";
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
@@ -61,6 +62,11 @@
   // SET_POINT_MODE is HmIP; CONTROL_MODE is the RF read-back.
   const setpointModeDP = $derived(dp("SET_POINT_MODE"));
   const controlModeDP = $derived(dp("CONTROL_MODE"));
+  // CONTROL_MODE is a read-only ENUM: the wire carries the value_list
+  // index, never the "AUTO-MODE" label the mode table is keyed on.
+  const controlMode = $derived(
+    controlModeDP ? enumValueToken(controlModeDP) : undefined,
+  );
   const boostDP = $derived(dp("BOOST_MODE"));
   const frostDP = $derived(dp("FROST_PROTECTION"));
   const stateDP = $derived(dp("STATE")); // HM-CC-TC heat on/off
@@ -82,6 +88,15 @@
   const setpoint = $derived(
     typeof setpointDP?.value === "number" ? setpointDP.value : 21,
   );
+  // The stepper must not offer a temperature the descriptor forbids —
+  // the CCU rejects an out-of-range write with 400 and the operator is
+  // left staring at a value the device never took.
+  const setpointMin = $derived(
+    typeof setpointDP?.min === "number" ? setpointDP.min : undefined,
+  );
+  const setpointMax = $derived(
+    typeof setpointDP?.max === "number" ? setpointDP.max : undefined,
+  );
   const currentTemp = $derived(
     typeof tempDP?.value === "number" ? tempDP.value : undefined,
   );
@@ -93,15 +108,15 @@
   // Mode label for the secondary line — RF surfaces it as the ENUM
   // value, HmIP as an integer index (read off SET_POINT_MODE).
   const currentModeLabel = $derived.by(() => {
-    if (isRf && typeof controlModeDP?.value === "string") {
+    if (isRf && controlMode) {
       const RF_MODE_KEY: Record<string, string> = {
         "AUTO-MODE": "cdp.climate.mode_auto",
         "MANU-MODE": "cdp.climate.mode_manual",
         "PARTY-MODE": "cdp.climate.mode_away",
         "BOOST-MODE": "cdp.climate.mode_boost",
       };
-      const key = RF_MODE_KEY[controlModeDP.value];
-      return key ? t(key) : controlModeDP.value;
+      const key = RF_MODE_KEY[controlMode];
+      return key ? t(key) : controlMode;
     }
     if (isHmIP && typeof setpointModeDP?.value === "number") {
       const HMIP_MODE_KEY: Record<number, string> = {
@@ -250,8 +265,8 @@
     if (isHmIP && typeof setpointModeDP?.value === "number") {
       return setpointModeDP.value === 2;
     }
-    if (isRf && typeof controlModeDP?.value === "string") {
-      return controlModeDP.value === "PARTY-MODE";
+    if (isRf) {
+      return controlMode === "PARTY-MODE";
     }
     return false;
   });
@@ -337,6 +352,8 @@
         <TargetTemperatureFeature
           value={setpoint}
           color={tileColor}
+          min={setpointMin}
+          max={setpointMax}
           disabled={!setpointDP.operations.write}
           onChange={(v) => invoke("set_temperature", { temperature: v })}
         />

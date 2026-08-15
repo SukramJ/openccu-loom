@@ -1,5 +1,4 @@
 {
-  "overall": "healthy",
-  "components": [],
-  "score": 100
+  "status": "healthy",
+  "components": []
 }

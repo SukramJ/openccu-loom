@@ -19,6 +19,8 @@ const mockUpdateGroup = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 const mockConfirmAsk = vi.fn();
+const mockCreateRoom = vi.fn();
+const mockCreateFunction = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the component
@@ -36,6 +38,8 @@ vi.mock("$lib/api/client", () => ({
     getGroups: (...args: unknown[]) => mockGetGroups(...args),
     groupSuitableMembers: (...args: unknown[]) => mockGroupSuitable(...args),
     updateGroup: (...args: unknown[]) => mockUpdateGroup(...args),
+    createRoom: (...args: unknown[]) => mockCreateRoom(...args),
+    createFunction: (...args: unknown[]) => mockCreateFunction(...args),
     listInstallModeInterfaces: vi.fn().mockResolvedValue([]),
     setInstallModeInterface: vi.fn(),
     pairDeviceInstallMode: vi.fn(),
@@ -109,6 +113,12 @@ function setStoreInterfaces(list: InstallModeInterfaceEntry[]) {
     list;
 }
 
+// `active` drives the 3 s pairing poll; the real store exposes it as a
+// read-only getter, so writes go through this cast the same way.
+function setStoreActive(active: boolean) {
+  (installModeStore as unknown as { active: boolean }).active = active;
+}
+
 const ONE_DEVICE = [{ address: "0009ABCD", model: "HmIP-STH", central: "" }];
 
 // A BidCos-RF device is the only inbox interface that offers the
@@ -130,9 +140,12 @@ beforeEach(() => {
   mockListReplaceCandidates.mockResolvedValue([]);
   mockReplaceDevice.mockResolvedValue(undefined);
   mockConfirmAsk.mockResolvedValue(true);
+  mockCreateRoom.mockResolvedValue(undefined);
+  mockCreateFunction.mockResolvedValue(undefined);
   // Reset the plain-object store mock's mutable state: individual tests in
   // the "wired bus search" block below populate .interfaces before render.
   setStoreInterfaces([]);
+  setStoreActive(false);
 });
 
 afterEach(() => {
@@ -525,6 +538,114 @@ describe("Inbox — GR05 group assignment on accept", () => {
         },
         expect.anything(),
       );
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Creating a room / function from the accept dialog
+// ---------------------------------------------------------------------------
+
+// Types a brand-new name into one of the two comboboxes and clicks its
+// "create" entry.
+async function createInCombo(comboId: string, name: string, createKey: string) {
+  const input = document.getElementById(comboId) as HTMLInputElement;
+  await fireEvent.input(input, { target: { value: name } });
+  const list = await waitFor(() => {
+    const el = document.getElementById(`${comboId}-list`);
+    if (!el) throw new Error(`combobox ${comboId} did not open`);
+    return el;
+  });
+  await fireEvent.click(within(list).getByText(createKey));
+}
+
+describe("Inbox — creating a CCU room from the accept dialog", () => {
+  it("surfaces a rejected create instead of failing silently", async () => {
+    // The CCU refuses a duplicate name with 409, an unwired room admin with
+    // 503 and a ReGa failure with 502. The combobox discards the promise it
+    // gets back, so an uncaught rejection reaches nothing at all.
+    const { ApiError } = await import("$lib/api/client");
+    mockCreateRoom.mockRejectedValueOnce(
+      new ApiError(409, null, "room already exists"),
+    );
+    await openDialog();
+
+    await createInCombo("inbox-rooms", "Cellar", "roomfn.create.room");
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("room already exists");
+    });
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+    // The chip must not appear for a room the CCU never created.
+    expect(screen.queryByLabelText("roomfn.remove_named")).toBeNull();
+  });
+
+  it("toasts success and offers the new room as a chip when the CCU accepts", async () => {
+    await openDialog();
+
+    await createInCombo("inbox-rooms", "Cellar", "roomfn.create.room");
+
+    await waitFor(() => {
+      expect(mockCreateRoom).toHaveBeenCalledWith("Cellar", "");
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("roomfn.created.room");
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pairing poll
+// ---------------------------------------------------------------------------
+
+describe("Inbox — pairing poll", () => {
+  it("refreshes the candidate list without tearing the table down", async () => {
+    // The poll runs for the whole ~60 s teach-in window. Raising `loading`
+    // swaps the table for the loading placeholder, so the operator watching
+    // for the device they just paired loses the list — and the focus in its
+    // search box — roughly twenty times a minute.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      setStoreActive(true);
+      render(Inbox);
+
+      const table = await waitFor(() => screen.getByRole("table"));
+      expect(mockListInbox).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(3100);
+
+      await waitFor(() => expect(mockListInbox).toHaveBeenCalledTimes(2));
+      // Same DOM node: a `loading` flip destroys the {#if} branch and builds
+      // a fresh table (and a fresh search input) instead of patching rows.
+      expect(screen.getByRole("table")).toBe(table);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dialog keyboard handling
+// ---------------------------------------------------------------------------
+
+describe("Inbox — accept dialog keyboard handling", () => {
+  it("moves focus into the dialog and closes it on Escape", async () => {
+    await openDialog();
+
+    // Focus has to leave the row button behind the overlay, or assistive
+    // technology never enters the aria-modal dialog.
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+
+    // Escape is handled on the window: the keydown never travels through the
+    // overlay's own subtree, so a handler bound there can never see it.
+    await fireEvent.keyDown(document.activeElement as HTMLElement, {
+      key: "Escape",
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
 });

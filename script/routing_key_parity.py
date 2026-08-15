@@ -64,6 +64,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import sys
@@ -128,15 +129,28 @@ _ensure_venv()
 
 _GITHUB_ROOT = Path(__file__).resolve().parents[2]
 
-_AIOHM_VENV = Path.home() / "Documents" / "GitHub" / "aiohomematic" / ".venv"
-if _AIOHM_VENV.is_dir():
-    for _candidate in (_AIOHM_VENV / "lib").glob("python*/site-packages"):
-        if str(_candidate) not in sys.path:
-            sys.path.insert(0, str(_candidate))
 
-_AIOHM_REPO = _GITHUB_ROOT / "aiohomematic"
-if _AIOHM_REPO.is_dir() and str(_AIOHM_REPO) not in sys.path:
-    sys.path.insert(0, str(_AIOHM_REPO))
+def _bootstrap_sibling_checkout() -> None:
+    """
+    Make aiohomematic importable when the script runs straight from the
+    openccu-loom repo with no environment prepared for it.
+
+    This is a *fallback*, and the ordering matters. Whatever the active
+    interpreter can already import wins: appending (never prepending) keeps a
+    deliberately provisioned environment — CI's pinned reference stack, or one
+    named via AIOHOMEMATIC_VENV_PYTHON — in charge of which aiohomematic
+    version the fixtures are compared against. Prepending a sibling working
+    copy silently pointed the gate at whatever uncommitted edits sat next to
+    the repo, which is the one thing a parity gate must not do.
+    """
+    if importlib.util.find_spec("aiohomematic") is not None:
+        return
+    repo = _GITHUB_ROOT / "aiohomematic"
+    if repo.is_dir() and str(repo) not in sys.path:
+        sys.path.append(str(repo))
+
+
+_bootstrap_sibling_checkout()
 
 try:
     from aiohomematic.model.support import (

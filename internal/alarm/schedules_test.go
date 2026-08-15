@@ -320,9 +320,9 @@ func TestScheduleFireAutoArmNotReadyNotifiesHookWhenWired(t *testing.T) {
 }
 
 func TestScheduleFireAutoArmNotReadyJournalOnlyWithoutHook(t *testing.T) {
-	// No ArmFailure hook wired (the default until the daemon
-	// composition root wires the MQTT publisher) — the failure must
-	// still be fail-visible via the journal alone.
+	// No ArmFailure hook wired — the shape of a daemon configured
+	// without MQTT. The failure must still be fail-visible via the
+	// journal alone.
 	clk := clock.NewFake(scheduleTestStart)
 	journal := &fakeJournalRecorder{}
 	eng := &fakeScheduleEngine{

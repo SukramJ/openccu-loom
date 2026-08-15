@@ -301,6 +301,31 @@ func TestCORS_CaseInsensitiveOriginMatching(t *testing.T) {
 	}
 }
 
+// TestCORS_ConfiguredOriginWithTrailingSlashMatches pins the operator-facing
+// half of the whitelist: an allowed origin copied out of a browser address bar
+// carries a trailing slash, while the Origin header never does. The WebSocket
+// handshake gate trims it, so a mismatch here presented as "the live socket
+// connects but every REST call is blocked" with nothing logged.
+func TestCORS_ConfiguredOriginWithTrailingSlashMatches(t *testing.T) {
+	t.Parallel()
+
+	cfg := CORSConfig{Origins: []string{"https://ha.example.com/", "  https://Second.Example.com  "}}
+	var calls atomic.Int32
+	handler := CORS(cfg)(newCountingHandler(t, &calls, http.StatusOK, "ok"))
+
+	for _, origin := range []string{"https://ha.example.com", "https://second.example.com"} {
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+		req.Header.Set("Origin", origin)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != origin {
+			t.Errorf("Origin %q: Access-Control-Allow-Origin = %q, want %q", origin, got, origin)
+		}
+	}
+}
+
 // containsToken reports whether token appears as a word in the comma-separated
 // header value s.
 func containsToken(s, token string) bool {

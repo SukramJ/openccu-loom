@@ -50,6 +50,14 @@ func TestStoreInterfaceIDMatchesWireID(t *testing.T) {
 		{"ccu", "HmIP-RF"},
 		{"ccu1", "BidCos-RF"},
 		{"", "CUxD"},
+		// Two interface tokens carry a hyphen themselves, so a central
+		// named after a radio makes the bare name look like it already
+		// carries the prefix. `HmIP-RF` under a central called `HmIP`
+		// must still be prefixed — the persisted rows are keyed
+		// `HmIP-HmIP-RF`.
+		{"HmIP", "HmIP-RF"},
+		{"BidCos", "BidCos-RF"},
+		{"BidCos", "BidCos-Wired"},
 	} {
 		got := cachereset.StoreInterfaceID(tc.central, tc.iface)
 		want := adapter.WireInterfaceID(tc.central, hmenum.Interface(tc.iface))

@@ -828,8 +828,19 @@
     },
     {
       "category": "master_profiles",
-      "description": "Apply a stored master profile to a channel by writing its fixed parameters.",
-      "name": "master_profiles.apply"
+      "description": "Apply a stored master profile to a channel by writing its fixed parameters. This is a MASTER paramset write and is gated behind the same per-resource edit lock as paramset.put: pass edit_token (issued by POST /sessions/edit with key channel:{channel_address}:MASTER) or the write is rejected with a 'locked' command error.",
+      "name": "master_profiles.apply",
+      "args": {
+        "device_type": "string",
+        "channel_type": "string",
+        "channel_address": "string",
+        "id": "integer",
+        "edit_token": "string"
+      },
+      "result": {
+        "applied": "integer",
+        "param_count": "integer"
+      }
     },
     {
       "category": "master_profiles",
@@ -1162,7 +1173,7 @@
     },
     {
       "category": "matter",
-      "description": "Server-pushed: an allowlist row was inserted, updated or deleted via /api/v1/matter/exposable.",
+      "description": "Server-pushed: an allowlist row was inserted, updated or deleted via /api/v1/matter/exposable. A bulk write emits one frame per affected row.",
       "kind": "broadcast",
       "name": "matter.exposable_changed",
       "topic": "matter.exposable_changed",
@@ -1170,7 +1181,7 @@
     },
     {
       "category": "matter",
-      "description": "Server-pushed: a Matter commissioning window opened (REST or cluster command).",
+      "description": "Server-pushed: a Matter commissioning window opened (REST or cluster command). The pairing credential is redacted from the broadcast — `passcode`, `qr_code` and `manual_code` are empty, because the WS event plane has no role filter. Read them from the admin-gated POST /api/v1/matter/commissioning/window response.",
       "kind": "broadcast",
       "name": "matter.commissioning_window_opened",
       "topic": "matter.commissioning_window_opened",

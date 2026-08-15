@@ -62,6 +62,18 @@ function createMatterStore() {
 
   let unsub: (() => void) | null = null;
   let countdownTimer: ReturnType<typeof setInterval> | null = null;
+  let exposuresReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // The daemon emits one matter.exposable_changed frame per affected
+  // allowlist row, so saving a select-all change arrives here as a burst
+  // of hundreds. Collapse the burst into a single refetch of the list.
+  function scheduleExposuresReload(): void {
+    if (exposuresReloadTimer) clearTimeout(exposuresReloadTimer);
+    exposuresReloadTimer = setTimeout(() => {
+      exposuresReloadTimer = null;
+      void loadExposures();
+    }, 300);
+  }
 
   function exposureKey(e: {
     central_name: string;
@@ -101,7 +113,7 @@ function createMatterStore() {
         break;
       }
       case "matter.exposable_changed": {
-        void loadExposures();
+        scheduleExposuresReload();
         break;
       }
       case "matter.commissioning_progress": {
@@ -229,7 +241,9 @@ function createMatterStore() {
     const next = new Map(pendingUpdates);
     next.set(key, updated);
     pendingUpdates = next;
-    dirty.set(DIRTY_KEY, true);
+    // The pending map is module state and outlives the exposure list, so
+    // the leave-confirm needs a way to actually drop it.
+    dirty.set(DIRTY_KEY, true, discardDirty);
   }
 
   function discardDirty() {
@@ -326,6 +340,10 @@ function createMatterStore() {
 
   function close() {
     stopCountdown();
+    if (exposuresReloadTimer) {
+      clearTimeout(exposuresReloadTimer);
+      exposuresReloadTimer = null;
+    }
     unsub?.();
     unsub = null;
   }

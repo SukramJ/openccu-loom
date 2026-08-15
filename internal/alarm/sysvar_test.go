@@ -6,6 +6,7 @@ package alarm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"path/filepath"
 	"sync"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/clock"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -87,6 +89,53 @@ func (f *fakeSysvarCreator) wasEnumCalled() bool {
 	return f.enumCalled
 }
 
+// blockingSysvarWriter stands in for a CCU that is slow, rebooting or
+// gone: every SetSysvar parks until release is closed.
+type blockingSysvarWriter struct {
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (b *blockingSysvarWriter) SetSysvar(_ context.Context, _ string, _ any) error {
+	b.once.Do(func() { close(b.entered) })
+	<-b.release
+	return nil
+}
+
+// flakySysvarCreator fails the first failures CreateSysvarEnum calls,
+// reproducing the "sysvar creator not wired" answer the hub gives while
+// the south-bound bring-up is still gated.
+type flakySysvarCreator struct {
+	mu       sync.Mutex
+	calls    int
+	failures int
+}
+
+func (*flakySysvarCreator) CreateSysvarBool(context.Context, string, bool) (map[string]any, error) {
+	return nil, nil
+}
+
+func (f *flakySysvarCreator) CreateSysvarEnum(_ context.Context, _ string, _ []string) (map[string]any, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	if f.calls <= f.failures {
+		return nil, errors.New("sysvar creator not wired")
+	}
+	return map[string]any{}, nil
+}
+
+func (*flakySysvarCreator) CreateSysvarFloat(context.Context, string, float64, float64) (map[string]any, error) {
+	return nil, nil
+}
+
+func (f *flakySysvarCreator) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
+}
+
 // sysvarHarness bundles a real SQLite-backed alarm.Service around a
 // central.Registry that can carry real *central.Unit entries with a
 // faked south-bound sysvar hook, so mirrorTarget.export/onInbound run
@@ -128,17 +177,24 @@ func newSysvarHarness(t *testing.T) *sysvarHarness {
 // a live Hub through the registry exactly as production does.
 func (h *sysvarHarness) wireCentral(name string) (*fakeSysvarWriter, *fakeSysvarCreator) {
 	h.t.Helper()
+	writer := &fakeSysvarWriter{}
+	creator := &fakeSysvarCreator{}
+	h.wireCentralWith(name, writer, creator)
+	return writer, creator
+}
+
+// wireCentralWith is wireCentral with caller-supplied south-bound
+// hooks, for the cases that need a failing or a blocking CCU.
+func (h *sysvarHarness) wireCentralWith(name string, w coordinators.SysvarValueWriter, c coordinators.SysvarCreator) {
+	h.t.Helper()
 	unit, err := central.New(central.Config{Name: name})
 	if err != nil {
 		h.t.Fatalf("central.New(%s): %v", name, err)
 	}
-	writer := &fakeSysvarWriter{}
-	creator := &fakeSysvarCreator{}
-	unit.Hub.SetSysvarValueWriter(writer).SetSysvarCreator(creator)
+	unit.Hub.SetSysvarValueWriter(w).SetSysvarCreator(c)
 	if err := h.reg.Register(unit); err != nil {
 		h.t.Fatalf("register central %s: %v", name, err)
 	}
-	return writer, creator
 }
 
 // seedZone persists a minimal armable zone: mode "full" with no exit
@@ -208,6 +264,26 @@ func (h *sysvarHarness) start() {
 	h.t.Cleanup(func() { _ = h.svc.Stop(context.Background()) })
 }
 
+// waitCalls polls w until it has recorded at least n SetSysvar calls
+// and returns them. Exports run on the mirror's own worker goroutine —
+// deliberately, so the engine lock is never held across a CCU round
+// trip — so reading the fake in the statement after the trigger races
+// the write.
+func (h *sysvarHarness) waitCalls(w *fakeSysvarWriter, n int) []fakeSysvarWrite {
+	h.t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		calls := w.callsSnapshot()
+		if len(calls) >= n {
+			return calls
+		}
+		if time.Now().After(deadline) {
+			h.t.Fatalf("SetSysvar calls = %+v, want at least %d", calls, n)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
 // zoneState reads the engine's current state for id, failing if
 // unknown.
 func (h *sysvarHarness) zoneState(id string) hmenum.AlarmZoneState {
@@ -238,7 +314,7 @@ func TestSysvarMirrorExisting_ExportsTrueWhenTriggered(t *testing.T) {
 		ZoneID: "eg", To: hmenum.AlarmZoneStateTriggered, Mode: hmenum.AlarmModeFull,
 	})
 
-	calls := writer.callsSnapshot()
+	calls := h.waitCalls(writer, 1)
 	if len(calls) != 1 {
 		t.Fatalf("SetSysvar calls = %+v, want exactly 1", calls)
 	}
@@ -270,7 +346,7 @@ func TestSysvarMirrorExisting_ExportsFalseOnModeChange(t *testing.T) {
 		ZoneID: "eg", To: hmenum.AlarmZoneStateArmed, Mode: hmenum.AlarmModeFull,
 	})
 
-	calls := writer.callsSnapshot()
+	calls := h.waitCalls(writer, 1)
 	if len(calls) != 1 {
 		t.Fatalf("SetSysvar calls = %+v, want exactly 1", calls)
 	}
@@ -362,10 +438,7 @@ func TestSysvarMirrorOnInbound_IntentTheEngineDoesNotCarryOutReExportsTheRealSta
 			if got := h.zoneState("eg"); got != tc.wantZone {
 				t.Fatalf("zone state = %s, want %s", got, tc.wantZone)
 			}
-			calls := writer.callsSnapshot()
-			if len(calls) == 0 {
-				t.Fatal("no sysvar write: the CCU variable still holds the index the engine did not act on")
-			}
+			calls := h.waitCalls(writer, 1)
 			last := calls[len(calls)-1]
 			if last.name != "AlarmMode" {
 				t.Fatalf("re-export wrote %q, want AlarmMode", last.name)
@@ -402,4 +475,101 @@ func TestSysvarMirrorOnInbound_RefusedArmIsJournalled(t *testing.T) {
 		}
 	}
 	t.Fatalf("no sysvar_arm_failed journal entry after a refused arm; got %+v", entries)
+}
+
+// --- export: the engine keeps running while the CCU does not ---
+
+// TestSysvarMirrorExport_LeavesAlarmVerbsAnswerableWhileTheCCUHangs
+// drives the mirror through the real sink — engine verb → publishState
+// → Service.publish → mirror — with a CCU write that never returns.
+//
+// The sink runs with the engine lock held, so exporting inline put a
+// CCU round trip inside that lock: every alarm verb, Disarm and Silence
+// included, then queued behind an unreachable CCU, which is precisely
+// when the state machine has to answer.
+func TestSysvarMirrorExport_LeavesAlarmVerbsAnswerableWhileTheCCUHangs(t *testing.T) {
+	t.Parallel()
+	h := newSysvarHarness(t)
+	writer := &blockingSysvarWriter{entered: make(chan struct{}), release: make(chan struct{})}
+	h.wireCentralWith("ccu1", writer, &fakeSysvarCreator{})
+	h.seedZone("eg", "Erdgeschoss")
+	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmMode"})
+	h.start()
+	t.Cleanup(func() { close(writer.release) })
+
+	armed := make(chan error, 1)
+	go func() {
+		_, err := h.svc.Engine().Arm(context.Background(), "eg",
+			engine.ArmRequest{Mode: hmenum.AlarmModeFull, Source: "test"})
+		armed <- err
+	}()
+	select {
+	case err := <-armed:
+		if err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Arm never returned: the export ran on the engine's goroutine, under the engine lock")
+	}
+
+	select {
+	case <-writer.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the armed transition never reached the mirror export")
+	}
+
+	disarmed := make(chan error, 1)
+	go func() { disarmed <- h.svc.Engine().Disarm(context.Background(), "eg", "", "test") }()
+	select {
+	case err := <-disarmed:
+		if err != nil {
+			t.Fatalf("disarm while an export is on the wire: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Disarm blocked behind the stuck sysvar export — the engine lock is held across the CCU write")
+	}
+}
+
+// --- export: a failed enum create must not disable the mirror ---
+
+// TestSysvarMirrorExport_RetriesEnumCreateAfterAFailure pins that a
+// failed CreateSysvarEnum is retried on the next export.
+//
+// The first export after boot regularly races the south-bound bring-up
+// and is answered with "sysvar creator not wired". Latching the ensure
+// flag on that failure disabled enum creation for the rest of the
+// process: every later write addressed a variable that had never been
+// created, so a configured mirror stayed dead until a restart.
+func TestSysvarMirrorExport_RetriesEnumCreateAfterAFailure(t *testing.T) {
+	t.Parallel()
+	h := newSysvarHarness(t)
+	writer := &fakeSysvarWriter{}
+	creator := &flakySysvarCreator{failures: 1}
+	h.wireCentralWith("ccu1", writer, creator)
+	h.seedZone("eg", "Erdgeschoss")
+	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmMode"})
+	h.start()
+
+	h.svc.sysvarMirror.onStateChanged(hmevent.AlarmStateChangedEvent{
+		ZoneID: "eg", To: hmenum.AlarmZoneStateArmed, Mode: hmenum.AlarmModeFull,
+	})
+	h.waitCalls(writer, 1)
+
+	h.svc.sysvarMirror.onStateChanged(hmevent.AlarmStateChangedEvent{
+		ZoneID: "eg", To: hmenum.AlarmZoneStateDisarmed, Mode: hmenum.AlarmModeDisarmed,
+	})
+	h.waitCalls(writer, 2)
+
+	if got := creator.callCount(); got != 2 {
+		t.Fatalf("CreateSysvarEnum calls = %d, want 2 (the failed create must be retried, not latched)", got)
+	}
+
+	// And once it succeeds the ensure stops repeating.
+	h.svc.sysvarMirror.onStateChanged(hmevent.AlarmStateChangedEvent{
+		ZoneID: "eg", To: hmenum.AlarmZoneStateArmed, Mode: hmenum.AlarmModeFull,
+	})
+	h.waitCalls(writer, 3)
+	if got := creator.callCount(); got != 2 {
+		t.Fatalf("CreateSysvarEnum calls = %d after a successful create, want 2", got)
+	}
 }

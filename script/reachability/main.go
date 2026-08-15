@@ -669,8 +669,9 @@ func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) 
 	if strings.Contains(relFile, "pkg/hmproto/") {
 		return autoWhitelistGenericHelper, true
 	}
-	// pkg/hmenum utility functions: AllFields, ValidateStartup — called during
-	// boot-time validation.
+	// pkg/hmenum utility functions: AllFields is called by the parameter
+	// pipeline; ValidateStartup is driven by the contract suite, which this
+	// analyzer does not load.
 	if strings.Contains(relFile, "pkg/hmenum/field.go") ||
 		strings.Contains(relFile, "pkg/hmenum/validate_startup.go") {
 		return autoWhitelistGenericHelper, true

@@ -251,12 +251,17 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// flush_interval (default 60 s; override via
 	// persistence.values_cache.flush_interval) and once more on
 	// graceful shutdown. nil-store / nil-registry guards make this a
-	// no-op when the feature is disabled.
+	// no-op when the feature is disabled. It carries the same per-central
+	// opt-out as the restore half above — otherwise an excluded CCU is kept
+	// out of the cache on read and written to it on every tick.
 	flushInterval := cfg.Persistence.ValuesCache.FlushInterval
 	if flushInterval <= 0 {
 		flushInterval = adapter.DefaultValuesCacheFlushInterval
 	}
-	flusher := adapter.WireValuesCacheFlusher(reg, d.valuesCacheStore, flushInterval, logger) //nolint:contextcheck // WireValuesCacheFlusher has no ctx parameter; it creates its own daemon-lifetime context internally
+	flusher := adapter.WireValuesCacheFlusher(reg, d.valuesCacheStore, flushInterval, logger, //nolint:contextcheck // WireValuesCacheFlusher has no ctx parameter; it creates its own daemon-lifetime context internally
+		adapter.WithValuesCacheCentralFilter(func(centralName string) bool {
+			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
+		}))
 	teardowns = append(teardowns, flusher.Stop)
 	// Evict a device's persisted cache rows when it is removed, so an
 	// unpaired device does not leave orphaned values_cache rows behind;
@@ -333,6 +338,14 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	}
 	// Appended in this order so shutdown (LIFO) drains climate closers before
 	// availability closers — matching the original two inline defers.
+	//
+	// The un_ignore observer joins the same list: it applies the per-central
+	// patterns from SQLite (seeded from config.yaml when the table is empty)
+	// onto the shared visibility registry. Registered here, after
+	// WireCentrals, so every central's ModelRegistry is populated with
+	// materialised devices that the suppression-mark pass can flip; it
+	// re-applies for every CCU adopted or removed afterwards. See
+	// notes/concepts/ui/unignore-concept.md and visibility_wiring.go.
 	teardowns = append(
 		teardowns,
 		func() {
@@ -345,15 +358,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 				close()
 			}
 		},
+		wireVisibilityUnIgnore(ctx, cfg, reg, d.visibilityUnIgnoreStore, d.visReg, logger),
 	)
-
-	// Apply the per-central un_ignore lists from SQLite (seeded from
-	// config.yaml when the table is empty) onto the shared visibility
-	// registry. Runs after WireCentrals so every central's
-	// ModelRegistry is populated with materialised devices that the
-	// suppression-mark pass can flip. See notes/concepts/ui/unignore-concept.md
-	// and visibility_wiring.go.
-	applyVisibilityUnIgnore(ctx, cfg, reg, d.visibilityUnIgnoreStore, d.visReg, logger)
 
 	// Re-run the hub publisher once each central's serial resolves. WireCentrals
 	// only LAUNCHES the readiness-gated bring-up goroutines and returns before
@@ -465,15 +471,15 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 // The sweeps evict what previous builds/boots retained but the current model
 // no longer publishes: MASTER paramsets that escaped before the visibility
 // gate closed the mid-ingest window, suppressed VALUES parameters, retired
-// profiles, removed devices. Once per boot and per central; the HA-Discovery
-// sweep additionally only for the bridge's default central, whose node_id
-// namespace it is scoped to. Best-effort — a broker without subscribe
-// support just skips.
+// profiles, removed devices. Once per boot and per central — both sweeps
+// alike: each is scoped to the node-id / topic namespace of the central it
+// is called with, and running only the default central's would leave every
+// other CCU's orphans unreachable forever. Best-effort — a broker without
+// subscribe support just skips.
 func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *config.Config, logger *slog.Logger) {
 	if d.mqttWiring == nil || d.mqttWiring.Bridge() == nil {
 		return
 	}
-	defaultCentral := pickFirstCentral(cfg)
 	cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
 	var sweptCentrals sync.Map
 	d.bridge.SetPostCentralSnapshotHook(func(_ context.Context, centralName string) {
@@ -501,15 +507,15 @@ func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *
 			// daemon ctx for shutdown.
 			sweepCtx, sweepCancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer sweepCancel()
-			if centralName == defaultCentral {
-				n, err := mqttBridge.RunDiscoveryOrphanCleanupOnce(sweepCtx, cleanupWindow)
-				if err != nil {
-					logger.Warn("mqtt.discovery_orphan_cleanup", slog.String("err", err.Error()))
-				} else if n > 0 {
-					logger.Info("mqtt.discovery_orphan_cleanup", slog.Int("evicted", n))
-				}
+			n, err := mqttBridge.RunDiscoveryOrphanCleanupOnce(sweepCtx, centralName, cleanupWindow)
+			if err != nil {
+				logger.Warn("mqtt.discovery_orphan_cleanup",
+					slog.String("central", centralName), slog.String("err", err.Error()))
+			} else if n > 0 {
+				logger.Info("mqtt.discovery_orphan_cleanup",
+					slog.String("central", centralName), slog.Int("evicted", n))
 			}
-			n, err := mqttBridge.RunRawOrphanCleanupOnce(sweepCtx, centralName, cleanupWindow)
+			n, err = mqttBridge.RunRawOrphanCleanupOnce(sweepCtx, centralName, cleanupWindow)
 			if err != nil {
 				logger.Warn("mqtt.raw_orphan_cleanup",
 					slog.String("central", centralName), slog.String("err", err.Error()))

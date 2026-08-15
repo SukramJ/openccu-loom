@@ -206,15 +206,22 @@ func (l *Light) MarkLightModified() { l.baseDP.MarkModified() }
 // CCU event. Delegates to the baseDP observability field.
 func (l *Light) MarkLightRefreshed() { l.baseDP.MarkRefreshed() }
 
-// Close releases the level-update subscription. Light callers do not
-// usually invoke this directly: it is wired through
-// [Subscribe] / [Channel.SetCustomDataPoint] so replacing the custom
-// DP on the channel tears the subscription down automatically.
+// Close releases the level-update subscription and the Matter timed-OnOff
+// tick goroutine. Light callers do not usually invoke this directly: it is
+// wired through [Subscribe] / [Channel.SetCustomDataPoint] so replacing the
+// custom DP on the channel tears both down automatically.
+//
+// The tick goroutine has to be named here because nothing else can reach
+// it: its stop channel lives inside [timedOnOffState] and is closed only
+// when a countdown runs out. A light with an armed OnWithTimedOff whose
+// device leaves the model would otherwise keep ticking — and write a
+// turn-off to the CCU at expiry — long after the Light was retired.
 func (l *Light) Close() {
 	if l.unsubLevel != nil {
 		l.unsubLevel()
 		l.unsubLevel = nil
 	}
+	l.timed.stopLoop()
 }
 
 // Subscribe satisfies [device.SubscribingDataPoint]. Light has no

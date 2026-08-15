@@ -27,6 +27,11 @@ type EditSessions struct {
 
 // EditLock describes the live session record returned by
 // [EditSessions.Open] and [EditSessions.Heartbeat].
+//
+// Both return it by value. The registry keeps the live record behind
+// its own mutex and every heartbeat rewrites that record's deadline, so
+// handing out the stored pointer would let a handler serialise Expires
+// while a concurrent heartbeat for the same key writes it.
 type EditLock struct {
 	Token   string
 	Subject string
@@ -64,13 +69,13 @@ func (s *EditSessions) prune(now time.Time) {
 
 // Open acquires a lock for `key` on behalf of `subject`. Returns 423
 // when another live session already holds the key.
-func (s *EditSessions) Open(key, subject string) (*EditLock, bool) {
+func (s *EditSessions) Open(key, subject string) (EditLock, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
 	s.prune(now)
 	if cur, ok := s.locks[key]; ok && cur.Expires.After(now) {
-		return cur, false
+		return *cur, false
 	}
 	lock := &EditLock{
 		Token:   uuid.NewString(),
@@ -78,22 +83,22 @@ func (s *EditSessions) Open(key, subject string) (*EditLock, bool) {
 		Expires: now.Add(EditSessionTTL),
 	}
 	s.locks[key] = lock
-	return lock, true
+	return *lock, true
 }
 
 // Heartbeat refreshes the lock's deadline. Returns the updated lock
 // or false when the token does not match.
-func (s *EditSessions) Heartbeat(key, token string) (*EditLock, bool) {
+func (s *EditSessions) Heartbeat(key, token string) (EditLock, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
 	s.prune(now)
 	cur, ok := s.locks[key]
 	if !ok || cur.Token != token {
-		return nil, false
+		return EditLock{}, false
 	}
 	cur.Expires = now.Add(EditSessionTTL)
-	return cur, true
+	return *cur, true
 }
 
 // Verify reports whether a live (non-expired) lock for `key` is

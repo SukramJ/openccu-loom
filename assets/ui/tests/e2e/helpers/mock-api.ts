@@ -234,7 +234,14 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: fixture('diagnostics.json') }),
   );
 
-  // Config - more specific FIRST
+  // Config — catch-all FIRST, specific routes after it. Playwright
+  // consults the most recently registered matching route, so a
+  // `/config/**` glob added last shadows every sibling below it: the
+  // schema and the effective config would both answer `{}` and their
+  // fixtures would never be read.
+  await page.route('**/api/v1/config/**', (route) =>
+    route.fulfill({ json: {} }),
+  );
   await page.route('**/api/v1/config/schema', (route) =>
     route.fulfill({ json: fixture('config-schema.json') }),
   );
@@ -246,9 +253,6 @@ export async function mockAllApis(page: Page): Promise<void> {
   );
   await page.route('**/api/v1/config/fields/**', (route) =>
     route.fulfill({ status: 204 }),
-  );
-  await page.route('**/api/v1/config/**', (route) =>
-    route.fulfill({ json: {} }),
   );
 
   // Areas. Every view that resolves a device's area asks for this on boot,
@@ -556,11 +560,22 @@ export async function mockAllApis(page: Page): Promise<void> {
     return route.fulfill({ json: fixture('visibility-unignore.json') });
   });
 
-  // Sessions
+  // Sessions. The edit-lock body is EditSessionResponse — `token`, `key`,
+  // `expires`. It is not decoration: the SPA threads `token` into the
+  // X-Edit-Token header of every MASTER write, and the daemon answers 423
+  // without it, so a differently-shaped lock body makes a MASTER-save test
+  // green against a request production would have rejected.
   await page.route('**/api/v1/sessions/**', (route) => {
     const url = route.request().url();
     if (url.includes('/edit')) {
-      return route.fulfill({ json: { session_id: 'test-session', owner: 'admin', expires_at: new Date(Date.now() + 300000).toISOString() } });
+      return route.fulfill({
+        json: {
+          token: 'test-edit-token',
+          key: 'test-session',
+          subject: 'admin',
+          expires: new Date(Date.now() + 300000).toISOString(),
+        },
+      });
     }
     return route.fulfill({ status: 200 });
   });

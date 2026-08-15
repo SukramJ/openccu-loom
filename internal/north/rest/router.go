@@ -534,12 +534,14 @@ type Deps struct {
 	// multi-CCU deployments. Nil leaves that one endpoint returning 503;
 	// the global reset still works.
 	DeviceLookup handlers.DeviceLookup
-	// KnownCentrals is the list of CCU scope names whose
-	// per-central health score the diagnostics dump should
-	// publish. Daemon composition root fills this from the central
-	// registry; tests may pass an explicit list. Empty disables the
-	// `central_scores` block in the diagnostics envelope.
-	KnownCentrals []string
+	// KnownCentrals returns the CCU scope names whose per-central health
+	// score the diagnostics dump should publish. It is a func rather than
+	// a slice because the router is built once and the CCU set is not
+	// fixed — `(*central.Registry).Names` satisfies it directly and keeps
+	// a runtime adopt or removal visible in the next dump. Nil, or an
+	// empty result, disables the `central_scores` block in the
+	// diagnostics envelope.
+	KnownCentrals func() []string
 	// HealthGauges, when set, returns the daemon's current
 	// pull-gauge readings (event_bus / audit / scheduler / rest /
 	// ws). `(*health.Tracker).Gauges` satisfies this directly.
@@ -580,7 +582,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	r.Use(middleware.ReqContextWithCentral(d.CentralName))
 	r.Use(middleware.Logger(d.Logger))
 	r.Use(middleware.Recover(d.Logger))
-	r.Use(middleware.Timeout(d.WriteTimeout))
+	r.Use(timeoutExceptStreaming(d.WriteTimeout))
 	if d.StatusMetrics != nil {
 		r.Use(middleware.StatusCounter(d.StatusMetrics))
 	}
@@ -628,7 +630,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// this cannot redirect to a foreign origin.
 			http.Redirect(w, req, target, http.StatusFound) //nolint:gosec // G710: target validated to a local path
 		})
-		r.Handle("/app", http.RedirectHandler("/app/", http.StatusMovedPermanently))
+		// Same Ingress reasoning for the slash-less form: a bare "/app/" here
+		// would send the browser to the Home Assistant origin and out of the
+		// add-on panel — permanently, since the redirect is a 301.
+		r.Handle("/app", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			http.Redirect(w, req, safeIngressPrefix(req)+"/app/", http.StatusMovedPermanently) //nolint:gosec // G710: prefix validated to a local path
+		}))
 		r.Handle("/app/*", http.StripPrefix("/app/", d.SPAHandler))
 	}
 
@@ -1323,6 +1330,35 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		})
 	})
 	return r
+}
+
+// logStreamPath is the one long-lived response this router serves: the
+// server-sent-event log tail writes for as long as an operator keeps the Logs
+// view open.
+const logStreamPath = "/api/v1/diagnostics/logs/stream"
+
+// timeoutExceptStreaming applies the router-wide request deadline everywhere
+// except the SSE log tail.
+//
+// [middleware.Timeout] puts the deadline on r.Context(), and the streaming
+// handler returns as soon as that context is done — so the blanket timeout
+// cut a perfectly healthy live tail after d and left the browser's EventSource
+// reconnecting (and re-sending its original backfill cursor) on a loop. A
+// streaming response is bounded by the client hanging up, which still cancels
+// the request context; it is not a request that can be given a deadline. The
+// WebSocket route escapes the same deadline by hijacking the connection.
+func timeoutExceptStreaming(d time.Duration) func(http.Handler) http.Handler {
+	timeout := middleware.Timeout(d)
+	return func(next http.Handler) http.Handler {
+		timed := timeout(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == logStreamPath {
+				next.ServeHTTP(w, r)
+				return
+			}
+			timed.ServeHTTP(w, r)
+		})
+	}
 }
 
 // safeIngressPrefix returns the Home Assistant Ingress proxy prefix from the

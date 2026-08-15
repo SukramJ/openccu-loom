@@ -48,8 +48,12 @@ func clusterByID(s *matterSchema, id uint32) (matterClusterEntry, bool) {
 // TestParityMatterJS_SmokeCOMandatoryAttributes asserts that
 // smokeCOServer.MatterAttributes() covers every mandatory attribute per
 // matter.js HEAD (packages/model/src/standard/elements/
-// smoke-co-alarm.element.ts), including HardwareFaultAlert (0x0006) and
-// EndOfServiceAlert (0x0007).
+// smoke-co-alarm-cluster.element.ts), including HardwareFaultAlert
+// (0x0006) and EndOfServiceAlert (0x0007).
+//
+// SmokeState (conformance "SMOKE") is mandatory here because this
+// projection advertises the SMOKE feature; CoState is not — see
+// TestParityMatterJS_SmokeCOStateIsGatedOnTheCOFeature.
 func TestParityMatterJS_SmokeCOMandatoryAttributes(t *testing.T) {
 	t.Parallel()
 	srv := smokeCOServer{s: &SmokeSiren{}}
@@ -63,7 +67,6 @@ func TestParityMatterJS_SmokeCOMandatoryAttributes(t *testing.T) {
 	}{
 		{matterAttrSmokeExpressedState, "ExpressedState (0x0000)"},
 		{matterAttrSmokeState, "SmokeState (0x0001)"},
-		{matterAttrCOState, "COState (0x0002)"},
 		{matterAttrBatteryAlert, "BatteryAlert (0x0003)"},
 		{matterAttrHardwareFaultAlert, "HardwareFaultAlert (0x0006)"},
 		{matterAttrEndOfServiceAlert, "EndOfServiceAlert (0x0007)"},
@@ -76,6 +79,55 @@ func TestParityMatterJS_SmokeCOMandatoryAttributes(t *testing.T) {
 		_, ok := srv.MatterRead(m.id)
 		if !ok {
 			t.Errorf("SmokeCOAlarm MatterRead(0x%04X) returned ok=false for mandatory %s", m.id, m.name)
+		}
+	}
+}
+
+// TestParityMatterJS_SmokeCOStateIsGatedOnTheCOFeature pins CoState
+// (0x0002) against its matter.js conformance, "CO": the attribute exists
+// only while the FeatureMap carries the CO bit. Serving it beside a
+// FeatureMap of SMOKE alone put a non-conformant attribute in
+// AttributeList on every commissioner read, and offered controllers a
+// carbon-monoxide reading from a device with no CO sensor.
+func TestParityMatterJS_SmokeCOStateIsGatedOnTheCOFeature(t *testing.T) {
+	t.Parallel()
+	srv := smokeCOServer{s: &SmokeSiren{}}
+	fm, ok := srv.MatterRead(matterAttrFeatureMap)
+	if !ok {
+		t.Fatal("SmokeCOAlarm MatterRead(FeatureMap) returned ok=false")
+	}
+	if fm.(uint32)&matterSmokeCOFeatureCO != 0 {
+		t.Fatalf("FeatureMap=%v unexpectedly advertises CO; the rest of this test assumes smoke-only", fm)
+	}
+	for _, id := range srv.MatterAttributes() {
+		if id == matterAttrCOState {
+			t.Error("MatterAttributes() lists CoState (0x0002) while the FeatureMap omits CO")
+		}
+	}
+	if _, ok := srv.MatterRead(matterAttrCOState); ok {
+		t.Error("MatterRead(0x0002) must return ok=false while the FeatureMap omits CO")
+	}
+}
+
+// TestParityMatterJS_SmokeExpressedStateUsesItsOwnEnum pins ExpressedState
+// (0x0000) against ExpressedStateEnum rather than AlarmStateEnum. The two
+// enums share a value space by accident only: AlarmStateEnum's Critical is
+// 2, which in ExpressedStateEnum means CoAlarm — so a real smoke alarm
+// used to surface as a carbon-monoxide alarm.
+func TestParityMatterJS_SmokeExpressedStateUsesItsOwnEnum(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		status SmokeAlarmStatus
+		want   uint8
+	}{
+		{SmokeStatusIdleOff, matterExpressedStateNormal},
+		{SmokeStatusSecondaryAlarm, matterExpressedStateSmokeAlarm},
+		{SmokeStatusPrimaryAlarm, matterExpressedStateSmokeAlarm},
+		{SmokeStatusIntrusion, matterExpressedStateSmokeAlarm},
+	}
+	for _, c := range cases {
+		if got := smokeStatusToExpressedState(c.status); got != c.want {
+			t.Errorf("smokeStatusToExpressedState(%v) = %d, want %d", c.status, got, c.want)
 		}
 	}
 }

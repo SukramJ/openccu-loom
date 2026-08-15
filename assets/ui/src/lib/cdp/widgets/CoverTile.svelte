@@ -16,6 +16,7 @@
   import { api, friendlyError } from "$lib/api/client";
   import type { CustomDPSummary, DataPointSummary } from "$lib/api/types";
   import { onResync, subscribe } from "$lib/stores/events.svelte";
+  import { enumValueToken } from "$lib/sensor-actor/classify";
   import { t } from "$lib/i18n";
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
@@ -68,9 +69,11 @@
   const hasControls = true;
   const showEmpty = $derived(!observed && !hasControls);
 
-  // Garage state mapping.
+  // Garage state mapping. DOOR_STATE is a read-only ENUM, so the value
+  // that arrives over REST and over the WS patch below is the value_list
+  // index — never the CLOSED / OPEN / … token STATE_KEY is keyed on.
   const garageState = $derived<string>(
-    typeof stateDP?.value === "string" ? stateDP.value : "",
+    (stateDP ? enumValueToken(stateDP) : undefined) ?? "",
   );
   const STATE_KEY: Record<string, string> = {
     CLOSED: "cdp.cover.state_closed",

@@ -83,6 +83,7 @@ type Manager struct {
 	byID      map[uint32]*Subscription
 	perFabric map[uint8]int
 	nextID    uint32
+	onClosed  func(subID uint32)
 
 	stopOnce sync.Once
 	stopCh   chan struct{}
@@ -96,6 +97,33 @@ func (m *Manager) SetEventReporter(r EventReporter) {
 	m.mu.Lock()
 	m.eventReporter = r
 	m.mu.Unlock()
+}
+
+// SetOnSubscriptionClosed registers a callback fired once per
+// subscription the manager terminates, whichever close path got there.
+// The transport side keeps its own per-subscription routing state that
+// only a fresh SubscribeRequest recreates, so without this hook a
+// cleanly closed subscription leaks that state for the daemon's
+// lifetime. Pass nil to detach.
+func (m *Manager) SetOnSubscriptionClosed(fn func(subID uint32)) {
+	m.mu.Lock()
+	m.onClosed = fn
+	m.mu.Unlock()
+}
+
+// finishClose runs the per-subscription teardown for every victim a
+// close path removed from the tables. Callers must have released m.mu:
+// the observer reaches back into the transport layer.
+func (m *Manager) finishClose(victims []*Subscription) {
+	m.mu.RLock()
+	hook := m.onClosed
+	m.mu.RUnlock()
+	for _, sub := range victims {
+		sub.Close()
+		if hook != nil {
+			hook(sub.ID)
+		}
+	}
 }
 
 // NewManager constructs a manager. logger and reporter may be nil;
@@ -284,7 +312,7 @@ func (m *Manager) Close(id uint32) error {
 		delete(m.perFabric, sub.FabricIndex)
 	}
 	m.mu.Unlock()
-	sub.Close()
+	m.finishClose([]*Subscription{sub})
 	return nil
 }
 
@@ -304,9 +332,7 @@ func (m *Manager) CloseSession(sessionID uint16) {
 		}
 	}
 	m.mu.Unlock()
-	for _, sub := range victims {
-		sub.Close()
-	}
+	m.finishClose(victims)
 }
 
 // ClosePeer terminates every subscription owned by the (fabric, peer)
@@ -332,9 +358,7 @@ func (m *Manager) ClosePeer(fabricIndex uint8, peerNodeID uint64) int {
 		}
 	}
 	m.mu.Unlock()
-	for _, sub := range victims {
-		sub.Close()
-	}
+	m.finishClose(victims)
 	return len(victims)
 }
 
@@ -351,9 +375,7 @@ func (m *Manager) CloseFabric(fabricIndex uint8) {
 	}
 	delete(m.perFabric, fabricIndex)
 	m.mu.Unlock()
-	for _, sub := range victims {
-		sub.Close()
-	}
+	m.finishClose(victims)
 }
 
 // CloseFabricExcept terminates every subscription on fabricIndex except those
@@ -376,9 +398,7 @@ func (m *Manager) CloseFabricExcept(fabricIndex uint8, exceptSessionID uint16) {
 		delete(m.perFabric, fabricIndex)
 	}
 	m.mu.Unlock()
-	for _, sub := range victims {
-		sub.Close()
-	}
+	m.finishClose(victims)
 }
 
 // CloseEndpoint terminates every subscription that contains at least
@@ -405,9 +425,7 @@ func (m *Manager) CloseEndpoint(endpointID uint16) int {
 		}
 	}
 	m.mu.Unlock()
-	for _, sub := range victims {
-		sub.Close()
-	}
+	m.finishClose(victims)
 	return len(victims)
 }
 

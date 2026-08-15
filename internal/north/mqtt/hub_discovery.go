@@ -650,16 +650,27 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 // ----------------------- InstallMode ------------------------------
 
 // installModeInterfaceSuffix maps a CCU interface identifier to the
-// short suffix the reference stack uses for per-interface install-mode
-// entities: "hmip" for HmIP-RF, "bidcos" for everything else (BidCos-RF
-// and the wired families). The suffix feeds both the unique_id slot and
-// the friendly-name infix so the loom entities line up 1:1 with the
-// reference registry (`install_mode_hmip`, `install_mode_bidcos`).
+// short suffix used for per-interface install-mode entities: "hmip" for
+// HmIP-RF and "bidcos" for BidCos-RF, matching the reference registry
+// entity names (`install_mode_hmip`, `install_mode_bidcos`). The suffix
+// feeds the unique_id slot, the object_id and the friendly-name infix.
+//
+// Every other pairing-capable interface — BidCos-Wired above all — gets
+// its own slot instead of falling into the "bidcos" bucket. The state
+// and command topics are built per interface, so two interfaces sharing
+// a suffix share one retained discovery topic and one unique_id while
+// declaring two different topic sets: only the payload published last
+// survives, and its pairing button opens the window on whichever bus
+// won that race.
 func installModeInterfaceSuffix(iface string) string {
-	if strings.EqualFold(iface, "HmIP-RF") {
+	switch {
+	case strings.EqualFold(iface, "HmIP-RF"):
 		return "hmip"
+	case strings.EqualFold(iface, "BidCos-RF"):
+		return "bidcos"
+	default:
+		return safeLower(iface)
 	}
-	return "bidcos"
 }
 
 // installModeInterfaceLabel returns the human-readable interface label

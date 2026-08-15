@@ -5,8 +5,16 @@
 -- the per-subject stores (preferences, private diagram ownership) and cannot be
 -- addressed by any user-side operation that uses the stored spelling.
 --
--- lower() folds ASCII only, which is exactly the fold the write path performs,
--- so both stay on the same rule.
+-- The fold below is not identical to the write path's: SQLite's lower() and
+-- trim() are ASCII-only, while the Go side uses strings.ToLower and
+-- strings.TrimSpace, which are Unicode-aware. A legacy subject carrying a
+-- non-ASCII upper-case letter (Emile with an acute É, a Cyrillic name, an
+-- all-caps umlaut) or non-breaking whitespace therefore keeps a spelling no
+-- Go-side lookup produces: its per-subject side-stores stay split, and the
+-- purge behind an account deletion does not match it. Folding those rows
+-- needs a Go pass, which this migration deliberately does not attempt — it
+-- fixes the ASCII and plain-space cases and leaves the rest no worse than
+-- before.
 
 -- +goose Up
 UPDATE tokens SET subject = lower(trim(subject));

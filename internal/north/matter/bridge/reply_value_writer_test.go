@@ -297,16 +297,71 @@ func TestDefaultAttributeValueWriter_AccuracyStructSlice(t *testing.T) {
 	t.Parallel()
 	v := []mattermeasure.AccuracyStruct{
 		{
-			MeasurementType: 0x0001,
-			Measured:        true,
-			MinAccuracy:     0,
-			MaxAccuracy:     100,
+			MeasurementType:  0x0001,
+			Measured:         true,
+			MinMeasuredValue: -1000,
+			MaxMeasuredValue: 1000,
 			AccuracyRanges: []mattermeasure.AccuracyRangeStruct{
 				{RangeMin: -1000, RangeMax: 1000},
 			},
 		},
 	}
 	verifyNonEmpty(t, "[]AccuracyStruct", callAttributeWriter(im.AttributeValue{Value: v}))
+}
+
+// TestDefaultAttributeValueWriter_AccuracyStructSignedMeasuredValues pins
+// the wire type of MeasurementAccuracyStruct tags 2 and 3. matter.js
+// packages/model/src/standard/elements/measurement-accuracy-struct.element.ts
+// declares them MinMeasuredValue / MaxMeasuredValue, both int64 — a typed
+// controller decoding them as signed (chip's TLVReader::Get(int64_t&)
+// accepts only the Int element types) fails with WRONG_TLV_TYPE on an
+// unsigned element and loses a conformance-M attribute of both electrical
+// clusters.
+func TestDefaultAttributeValueWriter_AccuracyStructSignedMeasuredValues(t *testing.T) {
+	t.Parallel()
+	v := []mattermeasure.AccuracyStruct{
+		{
+			MeasurementType:  0x0008,
+			Measured:         true,
+			MinMeasuredValue: -1000,
+			MaxMeasuredValue: 1000,
+			AccuracyRanges: []mattermeasure.AccuracyRangeStruct{
+				{RangeMin: -1000, RangeMax: 1000},
+			},
+		},
+	}
+	b := verifyNonEmpty(t, "[]AccuracyStruct", callAttributeWriter(im.AttributeValue{Value: v}))
+
+	signed := map[tlv.ElementType]bool{
+		tlv.TypeSignedInt1: true, tlv.TypeSignedInt2: true,
+		tlv.TypeSignedInt4: true, tlv.TypeSignedInt8: true,
+	}
+	// Walk the flat element stream; the first struct entered is the
+	// AccuracyStruct itself, so its context tags 2 and 3 are the first
+	// occurrences of those tag numbers.
+	seen := map[uint32]tlv.ElementType{}
+	dec := tlv.NewDecoder(b)
+	for {
+		el, err := dec.Next()
+		if err != nil {
+			break
+		}
+		if el.IsContainer || el.IsEndContainer || el.Tag.Kind != tlv.TagKindContext {
+			continue
+		}
+		if _, dup := seen[el.Tag.Number]; !dup {
+			seen[el.Tag.Number] = el.Type
+		}
+	}
+	for _, tag := range []uint32{2, 3} {
+		typ, ok := seen[tag]
+		if !ok {
+			t.Fatalf("MeasurementAccuracyStruct context tag %d absent from the encoded payload", tag)
+		}
+		if !signed[typ] {
+			t.Errorf("MeasurementAccuracyStruct tag %d encoded as element type 0x%02X, want a signed-int type (int64 per matter.js)", tag, uint8(typ))
+		}
+	}
 }
 
 func TestDefaultAttributeValueWriter_EnergyMeasurementStruct(t *testing.T) {

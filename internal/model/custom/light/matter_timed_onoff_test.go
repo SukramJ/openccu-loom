@@ -10,7 +10,11 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // errWriter always fails the write — used to exercise the rollback path
@@ -416,5 +420,57 @@ func TestOnWithTimedOffTurnOnFailureRollsBackArm(t *testing.T) {
 	}
 	if v, ok := srv.MatterRead(0x4002); !ok || v.(uint16) != 0 {
 		t.Fatalf("OffWaitTime after rollback = (%v, %v), want (0, true)", v, ok)
+	}
+}
+
+// TestChannelTeardownStopsTheTimedOnOffLoop drives the real teardown
+// path: the Light is bound to its channel (which subscribes it), a
+// controller arms OnWithTimedOff, and the channel is then removed — the
+// device-removal / cache-clear / custom-DP-replacement path.
+//
+// The countdown's tick goroutine used to survive that, because its only
+// exit is a countdown reaching zero. It kept the retired Light alive for
+// up to the 65534-tenths maximum and then issued a CCU turn-off for a
+// device the daemon no longer modelled. The wall-clock loop runs here on
+// purpose — a disabled loop is exactly the state under test.
+func TestChannelTeardownStopsTheTimedOnOffLoop(t *testing.T) {
+	w := &stubWriter{}
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
+	ch := d.AddChannel("HmIP-BDT:4", 4, "DIMMER", hmenum.ParamsetKeyValues)
+	ch.Put(generic.NewFloat(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: "HmIP-BDT:4",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterLevel),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+		Writer: w,
+	}))
+	l := New(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{Dimmable: true}})
+	ch.SetCustomDataPoint(l)
+	l.OnLevel(0.5)
+
+	// OnTime = 600 tenths (60 s), far beyond the test's own lifetime.
+	srv := onOffServer(t, l)
+	fields := map[uint8]any{0: uint64(0), 1: uint64(600), 2: uint64(0)}
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, fields, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OnWithTimedOff arm error: %v", err)
+	}
+	l.timed.mu.Lock()
+	running := l.timed.stop != nil
+	l.timed.mu.Unlock()
+	if !running {
+		t.Fatal("OnWithTimedOff must arm the countdown tick goroutine")
+	}
+
+	ch.Remove()
+
+	l.timed.mu.Lock()
+	defer l.timed.mu.Unlock()
+	if l.timed.stop != nil {
+		t.Error("channel teardown must stop the countdown tick goroutine")
 	}
 }

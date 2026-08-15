@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { authStore } from "$lib/stores/auth.svelte";
   import { setupStore } from "$lib/stores/setup.svelte";
   import {
@@ -57,6 +57,7 @@
   import Sidebar from "$lib/components/ui/Sidebar.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { dirty } from "$lib/stores/dirty.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
@@ -127,6 +128,11 @@
         location.hash = committedHash;
         return;
       }
+      // The dialog promised the edits are lost. Editors whose draft is
+      // module state survive this navigation, so rolling them back here
+      // is what keeps that promise - and what stops the same dialog from
+      // re-appearing on every later navigation.
+      dirty.discardAll();
     }
     committedHash = nextHash;
     path = next;
@@ -170,19 +176,39 @@
     if (target) location.hash = target;
   }
 
+  // Which operator the per-user boot state was loaded for. A plain
+  // variable, not $state: the effect below writes it, and a reactive one
+  // would re-trigger that very effect.
+  let loadedForSubject: string | null = null;
+
+  // The surface profile and the start route both come from endpoints
+  // behind AuthRequire, so loading them next to the auth probe answered
+  // 401 on every boot without a session - and an interactive login is a
+  // hash change, not a page load, so nothing ever re-ran them. Keying
+  // them on the identity runs them exactly once per signed-in operator:
+  // on a boot that already carries a session, after a password login,
+  // and again when a second operator signs in in the same tab.
+  $effect(() => {
+    const subject = authStore.identity?.subject ?? null;
+    if (subject === null || subject === loadedForSubject) return;
+    loadedForSubject = subject;
+    untrack(() => {
+      // A fresh operator gets their own start route applied; the latch
+      // still keeps it to one application per sign-in.
+      startRouteApplied = false;
+      void startRouteStore.load().then(applyStartRoute);
+      // The route guard needs the profile too, so a view the operator
+      // hid must not stay reachable once it has arrived.
+      void surfacesStore.load().then(redirectIfHidden);
+    });
+  });
+
   onMount(() => {
     // The initial hash named a folded route: `path` was already resolved
     // to its successor above, so this only corrects the address bar.
     const foldedInitial = foldedRouteTarget(location.hash);
     if (foldedInitial) location.hash = foldedInitial;
     authStore.probe();
-    // Seeded before the route is applied; a failed load resolves to the
-    // default rather than delaying the first paint.
-    void startRouteStore.load().then(applyStartRoute);
-    // The surface profile. Loaded here rather than lazily in the
-    // sidebar because the route guard below needs it too, and a view the
-    // operator hid must not render for the moment before it arrives.
-    void surfacesStore.load().then(redirectIfHidden);
     // First-run probe: when the daemon has no auth source yet, render the
     // onboarding wizard instead of the login screen.
     void setupStore.probe();
@@ -361,6 +387,20 @@
 <ConfirmDialog />
 <ShortcutHelp open={helpOpen} onClose={() => (helpOpen = false)} />
 
+<!--
+  Fallback for the code-split routes below. Their chunks are content-
+  hashed, so a daemon update under a tab that has been open since before
+  it invalidates every chunk the tab never fetched, and the import
+  rejects. Without a catch branch Svelte tears the pending block down and
+  renders nothing at all: a blank content region with no way to learn
+  that a reload fixes it.
+-->
+{#snippet routeLoadFailed()}
+  <section class="mx-auto max-w-6xl px-6 py-8">
+    <ErrorState message={t("app.route_load_failed")} onRetry={() => location.reload()} />
+  </section>
+{/snippet}
+
 {#if authStore.checking || setupStore.checking}
   <section
     class="flex min-h-screen items-center justify-center"
@@ -456,6 +496,8 @@
             <LoadingState />
           {:then { default: Diagnostics }}
             <Diagnostics />
+          {:catch}
+            {@render routeLoadFailed()}
           {/await}
         {:else if route.kind === "energy"}
           <Energy />
@@ -467,6 +509,8 @@
               <LoadingState />
             {:then { default: Logs }}
               <Logs />
+            {:catch}
+              {@render routeLoadFailed()}
             {/await}
           {:else}
             <section class="mx-auto max-w-6xl px-6 py-8">
@@ -488,18 +532,24 @@
             <LoadingState />
           {:then { default: Matter }}
             <Matter subpath={route.subpath} />
+          {:catch}
+            {@render routeLoadFailed()}
           {/await}
         {:else if route.kind === "alarm"}
           {#await loadAlarm()}
             <LoadingState />
           {:then { default: Alarm }}
             <Alarm subpath={route.subpath} />
+          {:catch}
+            {@render routeLoadFailed()}
           {/await}
         {:else if route.kind === "security"}
           {#await loadSecurity()}
             <LoadingState />
           {:then { default: Security }}
             <Security subpath={route.subpath} />
+          {:catch}
+            {@render routeLoadFailed()}
           {/await}
         {:else if route.kind === "about"}
           <About />

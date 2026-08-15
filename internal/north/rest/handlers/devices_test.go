@@ -1024,6 +1024,49 @@ func TestParsePagination_InvalidValues_FallsBackToDefaults(t *testing.T) {
 	}
 }
 
+// TestParsePagination_HugePageCannotOverflowSliceBounds pins the upper page
+// bound. The OpenAPI parameter declares a minimum and no maximum, so a probe
+// can send a page whose (page-1)*per_page product wraps negative; the list
+// handlers then slice with a negative low bound and panic the request.
+func TestParsePagination_HugePageCannotOverflowSliceBounds(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/?page=200000000000000000&per_page=50", http.NoBody)
+	page, perPage := parsePagination(req)
+	if start := (page - 1) * perPage; start < 0 {
+		t.Fatalf("start = %d for page=%d per_page=%d, want a non-negative slice bound", start, page, perPage)
+	}
+	if start := (page - 1) * maxPerPage; start < 0 || start+maxPerPage < 0 {
+		t.Fatalf("page=%d overflows at the maximum per_page (start=%d)", page, start)
+	}
+}
+
+// TestListDevices_HugePageReturnsEmptyPageInsteadOfPanicking drives the
+// overflow through the real handler: a page past the end must answer an empty
+// item list, never a recovered 500 plus a stack trace in the log ring.
+func TestListDevices_HugePageReturnsEmptyPageInsteadOfPanicking(t *testing.T) {
+	t.Parallel()
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{
+		"0001ABCD": newTestDevice("0001ABCD", "HmIP-BSM"),
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices?page=200000000000000000", http.NoBody)
+	w := httptest.NewRecorder()
+	ListDevices(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if items, ok := body["items"].([]any); !ok || len(items) != 0 {
+		t.Fatalf("expected an empty page, got %v", body["items"])
+	}
+	if body["total"].(float64) != 1 {
+		t.Fatalf("expected total=1, got %v", body["total"])
+	}
+}
+
 func TestParsePagination_PerPageExceedsMax_Clamps(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/?per_page=999", http.NoBody)
@@ -1364,10 +1407,10 @@ func TestListChannels_GroupAndRoomFields(t *testing.T) {
 	for _, no := range []int{3, 4, 5} {
 		d.AddChannelToGroup(4, no)
 	}
-	state.GroupNo = 4
-	master.GroupNo = 4
+	state.AssignGroupNumber(4)
+	master.AssignGroupNumber(4)
 	vch := d.AddChannel("0001GRP:5", 5, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
-	vch.GroupNo = 4
+	vch.AssignGroupNumber(4)
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001GRP": d}}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001GRP/channels", http.NoBody)

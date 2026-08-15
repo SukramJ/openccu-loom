@@ -437,51 +437,62 @@ func snapshotFunctions(idx DeviceIndex) []FunctionEntry {
 	return out
 }
 
-// snapshotPrograms reuses the existing list-programs projection so
-// SnapshotEnvelope.Programs and `/programs` always agree.
+// snapshotPrograms mirrors the list-programs filtering so
+// SnapshotEnvelope.Programs and `/programs` cover the same set. It walks
+// every central's hub: HubIndex.Hub() is the first central's hub alone,
+// so reading it would drop every other CCU's programs from an export
+// documented as self-contained — and return nothing at all for
+// `?central=` naming any but the first.
 func snapshotPrograms(idx HubIndex) []ProgramSummary {
-	if idx.Hub() == nil {
-		return nil
-	}
-	progs := idx.Hub().Programs()
-	// The hub always holds internal programs; the snapshot mirrors the
-	// list endpoint's default and omits them unless the central opted in
-	// via include_internal_programs.
-	includeInternal := idx.Hub().IncludeInternalProgramsDefault()
-	out := make([]ProgramSummary, 0, len(progs))
-	for _, p := range progs {
-		if p.IsInternal && !includeInternal {
+	var out []ProgramSummary
+	for _, nh := range idx.Hubs() {
+		if nh.Hub == nil {
 			continue
 		}
-		active, observed := p.Active()
-		entry := ProgramSummary{
-			ID:          p.ID,
-			Name:        p.Name,
-			Description: p.Description,
-			Central:     p.Central(),
-			UniqueID:    p.CanonicalUniqueID(idx.SerialSuffix(p.Central())),
+		// The hub always holds internal programs; the snapshot mirrors the
+		// list endpoint's default and omits them unless the central opted in
+		// via include_internal_programs.
+		includeInternal := nh.Hub.IncludeInternalProgramsDefault()
+		serial := idx.SerialSuffix(nh.Central)
+		for _, p := range nh.Hub.Programs() {
+			if p.IsInternal && !includeInternal {
+				continue
+			}
+			active, observed := p.Active()
+			entry := ProgramSummary{
+				ID:          p.ID,
+				Name:        p.Name,
+				Description: p.Description,
+				Central:     nh.Central,
+				UniqueID:    p.CanonicalUniqueID(serial),
+			}
+			if observed {
+				v := active
+				entry.Active = &v
+			}
+			entry.ConditionSummary, entry.ActivitySummary = p.RuleSummary()
+			out = append(out, entry)
 		}
-		if observed {
-			v := active
-			entry.Active = &v
-		}
-		entry.ConditionSummary, entry.ActivitySummary = p.RuleSummary()
-		out = append(out, entry)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
 
-// snapshotSysvars projects the hub's current sysvars into the wire
-// summary. Mirrors what `GET /sysvars` returns.
+// snapshotSysvars projects every central's sysvars into the wire
+// summary. Mirrors what `GET /sysvars` returns — including its walk over
+// all hubs, for the same reason [snapshotPrograms] does.
 func snapshotSysvars(idx HubIndex) []SysvarSummary {
-	if idx.Hub() == nil {
-		return nil
-	}
-	vars := idx.Hub().Sysvars()
-	out := make([]SysvarSummary, 0, len(vars))
-	for _, s := range vars {
-		out = append(out, toSysvarSummary(s, idx.SerialSuffix(s.Central())))
+	var out []SysvarSummary
+	for _, nh := range idx.Hubs() {
+		if nh.Hub == nil {
+			continue
+		}
+		serial := idx.SerialSuffix(nh.Central)
+		for _, s := range nh.Hub.Sysvars() {
+			sum := toSysvarSummary(s, serial)
+			sum.Central = nh.Central
+			out = append(out, sum)
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

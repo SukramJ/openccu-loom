@@ -68,7 +68,7 @@
   $effect(() => {
     if (installModeStore.active) {
       if (!pairingTimer) {
-        pairingTimer = setInterval(() => void load(), 3000);
+        pairingTimer = setInterval(() => void load({ silent: true }), 3000);
       }
     } else if (pairingTimer) {
       clearInterval(pairingTimer);
@@ -76,8 +76,13 @@
     }
   });
 
-  async function load() {
-    loading = true;
+  // The pairing tick must not blank the table: `loading` swaps the whole
+  // result for the loading placeholder, so a poll that raises it destroys
+  // and recreates the table — including the search input, which loses focus
+  // mid-keystroke — roughly twenty times per teach-in window, precisely
+  // while the operator is watching for the device they just paired.
+  async function load(opts: { silent?: boolean } = {}) {
+    if (!opts.silent) loading = true;
     loadError = null;
     try {
       entries = await api.listInbox();
@@ -194,6 +199,70 @@
   let replaceLoading = $state(false);
   let replaceLoadError = $state<string | null>(null);
   let replaceSubmitting = $state(false);
+
+  // Focus-trap bookkeeping for the two hand-rolled dialogs, mirroring
+  // ConfirmDialog.svelte. Without it focus stays on the row button that
+  // opened the overlay: assistive technology never enters the aria-modal
+  // dialog, a keyboard user has to tab through the table behind it, and the
+  // overlay's own Escape handler is unreachable because the keydown never
+  // travels through the overlay's subtree. Only one of the two can be open
+  // at a time, so a single window handler dispatches to whichever it is.
+  let acceptDialogEl = $state<HTMLDivElement | null>(null);
+  let replaceDialogEl = $state<HTMLDivElement | null>(null);
+  let dialogOpener: HTMLElement | null = null;
+
+  function dialogFocusables(el: HTMLDivElement | null): HTMLElement[] {
+    if (!el) return [];
+    return Array.from(
+      el.querySelectorAll<HTMLElement>(
+        'input, button, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((e) => !e.hasAttribute("disabled"));
+  }
+
+  $effect(() => {
+    if (!acceptTarget && !replaceTarget) return;
+    dialogOpener = document.activeElement as HTMLElement | null;
+    // The dialog's DOM is inserted by the {#if} this effect depends on;
+    // queue past the current microtask so Svelte has committed it.
+    queueMicrotask(() =>
+      dialogFocusables(acceptTarget ? acceptDialogEl : replaceDialogEl)[0]?.focus(),
+    );
+    return () => {
+      dialogOpener?.focus();
+      dialogOpener = null;
+    };
+  });
+
+  function onDialogKey(e: KeyboardEvent) {
+    const busy = acceptTarget ? acceptSubmitting : replaceSubmitting;
+    const el = acceptTarget
+      ? acceptDialogEl
+      : replaceTarget
+        ? replaceDialogEl
+        : null;
+    if (!el) return;
+    if (e.key === "Escape") {
+      if (busy) return;
+      e.preventDefault();
+      if (acceptTarget) closeAccept();
+      else closeReplace();
+      return;
+    }
+    if (e.key === "Tab") {
+      const els = dialogFocusables(el);
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      const active = document.activeElement;
+      const atEdge = e.shiftKey ? active === first : active === last;
+      const outside = !els.includes(active as HTMLElement);
+      if (atEdge || outside) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
+    }
+  }
 
   function isReplaceable(d: InboxDevice): boolean {
     // The CCU exposes replaceDevice on BidCos only; HmIP throws
@@ -343,14 +412,29 @@
 
   // The combobox may create a brand-new CCU room / function on the spot;
   // append it to the catalogue so it renders immediately as selected.
+  // The CCU refuses the write on a duplicate name, a missing permission or
+  // an unreachable ReGa, and the combobox discards the returned promise, so
+  // a rejection that is not caught here reaches nothing at all — the chip
+  // never appears and the operator is told neither that it worked nor that
+  // it failed.
   async function createRoomOption(name: string) {
-    await api.createRoom(name, acceptTarget?.central);
+    try {
+      await api.createRoom(name, acceptTarget?.central);
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+      throw err;
+    }
     if (!roomOptions.includes(name))
       roomOptions = [...roomOptions, name].sort((a, b) => a.localeCompare(b));
     toastStore.success(t("roomfn.created.room"));
   }
   async function createFunctionOption(name: string) {
-    await api.createFunction(name, acceptTarget?.central);
+    try {
+      await api.createFunction(name, acceptTarget?.central);
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+      throw err;
+    }
     if (!functionOptions.includes(name))
       functionOptions = [...functionOptions, name].sort((a, b) =>
         a.localeCompare(b),
@@ -487,6 +571,8 @@
     },
   ]);
 </script>
+
+<svelte:window onkeydown={onDialogKey} />
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   <PageHeader title={t("inbox.title")} subtitle={t("inbox.subtitle")}>
@@ -733,6 +819,7 @@
     }}
   >
     <div
+      bind:this={acceptDialogEl}
       class="max-h-[90vh] w-full max-w-lg overflow-y-auto p-5"
       style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-radius: var(--ha-radius-card); box-shadow: var(--ha-elevation-modal);"
     >
@@ -870,6 +957,7 @@
     }}
   >
     <div
+      bind:this={replaceDialogEl}
       class="max-h-[90vh] w-full max-w-lg overflow-y-auto p-5"
       style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-radius: var(--ha-radius-card); box-shadow: var(--ha-elevation-modal);"
     >

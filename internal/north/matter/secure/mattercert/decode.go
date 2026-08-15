@@ -386,8 +386,14 @@ func validateMandatory(c *Certificate) error {
 	if c.EllipticCurveID != CurvePrime256v1 {
 		return fmt.Errorf("%w: elliptic curve %d", ErrUnsupportedAlgorithm, c.EllipticCurveID)
 	}
-	if len(c.PublicKey) != 65 || c.PublicKey[0] != 0x04 {
-		return fmt.Errorf("%w: ec-pub-key length=%d prefix=%#x", ErrMalformed, len(c.PublicKey), c.PublicKey[0])
+	// The prefix is only reportable once the length check has passed —
+	// tag 9 may be absent or empty in a peer-supplied cert, and Go
+	// evaluates the whole argument list before the fmt call.
+	if len(c.PublicKey) != 65 {
+		return fmt.Errorf("%w: ec-pub-key length=%d (want 65)", ErrMalformed, len(c.PublicKey))
+	}
+	if c.PublicKey[0] != 0x04 {
+		return fmt.Errorf("%w: ec-pub-key prefix=%#x (want 0x04)", ErrMalformed, c.PublicKey[0])
 	}
 	if len(c.Signature) != 64 {
 		return fmt.Errorf("%w: signature length=%d (want 64)", ErrMalformed, len(c.Signature))

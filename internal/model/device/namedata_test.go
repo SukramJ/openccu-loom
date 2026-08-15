@@ -373,7 +373,8 @@ func TestBuildCustomDataPointName_SinglePrimaryCollapses(t *testing.T) {
 	d := makeDevice("Steckdose", "HmIP-PSM", "000ABC")
 	ch3 := d.AddChannel("000ABC:3", 3, "SWITCH", hmenum.ParamsetKeyValues)
 	ch4 := d.AddChannel("000ABC:4", 4, "SWITCH", hmenum.ParamsetKeyValues)
-	ch3.GroupNo, ch4.GroupNo = 3, 3
+	ch3.AssignGroupNumber(3)
+	ch4.AssignGroupNumber(3)
 	attachCustomStub(ch3, "switch")
 	attachCustomStub(ch4, "switch")
 
@@ -397,7 +398,8 @@ func TestBuildCustomDataPointName_MultiPrimaryGetsChMarker(t *testing.T) {
 	d := makeDevice("Schalter Dachboden", "HmIP-DRSI4", "000ABC")
 	ch6 := d.AddChannel("000ABC:6", 6, "SWITCH", hmenum.ParamsetKeyValues)
 	ch10 := d.AddChannel("000ABC:10", 10, "SWITCH", hmenum.ParamsetKeyValues)
-	ch6.GroupNo, ch10.GroupNo = 6, 10
+	ch6.AssignGroupNumber(6)
+	ch10.AssignGroupNumber(10)
 	attachCustomStub(ch6, "switch")
 	attachCustomStub(ch10, "switch")
 
@@ -416,7 +418,8 @@ func TestBuildCustomDataPointName_CustomChannelNames(t *testing.T) {
 	d := makeDevice("Signalleuchte FL", "HmIP-BSL", "000ABC")
 	ch4 := d.AddChannel("000ABC:4", 4, "SWITCH", hmenum.ParamsetKeyValues)
 	ch5 := d.AddChannel("000ABC:5", 5, "SWITCH", hmenum.ParamsetKeyValues)
-	ch4.GroupNo, ch5.GroupNo = 4, 4
+	ch4.AssignGroupNumber(4)
+	ch5.AssignGroupNumber(4)
 	attachCustomStub(ch4, "switch")
 	attachCustomStub(ch5, "switch")
 	ch4.SetName("Treppe")
@@ -439,7 +442,8 @@ func TestBuildCustomDataPointName_MarkerDigitsFollowNameSuffix(t *testing.T) {
 	d := makeDevice("Steuerung", "HmIP-DRSI4", "000ABC")
 	ch5 := d.AddChannel("000ABC:5", 5, "SWITCH", hmenum.ParamsetKeyValues)
 	ch6 := d.AddChannel("000ABC:6", 6, "SWITCH", hmenum.ParamsetKeyValues)
-	ch5.GroupNo, ch6.GroupNo = 5, 6
+	ch5.AssignGroupNumber(5)
+	ch6.AssignGroupNumber(6)
 	attachCustomStub(ch5, "switch")
 	attachCustomStub(ch6, "switch")
 	ch5.SetName("Relais:9")

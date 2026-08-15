@@ -92,6 +92,8 @@ function uiSchemaFixture(channel: number) {
   };
 }
 
+const EDIT_TOKEN = 'e2e-lock-token';
+
 async function applyDeviceMocks(page: Page): Promise<void> {
   await page.route(`**/api/v1/devices/${DEVICE_ADDRESS}`, (route) =>
     route.fulfill({ json: deviceDetailFixture() }),
@@ -113,12 +115,18 @@ async function applyDeviceMocks(page: Page): Promise<void> {
   await page.route('**/api/v1/devices/*/schedule', (route) =>
     route.fulfill({ status: 404, body: JSON.stringify({ detail: 'no schedule' }) }),
   );
+  // EditSessionResponse — token / key / expires. The token is what the
+  // editor puts in X-Edit-Token on the MASTER write; a lock body without
+  // it leaves the header off and the daemon answers 423, so a
+  // wrong-shaped mock makes the save test pass against a rejected
+  // request.
   await page.route('**/api/v1/sessions/edit', (route) =>
     route.fulfill({
       json: {
-        session_id: 'e2e-session',
-        owner: 'admin',
-        expires_at: new Date(Date.now() + 300000).toISOString(),
+        token: EDIT_TOKEN,
+        key: `channel:${DEVICE_ADDRESS}:1:MASTER`,
+        subject: 'admin',
+        expires: new Date(Date.now() + 300000).toISOString(),
       },
     }),
   );
@@ -140,10 +148,12 @@ test.describe('Device detail — MASTER parameter write', () => {
     page,
   }) => {
     let putBody: unknown = null;
+    let putEditToken: string | undefined;
     // The channel address (…:1) is percent-encoded in the request URL, so
     // match the address segment with a wildcard rather than a literal colon.
     await page.route('**/api/v1/devices/*/paramsets/MASTER', async (route) => {
       putBody = route.request().postDataJSON();
+      putEditToken = route.request().headers()['x-edit-token'];
       await route.fulfill({ json: { status: 'ok' } });
     });
 
@@ -169,6 +179,10 @@ test.describe('Device detail — MASTER parameter write', () => {
     // The write reaches the MASTER paramset PUT endpoint with the edited value...
     await expect.poll(() => putBody).not.toBeNull();
     expect(putBody).toMatchObject({ TEMPERATURE_OFFSET: 1.5 });
+
+    // ...carrying the edit lock the daemon requires on MASTER — without
+    // the header the real write comes back 423 Locked.
+    expect(putEditToken).toBe(EDIT_TOKEN);
 
     // ...and a success toast confirms the write to the operator.
     await expect(page.getByText('Saved.')).toBeVisible();

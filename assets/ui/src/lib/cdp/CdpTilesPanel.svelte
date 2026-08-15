@@ -147,7 +147,7 @@
       if (!byNo.has(groupNo)) {
         byNo.set(groupNo, {
           groupNo,
-          name: ch.sub_device_name || `Gruppe ${groupNo}`,
+          name: ch.sub_device_name || t("cdp.group_n", { n: groupNo }),
           cdps: [],
           actorOrphans: [],
           statusOrphans: [],

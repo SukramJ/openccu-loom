@@ -84,12 +84,20 @@ type TokenStore interface {
 }
 
 // tokenEntry is the map value inside [MemoryTokenStore]. Only the
-// short display fingerprint (not the raw token) is retained after
-// Put so a heap or memory dump cannot reveal active bearer secrets.
-// AuthenticateToken looks up by the map key (tokenID hash) in O(1).
+// short display fingerprint and the full digest (never the raw token)
+// are retained after Put so a heap or memory dump cannot reveal active
+// bearer secrets. AuthenticateToken looks up by the map key (tokenID
+// hash) in O(1) and then verifies the full digest.
 type tokenEntry struct {
 	fingerprint string // first-8-hex of sha256, for display only
-	identity    Identity
+	// digest is the FULL SHA-256 of the token. The map key is a 64-bit
+	// prefix of it, which is a lookup index and not a credential: it is
+	// published as the token `id` by the management API and written into
+	// audit notes, so authorising on a bare map hit would let anyone who
+	// reads an id brute-force a colliding string and present it as the
+	// bearer token. The durable sibling store compares the full hash too.
+	digest   [sha256.Size]byte
+	identity Identity
 }
 
 // MemoryTokenStore is a pragmatic in-memory token store used by
@@ -108,7 +116,11 @@ func NewMemoryTokenStore(tokens map[string]Identity) *MemoryTokenStore {
 	cp := make(map[string]tokenEntry, len(tokens))
 	for raw, id := range tokens {
 		id.Subject = CanonicalSubject(id.Subject)
-		cp[tokenID(raw)] = tokenEntry{fingerprint: tokenFingerprint(raw), identity: id}
+		cp[tokenID(raw)] = tokenEntry{
+			fingerprint: tokenFingerprint(raw),
+			digest:      sha256.Sum256([]byte(raw)),
+			identity:    id,
+		}
 	}
 	return &MemoryTokenStore{tokens: cp}
 }
@@ -120,14 +132,19 @@ func (s *MemoryTokenStore) AuthenticateToken(_ context.Context, token string) (I
 	if token == "" {
 		return Identity{}, ErrUnauthenticated
 	}
-	// The map is keyed on tokenID(token) — a truncated SHA-256 hash.
-	// The raw token is never stored, so a map hit alone authorises
-	// the request (no stored secret to compare against).
-	id := tokenID(token)
+	// The map is keyed on tokenID(token) — a 64-bit prefix of the SHA-256,
+	// which doubles as the publicly visible token id. The map hit therefore
+	// only selects a candidate; the full digest is what authorises, compared
+	// in constant time so a mismatch cannot be timed byte by byte.
+	digest := sha256.Sum256([]byte(token))
+	id := hex.EncodeToString(digest[:tokenIDBytes])
 	s.mu.RLock()
 	entry, ok := s.tokens[id]
 	s.mu.RUnlock()
 	if !ok {
+		return Identity{}, ErrUnauthenticated
+	}
+	if subtle.ConstantTimeCompare(entry.digest[:], digest[:]) != 1 {
 		return Identity{}, ErrUnauthenticated
 	}
 	out := entry.identity
@@ -149,14 +166,20 @@ type TokenSummary struct {
 	Role        Role
 }
 
+// tokenIDBytes is how much of the SHA-256 the public token id carries.
+const tokenIDBytes = 8
+
 // tokenID returns the stable identifier for a token — first 16 hex
 // chars of the SHA-256. Long enough to avoid collisions in any
 // realistic token set, short enough to fit cleanly in URLs and audit
 // logs. Never returned to clients alongside the raw token in the
 // same response (clients keep the token; the ID is for management).
+//
+// It is an index, not a credential: [MemoryTokenStore.AuthenticateToken]
+// verifies the full digest after the lookup.
 func tokenID(token string) string {
 	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:8])
+	return hex.EncodeToString(sum[:tokenIDBytes])
 }
 
 // tokenFingerprint derives a short human-readable display value from
@@ -201,7 +224,11 @@ func (s *MemoryTokenStore) Put(token string, id Identity) string {
 		s.tokens = make(map[string]tokenEntry)
 	}
 	tid := tokenID(token)
-	s.tokens[tid] = tokenEntry{fingerprint: tokenFingerprint(token), identity: id}
+	s.tokens[tid] = tokenEntry{
+		fingerprint: tokenFingerprint(token),
+		digest:      sha256.Sum256([]byte(token)),
+		identity:    id,
+	}
 	return tid
 }
 

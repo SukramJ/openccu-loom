@@ -81,8 +81,9 @@ type ParamsetReader interface {
 
 // EditLockVerifier reports whether `token` currently holds the edit
 // lock for a resource `key`. It mirrors the REST strict edit-lock
-// gate so `paramset.put` enforces the same contract as
-// `PUT /devices/{addr}/paramsets/{key}`. *handlers.EditSessions
+// gate so every WS command that writes a configuration paramset —
+// `paramset.put` and `master_profiles.apply` — enforces the same
+// contract as `PUT /devices/{addr}/paramsets/{key}`. *handlers.EditSessions
 // satisfies it. A nil verifier disables enforcement — a test-only
 // escape hatch; the production mount always wires the shared registry
 // (see cmd/openccu-loom/ws_adapters.go).
@@ -237,10 +238,11 @@ type UISchemaQuery interface {
 type ExtendedCommandsConfig struct {
 	Devices   DeviceWriter
 	Paramsets ParamsetWriter
-	// EditLocks enforces the strict per-resource edit lock on
-	// `paramset.put` for MASTER/LINK keys. Nil disables enforcement
-	// (test-only); production wires the shared REST edit-session
-	// registry so REST and WS share one lock namespace.
+	// EditLocks enforces the strict per-resource edit lock on the
+	// commands that write a configuration paramset — `paramset.put`
+	// (MASTER/LINK keys) and `master_profiles.apply` (always MASTER).
+	// Nil disables enforcement (test-only); production wires the shared
+	// REST edit-session registry so REST and WS share one lock namespace.
 	EditLocks     EditLockVerifier
 	ChangeHistory ChangeHistoryQuery
 	// ChangeHistoryClearer backs `change_history.clear`.
@@ -322,7 +324,7 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if cfg.MasterProfiles != nil {
 		router.Register("master_profiles.list", masterProfilesListHandler(cfg.MasterProfiles))
 		router.Register("master_profiles.get", masterProfilesGetHandler(cfg.MasterProfiles))
-		router.Register("master_profiles.apply", masterProfilesApplyHandler(cfg.MasterProfiles, cfg.Paramsets))
+		router.Register("master_profiles.apply", masterProfilesApplyHandler(cfg.MasterProfiles, cfg.Paramsets, cfg.EditLocks))
 		router.Register("master_profiles.match", masterProfilesMatchHandler(cfg.MasterProfiles))
 	}
 	// --- Reports zweit ---
@@ -811,19 +813,33 @@ func masterProfilesMatchHandler(s *masterprofile.Store) CommandHandler {
 	}
 }
 
-func masterProfilesApplyHandler(s *masterprofile.Store, w ParamsetWriter) CommandHandler {
+func masterProfilesApplyHandler(s *masterprofile.Store, w ParamsetWriter, locks EditLockVerifier) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			DeviceType     string `json:"device_type"`
 			ChannelType    string `json:"channel_type"`
 			ChannelAddress string `json:"channel_address"`
 			ID             int    `json:"id"`
+			// EditToken carries the edit-lock token, as on `paramset.put`:
+			// applying a profile is a MASTER write on the target channel.
+			EditToken string `json:"edit_token"`
 		}
 		if err := decodeOrEmpty(raw, &p); err != nil {
 			return nil, err
 		}
 		if p.DeviceType == "" || p.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_type and channel_address are required")
+		}
+		// Applying a profile writes the channel's MASTER paramset, so it runs
+		// through the same strict edit-lock gate as `paramset.put`. Without it
+		// the lock guarantees nothing: the write another editor's open session
+		// is protected against arrives through this sibling command instead.
+		if locks != nil {
+			key := "channel:" + p.ChannelAddress + ":" + string(hmenum.ParamsetKeyMaster)
+			if !locks.Verify(key, p.EditToken) {
+				return nil, NewCommandError(CommandErrorLocked,
+					"edit lock required for MASTER write; open an edit session and pass edit_token")
+			}
 		}
 		prof, err := s.Profile(p.DeviceType, p.ChannelType, p.ID)
 		if err != nil {

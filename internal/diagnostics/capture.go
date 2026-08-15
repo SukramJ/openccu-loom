@@ -171,6 +171,9 @@ type Manager struct {
 	now      func() time.Time
 	active   *Capture
 	archived []*Capture
+	// expiry fires [Manager.Sweep] when the running capture's window
+	// ends. Stopped and cleared when the capture finalises.
+	expiry *time.Timer
 }
 
 // NewManager builds a manager bound to the supplied tee and level
@@ -216,6 +219,12 @@ func (m *Manager) Start(opts StartOptions) (Summary, error) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// A window that has already elapsed is not a busy manager. The timer
+	// below normally does this, but a suspended host wakes up with an
+	// overdue capture, and answering 409 for the rest of the daemon's
+	// life over a capture whose window closed hours ago is the failure
+	// mode this re-check exists to prevent.
+	m.sweepLocked()
 	if m.active != nil && m.active.Status == StatusRunning {
 		return Summary{}, ErrCaptureBusy
 	}
@@ -254,6 +263,14 @@ func (m *Manager) Start(opts StartOptions) (Summary, error) {
 		}
 	}
 	m.active = capture
+	// Expiry is self-driven. Nothing outside this package polls the
+	// manager, so without a timer here a capture the operator never
+	// stops runs for the daemon's whole life: the log tee stays
+	// attached, the archive the operator asked for is never built, and
+	// every later Start answers 409. The timer only pokes Sweep, which
+	// re-checks EndsAt against the injected clock, so a test clock stays
+	// authoritative.
+	m.expiry = time.AfterFunc(duration, m.Sweep)
 	return capture.summary(), nil
 }
 
@@ -275,11 +292,17 @@ func (m *Manager) Stop(id string) (Summary, error) {
 }
 
 // Sweep transitions any expired active capture to "expired" and
-// drops archives older than [ArchiveRetention]. Wire to a scheduler
-// tick (every 30 s is sufficient).
+// drops archives older than [ArchiveRetention]. It runs off the
+// capture's own expiry timer and on every [Manager.Start]; callers may
+// also drive it from a scheduler tick.
 func (m *Manager) Sweep() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.sweepLocked()
+}
+
+// sweepLocked is [Manager.Sweep] with the lock already held.
+func (m *Manager) sweepLocked() {
 	now := m.now()
 	if m.active != nil && m.active.Status == StatusRunning && !m.active.EndsAt.IsZero() && !m.active.EndsAt.After(now) {
 		m.finaliseLocked(m.active, StatusExpired)
@@ -296,6 +319,10 @@ func (m *Manager) Sweep() {
 func (m *Manager) finaliseLocked(c *Capture, status Status) {
 	c.Status = status
 	c.StoppedAt = m.now()
+	if m.expiry != nil {
+		m.expiry.Stop()
+		m.expiry = nil
+	}
 	if m.tee != nil {
 		_ = m.tee.Detach()
 	}

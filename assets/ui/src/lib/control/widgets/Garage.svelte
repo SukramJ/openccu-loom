@@ -19,6 +19,7 @@
   import ControlButton from "../controls/ControlButton.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { enumValueToken } from "$lib/sensor-actor/classify";
   import { t } from "$lib/i18n";
 
   type Props = {
@@ -34,8 +35,11 @@
   const stateDP = $derived(resolved.slots.DOOR_STATE);
 
   const writable = $derived(cmdDP?.operations.write ?? false);
+  // DOOR_STATE is read-only, so its value arrives as the value_list
+  // index; without the lookup every comparison below is false and the
+  // tile reports "—" for a door whose state the daemon knows.
   const stateLabel = $derived<string>(
-    typeof stateDP?.value === "string" ? stateDP.value : "",
+    (stateDP ? enumValueToken(stateDP) : undefined) ?? "",
   );
 
   // CCU DOOR_STATE labels: CLOSED / OPEN / VENTILATION_POSITION /

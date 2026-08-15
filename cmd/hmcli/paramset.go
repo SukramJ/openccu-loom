@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -57,7 +56,7 @@ func cmdParamsetGet(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	var params map[string]any
@@ -105,7 +104,7 @@ func cmdParamsetSet(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	body := map[string]any{param: coerceValue(rawVal)}

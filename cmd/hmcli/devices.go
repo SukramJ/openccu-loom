@@ -104,18 +104,49 @@ func cmdDevicesList(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
-	var resp deviceListResponse
-	if err := client.getJSON(ctx, "/api/v1/devices", &resp); err != nil {
+	items, total, err := fetchAllDevices(ctx, client)
+	if err != nil {
 		return err
 	}
 
 	if f.jsonOut {
-		return writeJSON(stdout, resp.Items)
+		return writeJSON(stdout, items)
 	}
-	return printDeviceList(stdout, resp.Items, resp.Total)
+	return printDeviceList(stdout, items, total)
+}
+
+// devicesListPageSize is the per-request page size `devices list` asks for.
+// It is the daemon's documented upper bound (parsePagination clamps anything
+// larger back to the 50 default), so a fleet of any realistic size needs only
+// a handful of round trips.
+const devicesListPageSize = 500
+
+// fetchAllDevices walks GET /api/v1/devices page by page until every device
+// the envelope's `total` announces has been collected.
+//
+// The endpoint paginates with a default of 50 per page, so a single unqualified
+// request returns the first 50 devices and nothing else — silently, since the
+// envelope's `total` still reports the full fleet. A CLI that shows a table (or
+// emits JSON a script greps for a device address) must not stop there.
+func fetchAllDevices(ctx context.Context, client *daemonClient) (items []deviceSummary, total int, err error) {
+	for page := 1; ; page++ {
+		var resp deviceListResponse
+		path := fmt.Sprintf("/api/v1/devices?page=%d&per_page=%d", page, devicesListPageSize)
+		if err := client.getJSON(ctx, path, &resp); err != nil {
+			return nil, 0, err
+		}
+		total = resp.Total
+		items = append(items, resp.Items...)
+		// A short page is the last one; an empty page ends the walk even if
+		// `total` and the sliced items disagree, so a mid-walk device removal
+		// cannot spin this loop forever.
+		if len(resp.Items) == 0 || len(resp.Items) < devicesListPageSize || len(items) >= total {
+			return items, total, nil
+		}
+	}
 }
 
 // printDeviceList renders a human-readable table. When items span more than one
@@ -182,7 +213,7 @@ func cmdDevicesGet(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	var detail deviceDetail
@@ -245,7 +276,7 @@ func cmdDevicesGetValue(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	path := fmt.Sprintf("/api/v1/devices/%s/channels/%s/data-points/%s",
@@ -284,7 +315,7 @@ func cmdDevicesSet(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	body := setValueRequest{

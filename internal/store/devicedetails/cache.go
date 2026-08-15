@@ -224,6 +224,33 @@ func (c *Cache) DeviceChannelISEIDs() map[string]int {
 	return out
 }
 
+// ReplaceWith swaps in the tables of a freshly built cache and stamps the
+// refresh timestamp, in one lock hold. It is the commit step of the loader's
+// build-into-a-staging-cache pass: the live cache keeps the previous
+// generation for the whole duration of the CCU round-trips, so a reader that
+// lands mid-refresh — the device pipeline resolving a name and an ISE-ID for
+// a device being ingested, above all — sees the last good generation rather
+// than an empty or half-filled one, and a failed round-trip leaves the
+// previous generation in place because the commit never runs.
+//
+// src is consumed: its tables are moved, not copied, so callers must not
+// keep using it afterwards.
+func (c *Cache) ReplaceWith(src *Cache, at time.Time) {
+	if src == nil {
+		return
+	}
+	src.mu.Lock()
+	names, iseIDs, interfaces := src.names, src.iseIDs, src.interfaces
+	channelRooms, deviceRooms, functions := src.channelRooms, src.deviceRooms, src.functions
+	src.mu.Unlock()
+
+	c.mu.Lock()
+	c.names, c.iseIDs, c.interfaces = names, iseIDs, interfaces
+	c.channelRooms, c.deviceRooms, c.functions = channelRooms, deviceRooms, functions
+	c.refreshedAt = at
+	c.mu.Unlock()
+}
+
 // Clear empties every internal table and resets the refreshed
 // timestamp. Mirrors `details.py:89-95`.
 func (c *Cache) Clear() {

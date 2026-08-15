@@ -4,6 +4,7 @@
 package device
 
 import (
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -58,6 +59,14 @@ func (a AvailabilityInfo) HasSignalInfo() bool {
 // [AvailabilityInfo] from the host device's observed data points.
 type Availability struct {
 	device *Device
+
+	// mu guards forced. The override is written from event-bus
+	// handlers — the interface client's reconnect/ping-pong goroutine
+	// and the system-status handler — while REST, MQTT and Matter
+	// readers evaluate IsReachable on their own goroutines. Without
+	// the lock those readers race a two-word string-header store and
+	// can publish an arbitrary availability verdict for one pass.
+	mu     sync.RWMutex
 	forced hmenum.ForcedDeviceAvailability
 }
 
@@ -67,27 +76,52 @@ func newAvailability(d *Device) *Availability {
 }
 
 // Forced returns the active override.
-func (a *Availability) Forced() hmenum.ForcedDeviceAvailability { return a.forced }
+func (a *Availability) Forced() hmenum.ForcedDeviceAvailability {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.forced
+}
 
 // SetForced applies an override. Returns true when the effective
 // availability actually flipped — the caller decides whether to emit
 // an event.
 func (a *Availability) SetForced(v hmenum.ForcedDeviceAvailability) bool {
+	_, reachabilityFlipped := a.setForced(v)
+	return reachabilityFlipped
+}
+
+// setForced applies the override and reports both whether the override
+// itself changed and whether the effective reachability flipped. Both
+// verdicts are computed in one critical section: the per-interface
+// reconnect handler and the system-status handler write the same field
+// concurrently, so a compare in one goroutine and a store in the other
+// would otherwise interleave and mis-compute the "changed" answer that
+// gates the lifecycle event.
+func (a *Availability) setForced(v hmenum.ForcedDeviceAvailability) (overrideChanged, reachabilityFlipped bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if a.forced == v {
-		return false
+		return false, false
 	}
-	old := a.IsReachable()
+	old := a.isReachableWith(a.forced)
 	a.forced = v
-	return old != a.IsReachable()
+	return true, old != a.isReachableWith(v)
 }
 
 // IsReachable honors the forced override first; otherwise derives
 // from UN_REACH (falling back to STICKY_UN_REACH).
 func (a *Availability) IsReachable() bool {
-	if a.forced == hmenum.ForcedDeviceAvailabilityForceTrue {
+	return a.isReachableWith(a.Forced())
+}
+
+// isReachableWith is [IsReachable] against an already-resolved override,
+// so the reachability verdict can also be computed from inside the
+// write-locked section of [setForced] without re-entering the lock.
+func (a *Availability) isReachableWith(forced hmenum.ForcedDeviceAvailability) bool {
+	if forced == hmenum.ForcedDeviceAvailabilityForceTrue {
 		return true
 	}
-	if a.forced == hmenum.ForcedDeviceAvailabilityForceFalse {
+	if forced == hmenum.ForcedDeviceAvailabilityForceFalse {
 		return false
 	}
 	if b, ok := a.channel0Bool(hmenum.ParameterUnreach); ok {

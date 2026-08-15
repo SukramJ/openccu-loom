@@ -105,6 +105,23 @@ func (l *Light) matterTimedLoop(stop <-chan struct{}) {
 	}
 }
 
+// stopLoop abandons both countdowns and ends the tick goroutine. Called
+// from [Light.Close], i.e. when the channel this Light hangs off is torn
+// down (device removal, cache clear, custom-DP replacement).
+//
+// Without it the only way out of the loop is a countdown reaching zero,
+// so a light armed by OnWithTimedOff kept a goroutine — and the retired
+// Light, Channel and Device graph behind it — alive for up to the
+// 65534-tenths maximum, then issued a real CCU write for a device the
+// daemon no longer models.
+func (t *timedOnOffState) stopLoop() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.timedOnActive = false
+	t.delayedOffActive = false
+	t.maybeStopLocked()
+}
+
 // maybeStopLocked ends the tick goroutine when both countdowns are
 // idle. Caller holds t.mu.
 func (t *timedOnOffState) maybeStopLocked() {

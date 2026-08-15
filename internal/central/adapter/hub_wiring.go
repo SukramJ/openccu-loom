@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -65,9 +66,11 @@ type HubData struct {
 // the pipeline can stamp device + channel metadata during ingest.
 // The returned closer tears the session down on daemon shutdown.
 //
-// Failures during program / sysvar / name / room / function load are
-// logged but do not abort wiring — an empty hub view is preferable
-// to a dead daemon when only the hub endpoint misbehaves.
+// Failures during program / sysvar / room / function load are logged but do
+// not abort wiring — an empty hub view is preferable to a dead daemon when
+// only the hub endpoint misbehaves. The device-name load is the exception: it
+// names every device and channel the pipeline then builds, and nothing renames
+// them afterwards, so it aborts the wiring and lets the gate retry.
 // serialResolveAttempts bounds how many times [resolveCCUSerial] retries the
 // CCU serial fetch before giving up and letting the bring-up gate re-wait. The
 // CCU has already passed the readiness probe, so a non-empty serial is expected
@@ -199,7 +202,7 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// reconcile job can run. Reconciler is nil in WireHub-only tests that
 	// run without the daemon bootstrap, hence the guard.
 	if unit.Reconciler != nil {
-		unit.Reconciler.SetConnect(NewJSONRPCConnectivityProbe(jc))
+		unit.Reconciler.SetConnect(observeProbeLatency(NewJSONRPCConnectivityProbe(jc), unit.HubModel))
 	}
 
 	// Stamp the CCU-side metadata on the central's SystemInfo:
@@ -293,18 +296,24 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 			slog.Int("count", len(unit.HubModel.Sysvars())))
 	}
 
+	// The device names (and the ISE-ID map derived from the same payload) are a
+	// hard prerequisite of the bring-up, like the serial above: the pipeline
+	// reads them exactly once per device, so a central brought up without them
+	// serves address-only names — across the SPA, REST, MQTT discovery and
+	// Matter — with no room or function, for the rest of the daemon run. The
+	// periodic detail refresh only re-fills the cache, it never re-names an
+	// already-built model. Failing here returns to the readiness gate, which
+	// re-probes within seconds; a fleet that lost its names cannot recover at
+	// all. An empty answer is not a failure — a CCU without devices is legal.
 	names, iseToAddress, err := loadDeviceNames(ctx, jc)
 	if err != nil {
-		logger.Warn("hub.device_names.load",
-			slog.String("central", cc.Name),
-			slog.String("err", err.Error()))
-		names = NameMap{}
-		iseToAddress = IseAddressMap{}
-	} else {
-		logger.Info("hub.device_names.ok",
-			slog.String("central", cc.Name),
-			slog.Int("count", len(names)))
+		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
+		_ = jc.Logout(context.Background())
+		return nil, HubData{}, nil, fmt.Errorf("hub device names (name/room/function source for every device): %w", err)
 	}
+	logger.Info("hub.device_names.ok",
+		slog.String("central", cc.Name),
+		slog.Int("count", len(names)))
 
 	rooms, err := loadRoomAssignments(ctx, jc, iseToAddress)
 	if err != nil {
@@ -344,12 +353,24 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// operators rename devices or change room assignments via the CCU
 	// WebUI. The loader uses the cache-age gate (≈3 s) so rapid-fire
 	// reconnects skip redundant reloads automatically.
+	//
+	// The job closes over THIS generation's JSON-RPC session, and the scheduler
+	// has no way to unregister a job: a re-init (cache clear) adds a second one
+	// under the same name while the first keeps ticking. Its client would then
+	// log back in after the closer's logout and hold a CCU session — a pool the
+	// WebUI shares — for the life of the process. The closer therefore disarms
+	// this generation, so only the newest job talks to the CCU.
+	generationActive := new(atomic.Bool)
+	generationActive.Store(true)
 	loader := devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, jc, cc.Name, logger)
 	if err := unit.Scheduler.Add(scheduler.Job{
 		Name:       "devicedetails.refresh." + cc.Name,
 		Interval:   5 * time.Minute,
 		RunOnStart: false,
 		Run: func(ctx context.Context) error {
+			if !generationActive.Load() {
+				return nil
+			}
 			return loader.Load(ctx, false)
 		},
 	}); err != nil {
@@ -421,11 +442,39 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	}
 
 	closer := func() { //nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx
+		// Disarm before the logout: a tick that starts afterwards would find an
+		// empty session id and log straight back in.
+		generationActive.Store(false)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = jc.Logout(shutdownCtx)
 	}
 	return runner, HubData{Names: names, Rooms: rooms, Functions: functions}, closer, nil
+}
+
+// observeProbeLatency wraps a connectivity probe so every answer feeds its
+// measured round-trip into the hub's connection-latency metric.
+//
+// That metric backs one central-wide sensor which MQTT discovery declares, the
+// hub data-point list enumerates and /system/ccu reports — and which nothing
+// ever observed: the probe's round-trip only rode
+// [hmevent.ConnectivityChangedEvent], which the reconciler publishes on a
+// reachability change alone, so the declared sensor stayed permanently empty.
+// The reconcile pass that measures the latency is the natural producer, and
+// wrapping the probe keeps the sample on exactly its cadence.
+func observeProbeLatency(probe coordinators.ConnectivityProbe, h *hub.Hub) coordinators.ProbeFunc {
+	return func(ctx context.Context) ([]coordinators.InterfaceReachability, error) {
+		reachability, err := probe.Probe(ctx)
+		if err != nil {
+			return reachability, err
+		}
+		// One JSON-RPC call answers for the whole interface list, so every
+		// entry carries the same round-trip: the metric is central-wide.
+		if h != nil && h.Metrics != nil && len(reachability) > 0 {
+			h.Metrics.Observe(hub.MetricConnectionLatMs, reachability[0].LatencyMs)
+		}
+		return reachability, nil
+	}
 }
 
 // populateDeviceDetailsCache seeds the DeviceDetails cache from the

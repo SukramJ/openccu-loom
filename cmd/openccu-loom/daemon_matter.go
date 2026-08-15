@@ -568,8 +568,8 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// Idle-session reaper: evict operational sessions with no traffic for
 	// [operational.SessionIdleTimeout] (5 min), sweeping every
 	// [matterSessionReapInterval]. The TTL must stay comfortably above the
-	// subscription publisher's heartbeat cadence — min(maxInterval/2, 30s),
-	// see the keep-alive branch in the IM subscription engine tick — so a
+	// subscription publisher's heartbeat cadence, which the IM subscription
+	// package caps at two minutes for exactly this reason — so a
 	// live but quiet subscription is never reaped: controllers ack every
 	// heartbeat report, and each ack refreshes the session's Rx activity
 	// through the receive path (WithActivityMarkers above). Reaped sessions
@@ -3494,7 +3494,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// Wire the Reassemble → WS event emit pipeline so the SPA's
 		// allowlist save flow gets a `matter.endpoint_assembled`
 		// notification after the topology refresh completes.
-		wiring.pub = &matterEventPublisher{hub: wsHub}
+		wiring.pub = &matterEventPublisher{hub: wsHub, fabrics: wiring.fabricStore}
 		// Composite onReassembled: WS event publish + Matter-spec
 		// lifecycle events (BootReason + StartUp) on the FIRST
 		// reassemble, when the cluster servers are wired to the

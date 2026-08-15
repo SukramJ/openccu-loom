@@ -107,6 +107,31 @@ describe("RoomFunctionSelect", () => {
     expect(onChange).toHaveBeenCalledWith(["Bad"]);
   });
 
+  it("leaves the entry unselected and the promise settled when onCreate rejects", async () => {
+    // Both call sites invoke create() as `void create()`, so a rejection
+    // that escapes here becomes an unhandled promise rejection. onCreate
+    // owns the error surface; this component's job is to not pretend the
+    // entry exists.
+    const onChange = vi.fn();
+    const onCreate = vi.fn().mockRejectedValue(new Error("CCU refused"));
+    render(RoomFunctionSelect, {
+      props: { ...baseProps, selected: [], onChange, onCreate },
+    });
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "Keller" } });
+    await fireEvent.click(await screen.findByText("create Keller"));
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith("Keller"));
+    expect(onChange).not.toHaveBeenCalled();
+    // The typed text survives so the operator can retry.
+    expect(input.value).toBe("Keller");
+    // The create entry is usable again — `creating` was reset.
+    expect(
+      (screen.getByText("create Keller").closest("button") as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  });
+
   it("does not open the dropdown when disabled", async () => {
     render(RoomFunctionSelect, {
       props: { ...baseProps, selected: [], onChange: vi.fn(), disabled: true },

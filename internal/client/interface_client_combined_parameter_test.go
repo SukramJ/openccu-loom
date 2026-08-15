@@ -28,7 +28,10 @@ func TestWriteUnconfirmedValueRoutesCombinedParameter(t *testing.T) {
 	ic.WriteUnconfirmedValue(channel, hmenum.ParameterCombinedParameter, hmenum.ParamsetKeyValues, wireValue)
 
 	tr := ic.CommandTracker()
-	interfaceID := string(iface)
+	// The tracker stamps entries with the wire interface id — the same
+	// `<central>-<interface>` form the CCU echo carries — so the lookup key
+	// has to be built the same way.
+	interfaceID := string(hmtypes.NewWireInterfaceID("test", iface))
 
 	// The raw COMBINED_PARAMETER key must NOT be present as a plain set-value.
 	rawKey := hmtypes.DataPointKey{
@@ -89,7 +92,10 @@ func TestWriteUnconfirmedValueRoutesLevelCombined(t *testing.T) {
 	ic.WriteUnconfirmedValue(channel, hmenum.ParameterLevelCombined, hmenum.ParamsetKeyValues, wireValue)
 
 	tr := ic.CommandTracker()
-	interfaceID := string(iface)
+	// The tracker stamps entries with the wire interface id — the same
+	// `<central>-<interface>` form the CCU echo carries — so the lookup key
+	// has to be built the same way.
+	interfaceID := string(hmtypes.NewWireInterfaceID("test", iface))
 
 	// The raw LEVEL_COMBINED key must NOT be recorded as a plain set-value.
 	rawKey := hmtypes.DataPointKey{
@@ -153,7 +159,7 @@ func TestWriteUnconfirmedValuePlainParameterRecordsDirectly(t *testing.T) {
 
 	tr := ic.CommandTracker()
 	stateKey := hmtypes.DataPointKey{
-		InterfaceID:    string(iface),
+		InterfaceID:    string(hmtypes.NewWireInterfaceID("test", iface)),
 		ChannelAddress: channel,
 		ParamsetKey:    hmenum.ParamsetKeyValues,
 		Parameter:      string(hmenum.ParameterState),

@@ -535,8 +535,15 @@ func joinMcast4() (*ipv4.PacketConn, error) {
 	group := &net.UDPAddr{IP: net.IPv4(224, 0, 0, 251)}
 	joined := 0
 	var primaryIface *net.Interface
-	for i := range listMulticastInterfaces() {
-		ifi := listMulticastInterfaces()[i]
+	// One snapshot: the loop bound and the indexed slice must come from
+	// the same enumeration. Re-reading the interface list per iteration
+	// indexes a second, independently-taken snapshot — an interface going
+	// down (container churn on the host) or a transient net.Interfaces()
+	// error between the two syscalls then panics with index out of range
+	// on the daemon's boot goroutine, where nothing recovers.
+	ifaces := listMulticastInterfaces()
+	for i := range ifaces {
+		ifi := ifaces[i]
 		if jerr := pc.JoinGroup(&ifi, group); jerr == nil {
 			joined++
 			// First non-loopback, non-tunnel interface with an IPv4
@@ -574,8 +581,11 @@ func joinMcast6() (*ipv6.PacketConn, error) {
 	group := &net.UDPAddr{IP: net.ParseIP("ff02::fb")}
 	joined := 0
 	var primaryIface *net.Interface
-	for i := range listMulticastInterfaces() {
-		ifi := listMulticastInterfaces()[i]
+	// One snapshot — see joinMcast4 for why the list must not be
+	// re-enumerated inside the loop.
+	ifaces := listMulticastInterfaces()
+	for i := range ifaces {
+		ifi := ifaces[i]
 		if jerr := pc.JoinGroup(&ifi, group); jerr == nil {
 			joined++
 			if primaryIface == nil && isPrimaryV6(&ifi) {

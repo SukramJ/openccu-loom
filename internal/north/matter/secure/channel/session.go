@@ -77,10 +77,9 @@ type Session struct {
 	peerPrivacyKey []byte // inbound (decrypt) privacy key
 
 	// closed gates Encrypt / Decrypt / the privacy-key accessors after
-	// [Session.Close]. atomic.Bool because Close flips it without
-	// holding privacyMu (the key-zeroing pass takes that lock
-	// separately), so a plain bool read from Encrypt/Decrypt would
-	// race with the Close write.
+	// [Session.Close]. atomic.Bool because Close flips it before taking
+	// privacyMu and Encrypt / Decrypt never take that lock, so a plain
+	// bool read from them would race with the Close write.
 	closed atomic.Bool
 }
 
@@ -289,13 +288,18 @@ func (s *Session) PeerCATs() []uint32 {
 // #sendCloseSession) before the session state is dropped.
 func (s *Session) Close() {
 	s.closed.Store(true)
+	// Every zeroing pass runs under privacyMu because that is the lock
+	// the privacy-key accessors hold while they read encKey / decKey to
+	// derive from. A reader that observed closed == false gains no
+	// happens-before edge from the atomic store, so wiping the key
+	// bytes outside the lock races the derivation on the receive path.
+	s.privacyMu.Lock()
 	for i := range s.encKey {
 		s.encKey[i] = 0
 	}
 	for i := range s.decKey {
 		s.decKey[i] = 0
 	}
-	s.privacyMu.Lock()
 	for i := range s.privacyKey {
 		s.privacyKey[i] = 0
 	}

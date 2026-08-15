@@ -123,3 +123,33 @@ func TestSwitch_AttachPowerNilClears(t *testing.T) {
 		}
 	}
 }
+
+// TestAttachPowerSourceRacesTheMatterAssembler drives the two production
+// goroutines that meet on this field: the ingest pipeline attaches the
+// measurement sources one stage *after* CreateCustomDataPoints published
+// the Switch to its channel, while the Matter assembler recomputes the
+// endpoint's cluster servers from whatever the model currently holds.
+//
+// Held as plain interface fields these were an unsynchronised
+// write/read pair on a two-word value. Only meaningful under -race.
+func TestAttachPowerSourceRacesTheMatterAssembler(t *testing.T) {
+	t.Parallel()
+	s := newTestSwitch(t, "VCU0000001:1", "", &stubWriter{})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 2000 {
+			s.AttachPowerSource(fakeFloat{})
+			s.AttachEnergySource(fakeFloat{})
+		}
+	}()
+	for range 2000 {
+		if got := len(s.MatterClusterServers()); got < 3 {
+			t.Errorf("MatterClusterServers() = %d entries, want at least the 3 mandatory ones", got)
+
+			break
+		}
+	}
+	<-done
+}

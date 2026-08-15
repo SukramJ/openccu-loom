@@ -1109,6 +1109,52 @@ func TestExtendedParamsetPut_EditLockEnforced(t *testing.T) {
 	}
 }
 
+// TestExtendedMasterProfilesApply_EditLockEnforced asserts that
+// master_profiles.apply passes through the same per-resource edit lock as
+// paramset.put. It writes the profile's fixed parameters into the channel's
+// MASTER paramset — the exact write paramset.put answers "locked" for — so an
+// ungated apply silently clobbers what another operator is staging in an open
+// edit session.
+func TestExtendedMasterProfilesApply_EditLockEnforced(t *testing.T) {
+	pw := &stubParamsetWriter{}
+	r := NewRouter()
+	RegisterExtendedCommands(r, ExtendedCommandsConfig{
+		Paramsets:      pw,
+		MasterProfiles: masterprofile.New(),
+		EditLocks:      fakeEditLocks{key: "channel:ABC0001:1:MASTER", token: "good-token"},
+	})
+
+	args := map[string]any{"device_type": "BLIND", "channel_address": "ABC0001:1", "id": 1}
+	raw, _ := json.Marshal(args)
+	res := r.Dispatch(opCtx(), "master_profiles.apply", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("apply without edit_token: expected code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if len(pw.calls) != 0 {
+		t.Fatalf("apply without edit_token must not be forwarded; got %d calls", len(pw.calls))
+	}
+
+	args["edit_token"] = "wrong-token"
+	raw, _ = json.Marshal(args)
+	res = r.Dispatch(opCtx(), "master_profiles.apply", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("apply with wrong edit_token: expected code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if len(pw.calls) != 0 {
+		t.Fatalf("apply with wrong edit_token must not be forwarded; got %d calls", len(pw.calls))
+	}
+
+	args["edit_token"] = "good-token"
+	raw, _ = json.Marshal(args)
+	res = r.Dispatch(opCtx(), "master_profiles.apply", raw)
+	if res.Error != nil {
+		t.Fatalf("apply with the correct edit_token: unexpected error: %+v", res.Error)
+	}
+	if len(pw.calls) != 1 {
+		t.Fatalf("apply with the correct edit_token: expected 1 write, got %d", len(pw.calls))
+	}
+}
+
 // fakeAddonUpdater records the addon_update verb calls and returns the
 // configured errors.
 type fakeAddonUpdater struct {

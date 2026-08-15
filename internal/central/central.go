@@ -351,6 +351,15 @@ func New(cfg Config) (*Unit, error) {
 	// confirmed.
 	c.Hub.SetHubModel(c.HubModel)
 
+	// Wire the description registries as cache-size providers. Nothing else
+	// calls SetSizeProviders, so without this the metrics/diagnostics surface
+	// reported a flat 0 for the two largest caches on every central and
+	// understated CacheMetricsSnapshot.TotalEntries by the same amount —
+	// an operator sizing cache pressure read it as "nothing is cached".
+	// The visibility slot stays nil here: that registry is daemon-global and
+	// is built long after any central.
+	cache.SetSizeProviders(descReg, psReg, nil)
+
 	// Feed the RPC session recorder: the cache coordinator forwards every
 	// CCU call/response to it, but only when a recorder is wired AND active.
 	// Without this line CacheCoordinator.RecordSession is a no-op and the
@@ -1204,9 +1213,10 @@ func (u *Unit) ServiceWiringComplete() bool {
 // daemon startup before the first health record arrives.
 //
 // Guards applied before transitioning:
-//   - RUNNING is suppressed while any interface is actively recovering
-//     (the central stays in RECOVERING until the recovery pipeline
-//     finishes and calls EvaluateCentralState itself).
+//   - RUNNING is suppressed while any interface is actively recovering and
+//     demoted to DEGRADED, so an in-flight recovery never reads as
+//     all-healthy. The recovery pipeline does not call back here; the next
+//     client-state change re-evaluates once the pipeline has settled.
 //   - DEGRADED and FAILED are only allowed from operational states
 //     (RUNNING, DEGRADED, RECOVERING, INITIALIZING). The state machine's
 //     transition table already enforces the exact set — TransitionTo
@@ -1304,6 +1314,14 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 		smOpts = append(smOpts, statemachine.WithDegradedInterfaces(degradedReasons))
 	}
 	_ = u.StateMachine.TransitionTo(newState, hmenum.FailureReasonNone, smOpts...)
+	// Report what the machine actually holds, not what we asked for. A
+	// rejected transition leaves the machine on its previous state, and the
+	// event is the only place that divergence would otherwise surface: the
+	// first evaluation of every boot and every runtime adopt computes FAILED
+	// (no InterfaceClient is registered yet) from a machine that Start left
+	// in RUNNING, so the payload announced a failed central while the machine,
+	// /health and the SPA badge all said RUNNING.
+	published := u.StateMachine.State()
 
 	// Healthy reflects the operator-visible connection quality:
 	//   - false when no client is active (all disconnected)
@@ -1317,49 +1335,11 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 			Base:                     hmevent.NewBase(),
 			CentralName:              u.cfg.Name,
 			Healthy:                  healthy,
-			CentralState:             newState,
+			CentralState:             published,
 			DegradedInterfaces:       degradedIfaces,
 			DegradedInterfaceReasons: degradedReasons,
 		})
 	}
-}
-
-// HandleSystemStatusForceAvailability handles a [hmevent.SystemStatusChangedEvent]
-// whose payload signals that all devices should be force-marked as available
-// (e.g. after the CCU reconnects following a service-mode outage). When the
-// event does not carry a force-available indication, this is a no-op.
-//
-// The "force available" condition is: Healthy == true AND Reason contains the
-// literal token "force_available". Callers that build such events should set
-// Component = "" and Reason = "force_available".
-func (u *Unit) HandleSystemStatusForceAvailability(e hmevent.SystemStatusChangedEvent) {
-	if !e.Healthy || e.Reason != "force_available" {
-		return
-	}
-	if u.ModelRegistry == nil {
-		return
-	}
-	for _, dev := range u.ModelRegistry.List() {
-		if dev == nil {
-			continue
-		}
-		dev.SetForcedAvailability(hmenum.ForcedDeviceAvailabilityForceTrue)
-	}
-}
-
-// WireSystemStatusForceAvailability subscribes to the event bus and calls
-// [HandleSystemStatusForceAvailability] on every matching event. Returns an
-// unsubscribe function; call it on teardown.
-func (u *Unit) WireSystemStatusForceAvailability() func() {
-	if u.EventBus == nil {
-		return func() {}
-	}
-	return events.Subscribe(u.EventBus, func(e hmevent.SystemStatusChangedEvent) {
-		if e.CentralName != u.cfg.Name && e.CentralName != "" {
-			return
-		}
-		u.HandleSystemStatusForceAvailability(e)
-	})
 }
 
 // LoadAndRefreshDataPointDataForInterface triggers a data-point reload for a

@@ -233,10 +233,10 @@ func TestChannelParameterFloatValueNotObserved(t *testing.T) {
 func TestChannelIsCustomDPPrimarySecondary(t *testing.T) {
 	d := newAggregateDevice()
 	ch1 := d.AddChannel("ABC0001:3", 3, "T", hmenum.ParamsetKeyValues)
-	ch1.GroupNo = 3 // group master (GroupNo == Number)
+	ch1.AssignGroupNumber(3) // group master (GroupNo == Number)
 
 	ch2 := d.AddChannel("ABC0001:4", 4, "T", hmenum.ParamsetKeyValues)
-	ch2.GroupNo = 3 // group secondary
+	ch2.AssignGroupNumber(3) // group secondary
 
 	custom := &fakeAttachable{key: hmtypes.DataPointKey{ChannelAddress: ch1.Address}}
 	ch1.SetCustomDataPoint(custom)
@@ -564,7 +564,7 @@ func TestChannelHasSinglePrimaryCustomDP(t *testing.T) {
 func TestChannelHasSinglePrimaryCustomDPWithComponent(t *testing.T) {
 	d := newAggregateDevice()
 	ch := d.AddChannel("ABC0001:3", 3, "T", hmenum.ParamsetKeyValues)
-	ch.GroupNo = 0 // no group → primary by default
+	// The channel stays ungrouped, which makes it a primary by default.
 
 	cdp := &fakeHAComponentDP{
 		key:         hmtypes.DataPointKey{ChannelAddress: ch.Address},
@@ -579,7 +579,7 @@ func TestChannelHasSinglePrimaryCustomDPWithComponent(t *testing.T) {
 
 	// Add a second channel with same component → both should return false.
 	ch2 := d.AddChannel("ABC0001:4", 4, "T2", hmenum.ParamsetKeyValues)
-	ch2.GroupNo = 0
+	// ch2 stays ungrouped too.
 	cdp2 := &fakeHAComponentDP{
 		key:         hmtypes.DataPointKey{ChannelAddress: ch2.Address},
 		haComponent: "switch",
@@ -608,10 +608,10 @@ func TestChannelGroupMasterNilDevice(t *testing.T) {
 	ch := &Channel{
 		Address: "ABC:3",
 		Number:  3,
-		GroupNo: 3,
 		device:  nil,
 	}
-	// GroupMaster on self (GroupNo == Number, but device nil).
+	ch.AssignGroupNumber(3)
+	// GroupMaster on self (group number == Number, but device nil).
 	master := ch.GroupMaster()
 	if master != ch {
 		t.Error("GroupMaster should return self when it is the group master")

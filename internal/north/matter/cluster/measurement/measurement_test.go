@@ -1133,9 +1133,9 @@ func TestPowerSourceServerBatReplaceability(t *testing.T) {
 	}
 }
 
-// TestPowerSourceServerFeatureMapAndRevision verifies FeatureMap=uint32(0x0A) (BAT|REPLC bits) and ClusterRevision=uint16(3).
-// BAT = bit 1 (0x02), REPLC = bit 3 (0x08). Both are required when BatReplaceability is served
-// per Matter §11.7.6.10 M conformance under REPLC.
+// TestPowerSourceServerFeatureMapAndRevision verifies FeatureMap=uint32(0x02)
+// (BAT bit only) and ClusterRevision=uint16(3). BAT is bit 1 per matter.js
+// power-source-cluster.element.ts.
 func TestPowerSourceServerFeatureMapAndRevision(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewPowerSourceServer(fakeBool{class: interfaces.MatterMeasurementBattery, val: false, obs: true})
@@ -1144,8 +1144,8 @@ func TestPowerSourceServerFeatureMapAndRevision(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(0xFFFC) ok = false")
 	}
-	if got, want := fm.(uint32), uint32(0x0A); got != want { // 0x02 (BAT) | 0x08 (REPLC)
-		t.Errorf("FeatureMap = 0x%02X, want 0x%02X (BAT|REPLC bits)", got, want)
+	if got, want := fm.(uint32), uint32(0x02); got != want {
+		t.Errorf("FeatureMap = 0x%02X, want 0x%02X (BAT bit)", got, want)
 	}
 
 	rev, ok := s.MatterRead(attrClusterRevision)
@@ -1403,13 +1403,15 @@ func TestElectricalEnergyServerHappyPath(t *testing.T) {
 		t.Errorf("CumulativeEnergyImported = %+v, want %+v", got, want)
 	}
 
-	// FeatureMap at 0xFFFC = uint32(1) (IMPE bit, 1<<0).
+	// FeatureMap at 0xFFFC = uint32(5): IMPE (bit 0) | CUME (bit 2).
+	// CumulativeEnergyImported has conformance "IMPE & CUME", so serving
+	// it obliges both bits.
 	fm, ok := s.MatterRead(0xFFFC)
 	if !ok {
 		t.Fatal("MatterRead(0xFFFC FeatureMap) ok = false")
 	}
-	if got, want := fm.(uint32), uint32(1); got != want {
-		t.Errorf("FeatureMap = %d, want %d (IMPE)", got, want)
+	if got, want := fm.(uint32), uint32(0x05); got != want {
+		t.Errorf("FeatureMap = 0x%02X, want 0x%02X (IMPE|CUME)", got, want)
 	}
 
 	// ClusterRevision at 0xFFFD = uint16(2) per matter.js HEAD (@matter/model 0.16.11).
@@ -1434,17 +1436,23 @@ func TestElectricalEnergyServerUnobserved(t *testing.T) {
 	}
 }
 
-// TestElectricalEnergyServerExportedIsNull verifies that CumulativeEnergyExported
-// (0x0002) returns (nil, true) — null, no exported-energy concept for HM-PSM.
-func TestElectricalEnergyServerExportedIsNull(t *testing.T) {
+// TestElectricalEnergyServerExportedIsUnsupported verifies that
+// CumulativeEnergyExported (0x0002) is not served. Its conformance is
+// "EXPE & CUME" and HM metering hardware has no exported-energy path, so
+// EXPE stays clear — returning a null for it would publish an attribute
+// whose gating feature is absent, which is what makes a
+// conformance-checking controller drop the cluster.
+func TestElectricalEnergyServerExportedIsUnsupported(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewElectricalEnergyServer(fakeFloat{val: 12345.0, obs: true})
 	v, ok := s.MatterRead(0x0002)
-	if !ok {
-		t.Fatal("MatterRead(0x0002 CumulativeExported): ok = false, want true (null present)")
+	if ok {
+		t.Errorf("MatterRead(0x0002 CumulativeExported) = (%v, true), want ok = false (unsupported attribute)", v)
 	}
-	if v != nil {
-		t.Errorf("CumulativeExported = %v, want nil (null)", v)
+	for _, id := range s.MatterAttributes() {
+		if id == 0x0002 {
+			t.Error("MatterAttributes() advertises CumulativeEnergyExported (0x0002) while EXPE is not in the FeatureMap")
+		}
 	}
 }
 
@@ -1576,12 +1584,14 @@ func TestElectricalEnergyServerOnMatterValueChangedNoNotifierFallback(t *testing
 	unsubscribe() // must not panic
 }
 
-// TestPowerSourceServerFeatureMapHasBATAndREPLC verifies that the FeatureMap
-// for a battery-backed PowerSource advertises both BAT (bit 1 = 0x02) and
-// REPLC (bit 3 = 0x08) per Matter §11.7.6.10 M-conformance for
-// BatReplaceability per Matter §11.7.6.10 M-conformance.
-// matter.js: power-source.element.ts feature REPLC bit=3.
-func TestPowerSourceServerFeatureMapHasBATAndREPLC(t *testing.T) {
+// TestPowerSourceServerFeatureMapHasBATWithoutREPLC verifies that the
+// FeatureMap for a battery-backed PowerSource advertises BAT (bit 1 = 0x02)
+// and leaves REPLC (bit 3 = 0x08) clear. matter.js
+// power-source-cluster.element.ts records BatReplaceability (0x0010) with
+// conformance "BAT" — serving it never needed REPLC — while REPLC makes
+// BatReplacementDescription (0x0013) and BatQuantity (0x0019) mandatory,
+// and the CCU reports neither.
+func TestPowerSourceServerFeatureMapHasBATWithoutREPLC(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewPowerSourceServer(fakeBool{class: interfaces.MatterMeasurementBattery, val: false, obs: true})
 	v, ok := s.MatterRead(0xFFFC) // AttrGlobalFeatureMap
@@ -1597,8 +1607,12 @@ func TestPowerSourceServerFeatureMapHasBATAndREPLC(t *testing.T) {
 	if fm&batBit == 0 {
 		t.Errorf("FeatureMap = 0x%02X: BAT bit (0x02) not set", fm)
 	}
-	if fm&replcBit == 0 {
-		t.Errorf("FeatureMap = 0x%02X: REPLC bit (0x08) not set; required when BatReplaceability is served", fm)
+	if fm&replcBit != 0 {
+		t.Errorf("FeatureMap = 0x%02X: REPLC bit (0x08) set, but neither BatReplacementDescription (0x0013) nor BatQuantity (0x0019) is served", fm)
+	}
+	// BatReplaceability stays readable — it is gated on BAT, not REPLC.
+	if _, served := s.MatterRead(0x0010); !served {
+		t.Error("MatterRead(0x0010 BatReplaceability) ok = false; it is mandatory under BAT")
 	}
 }
 

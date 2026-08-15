@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -244,6 +245,19 @@ func (fakeLogLevelsService) Default() slog.Level                         { retur
 func (fakeLogLevelsService) Set(_ string, _ slog.Level, _ time.Duration) {}
 func (fakeLogLevelsService) Reset(_ string) bool                         { return true }
 func (fakeLogLevelsService) Snapshot() []hmlog.OverrideInfo              { return nil }
+
+// fakeLogFeedService is a silent log feed: it subscribes without ever
+// emitting a record, so the SSE tail stays open until the request context
+// ends — which is what the timeout tests measure.
+type fakeLogFeedService struct{}
+
+func (fakeLogFeedService) Snapshot(_ int, _ slog.Level) []hmlog.LogRecord { return nil }
+func (fakeLogFeedService) Since(_ uint64, _ slog.Level) []hmlog.LogRecord { return nil }
+func (fakeLogFeedService) LastSeq() uint64                                { return 0 }
+
+func (fakeLogFeedService) Subscribe(_ slog.Level) (records <-chan hmlog.LogRecord, cancel func()) {
+	return make(chan hmlog.LogRecord), func() {}
+}
 
 type fakeStartupCaptureService struct{}
 
@@ -612,6 +626,47 @@ func TestRootRedirectsToSPA(t *testing.T) {
 			r.ServeHTTP(rr, req)
 			if rr.Code != http.StatusFound {
 				t.Fatalf("status=%d, want 302", rr.Code)
+			}
+			if loc := rr.Header().Get("Location"); loc != tc.wantLoc {
+				t.Errorf("Location=%q, want %q", loc, tc.wantLoc)
+			}
+		})
+	}
+}
+
+// TestSlashlessAppRedirectKeepsTheIngressPrefix pins that "/app" is normalised
+// to "/app/" *inside* the Home Assistant Ingress session. A bare "/app/"
+// resolves against the Home Assistant origin, so the browser leaves the add-on
+// panel and lands on HA's 404 — and because the redirect is permanent, it
+// caches that trip.
+func TestSlashlessAppRedirectKeepsTheIngressPrefix(t *testing.T) {
+	t.Parallel()
+	spa := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	r := NewRouter(Deps{StartedAt: time.Now(), SPAHandler: spa})
+
+	cases := []struct {
+		name        string
+		ingressPath string
+		wantLoc     string
+	}{
+		{"direct (no ingress)", "", "/app/"},
+		{"ingress prefix", "/api/hassio_ingress/tok3n", "/api/hassio_ingress/tok3n/app/"},
+		// The open-redirect guard applies here just as it does on "/".
+		{"reject absolute URL", "https://evil.example", "/app/"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodGet, "/app", http.NoBody)
+			if tc.ingressPath != "" {
+				req.Header.Set("X-Ingress-Path", tc.ingressPath)
+			}
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+			if rr.Code != http.StatusMovedPermanently {
+				t.Fatalf("status=%d, want 301", rr.Code)
 			}
 			if loc := rr.Header().Get("Location"); loc != tc.wantLoc {
 				t.Errorf("Location=%q, want %q", loc, tc.wantLoc)
@@ -1070,6 +1125,66 @@ func TestRouter_LogLevels_route(t *testing.T) {
 	withoutDep := NewRouter(Deps{StartedAt: time.Now()})
 	if code := routerGET(withoutDep, "/api/v1/diagnostics/log-levels"); code != http.StatusNotFound {
 		t.Fatalf("expected 404 without LogLevels dep, got %d", code)
+	}
+}
+
+// TestLogStreamOutlivesTheGlobalRequestTimeout pins that the SSE log tail is
+// bounded by the client hanging up, not by the router's request deadline. The
+// blanket timeout middleware ended the stream after WriteTimeout even though
+// the browser was healthy, so the SPA's Logs view reconnected — and re-sent its
+// full backfill cursor — every 30 seconds.
+func TestLogStreamOutlivesTheGlobalRequestTimeout(t *testing.T) {
+	t.Parallel()
+	r := NewRouter(Deps{
+		StartedAt:    time.Now(),
+		WriteTimeout: 50 * time.Millisecond,
+		LogFeed:      fakeLogFeedService{},
+	})
+
+	ctx, disconnect := context.WithCancel(context.Background())
+	defer disconnect()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/diagnostics/logs/stream", http.NoBody).WithContext(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		r.ServeHTTP(httptest.NewRecorder(), req)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("log stream ended on the request deadline; it must run until the client disconnects")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	// The stream must still end promptly when the client goes away — dropping
+	// the deadline must not also drop cancellation.
+	disconnect()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("log stream did not end after the client disconnected")
+	}
+}
+
+// TestRequestDeadlineAppliesToEveryRouteButTheLogStream is the control for
+// TestLogStreamOutlivesTheGlobalRequestTimeout: exempting the tail must not
+// exempt the rest of the API from the deadline.
+func TestRequestDeadlineAppliesToEveryRouteButTheLogStream(t *testing.T) {
+	t.Parallel()
+	var deadlines sync.Map
+	probe := timeoutExceptStreaming(time.Minute)(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+		_, ok := req.Context().Deadline()
+		deadlines.Store(req.URL.Path, ok)
+	}))
+
+	for _, path := range []string{"/api/v1/devices", logStreamPath} {
+		probe.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, http.NoBody))
+	}
+	if got, _ := deadlines.Load("/api/v1/devices"); got != true {
+		t.Error("regular API request lost its deadline")
+	}
+	if got, _ := deadlines.Load(logStreamPath); got != false {
+		t.Error("log stream request carried a deadline")
 	}
 }
 

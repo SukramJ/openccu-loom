@@ -85,7 +85,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 		"icon":                     "mdi:calendar-clock",
 		"availability":             availability,
 		"availability_mode":        "all",
-		"device":                   scheduleSubDeviceDescriptor(mockEv, d.Hub.URL, d.tr("discovery.schedule")),
+		"device":                   scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr("discovery.schedule")),
 		"origin":                   BuildOriginInfo(),
 		"entity_category":          EntityCategoryDiagnostic,
 	}
@@ -245,7 +245,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 		"icon":              "mdi:calendar-check",
 		"availability":      availability,
 		"availability_mode": "all",
-		"device":            scheduleSubDeviceDescriptor(mockEv, d.Hub.URL, d.tr("discovery.schedule")),
+		"device":            scheduleSubDeviceDescriptor(mockEv, d.hubURLFor(mockEv), d.tr("discovery.schedule")),
 		"origin":            BuildOriginInfo(),
 		"entity_category":   EntityCategoryConfig,
 		"optimistic":        false,

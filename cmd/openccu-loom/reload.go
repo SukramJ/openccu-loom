@@ -120,7 +120,24 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 					slog.String("reason", "supervisor not yet bound"))
 			} else {
 				swapCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				err := sup.Swap(swapCtx, next)
+				// Swap the EFFECTIVE config, not the config file's view of it.
+				// The watcher loads the YAML+env tier on its own, while
+				// `north.mqtt` is a DB-tier section: every value the operator
+				// saved in the SPA lives in the database and is overlaid on top
+				// at boot. Rebuilding from `next` alone would silently revert
+				// the running bridge to the file's broker, credentials and
+				// topic base — and the next restart, which re-applies the
+				// overlay, would flip it back. The REST-triggered reload
+				// re-assembles for the same reason.
+				swapCfg, fresh := deps.AssembleConfig(swapCtx)
+				if swapCfg == nil {
+					swapCfg = next
+				}
+				if !fresh {
+					logger.Warn("daemon.reload.mqtt_config_not_reassembled",
+						slog.String("effect", "swapping from the config file tier; database section edits may not be applied"))
+				}
+				err := sup.Swap(swapCtx, swapCfg)
 				cancel()
 				if err != nil {
 					logger.Warn("daemon.reload.mqtt_swap_failed",
@@ -130,8 +147,8 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 				}
 				applied++
 				logger.Info("daemon.reload.mqtt_swapped",
-					slog.String("broker", redactBrokerURL(next.North.MQTT.BrokerURL)),
-					slog.Bool("enabled", next.North.MQTT.Enabled))
+					slog.String("broker", redactBrokerURL(swapCfg.North.MQTT.BrokerURL)),
+					slog.Bool("enabled", swapCfg.North.MQTT.Enabled))
 
 				// Re-seed the snapshot. Swap rebuilt the bridge from
 				// scratch, so its Discovery cache and per-DP slot state
@@ -141,7 +158,7 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 				// edit) at runtime leaves the new bridge publishing
 				// nothing until a full daemon restart. Only meaningful
 				// when MQTT stays enabled; a disable-swap has no bridge.
-				if next.North.MQTT.Enabled {
+				if swapCfg.North.MQTT.Enabled {
 					if reseed := deps.MQTTReseed(); reseed != nil {
 						seedCtx, seedCancel := context.WithTimeout(context.Background(), 60*time.Second)
 						reseed(seedCtx)

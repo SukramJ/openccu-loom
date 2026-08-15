@@ -4,6 +4,8 @@
 package contract
 
 import (
+	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -313,6 +315,52 @@ func TestTeamsClassification(t *testing.T) {
 		if iface.SupportsTeams() {
 			t.Errorf("%s.SupportsTeams() = true, want false", iface)
 		}
+	}
+}
+
+// TestDataPointCategoryClassificationIsExhaustive drives
+// [hmenum.ValidateStartup] from the enum itself.
+//
+// ValidateStartup walks the hand-maintained [hmenum.AllDataPointCategories]
+// slice, so a category missing from that slice is invisible to it — which is
+// exactly what happened to alarm_control_panel: declared, returned by the model
+// and mapped in CategoryToType, but absent from the slice, so neither the
+// exhaustiveness check nor any other walk driven from it would have noticed had
+// its classification entry been missing too. A category that reaches no
+// classification set serves an empty data_point_type on REST and on the
+// WebSocket classify plane.
+//
+// Parsing the const block is what makes this a guard rather than a second
+// hand-maintained list.
+func TestDataPointCategoryClassificationIsExhaustive(t *testing.T) {
+	t.Parallel()
+
+	declared := extractEnumConstantsFromSource(t,
+		filepath.Join(repoRoot(t), "pkg", "hmenum", "datapoint.go"), "DataPointCategory")
+
+	listed := make(map[string]struct{}, len(hmenum.AllDataPointCategories))
+	for _, c := range hmenum.AllDataPointCategories {
+		listed[string(c)] = struct{}{}
+	}
+
+	var missing []string
+	for goName, wire := range declared {
+		// The undefined sentinel is deliberately absent: it classifies
+		// nothing and is blocked from every north-bound plane.
+		if wire == string(hmenum.DataPointCategoryUndefined) {
+			continue
+		}
+		if _, ok := listed[wire]; !ok {
+			missing = append(missing, goName)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		t.Errorf("hmenum.AllDataPointCategories is missing %d declared category/categories: %v", len(missing), missing)
+	}
+
+	if err := hmenum.ValidateStartup(); err != nil {
+		t.Errorf("ValidateStartup: %v", err)
 	}
 }
 

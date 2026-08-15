@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"sync"
 	"time"
 
@@ -142,7 +141,7 @@ type CommandRetryMetrics struct {
 	RecoveryWaitTimeouts int64
 
 	// CancelledRetries is the number of chains cancelled by supersede
-	// or explicit CancelKey/CancelDevice/CancelInterface calls.
+	// or explicit CancelKey/CancelInterface calls.
 	CancelledRetries int64
 }
 
@@ -531,8 +530,8 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 		select {
 		case <-cancel:
 			// The cancelling caller (supersede in DoForKey / CancelKey /
-			// CancelDevice / CancelInterface) already counted this
-			// cancellation; counting again here double-counts CancelledRetries.
+			// CancelInterface) already counted this cancellation;
+			// counting again here double-counts CancelledRetries.
 			return ErrRetrySuperseded
 		default:
 		}
@@ -621,41 +620,6 @@ func (r *Retrier) CancelKey(key hmtypes.DataPointKey) {
 		r.metrics.CancelledRetries++
 	}
 	r.mu.Unlock()
-}
-
-// CancelDevice aborts every in-flight retry chain whose key
-// [hmtypes.DataPointKey.ChannelAddress] is on the given device. The channel
-// address has the form `<device>:<channel-no>`; this method matches both that
-// form and a bare device address, so callers can pass either "VCU1234567" or
-// "VCU1234567:3" with the same effect on any DP belonging to VCU1234567.
-//
-// Returns the number of chains canceled. Used by the device-removal pipeline
-// to drop pending optimistic retries for a device that the operator has just
-// deleted.
-func (r *Retrier) CancelDevice(deviceAddress string) int {
-	if deviceAddress == "" {
-		return 0
-	}
-	// Normalize to the bare device portion (everything before ':').
-	devOnly := deviceAddress
-	if i := strings.IndexByte(deviceAddress, ':'); i > 0 {
-		devOnly = deviceAddress[:i]
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	canceled := 0
-	for key, cancel := range r.active {
-		ch := key.ChannelAddress
-		// Match either an exact device prefix ("VCU…" alone) or the
-		// "VCU…:N" channel address form.
-		if ch == devOnly || (len(ch) > len(devOnly) && ch[:len(devOnly)] == devOnly && ch[len(devOnly)] == ':') {
-			close(cancel)
-			delete(r.active, key)
-			canceled++
-		}
-	}
-	r.metrics.CancelledRetries += int64(canceled)
-	return canceled
 }
 
 // CancelInterface aborts every in-flight retry chain registered with this

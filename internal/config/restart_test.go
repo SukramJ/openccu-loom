@@ -105,6 +105,14 @@ func TestRestartRequiredDiff_SingleFieldChange(t *testing.T) {
 			mutate: func(c *Config) { c.Callback.PortRange = "40000-40099" },
 		},
 		{
+			path:   "callback.restrict_source_ips",
+			mutate: func(c *Config) { c.Callback.RestrictSourceIPs = true },
+		},
+		{
+			path:   "callback.max_connections",
+			mutate: func(c *Config) { c.Callback.MaxConnections = 128 },
+		},
+		{
 			path:   "north.matter.enabled",
 			mutate: func(c *Config) { c.North.Matter.Enabled = true },
 		},

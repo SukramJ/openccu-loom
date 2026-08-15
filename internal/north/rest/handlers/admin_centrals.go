@@ -4,9 +4,13 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -43,6 +47,43 @@ func maskCentralRow(row sqlite.CentralRow) sqlite.CentralRow {
 		row.PasswordPlain = maskSentinel
 	}
 	return row
+}
+
+// decodeCentralRow decodes a central request body and additionally reports
+// whether the payload carried a password_plain key at all.
+//
+// The distinction is load-bearing on the update path. GET masks the stored
+// credential to [maskSentinel] and [sqlite.CentralRow] marshals
+// password_plain with omitempty, so a client following the published schema —
+// where password_plain is optional — has no way to send the real password
+// back, and [CentralAdminService.Put] is an unconditional upsert. Without the
+// presence probe a partial replace that only flips `enabled` decodes to the
+// Go zero value and destroys the CCU password on disk. An absent key (and an
+// explicit null) therefore means "unchanged", matching the contract the
+// config section editor implements in [restoreMaskedSecrets]; only an
+// explicit empty string clears the password.
+func decodeCentralRow(r *http.Request) (row sqlite.CentralRow, passwordSent bool, err error) {
+	body, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, maxRequestBodyBytes))
+	if err != nil {
+		return row, false, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&row); err != nil {
+		return row, false, err
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(body, &keys); err != nil {
+		return row, false, err
+	}
+	for k, v := range keys {
+		// encoding/json matches object keys case-insensitively, so the
+		// presence probe has to as well.
+		if strings.EqualFold(k, "password_plain") {
+			return row, string(v) != "null", nil
+		}
+	}
+	return row, false, nil
 }
 
 // writeCentralSecretRefusal answers a store refusal to persist a CCU
@@ -164,8 +205,8 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				problem.New(problem.TypeValidation, r, "Missing name", "name path parameter is required"))
 			return
 		}
-		var row sqlite.CentralRow
-		if err := DecodeJSON(r, &row); err != nil {
+		row, passwordSent, err := decodeCentralRow(r)
+		if err != nil {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
@@ -183,10 +224,12 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
 			return
 		}
-		// The GET path masks password_plain to the sentinel; a save that
-		// echoes the sentinel back means "unchanged" and must restore the
-		// stored credential rather than overwrite it with the literal mask.
-		if row.PasswordPlain == maskSentinel {
+		// The GET path masks password_plain to the sentinel and omits it
+		// entirely when unset; a save that echoes the sentinel back — or
+		// leaves the optional key out — means "unchanged" and must restore
+		// the stored credential rather than overwrite it. See
+		// [decodeCentralRow] for why the absent key cannot be read as "clear".
+		if !passwordSent || row.PasswordPlain == maskSentinel {
 			existing, err := svc.Get(r.Context(), name)
 			if err != nil && !errors.Is(err, sqlite.ErrCentralNotFound) {
 				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central lookup failed", err)

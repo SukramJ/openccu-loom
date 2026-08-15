@@ -94,10 +94,10 @@ type Service struct {
 }
 
 // ArmFailureHook is a FAILED_TO_ARM notification callback. It mirrors
-// the MQTT alarm publisher's PublishFailedToArm signature
-// (cmd/openccu-loom/daemon_north.go) so the daemon composition root
-// can wire that publisher in one line via SetArmFailureHook. A nil
-// hook (the default) means the schedule chain's AutoArm failures stay
+// the MQTT alarm publisher's PublishFailedToArm signature so the daemon
+// composition root can wire that publisher in one line via
+// SetArmFailureHook. A nil hook — the state of a daemon configured
+// without MQTT — means the schedule chain's AutoArm failures stay
 // journal-only (notes/concepts/alarm-concept.md §15 row 19).
 type ArmFailureHook func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail)
 
@@ -423,6 +423,11 @@ func (s *Service) Start(ctx context.Context) error {
 	s.started = true
 	s.mu.Unlock()
 
+	// Before startInner: the engine's restore pass publishes state
+	// transitions through the sink, and an export queued while the
+	// worker is down is dropped.
+	s.sysvarMirror.start(ctx)
+
 	// Load failures are fail-visible, not fail-fatal: the daemon's
 	// other surfaces (MQTT/REST/UI) must not die because the alarm
 	// tier cannot come up — the health tracker and log carry the
@@ -432,6 +437,7 @@ func (s *Service) Start(ctx context.Context) error {
 		s.mu.Lock()
 		s.started = false
 		s.mu.Unlock()
+		s.sysvarMirror.stop()
 		if errors.Is(err, context.Canceled) {
 			return nil // shutdown race during boot — not a failure
 		}
@@ -490,6 +496,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	}
 	s.schedules.stop()
 	s.manager.StopWatchdogs()
+	s.sysvarMirror.stop()
 	s.engine.Stop(ctx)
 	return nil
 }

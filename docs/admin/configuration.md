@@ -237,7 +237,9 @@ callback listener accepts (`0` uses the default of `64`) — a guard
 against a misbehaving or hostile peer exhausting file descriptors.
 `restrict_source_ips`, when `true`, makes the listeners accept
 callbacks only from the configured CCU IPs (plus loopback); leave it
-`false` unless every CCU address is static and known.
+`false` unless every CCU address is static and known. Both are read
+once, when the listeners bind, so changing either is restart-required —
+the config editor marks them accordingly.
 
 ### `north.rest` and authentication
 
@@ -257,6 +259,17 @@ for the SPA.
 | `north.rest.rate_limit.enabled` | bool | `false` | — | no |
 | `north.rest.rate_limit.requests_per_second` | float | `10` | — | no |
 | `north.rest.rate_limit.burst` | int | `30` | — | no |
+
+`north.rest.cors` lists the browser origins allowed to call the API
+cross-origin. Entries are matched case-insensitively and a trailing
+slash is ignored, so `https://ha.example.com/` and
+`https://ha.example.com` are the same entry. While `csrf_enabled` is
+true the same list — plus the daemon's own origin — also gates the live
+WebSocket handshake, with one deliberate difference: `"*"` opens CORS
+for every origin but is **not** honoured on the WebSocket, where
+allowing any origin would remove the socket's CSRF protection. A
+cross-origin page that needs the live WebSocket must be listed by its
+concrete origin.
 
 Authentication lives under `north.rest.auth`:
 

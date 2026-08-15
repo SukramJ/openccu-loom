@@ -15,6 +15,15 @@ import (
 // PersistentSubscriptionRecord is one row from matter_persistent_subscriptions.
 // It carries the minimum state needed to re-arm a subscription after a
 // daemon restart per Matter 1.4 §10.6.9.
+//
+// The table is storage only: no part of the subscription lifecycle writes
+// or reads it, so it is always empty at runtime and a restart drops every
+// subscription. That is survivable because controllers re-subscribe once
+// CASE is re-established, which is why the gap has never surfaced as a
+// symptom — but the §10.6.9 re-arm it was built for does not exist yet.
+// Wiring it needs a producer at subscription establishment, a consumer at
+// daemon start, and a delete on both teardown and fabric removal; until all
+// four exist, treat rows here as inert.
 type PersistentSubscriptionRecord struct {
 	// ID is the auto-assigned row key; zero on insert (assigned by the DB).
 	ID int64
@@ -35,8 +44,7 @@ type PersistentSubscriptionRecord struct {
 var ErrPersistentSubscriptionNotFound = errors.New("matter store: persistent subscription not found")
 
 // SavePersistentSubscription inserts one row and returns the assigned ID.
-// Called when a new subscription is established so that a daemon restart
-// can re-arm it.
+// See [PersistentSubscriptionRecord] — nothing calls this yet.
 func (s *Store) SavePersistentSubscription(ctx context.Context, rec PersistentSubscriptionRecord) (int64, error) {
 	res, err := s.db.ExecContext(
 		ctx, `
@@ -59,9 +67,9 @@ VALUES (?, ?, ?, ?)`,
 }
 
 // LoadPersistentSubscriptions returns every row from
-// matter_persistent_subscriptions.  Called once at daemon start to
-// re-arm subscriptions that survived a restart.  Rows are returned in
-// ascending id order so the re-arm loop processes them deterministically.
+// matter_persistent_subscriptions in ascending id order, so a re-arm loop
+// would process them deterministically.  No daemon-start path calls this —
+// see [PersistentSubscriptionRecord].
 func (s *Store) LoadPersistentSubscriptions(ctx context.Context) ([]PersistentSubscriptionRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `
 SELECT id, fabric_index, node_id, paths_json, intervals_json
@@ -99,9 +107,9 @@ ORDER BY id ASC`)
 	return out, nil
 }
 
-// DeletePersistentSubscription removes a single row by ID.  Called when
-// a subscription is torn down so it is not re-armed on the next restart.
-// Idempotent — no error if the row is already gone.
+// DeletePersistentSubscription removes a single row by ID.  Idempotent —
+// no error if the row is already gone.  No subscription-teardown path calls
+// this — see [PersistentSubscriptionRecord].
 func (s *Store) DeletePersistentSubscription(ctx context.Context, id int64) error {
 	_, err := s.db.ExecContext(ctx, `
 DELETE FROM matter_persistent_subscriptions WHERE id = ?`, id)
@@ -112,8 +120,9 @@ DELETE FROM matter_persistent_subscriptions WHERE id = ?`, id)
 }
 
 // DeletePersistentSubscriptionsByFabric removes all rows for fabricIndex.
-// Called from the OnFabricRemoved hook so subscription records do not
-// accumulate for fabrics that have been removed.
+// The fabric-removal fan-out does not call this — see
+// [PersistentSubscriptionRecord]; rows cannot accumulate today because
+// nothing writes any.
 func (s *Store) DeletePersistentSubscriptionsByFabric(ctx context.Context, fabricIndex uint8) error {
 	_, err := s.db.ExecContext(ctx, `
 DELETE FROM matter_persistent_subscriptions WHERE fabric_index = ?`, fabricIndex)

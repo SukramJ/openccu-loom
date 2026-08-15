@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"sort"
 	"sync"
@@ -32,6 +33,11 @@ type Discoverer struct {
 	logger   *slog.Logger
 	http     *http.Client
 	now      func() time.Time
+	// sourceIPs / search are the probe seams. Both default to the real
+	// network path; a test replaces them because the scan loop is otherwise
+	// only observable against a live LAN segment.
+	sourceIPs func() []net.IP
+	search    func(ctx context.Context, srcIP net.IP) ([]string, error)
 
 	mu     sync.RWMutex
 	found  map[string]DiscoveredCCU
@@ -49,11 +55,13 @@ func New(interval time.Duration, logger *slog.Logger) *Discoverer {
 		interval = 60 * time.Second
 	}
 	return &Discoverer{
-		interval: interval,
-		logger:   logger,
-		http:     httpx.NewClient(fetchTimeout),
-		now:      time.Now,
-		found:    make(map[string]DiscoveredCCU),
+		interval:  interval,
+		logger:    logger,
+		http:      httpx.NewClient(fetchTimeout),
+		now:       time.Now,
+		sourceIPs: multicastSourceIPs,
+		search:    searchFrom,
+		found:     make(map[string]DiscoveredCCU),
 	}
 }
 
@@ -103,8 +111,14 @@ func (d *Discoverer) loop(ctx context.Context) {
 // drop entries that have gone stale.
 func (d *Discoverer) scan(ctx context.Context) {
 	locations := make(map[string]struct{})
-	for _, ip := range multicastSourceIPs() {
-		locs, err := searchFrom(ctx, ip)
+	for _, ip := range d.sourceIPs() {
+		// One probe blocks for the M-SEARCH read deadline, and a cancelled
+		// context does not shorten a deadline that is already set, so without
+		// this check shutdown waits out every remaining interface in turn.
+		if ctx.Err() != nil {
+			break
+		}
+		locs, err := d.search(ctx, ip)
 		if err != nil {
 			d.logger.Debug("discovery.ssdp.search_failed",
 				slog.String("src", ip.String()), slog.String("err", err.Error()))

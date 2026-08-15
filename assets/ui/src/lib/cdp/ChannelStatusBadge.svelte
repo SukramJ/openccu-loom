@@ -14,7 +14,7 @@
   import { onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
   import type { DataPointSummary } from "$lib/api/types";
-  import { dpLabel } from "$lib/sensor-actor/classify";
+  import { dpLabel, enumValueLabel } from "$lib/sensor-actor/classify";
   import { onResync, subscribe } from "$lib/stores/events.svelte";
   import { STATUS_HEADLINE_KEYS } from "$lib/quickcontrol/domain";
   import { t } from "$lib/i18n";
@@ -114,7 +114,12 @@
 
   // Format a DP value for the badge: numbers carry the descriptor unit
   // when present (and the explicit LEVEL → percent conversion stays).
+  // An ENUM reaches the SPA as the raw value_list index, so it is
+  // resolved to its label first — a bare `2` says nothing about a smoke
+  // detector's alarm status.
   function formatDP(dp: DataPointSummary): string {
+    const label = enumValueLabel(dp);
+    if (label !== undefined) return label;
     return formatValue(dp.value, dp.parameter, dp.unit);
   }
 
@@ -134,9 +139,9 @@
       // true means "open", a SMOKE_DETECTOR true means an alarm. Keep
       // it terse — the badge row is short.
       if (key === "STATE" && (type ?? "").toUpperCase().includes("SHUTTER_CONTACT")) {
-        return v ? "offen" : "zu";
+        return v ? t("enum.OPEN") : t("enum.CLOSED");
       }
-      return v ? "an" : "aus";
+      return v ? t("quick.on") : t("quick.off");
     }
     if (typeof v === "number") {
       // LEVEL is stored as 0..1 — render as percent regardless of unit.
@@ -158,7 +163,9 @@
     if (s.endsWith("_TRANSMITTER")) return "M3 12h18M3 6h18M3 18h18"; // signal bars
     return "M12 2a10 10 0 100 20 10 10 0 000-20z"; // circle
   }
-  const displayName = $derived(name ?? typeLabel ?? `Kanal ${channel}`);
+  const displayName = $derived(
+    name ?? typeLabel ?? t("device.channel_n", { n: channel }),
+  );
 </script>
 
 <div

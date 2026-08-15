@@ -16,11 +16,16 @@ import (
 type Switch struct {
 	*DataPoint[bool]
 	TimerSlot
+
+	// matterLT holds the Lighting-feature OnOff attributes the Matter
+	// projection answers. See internal/model/generic/switch_matter.go.
+	matterLT matterOnOffLTState
 }
 
 // NewSwitch constructs a Switch.
 func NewSwitch(cfg Spec) *Switch {
 	s := &Switch{DataPoint: NewDataPoint[bool](cfg)}
+	s.matterLT.initMatterOnOffLT()
 	s.RegisterService("turn_on", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return s.TurnOn(ctx, priority)
 	})

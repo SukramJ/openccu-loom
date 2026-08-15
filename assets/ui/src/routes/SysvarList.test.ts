@@ -41,11 +41,20 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: vi.fn().mockResolvedValue(false) },
 }));
 
-// Capture the handler the view registers on the WS pump so a test can
-// deliver a `sysvar` envelope without a socket.
+// Capture the handlers the view registers on the WS pump so a test can
+// deliver a `sysvar` envelope — or the daemon's resync signal — without a
+// socket. Both lists have to record: a mock that accepts onResync and
+// throws the handler away is green whether or not the view registers one.
 const eventHandlers: Array<(ev: unknown) => void> = [];
+const resyncHandlers: Array<() => void> = [];
 vi.mock("$lib/stores/events.svelte", () => ({
-  onResync: () => () => {},
+  onResync: (handler: () => void) => {
+    resyncHandlers.push(handler);
+    return () => {
+      const idx = resyncHandlers.indexOf(handler);
+      if (idx >= 0) resyncHandlers.splice(idx, 1);
+    };
+  },
   subscribe: (handler: (ev: unknown) => void) => {
     eventHandlers.push(handler);
     return () => {
@@ -119,6 +128,38 @@ describe("SysvarList live values", () => {
         payload: { central: "ccu1", name: "S_Temperatur", value: 23.5 },
       });
     }
+
+    await waitFor(() =>
+      expect(
+        container.querySelector<HTMLInputElement>('input[type="number"]')?.value,
+      ).toBe("23.5"),
+    );
+  });
+
+  // A resync is the daemon saying the stream cannot carry this client to
+  // the current state (restart, boot snapshot, dropped queue). Nothing
+  // replays the values that changed during the gap as `sysvar` frames, so
+  // a table that only subscribes keeps showing pre-gap values as live.
+  it("re-reads the list when the daemon signals a resync", async () => {
+    const temp = {
+      name: "S_Temperatur",
+      central: "ccu1",
+      value_type: "FLOAT",
+      value: 21.5,
+      value_list: [],
+      unit: "°C",
+    };
+    mockListSysvars.mockResolvedValue([temp]);
+    const { container } = render(SysvarList);
+    await waitFor(() =>
+      expect(
+        container.querySelector<HTMLInputElement>('input[type="number"]')?.value,
+      ).toBe("21.5"),
+    );
+
+    mockListSysvars.mockResolvedValue([{ ...temp, value: 23.5 }]);
+    expect(resyncHandlers.length).toBeGreaterThan(0);
+    for (const handler of [...resyncHandlers]) handler();
 
     await waitFor(() =>
       expect(
@@ -485,6 +526,88 @@ describe("SysvarList edit dialog dispatch", () => {
       expect.objectContaining({ is_visible: false, is_logged: true }),
       "ccu1",
     );
+  });
+});
+
+// The edit overlay announces itself as aria-modal, so it owes a keyboard
+// user the behaviour that goes with it: focus moves in, Escape closes it
+// from wherever focus sits, Tab stays inside, focus returns to the trigger.
+// It previously handled Escape on the overlay element only, which never
+// sees a key pressed on the ⚙ button that opened it.
+describe("SysvarList edit dialog focus handling", () => {
+  const listVar = {
+    name: "Mode",
+    central: "ccu1",
+    value_type: "LIST",
+    value: 1,
+    value_list: ["Off", "Home", "Away"],
+    unit: "",
+    is_internal: false,
+    is_extended: false,
+  };
+
+  async function openViaGear(): Promise<{
+    container: HTMLElement;
+    gear: HTMLButtonElement;
+    dialog: HTMLElement;
+  }> {
+    mockListSysvars.mockResolvedValue([listVar]);
+    const { container } = render(SysvarList);
+    await waitFor(() => expect(container.querySelector("tbody tr")).not.toBeNull());
+    const gear = buttonByText(container, /^⚙$/);
+    // A real click leaves focus on the button it hit; fireEvent does not,
+    // so put it there explicitly — that is the state under test.
+    gear.focus();
+    await fireEvent.click(gear);
+    await waitFor(() =>
+      expect(container.querySelector('[role="dialog"]')).not.toBeNull(),
+    );
+    return {
+      container,
+      gear,
+      dialog: container.querySelector('[role="dialog"]') as HTMLElement,
+    };
+  }
+
+  it("moves focus into the dialog and returns it to the ⚙ button on close", async () => {
+    const { container, gear, dialog } = await openViaGear();
+
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+
+    await fireEvent.click(buttonByText(dialog, /cancel|abbrechen/i));
+    await waitFor(() =>
+      expect(container.querySelector('[role="dialog"]')).toBeNull(),
+    );
+    expect(document.activeElement).toBe(gear);
+  });
+
+  it("closes on Escape pressed while focus is still on the ⚙ button", async () => {
+    const { container, gear } = await openViaGear();
+
+    // Focus deliberately back outside the overlay: the previous handler
+    // lived on the overlay element, so this key never reached it.
+    gear.focus();
+    await fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() =>
+      expect(container.querySelector('[role="dialog"]')).toBeNull(),
+    );
+  });
+
+  it("keeps Tab inside the dialog instead of walking the table behind it", async () => {
+    const { dialog } = await openViaGear();
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+
+    const focusables = [
+      ...dialog.querySelectorAll<HTMLElement>(
+        'input, button, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ].filter((el) => !el.hasAttribute("disabled"));
+    const last = focusables[focusables.length - 1];
+    last.focus();
+    await fireEvent.keyDown(window, { key: "Tab" });
+
+    expect(document.activeElement).toBe(focusables[0]);
   });
 });
 

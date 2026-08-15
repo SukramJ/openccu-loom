@@ -3,6 +3,8 @@
 
 package payload
 
+import "encoding/json"
+
 // This file holds the typed [InfoPayload] structs every Source
 // implementation returns from [Source.InfoPayload]. The structs mirror
 // the historic `map[string]any` shapes the source-pipeline already
@@ -362,14 +364,20 @@ type GenericDataPointInfo struct {
 
 // GenericDataPointConfig carries the wire-DP descriptor.
 type GenericDataPointConfig struct {
-	Usage          string   `json:"usage"`
-	EnabledDefault bool     `json:"enabled_default"`
-	Unit           string   `json:"unit,omitempty"`
-	Default        string   `json:"default,omitempty"`
-	Min            string   `json:"min,omitempty"`
-	Max            string   `json:"max,omitempty"`
-	Special        []byte   `json:"special,omitempty"`
-	ValueList      []string `json:"value_list,omitempty"`
+	Usage          string `json:"usage"`
+	EnabledDefault bool   `json:"enabled_default"`
+	Unit           string `json:"unit,omitempty"`
+	Default        string `json:"default,omitempty"`
+	Min            string `json:"min,omitempty"`
+	Max            string `json:"max,omitempty"`
+	// Special is the descriptor's SPECIAL blob — the declared sentinel
+	// values of the parameter — and is embedded verbatim. It is typed as
+	// json.RawMessage, not []byte: encoding/json renders a []byte as a
+	// base64 string, so the retained config topic would carry
+	// "eyJOT1RfVVNFRCI6MC4wfQ==" where consumers of the raw plane expect
+	// the object. Producers must only fill it with valid JSON.
+	Special   json.RawMessage `json:"special,omitempty"`
+	ValueList []string        `json:"value_list,omitempty"`
 	// Multiplier is only emitted when the DP declares a non-trivial
 	// scaling factor (m != 0 && m != 1.0).
 	Multiplier float64 `json:"multiplier,omitempty"`

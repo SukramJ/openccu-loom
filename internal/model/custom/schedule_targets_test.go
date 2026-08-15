@@ -47,7 +47,7 @@ func newScheduleTargetDevice(t *testing.T, model, address string, maxChannel int
 		if ch == nil {
 			t.Fatalf("channel %s missing", chAddr)
 		}
-		ch.GroupNo = no
+		ch.AssignGroupNumber(no)
 		d.AddChannelToGroup(no, no)
 		ch.SetCustomDataPoint(&scheduleTargetFakeCDP{
 			key: hmtypes.DataPointKey{ChannelAddress: chAddr, Parameter: "STATE"},

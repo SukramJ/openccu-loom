@@ -4,6 +4,13 @@
 package wiring_pins
 
 import (
+	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/printer"
+	"go/token"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/tests/contract"
@@ -98,10 +105,77 @@ func TestPin_NotifyCallback_WiredInCallbackHandler(t *testing.T) {
 // with ping-pong tracking ON. The PONG-correlation wiring above is inert
 // unless the keepalive actually records outbound pings — the prior bug was a
 // fully wired tracker fed by a probe that passed handlePingPong=false.
+//
+// The flag is the whole pin, so it asserts the argument rather than the call:
+// a name-only search stays green through exactly the regression it exists to
+// catch, and the two PONG pins above stay green with it because they only
+// check that the correlation path is wired, not that anything feeds it.
 func TestPin_KeepaliveEnablesPingPong(t *testing.T) {
-	contract.MustFindMethodCall(t,
-		"internal/central/jobs.go",
-		"Client", "CheckConnectionAvailability")
+	assertKeepaliveHandlesPingPong(t)
+}
+
+// assertKeepaliveHandlesPingPong finds the keepalive job's
+// CheckConnectionAvailability call and requires its handlePingPong argument to
+// be the literal true. Without it the client never calls RecordPing, no
+// outbound ping is tokenised, and every inbound PONG is dropped as unmatched —
+// ping-pong health then degrades to sweep timeouts alone.
+func assertKeepaliveHandlesPingPong(t *testing.T) {
+	t.Helper()
+
+	const (
+		relPath    = "internal/central/jobs.go"
+		method     = "CheckConnectionAvailability"
+		argIndex   = 1 // (ctx, handlePingPong)
+		wantLitral = "true"
+	)
+
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	path := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", relPath)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", relPath, err)
+	}
+
+	calls := 0
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, isCall := n.(*ast.CallExpr)
+		if !isCall {
+			return true
+		}
+		sel, isSel := call.Fun.(*ast.SelectorExpr)
+		if !isSel || sel.Sel.Name != method {
+			return true
+		}
+		calls++
+		if len(call.Args) <= argIndex {
+			t.Errorf("%s: %s called with %d argument(s) at %s — the handlePingPong flag is gone",
+				relPath, method, len(call.Args), fset.Position(call.Pos()))
+			return true
+		}
+		lit, isIdent := call.Args[argIndex].(*ast.Ident)
+		if !isIdent || lit.Name != wantLitral {
+			t.Errorf("%s: keepalive calls %s with handlePingPong=%s at %s, want %s — "+
+				"the probe would stop recording outbound pings and every PONG would be dropped",
+				relPath, method, exprSource(fset, call.Args[argIndex]), fset.Position(call.Pos()), wantLitral)
+		}
+		return true
+	})
+	if calls == 0 {
+		t.Fatalf("%s: no call to %s — the keepalive probe moved; repoint this pin", relPath, method)
+	}
+}
+
+// exprSource renders an expression for the failure message.
+func exprSource(fset *token.FileSet, e ast.Expr) string {
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, fset, e); err != nil {
+		return "<unprintable>"
+	}
+	return buf.String()
 }
 
 // --- D3: BridgedDevice reachability ---

@@ -499,7 +499,7 @@ func TestRunDiscoveryOrphanCleanupOnce_NonSlugCentralName(t *testing.T) {
 	b.declared[liveTopic] = []byte(`{}`)
 	b.mu.Unlock()
 
-	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), 50*time.Millisecond); err != nil {
+	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "", 50*time.Millisecond); err != nil {
 		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
 	}
 	evicted := map[string]bool{}
@@ -748,5 +748,139 @@ func TestRunRetainCleanupOnceKeepsMetricTopicsTheEscapingNeverMoved(t *testing.T
 				t.Fatalf("cleared %v — those are the live metric topics of %q", cleared, tc.owner)
 			}
 		})
+	}
+}
+
+// unsubscribeTrackingClient is a [Client] that records every filter it
+// was asked to unsubscribe from, so a test can prove no sweep leaves its
+// wildcard subscription installed on the shared client.
+type unsubscribeTrackingClient struct {
+	mu           sync.Mutex
+	unsubscribed []string
+}
+
+func (c *unsubscribeTrackingClient) Publish(_ context.Context, _ string, _ []byte, _ QoS, _ bool, _ ...PublishOption) error {
+	return nil
+}
+
+func (c *unsubscribeTrackingClient) Subscribe(_ context.Context, _ string, _ QoS, _ MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
+	return SubscribeResult{}, nil
+}
+
+func (c *unsubscribeTrackingClient) Unsubscribe(_ context.Context, filter string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.unsubscribed = append(c.unsubscribed, filter)
+	return nil
+}
+
+func (c *unsubscribeTrackingClient) filters() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.unsubscribed...)
+}
+
+// TestRetainSweepsUnsubscribeWhenTheWindowIsCancelled pins the teardown
+// of every one-shot sweep against a cancelled context.
+//
+// The sweeps are boot-time passes over broad wildcards whose handler
+// closes over a growing worklist. Returning from the snapshot window
+// without unsubscribing left that handler attached to the shared client
+// for the rest of the process — running on the daemon's own publishes,
+// accumulating forever, and replayed onto every reconnect by the client's
+// own subscription bookkeeping.
+func TestRetainSweepsUnsubscribeWhenTheWindowIsCancelled(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		run  func(ctx context.Context, b *Bridge) error
+	}{
+		{"retain", func(ctx context.Context, b *Bridge) error {
+			_, err := b.RunRetainCleanupOnce(ctx, time.Minute)
+			return err
+		}},
+		{"discovery_orphan", func(ctx context.Context, b *Bridge) error {
+			_, err := b.RunDiscoveryOrphanCleanupOnce(ctx, "", time.Minute)
+			return err
+		}},
+		{"raw_orphan", func(ctx context.Context, b *Bridge) error {
+			_, err := b.RunRawOrphanCleanupOnce(ctx, "", time.Minute)
+			return err
+		}},
+		{"unscoped_discovery", func(ctx context.Context, b *Bridge) error {
+			_, err := b.RunUnscopedDiscoveryCleanupOnce(ctx, time.Minute)
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := &unsubscribeTrackingClient{}
+			b := NewBridge(BridgeConfig{
+				Base: "openccu-loom", CentralName: "ccu-01",
+				RawEnabled: true, HADiscoveryEnabled: true,
+			}, client)
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				time.Sleep(20 * time.Millisecond)
+				cancel()
+			}()
+			if err := tc.run(ctx, b); !errors.Is(err, context.Canceled) {
+				t.Fatalf("err = %v, want context.Canceled", err)
+			}
+			if got := client.filters(); len(got) != 1 {
+				t.Fatalf("unsubscribed = %v, want exactly one filter — a stranded wildcard runs for the daemon's lifetime", got)
+			}
+		})
+	}
+}
+
+// TestRunDiscoveryOrphanCleanupOnceSweepsEveryCentral pins the sweep's
+// scoping against a multi-CCU daemon.
+//
+// Both node-id producers slug the central they belong to, so a pass that
+// derived its ownership filter from the default central alone classified
+// every other CCU's retained config as "not ours" and skipped it. Those
+// orphans then had no automatic path off the broker at all: Home
+// Assistant re-created them as permanently unavailable phantoms on every
+// integration restart.
+func TestRunDiscoveryOrphanCleanupOnceSweepsEveryCentral(t *testing.T) {
+	t.Parallel()
+	const (
+		defaultCentral = "ccu-01"
+		secondCentral  = "ccu-02"
+	)
+	var (
+		orphan = "homeassistant/switch/" + naming.DiscoverySlug(secondCentral) + "_0001d3c99c1234/state/config"
+		live   = "homeassistant/switch/" + naming.DiscoverySlug(secondCentral) + "_0001d3c99c1234/level/config"
+		other  = "homeassistant/switch/" + naming.DiscoverySlug(defaultCentral) + "_0001d3c99c5678/state/config"
+	)
+	mc := &mockRetainClient{retained: []retainedMsg{
+		{topic: orphan, payload: []byte(`{}`)},
+		{topic: live, payload: []byte(`{}`)},
+		{topic: other, payload: []byte(`{}`)},
+	}}
+	b := NewBridge(BridgeConfig{
+		Base: "openccu-loom", HADiscoveryEnabled: true, CentralName: defaultCentral,
+	}, mc)
+	b.mu.Lock()
+	b.declared[live] = []byte(`{}`)
+	b.mu.Unlock()
+
+	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), secondCentral, 50*time.Millisecond); err != nil {
+		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
+	}
+	evicted := map[string]bool{}
+	for _, topic := range mc.evicted() {
+		evicted[topic] = true
+	}
+	if !evicted[orphan] {
+		t.Errorf("orphan %q survived — a non-default CCU's phantom entities can never be removed", orphan)
+	}
+	if evicted[live] {
+		t.Errorf("the sweep evicted a declared entity: %q", live)
+	}
+	if evicted[other] {
+		t.Errorf("the sweep judged another central's topic: %q — that central's snapshot may not have run yet", other)
 	}
 }

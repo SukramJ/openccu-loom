@@ -4,6 +4,7 @@
 package device
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -122,6 +123,49 @@ func TestAvailabilityForceOverride(t *testing.T) {
 	a.SetForced(hmenum.ForcedDeviceAvailabilityNotSet)
 	if !a.IsReachable() {
 		t.Fatal("cleared force → reachable again")
+	}
+}
+
+// TestAvailabilityForceOverrideIsSafeUnderConcurrentReaders mirrors the
+// production shape: the interface-client reconnect handler and the
+// system-status handler both flip the override while REST and the MQTT
+// bridge read the availability verdict. Run with -race.
+func TestAvailabilityForceOverrideIsSafeUnderConcurrentReaders(t *testing.T) {
+	d := newTestDevice(t)
+	a := d.Availability()
+
+	const rounds = 200
+	var wg sync.WaitGroup
+	wg.Add(4)
+	for range 2 {
+		go func() {
+			defer wg.Done()
+			for i := range rounds {
+				if i%2 == 0 {
+					d.SetForcedAvailability(hmenum.ForcedDeviceAvailabilityForceFalse)
+				} else {
+					d.SetForcedAvailability(hmenum.ForcedDeviceAvailabilityNotSet)
+				}
+			}
+		}()
+	}
+	go func() {
+		defer wg.Done()
+		for range rounds {
+			_ = a.IsReachable()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range rounds {
+			_ = d.AvailabilityInfo()
+		}
+	}()
+	wg.Wait()
+
+	a.SetForced(hmenum.ForcedDeviceAvailabilityNotSet)
+	if !a.IsReachable() {
+		t.Fatal("cleared override → reachable")
 	}
 }
 
@@ -308,15 +352,44 @@ func TestChannelIsGroupMaster(t *testing.T) {
 	d := newTestDevice(t)
 	ch1 := d.Channel("0001ABCD:1")
 	if ch1.IsGroupMaster() {
-		t.Fatal("GroupNo == 0 must not be a group master")
+		t.Fatal("group number 0 must not be a group master")
 	}
-	ch1.GroupNo = 1
+	ch1.AssignGroupNumber(1)
 	if !ch1.IsGroupMaster() {
-		t.Fatal("GroupNo == Number must be a group master")
+		t.Fatal("group number == Number must be a group master")
 	}
-	ch1.GroupNo = 5
-	if ch1.IsGroupMaster() {
-		t.Fatal("GroupNo != Number must not be a group master")
+	// The secondary case needs its own channel: a channel's group is
+	// assigned once and never re-pointed, so a group whose master is a
+	// different channel is only reachable on a channel that starts
+	// ungrouped — which is exactly how the materializer produces it.
+	ch2 := d.Channel("0001ABCD:0")
+	ch2.AssignGroupNumber(5)
+	if ch2.IsGroupMaster() {
+		t.Fatal("group number != Number must not be a group master")
+	}
+}
+
+func TestChannelGroupAssignmentIsFirstWins(t *testing.T) {
+	d := newTestDevice(t)
+	ch := d.Channel("0001ABCD:1")
+
+	if !ch.AssignGroupNumber(3) {
+		t.Fatal("first assignment must take effect")
+	}
+	// A device matching several profiles has the same channel claimed
+	// twice; the group must not follow whichever profile ran last.
+	if ch.AssignGroupNumber(7) {
+		t.Fatal("second assignment must be refused")
+	}
+	if got := ch.GroupNumber(); got != 3 {
+		t.Fatalf("GroupNumber() = %d, want 3", got)
+	}
+	// 0 is the "no group" sentinel, not a value: it never clears.
+	if ch.AssignGroupNumber(0) {
+		t.Fatal("assigning the no-group sentinel must be a no-op")
+	}
+	if got := ch.GroupNumber(); got != 3 {
+		t.Fatalf("GroupNumber() after zero assign = %d, want 3", got)
 	}
 }
 
@@ -324,10 +397,10 @@ func TestChannelGroupMasterLookup(t *testing.T) {
 	d := newTestDevice(t)
 	// Add a third channel that will act as the group master.
 	master := d.AddChannel("0001ABCD:3", 3, "", hmenum.ParamsetKeyValues)
-	master.GroupNo = 3
+	master.AssignGroupNumber(3)
 
 	slave := d.Channel("0001ABCD:1")
-	slave.GroupNo = 3
+	slave.AssignGroupNumber(3)
 	got := slave.GroupMaster()
 	if got != master {
 		t.Fatalf("GroupMaster lookup = %v want master channel", got)
@@ -346,11 +419,11 @@ func TestChannelGroupMasterLookup(t *testing.T) {
 func TestChannelRoomFallbackToMaster(t *testing.T) {
 	d := newTestDevice(t)
 	master := d.AddChannel("0001ABCD:3", 3, "", hmenum.ParamsetKeyValues)
-	master.GroupNo = 3
+	master.AssignGroupNumber(3)
 	master.SetRooms([]string{"Wohnzimmer"})
 
 	slave := d.Channel("0001ABCD:1")
-	slave.GroupNo = 3
+	slave.AssignGroupNumber(3)
 	if got := slave.Room(); got != "Wohnzimmer" {
 		t.Fatalf("slave.Room = %q want Wohnzimmer (fallback to master)", got)
 	}

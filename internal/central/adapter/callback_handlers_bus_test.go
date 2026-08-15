@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -16,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 )
 
@@ -197,6 +199,66 @@ func TestCallbackHandlersDeleteDevicesRemovesFromRegistry(t *testing.T) {
 	}
 	if _, ok := c.ModelRegistry.Get(dev.Address); ok {
 		t.Fatal("device must be removed after DeleteDevices")
+	}
+}
+
+// TestCallbackHandlersDeleteDevicesDropsDescriptionsAndParamsets pins the
+// CCU-side deletion path against the operator-side unpair path: a device the
+// operator removes in the CCU WebUI must leave the same amount of state behind
+// as one removed through the REST unpair endpoint, namely none.
+//
+// Dropping only the model device left the description and paramset registries
+// — and through their persistence sinks the SQLite rows — holding every
+// channel of a device the CCU no longer reports, which the next boot then
+// rehydrated into a ghost device-registry entry.
+func TestCallbackHandlersDeleteDevicesDropsDescriptionsAndParamsets(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	const (
+		wireID  = "ccu-01-HmIP-RF"
+		devAddr = "0001ABCD"
+	)
+	iface := hmtypes.ParseWireInterfaceID(wireID)
+	dev := device.New(device.Config{
+		InterfaceID: wireID,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     devAddr,
+		Model:       "HmIP-STH",
+		Name:        "Flur",
+	})
+	c.ModelRegistry.Put(dev)
+	c.DeviceRegistry.Put(registry.DeviceEntry{Interface: iface, Address: devAddr, Model: "HmIP-STH"})
+	c.DescRegistry.Put(iface, hmproto.DeviceDescription{Address: devAddr, Type: "HmIP-STH"})
+	for chNo, chAddr := range []string{devAddr + ":0", devAddr + ":1"} {
+		dev.AddChannel(chAddr, chNo, "MAINTENANCE", hmenum.ParamsetKeyValues)
+		c.DescRegistry.Put(iface, hmproto.DeviceDescription{
+			Address: chAddr, Parent: devAddr, Type: "MAINTENANCE",
+		})
+		c.ParamsetReg.Put(iface, chAddr, hmenum.ParamsetKeyValues, hmproto.Paramset{})
+		c.ParamsetReg.Put(iface, chAddr, hmenum.ParamsetKeyMaster, hmproto.Paramset{})
+	}
+
+	h := NewCallbackHandlers(c, nil)
+	// The CCU echoes the init id it was announced with, not the canonical
+	// wire id the registries are keyed by.
+	if err := h.DeleteDevices(context.Background(), "loom-ccu-01-HmIP-RF", []string{devAddr}); err != nil {
+		t.Fatalf("DeleteDevices: %v", err)
+	}
+
+	if _, ok := c.ModelRegistry.Get(devAddr); ok {
+		t.Error("device still in ModelRegistry after deleteDevices")
+	}
+	if _, ok := c.DeviceRegistry.Get(iface, devAddr); ok {
+		t.Error("device still in DeviceRegistry after deleteDevices")
+	}
+	if n := c.DescRegistry.Len(); n != 0 {
+		t.Errorf("descriptions still present after deleteDevices, len=%d", n)
+	}
+	if n := c.ParamsetReg.Len(); n != 0 {
+		t.Errorf("paramsets still present after deleteDevices, len=%d", n)
 	}
 }
 

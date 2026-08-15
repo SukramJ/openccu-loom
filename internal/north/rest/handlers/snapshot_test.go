@@ -683,7 +683,10 @@ func TestSnapshot_CentralScope(t *testing.T) {
 	h := hub.NewHub("home")
 	h.PutProgram(hub.NewProgram("home", "P1", "Morning", "", false, nil))
 	h.PutSysvar(hub.NewSysvar("home", "Flag", "", hmenum.HubValueTypeLogic, nil))
-	hubIdx := &testHubIndex{h: h}
+	// The index must register the hub under the name the request filters
+	// on — the snapshot tags hub entities with the registry's name for
+	// the central, the same way the /programs and /sysvars lists do.
+	hubIdx := &testHubIndex{h: h, centralName: "home"}
 
 	t.Run("central=home scopes devices", func(t *testing.T) {
 		t.Parallel()
@@ -889,4 +892,63 @@ func TestSnapshot_Anonymise_NestedChannelNames(t *testing.T) {
 	if ch0.Address != "0001ABCD:1" {
 		t.Errorf("channel address must not be anonymised, got %q", ch0.Address)
 	}
+}
+
+// TestSnapshot_MultiCentralHubEntities pins the snapshot's hub projection
+// to the whole registry. It used to read HubIndex.Hub() — the first
+// central's hub — so a fleet snapshot silently dropped every other CCU's
+// programs and system variables, and a per-central export of any CCU but
+// the first came back with both arrays empty while `devices` was correct.
+func TestSnapshot_MultiCentralHubEntities(t *testing.T) {
+	t.Parallel()
+
+	hubA := hub.NewHub("ccu-a")
+	hubA.PutProgram(hub.NewProgram("ccu-a", "PA", "Morning", "", false, nil))
+	hubA.PutSysvar(hub.NewSysvar("ccu-a", "FlagA", "", hmenum.HubValueTypeLogic, nil))
+
+	hubB := hub.NewHub("ccu-b")
+	hubB.PutProgram(hub.NewProgram("ccu-b", "PB", "Evening", "", false, nil))
+	hubB.PutSysvar(hub.NewSysvar("ccu-b", "FlagB", "", hmenum.HubValueTypeLogic, nil))
+
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-a", Hub: hubA},
+		{Central: "ccu-b", Hub: hubB},
+	}}
+
+	get := func(t *testing.T, target string) SnapshotEnvelope {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, target, http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Hub: idx}).ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		return env
+	}
+
+	t.Run("fleet snapshot carries every central", func(t *testing.T) {
+		t.Parallel()
+		env := get(t, "/api/v1/snapshot")
+		if len(env.Programs) != 2 {
+			t.Fatalf("programs = %d (%+v), want both centrals", len(env.Programs), env.Programs)
+		}
+		if len(env.Sysvars) != 2 {
+			t.Fatalf("sysvars = %d (%+v), want both centrals", len(env.Sysvars), env.Sysvars)
+		}
+	})
+
+	t.Run("per-central scope resolves a non-first central", func(t *testing.T) {
+		t.Parallel()
+		env := get(t, "/api/v1/snapshot?central=ccu-b")
+		if len(env.Programs) != 1 || env.Programs[0].ID != "PB" {
+			t.Fatalf("programs = %+v, want only ccu-b's PB", env.Programs)
+		}
+		if len(env.Sysvars) != 1 || env.Sysvars[0].Name != "FlagB" {
+			t.Fatalf("sysvars = %+v, want only ccu-b's FlagB", env.Sysvars)
+		}
+	})
 }

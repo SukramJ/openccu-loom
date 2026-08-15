@@ -57,6 +57,19 @@
     persistDeviceListFilters();
   });
 
+  // The persisted central filter outlives the CCU it names: renaming or
+  // removing that CCU leaves a filter that matches nothing, and the select
+  // that could clear it is only rendered while more than one CCU has
+  // devices — so the list stays empty with no visible cause and no in-app
+  // way out. Reconcile against the configured fleet (not the loaded
+  // devices) so a CCU that is merely still inside its readiness-gated
+  // bring-up keeps the operator's filter.
+  $effect(() => {
+    const configured = centralStore.items;
+    if (!centralFilter || configured.length === 0) return;
+    if (!configured.some((c) => c.name === centralFilter)) centralFilter = "";
+  });
+
   // Layout class for the device containers — a multi-column card grid
   // or a single-column list, per the operator's view preference.
   const listClass = $derived(
