@@ -310,6 +310,23 @@
         : suppressedCentrals,
   );
 
+  // The filter is persisted and spans all three tabs, while each tab derives
+  // its own central list from its own rows. An active filter therefore
+  // regularly names a central the active tab knows nothing about — after a
+  // tab switch, after the last message of that central was acknowledged, or
+  // after the CCU was renamed. Keep the stored value among the options so
+  // the filter never hides every row with no control to clear it.
+  function centralOptions(list: string[]): { value: string; label: string }[] {
+    const names =
+      centralFilter && !list.includes(centralFilter)
+        ? [...list, centralFilter]
+        : list;
+    return [
+      { value: "", label: t("common.all_ccus") },
+      ...names.map((c) => ({ value: c, label: c })),
+    ];
+  }
+
   // Bulk-acknowledge scope: how many messages the "acknowledge all"
   // button would clear given the current central filter (the type /
   // quittable-only view filters do not narrow the CCU-side bulk pass).
@@ -425,18 +442,8 @@
     subtitle={t("messages.summary", { alarms: alarms.length, services: services.length })}
   >
     {#snippet actions()}
-      {#if tabCentrals.length > 1}
-        <Select
-          class="w-auto"
-          bind:value={centralFilter}
-          options={[
-            { value: "", label: t("common.all_ccus") },
-            ...tabCentrals.map((c) => ({
-              value: c,
-              label: c,
-            })),
-          ]}
-        />
+      {#if tabCentrals.length > 1 || centralFilter}
+        <Select class="w-auto" bind:value={centralFilter} options={centralOptions(tabCentrals)} />
       {/if}
       {#if tab === "alarm" && alarmAckAllCount > 0}
         <Button
@@ -567,15 +574,8 @@
         <input type="checkbox" bind:checked={onlyQuittable} />
         {t("messages.quittable_only")}
       </label>
-      {#if serviceCentrals.length > 1}
-        <Select
-          class="w-auto"
-          bind:value={centralFilter}
-          options={[
-            { value: "", label: t("common.all_ccus") },
-            ...serviceCentrals.map((c) => ({ value: c, label: c })),
-          ]}
-        />
+      {#if serviceCentrals.length > 1 || centralFilter}
+        <Select class="w-auto" bind:value={centralFilter} options={centralOptions(serviceCentrals)} />
       {/if}
     </div>
     <Card class="p-4">

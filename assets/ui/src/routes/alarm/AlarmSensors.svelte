@@ -174,21 +174,33 @@
   }
 
   // --- data loading ------------------------------------------------
+  // Monotonic generation guarding the zone-scoped fetch. save() PUTs the
+  // roster on screen back under the zone the selector points at *then*, so a
+  // response for a zone the operator has already left must never land — it
+  // would leave zone A's detectors staged under zone B, and the PUT replaces
+  // the whole set.
+  let loadGeneration = 0;
+
   async function loadSensors() {
-    if (!zoneId) {
+    const generation = ++loadGeneration;
+    const zone = zoneId;
+    if (!zone) {
       sensors = [];
       return;
     }
     loading = true;
     loadError = null;
     try {
-      sensors = await api.listAlarmZoneSensors(zoneId);
+      const next = await api.listAlarmZoneSensors(zone);
+      if (generation !== loadGeneration) return;
+      sensors = next;
       dirty = false;
       selected = new Set();
     } catch (err) {
+      if (generation !== loadGeneration) return;
       loadError = friendlyError(err, t);
     } finally {
-      loading = false;
+      if (generation === loadGeneration) loading = false;
     }
   }
 
@@ -413,6 +425,14 @@
   $effect(() => {
     if (zoneId && zoneId !== loadedFor) {
       loadedFor = zoneId;
+      // Drop the previous zone's roster before the new one arrives. The Save
+      // bar writes what is on screen to the *selected* zone, so leaving the
+      // old set (and its dirty flag) visible during the fetch would let it be
+      // saved into the zone just switched to.
+      sensors = [];
+      dirty = false;
+      selected = new Set();
+      drawerId = null;
       void loadSensors();
     }
   });
