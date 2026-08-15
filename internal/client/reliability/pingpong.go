@@ -224,7 +224,11 @@ func (t *PingPongTracker) Clear() {
 // count is above [PingPongConfig.MismatchThreshold] callers wire this to
 // publish a PingPongMismatchEvent.
 func (t *PingPongTracker) RecordPing(id string) {
-	if t.hasConnectionIssue != nil && t.hasConnectionIssue() {
+	// Read the gate through the accessor rather than the field: the gate is
+	// installed after the client is already published into the central's
+	// client registry, so the periodic connection check can call this while
+	// SetConnectionIssueGate writes the same field.
+	if t.HasConnectionIssue() {
 		// Skip tracking: connection is known down.
 		return
 	}

@@ -41,8 +41,8 @@ func TestCoalesceKeyForIsValueInclusive(t *testing.T) {
 	const addr, param = "VCU0000001:1", "LEVEL"
 
 	// Different float values → different, non-empty keys.
-	k1 := coalesceKeyFor("setValue", []any{addr, param, 0.3})
-	k2 := coalesceKeyFor("setValue", []any{addr, param, 0.7})
+	k1 := coalesceKeyFor("setValue", []any{addr, param, 0.3}, hmenum.CommandPriorityLow)
+	k2 := coalesceKeyFor("setValue", []any{addr, param, 0.7}, hmenum.CommandPriorityLow)
 	if k1 == "" || k2 == "" {
 		t.Fatalf("float-value writes produced empty keys (coalescing disabled): %q %q", k1, k2)
 	}
@@ -51,15 +51,15 @@ func TestCoalesceKeyForIsValueInclusive(t *testing.T) {
 	}
 
 	// Identical (address, parameter, value) → equal keys (dedup benefit).
-	if k3 := coalesceKeyFor("setValue", []any{addr, param, 0.3}); k1 != k3 {
+	if k3 := coalesceKeyFor("setValue", []any{addr, param, 0.3}, hmenum.CommandPriorityLow); k1 != k3 {
 		t.Fatalf("identical writes produced different keys: %q vs %q", k1, k3)
 	}
 
 	// Non-string value types are supported. The previous implementation type-
 	// asserted args[2] to string and returned "" for bool/int/float, disabling
 	// coalescing for the most common cases (STATE, LEVEL).
-	kTrue := coalesceKeyFor("setValue", []any{addr, "STATE", true})
-	kFalse := coalesceKeyFor("setValue", []any{addr, "STATE", false})
+	kTrue := coalesceKeyFor("setValue", []any{addr, "STATE", true}, hmenum.CommandPriorityLow)
+	kFalse := coalesceKeyFor("setValue", []any{addr, "STATE", false}, hmenum.CommandPriorityLow)
 	if kTrue == "" || kFalse == "" {
 		t.Fatalf("bool STATE writes produced empty keys: %q %q", kTrue, kFalse)
 	}
@@ -68,16 +68,16 @@ func TestCoalesceKeyForIsValueInclusive(t *testing.T) {
 	}
 
 	// Type is encoded so bool true and string "true" never collide.
-	if coalesceKeyFor("setValue", []any{addr, param, true}) ==
-		coalesceKeyFor("setValue", []any{addr, param, "true"}) {
+	if coalesceKeyFor("setValue", []any{addr, param, true}, hmenum.CommandPriorityLow) ==
+		coalesceKeyFor("setValue", []any{addr, param, "true"}, hmenum.CommandPriorityLow) {
 		t.Fatal("bool true and string \"true\" must not produce the same key")
 	}
 
 	// Non-setValue methods and short arg lists never coalesce.
-	if got := coalesceKeyFor("getValue", []any{addr, param, 1}); got != "" {
+	if got := coalesceKeyFor("getValue", []any{addr, param, 1}, hmenum.CommandPriorityLow); got != "" {
 		t.Errorf("getValue coalesce key = %q, want empty", got)
 	}
-	if got := coalesceKeyFor("setValue", []any{addr}); got != "" {
+	if got := coalesceKeyFor("setValue", []any{addr}, hmenum.CommandPriorityLow); got != "" {
 		t.Errorf("short-arg setValue coalesce key = %q, want empty", got)
 	}
 }
@@ -138,5 +138,74 @@ func TestBackendCallerDifferentValuesBothReachWire(t *testing.T) {
 	}
 	if _, ok := seen.Load(0.7); !ok {
 		t.Error("value 0.7 never reached the wire")
+	}
+}
+
+// TestBackendCallerCriticalWriteDoesNotAttachToLowPriorityLeader drives the
+// alarm case: a Low-priority write of ACOUSTIC_ALARM_ACTIVE=false is already
+// in flight and stalled on the wire when the alarm engine issues the same
+// write at Critical. A coalesce follower never runs its own function, so if
+// the two share a key the Critical command inherits the Low leader's throttle
+// slot, backoff and breaker verdict instead of taking the Critical bypasses.
+// The transport blocks until two calls have arrived, so a coalesced follower
+// deadlocks the barrier and the arrival count stays at 1.
+func TestBackendCallerCriticalWriteDoesNotAttachToLowPriorityLeader(t *testing.T) {
+	t.Parallel()
+
+	const addr, param = "VCU0000001:1", "ACOUSTIC_ALARM_ACTIVE"
+
+	var arrived atomic.Int32
+	leaderInFlight := make(chan struct{})
+	barrier := make(chan struct{})
+	caller := CallerFunc(func(ctx context.Context, _ string, _ []any) (any, error) {
+		if n := arrived.Add(1); n == 1 {
+			close(leaderInFlight)
+		} else if n == 2 {
+			close(barrier)
+		}
+		select {
+		case <-barrier:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		return nil, nil
+	})
+
+	ic, err := New(Config{
+		CentralName:   "c",
+		Interface:     hmenum.InterfaceHmIPRF,
+		Caller:        caller,
+		WriteThrottle: reliability.NewThrottle(reliability.ThrottleConfig{MaxInFlight: 2}),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	bc := NewBackendCaller(ic, hmenum.CommandPriorityLow)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = bc.CallAt(ctx, hmenum.CommandPriorityLow, "setValue", addr, param, false)
+	}()
+
+	select {
+	case <-leaderInFlight:
+	case <-ctx.Done():
+		t.Fatal("low-priority leader never reached the transport")
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = bc.CallAt(ctx, hmenum.CommandPriorityCritical, "setValue", addr, param, false)
+	}()
+	wg.Wait()
+
+	if n := arrived.Load(); n != 2 {
+		t.Fatalf("wire calls = %d, want 2 — the Critical write coalesced onto the Low leader", n)
 	}
 }

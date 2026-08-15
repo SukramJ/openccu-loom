@@ -284,12 +284,19 @@ func (c *InterfaceClient) Reconnect( //nolint:funlen // composition/wiring: long
 // last_value_send_tracker in Python terms). It is constructed lazily on first
 // access and stored in cfg.commandTracker (promoted via SetCommandTracker /
 // CommandTracker accessor pair).
+//
+// The tracker stamps every entry with this id, and its entries are cleared
+// by [reliability.CommandTracker.ClearForKey] from the callback path, which
+// builds its key from the id the CCU echo carries — the wire form
+// `<central>-<interface>`. Keying the tracker on the bare interface tag
+// instead would make the two keys never compare equal, so no confirmed echo
+// would ever clear an entry and every write would linger for the full TTL.
 func (c *InterfaceClient) CommandTracker() *reliability.CommandTracker {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.commandTracker == nil {
 		c.commandTracker = reliability.NewCommandTracker(
-			string(c.cfg.Interface),
+			string(hmtypes.NewWireInterfaceID(c.cfg.CentralName, c.cfg.Interface)),
 			reliability.CommandTrackerConfig{},
 		)
 	}
