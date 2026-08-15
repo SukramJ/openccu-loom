@@ -85,11 +85,13 @@ func buildTestCert(t *testing.T, opts certOptions) []byte {
 	e.PutUint(tlv.ContextTag(8), curveID)
 
 	// tag 9: PublicKey (65-byte uncompressed P-256)
-	pubKey := opts.pubKey
-	if pubKey == nil {
-		pubKey = makeValidPubKey(t)
+	if !opts.omitPublicKey {
+		pubKey := opts.pubKey
+		if pubKey == nil {
+			pubKey = makeValidPubKey(t)
+		}
+		e.PutOctets(tlv.ContextTag(9), pubKey)
 	}
-	e.PutOctets(tlv.ContextTag(9), pubKey)
 
 	// tag 10: Extensions (empty list)
 	e.StartList(tlv.ContextTag(10))
@@ -135,6 +137,7 @@ type certOptions struct {
 	pubAlgo            uint64
 	curveID            uint64
 	pubKey             []byte
+	omitPublicKey      bool
 	signature          []byte
 	omitSignature      bool
 }
@@ -427,5 +430,30 @@ func TestDecode_PublicKeyECDSA_ValidKey(t *testing.T) {
 	}
 	if ecdhPriv.PublicKey().Equal(ecdhPub) == false {
 		t.Error("PublicKeyECDSA returned wrong key")
+	}
+}
+
+func TestDecode_PublicKeyAbsentOrEmptyRejected(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		mut  func(o *certOptions)
+	}{
+		{"field omitted", func(o *certOptions) { o.omitPublicKey = true }},
+		{"empty octet string", func(o *certOptions) { o.pubKey = []byte{} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			opts := makeRootCertOpts()
+			tc.mut(&opts)
+			// Peer-supplied certs reach Decode straight off the wire
+			// (AddNOC, AddTrustedRootCertificate, CASE Sigma3), so a
+			// missing public key must be a clean rejection, never a panic.
+			_, err := Decode(buildTestCert(t, opts))
+			if !errors.Is(err, ErrMalformed) {
+				t.Fatalf("Decode: expected ErrMalformed, got %v", err)
+			}
+		})
 	}
 }

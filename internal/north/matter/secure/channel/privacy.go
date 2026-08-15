@@ -152,9 +152,10 @@ func ApplyPrivacyMask(mask, headerSlice []byte) error {
 }
 
 // PrivacyKey returns the lazily-derived privacy key for outbound
-// (encrypt) traffic. The key is cached on first use so subsequent
-// calls return the same slice. Returns an error when the session has
-// been [Session.Close]d.
+// (encrypt) traffic. The key is derived once and cached; each call
+// returns a fresh copy, because callers keep reading the bytes after
+// the lock is released and [Session.Close] zeroises the cached array.
+// Returns an error when the session has been [Session.Close]d.
 //
 // Used by the message-framing layer when a frame's Security Flags
 // carry the Privacy bit (P, bit 7). MRP / Secure Channel control
@@ -174,13 +175,14 @@ func (s *Session) PrivacyKey() ([]byte, error) {
 		}
 		s.privacyKey = k
 	}
-	return s.privacyKey, nil
+	return append([]byte(nil), s.privacyKey...), nil
 }
 
 // PeerPrivacyKey returns the lazily-derived privacy key for inbound
 // (decrypt) traffic. Unidirectional sessions where EncryptKey ==
 // DecryptKey share a single privacy key with [PrivacyKey]; PASE /
-// CASE bidirectional sessions split them.
+// CASE bidirectional sessions split them. Like [Session.PrivacyKey]
+// it returns a copy of the cached key.
 func (s *Session) PeerPrivacyKey() ([]byte, error) {
 	s.privacyMu.Lock()
 	defer s.privacyMu.Unlock()
@@ -194,5 +196,5 @@ func (s *Session) PeerPrivacyKey() ([]byte, error) {
 		}
 		s.peerPrivacyKey = k
 	}
-	return s.peerPrivacyKey, nil
+	return append([]byte(nil), s.peerPrivacyKey...), nil
 }
