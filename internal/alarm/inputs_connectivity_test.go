@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -120,6 +121,63 @@ func TestVanishedInterfaceEscalatesThroughTheReconciler(t *testing.T) {
 	reconcile()
 	waitForJournalEvent(t, svc, "central_lost_while_armed",
 		"losing every enrolled interface from the list must run the zone's central-loss policy")
+}
+
+// TestPartialInterfaceRecoveryKeepsTheStillDownRadioDegraded pins what
+// a half-recovered central reports.
+//
+// The all-interfaces-down boundary is the only edge the zone's
+// central-loss policy runs on, and the engine's central-scoped restore
+// marks every sensor of the central available again — the whole
+// central, not the interface that actually came back. So when one of
+// two lost radios returns, the sensors behind the other one flip to
+// available while that radio is still gone, and nothing corrects them:
+// the reconciler publishes only on drift, and a radio that stayed away
+// has not drifted. The zone then reports ready to arm, raises no
+// unreachable blocker and journals no fault, for as long as the daemon
+// runs.
+func TestPartialInterfaceRecoveryKeepsTheStillDownRadioDegraded(t *testing.T) {
+	t.Parallel()
+
+	svc, unit := armedConnectivityService(t)
+	report := func(iface hmenum.Interface, reachable bool) {
+		events.Publish(unit.EventBus, hmevent.ConnectivityChangedEvent{
+			Base: hmevent.NewBase(), CentralName: connectivityTestCentral,
+			InterfaceID: string(iface), Reachable: reachable,
+		})
+	}
+
+	report(hmenum.InterfaceHmIPRF, false)
+	report(hmenum.InterfaceBidCosRF, false)
+	waitForJournalEvent(t, svc, "central_lost_while_armed",
+		"losing every enrolled interface must run the zone's central-loss policy")
+
+	// Only the BidCos radio comes back; the HmIP one stays away.
+	report(hmenum.InterfaceBidCosRF, true)
+
+	waitForBlockers(t, svc, connectivityTestZone, hmenum.AlarmModeFull, []string{"door"},
+		"a sensor on a radio that never came back must keep blocking the arm")
+}
+
+// waitForBlockers polls the zone's readiness until its blockers for
+// mode equal want, or fails with why. The engine is fed from bus
+// handlers, so the verdict cannot be read once and be done.
+func waitForBlockers(t *testing.T, svc *Service, zoneID string, mode hmenum.AlarmMode, want []string, why string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	var got []string
+	for time.Now().Before(deadline) {
+		snap, ok := svc.Engine().Zone(zoneID)
+		if !ok {
+			t.Fatalf("unknown zone %q", zoneID)
+		}
+		got = snap.Readiness[mode].Blockers
+		if slices.Equal(got, want) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("readiness blockers = %v, want %v: %s", got, want, why)
 }
 
 // armedConnectivityService brings up an alarm service with two sensors

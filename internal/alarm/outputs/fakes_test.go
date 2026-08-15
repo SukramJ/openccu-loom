@@ -118,6 +118,16 @@ func (d *fakeSirenDevice) setOptical(active, observed bool) {
 	d.opticalActive, d.opticalObserved = active, observed
 }
 
+// setValueLists declares the device's acoustic/optical selection value
+// lists. Their head is the disable entry the CCU exposes first, which
+// is what an optical-only activation pins the acoustic half to — a test
+// that asserts what reaches the acoustic half has to declare them.
+func (d *fakeSirenDevice) setValueLists(tones, lights []string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.tones, d.lights = tones, lights
+}
+
 func (d *fakeSirenDevice) setTurnOnErr(err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
