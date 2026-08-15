@@ -13,6 +13,8 @@
   import { api, friendlyError } from "$lib/api/client";
   import type { DataPointSummary } from "$lib/api/types";
   import { onResync, subscribe } from "$lib/stores/events.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
+  import { dpLabel } from "$lib/sensor-actor/classify";
   import { t } from "$lib/i18n";
   import { resolveChannel, type ResolvedChannel } from "./resolver";
   import { widgetForResolved } from "./widgets";
@@ -111,7 +113,14 @@
         dataPoints[idx] = { ...dataPoints[idx], value };
       }
     } catch (err) {
-      error = friendlyError(err, t);
+      // A rejected write is an action result, not a load failure: `error`
+      // drives the template branch that replaces the whole widget, so
+      // writing it here would leave the operator without the control they
+      // just used — and nothing clears it until the next resync.
+      toastStore.error(
+        t("sensor_actor.action_failed", { name: dpLabel(dp) }),
+        friendlyError(err, t),
+      );
     }
   }
 </script>
