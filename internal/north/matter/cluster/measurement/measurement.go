@@ -64,6 +64,12 @@ const (
 	attrOccupancySensorBmp  uint32 = 0x0002
 )
 
+// OccupancySensing FeatureMap bit for the passive-infrared sensor type.
+// matter.js `occupancy-sensing.element.ts` gives OTHER constraint "0" and
+// PIR constraint "1", so PIR is bit 1. Bit 0 would advertise OTHER and
+// contradict the two sensor-type attributes, both of which report PIR.
+const occupancyFeaturePIR uint32 = 1 << 1
+
 // Cluster revisions. Matched against the model-layer constants in
 // `internal/model/custom/.../matter*.go`.
 const (
@@ -151,19 +157,15 @@ const (
 // always user-replaceable.
 const batReplaceUserReplaceable uint8 = 2
 
-// PowerSource FeatureMap bits per §11.7.4.
-//   - WIRED (0x01), BAT (0x02), RECHG (0x04), REPLC (0x08).
-//
-// HM-LOWBAT-driven projection sets BAT | REPLC. The REPLC bit is
-// required whenever BatReplaceability is served (Matter §11.7.6.10 M
-// conformance under REPLC) — strict validators reject the attribute
-// as non-conformant when the feature bit is absent.
-// matter.js ref: packages/model/src/standard/elements/power-source.element.ts
-// feature REPLC bit=3 per matter.js power-source.element.ts.
-const (
-	pwrFeatureBAT   uint32 = 1 << 1
-	pwrFeatureREPLC uint32 = 1 << 3
-)
+// PowerSource FeatureMap bit for a battery-backed source. matter.js
+// `power-source-cluster.element.ts` gives WIRED constraint "0" and BAT
+// constraint "1"; RECHG ("2") and REPLC ("3") stay clear because each
+// makes attributes mandatory that a LOWBAT-driven projection cannot
+// fill — REPLC requires BatReplacementDescription (0x13) and BatQuantity
+// (0x19), neither of which the CCU reports. BatReplaceability (0x10) is
+// served under the BAT feature: matter.js records its conformance as
+// "BAT", not "REPLC".
+const pwrFeatureBAT uint32 = 1 << 1
 
 // ElectricalPowerMeasurement (0x0090) attribute IDs per Matter §2.13.6.
 const (
@@ -177,10 +179,12 @@ const (
 )
 
 // ElectricalEnergyMeasurement (0x0091) attribute IDs per Matter §2.14.6.
+// CumulativeEnergyExported (0x0002) is deliberately absent: matter.js
+// gates it on "EXPE & CUME" and HM metering hardware has no exported-energy
+// path, so serving it would advertise an attribute whose feature is clear.
 const (
 	attrElEnAccuracy           uint32 = 0x0000
 	attrElEnCumulativeImported uint32 = 0x0001 // int64 mWh, struct EnergyMeasurementStruct.energy
-	attrElEnCumulativeExported uint32 = 0x0002
 )
 
 // ElectricalPower / ElectricalEnergy ClusterRevisions per matter.js HEAD
@@ -198,39 +202,71 @@ const (
 // DC measurement hardware.
 const elPwrFeatureAltC uint32 = 1 << 1
 
-// ElectricalEnergy FeatureMap bits per Matter §2.14.4 — only IMPE
-// (Imported energy) is advertised; HM-PSM does not measure exported
-// energy (no PV inversion path).
-const elEnFeatureIMPE uint32 = 1 << 0
+// ElectricalEnergy FeatureMap bits. matter.js
+// `electrical-energy-measurement.element.ts` puts IMPE at constraint "0"
+// and CUME at constraint "2". Both are advertised: the imported/exported
+// pair and the cumulative/periodic pair form two separate
+// at-least-one-required choice groups, and CumulativeEnergyImported —
+// the only value-bearing attribute the bridge serves — has conformance
+// "IMPE & CUME". EXPE stays clear because HM metering hardware has no
+// exported-energy path, PERE because no periodic accumulator exists.
+const (
+	elEnFeatureIMPE uint32 = 1 << 0
+	elEnFeatureCUME uint32 = 1 << 2
+)
 
-// AccuracyRangeStruct is one range entry inside an
-// AccuracyStruct per Matter §2.13.5.2 / §2.14.5.2.
+// AccuracyRangeStruct is one range entry inside an [AccuracyStruct].
 // Fields follow matter.js
-// packages/model/src/standard/elements/electrical-power-measurement.element.ts:
-// RangeMin(0) int64, RangeMax(1) int64. Only the mandatory pair is
-// surfaced here; optional PercentMax/FixedMax etc. are absent.
+// packages/model/src/standard/elements/measurement-accuracy-range-struct.element.ts:
+// RangeMin(0) int64, RangeMax(1) int64, FixedMax(5) uint64. PercentMax(2)
+// and FixedMax form an at-least-one-required choice group, so one of the
+// two has to be present for the struct to be conformant; we carry
+// FixedMax because HM meters quantise, they do not specify a relative
+// error.
 type AccuracyRangeStruct struct {
 	RangeMin int64
 	RangeMax int64
+	FixedMax uint64
 }
 
-// AccuracyStruct encodes one accuracy entry per Matter
-// §2.13.5.1 / §2.14.5.1 (ElectricalPowerMeasurement / ElectricalEnergy).
-// Field tag numbers follow matter.js
-// packages/model/src/standard/elements/electrical-power-measurement.element.ts:
-// MeasurementType(0) enum16, Measured(1) bool, MinAccuracy(2) uint16,
-// MaxAccuracy(3) uint16, AccuracyRanges(4) list[AccuracyRangeStruct].
+// AccuracyStruct encodes one MeasurementAccuracyStruct entry — the
+// payload of ElectricalPowerMeasurement.Accuracy (0x0090:0x0002) and
+// ElectricalEnergyMeasurement.Accuracy (0x0091:0x0000). Field tag numbers
+// and types follow matter.js
+// packages/model/src/standard/elements/measurement-accuracy-struct.element.ts:
+// MeasurementType(0) enum16, Measured(1) bool, MinMeasuredValue(2) int64,
+// MaxMeasuredValue(3) int64, AccuracyRanges(4) list[AccuracyRangeStruct].
 //
-// The spec requires at least one AccuracyStruct in the Accuracy list.
-// We surface one stub entry with all-zero accuracy bounds because HM
-// hardware does not publish manufacturer uncertainty specifications.
+// Tags 2 and 3 are the measurement *range*, not an accuracy percentage —
+// encoding them as unsigned made a typed decoder (chip's
+// TLVReader::Get(int64_t&) rejects unsigned elements) fail on a
+// conformance-M attribute of both clusters.
+//
+// The spec requires at least one AccuracyStruct in the Accuracy list and
+// at least one range inside it. HM hardware publishes no manufacturer
+// uncertainty specification, so the entry mirrors the placeholder shape
+// matter.js itself demonstrates in its measuring-socket template: the
+// full permitted measurement range with a one-unit fixed accuracy.
 type AccuracyStruct struct {
-	MeasurementType uint16 // enum16: 0x0008=ActivePower, 0x0009=ActiveEnergyImported
-	Measured        bool
-	MinAccuracy     uint16
-	MaxAccuracy     uint16
-	AccuracyRanges  []AccuracyRangeStruct
+	MeasurementType  uint16 // enum16: 0x0008=ActivePower, 0x0009=ActiveEnergyImported
+	Measured         bool
+	MinMeasuredValue int64
+	MaxMeasuredValue int64
+	AccuracyRanges   []AccuracyRangeStruct
 }
+
+// Measurement-range bounds for the stub accuracy entry. matter.js
+// constrains MinMeasuredValue / MaxMeasuredValue / RangeMin / RangeMax to
+// "-2^62 to 2^62"; math.MinInt64 / math.MaxInt64 sit outside that and are
+// rejected by a constraint-checking controller.
+const (
+	accuracyRangeMin int64 = -(1 << 62)
+	accuracyRangeMax int64 = 1 << 62
+	// accuracyFixedMax claims a one-unit (mW / mWh) absolute error. It is
+	// the smallest non-vacuous claim that satisfies the PercentMax/FixedMax
+	// choice group; matter.js uses the same placeholder.
+	accuracyFixedMax uint64 = 1
+)
 
 // EnergyMeasurementStruct is the wire payload of the
 // ElectricalEnergyMeasurement Cumulative/PeriodicEnergy* attributes per
@@ -768,11 +804,12 @@ func (s *OccupancySensingServer) MatterRead(attrID uint32) (any, bool) {
 	case attrOccupancySensorBmp:
 		return uint8(1 << 0), true // bit 0 = PIR
 	case cluster.AttrGlobalFeatureMap:
-		// All HM motion detectors use PIR (passive infrared). Per Matter
-		// §2.7.4 and matter.js OccupancySensingServer.ts:33-55, PIR is
-		// feature bit 0x01. FeatureMap=0 is only valid for sensors that
-		// declare no sensor-type feature — which is not our case.
-		return uint32(0x01), true
+		// All HM motion detectors use PIR (passive infrared). From
+		// cluster revision 5 on, matter.js requires one sensor-type
+		// feature to be selected, and controllers that branch on it
+		// (matter.js OccupancySensingServer.ts `features.passiveInfrared`)
+		// classify the sensor from this bit alone.
+		return occupancyFeaturePIR, true
 	case cluster.AttrGlobalClusterRevision:
 		return occupancyClusterRevision, true
 	}
@@ -957,20 +994,16 @@ func (s *ElectricalPowerServer) MatterRead(attrID uint32) (any, bool) {
 		// Matter §2.13.5.2 requires AccuracyRanges to have at least ONE
 		// AccuracyRangeStruct; an empty list is schema-invalid
 		// and strict validators (chip CHIP Error 0x26) reject it.
-		// HM hardware does not publish manufacturer uncertainty specs, so
-		// we surface one stub entry covering the full int64 measurement
-		// range with all optional accuracy fields absent (nullable).
-		// matter.js ref: packages/model/src/standard/elements/
-		// electrical-power-measurement.element.ts — AccuracyRangeStruct
-		// fields RangeMin(0) int64, RangeMax(1) int64.
+		// See [AccuracyStruct] for the stub-entry rationale.
 		return []AccuracyStruct{{
-			MeasurementType: 0x0008, // ActivePower
-			Measured:        true,
-			MinAccuracy:     0,
-			MaxAccuracy:     0,
+			MeasurementType:  0x0008, // ActivePower
+			Measured:         true,
+			MinMeasuredValue: accuracyRangeMin,
+			MaxMeasuredValue: accuracyRangeMax,
 			AccuracyRanges: []AccuracyRangeStruct{{
-				RangeMin: math.MinInt64,
-				RangeMax: math.MaxInt64,
+				RangeMin: accuracyRangeMin,
+				RangeMax: accuracyRangeMax,
+				FixedMax: accuracyFixedMax,
 			}},
 		}}, true
 	case attrElPwrActivePower:
@@ -1078,18 +1111,16 @@ func (s *ElectricalEnergyServer) MatterRead(attrID uint32) (any, bool) {
 	case attrElEnAccuracy:
 		// Matter §2.14.5.2 requires AccuracyRanges to have at least ONE
 		// AccuracyRangeStruct; an empty list is schema-invalid.
-		// Stub entry covers the full int64 measurement range.
-		// matter.js ref: packages/model/src/standard/elements/
-		// electrical-energy-measurement.element.ts — AccuracyRangeStruct
-		// fields RangeMin(0) int64, RangeMax(1) int64.
+		// See [AccuracyStruct] for the stub-entry rationale.
 		return []AccuracyStruct{{
-			MeasurementType: 0x0009, // ActiveEnergyImported
-			Measured:        true,
-			MinAccuracy:     0,
-			MaxAccuracy:     0,
+			MeasurementType:  0x0009, // ActiveEnergyImported
+			Measured:         true,
+			MinMeasuredValue: accuracyRangeMin,
+			MaxMeasuredValue: accuracyRangeMax,
 			AccuracyRanges: []AccuracyRangeStruct{{
-				RangeMin: math.MinInt64,
-				RangeMax: math.MaxInt64,
+				RangeMin: accuracyRangeMin,
+				RangeMax: accuracyRangeMax,
+				FixedMax: accuracyFixedMax,
 			}},
 		}}, true
 	case attrElEnCumulativeImported:
@@ -1103,11 +1134,8 @@ func (s *ElectricalEnergyServer) MatterRead(attrID uint32) (any, bool) {
 		// rejects a plain int64 here with "Wrong TLV type" (the report
 		// path's generic logger masked that for a while).
 		return EnergyMeasurementStruct{Energy: whToMilliWattHours(v)}, true
-	case attrElEnCumulativeExported:
-		// HM-PSM has no exported-energy concept; surface as null.
-		return nil, true
 	case cluster.AttrGlobalFeatureMap:
-		return elEnFeatureIMPE, true
+		return elEnFeatureIMPE | elEnFeatureCUME, true
 	case cluster.AttrGlobalClusterRevision:
 		return electricalEnergyClusterRevision, true
 	}
@@ -1134,7 +1162,7 @@ func (s *ElectricalEnergyServer) MatterReportable() []uint32 {
 // service rebuild reads the full attribute set; without this the
 // dispatcher falls back to MatterReportable's single attribute.
 func (s *ElectricalEnergyServer) MatterAttributes() []uint32 {
-	return []uint32{attrElEnAccuracy, attrElEnCumulativeImported, attrElEnCumulativeExported}
+	return []uint32{attrElEnAccuracy, attrElEnCumulativeImported}
 }
 
 func whToMilliWattHours(wh float64) int64 {
@@ -1479,11 +1507,8 @@ func (s *PowerSourceServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return []uint16{s.endpoint}, true
 	case cluster.AttrGlobalFeatureMap:
-		// BAT (bit 1) + REPLC (bit 3): BatReplaceability has M conformance
-		// under the REPLC feature per Matter §11.7.6.10; serving the
-		// attribute without the feature bit causes strict-validator rejection.
-		// matter.js: power-source.element.ts feature REPLC bit=3.
-		return pwrFeatureBAT | pwrFeatureREPLC, true
+		// BAT (bit 1) alone — see [pwrFeatureBAT] for why REPLC stays clear.
+		return pwrFeatureBAT, true
 	case cluster.AttrGlobalClusterRevision:
 		return powerSourceClusterRevision, true
 	}

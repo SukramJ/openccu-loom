@@ -382,12 +382,34 @@ func TestPowerSourceServer_MatterRead_BatReplacementNeeded_Unobserved(t *testing
 
 // ── OccupancySensingServer: FeatureMap attribute ──────────────────────────────
 
+// TestOccupancySensingServer_MatterRead_FeatureMap pins the advertised
+// sensor-type feature to PIR. matter.js
+// packages/model/src/standard/elements/occupancy-sensing.element.ts gives
+// OTHER constraint "0" and PIR constraint "1", so PIR is bit 1 (0x02).
+// Bit 0 advertises OTHER, which contradicts OccupancySensorType (0x0001)
+// and OccupancySensorTypeBitmap (0x0002) — both of which report PIR — and
+// mis-classifies the sensor for controllers that derive the sensor kind
+// from the FeatureMap.
 func TestOccupancySensingServer_MatterRead_FeatureMap(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewOccupancySensingServer(fakeBool{class: interfaces.MatterMeasurementOccupancy, val: true, obs: true})
 	v, ok := s.MatterRead(attrGlobalFeatureMap)
 	if !ok || v == nil {
 		t.Fatalf("OccupancySensing FeatureMap: got (%v, %v)", v, ok)
+	}
+	fm, isU32 := v.(uint32)
+	if !isU32 {
+		t.Fatalf("OccupancySensing FeatureMap is %T, want uint32", v)
+	}
+	const (
+		featureOther = uint32(1 << 0)
+		featurePIR   = uint32(1 << 1)
+	)
+	if fm&featurePIR == 0 {
+		t.Errorf("FeatureMap = 0x%02X: PIR bit (0x02) not set", fm)
+	}
+	if fm&featureOther != 0 {
+		t.Errorf("FeatureMap = 0x%02X: OTHER bit (0x01) set, but the sensor-type attributes report PIR", fm)
 	}
 }
 
