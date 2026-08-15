@@ -4,7 +4,29 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.59.2]
+## [0.60.0]
+
+### Changed
+
+A minor rather than a patch release: three of the fixes below change
+behaviour an operator may be relying on.
+
+- **The assistant (MCP) interface now enforces a role.** It previously
+  checked only that a request was authenticated, so a viewer-role token
+  reached the device-write and alarm-control tools. With
+  `north.mcp.allow_writes` set, the mount now requires the operator role;
+  read-only stays viewer-level. A viewer token that drives writes today
+  will start receiving 403.
+- **`GET /api/v1/matter/setup-payload` is admin-only.** It hands out the
+  commissioning passcode, so any authenticated identity could commission
+  the bridge into its own fabric.
+- **Three exported client seams were removed** rather than wired:
+  `ValueWriter.SetRetrier`, `ValueWriter.CancelInterface` and
+  `WriteOptions.PurgeAddresses`. None had a production caller, and
+  `CancelInterface` ignored both of its arguments while the effect it
+  advertised already happens in `InterfaceClient.Close()`.
+
+The REST contract version moves 5.29.0 → 5.31.0.
 
 ### Fixed
 

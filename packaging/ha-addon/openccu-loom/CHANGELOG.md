@@ -1,6 +1,6 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## 0.59.2
+## 0.60.0
 
 A maintenance release built from a full audit of the code base. Every one
 of the 272 defects it works through was confirmed by a second reviewer
@@ -41,6 +41,11 @@ affected by:
   audit log; the Matter commissioning code was readable by any signed-in
   account; and `config export` wrote the MQTT, OIDC and Matter passwords
   in clear text even without `--include-secrets`.
+
+Two changes you may notice if you use the assistant interface: it now
+requires an operator-role token for the write tools (a read-only token
+used to reach them, which was the defect), and the Matter commissioning
+code is readable by administrators only.
 
 Also includes the earlier pre-release comment review, which corrected 22
 inaccurate code comments and changes no behaviour.
