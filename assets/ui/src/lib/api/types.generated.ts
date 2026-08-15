@@ -4696,7 +4696,6 @@ export interface paths {
         trace?: never;
     };
     "/matter/events": {
-    "/matter/force-sync": {
         parameters: {
             query?: never;
             header?: never;
@@ -4712,6 +4711,19 @@ export interface paths {
         get: operations["getMatterDiagnosticEvents"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/matter/force-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
         get?: never;
         put?: never;
         /**
@@ -15375,7 +15387,6 @@ export interface operations {
         };
     };
     getMatterDiagnosticEvents: {
-    matterForceSync: {
         parameters: {
             query?: never;
             header?: never;
@@ -15386,6 +15397,24 @@ export interface operations {
         responses: {
             /** @description Recorded events, newest first */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatterDiagnosticEventList"];
+                };
+            };
+        };
+    };
+    matterForceSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             /** @description Topology re-assembled */
             204: {
                 headers: {
@@ -15399,7 +15428,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MatterDiagnosticEventList"];
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };

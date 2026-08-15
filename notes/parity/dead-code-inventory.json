@@ -1,6 +1,6 @@
 {
-  "generated": "f19d0088",
-  "head": "f19d0088",
+  "generated": "33afdc40",
+  "head": "33afdc40",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28863,
-    "reachable": 5047,
-    "whitelisted": 20811,
+    "total_exported": 28879,
+    "reachable": 5051,
+    "whitelisted": 20823,
     "unreachable": 3005
   },
   "by_package": [
@@ -1692,21 +1692,21 @@
       "package": "internal/audit",
       "identifier": "Buffer",
       "file": "internal/audit/audit.go",
-      "line": 292,
+      "line": 300,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 277,
+      "line": 285,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 277,
+      "line": 285,
       "kind": "type"
     },
     {
@@ -1755,14 +1755,14 @@
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 237,
+      "line": 245,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 237,
+      "line": 245,
       "kind": "type"
     },
     {
@@ -1804,28 +1804,28 @@
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 268,
+      "line": 276,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 268,
+      "line": 276,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 285,
+      "line": 293,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 285,
+      "line": 293,
       "kind": "type"
     },
     {
@@ -24603,6 +24603,13 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestEveryMatterRESTPortIsAssignedAndForwarded",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/matter_wiring_ports_test.go",
+      "line": 36
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestEvictModelNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
@@ -30024,14 +30031,14 @@
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 314
+      "line": 322
     },
     {
       "package": "internal/audit",
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 314
+      "line": 322
     },
     {
       "package": "internal/audit",
@@ -130968,6 +130975,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "MatterFabricPurger",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/matter_maintenance.go",
+      "line": 48
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "MatterFabricPurger",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/matter_maintenance.go",
+      "line": 48
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "MatterFabricResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter.go",
@@ -131035,6 +131056,34 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/matter.go",
       "line": 233
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "MatterFactoryReset",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/matter_maintenance.go",
+      "line": 66
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "MatterFactoryReset",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/matter_maintenance.go",
+      "line": 66
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "MatterForceSync",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/matter_maintenance.go",
+      "line": 26
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "MatterForceSync",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/matter_maintenance.go",
+      "line": 26
     },
     {
       "package": "internal/north/rest/handlers",
@@ -135644,6 +135693,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestFactoryResetRefusesWithoutTheWrittenConfirmation",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/matter_maintenance_test.go",
+      "line": 87
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestFactoryResetRemovesEveryFabricWhenConfirmed",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/matter_maintenance_test.go",
+      "line": 111
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestFetchSysvars_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
@@ -135767,6 +135830,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/session_test.go",
       "line": 231
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestForceSyncReassemblesTheTopology",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/matter_maintenance_test.go",
+      "line": 47
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestForceSyncReportsAFailedReassembly",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/matter_maintenance_test.go",
+      "line": 66
     },
     {
       "package": "internal/north/rest/handlers",
@@ -138350,6 +138427,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/admin_mqtt_reload_test.go",
       "line": 96
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestMaintenanceActionsNeedAnEnabledBridge",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/matter_maintenance_test.go",
+      "line": 130
     },
     {
       "package": "internal/north/rest/handlers",
