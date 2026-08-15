@@ -797,6 +797,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		restResolve:             restResolve,
 		authMw:                  authMw,
 		wsHandler:               wsHandler,
+		wsHub:                   wsHub,
 		levels:                  levels,
 		liveFeed:                stack.Live,
 		captureManager:          captureManager,

@@ -74,6 +74,12 @@ type PreUpdateBackupPort interface {
 	CreateBackupForCentral(ctx context.Context, centralName string) (string, error)
 }
 
+// preUpdateBackupTimeout budgets the backup-then-install sequence a
+// `backup_first` install runs. A CCU backup is a poll loop measured in
+// minutes, so this sits above the backend's own poll ceiling; the router's
+// request deadline (tens of seconds) never could.
+const preUpdateBackupTimeout = 6 * time.Minute
+
 // systemUpdateInstallRequest is the optional body of the install call.
 type systemUpdateInstallRequest struct {
 	// BackupFirst takes a full CCU backup and only starts the update once
@@ -90,7 +96,9 @@ type systemUpdateInstallRequest struct {
 // to, so proceeding without it would defeat the request. The call then
 // blocks for as long as the backup takes (minutes on a large
 // configuration) - the response is what tells the operator whether the
-// safety net exists, so it cannot be detached.
+// safety net exists, so the response cannot be detached. The context it
+// runs under is detached from the request, because the request deadline
+// is far shorter than a backup — see [preUpdateBackupTimeout].
 func PostSystemUpdateInstall(idx HubIndex, backup PreUpdateBackupPort, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		centralName := r.URL.Query().Get("central")
@@ -106,6 +114,9 @@ func PostSystemUpdateInstall(idx HubIndex, backup PreUpdateBackupPort, rec audit
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON body", err.Error()))
 			return
 		}
+		// Without a pre-update backup the request deadline is the right
+		// budget for the install; with one it is not — see below.
+		installCtx := r.Context()
 		if req.BackupFirst {
 			if backup == nil {
 				problem.Write(w, http.StatusServiceUnavailable,
@@ -128,7 +139,19 @@ func PostSystemUpdateInstall(idx HubIndex, backup PreUpdateBackupPort, rec audit
 						"a pre-update backup needs an explicit central on a multi-CCU install"))
 				return
 			}
-			id, err := backup.CreateBackupForCentral(r.Context(), target)
+			// The request deadline cannot bound a CCU backup: it is measured
+			// in tens of seconds while the backup polls for minutes, so
+			// binding the call to r.Context() cancels it mid-flight every
+			// time — the operator is told the safety net failed while the
+			// CCU-side backup is in fact still running. Detach from the
+			// request (request-scoped values such as the identity survive)
+			// and carry a budget that matches what a backup costs. The
+			// install shares it, because by the time it runs the request
+			// deadline has certainly expired.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), preUpdateBackupTimeout)
+			defer cancel()
+			installCtx = ctx
+			id, err := backup.CreateBackupForCentral(installCtx, target)
 			if err != nil {
 				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable,
 					"Pre-update backup failed; the update was not started", err)
@@ -142,7 +165,7 @@ func PostSystemUpdateInstall(idx HubIndex, backup PreUpdateBackupPort, rec audit
 				})
 			}
 		}
-		if err := h.Update.Install(r.Context()); err != nil {
+		if err := h.Update.Install(installCtx); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "System update failed", err)
 			return
 		}

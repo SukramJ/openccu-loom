@@ -31,6 +31,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
 	"github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
@@ -152,6 +153,10 @@ type restMountDeps struct {
 	restResolve func(http.Handler) http.Handler
 	authMw      *auth.Middleware
 	wsHandler   http.Handler
+	// wsHub is the live WebSocket hub. A credential revocation has to
+	// reach the open sockets too, not just the HTTP sessions — see
+	// [restMountDeps.credentialRevoker].
+	wsHub *ws.Hub
 
 	levels            *hmlog.LevelRegistry
 	liveFeed          *hmlog.LiveLog
@@ -306,7 +311,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ConfigChanges:     restartState,
 		UserAdmin:         d.userSvc,
 		SelfPassword:      d.passwordSvc,
-		SessionRevoker:    d.sessions,
+		SessionRevoker:    d.credentialRevoker(),
 		TokenPurger:       d.tokenPurger,
 		Preferences:       d.prefSvc,
 		Diagrams:          d.diagramSvc,
@@ -585,6 +590,19 @@ func alarmCodeAdminFrom(s *alarm.Service) handlers.AlarmCodeAdmin {
 		return nil
 	}
 	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes).OnChange(s.NotifyCodesChanged)
+}
+
+// credentialRevoker resolves the revoker the credential-change handlers
+// (user update, user delete, self-service password change) call. It is the
+// session store plus the WebSocket teardown: a socket captures its identity
+// at the upgrade and gates every later command on that snapshot, so a role
+// change or an account deletion that stops at the session map leaves the
+// old role live on the command plane until the client happens to reconnect.
+func (d restMountDeps) credentialRevoker() handlers.SessionRevoker {
+	if d.sessions == nil {
+		return nil
+	}
+	return ws.RevokeWithSockets(d.sessions, d.wsHub)
 }
 
 // mountMCP wraps the REST router so the configured MCP path serves the

@@ -131,6 +131,53 @@ func (h *Hub) ResyncSignals() uint64 {
 	return h.resyncSignals.Load()
 }
 
+// CloseBySubject tears down every open connection authenticated as
+// subject and reports how many it closed.
+//
+// A connection captures its identity once, at the upgrade, and the
+// command router gates every later write on that snapshot — for as long
+// as the socket lives, which is unbounded for a client that answers
+// pings. A credential revocation (role change, account deletion,
+// password reset) therefore has to reach the socket as well, or the
+// demoted principal keeps its connect-time role on the command plane
+// while REST already refuses it.
+//
+// Closing rather than re-resolving is deliberate: the raw credential is
+// never retained, so the connection cannot be re-validated in place. The
+// client reconnects and the upgrade re-runs the full auth chain, which
+// is the authority on what the principal may still do.
+//
+// Federated principals are skipped for the same reason
+// [auth.SessionStore.RevokeBySubject] skips them: an external provider
+// owns their credentials, so a local account change has no say over
+// their connections.
+func (h *Hub) CloseBySubject(subject string) int {
+	subject = auth.CanonicalSubject(subject)
+	if subject == "" {
+		return 0
+	}
+	h.mu.RLock()
+	targets := make([]*client, 0, len(h.clients))
+	for c := range h.clients {
+		if c.isClosed() {
+			continue
+		}
+		id := c.Identity()
+		if id.Scheme.Federated() || auth.CanonicalSubject(id.Subject) != subject {
+			continue
+		}
+		targets = append(targets, c)
+	}
+	h.mu.RUnlock()
+
+	// close() deregisters, which takes h.mu for writing — hence the two
+	// phases, mirroring [Hub.SignalResync].
+	for _, c := range targets {
+		c.close()
+	}
+	return len(targets)
+}
+
 // SetTokenStore wires the bearer-token resolver the in-band reauth
 // op consults. Nil disables reauth: a client sending {op:"reauth"}
 // then receives {op:"reauth_failed"} and the connection is closed —

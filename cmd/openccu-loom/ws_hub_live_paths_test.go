@@ -261,7 +261,7 @@ func buildHubQueryWithLiveHub(t *testing.T) (*wsHubQuery, *hubmodel.Hub) {
 		t.Fatal("HubModel is nil — buildTestRegistry must create it")
 	}
 	hubAdapter := adapter.NewHubAdapter(reg)
-	q := &wsHubQuery{hub: hubAdapter, registry: reg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg})
 	return q, h
 }
 

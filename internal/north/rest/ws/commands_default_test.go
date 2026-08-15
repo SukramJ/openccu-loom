@@ -7,7 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -480,6 +482,14 @@ func TestParamsetGetSurfacesBackendError(t *testing.T) {
 // --- programs.* / sysvars.* ---
 
 type stubHub struct {
+	// centralHubs, when set, is the set of centrals this stub knows, so a
+	// test can reproduce a multi-CCU daemon. The zero value keeps the
+	// single-central convenience case every command test relies on.
+	centralHubs []string
+	// boundCentral records what the last CentralHub call resolved to — the
+	// stub would otherwise accept a target it never inspects, which is
+	// exactly the wrong-CCU bug this contract exists to prevent.
+	boundCentral       string
 	localCalls         map[string]string
 	wiredSearches      map[string]string
 	wiredFound         int
@@ -529,6 +539,24 @@ type stubHub struct {
 	inboxAccepted     string
 	inboxAcceptOpts   InboxAcceptOptions
 	inboxErr          error
+}
+
+// CentralHub mirrors the production resolution: an explicit name must be
+// known, an empty name is the single-central convenience case, and an
+// empty name with several centrals is refused rather than guessed.
+func (h *stubHub) CentralHub(centralName string) (CentralHub, error) {
+	switch {
+	case centralName != "":
+		if len(h.centralHubs) > 0 && !slices.Contains(h.centralHubs, centralName) {
+			return nil, fmt.Errorf("%w: %s", ErrCentralUnknown, centralName)
+		}
+	case len(h.centralHubs) > 1:
+		return nil, ErrCentralRequired
+	case len(h.centralHubs) == 1:
+		centralName = h.centralHubs[0]
+	}
+	h.boundCentral = centralName
+	return h, nil
 }
 
 func (h *stubHub) ListPrograms(_ context.Context, includeInternal *bool) ([]map[string]any, error) {
