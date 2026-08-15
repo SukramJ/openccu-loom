@@ -69,8 +69,10 @@ func putWritableInteger(ch *device.Channel, address string, p hmenum.Parameter, 
 	}))
 }
 
-// fixedColorValueList is the canonical CCU label list for the COLOR enum,
-// ordered by FixedColor index (BLACK=0 .. WHITE=7).
+// fixedColorValueList lists the eight COLOR labels in [FixedColor] index
+// order (BLACK=0 .. WHITE=7). A CCU orders its own descriptor by the RGB bit
+// pattern instead, which is why the wire value is the label and never an
+// index — see [FixedColorLight.SetColorByName].
 var fixedColorValueList = []string{
 	"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE",
 }
@@ -211,6 +213,42 @@ func TestFixedColorLightSet(t *testing.T) {
 	// SetColor sends the string label "PURPLE" (FixedColorMagenta → "PURPLE").
 	if got := w.last(); got.param != hmenum.ParameterColor || got.value.(string) != "PURPLE" {
 		t.Fatalf("last=%+v", got)
+	}
+}
+
+func TestFixedColorLightSetByName(t *testing.T) {
+	// The descriptor a CCU reports is ordered by the RGB bit pattern, not by
+	// FixedColor — a caller holding only that list has to address the slot by
+	// name, and the name must reach the wire unchanged.
+	ccuOrder := []string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"}
+
+	for _, name := range ccuOrder {
+		w := &colorStubWriter{}
+		d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
+		ch := d.AddChannel("x", 1, "RGBW", hmenum.ParamsetKeyValues)
+		putWritableFloat(ch, "x", hmenum.ParameterLevel, w)
+		putWritableSelect(ch, "x", hmenum.ParameterColor, w, ccuOrder)
+
+		l := NewFixedColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{}})
+		if err := l.SetColorByName(context.Background(), name, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("SetColorByName(%q): %v", name, err)
+		}
+		if got := w.last(); got.param != hmenum.ParameterColor || got.value.(string) != name {
+			t.Fatalf("SetColorByName(%q) wrote %+v", name, got)
+		}
+	}
+}
+
+func TestFixedColorLightSetByNameRejectsUnknown(t *testing.T) {
+	w := &colorStubWriter{}
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
+	ch := d.AddChannel("x", 1, "RGBW", hmenum.ParamsetKeyValues)
+	putWritableFloat(ch, "x", hmenum.ParameterLevel, w)
+	putWritableSelect(ch, "x", hmenum.ParameterColor, w, fixedColorValueList)
+
+	l := NewFixedColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{}})
+	if err := l.SetColorByName(context.Background(), "MAUVE", hmenum.CommandPriorityHigh); err == nil {
+		t.Fatal("SetColorByName with an unknown name: want error, got nil")
 	}
 }
 

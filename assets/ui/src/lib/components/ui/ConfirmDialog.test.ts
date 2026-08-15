@@ -96,3 +96,61 @@ describe("ConfirmDialog — focus trap", () => {
     trigger.remove();
   });
 });
+
+describe("ConfirmDialog — keyboard", () => {
+  it("does not confirm when Enter is pressed while cancel holds focus", async () => {
+    render(ConfirmDialog);
+    let settled: boolean | undefined;
+    void confirmStore
+      .ask({ title: "Delete?", destructive: true })
+      .then((ok) => (settled = ok));
+    await tick();
+    await Promise.resolve();
+    await tick();
+
+    const buttons = document.querySelectorAll<HTMLElement>(
+      '[role="dialog"] button',
+    );
+    expect(document.activeElement).toBe(buttons[0]);
+
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    buttons[0].dispatchEvent(enter);
+    await tick();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(settled).toBeUndefined();
+    // The browser turns Enter on a focused <button> into a click. Suppressing
+    // it would make Cancel unreachable by keyboard while a global handler
+    // confirmed instead.
+    expect(enter.defaultPrevented).toBe(false);
+
+    confirmStore.resolve(false);
+  });
+
+  it("cancels on Escape", async () => {
+    render(ConfirmDialog);
+    let settled: boolean | undefined;
+    void confirmStore.ask({ title: "Delete?" }).then((ok) => (settled = ok));
+    await tick();
+    await Promise.resolve();
+    await tick();
+
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    await tick();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(settled).toBe(false);
+  });
+});

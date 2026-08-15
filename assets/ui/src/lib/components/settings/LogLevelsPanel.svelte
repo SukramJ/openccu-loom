@@ -29,7 +29,10 @@
 
   let newPath = $state("");
   let newLevel = $state<string>("debug");
-  let newTtl = $state(""); // minutes; empty ⇒ permanent
+  // Minutes; empty ⇒ permanent. The field below is an <input type="number">,
+  // and Svelte's numeric `bind:value` hands back a number — or null once the
+  // field is cleared — never a string.
+  let newTtl = $state<number | null>(null);
 
   const isAdmin = $derived(authStore.identity?.role === "admin");
   const levelOptions = LEVELS.map((l) => ({ value: l, label: l }));
@@ -56,17 +59,15 @@
     e.preventDefault();
     const path = newPath.trim();
     if (!path) return;
-    const minutes = Number(newTtl);
+    const minutes = newTtl ?? 0;
     const ttlSeconds =
-      newTtl.trim() !== "" && Number.isFinite(minutes) && minutes > 0
-        ? Math.round(minutes * 60)
-        : 0;
+      Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 60) : 0;
     busy = true;
     try {
       await api.setLogLevel(path, newLevel, ttlSeconds);
       toastStore.success(t("loglevels.added", { path }));
       newPath = "";
-      newTtl = "";
+      newTtl = null;
       await load();
     } catch (err) {
       toastStore.error(describe(err));

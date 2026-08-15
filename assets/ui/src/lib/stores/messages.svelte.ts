@@ -1,3 +1,4 @@
+import { SvelteMap } from "svelte/reactivity";
 import { api } from "$lib/api/client";
 import { subscribe } from "./events.svelte";
 import type { EventEnvelope } from "$lib/api/types";
@@ -23,8 +24,11 @@ import type { EventEnvelope } from "$lib/api/types";
  * subscription for the session and any view may add its own.
  */
 function createMessagesStore() {
-  const serviceByCentral = $state(new Map<string, number>());
-  const alarmByCentral = $state(new Map<string, number>());
+  // SvelteMap, not `$state(new Map())`: the rune's proxy passes a Map through
+  // untouched, so an in-place `set()` invalidates nothing and a view reading
+  // the totals below paints once at mount and never again.
+  const serviceByCentral = new SvelteMap<string, number>();
+  const alarmByCentral = new SvelteMap<string, number>();
   let seeded = $state(false);
 
   let unsub: (() => void) | null = null;
@@ -34,7 +38,7 @@ function createMessagesStore() {
   // value it read before the change.
   const live = new Set<string>();
 
-  function sum(m: Map<string, number>): number {
+  function sum(m: ReadonlyMap<string, number>): number {
     let total = 0;
     for (const n of m.values()) total += n;
     return total;
