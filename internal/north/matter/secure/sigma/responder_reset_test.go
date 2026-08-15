@@ -46,11 +46,11 @@ func runHandshakeAgainst(t *testing.T, responder *Responder, ipk [16]byte, fabri
 
 // TestResponderResetForNewSigma1_ClearsPeerCATs pins that the peer's
 // authenticated-subject state does not survive into the next
-// handshake. ProcessSigma3 only assigns CATs when the new peer's NOC
-// actually carries some, so a retained list would be handed to the
-// next session's ACL subject set — a peer with no CAT in its
-// certificate would be matched by every CAT-scoped ACE written for the
-// previous peer.
+// handshake: a peer with no CAT in its certificate must not be matched
+// by the CAT-scoped ACEs written for the previous peer. The reset is
+// what keeps the accessors honest for the whole span of the new
+// handshake; ProcessSigma3 replaces the tag set again once the new
+// peer authenticates.
 func TestResponderResetForNewSigma1_ClearsPeerCATs(t *testing.T) {
 	t.Parallel()
 	ipk := fabricIPK()

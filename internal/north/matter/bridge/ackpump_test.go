@@ -346,6 +346,83 @@ func TestAckPump_SessionScopedExchangeCollision(t *testing.T) {
 	}
 }
 
+// TestAckPumpStandaloneAckCarriesTheBridgeExchangeRole pins the
+// Initiator flag of a synthesised StandaloneAck to the bridge's role on
+// the exchange, which is the inverse of the inbound message's flag. The
+// ongoing-subscription path opens its own exchange
+// ([Bridge.sendInitiatedReport]), so the controller's IM StatusResponse
+// arrives with Initiator=false and the ack the pump answers with must
+// carry Initiator=true. An ack whose flag does not invert the peer's is
+// discarded as unsolicited — chip's ExchangeContext::MatchExchange
+// requires `payloadHeader.IsInitiator() != IsInitiator()`
+// (src/messaging/ExchangeContext.cpp:384) and matter.js applies the
+// same rule (packages/protocol/src/protocol/ExchangeManager.ts:319) —
+// leaving the StatusResponse unacked until the peer's retransmit cap
+// fires. matter.js stamps every message it sends, standalone acks
+// included, with the exchange's own role
+// (packages/protocol/src/protocol/MessageExchange.ts:738).
+func TestAckPumpStandaloneAckCarriesTheBridgeExchangeRole(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		peerInitiator bool
+		wantInitiator bool
+	}{
+		{
+			name:          "peer opened the exchange",
+			peerInitiator: true,
+			wantInitiator: false,
+		},
+		{
+			name:          "bridge opened the exchange",
+			peerInitiator: false,
+			wantInitiator: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			b := newStartedBridge(t)
+			b.AttachAckTracker(mrp.NewAckTracker(0))
+
+			peerConn, peerAddr := openPeerSocket(t)
+			defer peerConn.Close()
+
+			const (
+				exchangeID uint16 = 64
+				msgCounter uint32 = 0x4242
+			)
+			proto := buildNeedsAckProto(exchangeID, msgCounter)
+			proto.Initiator = tc.peerInitiator
+			b.owedInboundAck(peerAddr, buildMsgHdr(msgCounter), proto)
+			if n := b.RunAckPumpOnce(time.Now()); n != 1 {
+				t.Fatalf("RunAckPumpOnce: want 1, got %d", n)
+			}
+
+			if err := peerConn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+				t.Fatalf("SetReadDeadline: %v", err)
+			}
+			buf := make([]byte, 512)
+			nRead, _, err := peerConn.ReadFromUDP(buf)
+			if err != nil {
+				t.Fatalf("ReadFromUDP: %v", err)
+			}
+			_, hdrLen, err := message.UnmarshalHeader(buf[:nRead])
+			if err != nil {
+				t.Fatalf("UnmarshalHeader: %v", err)
+			}
+			rxProto, _, err := message.UnmarshalProtocolHeader(buf[hdrLen:nRead])
+			if err != nil {
+				t.Fatalf("UnmarshalProtocolHeader: %v", err)
+			}
+			if rxProto.Initiator != tc.wantInitiator {
+				t.Errorf("StandaloneAck Initiator = %v, want %v (inbound Initiator=%v)",
+					rxProto.Initiator, tc.wantInitiator, tc.peerInitiator)
+			}
+		})
+	}
+}
+
 // TestAckPump_MultipleExchanges verifies that two distinct obligations
 // produce two emissions from RunAckPumpOnce.
 func TestAckPump_MultipleExchanges(t *testing.T) {
