@@ -113,9 +113,11 @@ type Deps struct {
 	SysvarRefresh handlers.SysvarRefreshService
 	Interfaces    handlers.InterfaceIndex
 	Incidents     handlers.IncidentsReader
-	// IncidentsAdmin backs DELETE /incidents (admin-only bulk clear across
-	// every registered central). Nil disables the route (404); shares the
-	// domain call with the WS `incidents.clear` command.
+	// IncidentsAdmin backs DELETE /incidents, the bulk clear across every
+	// registered central. Operator-gated, matching the WS
+	// `incidents.clear` role it shares its domain call with — the name is
+	// historical and does not mean admin-only. Nil disables the route
+	// (404).
 	IncidentsAdmin handlers.IncidentsClearer
 	// Alarm backs the /alarm surface (the alarm-panel engine + output
 	// drivers + config stores). Nil leaves every /alarm route unmounted
@@ -753,8 +755,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Config != nil {
 				pr.Get("/config", handlers.Config(d.Config))
 			}
-			// UI telemetry — anonymous fire-and-forget endpoint the
-			// SPA uses to log toggle / view-selector events (ADR 0016).
+			// UI telemetry — fire-and-forget endpoint the SPA uses to
+			// log toggle / view-selector events (ADR 0016). It sits in
+			// this authenticated group: the payload is
+			// per-installation rather than per-user, but a caller still
+			// has to be authenticated.
 			pr.Post("/ui/event", handlers.PostUIEvent())
 			// Self-service password change for the logged-in local user.
 			// Any authenticated role; the handler verifies the current

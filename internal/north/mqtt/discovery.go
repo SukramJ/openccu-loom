@@ -126,7 +126,7 @@ const (
 	originSupportURL = "https://github.com/SukramJ/openccu-loom"
 )
 
-// originVersionStore is wired by main.SetVersion at startup so the
+// originVersionStore is set from the build version at daemon start-up so the
 // release banner can keep this compile-time constant in sync with
 // the build metadata. The Discovery payload uses whatever value
 // was last assigned — falls back to "dev". atomic.Value so concurrent

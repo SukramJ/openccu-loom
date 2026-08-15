@@ -130,8 +130,8 @@ type MissingCommandsConfig struct {
 	ParameterDeterminer ParameterDeterminer
 }
 
-// RegisterMissingCommands wires the 9 previously-missing WebSocket
-// commands onto router. Call alongside RegisterDefaultCommands,
+// RegisterMissingCommands wires ten WebSocket commands onto router
+// that the default set does not carry. Call alongside RegisterDefaultCommands,
 // RegisterExtendedCommands, and RegisterCustomDPCommands at boot time.
 func RegisterMissingCommands(router *Router, cfg MissingCommandsConfig) {
 	if router == nil {

@@ -1374,10 +1374,13 @@ func (b *Bridge) EvictState(
 // specific command topics.
 func (b *Bridge) Topics() *TopicBuilder { return b.topics }
 
-// CommandQoS exposes the configured inbound-command QoS
-// ([QoSProfile.Commands]) so a [CommandSubscriber] wired against this
-// bridge (via [CommandSubscriber.WithQoS]) subscribes at the operator's
-// configured level instead of a hardcoded default.
+// CommandQoS exposes the bridge's inbound-command QoS
+// ([QoSProfile.Commands]).
+//
+// Nothing calls it: the composition root builds the CommandSubscriber
+// without [CommandSubscriber.WithQoS], so inbound subscriptions use that
+// type's own QoS1 default. There is no operator setting behind this
+// either — BridgeConfig.QoS is never populated from the daemon config.
 func (b *Bridge) CommandQoS() QoS { return b.cfg.QoS.Commands }
 
 // PublishSystemStatus publishes payload to the per-central system-status

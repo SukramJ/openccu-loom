@@ -8,7 +8,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **The pre-release comment sweep corrected 22 inaccurate code
+- **The pre-release comment sweep corrected 31 inaccurate code
   comments.** Nothing about the daemon's behaviour changes; what changes
   is that its documentation no longer describes a system that does not
   exist. The ones worth naming: a package doc listed a Matter cluster
@@ -21,7 +21,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   documented as anonymous although it sits behind the auth gate; two
   constructors were marked as having no production caller when both are
   called; and several file inventories named files, packages and
-  directories that had been renamed or removed.
+  directories that had been renamed or removed. The page the daemon
+  serves when its web bundle is missing told the operator that login and
+  setup were still reachable — they live in that very bundle, so the one
+  situation in which the page appears is the one in which the statement
+  is false.
 
 ## [0.59.1]
 

@@ -391,8 +391,8 @@ func (c *RetainCleanup) Worklist() []string {
 //
 // Requires the bridge's underlying client to satisfy the [Client]
 // interface (publish + subscribe). The default [Publisher] interface
-// is narrower; production wiring uses the [Client] implementation
-// from `adapter_tcp.go`.
+// is narrower; production wiring uses the [Client] alias of the shared
+// go-mqtt client.
 func (b *Bridge) RunRetainCleanupOnce(ctx context.Context, snapshotWindow time.Duration) (int, error) {
 	if !b.cfg.RawEnabled {
 		return 0, nil

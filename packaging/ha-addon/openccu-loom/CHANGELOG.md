@@ -4,7 +4,8 @@
 
 Documentation-only release. A pre-release review of what the code's own
 comments claim, checked against what the code does, corrected 22
-inaccurate ones. No behaviour changes.
+inaccurate ones, including the page shown when the web bundle is missing,
+which claimed login and setup were still reachable. No behaviour changes.
 
 ## 0.59.1
 
