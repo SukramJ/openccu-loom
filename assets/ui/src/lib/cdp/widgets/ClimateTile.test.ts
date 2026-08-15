@@ -53,13 +53,25 @@ function dp(
   } as unknown as DataPointSummary;
 }
 
-function cdp(away: boolean): CustomDPSummary {
+function cdp(away: boolean, kind = "climate_hmip"): CustomDPSummary {
   return {
     name: "climate",
-    kind: "climate_hmip",
+    kind,
     channel_no: 1,
     capabilities: { away },
   } as unknown as CustomDPSummary;
+}
+
+// CONTROL_MODE is a read-only ENUM, so the wire carries the value_list
+// index — the label only exists in the descriptor.
+const RF_MODES = ["AUTO-MODE", "MANU-MODE", "PARTY-MODE", "BOOST-MODE"];
+
+function controlModeDP(index: number): DataPointSummary {
+  return {
+    ...dp("CONTROL_MODE", index, "ENUM"),
+    value_list: RF_MODES,
+    operations: { read: true, write: false, event: true },
+  } as unknown as DataPointSummary;
 }
 
 beforeEach(() => {
@@ -131,5 +143,71 @@ describe("ClimateTile — HmIP mode row", () => {
     expect(mockInvoke.mock.calls[0][2]).toBe("disable_away");
     expect(mockInvoke.mock.calls[1][2]).toBe("set_mode");
     expect(mockInvoke.mock.calls[1][3]).toEqual({ mode: "heat" });
+  });
+});
+
+describe("ClimateTile — RF control mode", () => {
+  it("labels the mode from the CONTROL_MODE value_list index", async () => {
+    mockListDataPoints.mockResolvedValue([
+      dp("SETPOINT", 21),
+      dp("ACTUAL_TEMPERATURE", 20.5),
+      controlModeDP(1),
+    ]);
+    render(ClimateTile, {
+      props: { address: ADDRESS, cdp: cdp(true, "climate_rf") },
+    });
+
+    // The secondary line is the only place the mode word appears — the RF
+    // button row carries the same caption, so match the joined readout.
+    await waitFor(() =>
+      expect(
+        screen.getByText("cdp.climate.mode_manual · 20.5 °C → 21.0 °C"),
+      ).toBeTruthy(),
+    );
+  });
+
+  // While the device is in PARTY-MODE the tile has to offer the way out.
+  // Reading CONTROL_MODE as a label left `isAway` permanently false, so the
+  // only button on the absence row re-armed the window the operator wanted
+  // to end.
+  it("detects PARTY-MODE as away and offers the disable_away action", async () => {
+    mockListDataPoints.mockResolvedValue([dp("SETPOINT", 12), controlModeDP(2)]);
+    render(ClimateTile, {
+      props: { address: ADDRESS, cdp: cdp(true, "climate_rf") },
+    });
+
+    await fireEvent.click(await screen.findByText("cdp.climate.present"));
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith(
+        ADDRESS,
+        "climate",
+        "disable_away",
+        {},
+      ),
+    );
+    expect(screen.queryByText("cdp.climate.away_24h")).toBeNull();
+  });
+});
+
+describe("ClimateTile — setpoint bounds", () => {
+  it("clamps the stepper to the descriptor range instead of 4.5 °C", async () => {
+    mockListDataPoints.mockResolvedValue([
+      { ...dp("SETPOINT", 6), min: 6, max: 30 } as unknown as DataPointSummary,
+    ]);
+    render(ClimateTile, {
+      props: { address: ADDRESS, cdp: cdp(false, "climate_rf") },
+    });
+
+    await fireEvent.click(
+      await screen.findByLabelText("control.number.decrement"),
+    );
+
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(1));
+    expect(mockInvoke).toHaveBeenCalledWith(
+      ADDRESS,
+      "climate",
+      "set_temperature",
+      { temperature: 6 },
+    );
   });
 });

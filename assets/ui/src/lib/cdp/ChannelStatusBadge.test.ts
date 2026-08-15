@@ -25,12 +25,23 @@ vi.mock("$lib/stores/events.svelte", () => ({
 }));
 
 vi.mock("$lib/i18n", () => ({
-  t: (key: string) => key,
+  t: (key: string, vars?: Record<string, unknown>) =>
+    vars ? `${key}::${JSON.stringify(vars)}` : key,
 }));
 
-// dpLabel just returns the parameter name in the stub.
+// dpLabel just returns the parameter name in the stub; enumValueLabel keeps
+// the real value_list lookup so the badge's ENUM path stays exercised.
 vi.mock("$lib/sensor-actor/classify", () => ({
   dpLabel: (dp: { parameter: string }) => dp.parameter,
+  enumValueLabel: (dp: {
+    type?: string;
+    value: unknown;
+    value_list?: string[];
+  }) => {
+    if ((dp.type ?? "").toUpperCase() !== "ENUM") return undefined;
+    if (typeof dp.value !== "number" || !dp.value_list) return undefined;
+    return dp.value_list[dp.value];
+  },
 }));
 
 vi.mock("$lib/quickcontrol/domain", () => ({
@@ -81,11 +92,51 @@ describe("ChannelStatusBadge — display name", () => {
     expect(getByText("MAINTENANCE")).toBeTruthy();
   });
 
-  it("falls back to 'Kanal N' when neither name nor typeLabel is set", () => {
+  it("falls back to the localized channel caption when neither name nor typeLabel is set", () => {
     const { getByText } = render(ChannelStatusBadge, {
       props: { address: "ABC123", channel: 3 },
     });
-    expect(getByText("Kanal 3")).toBeTruthy();
+    expect(getByText('device.channel_n::{"n":3}')).toBeTruthy();
+  });
+});
+
+describe("ChannelStatusBadge — value formatting", () => {
+  it("renders booleans through the catalogue instead of German literals", async () => {
+    listDataPointsMock.mockResolvedValue([
+      makeDP({ parameter: "STATE", type: "BOOL", value: true, observed: true }),
+    ]);
+    const { getByText } = render(ChannelStatusBadge, {
+      props: { address: "ABC123", channel: 0 },
+    });
+    await vi.waitFor(() => expect(getByText("quick.on")).toBeTruthy());
+  });
+
+  it("renders a window contact's STATE as the open/closed catalogue entry", async () => {
+    listDataPointsMock.mockResolvedValue([
+      makeDP({ parameter: "STATE", type: "BOOL", value: false, observed: true }),
+    ]);
+    const { getByText } = render(ChannelStatusBadge, {
+      props: { address: "ABC123", channel: 1, type: "SHUTTER_CONTACT" },
+    });
+    await vi.waitFor(() => expect(getByText("enum.CLOSED")).toBeTruthy());
+  });
+
+  // A read-only ENUM arrives as the raw value_list index; showing the digit
+  // turns a smoke detector's alarm status into an unreadable "1".
+  it("resolves an ENUM index to its value_list label", async () => {
+    listDataPointsMock.mockResolvedValue([
+      makeDP({
+        parameter: "SMOKE_DETECTOR_ALARM_STATUS",
+        type: "ENUM",
+        value: 1,
+        value_list: ["IDLE_OFF", "PRIMARY_ALARM", "INTRUSION_ALARM"],
+        observed: true,
+      }),
+    ]);
+    const { getByText } = render(ChannelStatusBadge, {
+      props: { address: "ABC123", channel: 2 },
+    });
+    await vi.waitFor(() => expect(getByText("PRIMARY_ALARM")).toBeTruthy());
   });
 });
 
