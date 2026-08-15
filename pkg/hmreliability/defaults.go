@@ -61,10 +61,20 @@ const (
 
 // Throttle defaults — mirror
 // (`command_throttle.py`).
+//
+// Only [ThrottleInterCommandDelay] is in force today. The southbound
+// pools are built per traffic class with an explicit in-flight capacity
+// and queue depth, and they leave the throttle's burst window
+// unconfigured — the throttle enables that path only when both burst
+// values are set, so the two constants below describe the reference
+// pacing rather than what a running daemon does. Enabling it is a
+// change to RF transmit behaviour and needs measurement against a real
+// CCU, not a constant flipped here.
 const (
 	// ThrottleInterCommandDelay is the minimum gap between two consecutive
-	// non-critical commands on the same interface. Default 0 — burst
-	// protection alone is usually sufficient for HmIP-RF.
+	// non-critical commands on the same interface. Default 0: writes are
+	// already serialised at one in-flight command per interface, and a CCU
+	// duty-cycle rejection is absorbed by [RetryDutyCycleDelay].
 	ThrottleInterCommandDelay = 0 * time.Millisecond
 	// ThrottleBurstThreshold is the soft cap on non-critical commands per
 	// [ThrottleBurstWindow].
@@ -72,10 +82,9 @@ const (
 	// ThrottleBurstWindow is the rolling window across which the burst threshold
 	// is measured.
 	ThrottleBurstWindow = 500 * time.Millisecond
-	// ThrottleMaxQueueDepthFactor scales [ThrottleMaxInFlight] into
-	// the recommended [ThrottleConfig.MaxQueueDepth]. The audit
-	// recommendation in §4.2.O9 is "4× MaxInFlight"; we centralise
-	// it here so the multiplier stays one value across callers.
+	// ThrottleMaxQueueDepthFactor scales a pool's in-flight capacity into
+	// its recommended queue depth ("4× in-flight"), centralised here so
+	// the multiplier stays one value across callers.
 	ThrottleMaxQueueDepthFactor = 4
 )
 

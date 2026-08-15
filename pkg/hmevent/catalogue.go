@@ -612,19 +612,24 @@ type IncidentRecordedEvent struct {
 func (IncidentRecordedEvent) Type() EventType { return EventTypeIncidentRecorded }
 
 // ConnectivityChangedEvent fires whenever per-interface reachability
-// flips. The reconciliation job emits one for every interface whose
-// state has drifted from the cached value — including one with
-// Reachable=false for an interface that has disappeared from the CCU's
-// interface list; the regular push pipeline emits one whenever a CCU
-// callback signals a change.
+// flips. The reconciliation job is its only producer: it emits one for
+// every interface whose state has drifted from the cached value —
+// including one with Reachable=false for an interface that has
+// disappeared from the CCU's interface list.
+//
+// The CCU offers no per-interface reachability callback, so this plane
+// is poll-bound by design: a radio interface that drops is reported at
+// the next reconcile pass, not on the push path. Consumers that gate a
+// safety decision on reachability (the alarm domain's central-loss
+// policy) inherit that latency.
 type ConnectivityChangedEvent struct {
 	Base
 	CentralName string
 	InterfaceID string
 	Reachable   bool
 	// LatencyMs is the round-trip latency observed during the probe that
-	// triggered this event, in milliseconds. Zero when the probe did not
-	// measure latency (e.g. push-driven path).
+	// triggered this event, in milliseconds. Zero when no probe measured
+	// latency — e.g. an interface that vanished from the CCU's list.
 	LatencyMs float64
 }
 

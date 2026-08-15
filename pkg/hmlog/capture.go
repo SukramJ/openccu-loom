@@ -203,7 +203,7 @@ func (h *TeeHandler) Enabled(ctx context.Context, level slog.Level) bool {
 // swallowed — capture must never interfere with normal logging.
 func (h *TeeHandler) Handle(ctx context.Context, r slog.Record) error {
 	if sink := h.state.sink.Load(); sink != nil {
-		if line, err := encodeRecord(r, sink.Anonymise()); err == nil {
+		if line, err := encodeRecord(r, h.bound, sink.Anonymise()); err == nil {
 			sink.Append(line)
 		}
 	}
@@ -239,17 +239,29 @@ func (h *TeeHandler) WithGroup(name string) slog.Handler {
 // encodeRecord renders r as a single JSON object. Conceptually
 // matches slog's JSON handler but operates on a fresh map so we can
 // inject the anonymisation step before serialisation.
-func encodeRecord(r slog.Record, anonymise bool) ([]byte, error) {
-	out := make(map[string]any, 8+r.NumAttrs())
+//
+// bound are the attributes the handler chain carries from With(...) —
+// central, interface, component. They are not on the record, so an
+// archive built from r alone cannot be attributed to a CCU. Record
+// attributes are written last and win on a key collision, matching
+// slog's own precedence.
+func encodeRecord(r slog.Record, bound []slog.Attr, anonymise bool) ([]byte, error) {
+	out := make(map[string]any, 8+len(bound)+r.NumAttrs())
 	out["time"] = r.Time.UTC().Format(time.RFC3339Nano)
 	out["level"] = strings.ToLower(r.Level.String())
 	out["msg"] = r.Message
-	r.Attrs(func(a slog.Attr) bool {
+	add := func(a slog.Attr) {
 		k, v := a.Key, attrValue(a.Value)
 		if anonymise {
 			v = anonymiseValue(k, v)
 		}
 		out[k] = v
+	}
+	for _, a := range bound {
+		add(a)
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		add(a)
 		return true
 	})
 	return json.Marshal(out)
