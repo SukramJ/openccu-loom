@@ -65,7 +65,7 @@ const (
 //   - ProtocolHeader.HasAck     = true
 //   - ProtocolHeader.AckCounter = AckCounter
 //   - ProtocolHeader.ExchangeID = ExchangeID
-//   - ProtocolHeader.Initiator  = !Initiator (peer's flag inverted)
+//   - ProtocolHeader.Initiator  = Initiator (our own role on the exchange)
 //   - ProtocolHeader.NeedsAck   = false (ACKs are never themselves Reliable)
 //
 // MRP itself stays protocol-shape-free; building the message bytes is
@@ -81,9 +81,11 @@ type AckObligation struct {
 	// belonged to. The standalone ACK rides the same exchange so the
 	// peer's MRP layer correlates it with the in-flight message.
 	ExchangeID uint16
-	// Initiator is true when the local side opened the exchange. The
-	// emitted standalone ACK uses the negation: a responder ACKs an
-	// initiator-flagged peer message and vice versa.
+	// Initiator is true when the local side opened the exchange, so it
+	// is the inverse of the flag on the message that created the
+	// obligation. The emitted standalone ACK carries it verbatim: the
+	// I flag always describes the sender's own role, and a peer drops
+	// an ACK whose flag does not invert its own.
 	Initiator bool
 	// DueAt is the wall-clock time after which the obligation MUST be
 	// emitted as a standalone ACK if it hasn't been piggybacked yet.

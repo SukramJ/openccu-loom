@@ -153,7 +153,7 @@ func TestSendUnsolicitedIM_EncryptedRoundTrip(t *testing.T) {
 		t.Errorf("proto.Opcode = %#x, want %#x (OpcodeReportData)", proto.Opcode, im.OpcodeReportData)
 	}
 	if proto.ExchangeID != target.exchangeID {
-		t.Errorf("proto.ExchangeID = %d, want %d (sendUnsolicitedIM with peerInitiator=true must echo target.exchangeID — that is the event-report path that stays on the peer's Subscribe exchange; attribute ongoing reports go through sendInitiatedIM on a fresh exchange)",
+		t.Errorf("proto.ExchangeID = %d, want %d (sendUnsolicitedIM with peerInitiator=true must echo target.exchangeID — that is the event-report path that stays on the peer's Subscribe exchange; attribute ongoing reports go through sendInitiatedReport on a fresh exchange)",
 			proto.ExchangeID, target.exchangeID)
 	}
 	if proto.Initiator {
