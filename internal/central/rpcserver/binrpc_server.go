@@ -11,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,12 +31,12 @@ type BINRPCServer struct {
 	mu     sync.RWMutex
 	routes map[string]Handlers // interface_id → handlers
 
-	// allowlist is an optional source-IP filter. When non-empty, only
-	// connections whose remote IP falls within one of the prefixes are
-	// dispatched; others are closed immediately with a debug log.
-	// Empty/nil means accept all peers (default: open — preserves
-	// existing behaviour on home-LAN deployments).
-	allowlist []netip.Prefix
+	// allowlist is an optional source-IP filter, resolved per connection.
+	// Only connections whose remote IP falls within one of the prefixes it
+	// reports are dispatched; others are closed immediately with a debug
+	// log. Nil means accept all peers (default: open — preserves existing
+	// behaviour on home-LAN deployments).
+	allowlist PeerAllowlist
 
 	ioTimeout   time.Duration
 	wg          sync.WaitGroup
@@ -66,12 +65,13 @@ type BINRPCConfig struct {
 	// Addr specifies a fixed non-zero port.
 	PortRange *PortRange
 
-	// PeerAllowlist, when non-empty, restricts accepted TCP connections
-	// to source IPs covered by one of the listed CIDR prefixes. A
-	// connection from an unlisted peer is closed immediately before any
-	// BIN-RPC data is read. Nil or empty means accept all peers (the
-	// default, preserving the current open-LAN behaviour).
-	PeerAllowlist []netip.Prefix
+	// PeerAllowlist, when non-nil, restricts accepted TCP connections to
+	// source IPs covered by one of the prefixes it reports. A connection
+	// from an unlisted peer is closed immediately before any BIN-RPC data
+	// is read. It is consulted per connection — see [PeerAllowlist]. Nil
+	// means accept all peers (the default, preserving the current open-LAN
+	// behaviour).
+	PeerAllowlist PeerAllowlist
 
 	// MaxConnections caps the number of simultaneously-accepted TCP
 	// connections. Accept blocks once the cap is reached and resumes as
@@ -103,7 +103,7 @@ func NewBINRPCServer(cfg BINRPCConfig) (*BINRPCServer, error) {
 // listener. Split out of [NewBINRPCServer] so the accept loop can be
 // exercised against a listener that fails on demand, through the same
 // field initialisation the daemon uses.
-func newBINRPCServerOn(ln net.Listener, logger *slog.Logger, ioTimeout time.Duration, allow []netip.Prefix) *BINRPCServer {
+func newBINRPCServerOn(ln net.Listener, logger *slog.Logger, ioTimeout time.Duration, allow PeerAllowlist) *BINRPCServer {
 	if logger == nil {
 		logger = slog.Default()
 	}

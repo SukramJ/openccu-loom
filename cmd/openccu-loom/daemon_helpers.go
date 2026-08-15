@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
@@ -18,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // configuredCentralNames returns the names of every configured central,
@@ -63,7 +65,7 @@ func bridgeHealthSupplier(cfg *config.Config, startedAt time.Time) func() map[st
 //
 // The effective port is always read from srv.Addr() after construction,
 // never from the configured value.
-func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*rpcserver.XMLRPCServer, int, error) {
+func startCallbackServer(ctx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, logger *slog.Logger) (*rpcserver.XMLRPCServer, int, error) {
 	host := cfg.Callback.Host
 	if host == "" {
 		host = "0.0.0.0"
@@ -85,7 +87,7 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 		Addr:           addr,
 		Logger:         logger.With(slog.String("component", "callback.xmlrpc")),
 		MaxConnections: cfg.Callback.MaxConnections,
-		PeerAllowlist:  buildCallbackAllowlist(ctx, cfg, logger),
+		PeerAllowlist:  allowlist,
 		PortRange:      portRange,
 	}
 
@@ -106,46 +108,158 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 	return srv, port, nil
 }
 
-// buildCallbackAllowlist resolves the source-IP allowlist for both
-// callback listeners from the configured CCU hosts plus loopback. It
-// returns nil (accept-all) unless cfg.Callback.RestrictSourceIPs is set,
-// preserving the default open-LAN behaviour. Loopback is always included
-// so a co-located CCU (e.g. the RaspberryMatic add-on pushing from
-// 127.0.0.1) keeps working. A configured host that is an IP literal is
-// added as a /32 or /128; a hostname is resolved to all of its A/AAAA
-// records. A host that fails to resolve is skipped with a warning rather
-// than silently blackholing its callbacks — the operator opted in, so a
-// visible log beats an invisible drop.
-func buildCallbackAllowlist(ctx context.Context, cfg *config.Config, logger *slog.Logger) []netip.Prefix {
+// callbackAllowlistRefresh is how often the source-IP allowlist is
+// re-derived. It bounds two windows: how long a CCU adopted through the
+// admin surface is refused, and how long a CCU whose DHCP lease or DNS
+// record moved keeps being refused.
+const callbackAllowlistRefresh = 30 * time.Second
+
+// newCallbackAllowlist returns the source-IP allowlist for both callback
+// listeners, or nil (accept-all) unless cfg.Callback.RestrictSourceIPs is
+// set — preserving the default open-LAN behaviour.
+//
+// The result is a resolver, not a snapshot. The CCU set is not fixed at boot:
+// adding a central is an explicitly restart-free operation, and the
+// orchestrator wires it live without touching cfg.Centrals. A listener frozen
+// on the boot-time set therefore drops every callback from that CCU — with
+// only a DEBUG line and no fallback poll, so it presents as a central that
+// comes up, reports live, and then never updates a value. Re-resolving also
+// covers an existing CCU whose address changed under it.
+//
+// Both tiers are consulted, the same union [hasConfiguredCentral] uses: the
+// boot config (YAML plus the DB rows layered in at boot) and the SQLite
+// centrals table a runtime adopt writes. Loopback is always included so a
+// co-located CCU (pushing from 127.0.0.1) keeps working. A host that is an IP
+// literal becomes a /32 or /128; a hostname is resolved to all of its A/AAAA
+// records, and one that fails to resolve is skipped with a warning rather
+// than silently blackholed — the operator opted in, so a visible log beats an
+// invisible drop.
+//
+// Resolution runs on its own goroutine, ticking until ctx is done, so no DNS
+// lookup ever blocks an Accept. The first list is resolved synchronously, so
+// the listener is never briefly open.
+func newCallbackAllowlist(
+	ctx context.Context,
+	cfg *config.Config,
+	centrals *sqlitestore.CentralsStore,
+	logger *slog.Logger,
+) rpcserver.PeerAllowlist {
 	if !cfg.Callback.RestrictSourceIPs {
 		return nil
 	}
+	return newLiveCallbackAllowlist(ctx, cfg, centrals, logger, callbackAllowlistRefresh)
+}
+
+// newLiveCallbackAllowlist is [newCallbackAllowlist] past the opt-in gate,
+// with the refresh cadence as a parameter so the loop can be exercised
+// without waiting out the production interval.
+func newLiveCallbackAllowlist(
+	ctx context.Context,
+	cfg *config.Config,
+	centrals *sqlitestore.CentralsStore,
+	logger *slog.Logger,
+	refresh time.Duration,
+) rpcserver.PeerAllowlist {
+	live := &callbackAllowlist{cfg: cfg, centrals: centrals, logger: logger}
+	live.store(live.resolve(ctx))
+	go live.run(ctx, refresh)
+	return live.prefixes
+}
+
+// callbackAllowlist holds the most recently resolved prefix set. Readers are
+// the two listeners' accept paths, which must never block; the single writer
+// is the refresh goroutine [newCallbackAllowlist] starts.
+type callbackAllowlist struct {
+	cfg      *config.Config
+	centrals *sqlitestore.CentralsStore
+	logger   *slog.Logger
+
+	mu      sync.RWMutex
+	current []netip.Prefix
+}
+
+// prefixes reports the current allowlist. It satisfies
+// [rpcserver.PeerAllowlist].
+func (a *callbackAllowlist) prefixes() []netip.Prefix {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.current
+}
+
+func (a *callbackAllowlist) store(prefixes []netip.Prefix) {
+	a.mu.Lock()
+	a.current = prefixes
+	a.mu.Unlock()
+}
+
+// run re-resolves the allowlist until ctx is cancelled — the daemon context,
+// so the refresh outlives a callback-listener restart and stops at shutdown.
+func (a *callbackAllowlist) run(ctx context.Context, refresh time.Duration) {
+	ticker := time.NewTicker(refresh)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.store(a.resolve(ctx))
+		}
+	}
+}
+
+func (a *callbackAllowlist) resolve(ctx context.Context) []netip.Prefix {
 	out := []netip.Prefix{
 		netip.MustParsePrefix("127.0.0.0/8"),
 		netip.MustParsePrefix("::1/128"),
 	}
-	for i := range cfg.Centrals {
-		host := cfg.Centrals[i].Host
-		if host == "" {
+	seen := make(map[string]struct{}, len(a.cfg.Centrals))
+	for i := range a.cfg.Centrals {
+		out = a.appendHost(ctx, out, seen, a.cfg.Centrals[i].Name, a.cfg.Centrals[i].Host)
+	}
+	if a.centrals == nil {
+		return out
+	}
+	rows, err := a.centrals.List(ctx)
+	if err != nil {
+		// The boot-config tier still holds; a transient store error must not
+		// shrink the allowlist to loopback-plus-nothing.
+		a.logger.Warn("callback.allowlist.centrals.list", slog.String("err", err.Error()))
+		return out
+	}
+	for i := range rows {
+		if !rows[i].Enabled {
 			continue
 		}
-		if addr, err := netip.ParseAddr(host); err == nil {
+		out = a.appendHost(ctx, out, seen, rows[i].Name, rows[i].Host)
+	}
+	return out
+}
+
+// appendHost adds host's addresses to out, skipping hosts already covered so
+// a central present in both tiers is resolved once.
+func (a *callbackAllowlist) appendHost(ctx context.Context, out []netip.Prefix, seen map[string]struct{}, name, host string) []netip.Prefix {
+	if host == "" {
+		return out
+	}
+	if _, dup := seen[host]; dup {
+		return out
+	}
+	seen[host] = struct{}{}
+	if addr, err := netip.ParseAddr(host); err == nil {
+		addr = addr.Unmap()
+		return append(out, netip.PrefixFrom(addr, addr.BitLen()))
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil || len(ips) == 0 {
+		a.logger.Warn("callback.allowlist.resolve.failed",
+			slog.String("central", name),
+			slog.String("host", host))
+		return out
+	}
+	for _, ip := range ips {
+		if addr, ok := netip.AddrFromSlice(ip.IP); ok {
 			addr = addr.Unmap()
 			out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
-			continue
-		}
-		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-		if err != nil || len(ips) == 0 {
-			logger.Warn("callback.allowlist.resolve.failed",
-				slog.String("central", cfg.Centrals[i].Name),
-				slog.String("host", host))
-			continue
-		}
-		for _, ip := range ips {
-			if addr, ok := netip.AddrFromSlice(ip.IP); ok {
-				addr = addr.Unmap()
-				out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
-			}
 		}
 	}
 	return out

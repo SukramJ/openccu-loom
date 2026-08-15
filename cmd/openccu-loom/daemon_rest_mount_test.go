@@ -100,6 +100,39 @@ func TestMountMCPResolvesCredentialsBeforeRequire(t *testing.T) {
 	})
 }
 
+// TestMountMCPSurvivesAPersistedUnmountablePath pins that a mount path
+// http.ServeMux cannot register does not take the daemon down.
+//
+// ServeMux reports a bad pattern by panicking during registration, and the
+// path is persisted config: the panic would repeat on every start with the
+// SPA that could correct the value never coming up. The mount is refused
+// instead, and REST — which serves that SPA — keeps working.
+func TestMountMCPSurvivesAPersistedUnmountablePath(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{"/", "/mcp{id}", "/mcp/"} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := config.Default()
+			cfg.North.MCP.Enabled = true
+			cfg.North.MCP.Path = path
+
+			rest := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusTeapot)
+			})
+			handler := mountMCP(cfg, restMountDeps{reg: central.NewRegistry()}, rest, slog.New(slog.DiscardHandler))
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != http.StatusTeapot {
+				t.Fatalf("REST fallthrough after a refused MCP mount: got %d, want %d", rr.Code, http.StatusTeapot)
+			}
+		})
+	}
+}
+
 // TestMountMCPGatesWriteToolsOnOperatorRole pins that the MCP mount enforces
 // a role, not merely the presence of an identity.
 //

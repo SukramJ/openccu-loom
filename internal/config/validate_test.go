@@ -169,10 +169,11 @@ func TestValidateChecksTheWebhookEndpoint(t *testing.T) {
 	})
 }
 
-// TestValidateChecksTheMCPMountPath pins that north.mcp.path, when set,
-// must be an absolute mount prefix — no leading slash mounts nothing an
-// HTTP client can reach, and a trailing slash (other than the root
-// mount) is rejected rather than silently normalised.
+// TestValidateChecksTheMCPMountPath pins that north.mcp.path, when set, is
+// something http.ServeMux can register: an absolute mount prefix built from
+// unreserved characters. ServeMux rejects a malformed pattern by panicking
+// during registration, so a value that gets past this check kills the daemon
+// in bring-up — on every start, since the value is persisted.
 func TestValidateChecksTheMCPMountPath(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -182,9 +183,17 @@ func TestValidateChecksTheMCPMountPath(t *testing.T) {
 	}{
 		{"empty selects the default", "", false},
 		{"a normal mount", "/mcp", false},
+		{"a nested mount", "/api/mcp-v1", false},
 		{"no leading slash", "mcp", true},
 		{"trailing slash", "/mcp/", true},
-		{"root mount is allowed", "/", false},
+		// The mount registers "/" itself as the fall-through to the REST
+		// router, so a root MCP mount registers that pattern twice and
+		// ServeMux panics with "conflicts with pattern".
+		{"root mount", "/", true},
+		// A brace is a ServeMux wildcard segment; an unbalanced or
+		// non-identifier one panics in the pattern parser.
+		{"wildcard brace", "/mcp{id}", true},
+		{"embedded space", "/mcp adapter", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

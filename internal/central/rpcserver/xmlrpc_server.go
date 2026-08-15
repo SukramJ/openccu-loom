@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/netip"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,12 +59,13 @@ type XMLRPCConfig struct {
 	// Logger for slog events. Defaults to slog.Default().
 	Logger *slog.Logger
 
-	// PeerAllowlist, when non-empty, restricts accepted TCP connections
-	// to source IPs covered by one of the listed CIDR prefixes. A
-	// connection from an unlisted peer is closed at Accept time, before
-	// the HTTP server reads it. Nil or empty means accept all peers (the
-	// default, preserving the current open-LAN behaviour).
-	PeerAllowlist []netip.Prefix
+	// PeerAllowlist, when non-nil, restricts accepted TCP connections to
+	// source IPs covered by one of the prefixes it reports. A connection
+	// from an unlisted peer is closed at Accept time, before the HTTP
+	// server reads it. It is consulted per connection — see
+	// [PeerAllowlist]. Nil means accept all peers (the default,
+	// preserving the current open-LAN behaviour).
+	PeerAllowlist PeerAllowlist
 
 	// MaxConnections caps the number of simultaneously-accepted TCP
 	// connections. Accept blocks once the cap is reached and resumes as

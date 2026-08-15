@@ -42,7 +42,7 @@ func TestStartCallbackServerBindsInsideTheConfiguredPortRange(t *testing.T) {
 	// so the test's own context is the teardown.
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
-	_, port, err := startCallbackServer(ctx, cfg, quietLogger())
+	_, port, err := startCallbackServer(ctx, cfg, nil, quietLogger())
 	if err != nil {
 		t.Fatalf("startCallbackServer: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestStartCallbackServerUsesTheFixedPortWhenNoRangeIsConfigured(t *testing.T
 	// so the test's own context is the teardown.
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
-	_, port, err := startCallbackServer(ctx, cfg, quietLogger())
+	_, port, err := startCallbackServer(ctx, cfg, nil, quietLogger())
 	if err != nil {
 		t.Fatalf("startCallbackServer: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestStartCallbackServerRejectsAMalformedPortRange(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
-	if _, _, err := startCallbackServer(ctx, cfg, quietLogger()); err == nil {
+	if _, _, err := startCallbackServer(ctx, cfg, nil, quietLogger()); err == nil {
 		t.Fatal("a malformed port_range must fail the callback bring-up")
 	}
 }

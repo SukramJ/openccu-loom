@@ -691,6 +691,35 @@ func (m NorthMCP) MountPath() string {
 	return m.Path
 }
 
+// mcpMountPathPattern is the shape [NorthMCP.MountPath] must have to be
+// usable as an http.ServeMux pattern: one or more slash-separated segments
+// of URI-unreserved characters. Anything outside that set is rejected
+// rather than sanitised — a wildcard brace makes ServeMux panic while
+// parsing the pattern, and a percent escape would mount the adapter on a
+// path the operator did not write.
+var mcpMountPathPattern = regexp.MustCompile(`^(/[A-Za-z0-9._~-]+)+$`)
+
+// ValidateMountPath reports why the effective mount path cannot be
+// registered on the daemon's HTTP mux.
+//
+// The value is handed to http.ServeMux verbatim, and ServeMux answers a
+// malformed pattern with a panic during registration, not an error: the
+// daemon dies in bring-up, on every subsequent start, with the offending
+// value already persisted and the UI that would fix it unreachable. The
+// root mount is rejected for the same reason — the MCP mount registers
+// "/" itself as the fall-through to the REST router, so mounting MCP
+// there registers one pattern twice.
+func (m NorthMCP) ValidateMountPath() error {
+	path := m.MountPath()
+	if !mcpMountPathPattern.MatchString(path) {
+		return fmt.Errorf(
+			"config: north.mcp.path must be an absolute path of unreserved characters "+
+				"with no trailing slash (e.g. %q): %q", "/mcp", path,
+		)
+	}
+	return nil
+}
+
 // NorthDiscovery groups LAN-discovery surfaces external clients use
 // to locate the daemon without manual configuration. See ADR 0021.
 type NorthDiscovery struct {

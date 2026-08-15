@@ -178,8 +178,14 @@ func wireSharedInfrastructure(
 	// bridge — the gate is captured at build time and has no setter afterwards.
 	// The overlay is keyed on (central, address).
 	si.mqttSup.SetChannelHidden(channelHiddenGate(channelFlags))
+	// A failed first connect is not fatal and not final: the supervisor keeps
+	// the stable Wiring every consumer below binds to and retries the connect
+	// in the background, so a broker that is still booting beside the daemon
+	// costs a delay rather than the whole MQTT plane until the next restart.
 	if err := si.mqttSup.Start(ctx, cfg); err != nil {
-		logger.Warn("mqtt.supervisor.start", slog.String("err", err.Error()))
+		logger.Warn("mqtt.supervisor.start",
+			slog.String("err", err.Error()),
+			slog.String("effect", "MQTT publishes are dropped until a background retry connects"))
 	}
 	// Late-bind the supervisor + the live config snapshot into the
 	// reload deps bag so the config-watcher's hot-reload handler can

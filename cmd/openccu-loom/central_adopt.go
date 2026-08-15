@@ -44,6 +44,9 @@ type centralHandle struct {
 	// list is discarded once the adopt succeeds: an unwire that lives only
 	// there lets a removed central keep publishing.
 	unwires []func()
+	// detachBridge releases the north-bound event bridge. It is separate
+	// from unwires because it must run LAST — see [centralHooks].
+	detachBridge func()
 }
 
 // centralOrchestrator is the live-CCU-adopt composition seam: it drives one
@@ -131,6 +134,14 @@ type centralOrchestrator struct {
 // registered at all.
 type centralHooks struct {
 	unwires []func()
+	// detachBridge is the one teardown that is deliberately NOT in the list:
+	// the north-bound event bridge carries the per-device retractions that
+	// the model eviction publishes during teardown, so detaching it in
+	// attach order — first — silently discarded every one of them and left
+	// the removed CCU's HA discovery configs and raw-plane topics retained
+	// on the broker forever. It runs after the eviction instead; see
+	// [centralOrchestrator.removeCentral].
+	detachBridge func()
 }
 
 // attachCentralHooks subscribes an adopted central onto every per-central
@@ -168,7 +179,7 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 	if bridge := o.sbDeps.bridge; bridge != nil {
 		bridge.AttachCentral(unit)
 		name := unit.Name()
-		keep(func() { bridge.DetachCentral(name) })
+		h.detachBridge = func() { bridge.DetachCentral(name) }
 	}
 	if matterHook != nil {
 		keep(matterHook(unit))
@@ -404,6 +415,13 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// bridge is disabled.
 	hooks := o.attachCentralHooks(unit)
 	undo = append(undo, hooks.unwires...)
+	// A failed adopt has no model to evict, so the ordering constraint that
+	// keeps detachBridge out of the unwire list does not apply here — the
+	// rollback simply must not leave the bridge attached to a central that
+	// never came up.
+	if hooks.detachBridge != nil {
+		undo = append(undo, hooks.detachBridge)
+	}
 
 	// Southbound bring-up (callback routes + readiness-gated device pull) and
 	// the north-bound hooks run AFTER Start, matching wireSouthbound's
@@ -422,7 +440,8 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 
 	o.mu.Lock()
 	o.handles[cc.Name] = &centralHandle{
-		cc: cc, avail: avail, climate: climate, unwires: hooks.unwires,
+		cc: cc, avail: avail, climate: climate,
+		unwires: hooks.unwires, detachBridge: hooks.detachBridge,
 	}
 	o.mu.Unlock()
 
@@ -481,11 +500,10 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 
 	o.bringUp.RemoveCentral(name)
 
-	// Every per-central domain unwire, in attach order: the event bridge and
-	// the Matter subscriptions go first — no value change, readiness,
-	// reassemble or hub broadcast must be processed for a central whose
-	// teardown has begun — and all of them run before the model teardown
-	// below.
+	// Every per-central domain unwire, in attach order: the Matter
+	// subscriptions go first — no readiness, reassemble or hub broadcast
+	// must be processed for a central whose teardown has begun — and all of
+	// them run before the model teardown below.
 	for _, unwire := range h.unwires {
 		unwire()
 	}
@@ -501,6 +519,13 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	if unit, live := o.reg.Get(name); live {
 		evictModel(unit)
 		unit.Stop() //nolint:contextcheck // Unit.Stop takes no ctx parameter; teardown always runs to completion regardless of the caller's ctx
+	}
+	// The event bridge is released only now: it owns the DeviceRemovedEvent
+	// subscription that turns the eviction above into MQTT retractions and
+	// into the release of the removed devices' week-profile / schedule /
+	// firmware callbacks. Detaching it with the other unwires cost both.
+	if h.detachBridge != nil {
+		h.detachBridge()
 	}
 
 	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore, h.cc, o.logger)
@@ -532,7 +557,7 @@ func (o *centralOrchestrator) bootHandle(name string) *centralHandle {
 		}
 	}
 	if bridge := o.sbDeps.bridge; bridge != nil {
-		h.unwires = append(h.unwires, func() { bridge.DetachCentral(name) })
+		h.detachBridge = func() { bridge.DetachCentral(name) }
 	}
 	return h
 }

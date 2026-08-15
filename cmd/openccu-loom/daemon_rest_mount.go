@@ -610,6 +610,18 @@ func (d restMountDeps) credentialRevoker() handlers.SessionRevoker {
 // every other path falls through to the REST router. The MCP server is
 // read-only unless North.MCP.AllowWrites is also set. See ADR 0025.
 func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *slog.Logger) http.Handler {
+	// http.ServeMux answers a malformed pattern with a panic while
+	// registering it, and the value reaching us here has been persisted, so
+	// a panic would repeat on every subsequent boot with the SPA that could
+	// correct it never coming up. Refuse the mount and keep REST serving:
+	// the operator loses the MCP surface and keeps the daemon.
+	if err := cfg.North.MCP.ValidateMountPath(); err != nil {
+		logger.Error("north.mcp.mount.rejected",
+			slog.String("path", cfg.North.MCP.MountPath()),
+			slog.String("err", err.Error()),
+			slog.String("effect", "MCP is not served this run; REST is unaffected"))
+		return router
+	}
 	// The MCP tool set is a projection of the same domain REST serves, so it
 	// carries the same role requirement. With AllowWrites the set includes
 	// set_datapoint and the alarm arm / disarm / silence controls, which REST

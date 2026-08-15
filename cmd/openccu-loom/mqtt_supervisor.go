@@ -51,7 +51,24 @@ type mqttSupervisor struct {
 	onConnect     []func(context.Context) // forwarded to every (re)built lifecycle
 
 	current *mqttSwap // nil when no stack is active (MQTT disabled or pre-Start)
+
+	// retryCancel stops the background connect-retry loop [Start] launches
+	// when the very first broker connect fails. Nil while no retry runs.
+	retryCancel context.CancelFunc
+	// retryDelay / retryMaxDelay bound that loop's exponential backoff.
+	// Fields rather than constants so a test can drive the loop without
+	// waiting out real broker timings.
+	retryDelay    time.Duration
+	retryMaxDelay time.Duration
 }
+
+// Bounds of the boot-connect retry backoff. The upper bound is what an
+// operator waits at worst after the broker comes back, and it also paces the
+// connect-failure log line each attempt emits.
+const (
+	defaultMQTTRetryDelay    = 5 * time.Second
+	defaultMQTTRetryMaxDelay = 2 * time.Minute
+)
 
 // mqttSwap captures the live components of one MQTT stack
 // generation. Every Swap creates a fresh mqttSwap and tears the
@@ -81,7 +98,12 @@ func newMQTTSupervisor(logger *slog.Logger, healthTracker *health.Tracker) *mqtt
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &mqttSupervisor{logger: logger, healthTracker: healthTracker}
+	return &mqttSupervisor{
+		logger:        logger,
+		healthTracker: healthTracker,
+		retryDelay:    defaultMQTTRetryDelay,
+		retryMaxDelay: defaultMQTTRetryMaxDelay,
+	}
 }
 
 // SetChannelHidden wires the operator-hidden-channel gate (G12) that every
@@ -225,6 +247,25 @@ func (s *mqttSupervisor) Start(ctx context.Context, cfg *config.Config) error {
 	}
 	swap, err := s.buildSwap(ctx, cfg)
 	if err != nil {
+		// A broker that is not accepting connections yet — the co-located
+		// broker add-on still booting is the common case — must not disable
+		// the MQTT plane for the process lifetime. Two things make that
+		// happen, and both are handled here.
+		//
+		// First, every consumer captures the [mqtt.Wiring] pointer once at
+		// composition time; handing them nil is permanent, and a later Swap
+		// builds a Wiring they do not hold. Publishing through a
+		// bridge-less Wiring is a no-op, so the stable pointer costs nothing
+		// while the link is down.
+		//
+		// Second, the lifecycle's reconnect loop only starts after a
+		// successful first connect, so nothing retries on its own.
+		s.mu.Lock()
+		if s.wiring == nil {
+			s.wiring = mqtt.NewWiring(nil, s.logger)
+		}
+		s.mu.Unlock()
+		s.retryInitialConnect(ctx, cfg)
 		return err
 	}
 	s.mu.Lock()
@@ -257,6 +298,65 @@ func (s *mqttSupervisor) Start(ctx context.Context, cfg *config.Config) error {
 		slog.String("client_id", cfg.North.MQTT.ClientID),
 		slog.String("topic_base", cfg.North.MQTT.TopicBase))
 	return nil
+}
+
+// retryInitialConnect re-attempts the boot-time stack build in the background
+// until the broker accepts a connection, then returns. It goes through [Swap]
+// so a recovered link installs the new bridge into the Wiring every consumer
+// already holds, re-attaches the subscribers and fires the OnConnect
+// republish hooks — i.e. the daemon ends up in the state a successful boot
+// would have produced, without a restart.
+//
+// ctx is the daemon-lifetime context [Start] received; [Shutdown] cancels the
+// loop early. Only one loop runs at a time, and it stops as soon as any other
+// path (a config reload, POST /mqtt/reload) has built a stack.
+func (s *mqttSupervisor) retryInitialConnect(ctx context.Context, cfg *config.Config) {
+	s.mu.Lock()
+	if s.retryCancel != nil {
+		s.mu.Unlock()
+		return
+	}
+	retryCtx, cancel := context.WithCancel(ctx)
+	s.retryCancel = cancel
+	delay, maxDelay := s.retryDelay, s.retryMaxDelay
+	s.mu.Unlock()
+
+	if delay <= 0 {
+		delay = defaultMQTTRetryDelay
+	}
+	if maxDelay < delay {
+		maxDelay = delay
+	}
+
+	go func() {
+		defer func() {
+			cancel()
+			s.mu.Lock()
+			s.retryCancel = nil
+			s.mu.Unlock()
+		}()
+		for {
+			select {
+			case <-retryCtx.Done():
+				return
+			case <-time.After(delay):
+			}
+			s.mu.Lock()
+			live := s.current != nil
+			s.mu.Unlock()
+			if live {
+				return
+			}
+			if err := s.Swap(retryCtx, cfg); err == nil {
+				s.logger.Info("mqtt.supervisor.connect.recovered",
+					slog.String("broker", redactBrokerURL(cfg.North.MQTT.BrokerURL)))
+				return
+			}
+			if delay *= 2; delay > maxDelay {
+				delay = maxDelay
+			}
+		}
+	}()
 }
 
 // Swap rebuilds the MQTT stack from newCfg. The new stack must
@@ -354,7 +454,11 @@ func (s *mqttSupervisor) Shutdown(ctx context.Context) {
 	s.mu.Lock()
 	swap := s.current
 	s.current = nil
+	cancelRetry := s.retryCancel
 	s.mu.Unlock()
+	if cancelRetry != nil {
+		cancelRetry()
+	}
 	if swap == nil {
 		return
 	}
