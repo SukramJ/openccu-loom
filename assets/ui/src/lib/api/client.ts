@@ -47,6 +47,7 @@ import type {
   RoomEntry,
   UserListEntry,
   ClimateSchedule,
+  ChannelSummary,
   CustomDPSummary,
   DataPointSummary,
   DeviceDetail,
@@ -193,7 +194,17 @@ function csrfToken(): string {
   return "";
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/**
+ * `payloadStatuses` names the non-2xx statuses whose body the OpenAPI
+ * contract documents as the normal payload rather than an error. Such a
+ * response resolves like a 200 instead of throwing; every other non-2xx
+ * still throws an ApiError.
+ */
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  payloadStatuses: readonly number[] = [],
+): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -212,7 +223,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     // per-call Content-Type + CSRF) is not clobbered by `...init`.
     headers,
   });
-  if (!res.ok) {
+  if (!res.ok && !payloadStatuses.includes(res.status)) {
     // A 401 on any non-login call means the session is no longer valid;
     // notify the auth store so the SPA returns to the login view (which
     // unmounts the app shell and stops its background pollers). /auth/login
@@ -356,7 +367,7 @@ export const api = {
     return request<DeviceDetail>(`/devices/${encodeURIComponent(address)}`);
   },
   listChannels(address: string) {
-    return request<{ items: DeviceDetail["channels"] }>(
+    return request<ChannelSummary[]>(
       `/devices/${encodeURIComponent(address)}/channels`,
     );
   },
@@ -1070,7 +1081,11 @@ export const api = {
   },
   // --- Diagnostics ----------------------------------------------
   health() {
-    return request<HealthSnapshot>(`/health`);
+    // The daemon answers 503 with a complete snapshot once every
+    // interface component is unhealthy — one CCU offline or rebooting is
+    // enough. That is the outage Diagnostics and the connectivity lights
+    // exist to explain, so the body is the payload, not an error.
+    return request<HealthSnapshot>(`/health`, {}, [503]);
   },
   incidents() {
     return request<Incident[] | null>(`/incidents`).then((v) => v ?? []);

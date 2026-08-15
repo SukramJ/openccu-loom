@@ -75,7 +75,7 @@
     const generation = ++loadGeneration;
     loadingChannels = true;
     try {
-      const items = (await api.listChannels(addr)).items ?? [];
+      const items = (await api.listChannels(addr)) ?? [];
       if (generation !== loadGeneration) return;
       channels = items;
     } catch {
