@@ -11,8 +11,10 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"strconv"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
@@ -325,6 +327,13 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 			b.logger.Info("matter.rx.sc.pase_busy",
 				slog.String("src", srcString(src)),
 				slog.Int("exchange_id", int(proto.ExchangeID)))
+			b.diagEvents.Record(diagevent.Event{
+				Kind:     diagevent.KindPairing,
+				Severity: diagevent.SeverityWarning,
+				Message: "A commissioner tried to pair while another pairing was already " +
+					"in progress; its attempt was dropped and it will retry.",
+				Detail: map[string]string{"peer": srcString(src)},
+			})
 			return nil
 		}
 		h := b.resolvePaseHandler(proto.ExchangeID)
@@ -488,6 +497,13 @@ func (b *Bridge) recordPaseFailure() {
 	b.logger.Warn("matter.rx.sc.pase_bruteforce",
 		slog.Int("max_errors", paseMaxErrors),
 		slog.String("hint", "too many PASE pairing failures; revoking commissioning window"))
+	b.diagEvents.Record(diagevent.Event{
+		Kind:     diagevent.KindPairing,
+		Severity: diagevent.SeverityError,
+		Message: "The commissioning window was revoked after too many failed pairing " +
+			"attempts. Open a new one and re-check the pairing code.",
+		Detail: map[string]string{"max_errors": strconv.Itoa(paseMaxErrors)},
+	})
 	_ = win.RevokeWindow(context.Background())
 }
 

@@ -6,6 +6,7 @@ import type {
   MatterEndpointsResponse,
   MatterMdnsDiagnostics,
   MatterSessionsResponse,
+  MatterDiagnosticEventList,
 } from "$lib/api/matter-types";
 
 const emptyTable = { live: 0, reserved: 0, capacity: 65534, free: 65534 };
@@ -14,6 +15,7 @@ let sessions: MatterSessionsResponse = { sessions: [], occupancy: emptyTable };
 let mdns: MatterMdnsDiagnostics = { advertising: true, services: [], findings: [] };
 let endpoints: MatterEndpointsResponse = { endpoints: [] };
 let compat: MatterCompatibility = { ecosystems: [], endpoint_count: 0, findings: [] };
+let diagEvents: MatterDiagnosticEventList = { events: [] };
 
 vi.mock("$lib/api/client", () => ({
   api: {
@@ -21,6 +23,7 @@ vi.mock("$lib/api/client", () => ({
     matterMdns: () => Promise.resolve(mdns),
     matterEndpoints: () => Promise.resolve(endpoints),
     matterCompatibility: () => Promise.resolve(compat),
+    matterDiagnosticEvents: () => Promise.resolve(diagEvents),
   },
 }));
 
@@ -32,6 +35,7 @@ describe("MatterDiagnostics", () => {
     mdns = { advertising: true, services: [], findings: [] };
     endpoints = { endpoints: [] };
     compat = { ecosystems: [], endpoint_count: 0, findings: [] };
+    diagEvents = { events: [] };
   });
   afterEach(cleanup);
 
@@ -167,5 +171,26 @@ describe("MatterDiagnostics", () => {
     render(MatterDiagnostics);
     expect(await screen.findByText("Bücherregal")).toBeTruthy();
     expect(screen.queryByText("RootNode")).toBeNull();
+  });
+
+  // The trace is the only surface that answers "what happened before the
+  // controller went quiet"; the others report current state.
+  it("shows a recorded pairing failure", async () => {
+    diagEvents = {
+      events: [
+        {
+          at: "2026-08-15T12:00:30Z",
+          kind: "pairing",
+          severity: "error",
+          message:
+            "The commissioning window was revoked after too many failed pairing attempts.",
+        },
+      ],
+    };
+
+    render(MatterDiagnostics);
+    expect(
+      await screen.findByText(/revoked after too many failed pairing/i),
+    ).toBeTruthy();
   });
 });

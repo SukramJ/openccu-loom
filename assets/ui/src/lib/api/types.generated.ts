@@ -4695,6 +4695,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/matter/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent Matter pairing, session and discovery events
+         * @description A bounded, in-memory trace of the moments that explain a failed pairing — a commissioner refused while another was mid-handshake, a commissioning window revoked after repeated failures, a session closed. The existing Matter diagnostics report state and therefore cannot answer "what happened thirty seconds ago", which is the question left after a controller gives up and goes quiet.
+         *
+         *     The trace is lossy by design: oldest entries are dropped to make room, and it does not survive a restart. It is a diagnostic, not an audit trail.
+         */
+        get: operations["getMatterDiagnosticEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/matter/fabrics": {
         parameters: {
             query?: never;
@@ -7584,6 +7606,23 @@ export interface components {
             subject: string;
             /** @enum {string} */
             role: "admin" | "operator" | "viewer";
+        };
+        MatterDiagnosticEvent: {
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            kind: "pairing" | "session" | "discovery";
+            /** @enum {string} */
+            severity: "info" | "warning" | "error";
+            /** @description One sentence an operator can act on. */
+            message: string;
+            /** @description Identifiers that make the message specific. */
+            detail?: {
+                [key: string]: string;
+            };
+        };
+        MatterDiagnosticEventList: {
+            events: components["schemas"]["MatterDiagnosticEvent"][];
         };
         MatterFabric: {
             /** @description Stack-assigned fabric index per Matter Core Spec §11.18.5 */
@@ -15292,6 +15331,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MatterSessionList"];
+                };
+            };
+            /** @description Matter bridge not enabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMatterDiagnosticEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recorded events, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatterDiagnosticEventList"];
                 };
             };
             /** @description Matter bridge not enabled */
