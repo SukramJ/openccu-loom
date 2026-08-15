@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
-  import { subscribe } from "$lib/stores/events.svelte";
+  import { onResync, subscribe } from "$lib/stores/events.svelte";
   import type { SysvarChangedEvent, SysvarEntry } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
@@ -78,6 +78,58 @@
     is_visible: true,
     is_logged: false,
   });
+
+  // Focus-trap bookkeeping for the edit dialog, mirroring
+  // ConfirmDialog.svelte: `dialogEl` roots the search for the dialog's
+  // focusable controls, `previouslyFocused` is the ⚙ button that opened it
+  // so focus is restored there on close instead of stranded on <body>.
+  let dialogEl = $state<HTMLDivElement | null>(null);
+  let previouslyFocused: HTMLElement | null = null;
+
+  function focusableEls(): HTMLElement[] {
+    if (!dialogEl) return [];
+    return Array.from(
+      dialogEl.querySelectorAll<HTMLElement>(
+        'input, button, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute("disabled"));
+  }
+
+  $effect(() => {
+    if (editing) {
+      previouslyFocused = document.activeElement as HTMLElement | null;
+      // The dialog's DOM is inserted by the {#if} block guarding this
+      // effect's dependency; queue past the current microtask so Svelte
+      // has committed it before the query runs.
+      queueMicrotask(() => focusableEls()[0]?.focus());
+    } else if (previouslyFocused) {
+      previouslyFocused.focus();
+      previouslyFocused = null;
+    }
+  });
+
+  // Escape and Tab belong to the dialog as a whole, so they are handled on
+  // the window: focus starts on the trigger outside the overlay, and a
+  // handler on the overlay element never sees a key pressed there.
+  function onDialogKey(e: KeyboardEvent) {
+    if (!editing) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      editing = null;
+    } else if (e.key === "Tab") {
+      const els = focusableEls();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      const active = document.activeElement;
+      const atEdge = e.shiftKey ? active === first : active === last;
+      const outside = !els.includes(active as HTMLElement);
+      if (atEdge || outside) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
+    }
+  }
 
   function startEdit(sv: SysvarEntry) {
     editing = sv;
@@ -315,7 +367,7 @@
     // event stream; without this the table shows the values of the last
     // REST read until the operator hits reload, even though the frames
     // are already arriving.
-    return subscribe((ev) => {
+    const unsubEvents = subscribe((ev) => {
       if (ev.type !== "sysvar") return;
       const p = ev.payload as SysvarChangedEvent;
       const i = sysvars.findIndex(
@@ -324,6 +376,16 @@
       if (i < 0) return;
       sysvars[i] = { ...sysvars[i], value: p.value };
     });
+    // A resync says the stream could not carry this client to the current
+    // state — a daemon restart, a boot snapshot, a queue that fell too far
+    // behind. The values that changed during that gap are never replayed
+    // as `sysvar` frames, so the patched rows above would keep showing
+    // pre-gap values as if they were live. Read the list again instead.
+    const unsubResync = onResync(() => void load());
+    return () => {
+      unsubEvents();
+      unsubResync();
+    };
   });
 
   const centrals = $derived.by(() => {
@@ -580,6 +642,8 @@
   {/if}
 </section>
 
+<svelte:window onkeydown={onDialogKey} />
+
 {#if editing}
   <div
     class="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--color-slate-900)_50%,transparent)] p-4"
@@ -591,10 +655,16 @@
       if (e.target === e.currentTarget) editing = null;
     }}
     onkeydown={(e) => {
+      // Backdrop-local pair for the click dismissal above. Escape from
+      // anywhere is handled on the window, because focus can sit outside
+      // this subtree — on the ⚙ button that opened the dialog.
       if (e.key === "Escape") editing = null;
     }}
   >
-    <div class="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900">
+    <div
+      bind:this={dialogEl}
+      class="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900"
+    >
       <header class="mb-3 flex items-baseline justify-between gap-2">
         <h2 class="text-lg font-semibold">
           {t("sysvars.edit.title")}

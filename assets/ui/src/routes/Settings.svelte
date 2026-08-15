@@ -327,9 +327,13 @@
   }
 
   // Follow the URL: a deep link, or a redirect from one of the views that
-  // were folded in here, selects its tab.
+  // were folded in here, selects its tab. A hash without `?tab=` names the
+  // General tab, so the prop dropping back to undefined is a navigation
+  // too — treating it as "no opinion" left the previous panel on screen
+  // while the address bar already read `#/settings`, and a link shared
+  // from that state opened a different view than the sender saw.
   $effect(() => {
-    if (tab) activeTab = tab;
+    activeTab = tab ?? "general";
   });
 
   // Never sit on a tab that is not offered — expert-only with expert mode
