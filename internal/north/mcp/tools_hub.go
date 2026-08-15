@@ -147,12 +147,17 @@ func registerListSysvars(s *mcpsdk.Server, d Deps) {
 // --- service messages -------------------------------------------------
 
 type serviceMessageSummary struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Address    string `json:"address,omitempty"`
-	DeviceName string `json:"device_name,omitempty"`
-	Type       string `json:"type"`
-	Timestamp  string `json:"timestamp,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// DisplayName is the localized rendering of the message code. Name stays
+	// the raw CCU string, so an assistant that shows the operator a label
+	// needs this one — without it the answer reads "LOWBAT" rather than
+	// "Battery low". Empty when no catalogue entry covers the code.
+	DisplayName string `json:"display_name,omitempty"`
+	Address     string `json:"address,omitempty"`
+	DeviceName  string `json:"device_name,omitempty"`
+	Type        string `json:"type"`
+	Timestamp   string `json:"timestamp,omitempty"`
 	// LastTimestamp is when the message last recurred. Omitted when the
 	// CCU reports no such occurrence.
 	LastTimestamp string   `json:"last_timestamp,omitempty"`
@@ -183,6 +188,7 @@ func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
 				out.Messages = append(out.Messages, serviceMessageSummary{
 					ID:            m.ID,
 					Name:          m.Name,
+					DisplayName:   m.DisplayName,
 					Address:       m.Address,
 					DeviceName:    m.DeviceName,
 					Type:          m.Type.String(),
@@ -206,8 +212,11 @@ func registerListServiceMessages(s *mcpsdk.Server, d Deps) {
 // variable, not a device datapoint — so this carries only identity and
 // timing fields. See [hub.AlarmMessage].
 type alarmMessageSummary struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// DisplayName is the localized rendering of the message code; see
+	// [serviceMessageSummary.DisplayName].
+	DisplayName string `json:"display_name,omitempty"`
 	Description string `json:"description,omitempty"`
 	Timestamp   string `json:"timestamp,omitempty"`
 	// LastTimestamp is when the backing alarm variable last changed.
@@ -237,6 +246,7 @@ func registerListAlarmMessages(s *mcpsdk.Server, d Deps) {
 				out.Messages = append(out.Messages, alarmMessageSummary{
 					ID:            m.ID,
 					Name:          m.Name,
+					DisplayName:   m.DisplayName,
 					Description:   m.Description,
 					Timestamp:     rfc3339OrEmpty(m.Timestamp),
 					LastTimestamp: rfc3339OrEmpty(m.LastTimestamp),
