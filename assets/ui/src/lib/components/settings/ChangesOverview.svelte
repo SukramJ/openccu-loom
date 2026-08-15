@@ -5,6 +5,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
 
   type Props = {
@@ -134,6 +135,16 @@
   let reverting = $state<Record<string, boolean>>({});
 
   async function revertField(path: string) {
+    // The DELETE drops the operator's value server-side and the UI has no undo
+    // for it — a secret even renders as bullets, so a mis-click is
+    // unrecoverable from here.
+    const ok = await confirmStore.ask({
+      title: t("changes.revert"),
+      body: t("changes.revert_confirm", { field: fieldLabel(path) }),
+      confirmLabel: t("changes.revert"),
+      destructive: true,
+    });
+    if (!ok) return;
     reverting = { ...reverting, [path]: true };
     try {
       await api.resetConfigField(path);
