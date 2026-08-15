@@ -51,10 +51,118 @@ type sysvarMirror struct {
 	mu          sync.Mutex
 	ensured     map[string]bool // central|name → enum ensured
 	lastWritten map[string]int  // central|name → last exported index
+
+	// Export queue. Every export runs on one worker goroutine instead
+	// of on the caller, because the caller is the engine's event sink
+	// and that runs with the engine lock held: an export is a SQLite
+	// read plus a CCU JSON-RPC round trip bounded only by the 30 s HTTP
+	// timeout, so exporting inline blocks every alarm verb — Disarm and
+	// Silence included — behind a CCU that is slow, rebooting or gone.
+	// That is exactly when the state machine has to stay responsive.
+	// One worker, FIFO, so the variable still ends up carrying the
+	// transitions in the order the engine produced them.
+	queueMu sync.Mutex
+	queue   []hmevent.AlarmStateChangedEvent
+	quit    chan struct{} // non-nil while the worker runs
+	wake    chan struct{}
 }
 
+// sysvarExportQueueDepth bounds the pending export queue. A queue in
+// front of an unreachable CCU must not grow without limit; the oldest
+// pending transition is dropped first because the mirror carries state,
+// not history — the newest value is the one the variable has to end up
+// with.
+const sysvarExportQueueDepth = 64
+
 func newSysvarMirror(svc *Service) *sysvarMirror {
-	return &sysvarMirror{svc: svc, ensured: map[string]bool{}, lastWritten: map[string]int{}}
+	return &sysvarMirror{
+		svc:         svc,
+		ensured:     map[string]bool{},
+		lastWritten: map[string]int{},
+		wake:        make(chan struct{}, 1),
+	}
+}
+
+// start launches the export worker. Idempotent; paired with stop.
+func (m *sysvarMirror) start() {
+	m.queueMu.Lock()
+	defer m.queueMu.Unlock()
+	if m.quit != nil {
+		return
+	}
+	quit := make(chan struct{})
+	m.quit = quit
+	go m.run(quit)
+}
+
+// stop ends the export worker and discards whatever it has not written
+// yet. It does not wait for an export already on the wire — that would
+// hold daemon shutdown for a CCU round trip — so the worker returns
+// once the current export completes.
+func (m *sysvarMirror) stop() {
+	m.queueMu.Lock()
+	quit := m.quit
+	m.quit = nil
+	m.queue = nil
+	m.queueMu.Unlock()
+	if quit != nil {
+		close(quit)
+	}
+}
+
+// run drains the export queue until quit closes.
+func (m *sysvarMirror) run(quit <-chan struct{}) {
+	for {
+		select {
+		case <-quit:
+			return
+		case <-m.wake:
+		}
+		for {
+			select {
+			case <-quit:
+				return
+			default:
+			}
+			e, ok := m.dequeue()
+			if !ok {
+				break
+			}
+			m.exportState(e)
+		}
+	}
+}
+
+// enqueue appends one transition to the export queue and wakes the
+// worker. A mirror that was never started (or is already stopped)
+// drops the transition: nothing would ever write it out.
+func (m *sysvarMirror) enqueue(e hmevent.AlarmStateChangedEvent) {
+	m.queueMu.Lock()
+	if m.quit == nil {
+		m.queueMu.Unlock()
+		return
+	}
+	if len(m.queue) >= sysvarExportQueueDepth {
+		m.queue = m.queue[1:]
+	}
+	m.queue = append(m.queue, e)
+	m.queueMu.Unlock()
+	select {
+	case m.wake <- struct{}{}:
+	default:
+	}
+}
+
+// dequeue pops the oldest pending transition.
+func (m *sysvarMirror) dequeue() (hmevent.AlarmStateChangedEvent, bool) {
+	m.queueMu.Lock()
+	defer m.queueMu.Unlock()
+	if len(m.queue) == 0 {
+		return hmevent.AlarmStateChangedEvent{}, false
+	}
+	e := m.queue[0]
+	m.queue = m.queue[1:]
+	return e, true
 }
 
 // mirrorTargets returns the sysvar-mirror outputs of an zone.
@@ -104,12 +212,20 @@ type mirrorConfig struct {
 	SysvarExisting    bool   `json:"sysvar_existing"`
 }
 
-// onStateChanged exports the zone state to every mirror sysvar. It
-// runs from the event sink — detached from any caller context by
-// design.
+// onStateChanged queues the zone state for export to every mirror
+// sysvar. It runs from the event sink, which holds the engine lock, so
+// it must not touch the database or the CCU itself — the worker does
+// both.
+func (m *sysvarMirror) onStateChanged(e hmevent.AlarmStateChangedEvent) {
+	m.enqueue(e)
+}
+
+// exportState resolves a queued transition to its mirror targets and
+// writes it out. It runs on the export worker — detached from any
+// caller context by design.
 //
 //nolint:contextcheck // sink callbacks have no caller ctx; exports run on the service lifetime
-func (m *sysvarMirror) onStateChanged(e hmevent.AlarmStateChangedEvent) {
+func (m *sysvarMirror) exportState(e hmevent.AlarmStateChangedEvent) {
 	idx := sysvarIndexByMode[e.Mode]
 	if e.To == hmenum.AlarmZoneStateTriggered {
 		idx = sysvarAlarmIndex
@@ -142,12 +258,21 @@ func (m *sysvarMirror) export(t mirrorTarget, idx int) {
 	ensured := m.ensured[key]
 	m.mu.Unlock()
 	if !ensured {
+		// Latch only on success. The first export after boot regularly
+		// races the south-bound bring-up, and the creator answers
+		// "sysvar creator not wired" until the primary client is
+		// registered. Latching on that failure disabled enum creation
+		// for the whole process lifetime, so every later write went to
+		// a variable that had never been created and the mirror stayed
+		// dead until the daemon restarted. Retrying is cheap: the
+		// create script is a no-op when the variable already exists.
 		if _, err := u.Hub.CreateSysvarEnum(ctx, t.name, sysvarStates); err != nil {
 			m.svc.log.Warn("alarm sysvar mirror: ensure enum", "sysvar", t.name, "error", err)
+		} else {
+			m.mu.Lock()
+			m.ensured[key] = true
+			m.mu.Unlock()
 		}
-		m.mu.Lock()
-		m.ensured[key] = true
-		m.mu.Unlock()
 	}
 	m.mu.Lock()
 	m.lastWritten[key] = idx
