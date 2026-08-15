@@ -387,9 +387,15 @@ func (a *Aggregator) Events() EventMetrics {
 		EventsByType:         stats,
 		CircuitBreakerTrips:  stats["client.circuit_breaker_state_changed"],
 		StateChanges:         stats["client.state_changed"] + stats["central.state_changed"],
-		ProgramsExecuted:     stats["hub.program_executed"],
-		RequestsCoalesced:    stats["client.request_coalesced"],
-		HealthRecords:        stats["health.recorded"],
+		// The scheduler's background refresh job publishes both halves
+		// on the same bus as every counter above. Leaving them unread
+		// made the dump report "no background refresh ever ran" next to
+		// sibling fields carrying real counts.
+		DataRefreshesTriggered: stats["scheduler.refresh_triggered"],
+		DataRefreshesCompleted: stats["scheduler.refresh_completed"],
+		ProgramsExecuted:       stats["hub.program_executed"],
+		RequestsCoalesced:      stats["client.request_coalesced"],
+		HealthRecords:          stats["health.recorded"],
 	}
 }
 
