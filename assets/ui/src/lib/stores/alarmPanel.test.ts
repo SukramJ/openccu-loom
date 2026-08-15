@@ -8,9 +8,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 let capturedHandler: ((ev: { type: string; payload?: unknown }) => void) | null =
   null;
+let capturedResync: (() => void) | null = null;
 
 vi.mock("$lib/stores/events.svelte", () => ({
-  onResync: () => () => {},
+  onResync: vi.fn((h: () => void) => {
+    capturedResync = h;
+    return vi.fn();
+  }),
   subscribe: vi.fn((h: (ev: { type: string; payload?: unknown }) => void) => {
     capturedHandler = h;
     return vi.fn();
@@ -77,6 +81,7 @@ const listAlarmJournalMock = api.listAlarmJournal as ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.clearAllMocks();
   capturedHandler = null;
+  capturedResync = null;
   getAlarmStateMock.mockResolvedValue({ zones: [zone()] });
   listAlarmZonesMock.mockResolvedValue([{ id: "zone-1", name: "Ground floor" }]);
   listAlarmJournalMock.mockResolvedValue([]);
@@ -111,6 +116,37 @@ describe("alarmPanelStore.refresh", () => {
       remaining_s: 12,
       total_s: 30,
     });
+  });
+});
+
+describe("alarmPanelStore.ensureStream — resync", () => {
+  // A resync means the stream cannot carry this client to the current
+  // state: whatever arm state, readiness and journal head the last REST
+  // read produced is now unverified, and no alarm broadcast repairs it.
+  it("reloads the panel when the daemon signals a lost replay", async () => {
+    await alarmPanelStore.refresh();
+    alarmPanelStore.ensureStream();
+    expect(capturedResync).not.toBeNull();
+    getAlarmStateMock.mockClear();
+
+    getAlarmStateMock.mockResolvedValue({
+      zones: [zone({ state: "armed", mode: "full" })],
+    });
+    capturedResync!();
+
+    await vi.waitFor(() => expect(getAlarmStateMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() =>
+      expect(alarmPanelStore.zones[0].state).toBe("armed"),
+    );
+  });
+
+  it("drops the resync subscription on close", async () => {
+    alarmPanelStore.ensureStream();
+    const { onResync } = await import("$lib/stores/events.svelte");
+    const unsubscribe = (onResync as ReturnType<typeof vi.fn>).mock.results[0]
+      .value as ReturnType<typeof vi.fn>;
+    alarmPanelStore.close();
+    expect(unsubscribe).toHaveBeenCalled();
   });
 });
 
