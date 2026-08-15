@@ -290,7 +290,13 @@ func MatterExposeBulk(store MatterExposureStore, publisher MatterEventPublisher,
 			applied++
 		}
 		reassembleAfterExposureChange(req.Context(), reassembler)
-		publishMatterEvent(req.Context(), publisher, MatterTopicExposableChanged, body)
+		// One frame per affected row, never the request envelope: the
+		// topic declares a single MatterExposureUpdate, so a subscriber
+		// mirroring the allowlist reads undefined fields — and silently
+		// misses the whole batch — when the bulk body is published as-is.
+		for i := range body.Items {
+			publishMatterEvent(req.Context(), publisher, MatterTopicExposableChanged, body.Items[i])
+		}
 		recordMatterAudit(recorder, req, audit.ActionMatterExposureBulk,
 			fmt.Sprintf("applied=%d", applied))
 		JSON(w, http.StatusOK, map[string]any{"applied": applied})
@@ -313,22 +319,19 @@ func validateExposureKey(centralName, addr, kind, key string) error {
 	return nil
 }
 
-// actorFromRequest retrieves the authenticated subject from the
-// request context for audit purposes. Falls back to "anonymous"
-// when no auth middleware is wired (test paths).
+// actorFromRequest retrieves the authenticated subject from the request
+// context for audit purposes. It reads the identity the auth middleware
+// attached, the same source every other audited handler in this package
+// uses — a private key of its own would never be written and would
+// silently attribute every Matter mutation to "anonymous". Falls back to
+// "anonymous" when no identity is attached (test paths, unauthenticated
+// deployments).
 func actorFromRequest(req *http.Request) string {
-	if v := req.Context().Value(actorContextKey{}); v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
+	if s := identitySubject(req.Context()); s != "" {
+		return s
 	}
 	return "anonymous"
 }
-
-// actorContextKey is the context key middleware uses to stash the
-// authenticated subject. Defined here so the handler is self-contained;
-// real auth middleware writes through this key when wired.
-type actorContextKey struct{}
 
 // MatterStatusReader is the narrow facade `/matter/status` reads
 // through.

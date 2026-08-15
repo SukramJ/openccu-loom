@@ -267,12 +267,26 @@ list does not drift from reality.
 
 | Topic (also used as `type` in the envelope) | Payload schema |
 |---|---|
-| `matter.exposable_changed` | [`MatterExposureUpdate`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
-| `matter.commissioning_window_opened` | [`MatterCommissioningWindowResponse`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `matter.exposable_changed` | [`MatterExposureBulkUpdate`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+| `matter.commissioning_window_opened` | [`MatterCommissioningWindowResponse`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) (credential redacted, see below) |
 | `matter.commissioning_progress` | [`MatterCommissioningProgressPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `matter.fabric_added` | [`MatterFabric`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `matter.fabric_removed` | [`MatterFabricRemovedPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
 | `matter.endpoint_assembled` | [`MatterEndpointAssembledPayload`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml) |
+
+`matter.exposable_changed` always carries the affected rows under
+`items`: one entry for a single-row `PUT /api/v1/matter/exposable`, the
+whole batch for `POST /api/v1/matter/exposable/bulk`. One operator
+action is one broadcast, so a client mirroring the allowlist applies
+every entry of the envelope rather than expecting one frame per row.
+
+`matter.commissioning_window_opened` **redacts the pairing credential**:
+`passcode` is `0` and `qr_code` / `manual_code` are empty. Subscribing
+to a topic requires no role, so the credential that commissions the
+bridge onto a new fabric never leaves the admin-gated
+`POST /api/v1/matter/commissioning/window` response. The broadcast
+carries `discriminator` and `duration_seconds`, which is what a client
+needs to show that a window is open and when it closes.
 
 **Known divergence:** Matter broadcast frames currently set `type` to
 the *trailing segment* after `matter.` (e.g. `type: "exposable_changed"`

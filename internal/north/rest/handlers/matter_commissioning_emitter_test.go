@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,8 +25,11 @@ import (
 
 // TestMatterCommissioningWindow_HappyPath_PublishesCommissioningWindowOpened
 // asserts that a successful POST /matter/commissioning/window emits exactly
-// one "matter.commissioning_window_opened" broadcast carrying the response
-// body, mirroring MatterCommissioningWindow's documented publisher contract.
+// one "matter.commissioning_window_opened" broadcast, and that the broadcast
+// carries no pairing credential. The route is admin-gated but the WS event
+// plane applies no role filter, so publishing the passcode (or either code
+// that embeds it) would hand every subscribed viewer the credential that
+// commissions the bridge onto a new fabric.
 func TestMatterCommissioningWindow_HappyPath_PublishesCommissioningWindowOpened(t *testing.T) {
 	t.Parallel()
 
@@ -57,8 +61,19 @@ func TestMatterCommissioningWindow_HappyPath_PublishesCommissioningWindowOpened(
 	if !ok {
 		t.Fatalf("payload type %T, want MatterCommissioningWindowResponse", ev.Payload)
 	}
-	if resp.Discriminator != 0xABC || resp.Passcode != 12345678 || resp.DurationSeconds != 300 {
-		t.Errorf("payload = %+v, want discriminator=0xABC passcode=12345678 duration_seconds=300", resp)
+	if resp.Discriminator != 0xABC || resp.DurationSeconds != 300 {
+		t.Errorf("payload = %+v, want discriminator=0xABC duration_seconds=300", resp)
+	}
+	if resp.Passcode != 0 || resp.QRCode != "" || resp.ManualCode != "" {
+		t.Errorf("broadcast leaks the pairing credential: %+v", resp)
+	}
+	// The admin-gated HTTP response is where the credential belongs.
+	var served MatterCommissioningWindowResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &served); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if served.Passcode != 12345678 || served.QRCode == "" || served.ManualCode == "" {
+		t.Errorf("HTTP response = %+v, want the full pairing credential", served)
 	}
 }
 

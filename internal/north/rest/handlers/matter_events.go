@@ -55,11 +55,16 @@ type MatterTopologyReassembler interface {
 const (
 	// MatterTopicExposableChanged fires when an allowlist row is
 	// inserted, updated or deleted. Payload: the affected
-	// MatterExposureUpdate.
+	// MatterExposureUpdate — one frame per row, so a bulk write emits
+	// one frame per item rather than its request envelope. A subscriber
+	// mirroring the allowlist applies each frame on its own.
 	MatterTopicExposableChanged = "matter.exposable_changed"
 	// MatterTopicCommissioningWindowOpened fires when a
 	// commissioning window opens (REST + cluster command).
-	// Payload: the resulting MatterCommissioningWindowResponse.
+	// Payload: the resulting MatterCommissioningWindowResponse with the
+	// pairing credential cleared — subscribing to a topic requires no
+	// role, so passcode / QR / manual code stay in the admin-gated HTTP
+	// response.
 	MatterTopicCommissioningWindowOpened = "matter.commissioning_window_opened"
 	// MatterTopicCommissioningProgress fires during commissioning
 	// state transitions. Payload: free-form progress object
