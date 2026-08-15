@@ -4,6 +4,7 @@
 package device
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -122,6 +123,49 @@ func TestAvailabilityForceOverride(t *testing.T) {
 	a.SetForced(hmenum.ForcedDeviceAvailabilityNotSet)
 	if !a.IsReachable() {
 		t.Fatal("cleared force → reachable again")
+	}
+}
+
+// TestAvailabilityForceOverrideIsSafeUnderConcurrentReaders mirrors the
+// production shape: the interface-client reconnect handler and the
+// system-status handler both flip the override while REST and the MQTT
+// bridge read the availability verdict. Run with -race.
+func TestAvailabilityForceOverrideIsSafeUnderConcurrentReaders(t *testing.T) {
+	d := newTestDevice(t)
+	a := d.Availability()
+
+	const rounds = 200
+	var wg sync.WaitGroup
+	wg.Add(4)
+	for range 2 {
+		go func() {
+			defer wg.Done()
+			for i := range rounds {
+				if i%2 == 0 {
+					d.SetForcedAvailability(hmenum.ForcedDeviceAvailabilityForceFalse)
+				} else {
+					d.SetForcedAvailability(hmenum.ForcedDeviceAvailabilityNotSet)
+				}
+			}
+		}()
+	}
+	go func() {
+		defer wg.Done()
+		for range rounds {
+			_ = a.IsReachable()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range rounds {
+			_ = d.AvailabilityInfo()
+		}
+	}()
+	wg.Wait()
+
+	a.SetForced(hmenum.ForcedDeviceAvailabilityNotSet)
+	if !a.IsReachable() {
+		t.Fatal("cleared override → reachable")
 	}
 }
 
