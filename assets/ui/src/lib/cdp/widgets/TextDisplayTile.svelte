@@ -4,7 +4,7 @@
   are exposed via "Erweitert" — most users want to push one line
   quickly.
 
-  Service operation: write { id, text, icon?, color? }.
+  Service operation: write { id, text, icon?, text_color? }.
 -->
 <script lang="ts">
   import type { CustomDPSummary } from "$lib/api/types";
@@ -40,10 +40,12 @@
     try {
       const params: Record<string, unknown> = { id: rowId, text };
       if (iconValue) params.icon = iconValue;
-      if (color) {
-        const n = Number(color);
-        if (Number.isFinite(n)) params.color = n;
-      }
+      // The row the dispatcher builds carries a colour *label*
+      // (`WHITE`, `RED`) under `text_color`. It ignores keys it does
+      // not know, so anything else is dropped with a 204 and the
+      // operator never learns the colour went nowhere.
+      const textColor = color.trim().toUpperCase();
+      if (textColor) params.text_color = textColor;
       await api.invokeCustomDataPoint(address, cdp.name, "write", params);
     } catch (err) {
       error = friendlyError(err, t);
