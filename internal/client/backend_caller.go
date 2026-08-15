@@ -31,14 +31,14 @@ func NewBackendCaller(c *InterfaceClient, priority hmenum.CommandPriority) *Back
 }
 
 // Call implements backends.Caller.
-// For `setValue`, concurrent calls with the same (address, parameter,
-// value) triple are coalesced — the first call wins and followers inherit
-// its result. Two writes to the same data point with DIFFERENT values are
-// NOT coalesced, so the follower's value still reaches the wire (collapsing
+// For `setValue`, concurrent calls with the same (priority, address,
+// parameter, value) tuple are coalesced — the first call wins and followers
+// inherit its result. Two writes to the same data point with DIFFERENT values
+// are NOT coalesced, so the follower's value still reaches the wire (collapsing
 // them would silently drop the follower's write — a last-write-lost bug).
 // Other methods pass through without coalescing.
 func (c *BackendCaller) Call(ctx context.Context, method string, args ...any) (any, error) {
-	coalesceKey := coalesceKeyFor(method, args)
+	coalesceKey := coalesceKeyFor(method, args, c.priority)
 	return c.client.Call(ctx, method, args, c.priority, coalesceKey)
 }
 
@@ -48,7 +48,7 @@ func (c *BackendCaller) Call(ctx context.Context, method string, args ...any) (a
 func (c *BackendCaller) CallAt(
 	ctx context.Context, priority hmenum.CommandPriority, method string, args ...any,
 ) (any, error) {
-	coalesceKey := coalesceKeyFor(method, args)
+	coalesceKey := coalesceKeyFor(method, args, priority)
 	return c.client.Call(ctx, method, args, priority, coalesceKey)
 }
 
@@ -67,12 +67,22 @@ var _ backends.Caller = (*BackendCaller)(nil)
 // Keying on (address, parameter) alone would collapse them into a single
 // wire call and silently drop the follower's value — a last-write-lost bug.
 //
-// Identical (address, parameter, value) writes still share a leader, so a
-// burst of redundant repeats (e.g. "set STATE=true" fired twice) is
-// deduplicated into one wire call.
+// The key also carries the command priority. A follower does not run its
+// own function — it blocks on the leader's result — so it inherits the
+// leader's captured priority, and with it the leader's place in the write
+// throttle and the leader's circuit-breaker verdict. Keying without the
+// priority therefore parks a Critical write (an alarm stopping a siren)
+// behind a Low-priority leader that may be queued in a MaxInFlight pool or
+// sleeping through a DUTY_CYCLE retry backoff, and hands it that leader's
+// error — the exact queue the Critical bypasses exist to skip. Two writes
+// at the same priority still share a leader.
+//
+// Identical (priority, address, parameter, value) writes still share a
+// leader, so a burst of redundant repeats (e.g. "set STATE=true" fired
+// twice) is deduplicated into one wire call.
 //
 // All other methods return "" (no coalescing).
-func coalesceKeyFor(method string, args []any) string {
+func coalesceKeyFor(method string, args []any, priority hmenum.CommandPriority) string {
 	if method != "setValue" || len(args) < 3 {
 		return ""
 	}
@@ -85,5 +95,5 @@ func coalesceKeyFor(method string, args []any) string {
 	// string). Encode both the Go type and the value so that, e.g., the
 	// bool true and the string "true" never collide on the same key.
 	value := args[2]
-	return fmt.Sprintf("setValue|%s|%s|%T|%v", address, parameter, value, value)
+	return fmt.Sprintf("setValue|%d|%s|%s|%T|%v", int(priority), address, parameter, value, value)
 }

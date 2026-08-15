@@ -29,7 +29,7 @@ import (
 func TestCoalesceKeyForSetValue(t *testing.T) {
 	t.Parallel()
 	// method = "setValue", 3+ string args → returns a non-empty key.
-	key := coalesceKeyFor("setValue", []any{"HmIP-RF", "VCU001:1", "LEVEL", float64(0.5)})
+	key := coalesceKeyFor("setValue", []any{"HmIP-RF", "VCU001:1", "LEVEL", float64(0.5)}, hmenum.CommandPriorityLow)
 	if key == "" {
 		t.Error("expected non-empty coalesce key for setValue")
 	}
@@ -38,7 +38,7 @@ func TestCoalesceKeyForSetValue(t *testing.T) {
 func TestCoalesceKeyForNonSetValue(t *testing.T) {
 	t.Parallel()
 	// method ≠ "setValue" → always ""
-	if key := coalesceKeyFor("getValue", []any{"HmIP-RF", "VCU001:1", "LEVEL"}); key != "" {
+	if key := coalesceKeyFor("getValue", []any{"HmIP-RF", "VCU001:1", "LEVEL"}, hmenum.CommandPriorityLow); key != "" {
 		t.Errorf("expected empty key for getValue, got %q", key)
 	}
 }
@@ -46,7 +46,7 @@ func TestCoalesceKeyForNonSetValue(t *testing.T) {
 func TestCoalesceKeyForTooFewArgs(t *testing.T) {
 	t.Parallel()
 	// method = "setValue" but < 3 args → ""
-	if key := coalesceKeyFor("setValue", []any{"HmIP-RF"}); key != "" {
+	if key := coalesceKeyFor("setValue", []any{"HmIP-RF"}, hmenum.CommandPriorityLow); key != "" {
 		t.Errorf("expected empty key for < 3 args, got %q", key)
 	}
 }
@@ -54,7 +54,7 @@ func TestCoalesceKeyForTooFewArgs(t *testing.T) {
 func TestCoalesceKeyForNonStringArgs(t *testing.T) {
 	t.Parallel()
 	// method = "setValue", 3 args, but not all strings → ""
-	if key := coalesceKeyFor("setValue", []any{1, 2, 3}); key != "" {
+	if key := coalesceKeyFor("setValue", []any{1, 2, 3}, hmenum.CommandPriorityLow); key != "" {
 		t.Errorf("expected empty key for non-string args, got %q", key)
 	}
 }

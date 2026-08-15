@@ -71,6 +71,12 @@ func LoadEasymodeEmbedded() (*Easymode, error) {
 	if err := json.NewDecoder(gz).Decode(out); err != nil {
 		return EmptyEasymode(), fmt.Errorf("ccudata: decode embedded easymode: %w", err)
 	}
+	// The archive ships subsets but no pre-computed subset_group_ids, so the
+	// derivation has to run here exactly as it does for an operator-supplied
+	// file. Skipping it made the default daemon — the one with no easymode
+	// path configured — the only build that serves an empty subset_group_id,
+	// which reads as an environment quirk rather than a missing step.
+	materializeSubsetGroupIDs(out)
 	return out, nil
 }
 

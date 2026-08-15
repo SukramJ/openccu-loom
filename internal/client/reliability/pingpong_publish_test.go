@@ -4,6 +4,7 @@
 package reliability
 
 import (
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -115,6 +116,38 @@ func TestPingPongConnectionIssueGate(t *testing.T) {
 	if got := tr.PendingCount(); got != 1 {
 		t.Fatalf("PendingCount=%d, want 1 (gate open)", got)
 	}
+}
+
+// TestPingPongGateInstallIsSafeAgainstConcurrentRecordPing reproduces the
+// production window: the client is published into the central's client
+// registry before the ping/pong wiring installs the connection-issue gate, so
+// the periodic connection check can be inside RecordPing while the gate is
+// still being assigned. Run under -race, an unsynchronised read of the func
+// field fails here.
+func TestPingPongGateInstallIsSafeAgainstConcurrentRecordPing(t *testing.T) {
+	t.Parallel()
+
+	tr := NewPingPongTracker(PingPongConfig{
+		PendingTTL: time.Minute,
+		UnknownTTL: time.Minute,
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := range 200 {
+			tr.RecordPing(strconv.Itoa(i))
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		var blocked atomic.Bool
+		for range 200 {
+			tr.SetConnectionIssueGate(blocked.Load)
+		}
+	}()
+	wg.Wait()
 }
 
 // TestPingPongPublishHookOnRecordPongDrop verifies that when a matched PONG

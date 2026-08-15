@@ -33,16 +33,22 @@ type Job struct {
 	// the first interval tick.
 	RunOnStart bool
 
-	// OnStart is an optional hook called just before each job invocation begins.
-	// The argument is the job name. Used by north-bound adapters to emit
-	// DataRefreshTriggeredEvent. Closes C-SCHED-2 lifecycle hook.
+	// OnStart is an optional hook called just before each job invocation
+	// begins. The argument is the job name.
+	//
+	// No production job sets it: the per-central refresh jobs publish their
+	// start/end events from inside their own JobFunc, which keeps the
+	// telemetry next to the work it describes and needs no scheduler seam.
+	// The hook stays as the seam a caller registering a job directly through
+	// [Scheduler.Add] can use — do not read it as one anything wires today.
 	OnStart func(name string)
 
 	// OnComplete is an optional hook called after each job invocation
 	// completes (whether or not it returned an error). Arguments are
 	// the job name, the wall-clock duration in milliseconds, a
 	// success flag (true = nil error), and the underlying error
-	// (nil on success). Used to emit DataRefreshCompletedEvent.
+	// (nil on success). Unset by every production job, for the same reason
+	// as [Job.OnStart].
 	OnComplete func(name string, durationMs int64, success bool, err error)
 }
 

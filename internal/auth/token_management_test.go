@@ -101,6 +101,41 @@ func TestMemoryTokenStore_WrongTokenRejected(t *testing.T) {
 	}
 }
 
+// TestMemoryTokenStore_TruncatedIDCollisionRejected pins that the stored
+// entry, not the map key, is the credential. The map key is the token `id`
+// the management API publishes and the audit trail records — a 64-bit prefix
+// of the SHA-256 — so a holder of an id who finds any string with the same
+// prefix must not authenticate as the bound subject. The collision is staged
+// directly (finding a real 64-bit preimage is the attacker's work, not the
+// test's): a candidate whose id matches but whose full digest does not.
+func TestMemoryTokenStore_TruncatedIDCollisionRejected(t *testing.T) {
+	t.Parallel()
+	const (
+		genuine   = "registered-token-abcdef"
+		colliding = "attacker-preimage"
+	)
+	store := NewMemoryTokenStore(map[string]Identity{genuine: {Subject: "alice", Role: RoleAdmin}})
+
+	// Stage the collision: file the real token's entry under the id the
+	// attacker's candidate hashes to.
+	store.mu.Lock()
+	entry := store.tokens[tokenID(genuine)]
+	store.tokens[tokenID(colliding)] = entry
+	store.mu.Unlock()
+
+	if _, err := store.AuthenticateToken(context.Background(), colliding); err == nil {
+		t.Fatal("a token that only matches the truncated id must not authenticate")
+	}
+	// The genuine token still works.
+	id, err := store.AuthenticateToken(context.Background(), genuine)
+	if err != nil {
+		t.Fatalf("registered token must still authenticate: %v", err)
+	}
+	if id.Subject != "alice" || id.Scheme != SchemeBearer {
+		t.Fatalf("identity = %+v, want alice/bearer", id)
+	}
+}
+
 func TestMemoryUserStore_List_SortsByUsername(t *testing.T) {
 	t.Parallel()
 	store := NewMemoryUserStore()

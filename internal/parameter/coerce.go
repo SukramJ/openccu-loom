@@ -121,12 +121,17 @@ func coerceEnum(desc hmproto.ParameterData, raw any) (hmtypes.ParamValue, error)
 
 // asBool's truth table differs on purpose from
 // [github.com/SukramJ/openccu-loom/internal/payload.ParamBool]: this one
-// coerces CCU wire values against a [hmproto.ParameterData] descriptor
-// (case-insensitive, accepts "yes"/"no", no float32/float64 branch since
-// paramset bools arrive as native ints); ParamBool coerces JSON-decoded
+// coerces values against a [hmproto.ParameterData] descriptor
+// (case-insensitive, accepts "yes"/"no"); ParamBool coerces JSON-decoded
 // north-bound service-call bodies (REST/MQTT) and matches what Home
 // Assistant's `payload_on` / `payload_off` MQTT templates commonly send.
 // Different boundaries, different tolerances — keep both, do not unify.
+//
+// The float branches are load-bearing rather than defensive: [Coerce] is
+// also the REST write boundary, and the request body is decoded by
+// encoding/json without UseNumber, so every JSON number in
+// `{"value": 1}` arrives as a float64 — the CCU's own 1/0 spelling of a
+// BOOL, which would otherwise be rejected with a 400.
 func asBool(raw any) (bool, error) {
 	switch v := raw.(type) {
 	case bool:
@@ -136,6 +141,10 @@ func asBool(raw any) (bool, error) {
 	case int32:
 		return v != 0, nil
 	case int64:
+		return v != 0, nil
+	case float32:
+		return v != 0, nil
+	case float64:
 		return v != 0, nil
 	case string:
 		s := strings.ToLower(strings.TrimSpace(v))

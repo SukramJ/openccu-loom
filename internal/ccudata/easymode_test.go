@@ -131,9 +131,12 @@ func TestOptionPresetAllowCustom(t *testing.T) {
 
 // TestMaterializeSubsetGroupIDs covers the derivation that runs on every
 // easymode load: a sender type that defines subsets but ships no
-// pre-computed group ids gets one group per subset, keyed by member
-// parameter. Archives that already carry the ids are left alone, because
-// overwriting them would discard whatever the extractor decided.
+// pre-computed group ids gets one group per subset, and every member
+// parameter is mapped to "subset_<first member>" — the same id the UI-schema
+// builder gives the group derived from that SubsetDef, so a consumer can
+// resolve a parameter to its group inside one payload. Archives that already
+// carry the ids are left alone, because overwriting them would discard
+// whatever the extractor decided.
 func TestMaterializeSubsetGroupIDs(t *testing.T) {
 	t.Parallel()
 
@@ -151,9 +154,9 @@ func TestMaterializeSubsetGroupIDs(t *testing.T) {
 
 		got := e.ChannelMetadata["SWITCH_VIRTUAL_RECEIVER"].SenderTypes["KEY_TRANSCEIVER"].SubsetGroupIDs
 		want := map[string]string{
-			"SHORT_ON_TIME":  "subset_1",
-			"SHORT_OFF_TIME": "subset_1",
-			"LONG_ON_TIME":   "subset_7",
+			"SHORT_ON_TIME":  "subset_SHORT_ON_TIME",
+			"SHORT_OFF_TIME": "subset_SHORT_ON_TIME",
+			"LONG_ON_TIME":   "subset_LONG_ON_TIME",
 		}
 		if len(got) != len(want) {
 			t.Fatalf("got %d group ids, want %d: %v", len(got), len(want), got)

@@ -60,7 +60,7 @@ func TestEventClearsCommandTrackerOnCoercedEcho(t *testing.T) {
 		t.Fatalf("client.New: %v", err)
 	}
 	if err := c.Clients.Register(&coordinators.ClientEntry{
-		InterfaceID: "HmIP-RF",
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
 		Interface:   hmenum.InterfaceHmIPRF,
 		Client:      ic,
 	}); err != nil {
@@ -68,7 +68,7 @@ func TestEventClearsCommandTrackerOnCoercedEcho(t *testing.T) {
 	}
 
 	dpk := hmtypes.DataPointKey{
-		InterfaceID:    "HmIP-RF",
+		InterfaceID:    WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
 		ChannelAddress: "0001ABCD:1",
 		ParamsetKey:    hmenum.ParamsetKeyValues,
 		Parameter:      "STATE",
@@ -81,7 +81,8 @@ func TestEventClearsCommandTrackerOnCoercedEcho(t *testing.T) {
 	}
 
 	h := NewCallbackHandlers(c, nil)
-	if err := h.Event(context.Background(), "HmIP-RF", "0001ABCD:1", "STATE", xmlrpc.BoolValue(true)); err != nil {
+	if err := h.Event(context.Background(), InitInterfaceID("ccu-01", "ccu-01", hmenum.InterfaceHmIPRF),
+		"0001ABCD:1", "STATE", xmlrpc.BoolValue(true)); err != nil {
 		t.Fatalf("Event: %v", err)
 	}
 
@@ -127,7 +128,7 @@ func TestEventKeepsCommandTrackerOnCoerceFailure(t *testing.T) {
 		t.Fatalf("client.New: %v", err)
 	}
 	if err := c.Clients.Register(&coordinators.ClientEntry{
-		InterfaceID: "HmIP-RF",
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
 		Interface:   hmenum.InterfaceHmIPRF,
 		Client:      ic,
 	}); err != nil {
@@ -135,7 +136,7 @@ func TestEventKeepsCommandTrackerOnCoerceFailure(t *testing.T) {
 	}
 
 	dpk := hmtypes.DataPointKey{
-		InterfaceID:    "HmIP-RF",
+		InterfaceID:    WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
 		ChannelAddress: "0001ABCD:1",
 		ParamsetKey:    hmenum.ParamsetKeyValues,
 		Parameter:      "STATE",
@@ -145,8 +146,8 @@ func TestEventKeepsCommandTrackerOnCoerceFailure(t *testing.T) {
 	h := NewCallbackHandlers(c, nil)
 	// Struct-typed xmlrpc value is non-coercible to bool; OnWireValue
 	// returns false and the !coerced branch fires.
-	if err := h.Event(context.Background(), "HmIP-RF", "0001ABCD:1", "STATE",
-		xmlrpc.StructValue{Members: nil}); err != nil {
+	if err := h.Event(context.Background(), InitInterfaceID("ccu-01", "ccu-01", hmenum.InterfaceHmIPRF),
+		"0001ABCD:1", "STATE", xmlrpc.StructValue{Members: nil}); err != nil {
 		t.Fatalf("Event: %v", err)
 	}
 

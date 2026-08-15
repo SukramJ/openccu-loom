@@ -1035,12 +1035,21 @@ type NorthMatterCommissioning struct {
 //
 // JSON only: YAML loading is unaffected (yaml.v3 does not call this), so
 // config.yaml continues to use a plain numeric passcode.
+//
+// The shadow field is seeded with the receiver's current passcode so an
+// omitted `passcode` key keeps the stored value, exactly as every field
+// decoded through the embedded alias does. The DB-tier overlay decodes a
+// stored section onto the config the YAML tier already produced, and its
+// contract is that a key the payload omits keeps the value underneath —
+// an unconditional overwrite would zero the operator's setup code the
+// moment a single stored row omits that one leaf, silently leaving the
+// Matter bridge advertising with no pairing handler attached.
 func (c *NorthMatterCommissioning) UnmarshalJSON(data []byte) error {
 	type alias NorthMatterCommissioning
 	aux := &struct {
 		Passcode flexUint32 `json:"passcode"`
 		*alias
-	}{alias: (*alias)(c)}
+	}{Passcode: flexUint32(c.Passcode), alias: (*alias)(c)}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(aux); err != nil {
@@ -1051,7 +1060,9 @@ func (c *NorthMatterCommissioning) UnmarshalJSON(data []byte) error {
 }
 
 // flexUint32 decodes a uint32 from either a JSON number or a numeric
-// JSON string. An empty string or null decodes to 0.
+// JSON string. An empty string decodes to 0; a JSON null leaves the
+// receiver untouched, matching encoding/json's treatment of null for
+// non-pointer types.
 type flexUint32 uint32
 
 func (f *flexUint32) UnmarshalJSON(data []byte) error {

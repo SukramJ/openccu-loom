@@ -49,6 +49,41 @@ func TestNorthMatterCommissioning_PasscodeAcceptsStringOrNumber(t *testing.T) {
 	}
 }
 
+// TestNorthMatterCommissioning_OmittedPasscodeKeepsStoredValue pins the
+// overlay contract for the one field that is decoded outside the embedded
+// alias: a payload that carries other commissioning keys but no `passcode`
+// must leave the passcode the base config already holds untouched. The DB
+// tier decodes a stored `north.matter` row onto the YAML-derived config, so
+// an unconditional overwrite loses the operator's setup code as soon as the
+// stored row omits that leaf — which is what a per-field reset produces.
+func TestNorthMatterCommissioning_OmittedPasscodeKeepsStoredValue(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		raw  string
+		want uint32
+	}{
+		{"passcode absent", `{"iterations":3000}`, 20202021},
+		{"passcode present overrides", `{"passcode":11223344}`, 11223344},
+		{"explicit null is a no-op", `{"passcode":null}`, 20202021},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := NorthMatterCommissioning{Passcode: 20202021, Salt: "seeded-salt"}
+			if err := strictDecode(t, tc.raw, &c); err != nil {
+				t.Fatalf("decode %q: %v", tc.raw, err)
+			}
+			if c.Passcode != tc.want {
+				t.Fatalf("Passcode = %d, want %d", c.Passcode, tc.want)
+			}
+			if c.Salt != "seeded-salt" {
+				t.Fatalf("Salt = %q, want the seeded value to survive", c.Salt)
+			}
+		})
+	}
+}
+
 // TestNorthMatterCommissioning_PasscodeRejectsGarbage verifies a
 // non-numeric string is still an error (the field is a numeric code).
 func TestNorthMatterCommissioning_PasscodeRejectsGarbage(t *testing.T) {

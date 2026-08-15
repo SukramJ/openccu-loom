@@ -237,7 +237,9 @@ callback listener accepts (`0` uses the default of `64`) — a guard
 against a misbehaving or hostile peer exhausting file descriptors.
 `restrict_source_ips`, when `true`, makes the listeners accept
 callbacks only from the configured CCU IPs (plus loopback); leave it
-`false` unless every CCU address is static and known.
+`false` unless every CCU address is static and known. Both are read
+once, when the listeners bind, so changing either is restart-required —
+the config editor marks them accordingly.
 
 ### `north.rest` and authentication
 

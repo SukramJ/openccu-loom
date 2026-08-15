@@ -106,6 +106,20 @@ func processRestartRules() []RestartRule {
 			Path:    "callback.port_range",
 			Differs: func(b, e *Config) bool { return b.Callback.PortRange != e.Callback.PortRange },
 		},
+		// The source-IP filter and the connection cap are decided once, at
+		// listener construction: an allowlist is only built when the flag is
+		// on at bind time, and the cap only wraps the listener when it is
+		// positive then. Both listeners keep the wrapper they were born with,
+		// so a later change is inert — and a hardening toggle the operator
+		// believes is live is worse than one that says "restart to apply".
+		{
+			Path:    "callback.restrict_source_ips",
+			Differs: func(b, e *Config) bool { return b.Callback.RestrictSourceIPs != e.Callback.RestrictSourceIPs },
+		},
+		{
+			Path:    "callback.max_connections",
+			Differs: func(b, e *Config) bool { return b.Callback.MaxConnections != e.Callback.MaxConnections },
+		},
 		// The scheduled-backup job is registered once at boot with the interval +
 		// keep-count captured then, so a change takes effect only after a restart.
 		{
