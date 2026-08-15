@@ -111,6 +111,56 @@ func TestReportablePaths_BridgedEndpoint_CollectsAttributesFromAllServers(t *tes
 	}
 }
 
+// TestReportablePaths_AirQualityEndpoint_CoversBothDerivedClusters
+// verifies that an air-quality endpoint reports on the AirQuality
+// cluster as well as the concentration cluster it derives from. Both
+// values move on the same push, and the AirQuality cluster server has no
+// change notifier of its own — it relies on this path set being wired to
+// the concentration source, so a missing entry would leave the level
+// stale on every controller until the next full read.
+func TestReportablePaths_AirQualityEndpoint_CoversBothDerivedClusters(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev := newDevice("AQDEV0001", "CO2 Sensor")
+	ch := addChannel(dev, "AQDEV0001:1", 1)
+	ch.AttachCalculatedDataPoint(&stubFloatMeasNotifier{
+		class: interfaces.MatterMeasurementCO2,
+		val:   650,
+		obs:   true,
+	})
+
+	cfg := validConfig()
+	cfg.IncludeMeasurements = true
+	a, err := endpoint.New(newFakeStore(), cfg, nil)
+	if err != nil {
+		t.Fatalf("endpoint.New: %v", err)
+	}
+	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	bridged := top.Bridged()
+	if len(bridged) != 1 {
+		t.Fatalf("expected 1 bridged endpoint, got %d", len(bridged))
+	}
+
+	const (
+		airQualityCluster uint32 = 0x005B
+		co2Cluster        uint32 = 0x040D
+	)
+	clusters := make(map[uint32]bool)
+	for _, p := range endpoint.ReportablePaths(bridged[0]) {
+		clusters[p.Cluster] = true
+	}
+	if !clusters[airQualityCluster] {
+		t.Errorf("no reportable path on AirQuality (0x005B); got clusters %v", clusters)
+	}
+	if !clusters[co2Cluster] {
+		t.Errorf("no reportable path on CarbonDioxideConcentrationMeasurement (0x040D); got clusters %v", clusters)
+	}
+}
+
 // TestReportablePaths_RootEndpoint_ReturnsNil verifies that the root
 // endpoint (ID 0) always returns nil — it uses its own change-emission
 // path and must not be wired via the measurement push path.

@@ -418,3 +418,139 @@ func TestParityMatterJS_BridgedEndpoint_ServerListDerivedFromMountedClusters(t *
 		}
 	}
 }
+
+// stubFloatMeasurement is a [interfaces.MatterMeasurementSource] carrying
+// a float reading, the shape every analog sensor DP presents to the bridge.
+type stubFloatMeasurement struct {
+	class interfaces.MatterMeasurementClass
+	val   float64
+}
+
+func (s stubFloatMeasurement) MatterMeasurementClass() interfaces.MatterMeasurementClass {
+	return s.class
+}
+func (s stubFloatMeasurement) MatterFloatValue() (float64, bool) { return s.val, true }
+
+// stubBoolMeasurement is the binary counterpart of stubFloatMeasurement.
+type stubBoolMeasurement struct {
+	class interfaces.MatterMeasurementClass
+}
+
+func (s stubBoolMeasurement) MatterMeasurementClass() interfaces.MatterMeasurementClass {
+	return s.class
+}
+func (s stubBoolMeasurement) MatterBoolValue() (value, observed bool) { return true, true }
+
+// TestParityMatterJS_MeasurementDeviceTypeMandatoryClusters asserts that
+// every measurement endpoint the bridge materialises serves the full
+// mandatory server-cluster set its primary device type declares in
+// matter.js `packages/node/src/devices/<name>.ts`
+// (`Requirements.server.mandatory`). A device type advertised without
+// its mandatory clusters fails the controller-side requirement check:
+// Apple Home cannot build the matching HAP service and the endpoint
+// never becomes an accessory.
+//
+// Identify (0x0003) is mandatory for all of them and is mounted by
+// [endpoint.ClusterServers] itself, so it is checked once rather than
+// listed per row.
+func TestParityMatterJS_MeasurementDeviceTypeMandatoryClusters(t *testing.T) {
+	t.Parallel()
+
+	const identifyCluster uint32 = 0x0003
+
+	rows := []struct {
+		deviceTypeName string
+		deviceType     uint16
+		measurement    interfaces.MatterMeasurementSource
+		mandatory      []uint32
+	}{
+		{
+			deviceTypeName: "TemperatureSensor",
+			deviceType:     0x0302,
+			measurement:    stubFloatMeasurement{class: interfaces.MatterMeasurementTemperature, val: 21.5},
+			mandatory:      []uint32{0x0402}, // TemperatureMeasurement
+		},
+		{
+			deviceTypeName: "HumiditySensor",
+			deviceType:     0x0307,
+			measurement:    stubFloatMeasurement{class: interfaces.MatterMeasurementHumidity, val: 48},
+			mandatory:      []uint32{0x0405}, // RelativeHumidityMeasurement
+		},
+		{
+			deviceTypeName: "LightSensor",
+			deviceType:     0x0106,
+			measurement:    stubFloatMeasurement{class: interfaces.MatterMeasurementIlluminance, val: 300},
+			mandatory:      []uint32{0x0400}, // IlluminanceMeasurement
+		},
+		{
+			deviceTypeName: "PressureSensor",
+			deviceType:     0x0305,
+			measurement:    stubFloatMeasurement{class: interfaces.MatterMeasurementPressure, val: 1013},
+			mandatory:      []uint32{0x0403}, // PressureMeasurement
+		},
+		{
+			deviceTypeName: "AirQualitySensorCO2",
+			deviceType:     0x002C,
+			measurement:    stubFloatMeasurement{class: interfaces.MatterMeasurementCO2, val: 650},
+			mandatory:      []uint32{0x005B}, // AirQuality — every concentration cluster is optional
+		},
+		{
+			deviceTypeName: "AirQualitySensorPM25",
+			deviceType:     0x002C,
+			measurement:    stubFloatMeasurement{class: interfaces.MatterMeasurementPM25, val: 12},
+			mandatory:      []uint32{0x005B},
+		},
+		{
+			deviceTypeName: "AirQualitySensorPM10",
+			deviceType:     0x002C,
+			measurement:    stubFloatMeasurement{class: interfaces.MatterMeasurementPM10, val: 30},
+			mandatory:      []uint32{0x005B},
+		},
+		{
+			deviceTypeName: "OccupancySensor",
+			deviceType:     0x0107,
+			measurement:    stubBoolMeasurement{class: interfaces.MatterMeasurementOccupancy},
+			mandatory:      []uint32{0x0406}, // OccupancySensing
+		},
+		{
+			deviceTypeName: "ContactSensor",
+			deviceType:     0x0015,
+			measurement:    stubBoolMeasurement{class: interfaces.MatterMeasurementContact},
+			mandatory:      []uint32{0x0045}, // BooleanState
+		},
+	}
+
+	for _, r := range rows {
+		t.Run(r.deviceTypeName, func(t *testing.T) {
+			t.Parallel()
+
+			// Pin the device type the assembler derives for this class —
+			// otherwise the mandatory set below would be checked against
+			// the wrong requirement list.
+			if got := interfaces.MatterMeasurementClassDeviceType(r.measurement.MatterMeasurementClass()); got != r.deviceType {
+				t.Fatalf("device type for class = 0x%04X, want 0x%04X", got, r.deviceType)
+			}
+
+			ep := &endpoint.Endpoint{
+				ID:           2,
+				DeviceType:   r.deviceType,
+				Reachable:    true,
+				FriendlyName: r.deviceTypeName,
+				Measurement:  r.measurement,
+			}
+			mounted := make(map[uint32]bool)
+			for _, srv := range endpoint.ClusterServers(ep) {
+				mounted[srv.MatterClusterID()] = true
+			}
+			if !mounted[identifyCluster] {
+				t.Errorf("Identify (0x0003) not mounted on device type 0x%04X; mounted = %v", r.deviceType, mounted)
+			}
+			for _, id := range r.mandatory {
+				if !mounted[id] {
+					t.Errorf("mandatory cluster 0x%04X of device type 0x%04X not mounted; mounted = %v",
+						id, r.deviceType, mounted)
+				}
+			}
+		})
+	}
+}

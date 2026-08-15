@@ -227,3 +227,33 @@ func TestDeriveMatterEligibility_MeasurementSource_UsesClassDeviceTypeAndCluster
 		t.Errorf("clusters: got %v, want [%d]", got.Clusters, wantCl)
 	}
 }
+
+// TestDeriveMatterEligibility_HostClusterMeasurement_Returns_Unmappable
+// covers the classes whose cluster rides on the endpoint it describes
+// (PowerSource, Electrical{Power,Energy}Measurement) and therefore has
+// no standalone device type. The assembler cannot build an endpoint for
+// them, so offering the row as mappable would give the operator a toggle
+// that silently does nothing.
+func TestDeriveMatterEligibility_HostClusterMeasurement_Returns_Unmappable(t *testing.T) {
+	t.Parallel()
+	classes := []struct {
+		name  string
+		class interfaces.MatterMeasurementClass
+	}{
+		{name: "battery", class: interfaces.MatterMeasurementBattery},
+		{name: "power", class: interfaces.MatterMeasurementPower},
+		{name: "energy", class: interfaces.MatterMeasurementEnergy},
+	}
+	for _, tc := range classes {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := eligibility.DeriveMatterEligibility(&fakeMeasurementSource{class: tc.class})
+			if got.State != eligibility.StateUnmappable {
+				t.Errorf("expected Unmappable, got %v (device type %d)", got.State, got.DeviceType)
+			}
+			if got.Reason == "" {
+				t.Error("Unmappable verdict must carry a reason")
+			}
+		})
+	}
+}

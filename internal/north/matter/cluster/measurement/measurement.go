@@ -4,8 +4,8 @@
 // Package measurement contains generic, Source-driven cluster server
 // implementations for the read-only Matter measurement clusters
 // (Temperature, Humidity, Illuminance, Pressure, BooleanState,
-// OccupancySensing). They project a typed measurement source from the
-// rich-model layer (`internal/model/generic`, `internal/model/calculated`)
+// OccupancySensing, AirQuality). They project a typed measurement source
+// from the rich-model layer (`internal/model/generic`, `internal/model/calculated`)
 // onto Matter wire format without depending on any specific source
 // type — a single MatterFloatMeasurementSource backs Temperature /
 // Humidity / Illuminance / Pressure indistinguishably.
@@ -37,6 +37,7 @@ const (
 	ClusterPressureMeasurement    uint32 = 0x0403
 	ClusterBooleanState           uint32 = 0x0045
 	ClusterOccupancySensing       uint32 = 0x0406
+	ClusterAirQuality             uint32 = 0x005B // mandatory on AirQualitySensor (0x002C)
 	ClusterCO2Concentration       uint32 = 0x040D // ADR 0012 §"Tier P2"
 	ClusterPM25Concentration      uint32 = 0x042A // ADR 0012 §"Tier P2"
 	ClusterPM10Concentration      uint32 = 0x042D // ADR 0012 §"Tier P2"
@@ -73,7 +74,23 @@ const (
 	booleanStateClusterRevision  uint16 = 3 // matter.js HEAD `boolean-state.element.ts:19` default=3
 	occupancyClusterRevision     uint16 = 7 // matter.js HEAD `occupancy-sensing.element.ts:20` default=7
 	concentrationClusterRevision uint16 = 5 // CO2 / PM2.5 / PM10 base cluster — matter.js HEAD `concentration-measurement.element.ts:19` default=5
+	airQualityClusterRevision    uint16 = 1 // matter.js HEAD `air-quality.element.ts:19` default=1
 	powerSourceClusterRevision   uint16 = 3 // matter.js HEAD (@matter/model 0.16.11)
+)
+
+// AirQuality (0x005B) attribute ID per Matter §2.9.6.1.
+const attrAirQualityLevel uint32 = 0x0000
+
+// AirQualityEnum members per Matter §2.9.5.1, mirroring matter.js
+// `packages/model/src/standard/elements/air-quality.element.ts`. Only
+// Unknown, Good and Poor carry conformance "M" — Fair, Moderate,
+// VeryPoor and ExtremelyPoor are each gated on an optional FeatureMap
+// bit (FAIR / MOD / VPOOR / XPOOR) that [AirQualityServer] does not
+// advertise, so they never appear on the wire.
+const (
+	airQualityUnknown uint8 = 0
+	airQualityGood    uint8 = 1
+	airQualityPoor    uint8 = 4
 )
 
 // Concentration Measurement (CO2 / PM2.5 / PM10) attribute IDs per
@@ -529,11 +546,15 @@ func luxToMatter(lux float64) uint16 {
 
 // PressureServer projects a [interfaces.MatterFloatMeasurementSource]
 // onto Matter PressureMeasurement. Model unit: hPa (= mbar = 100 Pa).
-// Wire unit: int16 in 10-Pa units per Matter §2.4.5.1, so 1 hPa
-// (100 Pa) = 10 wire units. Saturates at int16 boundaries.
+// Wire unit: int16 deci-kPa — Matter §2.4.5.1 defines
+// `MeasuredValue = 10 x Pressure [kPa]`, so one wire unit is 0.1 kPa =
+// 100 Pa = exactly 1 hPa and the model value passes through rounded.
+// Mirrors matter.js
+// `packages/model/src/standard/resources/pressure-measurement.resource.ts:27`.
+// Saturates at int16 boundaries.
 //
-// Typical atmospheric pressure (950-1050 hPa) maps to 9500-10500
-// wire units, well within int16 range.
+// Typical atmospheric pressure (950-1050 hPa) maps to 950-1050 wire
+// units, well within int16 range.
 //
 // PressureServer embeds [cluster.DataVersionTracker] and implements
 // [interfaces.MatterClusterDataVersion]. See TemperatureServer for the
@@ -613,7 +634,7 @@ func (s *PressureServer) MatterAttributes() []uint32 {
 }
 
 func hPaToMatter(hpa float64) int16 {
-	v := math.Round(hpa * 10) // 1 hPa = 100 Pa = 10 × 10-Pa units
+	v := math.Round(hpa) // 1 hPa = 0.1 kPa = 1 deci-kPa wire unit
 	if v > math.MaxInt16 {
 		return math.MaxInt16
 	}
@@ -793,6 +814,11 @@ func (s *OccupancySensingServer) MatterAttributes() []uint32 {
 // is one that has no measurement-cluster materialisation (None,
 // Power, Energy, MomentarySwitch).
 //
+// The air-quality classes (CO2 / PM2.5 / PM10) return two servers: the
+// concentration cluster plus [AirQualityServer], which the
+// AirQualitySensor device type mandates while listing every
+// concentration cluster as optional.
+//
 // Power / Energy host-cluster materialisation: when a Custom DP
 // (typically a switch.Switch on a HmIP-PSM) advertises a Power /
 // Energy MatterMeasurementClass alongside its OnOff cluster, the
@@ -834,15 +860,15 @@ func FromMeasurementClass(class interfaces.MatterMeasurementClass, src any) []in
 		}
 	case interfaces.MatterMeasurementCO2:
 		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewCO2ConcentrationServer(f)}
+			return []interfaces.MatterClusterServer{NewAirQualityServer(class, f), NewCO2ConcentrationServer(f)}
 		}
 	case interfaces.MatterMeasurementPM25:
 		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewPM25ConcentrationServer(f)}
+			return []interfaces.MatterClusterServer{NewAirQualityServer(class, f), NewPM25ConcentrationServer(f)}
 		}
 	case interfaces.MatterMeasurementPM10:
 		if f, ok := src.(interfaces.MatterFloatMeasurementSource); ok {
-			return []interfaces.MatterClusterServer{NewPM10ConcentrationServer(f)}
+			return []interfaces.MatterClusterServer{NewAirQualityServer(class, f), NewPM10ConcentrationServer(f)}
 		}
 	case interfaces.MatterMeasurementContact, interfaces.MatterMeasurementLeak:
 		if b, ok := src.(interfaces.MatterBoolMeasurementSource); ok {
@@ -1121,6 +1147,132 @@ func whToMilliWattHours(wh float64) int64 {
 	}
 	return int64(v)
 }
+
+// --- AirQuality (0x005B) ----------------------------------------------
+
+// AirQualityServer projects a [interfaces.MatterFloatMeasurementSource]
+// carrying a pollutant concentration onto the Matter AirQuality cluster.
+//
+// The AirQualitySensor device type (0x002C) mandates this cluster
+// alongside Identify and lists every concentration cluster as optional —
+// matter.js `packages/node/src/devices/air-quality-sensor.ts:169`
+// (`mandatory: { Identify: IdentifyServer, AirQuality: AirQualityServer }`).
+// An endpoint that advertises the device type while serving only a
+// concentration cluster fails the controller-side requirement check, so
+// the materializer mounts this server on every air-quality endpoint.
+//
+// Matter §2.9.5.1 states the concentration → level mapping is the
+// implementer's to define ("It is up to the device manufacturer to
+// determine the mapping between the measured values and their
+// corresponding enumeration values"), so the bridge grades against the
+// pollutant's published guideline value; see [airQualityGoodBelow].
+// FeatureMap stays 0, which restricts the reportable levels to the
+// conformance-mandatory Unknown / Good / Poor.
+//
+// The server deliberately does not implement
+// [interfaces.MatterChangeNotifier]: it shares its endpoint with the
+// concentration cluster it derives from, and that source already drives
+// the endpoint's notifier across the endpoint's full reportable-path
+// set. A second listener on the same source would only mark the same
+// path dirty twice. The Electrical* servers differ because they ride on
+// a host endpoint whose notifier is a different source entirely.
+//
+// AirQualityServer embeds [cluster.DataVersionTracker] and implements
+// [interfaces.MatterClusterDataVersion], following TemperatureServer.
+type AirQualityServer struct {
+	cluster.DataVersionTracker
+	src interfaces.MatterFloatMeasurementSource
+	// goodBelow is the upper bound (inclusive) of the Good level in the
+	// source's own unit; graded is false for a class with no guideline,
+	// in which case the server reports Unknown.
+	goodBelow float64
+	graded    bool
+}
+
+// Compile-time assertion: AirQualityServer satisfies MatterClusterDataVersion.
+var _ interfaces.MatterClusterDataVersion = (*AirQualityServer)(nil)
+
+// NewAirQualityServer constructs an AirQualityServer that grades src's
+// readings against the guideline value for class.
+func NewAirQualityServer(class interfaces.MatterMeasurementClass, src interfaces.MatterFloatMeasurementSource) *AirQualityServer {
+	goodBelow, graded := airQualityGoodBelow(class)
+	return &AirQualityServer{src: src, goodBelow: goodBelow, graded: graded}
+}
+
+// airQualityGoodBelow returns the concentration at or below which the
+// air still counts as Good, expressed in the unit the model carries for
+// that pollutant, and whether the class has a guideline at all.
+//
+// CO2 is ppm and uses the 1000 ppm indoor-air limit above which a room
+// is considered inadequately ventilated. PM2.5 and PM10 are µg/m³ and
+// use the World Health Organization 2021 air-quality guideline levels
+// for the 24-hour mean (15 and 45 µg/m³) — the model classifies exactly
+// the 24-hour-average parameters onto these classes, so the averaging
+// windows line up.
+func airQualityGoodBelow(class interfaces.MatterMeasurementClass) (float64, bool) {
+	switch class {
+	case interfaces.MatterMeasurementCO2:
+		return 1000, true
+	case interfaces.MatterMeasurementPM25:
+		return 15, true
+	case interfaces.MatterMeasurementPM10:
+		return 45, true
+	default:
+		return 0, false
+	}
+}
+
+// MatterDataVersion implements [interfaces.MatterClusterDataVersion].
+func (s *AirQualityServer) MatterDataVersion() uint32 { return s.Current() }
+
+// MatterClusterID returns the Matter Air Quality cluster ID (0x005B).
+func (s *AirQualityServer) MatterClusterID() uint32 { return ClusterAirQuality }
+
+// MatterRead resolves an attribute by ID against the underlying source.
+func (s *AirQualityServer) MatterRead(attrID uint32) (any, bool) {
+	switch attrID {
+	case attrAirQualityLevel:
+		// Unlike the measurement clusters this attribute is not
+		// nullable — the enum carries its own Unknown member, so a
+		// source without a reading yet reports Unknown rather than nil.
+		return s.level(), true
+	case cluster.AttrGlobalFeatureMap:
+		return uint32(0), true
+	case cluster.AttrGlobalClusterRevision:
+		return airQualityClusterRevision, true
+	}
+	return nil, false
+}
+
+// level grades the current reading into an AirQualityEnum member.
+func (s *AirQualityServer) level() uint8 {
+	v, ok := s.src.MatterFloatValue()
+	if !ok || !s.graded {
+		return airQualityUnknown
+	}
+	if v <= s.goodBelow {
+		return airQualityGood
+	}
+	return airQualityPoor
+}
+
+// MatterWrite returns errReadOnly — AirQuality carries a single "R V" attribute.
+func (s *AirQualityServer) MatterWrite(_ context.Context, _ uint32, _ any, _ hmenum.CommandPriority) error {
+	return errReadOnly
+}
+
+// MatterInvoke returns errNoCommands — the Matter Air Quality cluster has no commands.
+func (s *AirQualityServer) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
+	return nil, fmt.Errorf("%w (cmd 0x%02X)", errNoCommands, cmdID)
+}
+
+// MatterReportable returns the attribute IDs the cluster reports on change.
+func (s *AirQualityServer) MatterReportable() []uint32 { return []uint32{attrAirQualityLevel} }
+
+// MatterAttributes lists every AirQuality (0x005B) attribute the server
+// implements via MatterRead, so the dispatcher advertises the full
+// AttributeList rather than falling back to MatterReportable.
+func (s *AirQualityServer) MatterAttributes() []uint32 { return []uint32{attrAirQualityLevel} }
 
 // --- Concentration Measurement (CO2 / PM2.5 / PM10) ------------------
 
