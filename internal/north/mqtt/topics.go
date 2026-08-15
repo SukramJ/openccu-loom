@@ -293,8 +293,15 @@ func (b *TopicBuilder) ScheduleSwitchCommand(centralName, iface, address string,
 // channelScopedTopic returns the shared "<base>/<central>/<iface>/<addr>/<channel>"
 // prefix used by every bridge-internal channel topic that has no
 // naming.PathData helper yet (combined-DP and schedule topics).
+//
+// The base is only slash-trimmed, never [naming.TopicSafe]d: a base is a
+// topic *prefix*, and an operator may configure it with levels
+// ("home/loom"). Escaping it here collapsed those to "home_loom" while
+// every naming.MQTT* helper kept them, so the combined-DP and schedule
+// topics of such an installation landed on a prefix of their own — one
+// no subscriber and no retain sweep looks at.
 func (b *TopicBuilder) channelScopedTopic(centralName, iface, address string, channel int) string {
-	return naming.TopicSafe(b.Base) + "/" +
+	return strings.Trim(b.Base, "/") + "/" +
 		naming.TopicSafe(centralName) + "/" +
 		naming.TopicSafe(iface) + "/" +
 		naming.TopicSafe(address) + "/" +

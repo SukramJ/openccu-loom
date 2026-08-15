@@ -445,6 +445,29 @@ var reservedLegacyParamSegments = map[string]struct{}{
 	"week_profile": {},
 }
 
+// commandParts splits an inbound topic into the segments the command
+// plane defines, with the configured topic base removed first. A topic
+// that does not sit under the base is refused (ok=false) — the caller
+// drops it the same way it drops an unknown shape.
+//
+// Every handler indexes these segments by position, so they have to be
+// counted from the plane, not from the topic: `topic_base` is free-form
+// operator config and may carry levels of its own ("home/loom"). Counting
+// absolute segments of the full topic shifted every index by the depth of
+// the base, which dropped every inbound command on such an installation
+// while the state plane kept publishing normally — an outage that reads
+// exactly like a broker or CCU fault.
+func (c *CommandSubscriber) commandParts(topic string) ([]string, bool) {
+	if c.topics == nil || c.topics.Base == "" {
+		return strings.Split(topic, "/"), true
+	}
+	rest, ok := strings.CutPrefix(topic, c.topics.Base+"/")
+	if !ok {
+		return nil, false
+	}
+	return strings.Split(rest, "/"), true
+}
+
 // Start attaches the four subscriptions.
 func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if c.sub == nil {
@@ -566,12 +589,12 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 		c.logger.Debug("mqtt.command.schedule.retained_drop", slog.String("topic", topic))
 		return
 	}
-	parts := strings.Split(topic, "/")
-	if len(parts) != 8 || parts[5] != "schedule" || parts[7] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 7 || parts[4] != "schedule" || parts[6] != "set" {
 		c.logger.Warn("mqtt.command.schedule.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralSeg, iface, deviceAddr, channelStr, key := parts[1], parts[2], parts[3], parts[4], parts[6]
+	centralSeg, iface, deviceAddr, channelStr, key := parts[0], parts[1], parts[2], parts[3], parts[5]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
@@ -623,12 +646,12 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 		c.logger.Debug("mqtt.command.wp.retained_drop", slog.String("topic", topic))
 		return
 	}
-	parts := strings.Split(topic, "/")
-	if len(parts) != 7 || parts[5] != "week_profile" || parts[6] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 6 || parts[4] != "week_profile" || parts[5] != "set" {
 		c.logger.Warn("mqtt.command.wp.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralSeg, iface, deviceAddr, channelStr := parts[1], parts[2], parts[3], parts[4]
+	centralSeg, iface, deviceAddr, channelStr := parts[0], parts[1], parts[2], parts[3]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
@@ -673,12 +696,12 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 		c.logger.Debug("mqtt.command.combined.retained_drop", slog.String("topic", topic))
 		return
 	}
-	parts := strings.Split(topic, "/")
-	if len(parts) != 8 || parts[5] != "combined" || parts[7] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 7 || parts[4] != "combined" || parts[6] != "set" {
 		c.logger.Warn("mqtt.command.combined.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralSeg, iface, deviceAddr, channelStr, kind := parts[1], parts[2], parts[3], parts[4], parts[6]
+	centralSeg, iface, deviceAddr, channelStr, kind := parts[0], parts[1], parts[2], parts[3], parts[5]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
@@ -727,12 +750,12 @@ func (c *CommandSubscriber) handleServiceMethod(topic string, raw []byte, retain
 		c.logger.Debug("mqtt.command.svc.retained_drop", slog.String("topic", topic))
 		return
 	}
-	parts := strings.Split(topic, "/")
-	if len(parts) != 9 || parts[5] != "custom" || parts[7] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 8 || parts[4] != "custom" || parts[6] != "set" {
 		c.logger.Warn("mqtt.command.svc.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralSeg, iface, deviceAddr, channelStr, method := parts[1], parts[2], parts[3], parts[4], parts[8]
+	centralSeg, iface, deviceAddr, channelStr, method := parts[0], parts[1], parts[2], parts[3], parts[7]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
@@ -776,43 +799,46 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 		c.logger.Debug("mqtt.command.dp.retained_drop", slog.String("topic", topic))
 		return
 	}
-	// Two accepted shapes — both end with `/set`:
+	// Two accepted shapes — both end with `/set`. Segment counts are
+	// below the base, which [CommandSubscriber.commandParts] has already
+	// stripped:
 	//
 	//   1. Bucket-aware (canonical, emitted by the discovery builder):
-	//      <base>/<central>/<iface>/<addr>/<channel>/<bucket>/<param>/set
-	//      (8 segments; `<bucket>` is `values`/`master`/`calculated`).
+	//      <central>/<iface>/<addr>/<channel>/<bucket>/<param>/set
+	//      (7 segments; `<bucket>` is `values`/`master`/`calculated`).
 	//
-	//   2. Legacy bucket-less shape (still produced by some hand-built
-	//      tools and the legacy alias mirror on the raw plane):
-	//      <base>/<central>/<iface>/<addr>/<channel>/<param>/set
-	//      (7 segments).
+	//   2. Legacy bucket-less shape, still produced by hand-built tools
+	//      and by automations written against the pre-bucket topology
+	//      (the legacy alias mirrors state only, never `/set`):
+	//      <central>/<iface>/<addr>/<channel>/<param>/set
+	//      (6 segments).
 	//
-	// The 7-segment (legacy) form always routes to VALUES. In the 8-segment
+	// The bucket-less form always routes to VALUES. In the bucket-aware
 	// form `values` routes to SetValue, `master` routes to SetMasterValue,
 	// and `calculated` is read-only and is dropped with a debug log.
-	parts := strings.Split(topic, "/")
-	if parts[len(parts)-1] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || parts[len(parts)-1] != "set" {
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
 		return
 	}
 	var centralSeg, iface, device, channelStr, parameter string
 	isMaster := false
 	switch len(parts) {
-	case 7:
+	case 6:
 		// A broker delivers a message to EVERY matching subscription, and
 		// the legacy filter is the same length as the filters that own a
 		// literal segment here. Without this guard picking a heating profile
 		// wrote the profile AND issued a CCU write for a parameter named
 		// `week_profile`, which no channel has.
-		if _, reserved := reservedLegacyParamSegments[parts[5]]; reserved {
+		if _, reserved := reservedLegacyParamSegments[parts[4]]; reserved {
 			c.logger.Debug("mqtt.command.reserved_segment",
 				slog.String("topic", topic),
-				slog.String("segment", parts[5]))
+				slog.String("segment", parts[4]))
 			return
 		}
-		centralSeg, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[5]
-	case 8:
-		bucket := parts[5]
+		centralSeg, iface, device, channelStr, parameter = parts[0], parts[1], parts[2], parts[3], parts[4]
+	case 7:
+		bucket := parts[4]
 		switch bucket {
 		case "values":
 			// Default VALUES write — no special flag needed.
@@ -827,7 +853,7 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 				slog.String("bucket", bucket))
 			return
 		}
-		centralSeg, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[6]
+		centralSeg, iface, device, channelStr, parameter = parts[0], parts[1], parts[2], parts[3], parts[5]
 	default:
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
 		return
@@ -871,11 +897,11 @@ func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained boo
 		return
 	}
 	// Canonical ADR-0011: <base>/<central>/hub/sysvars/<name>/set
-	parts := strings.Split(topic, "/")
-	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "sysvars" || parts[5] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 5 || parts[1] != "hub" || parts[2] != "sysvars" || parts[4] != "set" {
 		return
 	}
-	centralSeg, name := parts[1], parts[4]
+	centralSeg, name := parts[0], parts[3]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
@@ -908,11 +934,11 @@ func (c *CommandSubscriber) handleProgram(topic string, body []byte, retained bo
 		return
 	}
 	// Canonical ADR-0011: <base>/<central>/hub/programs/<id>/trigger
-	parts := strings.Split(topic, "/")
-	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "programs" || parts[5] != "trigger" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 5 || parts[1] != "hub" || parts[2] != "programs" || parts[4] != "trigger" {
 		return
 	}
-	centralSeg, id := parts[1], parts[4]
+	centralSeg, id := parts[0], parts[3]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
@@ -940,11 +966,11 @@ func (c *CommandSubscriber) handleProgramEnable(topic string, body []byte, retai
 		c.logger.Debug("mqtt.command.program_enable.retained_drop", slog.String("topic", topic))
 		return
 	}
-	parts := strings.Split(topic, "/")
-	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "programs" || parts[5] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 5 || parts[1] != "hub" || parts[2] != "programs" || parts[4] != "set" {
 		return
 	}
-	centralSeg, id := parts[1], parts[4]
+	centralSeg, id := parts[0], parts[3]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
@@ -991,12 +1017,12 @@ func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retaine
 		return
 	}
 	// <base>/<central>/hub/install_mode/<iface>/set
-	parts := strings.Split(topic, "/")
-	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "install_mode" || parts[5] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 5 || parts[1] != "hub" || parts[2] != "install_mode" || parts[4] != "set" {
 		c.logger.Warn("mqtt.command.install_mode.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralSeg, iface := parts[1], parts[4]
+	centralSeg, iface := parts[0], parts[3]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
@@ -1048,12 +1074,12 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 		return
 	}
 	// <base>/alarm/<zone>/set
-	parts := strings.Split(topic, "/")
-	if len(parts) != 4 || parts[1] != "alarm" || parts[3] != "set" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 3 || parts[0] != "alarm" || parts[2] != "set" {
 		c.logger.Warn("mqtt.command.alarm.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	zone := parts[2]
+	zone := parts[1]
 	action, code := parseAlarmAction(body)
 	if action == "" {
 		c.logger.Warn("mqtt.command.alarm.empty_payload", slog.String("topic", topic))
@@ -1224,12 +1250,12 @@ func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained b
 		return
 	}
 	// <base>/<central>/devices/<deviceAddr>/cdps/<name>/<operation>/invoke
-	parts := strings.Split(topic, "/")
-	if len(parts) != 8 || parts[2] != "devices" || parts[4] != "cdps" || parts[7] != "invoke" {
+	parts, ok := c.commandParts(topic)
+	if !ok || len(parts) != 7 || parts[1] != "devices" || parts[3] != "cdps" || parts[6] != "invoke" {
 		c.logger.Warn("mqtt.command.cdp.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	centralSeg, deviceAddr, name, operation := parts[1], parts[3], parts[5], parts[6]
+	centralSeg, deviceAddr, name, operation := parts[0], parts[2], parts[4], parts[5]
 	centralName, ok := c.resolveCentral(topic, centralSeg)
 	if !ok {
 		return
