@@ -116,7 +116,10 @@ describe("Login — rendering", () => {
 // ---------------------------------------------------------------------------
 
 describe("Login — submit flow", () => {
-  it("submits the entered credentials to authStore.login and navigates to the device list", async () => {
+  // The form deliberately leaves the hash alone. It used to force
+  // "#/devices", which made the configured start page unreachable after a
+  // password login - App only applies it to an empty hash.
+  it("submits the entered credentials to authStore.login without choosing a route", async () => {
     render(Login);
 
     await fireEvent.input(screen.getByLabelText("login.username"), {
@@ -129,11 +132,11 @@ describe("Login — submit flow", () => {
 
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalledWith("admin", "secret123");
-      expect(location.hash).toBe("#/devices");
     });
+    expect(location.hash).toBe("");
   });
 
-  it("does not navigate when authStore.login rejects", async () => {
+  it("leaves the hash untouched when authStore.login rejects", async () => {
     mockLogin.mockRejectedValue(new Error("invalid"));
 
     render(Login);

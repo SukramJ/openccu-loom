@@ -27,10 +27,11 @@
     submitting = true;
     try {
       await authStore.login(username, password);
-      // Navigate to the device list by default. Deep-link support
-      // ("came from /app/#/devices/0001") is deferred until a real
-      // router arrives.
-      location.hash = "#/devices";
+      // No navigation here. An empty hash already renders the device
+      // list, a hash the operator arrived with is their deep link, and
+      // App applies the configured start page once the identity exists -
+      // which forcing "#/devices" here used to make impossible, because
+      // the start route only applies to an empty hash.
     } catch {
       // Error message is surfaced through authStore.error.
     } finally {

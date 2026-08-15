@@ -229,7 +229,9 @@ function createMatterStore() {
     const next = new Map(pendingUpdates);
     next.set(key, updated);
     pendingUpdates = next;
-    dirty.set(DIRTY_KEY, true);
+    // The pending map is module state and outlives the exposure list, so
+    // the leave-confirm needs a way to actually drop it.
+    dirty.set(DIRTY_KEY, true, discardDirty);
   }
 
   function discardDirty() {

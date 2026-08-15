@@ -38,7 +38,9 @@ function createVisibilityStore() {
   let lastSave = $state<UnIgnoreUpdateResponse | null>(null);
 
   function markDirty() {
-    dirty.set(DIRTY_KEY, pending.size > 0);
+    // `pending` is module state and is not reset by a revisit, so the
+    // leave-confirm has to be able to drop it.
+    dirty.set(DIRTY_KEY, pending.size > 0, () => discardPending());
   }
 
   async function loadCentrals() {
