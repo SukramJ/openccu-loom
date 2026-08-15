@@ -4,11 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
-# 0.59.2
+# 0.60.0
 
-- Version alignment with OpenCCU-Loom 0.59.2. The proxy itself is
-  unchanged; the release corrects two inaccurate code comments and
-  changes no behaviour.
+- Version alignment with OpenCCU-Loom 0.60.0. The proxy itself is
+  unchanged; the release is a maintenance release built from a full audit
+  of the code base, fixing device-configuration writes, the interface
+  connectivity display, a silent refused-arming path and several
+  credential-handling defects in the daemon.
 
 # 0.59.1
 
