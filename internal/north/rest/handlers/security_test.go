@@ -6,11 +6,14 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/security"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -104,5 +107,71 @@ func TestPutSecuritySourceOverride_RefWithEscapeLikeComponent(t *testing.T) {
 	}
 	if d.central != "%41" {
 		t.Fatalf("central = %q, want %q (no second decode)", d.central, "%41")
+	}
+}
+
+// zoneSnapshotDomain serves a fixed snapshot so the projection can be
+// exercised on its own.
+type zoneSnapshotDomain struct {
+	snap security.Snapshot
+}
+
+func (z *zoneSnapshotDomain) Snapshot() security.Snapshot { return z.snap }
+
+func (z *zoneSnapshotDomain) Faults() []security.Fault { return nil }
+
+func (z *zoneSnapshotDomain) AcknowledgeFault(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+
+func (z *zoneSnapshotDomain) Sources(context.Context) []security.SourceView { return nil }
+
+func (z *zoneSnapshotDomain) SetSourceOverride(
+	context.Context, string, string, string, string, hmenum.SecurityClass, bool, string,
+) error {
+	return nil
+}
+
+// TestGetSecuritySnapshot_ZoneOrderIsStableAcrossRequests pins the zone
+// list to a deterministic order. The domain keys zones by slug in a map,
+// so projecting them in range order let Go's randomised map iteration
+// reshuffle the overview's zone cards on every refresh — and the view
+// refetches on every domain broadcast.
+func TestGetSecuritySnapshot_ZoneOrderIsStableAcrossRequests(t *testing.T) {
+	t.Parallel()
+	d := &zoneSnapshotDomain{snap: security.Snapshot{
+		Zones: map[string]security.ZoneState{
+			"cellar":  {ID: "3", Slug: "cellar", Name: "Cellar"},
+			"ground":  {ID: "1", Slug: "ground", Name: "Ground floor"},
+			"upstair": {ID: "2", Slug: "upstair", Name: "Upstairs"},
+		},
+	}}
+
+	var first []string
+	for range 40 {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/security", http.NoBody)
+		w := httptest.NewRecorder()
+		GetSecuritySnapshot(d).ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", w.Code)
+		}
+		var body hmapi.SecuritySnapshot
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		got := make([]string, 0, len(body.Zones))
+		for _, z := range body.Zones {
+			got = append(got, z.Slug)
+		}
+		if first == nil {
+			first = got
+			continue
+		}
+		if !slices.Equal(first, got) {
+			t.Fatalf("zone order changed between requests: %v then %v", first, got)
+		}
+	}
+	if want := []string{"cellar", "ground", "upstair"}; !slices.Equal(first, want) {
+		t.Fatalf("zone order = %v, want %v (slug order)", first, want)
 	}
 }
