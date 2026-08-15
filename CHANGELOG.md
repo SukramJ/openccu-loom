@@ -44,6 +44,15 @@ The REST contract version moves 5.29.0 → 5.31.0.
 
 ### Fixed
 
+- **A code comment can no longer cite a catalogue entry nobody wrote.**
+  The reference guard confirmed that a cited markdown file exists and
+  stopped there, so a comment pointing at a specific entry inside it —
+  the shape used to record a deliberate divergence — passed even when the
+  entry had never been written. Such a citation reads as evidence that
+  someone weighed the question and decided; three comments carried one
+  that did not exist. The guard now checks the entry too, and found a
+  fourth the manual sweep had missed.
+
 A full-codebase audit found 272 verified defects — every one confirmed by
 a second reviewer whose job was to refute it, out of 338 raised. Every
 linter was green on all of them, so none of this was mechanically
