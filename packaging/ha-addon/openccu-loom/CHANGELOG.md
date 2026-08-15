@@ -42,6 +42,27 @@ A maintenance release built from a full review of the code base. It fixes
   while the address bar showed the new one — and rename, delete and
   parameter saves went to the device that was still loaded.
 
+- **A siren left sounding across a restart was ignored.** After a restart
+  the alarm engine reads which sirens are running: one in an armed zone
+  becomes a triggered incident, one in a disarmed zone is switched off.
+  That check ran before the CCU had answered with a single device, so it
+  found nothing and never ran again. A siren still sounding was neither
+  adopted nor stopped, and nothing was logged.
+
+- **A siren that failed to fire did so quietly.** A failed output command
+  — an activation during an alarm, a stop, a test — now leaves a journal
+  entry and marks the alarm system unhealthy. A failed test reported an
+  error to whoever pressed the button and nothing else, while successful
+  tests were journalled: the record of a siren sweep listed only the
+  outputs that worked.
+
+- **The siren tone you pick in Home Assistant now reaches the device.**
+  The tone selector was decoration: the choice was dropped on the way in
+  and the siren fired with its default, which on an HmIP-ASIR is the
+  value that silences it. Sound-player soundfiles had the same problem.
+  Siren tones and light effects are also translated now instead of
+  showing raw device tokens; the old token still works in automations.
+
 A CCU name containing characters other than letters, digits, hyphen and
 underscore is now rejected at start-up instead of being accepted silently.
 Such a name produced a callback address the CCU could never reach, so the
