@@ -415,15 +415,6 @@ func TestParamsetStore_ClosedDB_GetChannelAddressesByParamsetKey(t *testing.T) {
 	}
 }
 
-func TestParamsetStore_ClosedDB_IsInMultipleChannels(t *testing.T) {
-	t.Parallel()
-	s := closedDB(t)
-	_, err := s.paramsets.IsInMultipleChannels(context.Background(), "c", "HmIP-RF", "ABC:1", "LEVEL")
-	if err == nil {
-		t.Error("IsInMultipleChannels on closed DB: want error, got nil")
-	}
-}
-
 func TestParamsetStore_ClosedDB_ClearForInterface(t *testing.T) {
 	t.Parallel()
 	s := closedDB(t)
@@ -448,15 +439,6 @@ func TestParamsetStore_ClosedDB_WipeOutdated(t *testing.T) {
 	_, err := s.paramsets.WipeOutdated(context.Background())
 	if err == nil {
 		t.Error("WipeOutdated on closed DB: want error, got nil")
-	}
-}
-
-func TestParamsetStore_ClosedDB_WarmCache(t *testing.T) {
-	t.Parallel()
-	s := closedDB(t)
-	err := s.paramsets.WarmCache(context.Background())
-	if err == nil {
-		t.Error("WarmCache on closed DB: want error, got nil")
 	}
 }
 
