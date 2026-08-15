@@ -37,6 +37,18 @@ import (
 // caller-supplied [SubscriberBuilder] every time the stack is
 // swapped.
 type mqttSupervisor struct {
+	// lifecycleMu serialises whole stack transitions — Start, Swap and
+	// Shutdown — against each other. mu only guards the field reads and
+	// writes inside them, which is not enough: Swap snapshots the live
+	// stack, releases mu to build and connect the replacement, then
+	// re-takes mu to commit. Two concurrent Swaps (the config watcher's
+	// tick and POST /admin/mqtt/reload are independent callers) therefore
+	// capture the same predecessor, both commit, and the loser's
+	// fully-connected client plus its subscribers are referenced by
+	// nothing that could ever tear them down. Held across the build so a
+	// transition is atomic end to end.
+	lifecycleMu sync.Mutex
+
 	mu     sync.Mutex
 	logger *slog.Logger
 
@@ -240,6 +252,8 @@ func (s *mqttSupervisor) CurrentBridge() *mqtt.Bridge {
 // subscribers. A nil-or-disabled cfg leaves the supervisor in a
 // no-stack state and returns nil.
 func (s *mqttSupervisor) Start(ctx context.Context, cfg *config.Config) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	if cfg == nil || !cfg.North.MQTT.Enabled {
 		s.logger.Info("mqtt.supervisor.start.skipped",
 			slog.String("reason", "mqtt disabled in config"))
@@ -289,7 +303,13 @@ func (s *mqttSupervisor) Start(ctx context.Context, cfg *config.Config) error {
 			s.logger.Warn("mqtt.supervisor.subscribers.start", slog.String("err", sErr.Error()))
 		} else {
 			s.mu.Lock()
-			s.current.stopSubs = stop
+			// Record against the stack this Start built, not against
+			// whatever s.current happens to hold: Shutdown clears it.
+			if s.current == swap {
+				s.current.stopSubs = stop
+			} else {
+				stop()
+			}
 			s.mu.Unlock()
 		}
 	}
@@ -370,6 +390,8 @@ func (s *mqttSupervisor) Swap(ctx context.Context, newCfg *config.Config) error 
 	if newCfg == nil {
 		return errors.New("mqtt.supervisor.swap: nil config")
 	}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	start := time.Now()
 
 	// Snapshot current state under the lock.
@@ -429,7 +451,14 @@ func (s *mqttSupervisor) Swap(ctx context.Context, newCfg *config.Config) error 
 			s.logger.Warn("mqtt.supervisor.swap.subscribers", slog.String("err", sErr.Error()))
 		} else {
 			s.mu.Lock()
-			s.current.stopSubs = stop
+			// Shutdown may have raced in and cleared s.current; stop the
+			// subscribers we just built rather than writing through a nil
+			// pointer or hanging them off a foreign generation.
+			if s.current == newSwap {
+				s.current.stopSubs = stop
+			} else {
+				stop()
+			}
 			s.mu.Unlock()
 		}
 	}
@@ -451,14 +480,21 @@ func (s *mqttSupervisor) Swap(ctx context.Context, newCfg *config.Config) error 
 // Shutdown tears down whatever stack is currently active. Safe to
 // call without a prior Start. Idempotent.
 func (s *mqttSupervisor) Shutdown(ctx context.Context) {
+	// Cancel the boot-connect retry before waiting on lifecycleMu: that loop
+	// runs Swap, which holds the lock, and a shutdown that queued behind a
+	// full reconnect attempt would stall the daemon exit.
+	s.mu.Lock()
+	if s.retryCancel != nil {
+		s.retryCancel()
+	}
+	s.mu.Unlock()
+
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	s.mu.Lock()
 	swap := s.current
 	s.current = nil
-	cancelRetry := s.retryCancel
 	s.mu.Unlock()
-	if cancelRetry != nil {
-		cancelRetry()
-	}
 	if swap == nil {
 		return
 	}
@@ -631,8 +667,16 @@ func makeMQTTSubscriberBuilder(
 		// per-Start/Swap ctx) so a broker-restart-triggered republish is
 		// cancelled on shutdown but survives a broker swap — same rationale
 		// as the command subscriber below.
+		//
+		// Both subscriber constructors start their dispatcher worker
+		// goroutines immediately, and only Close stops them — so every early
+		// return from here on closes what it already built. Without that a
+		// failed build (a broker ACL rejecting one of the command
+		// subscriptions) leaves nine goroutines running with no handle left
+		// to stop them.
 		birthSync := mqtt.NewBirthSync(sub, bridge, logger).WithLifecycleContext(lifecycleCtx)
 		if err := birthSync.Start(ctx); err != nil {
+			birthSync.Close()
 			return nil, fmt.Errorf("birth_sync.Start: %w", err)
 		}
 		// The labeler turns a localised siren tone or light effect the
@@ -667,6 +711,8 @@ func makeMQTTSubscriberBuilder(
 			cmdSub = cmdSub.WithAddonUpdateSink(addonSink)
 		}
 		if err := cmdSub.Start(ctx); err != nil {
+			cmdSub.Close()
+			birthSync.Close()
 			return nil, fmt.Errorf("command_subscriber.Start: %w", err)
 		}
 
@@ -700,14 +746,21 @@ func makeMQTTSubscriberBuilder(
 		// Subscriptions are tied to the underlying client; the
 		// supervisor's teardown calls lifecycle.Stop() which
 		// Disconnects the client and drops every active filter, so an
-		// explicit per-subscriber stop is a no-op for them. The
-		// addon-update OnChange subscription above is the one exception —
-		// it is bound to the Updater, not the mqtt client — so it is
-		// unsubscribed explicitly here.
+		// explicit per-subscriber unsubscribe is a no-op for them.
+		//
+		// Their dispatchers are not: each subscriber owns worker goroutines
+		// started in its constructor that exit only on Close, and every
+		// stack swap builds a fresh pair. Closing them here — after the
+		// queued republishes and commands have drained — keeps a reload from
+		// leaking nine goroutines per generation. The addon-update OnChange
+		// subscription is bound to the Updater rather than to the mqtt
+		// client, so it needs its own unsubscribe.
 		return func() {
 			if addonUnsub != nil {
 				addonUnsub()
 			}
+			cmdSub.Close()
+			birthSync.Close()
 		}, nil
 	}
 }
