@@ -519,8 +519,14 @@ func (b *Blind) CurrentChannelTiltPosition() (custom.Position, bool) {
 //   - level=1.0, tilt=1.0 → "0xc8,0xc8"
 //   - level=1.0, tilt=0.0 → "0xc8,0x00"
 //   - level=0.5, tilt=0.5 → "0x64,0x64"
+//
+// The product is rounded, not truncated: 0.29, 0.57 and 0.58 land just
+// below an exact half-percent step in binary64, so truncation moved the
+// blind one 0.5 % step below the commanded position while the HmIP
+// branch of the same switch (and internal/client/backends EncodeHMLevel,
+// the twin encoder) rounded half-up.
 func hmLevelCombined(level, tilt float64) string {
-	lByte := int(level * 100 * 2)
-	tByte := int(tilt * 100 * 2)
+	lByte := int(math.Round(level * 100 * 2))
+	tByte := int(math.Round(tilt * 100 * 2))
 	return fmt.Sprintf("0x%02x,0x%02x", lByte, tByte)
 }

@@ -4,12 +4,16 @@
 package textdisplay_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
-	_ "github.com/SukramJ/openccu-loom/internal/model/custom/textdisplay" // trigger init()
+	"github.com/SukramJ/openccu-loom/internal/model/custom/textdisplay"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // makeTextDisplayChannel builds a bare device + channel for constructor testing.
@@ -157,4 +161,67 @@ func TestIPTextDisplayConstructorCanAttachToChannel(t *testing.T) {
 	if got := ch.CustomDataPoint(); got == nil {
 		t.Fatal("channel must hold the attached custom DP")
 	}
+}
+
+// TestIPTextDisplayConstructorCapturesRowFormattingValueLists verifies
+// that the constructor lifts the alignment and colour VALUE_LISTs off
+// the device's own paramset.
+//
+// Those three lists had no production caller at all: the state payload
+// dropped available_alignments / available_text_colors /
+// available_background_colors through omitempty on every device, so no
+// consumer could offer the pickers, and validateAlignment /
+// validateTextColor / validateBackgroundColor — which pass anything
+// while their list is empty — let an unknown label reach the CCU.
+func TestIPTextDisplayConstructorCapturesRowFormattingValueLists(t *testing.T) {
+	t.Parallel()
+
+	ch := makeTextDisplayChannel(t, "HmIP-WRCD:3")
+	putDisplayEnum(t, ch, "HmIP-WRCD:3", hmenum.ParameterDisplayDataAlignment, []string{"LEFT", "CENTER", "RIGHT"})
+	putDisplayEnum(t, ch, "HmIP-WRCD:3", hmenum.ParameterDisplayDataTextColor, []string{"WHITE", "BLACK"})
+	putDisplayEnum(t, ch, "HmIP-WRCD:3", hmenum.ParameterDisplayDataBackgroundColor, []string{"WHITE", "BLACK"})
+
+	ctor, _ := custom.DefaultRegistry().Constructor(hmenum.DeviceProfileIPTextDisplay)
+	dp, err := ctor(ch, custom.RebasedChannelGroupConfig{})
+	if err != nil {
+		t.Fatalf("constructor returned error: %v", err)
+	}
+	td, ok := dp.(*textdisplay.TextDisplay)
+	if !ok {
+		t.Fatalf("constructor returned %T, want *textdisplay.TextDisplay", dp)
+	}
+
+	cases := []struct {
+		name string
+		got  []string
+		want []string
+	}{
+		{"alignments", td.AvailableAlignments(), []string{"LEFT", "CENTER", "RIGHT"}},
+		{"text colors", td.AvailableTextColors(), []string{"WHITE", "BLACK"}},
+		{"background colors", td.AvailableBackgroundColors(), []string{"WHITE", "BLACK"}},
+	}
+	for _, c := range cases {
+		if !slices.Equal(c.got, c.want) {
+			t.Errorf("available %s = %v, want %v", c.name, c.got, c.want)
+		}
+	}
+}
+
+// putDisplayEnum installs a writable ENUM data point carrying valueList
+// on ch, matching the shape the CCU reports for the row-formatting
+// parameters.
+func putDisplayEnum(t *testing.T, ch *device.Channel, address string, p hmenum.Parameter, valueList []string) {
+	t.Helper()
+	ch.Put(generic.NewSelect(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(p),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+			ValueList:  valueList,
+		},
+	}))
 }

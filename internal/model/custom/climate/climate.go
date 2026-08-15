@@ -1256,8 +1256,18 @@ func (c *Climate) AwayUntil() (time.Time, bool) {
 // encodePartyTime renders a timestamp in the CCU PARTY_TIME format
 // `yyyy_mm_dd hh:mm`, mirroring the reference model/custom/climate.py
 // _PARTY_DATE_FORMAT = "%Y_%m_%d %H:%M" used for PARTY_TIME_START/END.
+//
+// PARTY_TIME_START/END carry no zone, so the CCU reads them as its own
+// local wall clock — which is the daemon's zone, the one `time.Now()`
+// already renders the window's start in. The conversion is what keeps
+// both ends of one window in the same zone: an `until` parsed from an
+// RFC-3339 timestamp keeps the literal offset of the string it came
+// from, so a client sending the canonical trailing `Z` used to encode an
+// end that was one UTC offset earlier than requested — and, past the
+// offset, earlier than the start, which the CCU rejects as an inverted
+// window without reporting anything back.
 func encodePartyTime(t time.Time) string {
-	return t.Format("2006_01_02 15:04")
+	return t.Local().Format("2006_01_02 15:04")
 }
 
 // partyModeCode renders the PARTY_MODE_SUBMIT payload the HM-CC-RT firmware
@@ -1266,7 +1276,13 @@ func encodePartyTime(t time.Time) string {
 //	temp,start_minutes_of_day,start_dd,start_mm,start_yy,end_minutes_of_day,end_dd,end_mm,end_yy
 //
 // Example: "21.5,1200,20,10,16,1380,20,10,16"
+//
+// Both ends are converted to the daemon's zone for the same reason
+// [encodePartyTime] does: the payload is a bare wall clock the CCU reads
+// in its own local time, and the caller's `end` carries whatever offset
+// its RFC-3339 source spelled out.
 func partyModeCode(start, end time.Time, setpoint float64) string {
+	start, end = start.Local(), end.Local()
 	startMOD := start.Hour()*60 + start.Minute()
 	endMOD := end.Hour()*60 + end.Minute()
 	return fmt.Sprintf(
@@ -1319,8 +1335,13 @@ func (c *Climate) setIPMode(ctx context.Context, m Mode, priority hmenum.Command
 	// BOOST_MODE=False so the mode switch implies "boost off". Without
 	// that bundling the CCU keeps boost active and rejects the new
 	// mode with a 502.
+	//
+	// The profile is read through the accessor rather than the field: the
+	// CCU event goroutine writes it under c.mu whenever BOOST_MODE or
+	// SET_POINT_MODE arrives, and setIPMode runs on whichever north-bound
+	// goroutine issued the command.
 	params := map[hmenum.Parameter]any{}
-	if c.profile == ProfileBoost {
+	if p, ok := c.Profile(); ok && p == ProfileBoost {
 		params[hmenum.ParameterBoostMode] = false
 	}
 	switch m {

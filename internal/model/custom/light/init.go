@@ -262,6 +262,7 @@ func newFixedColorConstructor(ch *device.Channel, rebased custom.RebasedChannelG
 		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}),
 	)
 	applyGroupLevel(fcl.Light, ch, rebased)
+	fcl.bindChannelColor(ch, rebased)
 	return fcl, nil
 }
 

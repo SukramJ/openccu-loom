@@ -326,9 +326,11 @@ func (t *TextDisplay) AvailableTextColors() []string {
 	return append([]string(nil), t.availableTextColors...)
 }
 
-// SetAvailableIntervals replaces the interval list with the values from the
-// device's runtime paramset. Called by the profile-registry constructor in
-// init.go when the channel carries INTERVAL.
+// SetAvailableIntervals replaces the interval list. Unlike the other
+// capability lists this one has no wire source: INTERVAL is an INTEGER
+// parameter with no VALUE_LIST, so the profile-registry constructor
+// cannot fill it and the list stays empty unless a caller supplies one.
+// [TextDisplay.validateInterval] accepts anything while it is empty.
 func (t *TextDisplay) SetAvailableIntervals(intervals []string) {
 	if len(intervals) > 0 {
 		t.availableIntervals = append([]string(nil), intervals...)

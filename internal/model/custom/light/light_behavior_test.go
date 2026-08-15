@@ -461,33 +461,77 @@ func fireChannelColor(t *testing.T, dp *generic.Sensor[int32], label string) {
 	dp.OnEvent(idx)
 }
 
-// TestFixedColorLightChannelHsColor verifies ChannelHsColor maps the CHANNEL_COLOR
-// index sensor to (hue, sat, ok).
-func TestFixedColorLightChannelHsColor(t *testing.T) {
+// buildFixedColorLightFromProfile hydrates the two-channel shape an HmIP
+// signal light really has — the writable COLOR on the action channel and
+// the read-only COLOR ENUM on the group's state channel one below it —
+// and builds the custom data point through the constructor the profile
+// registry holds for IPFixedColorLight, with that profile's own rebased
+// channel-group config. Returns the light and the state channel's COLOR
+// sensor so the caller can push wire events onto it.
+func buildFixedColorLightFromProfile(t *testing.T, valueList []string) (*FixedColorLight, *generic.Sensor[int32]) {
+	t.Helper()
+
+	const groupNo = 8
+	cfg, ok := custom.ProfileConfigs[hmenum.DeviceProfile("IPFixedColorLight")]
+	if !ok {
+		t.Fatal("no shipped profile config for IPFixedColorLight")
+	}
+	rebased := custom.RebaseChannelGroup(*cfg, groupNo)
+	if rebased.StateChannel == nil {
+		t.Fatal("IPFixedColorLight profile must declare a state channel")
+	}
+
 	w := &colorStubWriter{}
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "X0001"})
-	ch := d.AddChannel("X:1", 1, "FCL", hmenum.ParamsetKeyValues)
-	putWritableFloat(ch, "X:1", hmenum.ParameterLevel, w)
-	putWritableSelect(ch, "X:1", hmenum.ParameterColor, w, fixedColorValueList)
-	// Add CHANNEL_COLOR sensor. CHANNEL_COLOR is a read-only ENUM the
-	// resolver projects onto a raw-index Sensor[int32] (see
-	// custom.EnumSensorField); the colour-name label is resolved on read
-	// via custom.EnumLabelValue.
-	channelColorDP := generic.NewIntegerSensor(generic.Spec{
+
+	stateAddr := "X:7"
+	stateCh := d.AddChannel(stateAddr, *rebased.StateChannel, "FCL_STATE", hmenum.ParamsetKeyValues)
+	// The state channel's COLOR is read-only (OPERATIONS 5), which the
+	// resolver projects onto a raw-index Sensor[int32].
+	stateColor := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
-			ChannelAddress: "X:1",
+			ChannelAddress: stateAddr,
 			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      string(hmenum.ParameterChannelColor),
+			Parameter:      string(hmenum.ParameterColor),
 		},
 		Descriptor: hmproto.ParameterData{
 			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
-			ValueList:  []string{"RED", "UNKNOWN_COLOR_XYZ"},
+			ValueList:  valueList,
 		},
 	})
-	ch.Put(channelColorDP)
+	stateCh.Put(stateColor)
 
-	l := NewFixedColorLight(Config{Channel: ch, Writer: w})
+	actionAddr := "X:8"
+	actionCh := d.AddChannel(actionAddr, groupNo, "FCL", hmenum.ParamsetKeyValues)
+	putWritableFloat(actionCh, actionAddr, hmenum.ParameterLevel, w)
+	putWritableSelect(actionCh, actionAddr, hmenum.ParameterColor, w, fixedColorValueList)
+
+	ctor, ok := custom.DefaultRegistry().Constructor(hmenum.DeviceProfile("IPFixedColorLight"))
+	if !ok {
+		t.Fatal("no constructor registered for IPFixedColorLight")
+	}
+	dp, err := ctor(actionCh, rebased)
+	if err != nil {
+		t.Fatalf("IPFixedColorLight constructor: %v", err)
+	}
+	l, ok := dp.(*FixedColorLight)
+	if !ok {
+		t.Fatalf("constructor returned %T, want *FixedColorLight", dp)
+	}
+
+	return l, stateColor
+}
+
+// TestFixedColorLightChannelHsColor verifies ChannelHsColor maps the
+// profile-declared channel_color slot to (hue, sat, ok).
+//
+// The slot is the read-only COLOR ENUM of the group's state channel, not
+// a wire parameter of the light's own channel: resolving it as one left
+// the field nil on every device in the fleet, so the HA discovery
+// payload advertised an `hs` colour mode whose state never arrived.
+func TestFixedColorLightChannelHsColor(t *testing.T) {
+	l, channelColorDP := buildFixedColorLightFromProfile(t, []string{"RED", "UNKNOWN_COLOR_XYZ"})
 
 	// Not observed.
 	_, _, ok := l.ChannelHsColor()

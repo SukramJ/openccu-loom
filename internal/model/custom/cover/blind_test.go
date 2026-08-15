@@ -111,6 +111,37 @@ func TestBlindHMSetTiltSendsLevelCombined(t *testing.T) {
 	}
 }
 
+// TestBlindHMLevelCombinedRoundsToTheHalfPercentStep drives the three
+// commanded positions whose ×200 product lands just below an exact
+// half-percent step in binary64. Truncating them sent the blind to the
+// step below the one the operator asked for, while the HmIP branch of
+// the same command rounded half-up and landed correctly.
+func TestBlindHMLevelCombinedRoundsToTheHalfPercentStep(t *testing.T) {
+	cases := []struct {
+		tilt float64
+		want string
+	}{
+		{0.29, "0x00,0x3a"},
+		{0.57, "0x00,0x72"},
+		{0.58, "0x00,0x74"},
+		{0.45, "0x00,0x5a"},
+	}
+	for _, tc := range cases {
+		w := &putWriter{}
+		b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
+		if err := b.SetTilt(context.Background(), tc.tilt, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatal(err)
+		}
+		cc := w.combinedCalls()
+		if len(cc) != 1 {
+			t.Fatalf("tilt=%v: expected 1 LEVEL_COMBINED SetValue, got %d", tc.tilt, len(cc))
+		}
+		if got, ok := cc[0].value.(string); !ok || got != tc.want {
+			t.Errorf("tilt=%v: LEVEL_COMBINED=%v, want %q", tc.tilt, cc[0].value, tc.want)
+		}
+	}
+}
+
 func TestBlindCommandLockSerialisesConcurrentMoves(t *testing.T) {
 	w := &slowWriter{delay: 30 * time.Millisecond}
 	b := newBlindRig(t, "VCU3560967:1", w, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)

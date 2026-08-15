@@ -912,23 +912,24 @@ func TestSmokeSirenMatterReadAttributes(t *testing.T) {
 		t.Errorf("ExpressedState before observation = %v ok=%v, want (nil, true)", v, ok)
 	}
 
-	// After PRIMARY_ALARM → Critical=2.
+	// After PRIMARY_ALARM → ExpressedStateEnum SmokeAlarm=1. The
+	// attribute is typed ExpressedStateEnum, where AlarmStateEnum's
+	// Critical=2 would mean CoAlarm.
 	fireSmokeStatus(t, statusDP, string(SmokeStatusPrimaryAlarm))
 	v, ok = srv.MatterRead(matterAttrSmokeExpressedState)
-	if !ok || v != matterSmokeAlarmCritical {
-		t.Errorf("ExpressedState PRIMARY = %v ok=%v, want (%d, true)", v, ok, matterSmokeAlarmCritical)
+	if !ok || v != matterExpressedStateSmokeAlarm {
+		t.Errorf("ExpressedState PRIMARY = %v ok=%v, want (%d, true)", v, ok, matterExpressedStateSmokeAlarm)
 	}
 
-	// SmokeState same as ExpressedState for smoke-only device.
+	// SmokeState carries the AlarmStateEnum severity.
 	v, ok = srv.MatterRead(matterAttrSmokeState)
 	if !ok || v != matterSmokeAlarmCritical {
 		t.Errorf("SmokeState PRIMARY = %v ok=%v, want (%d, true)", v, ok, matterSmokeAlarmCritical)
 	}
 
-	// CO state → Normal (no CO sensor).
-	v, ok = srv.MatterRead(matterAttrCOState)
-	if !ok || v != matterSmokeAlarmNormal {
-		t.Errorf("COState = %v ok=%v, want Normal", v, ok)
+	// CO state → not served; the FeatureMap carries SMOKE only.
+	if v, ok = srv.MatterRead(matterAttrCOState); ok {
+		t.Errorf("COState = %v ok=%v, want (nil, false)", v, ok)
 	}
 
 	// HardwareFaultAlert → false.

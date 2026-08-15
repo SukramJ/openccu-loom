@@ -184,14 +184,14 @@ func TestSmokeSirenFeatureMapAdvertisesSmoke(t *testing.T) {
 	}
 }
 
-// TestSmokeSirenCOStateAlwaysNormal — HM-SWSD has no CO sensor; the
-// CO attribute returns Normal as a stable read.
-func TestSmokeSirenCOStateAlwaysNormal(t *testing.T) {
+// TestSmokeSirenCOStateNotServedWithoutCOFeature — HM-SWSD has no CO
+// sensor, so the projection does not advertise the CO feature, and
+// CoState (conformance "CO") must not answer beside it.
+func TestSmokeSirenCOStateNotServedWithoutCOFeature(t *testing.T) {
 	r := newSmokeRig(t)
 	srv := findCluster(t, r.siren, 0x005C)
-	v, ok := srv.MatterRead(0x0002)
-	if !ok || v.(uint8) != matterSmokeAlarmNormal {
-		t.Fatalf("COState = (%v, %v), want (0=Normal, true)", v, ok)
+	if v, ok := srv.MatterRead(0x0002); ok {
+		t.Fatalf("COState = (%v, %v), want (nil, false) on a smoke-only FeatureMap", v, ok)
 	}
 }
 

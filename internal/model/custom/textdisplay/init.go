@@ -31,12 +31,15 @@ func (t *TextDisplay) Category() hmenum.DataPointCategory { return hmenum.DataPo
 // A nil writer is valid at construction time — the field may be set
 // later once the pipeline wires the channel.
 //
-// Runtime capability lists (available_icons, available_sounds) are
-// captured from the channel's VALUES paramset — this mirrors
-// (text_display.py:108-111: `_dp_display_data_icon.values`
-// `_dp_acoustic_notification_selection.values`). The static defaults
-// from [defaultIcons] / [defaultSounds] are already seeded by [New];
-// the channel values take precedence when present.
+// Runtime capability lists (icons, sounds, repetitions, alignments and
+// the two colour lists) are captured from the channel's VALUES paramset
+// so the state payload advertises what this device actually accepts. The
+// static defaults from [defaultIcons] / [defaultSounds] are already
+// seeded by [New]; the channel values take precedence when present.
+//
+// The interval list has no wire source: INTERVAL is an INTEGER with no
+// VALUE_LIST, so [TextDisplay.SetAvailableIntervals] is a caller-supplied
+// list only.
 func init() {
 	custom.DefaultRegistry().MustRegisterConstructor(
 		hmenum.DeviceProfileIPTextDisplay,
@@ -67,6 +70,21 @@ func init() {
 			}
 			if dp := ch.Parameter(hmenum.ParameterRepetitions); dp != nil {
 				td.SetAvailableRepetitions(dp.ParameterData().ValueList)
+			}
+			// The three row-formatting ENUMs. Without them the state
+			// payload dropped available_alignments / available_text_colors /
+			// available_background_colors through omitempty on every device,
+			// so no north-bound consumer could offer those pickers, and the
+			// matching validators — which pass anything while their list is
+			// empty — let an unknown label through to the CCU.
+			if dp := ch.Parameter(hmenum.ParameterDisplayDataAlignment); dp != nil {
+				td.SetAvailableAlignments(dp.ParameterData().ValueList)
+			}
+			if dp := ch.Parameter(hmenum.ParameterDisplayDataTextColor); dp != nil {
+				td.SetAvailableTextColors(dp.ParameterData().ValueList)
+			}
+			if dp := ch.Parameter(hmenum.ParameterDisplayDataBackgroundColor); dp != nil {
+				td.SetAvailableBackgroundColors(dp.ParameterData().ValueList)
 			}
 			// Wire the BURST_LIMIT_WARNING binary sensor when the channel
 			// exposes the parameter so Write/WriteWithSound can emit a

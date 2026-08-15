@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
@@ -94,18 +95,19 @@ func (s *Switch) MatterDeviceType() uint16 { return matterDeviceTypeOnOffPlugInU
 // ElectricalEnergyMeasurement (0x0091) host-clusters when the
 // channel exposes a POWER / ENERGY_COUNTER sensor — wired through
 // the [Switch.attachedPowerSource] / [Switch.attachedEnergySource]
-// hooks the model layer populates at construction.
+// hooks the ingest pipeline populates right after materialising the
+// device's custom data points.
 func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
 	servers := []interfaces.MatterClusterServer{
 		s,
 		wire.Groups{},
 		wire.ScenesManagement{},
 	}
-	if s.attachedPowerSource != nil {
-		servers = append(servers, measurement.NewElectricalPowerServer(s.attachedPowerSource))
+	if src := s.attachedPowerSource.Load(); src != nil {
+		servers = append(servers, measurement.NewElectricalPowerServer(*src))
 	}
-	if s.attachedEnergySource != nil {
-		servers = append(servers, measurement.NewElectricalEnergyServer(s.attachedEnergySource))
+	if src := s.attachedEnergySource.Load(); src != nil {
+		servers = append(servers, measurement.NewElectricalEnergyServer(*src))
 	}
 	return servers
 }
@@ -115,16 +117,33 @@ func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
 // Matter projection includes ElectricalPowerMeasurement on the
 // Switch endpoint. Calling with nil clears the attachment.
 //
-// The model layer is expected to call this once at composition; the
-// bridge does not re-discover sources at runtime.
+// The write is atomic because the caller runs after the custom data
+// point is already published on its channel, and therefore reachable by
+// the Matter assembler on another goroutine — the model layer attaches
+// the sources one pipeline stage later, not at construction.
 func (s *Switch) AttachPowerSource(src interfaces.MatterFloatMeasurementSource) {
-	s.attachedPowerSource = src
+	storeMeasurementSource(&s.attachedPowerSource, src)
 }
 
 // AttachEnergySource binds the ENERGY_COUNTER source — projects to
 // ElectricalEnergyMeasurement (0x0091).
 func (s *Switch) AttachEnergySource(src interfaces.MatterFloatMeasurementSource) {
-	s.attachedEnergySource = src
+	storeMeasurementSource(&s.attachedEnergySource, src)
+}
+
+// storeMeasurementSource publishes src into slot, clearing it for a nil
+// source. The extra indirection is what makes the interface value
+// storable in an [atomic.Pointer].
+func storeMeasurementSource(
+	slot *atomic.Pointer[interfaces.MatterFloatMeasurementSource],
+	src interfaces.MatterFloatMeasurementSource,
+) {
+	if src == nil {
+		slot.Store(nil)
+
+		return
+	}
+	slot.Store(&src)
 }
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
