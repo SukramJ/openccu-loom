@@ -5,9 +5,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
@@ -85,5 +88,86 @@ func TestMatterEventPublisher_WithHub_PublishDoesNotPanic(t *testing.T) {
 	})
 	if hub.ClientCount() != 0 {
 		t.Errorf("expected 0 clients, got %d", hub.ClientCount())
+	}
+}
+
+// stubFabricStore serves one persisted fabric, the way the Matter store does
+// once AddNOC has written it — which is before OnFabricInstalled fires.
+type stubFabricStore struct {
+	recs []store.FabricRecord
+	err  error
+}
+
+func (s stubFabricStore) ListFabrics(context.Context) ([]store.FabricRecord, error) {
+	return s.recs, s.err
+}
+
+// TestPublishFabricAddedCarriesTheDeclaredFabricIdentity pins the payload
+// against the schema the broadcast declares. `matter.fabric_added` is declared
+// as MatterFabric, whose six required members every generated client decodes
+// strictly; publishing the index alone leaves five of them absent, so a strict
+// decoder rejects the frame and a TypeScript consumer reads undefined.
+func TestPublishFabricAddedCarriesTheDeclaredFabricIdentity(t *testing.T) {
+	t.Parallel()
+	hub := ws.NewHub()
+	hub.SetReplayCapacity(4)
+	recs := []store.FabricRecord{
+		{
+			FabricIndex: 7, FabricID: 0xAABB, NodeID: 0xCCDD, VendorID: 0x1349, Label: "Apple Home",
+			CompressedID: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, RootPublicKey: []byte{4, 9, 9},
+		},
+		{FabricIndex: 2, FabricID: 1, NodeID: 1},
+	}
+	pub := &matterEventPublisher{hub: hub, fabrics: stubFabricStore{recs: recs}}
+
+	pub.publishFabricAdded(7)
+
+	events := hub.Replay(0, nil).Events
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	raw, err := json.Marshal(events[0].Payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	// The MatterFabric schema's required members.
+	for _, key := range []string{"fabric_index", "fabric_id", "node_id", "vendor_id", "compressed_id", "root_public_key"} {
+		if _, ok := got[key]; !ok {
+			t.Errorf("payload is missing the required member %q: %s", key, raw)
+		}
+	}
+	if got["compressed_id"] != "0102030405060708" {
+		t.Errorf("compressed_id = %v, want the hex-encoded identifier", got["compressed_id"])
+	}
+	if got["label"] != "Apple Home" {
+		t.Errorf("label = %v, want the fabric's own label", got["label"])
+	}
+}
+
+// TestPublishFabricAddedStillEmitsWhenTheFabricCannotBeResolved keeps the
+// event itself unconditional: a store read that fails must degrade the payload,
+// never swallow the commissioning notification.
+func TestPublishFabricAddedStillEmitsWhenTheFabricCannotBeResolved(t *testing.T) {
+	t.Parallel()
+	hub := ws.NewHub()
+	hub.SetReplayCapacity(4)
+	pub := &matterEventPublisher{hub: hub, fabrics: stubFabricStore{err: errors.New("store closed")}}
+
+	pub.publishFabricAdded(3)
+
+	events := hub.Replay(0, nil).Events
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	payload, ok := events[0].Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("payload type = %T, want the degraded map", events[0].Payload)
+	}
+	if payload["fabric_index"] != uint8(3) {
+		t.Errorf("fabric_index = %v, want 3", payload["fabric_index"])
 	}
 }

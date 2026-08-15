@@ -3494,7 +3494,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// Wire the Reassemble → WS event emit pipeline so the SPA's
 		// allowlist save flow gets a `matter.endpoint_assembled`
 		// notification after the topology refresh completes.
-		wiring.pub = &matterEventPublisher{hub: wsHub}
+		wiring.pub = &matterEventPublisher{hub: wsHub, fabrics: wiring.fabricStore}
 		// Composite onReassembled: WS event publish + Matter-spec
 		// lifecycle events (BootReason + StartUp) on the FIRST
 		// reassemble, when the cluster servers are wired to the
