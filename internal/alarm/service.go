@@ -94,10 +94,10 @@ type Service struct {
 }
 
 // ArmFailureHook is a FAILED_TO_ARM notification callback. It mirrors
-// the MQTT alarm publisher's PublishFailedToArm signature
-// (cmd/openccu-loom/daemon_north.go) so the daemon composition root
-// can wire that publisher in one line via SetArmFailureHook. A nil
-// hook (the default) means the schedule chain's AutoArm failures stay
+// the MQTT alarm publisher's PublishFailedToArm signature so the daemon
+// composition root can wire that publisher in one line via
+// SetArmFailureHook. A nil hook — the state of a daemon configured
+// without MQTT — means the schedule chain's AutoArm failures stay
 // journal-only (notes/concepts/alarm-concept.md §15 row 19).
 type ArmFailureHook func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []hmevent.AlarmBlockerDetail)
 

@@ -271,6 +271,13 @@ func injectsCollaborator(fn *types.Func) bool {
 
 // isCollaborator reports whether t is one of the three ways this
 // codebase hands one component to another.
+//
+// A *named* function type counts as much as a bare one. Matching only
+// the bare `func(...)` literal made the guard blind to every seam that
+// gives its callback a name — the idiomatic form here — and that blind
+// spot hid a live one: alarm.Service.SetArmFailureHook takes an
+// ArmFailureHook, so an auto-arm the engine refused notified nobody
+// while this test stayed green.
 func isCollaborator(t types.Type) bool {
 	switch t := t.(type) {
 	case *types.Pointer:
@@ -279,8 +286,11 @@ func isCollaborator(t types.Type) bool {
 	case *types.Signature:
 		return true
 	case *types.Named:
-		_, isIface := t.Underlying().(*types.Interface)
-		return isIface
+		switch t.Underlying().(type) {
+		case *types.Interface, *types.Signature:
+			return true
+		}
+		return false
 	case *types.Interface:
 		return true
 	}
