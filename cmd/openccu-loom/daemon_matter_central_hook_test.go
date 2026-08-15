@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -224,5 +225,66 @@ func TestMatterCentralHook_NilUnitIsNoop(t *testing.T) {
 	hook := newMatterCentralHook(newMatterCentralReadiness(), func() {}, nil)
 	if unwire := hook(nil); unwire != nil {
 		t.Error("hook(nil unit) returned a non-nil unwire, want nil")
+	}
+}
+
+// TestMatterCentralHook_ReAdoptedCentralStartsModelIncomplete pins the
+// teardown half of the readiness latch.
+//
+// The latch decides whether the assembler's vanished-source GC trusts a
+// central's device list. Removing a central and registering a fresh unit
+// under the same name — a re-add, or the SPA's disable/enable toggle — hands
+// the snapshotter a unit whose ModelRegistry is still empty, because
+// reg.Register runs long before the readiness-gated CCU load. With the
+// removed central's latch still set, that empty snapshot is stamped
+// ModelComplete, the GC reads every persisted endpoint as vanished and
+// deletes it, and the refill renumbers the fleet: controllers key their
+// accessory cache on the endpoint number, so Apple Home / Google Home lose
+// every accessory of that CCU.
+func TestMatterCentralHook_ReAdoptedCentralStartsModelIncomplete(t *testing.T) {
+	t.Parallel()
+	const name = "ccu-readopted"
+
+	reg := buildTestRegistry(t, name)
+	readiness := newMatterCentralReadiness()
+	hook := newMatterCentralHook(readiness, func() {}, nil)
+
+	first, _ := reg.Get(name)
+	unwire := hook(first)
+	if unwire == nil {
+		t.Fatal("hook returned nil unwire for a unit with an event bus")
+	}
+	events.Publish(first.EventBus, hmevent.CentralSouthboundReadyEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: name,
+	})
+	if !readiness.isReady(name) {
+		t.Fatal("precondition: the central must be latched after its ready event")
+	}
+
+	// Live remove: the orchestrator runs the hook's unwire, then the unit
+	// leaves the registry.
+	unwire()
+	reg.Unregister(name)
+
+	// Re-adopt: a brand-new unit under the same name, model not loaded yet.
+	replacement, err := central.New(central.Config{Name: name})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(replacement); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	t.Cleanup(hook(replacement))
+
+	for _, snap := range matterSnapshotter(reg, readiness)(context.Background()) {
+		if snap.CentralName != name {
+			continue
+		}
+		if snap.ModelComplete {
+			t.Fatalf("re-adopted central reports ModelComplete with %d devices loaded; "+
+				"the vanished-source GC would delete every persisted endpoint id",
+				len(snap.Devices))
+		}
 	}
 }

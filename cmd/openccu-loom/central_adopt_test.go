@@ -16,13 +16,12 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -305,18 +304,31 @@ func TestCentralOrchestratorIsRegisteredReflectsSharedRegistry(t *testing.T) {
 	}
 }
 
-// TestRemoveCentralRetractsDevicesBeforeStoppingBus verifies removeCentral
-// evicts the in-memory model — which publishes a DeviceRemovedEvent per device
-// — BEFORE Unit.Stop clears every EventBus subscription. Stopping first would
-// land those retractions on a bus with no subscribers, so HA/MQTT discovery
-// configs for the removed central's devices would never be retracted
-// (orphaned entities).
-func TestRemoveCentralRetractsDevicesBeforeStoppingBus(t *testing.T) {
+// TestRemoveCentralRetractsDevicesThroughTheEventBridge verifies that removing
+// a live central reaches the broker: the model eviction publishes a
+// DeviceRemovedEvent per device, and the north-bound event bridge — the only
+// subscriber that retracts anything — must still be attached when it does.
+//
+// The assertion deliberately goes through the real [adapter.EventBridge] and a
+// real [mqtt.Bridge]. A test that subscribes its own handler to the unit's bus
+// proves only that eviction runs before Unit.Stop; nothing detaches such a
+// handler, so it stays green while the production consumer has already been
+// released — which is exactly how the retraction was lost.
+func TestRemoveCentralRetractsDevicesThroughTheEventBridge(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
+	client := mqtt.NewNoopClient()
+	mqttBridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "loom", CentralName: "retract-live", RawEnabled: true,
+	}, client)
+	eventBridge := adapter.NewEventBridge(central.NewRegistry(), nil, mqtt.NewWiring(mqttBridge, discardTestLogger()))
+	eventBridge.Start(ctx)
+	t.Cleanup(eventBridge.Stop)
+
 	reg := central.NewRegistry()
 	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
+	orch.sbDeps.bridge = eventBridge
 
 	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("retract-live")); err != nil {
 		t.Fatalf("adoptCentral: %v", err)
@@ -328,32 +340,27 @@ func TestRemoveCentralRetractsDevicesBeforeStoppingBus(t *testing.T) {
 
 	// Inject a device so evictModel has something to retract.
 	d := device.New(device.Config{
-		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
+		InterfaceID: "retract-live-HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
 		Address: "AAAA0009", Model: "HmIP-STH", Name: "Sensor",
 	})
 	d.AddChannel("AAAA0009:1", 1, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	unit.ModelRegistry.Put(d)
 
-	var mu sync.Mutex
-	var removed []string
-	// Publishing is synchronous (handlers run on the publisher's goroutine), so
-	// the slice is fully populated by the time removeCentral returns.
-	unsub := events.Subscribe(unit.EventBus, func(e hmevent.DeviceRemovedEvent) {
-		mu.Lock()
-		removed = append(removed, e.Address)
-		mu.Unlock()
-	})
-	defer unsub()
-
 	if err := orch.removeCentral(ctx, "retract-live"); err != nil {
 		t.Fatalf("removeCentral: %v", err)
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-	if len(removed) != 1 || removed[0] != "AAAA0009" {
-		t.Fatalf("DeviceRemovedEvent subscriber notified with %v, want [AAAA0009]; "+
-			"evictModel must run before Unit.Stop clears EventBus subscriptions", removed)
+	want := mqttBridge.Topics().DeviceAvailability("retract-live", "retract-live-HmIP-RF", "AAAA0009")
+	var found bool
+	for _, p := range client.Published() {
+		if p.Topic == want && len(p.Payload) == 0 && p.Retain {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no retained retraction published for %q after removing the central; "+
+			"the event bridge must stay attached until the model eviction has fanned out", want)
 	}
 }
 

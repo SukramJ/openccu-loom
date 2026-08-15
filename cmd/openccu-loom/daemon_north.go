@@ -171,11 +171,16 @@ func buildBootstrapRouter(cfg *config.Config, logger *slog.Logger, d uiMountDeps
 // store) reports "not first run" so the probe never traps an operator on a
 // backend that cannot persist the onboarding result.
 //
-// sqCentrals supplies the live central count. CCU-delegated login only
-// counts as an authentication source once a central is configured, so the
-// probe must read the same table a runtime adopt writes to rather than the
-// boot-time snapshot alone.
-func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore, sqCentrals *sqlitestore.CentralsStore) func(context.Context) bool {
+// sqTokens and sqCentrals are read live for the same reason the user count
+// is: both back an authentication source an operator can add after boot (an
+// API token minted through the SPA, a CCU adopted at runtime), and the probe
+// gates an endpoint that creates an admin account without any credential.
+func firstRunProbe(
+	cfg *config.Config,
+	sqUsers *sqlitestore.UserStore,
+	sqTokens *sqlitestore.TokenStore,
+	sqCentrals *sqlitestore.CentralsStore,
+) func(context.Context) bool {
 	return func(ctx context.Context) bool {
 		if sqUsers == nil {
 			return false
@@ -184,8 +189,30 @@ func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore, sqCentral
 		if err != nil {
 			return false
 		}
-		return firstRunNeedsSetup(cfg, n, hasConfiguredCentral(ctx, cfg, sqCentrals))
+		return firstRunNeedsSetup(cfg, authSources{
+			localUsers:      n,
+			persistedTokens: hasPersistedToken(ctx, sqTokens),
+			hasCentral:      hasConfiguredCentral(ctx, cfg, sqCentrals),
+		})
 	}
+}
+
+// hasPersistedToken reports whether the API-token store holds at least one
+// token — a live bearer credential that authenticates through
+// [auth.Middleware] exactly like a local user does.
+//
+// A store error reports true. The probe this feeds opens anonymous admin
+// creation, so an unreadable store must not be read as "nobody can
+// authenticate"; the user count fails in the same direction.
+func hasPersistedToken(ctx context.Context, sqTokens *sqlitestore.TokenStore) bool {
+	if sqTokens == nil {
+		return false
+	}
+	n, err := sqTokens.Count(ctx)
+	if err != nil {
+		return true
+	}
+	return n > 0
 }
 
 // warnOnDormantOnboarding logs once at boot when the operator has closed the
@@ -193,7 +220,7 @@ func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore, sqCentral
 // is the point of `bootstrap.allow_first_run_setup: false`, but from the SPA
 // it is indistinguishable from a broken login — the log record is the only
 // place that can name the cause and the way out.
-func warnOnDormantOnboarding(ctx context.Context, cfg *config.Config, sqUsers *sqlitestore.UserStore, sqCentrals *sqlitestore.CentralsStore, logger *slog.Logger) {
+func warnOnDormantOnboarding(ctx context.Context, cfg *config.Config, sqUsers *sqlitestore.UserStore, sqTokens *sqlitestore.TokenStore, sqCentrals *sqlitestore.CentralsStore, logger *slog.Logger) {
 	if cfg.Bootstrap.FirstRunSetupAllowed() || sqUsers == nil {
 		return
 	}
@@ -201,7 +228,11 @@ func warnOnDormantOnboarding(ctx context.Context, cfg *config.Config, sqUsers *s
 	if err != nil {
 		return
 	}
-	if !noAuthSourceConfigured(cfg, n, hasConfiguredCentral(ctx, cfg, sqCentrals)) {
+	if !noAuthSourceConfigured(cfg, authSources{
+		localUsers:      n,
+		persistedTokens: hasPersistedToken(ctx, sqTokens),
+		hasCentral:      hasConfiguredCentral(ctx, cfg, sqCentrals),
+	}) {
 		return
 	}
 	logger.Warn("setup.onboarding.dormant",
@@ -255,19 +286,46 @@ func hasConfiguredCentral(ctx context.Context, cfg *config.Config, sqCentrals *s
 // the toggle false and no authentication source configured the only way in is
 // editing the YAML back and restarting. [warnOnDormantOnboarding] names that
 // state in the log so it is diagnosable.
-func firstRunNeedsSetup(cfg *config.Config, localUserCount int, hasCentral bool) bool {
-	return cfg.Bootstrap.FirstRunSetupAllowed() && noAuthSourceConfigured(cfg, localUserCount, hasCentral)
+func firstRunNeedsSetup(cfg *config.Config, src authSources) bool {
+	return cfg.Bootstrap.FirstRunSetupAllowed() && noAuthSourceConfigured(cfg, src)
+}
+
+// authSources carries the facts [noAuthSourceConfigured] can only learn from
+// the persistent stores — everything else comes out of cfg. Grouping them
+// keeps every call site naming what it passes: the decision opens or closes
+// anonymous admin creation, and a silently-swapped positional bool there is
+// a remote-privilege bug.
+type authSources struct {
+	// localUsers is the row count of the SQLite users table.
+	localUsers int
+	// persistedTokens reports whether the SQLite token store holds at
+	// least one API token.
+	persistedTokens bool
+	// hasCentral reports whether any central is configured, which is what
+	// makes CCU-delegated login usable.
+	hasCentral bool
 }
 
 // noAuthSourceConfigured reports whether the daemon has no way to
 // authenticate anyone yet.
-func noAuthSourceConfigured(cfg *config.Config, localUserCount int, hasCentral bool) bool {
+//
+// Every credential the auth middleware resolves has to be listed here.
+// Bearer tokens were missing, and they are resolved FIRST in the chain: a
+// token-only deployment — the documented headless setup, since CCU-delegated
+// login is off outside the add-on — authenticated its operator perfectly
+// while still reporting "first run", which leaves the unauthenticated
+// POST /api/v1/setup open for anyone on the network to mint an admin.
+func noAuthSourceConfigured(cfg *config.Config, src authSources) bool {
 	switch {
-	case localUserCount > 0:
+	case src.localUsers > 0:
 		return false // a persisted local admin exists
+	case src.persistedTokens:
+		return false // a persisted API token authenticates as its role
 	case len(cfg.North.REST.Auth.Users) > 0:
 		return false // a YAML-pinned local user exists
-	case ccuAuthEnabled(cfg.North.REST.Auth.CCU) && hasCentral:
+	case len(cfg.North.REST.Auth.Tokens) > 0:
+		return false // a YAML-pinned bearer token (seeded into the store on upgrade)
+	case ccuAuthEnabled(cfg.North.REST.Auth.CCU) && src.hasCentral:
 		return false // CCU-delegated login is available (ADR 0043)
 	case cfg.North.REST.Auth.OIDC.Enabled:
 		return false // OIDC SSO is available

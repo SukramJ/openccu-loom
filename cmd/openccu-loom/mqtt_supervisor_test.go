@@ -7,8 +7,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -274,5 +276,112 @@ func TestSupervisor_RedactBrokerURL(t *testing.T) {
 		if got != c.want {
 			t.Errorf("redactBrokerURL(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// TestSupervisorSurvivesABrokerThatIsDownAtBoot pins the two halves of the
+// boot-time recovery: the Wiring every north-bound consumer binds to must
+// exist even though the first connect failed, and the supervisor must keep
+// retrying so the link comes up without a daemon restart.
+//
+// Both mattered because Lifecycle.Start performs the first connect
+// synchronously and only starts its reconnect loop afterwards — a refused
+// CONNECT at boot left no bridge, no Wiring and nothing that would ever try
+// again, so the whole MQTT plane stayed dark for the process lifetime.
+func TestSupervisorSurvivesABrokerThatIsDownAtBoot(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	// A listener that accepts and immediately closes is a broker that is
+	// reachable but not serving — every CONNECT fails, and each accept counts
+	// one connect attempt.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	var dials atomic.Int64
+	go func() {
+		for {
+			conn, aErr := ln.Accept()
+			if aErr != nil {
+				return
+			}
+			dials.Add(1)
+			_ = conn.Close()
+		}
+	}()
+
+	cfg := mqttCfg(true)
+	cfg.North.MQTT.BrokerURL = "tcp://" + ln.Addr().String()
+
+	s := newSup(t)
+	s.retryDelay = 10 * time.Millisecond
+	s.retryMaxDelay = 10 * time.Millisecond
+	t.Cleanup(func() { s.Shutdown(context.Background()) })
+
+	if err := s.Start(ctx, cfg); err == nil {
+		t.Fatal("Start against a broker that refuses every CONNECT returned nil, want an error")
+	}
+	if s.Wiring() == nil {
+		t.Fatal("Wiring() is nil after a failed boot connect; every consumer binds this pointer " +
+			"once at composition time, so a nil here disables MQTT for the process lifetime")
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for dials.Load() < 3 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := dials.Load(); got < 3 {
+		t.Fatalf("connect attempts = %d, want >= 3; the supervisor must keep retrying "+
+			"because the lifecycle's own reconnect loop never started", got)
+	}
+}
+
+// TestSupervisorSwapAfterAFailedBootConnectReachesBoundConsumers pins that the
+// recovery actually reaches the consumers: they hold the Wiring pointer from
+// boot, so a stack built later has to be installed INTO that pointer rather
+// than into a fresh one.
+func TestSupervisorSwapAfterAFailedBootConnectReachesBoundConsumers(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	// A closed port: the dial itself fails, so no retry can succeed until the
+	// config is swapped.
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := probe.Addr().String()
+	_ = probe.Close()
+
+	cfg := mqttCfg(true)
+	cfg.North.MQTT.BrokerURL = "tcp://" + addr
+
+	s := newSup(t)
+	s.retryDelay = time.Hour // the retry loop must not race the explicit Swap
+	s.retryMaxDelay = time.Hour
+	t.Cleanup(func() { s.Shutdown(context.Background()) })
+
+	if err := s.Start(ctx, cfg); err == nil {
+		t.Fatal("Start against a closed port returned nil, want an error")
+	}
+	// What a consumer captured at composition time.
+	bound := s.Wiring()
+	if bound == nil {
+		t.Fatal("Wiring() is nil after a failed boot connect")
+	}
+	if bound.Bridge() != nil {
+		t.Fatal("the boot-failed Wiring must carry no bridge, so publishes are dropped rather than panicking")
+	}
+
+	if err := s.Swap(ctx, mqttCfg(true)); err != nil {
+		t.Fatalf("Swap after a failed boot connect: %v", err)
+	}
+	if bound.Bridge() == nil {
+		t.Fatal("the Wiring captured at boot still has no bridge after a successful Swap; " +
+			"the recovered stack never reaches the publishers built at boot")
 	}
 }

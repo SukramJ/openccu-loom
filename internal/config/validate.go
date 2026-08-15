@@ -104,21 +104,14 @@ func validateWebhook(w *NorthWebhook) error {
 	return nil
 }
 
-// validateMCP checks the Model Context Protocol mount path. The value is
-// handed to the router as a mount prefix, so a path without a leading
-// slash mounts nothing an HTTP client can reach while the schema keeps
-// promising the adapter is served there.
+// validateMCP checks the Model Context Protocol mount path. The value
+// becomes an [net/http.ServeMux] pattern verbatim, which is why the rules
+// live on the config type itself — see [NorthMCP.ValidateMountPath].
 func validateMCP(m *NorthMCP) error {
 	if m.Path == "" {
 		return nil
 	}
-	if !strings.HasPrefix(m.Path, "/") {
-		return fmt.Errorf("config: north.mcp.path must start with %q: %q", "/", m.Path)
-	}
-	if m.Path != "/" && strings.HasSuffix(m.Path, "/") {
-		return fmt.Errorf("config: north.mcp.path must not end with %q: %q", "/", m.Path)
-	}
-	return nil
+	return m.ValidateMountPath()
 }
 
 // maxMatterDiscriminator is the largest 12-bit commissioning

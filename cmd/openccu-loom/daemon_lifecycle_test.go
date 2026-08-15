@@ -248,7 +248,7 @@ func TestStartCallbackServer_PublicHostConfigured(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
-	srv, port, err := startCallbackServer(ctx, cfg, logger)
+	srv, port, err := startCallbackServer(ctx, cfg, nil, logger)
 	if err != nil {
 		t.Fatalf("startCallbackServer with public host: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestStartCallbackServer_NoCentralsNoPublicHost(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
-	srv, port, err := startCallbackServer(ctx, cfg, logger)
+	srv, port, err := startCallbackServer(ctx, cfg, nil, logger)
 	if err != nil {
 		t.Fatalf("startCallbackServer must succeed even without centrals: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestStartCallbackServer_WithPortRange(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
-	srv, port, err := startCallbackServer(ctx, cfg, logger)
+	srv, port, err := startCallbackServer(ctx, cfg, nil, logger)
 	if err != nil {
 		t.Fatalf("startCallbackServer with port range: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestStartCallbackServer_InvalidPortRange(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
-	_, _, err := startCallbackServer(ctx, cfg, logger)
+	_, _, err := startCallbackServer(ctx, cfg, nil, logger)
 	if err == nil {
 		t.Error("expected error for invalid port range")
 	}

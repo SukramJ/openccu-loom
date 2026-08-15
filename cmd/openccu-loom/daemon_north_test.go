@@ -4,25 +4,29 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 func TestFirstRunNeedsSetup(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		localUserCount int
-		hasCentral     bool
-		mutate         func(*config.Config)
-		want           bool
+		name            string
+		localUserCount  int
+		persistedTokens bool
+		hasCentral      bool
+		mutate          func(*config.Config)
+		want            bool
 	}{
 		{
 			name:           "local user present",
@@ -36,6 +40,26 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 				c.North.REST.Auth.Users = map[string]string{"admin": "x"}
 			},
 			want: false,
+		},
+		{
+			// A token-only deployment authenticates through the bearer
+			// resolver, which runs first in the chain. Reporting first run
+			// here leaves the unauthenticated POST /api/v1/setup open to
+			// anyone on the network.
+			name:           "YAML bearer token present",
+			localUserCount: 0,
+			mutate: func(c *config.Config) {
+				c.North.REST.Auth.Tokens = map[string]string{"s3cr3t": "admin"}
+			},
+			want: false,
+		},
+		{
+			// Same credential after the one-shot migration into SQLite, and
+			// the shape an SPA-minted token has from the start.
+			name:            "persisted API token present",
+			localUserCount:  0,
+			persistedTokens: true,
+			want:            false,
 		},
 		{
 			name:           "CCU auth explicitly enabled with a configured central",
@@ -101,12 +125,49 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			if tt.mutate != nil {
 				tt.mutate(cfg)
 			}
-			got := firstRunNeedsSetup(cfg, tt.localUserCount, tt.hasCentral)
+			src := authSources{
+				localUsers:      tt.localUserCount,
+				persistedTokens: tt.persistedTokens,
+				hasCentral:      tt.hasCentral,
+			}
+			got := firstRunNeedsSetup(cfg, src)
 			if got != tt.want {
-				t.Errorf("firstRunNeedsSetup(..., %d, %v) = %v, want %v",
-					tt.localUserCount, tt.hasCentral, got, tt.want)
+				t.Errorf("firstRunNeedsSetup(..., %+v) = %v, want %v", src, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestFirstRunProbeClosesSetupOnceATokenExists drives the probe the REST
+// setup routes actually mount against real stores: a daemon whose only
+// credential is an API token must NOT report first run, or POST /api/v1/setup
+// stays open for any unauthenticated peer to create an admin account.
+func TestFirstRunProbeClosesSetupOnceATokenExists(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "firstrun.db")))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	sqUsers := sqlitestore.NewUserStore(db)
+	sqTokens := sqlitestore.NewTokenStore(db)
+	cfg := config.Default()
+	cfg.North.REST.Auth.CCU.Enabled = ptrBool(false)
+
+	probe := firstRunProbe(cfg, sqUsers, sqTokens, nil)
+	if !probe(ctx) {
+		t.Fatal("probe on an empty database = false, want true (genuine first run)")
+	}
+
+	if _, err := sqTokens.Import(ctx, "s3cr3t-token-value", "headless", auth.RoleAdmin); err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+	if probe(ctx) {
+		t.Error("probe with a persisted API token = true; the daemon can authenticate, " +
+			"so the anonymous setup endpoint must be closed")
 	}
 }
 

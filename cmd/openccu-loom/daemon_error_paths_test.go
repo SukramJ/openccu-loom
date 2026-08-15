@@ -269,7 +269,7 @@ func TestStartCallbackServer_InvalidPortRange_ReturnsError(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 
 	ctx := context.Background()
-	_, _, err := startCallbackServer(ctx, cfg, logger)
+	_, _, err := startCallbackServer(ctx, cfg, nil, logger)
 	if err == nil {
 		t.Fatal("expected error from invalid port range, got nil")
 	}
