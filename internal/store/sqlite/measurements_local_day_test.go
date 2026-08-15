@@ -459,3 +459,139 @@ func TestMigration_005_LocalDayBuckets_ResetsTheDailyTier(t *testing.T) {
 		t.Errorf("re-folded bucket = %s, want the local day %s", got, want)
 	}
 }
+
+// midnightDSTZones are the zones whose DST jump lands on local midnight, so
+// that a whole calendar day starts at 01:00 and the wall clock 00:00 never
+// happens there. They are what separates a day-by-day fold that walks the
+// calendar from one that walks a fixpoint.
+var midnightDSTZones = []struct {
+	zone string
+	y    int
+	m    time.Month
+	d    int
+}{
+	{zone: "America/Santiago", y: 2025, m: time.September, d: 7},
+	{zone: "America/Havana", y: 2025, m: time.March, d: 9},
+	{zone: "Atlantic/Azores", y: 2025, m: time.March, d: 30},
+}
+
+// TestNextDayStartAdvancesWhenLocalMidnightDoesNotExist pins the invariant
+// every day-by-day fold depends on: the next day's start is strictly later
+// than this day's.
+//
+// time.Date normalizes a wall clock the zone never showed, and for a
+// midnight transition it normalizes *backwards* onto the previous local
+// day — so the naive day start of the transition day is an instant that
+// belongs to the day before, and asking for the day after that instant
+// lands on it again. A caller stepping with it never moves.
+func TestNextDayStartAdvancesWhenLocalMidnightDoesNotExist(t *testing.T) {
+	t.Parallel()
+	for _, tc := range midnightDSTZones {
+		t.Run(tc.zone, func(t *testing.T) {
+			t.Parallel()
+			loc, err := time.LoadLocation(tc.zone)
+			if err != nil {
+				t.Skipf("%s unavailable: %v", tc.zone, err)
+			}
+			s := NewMeasurementStoreIn(nil, loc)
+
+			noon := time.Date(tc.y, tc.m, tc.d, 12, 0, 0, 0, loc)
+			if midnight := time.Date(tc.y, tc.m, tc.d, 0, 0, 0, 0, loc); midnight.Day() == tc.d {
+				t.Skipf("fixture stale: local midnight exists on %04d-%02d-%02d in %s",
+					tc.y, tc.m, tc.d, tc.zone)
+			}
+
+			start := s.dayStartMs(noon.UnixMilli())
+			// Every surface labels a bucket with the local date of its
+			// start, so a start belonging to the previous day mislabels
+			// the whole day and collides with that day's own bucket.
+			if got := time.UnixMilli(start).In(loc); got.Year() != tc.y || got.Month() != tc.m || got.Day() != tc.d {
+				t.Errorf("dayStartMs(noon) = %s, want the first instant of %04d-%02d-%02d",
+					got, tc.y, tc.m, tc.d)
+			}
+			next := s.nextDayStartMs(start)
+			if next <= start {
+				t.Fatalf("nextDayStartMs(%s) did not advance — every fold loop stepping with it spins forever",
+					time.UnixMilli(start).In(loc))
+			}
+			if got, want := time.UnixMilli(next).In(loc), noon.AddDate(0, 0, 1); got.Day() != want.Day() {
+				t.Errorf("nextDayStartMs landed on %s, want the day after %04d-%02d-%02d",
+					got, tc.y, tc.m, tc.d)
+			}
+		})
+	}
+}
+
+// TestDailyFoldTerminatesAcrossAMidnightDSTTransition drives the real
+// rollup over a zone whose local midnight is skipped.
+//
+// foldDaysIntoDailyTier steps with nextDayStartMs and clamps every day's
+// range to the fold window, so a step that does not advance leaves the loop
+// taking its `hi <= lo` branch forever — the rollup goroutine spins inside
+// the write transaction RollupDaily opened, which then never commits and
+// never releases the history database.
+func TestDailyFoldTerminatesAcrossAMidnightDSTTransition(t *testing.T) {
+	t.Parallel()
+	loc, err := time.LoadLocation("America/Santiago")
+	if err != nil {
+		t.Skipf("America/Santiago unavailable: %v", err)
+	}
+	s := measurementStoreIn(t, loc)
+
+	// One sample per wall-clock hour from the day before the transition
+	// through the day after it, so the fold has to walk across the
+	// skipped midnight rather than stop short of it.
+	from := time.Date(2025, 9, 6, 0, 0, 0, 0, loc)
+	until := time.Date(2025, 9, 9, 0, 0, 0, 0, loc)
+	var samples []MeasurementSample
+	for ts := from; ts.Before(until); ts = ts.Add(time.Hour) {
+		samples = append(samples, sampleAt(ts, 1))
+	}
+	if err := s.SaveBatch(context.Background(), samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	foldUpTo := until.Add(72 * time.Hour)
+	if _, err := s.RollupHourly(context.Background(), foldUpTo); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	// The fold runs off-goroutine because the failure mode is a spin, not
+	// a wrong answer: a plain call would hang the whole package run.
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.RollupDaily(context.Background(), foldUpTo)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RollupDaily: %v", err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("RollupDaily did not return — the day-by-day fold is not advancing across the skipped midnight")
+	}
+
+	daily := queryDaily(t, s, localDayCentral, localDayIface, localDayChannel, localDayParam)
+	if len(daily) != 3 {
+		t.Fatalf("daily rows = %d, want one per local day: %+v", len(daily), daily)
+	}
+	wantStarts := []time.Time{
+		time.Date(2025, 9, 6, 0, 0, 0, 0, loc),
+		time.Date(2025, 9, 7, 1, 0, 0, 0, loc), // the transition day begins at 01:00
+		time.Date(2025, 9, 8, 0, 0, 0, 0, loc),
+	}
+	wantCounts := []int64{24, 23, 24}
+	var total int64
+	for i, row := range daily {
+		if got := time.UnixMilli(row.BucketTS).In(loc); !got.Equal(wantStarts[i]) {
+			t.Errorf("bucket[%d] start = %s, want %s", i, got, wantStarts[i])
+		}
+		if row.Count != wantCounts[i] {
+			t.Errorf("bucket[%d] count = %d, want %d", i, row.Count, wantCounts[i])
+		}
+		total += row.Count
+	}
+	if want := int64(len(samples)); total != want {
+		t.Errorf("total folded samples = %d, want %d", total, want)
+	}
+}

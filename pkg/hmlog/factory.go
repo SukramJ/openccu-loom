@@ -49,10 +49,11 @@ func ParseFormat(raw string) Format {
 //
 // The default chain, in order from outer to inner, is:
 //
-//	reqctx.ContextHandler (adds request_id / operation / trace fields)
-//	  → RedactingHandler (masks sensitive attribute values)
-//	    → TeeHandler (mirrors into the capture sink + live-log ring)
-//	      → core handler (JSON or text, gated by a Leveler)
+//	levelFilterHandler (drops records below their subsystem's level)
+//	  → reqctx.ContextHandler (adds request_id / operation / trace fields)
+//	    → RedactingHandler (masks sensitive attribute values)
+//	      → TeeHandler (mirrors into the capture sink + live-log ring)
+//	        → core handler (JSON or text, gated by a Leveler)
 //
 // A nil [Sensitive] slice keeps the default redaction list; passing an
 // empty slice disables redaction entirely.
@@ -81,16 +82,16 @@ type Stack struct {
 }
 
 // BuildFullStack returns the global root logger plus its level
-// registry, capture tee, and live ring. The root logger is gated by
-// the registry's default level — every subsequent
-// [LevelRegistry.SetDefault] call takes effect on the next log record
-// without rebuilding the logger.
+// registry, capture tee, and live ring. Every record is gated by the
+// level the registry resolves for the subsystem that emitted it, so a
+// later [LevelRegistry.SetDefault] or per-path override takes effect on
+// the next log record without rebuilding the logger.
 //
 // Callers typically wire [Stack.Logger] into [slog.SetDefault] and
 // hold [Stack.Levels] + [Stack.Tee] for the diagnostics endpoints.
 func BuildFullStack(opts StackOptions, defaultLevel slog.Level) Stack {
 	reg := NewLevelRegistry(defaultLevel)
-	logger, tee := loggerForLevelerWithTee(opts, reg.Leveler(""))
+	logger, tee := loggerForRegistryWithTee(opts, reg)
 	// Attach the live ring to the root tee before any derived logger is
 	// spawned via With(...), so every child inherits the same instance.
 	live := NewLiveLog(DefaultLiveLogCapacity)
@@ -98,17 +99,35 @@ func BuildFullStack(opts StackOptions, defaultLevel slog.Level) Stack {
 	return Stack{Logger: logger, Levels: reg, Tee: tee, Live: live}
 }
 
-// ForSubsystem returns a logger gated by the level configured (or
-// inherited) for path. The handler chain is identical to the one
-// installed by [BuildFullStack] so that subsystem records carry the same
-// request-context fields and the same redaction guarantees as the
-// root logger.
+// Named returns a logger whose records are gated by path's level instead
+// of the level derived from the emitting package. Everything else — the
+// request-context fields, the redaction guarantees, the capture sink and
+// the live ring — stays the shared root chain, so a capture started later
+// still sees these records.
 //
-// Use a dotted, lowercase path that describes the subsystem
-// uniquely, e.g. `openccu-loom.client.transport.xmlrpc` or
-// `openccu-loom.north.matter.bridge`. The registry resolves the
-// effective level hierarchically — a debug override on
-// `openccu-loom.client` covers every descendant.
+// Use a dotted, lowercase path that describes the subsystem uniquely,
+// e.g. `openccu-loom.client.transport.xmlrpc` or
+// `openccu-loom.north.matter.bridge`. The registry resolves the effective
+// level hierarchically — a debug override on `openccu-loom.client` covers
+// every descendant.
+//
+// Naming is optional: an unnamed logger resolves its level from the
+// package it is called in, which already lands in this path space.
+func (s Stack) Named(path string) *slog.Logger {
+	if s.Logger == nil {
+		return slog.Default()
+	}
+	return s.Logger.With(slog.String("logger", path))
+}
+
+// ForSubsystem returns a logger gated by the level configured (or
+// inherited) for path, on its own handler chain of the same shape as
+// [BuildFullStack]'s.
+//
+// Its capture tee and live ring are separate instances, so records logged
+// through it do not reach the diagnostics capture archive or the log
+// viewer. Prefer [Stack.Named] on the daemon's own stack; this exists for
+// callers that hold a registry but no stack.
 func ForSubsystem(reg *LevelRegistry, opts StackOptions, path string) *slog.Logger {
 	if reg == nil {
 		// Caller failed to wire the registry. Falling back to a plain
@@ -116,12 +135,17 @@ func ForSubsystem(reg *LevelRegistry, opts StackOptions, path string) *slog.Logg
 		// gating — better than nil-pointer at log time.
 		reg = NewLevelRegistry(slog.LevelInfo)
 	}
-	return loggerForLeveler(opts, reg.Leveler(path)).With(slog.String("logger", path))
+	logger, _ := loggerForRegistryWithTee(opts, reg)
+	return logger.With(slog.String("logger", path))
 }
 
-func loggerForLeveler(opts StackOptions, leveler slog.Leveler) *slog.Logger {
-	logger, _ := loggerForLevelerWithTee(opts, leveler)
-	return logger
+// loggerForRegistryWithTee builds the full chain: the core handler is
+// gated at the registry's minimum so no subsystem's records are dropped
+// before their path is known, and the outermost filter then applies each
+// record's own level.
+func loggerForRegistryWithTee(opts StackOptions, reg *LevelRegistry) (*slog.Logger, *TeeHandler) {
+	logger, tee := loggerForLevelerWithTee(opts, reg.MinLeveler())
+	return slog.New(newLevelFilterHandler(logger.Handler(), reg)), tee
 }
 
 func loggerForLevelerWithTee(opts StackOptions, leveler slog.Leveler) (*slog.Logger, *TeeHandler) {

@@ -145,6 +145,43 @@ func (r *LevelRegistry) Leveler(path string) slog.Leveler {
 	return pathLeveler{reg: r, path: normalisePath(path)}
 }
 
+// Min returns the most verbose level any path currently resolves to —
+// the default, or a lower override if one is installed.
+//
+// It is the only sound gate for a handler that has to answer
+// slog.Handler.Enabled before it knows which subsystem the record belongs
+// to: anything stricter would discard a raised subsystem's records before
+// the path is even known. The per-record decision is made afterwards, in
+// [levelFilterHandler.Handle].
+func (r *LevelRegistry) Min() slog.Level {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	now := r.now()
+	minLevel := r.defaultLevel
+	for _, ov := range r.overrides {
+		if !ov.expiresAt.IsZero() && !ov.expiresAt.After(now) {
+			continue
+		}
+		minLevel = min(minLevel, ov.level)
+	}
+	return minLevel
+}
+
+// MinLeveler returns a [slog.Leveler] reporting [LevelRegistry.Min] on
+// every call, so an override installed at runtime widens the gate without
+// rebuilding the handler chain.
+func (r *LevelRegistry) MinLeveler() slog.Leveler {
+	return minLeveler{reg: r}
+}
+
+// minLeveler is a [slog.Leveler] bound to the registry's minimum.
+type minLeveler struct {
+	reg *LevelRegistry
+}
+
+// Level returns the registry's current minimum.
+func (l minLeveler) Level() slog.Level { return l.reg.Min() }
+
 // Sweep removes expired overrides. Safe to call concurrently with
 // Resolve / Set. Returns the number of overrides actually removed.
 //

@@ -256,7 +256,7 @@ func (c *CircuitBreaker) DoWithPriority(ctx context.Context, operationID string,
 			c.totalRequests++
 			c.mu.Unlock()
 			err := fn(ctx)
-			c.record(err)
+			c.record(ctx, err)
 			return err
 		}
 		c.totalRequests++
@@ -278,20 +278,14 @@ func (c *CircuitBreaker) DoWithPriority(ctx context.Context, operationID string,
 	c.mu.Unlock()
 
 	err := fn(ctx)
-	c.record(err)
+	c.record(ctx, err)
 	return err
 }
 
-// record updates breaker state based on the outcome of one call.
-//
-// Only transport-level failures (timeouts, unreach, transient CCU
-// faults) advance the failure counter. Semantic XML-RPC faults
-// (`Unknown Parameter`, missing entity, validation rejections) are
-// permanent device-side outcomes that say nothing about the wire
-// channel — counting them as breaker failures would trip OPEN on a
-// healthy CCU that happens to be polled for a write-only parameter.
-// The retrier already classifies these as non-retryable.
-func (c *CircuitBreaker) record(err error) {
+// record updates breaker state based on the outcome of one call. ctx is
+// the caller's context, which is what tells a failure the CCU produced
+// apart from one the caller produced — see [isWireFailure].
+func (c *CircuitBreaker) record(ctx context.Context, err error) {
 	c.mu.Lock()
 	from := c.state
 	if err == nil {
@@ -303,7 +297,7 @@ func (c *CircuitBreaker) record(err error) {
 				c.halfOpenOK = 0
 			}
 		}
-	} else if !errors.Is(err, hmerr.ErrCircuitBreakerOpen) && !isSemanticFault(err) {
+	} else if isWireFailure(ctx, err) {
 		c.halfOpenOK = 0
 		c.consecutiveErr++
 		if c.state == hmenum.CircuitStateHalfOpen {
@@ -330,7 +324,60 @@ func (c *CircuitBreaker) record(err error) {
 // for callers that drive the breaker from outside the Do/record hot-path
 // (e.g. connection-health aggregator, unit tests).
 func (c *CircuitBreaker) RecordFailure() {
-	c.record(errors.New("recorded failure"))
+	c.record(context.Background(), errors.New("recorded failure"))
+}
+
+// isWireFailure reports whether err is evidence about the channel to the
+// CCU, which is the only thing the breaker is allowed to react to. ctx is
+// the context the caller handed to [CircuitBreaker.Do].
+//
+// Four classes of error reach this point without having learned anything
+// about the wire:
+//
+//   - The breaker's own rejection, which would otherwise feed itself.
+//   - Semantic XML-RPC faults (`Unknown Parameter`, missing entity,
+//     validation rejections): permanent device-side outcomes, so a healthy
+//     CCU polled for a write-only parameter would trip the breaker. The
+//     retrier already classifies these as non-retryable.
+//   - The caller going away. The retrier returns immediately once the
+//     caller's context is done and the throttle hands back ctx.Err() from
+//     its queue, so one abandoned request — a browser tab closing on a view
+//     that reads several paramsets through a pool with one command in
+//     flight — unwinds every parked call at once and reaches the failure
+//     threshold without a single wire attempt.
+//   - The daemon shedding its own load: a full throttle queue, a throttle
+//     closed at shutdown, a waiter purged in favour of a newer command.
+//
+// A deadline the transport sets on its own derived context is *not* in
+// that set: the caller's context is still live, so a CCU that stops
+// answering keeps tripping the breaker as it must.
+func isWireFailure(ctx context.Context, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, hmerr.ErrCircuitBreakerOpen):
+		return false
+	case isSemanticFault(err):
+		return false
+	case isCallerGone(ctx, err):
+		return false
+	case errors.Is(err, ErrThrottleQueueFull),
+		errors.Is(err, ErrThrottleClosed),
+		errors.Is(err, ErrSuperseded):
+		return false
+	}
+	return true
+}
+
+// isCallerGone reports whether err is this call unwinding because the
+// context its caller supplied is done. Both halves are required: a bare
+// [context.DeadlineExceeded] with a live caller context comes from a
+// per-attempt deadline further down the stack and is a real timeout.
+func isCallerGone(ctx context.Context, err error) bool {
+	if ctx == nil || ctx.Err() == nil {
+		return false
+	}
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // isSemanticFault reports whether err is a permanent CCU-side
@@ -362,7 +409,7 @@ func (c *CircuitBreaker) RecordRejection() {
 // RecordSuccess records an external success event and advances the breaker
 // state machine as if it had come from a [Do] call.
 func (c *CircuitBreaker) RecordSuccess() {
-	c.record(nil)
+	c.record(context.Background(), nil)
 }
 
 // WaitCallbacks blocks until all state-change callback goroutines launched
