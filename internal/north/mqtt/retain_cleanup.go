@@ -6,8 +6,10 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -405,19 +407,8 @@ func (b *Bridge) RunRetainCleanupOnce(ctx context.Context, snapshotWindow time.D
 		return 0, errCleanupClientLacksSubscribe
 	}
 	cleanup := NewRetainCleanup(b)
-	filter := b.cfg.Base + "/#"
-	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.State, LegacyHandler(cleanup.collect)); err != nil {
-		return 0, err
-	}
 	// Wait for the broker to deliver retained messages.
-	timer := time.NewTimer(snapshotWindow)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-		return 0, ctx.Err()
-	}
-	if err := subClient.Unsubscribe(ctx, filter); err != nil {
+	if err := b.snapshotRetained(ctx, subClient, b.cfg.Base+"/#", b.cfg.QoS.State, snapshotWindow, cleanup.collect); err != nil {
 		return 0, err
 	}
 	worklist := cleanup.Worklist()
@@ -425,6 +416,57 @@ func (b *Bridge) RunRetainCleanupOnce(ctx context.Context, snapshotWindow time.D
 		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true)
 	}
 	return len(worklist), nil
+}
+
+// snapshotRetained installs filter on the shared subscribe client for
+// the length of window, feeding every delivered message to collect, and
+// takes the subscription down again on every exit path — a cancelled
+// context and a broker that refuses the UNSUBSCRIBE included.
+//
+// Both halves matter, and both used to be missing. The sweeps are
+// one-shot boot passes over broad wildcards (`<base>/#`,
+// `homeassistant/#`) whose handler closes over a growing worklist, so a
+// subscription left installed keeps that worklist alive and keeps
+// running on the daemon's own publishes for the rest of the process —
+// and go-mqtt replays its subscriptions on reconnect, so it survives the
+// very broker restart that stranded it. The collect gate bounds the
+// damage in the case the teardown itself fails: the handler stays
+// registered, but it stops accumulating once its window has closed.
+func (b *Bridge) snapshotRetained(
+	ctx context.Context,
+	subClient Subscriber,
+	filter string,
+	qos QoS,
+	window time.Duration,
+	collect func(topic string, payload []byte, retained bool),
+) error {
+	var closed atomic.Bool
+	gated := func(topic string, payload []byte, retained bool) {
+		if closed.Load() {
+			return
+		}
+		collect(topic, payload, retained)
+	}
+	if _, err := subClient.Subscribe(ctx, filter, qos, LegacyHandler(gated)); err != nil {
+		return err
+	}
+	defer func() {
+		closed.Store(true)
+		// Detached from ctx on purpose: a shutdown mid-window is exactly
+		// the case where the subscription would otherwise be stranded.
+		if err := subClient.Unsubscribe(context.WithoutCancel(ctx), filter); err != nil {
+			slog.Default().Warn("mqtt.retain_cleanup.unsubscribe",
+				slog.String("filter", filter), slog.String("err", err.Error()))
+		}
+	}()
+	timer := time.NewTimer(window)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // cleanupSubscriber returns the subscribe-capable client the cleanup
@@ -553,7 +595,18 @@ func hasAnyPrefix(s string, prefixes []string) bool {
 // brokers (Mosquitto / EMQX / VerneMQ) to flush the retained QoS1
 // queue to a fresh subscriber. Best-effort: returns the number of
 // orphans evicted plus any subscribe error.
-func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWindow time.Duration) (int, error) {
+//
+// centralName scopes the pass to one CCU's node-id namespace, exactly
+// like [Bridge.RunRawOrphanCleanupOnce]: both node-id producers
+// ([naming.PathData.DiscoveryNodeID] and [hubNodeID]) slug the central
+// they belong to, so a pass that derived the prefix from the default
+// central alone could never reach a second CCU's orphans — their
+// retained configs kept re-creating permanently unavailable phantom
+// entities that no automatic pass could remove. An empty centralName
+// falls back to the bridge default, which is the single-CCU case.
+// Run it per central, after that central's snapshot: the other
+// centrals' entities are not in `declared` yet and must not be judged.
+func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName string, snapshotWindow time.Duration) (int, error) {
 	if !b.cfg.HADiscoveryEnabled {
 		return 0, nil
 	}
@@ -564,7 +617,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 	if !ok {
 		return 0, errCleanupClientLacksSubscribe
 	}
-	rawCentral := b.resolvedCentral("")
+	rawCentral := b.resolvedCentral(centralName)
 	if rawCentral == "" {
 		// Without a central name we cannot scope the orphan filter to
 		// our own node_id namespace; refuse rather than risk wiping
@@ -626,18 +679,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 		mu.Unlock()
 	}
 
-	filter := prefix + "#"
-	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.Discovery, LegacyHandler(handler)); err != nil {
-		return 0, err
-	}
-	timer := time.NewTimer(snapshotWindow)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-		return 0, ctx.Err()
-	}
-	if err := subClient.Unsubscribe(ctx, filter); err != nil {
+	if err := b.snapshotRetained(ctx, subClient, prefix+"#", b.cfg.QoS.Discovery, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
 	for _, topic := range orphans {
@@ -776,17 +818,7 @@ func (b *Bridge) RunRawOrphanCleanupOnce(ctx context.Context, centralName string
 	}
 
 	filter := rawCentralPrefix(b.cfg.Base, centralName) + "#"
-	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.State, LegacyHandler(handler)); err != nil {
-		return 0, err
-	}
-	timer := time.NewTimer(snapshotWindow)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-		return 0, ctx.Err()
-	}
-	if err := subClient.Unsubscribe(ctx, filter); err != nil {
+	if err := b.snapshotRetained(ctx, subClient, filter, b.cfg.QoS.State, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
 	for _, topic := range orphans {
@@ -863,18 +895,7 @@ func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWi
 		mu.Unlock()
 	}
 
-	filter := "homeassistant/#"
-	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.Discovery, LegacyHandler(handler)); err != nil {
-		return 0, err
-	}
-	timer := time.NewTimer(snapshotWindow)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-		return 0, ctx.Err()
-	}
-	if err := subClient.Unsubscribe(ctx, filter); err != nil {
+	if err := b.snapshotRetained(ctx, subClient, "homeassistant/#", b.cfg.QoS.Discovery, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
 

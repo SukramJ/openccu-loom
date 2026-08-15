@@ -98,7 +98,7 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(centralName string
 		"step":              step,
 		"availability":      availability,
 		"availability_mode": "all",
-		"device":            deviceDescriptor(mockEv, d.Hub.URL, d.SubDevicesEnabled),
+		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
 		"entity_category":   EntityCategoryConfig,
 		"mode":              "box",
@@ -252,7 +252,7 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedSensorDiscovery(centralName strin
 		"state_topic":       stateTopic,
 		"availability":      availability,
 		"availability_mode": "all",
-		"device":            deviceDescriptor(mockEv, d.Hub.URL, d.SubDevicesEnabled),
+		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
 		"entity_category":   EntityCategoryDiagnostic,
 	}

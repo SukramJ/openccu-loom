@@ -567,17 +567,79 @@ type dispatchJob func()
 type boundedDispatcher struct {
 	name   string // log-line identity, e.g. "birth_sync" / "command"
 	logger *slog.Logger
-	queues []chan dispatchJob
-	wg     sync.WaitGroup
+	queues []*dispatchQueue
+	// softDepth is the backlog a worker is expected to absorb. Passing it
+	// is logged, never blocked on — see [boundedDispatcher.Enqueue].
+	softDepth int
+	wg        sync.WaitGroup
+}
 
-	closeMu sync.RWMutex
-	closed  bool
+// dispatchQueue is one worker's FIFO backlog: a mutex-guarded slice with
+// a condition variable, deliberately not a buffered channel.
+//
+// A buffered channel parks the sender once it is full, and here the
+// sender is the MQTT client's single read-loop goroutine — the same
+// goroutine that delivers the PUBACK a parked worker is waiting for.
+// Waiting for room therefore waits for a worker that can only make room
+// once the waiter returns: the in-flight QoS1 publish runs into its ack
+// timeout, PINGRESP goes unread until the keepalive watchdog drops the
+// link, and Close cannot take its own lock either.
+type dispatchQueue struct {
+	mu     sync.Mutex
+	ready  *sync.Cond
+	jobs   []dispatchJob
+	closed bool
+}
+
+func newDispatchQueue() *dispatchQueue {
+	q := &dispatchQueue{}
+	q.ready = sync.NewCond(&q.mu)
+	return q
+}
+
+// push appends job and reports the resulting backlog depth. accepted is
+// false once the queue is closed — the dispatcher is shutting down and
+// no worker remains to run the job.
+func (q *dispatchQueue) push(job dispatchJob) (depth int, accepted bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.closed {
+		return 0, false
+	}
+	q.jobs = append(q.jobs, job)
+	q.ready.Signal()
+	return len(q.jobs), true
+}
+
+// pop blocks until a job is available and returns it. ok is false once
+// the queue is both closed and drained, which ends the worker loop.
+func (q *dispatchQueue) pop() (dispatchJob, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for len(q.jobs) == 0 && !q.closed {
+		q.ready.Wait()
+	}
+	if len(q.jobs) == 0 {
+		return nil, false
+	}
+	job := q.jobs[0]
+	q.jobs[0] = nil // release the closure for the GC while the slice header lives on
+	q.jobs = q.jobs[1:]
+	return job, true
+}
+
+// close stops accepting jobs and wakes every waiter. Idempotent.
+func (q *dispatchQueue) close() {
+	q.mu.Lock()
+	q.closed = true
+	q.mu.Unlock()
+	q.ready.Broadcast()
 }
 
 // newBoundedDispatcher starts `workers` goroutines, each backed by a
-// FIFO queue of depth `queueDepth`. workers and queueDepth are clamped
-// to at least 1 so a misconfigured caller still gets a working (if
-// serial) dispatcher rather than a panic.
+// FIFO queue that warns beyond a backlog of `queueDepth`. workers and
+// queueDepth are clamped to at least 1 so a misconfigured caller still
+// gets a working (if serial) dispatcher rather than a panic.
 func newBoundedDispatcher(workers, queueDepth int, name string, logger *slog.Logger) *boundedDispatcher {
 	if workers < 1 {
 		workers = 1
@@ -589,12 +651,13 @@ func newBoundedDispatcher(workers, queueDepth int, name string, logger *slog.Log
 		logger = slog.Default()
 	}
 	d := &boundedDispatcher{
-		name:   name,
-		logger: logger,
-		queues: make([]chan dispatchJob, workers),
+		name:      name,
+		logger:    logger,
+		queues:    make([]*dispatchQueue, workers),
+		softDepth: queueDepth,
 	}
 	for i := range d.queues {
-		d.queues[i] = make(chan dispatchJob, queueDepth)
+		d.queues[i] = newDispatchQueue()
 		d.wg.Add(1)
 		go d.runWorker(d.queues[i])
 	}
@@ -604,36 +667,39 @@ func newBoundedDispatcher(workers, queueDepth int, name string, logger *slog.Log
 // runWorker drains one queue until it is closed (by Close), running
 // every already-queued job first — a graceful drain, not an abrupt
 // stop.
-func (d *boundedDispatcher) runWorker(q chan dispatchJob) {
+func (d *boundedDispatcher) runWorker(q *dispatchQueue) {
 	defer d.wg.Done()
-	for job := range q {
+	for {
+		job, ok := q.pop()
+		if !ok {
+			return
+		}
 		job()
 	}
 }
 
-// Enqueue routes job to the worker selected by key's hash. It never
-// silently drops job: a full queue first logs one bounded warning
-// (visible proof of backpressure instead of a silent stall) and then
-// blocks until the worker has room. Once Close has been called,
-// Enqueue logs a warning and returns without running job — the
-// dispatcher is shutting down and no worker remains to run it.
+// Enqueue routes job to the worker selected by key's hash and returns
+// without waiting for it — the caller runs on the MQTT read loop, which
+// must never block on downstream I/O.
+//
+// It neither drops nor blocks: a backlog past the configured depth logs
+// one warning per job (visible proof of backpressure) and is queued
+// anyway. Once Close has been called, Enqueue logs a warning and returns
+// without running job — the dispatcher is shutting down and no worker
+// remains to run it.
 func (d *boundedDispatcher) Enqueue(key string, job dispatchJob) {
-	d.closeMu.RLock()
-	defer d.closeMu.RUnlock()
-	if d.closed {
+	q := d.queues[dispatchWorkerIndex(key, len(d.queues))]
+	depth, accepted := q.push(job)
+	if !accepted {
 		d.logger.Warn("mqtt.dispatch.dropped_after_close",
 			slog.String("dispatcher", d.name), slog.String("key", key))
 		return
 	}
-	q := d.queues[dispatchWorkerIndex(key, len(d.queues))]
-	select {
-	case q <- job:
-		return
-	default:
+	if depth > d.softDepth {
+		d.logger.Warn("mqtt.dispatch.queue_full",
+			slog.String("dispatcher", d.name), slog.String("key", key),
+			slog.Int("depth", depth))
 	}
-	d.logger.Warn("mqtt.dispatch.queue_full",
-		slog.String("dispatcher", d.name), slog.String("key", key))
-	q <- job
 }
 
 // Close stops accepting new jobs and blocks until every worker has
@@ -643,16 +709,9 @@ func (d *boundedDispatcher) Close() {
 	if d == nil {
 		return
 	}
-	d.closeMu.Lock()
-	if d.closed {
-		d.closeMu.Unlock()
-		return
-	}
-	d.closed = true
 	for _, q := range d.queues {
-		close(q)
+		q.close()
 	}
-	d.closeMu.Unlock()
 	d.wg.Wait()
 }
 
@@ -662,18 +721,14 @@ func (d *boundedDispatcher) Close() {
 // per-worker sentinel job through every queue. A no-op once Close has
 // run.
 func (d *boundedDispatcher) flush() {
-	d.closeMu.RLock()
-	if d.closed {
-		d.closeMu.RUnlock()
-		return
-	}
-	dones := make([]chan struct{}, len(d.queues))
-	for i, q := range d.queues {
+	dones := make([]chan struct{}, 0, len(d.queues))
+	for _, q := range d.queues {
 		done := make(chan struct{})
-		dones[i] = done
-		q <- func() { close(done) }
+		if _, accepted := q.push(func() { close(done) }); !accepted {
+			continue
+		}
+		dones = append(dones, done)
 	}
-	d.closeMu.RUnlock()
 	for _, done := range dones {
 		<-done
 	}
@@ -1626,13 +1681,20 @@ func (b *Bridge) RetractDiscoveryForDevice(ctx context.Context, deviceAddress st
 // Shared by [Bridge.RetractDiscoveryForDevice] (declared map) and
 // [Bridge.RetractRawStateForDevice] (rawTopics / configCache maps).
 //
+// The match is case-insensitive because the two planes spell the address
+// differently: discovery node ids lower-case it, raw topics upper-case
+// it, and the removal event carries the CCU's own spelling — which is
+// mixed case for the virtual remote and the BidCoS pseudo devices. A
+// case-sensitive needle silently matched none of their retained topics.
+//
 // Best-effort: a publish error is counted but does not abort the sweep
 // — a boot-time orphan-cleanup pass (where one exists) is the backstop.
 func (b *Bridge) retractTopicsMatching(ctx context.Context, m map[string][]byte, needle string, qos QoS) int {
+	needle = strings.ToLower(needle)
 	b.mu.Lock()
 	topics := make([]string, 0)
 	for topic := range m {
-		if strings.Contains(topic, needle) {
+		if strings.Contains(strings.ToLower(topic), needle) {
 			topics = append(topics, topic)
 			delete(m, topic)
 		}

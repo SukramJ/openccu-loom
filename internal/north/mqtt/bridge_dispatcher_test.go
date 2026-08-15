@@ -51,6 +51,60 @@ func TestBoundedDispatcherEnqueueReturnsBeforeJobCompletes(t *testing.T) {
 	}
 }
 
+// TestBoundedDispatcherEnqueueDoesNotBlockOnAFullQueue is the deadlock
+// guard. Every Enqueue caller sits on the MQTT client's single read-loop
+// goroutine, which is also the only goroutine that consumes PUBACK and
+// PINGRESP. A worker that is blocked on a QoS1 publish therefore cannot
+// make room in its queue unless the read loop keeps running, so an
+// Enqueue that waits for room deadlocks the whole link: the in-flight
+// publish times out, the keepalive watchdog tears the connection down,
+// and Close cannot take its write lock either.
+func TestBoundedDispatcherEnqueueDoesNotBlockOnAFullQueue(t *testing.T) {
+	t.Parallel()
+	const depth = 2
+	d := newBoundedDispatcher(1, depth, "test", nil)
+
+	release := make(chan struct{})
+	started := make(chan struct{})
+	var ran atomic.Int32
+	// The first job occupies the single worker and never returns until
+	// released — exactly the "worker parked on downstream I/O" state.
+	d.Enqueue("k", func() {
+		close(started)
+		<-release
+		ran.Add(1)
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("first job never started")
+	}
+
+	// Overshoot the queue depth by a wide margin: with the worker parked,
+	// none of these can run, so every one of them has to be accepted
+	// without waiting.
+	const overshoot = depth + 8
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range overshoot {
+			d.Enqueue("k", func() { ran.Add(1) })
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("Enqueue blocked on a full queue — the MQTT read loop cannot make room for itself")
+	}
+
+	close(release)
+	d.Close()
+	if got, want := ran.Load(), int32(overshoot+1); got != want {
+		t.Fatalf("ran=%d, want %d — no job may be dropped", got, want)
+	}
+}
+
 // TestBoundedDispatcherPreservesPerKeyOrder proves that jobs submitted for
 // the same key never reorder, even across a worker pool with more than one
 // worker.

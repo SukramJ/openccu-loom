@@ -395,7 +395,7 @@ func (d *DefaultDiscoveryBuilder) channelBaseBody(ev Event, name, uniqueID strin
 		"unique_id":         uniqueID,
 		"availability":      availability,
 		"availability_mode": "all",
-		"device":            deviceDescriptor(ev, d.Hub.URL, d.SubDevicesEnabled),
+		"device":            deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
 	}
 	if name == "" {

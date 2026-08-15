@@ -115,7 +115,7 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 		"options":           profiles,
 		"availability":      buildWeekProfileAvailability(d, centralName, ev),
 		"availability_mode": "all",
-		"device":            deviceDescriptor(mockEv, d.Hub.URL, d.SubDevicesEnabled),
+		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
 	}
 

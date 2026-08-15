@@ -137,7 +137,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 		"object_id":         objectID,
 		"availability":      availability,
 		"availability_mode": "all",
-		"device":            deviceDescriptor(mockEv, d.Hub.URL, d.SubDevicesEnabled),
+		"device":            deviceDescriptor(mockEv, d.hubURLFor(mockEv), d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
 	}
 	// Overlay base on body; existing body keys (platform-specific) win.

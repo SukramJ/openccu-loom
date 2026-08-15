@@ -155,6 +155,56 @@ func TestRetractRawStateForDeviceClearsEveryDeviceScopedPublisher(t *testing.T) 
 	}
 }
 
+// TestRetractRawStateForDeviceMatchesMixedCaseAddresses pins the raw
+// retraction against the one class of address a CCU spells in mixed case.
+//
+// Every raw topic is written with the address upper-cased, while the
+// removal event carries the CCU's own spelling — `HmIP-RCV-1`,
+// `BidCoS-RF`, `BidCoS-Wir`. A case-sensitive needle matched none of
+// their retained topics, so the virtual remote's last button state and
+// its `/config` companion stayed on the broker reading `available: true`
+// while its availability topic said the device was gone.
+func TestRetractRawStateForDeviceMatchesMixedCaseAddresses(t *testing.T) {
+	t.Parallel()
+
+	const (
+		central = "ccu01"
+		iface   = "HmIP-RF"
+		addr    = "HmIP-RCV-1" // the CCU's spelling of the virtual remote
+	)
+	ctx := context.Background()
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom", RawEnabled: true, CentralName: central}, mp)
+
+	slot := pload.TopicSlot{Address: addr, Channel: 1, Bucket: pload.BucketValues, Parameter: "PRESS_SHORT"}
+	if err := b.PublishSlotState(ctx, central, iface, slot, pload.PerDPState{Value: true, Available: true}); err != nil {
+		t.Fatalf("PublishSlotState: %v", err)
+	}
+	stateTopic := b.topics.SlotState(central, iface, slot)
+	before := len(mp.publications())
+
+	b.RetractRawStateForDevice(ctx, central, iface, addr)
+
+	var found bool
+	for _, p := range mp.publications()[before:] {
+		if p.topic == stateTopic {
+			found = true
+			if p.payload != "" || !p.retain {
+				t.Fatalf("retract %q: payload=%q retain=%v, want an empty retained publish", stateTopic, p.payload, p.retain)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("removal left the retained payload on %q", stateTopic)
+	}
+	b.mu.Lock()
+	_, stillTracked := b.rawTopics[stateTopic]
+	b.mu.Unlock()
+	if stillTracked {
+		t.Fatalf("%q is still in the raw-topic index after retraction", stateTopic)
+	}
+}
+
 // failingPublisher fails every publish whose topic contains failFor, so a
 // test can model a broker outage or an open circuit breaker that affects
 // part of the traffic only.
