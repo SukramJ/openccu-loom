@@ -71,9 +71,36 @@ const perChunkStatusRespTimeout = 500 * time.Millisecond
 // the message frame still parses on the controller side).
 func (b *Bridge) AttachSubscriptionManager(m *subscription.Manager) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	b.subManager = m
 	b.wireMeasurementListenersLocked()
+	b.mu.Unlock()
+	if m != nil {
+		// The manager owns subscription lifetime; the bridge owns the
+		// routing state keyed by subscription ID. Without this hook the
+		// routing entry outlives every cleanly-closed subscription —
+		// re-subscribe, endpoint removal, fabric teardown and session
+		// reap all terminate subscriptions the bridge never hears about.
+		m.SetOnSubscriptionClosed(b.releaseSubscriptionRouting)
+	}
+}
+
+// releaseSubscriptionRouting drops every bridge-side table entry that
+// belongs to subID. Called by the subscription manager's close
+// observer, so it must not take b.mu (the manager can close a
+// subscription from within a bridge call).
+func (b *Bridge) releaseSubscriptionRouting(subID uint32) {
+	b.routing.subTargets.Delete(subID)
+	b.subSendErrorCount.Delete(subID)
+	// reportCounterOwner is keyed by (session, counter), so the owning
+	// subscription is only visible in the value — a scan is the only
+	// way to reclaim the in-flight report counters of a subscription
+	// whose peer never ACKs them.
+	b.reportCounterOwner.Range(func(key, value any) bool {
+		if owner, ok := value.(uint32); ok && owner == subID {
+			b.reportCounterOwner.Delete(key)
+		}
+		return true
+	})
 }
 
 // subTarget captures the per-subscription routing metadata needed to
@@ -206,12 +233,10 @@ func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription
 
 	counters, err := b.sendReportChunks(target, report)
 	if err != nil {
-		b.routing.subTargets.Delete(sub.ID)
-		b.logger.Debug("matter.tx.subscribe.event_report",
-			slog.Int("subscription_id", int(sub.ID)),
-			slog.String("err", err.Error()))
+		b.noteSubscriptionSendError(sub.ID, "event_report", err)
 		return
 	}
+	b.subSendErrorCount.Delete(sub.ID)
 	for _, counter := range counters {
 		b.reportCounterOwner.Store(reportCounterKey(target.sessionID, counter), sub.ID)
 	}
@@ -368,45 +393,7 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 
 	counters, freshExch, err := b.sendInitiatedReport(target, report)
 	if err != nil {
-		// matter.js's ServerSubscription.ts retries an ongoing report
-		// up to 2 times before cancelling. Mirror that: per-subscription
-		// consecutive failure counter; only on the 3rd consecutive
-		// failure do we evict. A transient socket-write hiccup or
-		// fabric-reload race no longer reaps an otherwise-healthy
-		// subscription, while a peer that truly vanished still gets
-		// reaped eventually. The MRP tracker path
-		// (closeSubscriptionByCounter) handles the ACK-timeout case;
-		// this path covers the immediate-send-error case where no MRP
-		// tracker is wired.
-		const sendErrorRetryLimit = 2
-		var failures int
-		if raw, ok := b.subSendErrorCount.Load(sub.ID); ok {
-			if n, ok := raw.(int); ok {
-				failures = n
-			}
-		}
-		failures++
-		if failures <= sendErrorRetryLimit {
-			b.subSendErrorCount.Store(sub.ID, failures)
-			b.logger.Debug("matter.tx.subscribe.report",
-				slog.Int("subscription_id", int(sub.ID)),
-				slog.Int("send_failures", failures),
-				slog.Int("retry_limit", sendErrorRetryLimit),
-				slog.String("err", err.Error()))
-			return
-		}
-		// Cap reached — drop the routing target and evict the
-		// subscription from the manager so the engine stops ticking
-		// a dead subscription.
-		b.routing.subTargets.Delete(sub.ID)
-		b.subSendErrorCount.Delete(sub.ID)
-		if m := b.subscriptionManagerLocked(); m != nil {
-			_ = m.Close(sub.ID) // ErrNotFound is fine — racing with peer or ACK-pump Close
-		}
-		b.logger.Info("matter.subscribe.peer_unreachable",
-			slog.Int("subscription_id", int(sub.ID)),
-			slog.Int("send_failures", failures),
-			slog.String("hint", "consecutive send-error cap reached; subscription reaped"))
+		b.noteSubscriptionSendError(sub.ID, "report", err)
 		return
 	}
 	// Successful send — reset the per-subscription error counter so a
@@ -425,6 +412,61 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 		slog.Int("paths", len(paths)),
 		slog.Int("reports", len(report.Reports)),
 		slog.Int("exchange_id", int(freshExch)))
+}
+
+// sendErrorRetryLimit is how many consecutive send failures an ongoing
+// report path tolerates before the subscription is reaped. matter.js's
+// ServerSubscription.ts retries an ongoing report up to 2 times before
+// cancelling; only on the 3rd consecutive failure do we evict.
+const sendErrorRetryLimit = 2
+
+// noteSubscriptionSendError records one failed ongoing report for subID
+// and reaps the subscription once [sendErrorRetryLimit] consecutive
+// failures have accumulated. Both ongoing report paths (attributes and
+// events) funnel through here: a transient socket-write hiccup, a
+// fabric-reload race or a session being re-adopted must not unroute an
+// otherwise-healthy subscription, because the routing entry is written
+// only by captureSubTarget on a fresh SubscribeRequest — once dropped,
+// nothing recreates it and every later report silently returns at the
+// subTargets lookup, keep-alives included. A peer that truly vanished
+// is still reaped. The MRP tracker path (closeSubscriptionByCounter)
+// covers the ACK-timeout case; this covers the immediate send error
+// where no MRP tracker is wired.
+//
+// op names the reporter for the log line ("report" / "event_report").
+func (b *Bridge) noteSubscriptionSendError(subID uint32, op string, err error) {
+	var failures int
+	if raw, ok := b.subSendErrorCount.Load(subID); ok {
+		if n, ok := raw.(int); ok {
+			failures = n
+		}
+	}
+	failures++
+	if failures <= sendErrorRetryLimit {
+		b.subSendErrorCount.Store(subID, failures)
+		if b.logger != nil {
+			b.logger.Debug("matter.tx.subscribe."+op,
+				slog.Int("subscription_id", int(subID)),
+				slog.Int("send_failures", failures),
+				slog.Int("retry_limit", sendErrorRetryLimit),
+				slog.String("err", err.Error()))
+		}
+		return
+	}
+	// Cap reached — drop the routing target and evict the subscription
+	// from the manager so the engine stops ticking a dead subscription.
+	b.routing.subTargets.Delete(subID)
+	b.subSendErrorCount.Delete(subID)
+	if m := b.subscriptionManagerLocked(); m != nil {
+		_ = m.Close(subID) // ErrNotFound is fine — racing with peer or ACK-pump Close
+	}
+	if b.logger != nil {
+		b.logger.Info("matter.subscribe.peer_unreachable",
+			slog.Int("subscription_id", int(subID)),
+			slog.Int("send_failures", failures),
+			slog.String("op", op),
+			slog.String("hint", "consecutive send-error cap reached; subscription reaped"))
+	}
 }
 
 // closeSubscriptionByCounter is called by the ACK pump when an

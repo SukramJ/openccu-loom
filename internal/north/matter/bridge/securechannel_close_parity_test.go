@@ -498,3 +498,35 @@ func TestTriggerSessionReannounce_RepublishesActiveRecords(t *testing.T) {
 		t.Errorf("trigger after Stop re-published records — must be a no-op during teardown")
 	}
 }
+
+// TestSendCloseSessionReport_ForgetsPeerAddrEvenWhenTheFarewellFails
+// pins that the per-session peer address is released on every graceful
+// close, not only when the farewell datagram made it out. The session
+// is gone either way — keeping the entry leaves a stale address that
+// only a session-id wrap can overwrite. The failure modelled here is
+// real: the reaper zeroises the keys, so the farewell's Encrypt fails.
+func TestSendCloseSessionReport_ForgetsPeerAddrEvenWhenTheFarewellFails(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	_, peerAddr := openPeerSocket(t)
+
+	const sessionID uint16 = 51
+	b.sessionPeerAddrs.Store(sessionID, peerAddr)
+
+	key := make([]byte, 16)
+	sess, err := channel.New(channel.Config{
+		EncryptKey: key, DecryptKey: key,
+		LocalNodeID: 0xB0B, PeerNodeID: 0xA11,
+		InitialCounter: 100,
+	})
+	if err != nil {
+		t.Fatalf("channel.New: %v", err)
+	}
+	sess.Close()
+
+	b.sendCloseSessionReport(sessionID, sess)
+
+	if _, ok := b.sessionPeerAddrs.Load(sessionID); ok {
+		t.Error("peer address for the closed session survived the failed farewell")
+	}
+}

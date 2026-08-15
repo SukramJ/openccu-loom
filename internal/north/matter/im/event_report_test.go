@@ -716,3 +716,44 @@ func TestBuildEventReports_OneEvent(t *testing.T) {
 		t.Error("IsStatus must be false for a data report")
 	}
 }
+
+// TestBuildEventReports_MultiPathOutputIsGloballyAscending pins the
+// wire ordering for a read naming more than one event path. Each path
+// is queried separately, so without a final sort the output is a
+// sequence of independently ascending runs. matter.js collects the
+// allowed paths first and then walks the occurrence store once
+// (packages/protocol/src/action/server/EventReadResponse.ts:334
+// #readAllowedEvents), which is globally ascending by construction.
+func TestBuildEventReports_MultiPathOutputIsGloballyAscending(t *testing.T) {
+	t.Parallel()
+	log := NewEventLog()
+	// Interleave the two endpoints so a per-path query cannot
+	// accidentally produce ascending output.
+	for _, ep := range []uint16{1, 2, 1, 2} {
+		log.Append(EventRecord{
+			Priority: EventPriorityInfo,
+			Endpoint: ep,
+			Cluster:  0x003B,
+			EventID:  0x01,
+			Payload:  uint8(1),
+		})
+	}
+
+	paths := []ConcreteEventPath{
+		{Endpoint: 1, HasEndpoint: true, Cluster: 0x003B, HasCluster: true, Event: 0x01, HasEvent: true},
+		{Endpoint: 2, HasEndpoint: true, Cluster: 0x003B, HasCluster: true, Event: 0x01, HasEvent: true},
+	}
+	got := BuildEventReports(paths, log, nil)
+	if len(got) != 4 {
+		t.Fatalf("expected 4 EventReports, got %d", len(got))
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i-1].Number >= got[i].Number {
+			nums := make([]uint64, len(got))
+			for j, rep := range got {
+				nums[j] = rep.Number
+			}
+			t.Fatalf("EventNumbers not ascending across paths: %v", nums)
+		}
+	}
+}

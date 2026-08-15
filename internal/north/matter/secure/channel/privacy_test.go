@@ -6,6 +6,7 @@ package channel_test
 import (
 	"bytes"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
@@ -326,5 +327,47 @@ func TestSession_PrivacyKey_ReturnsErrAfterClose(t *testing.T) {
 	}
 	if _, err := sess.PeerPrivacyKey(); !errors.Is(err, channel.ErrSessionInactive) {
 		t.Fatalf("PeerPrivacyKey after Close: err=%v, want ErrSessionInactive", err)
+	}
+}
+
+// TestConcurrentPrivacyKeyDerivationAndClose reproduces the live
+// shape: the operational manager's idle reaper closes a session on its
+// own goroutine while the receive path unmasks a privacy-flagged frame
+// for that same session. Both touch the session key material, so Close
+// must zeroise it under the lock the accessors hold, and the accessors
+// must hand out material the caller can keep reading after they
+// return. Run with `go test -race`.
+func TestConcurrentPrivacyKeyDerivationAndClose(t *testing.T) {
+	t.Parallel()
+	for range 200 {
+		sess, err := channel.New(newPrivacyTestConfig())
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		// Prime the cache so the racing reader exercises the cached
+		// slice as well as the encKey/decKey derivation source.
+		if _, err := sess.PrivacyKey(); err != nil {
+			t.Fatalf("PrivacyKey: %v", err)
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			if k, err := sess.PeerPrivacyKey(); err == nil {
+				_ = bytes.Contains(k, []byte{0xFF})
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if k, err := sess.PrivacyKey(); err == nil {
+				_ = bytes.Contains(k, []byte{0xFF})
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			sess.Close()
+		}()
+		wg.Wait()
 	}
 }

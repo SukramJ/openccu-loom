@@ -4,10 +4,12 @@
 package im
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 )
@@ -603,6 +605,16 @@ func BuildEventReports(paths []ConcreteEventPath, log *EventLog, filters []Event
 			})
 		}
 	}
+	// Each path is queried on its own, so out is a sequence of
+	// independently ascending runs. The wire order must be globally
+	// ascending: matter.js registers the allowed paths first and then
+	// walks the occurrence store exactly once
+	// (packages/protocol/src/action/server/EventReadResponse.ts:334
+	// #readAllowedEvents), so a controller that tracks the last
+	// EventNumber it saw never observes a descending step.
+	slices.SortFunc(out, func(a, b EventReport) int {
+		return cmp.Compare(a.Number, b.Number)
+	})
 	return out
 }
 

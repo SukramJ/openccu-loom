@@ -115,8 +115,9 @@ func (m *Manager) tick(ctx context.Context, now time.Time) {
 		// Home's MTRDevice and chip-tool's ReadClient both drop the
 		// subscription after an internal timer that fires *well before*
 		// `MaxIntervalCeiling` would — so heartbeats must ride at the
-		// faster matter.js-style cadence (`min(maxInterval/2, 30s)`-ish),
-		// not at the spec-only `MaxIntervalCeiling`.
+		// faster matter.js-style cadence computed by
+		// [Subscription.sendIntervalLocked], not at the spec-only
+		// `MaxIntervalCeiling`.
 		if sub.heartbeatIntervalElapsed(now) {
 			sub.touchLastReport(now)
 			if m.reporter != nil {

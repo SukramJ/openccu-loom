@@ -393,8 +393,13 @@ type Bridge struct {
 	// sender routes on it; matter.js keeps the equivalent association
 	// on the session itself via its MessageChannel
 	// (packages/protocol/src/session/Session.ts, `get channel()`).
-	// Entries are dropped when the session closes; the id space is
-	// uint16 so the map stays bounded regardless.
+	// Entries are dropped on an inbound CloseSession and on every
+	// graceful close the operational manager notifies. Teardown paths
+	// that skip that notifier (fabric removal, NOC rotation, manager
+	// shutdown) leave the entry behind until the id is reused: the
+	// id space is uint16 and the next session that draws the same id
+	// overwrites it on its first authenticated datagram, so the map
+	// stays bounded and cannot outlive a reuse.
 	sessionPeerAddrs sync.Map
 }
 

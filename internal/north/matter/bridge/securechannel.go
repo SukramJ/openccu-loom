@@ -915,11 +915,15 @@ func (b *Bridge) resolveSessionPeerAddr(sessionID uint16) *net.UDPAddr {
 // ack a farewell.
 func (b *Bridge) sendCloseSessionReport(sessionID uint16, sess *channel.Session) {
 	// The session is being torn down whether or not the farewell
-	// reaches the peer, so its per-exchange timed deadlines can never
-	// be consumed again. Dropped before the early returns below — none
-	// of them means the session survives. Teardown paths that do not
-	// notify the peer fall back to the expiry sweep.
+	// reaches the peer, so its per-exchange timed deadlines and its
+	// learned peer address can never be used again — neither of the
+	// early returns below means the session survives. Teardown paths
+	// that do not notify the peer fall back to the expiry sweep and to
+	// overwrite-on-reuse respectively.
 	b.routing.dropSessionTimedDeadlines(sessionID)
+	// Deferred, not dropped here: this farewell still has to be routed
+	// on that address, and every exit path must release it.
+	defer b.sessionPeerAddrs.Delete(sessionID)
 	b.mu.RLock()
 	listener := b.listener
 	b.mu.RUnlock()
@@ -969,7 +973,6 @@ func (b *Bridge) sendCloseSessionReport(sessionID uint16, sess *channel.Session)
 			slog.String("err", err.Error()))
 		return
 	}
-	b.sessionPeerAddrs.Delete(sessionID)
 	b.logger.Debug("matter.tx.sc.close_session",
 		slog.String("dst", srcString(dst)),
 		slog.Int("session_id", int(sessionID)))

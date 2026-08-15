@@ -10,6 +10,15 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 )
 
+// maxSendInterval caps the publisher heartbeat so at least two reports
+// fall inside the operational session manager's idle TTL
+// (secure/operational.SessionIdleTimeout). See
+// [Subscription.sendIntervalLocked] for why the cap exists;
+// TestSendInterval_LongMaxIntervalStillBeatsSessionIdleTimeout drives
+// the manager against that TTL so neither constant can drift out from
+// under the other.
+const maxSendInterval = 2 * time.Minute
+
 // Subscription is one active commissioner-side subscription. The
 // manager keeps these in a map keyed by ID; engine.Tick walks the
 // map to drive reports.
@@ -147,6 +156,19 @@ func (s *Subscription) sendIntervalLocked() time.Duration {
 		eighty := time.Duration(float64(maxInt) * 0.8)
 		floor := time.Duration(s.MinIntervalFloor) * time.Second
 		send = max(floor, eighty)
+	}
+	// Upper clamp — a deliberate divergence from matter.js, which has no
+	// cap because it never evicts idle operational sessions. This daemon
+	// runs a 5-minute idle reaper on the operational session manager, and
+	// on an otherwise quiet CASE session the heartbeat report (plus the
+	// controller's ack) is the only thing that refreshes session
+	// activity. A subscription that negotiated a long MaxIntervalCeiling
+	// — the bridge accepts up to an hour — would otherwise have its
+	// session reaped mid-cycle and be torn down every five minutes.
+	// Keeping two heartbeats inside the TTL also survives one lost
+	// report.
+	if send > maxSendInterval {
+		send = maxSendInterval
 	}
 	// Final clamp: never below the requested MinIntervalFloor
 	// (commissioner-side rate limit) and never below 1 s.
