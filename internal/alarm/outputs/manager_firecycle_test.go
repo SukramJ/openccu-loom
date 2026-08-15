@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -542,5 +543,120 @@ func TestFireCycle_PerOutputFailureIsolatesRemainingOutputs(t *testing.T) {
 	}
 	if n := h.actuator("plug").boundedCallCount(); n != 1 {
 		t.Fatalf("plug TurnOnBounded calls = %d, want 1 (sirA's failure must not block it)", n)
+	}
+}
+
+// asirChannel is the single siren channel of an ASIR-class device — the
+// channel an operator can enrol under both siren classes at once.
+const asirChannel = "0001D8A9BC7654:3"
+
+// selection renders an OnConfig selection pointer for a failure
+// message; "" means the write left that half of the paramset out.
+func selection(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// sharedSirenChannelRows returns the two rows an operator produces by
+// enrolling one ASIR channel as an acoustic and as an optical siren.
+// The ids follow the enrollment surface's "<zone>|<channel>|<class>"
+// scheme, so the optical row sorts last exactly as it does in the
+// field.
+func sharedSirenChannelRows() (acoustic, optical sqlitestore.AlarmOutputRow) {
+	return sharedRow("eg|"+asirChannel+"|acoustic_siren", "eg",
+			hmenum.AlarmOutputClassAcousticSiren, asirChannel,
+			OutputConfig{DurationSeconds: 120, AcousticTone: "FREQ_HIGH"}),
+		sharedRow("eg|"+asirChannel+"|optical_siren", "eg",
+			hmenum.AlarmOutputClassOpticalSiren, asirChannel, OutputConfig{})
+}
+
+// TestFireCycle_SirenChannelEnrolledUnderBothClassesFiresOneMergedWrite
+// pins the burglar alarm that flashes but never sounds.
+//
+// An ASIR takes tone, pattern and duration in one atomic VALUES
+// paramset and ignores partial writes, so two rows on one channel do
+// not add up — the second write replaces the first. Firing them
+// independently meant the optical row, which pins the acoustic half to
+// the device's disable entry so its own write cannot start a tone,
+// silenced the acoustic row enrolled on the very same channel. Both
+// writes succeed, so nothing errors, journals or reaches health: the
+// operator finds out during a burglary.
+func TestFireCycle_SirenChannelEnrolledUnderBothClassesFiresOneMergedWrite(t *testing.T) {
+	h := newHarness(t)
+	h.seedOutputs(sharedSirenChannelRows())
+	dev := sirenAt(t, h, asirChannel)
+	dev.setValueLists(
+		[]string{"DISABLE_ACOUSTIC_SIGNAL", "FREQ_HIGH"},
+		[]string{"DISABLE_OPTICAL_SIGNAL", "BLINKING_ALTERNATELY_REPEATING"},
+	)
+
+	const incidentID = 30
+	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(incidentID, hmenum.AlarmModeFull),
+		engine.FireOptions{Policy: noPolicy}); err != nil {
+		t.Fatalf("FireCycle: %v", err)
+	}
+
+	calls := dev.turnOnCallsSnapshot()
+	if len(calls) != 1 {
+		t.Fatalf("TurnOn calls = %d, want 1: one channel takes one atomic write per cycle", len(calls))
+	}
+	call := calls[0]
+	if selection(call.Cfg.AcousticSelection) != "FREQ_HIGH" {
+		t.Errorf("acoustic selection = %q, want FREQ_HIGH: the optical row must not silence the "+
+			"acoustic row enrolled on its own channel", selection(call.Cfg.AcousticSelection))
+	}
+	if selection(call.Cfg.OpticalSelection) != "BLINKING_ALTERNATELY_REPEATING" {
+		t.Errorf("optical selection = %q, want the device's flash pattern: the merged write carries "+
+			"both halves", selection(call.Cfg.OpticalSelection))
+	}
+	if call.Cfg.Duration != 120*time.Second {
+		t.Errorf("duration = %v, want 120s: one channel has one duration, and the reserved acoustic "+
+			"budget is what bounds it", call.Cfg.Duration)
+	}
+	if ledgerCalls := h.ledger.callsFor(incidentID); len(ledgerCalls) != 1 {
+		t.Errorf("acoustic ledger writes = %+v, want exactly 1: one activation spends the budget once",
+			ledgerCalls)
+	}
+
+	// The merged write stays bounded: the watchdog stops the channel at
+	// the duration it was actually given.
+	h.advance(120 * time.Second)
+	if n := dev.turnOffCount(); n == 0 {
+		t.Error("no TurnOff after the activation's duration elapsed: the merged write must stay watchdogged")
+	}
+}
+
+// TestFireCycle_SilentPolicyKeepsTheSharedSirenChannelMute guards the
+// other direction of the merge: a silent mode drops the acoustic row
+// before the grouping, so the remaining optical row must still pin the
+// acoustic half to the device's disable entry. A merge that let the
+// tone through here would sound a siren the mode exists to keep quiet.
+func TestFireCycle_SilentPolicyKeepsTheSharedSirenChannelMute(t *testing.T) {
+	h := newHarness(t)
+	h.seedOutputs(sharedSirenChannelRows())
+	dev := sirenAt(t, h, asirChannel)
+	dev.setValueLists(
+		[]string{"DISABLE_ACOUSTIC_SIGNAL", "FREQ_HIGH"},
+		[]string{"DISABLE_OPTICAL_SIGNAL", "BLINKING_ALTERNATELY_REPEATING"},
+	)
+
+	const incidentID = 31
+	opts := engine.FireOptions{Policy: engine.OutputPolicy{Silent: true}}
+	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(incidentID, hmenum.AlarmModeFull), opts); err != nil {
+		t.Fatalf("FireCycle: %v", err)
+	}
+
+	calls := dev.turnOnCallsSnapshot()
+	if len(calls) != 1 {
+		t.Fatalf("TurnOn calls = %d, want 1 (the optical row alone)", len(calls))
+	}
+	if sel := selection(calls[0].Cfg.AcousticSelection); sel != "DISABLE_ACOUSTIC_SIGNAL" {
+		t.Errorf("acoustic selection = %q, want the disable entry: a silent cycle must not let the "+
+			"atomic write start a tone", sel)
+	}
+	if ledgerCalls := h.ledger.callsFor(incidentID); len(ledgerCalls) != 0 {
+		t.Errorf("acoustic ledger writes = %+v, want none in a silent cycle", ledgerCalls)
 	}
 }

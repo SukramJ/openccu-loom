@@ -177,6 +177,27 @@ func (h *sysvarHarness) seedOutput(id, zoneID, centralName string, cfg mirrorCon
 	}
 }
 
+// seedSensor persists one enrolled window sensor of zoneID so the
+// ordinary refused-arm case (an open contact) can be produced through
+// the real engine.
+func (h *sysvarHarness) seedSensor(id, zoneID, centralName string) {
+	h.t.Helper()
+	cfg, err := json.Marshal(engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
+	if err != nil {
+		h.t.Fatalf("marshal sensor config: %v", err)
+	}
+	now := h.clk.Now().UnixMilli()
+	if err := h.svc.Stores().Sensors.Upsert(h.ctx, sqlitestore.AlarmSensorRow{
+		ID: id, ZoneID: zoneID, CentralName: centralName,
+		InterfaceID:    central.WireInterfaceID(centralName, hmenum.InterfaceHmIPRF),
+		ChannelAddress: "0001D3C99ABCDE:1", Parameter: string(hmenum.ParameterState),
+		SensorType: hmenum.AlarmSensorTypeWindow, Name: id, ConfigJSON: string(cfg),
+		CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		h.t.Fatalf("seed sensor %s: %v", id, err)
+	}
+}
+
 // start starts the service and registers cleanup, mirroring
 // intents_test.go's start().
 func (h *sysvarHarness) start() {
@@ -293,4 +314,92 @@ func TestSysvarMirrorOnInbound_ExistingModeTargetProducesNoIntentButManagedTarge
 	if got := h.zoneState("managed"); got != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("managed zone state = %s, want armed (managed sysvar target must still route an intent)", got)
 	}
+}
+
+// --- onInbound: an intent the engine does not carry out ---
+
+// TestSysvarMirrorOnInbound_IntentTheEngineDoesNotCarryOutReExportsTheRealState
+// pins the invariant the refused-disarm branch already states in prose:
+// the mirror cannot lie.
+//
+// Whatever the third party wrote is sitting in the CCU variable by the
+// time the intent reaches us. Every exit that leaves the zone where it
+// was therefore has to push the real state back, or the variable keeps
+// asserting a protection level the engine refused — for CCU programs,
+// the WebUI and every third-party reader, until some unrelated
+// transition happens to correct it.
+func TestSysvarMirrorOnInbound_IntentTheEngineDoesNotCarryOutReExportsTheRealState(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		inbound  int
+		wantZone hmenum.AlarmZoneState
+	}{
+		// Index 2 is AlarmModeFull: the arm is refused because a window
+		// is open, the everyday reason an arm fails.
+		{name: "refused arm", inbound: 2, wantZone: hmenum.AlarmZoneStateDisarmed},
+		// Index 6 is "Alarm", an export-only state, and index 5 is a
+		// mode this zone does not configure: neither is an intent the
+		// engine can carry out.
+		{name: "export-only alarm index", inbound: 6, wantZone: hmenum.AlarmZoneStateDisarmed},
+		{name: "mode the zone does not configure", inbound: 5, wantZone: hmenum.AlarmZoneStateDisarmed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := newSysvarHarness(t)
+			writer, _ := h.wireCentral("ccu1")
+			h.seedZone("eg", "Erdgeschoss")
+			h.seedSensor("window", "eg", "ccu1")
+			h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmMode"})
+			h.start()
+			h.svc.Engine().HandleSensorEvent(h.ctx, "window", true)
+
+			h.svc.sysvarMirror.onInbound("ccu1", hmevent.SysvarChangedEvent{
+				Name: "AlarmMode", NewValue: hmtypes.IntValue(tc.inbound),
+			})
+
+			if got := h.zoneState("eg"); got != tc.wantZone {
+				t.Fatalf("zone state = %s, want %s", got, tc.wantZone)
+			}
+			calls := writer.callsSnapshot()
+			if len(calls) == 0 {
+				t.Fatal("no sysvar write: the CCU variable still holds the index the engine did not act on")
+			}
+			last := calls[len(calls)-1]
+			if last.name != "AlarmMode" {
+				t.Fatalf("re-export wrote %q, want AlarmMode", last.name)
+			}
+			if idx, ok := last.value.(int); !ok || idx != 0 {
+				t.Fatalf("re-exported index = %v (%T), want 0 (disarmed)", last.value, last.value)
+			}
+		})
+	}
+}
+
+// TestSysvarMirrorOnInbound_RefusedArmIsJournalled keeps the operator's
+// record of a rejected intent: the fault row is what explains, after
+// the fact, why the CCU variable snapped back.
+func TestSysvarMirrorOnInbound_RefusedArmIsJournalled(t *testing.T) {
+	t.Parallel()
+	h := newSysvarHarness(t)
+	h.wireCentral("ccu1")
+	h.seedZone("eg", "Erdgeschoss")
+	h.seedSensor("window", "eg", "ccu1")
+	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmMode"})
+	h.start()
+	h.svc.Engine().HandleSensorEvent(h.ctx, "window", true)
+
+	h.svc.sysvarMirror.onInbound("ccu1", hmevent.SysvarChangedEvent{Name: "AlarmMode", NewValue: hmtypes.IntValue(2)})
+
+	entries, err := h.svc.Stores().Journal.Query(h.ctx, sqlitestore.AlarmJournalFilter{IncludeHidden: true})
+	if err != nil {
+		t.Fatalf("query journal: %v", err)
+	}
+	for i := range entries {
+		if entries[i].Event == "sysvar_arm_failed" {
+			return
+		}
+	}
+	t.Fatalf("no sysvar_arm_failed journal entry after a refused arm; got %+v", entries)
 }

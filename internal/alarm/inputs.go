@@ -189,10 +189,10 @@ func (s *Service) updateDeviceHealth(ctx context.Context, centralName string, ke
 // of a central is gone.
 //
 // The event names the interface the way the CCU does ("BidCos-RF"),
-// while every routing key in this package is keyed by the wire id the
+// while every routing entry in this package is keyed by the wire id the
 // ingest pipeline stamps onto a data point ("<central>-BidCos-RF").
 // The two spaces are reconciled once, here at the boundary, so the
-// prefix match and the down-map agree: matching the bare name against
+// sensor lookup and the down-map agree: matching the bare name against
 // wire-keyed routing silently found nothing, which left every contact
 // on a lost radio reporting its last known state while armed and never
 // ran the zone's central-loss policy.
@@ -208,11 +208,18 @@ func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChang
 	wasAllDown := s.allEnrolledDownLocked(centralName)
 	m[wireID] = !e.Reachable
 	nowAllDown := s.allEnrolledDownLocked(centralName)
-	// Collect the sensors of the affected interface.
-	var affected []string
-	for key, b := range s.dpIndex {
-		if strings.HasPrefix(key, dpKeyPrefix(centralName, wireID)) {
+	// Split the central's sensors into the ones this event speaks for
+	// and the ones sitting on an interface that is currently down.
+	var affected, onDownInterface []string
+	for _, b := range s.dpIndex {
+		if b.centralName != centralName {
+			continue
+		}
+		switch {
+		case b.interfaceID == wireID:
 			affected = append(affected, b.id)
+		case m[b.interfaceID]:
+			onDownInterface = append(onDownInterface, b.id)
 		}
 	}
 	s.mu.Unlock()
@@ -222,6 +229,16 @@ func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChang
 		// central-loss policy (alert or trigger) — never silently.
 		s.engine.HandleCentralConnectivity(ctx, centralName, !nowAllDown)
 		if !nowAllDown {
+			// That restore is central-scoped: it marks every sensor of
+			// the central available again, although only the interface
+			// this event names came back. Re-assert the per-interface
+			// truth, which lives here and not in the engine — otherwise
+			// the sensors of a radio that is still gone report
+			// available forever, since nothing re-drifts them and the
+			// zone would read ready while it is blind on that radio.
+			for _, id := range onDownInterface {
+				s.engine.SetSensorAvailability(ctx, id, false)
+			}
 			// Reconnect ends a blind window (§10.1): adopt or stop
 			// sounding sirens (S4) and re-evaluate sensor values — a
 			// window opened during the gap must surface now, not at
