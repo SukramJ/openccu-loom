@@ -112,7 +112,12 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error { //nolint:fun
 		}
 	}
 
-	l.cache.Clear()
+	// Build into a staging cache and commit it in one swap at the end. The
+	// three CCU round-trips below can each fail, and clearing the live cache
+	// up front would leave every name, ISE-ID, room and function gone until a
+	// later attempt succeeds — including for the ingest of a device paired in
+	// that window, which bakes the empty values into the model permanently.
+	staging := New()
 
 	// ── Step 1: names, ISE-IDs, interfaces ──────────────────────────
 	l.logger.Debug("devicedetails.load.names",
@@ -138,18 +143,18 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error { //nolint:fun
 		}
 		if d.Address != "" {
 			if d.Name != "" {
-				l.cache.AddName(d.Address, d.Name)
+				staging.AddName(d.Address, d.Name)
 			}
 			if d.ID != "" {
-				l.cache.AddAddressISEID(d.Address, int(parseIntStr(d.ID)))
+				staging.AddAddressISEID(d.Address, int(parseIntStr(d.ID)))
 				iseToAddress[d.ID] = d.Address
 			}
 			iface := hmenum.Interface(d.Interface)
 			if d.Interface != "" && isKnownInterface(iface) {
-				l.cache.AddInterface(d.Address, iface)
+				staging.AddInterface(d.Address, iface)
 			} else {
 				// Fallback: omitted or unrecognised interface → BidCos-RF,
-				l.cache.AddInterface(d.Address, hmenum.InterfaceBidCosRF)
+				staging.AddInterface(d.Address, hmenum.InterfaceBidCosRF)
 			}
 		}
 		for _, ch := range d.Channels {
@@ -157,10 +162,10 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error { //nolint:fun
 				continue
 			}
 			if ch.Name != "" {
-				l.cache.AddName(ch.Address, ch.Name)
+				staging.AddName(ch.Address, ch.Name)
 			}
 			if ch.ID != "" {
-				l.cache.AddAddressISEID(ch.Address, int(parseIntStr(ch.ID)))
+				staging.AddAddressISEID(ch.Address, int(parseIntStr(ch.ID)))
 				iseToAddress[ch.ID] = ch.Address
 			}
 		}
@@ -181,7 +186,7 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error { //nolint:fun
 		}
 		for _, chISE := range r.ChannelIDs {
 			if addr, ok := iseToAddress[chISE]; ok {
-				l.cache.AddChannelRoom(addr, r.Name)
+				staging.AddChannelRoom(addr, r.Name)
 			}
 		}
 	}
@@ -201,12 +206,12 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error { //nolint:fun
 		}
 		for _, chISE := range f.ChannelIDs {
 			if addr, ok := iseToAddress[chISE]; ok {
-				l.cache.AddFunction(addr, f.Name)
+				staging.AddFunction(addr, f.Name)
 			}
 		}
 	}
 
-	l.cache.MarkRefreshed(time.Now())
+	l.cache.ReplaceWith(staging, time.Now())
 	l.logger.Debug("devicedetails.load.done",
 		slog.String("central", l.centralName))
 	return nil

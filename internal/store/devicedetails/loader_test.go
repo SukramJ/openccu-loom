@@ -373,6 +373,73 @@ func TestLoaderLoad_FunctionsError(t *testing.T) {
 	}
 }
 
+// ─── Test: a failed refresh keeps the previous generation ────────────────────
+
+// TestLoaderLoad_FailedRefreshKeepsPreviousGeneration covers the periodic
+// 5-minute refresh meeting a CCU hiccup, and the forced refresh the hot-plug
+// ingest runs (whose error is only logged before the ingest proceeds). A
+// device materialised while the cache is empty keeps its address-derived name
+// and ISE-ID 0 for the daemon's lifetime, because the pipeline reads these
+// values once, at creation.
+func TestLoaderLoad_FailedRefreshKeepsPreviousGeneration(t *testing.T) {
+	// Sequential on purpose: the subtests share one fake client and one cache,
+	// each flipping a different round-trip to failing.
+	client := &fakeClient{
+		deviceDetails: []map[string]any{
+			{
+				"address":   "VCU1234567",
+				"name":      "Wohnzimmer Heizung",
+				"id":        "42",
+				"interface": "HmIP-RF",
+				"channels": []any{
+					map[string]any{"address": "VCU1234567:1", "name": "Kanal 1", "id": "44"},
+				},
+			},
+		},
+		rooms:     []rawEntry{{ID: "1", Name: "Wohnzimmer", ChannelIDs: []string{"44"}}},
+		functions: []rawEntry{{ID: "2", Name: "Heizung", ChannelIDs: []string{"44"}}},
+	}
+
+	cache, loader := newTestLoader(client)
+	if err := loader.Load(context.Background(), true); err != nil {
+		t.Fatalf("first Load() error: %v", err)
+	}
+	firstRefresh := cache.RefreshedAt()
+
+	for _, tc := range []struct {
+		name string
+		fail func()
+	}{
+		{"device details fail", func() { client.deviceDetailsErr = errors.New("CCU unreachable") }},
+		{"rooms fail", func() { client.roomsErr = errors.New("rooms RPC failed") }},
+		{"functions fail", func() { client.functionsErr = errors.New("functions RPC failed") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client.deviceDetailsErr, client.roomsErr, client.functionsErr = nil, nil, nil
+			tc.fail()
+
+			if err := loader.Load(context.Background(), true); err == nil {
+				t.Fatal("expected the failing round-trip to be reported")
+			}
+			if got := cache.GetName("VCU1234567"); got != "Wohnzimmer Heizung" {
+				t.Errorf("device name = %q, want the previous generation to survive", got)
+			}
+			if got := cache.GetAddressID("VCU1234567:1"); got != 44 {
+				t.Errorf("channel ISE-ID = %d, want 44 (previous generation)", got)
+			}
+			if got := cache.GetChannelRooms("VCU1234567:1"); len(got) != 1 || got[0] != "Wohnzimmer" {
+				t.Errorf("channel rooms = %v, want [Wohnzimmer]", got)
+			}
+			if got := cache.GetFunctions("VCU1234567:1"); len(got) != 1 || got[0] != "Heizung" {
+				t.Errorf("functions = %v, want [Heizung]", got)
+			}
+			if got := cache.RefreshedAt(); !got.Equal(firstRefresh) {
+				t.Errorf("RefreshedAt = %v, want the successful load's stamp %v", got, firstRefresh)
+			}
+		})
+	}
+}
+
 // ─── Test: MarkRefreshed is called on successful load ─────────────────────────
 
 func TestLoaderLoad_MarkRefreshedOnSuccess(t *testing.T) {
