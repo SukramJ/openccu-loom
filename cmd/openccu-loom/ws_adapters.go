@@ -28,6 +28,7 @@ import (
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/reqctx"
@@ -99,8 +100,8 @@ type wsCommandWiring struct {
 // DeviceStatistics, IncidentClearer) are left nil — the corresponding command
 // families are simply not registered, which is safe: the client receives
 // "unknown_command" rather than a panic.
-func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
-	router := hub.Router()
+func wireWSCommands(wsHub *ws.Hub, w wsCommandWiring) {
+	router := wsHub.Router()
 	// Install the cross-cutting boundary so every WS command emits the
 	// same logging shape as REST requests (audit O13). The central
 	// name comes from the wiring struct so multi-central deployments
@@ -133,8 +134,8 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// ccu.reload_channel_config — re-pulls a single channel's paramset
 		// descriptions + MASTER values and refreshes its data points.
 		ChannelReloader: w.deviceReloader,
-		// Backups backs backups.trigger — the central-scoped counterpart to
-		// the legacy Hub-backed backup.trigger (always first central).
+		// Backups backs backups.trigger — the create-and-download
+		// counterpart to the Rega-script-based backup.trigger.
 		Backups: w.backups,
 	})
 
@@ -381,8 +382,9 @@ func (w *wsLinkQuery) PutLinkParamset(ctx context.Context, channelAddress, peerA
 
 // ── wsHubQuery ──────────────────────────────────────────────────────────────
 
-// wsHubQuery bridges *adapter.HubAdapter (which exposes Hub() *hub.Hub)
-// onto ws.HubQuery. All methods delegate to the hub.Hub model directly.
+// wsHubQuery bridges *adapter.HubAdapter onto ws.HubQuery and, once
+// bound to a central via CentralHub, onto ws.CentralHub. All per-central
+// methods delegate to that central's hub.Hub model directly.
 //
 // InstallMode methods read the per-interface InstallMode trackers via
 // hub.Hub.InstallModeDPs() / InstallModeDP(interfaceID). Each tracker
@@ -394,12 +396,60 @@ type wsHubQuery struct {
 	// (accept + optional rename/rooms/functions) through the same
 	// multi-CCU-safe path the REST accept endpoint uses. Left nil in
 	// minimal wirings, in which case AcceptInboxDevice falls back to a
-	// plain accept via the first central's hub.
+	// plain accept via the resolved central's hub.
 	deviceAdmin *adapter.DeviceAdminDomain
+	// model is the central this query is bound to. Nil on the unbound
+	// entry point (whose only methods are the cross-central ones) and on
+	// a bound query whose central has no hub model yet.
+	model *hub.Hub
+}
+
+// CentralHub binds the per-central hub surface to centralName, so that a
+// command carries its target CCU instead of the daemon guessing one.
+func (w *wsHubQuery) CentralHub(centralName string) (ws.CentralHub, error) {
+	h, err := w.resolveHub(centralName)
+	if err != nil {
+		return nil, err
+	}
+	bound := *w
+	bound.model = h
+	return &bound, nil
+}
+
+// resolveHub maps a (possibly empty) central name onto one hub model.
+//
+// An empty name is the single-central convenience case. With several
+// centrals it is [ws.ErrCentralRequired]: picking one would run a sysvar
+// write, a program execute or a pairing window against a CCU the caller
+// never named, and answer success.
+func (w *wsHubQuery) resolveHub(centralName string) (*hub.Hub, error) {
+	if w.hub == nil {
+		return nil, nil
+	}
+	if centralName != "" {
+		h := w.hub.HubFor(centralName)
+		if h == nil {
+			return nil, fmt.Errorf("%w: %s", ws.ErrCentralUnknown, centralName)
+		}
+		return h, nil
+	}
+	hubs := w.hub.Hubs()
+	switch {
+	case len(hubs) > 1:
+		return nil, ws.ErrCentralRequired
+	case len(hubs) == 1:
+		return hubs[0].Hub, nil
+	default:
+		// No hub model exists yet (boot, or a central whose model has not
+		// loaded). The per-method nil guards answer with the same empty
+		// results as before rather than turning a starting daemon into a
+		// client-side error.
+		return nil, nil
+	}
 }
 
 func (w *wsHubQuery) ListPrograms(_ context.Context, includeInternal *bool) ([]map[string]any, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return []map[string]any{}, nil
 	}
@@ -442,7 +492,7 @@ func (w *wsHubQuery) ListPrograms(_ context.Context, includeInternal *bool) ([]m
 }
 
 func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string, checkConditions bool) (bool, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return false, errors.New("ws: hub not available")
 	}
@@ -463,7 +513,7 @@ func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string, checkConditi
 }
 
 func (w *wsHubQuery) DeleteProgram(ctx context.Context, id string) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -471,7 +521,7 @@ func (w *wsHubQuery) DeleteProgram(ctx context.Context, id string) error {
 }
 
 func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return []map[string]any{}, nil
 	}
@@ -521,7 +571,7 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 }
 
 func (w *wsHubQuery) SetSysvar(ctx context.Context, name string, value any) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -593,7 +643,7 @@ func (w *wsHubQuery) SysvarUsagePrograms(ctx context.Context, centralName, name 
 // fields. See [hub.AlarmMessage]. A zero Timestamp / LastTimestamp is
 // omitted from the entry rather than serialised as the Go zero time.
 func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return []map[string]any{}, nil
 	}
@@ -619,7 +669,7 @@ func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, err
 }
 
 func (w *wsHubQuery) AcknowledgeAlarmMessage(ctx context.Context, id string) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -627,7 +677,7 @@ func (w *wsHubQuery) AcknowledgeAlarmMessage(ctx context.Context, id string) err
 }
 
 func (w *wsHubQuery) AcknowledgeAllAlarmMessages(ctx context.Context) (int, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return 0, errors.New("ws: hub not available")
 	}
@@ -638,7 +688,7 @@ func (w *wsHubQuery) AcknowledgeAllAlarmMessages(ctx context.Context) (int, erro
 // Timestamp / LastTimestamp is omitted from the entry rather than
 // serialised as the Go zero time, mirroring [wsHubQuery.ListAlarmMessages].
 func (w *wsHubQuery) ListServiceMessages(_ context.Context) ([]map[string]any, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return []map[string]any{}, nil
 	}
@@ -673,7 +723,7 @@ func (w *wsHubQuery) ListServiceMessages(_ context.Context) ([]map[string]any, e
 }
 
 func (w *wsHubQuery) AcknowledgeServiceMessage(ctx context.Context, id string) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -681,7 +731,7 @@ func (w *wsHubQuery) AcknowledgeServiceMessage(ctx context.Context, id string) e
 }
 
 func (w *wsHubQuery) AcknowledgeAllServiceMessages(ctx context.Context) (int, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return 0, errors.New("ws: hub not available")
 	}
@@ -693,7 +743,7 @@ func (w *wsHubQuery) AcknowledgeAllServiceMessages(ctx context.Context) (int, er
 // is keyed by interfaceID; each entry carries enabled/remaining_seconds/
 // observed.
 func (w *wsHubQuery) InstallModeStatus(_ context.Context) (map[string]any, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return nil, errors.New("ws: hub not available")
 	}
@@ -713,7 +763,7 @@ func (w *wsHubQuery) InstallModeStatus(_ context.Context) (map[string]any, error
 // EnableInstallMode opens the pairing window for interfaceID for the
 // given duration. InstallMode.Enable validates duration > 0.
 func (w *wsHubQuery) EnableInstallMode(ctx context.Context, interfaceID string, durationSecs int) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -728,7 +778,7 @@ func (w *wsHubQuery) EnableInstallMode(ctx context.Context, interfaceID string, 
 // window (SGTIN + device-key whitelist) via InstallMode.EnableLocal,
 // which normalises both inputs and refuses to fall back to broadcast.
 func (w *wsHubQuery) EnableInstallModeLocal(ctx context.Context, interfaceID string, durationSecs int, sgtin, key string) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -741,7 +791,7 @@ func (w *wsHubQuery) EnableInstallModeLocal(ctx context.Context, interfaceID str
 
 // DisableInstallMode closes the pairing window for interfaceID.
 func (w *wsHubQuery) DisableInstallMode(ctx context.Context, interfaceID string) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -762,7 +812,7 @@ func (w *wsHubQuery) SearchWiredDevices(ctx context.Context, interfaceID, centra
 }
 
 func (w *wsHubQuery) TriggerBackup(ctx context.Context) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -770,7 +820,7 @@ func (w *wsHubQuery) TriggerBackup(ctx context.Context) error {
 }
 
 func (w *wsHubQuery) BackupStatus(ctx context.Context) (map[string]any, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return nil, errors.New("ws: hub not available")
 	}
@@ -785,7 +835,7 @@ func (w *wsHubQuery) BackupStatus(ctx context.Context) (map[string]any, error) {
 // hub's Update entity. Reports `observed: false` when no info has been
 // recorded yet (first OnInfo callback hasn't fired).
 func (w *wsHubQuery) FirmwareInfo(_ context.Context) (map[string]any, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil || h.Update == nil {
 		return map[string]any{"observed": false}, nil
 	}
@@ -804,7 +854,7 @@ func (w *wsHubQuery) FirmwareInfo(_ context.Context) (map[string]any, error) {
 }
 
 func (w *wsHubQuery) TriggerFirmwareUpdate(ctx context.Context) error {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
@@ -812,7 +862,7 @@ func (w *wsHubQuery) TriggerFirmwareUpdate(ctx context.Context) error {
 }
 
 func (w *wsHubQuery) InboxDevices(_ context.Context) ([]map[string]any, error) {
-	h := w.hub.Hub()
+	h := w.model
 	if h == nil || h.Inbox == nil {
 		return []map[string]any{}, nil
 	}
@@ -849,8 +899,14 @@ func (w *wsHubQuery) AcceptInboxDevice(
 		})
 	}
 	// Fallback for minimal wirings without a device-admin domain: a plain
-	// accept via the first central's hub, no follow-up configuration.
-	h := w.hub.Hub()
+	// accept via the sole central's hub, no follow-up configuration. It
+	// resolves rather than guesses, so a multi-CCU daemon without the
+	// domain reports the ambiguity instead of accepting on a CCU the
+	// caller never named.
+	h, err := w.resolveHub("")
+	if err != nil {
+		return err
+	}
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
