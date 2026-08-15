@@ -6,6 +6,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 
@@ -147,12 +148,58 @@ type ScheduleQuery interface {
 	CopyClimateProfile(ctx context.Context, srcChannelAddress string, srcProfile int, dstChannelAddress string, dstProfile int) error
 }
 
-// HubQuery is the read-only / lightly-mutating surface the
-// `programs.*`, `sysvars.*`, `alarm_messages.*`, `service_messages.*`,
-// and `install_mode.*` commands consume. The hub-wiring adapter
-// supplies the concrete implementation against `internal/model/hub`;
-// tests use a stub.
+// ErrCentralRequired reports a hub command that named no central on a
+// daemon which has more than one registered. Guessing is what this
+// replaces: every hub command targets exactly one CCU, so an unqualified
+// sysvar write on a two-CCU daemon used to land on whichever central
+// sorted first — the operator saw success and the wrong CCU changed.
+var ErrCentralRequired = errors.New("ws: central_name required (multiple CCUs)")
+
+// ErrCentralUnknown reports a named central that is not registered (or
+// whose hub model has not been built yet).
+var ErrCentralUnknown = errors.New("ws: unknown central")
+
+// HubQuery resolves the per-central hub surface the `programs.*`,
+// `sysvars.*`, `alarm_messages.*`, `service_messages.*`, `install_mode.*`,
+// `backup.*`, `firmware.*` and `inbox.*` commands consume, and carries the
+// few hub operations that are genuinely cross-central. The hub-wiring
+// adapter supplies the concrete implementation against
+// `internal/model/hub`; tests use a stub.
 type HubQuery interface {
+	// CentralHub binds the per-central hub surface to centralName. An empty
+	// name resolves the single-central convenience case and returns
+	// [ErrCentralRequired] once several centrals are registered;
+	// [ErrCentralUnknown] answers a name that resolves to nothing. There is
+	// deliberately no unscoped accessor — multi-CCU is first class (ADR
+	// 0002), so a command that cannot name its target must fail rather than
+	// pick one.
+	CentralHub(centralName string) (CentralHub, error)
+
+	// FetchSystemVariables force re-pulls the sysvar catalogue from the
+	// CCU and refreshes the hub model. An empty centralName refreshes
+	// every registered central — the one hub operation that is genuinely
+	// cross-central, which is why it does not go through CentralHub.
+	FetchSystemVariables(ctx context.Context, centralName string) error
+	// SysvarUsagePrograms lists the CCU programs referencing a sysvar.
+	// An empty centralName resolves the single-central convenience case;
+	// with multiple CCUs the name must be supplied.
+	SysvarUsagePrograms(ctx context.Context, centralName, name string) ([]map[string]any, error)
+	// SearchWiredDevices triggers a wired-bus scan on interfaceID of the
+	// (optionally named) central and returns the count of devices found.
+	SearchWiredDevices(ctx context.Context, interfaceID, central string) (int, error)
+	// AcceptInboxDevice promotes a paired-but-unconfigured device into the
+	// active set. The device address identifies the CCU, so the accept
+	// walks every central rather than taking one — the same shape the REST
+	// accept endpoint uses. opts carries the optional first-time
+	// configuration (name, rooms, functions) applied best-effort right
+	// after the accept; a zero-value opts accepts only.
+	AcceptInboxDevice(ctx context.Context, deviceAddress string, opts InboxAcceptOptions) error
+}
+
+// CentralHub is the hub surface of exactly one CCU. Every method acts on
+// the central [HubQuery.CentralHub] resolved, so none of them carries the
+// central as a parameter.
+type CentralHub interface {
 	// ListPrograms returns one entry per CCU program. includeInternal
 	// overrides the per-central default for internal (Tmp_*) programs:
 	// nil applies the central's include_internal_programs config default,
@@ -171,15 +218,6 @@ type HubQuery interface {
 	ListSysvars(ctx context.Context) ([]map[string]any, error)
 	// SetSysvar updates a system variable's value.
 	SetSysvar(ctx context.Context, name string, value any) error
-	// FetchSystemVariables force re-pulls the sysvar catalogue from the
-	// CCU and refreshes the hub model. An empty centralName refreshes
-	// every registered central. Mirrors the Python reference's
-	// fetch_system_variables.
-	FetchSystemVariables(ctx context.Context, centralName string) error
-	// SysvarUsagePrograms lists the CCU programs referencing a sysvar.
-	// An empty centralName resolves the single-central convenience case;
-	// with multiple CCUs the name must be supplied.
-	SysvarUsagePrograms(ctx context.Context, centralName, name string) ([]map[string]any, error)
 
 	// ListAlarmMessages returns active CCU alarm messages.
 	ListAlarmMessages(ctx context.Context) ([]map[string]any, error)
@@ -208,9 +246,6 @@ type HubQuery interface {
 	EnableInstallModeLocal(ctx context.Context, interfaceID string, durationSeconds int, sgtin, key string) error
 	// DisableInstallMode closes the pairing window.
 	DisableInstallMode(ctx context.Context, interfaceID string) error
-	// SearchWiredDevices triggers a wired-bus scan on interfaceID of the
-	// (optionally named) central and returns the count of devices found.
-	SearchWiredDevices(ctx context.Context, interfaceID, central string) (int, error)
 
 	// TriggerBackup kicks off a CCU configuration backup (OpenCCU
 	// only). Returns immediately — callers poll `backup.status`.
@@ -228,11 +263,6 @@ type HubQuery interface {
 	// InboxDevices returns devices the CCU has seen in pairing mode
 	// but that have not yet been accepted into the configuration.
 	InboxDevices(ctx context.Context) ([]map[string]any, error)
-	// AcceptInboxDevice promotes a paired-but-unconfigured device
-	// into the active set. opts carries the optional first-time
-	// configuration (name, rooms, functions) applied best-effort right
-	// after the accept; a zero-value opts accepts only.
-	AcceptInboxDevice(ctx context.Context, deviceAddress string, opts InboxAcceptOptions) error
 }
 
 // InboxAcceptOptions is the WS-side mirror of the REST accept body: the
@@ -247,12 +277,9 @@ type InboxAcceptOptions struct {
 }
 
 // BackupsService is the minimal contract the `backups.trigger` command
-// needs: a central-scoped counterpart to the legacy Rega-script-based
-// [HubQuery.TriggerBackup]/[HubQuery.BackupStatus] pair. It targets the
-// create-and-download backup flow (mirrors the REST `POST /backups`
-// endpoint's `central_name` body field) so a multi-CCU daemon can back
-// up one specific central instead of only the first registered one —
-// see ADR 0002.
+// needs: the create-and-download counterpart to the Rega-script-based
+// [CentralHub.TriggerBackup]/[CentralHub.BackupStatus] pair (mirrors the
+// REST `POST /backups` endpoint's `central_name` body field).
 type BackupsService interface {
 	// TriggerBackupForCentral starts the create-and-download backup flow
 	// for exactly the named central and returns the backup/job id.
@@ -521,7 +548,30 @@ func paramsetGetHandler(q DeviceQuery) CommandHandler {
 
 // --- programs.* / sysvars.* ---
 
+// centralArgs is the central selector every per-central hub command
+// accepts. An empty value resolves the single-central convenience case;
+// on a multi-CCU daemon it is an error, because the alternative — picking
+// one — writes to a CCU the caller never named.
+type centralArgs struct {
+	CentralName string `json:"central_name"`
+}
+
+// centralHub resolves the command's target central and maps the two
+// resolution failures onto the wire: naming the central is the caller's
+// job, so both are bad_request rather than internal.
+func centralHub(q HubQuery, centralName string) (CentralHub, error) {
+	h, err := q.CentralHub(centralName)
+	if err != nil {
+		if errors.Is(err, ErrCentralRequired) || errors.Is(err, ErrCentralUnknown) {
+			return nil, NewCommandError(CommandErrorBadRequest, err.Error())
+		}
+		return nil, NewCommandError(CommandErrorInternal, "resolve_central: "+err.Error())
+	}
+	return h, nil
+}
+
 type programIDArgs struct {
+	centralArgs
 	ID string `json:"id"`
 	// CheckConditions gates execution on the program's "if" condition when
 	// true; when false (the default) the program runs unconditionally.
@@ -532,10 +582,12 @@ type programIDArgs struct {
 // programs.list. A nil pointer (field absent) applies the central's
 // configured default; a non-nil value forces the choice.
 type programsListArgs struct {
+	centralArgs
 	IncludeInternal *bool `json:"include_internal"`
 }
 
 type sysvarSetArgs struct {
+	centralArgs
 	Name  string `json:"name"`
 	Value any    `json:"value"`
 }
@@ -546,7 +598,11 @@ func programsListHandler(q HubQuery) CommandHandler {
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		progs, err := q.ListPrograms(ctx, args.IncludeInternal)
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		progs, err := h.ListPrograms(ctx, args.IncludeInternal)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "list_programs: "+err.Error())
 		}
@@ -563,7 +619,11 @@ func programsExecuteHandler(q HubQuery) CommandHandler {
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
 		}
-		executed, err := q.ExecuteProgram(ctx, args.ID, args.CheckConditions)
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		executed, err := h.ExecuteProgram(ctx, args.ID, args.CheckConditions)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "execute_program: "+err.Error())
 		}
@@ -580,7 +640,11 @@ func programsDeleteHandler(q HubQuery) CommandHandler {
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
 		}
-		if err := q.DeleteProgram(ctx, args.ID); err != nil {
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		if err := h.DeleteProgram(ctx, args.ID); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "delete_program: "+err.Error())
 		}
 		return map[string]any{"deleted": true, "id": args.ID}, nil
@@ -588,8 +652,16 @@ func programsDeleteHandler(q HubQuery) CommandHandler {
 }
 
 func sysvarsListHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		vars, err := q.ListSysvars(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		vars, err := h.ListSysvars(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "list_sysvars: "+err.Error())
 		}
@@ -606,7 +678,11 @@ func sysvarsSetHandler(q HubQuery) CommandHandler {
 		if args.Name == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "name required")
 		}
-		if err := q.SetSysvar(ctx, args.Name, args.Value); err != nil {
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		if err := h.SetSysvar(ctx, args.Name, args.Value); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "set_sysvar: "+err.Error())
 		}
 		return map[string]any{"saved": true, "name": args.Name}, nil
@@ -658,12 +734,21 @@ func sysvarsUsageHandler(q HubQuery) CommandHandler {
 // --- alarm_messages.* / service_messages.* ---
 
 type messageIDArgs struct {
+	centralArgs
 	ID string `json:"id"`
 }
 
 func alarmMessagesListHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		msgs, err := q.ListAlarmMessages(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		msgs, err := h.ListAlarmMessages(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "list_alarm_messages: "+err.Error())
 		}
@@ -680,7 +765,11 @@ func alarmMessagesAckHandler(q HubQuery) CommandHandler {
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
 		}
-		if err := q.AcknowledgeAlarmMessage(ctx, args.ID); err != nil {
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		if err := h.AcknowledgeAlarmMessage(ctx, args.ID); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "ack_alarm: "+err.Error())
 		}
 		return map[string]any{"acknowledged": true, "id": args.ID}, nil
@@ -688,8 +777,16 @@ func alarmMessagesAckHandler(q HubQuery) CommandHandler {
 }
 
 func serviceMessagesListHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		msgs, err := q.ListServiceMessages(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		msgs, err := h.ListServiceMessages(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "list_service_messages: "+err.Error())
 		}
@@ -706,7 +803,11 @@ func serviceMessagesAckHandler(q HubQuery) CommandHandler {
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
 		}
-		if err := q.AcknowledgeServiceMessage(ctx, args.ID); err != nil {
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		if err := h.AcknowledgeServiceMessage(ctx, args.ID); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "ack_service: "+err.Error())
 		}
 		return map[string]any{"acknowledged": true, "id": args.ID}, nil
@@ -714,8 +815,16 @@ func serviceMessagesAckHandler(q HubQuery) CommandHandler {
 }
 
 func alarmMessagesAckAllHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		n, err := q.AcknowledgeAllAlarmMessages(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		n, err := h.AcknowledgeAllAlarmMessages(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "ack_all_alarm: "+err.Error())
 		}
@@ -724,8 +833,16 @@ func alarmMessagesAckAllHandler(q HubQuery) CommandHandler {
 }
 
 func serviceMessagesAckAllHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		n, err := q.AcknowledgeAllServiceMessages(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		n, err := h.AcknowledgeAllServiceMessages(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "ack_all_service: "+err.Error())
 		}
@@ -736,6 +853,7 @@ func serviceMessagesAckAllHandler(q HubQuery) CommandHandler {
 // --- install_mode.* ---
 
 type installModeEnableArgs struct {
+	centralArgs
 	InterfaceID     string `json:"interface_id"`
 	DurationSeconds int    `json:"duration_seconds"`
 	// SGTIN + Key request the keyserver-less HmIP LOCAL teach-in
@@ -745,12 +863,21 @@ type installModeEnableArgs struct {
 }
 
 type installModeIfaceArgs struct {
+	centralArgs
 	InterfaceID string `json:"interface_id"`
 }
 
 func installModeStatusHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		st, err := q.InstallModeStatus(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		st, err := h.InstallModeStatus(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "install_mode_status: "+err.Error())
 		}
@@ -773,13 +900,17 @@ func installModeEnableHandler(q HubQuery) CommandHandler {
 		if (args.SGTIN != "") != (args.Key != "") {
 			return nil, NewCommandError(CommandErrorBadRequest, "sgtin and key must be supplied together")
 		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
 		if args.SGTIN != "" {
-			if err := q.EnableInstallModeLocal(ctx, args.InterfaceID, args.DurationSeconds, args.SGTIN, args.Key); err != nil {
+			if err := h.EnableInstallModeLocal(ctx, args.InterfaceID, args.DurationSeconds, args.SGTIN, args.Key); err != nil {
 				return nil, NewCommandError(CommandErrorInternal, "enable_install_mode_local: "+err.Error())
 			}
 			return map[string]any{"enabled": true, "interface_id": args.InterfaceID, "duration_seconds": args.DurationSeconds, "local": true}, nil
 		}
-		if err := q.EnableInstallMode(ctx, args.InterfaceID, args.DurationSeconds); err != nil {
+		if err := h.EnableInstallMode(ctx, args.InterfaceID, args.DurationSeconds); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "enable_install_mode: "+err.Error())
 		}
 		return map[string]any{"enabled": true, "interface_id": args.InterfaceID, "duration_seconds": args.DurationSeconds}, nil
@@ -795,7 +926,11 @@ func installModeDisableHandler(q HubQuery) CommandHandler {
 		if args.InterfaceID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "interface_id required")
 		}
-		if err := q.DisableInstallMode(ctx, args.InterfaceID); err != nil {
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		if err := h.DisableInstallMode(ctx, args.InterfaceID); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "disable_install_mode: "+err.Error())
 		}
 		return map[string]any{"enabled": false, "interface_id": args.InterfaceID}, nil
@@ -837,18 +972,25 @@ type inboxAcceptArgs struct {
 }
 
 func backupTriggerHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		if err := q.TriggerBackup(ctx); err != nil {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		if err := h.TriggerBackup(ctx); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "trigger_backup: "+err.Error())
 		}
 		return map[string]any{"triggered": true}, nil
 	}
 }
 
-// backupsTriggerArgs is the required shape for `backups.trigger`.
-// Unlike the legacy `backup.trigger` (HubQuery, always the first
-// central), this command always targets exactly the named central —
-// see [BackupsService].
+// backupsTriggerArgs is the required shape for `backups.trigger`. The
+// central is mandatory here, where the Rega-script `backup.trigger` still
+// accepts the single-central convenience default — see [BackupsService].
 type backupsTriggerArgs struct {
 	CentralName string `json:"central_name"`
 }
@@ -871,8 +1013,16 @@ func backupsTriggerHandler(svc BackupsService) CommandHandler {
 }
 
 func backupStatusHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		st, err := q.BackupStatus(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		st, err := h.BackupStatus(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "backup_status: "+err.Error())
 		}
@@ -881,8 +1031,16 @@ func backupStatusHandler(q HubQuery) CommandHandler {
 }
 
 func firmwareInfoHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		info, err := q.FirmwareInfo(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		info, err := h.FirmwareInfo(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "firmware_info: "+err.Error())
 		}
@@ -891,8 +1049,16 @@ func firmwareInfoHandler(q HubQuery) CommandHandler {
 }
 
 func firmwareUpdateHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		if err := q.TriggerFirmwareUpdate(ctx); err != nil {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		if err := h.TriggerFirmwareUpdate(ctx); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "trigger_firmware_update: "+err.Error())
 		}
 		return map[string]any{"triggered": true}, nil
@@ -900,8 +1066,16 @@ func firmwareUpdateHandler(q HubQuery) CommandHandler {
 }
 
 func inboxListHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		devs, err := q.InboxDevices(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args centralArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		h, err := centralHub(q, args.CentralName)
+		if err != nil {
+			return nil, err
+		}
+		devs, err := h.InboxDevices(ctx)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "inbox_list: "+err.Error())
 		}

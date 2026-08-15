@@ -118,6 +118,9 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/devices/*/icon', (route) =>
     route.fulfill({ status: 404, json: { detail: 'no icon' } }),
   );
+  // Channel list. A bare JSON array, matching the contract — the channel
+  // pickers read the response itself, not a wrapper around it.
+  await page.route('**/api/v1/devices/*/channels', (route) => route.fulfill({ json: [] }));
   await page.route('**/api/v1/devices/*/cdps', (route) => route.fulfill({ json: [] }));
   await page.route('**/api/v1/devices/*/paramsets/**', (route) => route.fulfill({ json: {} }));
 

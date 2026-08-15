@@ -86,6 +86,12 @@ func (f *fakeChannelWriter) putCallCount() int {
 	return len(f.putCalls)
 }
 
+func (f *fakeChannelWriter) putSnapshot() []fakePutCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakePutCall(nil), f.putCalls...)
+}
+
 // ---------- fake ChannelRefresher --------------------------------------
 
 type fakeChannelRefresher struct {
@@ -435,8 +441,10 @@ func TestChannelSetMasterParameter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Set MASTER: %v", err)
 	}
-	if w.setCallCount() != 1 {
-		t.Fatalf("expected 1 SetValue for MASTER, got %d", w.setCallCount())
+	// MASTER dispatches through PutParamset — setValue is VALUES-only.
+	if w.putCallCount() != 1 || w.setCallCount() != 0 {
+		t.Fatalf("expected 1 PutParamset for MASTER, got %d PutParamset / %d SetValue",
+			w.putCallCount(), w.setCallCount())
 	}
 }
 
@@ -865,6 +873,73 @@ func TestMasterRefreshHookNotFiredOnValuesSet(t *testing.T) {
 	}
 }
 
+// TestSetMasterDispatchesThroughPutParamset pins that Channel.Set honours the
+// paramset key it was given. ChannelWriter.SetValue carries no paramset key
+// and reaches the wire as xml-rpc setValue, which is VALUES-only — so
+// dispatching a MASTER write through it sends a device configuration change
+// to the wrong paramset while the master-refresh hook fires as if it had
+// landed. Covers both the optimistic and the plain branch.
+func TestSetMasterDispatchesThroughPutParamset(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		opts SetOptions
+	}{
+		{"plain", SetOptions{}},
+		{"optimistic", SetOptions{Optimistic: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w := &fakeChannelWriter{}
+			ch := newTestChannel(t, w)
+			const param = hmenum.Parameter("LOW_BAT_LIMIT")
+			ch.PutMaster(newWritableMasterFloatDP(testChannelAddr, param, w))
+
+			err := ch.Set(context.Background(), hmenum.ParamsetKeyMaster, param, hmtypes.FloatValue(2.0), tc.opts)
+			if err != nil {
+				t.Fatalf("Set: %v", err)
+			}
+
+			if got := w.setCallCount(); got != 0 {
+				t.Errorf("a MASTER write must not reach the VALUES-only SetValue; got %d SetValue calls", got)
+			}
+			puts := w.putSnapshot()
+			if len(puts) != 1 {
+				t.Fatalf("expected exactly 1 PutParamset, got %d", len(puts))
+			}
+			if puts[0].paramsetKey != hmenum.ParamsetKeyMaster {
+				t.Errorf("paramset key mismatch: got %s, want %s", puts[0].paramsetKey, hmenum.ParamsetKeyMaster)
+			}
+			if puts[0].channelAddress != testChannelAddr {
+				t.Errorf("channel mismatch: got %s, want %s", puts[0].channelAddress, testChannelAddr)
+			}
+			if puts[0].values[string(param)] != 2.0 {
+				t.Errorf("value mismatch: %+v", puts[0].values)
+			}
+		})
+	}
+}
+
+// TestSetValuesStillDispatchesThroughSetValue guards the other half: a VALUES
+// write keeps the cheaper single-parameter setValue path.
+func TestSetValuesStillDispatchesThroughSetValue(t *testing.T) {
+	t.Parallel()
+
+	w := &fakeChannelWriter{}
+	ch := newTestChannel(t, w)
+	const param = hmenum.Parameter("LEVEL")
+	ch.Put(newWritableFloatDP(testChannelAddr, param, w))
+
+	if err := ch.Set(context.Background(), hmenum.ParamsetKeyValues, param, hmtypes.FloatValue(0.5), SetOptions{}); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if got, put := w.setCallCount(), w.putCallCount(); got != 1 || put != 0 {
+		t.Fatalf("VALUES write must use SetValue; got %d SetValue / %d PutParamset", got, put)
+	}
+}
+
 // TestMasterRefreshHookFiredOnMasterSetMany verifies that SetMany with
 // ParamsetKeyMaster also fires the hook after a successful PutParamset.
 func TestMasterRefreshHookFiredOnMasterSetMany(t *testing.T) {
@@ -899,7 +974,9 @@ func TestMasterRefreshHookFiredOnMasterSetMany(t *testing.T) {
 func TestMasterRefreshHookNotFiredOnWriteError(t *testing.T) {
 	t.Parallel()
 
-	w := &fakeChannelWriter{failSet: errors.New("wire error")}
+	// The MASTER write dispatches through PutParamset, so the failure has to
+	// be injected there — failSet would never be reached.
+	w := &fakeChannelWriter{failPut: errors.New("wire error")}
 	ch := newTestChannel(t, w)
 	dp := newWritableMasterFloatDP(testChannelAddr, hmenum.Parameter("SHORT_ON_TIME"), w)
 	ch.PutMaster(dp)

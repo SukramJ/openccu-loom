@@ -15,6 +15,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 )
 
 func TestGetSystemUpdate(t *testing.T) {
@@ -484,6 +485,75 @@ func TestPostSystemUpdateInstall_BackupFirstAmbiguousCentral_Returns400(t *testi
 	}
 	if backup.calls != 0 {
 		t.Fatal("backup must not be attempted when the target central is ambiguous")
+	}
+}
+
+// slowBackupPort implements PreUpdateBackupPort with a backup that takes
+// longer than the request deadline — the realistic case, since a CCU backup
+// polls for minutes. It reports the context error it observed so a test can
+// tell "the backup was cancelled" from "the backup ran to completion".
+type slowBackupPort struct {
+	duration time.Duration
+	calls    int
+	ctxErr   error
+}
+
+func (s *slowBackupPort) CreateBackupForCentral(ctx context.Context, _ string) (string, error) {
+	s.calls++
+	select {
+	case <-ctx.Done():
+		s.ctxErr = ctx.Err()
+		return "", ctx.Err()
+	case <-time.After(s.duration):
+	}
+	return "b1", nil
+}
+
+// ctxObservingFirmwareUpdater records whether the context it was handed was
+// still live — the install runs after the backup, so a request-bound context
+// is already expired by the time it is reached.
+type ctxObservingFirmwareUpdater struct {
+	calls  int
+	ctxErr error
+}
+
+func (c *ctxObservingFirmwareUpdater) TriggerFirmwareUpdate(ctx context.Context) error {
+	c.calls++
+	c.ctxErr = ctx.Err()
+	return ctx.Err()
+}
+
+// TestPostSystemUpdateInstall_BackupFirstOutlivesRequestDeadline verifies
+// that the pre-update backup and the install that follows it are not bound
+// to the router's request deadline. The router wraps /api/v1 in
+// middleware.Timeout, so a backup that polls the CCU for minutes would be
+// cancelled every time and the operator told the safety net failed — while
+// the CCU-side backup keeps running.
+func TestPostSystemUpdateInstall_BackupFirstOutlivesRequestDeadline(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	fw := &ctxObservingFirmwareUpdater{}
+	h.Update.FirmwareUpdater = fw
+	idx := &testHubIndex{h: h}
+	backup := &slowBackupPort{duration: 80 * time.Millisecond}
+
+	rr := httptest.NewRecorder()
+	// The real router deadline, only shorter: the point is that the backup
+	// outlasts it, not how long it is.
+	handler := middleware.Timeout(20 * time.Millisecond)(PostSystemUpdateInstall(idx, backup, nil))
+	handler.ServeHTTP(rr, systemUpdateInstallRequestBody(`{"backup_first":true}`))
+
+	if backup.ctxErr != nil {
+		t.Fatalf("pre-update backup was cancelled by the request deadline: %v", backup.ctxErr)
+	}
+	if fw.ctxErr != nil {
+		t.Fatalf("install ran on an expired context: %v", fw.ctxErr)
+	}
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202, body=%s", rr.Code, rr.Body.String())
+	}
+	if backup.calls != 1 || fw.calls != 1 {
+		t.Fatalf("backup calls = %d, install calls = %d, want 1 and 1", backup.calls, fw.calls)
 	}
 }
 

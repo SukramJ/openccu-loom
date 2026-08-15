@@ -234,3 +234,91 @@ describe("connectEvents resync signal", () => {
     expect(resyncs).toBe(0);
   });
 });
+
+describe("connectEvents resume cursor", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Drives the close→backoff→reconnect path and returns the fresh socket. */
+  function reconnect(sock: MockWebSocket): MockWebSocket {
+    sock.emit("close");
+    vi.advanceTimersByTime(20000);
+    const next = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+    next.emit("open");
+    return next;
+  }
+
+  function subscribeFrame(sock: MockWebSocket): Record<string, unknown> {
+    const raw = sock.sent.find((s) => s.includes('"subscribe"'));
+    expect(raw).toBeTruthy();
+    return JSON.parse(raw as string);
+  }
+
+  it("subscribes without a cursor on the first connect", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+
+    sock.emit("open");
+
+    expect(subscribeFrame(sock)).toEqual({ op: "subscribe", topics: ["*"] });
+    stream.close();
+  });
+
+  it("resumes from the highest seq it saw after a reconnect", () => {
+    // Without the cursor the daemon replays nothing and sends no
+    // replay_lost, so every event during the outage is lost behind a
+    // badge that has already turned green again.
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    sock.emit("open");
+    sock.emit("message", {
+      data: JSON.stringify({
+        seq: 7,
+        type: "hub.service_message",
+        payload: { count: 1 },
+      }),
+    });
+
+    const next = reconnect(sock);
+
+    expect(subscribeFrame(next)).toEqual({
+      op: "subscribe",
+      topics: ["*"],
+      since: 7,
+    });
+    stream.close();
+  });
+
+  it("keeps the cursor monotonic across out-of-order frames", () => {
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    sock.emit("open");
+    for (const seq of [11, 4]) {
+      sock.emit("message", {
+        data: JSON.stringify({ seq, type: "hub.service_message", payload: {} }),
+      });
+    }
+
+    expect(subscribeFrame(reconnect(sock)).since).toBe(11);
+    stream.close();
+  });
+
+  it("adopts the anchor from replay_lost so the next resume starts above the gap", () => {
+    // The daemon's seq counter is process-local and restarts at 0, so a
+    // cursor from before a restart is above its top and can only be
+    // answered with replay_lost. Holding on to the higher cursor would
+    // make every later reconnect lose the stream again.
+    const stream = connectEvents();
+    const sock = MockWebSocket.instances[0];
+    sock.emit("open");
+    sock.emit("message", {
+      data: JSON.stringify({ seq: 900, type: "hub.service_message", payload: {} }),
+    });
+    sock.emit("message", {
+      data: JSON.stringify({ op: "replay_lost", oldest_seq: 3 }),
+    });
+
+    expect(subscribeFrame(reconnect(sock)).since).toBe(3);
+    stream.close();
+  });
+});

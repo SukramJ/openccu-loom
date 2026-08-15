@@ -988,9 +988,12 @@ func (c *Climate) SetMode(ctx context.Context, m Mode, priority hmenum.CommandPr
 	return ErrModeNotSupported
 }
 
-// SetProfile activates a week-program profile.
+// SetProfile activates one of the profiles [Climate.Profiles]
+// advertises: a week-program slot, or one of the mode profiles (boost,
+// comfort, eco) that carry no pointer index and are dispatched to their
+// own wire parameter by [Climate.setModeProfile].
 //
-// The wire parameter differs by Kind
+// For a week program the wire parameter differs by Kind
 // `set_profile` overrides (model/custom/climate.py):
 //
 // - **KindIP** (HmIP-BWTH / -eTRV / -STH / -WTH / …): write
@@ -1015,6 +1018,17 @@ func (c *Climate) SetProfile(ctx context.Context, p Profile, priority hmenum.Com
 	if !c.IsStateChange(nil, nil, &p) {
 		return nil
 	}
+	// The mode profiles have no week-program index, so they are dispatched
+	// before one is resolved — requiring a pointer first made every
+	// advertised boost / comfort / eco preset fail on the guard below.
+	handled, err := c.setModeProfile(ctx, p, priority)
+	if err != nil {
+		return err
+	}
+	if handled {
+		c.recordProfile(p)
+		return nil
+	}
 	idx, ok := profileWeekIndex(p)
 	if !ok {
 		return fmt.Errorf("climate: profile %q has no pointer mapping", p)
@@ -1028,51 +1042,74 @@ func (c *Climate) SetProfile(ctx context.Context, p Profile, priority hmenum.Com
 			return fmt.Errorf("climate: set profile: %w", err)
 		}
 	case KindRF:
-		// RF thermostat special-case profiles map to dedicated mode parameters
-		// rather than WEEK_PROGRAM_POINTER. Week-program profiles also require
-		// the thermostat to be in AUTO mode before the pointer is written;
-		// when it is not, set AUTO first and clear BOOST.
-		switch p {
-		case ProfileBoost:
-			if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterBoostMode, true, priority); err != nil {
-				return fmt.Errorf("climate: set profile boost: %w", err)
-			}
-		case ProfileComfort:
-			if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterComfortMode, true, priority); err != nil {
-				return fmt.Errorf("climate: set profile comfort: %w", err)
-			}
-		case ProfileEco:
-			if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterLoweringMode, true, priority); err != nil {
-				return fmt.Errorf("climate: set profile eco: %w", err)
-			}
-		default:
-			// Week-program profile: ensure AUTO mode, clear BOOST, and set
-			// WEEK_PROGRAM_POINTER atomically via a single put_paramset — the CCU
-			// applies all three fields together. Sending them as separate SetValues
-			// risks the CCU seeing an intermediate inconsistent state when AUTO is
-			// set but BOOST has not been cleared yet.
-			value := profilePointerEnumLabel(idx)
-			params := map[hmenum.Parameter]any{
-				hmenum.ParameterAutoMode:           true,
-				hmenum.ParameterBoostMode:          false,
-				hmenum.ParameterWeekProgramPointer: value,
-			}
-			if err := custom.PutOrSet(custom.EnsureContext(ctx), c.writer, c.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
-				return fmt.Errorf("climate: set profile: %w", err)
-			}
+		// A week-program profile requires the thermostat to be in AUTO mode
+		// before the pointer is written. Ensure AUTO, clear BOOST and set
+		// WEEK_PROGRAM_POINTER atomically via a single put_paramset — the CCU
+		// applies all three fields together. Sending them as separate SetValues
+		// risks the CCU seeing an intermediate inconsistent state when AUTO is
+		// set but BOOST has not been cleared yet.
+		value := profilePointerEnumLabel(idx)
+		params := map[hmenum.Parameter]any{
+			hmenum.ParameterAutoMode:           true,
+			hmenum.ParameterBoostMode:          false,
+			hmenum.ParameterWeekProgramPointer: value,
+		}
+		if err := custom.PutOrSet(custom.EnsureContext(ctx), c.writer, c.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
+			return fmt.Errorf("climate: set profile: %w", err)
 		}
 	default:
-		// KindSimpleRF: WEEK_PROGRAM_POINTER ENUM label (no special profiles).
+		// KindSimpleRF: WEEK_PROGRAM_POINTER ENUM label.
 		value := profilePointerEnumLabel(idx)
 		if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterWeekProgramPointer, value, priority); err != nil {
 			return fmt.Errorf("climate: set profile: %w", err)
 		}
 	}
+	c.recordProfile(p)
+	return nil
+}
+
+// setModeProfile writes the wire parameter behind a mode profile — the
+// presets that switch a mode instead of selecting a week program.
+//
+// handled is false for every other profile, which leaves the caller on the
+// week-program pointer path; keeping the classification and the write in
+// one switch is what stops the two from drifting apart again.
+//
+// Each preset is gated on the capability [Climate.Profiles] offers it
+// from, so one the device never advertised is refused rather than written
+// to a parameter it does not carry — COMFORT_MODE and LOWERING_MODE exist
+// on RF thermostats only.
+func (c *Climate) setModeProfile(ctx context.Context, p Profile, priority hmenum.CommandPriority) (handled bool, err error) {
+	var (
+		param     hmenum.Parameter
+		supported bool
+	)
+	switch p {
+	case ProfileBoost:
+		param, supported = hmenum.ParameterBoostMode, c.Capabilities.SupportsBoost
+	case ProfileComfort:
+		param, supported = hmenum.ParameterComfortMode, c.Capabilities.SupportsComfort
+	case ProfileEco:
+		param, supported = hmenum.ParameterLoweringMode, c.Capabilities.SupportsEco
+	default:
+		return false, nil
+	}
+	if !supported {
+		return false, ErrModeNotSupported
+	}
+	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, param, true, priority); err != nil {
+		return false, fmt.Errorf("climate: set profile %s: %w", p, err)
+	}
+	return true, nil
+}
+
+// recordProfile stores the profile locally so the UI reflects the change
+// before the CCU echoes it back.
+func (c *Climate) recordProfile(p Profile) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.profile = p
 	c.hasProfile = true
-	c.mu.Unlock()
-	return nil
 }
 
 // profilePointerEnumLabel maps a 0-based week-program index to the CCU's
@@ -1619,12 +1656,17 @@ func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyc
 		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyTemperatureOffset(next) }))
 		replayCurrentValue(dp, applyTemperatureOffset)
 	}
-	applyHeatingCooling := func(next any) {
-		if s, ok := next.(string); ok {
-			c.OnHeatingCooling(s)
-		}
-	}
 	if dp := ch.Parameter(hmenum.ParameterHeatingCooling); dp != nil {
+		// HEATING_COOLING is a read+write ENUM, so the value pushed here
+		// is the 0-based VALUE_LIST index; a bare string assertion left
+		// heatingMode() on its "HEATING" default while the installation
+		// cooled. The label form is still accepted for the firmwares that
+		// spell it out.
+		applyHeatingCooling := func(next any) {
+			if label, ok := custom.EnumWireLabel(dp, next); ok {
+				c.OnHeatingCooling(label)
+			}
+		}
 		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyHeatingCooling(next) }))
 		replayCurrentValue(dp, applyHeatingCooling)
 	}

@@ -120,10 +120,18 @@ func (b *Bridge) owedInboundAck(src *net.UDPAddr, hdr *message.Header, proto mes
 			sessionID:           hdr.SessionID,
 		})
 	}
-	// Initiator is set to false: peer opened the exchange, we are
-	// the responder. The eventual StandaloneAck flips this back to
-	// false-on-our-side so the peer sees our role correctly.
-	tracker.Owe(hdr.MessageCounter, hdr.SessionID, proto.ExchangeID, false, time.Now())
+	// [mrp.AckObligation.Initiator] records OUR role on the exchange,
+	// which is the inverse of the inbound message's flag: a peer-opened
+	// exchange (proto.Initiator=true) makes us the responder, and a
+	// message arriving with Initiator=false is the peer responding on an
+	// exchange we opened — the ongoing-subscription case, where the
+	// controller's IM StatusResponse answers a report we initiated. The
+	// pump stamps the flag verbatim, and a StandaloneAck that does not
+	// invert the peer's flag is discarded as unsolicited (chip
+	// src/messaging/ExchangeContext.cpp:384, matter.js
+	// packages/protocol/src/protocol/ExchangeManager.ts:319), leaving
+	// the peer to retransmit until its cap fires.
+	tracker.Owe(hdr.MessageCounter, hdr.SessionID, proto.ExchangeID, !proto.Initiator, time.Now())
 }
 
 // refreshAckCounter rewrites requestHdr.MessageCounter to the latest

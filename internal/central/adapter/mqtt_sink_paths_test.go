@@ -11,6 +11,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"sync"
 	"testing"
 
@@ -187,10 +188,13 @@ func TestMQTTCommandSinkInvokeChannelServiceNoInvoker(t *testing.T) {
 // SetValue calls so SetMasterValue tests can assert the write reached
 // the wire layer.
 type sinkChannelWriter struct {
-	mu    sync.Mutex
-	param hmenum.Parameter
-	value any
-	calls int
+	mu       sync.Mutex
+	param    hmenum.Parameter
+	value    any
+	calls    int
+	putKey   hmenum.ParamsetKey
+	putVals  map[string]any
+	putCalls int
 }
 
 func (w *sinkChannelWriter) SetValue(
@@ -205,8 +209,13 @@ func (w *sinkChannelWriter) SetValue(
 }
 
 func (w *sinkChannelWriter) PutParamset(
-	_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority,
+	_ context.Context, _ string, key hmenum.ParamsetKey, vals map[string]any, _ hmenum.CommandPriority,
 ) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.putKey = key
+	w.putVals = maps.Clone(vals)
+	w.putCalls++
 	return nil
 }
 
@@ -214,6 +223,12 @@ func (w *sinkChannelWriter) snapshot() (p hmenum.Parameter, v any, calls int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.param, w.value, w.calls
+}
+
+func (w *sinkChannelWriter) putSnapshot() (key hmenum.ParamsetKey, vals map[string]any, calls int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.putKey, maps.Clone(w.putVals), w.putCalls
 }
 
 func TestMQTTCommandSinkSetMasterValueWritesValue(t *testing.T) {
@@ -263,15 +278,22 @@ func TestMQTTCommandSinkSetMasterValueWritesValue(t *testing.T) {
 		t.Fatalf("SetMasterValue: %v", err)
 	}
 
-	p, v, calls := cw.snapshot()
+	// The MASTER bucket command must reach the CCU as put_paramset(MASTER).
+	// xml-rpc setValue carries no paramset key and always targets VALUES, so
+	// dispatching it there would write a device configuration change to the
+	// wrong paramset.
+	if _, _, setCalls := cw.snapshot(); setCalls != 0 {
+		t.Errorf("MASTER command must not use the VALUES-only SetValue; got %d SetValue calls", setCalls)
+	}
+	key, vals, calls := cw.putSnapshot()
 	if calls != 1 {
-		t.Fatalf("expected 1 SetValue call, got %d", calls)
+		t.Fatalf("expected 1 PutParamset call, got %d", calls)
 	}
-	if p != hmenum.Parameter(paramName) {
-		t.Errorf("param: got %q want %q", p, paramName)
+	if key != hmenum.ParamsetKeyMaster {
+		t.Errorf("paramset key: got %q want %q", key, hmenum.ParamsetKeyMaster)
 	}
-	if v != 0.5 {
-		t.Errorf("value: got %v want 0.5", v)
+	if vals[paramName] != 0.5 {
+		t.Errorf("values: got %v want %s=0.5", vals, paramName)
 	}
 }
 

@@ -192,8 +192,7 @@ func (m *Manager) FireCycle(ctx context.Context, zoneID string, incident sqlites
 	instances := append([]*instance(nil), m.byZone[zoneID]...)
 	m.mu.Unlock()
 
-	remaining := m.acousticBudget(ctx, incident)
-	var errs []error
+	eligible := make([]*instance, 0, len(instances))
 	for _, inst := range instances {
 		if !inst.cfg.InMode(incident.Mode) {
 			continue
@@ -204,12 +203,26 @@ func (m *Manager) FireCycle(ctx context.Context, zoneID string, incident sqlites
 		if inst.cfg.Outdoor && opts.Policy.ExcludeOutdoor {
 			continue
 		}
+		eligible = append(eligible, inst)
+	}
+	// The siren rows are grouped by channel first: an ASIR takes tone,
+	// pattern and duration in one atomic paramset and ignores partial
+	// writes, so two rows on one channel cannot fire independently.
+	channels := groupSirenChannels(eligible)
+
+	remaining := m.acousticBudget(ctx, incident)
+	var errs []error
+	for _, inst := range eligible {
 		var err error
+		covered := []*instance{inst}
 		switch inst.row.Class {
-		case hmenum.AlarmOutputClassAcousticSiren:
-			err = m.fireSiren(ctx, inst, incident.ID, &remaining, true)
-		case hmenum.AlarmOutputClassOpticalSiren:
-			err = m.fireSiren(ctx, inst, incident.ID, &remaining, false)
+		case hmenum.AlarmOutputClassAcousticSiren, hmenum.AlarmOutputClassOpticalSiren:
+			ch := channels[demandChannelKey(inst.row.CentralName, inst.row.ChannelAddress)]
+			if ch.rows[0] != inst {
+				continue // already written with the first row of its channel
+			}
+			err = m.fireSirenChannel(ctx, ch, incident.ID, &remaining)
+			covered = ch.rows
 		case hmenum.AlarmOutputClassSwitchedSiren:
 			err = m.fireSwitchedSiren(ctx, inst, incident.ID, &remaining)
 		case hmenum.AlarmOutputClassSmokeSounder:
@@ -230,12 +243,72 @@ func (m *Manager) FireCycle(ctx context.Context, zoneID string, incident sqlites
 			// The sysvar mirror is state-driven, chirps have their
 			// own path.
 		}
-		if err != nil {
-			m.outputFailed(ctx, zoneID, "output_fire_failed", inst.row.ID, incident.ID, err)
-			errs = append(errs, fmt.Errorf("output %s: %w", inst.row.ID, err))
+		if err == nil {
+			continue
+		}
+		// One write can carry several rows; each of them stayed dark,
+		// so each is reported.
+		for _, member := range covered {
+			m.outputFailed(ctx, zoneID, "output_fire_failed", member.row.ID, incident.ID, err)
+			errs = append(errs, fmt.Errorf("output %s: %w", member.row.ID, err))
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// sirenChannel is the set of eligible siren rows of one cycle that
+// address the same physical channel.
+//
+// The pairing is the design-intended one — an operator enrolls an ASIR
+// channel as an acoustic siren and as an optical siren, the optical row
+// being the one the concept lets run its own way — but the hardware
+// takes both halves plus the duration in a single VALUES paramset. Two
+// independent writes therefore do not add up: the second replaces the
+// first, and the optical write, which pins the acoustic half to the
+// device's disable entry so it cannot start a tone of its own, silences
+// the acoustic row on its own channel. Both writes succeed, so the
+// alarm flashes without a sound and nothing reports it.
+type sirenChannel struct {
+	// rows keeps the cycle's enrollment order; rows[0] is the row the
+	// merged write is attributed to.
+	rows     []*instance
+	acoustic *instance
+	optical  *instance
+}
+
+// groupSirenChannels indexes the cycle's eligible siren rows by
+// physical channel. Rows of other classes are left out; every siren row
+// of eligible is present, which is what lets the fire loop look its
+// group up unconditionally.
+func groupSirenChannels(eligible []*instance) map[string]*sirenChannel {
+	channels := map[string]*sirenChannel{}
+	for _, inst := range eligible {
+		if !sirenClass(inst.row.Class) {
+			continue
+		}
+		key := demandChannelKey(inst.row.CentralName, inst.row.ChannelAddress)
+		ch, ok := channels[key]
+		if !ok {
+			ch = &sirenChannel{}
+			channels[key] = ch
+		}
+		ch.rows = append(ch.rows, inst)
+		// A second row of the same class on one channel adds nothing to
+		// the write; it still gets its demand and its watchdog.
+		if inst.row.Class == hmenum.AlarmOutputClassAcousticSiren && ch.acoustic == nil {
+			ch.acoustic = inst
+		}
+		if inst.row.Class == hmenum.AlarmOutputClassOpticalSiren && ch.optical == nil {
+			ch.optical = inst
+		}
+	}
+	return channels
+}
+
+// sirenClass reports whether the class activates through the shared
+// ASIR channel write.
+func sirenClass(class hmenum.AlarmOutputClass) bool {
+	return class == hmenum.AlarmOutputClassAcousticSiren || class == hmenum.AlarmOutputClassOpticalSiren
 }
 
 // StopAll implements engine.OutputPort: silence every sounding output
@@ -301,50 +374,88 @@ func (m *Manager) reserveAcoustic(ctx context.Context, incidentID int64, remaini
 	return d, nil
 }
 
-// fireSiren activates an ASIR-class siren: one atomic paramset write
-// carrying tone/pattern plus a finite duration. Acoustic activations
-// reserve ledger budget; optical-only activations are bounded but not
-// budgeted (no noise constraint).
-func (m *Manager) fireSiren(ctx context.Context, inst *instance, incidentID int64, remaining *time.Duration, acoustic bool) error {
-	dev, err := m.resolver.Siren(inst.row.CentralName, inst.row.ChannelAddress)
+// fireSirenChannel activates one ASIR-class channel for every eligible
+// row addressing it: a single atomic paramset write carrying
+// tone/pattern plus a finite duration. Acoustic activations reserve
+// ledger budget; optical-only activations are bounded but not budgeted
+// (no noise constraint).
+func (m *Manager) fireSirenChannel(ctx context.Context, ch *sirenChannel, incidentID int64, remaining *time.Duration) error {
+	lead := ch.rows[0]
+	dev, err := m.resolver.Siren(lead.row.CentralName, lead.row.ChannelAddress)
 	if err != nil {
 		return err
 	}
+	on, fires, err := m.sirenOnConfig(ctx, dev, ch, incidentID, remaining)
+	if err != nil || !fires {
+		return err
+	}
+	if err := dev.TurnOn(ctx, on, hmenum.CommandPriorityHigh); err != nil {
+		return err
+	}
+	for _, inst := range ch.rows {
+		m.noteDemand(inst)
+		// The device holds one duration for both halves, so every row
+		// of the channel is watchdogged against the duration actually
+		// written — the earliest stop silences the channel, which is
+		// the safe direction.
+		m.armStopWatchdog(inst, incidentID, on.Duration,
+			m.sirenStopper(inst, inst.row.Class == hmenum.AlarmOutputClassAcousticSiren))
+	}
+	return nil
+}
+
+// sirenOnConfig builds the channel's single activation write. It
+// reports false when nothing is left to activate (the acoustic budget
+// is spent and no optical row shares the channel).
+//
+// When both halves fire, the acoustic bound governs the write: the
+// device applies one duration to both, and stretching it to the
+// optical row's would sound the tone past the budget reserved for it.
+func (m *Manager) sirenOnConfig(
+	ctx context.Context, dev SirenDevice, ch *sirenChannel,
+	incidentID int64, remaining *time.Duration,
+) (sirencdp.OnConfig, bool, error) {
 	var on sirencdp.OnConfig
-	var d time.Duration
-	if acoustic {
-		d, err = m.reserveAcoustic(ctx, incidentID, remaining, inst.cfg.acousticDuration(m.defaultSiren))
+	acousticFires := false
+	if a := ch.acoustic; a != nil {
+		d, err := m.reserveAcoustic(ctx, incidentID, remaining, a.cfg.acousticDuration(m.defaultSiren))
 		if err != nil {
-			return err
+			return on, false, err
 		}
 		if d <= 0 {
-			m.journalFault(ctx, inst.row.ZoneID, "acoustic_budget_exhausted", inst.row.ID, incidentID, nil)
-			return nil
+			// An exhausted noise budget silences the tone; it does not
+			// stop an optical row sharing the channel from flashing.
+			m.journalFault(ctx, a.row.ZoneID, "acoustic_budget_exhausted", a.row.ID, incidentID, nil)
+		} else {
+			acousticFires = true
+			on.Duration = d
+			if a.cfg.AcousticTone != "" {
+				// The selection pointer is what reaches the wire; the
+				// tone field only opts into value-list validation.
+				tone := a.cfg.AcousticTone
+				on.AcousticSelection = &tone
+				on.AcousticTone = tone
+			}
+			if a.cfg.OpticalPattern != "" {
+				p := a.cfg.OpticalPattern
+				on.OpticalSelection = &p
+			}
 		}
-		on.Duration = d
-		if inst.cfg.AcousticTone != "" {
-			// The selection pointer is what reaches the wire; the tone
-			// field only opts into value-list validation.
-			tone := inst.cfg.AcousticTone
-			on.AcousticSelection = &tone
-			on.AcousticTone = tone
+	}
+	if o := ch.optical; o != nil {
+		if !acousticFires {
+			on.Duration = o.cfg.opticalDuration()
+			// No tone in this write: pin the acoustic selection to the
+			// device's disable default so the atomic write cannot
+			// re-trigger one (partial paramset writes are ignored by
+			// the hardware).
+			if tones := dev.AvailableTones(); len(tones) > 0 {
+				off := tones[0]
+				on.AcousticSelection = &off
+			}
 		}
-		if inst.cfg.OpticalPattern != "" {
-			p := inst.cfg.OpticalPattern
-			on.OpticalSelection = &p
-		}
-	} else {
-		d = inst.cfg.opticalDuration()
-		on.Duration = d
-		// Optical-only: pin the acoustic selection to the device's
-		// disable default so the atomic write cannot re-trigger a
-		// tone (partial paramset writes are ignored by the hardware).
-		if tones := dev.AvailableTones(); len(tones) > 0 {
-			off := tones[0]
-			on.AcousticSelection = &off
-		}
-		p := inst.cfg.OpticalPattern
-		if p == "" {
+		p := o.cfg.OpticalPattern
+		if p == "" && on.OpticalSelection == nil {
 			if lights := dev.AvailableLights(); len(lights) > 1 {
 				p = lights[len(lights)-1]
 			}
@@ -353,12 +464,7 @@ func (m *Manager) fireSiren(ctx context.Context, inst *instance, incidentID int6
 			on.OpticalSelection = &p
 		}
 	}
-	if err := dev.TurnOn(ctx, on, hmenum.CommandPriorityHigh); err != nil {
-		return err
-	}
-	m.noteDemand(inst)
-	m.armStopWatchdog(inst, incidentID, d, m.sirenStopper(inst, acoustic))
-	return nil
+	return on, acousticFires || ch.optical != nil, nil
 }
 
 // fireSwitchedSiren activates a plug-in siren behind an actuator: the

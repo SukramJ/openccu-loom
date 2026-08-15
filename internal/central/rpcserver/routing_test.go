@@ -380,7 +380,7 @@ func TestBINRPCServerPeerAllowlistRejectsUnlisted(t *testing.T) {
 	allowlist := []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}
 	srv, err := NewBINRPCServer(BINRPCConfig{
 		Addr:          "127.0.0.1:0",
-		PeerAllowlist: allowlist,
+		PeerAllowlist: staticPeerAllowlist(allowlist),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -413,7 +413,7 @@ func TestBINRPCServerPeerAllowlistAcceptsListedPeer(t *testing.T) {
 	allowlist := []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
 	srv, err := NewBINRPCServer(BINRPCConfig{
 		Addr:          "127.0.0.1:0",
-		PeerAllowlist: allowlist,
+		PeerAllowlist: staticPeerAllowlist(allowlist),
 	})
 	if err != nil {
 		t.Fatal(err)

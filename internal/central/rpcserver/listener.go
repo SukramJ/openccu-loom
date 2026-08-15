@@ -79,12 +79,33 @@ func limitListener(ln net.Listener, maxConns int) net.Listener {
 	return netutil.LimitListener(ln, maxConns)
 }
 
-// peerAllowed reports whether remote's IP falls within one of the
-// allowlist prefixes. An empty allowlist accepts every peer (the default,
-// preserving open-LAN behaviour). Shared by the BIN-RPC accept loop and
-// the XML-RPC [peerFilterListener] so both listeners apply identical
-// source-IP semantics.
-func peerAllowed(allow []netip.Prefix, remote net.Addr) bool {
+// PeerAllowlist resolves the source-IP prefixes a callback listener accepts.
+// It is called once per accepted connection rather than sampled at
+// construction: the set of CCUs allowed to push callbacks changes while the
+// daemon runs (a CCU adopted through the admin surface, a DHCP lease that
+// moves an existing one), and a listener holding a boot-time snapshot
+// blackholes those peers until the next restart with nothing above DEBUG to
+// say so. A nil func, or one returning no prefixes, accepts every peer — the
+// default, open-LAN behaviour.
+type PeerAllowlist func() []netip.Prefix
+
+// staticPeerAllowlist adapts a fixed prefix set to [PeerAllowlist], for
+// callers whose peer set genuinely cannot change.
+func staticPeerAllowlist(prefixes []netip.Prefix) PeerAllowlist {
+	if len(prefixes) == 0 {
+		return nil
+	}
+	return func() []netip.Prefix { return prefixes }
+}
+
+// peerAllowed reports whether remote's IP falls within one of the currently
+// allowed prefixes. Shared by the BIN-RPC accept loop and the XML-RPC
+// [peerFilterListener] so both listeners apply identical source-IP semantics.
+func peerAllowed(allowlist PeerAllowlist, remote net.Addr) bool {
+	if allowlist == nil {
+		return true
+	}
+	allow := allowlist()
 	if len(allow) == 0 {
 		return true
 	}
@@ -114,14 +135,14 @@ func peerAllowed(allow []netip.Prefix, remote net.Addr) bool {
 // its own accept loop instead (see [BINRPCServer.Serve]).
 type peerFilterListener struct {
 	net.Listener
-	allow  []netip.Prefix
+	allow  PeerAllowlist
 	logger *slog.Logger
 }
 
 // newPeerFilterListener wraps ln so only allowlisted source IPs are
-// accepted. When allow is empty ln is returned unwrapped.
-func newPeerFilterListener(ln net.Listener, allow []netip.Prefix, logger *slog.Logger) net.Listener {
-	if len(allow) == 0 {
+// accepted. When allow is nil ln is returned unwrapped.
+func newPeerFilterListener(ln net.Listener, allow PeerAllowlist, logger *slog.Logger) net.Listener {
+	if allow == nil {
 		return ln
 	}
 	if logger == nil {

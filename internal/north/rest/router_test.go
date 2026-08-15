@@ -858,6 +858,58 @@ func TestRouter_Audit_RequiresAdmin(t *testing.T) {
 	}
 }
 
+// TestRouter_MatterSetupPayload_RequiresAdmin pins that the commissioning
+// passcode is admin-only.
+//
+// The response carries north.matter.commissioning.passcode — a cfg:"secret"
+// value — plus the QR and manual codes derived from it, and anyone holding it
+// can commission the bridge into their own fabric while a window is open. The
+// route sat outside the admin gate that every mutating Matter route uses,
+// because the comment above them scopes the gate to "mutating routes
+// (PUT / POST / DELETE)" — a read that hands out a credential is exactly as
+// privileged as a write.
+func TestRouter_MatterSetupPayload_RequiresAdmin(t *testing.T) {
+	t.Parallel()
+	mw := auth.NewMiddleware(nil, nil)
+	build := func(role auth.Role) http.Handler {
+		return NewRouter(Deps{
+			StartedAt: time.Now(),
+			MatterCommissioning: handlers.MatterCommissioning{
+				Discriminator: 3840,
+				Passcode:      20202021,
+				VendorID:      0xFFF1,
+				ProductID:     0x8001,
+			},
+			AuthResolve: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
+					next.ServeHTTP(w, r.WithContext(ctx))
+				})
+			},
+			AuthRequire:  mw.Require,
+			RequireAdmin: func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) },
+		})
+	}
+
+	rr := httptest.NewRecorder()
+	build(auth.RoleViewer).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/matter/setup-payload", http.NoBody))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("viewer must not receive the commissioning passcode, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	build(auth.RoleOperator).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/matter/setup-payload", http.NoBody))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("operator must not receive the commissioning passcode, got %d", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/matter/setup-payload", http.NoBody))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("admin must reach the setup payload, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 // TestRouter_RefreshDevices_route confirms the refresh route is guarded by dep.
 func TestRouter_RefreshDevices_route(t *testing.T) {
 	t.Parallel()

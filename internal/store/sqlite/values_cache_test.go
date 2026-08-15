@@ -302,13 +302,16 @@ func TestValuesCache_GCDeadRows_KeepsAliveOnly(t *testing.T) {
 		}
 	}
 
-	alive := map[string]struct{}{
-		AliveKey(centralName, iface, "A:1", "P"): {},
-		AliveKey(centralName, iface, "B:1", "P"): {},
-		// C:1.P is intentionally absent → must be deleted
+	sweep := GCSweep{
+		Scopes: map[string]struct{}{ScopeKey(centralName, iface): {}},
+		Alive: map[string]struct{}{
+			AliveKey(centralName, iface, "A:1", "P"): {},
+			AliveKey(centralName, iface, "B:1", "P"): {},
+			// C:1.P is intentionally absent → must be deleted
+		},
 	}
 
-	res, err := s.GCDeadRows(ctx, alive)
+	res, err := s.GCDeadRows(ctx, sweep)
 	if err != nil {
 		t.Fatalf("GCDeadRows: %v", err)
 	}
@@ -340,9 +343,10 @@ func TestValuesCache_GCDeadRows_KeepsAliveOnly(t *testing.T) {
 	}
 }
 
-// TestValuesCache_GCDeadRows_NilAliveSet_NoOp verifies the defensive behaviour:
-// a nil alive map must not wipe the cache — it returns 0 deletes.
-func TestValuesCache_GCDeadRows_NilAliveSet_NoOp(t *testing.T) {
+// TestValuesCache_GCDeadRows_EmptySweep_NoOp verifies the defensive behaviour:
+// a sweep that observed no scope must not wipe the cache — it returns 0
+// deletes, whatever its alive set says.
+func TestValuesCache_GCDeadRows_EmptySweep_NoOp(t *testing.T) {
 	t.Parallel()
 	s := freshValuesCacheStore(t)
 	ctx := context.Background()
@@ -352,20 +356,59 @@ func TestValuesCache_GCDeadRows_NilAliveSet_NoOp(t *testing.T) {
 		t.Fatalf("SaveValue: %v", err)
 	}
 
-	res, err := s.GCDeadRows(ctx, nil)
+	res, err := s.GCDeadRows(ctx, GCSweep{})
 	if err != nil {
-		t.Fatalf("GCDeadRows(nil): %v", err)
+		t.Fatalf("GCDeadRows(empty): %v", err)
 	}
 	if res.Deleted != 0 {
-		t.Errorf("GCDeadRows(nil): Deleted = %d, want 0", res.Deleted)
+		t.Errorf("GCDeadRows(empty): Deleted = %d, want 0", res.Deleted)
 	}
 
 	got, err := s.LoadChannel(ctx, "ccu1", "HmIP-RF", "X:1")
 	if err != nil {
-		t.Fatalf("LoadChannel after GC(nil): %v", err)
+		t.Fatalf("LoadChannel after GC(empty): %v", err)
 	}
 	if len(got) == 0 {
-		t.Error("nil alive set must not wipe the cache")
+		t.Error("a sweep with no observed scope must not wipe the cache")
+	}
+}
+
+// TestValuesCache_GCDeadRows_SkipsUnsweptScope pins the rule the multi-CCU
+// sweep depends on: rows whose (central, interface) scope is absent from
+// GCSweep.Scopes are left untouched even though no alive key covers them.
+// Nothing was observed about that scope, so nothing about it can be deleted.
+func TestValuesCache_GCDeadRows_SkipsUnsweptScope(t *testing.T) {
+	t.Parallel()
+	s := freshValuesCacheStore(t)
+	ctx := context.Background()
+	now := nowMS()
+
+	if err := s.SaveValue(ctx, "ccu1", "HmIP-RF", "A:1", "P", true, now, now); err != nil {
+		t.Fatalf("SaveValue(swept): %v", err)
+	}
+	if err := s.SaveValue(ctx, "ccu2", "HmIP-RF", "A:1", "P", true, now, now); err != nil {
+		t.Fatalf("SaveValue(unswept): %v", err)
+	}
+
+	// ccu1 was read and reported one other data point; ccu2 was not read.
+	sweep := GCSweep{
+		Scopes: map[string]struct{}{ScopeKey("ccu1", "HmIP-RF"): {}},
+		Alive:  map[string]struct{}{AliveKey("ccu1", "HmIP-RF", "B:1", "P"): {}},
+	}
+	res, err := s.GCDeadRows(ctx, sweep)
+	if err != nil {
+		t.Fatalf("GCDeadRows: %v", err)
+	}
+	if res.Deleted != 1 {
+		t.Errorf("Deleted = %d, want 1 (only the swept scope's dead row)", res.Deleted)
+	}
+
+	kept, err := s.LoadChannel(ctx, "ccu2", "HmIP-RF", "A:1")
+	if err != nil {
+		t.Fatalf("LoadChannel(ccu2): %v", err)
+	}
+	if len(kept) != 1 {
+		t.Errorf("unswept scope lost %d rows, want 0", 1-len(kept))
 	}
 }
 
@@ -475,7 +518,7 @@ func TestValuesCache_NilStore_NoOps(t *testing.T) {
 	if all != nil {
 		t.Error("nil LoadAll: want nil map")
 	}
-	res, err := s.GCDeadRows(ctx, map[string]struct{}{})
+	res, err := s.GCDeadRows(ctx, GCSweep{})
 	if err != nil {
 		t.Errorf("nil GCDeadRows: %v", err)
 	}

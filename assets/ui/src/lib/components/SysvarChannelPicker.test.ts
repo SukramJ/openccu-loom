@@ -45,8 +45,11 @@ vi.mock("$lib/i18n", () => ({ t: (k: string) => k }));
 
 import SysvarChannelPicker from "./SysvarChannelPicker.svelte";
 
+// GET /devices/{addr}/channels answers with a bare JSON array — mocking a
+// wrapper here would keep the picker green against a client that reads a
+// property the response does not have.
 function channelList(address: string, number: number) {
-  return { items: [{ address, number, name: "Kanal", type_label: "" }] };
+  return [{ address, number, name: "Kanal", type_label: "" }];
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -67,6 +70,26 @@ describe("SysvarChannelPicker — device pick", () => {
     // The dropdown replaces the loading line once the list has arrived.
     await waitFor(() =>
       expect(container.textContent).not.toContain("common.loading"),
+    );
+  });
+
+  it("labels the assigned channel from the loaded list", async () => {
+    // Asserting only that the loading line disappears passes against an
+    // empty list too — and an empty list is a picker no assignment can
+    // ever be made from. The dropdown resolves its label from the loaded
+    // channels, so the label is the proof that they arrived.
+    mockListChannels.mockResolvedValue(channelList("ABC0000001:1", 1));
+    const { container } = render(SysvarChannelPicker, {
+      props: { value: "ABC0000001:1", onChange: vi.fn() },
+    });
+
+    await waitFor(() =>
+      expect(mockListChannels).toHaveBeenCalledWith("ABC0000001"),
+    );
+    await waitFor(() =>
+      expect(
+        container.querySelector("[data-select-trigger]")?.textContent,
+      ).toContain("#1 Kanal"),
     );
   });
 

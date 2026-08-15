@@ -49,11 +49,10 @@ import DiagramSeriesPicker from "./DiagramSeriesPicker.svelte";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockListChannels.mockResolvedValue({
-    items: [
-      { address: "ABC0000001:1", number: 1, name: "", type_label: "CLIMATE" },
-    ],
-  });
+  // GET /devices/{addr}/channels answers with a bare JSON array.
+  mockListChannels.mockResolvedValue([
+    { address: "ABC0000001:1", number: 1, name: "", type_label: "CLIMATE" },
+  ]);
   mockListDataPoints.mockResolvedValue([
     { parameter: "ACTUAL_TEMPERATURE", parameter_label: "Ist-Temperatur" },
   ]);
@@ -122,18 +121,14 @@ describe("DiagramSeriesPicker — device pick derives central/interface", () => 
         ),
       ).map((o) => o.textContent?.trim());
 
-    second.resolve?.({
-      items: [
-        { address: "DEF0000002:1", number: 1, name: "Küche Kanal", type_label: "" },
-      ],
-    });
+    second.resolve?.([
+      { address: "DEF0000002:1", number: 1, name: "Küche Kanal", type_label: "" },
+    ]);
     await waitFor(() => expect(channelOptions()).toContain("#1 Küche Kanal"));
 
-    first.resolve?.({
-      items: [
-        { address: "ABC0000001:9", number: 9, name: "Wohnzimmer Kanal", type_label: "" },
-      ],
-    });
+    first.resolve?.([
+      { address: "ABC0000001:9", number: 9, name: "Wohnzimmer Kanal", type_label: "" },
+    ]);
     await new Promise((r) => setTimeout(r, 0));
 
     expect(channelOptions()).not.toContain("#9 Wohnzimmer Kanal");

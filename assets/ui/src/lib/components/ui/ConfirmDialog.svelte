@@ -36,14 +36,16 @@
     }
   });
 
+  // Escape and Tab are handled globally because they belong to the dialog as
+  // a whole. Enter deliberately is not: focus starts on Cancel, so a global
+  // Enter shortcut would confirm the destructive action the operator was
+  // about to decline. Enter on a focused <button> activates that button
+  // natively, which is the behaviour every call site wants.
   function onKey(e: KeyboardEvent) {
     if (!pending) return;
     if (e.key === "Escape") {
       e.preventDefault();
       confirmStore.resolve(false);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      confirmStore.resolve(true);
     } else if (e.key === "Tab") {
       const els = focusableButtons();
       if (els.length === 0) return;

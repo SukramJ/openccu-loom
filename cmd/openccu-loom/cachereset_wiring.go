@@ -29,31 +29,78 @@ func cacheResetReset(svc *cachereset.Service) handlers.CacheResetService {
 	return svc
 }
 
-// configTopology adapts the loaded config to cachereset.Topology so a coarse
-// scope can be expanded to (central, interface) units.
-type configTopology struct{ cfg *config.Config }
+// daemonTopology adapts the daemon's view of its CCUs to cachereset.Topology
+// so a coarse scope can be expanded to (central, interface) units.
+//
+// It is the union of two sources on purpose. cfg.Centrals is materialised once
+// when the config is loaded and the adopt path never appends to it, so a CCU
+// the operator added at runtime is absent from it — expanding a scope from the
+// config alone yields zero units for that CCU, and Clear then reports success
+// having cleared nothing. The registry covers those, but only reports
+// interfaces whose client is up, so a reset issued while a CCU is unreachable
+// would clear nothing either. Together they cover both.
+type daemonTopology struct {
+	cfg *config.Config
+	reg *central.Registry
+}
 
-func (t configTopology) Centrals() []string {
+func (t daemonTopology) Centrals() []string {
+	seen := make(map[string]struct{})
 	out := make([]string, 0, len(t.cfg.Centrals))
+	add := func(name string) {
+		if name == "" {
+			return
+		}
+		if _, dup := seen[name]; dup {
+			return
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
 	for i := range t.cfg.Centrals {
-		out = append(out, t.cfg.Centrals[i].Name)
+		add(t.cfg.Centrals[i].Name)
+	}
+	if t.reg != nil {
+		for _, name := range t.reg.Names() {
+			add(name)
+		}
 	}
 	return out
 }
 
-func (t configTopology) Interfaces(centralName string) []string {
+func (t daemonTopology) Interfaces(centralName string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, 4)
+	add := func(name string) {
+		if name == "" {
+			return
+		}
+		if _, dup := seen[name]; dup {
+			return
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
 	for i := range t.cfg.Centrals {
 		c := &t.cfg.Centrals[i]
 		if c.Name != centralName {
 			continue
 		}
-		out := make([]string, 0, len(c.Interfaces))
 		for _, ifc := range c.Interfaces {
-			out = append(out, ifc.Name)
+			add(ifc.Name)
 		}
-		return out
 	}
-	return nil
+	if t.reg != nil {
+		if u, ok := t.reg.Get(centralName); ok && u.Clients != nil {
+			for _, e := range u.Clients.List() {
+				add(string(e.Interface))
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // buildCacheResetService wires the cache-reset service (ADR 0042) from the
@@ -79,7 +126,7 @@ func buildCacheResetService(
 	deps := cachereset.Deps{
 		Values:   values,
 		Master:   master,
-		Topology: configTopology{cfg: cfg},
+		Topology: daemonTopology{cfg: cfg, reg: reg},
 		Reiniter: mgr,
 		ClearValueCache: func(centralName string) {
 			if u, ok := reg.Get(centralName); ok && u.Cache != nil {

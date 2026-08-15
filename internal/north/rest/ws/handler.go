@@ -124,6 +124,12 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 		br := bufio.NewReader(conn)
 		bw := bufio.NewWriter(conn)
 		c := newClient(conn, br, bw, hub, logger)
+		// The identity resolved for the upgrade request is captured once and
+		// gates every command this connection later dispatches. It is only
+		// as current as the connection: the raw credential is not retained,
+		// so it cannot be re-resolved here. A revocation reaches the socket
+		// from the other side instead — see [Hub.CloseBySubject] — and the
+		// in-band reauth op replaces it without a reconnect.
 		if id, ok := auth.IdentityFrom(r.Context()); ok {
 			c.SetIdentity(id)
 		}

@@ -31,6 +31,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
 	"github.com/SukramJ/openccu-loom/internal/security"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
@@ -152,6 +153,10 @@ type restMountDeps struct {
 	restResolve func(http.Handler) http.Handler
 	authMw      *auth.Middleware
 	wsHandler   http.Handler
+	// wsHub is the live WebSocket hub. A credential revocation has to
+	// reach the open sockets too, not just the HTTP sessions — see
+	// [restMountDeps.credentialRevoker].
+	wsHub *ws.Hub
 
 	levels            *hmlog.LevelRegistry
 	liveFeed          *hmlog.LiveLog
@@ -306,7 +311,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ConfigChanges:     restartState,
 		UserAdmin:         d.userSvc,
 		SelfPassword:      d.passwordSvc,
-		SessionRevoker:    d.sessions,
+		SessionRevoker:    d.credentialRevoker(),
 		TokenPurger:       d.tokenPurger,
 		Preferences:       d.prefSvc,
 		Diagrams:          d.diagramSvc,
@@ -587,16 +592,52 @@ func alarmCodeAdminFrom(s *alarm.Service) handlers.AlarmCodeAdmin {
 	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes).OnChange(s.NotifyCodesChanged)
 }
 
+// credentialRevoker resolves the revoker the credential-change handlers
+// (user update, user delete, self-service password change) call. It is the
+// session store plus the WebSocket teardown: a socket captures its identity
+// at the upgrade and gates every later command on that snapshot, so a role
+// change or an account deletion that stops at the session map leaves the
+// old role live on the command plane until the client happens to reconnect.
+func (d restMountDeps) credentialRevoker() handlers.SessionRevoker {
+	if d.sessions == nil {
+		return nil
+	}
+	return ws.RevokeWithSockets(d.sessions, d.wsHub)
+}
+
 // mountMCP wraps the REST router so the configured MCP path serves the
 // Streamable-HTTP MCP handler behind the same auth chain as REST, while
 // every other path falls through to the REST router. The MCP server is
 // read-only unless North.MCP.AllowWrites is also set. See ADR 0025.
 func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *slog.Logger) http.Handler {
-	// Resolve must wrap Require: Require only checks the identity the
+	// http.ServeMux answers a malformed pattern with a panic while
+	// registering it, and the value reaching us here has been persisted, so
+	// a panic would repeat on every subsequent boot with the SPA that could
+	// correct it never coming up. Refuse the mount and keep REST serving:
+	// the operator loses the MCP surface and keeps the daemon.
+	if err := cfg.North.MCP.ValidateMountPath(); err != nil {
+		logger.Error("north.mcp.mount.rejected",
+			slog.String("path", cfg.North.MCP.MountPath()),
+			slog.String("err", err.Error()),
+			slog.String("effect", "MCP is not served this run; REST is unaffected"))
+		return router
+	}
+	// The MCP tool set is a projection of the same domain REST serves, so it
+	// carries the same role requirement. With AllowWrites the set includes
+	// set_datapoint and the alarm arm / disarm / silence controls, which REST
+	// mounts With(op) — gating only on Require would let a viewer token drive
+	// the entire write surface, since the mcp package deliberately holds no
+	// privilege path of its own and trusts whatever this mount wraps it in.
+	// Read-only is the default posture and is legitimately viewer-level.
+	mcpRole := auth.RoleViewer
+	if cfg.North.MCP.AllowWrites {
+		mcpRole = auth.RoleOperator
+	}
+	// Resolve must wrap the role gate: the gate only checks the identity the
 	// resolve chain put into the context — without it every request,
 	// credentialed or not, is rejected with 401 (the MCP mount sits
 	// outside the REST router's own middleware stack).
-	mcpHandler := d.restResolve(d.authMw.Require(mcp.Handler(mcp.Deps{
+	mcpHandler := d.restResolve(d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
 		Centrals:     d.reg,
 		Devices:      d.devicesAdapter,
 		Writer:       d.dpWriterAdapter,

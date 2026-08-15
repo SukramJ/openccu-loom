@@ -62,7 +62,7 @@ orphan channels appear together in the single `overview` tab.
 | `light` | `*light.Light` | `LightTile` | turn_on / turn_off / set_brightness |
 | `light_color` | `*light.ColorLight` (HSV) | `LightTile` | + set_color {hue, saturation} |
 | `light_color_temp` | `*light.ColorTempLight` | `LightTile` | + set_color_temperature {kelvin} |
-| `light_fixed_color` | `*light.FixedColorLight` (HmIP-BSL etc.) | `LightTile` | + set_color {color: "RED"…} |
+| `light_fixed_color` | `*light.FixedColorLight` (HmIP-BSL etc.) | `LightTile` | + set_color {label: "RED"…} |
 | `light_rgbw` | `*light.RGBWLight` (HmIP-RGBW) | `LightTile` | + Color/Weiß toggle, set_effect |
 | `light_dali` | `*light.DRGDaliLight` | `LightTile` | brightness + colour-temp variant |
 | `light_effect` | `*light.EffectLight` | `LightTile` | + set_effect |

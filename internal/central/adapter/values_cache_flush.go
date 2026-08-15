@@ -281,8 +281,8 @@ func (f *ValuesCacheFlusher) Stop() {
 // tick it rebuilds the alive-key set from the current device model
 // across every central and deletes any values_cache row that no
 // longer maps to a live parameter. GC does not run on the shutdown
-// flush — see [gcOnce] for the rationale and the empty-alive-set
-// safety guard.
+// flush — see [gcOnce] for the rationale and the per-scope safety
+// guard.
 func WireValuesCacheFlusher(
 	reg *central.Registry,
 	store *sqlite.ValuesCacheStore,
@@ -537,12 +537,16 @@ func appendPersistableEntry(
 // that has not yet received a fresh live value in this run is still a
 // legitimate row, not an orphan.
 //
-// A GC pass is skipped entirely when the alive set comes back empty. That
-// is the defensive case a bug in the walk (or a GC tick that fires before
-// any central finished loading its device model, e.g. during a slow CCU
-// boot) would otherwise turn into wiping the entire cache on the next
-// tick; the low default cadence (see [gcTickInterval]) makes a genuine
-// still-booting central an unlikely false negative in practice.
+// The sweep is scoped per (central, interface): only rows belonging to a
+// scope that actually contributed a live model are candidates for deletion.
+// An empty in-memory model is never read as "everything is gone" — a CCU
+// still blocked in the readiness gate, one rebooting mid-life, or a single
+// interface whose ingest exhausted its retries all present exactly that
+// picture, and deleting on it destroys the persisted cache that the next cold
+// boot restores sleeping battery devices from. The cost of the conservative
+// reading is bounded: an interface that genuinely loses its last device keeps
+// its rows until the device-level eviction path (values_cache_evict.go)
+// removes them, which is the path a real removal takes anyway.
 func gcOnce(
 	ctx context.Context,
 	reg *central.Registry,
@@ -552,14 +556,14 @@ func gcOnce(
 	if reg == nil || store == nil {
 		return
 	}
-	alive := buildAliveKeySet(reg)
-	if len(alive) == 0 {
+	sweep := buildGCSweep(reg)
+	if len(sweep.Scopes) == 0 {
 		if logger != nil {
-			logger.Debug("values_cache.gc_skipped", slog.String("reason", "empty_alive_set"))
+			logger.Debug("values_cache.gc_skipped", slog.String("reason", "no_scope_observed"))
 		}
 		return
 	}
-	result, err := store.GCDeadRows(ctx, alive)
+	result, err := store.GCDeadRows(ctx, sweep)
 	if err != nil {
 		if logger != nil {
 			logger.Warn("values_cache.gc_err", slog.String("err", err.Error()))
@@ -573,13 +577,19 @@ func gcOnce(
 	}
 }
 
-// buildAliveKeySet walks every registered central's current device model
-// and returns the set of [sqlite.AliveKey] tuples GC must preserve. Devices
-// or channels not present in the walk (removed, renamed address, dropped
-// parameter) leave no key behind, so their cache rows fall out of the set
-// and become eligible for deletion on the next [gcOnce].
-func buildAliveKeySet(reg *central.Registry) map[string]struct{} {
-	alive := make(map[string]struct{})
+// buildGCSweep walks every registered central's current device model and
+// returns what the walk observed: the (central, interface) scopes that yielded
+// at least one data point, and the [sqlite.AliveKey] tuples GC must preserve
+// inside them. Devices or channels not present in the walk (removed, renamed
+// address, dropped parameter) leave no key behind, so their cache rows fall
+// out of the alive set and become eligible for deletion — but only while
+// their own scope is still represented, which is what keeps an offline CCU's
+// rows out of the sweep entirely.
+func buildGCSweep(reg *central.Registry) sqlite.GCSweep {
+	sweep := sqlite.GCSweep{
+		Scopes: make(map[string]struct{}),
+		Alive:  make(map[string]struct{}),
+	}
 	for _, unit := range reg.List() {
 		if unit == nil || unit.ModelRegistry == nil {
 			continue
@@ -602,10 +612,11 @@ func buildAliveKeySet(reg *central.Registry) map[string]struct{} {
 						continue
 					}
 					key := addr.DataPointKey()
-					alive[sqlite.AliveKey(name, d.InterfaceID, key.ChannelAddress, key.Parameter)] = struct{}{}
+					sweep.Scopes[sqlite.ScopeKey(name, d.InterfaceID)] = struct{}{}
+					sweep.Alive[sqlite.AliveKey(name, d.InterfaceID, key.ChannelAddress, key.Parameter)] = struct{}{}
 				}
 			}
 		}
 	}
-	return alive
+	return sweep
 }

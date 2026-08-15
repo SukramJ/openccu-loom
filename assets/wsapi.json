@@ -29,34 +29,47 @@
   "commands": [
     {
       "category": "alarms",
-      "description": "Acknowledge (clear) a single alarm message by id.",
+      "description": "Acknowledge (clear) a single alarm message by id. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "alarm_messages.ack",
       "args": {
-        "id": "string"
+        "id": "string",
+        "central_name": "string?"
       }
     },
     {
       "category": "alarms",
-      "description": "Acknowledge (clear) every active alarm message in one pass. The response carries the number acknowledged.",
+      "description": "Acknowledge (clear) every active alarm message in one pass. The response carries the number acknowledged. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "alarm_messages.ack_all",
+      "args": {
+        "central_name": "string?"
+      },
       "result": {
         "acknowledged": "integer"
       }
     },
     {
       "category": "alarms",
-      "description": "List all active CCU alarm messages.",
-      "name": "alarm_messages.list"
+      "description": "List all active CCU alarm messages. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "alarm_messages.list",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "backup",
-      "description": "Return the current status of a running or last-completed CCU backup operation.",
-      "name": "backup.status"
+      "description": "Return the current status of a running or last-completed CCU backup operation. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "backup.status",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "backup",
-      "description": "Trigger a CCU configuration backup asynchronously.",
-      "name": "backup.trigger"
+      "description": "Trigger a CCU configuration backup asynchronously. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "backup.trigger",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "args": {
@@ -509,8 +522,11 @@
     },
     {
       "category": "firmware",
-      "description": "Report the current and available firmware versions and pending update status.",
-      "name": "firmware.info"
+      "description": "Report the current and available firmware versions and pending update status. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "firmware.info",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "firmware",
@@ -519,8 +535,11 @@
     },
     {
       "category": "firmware",
-      "description": "Trigger the CCU firmware update and reboot sequence.",
-      "name": "firmware.update"
+      "description": "Trigger the CCU firmware update and reboot sequence. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "firmware.update",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "groups",
@@ -689,13 +708,19 @@
     },
     {
       "category": "inbox",
-      "description": "List devices waiting for acceptance: those the CCU has seen in pairing mode and, when delay_new_device_creation is enabled, those this daemon parked (flagged pending_creation).",
-      "name": "inbox.list"
+      "description": "List devices waiting for acceptance: those the CCU has seen in pairing mode and, when delay_new_device_creation is enabled, those this daemon parked (flagged pending_creation). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "inbox.list",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "install_mode",
-      "description": "Close the pairing window for the named interface.",
-      "name": "install_mode.disable"
+      "description": "Close the pairing window for the named interface. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "install_mode.disable",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "install_mode",
@@ -712,19 +737,23 @@
     },
     {
       "category": "install_mode",
-      "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device.",
+      "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "install_mode.enable",
       "args": {
         "interface_id": "string",
         "duration_seconds": "integer",
         "sgtin": "string?",
-        "key": "string?"
+        "key": "string?",
+        "central_name": "string?"
       }
     },
     {
       "category": "install_mode",
-      "description": "Report the current pairing-mode state per interface.",
-      "name": "install_mode.status"
+      "description": "Report the current pairing-mode state per interface. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "install_mode.status",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "links",
@@ -870,11 +899,12 @@
     },
     {
       "category": "programs",
-      "description": "Execute a CCU program by id. When `check_conditions` is true the CCU evaluates the program's \"if\" condition and runs the program only when it is satisfied; when false (the default) the program runs unconditionally. `executed` reports whether the program actually ran — always true for an unconditional run, false for a condition-checked run whose condition was not met.",
+      "description": "Execute a CCU program by id. When `check_conditions` is true the CCU evaluates the program's \"if\" condition and runs the program only when it is satisfied; when false (the default) the program runs unconditionally. `executed` reports whether the program actually ran — always true for an unconditional run, false for a condition-checked run whose condition was not met. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "programs.execute",
       "args": {
         "id": "string",
-        "check_conditions": "boolean?"
+        "check_conditions": "boolean?",
+        "central_name": "string?"
       },
       "result": {
         "id": "string",
@@ -883,10 +913,11 @@
     },
     {
       "category": "programs",
-      "description": "Delete a CCU program by id. Removes the program from the CCU (dom.DeleteObject) and drops it from the hub mirror. Admin-gated, mirroring the REST DELETE /programs/{id} route (deletion is irreversible).",
+      "description": "Delete a CCU program by id. Removes the program from the CCU (dom.DeleteObject) and drops it from the hub mirror. Admin-gated, mirroring the REST DELETE /programs/{id} route (deletion is irreversible). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "programs.delete",
       "args": {
-        "id": "string"
+        "id": "string",
+        "central_name": "string?"
       },
       "result": {
         "deleted": "boolean",
@@ -895,10 +926,11 @@
     },
     {
       "category": "programs",
-      "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card. `include_internal` overrides whether internal (Tmp_*) programs are listed; when omitted the central's include_internal_programs config default applies.",
+      "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card. `include_internal` overrides whether internal (Tmp_*) programs are listed; when omitted the central's include_internal_programs config default applies. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "programs.list",
       "args": {
-        "include_internal": "boolean?"
+        "include_internal": "boolean?",
+        "central_name": "string?"
       }
     },
     {
@@ -1002,21 +1034,30 @@
     },
     {
       "category": "alarms",
-      "description": "Acknowledge (clear) a single service message by id.",
-      "name": "service_messages.ack"
+      "description": "Acknowledge (clear) a single service message by id. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "service_messages.ack",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "alarms",
-      "description": "Acknowledge (clear) every quittable service message in one pass. The response carries the number acknowledged.",
+      "description": "Acknowledge (clear) every quittable service message in one pass. The response carries the number acknowledged. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "service_messages.ack_all",
+      "args": {
+        "central_name": "string?"
+      },
       "result": {
         "acknowledged": "integer"
       }
     },
     {
       "category": "alarms",
-      "description": "List all active CCU service messages (UNREACH, low-battery, config-pending, etc.).",
-      "name": "service_messages.list"
+      "description": "List all active CCU service messages (UNREACH, low-battery, config-pending, etc.). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "service_messages.list",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "system",
@@ -1069,16 +1110,20 @@
     },
     {
       "category": "sysvars",
-      "description": "List all CCU system variables. Each entry carries optional `channel` / `device_address` fields when the variable is associated with a device (explicit CCU channel assignment or a device identifier in the name); absent fields mean the entity belongs on the central hub card.",
-      "name": "sysvars.list"
+      "description": "List all CCU system variables. Each entry carries optional `channel` / `device_address` fields when the variable is associated with a device (explicit CCU channel assignment or a device identifier in the name); absent fields mean the entity belongs on the central hub card. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+      "name": "sysvars.list",
+      "args": {
+        "central_name": "string?"
+      }
     },
     {
       "category": "sysvars",
-      "description": "Update the value of a CCU system variable by name.",
+      "description": "Update the value of a CCU system variable by name. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "sysvars.set",
       "args": {
         "name": "string",
-        "value": "any"
+        "value": "any",
+        "central_name": "string?"
       }
     },
     {

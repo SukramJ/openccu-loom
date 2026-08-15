@@ -193,13 +193,8 @@ func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEven
 		return
 	}
 	if len(matches) > 1 {
-		if _, err := m.svc.journal.Append(context.Background(), engine.JournalEntry{
-			Class: hmenum.AlarmJournalClassFault, Event: "sysvar_intent_ambiguous",
-			Source:  "sysvar",
-			Details: map[string]any{"sysvar": e.Name, "zones": len(matches)},
-		}); err != nil {
-			m.svc.log.Error("alarm sysvar journal append failed", "error", err)
-		}
+		m.journalIntentFault(context.Background(), "", "sysvar_intent_ambiguous",
+			map[string]any{"sysvar": e.Name, "zones": len(matches)})
 		return
 	}
 	t := matches[0].target
@@ -215,42 +210,70 @@ func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEven
 }
 
 // applyIntent executes one inbound sysvar intent against the engine.
+//
+// Every exit that leaves the zone where it was re-exports the real
+// state: the value the third party wrote already sits in the CCU
+// variable, so a policy refusal, a rejected arm and a value that is no
+// intent at all would each leave it asserting a protection level the
+// engine never entered. Nothing else converges it — the export runs off
+// real transitions only.
 func (m *sysvarMirror) applyIntent(t mirrorTarget, snap engine.ZoneSnapshot, idx int) {
 	ctx := context.Background()
 	if idx == 0 {
 		if !t.allowDisarm {
 			// Pinned by contract test: a sysvar write cannot disarm a
 			// protected zone by default.
-			if _, err := m.svc.journal.Append(ctx, engine.JournalEntry{
-				ZoneID: t.zoneID, Class: hmenum.AlarmJournalClassFault,
-				Event: "sysvar_disarm_refused", Source: "sysvar",
-			}); err != nil {
-				m.svc.log.Error("alarm sysvar journal append failed", "error", err)
-			}
-			// Re-export the real state so the sysvar cannot lie.
-			m.onStateChanged(hmevent.AlarmStateChangedEvent{ZoneID: t.zoneID, To: snap.State, Mode: snap.Mode})
+			m.journalIntentFault(ctx, t.zoneID, "sysvar_disarm_refused", nil)
+			m.reexport(t, snap)
 			return
 		}
 		if err := m.svc.engine.Disarm(ctx, t.zoneID, "", "sysvar"); err != nil {
 			m.svc.log.Warn("alarm sysvar disarm failed", "zone", t.zoneID, "error", err)
+			m.journalIntentFault(ctx, t.zoneID, "sysvar_disarm_failed",
+				map[string]any{"error": err.Error()})
+			m.reexport(t, snap)
 		}
 		return
 	}
-	if idx == sysvarAlarmIndex {
-		return // "Alarm" is an export-only state, never an intent.
-	}
 	mode := modeForSysvarIndex(idx)
-	if mode == "" {
+	if idx == sysvarAlarmIndex || mode == "" {
+		// "Alarm" is an export-only state, and an index outside the
+		// value list carries no mode — neither is an intent.
+		m.reexport(t, snap)
 		return
 	}
 	if _, err := m.svc.engine.Arm(ctx, t.zoneID, engine.ArmRequest{Mode: mode, Source: "sysvar"}); err != nil {
-		if _, jerr := m.svc.journal.Append(ctx, engine.JournalEntry{
-			ZoneID: t.zoneID, Class: hmenum.AlarmJournalClassFault,
-			Event: "sysvar_arm_failed", Source: "sysvar",
-			Details: map[string]any{"mode": string(mode), "error": err.Error()},
-		}); jerr != nil {
-			m.svc.log.Error("alarm sysvar journal append failed", "error", jerr)
+		m.journalIntentFault(ctx, t.zoneID, "sysvar_arm_failed",
+			map[string]any{"mode": string(mode), "error": err.Error()})
+		m.reexport(t, snap)
+	}
+}
+
+// reexport pushes the zone's current state back onto its mirrors. The
+// engine is asked again rather than trusting the pre-intent snapshot,
+// so the write — and the echo guard it refreshes — carry the state as
+// it stands after the attempt.
+func (m *sysvarMirror) reexport(t mirrorTarget, snap engine.ZoneSnapshot) {
+	cur := snap
+	zones := m.svc.engine.Zones()
+	for i := range zones {
+		if zones[i].ID == t.zoneID {
+			cur = zones[i]
+			break
 		}
+	}
+	m.onStateChanged(hmevent.AlarmStateChangedEvent{ZoneID: t.zoneID, To: cur.State, Mode: cur.Mode})
+}
+
+// journalIntentFault records a refused or failed inbound sysvar intent.
+// An empty zoneID files the entry system-wide (no zone could be
+// resolved).
+func (m *sysvarMirror) journalIntentFault(ctx context.Context, zoneID, event string, details map[string]any) {
+	if _, err := m.svc.journal.Append(ctx, engine.JournalEntry{
+		ZoneID: zoneID, Class: hmenum.AlarmJournalClassFault,
+		Event: event, Source: "sysvar", Details: details,
+	}); err != nil {
+		m.svc.log.Error("alarm sysvar journal append failed", "error", err)
 	}
 }
 

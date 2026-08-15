@@ -33,6 +33,25 @@ func publishSystemStatusOn(u *central.Unit, iface string) {
 	})
 }
 
+// waitForStatusPublishes polls until topic carries want probe payloads, then
+// returns the count.
+//
+// The MQTT fan-out hands the job off to a worker goroutine, so counting right
+// after events.Publish asserts on an instant the publish path has not reached
+// yet — the assertion passed or failed depending on scheduling. Only the
+// positive direction can wait; "want 0" is asserted after a short settle
+// instead, since no amount of waiting proves an absence.
+func waitForStatusPublishes(t *testing.T, client *mqtt.NoopClient, topic string, want int) int {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	got := statusPublishesFor(t, client, topic)
+	for got < want && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		got = statusPublishesFor(t, client, topic)
+	}
+	return got
+}
+
 // statusPublishesFor counts the probe payloads the noop broker saw on topic.
 func statusPublishesFor(t *testing.T, client *mqtt.NoopClient, topic string) int {
 	t.Helper()
@@ -93,7 +112,7 @@ func TestAdoptCentralWiresTheSystemStatusPlane(t *testing.T) {
 	publishSystemStatusOn(hooked, "HmIP-RF")
 
 	hookedTopic := bridge.Topics().SystemStatus("hooked")
-	if got := statusPublishesFor(t, client, hookedTopic); got != 1 {
+	if got := waitForStatusPublishes(t, client, hookedTopic, 1); got != 1 {
 		t.Fatalf("publishes to %q = %d, want 1", hookedTopic, got)
 	}
 	// The WebSocket broadcast and the REST buffer ride the same registry

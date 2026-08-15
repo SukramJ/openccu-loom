@@ -150,6 +150,78 @@ func TestGCOnce_SkipsWhenAliveSetEmpty(t *testing.T) {
 	}
 }
 
+// TestGCOnce_KeepsRowsOfCentralWhoseModelIsEmpty pins the rule that makes the
+// sweep safe on a multi-CCU install: a central whose device model is empty
+// contributed nothing to the sweep, so GC has no evidence about its rows and
+// must leave every one of them alone. An offline CCU (still blocked in the
+// readiness gate, or rebooting) looks exactly like a CCU whose devices all
+// disappeared, and only one of those two readings is recoverable.
+func TestGCOnce_KeepsRowsOfCentralWhoseModelIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	store := openGCTestStore(t)
+	reg, loadedCentral := buildGCTestRegistry(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	// The offline central sorts before the loaded one, so it is not the
+	// registry-order tail that happens to survive.
+	offline, err := central.New(central.Config{Name: "a-offline-central"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(offline); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+
+	if err := store.SaveValue(ctx, loadedCentral, "if1", "DEV:1", "STATE", true, now, now); err != nil {
+		t.Fatalf("SaveValue(loaded): %v", err)
+	}
+	if err := store.SaveValue(ctx, "a-offline-central", "if1", "OTHER:1", "STATE", true, now, now); err != nil {
+		t.Fatalf("SaveValue(offline): %v", err)
+	}
+
+	gcOnce(ctx, reg, store, slog.New(slog.DiscardHandler))
+
+	rows, err := store.LoadChannel(ctx, "a-offline-central", "if1", "OTHER:1")
+	if err != nil {
+		t.Fatalf("LoadChannel: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("gcOnce deleted the offline central's rows: got %d rows, want 1", len(rows))
+	}
+}
+
+// TestGCOnce_KeepsRowsOfInterfaceThatContributedNoKeys is the same rule one
+// level down: a single interface whose ingest failed leaves its devices out of
+// the model while its siblings on the same central load normally. Scoping the
+// sweep per central alone would classify that interface's whole cache as dead.
+func TestGCOnce_KeepsRowsOfInterfaceThatContributedNoKeys(t *testing.T) {
+	t.Parallel()
+
+	store := openGCTestStore(t)
+	reg, centralName := buildGCTestRegistry(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	if err := store.SaveValue(ctx, centralName, "if1", "DEV:1", "STATE", true, now, now); err != nil {
+		t.Fatalf("SaveValue(loaded interface): %v", err)
+	}
+	if err := store.SaveValue(ctx, centralName, "if2", "CUX:1", "STATE", true, now, now); err != nil {
+		t.Fatalf("SaveValue(silent interface): %v", err)
+	}
+
+	gcOnce(ctx, reg, store, slog.New(slog.DiscardHandler))
+
+	rows, err := store.LoadChannel(ctx, centralName, "if2", "CUX:1")
+	if err != nil {
+		t.Fatalf("LoadChannel: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("gcOnce deleted the silent interface's rows: got %d rows, want 1", len(rows))
+	}
+}
+
 // TestWireValuesCacheFlusher_RunsPeriodicGC verifies the production wiring
 // path: WireValuesCacheFlusher must itself drive gcOnce on a low-frequency
 // tick (derived from the flush interval) so GCDeadRows is reachable from

@@ -30,6 +30,11 @@ var (
 	_ interfaces.MatterEndpointSource     = (*Climate)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Climate)(nil)
 	_ interfaces.MatterChangeNotifier     = (*Climate)(nil)
+	// The Thermostat cluster's setpoint adjustment is a command, so the
+	// server has to advertise it: the dispatcher answers
+	// AcceptedCommandList from this capability and falls back to an empty
+	// list without it, which reads to a controller as "nothing to invoke".
+	_ interfaces.MatterClusterCommandLister = climateThermostatServer{}
 )
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
@@ -741,6 +746,23 @@ func (s climateThermostatServer) MatterAttributes() []uint32 {
 	}
 	return attrs
 }
+
+// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// SetpointRaiseLower (0x00) is the Thermostat cluster's only mandatory
+// command and the only one this server handles; the rest are gated on
+// features (MSCH / PRES / TSUGGEST) the projection does not advertise
+// (thermostat-cluster.element.ts:317-363). Without this list the
+// dispatcher answers AcceptedCommandList with an empty set, and a
+// controller that derives write capability from it sees a thermostat it
+// cannot command.
+func (s climateThermostatServer) MatterAcceptedCommands() []uint32 {
+	return []uint32{matterCmdSetpointRaiseLower}
+}
+
+// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// SetpointRaiseLower answers with a plain status
+// (thermostat-cluster.element.ts:317-321).
+func (s climateThermostatServer) MatterGeneratedCommands() []uint32 { return nil }
 
 // climateThermostatUIServer projects Climate onto the
 // ThermostatUserInterfaceConfiguration cluster (0x0204). HM devices

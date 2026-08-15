@@ -36,6 +36,23 @@ func (f *fakeInstallModeWriter) SetInstallMode(
 	return f.err
 }
 
+// boundHubQuery resolves the per-central hub surface the way the WS
+// command handlers do: a hub command names its central (or takes the
+// single-central default) before the adapter ever sees it, so a test that
+// calls the adapter directly has to bind the same way.
+func boundHubQuery(t *testing.T, q *wsHubQuery) *wsHubQuery {
+	t.Helper()
+	bound, err := q.CentralHub("")
+	if err != nil {
+		t.Fatalf("resolve central: %v", err)
+	}
+	hq, ok := bound.(*wsHubQuery)
+	if !ok {
+		t.Fatalf("CentralHub returned %T, want *wsHubQuery", bound)
+	}
+	return hq
+}
+
 // buildHubAdapter wires a Hub with the given install-mode trackers into a
 // Registry / HubAdapter so wsHubQuery.hub.Hub() returns it.
 func buildHubAdapter(h *hub.Hub) (*adapter.HubAdapter, *central.Registry) {
@@ -62,7 +79,7 @@ func TestWSHubQuery_InstallModeStatus_EmptyHub(t *testing.T) {
 
 	h := hub.NewHub("test-ccu")
 	hubAdapter, reg := buildHubAdapter(h)
-	q := &wsHubQuery{hub: hubAdapter, registry: reg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg})
 
 	got, err := q.InstallModeStatus(context.Background())
 	if err != nil {
@@ -82,7 +99,7 @@ func TestWSHubQuery_InstallModeStatus_NilHubAdapter(t *testing.T) {
 	// NewRegistry with no units → Hub() returns nil.
 	emptyReg := central.NewRegistry()
 	hubAdapter := adapter.NewHubAdapter(emptyReg)
-	q := &wsHubQuery{hub: hubAdapter, registry: emptyReg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: emptyReg})
 
 	_, err := q.InstallModeStatus(context.Background())
 	if err == nil {
@@ -111,7 +128,7 @@ func TestWSHubQuery_InstallModeStatus_TwoInterfaces(t *testing.T) {
 	imA.OnState(true, 60*time.Second)
 
 	hubAdapter, reg := buildHubAdapter(h)
-	q := &wsHubQuery{hub: hubAdapter, registry: reg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg})
 
 	got, err := q.InstallModeStatus(context.Background())
 	if err != nil {
@@ -166,7 +183,7 @@ func TestWSHubQuery_EnableInstallMode_Success(t *testing.T) {
 	h.PutInstallMode(im)
 
 	hubAdapter, reg := buildHubAdapter(h)
-	q := &wsHubQuery{hub: hubAdapter, registry: reg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg})
 
 	if err := q.EnableInstallMode(context.Background(), "HmIP-RF", 60); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -194,7 +211,7 @@ func TestWSHubQuery_EnableInstallMode_UnknownInterface(t *testing.T) {
 
 	h := hub.NewHub("test-ccu")
 	hubAdapter, reg := buildHubAdapter(h)
-	q := &wsHubQuery{hub: hubAdapter, registry: reg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg})
 
 	err := q.EnableInstallMode(context.Background(), "HmIP-RF", 60)
 	if err == nil {
@@ -219,7 +236,7 @@ func TestWSHubQuery_EnableInstallMode_ZeroDuration(t *testing.T) {
 	h.PutInstallMode(im)
 
 	hubAdapter, reg := buildHubAdapter(h)
-	q := &wsHubQuery{hub: hubAdapter, registry: reg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg})
 
 	err := q.EnableInstallMode(context.Background(), "HmIP-RF", 0)
 	if !errors.Is(err, hub.ErrInstallModeInvalidDuration) {
@@ -238,7 +255,7 @@ func TestWSHubQuery_DisableInstallMode_Success(t *testing.T) {
 	h.PutInstallMode(im)
 
 	hubAdapter, reg := buildHubAdapter(h)
-	q := &wsHubQuery{hub: hubAdapter, registry: reg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg})
 
 	if err := q.DisableInstallMode(context.Background(), "HmIP-RF"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -265,7 +282,7 @@ func TestWSHubQuery_DisableInstallMode_UnknownInterface(t *testing.T) {
 
 	h := hub.NewHub("test-ccu")
 	hubAdapter, reg := buildHubAdapter(h)
-	q := &wsHubQuery{hub: hubAdapter, registry: reg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg})
 
 	err := q.DisableInstallMode(context.Background(), "HmIP-RF")
 	if err == nil {
@@ -286,7 +303,7 @@ func TestWSHubQuery_InstallMode_NilHub(t *testing.T) {
 
 	emptyReg := central.NewRegistry()
 	hubAdapter := adapter.NewHubAdapter(emptyReg)
-	q := &wsHubQuery{hub: hubAdapter, registry: emptyReg}
+	q := boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: emptyReg})
 
 	t.Run("Enable", func(t *testing.T) {
 		t.Parallel()

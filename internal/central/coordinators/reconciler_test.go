@@ -114,6 +114,51 @@ func TestReconcilerEmitsDriftOnConnectivityFlip(t *testing.T) {
 	}
 }
 
+// TestReconcilerResolvesConnectivityWiredAfterRegistration reproduces the
+// production wiring order. The reconcile job is registered while the Hub still
+// has no connectivity aggregate — that aggregate is created much later, by
+// WireHub, during the readiness-gated south-bound bring-up. A Reconciler that
+// captures the aggregate when the job is registered therefore holds nil
+// forever and every reconcile pass returns without doing anything, so no
+// ConnectivityChangedEvent is ever published by the daemon.
+//
+// The order below is the load-bearing part: the aggregate must arrive AFTER
+// the Reconciler is built, exactly as it does in production.
+func TestReconcilerResolvesConnectivityWiredAfterRegistration(t *testing.T) {
+	bus := events.NewBus()
+	h := hub.NewHub("ccu1")
+
+	var connChanged []hmevent.ConnectivityChangedEvent
+	defer events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) { connChanged = append(connChanged, e) })()
+
+	// Built while h.ConnectivityDataPoints() is still nil.
+	r := &coordinators.Reconciler{
+		CentralName: "ccu1",
+		HubModel:    h,
+		Bus:         bus,
+		Connect: coordinators.ProbeFunc(func(_ context.Context) ([]coordinators.InterfaceReachability, error) {
+			return []coordinators.InterfaceReachability{
+				{InterfaceID: "HmIP-RF", Reachable: false},
+			}, nil
+		}),
+	}
+
+	// WireHub runs later and installs the aggregate.
+	connectivity := hub.NewConnectivity()
+	connectivity.OnState("HmIP-RF", true)
+	h.SetConnectivity(connectivity)
+
+	if err := r.Reconcile(context.Background()); err != nil {
+		t.Fatalf("Reconcile err: %v", err)
+	}
+	if len(connChanged) != 1 || connChanged[0].InterfaceID != "HmIP-RF" || connChanged[0].Reachable {
+		t.Fatalf("expected ConnectivityChanged HmIP-RF=false, got %+v", connChanged)
+	}
+	if reachable, _ := connectivity.Reachable("HmIP-RF"); reachable {
+		t.Fatal("connectivity cache should now be false")
+	}
+}
+
 func TestReconcilerNoEventWhenStateMatches(t *testing.T) {
 	bus := events.NewBus()
 	connectivity := hub.NewConnectivity()

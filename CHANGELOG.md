@@ -4,6 +4,88 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+A full-codebase audit found 272 verified defects; this change fixes the
+52 rated high severity. They are not 52 unrelated bugs — most are
+instances of a handful of habits, and the fixes are grouped that way
+below. Every linter was green on all of them, so none of this was
+mechanically detectable.
+
+- **Device configuration writes never reached the MASTER paramset.**
+  `Channel.Set` resolved the data point with the paramset key it was
+  given and then dispatched through `setValue`, which is VALUES-only on
+  the wire; the collector did the same whenever a batch happened to hold
+  exactly one parameter, which is what the SPA's channel editor always
+  sends. A whole-number value for a FLOAT parameter was rejected outright
+  because the request body was converted without consulting the
+  descriptor — the same field saved fine as `2.5`.
+- **Several subsystems read a collaborator once, before it existed.** The
+  connectivity plane was dead in its entirety: no per-interface state on
+  REST, MQTT or the WebSocket, and no down-detection for a radio that
+  dies mid-flight. A capture started at runtime never reached any logger
+  derived at boot, so the support archive was missing all south-bound
+  logging. Per-subsystem log levels were inert. Cache reset, the
+  callback source-IP allowlist and the diagnostics health scores were
+  blind to a CCU adopted at runtime.
+- **Authorization and secrets.** The MCP mount checked only that someone
+  had authenticated, so a viewer token reached the device-write and
+  alarm-control tools. `GET /matter/setup-payload` handed the
+  commissioning passcode to any authenticated identity. `config export`
+  wrote the MQTT, OIDC and Matter credentials in cleartext regardless of
+  `--include-secrets`. A token-only deployment counted as "no
+  authentication configured", leaving the unauthenticated first-run
+  setup endpoint open. WebSocket connections kept their identity
+  forever, so revoking a credential never reached an open socket. CASE
+  Sigma3 committed the peer's node ID and authenticated tags out of a
+  certificate it had not yet verified.
+- **Data loss and hangs.** The values-cache GC deleted every persisted
+  row of a CCU that was merely offline. The daily history rollup spun
+  forever in time zones whose DST transition lands on local midnight.
+  A broker that was down at boot disabled MQTT for the process lifetime.
+  The circuit breaker counted a cancelled caller as a transport failure
+  and tripped against a healthy CCU.
+- **Wrong values on normal paths.** `IsHeating()` was permanently true
+  and derived binary sensors never fired, both because an ENUM arrives
+  as a number on HmIP and as a string on BidCos and each site assumed
+  one. Boost/comfort/eco were rejected before the code implementing
+  them. A multi-level `topic_base` silently disabled the entire inbound
+  MQTT command plane. On a CCU with CUxD but no BidCos interface, the
+  "primary" backend resolved to CUxD and produced empty backups reported
+  as successful. Matter advertised air-quality sensors without the
+  mandatory cluster, measurement endpoints without a device type, window
+  coverings with an empty command list, and pressure ten times too
+  large.
+- **The alarm domain.** A partial interface recovery marked sensors
+  behind a still-dead radio as available; an optical siren row silenced
+  the acoustic row on the same channel; a rejected arm/disarm left the
+  CCU mirror variable asserting the state the engine had refused.
+- **The SPA.** After any WebSocket drop every view showed pre-outage
+  data behind a green connection badge, because the client never used
+  the resume protocol its own schema documents. Channel pickers were
+  permanently empty. The Diagnostics page went blank exactly when the
+  daemon was unhealthy. Colour sliders wrote to the CCU on every mouse
+  move. The confirm dialog accepted Enter while Cancel had focus. A
+  persisted CCU filter could hide every alarm message with no control to
+  clear it.
+
+Known limitations, both deliberately left in place:
+
+- Device lookups still key on the CCU address alone, so two CCUs that
+  share a device address resolve to the first one. Fixing it is a REST
+  contract change rather than a local fix, and is tracked separately.
+- A bridged endpoint carrying only a Battery, Power or Energy
+  measurement still advertises a DeviceTypeList of BridgedNode alone,
+  with no application device type. Suppressing those endpoints — the
+  obvious fix — removes the Electrical{Power,Energy}Measurement clusters
+  that controllers read today, which the chip-tool suite caught as a
+  regression. The correct fix gives them their real device types,
+  PowerSource (0x11) and ElectricalSensor (0x510); the latter mandates
+  the PowerTopology cluster, which this daemon does not implement yet.
+  That is a feature, not a bug fix, so it is out of scope here.
+
 ## [0.59.2]
 
 ### Fixed

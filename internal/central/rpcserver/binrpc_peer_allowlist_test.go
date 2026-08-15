@@ -27,7 +27,7 @@ import (
 func TestBINRPCServerServe_DisallowedPeer_ClosedBeforeHandlerSpawns(t *testing.T) {
 	srv, err := NewBINRPCServer(BINRPCConfig{
 		Addr:          "127.0.0.1:0",
-		PeerAllowlist: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+		PeerAllowlist: staticPeerAllowlist([]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}),
 	})
 	if err != nil {
 		t.Fatalf("NewBINRPCServer: %v", err)
@@ -84,7 +84,7 @@ func TestBINRPCServerServe_AllowedPeer_IsHandled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, err := NewBINRPCServer(BINRPCConfig{
 				Addr:          "127.0.0.1:0",
-				PeerAllowlist: tc.allowlist,
+				PeerAllowlist: staticPeerAllowlist(tc.allowlist),
 			})
 			if err != nil {
 				t.Fatalf("NewBINRPCServer: %v", err)

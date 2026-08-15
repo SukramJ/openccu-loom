@@ -199,6 +199,12 @@ export function connectEvents(): EventStream {
   >();
   const resyncHandlers = new Set<() => void>();
   let current: "connecting" | "open" | "closed" = "connecting";
+  // Highest cursor this stream has seen. The daemon stamps every event
+  // with a monotonic `seq` and replays buffered events above the `since`
+  // a subscribe carries, so carrying the cursor across a reconnect is
+  // what closes the gap a laptop sleep, a WiFi blip or an Ingress
+  // bounce opens. 0 means "no cursor yet" — seq starts at 1.
+  let lastSeq = 0;
   // A boot snapshot signals once per central, so a multi-CCU daemon
   // emits a short burst. Coalesce it into one reload.
   let resyncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -216,6 +222,21 @@ export function connectEvents(): EventStream {
     for (const h of stateHandlers) h(current);
   }
 
+  /**
+   * Absorb the daemon's cursor from any frame that carries one — events
+   * and the `replay_done` acknowledgement alike. The daemon assigns
+   * `seq` in ascending order, so taking only the higher value costs
+   * nothing and keeps a malformed frame from rewinding the resume point
+   * into events this client has already seen.
+   */
+  function noteSeq(raw: unknown): void {
+    if (!raw || typeof raw !== "object") return;
+    const seq = (raw as { seq?: unknown }).seq;
+    if (typeof seq === "number" && Number.isFinite(seq) && seq > lastSeq) {
+      lastSeq = seq;
+    }
+  }
+
   function connect() {
     if (closed) return;
     setState("connecting");
@@ -228,10 +249,19 @@ export function connectEvents(): EventStream {
       // the floor for this client. The SPA wants the full firehose
       // (devices, hub, central, interfaces) so the wildcard catches
       // future event topics too.
+      //
+      // A reconnect carries the cursor so the daemon either replays the
+      // events this client missed or answers `replay_lost`, which drives
+      // the reload path below. A subscribe without `since` gets neither,
+      // leaving the views holding pre-outage state. The first connect has
+      // nothing to resume from.
+      const frame: { op: string; topics: string[]; since?: number } = {
+        op: "subscribe",
+        topics: ["*"],
+      };
+      if (lastSeq > 0) frame.since = lastSeq;
       try {
-        socket?.send(
-          JSON.stringify({ op: "subscribe", topics: ["*"] }),
-        );
+        socket?.send(JSON.stringify(frame));
       } catch {
         // Subscribing is best-effort: a transient send error here is
         // recovered by the close→reconnect path.
@@ -258,7 +288,18 @@ export function connectEvents(): EventStream {
         }
         return;
       }
+      noteSeq(parsed);
       if (isResyncSignal(parsed)) {
+        // `oldest_seq` is the anchor to resume above: everything below it
+        // either arrived or was dropped and this client cannot tell
+        // which. Adopting it verbatim — not only when it grows — is what
+        // recovers from a daemon restart, whose seq counter starts over
+        // at 0 and would otherwise leave a permanently unreachable
+        // cursor behind.
+        const anchor = (parsed as { oldest_seq?: unknown }).oldest_seq;
+        if (typeof anchor === "number" && Number.isFinite(anchor)) {
+          lastSeq = anchor;
+        }
         if (resyncTimer !== null) clearTimeout(resyncTimer);
         resyncTimer = setTimeout(() => {
           resyncTimer = null;

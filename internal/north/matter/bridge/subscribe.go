@@ -204,12 +204,7 @@ func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription
 		EventReports:    authorizedEvents,
 	}
 
-	body, err := EncodeReportData(report)
-	if err != nil {
-		debugReplyError(b.logger, "encode_event_report", target.src, err)
-		return
-	}
-	counter, err := b.sendUnsolicitedIM(target, im.OpcodeReportData, body)
+	counters, err := b.sendReportChunks(target, report)
 	if err != nil {
 		b.routing.subTargets.Delete(sub.ID)
 		b.logger.Debug("matter.tx.subscribe.event_report",
@@ -217,7 +212,7 @@ func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription
 			slog.String("err", err.Error()))
 		return
 	}
-	if counter != 0 {
+	for _, counter := range counters {
 		b.reportCounterOwner.Store(reportCounterKey(target.sessionID, counter), sub.ID)
 	}
 	b.logger.Debug("matter.tx.subscribe.event_report",
@@ -371,12 +366,7 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 		report.SuppressResponse = true
 	}
 
-	body, err := EncodeReportData(report)
-	if err != nil {
-		debugReplyError(b.logger, "encode_ongoing_report", target.src, err)
-		return
-	}
-	counter, freshExch, err := b.sendInitiatedIM(target, body)
+	counters, freshExch, err := b.sendInitiatedReport(target, report)
 	if err != nil {
 		// matter.js's ServerSubscription.ts retries an ongoing report
 		// up to 2 times before cancelling. Mirror that: per-subscription
@@ -424,8 +414,10 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 	b.subSendErrorCount.Delete(sub.ID)
 	// Record the counter→subID mapping so the ACK pump can close
 	// the subscription if the peer never ACKs. Best-effort sends
-	// (NeedsAck=false / no tracker) return counter=0; skip in that case.
-	if counter != 0 {
+	// (NeedsAck=false / no tracker) yield no counters; every chunk of a
+	// split report gets its own entry because any one of them can be
+	// the datagram the peer stops acking.
+	for _, counter := range counters {
 		b.reportCounterOwner.Store(reportCounterKey(target.sessionID, counter), sub.ID)
 	}
 	b.logger.Debug("matter.tx.subscribe.report",
@@ -531,14 +523,60 @@ func (b *Bridge) nextOutboundExchangeID() uint16 {
 	}
 }
 
-// sendInitiatedIM ships an IM datagram on a **fresh bridge-initiated
+// sendReportChunks splits report into per-datagram chunks and ships
+// them in order on target's exchange, returning the MRP counter of
+// every chunk that was tracked (empty when the bridge sends
+// best-effort). All chunks but the last carry MoreChunkedMessages
+// (Matter §10.6.6), which [chunkReportData] stamps.
+//
+// Chunking is not optional on any ReportData path: the UDP listener
+// rejects a datagram above its size cap outright, and the subscription
+// engine has already drained and cleared the dirty set / event queue
+// by the time a reporter runs — an oversized report therefore loses
+// every change it carried, with no re-queue behind it. matter.js runs
+// ongoing updates through the same chunking messenger as the initial
+// report
+// (packages/protocol/src/interaction/InteractionMessenger.ts:347
+// sendDataReport).
+//
+// Unlike [Bridge.streamInitialReportChunks] this does not block for
+// the peer's per-chunk IM StatusResponse: the ongoing reporters run on
+// the subscription engine's tick goroutine, which serves every other
+// subscription behind them. MRP carries the reliability instead —
+// each chunk is tracked and retransmitted independently.
+func (b *Bridge) sendReportChunks(target subTarget, report im.ReportData) ([]uint32, error) {
+	chunks, err := chunkReportData(report, reportChunkPayloadBudget)
+	if err != nil {
+		debugReplyError(b.logger, "chunk_ongoing_report", target.src, err)
+		return nil, err
+	}
+	counters := make([]uint32, 0, len(chunks))
+	for _, chunk := range chunks {
+		body, err := EncodeReportData(chunk)
+		if err != nil {
+			debugReplyError(b.logger, "encode_ongoing_report", target.src, err)
+			return nil, err
+		}
+		counter, err := b.sendUnsolicitedIM(target, im.OpcodeReportData, body)
+		if err != nil {
+			return nil, err
+		}
+		if counter != 0 {
+			counters = append(counters, counter)
+		}
+	}
+	return counters, nil
+}
+
+// sendInitiatedReport ships report on a **fresh bridge-initiated
 // exchange** instead of reusing the commissioner's Subscribe exchange.
 // Use this for ongoing subscribe reports (matter.js's
 // ServerSubscription.#sendUpdateMessage pattern,
-// packages/node/src/node/server/ServerSubscription.ts:764). Returns the
-// allocated exchange ID so the caller can correlate the
-// signalStatusResponseRX call back into the per-subscription state
-// machine.
+// packages/node/src/node/server/ServerSubscription.ts:764). Every
+// chunk of one report rides the same exchange — a chunk sequence is a
+// single IM transaction. Returns the allocated exchange ID so the
+// caller can correlate the signalStatusResponseRX call back into the
+// per-subscription state machine.
 //
 // Background: ongoing reports on the original Subscribe exchange are
 // MRP-ACKed by Apple at the SecureChannel layer but never elicit the
@@ -551,7 +589,7 @@ func (b *Bridge) nextOutboundExchangeID() uint16 {
 // "subscription stays alive across exchanges" expectation via the
 // negotiated SubscriptionID — which matches the commissioner's
 // expectation regardless of which exchange carries the report.
-func (b *Bridge) sendInitiatedIM(target subTarget, payload []byte) (counter uint32, exchangeID uint16, err error) {
+func (b *Bridge) sendInitiatedReport(target subTarget, report im.ReportData) (counters []uint32, exchangeID uint16, err error) {
 	freshExchangeID := b.nextOutboundExchangeID()
 	freshTarget := target
 	freshTarget.exchangeID = freshExchangeID
@@ -559,11 +597,11 @@ func (b *Bridge) sendInitiatedIM(target subTarget, payload []byte) (counter uint
 	// `Initiator: !target.peerInitiator` evaluates to true — we are the
 	// exchange initiator on this fresh exchange.
 	freshTarget.peerInitiator = false
-	counter, err = b.sendUnsolicitedIM(freshTarget, im.OpcodeReportData, payload)
+	counters, err = b.sendReportChunks(freshTarget, report)
 	if err != nil {
-		return 0, 0, err
+		return nil, 0, err
 	}
-	return counter, freshExchangeID, nil
+	return counters, freshExchangeID, nil
 }
 
 func (b *Bridge) sendUnsolicitedIM(target subTarget, opcode uint8, payload []byte) (uint32, error) {
@@ -578,12 +616,13 @@ func (b *Bridge) sendUnsolicitedIM(target subTarget, opcode uint8, payload []byt
 
 	// sendUnsolicitedIM is the low-level primitive that ships an IM
 	// datagram on whichever exchange the caller has prepared in `target`.
-	// Two callers, two semantics:
+	// sendReportChunks is the caller, and the target it hands down
+	// carries one of two semantics:
 	//   - reportSubscriptionEvents stays on the peer-opened Subscribe
 	//     exchange (target.peerInitiator=true → Initiator=false).
-	//   - sendInitiatedIM forges a fresh bridge-opened exchange
+	//   - sendInitiatedReport forges a fresh bridge-opened exchange
 	//     (target.peerInitiator=false → Initiator=true) for ongoing
-	//     attribute reports. See sendInitiatedIM's doc for the Apple
+	//     attribute reports. See sendInitiatedReport's doc for the Apple
 	//     HMOutlet projection background.
 	respProto := message.ProtocolHeader{
 		Initiator:  !target.peerInitiator, // caller picks via target.peerInitiator
@@ -921,14 +960,14 @@ func (b *Bridge) wireMeasurementNotifier(mgr *subscription.Manager, ep *endpoint
 // When the notifier does not also implement
 // [interfaces.MatterClusterServer] — the measurement-source path,
 // where the source is a sensor-DP and the cluster server is materialised
-// separately — we fall back to the full path set. The measurement
-// projection has exactly one reportable cluster per endpoint by
-// construction (TemperatureMeasurement, RelativeHumidityMeasurement,
-// …), so the fallback's wider set is still effectively one cluster's
-// attributes plus the static Descriptor/BDBI ones; the historical
-// shipping behavior stays unchanged for that path. A future
-// per-cluster-attribute refinement can tighten this further if Apple
-// turns out to dislike the static-attr noise on sensor endpoints too.
+// separately — we fall back to the full path set. Every reportable
+// cluster on such an endpoint is derived from that one source (an
+// air-quality endpoint serves both the concentration cluster and the
+// AirQuality level computed from it), so the wider set still carries
+// only attributes that genuinely moved, plus the static Descriptor/BDBI
+// ones. A future per-cluster-attribute refinement can tighten this
+// further if Apple turns out to dislike the static-attr noise on sensor
+// endpoints too.
 func filterPathsByNotifierCluster(notifier interfaces.MatterChangeNotifier, paths []im.ConcreteAttributePath) []im.ConcreteAttributePath {
 	srv, ok := notifier.(interfaces.MatterClusterServer)
 	if !ok {

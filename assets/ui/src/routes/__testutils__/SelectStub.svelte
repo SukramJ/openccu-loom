@@ -11,7 +11,14 @@
     value?: string;
     onValueChange?: (value: string) => void;
   };
-  let { options, value, onValueChange }: Props = $props();
+  // `value` is bindable like the real Select's, so a view that drives its
+  // state through `bind:value` behaves the same against this stub.
+  let { options, value = $bindable(""), onValueChange }: Props = $props();
+
+  function pick(next: string) {
+    value = next;
+    onValueChange?.(next);
+  }
 </script>
 
 <div role="listbox">
@@ -20,7 +27,7 @@
       type="button"
       role="option"
       aria-selected={o.value === value}
-      onclick={() => onValueChange?.(o.value)}
+      onclick={() => pick(o.value)}
     >
       {o.label}
     </button>

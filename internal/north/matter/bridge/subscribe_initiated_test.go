@@ -15,7 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
 )
 
-// TestSendInitiatedIM_FreshExchange locks the F4 fix: ongoing attribute
+// TestSendInitiatedReport_FreshExchange locks the F4 fix: ongoing attribute
 // reports must travel on a fresh bridge-initiated exchange, not the
 // commissioner's Subscribe exchange. Mirrors matter.js
 // packages/node/src/node/server/ServerSubscription.ts:764 and
@@ -26,7 +26,7 @@ import (
 //   - proto.Initiator == true (we opened the exchange)
 //   - freshExchangeID in (0, 0x7FFF]
 //   - returned freshExchangeID matches proto.ExchangeID
-func TestSendInitiatedIM_FreshExchange(t *testing.T) {
+func TestSendInitiatedReport_FreshExchange(t *testing.T) {
 	t.Parallel()
 
 	bridgeKey := bytes.Repeat([]byte{0xAA}, 16)
@@ -93,10 +93,22 @@ func TestSendInitiatedIM_FreshExchange(t *testing.T) {
 		peerInitiator:       true,
 	}
 
-	payload := []byte{0xDE, 0xAD, 0xBE, 0xEF, 0x42}
-	counter, freshExchangeID, err := b.sendInitiatedIM(target, payload)
+	report := im.ReportData{
+		HasSubscription: true,
+		SubscriptionID:  0x99,
+		Reports: []im.AttributeReport{{
+			Path:        im.ConcreteAttributePath{Endpoint: 3, Cluster: 0x0006, Attribute: 0x0000},
+			DataVersion: 12,
+			Value:       im.AttributeValue{Value: true},
+		}},
+	}
+	payload, err := EncodeReportData(report)
 	if err != nil {
-		t.Fatalf("sendInitiatedIM: %v", err)
+		t.Fatalf("EncodeReportData: %v", err)
+	}
+	counters, freshExchangeID, err := b.sendInitiatedReport(target, report)
+	if err != nil {
+		t.Fatalf("sendInitiatedReport: %v", err)
 	}
 
 	if freshExchangeID == 0 || freshExchangeID > 0x7FFF {
@@ -105,8 +117,8 @@ func TestSendInitiatedIM_FreshExchange(t *testing.T) {
 	if freshExchangeID == peerExchangeID {
 		t.Errorf("freshExchangeID = %d equals target.exchangeID; must be different", freshExchangeID)
 	}
-	if counter == 0 {
-		t.Fatal("sendInitiatedIM returned counter=0; want non-zero (NeedsAck mode)")
+	if len(counters) != 1 {
+		t.Fatalf("sendInitiatedReport returned %d counters; want 1 (single-chunk report, NeedsAck mode)", len(counters))
 	}
 
 	if err := peerConn.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
@@ -151,11 +163,11 @@ func TestSendInitiatedIM_FreshExchange(t *testing.T) {
 	}
 }
 
-// TestSendInitiatedIM_MonotonicallyIncreasing verifies that successive
+// TestSendInitiatedReport_MonotonicallyIncreasing verifies that successive
 // calls produce strictly increasing exchange IDs, matching
 // matter.js packages/protocol/src/protocol/ExchangeManager.ts:130-139
 // which atomically increments and masks to 15 bits.
-func TestSendInitiatedIM_MonotonicallyIncreasing(t *testing.T) {
+func TestSendInitiatedReport_MonotonicallyIncreasing(t *testing.T) {
 	t.Parallel()
 
 	bridgeKey := bytes.Repeat([]byte{0xCC}, 16)
@@ -209,15 +221,15 @@ func TestSendInitiatedIM_MonotonicallyIncreasing(t *testing.T) {
 		peerInitiator: true,
 	}
 
-	payload := []byte{0x01}
+	payload := im.ReportData{HasSubscription: true, SubscriptionID: 1}
 
-	_, id1, err := b.sendInitiatedIM(target, payload)
+	_, id1, err := b.sendInitiatedReport(target, payload)
 	if err != nil {
-		t.Fatalf("sendInitiatedIM call#1: %v", err)
+		t.Fatalf("sendInitiatedReport call#1: %v", err)
 	}
-	_, id2, err := b.sendInitiatedIM(target, payload)
+	_, id2, err := b.sendInitiatedReport(target, payload)
 	if err != nil {
-		t.Fatalf("sendInitiatedIM call#2: %v", err)
+		t.Fatalf("sendInitiatedReport call#2: %v", err)
 	}
 
 	if id2 <= id1 {

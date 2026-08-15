@@ -424,7 +424,12 @@ func (c *CallParameterCollector) dispatch(
 	paramset map[string]any,
 	priority hmenum.CommandPriority,
 ) error {
-	if len(paramset) == 1 {
+	// The single-parameter shortcut is only sound for VALUES. SetValue
+	// carries no paramset key and reaches the wire as xml-rpc setValue,
+	// which always targets VALUES — so a lone MASTER (or LINK) parameter
+	// has to go through PutParamset even though a batch of one would
+	// otherwise be cheaper.
+	if len(paramset) == 1 && paramsetKey == hmenum.ParamsetKeyValues {
 		for param, value := range paramset {
 			return c.backend.SetValue(ctx, channelAddress, hmenum.Parameter(param), value, priority)
 		}

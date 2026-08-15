@@ -100,19 +100,22 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 		}
 	}
 	// Wire and register the Reconciler so the slow-cadence
-	// connectivity/health pass emits ConnectivityChangedEvent on
-	// drift. The Connectivity and Metrics slots come from the Hub
-	// aggregate (wired by WireHub once the JSON-RPC session is up,
-	// nil-tolerant before then). Without these the per-job
-	// reconcileConnectivity / reconcileSystemHealth passes would
-	// land on nil and short-circuit — the slow drift sweep would
-	// never fire even though the job slot was registered.
+	// connectivity/health pass emits ConnectivityChangedEvent on drift.
+	//
+	// The Hub itself is handed over, not its connectivity aggregate: that
+	// aggregate does not exist yet at this point. WireHub creates it during
+	// the readiness-gated south-bound bring-up, which runs long after job
+	// registration, and Hub.SetConnectivity replaces the Hub's pointer
+	// rather than filling in the nil a caller already copied. Passing
+	// ConnectivityDataPoints() here therefore captured a permanent nil and
+	// every reconcile pass short-circuited — invisibly, because a dead pass
+	// and a clean one look identical from outside.
 	if u.Reconciler == nil {
 		u.Reconciler = &coordinators.Reconciler{
-			CentralName:  u.Name(),
-			Bus:          u.EventBus,
-			Connectivity: u.HubModel.ConnectivityDataPoints(),
-			Metrics:      u.HubModel.Metrics,
+			CentralName: u.Name(),
+			Bus:         u.EventBus,
+			HubModel:    u.HubModel,
+			Metrics:     u.HubModel.Metrics,
 		}
 	}
 	jobs.Reconcile = u.Reconciler.Reconcile

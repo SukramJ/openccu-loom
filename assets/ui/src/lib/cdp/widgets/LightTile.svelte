@@ -247,11 +247,10 @@
           disabled={!colorDP.operations.write}
           label={t("cdp.light.color")}
           onChange={(v) => {
-            // The fixed-colour dispatch takes a numeric slot (the COLOR enum
-            // index); ControlColorPalette emits the option label, so map it
-            // back to its index in the descriptor's value list.
-            const slot = colorOptions.indexOf(v);
-            if (slot >= 0) invoke("set_color", { slot });
+            // The label, never its position: the COLOR descriptor orders its
+            // value list by the RGB bit pattern, so the index the palette sits
+            // at is not the slot number the daemon's colour enum uses.
+            invoke("set_color", { label: v });
           }}
         />
       {/if}

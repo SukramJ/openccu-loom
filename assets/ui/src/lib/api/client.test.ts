@@ -758,3 +758,44 @@ describe("api.searchWiredDevices — wired-bus scan request", () => {
     expect(body).not.toHaveProperty("central");
   });
 });
+
+describe("api.health — 503 carries the snapshot, not an error", () => {
+  // The daemon answers GET /health with 503 as soon as every interface
+  // component is unhealthy — a single-CCU install whose CCU is offline or
+  // rebooting — and the body is a complete Health snapshot either way
+  // (openapi.yaml documents both 200 and 503 with the Health schema).
+  // Throwing it away blanks Diagnostics on exactly the outage it exists
+  // to explain, and leaves the connectivity lights on their last green.
+  const unhealthy = {
+    status: "unhealthy",
+    components: [
+      { name: "ccu1-HmIP-RF", status: "unhealthy", detail: "no connection" },
+    ],
+  };
+
+  it("resolves with the body the daemon serves alongside 503", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(unhealthy, 503));
+    await expect(api.health()).resolves.toMatchObject(unhealthy);
+  });
+
+  it("still rejects on a status the contract does not document as a payload", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "boom" }, 500));
+    await expect(api.health()).rejects.toBeTruthy();
+  });
+});
+
+describe("api.listChannels — bare-array response", () => {
+  // GET /devices/{addr}/channels answers with a bare JSON array. A client
+  // that expects a wrapper reads `.items` off an Array, gets undefined and
+  // renders an empty channel picker for every device.
+  it("resolves with the array the daemon serves", async () => {
+    const channels = [
+      { address: "ABC0000001:1", number: 1, type: "SWITCH", name: "" },
+      { address: "ABC0000001:2", number: 2, type: "SWITCH", name: "" },
+    ];
+    fetchMock.mockResolvedValueOnce(jsonResponse(channels));
+    const result = await api.listChannels("ABC0000001");
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(2);
+  });
+});

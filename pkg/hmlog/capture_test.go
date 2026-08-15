@@ -230,6 +230,51 @@ func TestTeeHandler_WithoutAttach_RecordsGoToInnerOnly(t *testing.T) {
 	}
 }
 
+// TestTeeHandler_AttachReachesLoggersDerivedBeforeAttach pins that a capture
+// started at runtime reaches loggers that were derived earlier via With().
+//
+// This is the production order: every subsystem takes its logger with
+// With("logger", …) during boot, and the operator starts a capture much later
+// through the REST endpoint. If each derived handler owns a private copy of
+// the sink pointer, Attach on the root reaches none of them and the support
+// archive silently contains only records logged through the root logger.
+func TestTeeHandler_AttachReachesLoggersDerivedBeforeAttach(t *testing.T) {
+	t.Parallel()
+	var innerBuf bytes.Buffer
+	inner := slog.NewJSONHandler(&innerBuf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	tee := hmlog.NewTeeHandler(inner)
+
+	// Derived at boot, before any capture exists.
+	derived := slog.New(tee).With("logger", "client.xmlrpc")
+	grandchild := derived.WithGroup("wire").With("interface", "HmIP-RF")
+
+	// Operator starts the capture afterwards.
+	sink := hmlog.NewCaptureSink(0, false)
+	tee.Attach(sink)
+
+	derived.Info("south-bound call")
+	grandchild.Info("wire frame")
+
+	if sink.Bytes() == 0 {
+		t.Fatal("capture attached at runtime received nothing from loggers derived before the attach")
+	}
+	got := string(sink.Snapshot())
+	if !strings.Contains(got, "south-bound call") {
+		t.Errorf("sink is missing the With()-derived logger's record; got %q", got)
+	}
+	if !strings.Contains(got, "wire frame") {
+		t.Errorf("sink is missing the WithGroup()-derived logger's record; got %q", got)
+	}
+
+	// Detach must reach the derived handlers too, or the capture never stops.
+	tee.Detach()
+	before := sink.Bytes()
+	derived.Info("after detach")
+	if sink.Bytes() != before {
+		t.Error("records still reached the sink after Detach")
+	}
+}
+
 // --------------------------------------------------------------------------
 // TeeHandler — Attach + Handle records land in both
 // --------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.29.0
+  version: 5.30.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6020,6 +6020,10 @@ paths:
     get:
       operationId: matterSetupPayload
       summary: Bridge's QR + manual pairing code
+      description: >-
+        Admin only. The response carries the commissioning passcode and the QR
+        and manual codes derived from it, so anyone holding it can commission
+        the bridge into their own fabric while a window is open.
       tags: [matter]
       responses:
         "200":
@@ -6027,6 +6031,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MatterSetupPayload" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503":
           description: Matter commissioning not configured (passcode = 0)

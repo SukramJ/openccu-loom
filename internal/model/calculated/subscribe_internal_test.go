@@ -170,36 +170,73 @@ func TestSubscribeTemperatureHumidityCaptureFallbackAlias(t *testing.T) {
 // DerivedBinarySensor.Subscribe — real channel with STATE param
 // ---------------------------------------------------------------------------
 
+// TestDerivedBinarySensorSubscribeRealChannel drives the sensor through
+// both shapes a read-only ENUM source arrives in.
+//
+// The index case is the one production builds: a read-only ENUM resolves
+// to an integer sensor, so the wire value pushed through the source DP is
+// the 0-based VALUE_LIST index, never the label. Asserting the label form
+// alone left every derived binary sensor permanently valueless on the
+// devices the registry maps.
 func TestDerivedBinarySensorSubscribeRealChannel(t *testing.T) {
-	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "WIN0001", Model: "HmIP-SRH"})
-	ch := d.AddChannel("WIN0001:1", 1, "SHUTTER_CONTACT", hmenum.ParamsetKeyValues)
+	valueList := []string{"CLOSED", "TILTED", "OPEN"}
 
-	enumDP := generic.NewStringSensor(generic.Spec{
-		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterState)},
-		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeEnum, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
-	})
-	ch.Put(enumDP)
-
-	s := NewDerivedBinarySensor(hmenum.CalculatedParameterWindowOpen, []string{"OPEN"}, []string{"CLOSED"})
-	s.SourceParameter = hmenum.ParameterState
-
-	unsub := s.Subscribe(ch)
-	if unsub == nil {
-		t.Fatal("Subscribe must return a non-nil unsubscribe closure for valid channel+param")
+	cases := []struct {
+		name string
+		// build returns the source DP in its production shape plus the
+		// closure that pushes an "open" event in that shape.
+		build func(generic.Spec) (device.ParameterDataPoint, func())
+	}{
+		{
+			name: "enum index",
+			build: func(s generic.Spec) (device.ParameterDataPoint, func()) {
+				dp := generic.NewIntegerSensor(s)
+				return dp, func() { dp.OnEvent(int32(2)) }
+			},
+		},
+		{
+			name: "enum label",
+			build: func(s generic.Spec) (device.ParameterDataPoint, func()) {
+				dp := generic.NewStringSensor(s)
+				return dp, func() { dp.OnEvent("OPEN") }
+			},
+		},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "WIN0001", Model: "HmIP-SRH"})
+			ch := d.AddChannel("WIN0001:1", 1, "SHUTTER_CONTACT", hmenum.ParamsetKeyValues)
 
-	enumDP.OnAnyUpdate(nil)
-	enumDP.OnEvent("OPEN")
+			enumDP, fireOpen := tc.build(generic.Spec{
+				Key: hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterState)},
+				Descriptor: hmproto.ParameterData{
+					Type:       hmenum.ParameterTypeEnum,
+					Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+					ValueList:  valueList,
+				},
+			})
+			ch.Put(enumDP)
 
-	v, ok := s.Value()
-	if !ok {
-		t.Fatal("DerivedBinarySensor should report a value after receiving OPEN from channel")
+			s := NewDerivedBinarySensor(hmenum.CalculatedParameterWindowOpen, []string{"OPEN"}, []string{"CLOSED"})
+			s.SourceParameter = hmenum.ParameterState
+
+			unsub := s.Subscribe(ch)
+			if unsub == nil {
+				t.Fatal("Subscribe must return a non-nil unsubscribe closure for valid channel+param")
+			}
+			defer unsub()
+
+			fireOpen()
+
+			v, ok := s.Value()
+			if !ok {
+				t.Fatal("DerivedBinarySensor should report a value after receiving OPEN from channel")
+			}
+			if !v {
+				t.Fatalf("OPEN must map to true; got %v", v)
+			}
+		})
 	}
-	if !v {
-		t.Fatalf("OPEN must map to true; got %v", v)
-	}
-
-	unsub()
 }
 
 // ---------------------------------------------------------------------------

@@ -352,7 +352,7 @@ func (c *Channel) Set(ctx context.Context, key hmenum.ParamsetKey, p hmenum.Para
 		// the call fails. Mirrors CallParameterCollector.Send().
 		if cdp, ok := dp.(generic.CollectableDataPoint); ok {
 			rb := cdp.ApplyOptimistic(wireVal)
-			if err := w.SetValue(ctx, c.Address, p, wireVal, opts.Priority); err != nil {
+			if err := c.dispatchSet(ctx, w, key, p, wireVal, opts.Priority); err != nil {
 				if rb != nil {
 					rb()
 				}
@@ -366,7 +366,7 @@ func (c *Channel) Set(ctx context.Context, key hmenum.ParamsetKey, p hmenum.Para
 		}
 	}
 
-	if err := w.SetValue(ctx, c.Address, p, wireVal, opts.Priority); err != nil {
+	if err := c.dispatchSet(ctx, w, key, p, wireVal, opts.Priority); err != nil {
 		return err
 	}
 	if opts.WaitForEcho {
@@ -555,6 +555,27 @@ func (c *Channel) Refresh(ctx context.Context, key hmenum.ParamsetKey) error {
 // methods which each take their own RLock — this is fine because
 // sync.RWMutex is not reentrant but the public methods use separate
 // RLock/RUnlock pairs.
+// dispatchSet writes one parameter through the transport call that matches
+// the paramset key. [ChannelWriter.SetValue] carries no paramset key and
+// reaches the wire as xml-rpc setValue, which always targets VALUES — so a
+// MASTER write has to go through PutParamset even though it is a batch of
+// one. Sending it through SetValue instead makes the CCU answer fault -5, or
+// silently apply a same-named VALUES parameter, while the master-refresh hook
+// still fires as if the write had landed.
+func (c *Channel) dispatchSet(
+	ctx context.Context,
+	w ChannelWriter,
+	key hmenum.ParamsetKey,
+	p hmenum.Parameter,
+	wireVal any,
+	priority hmenum.CommandPriority,
+) error {
+	if key == hmenum.ParamsetKeyValues {
+		return w.SetValue(ctx, c.Address, p, wireVal, priority)
+	}
+	return w.PutParamset(ctx, c.Address, key, map[string]any{string(p): wireVal}, priority)
+}
+
 func (c *Channel) paramsetParameterFast(key hmenum.ParamsetKey, p hmenum.Parameter) ParameterDataPoint {
 	switch key { //nolint:exhaustive // only VALUES + MASTER are stored on channels
 	case hmenum.ParamsetKeyValues:

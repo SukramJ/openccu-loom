@@ -60,7 +60,7 @@
     try {
       const res = await api.listChannels(addr);
       if (generation !== loadGeneration) return;
-      channels = res.items ?? [];
+      channels = res ?? [];
     } catch {
       if (generation !== loadGeneration) return;
       channels = [];

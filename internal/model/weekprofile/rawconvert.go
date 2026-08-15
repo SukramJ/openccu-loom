@@ -981,9 +981,24 @@ var durationUnitIn100ms = map[string]float64{
 	"h":   36000,
 }
 
+// ZeroDuration is the string form of the (base 0, factor 0) pair — a
+// duration of zero, which the CCU stores as a value like any other.
+//
+// It exists because "" already means "leave the device's duration
+// alone": [BuildSimpleRawParamset] writes a sparse paramset, so an
+// entry with no duration string emits no DURATION_* keys at all. A door
+// lock's `lock_autorelock_start` encodes as exactly (0, 0), and without
+// a string for it the write kept whatever the slot held — the firmware
+// default (7, 31), which reads back as `lock_autorelock_end`, the
+// opposite intent.
+const ZeroDuration = "0ms"
+
 // FormatTimeBaseFactor converts a (base, factor) pair from the CCU
 // paramset into a human-readable duration string used by [schedule.SimpleEntry].
-// Returns "" when factor is not positive or the base id is unknown.
+// Returns "" when the factor is negative or the base id is unknown, and
+// [ZeroDuration] for a zero factor in any base — zero is the same
+// duration however it is spelled, and it re-parses to the canonical
+// (0, 0).
 //
 // The rendering is exact: the factor is multiplied out in the base's own
 // unit, so (SEC_5, 13) reads "65s". Choosing the unit by magnitude
@@ -992,8 +1007,11 @@ var durationUnitIn100ms = map[string]float64{
 // ends up with a duration the operator never asked for. Mirrors
 // `convert_base_factor_to_duration` in schedule_models.py.
 func FormatTimeBaseFactor(base, factor int) string {
-	if factor <= 0 {
+	if factor < 0 {
 		return ""
+	}
+	if factor == 0 {
+		return ZeroDuration
 	}
 	for _, row := range timeBaseTable {
 		if row.id == base {
@@ -1027,6 +1045,13 @@ func ParseTimeBaseFactor(d string) (base, factor int, ok bool) {
 	if !ok {
 		return 0, 0, false
 	}
+	// Zero is a duration the CCU holds ([ZeroDuration]), not an absent
+	// one, and it is the same value in every base — so it resolves to the
+	// canonical (MS_100, 0) rather than walking the table below, whose
+	// search starts at factor 1.
+	if total100ms == 0 {
+		return 0, 0, true
+	}
 	// Coarsest base first: timeBaseTable is ordered by ascending
 	// granularity, so walk it backwards.
 	for i := len(timeBaseTable) - 1; i >= 0; i-- {
@@ -1050,8 +1075,9 @@ func ParseTimeBaseFactor(d string) (base, factor int, ok bool) {
 }
 
 // durationIn100ms converts a duration string to whole 100ms steps.
-// ok is false for an unparseable string, a non-positive value, or one
-// with sub-100ms granularity, which the CCU cannot represent.
+// ok is false for an unparseable string, a negative value, or one
+// with sub-100ms granularity, which the CCU cannot represent. Zero is
+// accepted — see [ZeroDuration].
 func durationIn100ms(d string) (total100ms int, ok bool) {
 	d = strings.TrimSpace(strings.ToLower(d))
 	if d == "" {
@@ -1067,7 +1093,7 @@ func durationIn100ms(d string) (total100ms int, ok bool) {
 		}
 	}
 	n, err := strconv.ParseFloat(strings.TrimSpace(numStr), 64)
-	if err != nil || n <= 0 {
+	if err != nil || n < 0 {
 		return 0, false
 	}
 	// Sub-100ms granularity is not representable on the CCU; require the

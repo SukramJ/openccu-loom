@@ -3641,13 +3641,14 @@ func TestDispatchCombined_OnWireValueCalled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// anyMapToParamValues — conversion error (paramsets.go:153-154)
-// Pass a struct{}{} value which NewParamValue cannot handle.
+// anyMapToParamValues — conversion error.
+// Pass a struct{}{} value which NewParamValue cannot handle. A nil channel
+// exercises the descriptor-less fallback, where the blind conversion applies.
 // ---------------------------------------------------------------------------
 
 func TestAnyMapToParamValues_ConversionError(t *testing.T) {
 	t.Parallel()
-	_, err := anyMapToParamValues(map[string]any{
+	_, err := anyMapToParamValues(nil, hmenum.ParamsetKeyValues, map[string]any{
 		"GOOD_PARAM": true,
 		"BAD_PARAM":  struct{}{}, // unsupported type
 	})

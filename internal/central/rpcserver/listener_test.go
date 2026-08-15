@@ -10,8 +10,10 @@
 package rpcserver
 
 import (
+	"log/slog"
 	"net"
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 )
@@ -65,7 +67,7 @@ func TestPeerAllowed(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := peerAllowed(tc.allow, tc.remote); got != tc.want {
+			if got := peerAllowed(staticPeerAllowlist(tc.allow), tc.remote); got != tc.want {
 				t.Errorf("peerAllowed(%v, %q) = %v, want %v", tc.allow, tc.remote, got, tc.want)
 			}
 		})
@@ -153,5 +155,80 @@ func TestLimitListener_CapsConcurrentAccepts(t *testing.T) {
 		_ = c.Close()
 	case <-time.After(2 * time.Second):
 		t.Fatal("second connection was not accepted after the first was released")
+	}
+}
+
+// TestPeerFilterListenerResolvesTheAllowlistPerConnection pins that the
+// listener asks for the allowlist on every accept instead of capturing it
+// once.
+//
+// The peer set is not static: the daemon adopts CCUs at runtime, and a CCU's
+// address can move under it. A listener holding the prefix set it was built
+// with refuses those peers until the process restarts, and the only trace is
+// a DEBUG line — the CCU looks connected and simply stops delivering events.
+func TestPeerFilterListenerResolvesTheAllowlistPerConnection(t *testing.T) {
+	t.Parallel()
+
+	base, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = base.Close() })
+
+	var mu sync.Mutex
+	allowLoopback := false
+	ln := newPeerFilterListener(base, func() []netip.Prefix {
+		mu.Lock()
+		defer mu.Unlock()
+		if allowLoopback {
+			return []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
+		}
+		// TEST-NET-1 (RFC 5737): reachable from nowhere, so loopback is
+		// rejected while this is the answer.
+		return []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}
+	}, slog.New(slog.DiscardHandler))
+
+	accepted := make(chan net.Conn, 2)
+	go func() {
+		for {
+			conn, aErr := ln.Accept()
+			if aErr != nil {
+				close(accepted)
+				return
+			}
+			accepted <- conn
+		}
+	}()
+
+	dial := func() {
+		t.Helper()
+		conn, dErr := net.DialTimeout("tcp", base.Addr().String(), time.Second)
+		if dErr != nil {
+			t.Fatalf("dial: %v", dErr)
+		}
+		t.Cleanup(func() { _ = conn.Close() })
+	}
+
+	dial()
+	select {
+	case conn := <-accepted:
+		t.Fatalf("a peer outside the allowlist was accepted: %v", conn.RemoteAddr())
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	mu.Lock()
+	allowLoopback = true
+	mu.Unlock()
+
+	dial()
+	select {
+	case conn, ok := <-accepted:
+		if !ok {
+			t.Fatal("listener stopped accepting")
+		}
+		_ = conn.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatal("a peer allowed by the current allowlist was still refused; " +
+			"the listener must re-read the allowlist per connection")
 	}
 }

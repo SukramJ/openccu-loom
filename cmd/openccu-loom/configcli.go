@@ -84,6 +84,25 @@ type exportedToken struct {
 	Role        string `json:"role"`
 }
 
+// exportedSections renders the stored config sections for the export
+// document, redacting secrets unless the operator asked for them.
+//
+// The section store decrypts on read (see wireConfigStoreCrypto), so copying a
+// row verbatim writes the operator's MQTT / OIDC / Matter credentials into a
+// file whose whole purpose is to be handed around. Redaction is per leaf, not
+// per section: "north.mqtt" carries a broker URL next to a password.
+func exportedSections(rows []sqlite.SectionRow, includeSecrets bool) map[string]json.RawMessage {
+	out := make(map[string]json.RawMessage, len(rows))
+	for _, r := range rows {
+		value := r.ValueJSON
+		if !includeSecrets {
+			value = configstore.RedactSectionSecrets(configstore.Section(r.Section), value)
+		}
+		out[r.Section] = json.RawMessage(value)
+	}
+	return out
+}
+
 func configExport(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("config export", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -118,10 +137,7 @@ func configExport(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("config export: list sections: %w", err)
 	}
-	sections := make(map[string]json.RawMessage, len(sectionRows))
-	for _, r := range sectionRows {
-		sections[r.Section] = json.RawMessage(r.ValueJSON)
-	}
+	sections := exportedSections(sectionRows, *includeSecrets)
 
 	// Collect centrals — optionally redact plaintext passwords.
 	centrals, err := centralsStore.List(ctx)

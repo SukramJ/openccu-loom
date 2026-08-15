@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -258,10 +259,11 @@ func (s *OperatingVoltageLevelSensor) Subscribe(c *device.Channel) func() {
 // [DerivedBinarySensor.OnLabel]. When [SourceParameter] is empty the
 // subscribe is a no-op so manually-driven test fixtures keep working.
 //
-// String values pass through verbatim; integer wire values from CCU firmware
-// variants that emit the enum index instead of the label are silently dropped
-// — the source DP's typed `OnEvent` handler is expected to feed back the
-// resolved label via the descriptor's VALUE_LIST.
+// Every source in the registry is a read-only ENUM, which resolves to an
+// integer data point: the value pushed here is the 0-based VALUE_LIST index,
+// not the label the On/Off value sets are written in. Both shapes are
+// resolved through the descriptor — a bare string assertion dropped every
+// event these sensors exist to observe.
 //
 // The resolved source DP is registered for [StateUncertain] aggregation.
 func (s *DerivedBinarySensor) Subscribe(c *device.Channel) func() {
@@ -275,8 +277,9 @@ func (s *DerivedBinarySensor) Subscribe(c *device.Channel) func() {
 	if src, ok := raw.(SourceDP); ok {
 		s.RegisterSource(src)
 	}
+	desc := raw.ParameterData()
 	return raw.OnAnyUpdate(func(_, next any) {
-		if label, ok := next.(string); ok {
+		if label, ok := parameter.EnumLabel(desc, next); ok {
 			s.OnLabel(label)
 		}
 	})

@@ -48,6 +48,13 @@ func TestParseTimeBaseFactorPicksCoarsestBase(t *testing.T) {
 		// and a lock schedule read from the CCU carries it back into a
 		// save, so it passes through verbatim.
 		{"31h", 7, 31, true},
+		// Zero is a duration the CCU holds — a door lock encodes
+		// `lock_autorelock_start` as exactly (0, 0) — and it means the
+		// same in every base, so every spelling lands on the canonical
+		// pair rather than being rejected as "no duration".
+		{"0ms", 0, 0, true},
+		{"0s", 0, 0, true},
+		{"0h", 0, 0, true},
 		// Lenient input: it arrives straight from a REST payload.
 		{"90", 3, 9, true},    // bare number counts as seconds
 		{"2m", 4, 2, true},    // "m" is minutes
@@ -56,7 +63,7 @@ func TestParseTimeBaseFactorPicksCoarsestBase(t *testing.T) {
 		// rounded to the nearest pair the CCU would take.
 		{"", 0, 0, false},
 		{"abc", 0, 0, false},
-		{"0s", 0, 0, false},
+		{"-5s", 0, 0, false},
 		{"250ms", 0, 0, false}, // sub-100ms granularity
 		{"301s", 0, 0, false},  // no base divides it within the factor cap
 		{"32h", 0, 0, false},   // past the cap and not the sentinel
@@ -80,6 +87,18 @@ func TestParseTimeBaseFactorPicksCoarsestBase(t *testing.T) {
 // operator set to 65s. Nothing else in the stack would notice.
 func TestDurationBaseFactorRoundTrip(t *testing.T) {
 	t.Parallel()
+
+	// A zero factor is a real pair, not an absent one: it is how a door
+	// lock encodes `lock_autorelock_start`, and the sparse paramset write
+	// drops the keys entirely when the codec cannot render it.
+	for base := range 8 {
+		if got := FormatTimeBaseFactor(base, 0); got != ZeroDuration {
+			t.Errorf("FormatTimeBaseFactor(%d, 0) = %q, want %q", base, got, ZeroDuration)
+		}
+	}
+	if b, f, ok := ParseTimeBaseFactor(ZeroDuration); !ok || b != 0 || f != 0 {
+		t.Errorf("ParseTimeBaseFactor(%q) = (%d, %d, %v), want (0, 0, true)", ZeroDuration, b, f, ok)
+	}
 
 	for base := range 8 {
 		for factor := 1; factor <= MaxTimeBaseFactor; factor++ {

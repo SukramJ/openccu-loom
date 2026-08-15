@@ -27,7 +27,9 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/operational"
@@ -247,37 +249,37 @@ func TestNewFullLoggerStack_NoOverrides_NoError(t *testing.T) {
 	}
 }
 
-// ── buildCallbackAllowlist ───────────────────────────────────────────────────
+// ── newCallbackAllowlist ─────────────────────────────────────────────────────
 
-// TestBuildCallbackAllowlist_RestrictDisabled_ReturnsNil verifies the
+// TestCallbackAllowlistRestrictDisabledReturnsNil verifies the
 // default open-LAN behaviour: with RestrictSourceIPs unset (false), the
 // allowlist is nil (accept-all) regardless of configured centrals.
-func TestBuildCallbackAllowlist_RestrictDisabled_ReturnsNil(t *testing.T) {
+func TestCallbackAllowlistRestrictDisabledReturnsNil(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.Callback.RestrictSourceIPs = false
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "192.168.1.50"}}
 	logger := slog.New(slog.DiscardHandler)
 
-	got := buildCallbackAllowlist(context.Background(), cfg, logger)
+	got := newCallbackAllowlist(context.Background(), cfg, nil, logger)
 	if got != nil {
 		t.Errorf("expected nil allowlist when RestrictSourceIPs=false, got %v", got)
 	}
 }
 
-// TestBuildCallbackAllowlist_RestrictEnabled_IncludesLoopbackAndCentralIPLiteral
+// TestCallbackAllowlistIncludesLoopbackAndCentralIPLiteral
 // verifies that enabling RestrictSourceIPs always seeds the allowlist with
 // loopback (IPv4 + IPv6) and adds a /32 for every central whose Host is an
 // IP literal. Hostnames are deliberately not exercised here — they would
 // route through net.LookupIP and make the test depend on DNS.
-func TestBuildCallbackAllowlist_RestrictEnabled_IncludesLoopbackAndCentralIPLiteral(t *testing.T) {
+func TestCallbackAllowlistIncludesLoopbackAndCentralIPLiteral(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.Callback.RestrictSourceIPs = true
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "192.168.1.50"}}
 	logger := slog.New(slog.DiscardHandler)
 
-	got := buildCallbackAllowlist(context.Background(), cfg, logger)
+	got := resolveTestAllowlist(context.Background(), cfg, nil, logger)
 
 	want := []netip.Prefix{
 		netip.MustParsePrefix("127.0.0.0/8"),
@@ -301,17 +303,17 @@ func TestBuildCallbackAllowlist_RestrictEnabled_IncludesLoopbackAndCentralIPLite
 	}
 }
 
-// TestBuildCallbackAllowlist_RestrictEnabled_NoCentrals_StillIncludesLoopback
+// TestCallbackAllowlistWithoutCentralsStillIncludesLoopback
 // verifies loopback is always present even with zero configured centrals —
 // a co-located CCU pushing from 127.0.0.1 must keep working.
-func TestBuildCallbackAllowlist_RestrictEnabled_NoCentrals_StillIncludesLoopback(t *testing.T) {
+func TestCallbackAllowlistWithoutCentralsStillIncludesLoopback(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.Callback.RestrictSourceIPs = true
 	cfg.Centrals = nil
 	logger := slog.New(slog.DiscardHandler)
 
-	got := buildCallbackAllowlist(context.Background(), cfg, logger)
+	got := resolveTestAllowlist(context.Background(), cfg, nil, logger)
 	want := []netip.Prefix{
 		netip.MustParsePrefix("127.0.0.0/8"),
 		netip.MustParsePrefix("::1/128"),
@@ -330,6 +332,78 @@ func TestBuildCallbackAllowlist_RestrictEnabled_NoCentrals_StillIncludesLoopback
 		if !found {
 			t.Errorf("allowlist %v is missing expected prefix %v", got, w)
 		}
+	}
+}
+
+// resolveTestAllowlist returns one resolution of the live callback allowlist,
+// which is what the listeners read on every accepted connection.
+func resolveTestAllowlist(ctx context.Context, cfg *config.Config, centrals *sqlitestore.CentralsStore, logger *slog.Logger) []netip.Prefix {
+	return (&callbackAllowlist{cfg: cfg, centrals: centrals, logger: logger}).resolve(ctx)
+}
+
+// TestCallbackAllowlistPicksUpACentralAddedAtRuntime pins the reason the
+// allowlist is resolved per connection instead of captured at boot: adopting a
+// CCU through the admin surface is an explicitly restart-free operation, and
+// it writes the SQLite centrals row without touching cfg.Centrals. A listener
+// holding the boot-time prefix set drops every callback from that CCU — at
+// DEBUG level, with no polling fallback — so the central comes up, reports
+// live, and then never updates a value until the daemon is restarted.
+func TestCallbackAllowlistPicksUpACentralAddedAtRuntime(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	db := openMigratedTestDB(t, "callback_allowlist.db")
+	centrals := sqlitestore.NewCentralsStore(db)
+
+	cfg := config.Default()
+	cfg.Callback.RestrictSourceIPs = true
+	cfg.Centrals = nil
+
+	allowlist := newLiveCallbackAllowlist(ctx, cfg, centrals, slog.New(slog.DiscardHandler), 5*time.Millisecond)
+	if allowlist == nil {
+		t.Fatal("newLiveCallbackAllowlist returned nil with RestrictSourceIPs enabled")
+	}
+	adopted := netip.MustParsePrefix("192.0.2.77/32")
+	if slices.Contains(allowlist(), adopted) {
+		t.Fatal("precondition: the adopted CCU must not be allowed before its row exists")
+	}
+
+	if err := centrals.Put(ctx, sqlitestore.CentralRow{
+		Name: "ccu-adopted", Host: "192.0.2.77", Enabled: true,
+	}); err != nil {
+		t.Fatalf("centrals.Put: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !slices.Contains(allowlist(), adopted) {
+		if time.Now().After(deadline) {
+			t.Fatalf("allowlist = %v, want it to contain %v; a CCU adopted at runtime "+
+				"is blackholed until the daemon restarts", allowlist(), adopted)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+// TestCallbackAllowlistSkipsDisabledCentralRows verifies a central the
+// operator switched off does not keep its push privilege.
+func TestCallbackAllowlistSkipsDisabledCentralRows(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	db := openMigratedTestDB(t, "callback_allowlist_disabled.db")
+	centrals := sqlitestore.NewCentralsStore(db)
+	if err := centrals.Put(ctx, sqlitestore.CentralRow{
+		Name: "ccu-off", Host: "192.0.2.9", Enabled: false,
+	}); err != nil {
+		t.Fatalf("centrals.Put: %v", err)
+	}
+
+	cfg := config.Default()
+	cfg.Callback.RestrictSourceIPs = true
+	got := resolveTestAllowlist(ctx, cfg, centrals, slog.New(slog.DiscardHandler))
+	if slices.Contains(got, netip.MustParsePrefix("192.0.2.9/32")) {
+		t.Errorf("allowlist %v includes a disabled central's host", got)
 	}
 }
 

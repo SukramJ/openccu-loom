@@ -170,8 +170,12 @@ func TestSharedChannel_OwnZoneMultipleRowsNeverBlockOwnStop(t *testing.T) {
 	if err := h.mgr.FireCycle(h.ctx, "zoneA", newIncident(205, hmenum.AlarmModeFull), engine.FireOptions{Policy: noPolicy}); err != nil {
 		t.Fatalf("FireCycle: %v", err)
 	}
-	if n := dev.turnOnCount(); n != 2 {
-		t.Fatalf("shared siren TurnOn calls = %d, want 2 (one per enrolled row)", n)
+	// One channel, one atomic activation write — the rows share the
+	// device, and a second write would only replace the first. Each row
+	// still holds its own demand, which is what the stop half below is
+	// about.
+	if n := dev.turnOnCount(); n != 1 {
+		t.Fatalf("shared siren TurnOn calls = %d, want 1 (both rows address one channel)", n)
 	}
 
 	if err := h.mgr.StopAll(h.ctx, "zoneA", 205); err != nil {

@@ -15,14 +15,22 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
 
-// nilHubQuery returns a wsHubQuery backed by an empty registry so hub.Hub()
-// returns nil — all methods should return the "hub not available" error.
+// nilHubQuery returns a wsHubQuery bound over an empty registry, so it
+// carries no hub model — all per-central methods should return the
+// "hub not available" error.
 func nilHubQuery() *wsHubQuery {
 	emptyReg := central.NewRegistry()
-	return &wsHubQuery{
+	q := &wsHubQuery{
 		hub:      adapter.NewHubAdapter(emptyReg),
 		registry: emptyReg,
 	}
+	// An empty registry resolves to no hub rather than to an error: a
+	// starting daemon is not an ambiguous one.
+	bound, err := q.CentralHub("")
+	if err != nil {
+		panic("nilHubQuery: unexpected resolution error: " + err.Error())
+	}
+	return bound.(*wsHubQuery)
 }
 
 // liveHubQuery returns a wsHubQuery backed by a real hub.Hub so we can
@@ -31,7 +39,7 @@ func liveHubQuery(t *testing.T) (*wsHubQuery, *hub.Hub) {
 	t.Helper()
 	h := hub.NewHub("test-ccu")
 	hubAdapter, reg := buildHubAdapter(h)
-	return &wsHubQuery{hub: hubAdapter, registry: reg}, h
+	return boundHubQuery(t, &wsHubQuery{hub: hubAdapter, registry: reg}), h
 }
 
 // ── wsHubMessageCounts ────────────────────────────────────────────────────────
@@ -641,5 +649,68 @@ func TestWSDeviceQuery_NilParamsets_GetParamset_Errors(t *testing.T) {
 	_, err := q.GetParamset(context.Background(), configui.SessionKey{ChannelAddress: "A:0"})
 	if err == nil {
 		t.Fatal("expected error when paramsets is nil, got nil")
+	}
+}
+
+// buildTwoCentralHubQuery registers two centrals whose hub models are told
+// apart by the sysvar each one carries, so a routing mistake is visible in
+// the result rather than only in a call log.
+func buildTwoCentralHubQuery(t *testing.T) *wsHubQuery {
+	t.Helper()
+	reg := central.NewRegistry()
+	for _, name := range []string{"attic", "basement"} {
+		cu, err := central.New(central.Config{Name: name})
+		if err != nil {
+			t.Fatalf("central.New(%s): %v", name, err)
+		}
+		cu.HubModel.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: name + "-var"}})
+		if err := reg.Register(cu); err != nil {
+			t.Fatalf("reg.Register(%s): %v", name, err)
+		}
+	}
+	return &wsHubQuery{hub: adapter.NewHubAdapter(reg), registry: reg}
+}
+
+// TestWSHubQuery_CentralHub_RoutesToTheNamedCentral verifies the adapter
+// resolves the central the command named. The whole hub family used to go
+// through one unscoped accessor that returned the alphabetically first
+// central, so a read or write meant for `basement` served `attic`.
+func TestWSHubQuery_CentralHub_RoutesToTheNamedCentral(t *testing.T) {
+	t.Parallel()
+	q := buildTwoCentralHubQuery(t)
+
+	for _, name := range []string{"attic", "basement"} {
+		bound, err := q.CentralHub(name)
+		if err != nil {
+			t.Fatalf("CentralHub(%s): %v", name, err)
+		}
+		vars, err := bound.ListSysvars(context.Background())
+		if err != nil {
+			t.Fatalf("ListSysvars(%s): %v", name, err)
+		}
+		if len(vars) != 1 || vars[0]["name"] != name+"-var" {
+			t.Fatalf("CentralHub(%q) served %v, want the %s sysvar", name, vars, name)
+		}
+	}
+}
+
+// TestWSHubQuery_CentralHub_RefusesToGuessOnMultiCCU verifies an unnamed
+// central is an error once several are registered — picking one would run
+// the command against a CCU the caller never named and report success.
+func TestWSHubQuery_CentralHub_RefusesToGuessOnMultiCCU(t *testing.T) {
+	t.Parallel()
+	q := buildTwoCentralHubQuery(t)
+	if _, err := q.CentralHub(""); !errors.Is(err, ws.ErrCentralRequired) {
+		t.Fatalf("CentralHub with no name = %v, want ErrCentralRequired", err)
+	}
+}
+
+// TestWSHubQuery_CentralHub_RejectsAnUnknownCentral verifies a name that
+// matches no central is reported rather than falling back to another one.
+func TestWSHubQuery_CentralHub_RejectsAnUnknownCentral(t *testing.T) {
+	t.Parallel()
+	q := buildTwoCentralHubQuery(t)
+	if _, err := q.CentralHub("garage"); !errors.Is(err, ws.ErrCentralUnknown) {
+		t.Fatalf("CentralHub for an unknown central = %v, want ErrCentralUnknown", err)
 	}
 }

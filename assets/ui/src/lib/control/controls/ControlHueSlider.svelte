@@ -15,7 +15,10 @@
     step?: number;
     disabled?: boolean;
     label?: string;
+    /** Fires once, on release — every call is a CCU write. */
     onChange: (value: number) => void;
+    /** Fires continuously while the user drags. Optional. */
+    onInput?: (value: number) => void;
   };
 
   let {
@@ -26,6 +29,7 @@
     disabled = false,
     label,
     onChange,
+    onInput,
   }: Props = $props();
 
   let track: HTMLDivElement;
@@ -47,25 +51,36 @@
   }
 
   let dragging = $state(false);
+  // The thumb follows the pointer locally while the drag runs; `onChange` —
+  // and with it the CCU write — happens once, on release. Same contract as
+  // ControlSlider.
+  let pendingValue = $state<number | null>(null);
 
   function onPointerDown(event: PointerEvent) {
     if (disabled) return;
     track.setPointerCapture(event.pointerId);
     dragging = true;
-    onChange(valueFromPointer(event));
+    const v = valueFromPointer(event);
+    pendingValue = v;
+    onInput?.(v);
   }
   function onPointerMove(event: PointerEvent) {
     if (!dragging) return;
-    onChange(valueFromPointer(event));
+    const v = valueFromPointer(event);
+    pendingValue = v;
+    onInput?.(v);
   }
   function onPointerUp(event: PointerEvent) {
     if (!dragging) return;
     track.releasePointerCapture(event.pointerId);
+    const v = valueFromPointer(event);
     dragging = false;
-    onChange(valueFromPointer(event));
+    pendingValue = null;
+    onChange(v);
   }
 
-  const percent = $derived(((value - min) / (max - min)) * 100);
+  const display = $derived(pendingValue ?? value);
+  const percent = $derived(((display - min) / (max - min)) * 100);
 </script>
 
 <div
@@ -77,7 +92,7 @@
   aria-label={label}
   aria-valuemin={min}
   aria-valuemax={max}
-  aria-valuenow={value}
+  aria-valuenow={display}
   aria-disabled={disabled}
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}

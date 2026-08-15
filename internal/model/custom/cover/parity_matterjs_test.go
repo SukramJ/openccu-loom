@@ -4,11 +4,14 @@
 package cover
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -178,4 +181,115 @@ func TestParityMatterJS_WindowCoveringTypeAndEndProductType(t *testing.T) {
 			t.Errorf("Garage EndProductType = %d, want %d (RollerShade)", got, jsEndRollerShade)
 		}
 	})
+}
+
+// TestParityMatterJS_WindowCoveringCommandLists pins the command lists
+// every cover projection advertises against matter.js HEAD
+// packages/model/src/standard/elements/window-covering-cluster.element.ts:85-105:
+// UpOrOpen (0x00), DownOrClose (0x01) and StopMotion (0x02) carry
+// conformance "M", GoToLiftPercentage (0x05) "LF & PA_LF" and
+// GoToTiltPercentage (0x08) "TL & PA_TL" — the feature pairs each
+// projection advertises in its FeatureMap.
+//
+// The dispatcher answers AcceptedCommandList (0xFFF9) from this
+// capability and falls back to an empty list without it, and a
+// controller derives its write capability from that attribute: an empty
+// list turns a blind into a read-only sensor, because Mode (0x0017) is
+// the cluster's only writable attribute.
+//
+// The second half of each case is the round-trip: a command is
+// advertised exactly when MatterInvoke handles it, so the declared
+// surface cannot drift away from the implemented one.
+func TestParityMatterJS_WindowCoveringCommandLists(t *testing.T) {
+	t.Parallel()
+
+	// Command IDs, verbatim from window-covering-cluster.element.ts:85-105.
+	const (
+		jsCmdUpOrOpen           uint32 = 0x0
+		jsCmdDownOrClose        uint32 = 0x1
+		jsCmdStopMotion         uint32 = 0x2
+		jsCmdGoToLiftPercentage uint32 = 0x5
+		jsCmdGoToTiltPercentage uint32 = 0x8
+	)
+	clusterCommands := []uint32{
+		jsCmdUpOrOpen, jsCmdDownOrClose, jsCmdStopMotion,
+		jsCmdGoToLiftPercentage, jsCmdGoToTiltPercentage,
+	}
+	// GoToTiltPercentage is gated on TL & PA_TL, which only the blind
+	// projection advertises.
+	liftOnly := []uint32{jsCmdUpOrOpen, jsCmdDownOrClose, jsCmdStopMotion, jsCmdGoToLiftPercentage}
+
+	cases := []struct {
+		name   string
+		server func(t *testing.T) interfaces.MatterClusterServer
+		want   []uint32
+	}{
+		{
+			name: "cover",
+			server: func(t *testing.T) interfaces.MatterClusterServer {
+				t.Helper()
+				c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{SupportsStop: true})
+
+				return c.MatterClusterServers()[0]
+			},
+			want: liftOnly,
+		},
+		{
+			name: "blind",
+			server: func(t *testing.T) interfaces.MatterClusterServer {
+				t.Helper()
+				b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true, SupportsStop: true}, BlindKindHM)
+
+				return b.MatterClusterServers()[0]
+			},
+			want: clusterCommands,
+		},
+		{
+			name: "garage",
+			server: func(t *testing.T) interfaces.MatterClusterServer {
+				t.Helper()
+				g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
+
+				return g.MatterClusterServers()[0]
+			},
+			want: liftOnly,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := tc.server(t)
+			lister, ok := srv.(interfaces.MatterClusterCommandLister)
+			if !ok {
+				t.Fatalf("%T does not implement MatterClusterCommandLister — AcceptedCommandList would be empty", srv)
+			}
+
+			advertised := make(map[uint32]bool, len(lister.MatterAcceptedCommands()))
+			for _, id := range lister.MatterAcceptedCommands() {
+				advertised[id] = true
+			}
+			for _, id := range tc.want {
+				if !advertised[id] {
+					t.Errorf("MatterAcceptedCommands() = %v, missing 0x%02X", lister.MatterAcceptedCommands(), id)
+				}
+			}
+			if len(advertised) != len(tc.want) {
+				t.Errorf("MatterAcceptedCommands() = %v, want exactly %v", lister.MatterAcceptedCommands(), tc.want)
+			}
+			// Every WindowCovering command answers with a plain status,
+			// so nothing is generated back (element.ts:85-105).
+			if got := lister.MatterGeneratedCommands(); len(got) != 0 {
+				t.Errorf("MatterGeneratedCommands() = %v, want empty", got)
+			}
+
+			for _, id := range clusterCommands {
+				_, err := srv.MatterInvoke(context.Background(), id, uint16(5000), hmenum.CommandPriorityHigh)
+				handled := !errors.Is(err, errMatterUnknownCommand)
+				if handled != advertised[id] {
+					t.Errorf("command 0x%02X: MatterInvoke handles=%v, advertised=%v", id, handled, advertised[id])
+				}
+			}
+		})
+	}
 }

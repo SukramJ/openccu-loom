@@ -3008,10 +3008,12 @@ func runMatterReassemble(ctx context.Context, reassemble func(context.Context) e
 // authoritative — a central still waiting on its CCU must keep its persisted
 // endpoint-ID rows (see [endpoint.Snapshot.ModelComplete]).
 //
-// Ready is latched and never cleared: the loaded model survives mid-life CCU
-// reconnects, so the registry view stays authoritative once the initial load
-// has completed. Safe for concurrent use — the snapshotter reads from the
-// bridge's assembly path while the event-bus dispatch writes.
+// Ready survives mid-life CCU reconnects — the loaded model does too, so the
+// registry view stays authoritative once the initial load has completed. It is
+// dropped in exactly one place: when a central is torn down (see
+// [newMatterCentralHook]), because the next unit registered under that name
+// starts with an empty model again. Safe for concurrent use — the snapshotter
+// reads from the bridge's assembly path while the event-bus dispatch writes.
 type matterCentralReadiness struct {
 	mu    sync.RWMutex
 	ready map[string]struct{}
@@ -3025,6 +3027,17 @@ func newMatterCentralReadiness() *matterCentralReadiness {
 func (r *matterCentralReadiness) markReady(centralName string) {
 	r.mu.Lock()
 	r.ready[centralName] = struct{}{}
+	r.mu.Unlock()
+}
+
+// clearReady drops centralName's latch, returning it to model-incomplete.
+// A nil receiver is a no-op so the teardown path stays unconditional.
+func (r *matterCentralReadiness) clearReady(centralName string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	delete(r.ready, centralName)
 	r.mu.Unlock()
 }
 
@@ -3165,13 +3178,24 @@ func newMatterCentralHook(
 		if unsub := wireMatterDeviceReachableForward(u, notifyReachable); unsub != nil {
 			unsubs = append(unsubs, unsub)
 		}
-		if len(unsubs) == 0 {
+		if len(unsubs) == 0 && readiness == nil {
 			return nil
 		}
+		name := u.Name()
 		return func() {
 			for _, unsub := range unsubs {
 				unsub()
 			}
+			// Dropping the readiness latch is as much a part of the teardown
+			// as the subscriptions are. A central re-registered under the
+			// same name — a re-add, or the disable/enable toggle — starts
+			// with an empty ModelRegistry, and a stale latch would let the
+			// very next assembly stamp that empty snapshot ModelComplete.
+			// The assembler then reads every persisted endpoint of the
+			// central as vanished and deletes it, so the refill renumbers
+			// the whole fleet and controllers lose every accessory of that
+			// CCU (rooms, names, automations included).
+			readiness.clearReady(name)
 		}
 	}
 }

@@ -400,7 +400,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Extracted into wireXMLRPCCallback (daemon_boot.go). The returned
 	// teardown cancels the callback context (folds the original
 	// `defer cancelCallback()`).
-	cb, cancelCallback := wireXMLRPCCallback(ctx, cfg, logger)
+	//
+	// One allowlist instance serves both listeners; it re-resolves the CCU
+	// set on its own so a central adopted at runtime is not refused until the
+	// next restart.
+	callbackAllow := newCallbackAllowlist(ctx, cfg, sqCentrals, logger)
+	cb, cancelCallback := wireXMLRPCCallback(ctx, cfg, callbackAllow, logger)
 	defer cancelCallback()
 	callbackCtx := cb.ctx
 	callbackSrv := cb.srv
@@ -409,7 +414,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// --- BIN-RPC callback server --------------------------------
 	// Extracted into wireBINRPCCallback (daemon_boot.go). Serves on
 	// callbackCtx so it shuts down with the XML-RPC callback server.
-	binCB := wireBINRPCCallback(callbackCtx, cfg, logger) //nolint:contextcheck // callbackCtx is the cancellable callback context the BIN-RPC listener serves on; it is intentionally not re-derived from the daemon ctx
+	binCB := wireBINRPCCallback(callbackCtx, cfg, callbackAllow, logger) //nolint:contextcheck // callbackCtx is the cancellable callback context the BIN-RPC listener serves on; it is intentionally not re-derived from the daemon ctx
 	binRPCSrv := binCB.srv
 	binRPCPort := binCB.port
 
@@ -728,8 +733,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// First-run probe gates the SPA onboarding endpoints. Built independently
 	// of the UI router so it works whenever REST is up, even with the
 	// diagnostic UI disabled.
-	noUsers := firstRunProbe(cfg, sqUsers, sqCentrals)
-	warnOnDormantOnboarding(ctx, cfg, sqUsers, sqCentrals, logger)
+	noUsers := firstRunProbe(cfg, sqUsers, sqTokens, sqCentrals)
+	warnOnDormantOnboarding(ctx, cfg, sqUsers, sqTokens, sqCentrals, logger)
 
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS
@@ -797,6 +802,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		restResolve:             restResolve,
 		authMw:                  authMw,
 		wsHandler:               wsHandler,
+		wsHub:                   wsHub,
 		levels:                  levels,
 		liveFeed:                stack.Live,
 		captureManager:          captureManager,

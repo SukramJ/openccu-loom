@@ -91,6 +91,20 @@ func (w *dispatchWriter) lastSet() (setCall, bool) {
 	return w.sets[len(w.sets)-1], true
 }
 
+// setsFor returns every SetValue recorded for one parameter, so a test can
+// assert the value that reached the wire and not merely that a call happened.
+func (w *dispatchWriter) setsFor(p hmenum.Parameter) []setCall {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var out []setCall
+	for _, s := range w.sets {
+		if s.param == p {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func (w *dispatchWriter) callCount() int {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -291,11 +305,18 @@ func buildColorTempLightDP(t *testing.T, addr string, w *dispatchWriter) *light.
 
 func buildFixedColorLightDP(t *testing.T, addr string, w *dispatchWriter) *light.FixedColorLight {
 	t.Helper()
+	return buildFixedColorLightDPWithColors(t, addr, w,
+		[]string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"})
+}
+
+func buildFixedColorLightDPWithColors(
+	t *testing.T, addr string, w *dispatchWriter, colors []string,
+) *light.FixedColorLight {
+	t.Helper()
 	dev := device.New(device.Config{Address: addr, InterfaceID: "test"})
 	ch := dev.AddChannel(addr+":1", 1, "FC", hmenum.ParamsetKeyValues)
 	ch.Put(floatDP(addr+":1", hmenum.ParameterLevel, w))
-	ch.Put(selectDP(addr+":1", hmenum.ParameterColor, w,
-		[]string{"BLACK", "RED", "GREEN", "YELLOW", "BLUE", "PURPLE", "TURQUOISE", "WHITE"}))
+	ch.Put(selectDP(addr+":1", hmenum.ParameterColor, w, colors))
 	return light.NewFixedColorLight(light.Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{}})
 }
 
@@ -632,6 +653,55 @@ func TestDispatchFixedColorLight_SetColorBySlot(t *testing.T) {
 	params := map[string]any{"slot": float64(2)} // green
 	if err := disp.InvokeCustomDP(context.Background(), "FCLG001", "LEVEL", "set_color", params, hmenum.CommandPriorityHigh, "test"); err != nil {
 		t.Fatalf("set_color by slot: %v", err)
+	}
+}
+
+// The COLOR descriptor a real CCU reports orders the slots by their RGB bit
+// pattern, which is not the order [light.FixedColor] enumerates. A caller
+// that only has the descriptor (the SPA reads value_list verbatim) therefore
+// cannot send an index — it sends the label, and the label is what has to
+// reach the wire.
+func TestDispatchFixedColorLight_SetColorByLabelWritesThatLabel(t *testing.T) {
+	t.Parallel()
+	ccuOrder := []string{"BLACK", "BLUE", "GREEN", "TURQUOISE", "RED", "PURPLE", "YELLOW", "WHITE"}
+
+	for _, label := range ccuOrder {
+		t.Run(label, func(t *testing.T) {
+			t.Parallel()
+			addr := "FCLB" + label
+			w := &dispatchWriter{}
+			l := buildFixedColorLightDPWithColors(t, addr, w, ccuOrder)
+			disp, _ := buildDispatcher(t, addr, "LEVEL", l)
+
+			params := map[string]any{"label": label}
+			if err := disp.InvokeCustomDP(context.Background(), addr, "LEVEL", "set_color", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+				t.Fatalf("set_color by label: %v", err)
+			}
+
+			sets := w.setsFor(hmenum.ParameterColor)
+			if len(sets) != 1 {
+				t.Fatalf("COLOR writes = %d, want 1", len(sets))
+			}
+			if got := sets[0].value; got != label {
+				t.Fatalf("COLOR written = %v, want %q", got, label)
+			}
+		})
+	}
+}
+
+func TestDispatchFixedColorLight_SetColorRejectsUnknownLabel(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	l := buildFixedColorLightDP(t, "FCLG003", w)
+	disp, _ := buildDispatcher(t, "FCLG003", "LEVEL", l)
+
+	params := map[string]any{"label": "MAUVE"}
+	err := disp.InvokeCustomDP(context.Background(), "FCLG003", "LEVEL", "set_color", params, hmenum.CommandPriorityHigh, "test")
+	if err == nil {
+		t.Fatal("set_color with an unknown label: want error, got nil")
+	}
+	if len(w.setsFor(hmenum.ParameterColor)) != 0 {
+		t.Fatal("an unknown label must not reach the wire")
 	}
 }
 

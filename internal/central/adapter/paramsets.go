@@ -150,7 +150,7 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 	ch := p.resolveChannel(deviceAddress)
 	if ch != nil {
 		// Route through the model: Channel.SetMany validates + dispatches.
-		paramValues, convErr := anyMapToParamValues(values)
+		paramValues, convErr := anyMapToParamValues(ch, key, values)
 		if convErr != nil {
 			return fmt.Errorf("paramsets: convert values: %w", convErr)
 		}
@@ -257,7 +257,10 @@ func validateParamsetValues(ctx context.Context, b interface {
 		if !ok {
 			continue
 		}
-		pv, convErr := hmtypes.NewParamValue(rawVal)
+		// Coerce, not NewParamValue: the descriptor is right here, and a
+		// blind conversion turns a whole-number FLOAT into an int that
+		// Validate then rejects on kind alone.
+		pv, convErr := parameter.Coerce(desc, rawVal)
 		if convErr != nil {
 			errs = append(errs, fmt.Errorf("paramsets: %s: %w", name, convErr))
 			continue
@@ -541,16 +544,52 @@ func (p *ParamsetsDomain) resolveChannel(channelAddress string) *device.Channel 
 // backend) into the typed map required by [device.Channel.SetMany].
 // Returns an error on the first value that [hmtypes.NewParamValue]
 // cannot represent.
-func anyMapToParamValues(values map[string]any) (map[hmenum.Parameter]hmtypes.ParamValue, error) {
+// The descriptor is what makes the conversion correct: JSON draws no
+// int/float distinction, so a FLOAT parameter written as `2` decodes to
+// float64(2), and a descriptor-blind conversion collapses that to an int —
+// which the validator's FLOAT branch rejects outright, failing the whole
+// batch. Parameters the channel does not know fall back to the blind
+// conversion; [device.Channel.SetMany] rejects those with ErrUnknownParameter
+// anyway. Mirrors what the single-value write path does via parameter.Coerce.
+func anyMapToParamValues(
+	ch *device.Channel,
+	key hmenum.ParamsetKey,
+	values map[string]any,
+) (map[hmenum.Parameter]hmtypes.ParamValue, error) {
 	out := make(map[hmenum.Parameter]hmtypes.ParamValue, len(values))
 	for name, v := range values {
+		p := hmenum.Parameter(name)
+		if dp := channelParameterFor(ch, key, p); dp != nil {
+			pv, err := parameter.Coerce(dp.ParameterData(), v)
+			if err != nil {
+				return nil, fmt.Errorf("parameter %q: %w", name, err)
+			}
+			out[p] = pv
+			continue
+		}
 		pv, err := hmtypes.NewParamValue(v)
 		if err != nil {
 			return nil, fmt.Errorf("parameter %q: %w", name, err)
 		}
-		out[hmenum.Parameter(name)] = pv
+		out[p] = pv
 	}
 	return out, nil
+}
+
+// channelParameterFor resolves a parameter's data point inside the paramset it
+// belongs to. Only VALUES and MASTER are stored on a channel.
+func channelParameterFor(
+	ch *device.Channel,
+	key hmenum.ParamsetKey,
+	p hmenum.Parameter,
+) device.ParameterDataPoint {
+	if ch == nil {
+		return nil
+	}
+	if key == hmenum.ParamsetKeyMaster {
+		return ch.MasterParameter(p)
+	}
+	return ch.Parameter(p)
 }
 
 // paramValueMapToAny converts a [device.Channel.GetAll] result back

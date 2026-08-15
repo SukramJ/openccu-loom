@@ -75,8 +75,10 @@ func TestChannelSetMasterNotRejectedWhenLocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Set MASTER on locked channel: want no error (lock is VALUES-scoped), got %v", err)
 	}
-	if w.setCallCount() != 1 {
-		t.Fatalf("expected 1 SetValue for MASTER write on locked channel, got %d", w.setCallCount())
+	// MASTER dispatches through PutParamset — setValue is VALUES-only.
+	if w.putCallCount() != 1 || w.setCallCount() != 0 {
+		t.Fatalf("expected 1 PutParamset for MASTER write on locked channel, got %d PutParamset / %d SetValue",
+			w.putCallCount(), w.setCallCount())
 	}
 }
 
@@ -97,8 +99,10 @@ func TestChannelSetManyMasterNotRejectedWhenLocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetMany MASTER on locked channel: want no error, got %v", err)
 	}
-	if w.setCallCount() != 1 {
-		t.Fatalf("expected 1 SetValue for MASTER SetMany on locked channel, got %d", w.setCallCount())
+	// MASTER dispatches through PutParamset — setValue is VALUES-only.
+	if w.putCallCount() != 1 || w.setCallCount() != 0 {
+		t.Fatalf("expected 1 PutParamset for MASTER SetMany on locked channel, got %d PutParamset / %d SetValue",
+			w.putCallCount(), w.setCallCount())
 	}
 }
 

@@ -9,7 +9,7 @@ package bridge
 // SuppressResponse=true on the wire so the peer does not owe an IM
 // StatusResponse for a no-op. Lives in package bridge to reach
 // reportSubscription and subTargets directly; reuses the real-session
-// wire-capture pattern from TestSendInitiatedIM_FreshExchange in
+// wire-capture pattern from TestSendInitiatedReport_FreshExchange in
 // subscribe_initiated_test.go.
 
 import (

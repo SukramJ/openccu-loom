@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 6375fdc0
-HEAD: 6375fdc0
+Generated: d5da54cf
+HEAD: d5da54cf
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28621 |
-| Reachable | 5024 |
-| Whitelisted | 20608 |
-| **Unreachable** | **2989** |
+| Total Exported | 28721 |
+| Reachable | 5026 |
+| Whitelisted | 20702 |
+| **Unreachable** | **2993** |
 
 ## Top-20 Packages by Dead Code
 
@@ -87,10 +87,10 @@ HEAD: 6375fdc0
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 104 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 104 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 101 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 101 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 105 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 105 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 102 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 102 |
 
 ## Full By-Package Breakdown
 
@@ -131,7 +131,7 @@ HEAD: 6375fdc0
 | internal/central/cachereset | 0 | 18 | 0 |
 | internal/central/coordinators | 0 | 109 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
-| internal/central/rpcserver | 0 | 10 | 4 |
+| internal/central/rpcserver | 0 | 12 | 4 |
 | internal/channelflags | 0 | 2 | 0 |
 | internal/client | 0 | 26 | 8 |
 | internal/client/observer | 0 | 3 | 0 |
@@ -199,7 +199,7 @@ HEAD: 6375fdc0
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 108 | 30 |
+| internal/store/sqlite | 0 | 110 | 30 |
 | pkg/hmapi | 0 | 157 | 16 |
 | pkg/hmevent | 0 | 9 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

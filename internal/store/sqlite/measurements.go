@@ -151,12 +151,10 @@ func NewMeasurementStoreIn(db *sql.DB, loc *time.Location) *MeasurementStore {
 }
 
 // dayStartMs returns the start of the local calendar day containing ms, as
-// epoch ms. On a spring-forward day whose local midnight does not exist,
-// [time.Date] normalizes to the first instant that does, which is the day's
-// true start.
+// epoch ms.
 func (s *MeasurementStore) dayStartMs(ms int64) int64 {
 	y, m, d := time.UnixMilli(ms).In(s.loc).Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, s.loc).UnixMilli()
+	return s.localStart(y, m, d).UnixMilli()
 }
 
 // nextDayStartMs returns the start of the local calendar day *after* the one
@@ -166,13 +164,44 @@ func (s *MeasurementStore) dayStartMs(ms int64) int64 {
 // 86400000 ms step.
 func (s *MeasurementStore) nextDayStartMs(ms int64) int64 {
 	y, m, d := time.UnixMilli(ms).In(s.loc).Date()
-	return time.Date(y, m, d+1, 0, 0, 0, 0, s.loc).UnixMilli()
+	if next := s.localStart(y, m, d+1).UnixMilli(); next > ms {
+		return next
+	}
+	// Unreachable for every zone in tzdata — the first instant of the next
+	// local day is later than any instant of this one. The clamp is here
+	// because the day-by-day fold in foldDaysIntoDailyTier terminates only
+	// while this function strictly advances, and a silent fixpoint there is
+	// an unkillable goroutine holding a write transaction open: a far worse
+	// failure than a day step that is off by an hour.
+	return ms + dayBucketMs
 }
 
 // monthStartMs returns the start of the local calendar month containing ms.
 func (s *MeasurementStore) monthStartMs(ms int64) int64 {
 	y, m, _ := time.UnixMilli(ms).In(s.loc).Date()
-	return time.Date(y, m, 1, 0, 0, 0, 0, s.loc).UnixMilli()
+	return s.localStart(y, m, 1).UnixMilli()
+}
+
+// localStart returns the first instant of the local calendar day y-m-d,
+// with out-of-range components normalized the way [time.Date] does.
+//
+// The plain time.Date is wrong on the day a zone's DST jump lands on
+// midnight — America/Santiago, America/Havana and Atlantic/Azores all shift
+// at 00:00, so their transition day has no 00:00 at all and starts at
+// 01:00. time.Date normalizes that missing wall clock *backwards*, onto the
+// previous local day, which both mislabels the bucket and makes the day
+// start a fixpoint of the next-day step. The day really begins where the
+// preceding zone period ends, which is what [time.Time.ZoneBounds] reports.
+func (s *MeasurementStore) localStart(y int, m time.Month, d int) time.Time {
+	t := time.Date(y, m, d, 0, 0, 0, 0, s.loc)
+	want := time.Date(y, m, d, 12, 0, 0, 0, time.UTC)
+	if ty, tm, td := t.Date(); ty == want.Year() && tm == want.Month() && td == want.Day() {
+		return t
+	}
+	if _, end := t.ZoneBounds(); !end.IsZero() {
+		return end
+	}
+	return t
 }
 
 // Close releases the underlying history database handle. Safe on a nil

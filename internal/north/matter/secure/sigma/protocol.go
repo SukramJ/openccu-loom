@@ -535,6 +535,11 @@ const (
 	responderStateInit responderState = iota
 	responderStateSigma2Sent
 	responderStateFinished
+	// responderStateFailed is terminal for the handshake attempt that
+	// reached it: a Sigma3 that did not authenticate must not be
+	// followed by a second Sigma3 against the same Sigma2. Only a fresh
+	// Sigma1 clears it, which is how a controller retries anyway.
+	responderStateFailed
 )
 
 // NewResponder returns a Responder ready to consume Sigma1.
@@ -869,7 +874,7 @@ func (r *Responder) processSigma1Locked(sigma1Bytes []byte) (Sigma2, error) { //
 	switch {
 	case r.state == responderStateInit:
 		// fresh responder — fall through to the standard processing.
-	case bytes.Equal(r.sigma1Bytes, sigma1Bytes) && r.sigma2Bytes != nil:
+	case r.state != responderStateFailed && bytes.Equal(r.sigma1Bytes, sigma1Bytes) && r.sigma2Bytes != nil:
 		// Idempotent replay: Apple Home retransmits Sigma1 over MRP
 		// when its layer hasn't yet observed our Sigma2 ACK. Same
 		// Sigma1 bytes → same Sigma2 wire reply (matter.js
@@ -900,11 +905,9 @@ func (r *Responder) processSigma1Locked(sigma1Bytes []byte) (Sigma2, error) { //
 		r.peerSessionID = 0
 		r.peerNodeID = 0
 		// CASE Authenticated Tags and the MRP hints are peer-supplied
-		// state. ProcessSigma3 re-assigns the tags only when the NEXT
-		// peer's NOC actually carries some, so keeping them here would
-		// hand the previous peer's tags to the next session's ACL
-		// subject set — a peer with no tag of its own would be matched
-		// by every CAT-scoped ACE written for its predecessor.
+		// state and describe the peer this responder served before.
+		// Clearing them here keeps every accessor honest for the whole
+		// span of the new handshake, not just from its Sigma3 onwards.
 		r.peerCATs = nil
 		r.peerSessionParams = nil
 		// Take a fresh local session id for the new handshake: the one
@@ -1041,6 +1044,10 @@ func (r *Responder) processSigma1Locked(sigma1Bytes []byte) (Sigma2, error) { //
 // then re-emits the cached StatusReport(Success). Mirrors matter.js
 // `CaseServer.ts:onSigma3` which converges the responder on the
 // finished state and re-acks duplicates.
+//
+// A Sigma3 that does not authenticate is terminal for this handshake:
+// the responder accepts no further Sigma3 until a new Sigma1 restarts
+// it, and commits nothing out of the rejected message.
 func (r *Responder) ProcessSigma3(sigma3Bytes []byte) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1053,6 +1060,26 @@ func (r *Responder) ProcessSigma3(sigma3Bytes []byte) error {
 	if r.state != responderStateSigma2Sent {
 		return fmt.Errorf("%w: ProcessSigma1 must run first", ErrSessionState)
 	}
+	if err := r.verifySigma3Locked(sigma3Bytes); err != nil {
+		// A Sigma3 that does not authenticate ends the handshake.
+		// Leaving the responder in Sigma2Sent would let a second Sigma3
+		// be verified against the same Sigma2 — the shape that turns any
+		// per-attempt state into cross-attempt state. matter.js has no
+		// such path: CaseServer reads exactly one Sigma3 and the first
+		// failure ends the exchange
+		// (packages/protocol/src/session/case/CaseServer.ts:275-309).
+		// Only a fresh Sigma1 restarts this responder.
+		r.state = responderStateFailed
+		return err
+	}
+	r.state = responderStateFinished
+	return nil
+}
+
+// verifySigma3Locked runs the Sigma3 crypto and, once the transcript
+// signature has authenticated the peer, commits the peer identity and
+// the session keys. Caller holds r.mu and owns the state transition.
+func (r *Responder) verifySigma3Locked(sigma3Bytes []byte) error {
 	sigma3, err := UnmarshalSigma3(sigma3Bytes)
 	if err != nil {
 		return err
@@ -1101,7 +1128,19 @@ func (r *Responder) ProcessSigma3(sigma3Bytes []byte) error {
 				ErrFabricIDMismatch, peerFabricID, r.identity.FabricID)
 		}
 	}
-	// Lift the peer's NodeID out of the verified NOC if the
+	// Nothing lifted out of the peer's certificate may reach responder
+	// state before the transcript signature proves the sender owns it:
+	// every step up to here is reproducible by any node that holds the
+	// fabric IPK, so an unauthenticated Sigma3 could otherwise install
+	// another member's identity on this exchange. matter.js keeps the
+	// decoded subject in locals across verifyEcdsa and only then builds
+	// the secure session from peerNodeId + caseAuthenticatedTags
+	// (packages/protocol/src/session/case/CaseServer.ts:302-327).
+	if err := verifyTranscript(initOpPub, tbe3.Signature, tbe3.InitiatorNOC, tbe3.InitiatorICAC, r.initEphPub, r.ephPubBytes); err != nil {
+		return err
+	}
+
+	// Lift the peer's NodeID out of the now-authenticated NOC if the
 	// verifier supports it (PeerNodeIDExtractor). The value rides
 	// into the secure channel's AES-CCM nonce (Matter §4.5.1.4)
 	// so we can authenticate the peer's outbound packets.
@@ -1111,16 +1150,17 @@ func (r *Responder) ProcessSigma3(sigma3Bytes []byte) error {
 		}
 	}
 	// Lift CASE Authenticated Tags out of the same NOC subject for the
-	// ACL gate's per-subject match (Matter §9.10.5.6). An extractor that
-	// returns an error or no CATs leaves r.peerCATs nil — the ACL gate
+	// ACL gate's per-subject match (Matter §9.10.5.6). The tag set is
+	// replaced, never merged: a peer whose NOC carries no CATs must end
+	// up with none, otherwise it inherits every CAT-scoped ACE written
+	// for whoever held this responder before it. An extractor that
+	// errors or reports no CATs leaves r.peerCATs nil — the ACL gate
 	// then only matches operational-node-id ACEs.
+	r.peerCATs = nil
 	if extractor, ok := r.verifier.(PeerCATsExtractor); ok {
 		if cats, cerr := extractor.PeerCATsFromNOC(tbe3.InitiatorNOC); cerr == nil && len(cats) > 0 {
 			r.peerCATs = append([]uint32(nil), cats...)
 		}
-	}
-	if err := verifyTranscript(initOpPub, tbe3.Signature, tbe3.InitiatorNOC, tbe3.InitiatorICAC, r.initEphPub, r.ephPubBytes); err != nil {
-		return err
 	}
 
 	// Secure-session salt = IPK || SHA256(sigma1 || sigma2 || sigma3).
@@ -1132,8 +1172,6 @@ func (r *Responder) ProcessSigma3(sigma3Bytes []byte) error {
 	copy(r.keys.I2RKey[:], final[0:SessionKeySize])
 	copy(r.keys.R2IKey[:], final[SessionKeySize:2*SessionKeySize])
 	copy(r.keys.AttestationChallenge[:], final[2*SessionKeySize:3*SessionKeySize])
-
-	r.state = responderStateFinished
 	return nil
 }
 
