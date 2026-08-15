@@ -500,17 +500,37 @@ type GCResult struct {
 	Deleted int
 }
 
-// GCDeadRows deletes rows whose (central, interface, channel,
-// parameter) tuple is not in the alive set passed by the caller.
-// alive may be nil — then nothing is deleted (defensive: a bug that
-// produced an empty alive set must not wipe the entire cache).
+// GCSweep is what one garbage-collection pass observed: the scopes whose
+// live model the caller actually read, and the keys that were alive inside
+// them.
+//
+// Both halves are needed because absence of a key is only evidence when the
+// scope it belongs to was read. A CCU that is powered off, or an interface
+// whose device ingest failed, contributes an empty model that is byte-for-byte
+// indistinguishable from "every device on it disappeared" — deleting on that
+// reading throws away the cache the next cold boot depends on, for a CCU that
+// is merely rebooting. A scope missing from Scopes is therefore skipped
+// entirely rather than treated as all-dead.
+type GCSweep struct {
+	// Scopes holds one [ScopeKey] per (central, interface) whose model the
+	// caller read. Rows outside it are never considered.
+	Scopes map[string]struct{}
+	// Alive holds one [AliveKey] per data point that still exists. Within a
+	// swept scope, a row whose key is absent is deleted.
+	Alive map[string]struct{}
+}
+
+// GCDeadRows deletes rows whose (central, interface, channel, parameter)
+// tuple is not in sweep.Alive, considering only rows whose (central,
+// interface) scope is in sweep.Scopes. An empty scope set deletes nothing —
+// a caller that observed no model at all has no basis for any deletion.
 func (s *ValuesCacheStore) GCDeadRows(
-	ctx context.Context, alive map[string]struct{},
+	ctx context.Context, sweep GCSweep,
 ) (GCResult, error) {
 	if s == nil || s.db == nil {
 		return GCResult{}, nil
 	}
-	if alive == nil {
+	if len(sweep.Scopes) == 0 {
 		return GCResult{}, nil
 	}
 	rows, err := s.db.QueryContext(ctx, `
@@ -530,8 +550,10 @@ func (s *ValuesCacheStore) GCDeadRows(
 			return GCResult{}, fmt.Errorf("values_cache.GCDeadRows row: %w", err)
 		}
 		scanned++
-		key := t.centralName + "|" + t.iface + "|" + t.channel + "|" + t.param
-		if _, live := alive[key]; !live {
+		if _, swept := sweep.Scopes[ScopeKey(t.centralName, t.iface)]; !swept {
+			continue
+		}
+		if _, live := sweep.Alive[AliveKey(t.centralName, t.iface, t.channel, t.param)]; !live {
 			dead = append(dead, t)
 		}
 	}
@@ -576,9 +598,18 @@ func (s *ValuesCacheStore) GCDeadRows(
 // [ValuesCacheStore.GCDeadRows] (see the adapter package's
 // values_cache_flush.go) is the production caller; tests use it
 // directly to build expected alive sets.
-// loom:reachable:reason="called in production by buildAliveKeySet on the periodic values-cache GC path (internal/central/adapter/values_cache_flush.go), which runs inside the flusher goroutine closure the static reachability pass does not trace"
+// loom:reachable:reason="called in production by buildGCSweep on the periodic values-cache GC path (internal/central/adapter/values_cache_flush.go), which runs inside the flusher goroutine closure the static reachability pass does not trace"
 func AliveKey(centralName, interfaceID, channelAddress, parameterName string) string {
 	return centralName + "|" + interfaceID + "|" + channelAddress + "|" + parameterName
+}
+
+// ScopeKey is the deterministic encoding of one [GCSweep] scope — the
+// (central, interface) pair whose live model the caller read. It shares the
+// separator with [AliveKey] so both sets are built from the same coordinates.
+//
+// loom:reachable:reason="called in production by buildGCSweep on the periodic values-cache GC path (internal/central/adapter/values_cache_flush.go), which runs inside the flusher goroutine closure the static reachability pass does not trace"
+func ScopeKey(centralName, interfaceID string) string {
+	return centralName + "|" + interfaceID
 }
 
 // Stats reports the current row count and approximate byte size of

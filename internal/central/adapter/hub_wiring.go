@@ -2302,31 +2302,76 @@ func (c *clientSysvarCreator) primaryBackend() (*clientpkg.InterfaceClient, back
 
 // primaryBackendOf resolves a central's primary InterfaceClient and its
 // registered backend at call time. Returns [ErrSysvarCreatorNoPrimary] when
-// the unit has no registered clients or the primary backend is not yet
-// registered. Shared by the sysvar-creator and backup-and-download wiring so
-// both bind late and stay independent of interface-wiring order.
+// the unit has no registered clients or no backend is registered for any of
+// them. Shared by the sysvar-creator, CCU-maintenance, heating-group and
+// backup-and-download wiring so all of them bind late and stay independent of
+// interface-wiring order.
+//
+// "Primary" means the interface that speaks for the CCU itself, not merely
+// the first one in registry order. Every caller needs the JSON-RPC / ReGa
+// surface that only a [backends.KindCCU] backend has: CUxD is a BIN-RPC
+// adapter whose capability profile carries neither Backup nor
+// CreateSystemVariable. Client entries are listed sorted by interface id, and
+// `CUxD` sorts before `HmIP-RF`, so an HmIP-only central that also runs CUxD
+// would otherwise resolve the CUxD backend for backup, reboot, heating-group
+// writes and sysvar creation alike — the backup path answering with a nil
+// archive and no error, which reaches storage as a zero-byte file.
+//
+// Selection order:
+//  1. the operator's `primary_interface` pin, when it names a registered
+//     CCU-class backend — an operator running BidCos-RF as the CCU's primary
+//     surface means it for these operations too;
+//  2. the first registered CCU-class backend in interface-id order;
+//  3. the first registered backend at all, so a central without any CCU-class
+//     interface still reaches its backend and fails with that backend's own
+//     unsupported error instead of a resolution error.
 func primaryBackendOf(unit *central.Unit, writer *clientpkg.ValueWriter) (*clientpkg.InterfaceClient, backends.Operations, error) {
-	if unit == nil || unit.Clients == nil {
+	if unit == nil || unit.Clients == nil || writer == nil {
 		return nil, nil, ErrSysvarCreatorNoPrimary
 	}
 	entries := unit.Clients.List()
 	if len(entries) == 0 {
 		return nil, nil, ErrSysvarCreatorNoPrimary
 	}
-	// entries are sorted by interface ID — take the first (= primary).
-	entry := entries[0]
-	if entry.Client == nil {
-		return nil, nil, ErrSysvarCreatorNoPrimary
+	name := unit.Name()
+	pinned := unit.Health.PrimaryInterface()
+
+	var (
+		firstClient  *clientpkg.InterfaceClient
+		firstBackend backends.Operations
+		ccuClient    *clientpkg.InterfaceClient
+		ccuBackend   backends.Operations
+	)
+	for _, entry := range entries {
+		if entry == nil || entry.Client == nil {
+			continue
+		}
+		wireID := hmtypes.ParseWireInterfaceID(entry.InterfaceID)
+		b, ok := writer.Backend(name, wireID)
+		if !ok {
+			continue
+		}
+		if firstBackend == nil {
+			firstClient, firstBackend = entry.Client, b
+		}
+		if b.Kind() != backends.KindCCU {
+			continue
+		}
+		if pinned != "" && string(wireID.Bare(name)) == pinned {
+			return entry.Client, b, nil
+		}
+		if ccuBackend == nil {
+			ccuClient, ccuBackend = entry.Client, b
+		}
 	}
-	if writer == nil {
-		return nil, nil, ErrSysvarCreatorNoPrimary
+	if ccuBackend != nil {
+		return ccuClient, ccuBackend, nil
 	}
-	b, ok := writer.Backend(unit.Name(), hmtypes.ParseWireInterfaceID(entry.InterfaceID))
-	if !ok {
-		return nil, nil, fmt.Errorf("%w: backend not registered for %s/%s",
-			ErrSysvarCreatorNoPrimary, unit.Name(), entry.InterfaceID)
+	if firstBackend != nil {
+		return firstClient, firstBackend, nil
 	}
-	return entry.Client, b, nil
+	return nil, nil, fmt.Errorf("%w: no backend registered for %s/%s",
+		ErrSysvarCreatorNoPrimary, name, entries[0].InterfaceID)
 }
 
 // CreateSysvarBool implements [coordinators.SysvarCreator].
