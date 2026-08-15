@@ -8,6 +8,62 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+The same audit's remaining 220 findings — 126 medium, 93 low, and the one
+high left over from the first round — were worked through after the
+high-severity set. Around 150 are fixed; the rest were declined with a
+stated reason, refuted, or had already been closed by the earlier work.
+Declining was a real outcome, not a formality: for a low-severity finding
+whose honest fix meant converting an exported field to a guarded accessor
+across four packages, the churn is the larger risk.
+
+What the fixes change for an operator:
+
+- **Security.** Bearer tokens were authenticated on a 64-bit prefix of the
+  digest rather than the whole value, and the comparison was not
+  constant-time. The MCP `list_audit` tool was readable by any viewer.
+  An SSDP response could name its own host and have the daemon believe it.
+  A Matter certificate with an absent or empty EC public key panicked the
+  decoder.
+- **Alarm.** An arm attempt the engine *refused* notified nobody: the
+  failure hook had no production caller, so a nightly auto-arm blocked by
+  an open contact was silent on every surface. The engine mutex is no
+  longer held across the CCU round-trip and the SQLite write of the sysvar
+  mirror, and the mirror no longer latches "ensured" after a failed
+  create.
+- **Device names.** A failed `Device.listAllDetail` left the daemon
+  serving an address-named fleet indefinitely instead of aborting the
+  bring-up and retrying, the way a failed serial already did.
+- **Matter.** A single failed event report permanently unrouted a live
+  subscription. Subscription heartbeats could exceed the session idle
+  timeout. OccupancySensing advertised the wrong sensor-type bit,
+  ElectricalEnergy omitted the cumulative-energy feature, and PowerSource
+  advertised a battery-replacement feature it did not serve — each
+  corrected against the matter.js element definitions, which also refuted
+  the comment that had justified one of them. Root and aggregator cluster
+  servers are now published atomically instead of being mutated under
+  live readers.
+- **REST and the SPA.** The global 30-second request deadline no longer
+  tears down the SSE log stream every 30 seconds. CORS and the WebSocket
+  handshake now normalise an operator's configured origin the same way, so
+  a trailing slash no longer matches one gate and not the other. The
+  diagnostics dump's `anonymize` flag, which reported `true` while
+  anonymising nothing, now actually hashes host and address-shaped values.
+  A partial `PUT` of a central no longer wipes the stored CCU password,
+  and an env-resolved secret is no longer persisted into the database as
+  if the operator had typed it.
+- **Assistant surface.** `list_service_messages` and `list_alarm_messages`
+  returned the raw CCU code and dropped the localized label that REST has
+  carried all along, so an assistant could only answer "LOWBAT" where it
+  meant "battery low".
+
+Two contract guards turned out to be blind, and both were widened by the
+findings they had missed: the wiring-setter guard matched a bare
+`func(...)` literal but not a *named* function type, and it dropped any
+seam declared as `Set*(x any)` because `any` is an alias. Between them
+they hid three seams production never called.
+
+---
+
 A full-codebase audit found 272 verified defects; this change fixes the
 52 rated high severity. They are not 52 unrelated bugs — most are
 instances of a handful of habits, and the fixes are grouped that way
