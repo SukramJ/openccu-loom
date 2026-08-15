@@ -333,30 +333,67 @@ func TestSubscribeTemperatureOffsetMaster(t *testing.T) {
 	}
 }
 
+// TestSubscribeHeatingCooling drives HEATING_COOLING in both wire shapes.
+//
+// The select case is the shape production builds: HEATING_COOLING is a
+// read+write ENUM, which resolves to a data point carrying the 0-based
+// VALUE_LIST index. Asserting the label alone left heatingMode() pinned to
+// its "HEATING" default, so a cooling installation reported hvac_action
+// `heating` for the lifetime of the process.
 func TestSubscribeHeatingCooling(t *testing.T) {
-	w := &stubWriter{}
-	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "HC0001"})
-	ch := d.AddChannel("HC0001:1", 1, "CLIMATE", hmenum.ParamsetKeyValues)
-
-	hcDP := generic.NewSensor[string](generic.Spec{
-		Key: hmtypes.DataPointKey{
-			ChannelAddress: ch.Address,
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      string(hmenum.ParameterHeatingCooling),
+	cases := []struct {
+		name string
+		// build returns the HEATING_COOLING DP in the shape under test
+		// plus the closure that pushes a COOLING event in that shape.
+		build func(generic.Spec) (device.ParameterDataPoint, func())
+	}{
+		{
+			name: "enum index",
+			build: func(s generic.Spec) (device.ParameterDataPoint, func()) {
+				s.Descriptor = hmproto.ParameterData{
+					Type:       hmenum.ParameterTypeEnum,
+					Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+					ValueList:  []string{"HEATING", "COOLING"},
+				}
+				dp := generic.NewSelect(s)
+				return dp, func() { dp.OnEvent(int32(1)) }
+			},
 		},
-		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
-			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		{
+			name: "enum label",
+			build: func(s generic.Spec) (device.ParameterDataPoint, func()) {
+				s.Descriptor = hmproto.ParameterData{
+					Type:       hmenum.ParameterTypeString,
+					Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+				}
+				dp := generic.NewSensor[string](s)
+				return dp, func() { dp.OnEvent("COOLING") }
+			},
 		},
-	})
-	ch.Put(hcDP)
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &stubWriter{}
+			d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "HC0001"})
+			ch := d.AddChannel("HC0001:1", 1, "CLIMATE", hmenum.ParamsetKeyValues)
 
-	c := New(Config{Channel: ch, Writer: w, Capabilities: custom.ClimateCapabilities{}, Kind: KindIP})
-	cancel := c.Subscribe(ch)
-	defer cancel()
+			hcDP, fireCooling := tc.build(generic.Spec{
+				Key: hmtypes.DataPointKey{
+					ChannelAddress: ch.Address,
+					ParamsetKey:    hmenum.ParamsetKeyValues,
+					Parameter:      string(hmenum.ParameterHeatingCooling),
+				},
+			})
+			ch.Put(hcDP)
 
-	hcDP.OnEvent("COOLING")
-	if c.IsHeating() {
-		t.Error("IsHeating() should be false after HEATING_COOLING=COOLING via Subscribe")
+			c := New(Config{Channel: ch, Writer: w, Capabilities: custom.ClimateCapabilities{}, Kind: KindIP})
+			cancel := c.Subscribe(ch)
+			defer cancel()
+
+			fireCooling()
+			if c.IsHeating() {
+				t.Error("IsHeating() should be false after HEATING_COOLING=COOLING via Subscribe")
+			}
+		})
 	}
 }

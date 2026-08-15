@@ -32,6 +32,13 @@ var (
 	_ interfaces.MatterChangeNotifier = (*Cover)(nil)
 	_ interfaces.MatterChangeNotifier = (*Blind)(nil)
 	_ interfaces.MatterChangeNotifier = (*Garage)(nil)
+	// Every actuation on this cluster is a command, so the three cluster
+	// servers must advertise them: the dispatcher answers
+	// AcceptedCommandList from this capability and falls back to an empty
+	// list without it, which reads to a controller as "nothing to invoke".
+	_ interfaces.MatterClusterCommandLister = coverWCServer{}
+	_ interfaces.MatterClusterCommandLister = blindWCServer{}
+	_ interfaces.MatterClusterCommandLister = garageWCServer{}
 )
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
@@ -579,6 +586,26 @@ func (s coverWCServer) MatterAttributes() []uint32 {
 	}
 }
 
+// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// UpOrOpen / DownOrClose / StopMotion are conformance "M" and
+// GoToLiftPercentage is "LF & PA_LF", the feature pair this projection
+// advertises (window-covering-cluster.element.ts:85-96). Mode (0x0017) is
+// the cluster's only writable attribute, so without this list a controller
+// sees no way to actuate the cover at all and renders it read-only.
+func (s coverWCServer) MatterAcceptedCommands() []uint32 {
+	return []uint32{
+		matterCmdUpOrOpen,
+		matterCmdDownOrClose,
+		matterCmdStopMotion,
+		matterCmdGoToLiftPercentage,
+	}
+}
+
+// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+// Every WindowCovering command answers with a plain status
+// (`response: "status"`, window-covering-cluster.element.ts:85-105).
+func (s coverWCServer) MatterGeneratedCommands() []uint32 { return nil }
+
 // blindWCServer projects a [Blind] (lift + tilt) onto the
 // WindowCovering cluster.
 type blindWCServer struct{ b *Blind }
@@ -762,6 +789,24 @@ func (s blindWCServer) MatterAttributes() []uint32 {
 	}
 }
 
+// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// The blind is the one projection that advertises TL & PA_TL, so it adds
+// GoToTiltPercentage (conformance "TL & PA_TL") to the lift surface — see
+// [coverWCServer.MatterAcceptedCommands] and
+// window-covering-cluster.element.ts:85-105.
+func (s blindWCServer) MatterAcceptedCommands() []uint32 {
+	return []uint32{
+		matterCmdUpOrOpen,
+		matterCmdDownOrClose,
+		matterCmdStopMotion,
+		matterCmdGoToLiftPercentage,
+		matterCmdGoToTiltPercentage,
+	}
+}
+
+// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+func (s blindWCServer) MatterGeneratedCommands() []uint32 { return nil }
+
 // garageWCServer projects a [Garage] onto the WindowCovering cluster.
 // Position is derived from the discrete door state — Open=1.0,
 // Ventilation=0.5, Closed=0.0 — which the [Garage.Position] method
@@ -904,6 +949,21 @@ func (s garageWCServer) MatterAttributes() []uint32 {
 		matterAttrMode,
 	}
 }
+
+// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister].
+// Same lift-only surface as [coverWCServer.MatterAcceptedCommands]; the
+// garage door has no tilt axis.
+func (s garageWCServer) MatterAcceptedCommands() []uint32 {
+	return []uint32{
+		matterCmdUpOrOpen,
+		matterCmdDownOrClose,
+		matterCmdStopMotion,
+		matterCmdGoToLiftPercentage,
+	}
+}
+
+// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister].
+func (s garageWCServer) MatterGeneratedCommands() []uint32 { return nil }
 
 // extractGoToPercentage pulls the LiftPercent100thsValue /
 // TiltPercent100thsValue (context tag 0) out of a GoToLiftPercentage /

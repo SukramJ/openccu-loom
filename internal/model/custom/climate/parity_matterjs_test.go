@@ -4,13 +4,17 @@
 package climate
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/thermo"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // TestParityMatterJS_ClimateClusterRevisions pins every cluster revision
@@ -266,5 +270,43 @@ func TestParityMatterJS_ThermostatUIMandatoryAttributeIDs(t *testing.T) {
 				t.Errorf("mandatory attribute %s (0x%04X) not handled in MatterRead()", a.name, a.id)
 			}
 		})
+	}
+}
+
+// TestParityMatterJS_ThermostatCommandList pins the Thermostat command
+// surface against matter.js HEAD
+// packages/model/src/standard/elements/thermostat-cluster.element.ts:317-363:
+// SetpointRaiseLower (0x00) is conformance "M"; every other command is
+// gated on MSCH / PRES / TSUGGEST, which this projection does not
+// advertise.
+//
+// The dispatcher answers AcceptedCommandList (0xFFF9) from this
+// capability and falls back to an empty list without it, so a controller
+// deriving write capability from the command lists sees a thermostat it
+// cannot command.
+func TestParityMatterJS_ThermostatCommandList(t *testing.T) {
+	t.Parallel()
+
+	// From thermostat-cluster.element.ts:319.
+	const jsCmdSetpointRaiseLower uint32 = 0x0
+
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	server := climateThermostatServer{c: r.climate}
+
+	lister, ok := any(server).(interfaces.MatterClusterCommandLister)
+	if !ok {
+		t.Fatal("climateThermostatServer does not implement MatterClusterCommandLister — AcceptedCommandList would be empty")
+	}
+	accepted := lister.MatterAcceptedCommands()
+	if len(accepted) != 1 || accepted[0] != jsCmdSetpointRaiseLower {
+		t.Errorf("MatterAcceptedCommands() = %v, want [0x%02X] (SetpointRaiseLower)", accepted, jsCmdSetpointRaiseLower)
+	}
+	if got := lister.MatterGeneratedCommands(); len(got) != 0 {
+		t.Errorf("MatterGeneratedCommands() = %v, want empty", got)
+	}
+	// Advertised must equal implemented: an unhandled command reports
+	// itself through errMatterUnknownCommand.
+	if _, err := server.MatterInvoke(context.Background(), jsCmdSetpointRaiseLower, nil, hmenum.CommandPriorityHigh); errors.Is(err, errMatterUnknownCommand) {
+		t.Errorf("SetpointRaiseLower is advertised but MatterInvoke rejects it: %v", err)
 	}
 }
