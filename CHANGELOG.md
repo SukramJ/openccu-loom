@@ -44,6 +44,25 @@ The REST contract version moves 5.29.0 → 5.31.0.
 
 ### Fixed
 
+- **Two ecosystems were classified under vendor ids belonging to someone
+  else.** A Matter fabric declares the vendor id of the controller that
+  created it, and the bridge uses that to decide whether an operator sees
+  a compatibility warning — "this device type will not appear in Google
+  Home" is only emitted for a fabric it can place. Aqara was mapped to
+  `0x1037`, which the CSA ledger assigns to NXP Semiconductors, and Home
+  Assistant to `0x125D`, which belongs to Tuya. Both mistakes cost twice:
+  the real ecosystem's fabric fell through to "unknown" and was never
+  warned about, and a fabric from the vendor who actually owns the id
+  would have been labelled as an ecosystem it has nothing to do with.
+  Apple's second, management fabric was unrecognised for the same reason.
+
+- **The fabric list names the controller instead of a hex id.** The name
+  now comes from the daemon, which is also what removes the second vendor
+  table the Config UI kept: the two disagreed about Amazon and
+  SmartThings, so a fabric could read as one vendor in the list and be
+  classified as another ecosystem on the compatibility tab.
+  (REST API 5.32.0)
+
 - **A code comment can no longer cite a catalogue entry nobody wrote.**
   The reference guard confirmed that a cited markdown file exists and
   stopped there, so a comment pointing at a specific entry inside it —

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/setup"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
@@ -214,6 +215,7 @@ type MatterFabricResponse struct {
 	FabricID      uint64 `json:"fabric_id"`
 	NodeID        uint64 `json:"node_id"`
 	VendorID      uint16 `json:"vendor_id"`
+	VendorName    string `json:"vendor_name"`
 	Label         string `json:"label,omitempty"`
 	CompressedID  string `json:"compressed_id"`
 	RootPublicKey string `json:"root_public_key"`
@@ -248,6 +250,7 @@ func MatterFabrics(s MatterFabricStore) http.HandlerFunc {
 				FabricID:      r.FabricID,
 				NodeID:        r.NodeID,
 				VendorID:      r.VendorID,
+				VendorName:    eligibility.VendorName(r.VendorID),
 				Label:         r.Label,
 				CompressedID:  hex.EncodeToString(r.CompressedID[:]),
 				RootPublicKey: hex.EncodeToString(r.RootPublicKey),

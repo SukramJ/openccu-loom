@@ -7593,6 +7593,8 @@ export interface components {
             /** Format: int64 */
             node_id: number;
             vendor_id: number;
+            /** @description Human-readable name of the controller vendor behind vendor_id (e.g. "Apple", "Google"). A vendor the daemon has no name for renders as its id in `0xNNNN` form rather than an empty string, so the row still identifies the controller. */
+            vendor_name?: string;
             label?: string;
             /** @description 8-byte compressed fabric identifier, hex-encoded */
             compressed_id: string;
