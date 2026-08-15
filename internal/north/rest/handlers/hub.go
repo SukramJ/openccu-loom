@@ -270,9 +270,14 @@ type InboxDeviceDTO struct {
 // [hub.AlarmMessage].
 type AlarmMessageDTO struct {
 	// Central is the CCU this alarm message belongs to.
-	Central     string `json:"central,omitempty"`
-	ID          string `json:"id"`
-	Name        string `json:"name"`
+	Central string `json:"central,omitempty"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	// DisplayName is the localized rendering of the message code the hub
+	// refresh resolved out of the translation catalogues. Name stays the raw
+	// CCU string, so a client that wants a human-readable label needs this.
+	// Empty when no catalogue entry covers the code.
+	DisplayName string `json:"display_name,omitempty"`
 	Description string `json:"description,omitempty"`
 	// Timestamp is when the alarm was raised. Omitted on the rare CCU
 	// report that carries no occurrence at all (see [hub.AlarmMessage]).
@@ -286,12 +291,15 @@ type AlarmMessageDTO struct {
 // ServiceMessageDTO is one entry in the service-messages list.
 type ServiceMessageDTO struct {
 	// Central is the CCU this service message belongs to.
-	Central    string `json:"central,omitempty"`
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Address    string `json:"address,omitempty"`
-	DeviceName string `json:"device_name,omitempty"`
-	Type       string `json:"type,omitempty"`
+	Central string `json:"central,omitempty"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	// DisplayName is the localized rendering of the message code; see
+	// [AlarmMessageDTO.DisplayName].
+	DisplayName string `json:"display_name,omitempty"`
+	Address     string `json:"address,omitempty"`
+	DeviceName  string `json:"device_name,omitempty"`
+	Type        string `json:"type,omitempty"`
 	// Timestamp is when the message first appeared. Omitted on the rare
 	// CCU report that carries no occurrence at all.
 	Timestamp time.Time `json:"timestamp,omitzero"`
@@ -1095,6 +1103,7 @@ func ListAlarmMessages(idx HubIndex) http.HandlerFunc {
 					Central:       nh.Central,
 					ID:            m.ID,
 					Name:          m.Name,
+					DisplayName:   m.DisplayName,
 					Description:   m.Description,
 					Timestamp:     m.Timestamp,
 					LastTimestamp: m.LastTimestamp,
@@ -1133,6 +1142,7 @@ func ListServiceMessages(idx HubIndex) http.HandlerFunc {
 					Central:       nh.Central,
 					ID:            m.ID,
 					Name:          m.Name,
+					DisplayName:   m.DisplayName,
 					Address:       m.Address,
 					DeviceName:    m.DeviceName,
 					Type:          m.Type.String(),

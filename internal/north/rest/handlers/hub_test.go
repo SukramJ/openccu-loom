@@ -83,6 +83,32 @@ func TestListPrograms_HappyPath(t *testing.T) {
 	}
 }
 
+// TestListPrograms_HugePageReturnsEmptyPage covers the shared
+// applyHubPagination slice bounds, which /programs, /sysvars,
+// /alarm-messages and /service-messages all go through: an unbounded `page`
+// used to wrap (page-1)*per_page negative and panic the request.
+func TestListPrograms_HugePageReturnsEmptyPage(t *testing.T) {
+	t.Parallel()
+	idx, _ := newTestHubWithProgram(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs?page=200000000000000000", http.NoBody)
+	w := httptest.NewRecorder()
+	ListPrograms(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body []ProgramSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 0 {
+		t.Fatalf("expected an empty page, got %+v", body)
+	}
+	if got := w.Header().Get("X-Total-Count"); got != "1" {
+		t.Errorf("X-Total-Count = %q, want the full pre-slice count 1", got)
+	}
+}
+
 func TestListPrograms_NilHub_ReturnsEmptyArray(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
@@ -501,6 +527,58 @@ func TestListAlarmMessages_TimestampFromUnixSeconds(t *testing.T) {
 		if s, ok := entry["timestamp"].(string); ok && strings.HasPrefix(s, "0001-01-01") {
 			t.Errorf("timestamp must never render the Go zero date, got %q", s)
 		}
+	}
+}
+
+// TestListMessages_CarryDisplayName pins the translated message name onto the
+// REST responses. The hub refresh resolves it out of the daemon's translation
+// catalogues while `name` stays the raw CCU code (AL-<addr>:<chn>.LOW_BAT), so
+// a DTO that drops it leaves every client rendering the code — and the
+// published schema declares display_name on both message shapes.
+func TestListMessages_CarryDisplayName(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Messages.Replace([]hub.AlarmMessage{
+		{ID: "A1", Name: "AL-0001ABCD:1.LOW_BAT", DisplayName: "Low battery", Counter: 1},
+	})
+	h.ServiceMessages.Replace([]hub.ServiceMessage{
+		{
+			ID:          "S1",
+			Name:        "0001ABCD:1.LOW_BAT",
+			DisplayName: "Low battery",
+			Type:        hmenum.ServiceMessageTypeGeneric,
+		},
+	})
+	idx := &testHubIndex{h: h}
+
+	for _, tc := range []struct {
+		name    string
+		path    string
+		handler http.Handler
+	}{
+		{name: "alarm messages", path: "/api/v1/hub/alarm-messages", handler: ListAlarmMessages(idx)},
+		{name: "service messages", path: "/api/v1/service-messages", handler: ListServiceMessages(idx)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+			w := httptest.NewRecorder()
+			tc.handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+			}
+			var raw []map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if len(raw) != 1 {
+				t.Fatalf("expected 1 message, got %d", len(raw))
+			}
+			if got := raw[0]["display_name"]; got != "Low battery" {
+				t.Errorf("display_name = %v, want %q", got, "Low battery")
+			}
+		})
 	}
 }
 
