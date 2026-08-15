@@ -94,6 +94,46 @@ afterEach(() => {
   cleanup();
 });
 
+// The bare `#/settings` names the General tab, so the `tab` prop going
+// from a value back to undefined is a navigation the view has to follow.
+// Ignoring that transition left the previous panel on screen while the
+// address bar already read `#/settings` — a link shared from that state
+// opens a different view than the sender was looking at.
+describe("Settings — a hash without ?tab lands on General", () => {
+  it("switches back to General when the tab prop drops to undefined", async () => {
+    location.hash = "#/settings?tab=mqtt";
+    const { rerender } = render(Settings, { props: { tab: "mqtt" } });
+
+    await waitFor(() =>
+      expect(screen.getByText("settings.mqtt.reload_title")).toBeInTheDocument(),
+    );
+
+    await rerender({ tab: undefined });
+
+    await waitFor(() =>
+      expect(screen.getByText("settings.interface")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("settings.mqtt.reload_title")).toBeNull();
+    expect(location.hash).toBe("#/settings");
+  });
+
+  it("still follows a deep link into a tab", async () => {
+    location.hash = "#/settings";
+    const { rerender } = render(Settings, { props: { tab: undefined } });
+
+    await waitFor(() =>
+      expect(screen.getByText("settings.interface")).toBeInTheDocument(),
+    );
+
+    await rerender({ tab: "mqtt" });
+
+    await waitFor(() =>
+      expect(screen.getByText("settings.mqtt.reload_title")).toBeInTheDocument(),
+    );
+    expect(location.hash).toBe("#/settings?tab=mqtt");
+  });
+});
+
 describe("Settings — schema load failure uses the shared ErrorState", () => {
   it("renders ErrorState with the error message and no ad-hoc Card banner", async () => {
     mockGetConfigSchema.mockRejectedValue(new Error("boom"));
