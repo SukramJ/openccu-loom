@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -186,6 +187,95 @@ func TestSetProfileWeekProgramRFMapsToEnumLabel(t *testing.T) {
 		s, ok := got.value.(string)
 		if !ok || s != tc.wantLabel {
 			t.Errorf("profile=%v: value=%#v, want %q", tc.profile, got.value, tc.wantLabel)
+		}
+	}
+}
+
+// TestSetProfileSpecialProfilesWriteTheirModeParameter verifies that the
+// three profiles [Climate.Profiles] advertises alongside the week programs
+// reach their dedicated mode parameter.
+//
+// They carry no week-program pointer, so requiring one rejected them before
+// the write ever happened — every "boost" / "comfort" / "eco" preset an
+// operator selected failed, on a device that advertised all three.
+func TestSetProfileSpecialProfilesWriteTheirModeParameter(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		kind      Kind
+		caps      custom.ClimateCapabilities
+		profile   Profile
+		wantParam hmenum.Parameter
+	}{
+		{
+			name:      "boost on RF",
+			kind:      KindRF,
+			caps:      custom.ClimateCapabilities{SupportsProfile: true, SupportsBoost: true},
+			profile:   ProfileBoost,
+			wantParam: hmenum.ParameterBoostMode,
+		},
+		{
+			name:      "boost on IP",
+			kind:      KindIP,
+			caps:      custom.ClimateCapabilities{SupportsProfile: true, SupportsBoost: true},
+			profile:   ProfileBoost,
+			wantParam: hmenum.ParameterBoostMode,
+		},
+		{
+			name:      "comfort on RF",
+			kind:      KindRF,
+			caps:      custom.ClimateCapabilities{SupportsProfile: true, SupportsComfort: true},
+			profile:   ProfileComfort,
+			wantParam: hmenum.ParameterComfortMode,
+		},
+		{
+			name:      "eco on RF",
+			kind:      KindRF,
+			caps:      custom.ClimateCapabilities{SupportsProfile: true, SupportsEco: true},
+			profile:   ProfileEco,
+			wantParam: hmenum.ParameterLoweringMode,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w := &stubWriter{}
+			r := newRig(t, "x", tc.kind, w, tc.caps)
+			if !slices.Contains(r.climate.Profiles(), tc.profile) {
+				t.Fatalf("Profiles() = %v, must advertise %v for this capability set", r.climate.Profiles(), tc.profile)
+			}
+			if err := r.climate.SetProfile(context.Background(), tc.profile, hmenum.CommandPriorityHigh); err != nil {
+				t.Fatalf("SetProfile(%v): %v", tc.profile, err)
+			}
+			got := w.last()
+			if got.param != tc.wantParam {
+				t.Fatalf("SetProfile(%v) wrote param=%v, want %v", tc.profile, got.param, tc.wantParam)
+			}
+			if on, ok := got.value.(bool); !ok || !on {
+				t.Fatalf("SetProfile(%v) wrote %v=%#v, want true", tc.profile, tc.wantParam, got.value)
+			}
+			if p, ok := r.climate.Profile(); !ok || p != tc.profile {
+				t.Errorf("Profile() = (%v, %v), want (%v, true)", p, ok, tc.profile)
+			}
+		})
+	}
+}
+
+// TestSetProfileSpecialProfileWithoutCapabilityRejected verifies that a
+// profile the device does not advertise is refused rather than written.
+func TestSetProfileSpecialProfileWithoutCapabilityRejected(t *testing.T) {
+	t.Parallel()
+
+	for _, p := range []Profile{ProfileBoost, ProfileComfort, ProfileEco} {
+		w := &stubWriter{}
+		r := newRig(t, "x", KindRF, w, custom.ClimateCapabilities{SupportsProfile: true})
+		if err := r.climate.SetProfile(context.Background(), p, hmenum.CommandPriorityHigh); !errors.Is(err, ErrModeNotSupported) {
+			t.Errorf("SetProfile(%v) without capability: err=%v, want ErrModeNotSupported", p, err)
+		}
+		if len(w.calls) != 0 {
+			t.Errorf("SetProfile(%v) without capability wrote %+v", p, w.calls)
 		}
 	}
 }

@@ -619,10 +619,16 @@ func TestParseTimeBaseFactorMinuteSuffix(t *testing.T) {
 
 func TestParseTimeBaseFactorZeroSeconds(t *testing.T) {
 	t.Parallel()
-	// "0s" → seconds=0 → should fail (seconds <= 0)
-	_, _, ok := weekprofile.ParseTimeBaseFactor("0s")
-	if ok {
-		t.Error("ParseTimeBaseFactor 0s must fail (zero duration)")
+	// A zero duration is a pair the CCU holds — (MS_100, 0), the door
+	// lock's `lock_autorelock_start` encoding — not an absent one, so it
+	// resolves rather than being rejected. "" remains the only way to
+	// say "leave the device's duration alone".
+	base, factor, ok := weekprofile.ParseTimeBaseFactor("0s")
+	if !ok || base != 0 || factor != 0 {
+		t.Errorf("ParseTimeBaseFactor(0s) = (%d, %d, %v), want (0, 0, true)", base, factor, ok)
+	}
+	if _, _, ok := weekprofile.ParseTimeBaseFactor(""); ok {
+		t.Error("ParseTimeBaseFactor(\"\") must stay unset, not a zero duration")
 	}
 }
 

@@ -274,24 +274,48 @@ func TestSerializeSimpleScheduleWithDomainNonLock(t *testing.T) {
 	}
 }
 
+// TestSerializeSimpleScheduleWithDomainLock asserts every door-lock action
+// reaches the paramset as the (LEVEL, DURATION_BASE, DURATION_FACTOR)
+// triplet its table entry declares.
+//
+// putParamset merges sparsely, so a key the encoder omits leaves whatever
+// the device holds. `lock_autorelock_start` is (0, 0, 0) — the one action
+// whose duration used to vanish on the way out, leaving the slot on the
+// firmware default (7, 31), which the read side maps back to
+// `lock_autorelock_end`: the operator asked for auto-relock to start and
+// the door kept it switched off.
 func TestSerializeSimpleScheduleWithDomainLock(t *testing.T) {
 	t.Parallel()
-	// lock_autorelock_start: level=0, durBase=0, durFactor=0 → empty duration
-	entries := []hmapi.SimpleScheduleEntry{
-		{
-			SlotNo:     1,
-			Weekdays:   []string{"MONDAY"},
-			Time:       "07:30",
-			LockMode:   "door_lock",
-			LockAction: "lock_autorelock_start",
-		},
-	}
-	m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedule.SimpleMaxSlot)
-	if err != nil {
-		t.Fatalf("serializeSimpleScheduleWithDomain lock: %v", err)
-	}
-	if m == nil {
-		t.Fatal("expected non-nil map")
+
+	for action, want := range schedule.LockActionTable {
+		t.Run(string(action), func(t *testing.T) {
+			t.Parallel()
+
+			entries := []hmapi.SimpleScheduleEntry{
+				{
+					SlotNo:     1,
+					Weekdays:   []string{"MONDAY"},
+					Time:       "07:30",
+					LockMode:   "door_lock",
+					LockAction: string(action),
+				},
+			}
+			m, err := serializeSimpleScheduleWithDomain(entries, "lock", schedule.SimpleMaxSlot)
+			if err != nil {
+				t.Fatalf("serializeSimpleScheduleWithDomain lock: %v", err)
+			}
+			base, baseSet := m["01_WP_DURATION_BASE"]
+			factor, factorSet := m["01_WP_DURATION_FACTOR"]
+			if !baseSet || !factorSet {
+				t.Fatalf("%v: DURATION_BASE/FACTOR not written — the sparse merge leaves the device's stale pair in place", action)
+			}
+			if base != want.DurBase() || factor != want.DurFactor() {
+				t.Errorf("%v: DURATION = (%v, %v), want (%d, %d)", action, base, factor, want.DurBase(), want.DurFactor())
+			}
+			if lvl := m["01_WP_LEVEL"]; lvl != want.Level() {
+				t.Errorf("%v: LEVEL = %v, want %v", action, lvl, want.Level())
+			}
+		})
 	}
 }
 

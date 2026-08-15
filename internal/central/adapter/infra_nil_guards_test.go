@@ -519,9 +519,14 @@ func TestFormatTimeBaseFactor(t *testing.T) {
 		{5, 13, "65min"},  // MIN_5, 13 → 65min (was "1h")
 		{6, 7, "70min"},   // MIN_10, 7 → 70min (was "1h")
 		{5, 12, "60min"},  // MIN_5, 12 → 60min (was "1h")
-		{0, 0, ""},        // zero factor
-		{-1, 5, ""},       // negative base
-		{99, 5, ""},       // out of range base
+		// A zero factor is the door lock's `lock_autorelock_start`
+		// encoding, so it renders rather than reading as "no duration" —
+		// the sparse paramset write drops the DURATION_* keys otherwise.
+		{0, 0, weekprofile.ZeroDuration},
+		{7, 0, weekprofile.ZeroDuration}, // zero is zero in every base
+		{0, -1, ""},                      // negative factor
+		{-1, 5, ""},                      // negative base
+		{99, 5, ""},                      // out of range base
 	}
 	for _, tc := range cases {
 		got := weekprofile.FormatTimeBaseFactor(tc.base, tc.factor)

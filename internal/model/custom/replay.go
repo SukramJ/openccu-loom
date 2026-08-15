@@ -5,6 +5,7 @@ package custom
 
 import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -57,38 +58,16 @@ func ParamFromChannelOrDevice(ch *device.Channel, p hmenum.Parameter) device.Par
 //
 // The wire value of an ENUM is its 0-based index — a [generic.Select]
 // carries int32, not the label — so a consumer that type-asserts the
-// pushed value to a string gets nothing and never learns why. Passing
-// the value through here keeps the index-to-label rule in one place and
-// accepts the label form too, for the parameters the CCU spells that way.
+// pushed value to a string gets nothing and never learns why. This is
+// the data-point-shaped entry into [parameter.EnumLabel], which holds
+// the index-to-label rule; a nil DP still resolves the label form, for
+// the parameters the CCU spells that way.
 func EnumWireLabel(dp device.ParameterDataPoint, value any) (string, bool) {
-	if s, ok := value.(string); ok {
-		return s, s != ""
-	}
 	if dp == nil {
-		return "", false
+		s, ok := value.(string)
+		return s, ok && s != ""
 	}
-	values := dp.ParameterData().ValueList
-	idx, ok := enumIndexOf(value)
-	if !ok || idx < 0 || idx >= len(values) {
-		return "", false
-	}
-	return values[idx], true
-}
-
-// enumIndexOf narrows the integer forms an ENUM value arrives in.
-func enumIndexOf(value any) (int, bool) {
-	switch v := value.(type) {
-	case int32:
-		return int(v), true
-	case int:
-		return v, true
-	case int64:
-		return int(v), true
-	case float64:
-		return int(v), true
-	default:
-		return 0, false
-	}
+	return parameter.EnumLabel(dp.ParameterData(), value)
 }
 
 // RawValuer is the minimal "snapshot of the wire DP's last observed

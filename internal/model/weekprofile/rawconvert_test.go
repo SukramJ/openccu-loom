@@ -831,3 +831,61 @@ func TestRawToClimateInvalidWeekday(t *testing.T) {
 		t.Fatal("invalid weekday must return error")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Door-lock action encoding
+// ---------------------------------------------------------------------------
+
+// TestBuildSimpleRawParamsetWritesEveryLockActionDuration walks the door-lock
+// actions through the two hops the write path uses — the wire triplet is
+// rendered as a duration string and the encoder turns it back into
+// DURATION_BASE / DURATION_FACTOR — and asserts each action reaches the
+// paramset as the pair its table entry declares.
+//
+// putParamset is a sparse merge, so an omitted key leaves whatever the
+// device holds. `lock_autorelock_start` is the one action whose encoding is
+// (0, 0), and dropping those keys left the slot on the firmware default
+// (7, 31) — the encoding of `lock_autorelock_end`, i.e. auto-relock
+// switched off rather than on, with the read-back flipping the operator's
+// choice straight back.
+func TestBuildSimpleRawParamsetWritesEveryLockActionDuration(t *testing.T) {
+	t.Parallel()
+
+	for action, want := range schedule.LockActionTable {
+		t.Run(string(action), func(t *testing.T) {
+			t.Parallel()
+
+			// Filled the way the write path fills it: the DTO is mapped
+			// onto the entry map directly. The model validator caps a
+			// duration factor at 30 and would reject the lock domain's
+			// own "permanent" sentinel (31), so going through Put would
+			// test a path no lock save takes.
+			s := schedule.NewSimple()
+			s.Entries[1] = schedule.SimpleEntry{
+				Weekdays:       []schedule.Weekday{schedule.WeekdayMonday},
+				Time:           "07:30",
+				Level:          want.Level(),
+				Duration:       FormatTimeBaseFactor(want.DurBase(), want.DurFactor()),
+				TargetChannels: []string{"1_1"},
+			}
+
+			raw, err := BuildSimpleRawParamset(s, schedule.SimpleMaxSlot)
+			if err != nil {
+				t.Fatalf("BuildSimpleRawParamset: %v", err)
+			}
+			base, baseSet := raw["01_WP_DURATION_BASE"]
+			factor, factorSet := raw["01_WP_DURATION_FACTOR"]
+			if !baseSet || !factorSet {
+				t.Fatalf("DURATION_BASE/FACTOR not written — the CCU keeps its stale pair, which reads back as a different action")
+			}
+			if base != want.DurBase() || factor != want.DurFactor() {
+				t.Errorf("DURATION = (%v, %v), want (%d, %d)", base, factor, want.DurBase(), want.DurFactor())
+			}
+			// The read side has to agree, or the operator's choice
+			// silently flips back on the next load.
+			if got := schedule.DetectLockAction(want.Level(), want.DurBase(), want.DurFactor()); got != action {
+				t.Errorf("DetectLockAction(%v, %d, %d) = %v, want %v", want.Level(), want.DurBase(), want.DurFactor(), got, action)
+			}
+		})
+	}
+}
