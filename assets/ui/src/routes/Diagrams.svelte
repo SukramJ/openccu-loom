@@ -43,14 +43,32 @@
   let loadError = $state<string | null>(null);
 
   // Editor state (null = closed). id === null → creating.
+  //
+  // A row carries a client-side uid because DiagramSeries has no id and the
+  // picker seeds its device / channel / data-point state once, at
+  // construction. Keying the editor's {#each} by array index would let a
+  // removal shift the surviving pickers onto another row's data — they would
+  // keep offering the removed device's channels and parameters while emitting
+  // the shifted row's address, so a pick saves a parameter that belongs to a
+  // different device (and central) than the series' channel address.
+  type DraftRow = { uid: string; series: DiagramSeries };
   type Draft = {
     id: string | null;
     name: string;
     visibility: "private" | "shared";
-    series: DiagramSeries[];
+    rows: DraftRow[];
   };
   let draft = $state<Draft | null>(null);
   let saving = $state(false);
+  let uidSeq = 0;
+
+  function row(series: DiagramSeries): DraftRow {
+    uidSeq += 1;
+    return { uid: `row-${uidSeq}`, series };
+  }
+  function emptyRow(): DraftRow {
+    return row({ central: "", interface_id: "", channel_address: "", parameter: "" });
+  }
 
   function docOf(d: DiagramConfig): DiagramDocument {
     const cfg = (d.config ?? {}) as unknown as DiagramDocument;
@@ -78,7 +96,7 @@
       id: null,
       name: "",
       visibility: "private",
-      series: [{ central: "", interface_id: "", channel_address: "", parameter: "" }],
+      rows: [emptyRow()],
     };
   }
   function editDraft(d: DiagramConfig) {
@@ -86,20 +104,20 @@
       id: d.id,
       name: d.name,
       visibility: (d.visibility as "private" | "shared") ?? "private",
-      series: docOf(d).series.map((s) => ({ ...s })),
+      rows: docOf(d).series.map((s) => row({ ...s })),
     };
   }
   function addSeries() {
     if (!draft) return;
-    draft.series = [...draft.series, { central: "", interface_id: "", channel_address: "", parameter: "" }];
+    draft.rows = [...draft.rows, emptyRow()];
   }
-  function removeSeries(i: number) {
+  function removeSeries(uid: string) {
     if (!draft) return;
-    draft.series = draft.series.filter((_, idx) => idx !== i);
+    draft.rows = draft.rows.filter((r) => r.uid !== uid);
   }
-  function updateSeries(i: number, ns: DiagramSeries) {
+  function updateSeries(uid: string, ns: DiagramSeries) {
     if (!draft) return;
-    draft.series = draft.series.map((s, idx) => (idx === i ? ns : s));
+    draft.rows = draft.rows.map((r) => (r.uid === uid ? { ...r, series: ns } : r));
   }
 
   async function save() {
@@ -109,9 +127,12 @@
       return;
     }
     // Keep only fully-picked series (device → channel → value all chosen).
-    const series = draft.series.filter(
-      (s) => (s.central ?? "").trim() && (s.channel_address ?? "").trim() && (s.parameter ?? "").trim(),
-    );
+    // The row uid is editor-local and never leaves this component.
+    const series = draft.rows
+      .map((r) => r.series)
+      .filter(
+        (s) => (s.central ?? "").trim() && (s.channel_address ?? "").trim() && (s.parameter ?? "").trim(),
+      );
     if (series.length === 0) {
       toastStore.error(t("diagrams.error.series_required"));
       return;
@@ -206,12 +227,12 @@
         <span class="text-xs font-semibold text-[var(--ha-secondary-text-color)]">
           {t("diagrams.field.series")}
         </span>
-        {#each draft.series as s, i (i)}
+        {#each draft.rows as r, i (r.uid)}
           <DiagramSeriesPicker
-            series={s}
+            series={r.series}
             index={i}
-            onChange={(ns) => updateSeries(i, ns)}
-            onRemove={() => removeSeries(i)}
+            onChange={(ns) => updateSeries(r.uid, ns)}
+            onRemove={() => removeSeries(r.uid)}
           />
         {/each}
         <div>
