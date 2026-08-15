@@ -724,7 +724,7 @@ func TestRunDiscoveryOrphanCleanupOnce_NotAClient(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: true, CentralName: "ccu"}, mp)
-	_, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), 10)
+	_, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "", 10)
 	if !errors.Is(err, errCleanupClientLacksSubscribe) {
 		t.Fatalf("expected errCleanupClientLacksSubscribe, got %v", err)
 	}
@@ -734,7 +734,7 @@ func TestRunDiscoveryOrphanCleanupOnce_HADisabled(t *testing.T) {
 	t.Parallel()
 	mc := &mockRetainClient{}
 	b := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: false, CentralName: "ccu"}, mc)
-	n, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), 10)
+	n, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "", 10)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -766,7 +766,7 @@ func TestRunDiscoveryOrphanCleanupOnce_OrphansEvicted(t *testing.T) {
 	b.mu.Unlock()
 
 	// The orphan has node_id "ccu_old" which starts with "ccu_" — our prefix.
-	n, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), 50)
+	n, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), "", 50)
 	if err != nil {
 		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
 	}

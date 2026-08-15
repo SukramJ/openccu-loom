@@ -465,15 +465,15 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 // The sweeps evict what previous builds/boots retained but the current model
 // no longer publishes: MASTER paramsets that escaped before the visibility
 // gate closed the mid-ingest window, suppressed VALUES parameters, retired
-// profiles, removed devices. Once per boot and per central; the HA-Discovery
-// sweep additionally only for the bridge's default central, whose node_id
-// namespace it is scoped to. Best-effort — a broker without subscribe
-// support just skips.
+// profiles, removed devices. Once per boot and per central — both sweeps
+// alike: each is scoped to the node-id / topic namespace of the central it
+// is called with, and running only the default central's would leave every
+// other CCU's orphans unreachable forever. Best-effort — a broker without
+// subscribe support just skips.
 func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *config.Config, logger *slog.Logger) {
 	if d.mqttWiring == nil || d.mqttWiring.Bridge() == nil {
 		return
 	}
-	defaultCentral := pickFirstCentral(cfg)
 	cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
 	var sweptCentrals sync.Map
 	d.bridge.SetPostCentralSnapshotHook(func(_ context.Context, centralName string) {
@@ -501,15 +501,15 @@ func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *
 			// daemon ctx for shutdown.
 			sweepCtx, sweepCancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer sweepCancel()
-			if centralName == defaultCentral {
-				n, err := mqttBridge.RunDiscoveryOrphanCleanupOnce(sweepCtx, cleanupWindow)
-				if err != nil {
-					logger.Warn("mqtt.discovery_orphan_cleanup", slog.String("err", err.Error()))
-				} else if n > 0 {
-					logger.Info("mqtt.discovery_orphan_cleanup", slog.Int("evicted", n))
-				}
+			n, err := mqttBridge.RunDiscoveryOrphanCleanupOnce(sweepCtx, centralName, cleanupWindow)
+			if err != nil {
+				logger.Warn("mqtt.discovery_orphan_cleanup",
+					slog.String("central", centralName), slog.String("err", err.Error()))
+			} else if n > 0 {
+				logger.Info("mqtt.discovery_orphan_cleanup",
+					slog.String("central", centralName), slog.Int("evicted", n))
 			}
-			n, err := mqttBridge.RunRawOrphanCleanupOnce(sweepCtx, centralName, cleanupWindow)
+			n, err = mqttBridge.RunRawOrphanCleanupOnce(sweepCtx, centralName, cleanupWindow)
 			if err != nil {
 				logger.Warn("mqtt.raw_orphan_cleanup",
 					slog.String("central", centralName), slog.String("err", err.Error()))
