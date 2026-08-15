@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +35,9 @@ func (f *fakeTokenAdminService) Create(_ context.Context, in sqlite.CreateInput)
 		Subject:     in.Subject,
 		Role:        in.Role,
 		CreatedAt:   time.Now().UTC(),
+		// Record the expiry the handler computed — a fake that drops it
+		// would stay green against a token that is already expired.
+		ExpiresAt: in.ExpiresAt,
 	})
 	return sqlite.CreateResult{Token: "plaintext-token-abc", Fingerprint: fp}, nil
 }
@@ -161,6 +165,52 @@ func TestCreateTokenAdmin_InvalidRole_Returns400(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestCreateTokenAdmin_ExpiryAlwaysLandsInTheFuture(t *testing.T) {
+	t.Parallel()
+	// expires_in_days is multiplied into nanoseconds; past the
+	// representable range the int64 product wraps negative and time.Add
+	// moves the expiry backwards, minting a credential the bearer
+	// resolver rejects on first use. The endpoint must refuse instead.
+	cases := []struct {
+		name string
+		days int
+		want int
+	}{
+		{name: "one day", days: 1, want: http.StatusCreated},
+		{name: "largest representable", days: maxTokenExpiryDays, want: http.StatusCreated},
+		{name: "one past representable", days: maxTokenExpiryDays + 1, want: http.StatusBadRequest},
+		{name: "years mistaken for days", days: 200000, want: http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &fakeTokenAdminService{}
+			body := strings.NewReader(
+				`{"subject":"svc","role":"operator","expires_in_days":` + strconv.Itoa(tc.days) + `}`,
+			)
+			req := httptest.NewRequest(http.MethodPost, "/admin/auth/tokens", body)
+			w := httptest.NewRecorder()
+			CreateTokenAdmin(svc, nil).ServeHTTP(w, req)
+
+			if w.Code != tc.want {
+				t.Fatalf("expected %d, got %d body=%s", tc.want, w.Code, w.Body.String())
+			}
+			if tc.want != http.StatusCreated {
+				if len(svc.tokens) != 0 {
+					t.Fatalf("expected no token to be minted, got %d", len(svc.tokens))
+				}
+				return
+			}
+			if len(svc.tokens) != 1 || svc.tokens[0].ExpiresAt == nil {
+				t.Fatalf("expected one token with an expiry, got %+v", svc.tokens)
+			}
+			if !svc.tokens[0].ExpiresAt.After(time.Now().UTC()) {
+				t.Errorf("stored expiry %s is not in the future", svc.tokens[0].ExpiresAt)
+			}
+		})
 	}
 }
 
