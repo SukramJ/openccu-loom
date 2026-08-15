@@ -89,9 +89,9 @@ func limitListener(ln net.Listener, maxConns int) net.Listener {
 // default, open-LAN behaviour.
 type PeerAllowlist func() []netip.Prefix
 
-// StaticPeerAllowlist adapts a fixed prefix set to [PeerAllowlist], for
+// staticPeerAllowlist adapts a fixed prefix set to [PeerAllowlist], for
 // callers whose peer set genuinely cannot change.
-func StaticPeerAllowlist(prefixes []netip.Prefix) PeerAllowlist {
+func staticPeerAllowlist(prefixes []netip.Prefix) PeerAllowlist {
 	if len(prefixes) == 0 {
 		return nil
 	}

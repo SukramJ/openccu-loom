@@ -394,12 +394,19 @@ func TestValuesCache_GCRemovesDeadRows(t *testing.T) {
 		t.Fatalf("SaveValue %s: %v", paramB, err)
 	}
 
-	// Alive set includes only paramA.
-	alive := map[string]struct{}{
-		sqlite.AliveKey(centralName, ifaceID, chAddr, paramA): {},
+	// The sweep covers this one (central, interface) scope, and within it only
+	// paramA is alive. The scope set is what keeps a CCU whose model happens to
+	// be empty — an offline one, say — from having all of its rows read as dead.
+	sweep := sqlite.GCSweep{
+		Scopes: map[string]struct{}{
+			sqlite.ScopeKey(centralName, ifaceID): {},
+		},
+		Alive: map[string]struct{}{
+			sqlite.AliveKey(centralName, ifaceID, chAddr, paramA): {},
+		},
 	}
 
-	res, err := vcStore.GCDeadRows(ctx, alive)
+	res, err := vcStore.GCDeadRows(ctx, sweep)
 	if err != nil {
 		t.Fatalf("GCDeadRows: %v", err)
 	}

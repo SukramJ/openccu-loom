@@ -4847,7 +4847,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Bridge's QR + manual pairing code */
+        /**
+         * Bridge's QR + manual pairing code
+         * @description Admin only. The response carries the commissioning passcode and the QR and manual codes derived from it, so anyone holding it can commission the bridge into their own fabric while a window is open.
+         */
         get: operations["matterSetupPayload"];
         put?: never;
         post?: never;
@@ -15608,6 +15611,7 @@ export interface operations {
                     "application/json": components["schemas"]["MatterSetupPayload"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalError"];
             /** @description Matter commissioning not configured (passcode = 0) */
             503: {

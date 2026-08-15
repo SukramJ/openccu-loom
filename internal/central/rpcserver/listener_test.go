@@ -67,7 +67,7 @@ func TestPeerAllowed(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := peerAllowed(StaticPeerAllowlist(tc.allow), tc.remote); got != tc.want {
+			if got := peerAllowed(staticPeerAllowlist(tc.allow), tc.remote); got != tc.want {
 				t.Errorf("peerAllowed(%v, %q) = %v, want %v", tc.allow, tc.remote, got, tc.want)
 			}
 		})
