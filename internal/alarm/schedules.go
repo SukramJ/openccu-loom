@@ -63,9 +63,9 @@ type scheduleRunnerDeps struct {
 	// ArmFailure is the FAILED_TO_ARM notification hook the AutoArm
 	// path calls in addition to the journal fault, when a *NotReadyError
 	// blocks the arm. It mirrors the MQTT alarm publisher's
-	// PublishFailedToArm signature (cmd/openccu-loom/daemon_north.go) so
-	// the daemon composition root can wire it in one line; nil (the
-	// default until that wiring lands) keeps the failure journal-only.
+	// PublishFailedToArm signature so the daemon composition root can
+	// wire it in one line; nil — the state of a daemon configured
+	// without MQTT — keeps the failure journal-only.
 	ArmFailure ArmFailureHook
 }
 
