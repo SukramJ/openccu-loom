@@ -225,7 +225,15 @@ func (d *TopologyDispatcher) WriteAuthorized(ctx context.Context, path im.Concre
 				// no read-only record — globals, writable attrs, clusters
 				// outside the table (known == false) — fall through unchanged.
 				if writable, known := schema.AttributeWritable(cPath.Cluster, attrID); known && !writable {
-					if path.HasAttribute {
+					// "Concrete" means endpoint AND cluster AND attribute are
+					// all named — the split matter.js makes before it picks a
+					// write path (AttributeWriteResponse.ts:65). A wildcard
+					// endpoint is a wildcard path even with a concrete
+					// attribute, and reporting a status per resolved endpoint
+					// would both diverge from the spec and enumerate which
+					// endpoints host the cluster to a peer whose authorization
+					// the gate below has not evaluated yet.
+					if !wildcardEndpoint && path.HasAttribute {
 						results = append(results, im.WriteResult{Path: aPath, Status: im.StatusUnsupportedWrite})
 					}
 					continue
