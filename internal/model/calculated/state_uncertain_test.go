@@ -299,6 +299,22 @@ func TestShouldPublishCalcUpdateOneSrcAlwaysTrue(t *testing.T) {
 	}
 }
 
+// TestShouldPublishCalcUpdateAllowsWhenNoSourceStampsAPublishTime pins the
+// production shape the guard's direction depends on: no wire data point
+// installs a publisher, so PublishedEventRecently is permanently false for
+// every source. Suppressing on that answer would silence every
+// multi-source calculated sensor, which is why the comparison in
+// shouldPublishCalcUpdate cannot be aligned with the reference contract
+// until the publish stamping exists.
+func TestShouldPublishCalcUpdateAllowsWhenNoSourceStampsAPublishTime(t *testing.T) {
+	t.Parallel()
+	a := &stubSourceDP{}
+	b := &stubSourceDP{}
+	if !shouldPublishCalcUpdate([]SourceDP{a, b}) {
+		t.Fatal("sources that never stamp a publish time must not suppress the publish")
+	}
+}
+
 // TestCalculatedSuppressesPublishWhenSourcesRecentlyPublished asserts that
 // when all ≥2 sources published recently, shouldPublishCalcUpdate returns false.
 func TestCalculatedSuppressesPublishWhenSourcesRecentlyPublished(t *testing.T) {
