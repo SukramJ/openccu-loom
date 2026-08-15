@@ -348,6 +348,7 @@ const EN: Catalog = {
   "alarm.journal_class.fault": "Fault",
   "alarm.journal_class.test": "Test",
   "alarm.journal_class.config": "Config",
+  "alarm.journal_class.maintenance": "Maintenance",
   // Walk test (§12.4).
   "alarm.walktest.placeholder": "No walk test running",
   "alarm.walktest.title": "Walk test",
@@ -4166,6 +4167,7 @@ const DE: Catalog = {
   "alarm.journal_class.fault": "Störung",
   "alarm.journal_class.test": "Test",
   "alarm.journal_class.config": "Konfiguration",
+  "alarm.journal_class.maintenance": "Wartung",
   // Begehungstest (§12.4).
   "alarm.walktest.placeholder": "Kein Begehungstest aktiv",
   "alarm.walktest.title": "Begehungstest",

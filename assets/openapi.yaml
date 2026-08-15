@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.30.0
+  version: 5.31.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -7111,7 +7111,7 @@ paths:
           name: class
           schema:
             type: string
-            enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+            enum: [arm, disarm, trigger, silence, bypass, fault, test, config, maintenance]
           description: Only return entries in this journal class.
         - in: query
           name: from
@@ -9794,7 +9794,12 @@ components:
       properties:
         subject: { type: string }
         role: { type: string, enum: [admin, operator, viewer] }
-        scheme: { type: string, enum: [basic, bearer, session, oidc] }
+        scheme:
+          type: string
+          enum: [basic, bearer, session, oidc, ingress]
+          description: >-
+            How the request authenticated. `ingress` is the Home
+            Assistant Ingress passthrough the add-on deployment uses.
     UserListEntry:
       type: object
       required: [username, role]
@@ -10443,6 +10448,17 @@ components:
           type: string
           format: date-time
           description: RFC3339Nano timestamp the CCU observed the change at.
+        category:
+          type: string
+          description: |
+            Model category of the data point (`switch`, `sensor`, …).
+            Only sent to clients that subscribed with `classify: true`;
+            omitted otherwise.
+        data_point_type:
+          type: string
+          description: |
+            North-bound type the category collapses into. Same
+            `classify: true` opt-in as `category`.
 
     CustomDataPointStateChangedPayload:
       type: object
@@ -10825,8 +10841,11 @@ components:
           description: Stable machine-readable cause token (sensor, adopted, central_lost, restored).
         mode:
           type: string
-          enum: [perimeter, full, night, vacation, custom]
-          description: Protection mode that was active at trigger time.
+          enum: [disarmed, perimeter, full, night, vacation, custom]
+          description: >-
+            Protection mode that was active at trigger time. `disarmed`
+            for an always-on trigger (hazard detector, panic) that fires
+            independently of the arm state.
 
     AlarmPanelEntity:
       type: object
@@ -10911,7 +10930,7 @@ components:
           description: Omitted for engine-global entries.
         class:
           type: string
-          enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+          enum: [arm, disarm, trigger, silence, bypass, fault, test, config, maintenance]
         event:
           type: string
           description: Stable machine-readable event token within the class.
@@ -13253,7 +13272,7 @@ components:
         zone_id: { type: string }
         class:
           type: string
-          enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+          enum: [arm, disarm, trigger, silence, bypass, fault, test, config, maintenance]
           description: Journal bucket used by the `class` query filter.
         event:
           type: string

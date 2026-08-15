@@ -36,6 +36,7 @@
     "fault",
     "test",
     "config",
+    "maintenance",
   ];
 
   const CLASS_VARIANT: Record<
@@ -50,6 +51,7 @@
     fault: "danger",
     test: "default",
     config: "default",
+    maintenance: "muted",
   };
 
   let zoneFilter = $state("");
