@@ -2512,7 +2512,14 @@ export function friendlyError(
       }
       return t("api.error.server", { status: String(err.status) });
     }
-    return err.message;
+    // Everything else (400 / 409 / 422 / 423 …): `err.message` is the
+    // machine string `API <status> <path>: <detail>`, which leaks the REST
+    // path into an operator-facing surface and is never localized. Keep the
+    // daemon's problem detail — it names the actual rejection — behind a
+    // localized frame, same shape as the 5xx branch above.
+    const detail = err.problemDetail;
+    const frame = t("api.error.request", { status: String(err.status) });
+    return detail ? `${frame} — ${detail}` : frame;
   }
   if (err instanceof Error) return err.message;
   return String(err);

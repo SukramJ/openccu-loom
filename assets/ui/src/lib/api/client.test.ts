@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { api, setUnauthorizedHandler, getHistory, HistoryDisabledError } from "./client";
+import {
+  api,
+  friendlyError,
+  setUnauthorizedHandler,
+  getHistory,
+  HistoryDisabledError,
+} from "./client";
 import type { HistoryBucket } from "./client";
 
 // The daemon mounts a double-submit CSRF guard on the whole REST router
@@ -781,6 +787,42 @@ describe("api.health — 503 carries the snapshot, not an error", () => {
   it("still rejects on a status the contract does not document as a payload", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "boom" }, 500));
     await expect(api.health()).rejects.toBeTruthy();
+  });
+});
+
+describe("friendlyError — validation and conflict responses", () => {
+  // A 4xx that is neither 401/403/404/429 used to fall through to the raw
+  // ApiError message, which is the machine string `API 422 /alarm/codes:
+  // …` — an untranslated banner that leaks the REST path to the operator.
+  const translate = (key: string, vars?: Record<string, string | number>) =>
+    vars ? `${key}::${JSON.stringify(vars)}` : key;
+
+  async function errorFrom(status: number, body: unknown): Promise<unknown> {
+    fetchMock.mockResolvedValueOnce(jsonResponse(body, status));
+    try {
+      await api.health();
+      throw new Error("expected the request to reject");
+    } catch (err) {
+      return err;
+    }
+  }
+
+  it("frames the status through the catalogue and keeps the problem detail", async () => {
+    const err = await errorFrom(422, {
+      detail: "keypad_slot binding requires zone_id",
+    });
+    const message = friendlyError(err, translate);
+    expect(message).toBe(
+      'api.error.request::{"status":"422"} — keypad_slot binding requires zone_id',
+    );
+    expect(message).not.toContain("/health");
+  });
+
+  it("falls back to the framed status when the body carries no detail", async () => {
+    const err = await errorFrom(409, "");
+    expect(friendlyError(err, translate)).toBe(
+      'api.error.request::{"status":"409"}',
+    );
   });
 });
 

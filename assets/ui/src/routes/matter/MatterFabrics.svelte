@@ -35,6 +35,13 @@
     return VENDOR_NAMES[vendorId] ?? `0x${vendorId.toString(16).toUpperCase().padStart(4, "0")}`;
   }
 
+  // The fabric list serves node ids as JSON numbers; controllers and
+  // chip-tool print them as 16-digit hex, so a `0x` in front of the
+  // decimal value matches nothing the operator can compare against.
+  function nodeIdHex(nodeId: number): string {
+    return `0x${nodeId.toString(16).toUpperCase().padStart(16, "0")}`;
+  }
+
   async function unpair(fabricIndex: number, label: string) {
     const confirmed = await confirmStore.ask({
       title: t("matter.fabric.unpair_confirm"),
@@ -100,7 +107,7 @@
           {:else if col.key === "fabric"}
             <span class="text-slate-500 dark:text-slate-400">{fabric.fabric_index}</span>
           {:else if col.key === "node_id"}
-            <span class="font-mono text-xs text-slate-500 dark:text-slate-400">0x{fabric.node_id}</span>
+            <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{nodeIdHex(fabric.node_id)}</span>
           {:else if col.key === "action"}
             <Button
               size="sm"
