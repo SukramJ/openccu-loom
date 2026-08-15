@@ -22,7 +22,6 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -653,37 +652,38 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 
 // ── Test 4: CentralRegistry / Registry lookup requires name param ────
 
-// TestCentralRegistryLookupRequiresName asserts that every exported
-// lookup / modification method on the central Registry (and the
-// registry.CentralRegistry in the sub-package) accepts a string name
-// parameter — so callers can never accidentally retrieve "the one
-// central" without naming it.
+// TestCentralRegistryLookupRequiresName asserts that every exported method on
+// the central Registry either names the central it acts on or is declared
+// name-free with a reason — so no caller can ever retrieve "the one central"
+// without naming it (ADR 0002).
+//
+// The check runs the other way round on purpose: every exported method must
+// carry a string parameter unless [allowedWithoutName] excuses it. A named
+// list of methods to check cannot see the violation this guard exists to
+// catch, because a new unscoped lookup (`GetSingle()`, `First()`) is by
+// definition a name nobody listed — the earlier shape checked exactly one
+// method and passed its own vacuity fuse at one.
 func TestCentralRegistryLookupRequiresName(t *testing.T) {
 	t.Parallel()
 
-	// Methods that must carry a name/string param.
-	// Note: "Register" is intentionally excluded here — the concrete
-	// Registry.Register takes a *Unit (which carries Name()
-	// internally) rather than a plain string. Only lookup / removal
-	// methods must take an explicit name string.
-	mustHaveNameParam := []string{"Get", "Remove"}
-
-	// Methods that are correctly name-free (they return all or nothing).
+	// Methods that legitimately take no central name, each with the reason.
+	// Everything else on the registry must name its central.
 	allowedWithoutName := map[string]string{
-		"Names":    "reason: returns all names — correct to not take a name param",
-		"List":     "reason: returns all centrals — aggregation, not lookup",
-		"StartAll": "reason: fans out to all centrals",
-		"StopAll":  "reason: fans out to all centrals",
+		"Names":      "returns all names — correct to not take a name param",
+		"List":       "returns all centrals — aggregation, not lookup",
+		"Len":        "counts the registry — no single central involved",
+		"StartAll":   "fans out to all centrals",
+		"StopAll":    "fans out to all centrals",
+		"Register":   "takes a *Unit, which carries its own Name()",
+		"OnRegister": "installs an observer that is replayed per central; the central arrives as the callback argument",
 	}
 
 	registryDirs := []string{
 		filepath.Join(repoRoot(t), "internal", "central"),
-		filepath.Join(repoRoot(t), "internal", "central", "registry"),
 	}
 
 	registryTypes := map[string]bool{
-		"Registry":        true,
-		"CentralRegistry": true,
+		"Registry": true,
 	}
 
 	checked := 0
@@ -704,12 +704,10 @@ func TestCentralRegistryLookupRequiresName(t *testing.T) {
 				if !fn.Name.IsExported() {
 					continue
 				}
-				if _, skip := allowedWithoutName[fn.Name.Name]; skip {
-					continue
-				}
-				// Only assert the "must have name" methods.
-				mustCheck := slices.Contains(mustHaveNameParam, fn.Name.Name)
-				if !mustCheck {
+				if reason, skip := allowedWithoutName[fn.Name.Name]; skip {
+					if reason == "" {
+						t.Errorf("%s.%s is excused from central-name scoping with an empty reason", recv, fn.Name.Name)
+					}
 					continue
 				}
 				checked++
