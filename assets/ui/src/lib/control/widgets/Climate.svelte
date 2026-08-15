@@ -136,9 +136,14 @@
   {/snippet}
   {#snippet features()}
     {#if setpointDP}
+      <!-- Bounds come from the descriptor: a virtual heating group's
+           SETPOINT is 5–30 °C, and a stepper that offers 4.5 °C only
+           earns a 400. -->
       <TargetTemperatureFeature
         value={setpoint}
         color={tileColor}
+        min={typeof setpointDP.min === "number" ? setpointDP.min : undefined}
+        max={typeof setpointDP.max === "number" ? setpointDP.max : undefined}
         disabled={!setpointDP.operations.write}
         onChange={(v) => onSetSlot("SETPOINT", v)}
       />

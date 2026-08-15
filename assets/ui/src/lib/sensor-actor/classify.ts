@@ -137,18 +137,20 @@ export function formatSecondaryValue(dp: DataPointSummary): string {
 }
 
 /**
- * Resolve an ENUM-typed DP's value to its value_list label. Accepts
- * numeric indices AND booleans — HmIP-SWDO's STATE for example is a
- * two-value ENUM where the wire carries `false` / `true` but the
- * descriptor's value_list is `["CLOSED", "OPEN"]`. Returns `undefined`
- * when the DP is not an ENUM, the value is out of range, or
- * value_list is missing. The label is title-cased so wire tokens
- * like `IDLE_OFF` surface as `Idle Off`.
+ * Resolve an ENUM-typed DP's wire value to its `value_list` token
+ * (`CLOSED`, `PARTY-MODE`, …). A read-only ENUM is published as the raw
+ * numeric index, so any caller that switches on the token has to map the
+ * index back itself; booleans map to 0/1 because HmIP-SWDO's STATE is a
+ * two-value ENUM whose wire form is `false` / `true` while its value_list
+ * is `["CLOSED", "OPEN"]`. A string value passes through unchanged.
+ * Returns `undefined` when the DP is not an ENUM, carries no value_list,
+ * or the index is out of range.
  */
-function enumValueLabel(dp: DataPointSummary): string | undefined {
+export function enumValueToken(dp: DataPointSummary): string | undefined {
   if ((dp.type ?? "").toUpperCase() !== "ENUM") return undefined;
-  if (!dp.value_list || dp.value_list.length === 0) return undefined;
   const v = dp.value;
+  if (typeof v === "string") return v;
+  if (!dp.value_list || dp.value_list.length === 0) return undefined;
   let idx: number;
   if (typeof v === "number") {
     idx = Math.round(v);
@@ -158,7 +160,18 @@ function enumValueLabel(dp: DataPointSummary): string | undefined {
     return undefined;
   }
   if (idx < 0 || idx >= dp.value_list.length) return undefined;
-  return enumValueText(dp.value_list[idx]);
+  return dp.value_list[idx];
+}
+
+/**
+ * Resolve an ENUM-typed DP's value to its value_list label. Returns
+ * `undefined` under the same conditions as [enumValueToken]. The label is
+ * title-cased so wire tokens like `IDLE_OFF` surface as `Idle Off`.
+ */
+export function enumValueLabel(dp: DataPointSummary): string | undefined {
+  const token = enumValueToken(dp);
+  if (token === undefined) return undefined;
+  return enumValueText(token);
 }
 
 /**

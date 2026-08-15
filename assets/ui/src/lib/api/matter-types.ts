@@ -13,8 +13,14 @@ export type MatterStatus = {
 
 export type MatterFabric = {
   fabric_index: number;
-  fabric_id: string;
-  node_id: string;
+  /**
+   * 64-bit fabric / operational node identifiers. Unlike the session DTO,
+   * which hex-encodes its ids into strings, the fabric list serves them as
+   * JSON numbers — render them with an explicit `toString(16)` rather than
+   * gluing a `0x` in front of the decimal value.
+   */
+  fabric_id: number;
+  node_id: number;
   vendor_id: number;
   label: string;
   compressed_id: string;
