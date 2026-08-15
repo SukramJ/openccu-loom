@@ -11,15 +11,11 @@
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
-  import type { MatterCommissioningWindow, MatterFabric } from "$lib/api/matter-types";
+  import type { MatterFabric } from "$lib/api/matter-types";
 
   onMount(async () => {
     await matterStore.loadFabrics();
   });
-
-  let sharing = $state(false);
-  let shareWindow = $state<MatterCommissioningWindow | null>(null);
-  let shareDuration = $state(300); // 5 min default
 
   // Vendor display name lookup table
   // The vendor name comes from the daemon: it owns the vendor table so
@@ -97,19 +93,6 @@
     }
   }
 
-  async function shareBridge() {
-    sharing = true;
-    shareWindow = null;
-    try {
-      const win = await api.matterShareBridge(shareDuration);
-      shareWindow = win;
-    } catch (err) {
-      toastStore.error(err instanceof ApiError ? err.message : String(err));
-    } finally {
-      sharing = false;
-    }
-  }
-
   const columns: DataColumn<MatterFabric>[] = $derived([
     { key: "vendor", label: t("matter.fabrics.col_vendor"), sortable: true, title: true, get: (f) => vendorName(f) },
     { key: "label", label: t("matter.fabrics.col_label"), sortable: true, get: (f) => f.label || t("matter.fabric.label_unknown") },
@@ -183,35 +166,20 @@
     </div>
   </div>
 
-  <!-- Share bridge section -->
+  <!-- Adding a controller runs on the pairing tab -->
   <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_50%,transparent)] p-4">
     <h3 class="font-medium mb-2 text-slate-900 dark:text-slate-100">
       {t("matter.fabric.share_bridge")}
     </h3>
-    <div class="flex flex-wrap items-center gap-2">
-      <select
-        class="h-9 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 text-sm"
-        bind:value={shareDuration}
-      >
-        <option value={300}>5 {t("matter.pair.minutes")}</option>
-        <option value={600}>10 {t("matter.pair.minutes")}</option>
-        <option value={900}>15 {t("matter.pair.minutes")}</option>
-      </select>
-      <Button size="sm" disabled={sharing} onclick={() => void shareBridge()}>
-        {sharing ? t("common.saving") : t("matter.fabric.share_bridge")}
-      </Button>
-    </div>
-
-    {#if shareWindow}
-      <div class="mt-4 space-y-2">
-        <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
-          {t("matter.pair.manual_code")}:
-          <span class="font-mono break-all">{shareWindow.manual_code}</span>
-        </p>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          {t("matter.pair.qr_payload")}: <span class="font-mono break-all">{shareWindow.qr_code}</span>
-        </p>
-      </div>
-    {/if}
+    <p class="text-sm text-slate-500 dark:text-slate-400">
+      {t("matter.fabric.share_bridge_hint")}
+    </p>
+    <a
+      href="#/matter/pair"
+      data-testid="share-bridge-link"
+      class="mt-3 inline-flex items-center text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline"
+    >
+      {t("matter.fabric.share_bridge_go")}
+    </a>
   </div>
 </div>

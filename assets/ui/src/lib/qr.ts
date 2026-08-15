@@ -63,6 +63,11 @@ function modulesToPath(data: Uint8Array, size: number, margin: number): string {
 /**
  * Returns a self-contained SVG string encoding `payload` as a QR code.
  *
+ * The modules are painted black on a white plate regardless of theme:
+ * scanners need a light quiet zone and dark modules, so inverting this
+ * for dark mode would produce a code that reads as decoration and
+ * scans on nothing.
+ *
  * The function signature is intentionally synchronous so callers can
  * use it inside Svelte `$derived` runes without async plumbing.
  *
@@ -70,7 +75,7 @@ function modulesToPath(data: Uint8Array, size: number, margin: number): string {
  * @param opts.size  Width/height in pixels of the rendered SVG (default 200).
  * @returns  An SVG element string suitable for `{@html ...}` injection.
  */
-export function qrPlaceholderSvg(payload: string, opts?: { size?: number }): string {
+export function renderQrSvg(payload: string, opts?: { size?: number }): string {
   const px = opts?.size ?? 200;
 
   const qr = qrCreate(payload, { errorCorrectionLevel: "M" });

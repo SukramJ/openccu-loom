@@ -97,3 +97,21 @@ describe("MatterFabrics — vendor column", () => {
     expect(await screen.findByText("0xABCD")).toBeTruthy();
   });
 });
+
+// Adding a second controller used to exist twice: the fabrics tab
+// opened a commissioning window of its own and printed the codes as
+// plain text — no QR, no countdown, and no way to close the window it
+// had just opened, because the close control lives on the pairing tab.
+// An operator who navigated away lost the codes while the window stayed
+// open on the daemon. The tab now points at the one surface that runs
+// the whole flow.
+describe("MatterFabrics — adding a controller", () => {
+  it("sends the operator to the pairing tab instead of opening a second window here", async () => {
+    fabrics = { fabrics: [] };
+
+    render(MatterFabrics);
+
+    const link = await screen.findByTestId("share-bridge-link");
+    expect(link.getAttribute("href")).toBe("#/matter/pair");
+  });
+});

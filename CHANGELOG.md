@@ -78,6 +78,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   access, knowing what to grep for, and still having the log. The trace
   is deliberately bounded and does not survive a restart: it is a
   diagnostic, not an audit trail. (REST API 5.33.0)
+- **The pairing card says which pairing this is, and its codes can be
+  copied.** Opening a commissioning window on a bridge three
+  controllers already hold is a different act from first-time pairing,
+  and the card read identically either way — an operator whose bridge
+  was already in Apple Home had no way to tell "my setup did not stick"
+  from "I am adding a fourth". It now names the count and offers to add
+  a controller. The manual code (eleven digits) and the QR payload each
+  get a copy button; a browser that refuses clipboard access — which is
+  every page served over plain HTTP, including the Config UI behind
+  Home Assistant's ingress — says so instead of reporting success and
+  sending the operator to another device with an empty clipboard.
+
+- **Adding a controller now runs in one place.** The fabrics tab had a
+  second implementation of the same flow: it opened a commissioning
+  window and printed the codes as plain text, with no QR, no countdown,
+  and no way to close the window it had just opened — the close control
+  only ever existed on the pairing tab. Navigating away lost the codes
+  while the window stayed open on the daemon. The tab now points at the
+  pairing card, which runs the whole flow. `POST /matter/share` is
+  unchanged for external clients; its now-unused wrapper in the SPA's
+  API client is gone.
+
 - **Two maintenance actions for the Matter bridge.** *Re-sync topology*
   rebuilds the exposed endpoints from the current devices without
   touching any pairing — until now the only way to reconcile a bridge
