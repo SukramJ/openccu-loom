@@ -465,6 +465,91 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 	}
 }
 
+// TestAssemble_HostClusterMeasurementFormsNoStandaloneEndpoint pins that
+// Battery / Power / Energy never become a bridged endpoint of their own.
+// Those classes have no standalone Matter device type — PowerSource and
+// Electrical{Power,Energy}Measurement ride on the endpoint they describe
+// — so a standalone endpoint would advertise a DeviceTypeList consisting
+// of BridgedNode alone. Apple Home keys its HAP-service lookup on the
+// first list entry and drops an endpoint with no application device type
+// into the unsupported bucket.
+func TestAssemble_HostClusterMeasurementFormsNoStandaloneEndpoint(t *testing.T) {
+	t.Parallel()
+
+	classes := []struct {
+		name  string
+		class interfaces.MatterMeasurementClass
+	}{
+		{name: "battery", class: interfaces.MatterMeasurementBattery},
+		{name: "power", class: interfaces.MatterMeasurementPower},
+		{name: "energy", class: interfaces.MatterMeasurementEnergy},
+	}
+	for _, tc := range classes {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+
+			dev := newDevice("PSM0001", "Schaltsteckdose")
+			ch := addChannel(dev, "PSM0001:6", 6)
+			ch.AttachCalculatedDataPoint(&stubMeasurementSource{
+				key:   dpKey("PSM0001:6", "POWER"),
+				class: tc.class,
+			})
+
+			cfg := validConfig()
+			cfg.IncludeMeasurements = true
+			a, _ := endpoint.New(newFakeStore(), cfg, nil)
+
+			top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+			if err != nil {
+				t.Fatalf("Assemble: %v", err)
+			}
+			if got := top.Bridged(); len(got) != 0 {
+				t.Fatalf("expected no bridged endpoint for a host-cluster measurement, got %d (DeviceType=0x%04X)",
+					len(got), got[0].DeviceType)
+			}
+		})
+	}
+}
+
+// TestAssemble_GenericPowerDataPointFormsNoStandaloneEndpoint drives the
+// same invariant through the generic-DP path a metering plug actually
+// takes: POWER on the energy-meter channel is a plain float sensor that
+// the model classifies as a host-cluster measurement.
+func TestAssemble_GenericPowerDataPointFormsNoStandaloneEndpoint(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev := newDevice("PSM0002", "Schaltsteckdose")
+	ch := addChannel(dev, "PSM0002:6", 6)
+	ch.Put(generic.NewSensor[float64](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "iface",
+			ChannelAddress: "PSM0002:6",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterPower),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			Unit:       "W",
+		},
+	}))
+
+	cfg := validConfig()
+	cfg.IncludeMeasurements = true
+	a, _ := endpoint.New(newFakeStore(), cfg, nil)
+
+	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if got := top.Bridged(); len(got) != 0 {
+		t.Fatalf("expected no bridged endpoint for generic POWER, got %d (DeviceType=0x%04X)",
+			len(got), got[0].DeviceType)
+	}
+}
+
 // ─── Button consolidation ────────────────────────────────────────────
 
 // TestAssemble_ButtonChannelConsolidatesPressDPs verifies that every

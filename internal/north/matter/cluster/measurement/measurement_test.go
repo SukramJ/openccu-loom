@@ -343,7 +343,11 @@ func TestIlluminanceServerSaturatesHigh(t *testing.T) {
 
 // --- PressureServer ---
 
-// TestPressureServerHappyPath verifies that 1013 hPa maps to wire value 10130.
+// TestPressureServerHappyPath verifies that a typical atmospheric
+// reading of 1013 hPa maps to wire value 1013 — MeasuredValue is
+// "10 x Pressure [kPa]" per matter.js
+// `packages/model/src/standard/resources/pressure-measurement.resource.ts:27`,
+// so one wire unit is 0.1 kPa = 100 Pa = exactly 1 hPa.
 func TestPressureServerHappyPath(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewPressureServer(fakeFloat{val: 1013.0, obs: true})
@@ -356,7 +360,7 @@ func TestPressureServerHappyPath(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(0x0000) ok = false")
 	}
-	if got, want := v.(int16), int16(10130); got != want {
+	if got, want := v.(int16), int16(1013); got != want {
 		t.Errorf("MeasuredValue = %d, want %d", got, want)
 	}
 
@@ -369,16 +373,34 @@ func TestPressureServerHappyPath(t *testing.T) {
 	}
 }
 
-// TestPressureServerHpaToTenPa verifies the unit conversion from hPa to 10-Pa wire units.
-func TestPressureServerHpaToTenPa(t *testing.T) {
+// TestPressureServerMeasuredValueIsDeciKiloPascal pins the wire unit
+// across the plausible barometric span. A wire unit is one hPa, so the
+// reading passes through rounded — a scaling factor here would push
+// every reading out of the atmospheric range a controller renders.
+func TestPressureServerMeasuredValueIsDeciKiloPascal(t *testing.T) {
 	t.Parallel()
-	s := measurement.NewPressureServer(fakeFloat{val: 1.5, obs: true})
-	v, ok := s.MatterRead(0x0000)
-	if !ok {
-		t.Fatal("ok = false")
+	cases := []struct {
+		name string
+		hpa  float64
+		want int16
+	}{
+		{name: "standard atmosphere", hpa: 1013.25, want: 1013},
+		{name: "deep low", hpa: 950.4, want: 950},
+		{name: "high pressure", hpa: 1050.6, want: 1051},
+		{name: "sub-unit reading rounds", hpa: 1.5, want: 2},
 	}
-	if got, want := v.(int16), int16(15); got != want {
-		t.Errorf("want %d, got %d", want, got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := measurement.NewPressureServer(fakeFloat{val: tc.hpa, obs: true})
+			v, ok := s.MatterRead(0x0000)
+			if !ok {
+				t.Fatal("MatterRead(MeasuredValue) ok = false")
+			}
+			if got := v.(int16); got != tc.want {
+				t.Errorf("MeasuredValue for %.2f hPa = %d, want %d", tc.hpa, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -678,6 +700,135 @@ func TestFromMeasurementClassWrongTypedSourceReturnsNil(t *testing.T) {
 	boolSrc := fakeBool{class: interfaces.MatterMeasurementTemperature, val: true, obs: true}
 	if got := measurement.FromMeasurementClass(interfaces.MatterMeasurementTemperature, boolSrc); got != nil {
 		t.Errorf("bool src for Temperature: want nil, got %v", got)
+	}
+}
+
+// TestFromMeasurementClassAirQualityMountsMandatoryCluster verifies that
+// every class the bridge projects onto the AirQualitySensor device type
+// (0x002C) materialises the AirQuality cluster next to its concentration
+// cluster. matter.js `packages/node/src/devices/air-quality-sensor.ts:169`
+// declares `mandatory: { Identify, AirQuality }` and lists every
+// concentration cluster as optional, so an endpoint carrying only the
+// concentration cluster fails the device type's requirement set.
+func TestFromMeasurementClassAirQualityMountsMandatoryCluster(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		class      interfaces.MatterMeasurementClass
+		concentrID uint32
+	}{
+		{name: "co2", class: interfaces.MatterMeasurementCO2, concentrID: measurement.ClusterCO2Concentration},
+		{name: "pm25", class: interfaces.MatterMeasurementPM25, concentrID: measurement.ClusterPM25Concentration},
+		{name: "pm10", class: interfaces.MatterMeasurementPM10, concentrID: measurement.ClusterPM10Concentration},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			src := fakeFloat{class: tc.class, val: 400.0, obs: true}
+			servers := measurement.FromMeasurementClass(tc.class, src)
+
+			got := make(map[uint32]bool, len(servers))
+			for _, s := range servers {
+				got[s.MatterClusterID()] = true
+			}
+			if !got[measurement.ClusterAirQuality] {
+				t.Errorf("AirQuality (0x%04X) not materialised; got %v", measurement.ClusterAirQuality, got)
+			}
+			if !got[tc.concentrID] {
+				t.Errorf("concentration cluster 0x%04X not materialised; got %v", tc.concentrID, got)
+			}
+		})
+	}
+}
+
+// --- AirQualityServer ---
+
+// TestAirQualityServerClassifiesAgainstGuideline verifies the
+// concentration -> AirQualityEnum mapping. Matter §2.9.5.1 leaves the
+// mapping to the implementer; the bridge grades against the pollutant's
+// published guideline value and reports only the levels the base cluster
+// mandates (Unknown / Good / Poor), because the finer levels are each
+// gated on a FeatureMap bit this server does not advertise.
+func TestAirQualityServerClassifiesAgainstGuideline(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		class interfaces.MatterMeasurementClass
+		val   float64
+		obs   bool
+		want  uint8
+	}{
+		{name: "co2 well ventilated", class: interfaces.MatterMeasurementCO2, val: 425, obs: true, want: 1},
+		{name: "co2 at guideline", class: interfaces.MatterMeasurementCO2, val: 1000, obs: true, want: 1},
+		{name: "co2 stale air", class: interfaces.MatterMeasurementCO2, val: 1800, obs: true, want: 4},
+		{name: "pm25 clean", class: interfaces.MatterMeasurementPM25, val: 8, obs: true, want: 1},
+		{name: "pm25 above guideline", class: interfaces.MatterMeasurementPM25, val: 40, obs: true, want: 4},
+		{name: "pm10 clean", class: interfaces.MatterMeasurementPM10, val: 20, obs: true, want: 1},
+		{name: "pm10 above guideline", class: interfaces.MatterMeasurementPM10, val: 90, obs: true, want: 4},
+		{name: "no reading yet", class: interfaces.MatterMeasurementCO2, val: 0, obs: false, want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := measurement.NewAirQualityServer(tc.class, fakeFloat{class: tc.class, val: tc.val, obs: tc.obs})
+			v, ok := s.MatterRead(0x0000)
+			if !ok {
+				t.Fatal("MatterRead(AirQuality) ok = false")
+			}
+			if got := v.(uint8); got != tc.want {
+				t.Errorf("AirQuality = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAirQualityServerGlobalAttributes pins cluster ID, revision and
+// FeatureMap. The revision comes from matter.js
+// `packages/model/src/standard/elements/air-quality.element.ts:19`
+// (default = 1); FeatureMap stays 0 so only the conformance-mandatory
+// enum members (Unknown / Good / Poor) are on the wire.
+func TestAirQualityServerGlobalAttributes(t *testing.T) {
+	t.Parallel()
+	s := measurement.NewAirQualityServer(
+		interfaces.MatterMeasurementCO2,
+		fakeFloat{class: interfaces.MatterMeasurementCO2, val: 425, obs: true},
+	)
+
+	if got, want := s.MatterClusterID(), uint32(0x005B); got != want {
+		t.Errorf("ClusterID = 0x%04X, want 0x%04X", got, want)
+	}
+	rev, ok := s.MatterRead(attrClusterRevision)
+	if !ok {
+		t.Fatal("MatterRead(ClusterRevision) ok = false")
+	}
+	if got, want := rev.(uint16), uint16(1); got != want {
+		t.Errorf("ClusterRevision = %d, want %d", got, want)
+	}
+	fm, ok := s.MatterRead(0xFFFC)
+	if !ok {
+		t.Fatal("MatterRead(FeatureMap) ok = false")
+	}
+	if got := fm.(uint32); got != 0 {
+		t.Errorf("FeatureMap = 0x%08X, want 0 (no optional level features)", got)
+	}
+}
+
+// TestAirQualityServerIsReadOnly verifies the cluster rejects writes and
+// has no commands — AirQuality carries a single "R V" attribute.
+func TestAirQualityServerIsReadOnly(t *testing.T) {
+	t.Parallel()
+	s := measurement.NewAirQualityServer(
+		interfaces.MatterMeasurementCO2,
+		fakeFloat{class: interfaces.MatterMeasurementCO2, val: 425, obs: true},
+	)
+	if err := s.MatterWrite(context.Background(), 0x0000, uint8(1), hmenum.CommandPriorityCritical); err == nil {
+		t.Error("MatterWrite: want error, got nil")
+	}
+	if _, err := s.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityCritical); err == nil {
+		t.Error("MatterInvoke: want error, got nil")
+	}
+	if got := s.MatterReportable(); !slices.Contains(got, 0x0000) {
+		t.Errorf("MatterReportable = %v, want it to contain the AirQuality attribute", got)
 	}
 }
 
@@ -1069,34 +1220,37 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 		name    string
 		class   interfaces.MatterMeasurementClass
 		src     any
-		wantID  uint32
+		wantIDs []uint32
 		wantNil bool
 	}
 
+	// The air-quality classes materialise two servers: the concentration
+	// cluster plus the AirQuality cluster (0x005B) that the
+	// AirQualitySensor device type mandates.
 	rows := []row{
 		{
-			name:   "CO2+fakeFloat→0x040D",
-			class:  interfaces.MatterMeasurementCO2,
-			src:    fakeFloat{class: interfaces.MatterMeasurementCO2, val: 800.0, obs: true},
-			wantID: 0x040D,
+			name:    "CO2+fakeFloat→0x005B+0x040D",
+			class:   interfaces.MatterMeasurementCO2,
+			src:     fakeFloat{class: interfaces.MatterMeasurementCO2, val: 800.0, obs: true},
+			wantIDs: []uint32{0x005B, 0x040D},
 		},
 		{
-			name:   "PM25+fakeFloat→0x042A",
-			class:  interfaces.MatterMeasurementPM25,
-			src:    fakeFloat{class: interfaces.MatterMeasurementPM25, val: 15.0, obs: true},
-			wantID: 0x042A,
+			name:    "PM25+fakeFloat→0x005B+0x042A",
+			class:   interfaces.MatterMeasurementPM25,
+			src:     fakeFloat{class: interfaces.MatterMeasurementPM25, val: 15.0, obs: true},
+			wantIDs: []uint32{0x005B, 0x042A},
 		},
 		{
-			name:   "PM10+fakeFloat→0x042D",
-			class:  interfaces.MatterMeasurementPM10,
-			src:    fakeFloat{class: interfaces.MatterMeasurementPM10, val: 30.0, obs: true},
-			wantID: 0x042D,
+			name:    "PM10+fakeFloat→0x005B+0x042D",
+			class:   interfaces.MatterMeasurementPM10,
+			src:     fakeFloat{class: interfaces.MatterMeasurementPM10, val: 30.0, obs: true},
+			wantIDs: []uint32{0x005B, 0x042D},
 		},
 		{
-			name:   "Battery+fakeBool→0x002F",
-			class:  interfaces.MatterMeasurementBattery,
-			src:    fakeBool{class: interfaces.MatterMeasurementBattery, val: false, obs: true},
-			wantID: 0x002F,
+			name:    "Battery+fakeBool→0x002F",
+			class:   interfaces.MatterMeasurementBattery,
+			src:     fakeBool{class: interfaces.MatterMeasurementBattery, val: false, obs: true},
+			wantIDs: []uint32{0x002F},
 		},
 		{
 			name:    "CO2+fakeBool→nil(wrong type)",
@@ -1122,11 +1276,12 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 				}
 				return
 			}
-			if len(servers) != 1 {
-				t.Fatalf("want 1 server, got %d", len(servers))
+			got := make([]uint32, 0, len(servers))
+			for _, s := range servers {
+				got = append(got, s.MatterClusterID())
 			}
-			if got := servers[0].MatterClusterID(); got != r.wantID {
-				t.Errorf("ClusterID = 0x%04X, want 0x%04X", got, r.wantID)
+			if !slices.Equal(got, r.wantIDs) {
+				t.Errorf("cluster IDs = %#04x, want %#04x", got, r.wantIDs)
 			}
 		})
 	}

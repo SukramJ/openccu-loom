@@ -921,14 +921,14 @@ func (b *Bridge) wireMeasurementNotifier(mgr *subscription.Manager, ep *endpoint
 // When the notifier does not also implement
 // [interfaces.MatterClusterServer] — the measurement-source path,
 // where the source is a sensor-DP and the cluster server is materialised
-// separately — we fall back to the full path set. The measurement
-// projection has exactly one reportable cluster per endpoint by
-// construction (TemperatureMeasurement, RelativeHumidityMeasurement,
-// …), so the fallback's wider set is still effectively one cluster's
-// attributes plus the static Descriptor/BDBI ones; the historical
-// shipping behavior stays unchanged for that path. A future
-// per-cluster-attribute refinement can tighten this further if Apple
-// turns out to dislike the static-attr noise on sensor endpoints too.
+// separately — we fall back to the full path set. Every reportable
+// cluster on such an endpoint is derived from that one source (an
+// air-quality endpoint serves both the concentration cluster and the
+// AirQuality level computed from it), so the wider set still carries
+// only attributes that genuinely moved, plus the static Descriptor/BDBI
+// ones. A future per-cluster-attribute refinement can tighten this
+// further if Apple turns out to dislike the static-attr noise on sensor
+// endpoints too.
 func filterPathsByNotifierCluster(notifier interfaces.MatterChangeNotifier, paths []im.ConcreteAttributePath) []im.ConcreteAttributePath {
 	srv, ok := notifier.(interfaces.MatterClusterServer)
 	if !ok {
