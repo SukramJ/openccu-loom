@@ -8,6 +8,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The boot seed is covered by tests for the first time.** The CCU
+  simulator now answers `fetch_all_device_data` with the object shape
+  the real script emits, so the path that fills every data point before
+  the first event arrives can finally be exercised without a CCU. Two
+  tests run the production ingest against it: one asserts a seeded value
+  reaches the model decoded, the other that a button's stored keypress
+  does **not** — a boot that seeds it publishes a press nobody made.
+  Both were verified to fail when the behaviour they describe is
+  removed.
+
+- **Fault-code classification is tested on the wire.** The simulator can
+  answer failures with the HomeMatic catalogue instead of a blanket −1,
+  so the retrier's decision — repeat this call or surface the error —
+  is now driven by a real failure rather than a hand-built error value.
+  This surfaced a collision worth deciding on: the catalogue assigns −2
+  to "unknown paramset", a permanent failure, while the daemon uses −2
+  for its own timeouts and therefore retries it through the full
+  backoff. The test characterises the current behaviour and fails if the
+  mapping changes, so any change is deliberate.
+
+
 - **A trace of what happened, next to the state that is true now.**
   **Matter → Diagnostics** gains a list of the moments that explain a
   failed pairing: a commissioner refused because another was already

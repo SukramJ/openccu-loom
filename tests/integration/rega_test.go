@@ -6,19 +6,19 @@
 // Package integration — Rega runner integration tests.
 //
 // These tests exercise openccu-loom's rega.Runner against the godevccu
-// OpenCCU fixture. godevccu implements a pattern-matching ReGa engine
-// (not a full interpreter) that recognises the scripts shipped with
-// openccu-loom by matching on embedded keywords or comment headers.
+// OpenCCU fixture. The simulator dispatches a script by the `!# name:`
+// header the daemon writes at the top of every one of its scripts, and
+// falls back to matching the body for clients that send none. Header
+// dispatch is what makes the result predictable: while the simulator
+// matched content in registration order, a generic pattern could shadow
+// a specific script, and a write script could be answered with a
+// listing — reported as success while changing nothing.
 //
-// Script matching notes (relevant for the tests below):
-//
-// - get_backend_info.fn: body contains both "grep VERSION= /VERSION" and
-// "grep PRODUCT= /VERSION", which satisfies godevccu's
-// `(?is)grep.*VERSION.*grep.*PRODUCT` pattern → returns JSON.
-//
-// - get_serial.fn: body uses system.Exec to cat /var/board_sgtin etc.
-// godevccu matches on `(?i)\bget_serial(\.fn)?\b` (the script filename
-// appears in the header "!# openccu-loom — get_serial") → returns JSON.
+// The simulator also carries an interpreter for the subset of the
+// language these scripts use, so a script it has never seen produces
+// real output rather than a canned one. Neither engine is a CCU: a
+// script that leans on something outside the supported subset still
+// needs the live check in live_rega_read_test.go.
 package integration
 
 import (
