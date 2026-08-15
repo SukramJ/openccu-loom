@@ -20,6 +20,10 @@ type SliderCase = {
   midpoint: number;
   /** Thumb offset for that release — quantized, so not always 50 %. */
   thumbPercent: string;
+  /** Value one ArrowRight press above the case's starting value. */
+  oneStepUp: number;
+  /** Value the End key commits (the track maximum). */
+  keyMax: number;
 };
 
 const CASES: SliderCase[] = [
@@ -29,6 +33,8 @@ const CASES: SliderCase[] = [
     props: { value: 0, min: 0, max: 360 },
     midpoint: 180,
     thumbPercent: "left: 50%",
+    oneStepUp: 1,
+    keyMax: 360,
   },
   {
     name: "ControlSaturationSlider",
@@ -36,6 +42,8 @@ const CASES: SliderCase[] = [
     props: { value: 0 },
     midpoint: 0.5,
     thumbPercent: "left: 50%",
+    oneStepUp: 0.01,
+    keyMax: 1,
   },
   {
     name: "ControlColorTempSlider",
@@ -43,6 +51,8 @@ const CASES: SliderCase[] = [
     props: { value: 2000, min: 2000, max: 6500, step: 100 },
     midpoint: 4300,
     thumbPercent: "left: 51.1",
+    oneStepUp: 2100,
+    keyMax: 6500,
   },
 ];
 
@@ -122,5 +132,52 @@ describe.each(CASES)("$name — commit on release", (c) => {
     expect(thumb?.getAttribute("style")).toContain(c.thumbPercent);
 
     track.dispatchEvent(pointer("pointerup", 100));
+  });
+});
+
+// The track is a focusable role="slider" with no native input behind it, so
+// without key handling it is a control that announces itself to assistive
+// technology, takes focus and then cannot be operated (WCAG 2.1.1).
+describe.each(CASES)("$name — keyboard operation", (c) => {
+  function key(name: string): KeyboardEvent {
+    return new KeyboardEvent("keydown", { key: name, bubbles: true });
+  }
+
+  it("commits one step per arrow key", async () => {
+    const onChange = vi.fn();
+    render(c.component, { ...c.props, onChange });
+    const track = trackAt();
+
+    track.dispatchEvent(key("ArrowRight"));
+    await tick();
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(c.oneStepUp);
+  });
+
+  it("jumps to the maximum on End", async () => {
+    const onChange = vi.fn();
+    render(c.component, { ...c.props, onChange });
+    const track = trackAt();
+
+    track.dispatchEvent(key("End"));
+    await tick();
+
+    expect(onChange).toHaveBeenCalledWith(c.keyMax);
+  });
+
+  it("ignores keys while disabled and keys it does not own", async () => {
+    const onChange = vi.fn();
+    render(c.component, { ...c.props, disabled: true, onChange });
+    trackAt().dispatchEvent(key("ArrowRight"));
+    await tick();
+    expect(onChange).not.toHaveBeenCalled();
+
+    cleanup();
+    const enabled = vi.fn();
+    render(c.component, { ...c.props, onChange: enabled });
+    trackAt().dispatchEvent(key("a"));
+    await tick();
+    expect(enabled).not.toHaveBeenCalled();
   });
 });
