@@ -4,19 +4,26 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.59.2]
 
 ### Fixed
 
-The same audit's remaining 220 findings — 126 medium, 93 low, and the one
-high left over from the first round — were worked through after the
-high-severity set. Around 150 are fixed; the rest were declined with a
-stated reason, refuted, or had already been closed by the earlier work.
-Declining was a real outcome, not a formality: for a low-severity finding
-whose honest fix meant converting an exported field to a guarded accessor
-across four packages, the churn is the larger risk.
+A full-codebase audit found 272 verified defects — every one confirmed by
+a second reviewer whose job was to refute it, out of 338 raised. Every
+linter was green on all of them, so none of this was mechanically
+detectable; the defects are semantic.
 
-What the fixes change for an operator:
+Of the 53 rated high severity, 52 are fixed. Of the remaining 219,
+roughly 150 are fixed and the rest were declined with a stated reason or
+refuted on a second look. Declining was a real outcome rather than a
+formality: for a low-severity finding whose honest fix meant converting
+an exported field to a guarded accessor across four packages, the churn
+is the larger risk.
+
+They are not 272 unrelated bugs. Most are instances of a handful of
+habits, and the entries below are grouped that way.
+
+What changes for an operator:
 
 - **Security.** Bearer tokens were authenticated on a 64-bit prefix of the
   digest rather than the whole value, and the comparison was not
@@ -61,14 +68,6 @@ findings they had missed: the wiring-setter guard matched a bare
 `func(...)` literal but not a *named* function type, and it dropped any
 seam declared as `Set*(x any)` because `any` is an alias. Between them
 they hid three seams production never called.
-
----
-
-A full-codebase audit found 272 verified defects; this change fixes the
-52 rated high severity. They are not 52 unrelated bugs — most are
-instances of a handful of habits, and the fixes are grouped that way
-below. Every linter was green on all of them, so none of this was
-mechanically detectable.
 
 - **Device configuration writes never reached the MASTER paramset.**
   `Channel.Set` resolved the data point with the paramset key it was
@@ -142,9 +141,6 @@ Known limitations, both deliberately left in place:
   the PowerTopology cluster, which this daemon does not implement yet.
   That is a feature, not a bug fix, so it is out of scope here.
 
-## [0.59.2]
-
-### Fixed
 
 - **The pre-release comment sweep corrected 31 inaccurate code
   comments.** Nothing about the daemon's behaviour changes; what changes

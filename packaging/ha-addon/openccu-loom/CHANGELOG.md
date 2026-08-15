@@ -2,10 +2,48 @@
 
 ## 0.59.2
 
-Documentation-only release. A pre-release review of what the code's own
-comments claim, checked against what the code does, corrected 22
-inaccurate ones, including the page shown when the web bundle is missing,
-which claimed login and setup were still reachable. No behaviour changes.
+A maintenance release built from a full audit of the code base. Every one
+of the 272 defects it works through was confirmed by a second reviewer
+whose job was to disprove it. The ones you are most likely to have been
+affected by:
+
+- **Device settings never reached the device.** Changing a single
+  configuration value in the channel editor — a low-battery limit, a
+  logging interval — was sent to the wrong parameter set and rejected by
+  the CCU, so the save failed with a generic error. Entering a whole
+  number where the device expects a decimal failed the same way, while
+  the same field with a decimal saved fine, which made it look like the
+  device was at fault.
+
+- **The interface connectivity display never worked at all.** No
+  per-interface state appeared on the API, on MQTT or in the web
+  interface, and a radio that died mid-flight left every sensor behind it
+  looking alive — including in the alarm system's sensor view.
+
+- **A refused arming attempt told nobody.** If a nightly automatic arm
+  was blocked by an open window, nothing was published anywhere.
+
+- **A smoke alarm reported carbon monoxide** to Matter controllers on
+  devices that have no CO sensor at all.
+
+- **Diagnostics went blank exactly when the daemon was unhealthy**, and
+  the support archive it produces was missing all CCU-side logging.
+
+- **After any brief connection drop the web interface kept showing
+  pre-outage values** behind a green connection indicator, because it
+  never resumed the event stream.
+
+- **Clearing the caches did nothing** for a CCU added while the daemon was
+  running, and reported success anyway.
+
+- Security: bearer tokens were compared on only part of their value; the
+  assistant interface let a read-only account reach write tools and the
+  audit log; the Matter commissioning code was readable by any signed-in
+  account; and `config export` wrote the MQTT, OIDC and Matter passwords
+  in clear text even without `--include-secrets`.
+
+Also includes the earlier pre-release comment review, which corrected 22
+inaccurate code comments and changes no behaviour.
 
 ## 0.59.1
 
