@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
@@ -327,6 +328,49 @@ func TestMatterExposeUpdate_HappyPath_Returns204_PublishesEvent(t *testing.T) {
 	}
 }
 
+// TestMatterExposeBulk_PublishesOneFramePerAffectedRow pins the bulk
+// write to the payload its topic declares. It used to publish its own
+// request envelope — `{items: [...]}` — on the same topic and the same
+// wire type as the single-row PUT, so a subscriber mirroring the
+// allowlist read undefined fields and silently missed the whole batch.
+// The batch is the SPA's only save path, so that was the common case.
+func TestMatterExposeBulk_PublishesOneFramePerAffectedRow(t *testing.T) {
+	t.Parallel()
+	pub := &fakeMatterEventPublisher{}
+	body := `{"items":[` +
+		`{"central_name":"ccu","device_address":"DEV1","channel_no":1,"dp_kind":"custom","dp_key":"onoff","enabled":true},` +
+		`{"central_name":"ccu","device_address":"DEV2","channel_no":2,"dp_kind":"generic","dp_key":"LEVEL","enabled":false}` +
+		`]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/exposable/bulk", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	MatterExposeBulk(&fakeExposureStore{}, pub, nil, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+	}
+	if got := pub.count(); got != 2 {
+		t.Fatalf("published events = %d, want one per item", got)
+	}
+	want := []MatterExposureUpdate{
+		{CentralName: "ccu", DeviceAddress: "DEV1", ChannelNo: 1, DPKind: "custom", DPKey: "onoff", Enabled: true},
+		{CentralName: "ccu", DeviceAddress: "DEV2", ChannelNo: 2, DPKind: "generic", DPKey: "LEVEL", Enabled: false},
+	}
+	for i, ev := range pub.events {
+		if ev.Topic != MatterTopicExposableChanged {
+			t.Errorf("event %d topic = %q, want %q", i, ev.Topic, MatterTopicExposableChanged)
+		}
+		got, ok := ev.Payload.(MatterExposureUpdate)
+		if !ok {
+			t.Fatalf("event %d payload type %T, want MatterExposureUpdate", i, ev.Payload)
+		}
+		if got != want[i] {
+			t.Errorf("event %d payload = %+v, want %+v", i, got, want[i])
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // MatterExposeBulk
 // ---------------------------------------------------------------------------
@@ -374,7 +418,7 @@ func TestMatterExposeBulk_BadItemKey_Returns400(t *testing.T) {
 	}
 }
 
-func TestMatterExposeBulk_HappyPath_Returns200_AppliedCount_PublishesOnce(t *testing.T) {
+func TestMatterExposeBulk_HappyPath_Returns200_AppliedCount(t *testing.T) {
 	t.Parallel()
 	store := &fakeExposureStore{}
 	pub := &fakeMatterEventPublisher{}
@@ -402,8 +446,10 @@ func TestMatterExposeBulk_HappyPath_Returns200_AppliedCount_PublishesOnce(t *tes
 	if int(applied.(float64)) != 2 {
 		t.Errorf("applied: got %v, want 2", applied)
 	}
-	if pub.count() != 1 {
-		t.Errorf("expected exactly 1 published event, got %d", pub.count())
+	// The emitted frames are asserted in
+	// TestMatterExposeBulk_PublishesOneFramePerAffectedRow.
+	if pub.count() == 0 {
+		t.Error("expected the batch to publish")
 	}
 }
 
@@ -526,13 +572,13 @@ func TestMatterShare_NilOpener_Returns503(t *testing.T) {
 	}
 }
 
-// --- actorFromRequest with context value set ---
+// --- actorFromRequest with an authenticated identity attached ---
 
-func TestActorFromRequest_WithContextValue(t *testing.T) {
+func TestActorFromRequest_WithAuthenticatedIdentity(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	ctx := context.WithValue(req.Context(), actorContextKey{}, "alice")
-	req = req.WithContext(ctx)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(),
+		auth.Identity{Subject: "alice", Role: auth.RoleAdmin}))
 	got := actorFromRequest(req)
 	if got != "alice" {
 		t.Errorf("expected alice, got %q", got)
@@ -548,14 +594,52 @@ func TestActorFromRequest_NoContext_ReturnsAnonymous(t *testing.T) {
 	}
 }
 
-func TestActorFromRequest_EmptyStringInContext_ReturnsAnonymous(t *testing.T) {
+func TestActorFromRequest_IdentityWithoutSubject_ReturnsAnonymous(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	ctx := context.WithValue(req.Context(), actorContextKey{}, "")
-	req = req.WithContext(ctx)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), auth.Identity{}))
 	got := actorFromRequest(req)
 	if got != "anonymous" {
-		t.Errorf("expected anonymous for empty string, got %q", got)
+		t.Errorf("expected anonymous for an identity without a subject, got %q", got)
+	}
+}
+
+// TestMatterExposeUpdate_AttributesTheAuthenticatedSubject drives the
+// handler the way the router does — behind the auth middleware, which
+// attaches the resolved Identity to the request context. The actor
+// lookup used to read a context key nothing outside its own tests ever
+// wrote, so every Matter audit row and every persisted exposure row was
+// attributed to "anonymous" while the rest of the ledger carried the
+// real subject.
+func TestMatterExposeUpdate_AttributesTheAuthenticatedSubject(t *testing.T) {
+	t.Parallel()
+	store := &fakeExposureStore{}
+	buf := audit.NewBuffer(10)
+	body := `{"central_name":"ccu-a","device_address":"ABC0001","channel_no":1,` +
+		`"dp_kind":"generic","dp_key":"STATE","enabled":true}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/matter/exposable", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(),
+		auth.Identity{Subject: "markus", Role: auth.RoleAdmin}))
+	w := httptest.NewRecorder()
+
+	MatterExposeUpdate(store, nil, buf, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204 body=%s", w.Code, w.Body.String())
+	}
+	entries := buf.List(10)
+	if len(entries) != 1 {
+		t.Fatalf("audit entries = %d, want 1", len(entries))
+	}
+	if entries[0].User != "markus" {
+		t.Errorf("audit user = %q, want %q", entries[0].User, "markus")
+	}
+	if len(store.upserted) != 1 {
+		t.Fatalf("upserted rows = %d, want 1", len(store.upserted))
+	}
+	if store.upserted[0].Actor != "markus" {
+		t.Errorf("exposure actor = %q, want %q", store.upserted[0].Actor, "markus")
 	}
 }
 

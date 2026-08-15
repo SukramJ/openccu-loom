@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -134,7 +135,17 @@ func apiSecuritySnapshot(snap security.Snapshot) hmapi.SecuritySnapshot {
 	if out.Classes == nil {
 		out.Classes = []hmapi.SecurityClassState{}
 	}
+	// Zones live in a slug-keyed map, so ranging over it would hand the
+	// client a different order on every request and reshuffle the
+	// overview's zone cards on every refresh. Slug order is the one
+	// deterministic ordering the projection still has — the operator's
+	// zone position never reaches this snapshot.
+	slugs := make([]string, 0, len(snap.Zones))
 	for slug := range snap.Zones {
+		slugs = append(slugs, slug)
+	}
+	sort.Strings(slugs)
+	for _, slug := range slugs {
 		out.Zones = append(out.Zones, apiSecurityZone(snap.Zones[slug]))
 	}
 	for i := range snap.Faults {

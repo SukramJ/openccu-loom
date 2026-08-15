@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -101,6 +102,43 @@ func TestHeartbeatEditSession_HappyPath(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
+}
+
+// TestHeartbeatEditSession_ConcurrentRequestsForOneLock drives the real
+// heartbeat handler from several goroutines holding the same key and
+// token — two SPA tabs on the same channel, or a heartbeat timer firing
+// while the previous request is still in flight. The registry used to
+// return the map's *EditLock and refresh Expires on that shared object
+// under its mutex, so one request marshalled the deadline while another
+// wrote it. Run under -race this fails on the unsynchronised access.
+func TestHeartbeatEditSession_ConcurrentRequestsForOneLock(t *testing.T) {
+	t.Parallel()
+	s := NewEditSessions()
+	key := "channel:DEV001:1:MASTER"
+	lock, ok := s.Open(key, "user1")
+	if !ok {
+		t.Fatal("open failed")
+	}
+	b, err := json.Marshal(EditSessionResponse{Token: lock.Token, Key: key})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	h := HeartbeatEditSession(s)
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Errorf("heartbeat status = %d, want 200 body=%s", w.Code, w.Body.String())
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestHeartbeatEditSession_ExpiredToken_Returns410(t *testing.T) {
@@ -350,7 +388,7 @@ func TestEditSessions_Verify_ExpiredLock_ReturnsFalse(t *testing.T) {
 		t.Fatal("open failed")
 	}
 	s.mu.Lock()
-	lock.Expires = time.Now().Add(-1 * time.Minute)
+	s.locks["channel:DEV001:1:MASTER"].Expires = time.Now().Add(-1 * time.Minute)
 	s.mu.Unlock()
 
 	if s.Verify("channel:DEV001:1:MASTER", lock.Token) {
@@ -364,12 +402,15 @@ func TestEditSessions_Prune_ExpiresExpiredLock(t *testing.T) {
 	t.Parallel()
 	s := NewEditSessions()
 	// Open a session.
-	lock, ok := s.Open("key1", "user1")
-	if !ok {
+	if _, ok := s.Open("key1", "user1"); !ok {
 		t.Fatal("expected open to succeed")
 	}
-	// Manually expire it by setting Expires to the past.
-	lock.Expires = lock.Expires.Add(-2 * EditSessionTTL)
+	// Manually expire the stored record by pushing its deadline into the
+	// past — Open hands back a copy, so the registry's own map is the
+	// only way to reach the live record.
+	s.mu.Lock()
+	s.locks["key1"].Expires = time.Now().Add(-2 * EditSessionTTL)
+	s.mu.Unlock()
 	// Open the same key again — prune should clean up the expired one.
 	_, ok2 := s.Open("key1", "user2")
 	if !ok2 {
