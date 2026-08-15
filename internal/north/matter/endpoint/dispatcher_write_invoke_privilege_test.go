@@ -10,7 +10,6 @@ import (
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
-	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // stubACLStore is a minimal [mattercore.ACLStoreFacade] used only to
@@ -115,12 +114,7 @@ func privilegeTestTopology(t *testing.T) *Topology {
 
 	return &Topology{
 		Endpoints: []*Endpoint{
-			{
-				ID: 0,
-				RootClusterServers: []interfaces.MatterClusterServer{
-					acl, opc, gc, plain,
-				},
-			},
+			rootEndpointWith(acl, opc, gc, plain),
 			{ID: 1, DeviceType: 0x000E}, // aggregator
 		},
 		NodeLabel: "test", VendorID: 0xFFF1, ProductID: 0x8000,
@@ -392,7 +386,7 @@ func TestHandleWriteRequest_RejectsWildcardAttributePath(t *testing.T) {
 	}
 	topo := &Topology{
 		Endpoints: []*Endpoint{
-			{ID: 0, RootClusterServers: []interfaces.MatterClusterServer{acl}},
+			rootEndpointWith(acl),
 			{ID: 1, DeviceType: 0x000E},
 		},
 		NodeLabel: "test", VendorID: 0xFFF1, ProductID: 0x8000,
@@ -440,7 +434,7 @@ func TestHandleWriteRequest_WildcardEndpointAuthorizesEveryResolvedEndpoint(t *t
 	bridgedSrv := &recordingServer{id: plainClusterID}
 	topo := &Topology{
 		Endpoints: []*Endpoint{
-			{ID: 0, RootClusterServers: []interfaces.MatterClusterServer{rootSrv}},
+			rootEndpointWith(rootSrv),
 			{ID: 1, DeviceType: 0x000E},
 			{ID: 3, Source: recordingSource{srv: bridgedSrv}},
 		},

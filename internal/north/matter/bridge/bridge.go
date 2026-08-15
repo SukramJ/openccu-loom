@@ -597,20 +597,23 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 	// after a Reassemble. Without this every Reassemble would clear
 	// the root attribute surface and any in-flight commissioning
 	// would fall through to UnsupportedCluster.
+	//
+	// Both sets are read under one lock so the fresh topology cannot mix
+	// a root set from before an [Bridge.AttachRootClusters] with an
+	// aggregator set from after the paired
+	// [Bridge.AttachAggregatorClusters].
 	b.mu.RLock()
 	rootClusters := append([]interfaces.MatterClusterServer(nil), b.rootClusters...)
+	aggregatorClusters := append([]interfaces.MatterClusterServer(nil), b.aggregatorClusters...)
 	b.mu.RUnlock()
 	if root := topology.FindByID(0); root != nil && len(rootClusters) > 0 {
-		root.RootClusterServers = rootClusters
+		root.PublishClusterServers(rootClusters)
 	}
 	// Reattach the daemon-supplied Aggregator cluster servers to the
 	// fresh EP 1 so reads on endpoint 1 (Descriptor) keep resolving
 	// after a Reassemble.
-	b.mu.RLock()
-	aggregatorClusters := append([]interfaces.MatterClusterServer(nil), b.aggregatorClusters...)
-	b.mu.RUnlock()
 	if agg := topology.FindByID(1); agg != nil && len(aggregatorClusters) > 0 {
-		agg.AggregatorClusterServers = aggregatorClusters
+		agg.PublishClusterServers(aggregatorClusters)
 	}
 	dispatcher := endpoint.NewTopologyDispatcher(topology)
 	// Wire ACL enforcement onto the fresh dispatcher (Matter §9.10). Nil
@@ -650,16 +653,10 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 		// Bridged endpoints carry per-device clusters (GenericSwitch,
 		// BridgedDeviceBasicInformation) that emit press / Reachable
 		// events.
-		var clusterServers []interfaces.MatterClusterServer
-		switch {
-		case ep.IsRoot():
-			clusterServers = ep.RootClusterServers
-		case ep.IsAggregator():
-			clusterServers = ep.AggregatorClusterServers
-		default:
-			clusterServers = endpoint.ClusterServers(ep)
-		}
-		for _, srv := range clusterServers {
+		//
+		// ClusterServers resolves all three cases: the published set on
+		// the root / aggregator, the materialised set everywhere else.
+		for _, srv := range endpoint.ClusterServers(ep) {
 			recv, ok := srv.(interfaces.MatterEventReceiver)
 			if !ok {
 				continue
@@ -938,7 +935,7 @@ func (b *Bridge) AttachRootClusters(servers []interfaces.MatterClusterServer) {
 	b.rootClusters = cp
 	if b.topology != nil {
 		if root := b.topology.FindByID(0); root != nil {
-			root.RootClusterServers = cp
+			root.PublishClusterServers(cp)
 		}
 	}
 	b.mu.Unlock()
@@ -988,7 +985,7 @@ func (b *Bridge) AttachAggregatorClusters(servers []interfaces.MatterClusterServ
 	b.aggregatorClusters = cp
 	if b.topology != nil {
 		if agg := b.topology.FindByID(1); agg != nil {
-			agg.AggregatorClusterServers = cp
+			agg.PublishClusterServers(cp)
 		}
 	}
 	b.mu.Unlock()

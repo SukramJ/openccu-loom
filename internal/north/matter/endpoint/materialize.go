@@ -40,10 +40,12 @@ const matterDeviceTypeBridgedNode uint32 = 0x0013
 //     which maps the measurement class enum to a concrete read-only
 //     cluster server wired against the source DP.
 //
-// The root endpoint (ep.IsRoot()) returns the slice the daemon
-// attached via [Endpoint.RootClusterServers] (BasicInformation,
-// GeneralCommissioning, OperationalCredentials, …). Bridged
-// endpoints without either field set return nil.
+// The root endpoint (ep.IsRoot()) and the Aggregator (ep.IsAggregator())
+// return the set the daemon published via
+// [Endpoint.PublishClusterServers] — BasicInformation,
+// GeneralCommissioning, OperationalCredentials, … on the root, Descriptor
+// (+ optional Identify) on the Aggregator. Bridged endpoints without
+// either field set return nil.
 //
 // Result is a fresh slice on every call; callers may mutate or
 // append without affecting subsequent invocations.
@@ -51,11 +53,8 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 	if ep == nil {
 		return nil
 	}
-	if ep.IsRoot() {
-		return append([]interfaces.MatterClusterServer(nil), ep.RootClusterServers...)
-	}
-	if ep.IsAggregator() {
-		return append([]interfaces.MatterClusterServer(nil), ep.AggregatorClusterServers...)
+	if ep.IsRoot() || ep.IsAggregator() {
+		return ep.AttachedClusterServers()
 	}
 
 	// Source / measurement-driven cluster servers come first so the
