@@ -3330,6 +3330,8 @@ const EN: Catalog = {
   "diagnostics.recordings.duration_open_hint": "0 = open (server cap 60 min)",
   "app.not_found": "Not found",
   "app.unknown_path": "Unknown path",
+  "app.route_load_failed":
+    "This view could not be loaded. The application was probably updated in the meantime — reload the page.",
   "audit.filter.global": "— (global)",
   "blind.label.position": "Position",
   "blind.label.slats": "Slats",
@@ -7380,6 +7382,8 @@ const DE: Catalog = {
   "logs.level_saved": "Standard-Level gespeichert.",
   "app.not_found": "Nicht gefunden",
   "app.unknown_path": "Unbekannter Pfad",
+  "app.route_load_failed":
+    "Diese Ansicht konnte nicht geladen werden. Vermutlich wurde die Anwendung zwischenzeitlich aktualisiert — lade die Seite neu.",
   "audit.filter.global": "— (global)",
   "blind.label.position": "Position",
   "blind.label.slats": "Lamellen",
@@ -8105,4 +8109,16 @@ export function t(key: string, vars?: Record<string, string | number>): string {
   const cat = catalogs[loc] ?? EN;
   const value = cat[key] ?? EN[key] ?? key;
   return format(value, vars);
+}
+
+/**
+ * The keys a single catalogue defines, without the English fallback.
+ *
+ * `t()` cannot answer "does this locale have the key?" — its fallback
+ * chain returns the English string for a missing German entry, so an
+ * assertion phrased against `t()` passes on a catalogue gap. This is the
+ * only surface that sees one catalogue on its own.
+ */
+export function catalogKeys(locale: string): readonly string[] {
+  return Object.keys(catalogs[locale] ?? {});
 }

@@ -77,9 +77,13 @@ test.describe('Settings — access administration', () => {
     // Submit button is labelled "Add" (exact) — the toggle now reads "Cancel".
     await page.getByRole('button', { name: 'Add', exact: true }).click();
 
-    // Toast region is attached (Toaster is always in the DOM).
-    const toastRegion = page.locator('[role="region"][aria-live="polite"]');
-    await expect(toastRegion).toBeAttached({ timeout: 5000 });
+    // The Toaster's live region is in the DOM on every page, so asserting
+    // on it proves nothing — it is attached before any toast is raised.
+    // The toast itself is the role="alert" child that exists only once
+    // toastStore.success has run.
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'User created.' }),
+    ).toBeVisible({ timeout: 5000 });
   });
 
   test('delete user opens confirm dialog', async ({ page }) => {
@@ -90,10 +94,13 @@ test.describe('Settings — access administration', () => {
     // Click the first Delete button (user row action).
     await page.getByRole('button', { name: 'Delete' }).first().click();
 
-    // The shared ConfirmDialog renders a destructive confirm button labelled "Delete".
-    await expect(
-      page.getByRole('button', { name: 'Delete', exact: true }).last(),
-    ).toBeVisible({ timeout: 5000 });
+    // Assert on the dialog, not on a "Delete" button: the row action
+    // carries that exact label too, so a button query stays visible when
+    // no dialog opened at all. The shared ConfirmDialog is labelled with
+    // its title and holds the destructive confirm button.
+    const dialog = page.getByRole('dialog', { name: 'Remove user?' });
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await expect(dialog.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
   });
 
   test('create token shows one-time plaintext token', async ({ page }) => {

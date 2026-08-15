@@ -82,7 +82,9 @@ function createSurfacesStore() {
   }
 
   function markDirty() {
-    dirty.set(DIRTY_KEY, changeCount() > 0);
+    // The draft is module state, so it survives the editor's unmount:
+    // leaving the view has to roll it back explicitly.
+    dirty.set(DIRTY_KEY, changeCount() > 0, discard);
   }
 
   function changeCount(): number {
