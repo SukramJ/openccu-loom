@@ -52,8 +52,8 @@ func newMultiLockDevice(address string) (ch1, ch2 *device.Channel) {
 	c1 := d.AddChannel(address+":1", 1, "LOCK_TRANSCEIVER", hmenum.ParamsetKeyValues)
 	c2 := d.AddChannel(address+":2", 2, "LOCK_TRANSCEIVER", hmenum.ParamsetKeyValues)
 	// Each lock is an independent primary (GroupNo == own Number).
-	c1.GroupNo = 1
-	c2.GroupNo = 2
+	c1.AssignGroupNumber(1)
+	c2.AssignGroupNumber(2)
 	attachIgnoreNameDP(c1)
 	attachIgnoreNameDP(c2)
 	return c1, c2
@@ -109,8 +109,8 @@ func TestChannelWithoutIgnoreOptOutKeepsSuffix(t *testing.T) {
 	})
 	c1 := d.AddChannel("VCU0099001:1", 1, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 	c2 := d.AddChannel("VCU0099001:2", 2, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
-	c1.GroupNo = 1
-	c2.GroupNo = 2
+	c1.AssignGroupNumber(1)
+	c2.AssignGroupNumber(2)
 	// A plain switch DP: implements HAComponent but NOT IgnoreMultipleChannelsForName.
 	c1.SetCustomDataPoint(&fakeCustomDP{key: hmtypes.DataPointKey{ChannelAddress: c1.Address, Parameter: "switch"}, haComponent: "switch"})
 	c2.SetCustomDataPoint(&fakeCustomDP{key: hmtypes.DataPointKey{ChannelAddress: c2.Address, Parameter: "switch"}, haComponent: "switch"})

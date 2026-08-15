@@ -1407,10 +1407,10 @@ func TestListChannels_GroupAndRoomFields(t *testing.T) {
 	for _, no := range []int{3, 4, 5} {
 		d.AddChannelToGroup(4, no)
 	}
-	state.GroupNo = 4
-	master.GroupNo = 4
+	state.AssignGroupNumber(4)
+	master.AssignGroupNumber(4)
 	vch := d.AddChannel("0001GRP:5", 5, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
-	vch.GroupNo = 4
+	vch.AssignGroupNumber(4)
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001GRP": d}}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001GRP/channels", http.NoBody)

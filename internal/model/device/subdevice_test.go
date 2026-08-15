@@ -26,11 +26,11 @@ func newSubDeviceFixture(t *testing.T, deviceName, masterName string) (dev *Devi
 		Name:        deviceName,
 	})
 	master = dev.AddChannel("DEV0001:5", 5, "TYPE_A", "")
-	master.GroupNo = 5
+	master.AssignGroupNumber(5)
 	master.SetName(masterName)
 
 	member = dev.AddChannel("DEV0001:6", 6, "TYPE_A", "")
-	member.GroupNo = 5
+	member.AssignGroupNumber(5)
 
 	dev.AddChannelToGroup(5, 5)
 	dev.AddChannelToGroup(5, 6)
@@ -84,7 +84,7 @@ func TestChannelIsInMultiGroup(t *testing.T) {
 	}
 
 	loner := d.AddChannel("DEV0001:7", 7, "TYPE_A", "")
-	loner.GroupNo = 7
+	loner.AssignGroupNumber(7)
 	d.AddChannelToGroup(7, 7)
 	if loner.IsInMultiGroup() {
 		t.Error("singleton group must NOT report IsInMultiGroup=true (single-DP sub-device adds no value)")
@@ -102,7 +102,7 @@ func TestChannelGroupNumber(t *testing.T) {
 	if got := ch.GroupNumber(); got != 0 {
 		t.Errorf("default GroupNumber()=%d, want 0", got)
 	}
-	ch.GroupNo = 4
+	ch.AssignGroupNumber(4)
 	if got := ch.GroupNumber(); got != 4 {
 		t.Errorf("set GroupNumber()=%d, want 4", got)
 	}

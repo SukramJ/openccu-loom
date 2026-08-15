@@ -337,8 +337,8 @@ func (d *Device) NotifyUpdated() {
 
 // AddChannelToGroup records that channelNo belongs to groupNo on the
 // device-level channel-grouping map. The Channel itself already carries its
-// own `GroupNo`; this map exists so coordinators can resolve "give me every
-// channel of group N" cheaply.
+// own group number ([Channel.GroupNumber]); this map exists so coordinators
+// can resolve "give me every channel of group N" cheaply.
 //
 // Calling with the same (groupNo, channelNo) twice is a no-op.
 func (d *Device) AddChannelToGroup(groupNo, channelNo int) {
@@ -415,9 +415,10 @@ func (d *Device) ChannelGroups() []RebasedChannelGroupConfig {
 // GetChannelGroupNo returns the group number for channelNo. Returns 0 when
 // the channel has not been assigned to a group.
 //
-// Note: each channel also carries its GroupNo field directly; this
-// device-level convenience method exists so callers with only a channel
-// number (not the Channel object) can look up the group association cheaply.
+// Note: each channel also reports its own group number via
+// [Channel.GroupNumber]; this device-level convenience method exists so
+// callers with only a channel number (not the Channel object) can look up
+// the group association cheaply.
 //
 // The lookup uses the O(1) reverse map maintained by [AddChannelToGroup].
 func (d *Device) GetChannelGroupNo(channelNo int) int {

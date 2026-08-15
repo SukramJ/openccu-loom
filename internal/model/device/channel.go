@@ -76,7 +76,7 @@ const ChannelNumberDevice = -1
 //   - mu (sync.RWMutex) — guards all data-point maps (valuePoints,
 //     masterPoints), the writer/refresher pointers, calculatedDPs,
 //     customDP, genericEvents, eventGroups, weekProfile,
-//     masterRefreshHook, centralName, typeTranslation, and the
+//     masterRefreshHook, centralName, typeTranslation, groupNo, and the
 //     operator-assigned identity (name, rooms, functions, iseID).
 //   - linkPeersMu (sync.RWMutex) — guards linkPeers only. Kept
 //     separate from mu so topology updates do not stall concurrent
@@ -123,10 +123,19 @@ type Channel struct {
 	functions []string
 	iseID     int
 
-	// GroupNo is the channel-group number this channel belongs to. Zero means
+	// groupNo is the channel-group number this channel belongs to. Zero means
 	// "no group". When non-zero, the master channel of the group has Number ==
-	// GroupNo.
-	GroupNo int
+	// groupNo.
+	//
+	// It is assigned long after the channel goes live: the ingest pipeline
+	// publishes every channel on its parent device first and only then walks
+	// the model registry to materialise custom data points, which is what
+	// derives the channel groups. Every north-bound reader (REST channel
+	// summary, MQTT sub-device discovery, schedule-target resolution) can
+	// therefore reach the channel while that assignment is in flight, so it
+	// is guarded by mu and reachable only through [Channel.GroupNumber] /
+	// [Channel.AssignGroupNumber].
+	groupNo int
 
 	// typeTranslation is the CCU/OCCU translation for the channel type (e.g.
 	// "Heizungsregler Transceiver" for HEATING_CLIMATECONTROL_TRANSCEIVER). Set
@@ -686,9 +695,10 @@ func resolveValueListIndex(desc hmproto.ParameterData, i int) string {
 
 // IsGroupMaster reports whether this channel is the master of its
 // channel group.
-// Channels outside any group (GroupNo == 0) report false.
+// Channels outside any group (group number 0) report false.
 func (c *Channel) IsGroupMaster() bool {
-	return c.GroupNo != 0 && c.GroupNo == c.Number
+	groupNo := c.GroupNumber()
+	return groupNo != 0 && groupNo == c.Number
 }
 
 // IsCustomDPPrimaryChannel reports whether this channel hosts a custom data
@@ -699,14 +709,15 @@ func (c *Channel) IsCustomDPPrimaryChannel() bool {
 	if c == nil || c.CustomDataPoint() == nil {
 		return false
 	}
-	// Channels outside any group (GroupNo == 0) but carrying a
+	// Channels outside any group (group number 0) but carrying a
 	// custom-DP are still treated as primary — Python's
 	// `is_only_primary_channel` would flag them the same way (single
 	// CDP, no group structure).
-	if c.GroupNo == 0 {
+	groupNo := c.GroupNumber()
+	if groupNo == 0 {
 		return true
 	}
-	return c.GroupNo == c.Number
+	return groupNo == c.Number
 }
 
 // IsCustomDPSecondaryChannel reports whether this channel hosts a
@@ -719,7 +730,8 @@ func (c *Channel) IsCustomDPSecondaryChannel() bool {
 	if c == nil || c.CustomDataPoint() == nil {
 		return false
 	}
-	return c.GroupNo != 0 && c.GroupNo != c.Number
+	groupNo := c.GroupNumber()
+	return groupNo != 0 && groupNo != c.Number
 }
 
 // haComponentProvider is the narrow contract every custom-DP that
@@ -813,14 +825,38 @@ func (c *Channel) HasSinglePrimaryCustomDP() bool {
 	return count == 1
 }
 
-// GroupNumber returns this channel's channel-group number (`Channel.GroupNo`)
-// as a method so adapters consuming the channel via a narrow inspector
-// interface can read it without depending on the struct field directly.
+// GroupNumber returns this channel's channel-group number, or 0 when the
+// channel belongs to no group. It is the only read path for the group
+// assignment — see the `groupNo` field for why it needs the lock.
 func (c *Channel) GroupNumber() int {
 	if c == nil {
 		return 0
 	}
-	return c.GroupNo
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.groupNo
+}
+
+// AssignGroupNumber records the channel group this channel belongs to and
+// reports whether the assignment took effect.
+//
+// The first non-zero assignment wins. A device that matches several profiles
+// can have the same channel claimed twice — HmIP-WGT registers a dimmer
+// profile on channel 2 and a switch profile on channel 4, and both claim
+// channels 3 and 4 as secondaries — and the channel must keep the group of
+// whichever profile claimed it first, independent of profile iteration order.
+// Assigning 0 is a no-op: it is the "no group" sentinel, not a value.
+func (c *Channel) AssignGroupNumber(groupNo int) bool {
+	if c == nil || groupNo == 0 {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.groupNo != 0 {
+		return false
+	}
+	c.groupNo = groupNo
+	return true
 }
 
 // IsInMultiGroup reports whether the channel belongs to a channel group that
@@ -829,10 +865,14 @@ func (c *Channel) GroupNumber() int {
 // would carry only the single channel's DP, which is the same view the flat
 // parent already provides).
 func (c *Channel) IsInMultiGroup() bool {
-	if c == nil || c.GroupNo == 0 || c.device == nil {
+	if c == nil || c.device == nil {
 		return false
 	}
-	return len(c.device.GroupChannels(c.GroupNo)) > 1
+	groupNo := c.GroupNumber()
+	if groupNo == 0 {
+		return false
+	}
+	return len(c.device.GroupChannels(groupNo)) > 1
 }
 
 // SubDeviceName returns the name to use for the channel's logical sub-device
@@ -868,9 +908,9 @@ func (c *Channel) SubDeviceName() string {
 		return masterName
 	}
 	if deviceName == "" {
-		return itoa(master.GroupNo)
+		return itoa(master.GroupNumber())
 	}
-	return deviceName + "-" + itoa(master.GroupNo)
+	return deviceName + "-" + itoa(master.GroupNumber())
 }
 
 // isNumericString reports whether s consists exclusively of ASCII digits and
@@ -892,10 +932,11 @@ func isNumericString(s string) bool {
 // no group is assigned or the master channel cannot be located on the parent
 // device. The receiver itself is returned when it is the group master.
 func (c *Channel) GroupMaster() *Channel {
-	if c.GroupNo == 0 {
+	groupNo := c.GroupNumber()
+	if groupNo == 0 {
 		return nil
 	}
-	if c.IsGroupMaster() {
+	if groupNo == c.Number {
 		return c
 	}
 	if c.device == nil {
@@ -905,7 +946,7 @@ func (c *Channel) GroupMaster() *Channel {
 	if i := indexOfColon(deviceAddr); i >= 0 {
 		deviceAddr = deviceAddr[:i]
 	}
-	masterAddr := deviceAddr + ":" + itoa(c.GroupNo)
+	masterAddr := deviceAddr + ":" + itoa(groupNo)
 	return c.device.Channel(masterAddr)
 }
 

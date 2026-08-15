@@ -546,7 +546,7 @@ func (s *stubNamedCustomDP) NamePostfix() string { return s.postfix }
 func addNamedCustomDP(d *device.Device, addr string, no, groupNo int, component, postfix string) *device.Channel {
 	chAddr := fmt.Sprintf("%s:%d", addr, no)
 	ch := d.AddChannel(chAddr, no, "SWITCH", hmenum.ParamsetKeyValues)
-	ch.GroupNo = groupNo
+	ch.AssignGroupNumber(groupNo)
 	ch.SetCustomDataPoint(&stubNamedCustomDP{
 		stubCustomDP: stubCustomDP{
 			key: hmtypes.DataPointKey{

@@ -149,9 +149,9 @@ func TestNamingContract(t *testing.T) {
 				ch4 := d.AddChannel("VCU0001000:4", 4, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch5 := d.AddChannel("VCU0001000:5", 5, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				// ch3 is the group master (primary), ch4+ch5 are secondaries.
-				ch3.GroupNo = 3
-				ch4.GroupNo = 3
-				ch5.GroupNo = 3
+				ch3.AssignGroupNumber(3)
+				ch4.AssignGroupNumber(3)
+				ch5.AssignGroupNumber(3)
 				attachSwitchDP(ch3)
 				attachSwitchDP(ch4)
 				attachSwitchDP(ch5)
@@ -168,9 +168,9 @@ func TestNamingContract(t *testing.T) {
 				ch3 := d.AddChannel("VCU0001001:3", 3, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch4 := d.AddChannel("VCU0001001:4", 4, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch5 := d.AddChannel("VCU0001001:5", 5, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch3.GroupNo = 3
-				ch4.GroupNo = 3
-				ch5.GroupNo = 3
+				ch3.AssignGroupNumber(3)
+				ch4.AssignGroupNumber(3)
+				ch5.AssignGroupNumber(3)
 				attachSwitchDP(ch3)
 				attachSwitchDP(ch4)
 				attachSwitchDP(ch5)
@@ -187,9 +187,9 @@ func TestNamingContract(t *testing.T) {
 				ch3 := d.AddChannel("VCU0001002:3", 3, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch4 := d.AddChannel("VCU0001002:4", 4, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch5 := d.AddChannel("VCU0001002:5", 5, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch3.GroupNo = 3
-				ch4.GroupNo = 3
-				ch5.GroupNo = 3
+				ch3.AssignGroupNumber(3)
+				ch4.AssignGroupNumber(3)
+				ch5.AssignGroupNumber(3)
 				attachSwitchDP(ch3)
 				attachSwitchDP(ch4)
 				attachSwitchDP(ch5)
@@ -207,8 +207,8 @@ func TestNamingContract(t *testing.T) {
 				d := newDevice("Schalter", "HmIP-FSM16", "VCU0002000")
 				ch1 := d.AddChannel("VCU0002000:1", 1, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch2 := d.AddChannel("VCU0002000:2", 2, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch1.GroupNo = 1
-				ch2.GroupNo = 1
+				ch1.AssignGroupNumber(1)
+				ch2.AssignGroupNumber(1)
 				attachSwitchDP(ch1)
 				attachSwitchDP(ch2)
 				return ch1, 1
@@ -227,10 +227,10 @@ func TestNamingContract(t *testing.T) {
 				ch3 := d.AddChannel("VCU0003000:3", 3, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch4 := d.AddChannel("VCU0003000:4", 4, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				// All four are independent primaries (GroupNo == own Number).
-				ch1.GroupNo = 1
-				ch2.GroupNo = 2
-				ch3.GroupNo = 3
-				ch4.GroupNo = 4
+				ch1.AssignGroupNumber(1)
+				ch2.AssignGroupNumber(2)
+				ch3.AssignGroupNumber(3)
+				ch4.AssignGroupNumber(4)
 				attachSwitchDP(ch1)
 				attachSwitchDP(ch2)
 				attachSwitchDP(ch3)
@@ -248,10 +248,10 @@ func TestNamingContract(t *testing.T) {
 				ch2 := d.AddChannel("VCU0003001:2", 2, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch3 := d.AddChannel("VCU0003001:3", 3, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch4 := d.AddChannel("VCU0003001:4", 4, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch1.GroupNo = 1
-				ch2.GroupNo = 2
-				ch3.GroupNo = 3
-				ch4.GroupNo = 4
+				ch1.AssignGroupNumber(1)
+				ch2.AssignGroupNumber(2)
+				ch3.AssignGroupNumber(3)
+				ch4.AssignGroupNumber(4)
 				attachSwitchDP(ch1)
 				attachSwitchDP(ch2)
 				attachSwitchDP(ch3)
@@ -285,8 +285,8 @@ func TestNamingContract(t *testing.T) {
 				d := newDevice("Wandthermostat", "HmIP-WTH-2", "VCU0005000")
 				ch1 := d.AddChannel("VCU0005000:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
 				ch6 := d.AddChannel("VCU0005000:6", 6, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch1.GroupNo = 1
-				ch6.GroupNo = 6
+				ch1.AssignGroupNumber(1)
+				ch6.AssignGroupNumber(6)
 				attachClimateDP(ch1)
 				attachSwitchDP(ch6)
 				return ch1, 1
@@ -300,8 +300,8 @@ func TestNamingContract(t *testing.T) {
 				d := newDevice("Wandthermostat", "HmIP-WTH-2", "VCU0005001")
 				ch1 := d.AddChannel("VCU0005001:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
 				ch6 := d.AddChannel("VCU0005001:6", 6, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch1.GroupNo = 1
-				ch6.GroupNo = 6
+				ch1.AssignGroupNumber(1)
+				ch6.AssignGroupNumber(6)
 				attachClimateDP(ch1)
 				attachSwitchDP(ch6)
 				return ch6, 6
@@ -317,8 +317,8 @@ func TestNamingContract(t *testing.T) {
 				d := newDevice("Statusanzeige", "HmIP-BSL", "VCU0006000")
 				ch8 := d.AddChannel("VCU0006000:8", 8, "OPTICAL_SIGNAL_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch12 := d.AddChannel("VCU0006000:12", 12, "OPTICAL_SIGNAL_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch8.GroupNo = 8
-				ch12.GroupNo = 12
+				ch8.AssignGroupNumber(8)
+				ch12.AssignGroupNumber(12)
 				attachLightDP(ch8)
 				attachLightDP(ch12)
 				return ch8, 8
@@ -332,8 +332,8 @@ func TestNamingContract(t *testing.T) {
 				d := newDevice("Statusanzeige", "HmIP-BSL", "VCU0006001")
 				ch8 := d.AddChannel("VCU0006001:8", 8, "OPTICAL_SIGNAL_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch12 := d.AddChannel("VCU0006001:12", 12, "OPTICAL_SIGNAL_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch8.GroupNo = 8
-				ch12.GroupNo = 12
+				ch8.AssignGroupNumber(8)
+				ch12.AssignGroupNumber(12)
 				attachLightDP(ch8)
 				attachLightDP(ch12)
 				return ch12, 12
@@ -385,7 +385,7 @@ func TestNamingContract(t *testing.T) {
 			setupDevice: func() (*device.Channel, int) {
 				d := newDevice("Rollladenantrieb", "HmIP-BROLL", "VCU0009000")
 				ch1 := d.AddChannel("VCU0009000:1", 1, "SHUTTER_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch1.GroupNo = 1
+				ch1.AssignGroupNumber(1)
 				attachCoverDP(ch1)
 				return ch1, 1
 			},
@@ -399,8 +399,8 @@ func TestNamingContract(t *testing.T) {
 				d := newDevice("Zweifach Rolllade", "HmIP-2BROLL", "VCU0009100")
 				ch1 := d.AddChannel("VCU0009100:1", 1, "SHUTTER_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch2 := d.AddChannel("VCU0009100:2", 2, "SHUTTER_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch1.GroupNo = 1
-				ch2.GroupNo = 2
+				ch1.AssignGroupNumber(1)
+				ch2.AssignGroupNumber(2)
 				attachCoverDP(ch1)
 				attachCoverDP(ch2)
 				return ch1, 1
@@ -414,7 +414,7 @@ func TestNamingContract(t *testing.T) {
 			setupDevice: func() (*device.Channel, int) {
 				d := newDevice("Türschloss", "HmIP-DLD", "VCU0010000")
 				ch1 := d.AddChannel("VCU0010000:1", 1, "DOOR_LOCK_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch1.GroupNo = 1
+				ch1.AssignGroupNumber(1)
 				attachLockDP(ch1)
 				return ch1, 1
 			},
@@ -481,8 +481,8 @@ func TestNamingContract(t *testing.T) {
 				d := newDevice("Steckdose", "HmIP-PSM", "VCU0012000")
 				ch3 := d.AddChannel("VCU0012000:3", 3, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
 				ch4 := d.AddChannel("VCU0012000:4", 4, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
-				ch3.GroupNo = 3
-				ch4.GroupNo = 3
+				ch3.AssignGroupNumber(3)
+				ch4.AssignGroupNumber(3)
 				attachSwitchDP(ch3)
 				attachSwitchDP(ch4)
 				return ch4, 4
