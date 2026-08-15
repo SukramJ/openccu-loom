@@ -84,11 +84,24 @@ func (f HealthProbeFunc) Probe(ctx context.Context) (int, error) { return f(ctx)
 // Callers wire the Reconciler as a standard job by passing
 // [Reconciler.Reconcile] into [central.StandardJobs].
 type Reconciler struct {
-	CentralName  string
+	CentralName string
+
+	// HubModel is the live hub. The connectivity aggregate is resolved from
+	// it on every tick rather than captured once, because the aggregate does
+	// not exist yet when the reconcile job is registered: WireHub creates it
+	// during the readiness-gated south-bound bring-up, well after
+	// registerStandardJobsFor builds this struct. A captured pointer is nil
+	// forever, and reconcileConnectivity then returns early on every tick —
+	// silently, since a dead reconcile pass looks exactly like a clean one.
+	HubModel *hub.Hub
+
+	// Connectivity is a direct override for callers that have an aggregate
+	// but no Hub. HubModel wins when both are set and the Hub has one.
 	Connectivity *hub.Connectivity
-	Metrics      *hub.Metrics
-	Connect      ConnectivityProbe
-	Health       SystemHealthProbe
+
+	Metrics *hub.Metrics
+	Connect ConnectivityProbe
+	Health  SystemHealthProbe
 
 	// Unobserved is the optional runner that walks devices for DPs
 	// that are still unobserved and re-attempts a LoadValue. Nil
@@ -126,6 +139,18 @@ func (r *Reconciler) connectProbe() ConnectivityProbe {
 	return r.Connect
 }
 
+// connectivityAggregate resolves the aggregate for this tick, preferring the
+// live Hub over any directly-supplied value. Resolving per tick is what keeps
+// the reconcile pass alive when the aggregate is wired after job registration.
+func (r *Reconciler) connectivityAggregate() *hub.Connectivity {
+	if r.HubModel != nil {
+		if c := r.HubModel.ConnectivityDataPoints(); c != nil {
+			return c
+		}
+	}
+	return r.Connectivity
+}
+
 // Reconcile fetches the CCU's authoritative state and reconciles the
 // in-memory caches. Returns the first error encountered; subsequent
 // probes still execute so a partial drift can be corrected.
@@ -153,7 +178,8 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 
 func (r *Reconciler) reconcileConnectivity(ctx context.Context) error {
 	connect := r.connectProbe()
-	if connect == nil || r.Connectivity == nil {
+	conn := r.connectivityAggregate()
+	if connect == nil || conn == nil {
 		return nil
 	}
 	probed, err := connect.Probe(ctx)
@@ -161,12 +187,12 @@ func (r *Reconciler) reconcileConnectivity(ctx context.Context) error {
 		return fmt.Errorf("reconciler: connectivity probe: %w", err)
 	}
 	for _, p := range probed {
-		cached, observed := r.Connectivity.Reachable(p.InterfaceID)
+		cached, observed := conn.Reachable(p.InterfaceID)
 		drifted := !observed || cached != p.Reachable
 		// Propagate the typed Interface enum so downstream consumers
 		// (REST, MQTT, Discovery) can render `interface_id` AND
 		// `interface` (e.g. "BidCos-RF" enum).
-		r.Connectivity.OnStateWithInterface(p.InterfaceID, hmenum.Interface(p.InterfaceID), p.Reachable)
+		conn.OnStateWithInterface(p.InterfaceID, hmenum.Interface(p.InterfaceID), p.Reachable)
 		if !drifted {
 			continue
 		}
@@ -186,7 +212,7 @@ func (r *Reconciler) reconcileConnectivity(ctx context.Context) error {
 			})
 		}
 	}
-	r.reconcileVanishedInterfaces(probed)
+	r.reconcileVanishedInterfaces(conn, probed)
 	return nil
 }
 
@@ -206,7 +232,7 @@ func (r *Reconciler) reconcileConnectivity(ctx context.Context) error {
 // produces. Reading either as "every interface went down" would run the
 // alarm domain's central-loss escalation on every CCU restart, so an
 // empty answer leaves the previous membership in place instead.
-func (r *Reconciler) reconcileVanishedInterfaces(probed []InterfaceReachability) {
+func (r *Reconciler) reconcileVanishedInterfaces(conn *hub.Connectivity, probed []InterfaceReachability) {
 	current := make(map[string]bool, len(probed))
 	for _, p := range probed {
 		current[p.InterfaceID] = true
@@ -233,11 +259,11 @@ func (r *Reconciler) reconcileVanishedInterfaces(probed []InterfaceReachability)
 	slices.Sort(vanished)
 
 	for _, id := range vanished {
-		cached, observed := r.Connectivity.Reachable(id)
+		cached, observed := conn.Reachable(id)
 		// The interface keeps its tracker entry with Reachable=false
 		// instead of dropping out of it, so the north-bound surfaces
 		// show it as down rather than as never-seen.
-		r.Connectivity.OnStateWithInterface(id, hmenum.Interface(id), false)
+		conn.OnStateWithInterface(id, hmenum.Interface(id), false)
 		if observed && !cached {
 			continue
 		}

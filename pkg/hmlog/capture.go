@@ -135,13 +135,24 @@ func (s *CaptureSink) Close() {
 // zero-cost pass-through (two atomic loads per record).
 type TeeHandler struct {
 	inner slog.Handler
-	sink  atomic.Pointer[CaptureSink]
-	live  atomic.Pointer[LiveLog]
+	// state is shared by reference with every handler derived through
+	// WithAttrs / WithGroup. It has to be shared rather than copied: every
+	// subsystem derives its logger with With(...) during boot, while the
+	// operator starts a capture much later. If each derived handler held its
+	// own sink pointer, Attach would reach none of them and the support
+	// archive would silently contain only records logged through the root.
+	state *teeState
 	// bound carries the attributes attached via With(...) up the
 	// handler chain (e.g. logger / central / interface). slog keeps
 	// these on the handler, not on the record, so the [LiveLog] would
 	// otherwise lose them; we accumulate and merge them at Handle time.
 	bound []slog.Attr
+}
+
+// teeState holds the two side channels shared across a whole handler chain.
+type teeState struct {
+	sink atomic.Pointer[CaptureSink]
+	live atomic.Pointer[LiveLog]
 }
 
 // NewTeeHandler wraps inner. Use [TeeHandler.Attach] / Detach to
@@ -151,33 +162,33 @@ func NewTeeHandler(inner slog.Handler) *TeeHandler {
 	if inner == nil {
 		panic("hmlog: NewTeeHandler: inner handler must not be nil")
 	}
-	return &TeeHandler{inner: inner}
+	return &TeeHandler{inner: inner, state: &teeState{}}
 }
 
 // Attach installs sink as the current capture target. Replaces any
 // previously attached sink (which the caller can detach + snapshot
 // before discarding).
 func (h *TeeHandler) Attach(sink *CaptureSink) {
-	h.sink.Store(sink)
+	h.state.sink.Store(sink)
 }
 
 // Detach removes the current sink and returns it (nil when no sink
 // was attached). The caller is responsible for snapshotting and
 // closing the returned sink.
 func (h *TeeHandler) Detach() *CaptureSink {
-	return h.sink.Swap(nil)
+	return h.state.sink.Swap(nil)
 }
 
 // Active reports whether a capture sink is currently attached.
 func (h *TeeHandler) Active() bool {
-	return h.sink.Load() != nil
+	return h.state.sink.Load() != nil
 }
 
 // AttachLive installs an always-on [LiveLog] ring that mirrors every
 // record for the log-viewer stream. Unlike the capture sink it is set
 // once (at stack construction) and never detached.
 func (h *TeeHandler) AttachLive(live *LiveLog) {
-	h.live.Store(live)
+	h.state.live.Store(live)
 }
 
 // Enabled delegates to the inner handler. The tee branch is always
@@ -191,24 +202,21 @@ func (h *TeeHandler) Enabled(ctx context.Context, level slog.Level) bool {
 // delegates to the inner handler. Sink encoding failures are
 // swallowed — capture must never interfere with normal logging.
 func (h *TeeHandler) Handle(ctx context.Context, r slog.Record) error {
-	if sink := h.sink.Load(); sink != nil {
+	if sink := h.state.sink.Load(); sink != nil {
 		if line, err := encodeRecord(r, sink.Anonymise()); err == nil {
 			sink.Append(line)
 		}
 	}
-	if live := h.live.Load(); live != nil {
+	if live := h.state.live.Load(); live != nil {
 		live.record(r, h.bound)
 	}
 	return h.inner.Handle(ctx, r)
 }
 
-// WithAttrs delegates to the inner handler and rewraps with the same
-// sink pointer so that loggers derived via With(...) still feed the
-// capture stream.
+// WithAttrs delegates to the inner handler and rewraps sharing the same
+// [teeState], so a sink attached later still reaches loggers derived here.
 func (h *TeeHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	child := &TeeHandler{inner: h.inner.WithAttrs(attrs)}
-	child.sink.Store(h.sink.Load())
-	child.live.Store(h.live.Load())
+	child := &TeeHandler{inner: h.inner.WithAttrs(attrs), state: h.state}
 	if len(h.bound)+len(attrs) > 0 {
 		merged := make([]slog.Attr, 0, len(h.bound)+len(attrs))
 		merged = append(merged, h.bound...)
@@ -223,9 +231,7 @@ func (h *TeeHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 // below the only WithGroup user); the bound attrs carry through
 // unchanged.
 func (h *TeeHandler) WithGroup(name string) slog.Handler {
-	child := &TeeHandler{inner: h.inner.WithGroup(name)}
-	child.sink.Store(h.sink.Load())
-	child.live.Store(h.live.Load())
+	child := &TeeHandler{inner: h.inner.WithGroup(name), state: h.state}
 	child.bound = h.bound
 	return child
 }
