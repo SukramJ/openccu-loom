@@ -145,7 +145,13 @@
       style:background-color="var(--ha-primary-color)"
       style:color="white"
     >
-      {phase === "pending" ? "⏳" : phase === "ok" ? "✔" : phase === "err" ? "✕" : "Send"}
+      {phase === "pending"
+        ? "⏳"
+        : phase === "ok"
+          ? "✔"
+          : phase === "err"
+            ? "✕"
+            : t("sensor_actor.send")}
     </button>
     <button
       type="button"

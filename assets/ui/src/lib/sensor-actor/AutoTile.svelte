@@ -137,6 +137,19 @@
     });
   }
 
+  /**
+   * Drag granularity for a slider control. ControlSlider quantizes every
+   * pointer position and arrow key to a whole step and defaults to 1, so
+   * a FLOAT LEVEL (min 0, max 1) would only ever write 0 or 1 — the two
+   * end stops, with nothing in between reachable. INTEGER data points
+   * keep whole steps because that is what their descriptor allows.
+   */
+  function sliderStep(c: ControlSpec): number {
+    if ((c.dp.type ?? "").toUpperCase() !== "FLOAT") return 1;
+    const span = (c.max ?? 1) - (c.min ?? 0);
+    return span <= 2 ? 0.01 : 0.1;
+  }
+
   function writeEnum(dp: DataPointSummary, next: string) {
     const idx = dp.value_list?.indexOf(next);
     const value: unknown = idx !== undefined && idx >= 0 ? idx : next;
@@ -276,6 +289,7 @@
         value={typeof c.dp.value === "number" ? c.dp.value : (c.min ?? 0)}
         min={c.min}
         max={c.max}
+        step={sliderStep(c)}
         label={c.dp.parameter}
         onChange={(v) => writeNumber(c.dp, v)}
       />
