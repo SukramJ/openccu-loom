@@ -350,13 +350,24 @@ func TestRemoveCentralRetractsDevicesThroughTheEventBridge(t *testing.T) {
 		t.Fatalf("removeCentral: %v", err)
 	}
 
+	// The retraction rides the MQTT fan-out, which hands the job to a worker
+	// goroutine, so the publish is not visible the instant removeCentral
+	// returns. Poll rather than assert on an instant: reading immediately
+	// makes the assertion depend on scheduling, and it fails under the
+	// coverage-instrumented CI run while passing a hundred times locally.
 	want := mqttBridge.Topics().DeviceAvailability("retract-live", "retract-live-HmIP-RF", "AAAA0009")
-	var found bool
-	for _, p := range client.Published() {
-		if p.Topic == want && len(p.Payload) == 0 && p.Retain {
-			found = true
-			break
+	retracted := func() bool {
+		for _, p := range client.Published() {
+			if p.Topic == want && len(p.Payload) == 0 && p.Retain {
+				return true
+			}
 		}
+		return false
+	}
+	found := retracted()
+	for deadline := time.Now().Add(5 * time.Second); !found && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+		found = retracted()
 	}
 	if !found {
 		t.Fatalf("no retained retraction published for %q after removing the central; "+
