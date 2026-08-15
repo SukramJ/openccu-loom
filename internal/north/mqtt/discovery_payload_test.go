@@ -134,6 +134,55 @@ func TestDiscoveryStampsConfigurationURL(t *testing.T) {
 	}
 }
 
+// TestDiscoveryStampsConfigurationURLFromThePerCentralHubInfo pins the
+// field against the way the daemon actually stamps CCU metadata.
+//
+// Production never calls WithHubInfo — every stamp goes through
+// SetHubInfoFor, which writes the per-central map. Reading the
+// wiring-time default instead left the URL empty on every device card,
+// so HA's "Visit device" button was missing everywhere but on the
+// synthetic hub device; the sibling test above could not see it because
+// it populates the default itself. The second central proves the value
+// is resolved per CCU rather than from whichever one happened to be
+// first.
+func TestDiscoveryStampsConfigurationURLFromThePerCentralHubInfo(t *testing.T) {
+	newDevice := func() *device.Device {
+		return device.New(device.Config{
+			InterfaceID:  "HmIP-RF",
+			Interface:    hmenum.InterfaceHmIPRF,
+			Address:      "0001ABCD",
+			Model:        "HmIP-STH",
+			Manufacturer: hmenum.ManufacturerEQ3,
+			ProductGroup: hmenum.ProductGroupHmIP,
+		})
+	}
+	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "GoOtto")
+	db.SetHubInfoFor("GoOtto", HubInfo{Serial: "3014F711A0001234", URL: "http://192.168.1.20"})
+	db.SetHubInfoFor("Zweitzentrale", HubInfo{Serial: "3014F711A0009999", URL: "http://192.168.1.30"})
+
+	for central, want := range map[string]string{
+		"GoOtto":        "http://192.168.1.20",
+		"Zweitzentrale": "http://192.168.1.30",
+	} {
+		_, _, _, buf, ok := db.Build(Event{
+			Central:   central,
+			Interface: "HmIP-RF", DeviceAddress: "0001ABCD", ChannelNo: 1,
+			Parameter: "STATE", Category: hmenum.DataPointCategorySwitch, Device: newDevice(),
+		})
+		if !ok {
+			t.Fatalf("%s: build", central)
+		}
+		var p map[string]any
+		if err := json.Unmarshal(buf, &p); err != nil {
+			t.Fatalf("%s: unmarshal: %v", central, err)
+		}
+		desc, _ := p["device"].(map[string]any)
+		if desc["configuration_url"] != want {
+			t.Errorf("%s: configuration_url = %v, want %q", central, desc["configuration_url"], want)
+		}
+	}
+}
+
 // TestDiscoveryOmitsConfigurationURLWhenHubURLEmpty pins that the
 // builder does NOT emit `configuration_url` when no hub URL is
 // configured (no WithHubInfo call, or HubInfo.URL is empty).

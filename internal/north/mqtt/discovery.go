@@ -324,6 +324,19 @@ func (d *DefaultDiscoveryBuilder) centralFor(ev Event) string {
 	return d.Central
 }
 
+// hubURLFor returns the WebUI URL of the CCU the event belongs to, for
+// the per-device `configuration_url`.
+//
+// It has to go through [hubFor]: the daemon registers its CCU metadata
+// per central via [SetHubInfoFor] and never writes the wiring-time
+// default, so reading d.Hub directly yielded an empty URL on every
+// device card — HA's "Visit device" button was missing everywhere but on
+// the synthetic hub device, which already resolved per central. In a
+// multi-CCU daemon the default would additionally be the wrong CCU.
+func (d *DefaultDiscoveryBuilder) hubURLFor(ev Event) string {
+	return d.hubFor(d.centralFor(ev)).URL
+}
+
 // hubAggregateUniqueID builds the unique_id for loom-specific hub
 // aggregate entities that have no equivalent in the canonical
 // routing-key contract (alarm_messages, service_messages, inbox,
@@ -528,7 +541,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		"value_template":    valueJSONValueTemplate,
 		"availability":      availability,
 		"availability_mode": "all",
-		"device":            deviceDescriptor(ev, d.Hub.URL, d.SubDevicesEnabled),
+		"device":            deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
 	}
 	// json_attributes_topic + template — exposes the per-DP config payload

@@ -87,7 +87,7 @@ func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
 		"payload_press":     "PRESS",
 		"availability":      availability,
 		"availability_mode": "all",
-		"device":            deviceDescriptor(ev, d.Hub.URL, d.SubDevicesEnabled),
+		"device":            deviceDescriptor(ev, d.hubURLFor(ev), d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
 	}
 	// The button entity-description rules mirror the reference factory
