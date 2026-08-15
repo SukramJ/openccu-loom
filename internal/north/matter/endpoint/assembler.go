@@ -343,7 +343,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 			continue
 		}
 		meas, ok := calc.(interfaces.MatterMeasurementSource)
-		if !ok || !standaloneMeasurement(meas.MatterMeasurementClass()) {
+		if !ok || meas.MatterMeasurementClass() == interfaces.MatterMeasurementNone {
 			continue
 		}
 		allowed, err := allow(store.DPKindMeasurement, key)
@@ -356,9 +356,6 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindMeasurement, key, meas)
 		if err != nil {
 			return nil, err
-		}
-		if ep == nil {
-			continue
 		}
 		seen[ep.SourceKey] = struct{}{}
 		out = append(out, ep)
@@ -442,7 +439,7 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		}
 		// Path 2: Generic-DP measurement source.
 		meas, ok := gdp.(interfaces.MatterMeasurementSource)
-		if !ok || !standaloneMeasurement(meas.MatterMeasurementClass()) {
+		if !ok || meas.MatterMeasurementClass() == interfaces.MatterMeasurementNone {
 			continue
 		}
 		allowed, err := allow(store.DPKindGeneric, key)
@@ -463,9 +460,6 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindGeneric, key, meas)
 		if err != nil {
 			return nil, err
-		}
-		if ep == nil {
-			continue
 		}
 		seen[ep.SourceKey] = struct{}{}
 		out = append(out, ep)
@@ -646,24 +640,6 @@ func (a *Assembler) makeEndpoint(
 	}, nil
 }
 
-// standaloneMeasurement reports whether a measurement class can carry a
-// bridged endpoint of its own. Battery / Power / Energy cannot: Matter
-// places PowerSource and Electrical{Power,Energy}Measurement on the
-// endpoint they describe, so [interfaces.MatterMeasurementClassDeviceType]
-// has no device type for them and returns 0. Materialising one anyway
-// yields an endpoint whose Descriptor.DeviceTypeList holds BridgedNode
-// alone — Apple Home keys its HAP-service lookup on the first entry and
-// files an endpoint without an application device type under the
-// unsupported bucket.
-func standaloneMeasurement(class interfaces.MatterMeasurementClass) bool {
-	return measurementDeviceType(class) != 0
-}
-
-// makeMeasurementEndpoint builds the standalone sensor endpoint for a
-// measurement source. Returns (nil, nil) for a class that belongs on a
-// host endpoint — see [standaloneMeasurement]. The bail comes before ID
-// assignment so no endpoint_id is burned on a source that cannot be
-// bridged on its own.
 func (a *Assembler) makeMeasurementEndpoint(
 	ctx context.Context,
 	centralName string,
@@ -673,10 +649,6 @@ func (a *Assembler) makeMeasurementEndpoint(
 	key string,
 	meas interfaces.MatterMeasurementSource,
 ) (*Endpoint, error) {
-	deviceType := measurementDeviceType(meas.MatterMeasurementClass())
-	if deviceType == 0 {
-		return nil, nil
-	}
 	sourceKey := store.EndpointKey{
 		CentralName:   centralName,
 		DeviceAddress: dev.Address,
@@ -684,6 +656,7 @@ func (a *Assembler) makeMeasurementEndpoint(
 		DPKind:        kind,
 		DPKey:         key,
 	}
+	deviceType := measurementDeviceType(meas.MatterMeasurementClass())
 
 	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
 	if err != nil {

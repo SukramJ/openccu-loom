@@ -71,10 +71,20 @@ mechanically detectable.
   persisted CCU filter could hide every alarm message with no control to
   clear it.
 
-Known limitation: device lookups still key on the CCU address alone, so
-two CCUs that share a device address resolve to the first one. Fixing it
-is a REST contract change rather than a local fix, and is tracked
-separately.
+Known limitations, both deliberately left in place:
+
+- Device lookups still key on the CCU address alone, so two CCUs that
+  share a device address resolve to the first one. Fixing it is a REST
+  contract change rather than a local fix, and is tracked separately.
+- A bridged endpoint carrying only a Battery, Power or Energy
+  measurement still advertises a DeviceTypeList of BridgedNode alone,
+  with no application device type. Suppressing those endpoints — the
+  obvious fix — removes the Electrical{Power,Energy}Measurement clusters
+  that controllers read today, which the chip-tool suite caught as a
+  regression. The correct fix gives them their real device types,
+  PowerSource (0x11) and ElectricalSensor (0x510); the latter mandates
+  the PowerTopology cluster, which this daemon does not implement yet.
+  That is a feature, not a bug fix, so it is out of scope here.
 
 ## [0.59.2]
 

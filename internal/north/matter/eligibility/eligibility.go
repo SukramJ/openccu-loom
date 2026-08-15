@@ -112,18 +112,9 @@ func DeriveMatterEligibility(src any) Verdict {
 		if cl == 0 {
 			return Verdict{State: StateUnmappable, Reason: "measurement class has no cluster equivalent"}
 		}
-		// Battery / Power / Energy have a cluster but no standalone
-		// device type: Matter places PowerSource and
-		// Electrical{Power,Energy}Measurement on the endpoint they
-		// describe. The assembler refuses to build an endpoint without a
-		// primary device type, so reporting these as mappable would offer
-		// the operator a toggle that can never materialise anything.
-		if dt == 0 {
-			return Verdict{State: StateUnmappable, Reason: "measurement rides on a host endpoint and has no standalone device type"}
-		}
 		return Verdict{
 			State:      StateMappable,
-			DeviceType: dt,
+			DeviceType: dt, // 0 for measurements that ride on a host endpoint
 			Clusters:   []uint32{cl},
 		}
 	}
