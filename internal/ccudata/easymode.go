@@ -205,9 +205,14 @@ func LoadEasymode(path string) (*Easymode, error) {
 
 // materializeSubsetGroupIDs derives SubsetGroupIDs from Subsets for
 // every SenderTypeMetadata that carries subset definitions but has no
-// pre-computed subset_group_ids in the archive. The mapping assigns
-// each member parameter the group id "subset_<id>" where <id> is the
-// integer identifier of the enclosing SubsetDef.
+// pre-computed subset_group_ids in the archive. Each member parameter is
+// mapped to "subset_<first member parameter>".
+//
+// That spelling is not free: it is the id the UI-schema builder gives the
+// group it derives from the same SubsetDef, and the field exists so a
+// consumer can match a parameter to the group that owns it. An id built
+// from anything else — the SubsetDef's own integer identifier, say — names
+// no group in the payload it ships with.
 func materializeSubsetGroupIDs(e *Easymode) {
 	for chKey, chMeta := range e.ChannelMetadata {
 		changed := false
@@ -216,7 +221,10 @@ func materializeSubsetGroupIDs(e *Easymode) {
 			if len(st.Subsets) > 0 && len(st.SubsetGroupIDs) == 0 {
 				ids := make(map[string]string, 4*len(st.Subsets))
 				for _, sub := range st.Subsets {
-					groupID := fmt.Sprintf("subset_%d", sub.ID)
+					if len(sub.MemberParams) == 0 {
+						continue
+					}
+					groupID := "subset_" + sub.MemberParams[0]
 					for _, param := range sub.MemberParams {
 						ids[param] = groupID
 					}
