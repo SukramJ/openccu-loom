@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 )
 
 // wsHandshakeStatus performs a raw WebSocket upgrade handshake against server,
@@ -87,6 +89,38 @@ func TestWSHandlerOriginAllowlist(t *testing.T) {
 				t.Fatalf("status = %d, want %d", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestOriginAllowlistIsDerivedOnceForBothGates pins that the WebSocket
+// handshake gate and the CORS middleware — both fed the same configured
+// allowed-origins list — accept the same operator spelling. While each derived
+// its own lookup key, an entry copied out of a browser address bar
+// ("https://ha.example.com/") passed the handshake but was missed by CORS, so
+// the live socket worked while every cross-origin REST call was blocked by the
+// browser with nothing logged on the daemon side.
+func TestOriginAllowlistIsDerivedOnceForBothGates(t *testing.T) {
+	t.Parallel()
+	const (
+		configured    = "https://ha.example.com/"
+		browserOrigin = "https://ha.example.com"
+	)
+
+	hub, _, _, _, _, _ := newTestHub(t)
+	server := httptest.NewServer(Handler(hub, nil, []string{configured}))
+	t.Cleanup(server.Close)
+	if got := wsHandshakeStatus(t, server, browserOrigin); got != http.StatusSwitchingProtocols {
+		t.Fatalf("websocket handshake: status = %d, want %d", got, http.StatusSwitchingProtocols)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody)
+	req.Header.Set("Origin", browserOrigin)
+	middleware.CORS(middleware.CORSConfig{Origins: []string{configured}})(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }),
+	).ServeHTTP(rec, req)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != browserOrigin {
+		t.Fatalf("CORS Access-Control-Allow-Origin = %q, want %q", got, browserOrigin)
 	}
 }
 
