@@ -88,11 +88,14 @@ type DiagnosticsDeps struct {
 	Incidents    IncidentsReader
 	SystemStatus SystemStatusReader
 	LogLevels    LogLevelsService
-	// KnownCentrals are the CCU scope names the per-CCU score map
-	// should iterate. The composition root fills this from the
-	// daemon's [*central.Registry]; tests can pass an explicit slice.
-	// Empty disables the per-central score block.
-	KnownCentrals []string
+	// KnownCentrals returns the CCU scope names the per-CCU score map
+	// should iterate. It is resolved on every request rather than held
+	// as a slice because the set is not fixed: a CCU adopted at runtime
+	// must show up in the next dump, and one that was removed must
+	// disappear from it. The composition root fills this from the
+	// daemon's [*central.Registry]. Nil, or an empty result, disables
+	// the per-central score block.
+	KnownCentrals func() []string
 	// HealthGauges, when set, returns the current pull-gauge readings
 	// the tracker keeps (event_bus / audit / scheduler / rest / ws).
 	// [*health.Tracker.Gauges] satisfies this directly.
@@ -161,10 +164,12 @@ func Diagnostics(deps DiagnosticsDeps) http.HandlerFunc { //nolint:gocognit,funl
 				h.Degraded = deps.HealthExt.IsDegraded()
 				h.Failed = deps.HealthExt.IsFailed()
 				h.PrimaryHealthy = deps.HealthExt.PrimaryClientHealthy()
-				if len(deps.KnownCentrals) > 0 {
-					h.CentralScores = make(map[string]int, len(deps.KnownCentrals))
-					for _, name := range deps.KnownCentrals {
-						h.CentralScores[name] = deps.HealthExt.CentralScoreInt(name)
+				if deps.KnownCentrals != nil {
+					if names := deps.KnownCentrals(); len(names) > 0 {
+						h.CentralScores = make(map[string]int, len(names))
+						for _, name := range names {
+							h.CentralScores[name] = deps.HealthExt.CentralScoreInt(name)
+						}
 					}
 				}
 				// Per-component client detail — only emit a block when the

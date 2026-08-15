@@ -461,8 +461,13 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		RSSIInfo:        adapter.NewRSSIInfoDomain(d.reg),
 		AuditRecorder:   d.auditRec,
 		StatusMetrics:   d.restStatusMetrics,
-		KnownCentrals:   d.reg.Names(),
-		HealthGauges:    d.healthAdapter.Gauges,
+		// Which CCUs the dump scores, read live rather than captured:
+		// the router is mounted once, so a snapshot of the registry
+		// taken here would keep scoring the boot-time set forever — a
+		// CCU adopted at runtime would never appear in a support dump
+		// and a removed one would never leave it.
+		KnownCentrals: d.reg.Names,
+		HealthGauges:  d.healthAdapter.Gauges,
 		// The per-CCU aggregators the boot wiring stands up leave the
 		// daemon here — the diagnostics dump is their only reader.
 		CentralMetrics: introspect.MetricsSnapshots,
