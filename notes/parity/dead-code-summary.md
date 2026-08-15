@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: e80c6362
-HEAD: e80c6362
+Generated: f19d0088
+HEAD: f19d0088
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28818 |
-| Reachable | 5033 |
-| Whitelisted | 20780 |
+| Total Exported | 28863 |
+| Reachable | 5047 |
+| Whitelisted | 20811 |
 | **Unreachable** | **3005** |
 
 ## Top-20 Packages by Dead Code

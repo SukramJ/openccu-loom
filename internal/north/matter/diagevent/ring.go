@@ -24,6 +24,8 @@ import (
 )
 
 // Kind buckets an event so a reader can filter without parsing prose.
+//
+// loom:reachable:reason="set on every Event the bridge records in securechannel.go and serialised by GET /api/v1/matter/events; a string alias without methods, invisible to the analyzer's type heuristic"
 type Kind string
 
 // Kind values.
@@ -40,6 +42,8 @@ const (
 
 // Severity separates the entries that explain a failure from the ones
 // that merely record progress.
+//
+// loom:reachable:reason="set on every Event the bridge records in securechannel.go and serialised by GET /api/v1/matter/events; a string alias without methods, invisible to the analyzer's type heuristic"
 type Severity string
 
 // Severity values.
@@ -50,6 +54,8 @@ const (
 )
 
 // Event is one recorded moment.
+//
+// loom:reachable:reason="constructed by the bridge's PASE and fabric paths in securechannel.go, returned by Bridge.DiagnosticEvents, and copied out by the GET /api/v1/matter/events handler; a data struct whose fields the REST layer reads, invisible to the analyzer's method-based type heuristic"
 type Event struct {
 	At       time.Time
 	Kind     Kind
@@ -69,6 +75,8 @@ type Event struct {
 // asymmetry is deliberate: the recording points sit on the Matter
 // receive path, taken for every packet, and a diagnostic that can panic
 // there is worse than no diagnostic.
+//
+// loom:reachable:reason="constructed by the composition root in daemon_matter.go (AttachDiagnosticEvents(diagevent.NewRing(...))) before the bridge starts serving, and held by Bridge.diagEvents; the analyzer reaches NewRing but not the type it returns"
 type Ring struct {
 	mu     sync.RWMutex
 	events []Event
