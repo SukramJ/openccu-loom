@@ -29,6 +29,39 @@ func TestValidateSection_MCP(t *testing.T) {
 	}
 }
 
+// TestGetConfigSchema_EmitsRestartRequiredOnEveryField pins the wire shape
+// against the published contract: components.schemas.SchemaField lists
+// restart_required among its required members, so a field that does not need
+// a restart has to serialise `"restart_required": false` rather than dropping
+// the member. Generated clients that enforce the required list fail to parse
+// a response that omits it.
+func TestGetConfigSchema_EmitsRestartRequiredOnEveryField(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config/schema", http.NoBody)
+	w := httptest.NewRecorder()
+	GetConfigSchema().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var body struct {
+		Fields []map[string]json.RawMessage `json:"fields"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	if len(body.Fields) == 0 {
+		t.Fatal("schema carries no fields")
+	}
+	for _, f := range body.Fields {
+		if _, ok := f["restart_required"]; !ok {
+			t.Fatalf("field %s omits restart_required", f["path"])
+		}
+	}
+}
+
 // TestGetConfigSchema_IncludesMCP verifies the schema endpoint surfaces
 // north.mcp as a section (so the SPA renders a tab) and that its fields
 // carry the restart-required flag plus the "/mcp" path default.

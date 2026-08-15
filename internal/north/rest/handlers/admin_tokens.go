@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"time"
 
@@ -39,6 +40,16 @@ type createTokenRequest struct {
 	Role          auth.Role `json:"role"`
 	ExpiresInDays *int      `json:"expires_in_days,omitempty"`
 }
+
+// maxTokenExpiryDays is the largest expires_in_days a token can carry.
+// The value is a day count multiplied into nanoseconds, and beyond this
+// the int64 product wraps negative: time.Add then moves the expiry into
+// the past and the endpoint answers 201 with a plaintext credential the
+// bearer resolver rejects on first use. Rejecting the input instead keeps
+// the failure visible at the point the operator can still fix it. The
+// bound is the representable range, not a policy — an operator who wants a
+// non-expiring token omits the field.
+const maxTokenExpiryDays = int(math.MaxInt64 / int64(24*time.Hour))
 
 // createTokenResponse carries the plaintext token shown exactly once.
 type createTokenResponse struct {
@@ -86,6 +97,13 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Invalid role",
 					"role must be one of: admin, operator, viewer"))
+			return
+		}
+		if body.ExpiresInDays != nil && *body.ExpiresInDays > maxTokenExpiryDays {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Invalid expiry",
+					"expires_in_days must not exceed "+itoa(maxTokenExpiryDays)+
+						"; omit the field for a token that never expires"))
 			return
 		}
 		var expiresAt *time.Time

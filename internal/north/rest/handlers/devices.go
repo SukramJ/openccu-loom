@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -1021,16 +1022,33 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	return s
 }
 
+const (
+	// maxPerPage is the largest per_page a list endpoint honours; larger
+	// values fall back to the default rather than being clamped.
+	maxPerPage = 500
+	// maxPage bounds page so the `(page-1)*per_page` slice arithmetic every
+	// list handler performs cannot overflow. The OpenAPI parameter declares
+	// a minimum and no maximum, so a probe could send a page whose product
+	// wrapped negative — both `start > total` clamps are no-ops for a
+	// negative bound, and the slice expression panicked the request. int is
+	// 32 bits on the armv7 build, so the ceiling is derived from MaxInt32
+	// and leaves room for the `start + per_page` end bound.
+	maxPage = math.MaxInt32/maxPerPage - 1
+)
+
+// parsePagination reads the optional `page` / `per_page` query parameters,
+// falling back to the defaults for anything out of range. Both results are
+// bounded so the caller's slice arithmetic stays representable; see [maxPage].
 func parsePagination(r *http.Request) (page, perPage int) {
 	page = 1
 	perPage = 50
 	if v := r.URL.Query().Get("page"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
-			page = n
+			page = min(n, maxPage)
 		}
 	}
 	if v := r.URL.Query().Get("per_page"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 500 {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= maxPerPage {
 			perPage = n
 		}
 	}

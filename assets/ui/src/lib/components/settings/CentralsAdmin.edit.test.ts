@@ -133,6 +133,43 @@ describe("CentralsAdmin — edit save toast honesty", () => {
     expect(mockToastWarn).not.toHaveBeenCalled();
   });
 
+  it("sends the emptied password as an explicit empty string so the daemon clears it", async () => {
+    // The daemon reads an absent password_plain as "unchanged" — it has to,
+    // because GET masks the stored credential and a client that round-trips a
+    // central would otherwise wipe it. Dropping the key when the input is
+    // empty would therefore make the password impossible to clear from here.
+    mockListCentrals.mockResolvedValue([{ ...baseRow, password_plain: "***" }]);
+    const { container } = render(CentralsAdmin);
+
+    await openEditModal(container);
+    const pwInput = container.querySelector<HTMLInputElement>("input[type='password']");
+    if (!pwInput) throw new Error("Password input not found");
+    expect(pwInput.value).toBe("***");
+    await fireEvent.input(pwInput, { target: { value: "" } });
+
+    await clickSave(container);
+
+    await waitFor(() => {
+      expect(mockUpdateCentral).toHaveBeenCalledOnce();
+    });
+    const payload = mockUpdateCentral.mock.calls[0][1] as { password_plain?: string };
+    expect(payload.password_plain).toBe("");
+  });
+
+  it("echoes the mask back when the password was not touched", async () => {
+    mockListCentrals.mockResolvedValue([{ ...baseRow, password_plain: "***" }]);
+    const { container } = render(CentralsAdmin);
+
+    await openEditModal(container);
+    await clickSave(container);
+
+    await waitFor(() => {
+      expect(mockUpdateCentral).toHaveBeenCalledOnce();
+    });
+    const payload = mockUpdateCentral.mock.calls[0][1] as { password_plain?: string };
+    expect(payload.password_plain).toBe("***");
+  });
+
   it("shows a restart-required warning toast (not a bare success) when the host changes on an already-enabled CCU", async () => {
     mockListCentrals.mockResolvedValue([{ ...baseRow }]);
     const { container } = render(CentralsAdmin);

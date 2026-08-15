@@ -6,7 +6,9 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -119,10 +121,9 @@ type HealthExtras interface {
 
 // Diagnostics renders the combined dump. The endpoint is anonymous by
 // default to keep the artefact safe-to-share; pass `?anonymize=0` (or
-// `false`) explicitly to receive raw values. Device addresses,
-// host names, and operator-controlled fields are hashed when
-// anonymisation is on; structural relationships (interface counts,
-// status verdicts, sample counts) stay intact.
+// `false`) explicitly to receive raw values. See [anonymiseDiagnostics]
+// for what anonymisation covers; structural relationships (interface
+// counts, status verdicts, sample counts) stay intact either way.
 func Diagnostics(deps DiagnosticsDeps) http.HandlerFunc { //nolint:gocognit,funlen // single-purpose diagnostics builder with many subsystem branches
 	return func(w http.ResponseWriter, r *http.Request) {
 		anonymize := parseBool(r.URL.Query().Get("anonymize"), true)
@@ -256,8 +257,103 @@ func Diagnostics(deps DiagnosticsDeps) http.HandlerFunc { //nolint:gocognit,funl
 			env.LogLevels = ll
 		}
 
+		if anonymize {
+			anonymiseDiagnostics(&env)
+		}
 		JSON(w, http.StatusOK, env)
 	}
+}
+
+// anonymiseDiagnostics replaces the site-identifying values in env in place.
+//
+// The dump is positioned as the artefact an operator attaches to a bug report,
+// and it says so itself in `anonymized`. What it carries that names a site is
+// the CCU host of every interface plus the free text of incidents, health
+// notes and system-status reasons — journal excerpts and error strings that
+// splice in device addresses and the CCU's address. Those are tokenised with
+// the same stable 12-hex SHA-256 scheme [anonymiseSnapshot] uses, so two dumps
+// of the same installation still correlate.
+//
+// Deliberately left intact: central names, interface ids, component names and
+// every counter. They are this envelope's join keys — the per-central score
+// map, the metrics map and the status entries are all keyed on them — and
+// tokenising them would cost the whole diagnostic value while hiding nothing
+// the free-text redaction does not already cover.
+func anonymiseDiagnostics(env *DiagnosticsEnvelope) {
+	for i := range env.Health.Components {
+		env.Health.Components[i].Note = anonymiseFreeText(env.Health.Components[i].Note)
+	}
+	for i := range env.Interfaces {
+		env.Interfaces[i].Host = anonToken("host", env.Interfaces[i].Host)
+		env.Interfaces[i].Note = anonymiseFreeText(env.Interfaces[i].Note)
+	}
+	// Copy before rewriting: the readers hand out slices whose elements
+	// (and whose nested string slices) may still be owned by a live store
+	// or ring buffer, and an anonymised response must not mutate them.
+	env.Incidents = slices.Clone(env.Incidents)
+	for i := range env.Incidents {
+		env.Incidents[i].Summary = anonymiseFreeText(env.Incidents[i].Summary)
+		env.Incidents[i].Detail = anonymiseFreeText(env.Incidents[i].Detail)
+	}
+	env.SystemStatus = slices.Clone(env.SystemStatus)
+	for i := range env.SystemStatus {
+		e := &env.SystemStatus[i]
+		e.Reason = anonymiseFreeText(e.Reason)
+		if len(e.Issues) == 0 {
+			continue
+		}
+		issues := make([]string, len(e.Issues))
+		for j, issue := range e.Issues {
+			issues[j] = anonymiseFreeText(issue)
+		}
+		e.Issues = issues
+	}
+}
+
+var (
+	// addressLikeRe matches a token shaped like a Homematic device address or
+	// serial — "LEQ1234567", "VCU0000123", "0001D3C99C1234", optionally with a
+	// ":<channel>" suffix. Incident details and status reasons splice these
+	// into free text, so they have to be redacted wherever they appear rather
+	// than only in dedicated address fields. [addressLike] applies the
+	// letters-and-digits test RE2 cannot express without lookahead.
+	addressLikeRe = regexp.MustCompile(`\b[0-9A-Z]{8,20}(?::\d{1,3})?\b`)
+	// ipv4Re matches a dotted-quad literal. The CCU's address reaches free
+	// text through connection errors ("dial tcp 10.0.0.5:2010: …").
+	ipv4Re = regexp.MustCompile(`\b\d{1,3}(?:\.\d{1,3}){3}\b`)
+)
+
+// anonymiseFreeText tokenises the address- and host-shaped substrings of s,
+// leaving the surrounding prose readable — an operator triaging from the dump
+// still sees which error occurred, only not on which device or host.
+func anonymiseFreeText(s string) string {
+	if s == "" {
+		return ""
+	}
+	s = ipv4Re.ReplaceAllStringFunc(s, func(m string) string { return anonToken("host", m) })
+	return addressLikeRe.ReplaceAllStringFunc(s, func(m string) string {
+		if !addressLike(m) {
+			return m
+		}
+		return anonToken("addr", m)
+	})
+}
+
+// addressLike reports whether an uppercase-alphanumeric token is plausibly a
+// device address rather than a protocol constant. Homematic serials always mix
+// letters with several digits, while the constants that share the character
+// class ("UNREACH", "CONFIG_PENDING") carry no digits at all.
+func addressLike(tok string) bool {
+	var letters, digits int
+	for _, r := range tok {
+		switch {
+		case r >= '0' && r <= '9':
+			digits++
+		case r >= 'A' && r <= 'Z':
+			letters++
+		}
+	}
+	return letters >= 1 && digits >= 2
 }
 
 func parseBool(raw string, defaultVal bool) bool {

@@ -387,7 +387,12 @@
       tls: fTls || undefined,
       tls_insecure_skip_verify: fTlsInsecure || undefined,
       username: fUsername || undefined,
-      password_plain: fPassword || undefined,
+      // Always send the key, even empty. The daemon reads an absent
+      // password_plain as "unchanged" — it has to, because GET masks the
+      // value and a client that round-trips a central would otherwise wipe
+      // the CCU credential — so an emptied input only clears the stored
+      // password when it arrives as an explicit "".
+      password_plain: fPassword,
       password_env: fPasswordEnv || undefined,
       primary_interface: fPrimaryInterface || undefined,
       interfaces: buildInterfaces(),

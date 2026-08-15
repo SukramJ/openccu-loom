@@ -382,6 +382,72 @@ func TestUpdateCentral_RealPassword_PersistsAsIs(t *testing.T) {
 	}
 }
 
+func TestUpdateCentral_AbsentPasswordKey_KeepsStoredCredential(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
+	}}
+	// password_plain is optional in the published schema and GET never
+	// returns it in the clear, so a script that only flips `enabled` omits
+	// it. Put is an unconditional upsert — the omission must not wipe the
+	// CCU credential.
+	body := strings.NewReader(`{"Host":"192.168.1.10","Enabled":true}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := svc.centrals["home"].PasswordPlain; got != "s3cret" {
+		t.Errorf("expected stored password s3cret to survive a partial replace, got %q", got)
+	}
+	if !svc.centrals["home"].Enabled {
+		t.Error("expected the submitted enabled flag to persist")
+	}
+}
+
+func TestUpdateCentral_NullPassword_KeepsStoredCredential(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
+	}}
+	body := strings.NewReader(`{"Host":"192.168.1.10","password_plain":null}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := svc.centrals["home"].PasswordPlain; got != "s3cret" {
+		t.Errorf("expected stored password s3cret to survive a null password, got %q", got)
+	}
+}
+
+func TestUpdateCentral_ExplicitEmptyPassword_ClearsStoredCredential(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
+	}}
+	// An operator switching the central to password_env sends the key
+	// explicitly empty; that is the one payload that clears it.
+	body := strings.NewReader(`{"Host":"192.168.1.10","password_plain":"","password_env":"CCU_PW"}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := svc.centrals["home"].PasswordPlain; got != "" {
+		t.Errorf("expected an explicit empty password to clear the credential, got %q", got)
+	}
+}
+
 // --- CreateCentral password sentinel clearing ---
 
 func TestCreateCentral_MaskedPassword_ClearsToEmpty(t *testing.T) {
