@@ -5,6 +5,7 @@ package weekprofile
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -358,5 +359,88 @@ func TestCountClimateEntriesWithData(t *testing.T) {
 	c.Profiles["P1"] = prof
 	if got := CountClimateEntries(c); got != 1 {
 		t.Fatalf("CountClimateEntries = %d, want 1", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetScheduleEnabled — wire-failure rollback and per-key hold window
+// ---------------------------------------------------------------------------
+
+// failingScheduleWriter rejects every COMBINED_PARAMETER write, standing
+// in for an unreachable device or a CCU that refuses the parameter.
+type failingScheduleWriter struct{ err error }
+
+func (w *failingScheduleWriter) SetValue(
+	_ context.Context, _ string, _ hmenum.Parameter, _ any, _ hmenum.CommandPriority,
+) error {
+	return w.err
+}
+
+// recordingScheduleWriter accepts every write and records the values so a
+// test can assert what reached the wire.
+type recordingScheduleWriter struct {
+	mu     sync.Mutex
+	values []any
+}
+
+func (w *recordingScheduleWriter) SetValue(
+	_ context.Context, _ string, _ hmenum.Parameter, value any, _ hmenum.CommandPriority,
+) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.values = append(w.values, value)
+	return nil
+}
+
+func TestSetScheduleEnabledRollsBackWhenTheWireWriteFails(t *testing.T) {
+	t.Parallel()
+	dp := NewProfileDataPoint(ProfileDataPointConfig{ScheduleType: ScheduleTypeDefault})
+	dp.RegisterChannel("1_1", true)
+	dp.AttachWriter(&failingScheduleWriter{err: errors.New("device unreachable")}, "DEV001:1")
+
+	var notified int
+	dp.OnChange(func() { notified++ })
+
+	if err := dp.SetScheduleEnabled(context.Background(), "1_1", false, hmenum.CommandPriorityHigh); err == nil {
+		t.Fatal("SetScheduleEnabled must surface the writer error")
+	}
+	// The CCU never changed, so it never pushes a correcting bitfield —
+	// the model must not keep the optimistic value.
+	if got := dp.ScheduleEnabled()["1_1"]; got != true {
+		t.Errorf("1_1 = %v after a failed write, want the pre-write value true", got)
+	}
+	if notified < 2 {
+		t.Errorf("OnChange fired %d times, want the optimistic update and its rollback", notified)
+	}
+	// The hold window must be released too, otherwise the next genuine
+	// CCU push for this key is dropped as a stale echo.
+	dp.SyncScheduleEnabled(map[string]bool{"1_1": false})
+	if got := dp.ScheduleEnabled()["1_1"]; got != false {
+		t.Errorf("1_1 = %v after a CCU push following the rollback, want false", got)
+	}
+}
+
+func TestSyncScheduleEnabledHoldsOnlyTheWrittenChannel(t *testing.T) {
+	t.Parallel()
+	dp := NewProfileDataPoint(ProfileDataPointConfig{ScheduleType: ScheduleTypeDefault})
+	dp.RegisterChannel("1_1", true)
+	dp.RegisterChannel("2_1", true)
+	dp.AttachWriter(&recordingScheduleWriter{}, "DEV001:1")
+
+	if err := dp.SetScheduleEnabled(context.Background(), "1_1", false, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SetScheduleEnabled: %v", err)
+	}
+
+	// WEEK_PROGRAM_CHANNEL_LOCKS is one device-wide bitfield: the echo of
+	// our own write for 1_1 arrives together with a genuine change on
+	// 2_1 made from the CCU WebUI.
+	dp.SyncScheduleEnabled(map[string]bool{"1_1": true, "2_1": false})
+
+	got := dp.ScheduleEnabled()
+	if got["1_1"] != false {
+		t.Errorf("1_1 = %v, want false — the pre-write echo must not revert the optimistic write", got["1_1"])
+	}
+	if got["2_1"] != false {
+		t.Errorf("2_1 = %v, want false — a genuine change on another channel must not be dropped", got["2_1"])
 	}
 }

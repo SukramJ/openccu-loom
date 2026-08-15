@@ -122,13 +122,17 @@ type ProfileDataPoint struct {
 	// ProfileDataPoint is attached to.
 	scheduleChannelAddress string
 
-	// writeHoldUntil tracks the timestamp until which incoming
-	// SyncScheduleEnabled events should be ignored after a user-driven
-	// write. Wire-read events that arrive within this window are stale
-	// pre-write echoes and would otherwise revert the optimistic UI
-	// state. The window is set to ~3s after every SetScheduleEnabled
-	// call; events firing after the window proceed normally.
-	writeHoldUntil time.Time
+	// writeHoldUntil maps a channel key to the timestamp until which
+	// incoming SyncScheduleEnabled updates for *that key* are ignored
+	// after a user-driven write. Wire-read events that arrive within the
+	// window are stale pre-write echoes and would otherwise revert the
+	// optimistic UI state.
+	//
+	// The hold is per key because WEEK_PROGRAM_CHANNEL_LOCKS is one
+	// device-wide bitfield: a device-wide hold would discard the state of
+	// every other channel carried in the same event, and the CCU only
+	// pushes the parameter on change, so nothing re-delivers it.
+	writeHoldUntil map[string]time.Time
 
 	// currentProfile is the active profile key ("P1".."P6"). Climate only.
 	currentProfile string
@@ -551,6 +555,12 @@ func (dp *ProfileDataPoint) validateProfileKey(key string) error {
 // Schedule-enabled state (non-climate devices only)
 // ---------------------------------------------------------------------------
 
+// scheduleWriteHoldWindow is how long a channel key ignores incoming
+// WEEK_PROGRAM_CHANNEL_LOCKS updates after a local write. The CCU echoes
+// the pre-write bit value for roughly one to two seconds before the new
+// one lands.
+const scheduleWriteHoldWindow = 3 * time.Second
+
 // ScheduleEnabled returns the per-channel schedule-enabled map, or nil if the
 // feature is not supported by this device.
 //
@@ -581,13 +591,16 @@ func (dp *ProfileDataPoint) ScheduleEnabled() map[string]bool {
 // already registered in the in-memory map and writes the bitwise-OR of
 // every available bitmask in a single CCU call. This is the canonical
 // "enable/disable all channels at once" path; it is the Go equivalent
-// of calling the Python helper with no channel_key argument. Returns an
-// error from the underlying writer; callers that don't care about wire
-// failures can ignore it (the in-memory state still updates).
+// of calling the Python helper with no channel_key argument.
+//
+// The optimistic state is rolled back when the wire write fails: the
+// CCU value never changed, so it never pushes a correcting
+// WEEK_PROGRAM_CHANNEL_LOCKS event, and the daemon, MQTT and the SPA
+// would keep reporting the opposite of what the device holds until an
+// unrelated refresh happens to re-seed it.
 //
 // When no writer is attached (test fixtures, unattached DPs) the wire
-// write is skipped silently and only the in-memory state changes — same
-// as the prior pre-Phase-B behaviour.
+// write is skipped silently and only the in-memory state changes.
 func (dp *ProfileDataPoint) SetScheduleEnabled(
 	ctx context.Context, channelKey string, enabled bool, priority hmenum.CommandPriority,
 ) error {
@@ -595,6 +608,8 @@ func (dp *ProfileDataPoint) SetScheduleEnabled(
 	if dp.scheduleEnabled == nil {
 		dp.scheduleEnabled = make(map[string]bool)
 	}
+	previousEnabled := maps.Clone(dp.scheduleEnabled)
+	previousHold := maps.Clone(dp.writeHoldUntil)
 	if channelKey == "" {
 		for k := range dp.scheduleEnabled {
 			dp.scheduleEnabled[k] = enabled
@@ -606,8 +621,20 @@ func (dp *ProfileDataPoint) SetScheduleEnabled(
 	sca := dp.scheduleChannelAddress
 	// Arm the wire-read hold window so the post-write
 	// WEEK_PROGRAM_CHANNEL_LOCKS echo (which may carry the pre-write
-	// bit value for ~1-2s) does not revert our optimistic state.
-	dp.writeHoldUntil = time.Now().Add(3 * time.Second)
+	// bit value for ~1-2s) does not revert our optimistic state. Only
+	// the keys this write touches are held — the bitfield carries every
+	// other channel too, and those bits must keep flowing.
+	until := time.Now().Add(scheduleWriteHoldWindow)
+	if dp.writeHoldUntil == nil {
+		dp.writeHoldUntil = make(map[string]time.Time, len(dp.scheduleEnabled))
+	}
+	if channelKey == "" {
+		for k := range dp.scheduleEnabled {
+			dp.writeHoldUntil[k] = until
+		}
+	} else {
+		dp.writeHoldUntil[channelKey] = until
+	}
 	dp.notifyLocked()
 	dp.mu.Unlock()
 
@@ -625,6 +652,7 @@ func (dp *ProfileDataPoint) SetScheduleEnabled(
 	} else {
 		bit, ok := ChannelKeyToBitmask(channelKey)
 		if !ok {
+			dp.restoreScheduleEnabled(previousEnabled, previousHold)
 			return fmt.Errorf("weekprofile: unknown channel key %q", channelKey)
 		}
 		bitmask = bit
@@ -633,7 +661,22 @@ func (dp *ProfileDataPoint) SetScheduleEnabled(
 		return nil
 	}
 	value := BuildCombinedParameterValue(bitmask, enabled)
-	return writer.SetValue(ctx, sca, hmenum.ParameterCombinedParameter, value, priority)
+	if err := writer.SetValue(ctx, sca, hmenum.ParameterCombinedParameter, value, priority); err != nil {
+		dp.restoreScheduleEnabled(previousEnabled, previousHold)
+		return err
+	}
+	return nil
+}
+
+// restoreScheduleEnabled undoes the optimistic update of a failed
+// [SetScheduleEnabled] and re-fires the change callbacks so every
+// north-bound surface converges back on the state the CCU still holds.
+func (dp *ProfileDataPoint) restoreScheduleEnabled(enabled map[string]bool, hold map[string]time.Time) {
+	dp.mu.Lock()
+	dp.scheduleEnabled = enabled
+	dp.writeHoldUntil = hold
+	dp.notifyLocked()
+	dp.mu.Unlock()
 }
 
 // SyncScheduleEnabled is the read-side counterpart to
@@ -653,20 +696,25 @@ func (dp *ProfileDataPoint) SyncScheduleEnabled(state map[string]bool) {
 	}
 	dp.mu.Lock()
 	defer dp.mu.Unlock()
-	// Drop wire-read echoes that arrive within the optimistic-hold
-	// window — they reflect the pre-write bit value and would
-	// otherwise revert a user-driven SetScheduleEnabled toggle. The
-	// window is armed by [SetScheduleEnabled]; outside it (boot-time
-	// initial sync, external CCU edits, periodic refresh) every event
-	// is applied unconditionally.
-	if !dp.writeHoldUntil.IsZero() && time.Now().Before(dp.writeHoldUntil) {
-		return
-	}
 	if dp.scheduleEnabled == nil {
 		dp.scheduleEnabled = make(map[string]bool, len(state))
 	}
+	now := time.Now()
 	changed := false
 	for k, v := range state {
+		// Drop wire-read echoes that arrive within the optimistic-hold
+		// window — they reflect the pre-write bit value and would
+		// otherwise revert a user-driven SetScheduleEnabled toggle. The
+		// window is armed per key by [SetScheduleEnabled]; every other
+		// key in the same bitfield is applied unconditionally, as is
+		// every key outside a window (boot-time initial sync, external
+		// CCU edits, periodic refresh).
+		if until, held := dp.writeHoldUntil[k]; held {
+			if now.Before(until) {
+				continue
+			}
+			delete(dp.writeHoldUntil, k)
+		}
 		if prev, ok := dp.scheduleEnabled[k]; !ok || prev != v {
 			dp.scheduleEnabled[k] = v
 			changed = true

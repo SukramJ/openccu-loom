@@ -259,19 +259,27 @@ func (ss *sourceSink) IsRefreshedFromSources() bool {
 	return true
 }
 
-// shouldPublishCalcUpdate guards calculated-sensor publish calls.
-// Returns false when ALL source DPs have published an event within the last
-// 500 ms AND there are at least two sources
-// _should_publish_data_point_updated_callback logic
-// (calculated/data_point.py:147-161):
+// shouldPublishCalcUpdate guards calculated-sensor publish calls: it
+// suppresses the recalculation only when every one of ≥2 sources
+// published an event within the last 500 ms, i.e. when the whole CCU
+// burst has already been accounted for and this callback would emit the
+// same number twice.
 //
-//	return all(dp.published_event_recently for dp in relevant_values_data_point)
+// The reference contract is the other way round — publish once
+// `all(dp.published_event_recently ...)` holds, so an intermediate value
+// computed from one fresh and one previous-cycle input never reaches a
+// consumer. **Do not "correct" the direction here in isolation.** That
+// contract only works when the source data points stamp a publish
+// timestamp, and in this stack no wire data point installs a publisher,
+// so PublishedEventRecently() is permanently false for every source.
+// Flipping the comparison therefore turns the guard into an
+// unconditional suppression and silences DewPoint, FrostPoint,
+// Enthalpy, VaporConcentration and ApparentTemperature completely
+// (measured: nine sensor tests stop emitting). Reaching the reference
+// behaviour means wiring the publish stamping onto generic data points
+// first, and flipping this comparison in the same change.
 //
-// The guard suppresses a redundant recalculation callback when both
-// temperature AND humidity just published — a single CCU burst updates them
-// together and the calculated sensor would otherwise fire twice in quick
-// succession with an intermediate (incorrect) value. With ≤1 source the
-// guard is always true (no "all sources published" condition to satisfy).
+// With ≤1 source there is no burst and the guard always allows.
 //
 // Callers check the sensor-level published_event_recently separately before
 // calling this helper (the sensor-level guard lives in feedSink).

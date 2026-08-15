@@ -33,13 +33,22 @@ func TestSwitchMatter_MatterDeviceType(t *testing.T) {
 	}
 }
 
+// TestSwitchMatter_MatterClusterServers_State pins the mandatory cluster
+// set of the OnOffPlugInUnit device type this source advertises: OnOff
+// plus the Groups and ScenesManagement stubs, both conformance "M" per
+// matter.js on-off-plug-in-unit.element.ts.
 func TestSwitchMatter_MatterClusterServers_State(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
 		hmenum.OperationsRead|hmenum.OperationsWrite))
-	servers := s.MatterClusterServers()
-	if len(servers) != 1 {
-		t.Fatalf("MatterClusterServers with STATE: want 1, got %d", len(servers))
+	mounted := map[uint32]bool{}
+	for _, srv := range s.MatterClusterServers() {
+		mounted[srv.MatterClusterID()] = true
+	}
+	for _, want := range []uint32{0x0006, 0x0004, 0x0062} {
+		if !mounted[want] {
+			t.Errorf("cluster 0x%04X not mounted; got %v", want, mounted)
+		}
 	}
 }
 
@@ -87,12 +96,81 @@ func TestSwitchMatter_MatterRead_Observed(t *testing.T) {
 	}
 }
 
+// TestSwitchMatter_MatterRead_FeatureMap pins the LT (Lighting) bit: the
+// advertised OnOffPlugInUnit device type requires the feature with
+// conformance "M" (matter.js on-off-plug-in-unit.element.ts:26), and a
+// controller reads FeatureMap before it trusts the LT-gated surface.
 func TestSwitchMatter_MatterRead_FeatureMap(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool, hmenum.OperationsRead))
 	v, ok := s.MatterRead(matterGenericSwitchAttrFeatureMap)
-	if !ok || v != uint32(0) {
-		t.Errorf("FeatureMap: want (uint32(0), true), got (%v, %v)", v, ok)
+	if !ok || v != matterGenericFeatureOnOffLT {
+		t.Errorf("FeatureMap: want (0x%02X, true), got (%v, %v)", matterGenericFeatureOnOffLT, v, ok)
+	}
+}
+
+// TestSwitchMatter_LTAttributesAnswer asserts every attribute the LT
+// feature makes mandatory is readable, so a controller that trusts the
+// FeatureMap bit never gets UnsupportedAttribute.
+// matter.js on-off.element.ts:30-36.
+func TestSwitchMatter_LTAttributesAnswer(t *testing.T) {
+	t.Parallel()
+	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
+		hmenum.OperationsRead|hmenum.OperationsWrite))
+
+	if v, ok := s.MatterRead(matterGenericSwitchAttrGlobalSceneControl); !ok || v != true {
+		t.Errorf("GlobalSceneControl: want (true, true), got (%v, %v)", v, ok)
+	}
+	if v, ok := s.MatterRead(matterGenericSwitchAttrOnTime); !ok || v != uint16(0) {
+		t.Errorf("OnTime: want (uint16(0), true), got (%v, %v)", v, ok)
+	}
+	if v, ok := s.MatterRead(matterGenericSwitchAttrOffWaitTime); !ok || v != uint16(0) {
+		t.Errorf("OffWaitTime: want (uint16(0), true), got (%v, %v)", v, ok)
+	}
+	// StartUpOnOff defaults to TLV null ("keep the last state").
+	if v, ok := s.MatterRead(matterGenericSwitchAttrStartUpOnOff); !ok || v != nil {
+		t.Errorf("StartUpOnOff: want (nil, true), got (%v, %v)", v, ok)
+	}
+
+	ctx := t.Context()
+	if err := s.MatterWrite(ctx, matterGenericSwitchAttrOnTime, uint16(42), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("write OnTime: %v", err)
+	}
+	if v, _ := s.MatterRead(matterGenericSwitchAttrOnTime); v != uint16(42) {
+		t.Errorf("OnTime after write: got %v, want 42", v)
+	}
+	if err := s.MatterWrite(ctx, matterGenericSwitchAttrStartUpOnOff, uint8(1), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("write StartUpOnOff: %v", err)
+	}
+	if v, _ := s.MatterRead(matterGenericSwitchAttrStartUpOnOff); v != uint8(1) {
+		t.Errorf("StartUpOnOff after write: got %v, want 1", v)
+	}
+}
+
+// TestSwitchMatter_LTCommandsAreAccepted asserts the three commands the
+// LT feature makes mandatory are dispatched rather than rejected with
+// UnsupportedCommand. matter.js on-off.element.ts:41,46,51.
+func TestSwitchMatter_LTCommandsAreAccepted(t *testing.T) {
+	t.Parallel()
+	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
+		hmenum.OperationsRead|hmenum.OperationsWrite))
+	s.Writer = &stubWriter{}
+	ctx := t.Context()
+
+	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOffWithEffect, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OffWithEffect: %v", err)
+	}
+	if v, _ := s.MatterRead(matterGenericSwitchAttrGlobalSceneControl); v != false {
+		t.Errorf("OffWithEffect must clear GlobalSceneControl, got %v", v)
+	}
+	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOnWithRecallGlobalScene, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OnWithRecallGlobalScene: %v", err)
+	}
+	if v, _ := s.MatterRead(matterGenericSwitchAttrGlobalSceneControl); v != true {
+		t.Errorf("OnWithRecallGlobalScene must set GlobalSceneControl, got %v", v)
+	}
+	if _, err := s.MatterInvoke(ctx, matterGenericSwitchCmdOnWithTimedOff, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OnWithTimedOff: %v", err)
 	}
 }
 
@@ -213,11 +291,26 @@ func TestSwitchMatter_MatterReportable(t *testing.T) {
 	}
 }
 
+// TestSwitchMatter_MatterAttributes asserts a wildcard read expands to
+// OnOff plus the four attributes the LT feature makes mandatory — a
+// controller that discovers the cluster this way must find the same set
+// the FeatureMap promises.
 func TestSwitchMatter_MatterAttributes(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool, hmenum.OperationsRead))
-	attrs := s.MatterAttributes()
-	if len(attrs) != 1 || attrs[0] != matterGenericSwitchAttrOnOff {
-		t.Errorf("MatterAttributes: got %v, want [%d]", attrs, matterGenericSwitchAttrOnOff)
+	listed := map[uint32]bool{}
+	for _, a := range s.MatterAttributes() {
+		listed[a] = true
+	}
+	for _, want := range []uint32{
+		matterGenericSwitchAttrOnOff,
+		matterGenericSwitchAttrGlobalSceneControl,
+		matterGenericSwitchAttrOnTime,
+		matterGenericSwitchAttrOffWaitTime,
+		matterGenericSwitchAttrStartUpOnOff,
+	} {
+		if !listed[want] {
+			t.Errorf("attribute 0x%04X not listed; got %v", want, s.MatterAttributes())
+		}
 	}
 }
