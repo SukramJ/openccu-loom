@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 	"unicode"
@@ -53,6 +54,20 @@ type SessionRevoker interface {
 // the user account itself is removed. *sqlite.TokenStore satisfies it.
 type TokenPurger interface {
 	DeleteBySubject(ctx context.Context, subject string) (int, error)
+}
+
+// logTokenPurgeFailure reports a bearer-token purge that did not happen.
+//
+// The user write it accompanies has already committed, so the request still
+// answers 204 — but the tokens survive, and bearer auth reads the role off
+// the token row rather than re-checking the users table, so a deleted or
+// demoted subject keeps working credentials until an operator notices the
+// orphaned rows in the token list. Nothing downstream would say so: the
+// wired purger is a chain that returns the first error, and the SQLite token
+// store only wraps it. This is the sole place the miss becomes attributable.
+func logTokenPurgeFailure(r *http.Request, subject string, err error) {
+	slog.Default().ErrorContext(r.Context(), "Bearer-token purge failed — tokens for this subject stay valid",
+		"error", err, "subject", subject, "method", r.Method, "path", r.URL.Path)
 }
 
 // createUserRequest is the body of POST /admin/users.
@@ -280,9 +295,12 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 		}
 		if tokens != nil && newRole != currentRole {
 			if _, perr := tokens.DeleteBySubject(r.Context(), subject); perr != nil {
-				// The role change itself succeeded; a purge miss is logged by
-				// the store layer and must not turn it into a 500.
-				_ = perr
+				// The role change itself succeeded, so this must not become a
+				// 500 — but every surviving token keeps authenticating with the
+				// role it was minted with, and the account now has a different
+				// one. Nothing below the handler reports the miss: neither the
+				// chained purger nor the SQLite token store carries a logger.
+				logTokenPurgeFailure(r, subject, perr)
 			}
 		}
 		actor := identityFromCtx(r.Context())
@@ -333,10 +351,11 @@ func DeleteUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 		}
 		if tokens != nil {
 			if _, err := tokens.DeleteBySubject(r.Context(), subject); err != nil {
-				// The account is already gone; a token-purge miss is logged by
-				// the store layer and must not turn a successful delete into a
-				// 500. Surface nothing to the caller.
-				_ = err
+				// The account is already gone, so this must not turn a
+				// successful delete into a 500 — but the orphaned tokens keep
+				// authenticating as the deleted subject, and no layer below
+				// reports the miss (see [logTokenPurgeFailure]).
+				logTokenPurgeFailure(r, subject, err)
 			}
 		}
 		actor := identityFromCtx(r.Context())

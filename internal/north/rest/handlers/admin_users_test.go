@@ -4,9 +4,11 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -498,6 +500,66 @@ func TestUpdateUser_EmptyBody_Returns400(t *testing.T) {
 	}
 	if len(revoker.revokeBySubjectCalls) != 0 {
 		t.Errorf("expected no revocation on 400, got %v", revoker.revokeBySubjectCalls)
+	}
+}
+
+// TestUserWrites_LogTheTokenPurgeFailure pins that a failed bearer-token
+// purge leaves a trace. The write itself still answers 204 — the account is
+// already deleted / demoted and a retry would not undo that — but the
+// surviving tokens keep authenticating with their minted role, so the miss
+// has to be attributable afterwards. Neither the chained purger nor the
+// SQLite token store carries a logger, so the handler is the only place that
+// can report it.
+//
+// Intentionally NOT t.Parallel(): the test mutates slog.Default() globally.
+func TestUserWrites_LogTheTokenPurgeFailure(t *testing.T) {
+	cases := []struct {
+		name   string
+		invoke func(svc *fakeUserAdminService, tokens *fakeTokenPurger) *httptest.ResponseRecorder
+	}{
+		{
+			name: "delete",
+			invoke: func(svc *fakeUserAdminService, tokens *fakeTokenPurger) *httptest.ResponseRecorder {
+				req := httptest.NewRequest(http.MethodDelete, "/admin/users/bob", http.NoBody)
+				req = withChiParam(req, "subject", "bob")
+				w := httptest.NewRecorder()
+				DeleteUser(svc, audit.NoopRecorder(), &fakeSessionRevoker{}, tokens).ServeHTTP(w, req)
+				return w
+			},
+		},
+		{
+			name: "demote",
+			invoke: func(svc *fakeUserAdminService, tokens *fakeTokenPurger) *httptest.ResponseRecorder {
+				req := httptest.NewRequest(http.MethodPatch, "/admin/users/bob",
+					strings.NewReader(`{"role":"viewer"}`))
+				req = withChiParam(req, "subject", "bob")
+				w := httptest.NewRecorder()
+				UpdateUser(svc, audit.NoopRecorder(), &fakeSessionRevoker{}, tokens).ServeHTTP(w, req)
+				return w
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			old := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+			defer slog.SetDefault(old)
+
+			tokens := &fakeTokenPurger{deleteErr: errors.New("database is locked")}
+			w := tc.invoke(newFakeUserSvc(), tokens)
+
+			if w.Code != http.StatusNoContent {
+				t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+			}
+			logged := buf.String()
+			if !strings.Contains(logged, "database is locked") {
+				t.Errorf("purge failure not logged: %q", logged)
+			}
+			if !strings.Contains(logged, "bob") {
+				t.Errorf("log line does not name the subject: %q", logged)
+			}
+		})
 	}
 }
 
