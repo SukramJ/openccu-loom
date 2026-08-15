@@ -79,6 +79,57 @@ func TestConfigPayload_WithMinMaxUnit(t *testing.T) {
 	}
 }
 
+// TestConfigPayload_SpecialMarshalsAsJSONNotBase64 pins the encoding of the
+// SPECIAL blob on the retained config topic: consumers of the raw plane read
+// the declared sentinel set from it, and a []byte-typed field would render as
+// a base64 string that nothing downstream decodes.
+func TestConfigPayload_SpecialMarshalsAsJSONNotBase64(t *testing.T) {
+	t.Parallel()
+	cfg := baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead)
+	cfg.Descriptor.Special = json.RawMessage(`{"NOT_USED":0.0}`)
+	dp := NewDataPoint[float64](cfg)
+
+	body, err := json.Marshal(dp.Config())
+	if err != nil {
+		t.Fatalf("marshal config payload: %v", err)
+	}
+	var decoded struct {
+		Special map[string]float64 `json:"special"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("special is not embedded as JSON (%s): %v", body, err)
+	}
+	if got, ok := decoded.Special["NOT_USED"]; !ok || got != 0 {
+		t.Fatalf("special = %v, want the declared sentinel set", decoded.Special)
+	}
+}
+
+// TestConfigPayload_InvalidSpecialIsDropped covers the descriptor whose
+// SPECIAL never parsed: normalization keeps such bytes verbatim, and embedding
+// them would make the whole config payload unmarshalable rather than lose the
+// one field.
+func TestConfigPayload_InvalidSpecialIsDropped(t *testing.T) {
+	t.Parallel()
+	cfg := baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead)
+	cfg.Descriptor.Special = json.RawMessage(`{not-json`)
+	dp := NewDataPoint[float64](cfg)
+
+	body, err := json.Marshal(dp.Config())
+	if err != nil {
+		t.Fatalf("marshal config payload: %v", err)
+	}
+	if !json.Valid(body) {
+		t.Fatalf("config payload is not valid JSON: %s", body)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("unmarshal config payload: %v", err)
+	}
+	if _, present := decoded["special"]; present {
+		t.Fatalf("an unparsable SPECIAL blob must be omitted, got %s", body)
+	}
+}
+
 func TestConfigPayload_WithValueList(t *testing.T) {
 	t.Parallel()
 	cfg := baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeInteger, hmenum.OperationsRead)
