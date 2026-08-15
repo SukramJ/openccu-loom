@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: d5da54cf
-HEAD: d5da54cf
+Generated: 5dbfdb20
+HEAD: 5dbfdb20
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28721 |
-| Reachable | 5026 |
-| Whitelisted | 20702 |
-| **Unreachable** | **2993** |
+| Total Exported | 28830 |
+| Reachable | 5031 |
+| Whitelisted | 20805 |
+| **Unreachable** | **2994** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: d5da54cf
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 95 | 52 |
+| internal/central/adapter | 4 | 97 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -99,7 +99,7 @@ HEAD: d5da54cf
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 95 | 52 |
+| internal/central/adapter | 4 | 97 | 52 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
@@ -129,7 +129,7 @@ HEAD: d5da54cf
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 26 | 2 |
 | internal/central/cachereset | 0 | 18 | 0 |
-| internal/central/coordinators | 0 | 109 | 6 |
+| internal/central/coordinators | 0 | 108 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 12 | 4 |
 | internal/channelflags | 0 | 2 | 0 |

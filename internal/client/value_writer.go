@@ -38,35 +38,24 @@ type icSetterLike interface {
 //
 // SetValueWithOptions / PutParamsetWithOptions also need:
 //
-// - the central event bus to subscribe to DataPointValueChangedEvent
-// when [WriteOptions.WaitForCallback] is true;
-// - the per-interface [reliability.Retrier] to cancel queued retries
-// when [WriteOptions.PurgeAddresses] is non-empty;
+// - a [BusResolver] that yields the central event bus to subscribe to
+// DataPointValueChangedEvent when [WriteOptions.WaitForCallback] is
+// true;
 // - an [icSetterLike] (the [InterfaceClient]) to route writes through
 // the full reliability stack when [WriteOptions.SkipRetry] is true.
 //
-// All three are wired after the central + reliability stack have been
+// Both are wired after the central + reliability stack have been
 // constructed. Nil is the safe default — WaitForCallback returns
-// immediately, PurgeAddresses is a no-op, and SkipRetry falls through
-// to the direct backend path (no retry anyway since the backend
-// bypasses the Retrier).
+// immediately and SkipRetry falls through to the direct backend path
+// (no retry anyway since the backend bypasses the Retrier).
 type ValueWriter struct {
 	mu             sync.RWMutex
 	backends       map[valueWriterKey]backends.Operations
 	icSetters      map[valueWriterKey]icSetterLike
-	bus            eventBusLike
 	busResolver    BusResolver
-	retrier        retrierLike
 	commandTracker CommandTrackerFn
 	inFlight       *reliability.InFlightTracker
 }
-
-// eventBusLike is the narrow contract ValueWriter needs from the
-// central event bus. Mirrors the surface
-// [WaitForStateChangeOrTimeout] consumes — keeping this internal so
-// the value writer does not become coupled to the full
-// `internal/central/events` package.
-type eventBusLike any
 
 // BusResolver maps a Unit name to its event bus. Multi-CCU
 // deployments use this to route [WaitForStateChangeOrTimeout]
@@ -89,14 +78,6 @@ type BusResolver func(centralName string) (bus any, ok bool)
 // value disables the feature entirely (default until the daemon wires
 // a resolver via [ValueWriter.SetCommandTrackerFn]).
 type CommandTrackerFn func(interfaceID, channelAddress string, parameter hmenum.Parameter, paramsetKey hmenum.ParamsetKey, value any)
-
-// retrierLike is the narrow contract ValueWriter needs from the
-// per-interface [reliability.Retrier] used by [PurgeAddresses] and
-// [CancelInterface].
-type retrierLike interface {
-	CancelDevice(deviceAddress string) int
-	CancelInterface() int
-}
 
 // valueWriterKey is the backend registry's key: a central plus the canonical
 // `<central>-<interface>` wire id the CCU echoes and every per-central
@@ -172,8 +153,7 @@ func (w *ValueWriter) Deregister(centralName string, interfaceID hmtypes.WireInt
 var ErrNoBackend = errors.New("value_writer: no backend for (central, interface)")
 
 // SetValue routes the call. Delegates to [SetValueWithOptions] with default
-// options so the same reliability path (PurgeAddresses guard, retrier hook)
-// is used uniformly.
+// options so both entry points share one write path.
 func (w *ValueWriter) SetValue(
 	ctx context.Context, centralName, interfaceID, channelAddress string,
 	parameter hmenum.Parameter, value any, priority hmenum.CommandPriority,
@@ -182,8 +162,7 @@ func (w *ValueWriter) SetValue(
 		Priority: priority,
 		// RxMode left as Unset (CCU default), WaitForCallback false,
 		// CheckAgainstPD false — matches the historical SetValue
-		// behaviour while still routing through the per-call
-		// PurgeAddresses + bus-aware path.
+		// behaviour while still routing through the bus-aware path.
 	})
 }
 
@@ -211,26 +190,15 @@ func (w *ValueWriter) Backend(centralName string, interfaceID hmtypes.WireInterf
 	return b, ok
 }
 
-// SetEventBus installs a single central event bus. Convenient for
-// single-CCU deployments. For multi-CCU use
-// [ValueWriter.SetBusResolver] which routes per central name.
-//
-// When both are set, [SetBusResolver] takes precedence — the
-// resolver is consulted first; if it returns ok=false, the writer
-// falls back to this single-bus field.
-func (w *ValueWriter) SetEventBus(bus any) {
-	w.mu.Lock()
-	w.bus = bus
-	w.mu.Unlock()
-}
-
 // SetBusResolver installs a per-central event bus resolver. nil
-// disables the resolver path; the writer then falls back to the
-// single bus from [SetEventBus] (if any).
+// disables the wait path entirely — [WriteOptions.WaitForCallback]
+// then behaves as if it were false.
 //
-// Multi-CCU daemons install the registry-backed closure here so
-// each [WaitForStateChangeOrTimeout] call subscribes to the bus
-// owning the target central.
+// One ValueWriter serves every configured CCU, so the bus a write has
+// to wait on is a function of the target central, never a property of
+// the writer: resolving per call is what keeps a write to central B
+// from waiting on central A's bus. The daemon installs the
+// registry-backed closure here.
 func (w *ValueWriter) SetBusResolver(r BusResolver) {
 	w.mu.Lock()
 	w.busResolver = r
@@ -250,36 +218,9 @@ func (w *ValueWriter) SetCommandTrackerFn(fn CommandTrackerFn) {
 	w.mu.Unlock()
 }
 
-// SetRetrier installs the per-interface [reliability.Retrier] used to
-// purge pending retries for addresses listed in
-// [WriteOptions.PurgeAddresses]. nil disables purging.
-func (w *ValueWriter) SetRetrier(r any) {
-	w.mu.Lock()
-	if r == nil {
-		w.retrier = nil
-	} else if rr, ok := r.(retrierLike); ok {
-		w.retrier = rr
-	}
-	w.mu.Unlock()
-}
-
 // InFlightTracker returns the shared [reliability.InFlightTracker] so callers
 // (e.g. callback coordinators) can check whether a key is currently being
 // written to the CCU. The tracker is always non-nil.
 func (w *ValueWriter) InFlightTracker() *reliability.InFlightTracker {
 	return w.inFlight
-}
-
-// CancelInterface aborts all in-flight retry chains for the (central,
-// interface) pair by forwarding to the installed retrier's
-// [reliability.Retrier.CancelInterface]. Returns the number of chains
-// canceled, or 0 when no retrier is installed.
-func (w *ValueWriter) CancelInterface(centralName, interfaceID string) int {
-	w.mu.RLock()
-	r := w.retrier
-	w.mu.RUnlock()
-	if r == nil {
-		return 0
-	}
-	return r.CancelInterface()
 }

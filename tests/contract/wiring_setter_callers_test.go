@@ -272,14 +272,22 @@ func injectsCollaborator(fn *types.Func) bool {
 // isCollaborator reports whether t is one of the three ways this
 // codebase hands one component to another.
 //
-// A *named* function type counts as much as a bare one. Matching only
-// the bare `func(...)` literal made the guard blind to every seam that
-// gives its callback a name — the idiomatic form here — and that blind
-// spot hid a live one: alarm.Service.SetArmFailureHook takes an
-// ArmFailureHook, so an auto-arm the engine refused notified nobody
-// while this test stayed green.
+// Two blind spots hid live seams here, and both are worth naming because
+// the shapes recur.
+//
+// A *named* function type counts as much as a bare one. Matching only the
+// bare `func(...)` literal made the guard blind to every seam that names
+// its callback — the idiomatic form in this codebase — and that hid
+// alarm.Service.SetArmFailureHook, so an auto-arm the engine refused
+// notified nobody while this test stayed green.
+//
+// The Unalias is load-bearing for the same reason. `any` is an alias, so
+// a seam declared as Set*(x any) — the shape used whenever the setter
+// must not import the collaborator's package — arrived as *types.Alias,
+// matched no case, and was dropped from the walk. Two ValueWriter seams
+// sat in that blind spot, neither ever called by production.
 func isCollaborator(t types.Type) bool {
-	switch t := t.(type) {
+	switch t := types.Unalias(t).(type) {
 	case *types.Pointer:
 		_, named := t.Elem().(*types.Named)
 		return named

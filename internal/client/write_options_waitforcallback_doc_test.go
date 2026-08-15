@@ -24,7 +24,7 @@ func TestWaitForCallback_Zero_Skips(t *testing.T) {
 
 	bus := events.NewBus()
 	w := NewValueWriter()
-	w.SetEventBus(bus)
+	installBusFor(w, "ccu", bus)
 	w.Register("ccu", "HmIP-RF", &stubBackend{})
 
 	// No event is published on the bus — the call must still return
@@ -61,7 +61,7 @@ func TestWaitForCallback_Positive_Waits(t *testing.T) {
 
 	bus := events.NewBus()
 	w := NewValueWriter()
-	w.SetEventBus(bus)
+	installBusFor(w, "ccu", bus)
 	w.Register("ccu", "HmIP-RF", &stubBackend{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -102,7 +102,7 @@ func TestWaitForCallback_Positive_TimesOut(t *testing.T) {
 
 	bus := events.NewBus()
 	w := NewValueWriter()
-	w.SetEventBus(bus)
+	installBusFor(w, "ccu", bus)
 	w.Register("ccu", "HmIP-RF", &stubBackend{})
 
 	// No echo — the timeout must fire.

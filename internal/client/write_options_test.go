@@ -19,6 +19,19 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
+// installBusFor points the writer's bus resolver at bus for centralName
+// and at nothing else. Tests go through the resolver because that is the
+// only bus seam production installs, and keying it on the central name
+// keeps a write that names the wrong central from finding a bus.
+func installBusFor(w *ValueWriter, centralName string, bus *events.Bus) {
+	w.SetBusResolver(func(name string) (any, bool) {
+		if name != centralName {
+			return nil, false
+		}
+		return bus, true
+	})
+}
+
 // stubBackend records the SetValue + PutParamset calls so the tests
 // can assert that the wire write went out before the wait kicks in.
 type stubBackend struct {
@@ -247,21 +260,6 @@ func (*stubBackend) GetMetadata(context.Context, string, string) (any, error) {
 }
 func (*stubBackend) SetMetadata(context.Context, string, string, any) error { return nil }
 
-// stubRetrier records device-cancel calls for PurgeAddresses tests.
-type stubRetrier struct {
-	mu        sync.Mutex
-	cancelled []string
-}
-
-func (r *stubRetrier) CancelDevice(addr string) int {
-	r.mu.Lock()
-	r.cancelled = append(r.cancelled, addr)
-	r.mu.Unlock()
-	return 1
-}
-
-func (r *stubRetrier) CancelInterface() int { return 0 }
-
 // TestSetValueWithOptions_WaitForCallbackHonoured verifies that with
 // a bus installed and an event on the bus matching the key+value, the
 // SetValue call returns nil after the event was published.
@@ -270,7 +268,7 @@ func TestSetValueWithOptions_WaitForCallbackHonoured(t *testing.T) {
 
 	bus := events.NewBus()
 	w := NewValueWriter()
-	w.SetEventBus(bus)
+	installBusFor(w, "ccu", bus)
 	w.Register("ccu", "HmIP-RF", &stubBackend{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -304,7 +302,7 @@ func TestSetValueWithOptions_WaitForCallbackTimeout(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
 	w := NewValueWriter()
-	w.SetEventBus(bus)
+	installBusFor(w, "ccu", bus)
 	w.Register("ccu", "HmIP-RF", &stubBackend{})
 
 	err := w.SetValueWithOptions(context.Background(), "ccu", "HmIP-RF", "VCU0001:1", hmenum.Parameter("STATE"), true, WriteOptions{
@@ -335,29 +333,6 @@ func TestSetValueWithOptions_WaitForCallbackNoBusIsNoOp(t *testing.T) {
 	}
 }
 
-// TestSetValueWithOptions_PurgeAddressesCancelsRetries verifies that
-// the listed addresses are passed to the retrier BEFORE the wire
-// write happens.
-func TestSetValueWithOptions_PurgeAddressesCancelsRetries(t *testing.T) {
-	t.Parallel()
-	w := NewValueWriter()
-	r := &stubRetrier{}
-	w.SetRetrier(r)
-	w.Register("ccu", "HmIP-RF", &stubBackend{})
-
-	err := w.SetValueWithOptions(context.Background(), "ccu", "HmIP-RF", "VCU0001:1", hmenum.Parameter("STATE"), true, WriteOptions{
-		PurgeAddresses: []string{"VCU0001", "VCU0002"},
-	})
-	if err != nil {
-		t.Fatalf("SetValueWithOptions: %v", err)
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(r.cancelled) != 2 || r.cancelled[0] != "VCU0001" || r.cancelled[1] != "VCU0002" {
-		t.Fatalf("CancelDevice calls = %v, want [VCU0001 VCU0002]", r.cancelled)
-	}
-}
-
 // TestPutParamsetWithOptions_WaitForCallbackAcrossKeys verifies that
 // PutParamsetWithOptions waits for confirmations on EVERY parameter
 // in the values map, not just one.
@@ -365,7 +340,7 @@ func TestPutParamsetWithOptions_WaitForCallbackAcrossKeys(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
 	w := NewValueWriter()
-	w.SetEventBus(bus)
+	installBusFor(w, "ccu", bus)
 	w.Register("ccu", "HmIP-RF", &stubBackend{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
