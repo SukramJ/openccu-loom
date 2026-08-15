@@ -182,6 +182,18 @@ func (s *fakeSink) stateChanges() []hmevent.AlarmStateChangedEvent {
 	return out
 }
 
+func (s *fakeSink) countdowns() []hmevent.AlarmCountdownEvent {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []hmevent.AlarmCountdownEvent
+	for _, e := range s.events {
+		if cd, ok := e.(hmevent.AlarmCountdownEvent); ok {
+			out = append(out, cd)
+		}
+	}
+	return out
+}
+
 func (s *fakeSink) triggered() []hmevent.AlarmTriggeredEvent {
 	s.mu.Lock()
 	defer s.mu.Unlock()

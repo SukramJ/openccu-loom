@@ -316,6 +316,12 @@ func (e *Engine) restoreArming(ctx context.Context, a *zone, timers []persistedT
 		remaining = time.Second
 	}
 	e.scheduleStateTimer(a, timerKindExit, remaining)
+	// The tick chain is a separate timer from the state timer, and it
+	// is the only producer of AlarmCountdownEvent and of the countdown
+	// chirps. Resuming the state timer alone left a restored countdown
+	// silent for the rest of the delay: no live countdown on the WS
+	// plane and, with Outputs.CountdownTicks on, no exit chirps.
+	e.startTicks(a, timerKindExit)
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassArm, Event: "arming_resumed",
@@ -351,6 +357,10 @@ func (e *Engine) restorePending(ctx context.Context, a *zone, timers []persisted
 	}
 	a.state = hmenum.AlarmZoneStatePending
 	e.scheduleStateTimer(a, timerKindEntry, time.UnixMilli(t.DeadlineMS).Sub(now))
+	// Same as the exit case, with more at stake: the entry-warning
+	// chirps are what tell a returning resident to enter their code
+	// before the zone triggers.
+	e.startTicks(a, timerKindEntry)
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassTrigger, Event: "pending_resumed",

@@ -164,6 +164,60 @@ func TestRestore_ArmingResumesRemainingDelay(t *testing.T) {
 	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 }
 
+// TestRestore_ResumedCountdownsKeepTicking pins that a restored
+// countdown restarts the 1 Hz tick chain, not just the state timer.
+//
+// The tick chain is the only producer of AlarmCountdownEvent and of the
+// countdown/entry chirps. Rescheduling the state timer alone left a
+// restored countdown silent for the rest of the delay: the arm still
+// completed and the trigger still fired on time, but the live countdown
+// went dead and — with Outputs.CountdownTicks configured — so did the
+// entry warning that tells a returning resident to enter their code.
+func TestRestore_ResumedCountdownsKeepTicking(t *testing.T) {
+	t.Run("exit delay", func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+		h.advance(10 * time.Second)
+
+		h.restart(5 * time.Second) // 15 s of the exit delay remain
+		h.wantState("eg", hmenum.AlarmZoneStateArming)
+
+		h.advance(2 * time.Second)
+		ticks := h.sink.countdowns()
+		if len(ticks) == 0 {
+			t.Fatal("no AlarmCountdownEvent after a restored exit delay: the tick chain never restarted")
+		}
+		if ticks[0].Kind != "exit_delay" || ticks[0].ZoneID != "eg" {
+			t.Fatalf("countdown = %+v, want zone eg / kind exit_delay", ticks[0])
+		}
+	})
+
+	t.Run("entry delay", func(t *testing.T) {
+		h := newHarness(t)
+		h.seedStandardZone()
+		h.start()
+		h.armFull()
+		h.eng.HandleSensorEvent(h.ctx, "door", true)
+		h.advance(5 * time.Second)
+
+		h.restart(4 * time.Second) // 6 s of the entry delay remain
+		h.wantState("eg", hmenum.AlarmZoneStatePending)
+
+		h.advance(2 * time.Second)
+		ticks := h.sink.countdowns()
+		if len(ticks) == 0 {
+			t.Fatal("no AlarmCountdownEvent after a restored entry delay: the tick chain never restarted")
+		}
+		if ticks[0].Kind != "entry_delay" || ticks[0].ZoneID != "eg" {
+			t.Fatalf("countdown = %+v, want zone eg / kind entry_delay", ticks[0])
+		}
+	})
+}
+
 func TestRestore_PendingDeadlinePassedEscalatesToTriggered(t *testing.T) {
 	h := newHarness(t)
 	h.seedStandardZone()
