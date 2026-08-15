@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 79a4cba9
-HEAD: 79a4cba9
+Generated: 6375fdc0
+HEAD: 6375fdc0
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28611 |
+| Total Exported | 28621 |
 | Reachable | 5024 |
-| Whitelisted | 20598 |
+| Whitelisted | 20608 |
 | **Unreachable** | **2989** |
 
 ## Top-20 Packages by Dead Code

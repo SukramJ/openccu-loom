@@ -196,6 +196,16 @@ type Event struct {
 	// back to its assumed-present heuristics.
 	Channel ChannelInspector
 
+	// SelectionLabels carries localised entries for the discovery-body
+	// lists a custom data point declares via
+	// payload.LocalisableSelections, keyed by body field. Empty when
+	// nothing needed translating or no labeler is wired.
+	//
+	// It is filled where the labeler lives — the south-bound event
+	// bridge — because the discovery builder has the channel but not the
+	// catalogues.
+	SelectionLabels map[string][]string
+
 	// Calculated marks the event as carrying a calculated/derived data
 	// point (DEW_POINT, ENTHALPY, OPERATING_VOLTAGE_LEVEL, …) rather
 	// than a wire VALUES parameter. The discovery builder uses this to

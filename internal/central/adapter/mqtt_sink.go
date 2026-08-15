@@ -8,12 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -30,6 +33,17 @@ type MQTTCommandSink struct {
 	registry    *central.Registry
 	writer      ValueWriter
 	cdpDispatch *CustomDPDispatcher
+	// labels resolves a localised selection back to its wire token. Nil
+	// leaves every command untouched, which is the pre-localisation
+	// behaviour and always correct.
+	labels mqtt.ValueListLabeler
+}
+
+// WithSelectionLabeler installs the labeler used to turn a localised
+// choice back into a wire token. Returns the receiver for fluent wiring.
+func (s *MQTTCommandSink) WithSelectionLabeler(labeler mqtt.ValueListLabeler) *MQTTCommandSink {
+	s.labels = labeler
+	return s
 }
 
 // NewMQTTCommandSink constructs the adapter.
@@ -262,7 +276,57 @@ func (s *MQTTCommandSink) InvokeChannelService(
 	if !ok {
 		return fmt.Errorf("mqtt_sink: custom DP on %s does not expose Invoke", chAddr)
 	}
+	params = s.resolveSelectionLabels(ch, cdp, params)
 	return src.Invoke(ctx, method, params, priority)
+}
+
+// resolveSelectionLabels turns a localised choice back into the wire
+// token the device speaks.
+//
+// The discovery payload shows an operator labels for the lists a custom
+// data point declares localisable, so Home Assistant hands that label
+// back on the command topic while the domain resolves selections by
+// exact VALUE_LIST match. Without this the write silently does nothing —
+// a translated tone selector that never changes the tone.
+//
+// A token that is already on the list passes through untouched, so the
+// raw form stays valid: an automation written against FREQUENCY_RISING
+// keeps working, and one written against the label works too.
+func (s *MQTTCommandSink) resolveSelectionLabels(
+	ch *device.Channel, cdp any, params map[string]any,
+) map[string]any {
+	decl, ok := cdp.(payload.LocalisableSelections)
+	if !ok || len(params) == 0 || ch == nil {
+		return params
+	}
+	vl := s.labels
+	if vl == nil {
+		return params
+	}
+	// params is decoded fresh per command, so mutating it in place is
+	// safe and avoids copying on every siren write.
+	out := params
+	for _, sel := range decl.LocalisableSelections() {
+		given, isString := out[sel.ArgKey].(string)
+		if !isString || given == "" {
+			continue
+		}
+		dp := ch.Parameter(hmenum.Parameter(sel.Parameter))
+		if dp == nil {
+			continue
+		}
+		values := dp.ParameterData().ValueList
+		if slices.Contains(values, given) {
+			continue // already a wire token
+		}
+		labels := vl.ValueListLabels(ch.Type, sel.Parameter, values)
+		idx := slices.Index(labels, given)
+		if idx < 0 || idx >= len(values) {
+			continue
+		}
+		out[sel.ArgKey] = values[idx]
+	}
+	return out
 }
 
 // SetScheduleSwitch implements [mqtt.ScheduleSwitchSink]. Resolves the

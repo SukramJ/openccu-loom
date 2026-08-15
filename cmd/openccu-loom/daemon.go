@@ -590,7 +590,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// once for the initial stack, and re-invoked automatically on
 	// every Swap (hot-reload) so birth sync + command subscriber
 	// follow the new broker without manual re-attachment.
-	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(ctx, reg, valueWriter, schedulesDomain, mqttCollector, alarmMQTTSink, addonUpdater, logger))
+	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(ctx, reg, valueWriter, schedulesDomain, mqttCollector, alarmMQTTSink, addonUpdater,
+		adapter.NewMqttParameterLabelAdapter(parameterLabels), logger))
 	if err := mqttSup.AttachSubscribers(ctx); err != nil {
 		logger.Warn("mqtt.subscribers.attach", slog.String("err", err.Error()))
 	}

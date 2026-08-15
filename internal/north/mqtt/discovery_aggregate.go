@@ -206,6 +206,9 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	if HAComponent(comp) == HAComponentClimate {
 		d.localiseClimatePresets(body)
 	}
+	// Lists a custom data point declared localisable — siren tones,
+	// light effects — carry their labels on the event.
+	applySelectionLabels(body, ev.SelectionLabels)
 	objectID = d.channelObjectID(ev, comp)
 	uniqueID, scoped := d.channelUniqueID(ev, comp)
 	if !scoped {

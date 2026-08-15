@@ -2256,6 +2256,7 @@ func (b *EventBridge) publishCustomDPDiscoverySnapshot(
 		Device:         d,
 		Source:         src,
 	}
+	ev.SelectionLabels = b.selectionLabelsFor(ch, src)
 	if err := bridge.PublishCustomDPDiscovery(ctx, ev); err != nil {
 		// Snapshot pass is best-effort.
 		_ = err
@@ -3309,4 +3310,42 @@ func (b *EventBridge) stampHubSerial(u *central.Unit) {
 		Serial:  si.Serial,
 		URL:     si.URL,
 	})
+}
+
+// selectionLabelsFor localises the discovery-body lists a custom data
+// point declares, so Home Assistant shows the operator words rather than
+// wire tokens.
+//
+// The raw tokens stay authoritative everywhere else: they remain in the
+// VALUE_LIST, they are what a write carries to the CCU, and the command
+// path keeps accepting them. Only what an operator reads changes.
+func (b *EventBridge) selectionLabelsFor(ch *device.Channel, src payload.Source) map[string][]string {
+	decl, ok := src.(payload.LocalisableSelections)
+	if !ok || ch == nil {
+		return nil
+	}
+	vl, ok := b.labels.(mqtt.ValueListLabeler)
+	if !ok || vl == nil {
+		return nil
+	}
+	var out map[string][]string
+	for _, sel := range decl.LocalisableSelections() {
+		dp := ch.Parameter(hmenum.Parameter(sel.Parameter))
+		if dp == nil {
+			continue
+		}
+		values := dp.ParameterData().ValueList
+		if len(values) == 0 {
+			continue
+		}
+		labels := vl.ValueListLabels(ch.Type, sel.Parameter, values)
+		if len(labels) != len(values) {
+			continue
+		}
+		if out == nil {
+			out = map[string][]string{}
+		}
+		out[sel.BodyKey] = labels
+	}
+	return out
 }

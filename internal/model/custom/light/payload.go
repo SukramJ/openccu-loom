@@ -835,3 +835,17 @@ func rgbwModeName(m RGBWMode) string {
 	}
 	return "unknown"
 }
+
+// LocalisableSelections implements [payload.LocalisableSelections]: the
+// effect list is the VALUE_LIST of PROGRAM, and Home Assistant returns
+// the operator's pick as `effect`.
+func (l *EffectLight) LocalisableSelections() []payload.LocalisableSelection {
+	if l == nil || len(l.Effects()) == 0 {
+		return nil
+	}
+	return []payload.LocalisableSelection{{
+		BodyKey:   "effect_list",
+		ArgKey:    "effect",
+		Parameter: string(hmenum.ParameterProgram),
+	}}
+}
