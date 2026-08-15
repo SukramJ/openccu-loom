@@ -47,7 +47,7 @@ func (p *SecurityMQTTPublisher) reconcile() {
 	}
 	p.enqueue(securityMsg{topic: securityAvailabilityTopic(base), payload: []byte("online"), retained: true})
 
-	p.publishDiscoveryOnce(snap)
+	p.declareEntities(snap)
 
 	p.enqueueJSON(securityStateTopic(base, "state"), string(snap.Severity), systemAttributes(snap))
 	p.enqueueJSON(securityStateTopic(base, "alarm"), onOff(hazardActive(snap)), hazardAttributes(snap))
@@ -90,60 +90,62 @@ func (p *SecurityMQTTPublisher) enqueueJSON(topic, state string, attrs map[strin
 	p.enqueue(securityMsg{topic: topic, payload: buf, retained: true})
 }
 
-// publishDiscoveryOnce declares the entities the installation actually
-// has, and only those.
+// declareEntities declares the entities the installation actually has,
+// and only those.
 //
 // A class the index knows no source for is not declared at all: an
 // installation without gas detectors should not carry a permanently-off
 // gas alarm in its entity list.
-func (p *SecurityMQTTPublisher) publishDiscoveryOnce(snap security.Snapshot) {
+//
+// Every pass offers every entity to the bridge, which publishes only
+// what changed and remembers only what the broker accepted. The
+// publisher therefore keeps no "already declared" flag of its own: one
+// refused config used to mark its class or zone declared anyway, hiding
+// that safety entity until the next broker reconnect, and a zone renamed
+// after its first pass kept the old label forever.
+func (p *SecurityMQTTPublisher) declareEntities(snap security.Snapshot) {
 	b := p.wiring.Bridge()
 	if b == nil {
 		return
 	}
+	// The known-sets are the retraction bookkeeping, not a discovery
+	// gate: they record which class and zone topics carry retained state
+	// so retractGone can evacuate one later. The raw plane publishes
+	// those states whether or not discovery is enabled, so the sets track
+	// the snapshot in both modes — gating them behind discovery left
+	// un-evacuable retained topics piling up in the raw-only deployment.
+	p.mu.Lock()
+	for class := range snap.Classes {
+		p.knownClasses[class] = true
+	}
+	for slug := range snap.Zones {
+		p.knownZones[slug] = true
+	}
+	p.mu.Unlock()
 	if !b.cfg.HADiscoveryEnabled {
-		// The raw plane still publishes retained class and zone states,
-		// so the known-sets have to be maintained regardless — they are
-		// what lets retractGone evacuate a topic later. Gating them
-		// behind discovery left un-evacuable retained topics piling up
-		// in the documented raw-only deployment.
-		p.mu.Lock()
-		for class := range snap.Classes {
-			p.knownClasses[class] = true
-		}
-		for slug := range snap.Zones {
-			p.knownZones[slug] = true
-		}
-		p.mu.Unlock()
 		return
 	}
 	base := b.topics.Base
 	device := p.tr8("discovery.security_system", "Security & Safety")
 	ctx := context.Background()
 
+	accepted := true
 	system := securitySystemEntities(p.tr8)
 	for i := range system {
-		p.publishDiscovery(ctx, base, device, system[i])
+		accepted = p.publishDiscovery(ctx, base, device, system[i]) && accepted
 	}
 	for class := range snap.Classes {
-		p.mu.Lock()
-		known := p.knownClasses[class]
-		p.knownClasses[class] = true
-		p.mu.Unlock()
-		if known {
-			continue
-		}
-		p.publishDiscovery(ctx, base, device, securityClassEntity(base, class, p.tr8))
+		accepted = p.publishDiscovery(ctx, base, device, securityClassEntity(base, class, p.tr8)) && accepted
 	}
 	for slug := range snap.Zones {
-		p.mu.Lock()
-		known := p.knownZones[slug]
-		p.knownZones[slug] = true
-		p.mu.Unlock()
-		if known {
-			continue
-		}
-		p.publishDiscovery(ctx, base, device, securityZoneEntity(base, slug, snap.Zones[slug].Name, p.tr8))
+		accepted = p.publishDiscovery(ctx, base, device,
+			securityZoneEntity(base, slug, snap.Zones[slug].Name, p.tr8)) && accepted
+	}
+	if !accepted {
+		// Declaring now would arm the orphan sweep against a plane whose
+		// configs the broker never took, and the sweep deletes retained
+		// configs it cannot find in the declared set.
+		return
 	}
 	// The plane has now declared, so its retained configs are eligible
 	// for the orphan sweep. Before this point the sweep cannot tell an
@@ -151,16 +153,23 @@ func (p *SecurityMQTTPublisher) publishDiscoveryOnce(snap security.Snapshot) {
 	b.MarkPlaneDeclared(securityDiscoveryNodeID)
 }
 
-func (p *SecurityMQTTPublisher) publishDiscovery(ctx context.Context, base, device string, e securityEntity) {
+// publishDiscovery emits one entity's config and reports whether the
+// broker took it. An entity with nothing publishable is not a broker
+// failure and must not hold the plane's declaration back.
+func (p *SecurityMQTTPublisher) publishDiscovery(ctx context.Context, base, device string, e securityEntity) bool {
 	item := BuildSecurityDiscovery(base, device, p.configURL, e)
 	if !item.OK {
-		return
+		return true
 	}
-	if b := p.wiring.Bridge(); b != nil {
-		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
-			p.logger.Error("security discovery publish failed", "object", item.ObjectID, "error", err)
-		}
+	b := p.wiring.Bridge()
+	if b == nil {
+		return false
 	}
+	if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
+		p.logger.Error("security discovery publish failed", "object", item.ObjectID, "error", err)
+		return false
+	}
+	return true
 }
 
 // retractGone clears the retained discovery and state of a class that

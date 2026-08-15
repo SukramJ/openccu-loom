@@ -290,15 +290,18 @@ func (p *SecurityMQTTPublisher) base() string {
 // deliberately NOT replayed: an alarm that fired an hour ago must not
 // re-fire every automation because the broker restarted. That
 // distinction is the reason the two halves are separated at all.
+//
+// The known-sets are deliberately left alone. They track which class and
+// zone topics carry retained state so retractGone can evacuate one that
+// disappears; clearing them here would drop exactly the entries for the
+// classes and zones that went away while the broker was unreachable,
+// which are the ones that still need evacuating. Retained discovery
+// configs a restarted broker dropped come back through
+// [Bridge.RepublishDiscovery], which replays every config the bridge
+// published.
 func (p *SecurityMQTTPublisher) OnBrokerConnect() {
 	if p == nil {
 		return
 	}
-	p.mu.Lock()
-	// Forget what is declared so discovery is rewritten too: the broker
-	// dropped the retained configs along with the states.
-	p.knownClasses = map[hmenum.SecurityClass]bool{}
-	p.knownZones = map[string]bool{}
-	p.mu.Unlock()
 	p.reconcile()
 }
