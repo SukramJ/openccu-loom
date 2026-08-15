@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 )
 
 // handshakeMagic is the RFC 6455 accept-token constant.
@@ -44,7 +45,16 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 	}
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
-		originSet[strings.ToLower(strings.TrimRight(o, "/"))] = struct{}{}
+		// One derivation for both origin gates: the CORS middleware is fed the
+		// same operator list, and two private normalisations meant a trailing
+		// slash was tolerated here but not there. A "*" entry stays a literal
+		// that no parsed origin matches — honouring it as allow-all would drop
+		// the CSRF gate for every cross-site page, which the CORS response
+		// headers alone never do (state-changing REST calls still need the
+		// CSRF token).
+		if norm := middleware.NormalizeOrigin(o); norm != "" {
+			originSet[norm] = struct{}{}
+		}
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
@@ -88,7 +98,7 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 			// not just the localhost self-origin the allow-list derives. The
 			// allow-list still gates genuinely cross-origin browser clients.
 			if !sameOriginHost(u.Host, r) {
-				normalized := strings.ToLower(u.Scheme + "://" + u.Host)
+				normalized := middleware.NormalizeOrigin(u.Scheme + "://" + u.Host)
 				if _, ok := originSet[normalized]; !ok {
 					http.Error(w, "websocket origin not allowed", http.StatusForbidden)
 					return

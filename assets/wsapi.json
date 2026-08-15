@@ -828,8 +828,19 @@
     },
     {
       "category": "master_profiles",
-      "description": "Apply a stored master profile to a channel by writing its fixed parameters.",
-      "name": "master_profiles.apply"
+      "description": "Apply a stored master profile to a channel by writing its fixed parameters. This is a MASTER paramset write and is gated behind the same per-resource edit lock as paramset.put: pass edit_token (issued by POST /sessions/edit with key channel:{channel_address}:MASTER) or the write is rejected with a 'locked' command error.",
+      "name": "master_profiles.apply",
+      "args": {
+        "device_type": "string",
+        "channel_type": "string",
+        "channel_address": "string",
+        "id": "integer",
+        "edit_token": "string"
+      },
+      "result": {
+        "applied": "integer",
+        "param_count": "integer"
+      }
     },
     {
       "category": "master_profiles",

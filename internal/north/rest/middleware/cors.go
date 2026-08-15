@@ -15,6 +15,21 @@ type CORSConfig struct {
 	MaxAgeSeconds    int
 }
 
+// NormalizeOrigin canonicalises one allowed-origin entry — or an incoming
+// Origin header — into the form both origin gates key on: lower-cased, no
+// surrounding blanks, no trailing slash. A browser sends a bare
+// `scheme://host[:port]`, but an operator copies the origin the way the
+// address bar shows it (`https://ha.example.com/`), and both spellings must
+// mean the same thing.
+//
+// The same configured list feeds this middleware and the WebSocket handshake
+// gate, so both derive their lookup key through this function: when each
+// derived its own, a trailing slash passed the WebSocket gate while every
+// cross-origin REST call was denied with no header, no error and no log line.
+func NormalizeOrigin(o string) string {
+	return strings.ToLower(strings.TrimRight(strings.TrimSpace(o), "/"))
+}
+
 // CORS returns a middleware that handles CORS preflight + adds the
 // `Access-Control-Allow-*` headers when the request Origin is
 // whitelisted.
@@ -26,7 +41,9 @@ func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 			allowAll = true
 			continue
 		}
-		whitelist[strings.ToLower(o)] = struct{}{}
+		if norm := NormalizeOrigin(o); norm != "" {
+			whitelist[norm] = struct{}{}
+		}
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +51,7 @@ func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 			if origin != "" {
 				allowed := allowAll
 				if !allowed {
-					_, allowed = whitelist[strings.ToLower(origin)]
+					_, allowed = whitelist[NormalizeOrigin(origin)]
 				}
 				if allowed {
 					if allowAll && !cfg.AllowCredentials {
