@@ -36,6 +36,7 @@
     "fault",
     "test",
     "config",
+    "maintenance",
   ];
 
   const CLASS_VARIANT: Record<
@@ -50,7 +51,19 @@
     fault: "danger",
     test: "default",
     config: "default",
+    maintenance: "muted",
   };
+
+  // The `event` token is an open vocabulary: the contract documents it as a
+  // stable machine token and the engine gains new ones with every feature,
+  // so a plain t() would render the dotted key for anything not yet in the
+  // catalogue — strictly worse than the token itself. Fall back to the raw
+  // token instead, which stays legible while the catalogue catches up.
+  function eventLabel(event: string): string {
+    const key = `alarm.journal_event.${event}`;
+    const label = t(key);
+    return label === key ? event : label;
+  }
 
   let zoneFilter = $state("");
   let classFilter = $state<AlarmJournalClass | "">("");
@@ -167,7 +180,7 @@
       fmtTime(e.when),
       zoneName(e.zone_id),
       t(`alarm.journal_class.${e.class}`),
-      e.event,
+      eventLabel(e.event),
       e.actor ?? "",
       e.source ?? "",
     ]);
@@ -287,7 +300,7 @@
                   {t(`alarm.journal_class.${e.class}`)}
                 </Badge>
               </td>
-              <td class="p-2 font-mono text-xs">{e.event}</td>
+              <td class="p-2 text-xs" title={e.event}>{eventLabel(e.event)}</td>
               <td class="p-2">{e.actor || "—"}</td>
               <td class="p-2 text-xs text-[var(--ha-secondary-text-color)]">
                 {e.source ?? "—"}

@@ -112,17 +112,16 @@
     }),
   );
 
+  // The daemon documents `action` as an open tag set ("new values may be
+  // added"), so the catalogue can lag behind the audit writers. Resolve
+  // through t() and fall back to the raw tag on a miss: a not-yet-translated
+  // action stays legible as `device_replace` instead of rendering the dotted
+  // key. An allow-list here would silently freeze the translated set to
+  // whatever was known when it was written.
   function actionLabel(action: string): string {
-    const known = new Set([
-      "paramset_write",
-      "link_paramset_write",
-      "link_add",
-      "link_remove",
-      "schedule_write",
-      "active_profile",
-      "data_point_write",
-    ]);
-    return known.has(action) ? t(`audit.action.${action}`) : action;
+    const key = `audit.action.${action}`;
+    const label = t(key);
+    return label === key ? action : label;
   }
 
   function formatTs(iso: string): string {

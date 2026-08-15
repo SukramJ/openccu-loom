@@ -62,9 +62,17 @@ vi.mock("$lib/api/client", () => ({
   },
 }));
 
-vi.mock("$lib/i18n", () => ({
-  t: (key: string) => key,
-}));
+// Partial catalogue rather than an echo: the status/severity cells resolve
+// through t() and fall back to the raw token on a miss, so an always-echoing
+// stub would make the two branches indistinguishable.
+vi.mock("$lib/i18n", () => {
+  const catalog: Record<string, string> = {
+    "diagnostics.capture_status.stopped": "Stopped",
+    "diagnostics.incident_severity.critical": "Critical",
+    "health.status.degraded": "Degraded",
+  };
+  return { t: (key: string) => catalog[key] ?? key };
+});
 
 vi.mock("$lib/stores/toast.svelte", () => ({
   toastStore: { success: mockToastSuccess, error: mockToastError },
@@ -310,5 +318,70 @@ describe("Diagnostics — values-cache panel", () => {
 
     await waitFor(() => expect(mockConfirmAsk).toHaveBeenCalled());
     expect(mockResetValuesCache).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Localized enum surfaces
+// ---------------------------------------------------------------------------
+
+describe("Diagnostics — daemon enums reach the operator localized", () => {
+  it("localizes a debug-capture state in the unified recordings table", async () => {
+    // The RPC rows in the same column were already localized, so a raw
+    // capture token put two languages in one column.
+    mockListCaptures.mockResolvedValue([
+      {
+        id: "cap-1",
+        status: "stopped",
+        started_at: "2026-07-28T10:40:24Z",
+        buffer_bytes: 2048,
+        archive_size: 4096,
+      },
+    ]);
+    render(Diagnostics);
+
+    await waitFor(() => {
+      expect(screen.getByText("Stopped")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("stopped")).not.toBeInTheDocument();
+  });
+
+  it("localizes the client-health status the same way as the health card", async () => {
+    mockDiagnostics.mockResolvedValue({
+      health: {
+        clients: [
+          {
+            name: "central-01-HmIP-RF",
+            status: "degraded",
+            requests: 12,
+            failures: 1,
+          },
+        ],
+      },
+    });
+    render(Diagnostics);
+
+    await waitFor(() => {
+      expect(screen.getByText("Degraded")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("degraded")).not.toBeInTheDocument();
+  });
+
+  it("localizes the incident severity badge", async () => {
+    mockIncidents.mockResolvedValue([
+      {
+        id: 1,
+        when: "2026-07-28T10:40:24Z",
+        severity: "critical",
+        component: "central-01-HmIP-RF",
+        summary: "interface unreachable",
+      },
+    ]);
+    render(Diagnostics);
+
+    await waitFor(() => {
+      expect(screen.getByText("Critical")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("critical")).not.toBeInTheDocument();
   });
 });

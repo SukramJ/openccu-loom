@@ -348,6 +348,117 @@ const EN: Catalog = {
   "alarm.journal_class.fault": "Fault",
   "alarm.journal_class.test": "Test",
   "alarm.journal_class.config": "Config",
+  "alarm.journal_class.maintenance": "Maintenance",
+  // Journal event vocabulary. The engine writes a stable snake_case token
+  // per entry; the journal is the surface an operator reads after an alarm,
+  // so every token the engine can emit needs a sentence here. A token
+  // without a key falls back to the raw token (never the dotted key), so a
+  // newly added engine event degrades to developer-readable rather than
+  // broken.
+  "alarm.journal_event.acknowledged": "Acknowledged",
+  "alarm.journal_event.acoustic_budget_exhausted": "Acoustic budget exhausted",
+  "alarm.journal_event.activation_during_downtime":
+    "Activated while the daemon was down",
+  "alarm.journal_event.always_on_activation": "Always-on sensor activated",
+  "alarm.journal_event.arm_failed_on_restore": "Arming failed during restore",
+  "alarm.journal_event.arm_reminder": "Arming reminder",
+  "alarm.journal_event.armed": "Armed",
+  "alarm.journal_event.armed_after_closing":
+    "Armed after the last opening closed",
+  "alarm.journal_event.arming_resumed": "Arming resumed",
+  "alarm.journal_event.arming_started": "Arming started",
+  "alarm.journal_event.auto_rearm_cancelled": "Auto re-arm cancelled",
+  "alarm.journal_event.auto_rearm_deferred": "Auto re-arm deferred",
+  "alarm.journal_event.auto_rearm_failed": "Auto re-arm failed",
+  "alarm.journal_event.auto_rearm_mode_unavailable":
+    "Auto re-arm mode unavailable",
+  "alarm.journal_event.auto_rearm_resumed": "Auto re-arm resumed",
+  "alarm.journal_event.auto_rearm_scheduled": "Auto re-arm scheduled",
+  "alarm.journal_event.auto_rearmed": "Auto re-armed",
+  "alarm.journal_event.central_lost_while_armed": "CCU lost while armed",
+  "alarm.journal_event.central_restored": "CCU restored",
+  "alarm.journal_event.code_action_failed": "Code action failed",
+  "alarm.journal_event.code_locked_out": "Code entry locked out",
+  "alarm.journal_event.code_lockout": "Code lockout started",
+  "alarm.journal_event.code_permission_denied":
+    "Code not permitted for this action",
+  "alarm.journal_event.cross_zone_first_hit": "First cross-zone hit",
+  "alarm.journal_event.disarmed": "Disarmed",
+  "alarm.journal_event.disarmed_post_trigger": "Disarmed after an alarm",
+  "alarm.journal_event.duress": "Duress code entered",
+  "alarm.journal_event.failed_to_arm": "Failed to arm",
+  "alarm.journal_event.implausible_clock_on_restore":
+    "Implausible clock on restore",
+  "alarm.journal_event.incident_load_failed": "Incident could not be loaded",
+  "alarm.journal_event.incident_lost_on_restore": "Incident lost on restore",
+  "alarm.journal_event.incident_persist_failed": "Incident could not be saved",
+  "alarm.journal_event.keypad_blocked": "Keypad blocked",
+  "alarm.journal_event.keypad_press_unmatched": "Keypad entry did not match",
+  "alarm.journal_event.mode_removed_while_armed":
+    "Armed mode removed from the configuration",
+  "alarm.journal_event.motion_reset": "Motion detectors reset",
+  "alarm.journal_event.orphan_incident_adopted": "Orphaned incident adopted",
+  "alarm.journal_event.orphan_incident_closed": "Orphaned incident closed",
+  "alarm.journal_event.output_fire_failed": "Output could not be fired",
+  "alarm.journal_event.output_stop_failed": "Output could not be stopped",
+  "alarm.journal_event.output_stop_unverified": "Output stop unverified",
+  "alarm.journal_event.pending_demoted_implausible_clock":
+    "Entry delay dropped: implausible clock",
+  "alarm.journal_event.pending_elapsed_while_down":
+    "Entry delay elapsed while the daemon was down",
+  "alarm.journal_event.pending_resumed": "Entry delay resumed",
+  "alarm.journal_event.pending_started": "Entry delay started",
+  "alarm.journal_event.pre_alarm_escalated": "Pre-alarm escalated to full alarm",
+  "alarm.journal_event.pre_alarm_restored_as_full":
+    "Pre-alarm restored as full alarm",
+  "alarm.journal_event.reconcile_stopped_unowned_siren":
+    "Stopped a siren nobody owned",
+  "alarm.journal_event.refire_account_failed":
+    "Output re-fire could not be accounted",
+  "alarm.journal_event.restart_loop_breaker_degraded":
+    "Restart-loop breaker degraded",
+  "alarm.journal_event.retrigger_account_failed":
+    "Retrigger could not be accounted",
+  "alarm.journal_event.retrigger_cycle": "Retrigger cycle",
+  "alarm.journal_event.schedule_arm_failed": "Scheduled arming failed",
+  "alarm.journal_event.sensor_activity": "Sensor activity",
+  "alarm.journal_event.sensor_activity_pending":
+    "Sensor activity during the entry delay",
+  "alarm.journal_event.sensor_bypassed": "Sensor bypassed",
+  "alarm.journal_event.sensor_config_unparseable":
+    "Sensor configuration unreadable",
+  "alarm.journal_event.sensor_sabotage": "Sensor sabotage",
+  "alarm.journal_event.sensor_unavailable_while_armed":
+    "Sensor unavailable while armed",
+  "alarm.journal_event.silence_persist_failed": "Silence could not be saved",
+  "alarm.journal_event.silence_requested": "Silence requested",
+  "alarm.journal_event.silenced": "Silenced",
+  "alarm.journal_event.silenced_incident_restored":
+    "Silenced incident restored",
+  "alarm.journal_event.sounding_siren_adopted": "Sounding siren adopted",
+  "alarm.journal_event.state_persist_failed": "State could not be saved",
+  "alarm.journal_event.sysvar_arm_failed": "System-variable arming failed",
+  "alarm.journal_event.sysvar_disarm_failed":
+    "System-variable disarming failed",
+  "alarm.journal_event.sysvar_disarm_refused":
+    "System-variable disarming refused",
+  "alarm.journal_event.sysvar_intent_ambiguous":
+    "Ambiguous system-variable command",
+  "alarm.journal_event.tamper_while_disarmed": "Tamper while disarmed",
+  "alarm.journal_event.trigger_window_elapsed_while_down":
+    "Alarm window elapsed while the daemon was down",
+  "alarm.journal_event.triggered": "Triggered",
+  "alarm.journal_event.triggered_restored": "Alarm restored",
+  "alarm.journal_event.triggered_restored_implausible_clock":
+    "Alarm restored with an implausible clock",
+  "alarm.journal_event.unknown_persisted_state": "Unknown stored state",
+  "alarm.journal_event.walktest_finished": "Walk test finished",
+  "alarm.journal_event.walktest_sensor_seen": "Walk-test sensor seen",
+  "alarm.journal_event.walktest_started": "Walk test started",
+  "alarm.journal_event.zone_config_unparseable":
+    "Zone configuration unreadable",
+  "alarm.journal_event.zone_removed_while_armed":
+    "Armed zone removed from the configuration",
   // Walk test (§12.4).
   "alarm.walktest.placeholder": "No walk test running",
   "alarm.walktest.title": "Walk test",
@@ -617,6 +728,61 @@ const EN: Catalog = {
   "audit.action.schedule_write": "Schedule",
   "audit.action.active_profile": "Profile",
   "audit.action.data_point_write": "Value",
+  "audit.action.addon_update_install": "Add-on update",
+  "audit.action.alarm_acknowledge": "Alarm acknowledged",
+  "audit.action.alarm_arm": "Alarm armed",
+  "audit.action.alarm_code_change": "Alarm code changed",
+  "audit.action.alarm_config_change": "Alarm configuration",
+  "audit.action.alarm_disarm": "Alarm disarmed",
+  "audit.action.alarm_motion_reset": "Motion detectors reset",
+  "audit.action.alarm_output_test": "Alarm output test",
+  "audit.action.alarm_silence": "Alarm silenced",
+  "audit.action.alarm_walk_test": "Alarm walk test",
+  "audit.action.area_change": "Area changed",
+  "audit.action.backup_pre_update": "Pre-update backup",
+  "audit.action.backup_upload": "Backup imported",
+  "audit.action.central_create": "CCU added",
+  "audit.action.central_delete": "CCU removed",
+  "audit.action.central_update": "CCU changed",
+  "audit.action.channel_flags": "Channel flags",
+  "audit.action.config_section_delete": "Config section deleted",
+  "audit.action.config_section_update": "Config section saved",
+  "audit.action.device_assignment": "Device assignment",
+  "audit.action.device_communication_test": "Communication test",
+  "audit.action.device_config_restore": "Device config restored",
+  "audit.action.device_install_mode": "Install mode",
+  "audit.action.device_replace": "Device replaced",
+  "audit.action.device_search": "Device search",
+  "audit.action.device_team_set": "Device team",
+  "audit.action.diagram_config": "Diagram configuration",
+  "audit.action.group_admin": "Group administration",
+  "audit.action.incidents_clear": "Incidents cleared",
+  "audit.action.install_mode": "Install mode",
+  "audit.action.install_mode_local": "Local teach-in",
+  "audit.action.link_activate": "Link activated",
+  "audit.action.link_update": "Link updated",
+  "audit.action.matter_commissioning": "Matter commissioning",
+  "audit.action.matter_exposure_bulk": "Matter exposure (bulk)",
+  "audit.action.matter_exposure_update": "Matter exposure",
+  "audit.action.matter_fabric_revoke": "Matter fabric revoked",
+  "audit.action.matter_share": "Matter share",
+  "audit.action.program_delete": "Program deleted",
+  "audit.action.program_execute": "Program executed",
+  "audit.action.recording_toggle": "Recording toggled",
+  "audit.action.room_function": "Room / function",
+  "audit.action.system_ccu_position": "CCU position",
+  "audit.action.system_ccu_poweroff": "CCU power off",
+  "audit.action.system_ccu_reboot": "CCU reboot",
+  "audit.action.system_ccu_recovery_mode": "CCU recovery mode",
+  "audit.action.system_ccu_safe_mode": "CCU safe mode",
+  "audit.action.system_firmware_download": "Firmware download",
+  "audit.action.tls_cert_upload": "TLS certificate",
+  "audit.action.token_create": "Token created",
+  "audit.action.token_revoke": "Token revoked",
+  "audit.action.un_ignore_update": "Update un-ignored",
+  "audit.action.user_create": "User created",
+  "audit.action.user_delete": "User deleted",
+  "audit.action.user_update": "User changed",
   "backup.title": "Backups",
   "backup.subtitle": "CCU backups stored on the daemon host.",
   "backup.empty": "No backups yet.",
@@ -808,6 +974,19 @@ const EN: Catalog = {
     "Records bus events, logs and health snapshots for the configured duration and packages them as a downloadable ZIP — meant for reproducible bug reports or support attachments. Anonymising replaces device addresses, serials and hosts with stable placeholders.",
   "diagnostics.capture_running": "running",
   "diagnostics.capture_idle": "idle",
+  // Debug-capture lifecycle, mirroring the Status constants the daemon
+  // writes into a capture record. The unified Recordings table shows these
+  // in the same column as the RPC-recording states, so they have to be
+  // localized the same way.
+  "diagnostics.capture_status.running": "Running",
+  "diagnostics.capture_status.stopped": "Stopped",
+  "diagnostics.capture_status.expired": "Expired",
+  "diagnostics.capture_status.aborted": "Aborted",
+  // Incident severity as recorded by the reliability/incident pipeline.
+  "diagnostics.incident_severity.info": "Info",
+  "diagnostics.incident_severity.warning": "Warning",
+  "diagnostics.incident_severity.error": "Error",
+  "diagnostics.incident_severity.critical": "Critical",
   "diagnostics.duration_seconds": "Duration (s)",
   "diagnostics.anonymise": "Anonymise",
   "diagnostics.anonymised": "anonymised",
@@ -4166,6 +4345,139 @@ const DE: Catalog = {
   "alarm.journal_class.fault": "Störung",
   "alarm.journal_class.test": "Test",
   "alarm.journal_class.config": "Konfiguration",
+  "alarm.journal_class.maintenance": "Wartung",
+  "alarm.journal_event.acknowledged": "Quittiert",
+  "alarm.journal_event.acoustic_budget_exhausted":
+    "Akustik-Budget aufgebraucht",
+  "alarm.journal_event.activation_during_downtime":
+    "Aktiviert, während der Dienst aus war",
+  "alarm.journal_event.always_on_activation":
+    "Dauerüberwachter Sensor ausgelöst",
+  "alarm.journal_event.arm_failed_on_restore":
+    "Scharfschalten beim Wiederherstellen fehlgeschlagen",
+  "alarm.journal_event.arm_reminder": "Erinnerung zum Scharfschalten",
+  "alarm.journal_event.armed": "Scharf geschaltet",
+  "alarm.journal_event.armed_after_closing":
+    "Scharf geschaltet, nachdem alles geschlossen war",
+  "alarm.journal_event.arming_resumed": "Scharfschaltung fortgesetzt",
+  "alarm.journal_event.arming_started": "Scharfschaltung gestartet",
+  "alarm.journal_event.auto_rearm_cancelled":
+    "Automatische Wiederscharfschaltung abgebrochen",
+  "alarm.journal_event.auto_rearm_deferred":
+    "Automatische Wiederscharfschaltung verschoben",
+  "alarm.journal_event.auto_rearm_failed":
+    "Automatische Wiederscharfschaltung fehlgeschlagen",
+  "alarm.journal_event.auto_rearm_mode_unavailable":
+    "Modus für die automatische Wiederscharfschaltung nicht verfügbar",
+  "alarm.journal_event.auto_rearm_resumed":
+    "Automatische Wiederscharfschaltung fortgesetzt",
+  "alarm.journal_event.auto_rearm_scheduled":
+    "Automatische Wiederscharfschaltung geplant",
+  "alarm.journal_event.auto_rearmed": "Automatisch wieder scharf geschaltet",
+  "alarm.journal_event.central_lost_while_armed":
+    "Verbindung zur CCU im scharfen Zustand verloren",
+  "alarm.journal_event.central_restored": "CCU wieder erreichbar",
+  "alarm.journal_event.code_action_failed": "Code-Aktion fehlgeschlagen",
+  "alarm.journal_event.code_locked_out": "Code-Eingabe gesperrt",
+  "alarm.journal_event.code_lockout": "Code-Sperre gestartet",
+  "alarm.journal_event.code_permission_denied":
+    "Code für diese Aktion nicht berechtigt",
+  "alarm.journal_event.cross_zone_first_hit":
+    "Erste Auslösung über Bereichsgrenze",
+  "alarm.journal_event.disarmed": "Unscharf geschaltet",
+  "alarm.journal_event.disarmed_post_trigger":
+    "Nach einem Alarm unscharf geschaltet",
+  "alarm.journal_event.duress": "Bedrohungscode eingegeben",
+  "alarm.journal_event.failed_to_arm": "Scharfschalten fehlgeschlagen",
+  "alarm.journal_event.implausible_clock_on_restore":
+    "Unplausible Uhrzeit beim Wiederherstellen",
+  "alarm.journal_event.incident_load_failed":
+    "Vorfall konnte nicht geladen werden",
+  "alarm.journal_event.incident_lost_on_restore":
+    "Vorfall beim Wiederherstellen verloren",
+  "alarm.journal_event.incident_persist_failed":
+    "Vorfall konnte nicht gespeichert werden",
+  "alarm.journal_event.keypad_blocked": "Bedienteil gesperrt",
+  "alarm.journal_event.keypad_press_unmatched":
+    "Eingabe am Bedienteil ohne Treffer",
+  "alarm.journal_event.mode_removed_while_armed":
+    "Scharfer Modus aus der Konfiguration entfernt",
+  "alarm.journal_event.motion_reset": "Bewegungsmelder zurückgesetzt",
+  "alarm.journal_event.orphan_incident_adopted":
+    "Verwaisten Vorfall übernommen",
+  "alarm.journal_event.orphan_incident_closed":
+    "Verwaisten Vorfall geschlossen",
+  "alarm.journal_event.output_fire_failed":
+    "Signalgeber konnte nicht ausgelöst werden",
+  "alarm.journal_event.output_stop_failed":
+    "Signalgeber konnte nicht gestoppt werden",
+  "alarm.journal_event.output_stop_unverified":
+    "Stopp des Signalgebers nicht bestätigt",
+  "alarm.journal_event.pending_demoted_implausible_clock":
+    "Eintrittsverzögerung verworfen: unplausible Uhrzeit",
+  "alarm.journal_event.pending_elapsed_while_down":
+    "Eintrittsverzögerung abgelaufen, während der Dienst aus war",
+  "alarm.journal_event.pending_resumed": "Eintrittsverzögerung fortgesetzt",
+  "alarm.journal_event.pending_started": "Eintrittsverzögerung gestartet",
+  "alarm.journal_event.pre_alarm_escalated":
+    "Voralarm zum Vollalarm eskaliert",
+  "alarm.journal_event.pre_alarm_restored_as_full":
+    "Voralarm als Vollalarm wiederhergestellt",
+  "alarm.journal_event.reconcile_stopped_unowned_siren":
+    "Fremde laufende Sirene gestoppt",
+  "alarm.journal_event.refire_account_failed":
+    "Erneutes Auslösen konnte nicht verbucht werden",
+  "alarm.journal_event.restart_loop_breaker_degraded":
+    "Neustartschleifen-Schutz ausgelöst",
+  "alarm.journal_event.retrigger_account_failed":
+    "Erneute Auslösung konnte nicht verbucht werden",
+  "alarm.journal_event.retrigger_cycle": "Erneute Auslösung",
+  "alarm.journal_event.schedule_arm_failed":
+    "Geplantes Scharfschalten fehlgeschlagen",
+  "alarm.journal_event.sensor_activity": "Sensoraktivität",
+  "alarm.journal_event.sensor_activity_pending":
+    "Sensoraktivität während der Eintrittsverzögerung",
+  "alarm.journal_event.sensor_bypassed": "Sensor überbrückt",
+  "alarm.journal_event.sensor_config_unparseable":
+    "Sensorkonfiguration nicht lesbar",
+  "alarm.journal_event.sensor_sabotage": "Sabotage am Sensor",
+  "alarm.journal_event.sensor_unavailable_while_armed":
+    "Sensor im scharfen Zustand nicht erreichbar",
+  "alarm.journal_event.silence_persist_failed":
+    "Stummschaltung konnte nicht gespeichert werden",
+  "alarm.journal_event.silence_requested": "Stummschaltung angefordert",
+  "alarm.journal_event.silenced": "Stummgeschaltet",
+  "alarm.journal_event.silenced_incident_restored":
+    "Stummgeschalteter Vorfall wiederhergestellt",
+  "alarm.journal_event.sounding_siren_adopted": "Laufende Sirene übernommen",
+  "alarm.journal_event.state_persist_failed":
+    "Zustand konnte nicht gespeichert werden",
+  "alarm.journal_event.sysvar_arm_failed":
+    "Scharfschalten per Systemvariable fehlgeschlagen",
+  "alarm.journal_event.sysvar_disarm_failed":
+    "Unscharfschalten per Systemvariable fehlgeschlagen",
+  "alarm.journal_event.sysvar_disarm_refused":
+    "Unscharfschalten per Systemvariable abgelehnt",
+  "alarm.journal_event.sysvar_intent_ambiguous":
+    "Mehrdeutiger Befehl per Systemvariable",
+  "alarm.journal_event.tamper_while_disarmed":
+    "Sabotage im unscharfen Zustand",
+  "alarm.journal_event.trigger_window_elapsed_while_down":
+    "Alarmfenster abgelaufen, während der Dienst aus war",
+  "alarm.journal_event.triggered": "Ausgelöst",
+  "alarm.journal_event.triggered_restored": "Alarm wiederhergestellt",
+  "alarm.journal_event.triggered_restored_implausible_clock":
+    "Alarm mit unplausibler Uhrzeit wiederhergestellt",
+  "alarm.journal_event.unknown_persisted_state":
+    "Unbekannter gespeicherter Zustand",
+  "alarm.journal_event.walktest_finished": "Begehungstest beendet",
+  "alarm.journal_event.walktest_sensor_seen":
+    "Sensor im Begehungstest erkannt",
+  "alarm.journal_event.walktest_started": "Begehungstest gestartet",
+  "alarm.journal_event.zone_config_unparseable":
+    "Bereichskonfiguration nicht lesbar",
+  "alarm.journal_event.zone_removed_while_armed":
+    "Scharfer Bereich aus der Konfiguration entfernt",
   // Begehungstest (§12.4).
   "alarm.walktest.placeholder": "Kein Begehungstest aktiv",
   "alarm.walktest.title": "Begehungstest",
@@ -4441,6 +4753,61 @@ const DE: Catalog = {
   "audit.action.schedule_write": "Zeitplan",
   "audit.action.active_profile": "Profil",
   "audit.action.data_point_write": "Wert",
+  "audit.action.addon_update_install": "Add-on-Update",
+  "audit.action.alarm_acknowledge": "Alarm quittiert",
+  "audit.action.alarm_arm": "Alarm scharf geschaltet",
+  "audit.action.alarm_code_change": "Alarmcode geändert",
+  "audit.action.alarm_config_change": "Alarmkonfiguration",
+  "audit.action.alarm_disarm": "Alarm unscharf geschaltet",
+  "audit.action.alarm_motion_reset": "Bewegungsmelder zurückgesetzt",
+  "audit.action.alarm_output_test": "Test des Signalgebers",
+  "audit.action.alarm_silence": "Alarm stummgeschaltet",
+  "audit.action.alarm_walk_test": "Begehungstest",
+  "audit.action.area_change": "Bereich geändert",
+  "audit.action.backup_pre_update": "Sicherung vor dem Update",
+  "audit.action.backup_upload": "Sicherung importiert",
+  "audit.action.central_create": "CCU hinzugefügt",
+  "audit.action.central_delete": "CCU entfernt",
+  "audit.action.central_update": "CCU geändert",
+  "audit.action.channel_flags": "Kanal-Kennzeichen",
+  "audit.action.config_section_delete": "Konfigurationsabschnitt gelöscht",
+  "audit.action.config_section_update": "Konfigurationsabschnitt gespeichert",
+  "audit.action.device_assignment": "Gerätezuordnung",
+  "audit.action.device_communication_test": "Kommunikationstest",
+  "audit.action.device_config_restore": "Gerätekonfiguration zurückgespielt",
+  "audit.action.device_install_mode": "Anlernmodus",
+  "audit.action.device_replace": "Gerät ersetzt",
+  "audit.action.device_search": "Gerätesuche",
+  "audit.action.device_team_set": "Geräteteam",
+  "audit.action.diagram_config": "Diagrammkonfiguration",
+  "audit.action.group_admin": "Gruppenverwaltung",
+  "audit.action.incidents_clear": "Vorfälle gelöscht",
+  "audit.action.install_mode": "Anlernmodus",
+  "audit.action.install_mode_local": "Lokales Anlernen",
+  "audit.action.link_activate": "Verknüpfung aktiviert",
+  "audit.action.link_update": "Verknüpfung geändert",
+  "audit.action.matter_commissioning": "Matter-Kopplung",
+  "audit.action.matter_exposure_bulk": "Matter-Freigabe (Sammeländerung)",
+  "audit.action.matter_exposure_update": "Matter-Freigabe",
+  "audit.action.matter_fabric_revoke": "Matter-Fabric entzogen",
+  "audit.action.matter_share": "Matter-Freigabe geteilt",
+  "audit.action.program_delete": "Programm gelöscht",
+  "audit.action.program_execute": "Programm ausgeführt",
+  "audit.action.recording_toggle": "Aufzeichnung umgeschaltet",
+  "audit.action.room_function": "Raum / Gewerk",
+  "audit.action.system_ccu_position": "CCU-Standort",
+  "audit.action.system_ccu_poweroff": "CCU ausgeschaltet",
+  "audit.action.system_ccu_reboot": "CCU neu gestartet",
+  "audit.action.system_ccu_recovery_mode": "CCU-Wiederherstellungsmodus",
+  "audit.action.system_ccu_safe_mode": "CCU-Sicherheitsmodus",
+  "audit.action.system_firmware_download": "Firmware-Download",
+  "audit.action.tls_cert_upload": "TLS-Zertifikat",
+  "audit.action.token_create": "Token erstellt",
+  "audit.action.token_revoke": "Token widerrufen",
+  "audit.action.un_ignore_update": "Update nicht mehr ignoriert",
+  "audit.action.user_create": "Benutzer angelegt",
+  "audit.action.user_delete": "Benutzer gelöscht",
+  "audit.action.user_update": "Benutzer geändert",
   "backup.title": "Backups",
   "backup.subtitle": "CCU-Sicherungen auf dem Daemon-Host.",
   "backup.empty": "Noch keine Backups vorhanden.",
@@ -4633,6 +5000,14 @@ const DE: Catalog = {
     "Zeichnet interne Bus-Events, Logs und Health-Snapshots für die eingestellte Dauer auf und packt sie als herunterladbares ZIP — gedacht für reproduzierbare Fehlerberichte oder Support-Anhänge. Anonymisieren ersetzt Geräteadressen, Seriennummern und Hostnamen durch stabile Platzhalter.",
   "diagnostics.capture_running": "läuft",
   "diagnostics.capture_idle": "inaktiv",
+  "diagnostics.capture_status.running": "Läuft",
+  "diagnostics.capture_status.stopped": "Gestoppt",
+  "diagnostics.capture_status.expired": "Abgelaufen",
+  "diagnostics.capture_status.aborted": "Abgebrochen",
+  "diagnostics.incident_severity.info": "Info",
+  "diagnostics.incident_severity.warning": "Warnung",
+  "diagnostics.incident_severity.error": "Fehler",
+  "diagnostics.incident_severity.critical": "Kritisch",
   "diagnostics.duration_seconds": "Dauer (s)",
   "diagnostics.anonymise": "Anonymisieren",
   "diagnostics.anonymised": "anonymisiert",

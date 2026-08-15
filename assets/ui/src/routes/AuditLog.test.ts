@@ -26,9 +26,16 @@ vi.mock("$lib/api/client", () => ({
   },
 }));
 
-vi.mock("$lib/i18n", () => ({
-  t: (key: string, _params?: unknown) => key,
-}));
+// Partial catalogue rather than an echo: actionLabel() resolves through t()
+// and falls back to the raw tag on a miss, so an always-echoing stub would
+// make the two branches indistinguishable.
+vi.mock("$lib/i18n", () => {
+  const catalog: Record<string, string> = {
+    "audit.action.system_ccu_reboot": "CCU reboot",
+    "audit.action.paramset_write": "Config",
+  };
+  return { t: (key: string, _params?: unknown) => catalog[key] ?? key };
+});
 
 vi.mock("$lib/stores/preferences.svelte", () => ({
   prefs: { locale: "en" },
@@ -143,5 +150,51 @@ describe("AuditLog row identity", () => {
       expect(screen.getByText("FIRST_ONE")).toBeInTheDocument();
     });
     expect(screen.queryByText("SECOND_ONE")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Action labels
+// ---------------------------------------------------------------------------
+
+describe("AuditLog action label", () => {
+  it("localizes an action outside the original paramset/link/schedule set", async () => {
+    // A CCU reboot is written by an ordinary REST handler and reached the
+    // badge as the raw tag `system_ccu_reboot` for as long as the label
+    // lookup was gated behind a hard-coded seven-entry allow-list.
+    mockListAudit.mockResolvedValue([
+      {
+        id: 1,
+        timestamp: "2026-07-28T10:40:24Z",
+        user: "markus",
+        action: "system_ccu_reboot",
+      },
+    ]);
+    render(AuditLog);
+
+    await waitFor(() => {
+      expect(screen.getByText("CCU reboot")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("system_ccu_reboot")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the raw tag for an action the catalogue does not know", async () => {
+    mockListAudit.mockResolvedValue([
+      {
+        id: 1,
+        timestamp: "2026-07-28T10:40:24Z",
+        user: "markus",
+        action: "some_future_action",
+      },
+    ]);
+    render(AuditLog);
+
+    // Never the dotted key — an untranslated tag has to stay readable.
+    await waitFor(() => {
+      expect(screen.getByText("some_future_action")).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText("audit.action.some_future_action"),
+    ).not.toBeInTheDocument();
   });
 });

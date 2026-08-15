@@ -7111,7 +7111,7 @@ paths:
           name: class
           schema:
             type: string
-            enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+            enum: [arm, disarm, trigger, silence, bypass, fault, test, config, maintenance]
           description: Only return entries in this journal class.
         - in: query
           name: from
@@ -10911,7 +10911,7 @@ components:
           description: Omitted for engine-global entries.
         class:
           type: string
-          enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+          enum: [arm, disarm, trigger, silence, bypass, fault, test, config, maintenance]
         event:
           type: string
           description: Stable machine-readable event token within the class.
@@ -13253,7 +13253,7 @@ components:
         zone_id: { type: string }
         class:
           type: string
-          enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+          enum: [arm, disarm, trigger, silence, bypass, fault, test, config, maintenance]
           description: Journal bucket used by the `class` query filter.
         event:
           type: string

@@ -8364,7 +8364,7 @@ export interface components {
             /** @description Omitted for engine-global entries. */
             zone_id?: string;
             /** @enum {string} */
-            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config" | "maintenance";
             /** @description Stable machine-readable event token within the class. */
             event: string;
             /** @description Attribution; omitted when unattributed. */
@@ -10084,7 +10084,7 @@ export interface components {
              * @description Journal bucket used by the `class` query filter.
              * @enum {string}
              */
-            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config" | "maintenance";
             /** @description Stable machine-readable event token within the class (e.g. "armed", "force_armed", "silenced"). */
             event: string;
             /** @description Identity that caused the entry (operator account, keypad identity, code name, or an engine-internal actor); empty when unattributed. */
@@ -16814,7 +16814,7 @@ export interface operations {
                 /** @description Only return entries for this alarm zone id. */
                 zone?: string;
                 /** @description Only return entries in this journal class. */
-                class?: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+                class?: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config" | "maintenance";
                 /** @description Only return entries at-or-after this value (inclusive, RFC3339). Returns 400 if the value cannot be parsed. */
                 from?: string;
                 /** @description Only return entries strictly before this value (exclusive, RFC3339). Returns 400 if the value cannot be parsed. */

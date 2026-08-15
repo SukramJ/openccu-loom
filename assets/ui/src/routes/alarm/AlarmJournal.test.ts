@@ -24,9 +24,18 @@ vi.mock("$lib/stores/preferences.svelte", () => ({
   prefs: { locale: "en" },
 }));
 
-vi.mock("$lib/i18n", () => ({
-  t: (key: string) => key,
-}));
+// Partial catalogue rather than an echo: the Event and Class cells resolve
+// through t() and fall back to the raw token on a miss, so a stub that always
+// echoes would make both branches look identical. "armed" and the maintenance
+// class resolve here; "disarmed" deliberately does not, which exercises the
+// fallback.
+vi.mock("$lib/i18n", () => {
+  const catalog: Record<string, string> = {
+    "alarm.journal_event.armed": "Armed",
+    "alarm.journal_class.maintenance": "Maintenance",
+  };
+  return { t: (key: string) => catalog[key] ?? key };
+});
 
 import AlarmJournal from "./AlarmJournal.svelte";
 
@@ -62,8 +71,42 @@ describe("AlarmJournal — table", () => {
     const rows = getAllByRole("row");
     // Header row + two data rows.
     expect(rows).toHaveLength(3);
-    expect(within(rows[1]).getByText("armed")).toBeTruthy();
+    expect(within(rows[1]).getByText("Armed")).toBeTruthy();
     expect(within(rows[2]).getByText("disarmed")).toBeTruthy();
+  });
+
+  it("localizes the event token and falls back to the raw token on a miss", async () => {
+    mockListAlarmJournal.mockResolvedValueOnce([
+      entry({ id: 1, event: "armed" }),
+      entry({ id: 2, event: "pending_started", class: "trigger" }),
+    ]);
+    const { findByRole, getAllByRole } = render(AlarmJournal);
+
+    await findByRole("table");
+    const rows = getAllByRole("row");
+    // Translated: the catalogue stub knows this token.
+    expect(within(rows[1]).getByText("Armed")).toBeTruthy();
+    expect(within(rows[1]).queryByText("armed")).toBeNull();
+    // Not in the stub catalogue: the raw engine token, never the dotted key.
+    expect(within(rows[2]).getByText("pending_started")).toBeTruthy();
+    expect(
+      within(rows[2]).queryByText("alarm.journal_event.pending_started"),
+    ).toBeNull();
+  });
+
+  it("renders a maintenance-class entry with its own class badge", async () => {
+    // Every arm files a motion-detector reset under the maintenance class,
+    // so the badge has to carry a label. The catalogue side of this — that
+    // the key exists in both locales — is pinned in i18n.enum-labels.test.ts,
+    // because this suite stubs t().
+    mockListAlarmJournal.mockResolvedValueOnce([
+      entry({ id: 1, class: "maintenance", event: "motion_reset" }),
+    ]);
+    const { findByRole, getAllByRole } = render(AlarmJournal);
+
+    await findByRole("table");
+    const rows = getAllByRole("row");
+    expect(within(rows[1]).getByText("Maintenance")).toBeTruthy();
   });
 });
 

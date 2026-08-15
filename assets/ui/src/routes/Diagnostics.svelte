@@ -319,7 +319,7 @@
         kind: "log",
         id: c.id,
         ccu: t("diagnostics.all_ccus"),
-        status: c.status,
+        status: captureStatusLabel(c.status),
         statusVariantKey: c.status === "running" ? "warning" : "default",
         startedAt: c.started_at ?? "",
         sizeLabel:
@@ -394,6 +394,24 @@
   function healthNoteLabel(c: { note?: string; note_key?: string }): string | undefined {
     if (c.note_key) return t(c.note_key);
     return c.note;
+  }
+
+  // Localizes a debug-capture lifecycle token. The unified Recordings table
+  // puts these in the same column as the already-localized RPC-recording
+  // states, so an untranslated token there reads as two languages in one
+  // column. Falls back to the raw token for a state the catalogue does not
+  // know yet, which is more legible than the dotted key.
+  function captureStatusLabel(status: string): string {
+    const key = `diagnostics.capture_status.${status}`;
+    const label = t(key);
+    return label === key ? status : label;
+  }
+
+  // Localizes an incident severity (info / warning / error / critical).
+  function incidentSeverityLabel(severity: string): string {
+    const key = `diagnostics.incident_severity.${severity}`;
+    const label = t(key);
+    return label === key ? severity : label;
   }
 
   function severityVariant(
@@ -611,7 +629,13 @@
           </div>
           <div class="mt-1">
             <Badge variant={scoreVariant(score)}>
-              {score >= 90 ? t("diagnostics.healthy") : score >= 50 ? "degraded" : score > 0 ? t("diagnostics.unhealthy") : "unknown"}
+              {score >= 90
+                ? t("diagnostics.healthy")
+                : score >= 50
+                  ? t("health.status.degraded")
+                  : score > 0
+                    ? t("diagnostics.unhealthy")
+                    : t("health.status.unknown")}
             </Badge>
           </div>
         </Card>
@@ -682,7 +706,9 @@
             <span class="font-mono text-sm">{row.name}</span>
           {:else if col.key === "status"}
             <div class="flex flex-wrap items-center gap-1">
-              <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
+              <Badge variant={statusVariant(row.status)}>
+                {healthStatusLabel(row.status)}
+              </Badge>
               {#if row.in_recovery}
                 <Badge variant="warning">{t("diagnostics.in_recovery")}</Badge>
               {/if}
@@ -1160,7 +1186,9 @@
         {#each incidentsSorted as i (i.id)}
           <li class="rounded border border-slate-200 p-2 dark:border-slate-800">
             <div class="flex flex-wrap items-baseline gap-2">
-              <Badge variant={severityVariant(i.severity)}>{i.severity}</Badge>
+              <Badge variant={severityVariant(i.severity)}>
+                {incidentSeverityLabel(i.severity)}
+              </Badge>
               <span class="font-medium">{i.summary}</span>
               <span class="text-xs text-[var(--ha-secondary-text-color)]">{i.component}</span>
               <span class="text-xs text-[var(--ha-secondary-text-color)]">{formatDate(i.when)}</span>
