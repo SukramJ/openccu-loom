@@ -32,13 +32,22 @@ const (
 // The ids come from the CSA vendor registry; a fabric's VendorID is what
 // the controller itself declared at commissioning, so this is the only
 // reliable way to tell which ecosystem a given fabric represents.
+//
+// The ids are the ones the CSA Distributed Compliance Ledger carries.
+// Two entries here were wrong until 0.60.0 and had been shipped: 0x1037
+// is NXP Semiconductors rather than Aqara, and 0x125D is Tuya rather
+// than Home Assistant. A wrong id costs twice — the real ecosystem's
+// fabric falls through to unknown and is never warned about, and a
+// fabric belonging to whoever owns the id is labelled as an ecosystem it
+// has nothing to do with.
 var vendorEcosystems = map[uint16]Ecosystem{
-	0x1349: EcosystemApple,
+	0x1349: EcosystemApple, // Apple Home
+	0x1384: EcosystemApple, // Apple Keychain — Apple adds a second, management fabric
 	0x6006: EcosystemGoogle,
 	0x1217: EcosystemAmazon,
 	0x110A: EcosystemSmartThings,
-	0x1037: EcosystemAqara,
-	0x125D: EcosystemHomeAssistant,
+	0x115F: EcosystemAqara,
+	0x134B: EcosystemHomeAssistant,
 }
 
 // EcosystemForVendor classifies a fabric's vendor id.

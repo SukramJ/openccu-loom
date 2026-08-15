@@ -22,6 +22,7 @@ export type MatterFabric = {
   fabric_id: number;
   node_id: number;
   vendor_id: number;
+  vendor_name: string;
   label: string;
   compressed_id: string;
   root_public_key: string;

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.31.0
+  version: 5.32.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9879,6 +9879,13 @@ components:
         fabric_id: { type: integer, format: int64 }
         node_id: { type: integer, format: int64 }
         vendor_id: { type: integer, minimum: 0, maximum: 65535 }
+        vendor_name:
+          type: string
+          description: >-
+            Human-readable name of the controller vendor behind vendor_id
+            (e.g. "Apple", "Google"). A vendor the daemon has no name for
+            renders as its id in `0xNNNN` form rather than an empty
+            string, so the row still identifies the controller.
         label: { type: string }
         compressed_id:
           type: string

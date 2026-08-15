@@ -22,17 +22,18 @@
   let shareDuration = $state(300); // 5 min default
 
   // Vendor display name lookup table
-  const VENDOR_NAMES: Record<number, string> = {
-    0x1349: "Apple",
-    0x6006: "Google",
-    0x1391: "Amazon",
-    0x04e5: "Signify (Philips)",
-    0x1321: "SmartThings",
-    0xfff1: "Test Vendor",
-  };
-
-  function vendorName(vendorId: number): string {
-    return VENDOR_NAMES[vendorId] ?? `0x${vendorId.toString(16).toUpperCase().padStart(4, "0")}`;
+  // The vendor name comes from the daemon: it owns the vendor table so
+  // one list cannot drift from the other. It did — this component
+  // carried its own table in which two ids were wrong and two others
+  // disagreed with the daemon's, and a fabric could be labelled one
+  // vendor here and classified as another ecosystem on the
+  // compatibility tab. A fabric served before that field existed falls
+  // back to the raw id.
+  function vendorName(fabric: MatterFabric): string {
+    return (
+      fabric.vendor_name ||
+      `0x${fabric.vendor_id.toString(16).toUpperCase().padStart(4, "0")}`
+    );
   }
 
   // The fabric list serves node ids as JSON numbers; controllers and
@@ -74,7 +75,7 @@
   }
 
   const columns: DataColumn<MatterFabric>[] = $derived([
-    { key: "vendor", label: t("matter.fabrics.col_vendor"), sortable: true, title: true, get: (f) => vendorName(f.vendor_id) },
+    { key: "vendor", label: t("matter.fabrics.col_vendor"), sortable: true, title: true, get: (f) => vendorName(f) },
     { key: "label", label: t("matter.fabrics.col_label"), sortable: true, get: (f) => f.label || t("matter.fabric.label_unknown") },
     { key: "fabric", label: t("matter.fabrics.col_fabric"), sortable: true, get: (f) => f.fabric_index },
     { key: "node_id", label: t("matter.fabrics.col_node_id"), sortable: true, get: (f) => f.node_id },
@@ -99,7 +100,7 @@
       >
         {#snippet cell(fabric, col)}
           {#if col.key === "vendor"}
-            <span class="text-slate-900 dark:text-slate-100">{vendorName(fabric.vendor_id)}</span>
+            <span class="text-slate-900 dark:text-slate-100">{vendorName(fabric)}</span>
           {:else if col.key === "label"}
             <span class="{fabric.label ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}">
               {fabric.label || t("matter.fabric.label_unknown")}
