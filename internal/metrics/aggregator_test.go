@@ -246,10 +246,14 @@ func TestAggregatorEventsCollectsFromBus(t *testing.T) {
 
 	bus := &stubEventBus{
 		stats: map[string]int{
-			"client.state_changed":     5,
-			"central.state_changed":    2,
-			"hub.program_executed":     3,
-			"client.request_coalesced": 10,
+			"client.state_changed":                 5,
+			"central.state_changed":                2,
+			"hub.program_executed":                 3,
+			"client.request_coalesced":             10,
+			"scheduler.refresh_triggered":          8,
+			"scheduler.refresh_completed":          7,
+			"health.recorded":                      4,
+			"client.circuit_breaker_state_changed": 1,
 		},
 		subs: 42,
 	}
@@ -267,6 +271,21 @@ func TestAggregatorEventsCollectsFromBus(t *testing.T) {
 	}
 	if ev.RequestsCoalesced != 10 {
 		t.Errorf("coalesced=%d", ev.RequestsCoalesced)
+	}
+	// The refresh counters share the bus with every field above; reporting
+	// 0 next to real sibling counts reads as "no background refresh ever
+	// ran" on a daemon that refreshes on schedule.
+	if ev.DataRefreshesTriggered != 8 {
+		t.Errorf("data_refreshes_triggered=%d, want 8", ev.DataRefreshesTriggered)
+	}
+	if ev.DataRefreshesCompleted != 7 {
+		t.Errorf("data_refreshes_completed=%d, want 7", ev.DataRefreshesCompleted)
+	}
+	if ev.HealthRecords != 4 {
+		t.Errorf("health_records=%d, want 4", ev.HealthRecords)
+	}
+	if ev.CircuitBreakerTrips != 1 {
+		t.Errorf("circuit_breaker_trips=%d, want 1", ev.CircuitBreakerTrips)
 	}
 }
 
