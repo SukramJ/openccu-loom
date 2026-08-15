@@ -655,6 +655,31 @@ func TestCoverStatePayloadWithPosition(t *testing.T) {
 	}
 }
 
+// TestCoverStatePayloadRoundsPositionToPercent covers the three LEVEL
+// values whose ×100 product falls just below an exact percent in
+// binary64. Truncating them published a current_position one percent
+// below the value the operator had just commanded, permanently, on the
+// retained state topic HA's position_template reads.
+func TestCoverStatePayloadRoundsPositionToPercent(t *testing.T) {
+	cases := []struct {
+		level float64
+		want  int
+	}{
+		{0.29, 29},
+		{0.57, 57},
+		{0.58, 58},
+		{0.75, 75},
+	}
+	for _, tc := range cases {
+		c, _, level := newRig(t, "x", &stubWriter{}, custom.CoverCapabilities{SupportsPosition: true})
+		level.OnEvent(tc.level)
+		out, _ := c.State().(*payload.CoverState)
+		if out.CurrentPosition == nil || *out.CurrentPosition != tc.want {
+			t.Errorf("LEVEL=%v: current_position=%v, want %d", tc.level, out.CurrentPosition, tc.want)
+		}
+	}
+}
+
 func TestCoverStatePayloadWithDirection(t *testing.T) {
 	c, _, _ := newRig(t, "x", &stubWriter{}, custom.CoverCapabilities{})
 	c.OnDirection(DirectionUp)

@@ -76,7 +76,12 @@ func (c *Cover) State() payload.StatePayload {
 		State: coverStateString(c.IsClosed(), c.IsOpening(), c.IsClosing()),
 	}
 	if pos, ok := c.Position(); ok {
-		v := int(pos.Level() * 100)
+		// OpenFraction rounds. Truncating LEVEL × 100 reports 29 %, 57 %
+		// and 58 % one percent low — those three levels are just below an
+		// exact hundredth in binary64 — so the HA slider snapped back one
+		// step below the position the operator had just commanded, on
+		// every retained-state read.
+		v := pos.OpenFraction()
 		out.CurrentPosition = &v
 		lv := pos.Level()
 		out.Level = &lv
@@ -206,14 +211,15 @@ func (b *Blind) State() payload.StatePayload {
 		State: coverStateString(b.IsClosed(), b.IsOpening(), b.IsClosing()),
 	}
 	if pos, ok := b.Position(); ok {
-		out.CurrentPosition = int(pos.Level() * 100)
+		// Rounded for the same reason as [Cover.State].
+		out.CurrentPosition = pos.OpenFraction()
 		lv := pos.Level()
 		out.Level = &lv
 	} else if b.Capabilities.SupportsPosition {
 		out.CurrentPosition = 0
 	}
 	if tilt, ok := b.TiltPosition(); ok {
-		out.CurrentTiltPosition = int(tilt.Level() * 100)
+		out.CurrentTiltPosition = tilt.OpenFraction()
 		out.TiltLevel = tilt.Level()
 	} else {
 		out.CurrentTiltPosition = 0
@@ -312,7 +318,7 @@ func (g *Garage) State() payload.StatePayload {
 		out.DoorState = string(s)
 	}
 	if pos, ok := g.Position(); ok {
-		out.CurrentPosition = int(pos.Level() * 100)
+		out.CurrentPosition = pos.OpenFraction()
 	}
 	return out
 }
