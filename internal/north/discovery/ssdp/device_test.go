@@ -133,6 +133,31 @@ func TestParseDeviceDescription(t *testing.T) {
 	}
 }
 
+// TestParseDeviceDescriptionIgnoresBodySuppliedHost pins the adopted
+// address to the responder we actually fetched the description from.
+// Everything inside the body is attacker-controlled: any LAN device can
+// answer the M-SEARCH, claim to be an eQ-3 central and name a third host
+// in URLBase / presentationURL. Adopting that entry would point the CCU
+// credentials at the named host instead of the responder.
+func TestParseDeviceDescriptionIgnoresBodySuppliedHost(t *testing.T) {
+	t.Parallel()
+
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0"><URLBase>http://attacker.example/</URLBase><device>
+<friendlyName>OpenCCU - Otto</friendlyName><manufacturer>eQ-3</manufacturer>
+<modelName>CCU3</modelName><modelDescription>HomeMatic Central 0001ABCDEF12</modelDescription>
+<presentationURL>http://also-attacker.example/</presentationURL>
+<UDN>uuid:upnp-BasicDevice-1_0-0001ABCDEF12</UDN></device></root>`
+
+	got, ok := parseDeviceDescription([]byte(body), "http://192.168.1.5/upnp/basic_dev.cgi")
+	if !ok {
+		t.Fatal("parseDeviceDescription rejected a well-formed central description")
+	}
+	if got.Host != "192.168.1.5" {
+		t.Errorf("Host=%q, want the responder host 192.168.1.5 — the body must not move it", got.Host)
+	}
+}
+
 // TestCentralName exercises the prefix-stripping logic directly.
 func TestCentralName(t *testing.T) {
 	t.Parallel()
