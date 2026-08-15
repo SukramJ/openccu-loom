@@ -43,6 +43,42 @@
     return `0x${nodeId.toString(16).toUpperCase().padStart(16, "0")}`;
   }
 
+  let busy = $state(false);
+
+  async function forceSync() {
+    busy = true;
+    try {
+      await api.matterForceSync();
+      toastStore.success(t("matter.maint.force_sync_done"));
+      await matterStore.loadStatus();
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function factoryReset() {
+    const confirmed = await confirmStore.ask({
+      title: t("matter.maint.reset_confirm"),
+      body: t("matter.maint.reset_confirm_body"),
+      destructive: true,
+      confirmLabel: t("matter.maint.reset_confirm_label"),
+    });
+    if (!confirmed) return;
+    busy = true;
+    try {
+      await api.matterFactoryReset();
+      toastStore.success(t("matter.maint.reset_done"));
+      await matterStore.loadFabrics();
+      await matterStore.loadStatus();
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      busy = false;
+    }
+  }
+
   async function unpair(fabricIndex: number, label: string) {
     const confirmed = await confirmStore.ask({
       title: t("matter.fabric.unpair_confirm"),
@@ -123,6 +159,29 @@
       </DataTable>
     </Card>
   {/if}
+
+  <!-- Maintenance: one non-destructive repair, one irreversible reset -->
+  <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+    <h3 class="font-medium mb-2 text-slate-900 dark:text-slate-100">
+      {t("matter.maint.title")}
+    </h3>
+    <div class="flex flex-wrap items-center gap-3">
+      <Button variant="outline" onclick={forceSync} disabled={busy}>
+        {t("matter.maint.force_sync")}
+      </Button>
+      <span class="text-xs text-slate-500 dark:text-slate-400">
+        {t("matter.maint.force_sync_hint")}
+      </span>
+    </div>
+    <div class="mt-3 flex flex-wrap items-center gap-3">
+      <Button variant="outline-destructive" onclick={factoryReset} disabled={busy}>
+        {t("matter.maint.reset")}
+      </Button>
+      <span class="text-xs text-slate-500 dark:text-slate-400">
+        {t("matter.maint.reset_hint")}
+      </span>
+    </div>
+  </div>
 
   <!-- Share bridge section -->
   <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_50%,transparent)] p-4">

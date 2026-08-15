@@ -435,6 +435,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		MatterCommissioningOpener: d.matter.opener,
 		MatterStatusReader:        d.matter.statusReader,
 		MatterFabricRevoker:       d.matter.fabricRevoker,
+		MatterFabricPurger:        d.matter.fabricPurger,
 		MatterCommissioningCloser: d.matter.closer,
 		MatterExposureStore:       d.matter.exposureStore,
 		MatterCandidateProvider:   d.matter.candidates,

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.33.0
+  version: 5.34.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5809,6 +5809,65 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MatterDiagnosticEventList" }
+  /matter/force-sync:
+    post:
+      operationId: matterForceSync
+      summary: Re-assemble the exposed Matter topology (admin)
+      description: >-
+        Re-runs endpoint assembly against the current device model. Use
+        when the bridge and the CCU disagree about what exists — a change
+        that arrived while the bridge was down, an exposure edited
+        outside the usual path. Not destructive: controllers keep their
+        sessions and fabrics.
+      tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204": { description: Topology re-assembled }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /matter/factory-reset:
+    post:
+      operationId: matterFactoryReset
+      summary: Remove every Matter fabric (admin, destructive)
+      description: >-
+        Returns the bridge to its uncommissioned state. Every paired
+        controller loses it and has to commission it again; there is no
+        undo.
+
+
+        The request body must name the action —
+        `{"confirm": "remove-all-fabrics"}` — so a replayed or
+        mis-scripted POST cannot unpair an installation.
+      tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  enum: ["remove-all-fabrics"]
+      responses:
+        "204": { description: Every fabric removed }
+        "400":
+          description: Confirmation missing or wrong
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "503":
           description: Matter bridge not enabled
           content:

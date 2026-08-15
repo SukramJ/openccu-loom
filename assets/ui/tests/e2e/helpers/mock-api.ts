@@ -525,6 +525,7 @@ export async function mockAllApis(page: Page): Promise<void> {
     endpoints: 'matter-endpoints.json',
     compatibility: 'matter-compatibility.json',
     events: 'matter-events.json',
+    fabrics: 'matter-fabrics.json',
   };
   await page.route('**/api/v1/matter/**', (route) => {
     const leaf = new URL(route.request().url()).pathname.split('/').pop() ?? '';

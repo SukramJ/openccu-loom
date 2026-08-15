@@ -78,6 +78,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   access, knowing what to grep for, and still having the log. The trace
   is deliberately bounded and does not survive a restart: it is a
   diagnostic, not an audit trail. (REST API 5.33.0)
+- **Two maintenance actions for the Matter bridge.** *Re-sync topology*
+  rebuilds the exposed endpoints from the current devices without
+  touching any pairing — until now the only way to reconcile a bridge
+  whose endpoint list had drifted from the model was restarting the
+  daemon, which drops every controller session to fix a list. *Remove
+  all pairings* returns the bridge to its unpaired state. Both live on
+  the Matter → Fabrics tab, both are admin-only and written to the audit
+  log. The reset additionally requires the caller to name the action
+  (`{"confirm":"remove-all-fabrics"}`), so neither an empty POST nor a
+  replayed generic `{"confirm":"yes"}` can unpair an installation, and a
+  fabric that fails to revoke is reported as an error rather than
+  silently skipped — a partial reset would leave the bridge paired to a
+  controller the operator believes they removed.
 
 ### Changed
 
