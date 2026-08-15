@@ -592,11 +592,22 @@ func alarmCodeAdminFrom(s *alarm.Service) handlers.AlarmCodeAdmin {
 // every other path falls through to the REST router. The MCP server is
 // read-only unless North.MCP.AllowWrites is also set. See ADR 0025.
 func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *slog.Logger) http.Handler {
-	// Resolve must wrap Require: Require only checks the identity the
+	// The MCP tool set is a projection of the same domain REST serves, so it
+	// carries the same role requirement. With AllowWrites the set includes
+	// set_datapoint and the alarm arm / disarm / silence controls, which REST
+	// mounts With(op) — gating only on Require would let a viewer token drive
+	// the entire write surface, since the mcp package deliberately holds no
+	// privilege path of its own and trusts whatever this mount wraps it in.
+	// Read-only is the default posture and is legitimately viewer-level.
+	mcpRole := auth.RoleViewer
+	if cfg.North.MCP.AllowWrites {
+		mcpRole = auth.RoleOperator
+	}
+	// Resolve must wrap the role gate: the gate only checks the identity the
 	// resolve chain put into the context — without it every request,
 	// credentialed or not, is rejected with 401 (the MCP mount sits
 	// outside the REST router's own middleware stack).
-	mcpHandler := d.restResolve(d.authMw.Require(mcp.Handler(mcp.Deps{
+	mcpHandler := d.restResolve(d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
 		Centrals:     d.reg,
 		Devices:      d.devicesAdapter,
 		Writer:       d.dpWriterAdapter,

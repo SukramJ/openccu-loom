@@ -118,9 +118,17 @@ func configExport(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("config export: list sections: %w", err)
 	}
+	// The section store decrypts on read (wireConfigStoreCrypto above), so a
+	// verbatim copy writes the operator's MQTT / OIDC / Matter credentials
+	// into a file whose whole purpose is to be handed around. --include-secrets
+	// governs that, exactly as it does for the central passwords below.
 	sections := make(map[string]json.RawMessage, len(sectionRows))
 	for _, r := range sectionRows {
-		sections[r.Section] = json.RawMessage(r.ValueJSON)
+		value := r.ValueJSON
+		if !*includeSecrets {
+			value = configstore.RedactSectionSecrets(configstore.Section(r.Section), value)
+		}
+		sections[r.Section] = json.RawMessage(value)
 	}
 
 	// Collect centrals — optionally redact plaintext passwords.

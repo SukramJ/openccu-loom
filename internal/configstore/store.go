@@ -816,3 +816,67 @@ func (s *Store) resolveEnvSecrets(cfg *config.Config, srcs map[string]FieldSourc
 		srcs["north.rest.auth.oidc.client_secret"] = SourceEnv
 	}
 }
+
+// RedactSectionSecrets returns raw with every cfg:"secret" leaf of section sec
+// replaced by the JSON null literal, leaving all other keys untouched.
+//
+// A section row is not secret or non-secret as a whole: "north.mqtt" carries a
+// broker URL next to a password. Callers that hand a stored row to somewhere
+// less trusted than the database — the config exporter above all, whose rows
+// arrive already decrypted by the store's crypto wiring — need the per-leaf
+// distinction that [config.ClassifyFields] already draws.
+//
+// A payload that is not a JSON object is returned unchanged; there is nothing
+// to walk, and refusing to emit it would hide the row instead of redacting it.
+func RedactSectionSecrets(sec Section, raw []byte) []byte {
+	var tree map[string]any
+	if err := json.Unmarshal(raw, &tree); err != nil || tree == nil {
+		return raw
+	}
+	var redacted bool
+	for _, f := range config.ClassifyFields(&config.Config{}) {
+		if f.Class != config.FieldSecret {
+			continue
+		}
+		rel := relativeFieldPath(sec, f.Path)
+		if rel == "" || rel == f.Path {
+			// Not a leaf of this section.
+			continue
+		}
+		if redactPath(tree, rel) {
+			redacted = true
+		}
+	}
+	if !redacted {
+		return raw
+	}
+	out, err := json.Marshal(tree)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+// redactPath nulls the leaf at dotted inside tree, reporting whether it was
+// present. Nulling rather than deleting keeps the key visible, so a reader can
+// tell "withheld" from "never set" — the same reason the audit log masks
+// rather than drops a credential value.
+func redactPath(tree map[string]any, dotted string) bool {
+	parts := strings.Split(dotted, ".")
+	cur := tree
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			if _, ok := cur[part]; !ok {
+				return false
+			}
+			cur[part] = nil
+			return true
+		}
+		next, ok := cur[part].(map[string]any)
+		if !ok {
+			return false
+		}
+		cur = next
+	}
+	return false
+}

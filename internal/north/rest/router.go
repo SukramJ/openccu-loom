@@ -1166,7 +1166,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/matter/endpoints", handlers.MatterEndpoints(d.MatterEndpointInspector))
 			pr.Get("/matter/compatibility", handlers.MatterCompatibilityHandler(d.MatterCompatibilityReporter))
 			pr.With(admin).Delete("/matter/fabrics/{id}", handlers.MatterFabricRevoke(d.MatterFabricRevoker, d.MatterEventPublisher, d.MatterAuditRecorder))
-			pr.Get("/matter/setup-payload", handlers.MatterSetupPayload(d.MatterCommissioning))
+			// Admin-gated despite being a GET: the response carries the
+			// cfg:"secret" commissioning passcode and the QR / manual codes
+			// derived from it, so anyone holding it can commission the bridge
+			// into their own fabric while a window is open. A read that hands
+			// out a credential is as privileged as a write.
+			pr.With(admin).Get("/matter/setup-payload", handlers.MatterSetupPayload(d.MatterCommissioning))
 			pr.Get("/matter/exposable", handlers.MatterExposable(d.MatterCandidateProvider, d.MatterExposureStore, d.Labels))
 			pr.With(admin).Put("/matter/exposable", handlers.MatterExposeUpdate(d.MatterExposureStore, d.MatterEventPublisher, d.MatterAuditRecorder, d.MatterTopologyReassembler))
 			pr.With(admin).Post("/matter/exposable/bulk", handlers.MatterExposeBulk(d.MatterExposureStore, d.MatterEventPublisher, d.MatterAuditRecorder, d.MatterTopologyReassembler))

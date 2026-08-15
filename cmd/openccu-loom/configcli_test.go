@@ -46,7 +46,11 @@ func seedConfigDB(t *testing.T, dir string) {
 	defer func() { _ = db.Close() }()
 
 	ss := sqlite.NewConfigSectionStore(db)
-	if _, err := ss.Put(ctx, "north.mqtt", []byte(`{"broker":"mqtt://localhost"}`), "test"); err != nil {
+	// The MQTT section carries a cfg:"secret" password alongside plain
+	// settings, which is what makes it the right fixture for the redaction
+	// tests: a section row is not secret or non-secret as a whole.
+	if _, err := ss.Put(ctx, "north.mqtt",
+		[]byte(`{"broker":"mqtt://localhost","password":"mqtt-s3cret"}`), "test"); err != nil {
 		t.Fatalf("put section: %v", err)
 	}
 
@@ -124,6 +128,21 @@ func TestConfigExportRedactsSecretsByDefault(t *testing.T) {
 		if c.PasswordPlain != "" {
 			t.Errorf("central %s: expected redacted password_plain, got %q", c.Name, c.PasswordPlain)
 		}
+	}
+
+	// Section-tier secrets must be redacted too. The section store decrypts
+	// on read (wireConfigStoreCrypto), so exporting a row verbatim writes the
+	// operator's MQTT / OIDC / Matter credentials into a file whose whole
+	// purpose is to be copied elsewhere — while --include-secrets, the flag
+	// that is supposed to govern exactly this, is off.
+	raw := stdout.String()
+	if strings.Contains(raw, "mqtt-s3cret") {
+		t.Errorf("section secret leaked into the export without --include-secrets:\n%s", raw)
+	}
+	// The non-secret half of the same section must survive, or the redaction
+	// has simply dropped the section.
+	if !strings.Contains(raw, "mqtt://localhost") {
+		t.Errorf("redaction removed non-secret section fields:\n%s", raw)
 	}
 }
 
