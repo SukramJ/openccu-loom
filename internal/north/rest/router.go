@@ -534,12 +534,14 @@ type Deps struct {
 	// multi-CCU deployments. Nil leaves that one endpoint returning 503;
 	// the global reset still works.
 	DeviceLookup handlers.DeviceLookup
-	// KnownCentrals is the list of CCU scope names whose
-	// per-central health score the diagnostics dump should
-	// publish. Daemon composition root fills this from the central
-	// registry; tests may pass an explicit list. Empty disables the
-	// `central_scores` block in the diagnostics envelope.
-	KnownCentrals []string
+	// KnownCentrals returns the CCU scope names whose per-central health
+	// score the diagnostics dump should publish. It is a func rather than
+	// a slice because the router is built once and the CCU set is not
+	// fixed — `(*central.Registry).Names` satisfies it directly and keeps
+	// a runtime adopt or removal visible in the next dump. Nil, or an
+	// empty result, disables the `central_scores` block in the
+	// diagnostics envelope.
+	KnownCentrals func() []string
 	// HealthGauges, when set, returns the daemon's current
 	// pull-gauge readings (event_bus / audit / scheduler / rest /
 	// ws). `(*health.Tracker).Gauges` satisfies this directly.
