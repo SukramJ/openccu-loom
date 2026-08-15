@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.59.2
+
+Documentation-only release. A pre-release review of what the code's own
+comments claim, checked against what the code does, corrected 22
+inaccurate ones, including the page shown when the web bundle is missing,
+which claimed login and setup were still reachable. No behaviour changes.
+
 ## 0.59.1
 
 A maintenance release built from a full review of the code base. It fixes

@@ -4,6 +4,29 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.59.2]
+
+### Fixed
+
+- **The pre-release comment sweep corrected 31 inaccurate code
+  comments.** Nothing about the daemon's behaviour changes; what changes
+  is that its documentation no longer describes a system that does not
+  exist. The ones worth naming: a package doc listed a Matter cluster
+  under the wrong ID and claimed it sits on the root endpoint when
+  nothing mounts it; a handler doc named an error symbol that does not
+  exist; the MCP surface was said to be authorized by the REST listener
+  when the authorization actually comes from middleware wrapped around
+  its mount, and a comment that invites a future mount to skip that
+  wrapper is a security problem in waiting; a telemetry endpoint was
+  documented as anonymous although it sits behind the auth gate; two
+  constructors were marked as having no production caller when both are
+  called; and several file inventories named files, packages and
+  directories that had been renamed or removed. The page the daemon
+  serves when its web bundle is missing told the operator that login and
+  setup were still reachable — they live in that very bundle, so the one
+  situation in which the page appears is the one in which the statement
+  is false.
+
 ## [0.59.1]
 
 ### Added

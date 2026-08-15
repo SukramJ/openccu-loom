@@ -455,8 +455,8 @@ func populateDeviceDetailsCache(
 	// iseToAddress has ISE-ID (string) → address; invert to get
 	// address → ISE-ID for AddAddressISEID.
 	for iseID, addr := range iseToAddress {
-		// parseIntStr is defined in loader.go within the same package
-		// use strconv here since we're in a different package.
+		// ISE-IDs arrive as decimal strings; parse defensively and skip
+		// anything that is not one.
 		var id int64
 		for _, c := range iseID {
 			if c < '0' || c > '9' {

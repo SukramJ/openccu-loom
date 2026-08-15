@@ -21,7 +21,11 @@
 //   - NetworkCommissioning                0x0031 — root endpoint only (Stufe 5)
 //   - GeneralDiagnostics                  0x0033 — root endpoint only
 //   - DiagnosticLogs                      0x0032 — root endpoint only
-//   - OTASoftwareUpdateRequestor          0x0029 — root endpoint (stub)
+//   - OTASoftwareUpdateRequestor          0x002A — stub, not mounted
+//
+// 0x0029 is OtaSoftwareUpdateProvider, a different cluster this package
+// does not implement; the requestor above is 0x002A. Nothing constructs
+// the requestor outside tests, so it reaches no endpoint.
 //
 // PowerSource (0x002F) for bridged battery endpoints lives in the
 // measurement package (measurement.PowerSourceServer), not here.

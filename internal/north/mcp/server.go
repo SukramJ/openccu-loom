@@ -6,9 +6,12 @@
 // thin projection of the same domain the REST surface serves: every
 // tool is scoped per central, reads are always available, and writes
 // are registered only when the operator opts in twice (Enabled +
-// AllowWrites). Authorization is enforced by the REST listener the
-// Streamable-HTTP handler mounts behind; the adapter holds no privilege
-// path of its own.
+// AllowWrites). The adapter holds no privilege path of its own:
+// authorization comes from the identity-resolve and require-auth
+// middleware the composition root wraps the Streamable-HTTP handler in
+// at its mount (daemon_rest_mount.go). It does not come from the REST
+// listener as such — a mount that skips that wrapper is unauthenticated,
+// which is why the wrapper and not the listener is named here.
 package mcp
 
 import (

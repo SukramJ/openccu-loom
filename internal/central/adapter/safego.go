@@ -12,9 +12,9 @@ import (
 // tear down the whole program: the stack trace is logged at slog.LevelError
 // and the goroutine exits cleanly.
 //
-// Used by adapter background tasks (`auto_refresh.go`,
-// `callback_handlers.go`, `eventbridge.go`, `unobserved_sweep_job.go`)
-// that would otherwise run as bare `go func()` calls with no panic recovery.
+// Used by the adapter's background tasks — the auto-refresh loop, the
+// central bring-up and the event bridge — which would otherwise run as
+// bare `go func()` calls with no panic recovery.
 // The wrapper centralises goroutine lifetime hygiene.
 //
 // `name` identifies the goroutine in the log and should be a static

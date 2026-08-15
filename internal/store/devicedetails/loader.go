@@ -73,8 +73,9 @@ type channelWireEntry struct {
 // (store/dynamic/details.py:123-141) and the CCU backend helpers
 // (client/backends/ccu.py:232-256).
 //
-// The Loader is intentionally thin: it has no scheduler of its own
-// and is called by the cache coordinator at the right time.
+// The Loader is intentionally thin: it has no scheduler of its own.
+// Production drives it from the periodic scheduler job wired in
+// hub_wiring.go and from the hot-plug ingestor.
 type Loader struct {
 	cache       *Cache
 	client      jsonClientLike

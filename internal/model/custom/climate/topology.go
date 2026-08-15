@@ -9,10 +9,10 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// Compile-time assertions that the new ADR-0011 declarative source
-// surface is satisfied. Phase 1a installs the markers without
-// changing the bridge publish path; phase 1b will start consuming
-// these interfaces.
+// Compile-time assertions that the ADR-0011 declarative source surface
+// is satisfied. payload.Slotted is consumed by the bridge; HAEntity and
+// DiscoveryDynamic are declarative only and have no consumption site
+// yet.
 var (
 	_ payload.HAEntity         = (*Climate)(nil)
 	_ payload.Slotted          = (*Climate)(nil)

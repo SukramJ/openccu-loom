@@ -3,8 +3,9 @@
 
 // Package webhook implements the outbound webhook bridge: a north-bound
 // adapter that subscribes to every registered central's event bus and POSTs
-// a signed, versioned JSON payload to an operator-configured endpoint on
-// datapoint, system-status and incident events.
+// a signed, versioned JSON payload to an operator-configured endpoint. The
+// subscribed surface is data-point, system-status and incident events plus
+// the alarm and security planes — twelve event types in all.
 package webhook
 
 import (

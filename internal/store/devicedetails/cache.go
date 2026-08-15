@@ -7,13 +7,14 @@
 // The openccu-loom equivalent.
 // `DeviceDetailsCache` (`store/dynamic/details.py`).
 //
-// The cache is populated by the cache coordinator's `Load()` pass:
+// The cache is populated by the periodic device-details load:
 // names from `Device.listAllDetail`, rooms from `Room.getChannelIDs`
 // (resolved via Room.getName), functions from
 // `Function.getChannelIDs`, ISE-IDs from the same listAllDetail
 // payload. Lookups are constant-time and locked with a single
-// RWMutex — every consumer (NameData builder, MQTT discovery, REST
-// list view) reads it on every render.
+// RWMutex. It is read at ingest time by the device pipeline, which
+// bakes the result into naming.NameData; the north-bound surfaces read
+// that baked model rather than this cache.
 package devicedetails
 
 import (

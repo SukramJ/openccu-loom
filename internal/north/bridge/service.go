@@ -2,10 +2,9 @@
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
 // Package bridge defines the uniform lifecycle contract for north-bound
-// adapters (MQTT, Matter, MCP, REST, webhook, …). Today each bridge is
-// hand-wired in cmd/openccu-loom with a bespoke constructor and Start/Stop
-// call; the Service interface + Registry give them one start/stop shape so
-// new bridges register uniformly and shutdown is ordered and best-effort.
+// adapters (MQTT, Matter, MCP, REST, webhook, …). MQTT, webhook, Matter
+// and REST register here and are driven by Registry.StartAll, so they
+// share one start/stop shape and shutdown is ordered and best-effort.
 //
 // This is a daemon-internal wiring contract, not a cross-package wire
 // protocol, so it lives in the consumer-side package rather than

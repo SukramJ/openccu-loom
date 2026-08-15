@@ -76,8 +76,9 @@ func serveIndex(sub fs.FS, w http.ResponseWriter, r *http.Request) {
 }
 
 // spaNotBuiltHTML is shown when the embedded spa_dist/ has no index.html —
-// the Svelte bundle has not been built. The bootstrap HTMX UI on the REST
-// listener (login / setup / health / about) remains usable in this state.
+// the Svelte bundle has not been built. Only /health and /about remain on
+// the REST listener in this state: login, setup and onboarding live in the
+// SPA (ADR 0045), so they are unavailable precisely when this page shows.
 const spaNotBuiltHTML = `<!doctype html>
 <html lang="en">
   <head>
@@ -100,8 +101,10 @@ const spaNotBuiltHTML = `<!doctype html>
 make dist         # SPA + daemon</pre>
     <p>Or run the Vite dev server with hot-reload (proxies <code>/api</code> to this daemon):</p>
     <pre>make ui-dev       # then open http://localhost:5173/app/</pre>
-    <p>The bootstrap UI (login / setup / health / about) is still
-    available on this same listener at <a href="/health">/health</a>.</p>
+    <p>Only the diagnostic pages remain on this listener while the bundle
+    is missing: <a href="/health">/health</a> and <a href="/about">/about</a>.
+    Login, setup and onboarding are part of the SPA and are unavailable
+    until it is built.</p>
   </body>
 </html>
 `

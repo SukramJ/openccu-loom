@@ -68,11 +68,8 @@ type HSColor struct {
 // source-compatible; the promoted [datapoint.BaseDataPointFields]
 // surface is initialised with an empty central.
 //
-// No production caller exists today: custom/light implements colour
-// handling inline via its own HSColor struct. This constructor is kept
-// so the combined package remains a coherent, testable unit; a future
-// refactor may wire it once materialiseCombinedDataPoints is added.
-// See notes/parity/by_design.md BD-A3-CombinedUnused.
+// The multi-CCU form is what production uses — custom/light builds its
+// colour data point through NewHSColorWithCentral.
 func NewHSColor(address string, w Writer, hueParam, satParam hmenum.Parameter) *HSColor {
 	return NewHSColorWithCentral("", address, w, hueParam, satParam)
 }
