@@ -104,10 +104,10 @@ function optionLabels(select: HTMLSelectElement): string[] {
 beforeEach(() => {
   vi.clearAllMocks();
   mockListDiagrams.mockResolvedValue([DIAGRAM]);
+  // GET /devices/{addr}/channels answers a bare array, like listDataPoints
+  // below — see the array schema in assets/openapi.yaml.
   mockListChannels.mockImplementation((addr: string) =>
-    Promise.resolve({
-      items: [{ address: `${addr}:1`, number: 1, name: `Chan ${tag(addr)}` }],
-    }),
+    Promise.resolve([{ address: `${addr}:1`, number: 1, name: `Chan ${tag(addr)}` }]),
   );
   mockListDataPoints.mockImplementation((addr: string) =>
     Promise.resolve([
