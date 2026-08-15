@@ -43,11 +43,9 @@ type CombinedDataPoint interface {
 // the caller's responsibility — typical use is one bridge per
 // (channel, combined-DP) pair, installed at materialise time.
 //
-// No production caller installs this bridge today: materialiseCombinedDataPoints
-// does not exist in device_pipeline.go (contrast with the analogous
-// materialiseCalculatedDataPoints at device_pipeline.go:783). BridgeCombined-
-// DataPoint is retained as the correct generic bridge for when combined-DP
-// materialisation is added; see notes/parity/by_design.md BD-A3-CombinedUnused.
+// Installed by materialiseCombinedDataPoints in device_pipeline.go, which
+// runs from finishIngest — the shared post-ingest path both interface
+// bring-up and hot-plug go through.
 func BridgeCombinedDataPoint(
 	bus *events.Bus,
 	dp CombinedDataPoint,

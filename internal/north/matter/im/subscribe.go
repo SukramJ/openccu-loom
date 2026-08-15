@@ -70,11 +70,12 @@ type EventMinimumNumber struct {
 
 // SubscribeRequest is the in-memory form of a SubscribeRequestMessage.
 //
-// Currently this implements the request / response *message shape*
-// only — the subscription state machine (cadence enforcement,
-// max-subscription caps, replay buffering) is not yet wired. The
-// message-layer surface is kept stable against cluster-side callers
-// that need to express "subscribe to OnOff state".
+// This type is the message shape only. The state machine around it —
+// cadence enforcement and the per-fabric subscription cap — lives in
+// im/subscription.Manager, which the daemon attaches to the bridge, so
+// both are in force in production. Replay buffering is the part that
+// remains unbuilt. The message-layer surface is kept stable against
+// cluster-side callers that need to express "subscribe to OnOff state".
 type SubscribeRequest struct {
 	KeepSubscriptions  bool
 	MinIntervalFloor   uint16

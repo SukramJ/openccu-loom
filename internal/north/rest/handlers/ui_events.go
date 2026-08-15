@@ -29,9 +29,11 @@ type UIEventRequest struct {
 // to the client and never persists it — observability lives in
 // the structured log line only.
 //
-// Anonymous endpoint: telemetry is per-installation, not per-user;
-// no auth gate is enforced. The daemon's audit log handles the
-// user-scoped activity stream separately.
+// The telemetry is per-installation rather than per-user, but the
+// route is mounted inside the router's authenticated group and the
+// daemon refuses to start without an auth gate, so a caller still has
+// to be authenticated. The daemon's audit log handles the user-scoped
+// activity stream separately.
 func PostUIEvent() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req UIEventRequest

@@ -387,9 +387,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// configured discriminator + passcode + vendor + product;
 		// the commissioning-window opener routes
 		// `POST /api/v1/matter/commissioning/window` through the
-		// bridge's [matterbridge.CommissioningWindowOpener] (reuses
-		// the configured PASE acceptor; ephemeral verifier
-		// generation is a post-0.1.0 follow-up).
+		// bridge's [matterbridge.CommissioningWindowOpener]. An
+		// ephemeral provider is installed alongside it, so an opened
+		// window mints a fresh passcode, discriminator and verifier
+		// rather than reusing the configured PASE credentials.
 		MatterFabricStore:           d.matter.fabricStore,
 		MatterSessionLister:         d.matter.sessionLister,
 		MatterMdnsReporter:          d.matter.mdnsReporter,

@@ -104,8 +104,11 @@ type Slotted interface {
 // between HEATING and COOLING swaps `modes` from `[auto,heat,off]`
 // to `[auto,cool,off]`).
 //
-// The bridge subscribes the listed parameters; on every observed
-// change it re-renders the discovery payload via
+// Declarative only: nothing consults this list today. The bridge
+// re-renders on every observed data-point change regardless of
+// parameter, and suppresses the publish when the rendered JSON matches
+// the cached previous one. The list documents which parameters
+// actually move the payload. It re-renders via
 // [HADiscoveryPayloadBuilder] and re-publishes the retained discovery
 // topic when the rendered JSON differs from the cached previous
 // version. HA picks up the change automatically (retained discovery

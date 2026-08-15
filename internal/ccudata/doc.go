@@ -4,7 +4,8 @@
 // Package ccudata loads the CCU-WebUI metadata archives produced by
 // The
 //
-// Three artefact groups ship embedded under `embedded/`:
+// Three artefact groups are read from the upstream data module (see
+// embed.go); they are no longer carried in a local directory:
 //
 //   - translation_extract.json.gz — per-locale channel-type labels,
 //     device-model descriptions, parameter labels + help, value

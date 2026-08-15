@@ -50,9 +50,11 @@ var (
 //
 //  1. Commissioner sends PBKDFParamRequest (opcode 0x20). Bridge
 //     responds with PBKDFParamResponse (0x21) carrying the salt +
-//     iterations the bridge advertises. v1.1 stub returns
-//     [ErrPBKDFNotImplemented]; the daemon must hand pre-negotiated
-//     params via a different path until the response encoder lands.
+//     iterations the bridge advertises. The response is assembled here:
+//     the request is decoded, the PasscodeID validated against the
+//     brute-force cap, and the answer built from the configured
+//     parameters. Refusals are [ErrPBKDFParamsMissing] when the daemon
+//     configured none and [ErrUnsupportedPasscodeID] otherwise.
 //  2. Commissioner sends Pake1 (0x22) carrying pA. Bridge runs
 //     [spake2.Verifier.ProcessPake1] and replies Pake2 (0x23) with
 //     Y + cB.

@@ -67,10 +67,8 @@ type LevelCombined struct {
 // renders as `:<address>:COMBINED/LEVEL_COMBINED`. Multi-CCU-safe
 // call sites MUST use [NewLevelCombinedWithCentral].
 //
-// No production caller exists today: custom/cover implements level
-// encoding inline via hmLevelCombined. This constructor is kept so
-// the combined package remains a coherent, testable unit; see
-// notes/parity/by_design.md BD-A3-CombinedUnused.
+// The multi-CCU form is what production uses — custom/cover builds its
+// level data point through NewLevelCombinedWithCentral.
 //
 // levelParam / slatsParam are the per-channel reading parameters
 // (LEVEL and LEVEL_2). combinedParam is the write-only paramset entry

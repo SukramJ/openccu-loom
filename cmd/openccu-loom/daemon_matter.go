@@ -1614,8 +1614,10 @@ type rootClusterRefs struct {
 //   - 0x0033 GeneralDiagnostics       — boot reason, network interfaces
 //   - 0x003E OperationalCredentials   — NOC / fabric install (PASE → CASE)
 //   - 0x003F GroupKeyManagement       — group quotas
-//   - 0x0032 DiagnosticLogs           — placeholder
-//   - 0x002A OTASoftwareUpdateRequestor — placeholder
+//
+// DiagnosticLogs (0x0032) and OTASoftwareUpdateRequestor (0x002A) are
+// deliberately absent from the returned set; the reasoning is at their
+// respective decision points below.
 //
 // Operators that disable Matter via cfg.Enabled never reach this
 // function. Construction errors are surfaced individually so a
@@ -2475,10 +2477,10 @@ func buildDevAttestation(vendorID, productID uint16) (dacKey *ecdsa.PrivateKey, 
 // [operational.Manager.OpenFromPase] so a successful Pake3 lands a
 // fresh session in the operational manager.
 //
-// **Single-verifier limitation**: the returned adapter wraps one
-// shared Verifier; concurrent PASE attempts (rare — a commissioner
-// retries one at a time) collide on Verifier state. Per-exchange
-// adapter construction is a post-0.1.0 follow-up (lifecycle redesign).
+// The returned adapter wraps one shared Verifier, so concurrent PASE
+// attempts would collide on its state. Production does not use it that
+// way: matterbridge.PerExchangePaseProvider builds a fresh adapter per
+// exchange, and that is what the concurrent-pairings path installs.
 // rotatingSerialPart mirrors the SerialNumber derivation in
 // [rootSerial] so the Rotating Device Identifier draws on the same
 // stable bridge identity tuple — keeps the commissionable `RI` TXT

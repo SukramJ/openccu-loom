@@ -11,8 +11,9 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
-// CuxdBackend talks to the CUxD bridge via BIN-RPC. Unlike
-// `TestCuxdUsesBINRPCBackend` enforces this.
+// CuxdBackend talks to the CUxD bridge via BIN-RPC — never JSON-RPC,
+// which is the reference implementation's workaround and not ours.
+// TestCUxDUsesBINRPCBackend in tests/contract enforces it.
 type CuxdBackend struct {
 	bin Caller
 	ann Announcer

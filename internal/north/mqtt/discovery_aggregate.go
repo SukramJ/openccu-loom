@@ -467,9 +467,13 @@ type channelMultiplierReader interface {
 	ParameterMultiplier(name string) (float64, bool)
 }
 
-// channelEnumValuesReader is an optional extension on ChannelInspector. When
-// a channel implements it, the sensor builder calls ParameterValueList to
-// populate the HA `options` field for `device_class: enum` sensors (H-029).
+// channelEnumValuesReader is an optional extension on ChannelInspector
+// for reading a parameter's VALUE_LIST off a channel.
+//
+// Nothing in the discovery path asserts against it today: the `options`
+// field of an enum sensor is populated from the event's own descriptor
+// (descValueList / descValueLabels in discovery.go), which is a
+// separate mechanism.
 type channelEnumValuesReader interface {
 	ParameterValueList(parameter string) []string
 }

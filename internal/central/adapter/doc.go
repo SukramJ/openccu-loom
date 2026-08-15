@@ -22,7 +22,7 @@
 //   - Transport callers & callbacks: xmlrpc_caller, jsonrpc_caller,
 //     binrpc_caller, rpc_recorder, callback_handlers, xmlrpc_announcer,
 //     wire_value — bridge the InterfaceClient transports to the domain.
-//   - Hub surface: hub, hub_mqtt_publisher, hub_retry — programs,
+//   - Hub surface: hub, hub_mqtt_publisher, hub_sysvar_fetch — programs,
 //     sysvars, inbox, service/alarm messages.
 //   - Device lifecycle: devices, device_admin, device_availability,
 //     device_pipeline, device_reloader, datapoint_resolver,
@@ -30,9 +30,9 @@
 //   - Direct links: central_links, links, link_resolver, link_profile,
 //     link_profiles_adapter, link_param_metadata,
 //     climate_link_peer_refresh.
-//   - Schedules & week profiles: schedule_enabled, schedule_facade,
-//     schedule_io, schedule_query_adapter, schedules,
-//     week_profile_filter, week_profile_io, scheduler_events.
+//   - Schedules & week profiles: schedule_enabled, schedule_io,
+//     schedule_query_adapter, schedules, week_profile_filter,
+//     week_profile_io.
 //   - UI schema: uischema_adapter, uischema_groups, uischema_link,
 //     labels, parameter_determiner.
 //   - Values cache & sources: values_cache_evict, values_cache_flush,

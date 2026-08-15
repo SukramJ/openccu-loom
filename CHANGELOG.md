@@ -8,14 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **Two code comments described the daemon inaccurately.** One claimed
-  that MQTT and WebSocket subscribers receive week-profile change events;
-  nothing subscribes to that event, and north-bound schedule state
-  travels a different path. The other said the MCP surface is
-  authorized by the REST listener it mounts behind, when the
-  authorization actually comes from middleware the composition root
-  wraps it in — a mount that skips that wrapper is unauthenticated, and
-  the comment as written invited exactly that mistake.
+- **The pre-release comment sweep corrected 22 inaccurate code
+  comments.** Nothing about the daemon's behaviour changes; what changes
+  is that its documentation no longer describes a system that does not
+  exist. The ones worth naming: a package doc listed a Matter cluster
+  under the wrong ID and claimed it sits on the root endpoint when
+  nothing mounts it; a handler doc named an error symbol that does not
+  exist; the MCP surface was said to be authorized by the REST listener
+  when the authorization actually comes from middleware wrapped around
+  its mount, and a comment that invites a future mount to skip that
+  wrapper is a security problem in waiting; a telemetry endpoint was
+  documented as anonymous although it sits behind the auth gate; two
+  constructors were marked as having no production caller when both are
+  called; and several file inventories named files, packages and
+  directories that had been renamed or removed.
 
 ## [0.59.1]
 

@@ -66,8 +66,10 @@ type HADiscoveryContext interface {
 
 	// ServiceMethodCommandTopic returns the topic HA should write to
 	// in order to invoke `method` on the channel's custom DP.
-	// The bridge subscribes the topic when [Source.ServiceMethodNames]
-	// includes `method`. ADR 0009.
+	// The bridge subscribes one wildcard covering every service-method
+	// topic rather than consulting [Source.ServiceMethodNames], so an
+	// unknown method is rejected at dispatch rather than never
+	// subscribed. ADR 0009.
 	ServiceMethodCommandTopic(method string) string
 
 	// WireParameterCommandTopic is the legacy per-parameter command

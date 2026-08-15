@@ -210,8 +210,11 @@ const commandDispatchWorkers = 8
 const commandDispatchQueueDepth = 32
 
 // CommandSubscriber wires the bridge's inbound /set and /invoke topics
-// back into the domain. It subscribes to four wildcards and dispatches
-// based on the topic shape (raw-plane schema; see ADR 0011):
+// back into the domain. It subscribes one wildcard per inbound shape —
+// data points, sysvars, programs, install mode, custom-DP invoke and
+// service methods, week profiles, combined data points, schedule
+// switches, alarm commands, add-on updates — and dispatches on the
+// topic shape (raw-plane schema; see ADR 0011):
 //
 //	<base>/<central>/<interface>/<device>/<channel>/<parameter>/set
 //	<base>/<central>/sysvars/<name>/set

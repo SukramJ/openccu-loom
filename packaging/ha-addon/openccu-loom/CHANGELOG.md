@@ -2,8 +2,9 @@
 
 ## 0.59.2
 
-Documentation-only release: two code comments described the daemon
-inaccurately and were corrected. No behaviour changes.
+Documentation-only release. A pre-release review of what the code's own
+comments claim, checked against what the code does, corrected 22
+inaccurate ones. No behaviour changes.
 
 ## 0.59.1
 
