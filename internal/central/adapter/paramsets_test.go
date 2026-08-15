@@ -515,6 +515,44 @@ func TestPutParamsetRoutesViaChannelSetMany(t *testing.T) {
 	}
 }
 
+// TestPutParamsetAcceptsWholeNumberForFloatParameter pins that a FLOAT
+// parameter accepts a whole number. JSON draws no int/float distinction, so
+// the SPA's `1` reaches the handler as float64(1) — a descriptor-blind
+// conversion collapses that to an int, and the validator's FLOAT branch is a
+// hard kind check, so the whole batch is rejected with "want float, got int".
+// Setting the same field to a fractional value succeeds, which makes the
+// failure look device- or parameter-specific to the operator.
+func TestPutParamsetAcceptsWholeNumberForFloatParameter(t *testing.T) {
+	t.Parallel()
+
+	domain, chw, _ := buildParamsetFixture(t)
+
+	values := map[string]any{string(hmenum.ParameterLevel): float64(1)}
+	if err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, values); err != nil {
+		t.Fatalf("PutParamset with a whole-number FLOAT value: %v", err)
+	}
+	if chw.putCallCount() != 1 {
+		t.Fatalf("channel writer PutParamset calls=%d, want 1", chw.putCallCount())
+	}
+}
+
+// TestPutParamsetStillRejectsOutOfRangeFloat guards the other half: the
+// descriptor-aware conversion must keep enforcing MIN/MAX.
+func TestPutParamsetStillRejectsOutOfRangeFloat(t *testing.T) {
+	t.Parallel()
+
+	domain, chw, _ := buildParamsetFixture(t)
+
+	// MASTER LEVEL is declared 0.0..1.0 — 5 is a whole number AND out of range.
+	values := map[string]any{string(hmenum.ParameterLevel): float64(5)}
+	if err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyMaster, values); err == nil {
+		t.Fatal("PutParamset must reject a value above MAX")
+	}
+	if chw.putCallCount() != 0 {
+		t.Fatalf("a rejected value must not reach the wire; got %d PutParamset calls", chw.putCallCount())
+	}
+}
+
 // TestPutParamsetRoutesManyViaChannelPutParamset verifies that when two
 // parameters are written at once, SetMany creates an internal collector
 // that dispatches via PutParamset on the channel writer.

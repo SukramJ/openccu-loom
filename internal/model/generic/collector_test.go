@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -23,6 +24,7 @@ type recordingBackend struct {
 	mu          sync.Mutex
 	setCalls    []setCall
 	putCalls    []putCall
+	dispatchLog []string
 	failOnSet   error
 	failOnPut   error
 	delaySingle time.Duration
@@ -49,6 +51,7 @@ func (b *recordingBackend) SetValue(_ context.Context, ch string, p hmenum.Param
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.setCalls = append(b.setCalls, setCall{ch, string(p), v, prio})
+	b.dispatchLog = append(b.dispatchLog, "set:"+string(p))
 	return b.failOnSet
 }
 
@@ -58,6 +61,7 @@ func (b *recordingBackend) PutParamset(_ context.Context, ch string, key hmenum.
 	clone := make(map[string]any, len(vals))
 	maps.Copy(clone, vals)
 	b.putCalls = append(b.putCalls, putCall{ch, key, clone, prio})
+	b.dispatchLog = append(b.dispatchLog, "put:"+string(key))
 	return b.failOnPut
 }
 
@@ -65,6 +69,30 @@ func (b *recordingBackend) snapshot() ([]setCall, []putCall) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return append([]setCall(nil), b.setCalls...), append([]putCall(nil), b.putCalls...)
+}
+
+// dispatches returns SetValue and PutParamset calls in the single order they
+// were issued, which the two separate snapshot slices cannot express.
+func (b *recordingBackend) dispatches() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]string(nil), b.dispatchLog...)
+}
+
+func masterDPForCollector(t *testing.T, channel, param string) *DataPoint[float64] {
+	t.Helper()
+	return NewDataPoint[float64](Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "iface",
+			ChannelAddress: channel,
+			ParamsetKey:    hmenum.ParamsetKeyMaster,
+			Parameter:      param,
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	})
 }
 
 func dpForCollector(t *testing.T, channel, param string) *DataPoint[float64] {
@@ -103,6 +131,37 @@ func TestCollectorSingleParameterDispatchesSetValue(t *testing.T) {
 	}
 	if sets[0].channel != "0001:1" || sets[0].param != "LEVEL" || sets[0].value != 0.5 {
 		t.Fatalf("call mismatch: %+v", sets[0])
+	}
+}
+
+// TestCollectorLoneMasterParameterDispatchesPutParamset pins that a group of
+// one is only collapsed to SetValue when it targets VALUES. SetValue carries
+// no paramset key and reaches the wire as xml-rpc setValue, which is
+// VALUES-only, so collapsing a lone MASTER parameter sends a device
+// configuration write to the wrong paramset — the CCU answers fault -5, or
+// silently applies a same-named VALUES parameter instead.
+func TestCollectorLoneMasterParameterDispatchesPutParamset(t *testing.T) {
+	b := &recordingBackend{}
+	c := NewCollector(b)
+	dp := masterDPForCollector(t, "0001:1", "LOW_BAT_LIMIT")
+
+	if err := c.Add(dp, 2.0, 0); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if err := c.Send(context.Background()); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	sets, puts := b.snapshot()
+	if len(sets) != 0 || len(puts) != 1 {
+		t.Fatalf("a lone MASTER parameter must dispatch through PutParamset; got %d SetValue / %d PutParamset",
+			len(sets), len(puts))
+	}
+	if puts[0].key != hmenum.ParamsetKeyMaster {
+		t.Fatalf("paramset key mismatch: got %s, want %s", puts[0].key, hmenum.ParamsetKeyMaster)
+	}
+	if puts[0].channel != "0001:1" || puts[0].values["LOW_BAT_LIMIT"] != 2.0 {
+		t.Fatalf("call mismatch: %+v", puts[0])
 	}
 }
 
@@ -533,13 +592,18 @@ func TestCollectorSortsAcrossParamsetKeys(t *testing.T) {
 	if err := c.Send(context.Background()); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
-	sets, _ := b.snapshot()
-	if len(sets) != 2 {
-		t.Fatalf("two paramset keys → two SetValues; got %d", len(sets))
-	}
+	// Two paramset keys → two dispatches, each carrying its own key: the
+	// MASTER group through PutParamset (setValue is VALUES-only on the
+	// wire), the VALUES group through the single-parameter shortcut.
 	// MASTER < VALUES alphabetically → MASTER first.
-	if sets[0].param != "MASTER_PARAM" {
-		t.Fatalf("expected MASTER_PARAM first, got %s", sets[0].param)
+	got := b.dispatches()
+	want := []string{"put:MASTER", "set:VAL_PARAM"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("dispatch order mismatch: got %v, want %v", got, want)
+	}
+	_, puts := b.snapshot()
+	if puts[0].values["MASTER_PARAM"] != 2.0 {
+		t.Fatalf("MASTER value mismatch: %+v", puts[0].values)
 	}
 }
 
