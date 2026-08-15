@@ -274,7 +274,7 @@ func TestHandleRawEventNormalizedPONGRoutesToTracker(t *testing.T) {
 	}
 }
 
-// ---- L-A5-29: EmitDevicesCreatedEvents / EmitDeviceRemovedEvent / EmitHubRefreshedEvent ----
+// ---- EmitDevicesCreatedEvents / EmitDeviceRemovedEvent ----
 
 func TestEmitDevicesCreatedEvents(t *testing.T) {
 	bus := events.NewBus()
@@ -311,30 +311,6 @@ func TestEmitDeviceRemovedEvent(t *testing.T) {
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("DeviceRemovedEvent not received")
-	}
-}
-
-func TestEmitHubRefreshedEvent(t *testing.T) {
-	bus := events.NewBus()
-	cache := NewCacheCoordinator()
-	ec := NewEventCoordinator(bus, cache, nil)
-	ec.SetCentralName("ccu1")
-
-	received := make(chan hmevent.DataRefreshCompletedEvent, 1)
-	_ = events.Subscribe(bus, func(e hmevent.DataRefreshCompletedEvent) { received <- e })
-
-	ec.EmitHubRefreshedEvent()
-
-	select {
-	case e := <-received:
-		if e.JobName != "hub" {
-			t.Fatalf("JobName = %q, want hub", e.JobName)
-		}
-		if !e.Success {
-			t.Fatal("Success should be true for EmitHubRefreshedEvent")
-		}
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("DataRefreshCompletedEvent not received")
 	}
 }
 

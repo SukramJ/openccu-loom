@@ -317,6 +317,15 @@ func (c *ConnectionRecoveryCoordinator) SetBackoff(base, maximum time.Duration) 
 // coordinator calls at the start (Recovering), on success (Running), and on
 // exhaustion (Failed) of every Run. Passing nil is valid and disables
 // transitions. Returns the receiver for chaining.
+//
+// The daemon deliberately leaves it nil, which is why CentralStateRecovering
+// never appears on a north-bound surface: a Run recovers ONE interface while
+// the central state machine is central-wide, so one interface's success would
+// drive a multi-interface central to RUNNING with the others still down, and
+// one interface's exhaustion would drive it to FAILED with the others fine.
+// central.Unit.EvaluateCentralState owns that state instead — it reads every
+// client and demotes RUNNING to DEGRADED while any interface is recovering.
+// Wire this only together with a per-interface state model.
 func (c *ConnectionRecoveryCoordinator) WithStateMachine(sm StateTransitioner) *ConnectionRecoveryCoordinator {
 	c.mu.Lock()
 	c.sm = sm
@@ -326,6 +335,11 @@ func (c *ConnectionRecoveryCoordinator) WithStateMachine(sm StateTransitioner) *
 
 // WithCircuitBreakerResetter injects an optional [CircuitBreakerResetter]
 // called on successful recovery. Nil disables CB resets. Returns the receiver.
+//
+// The daemon leaves it nil because the reset already happens one layer down:
+// the Reconnect stage of the wired pipeline is InterfaceClient.Reconnect,
+// which resets its own breakers on the success path. Wire this only for a
+// pipeline whose reconnect stage does not.
 func (c *ConnectionRecoveryCoordinator) WithCircuitBreakerResetter(r CircuitBreakerResetter) *ConnectionRecoveryCoordinator {
 	c.mu.Lock()
 	c.cbResetter = r
