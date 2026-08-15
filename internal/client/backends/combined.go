@@ -177,9 +177,10 @@ func convertCpvLevelHm(value string) any {
 // Out-of-range inputs are clamped to [0, 1] before encoding so the wire
 // never carries negative or overflowing levels.
 //
-// Note: cover/blind.go carries a parallel inline implementation (hmLevelCombined).
-// No production caller of this exported function exists; it is kept here for
-// backend-level unit tests. See notes/parity/by_design.md BD-A3-CombinedUnused.
+// Note: cover/blind.go carries a parallel inline implementation
+// (hmLevelCombined) and that is the one production uses. This exported
+// function has no production caller and is exercised by backend-level
+// unit tests only.
 func EncodeHMLevel(value float64) string {
 	switch {
 	case value < 0:
