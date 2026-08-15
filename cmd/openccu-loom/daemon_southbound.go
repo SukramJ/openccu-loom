@@ -251,12 +251,17 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// flush_interval (default 60 s; override via
 	// persistence.values_cache.flush_interval) and once more on
 	// graceful shutdown. nil-store / nil-registry guards make this a
-	// no-op when the feature is disabled.
+	// no-op when the feature is disabled. It carries the same per-central
+	// opt-out as the restore half above — otherwise an excluded CCU is kept
+	// out of the cache on read and written to it on every tick.
 	flushInterval := cfg.Persistence.ValuesCache.FlushInterval
 	if flushInterval <= 0 {
 		flushInterval = adapter.DefaultValuesCacheFlushInterval
 	}
-	flusher := adapter.WireValuesCacheFlusher(reg, d.valuesCacheStore, flushInterval, logger) //nolint:contextcheck // WireValuesCacheFlusher has no ctx parameter; it creates its own daemon-lifetime context internally
+	flusher := adapter.WireValuesCacheFlusher(reg, d.valuesCacheStore, flushInterval, logger, //nolint:contextcheck // WireValuesCacheFlusher has no ctx parameter; it creates its own daemon-lifetime context internally
+		adapter.WithValuesCacheCentralFilter(func(centralName string) bool {
+			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
+		}))
 	teardowns = append(teardowns, flusher.Stop)
 	// Evict a device's persisted cache rows when it is removed, so an
 	// unpaired device does not leave orphaned values_cache rows behind;
