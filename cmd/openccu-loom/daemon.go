@@ -807,7 +807,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		liveFeed:                stack.Live,
 		captureManager:          captureManager,
 		restStatusMetrics:       restStatusMetrics,
-		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
+		visibilityUnIgnoreStore: visibilityUnIgnoreStoreFrom(visibilityUnIgnoreStore),
 		visibilityAdapter:       visibilityAdapter,
 		valuesCacheStore:        valuesCacheStore,
 		historyStore:            historyStore,

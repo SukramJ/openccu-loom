@@ -560,3 +560,64 @@ func TestHotReloadHandler_MQTT_NoDiff_NoReseed(t *testing.T) {
 		t.Fatalf("reseed hook fired %d times with no diff, want 0", reseeds)
 	}
 }
+
+// TestHotReloadHandlerMQTTSwapRebuildsFromTheAssembledConfig pins which config
+// tier a YAML-file reload rebuilds the MQTT stack from.
+//
+// The config watcher loads the file tier itself, but `north.mqtt` is a
+// DB-tier section: whatever the operator saved in the SPA lives in the
+// database and is overlaid on top of the file at boot. Swapping the watcher's
+// own snapshot would silently revert the running bridge to the file's broker,
+// credentials and topic base, while the next restart re-applies the overlay
+// and flips the behaviour back.
+func TestHotReloadHandlerMQTTSwapRebuildsFromTheAssembledConfig(t *testing.T) {
+	ctx := context.Background()
+
+	sup := newMQTTSupervisor(slog.New(slog.DiscardHandler), health.NewTracker())
+	startCfg := config.Default()
+	startCfg.North.MQTT.Enabled = true
+	startCfg.North.MQTT.BrokerURL = ""
+	startCfg.North.MQTT.TopicBase = "from-database"
+	if err := sup.Start(ctx, startCfg); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { sup.Shutdown(ctx) })
+
+	deps := newReloadDeps()
+	deps.SetMQTTSupervisor(sup)
+	// What the database tier holds — the same shape wireConfigAssembler
+	// installs: the YAML base with the persisted sections overlaid.
+	deps.SetConfigAssembler(func(context.Context) (*config.Config, error) {
+		assembled := config.Default()
+		assembled.North.MQTT.Enabled = true
+		assembled.North.MQTT.BrokerURL = ""
+		assembled.North.MQTT.TopicBase = "from-database"
+		return assembled, nil
+	})
+
+	var buf bytes.Buffer
+	h := hotReloadHandler(makeLogger(&buf), deps)
+
+	prev := config.Default()
+	prev.North.MQTT.Enabled = true
+	prev.North.MQTT.BrokerURL = ""
+	prev.North.MQTT.TopicBase = "from-yaml-old"
+
+	next := config.Default()
+	next.North.MQTT.Enabled = true
+	next.North.MQTT.BrokerURL = ""
+	next.North.MQTT.TopicBase = "from-yaml-new"
+
+	if err := h(prev, next); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	bridge := sup.CurrentBridge()
+	if bridge == nil {
+		t.Fatal("no MQTT stack after the reload")
+	}
+	status := bridge.Topics().BridgeStatus()
+	if !strings.HasPrefix(status, "from-database/") {
+		t.Fatalf("the rebuilt bridge publishes under %q — the reload discarded the database-tier section", status)
+	}
+}

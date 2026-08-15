@@ -1286,18 +1286,23 @@ func (w *wsSessionRecorder) IsActive() bool {
 }
 
 // wsSessionRecorderFrom returns a ws.SessionRecorder backed by the central
-// registry, or nil when no central exposes a recorder (leaves the recording.*
-// commands unregistered).
+// registry, or nil when there is no registry at all (which leaves the
+// recording.* commands unregistered).
+//
+// The decision is deliberately NOT "does a central expose a recorder right
+// now": command registration happens once at boot, while every central.New
+// builds a recorder, so probing the registry only answers "is the fleet empty
+// yet". On a fresh install — no centrals in the config, the operator adding
+// the first CCU through the onboarding wizard — that probe left
+// recording.start/stop/status answering unknown_command for the whole run,
+// exactly when a new CCU is most likely being debugged. The returned recorder
+// re-walks the registry on every call, so a central adopted later is covered
+// and an empty fleet simply reports "not active".
 func wsSessionRecorderFrom(reg *central.Registry) ws.SessionRecorder {
 	if reg == nil {
 		return nil
 	}
-	for _, u := range reg.List() {
-		if u != nil && u.Recorder != nil {
-			return &wsSessionRecorder{registry: reg}
-		}
-	}
-	return nil
+	return &wsSessionRecorder{registry: reg}
 }
 
 // deviceAddrFromChannel strips the ":N" channel suffix from a channel

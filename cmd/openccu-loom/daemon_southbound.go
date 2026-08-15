@@ -333,6 +333,14 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	}
 	// Appended in this order so shutdown (LIFO) drains climate closers before
 	// availability closers — matching the original two inline defers.
+	//
+	// The un_ignore observer joins the same list: it applies the per-central
+	// patterns from SQLite (seeded from config.yaml when the table is empty)
+	// onto the shared visibility registry. Registered here, after
+	// WireCentrals, so every central's ModelRegistry is populated with
+	// materialised devices that the suppression-mark pass can flip; it
+	// re-applies for every CCU adopted or removed afterwards. See
+	// notes/concepts/ui/unignore-concept.md and visibility_wiring.go.
 	teardowns = append(
 		teardowns,
 		func() {
@@ -345,15 +353,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 				close()
 			}
 		},
+		wireVisibilityUnIgnore(ctx, cfg, reg, d.visibilityUnIgnoreStore, d.visReg, logger),
 	)
-
-	// Apply the per-central un_ignore lists from SQLite (seeded from
-	// config.yaml when the table is empty) onto the shared visibility
-	// registry. Runs after WireCentrals so every central's
-	// ModelRegistry is populated with materialised devices that the
-	// suppression-mark pass can flip. See notes/concepts/ui/unignore-concept.md
-	// and visibility_wiring.go.
-	applyVisibilityUnIgnore(ctx, cfg, reg, d.visibilityUnIgnoreStore, d.visReg, logger)
 
 	// Re-run the hub publisher once each central's serial resolves. WireCentrals
 	// only LAUNCHES the readiness-gated bring-up goroutines and returns before
