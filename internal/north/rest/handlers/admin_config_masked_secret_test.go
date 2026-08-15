@@ -495,6 +495,114 @@ func TestPutConfigSection_AbsentSecretKeepsPassword(t *testing.T) {
 	}
 }
 
+// TestPutConfigSection_EnvResolvedSecretStaysOutOfTheRow covers the secret an
+// operator supplies only through OPENCCU_LOOM_MQTT_PASSWORD. Effective
+// overlays it onto the assembled config as its last step and stamps it
+// SourceEnv; both the masked-secret restore and the section marshal then carry
+// it into the blob PutSection writes, so saving any unrelated MQTT field made
+// the credential durable — in database backups and, in cleartext, in
+// `config export`. The row must keep whatever it held (here: nothing).
+func TestPutConfigSection_EnvResolvedSecretStaysOutOfTheRow(t *testing.T) {
+	t.Parallel()
+
+	cur := mqttSectionConfig()
+	cur.North.MQTT.Password = "s3cr3t-from-env"
+	fake := &fakeConfigAdminSvc{
+		effectiveResult: &configstore.EffectiveResult{
+			Config:  cur,
+			Sources: map[string]configstore.FieldSource{"north.mqtt.password": configstore.SourceEnv},
+		},
+		getSectionRow: sqlitestore.SectionRow{
+			Section:   "north.mqtt",
+			ValueJSON: []byte(`{"enabled":true,"broker_url":"tcp://broker.example:1883"}`),
+		},
+	}
+	// The editor drops an untouched secret from the payload entirely.
+	body := `{"enabled":true,"broker_url":"tcp://broker.example:1883","client_id":"loom","username":"loom","topic_base":"homematic"}`
+	w := putSection(fake, "north.mqtt", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(string(fake.putJSON), "s3cr3t-from-env") {
+		t.Fatalf("env-only secret was persisted into the section row: %s", fake.putJSON)
+	}
+	var saved config.NorthMQTT
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON invalid: %v", err)
+	}
+	if saved.Password != "" {
+		t.Errorf("persisted password = %q, want it absent", saved.Password)
+	}
+	if saved.TopicBase != "homematic" {
+		t.Errorf("the unrelated edit was lost: topic_base = %q", saved.TopicBase)
+	}
+}
+
+// TestPutConfigSection_EnvSecretDoesNotDeleteTheStoredOne pins the other half:
+// an operator who saved a password through the editor and later added the env
+// var keeps the stored value in the row. Dropping it would delete the
+// credential the moment the env var goes away.
+func TestPutConfigSection_EnvSecretDoesNotDeleteTheStoredOne(t *testing.T) {
+	t.Parallel()
+
+	cur := mqttSectionConfig()
+	cur.North.MQTT.Password = "s3cr3t-from-env"
+	fake := &fakeConfigAdminSvc{
+		effectiveResult: &configstore.EffectiveResult{
+			Config:  cur,
+			Sources: map[string]configstore.FieldSource{"north.mqtt.password": configstore.SourceEnv},
+		},
+		getSectionRow: sqlitestore.SectionRow{
+			Section:   "north.mqtt",
+			ValueJSON: []byte(`{"enabled":true,"password":"saved-in-db"}`),
+		},
+	}
+	body := `{"enabled":true,"broker_url":"tcp://broker.example:1883","client_id":"loom","username":"loom","topic_base":"homematic"}`
+	w := putSection(fake, "north.mqtt", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	var saved config.NorthMQTT
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON invalid: %v", err)
+	}
+	if saved.Password != "saved-in-db" {
+		t.Errorf("persisted password = %q, want the stored value kept", saved.Password)
+	}
+}
+
+// TestPutConfigSection_TypedSecretPersistsDespiteEnvOverride verifies the
+// env-secret guard does not swallow an operator's own edit: a password typed
+// into the editor is theirs, and the row records it even while the env var
+// takes precedence at runtime.
+func TestPutConfigSection_TypedSecretPersistsDespiteEnvOverride(t *testing.T) {
+	t.Parallel()
+
+	cur := mqttSectionConfig()
+	cur.North.MQTT.Password = "s3cr3t-from-env"
+	fake := &fakeConfigAdminSvc{
+		effectiveResult: &configstore.EffectiveResult{
+			Config:  cur,
+			Sources: map[string]configstore.FieldSource{"north.mqtt.password": configstore.SourceEnv},
+		},
+	}
+	body := `{"enabled":true,"broker_url":"tcp://broker.example:1883","client_id":"loom","username":"loom","password":"typed-by-operator","topic_base":"homematic"}`
+	w := putSection(fake, "north.mqtt", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	var saved config.NorthMQTT
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON invalid: %v", err)
+	}
+	if saved.Password != "typed-by-operator" {
+		t.Errorf("persisted password = %q, want the operator's own value", saved.Password)
+	}
+}
+
 // TestPutConfigSection_EmptyStringSecretClears verifies the operator can still
 // remove a credential: emptying a string secret's input persists the empty
 // value instead of being reconciled back to the stored one. Without this the
