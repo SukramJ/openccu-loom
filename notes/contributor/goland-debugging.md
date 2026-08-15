@@ -54,9 +54,15 @@ go install github.com/go-delve/delve/cmd/dlv@latest
 | **All Unit Tests** | `go test ./...` | No build tags. Runs every package's unit + contract tests. |
 | **Contract Tests** | `go test ./tests/contract/...` | Just the contract pillar (catalogue lives under `tests/contract/`). |
 | **Integration Tests** | `go test -tags=integration ./tests/integration/...` | godevccu-based; slower. Mosquitto-backed cases need Docker. |
+| **E2E Tests** | `go test -tags=e2e -timeout=300s ./tests/e2e/...` | Black-box, against the built binaries. Runs **Build Binaries** first — without fresh binaries the suite silently tests yesterday's build. |
+| **Build Binaries** | `make build-all` | Every `cmd/*` into `./bin/`. Mostly a before-launch step for **E2E Tests**, but useful on its own. |
+| **Lint** | `make lint` | `golangci-lint run ./...` in the IDE terminal. Full-repo, not scoped to changed files. |
+| **hmcli** | `hmcli --help` | Admin CLI. Replace the program argument with the subcommand you are debugging. |
+| **SPA Unit Tests** | `npm run test` in `assets/ui` | vitest component suite. |
+| **SPA Browser E2E** | `npm run e2e` in `assets/ui` | Playwright browser-e2e + visual regression. macOS baselines only — CI compares the Linux ones. |
 
-All five set `CGO_ENABLED=0` and use `$PROJECT_DIR$` as the working
-directory, matching the build policy in
+The Go configurations set `CGO_ENABLED=0` and use `$PROJECT_DIR$` as
+the working directory, matching the build policy in
 [`CLAUDE.md`](../../CLAUDE.md#critical-rules).
 
 ### Run vs. Debug
@@ -118,3 +124,30 @@ team:
 
 Per-user tweaks (interactive args, attached debuggers, ad-hoc
 breakpoints) stay in `workspace.xml` and are not committed.
+
+---
+
+## Local project structure (not shareable via Git)
+
+`.idea/openccu-loom.iml` holds the module structure and is gitignored,
+so every developer configures it once. Two settings matter enough to
+call out:
+
+**Custom build tags.** Without them, roughly 120 test files carrying
+`//go:build integration|e2e|chiptool|loadtest|bench` are greyed out and
+unresolved in the editor. Set them under **Settings → Go → Build Tags &
+Vendoring → Custom tags**: `integration e2e chiptool loadtest bench`.
+Do *not* add `deadlock`, `snapshot_gen` or `integration_live` — each has
+a mutually exclusive counterpart (`!deadlock`, `!snapshot_gen`, the
+`integration`-tagged files in the same package), so enabling them
+produces phantom duplicate-declaration errors.
+
+**Excluded folders.** Mark at least `.claude/worktrees` (agent worktrees
+are full copies of the source tree, so search returns every hit three
+times), `assets/ui/node_modules`, `bin`, `var`, `dist`,
+`internal/north/ui/spa_dist` and `script/__pycache__` as excluded, plus
+the exclude-file patterns `*.test`, `coverage.out`,
+`model_snapshot_*.json` and `discovery_snapshot_*.json` — the snapshot
+dumps alone are ~70 MB of generated JSON. Excluding `spa_dist` does not
+break the `//go:embed all:spa_dist` directive in
+`internal/north/ui/spa.go`.

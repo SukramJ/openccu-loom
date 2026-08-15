@@ -1,0 +1,19 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="E2E Tests" type="GoTestRunConfiguration" factoryName="Go Test">
+    <module name="openccu-loom" />
+    <working_directory value="$PROJECT_DIR$" />
+    <go_parameters value="-tags=e2e -timeout=300s" />
+    <envs>
+      <env name="CGO_ENABLED" value="0" />
+    </envs>
+    <kind value="DIRECTORY" />
+    <package value="github.com/SukramJ/openccu-loom/tests/e2e" />
+    <directory value="$PROJECT_DIR$/tests/e2e" />
+    <filePath value="$PROJECT_DIR$/tests/e2e" />
+    <framework value="gotest" />
+    <pattern value="^Test.*" />
+    <method v="2">
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="Build Binaries" run_configuration_type="ShConfigurationType" />
+    </method>
+  </configuration>
+</component>
