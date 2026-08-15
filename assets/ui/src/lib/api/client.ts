@@ -84,6 +84,7 @@ import type {
   MatterExposableResponse,
   MatterExposureUpdate,
   MatterCompatibility,
+  MatterDiagnosticEventList,
   MatterEndpointsResponse,
   MatterFabricsResponse,
   MatterMdnsDiagnostics,
@@ -1626,6 +1627,9 @@ export const api = {
   },
   matterCompatibility() {
     return request<MatterCompatibility>(`/matter/compatibility`);
+  },
+  matterDiagnosticEvents() {
+    return request<MatterDiagnosticEventList>(`/matter/events`);
   },
   deleteMatterFabric(id: number) {
     return request<void>(`/matter/fabrics/${id}`, { method: "DELETE" });

@@ -29,6 +29,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
@@ -183,8 +184,12 @@ type Bridge struct {
 	caseHandler        CaseHandler
 	caseProvider       CaseHandlerProvider // optional; wins over caseHandler when set
 	ackHandler         AckHandler
-	ackTracker         *mrp.AckTracker       // optional; when set the pump goroutine runs
-	subManager         *subscription.Manager // optional; when set Subscribe is fully wired
+	ackTracker         *mrp.AckTracker // optional; when set the pump goroutine runs
+	// diagEvents records the moments that explain a failed pairing.
+	// Optional: a nil ring drops every record, which is what keeps the
+	// receive path safe when nothing wired one.
+	diagEvents *diagevent.Ring
+	subManager *subscription.Manager // optional; when set Subscribe is fully wired
 
 	// measurementUnsubscribers holds the unsubscribe closures returned
 	// by [interfaces.MatterChangeNotifier.OnMatterValueChanged] for
@@ -1442,4 +1447,16 @@ func udpPort(listen string) int {
 		}
 	}
 	return udp.MatterPort
+}
+
+// AttachDiagnosticEvents wires the ring the bridge records pairing and
+// session moments into. Passing nil detaches it.
+func (b *Bridge) AttachDiagnosticEvents(ring *diagevent.Ring) {
+	b.diagEvents = ring
+}
+
+// DiagnosticEvents returns the recorded trace, newest first. Empty when
+// no ring is attached.
+func (b *Bridge) DiagnosticEvents() []diagevent.Event {
+	return b.diagEvents.Snapshot()
 }

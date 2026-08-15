@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.32.0
+  version: 5.33.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5786,6 +5786,35 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /matter/events:
+    get:
+      operationId: getMatterDiagnosticEvents
+      summary: Recent Matter pairing, session and discovery events
+      description: >-
+        A bounded, in-memory trace of the moments that explain a failed
+        pairing — a commissioner refused while another was mid-handshake,
+        a commissioning window revoked after repeated failures, a session
+        closed. The existing Matter diagnostics report state and
+        therefore cannot answer "what happened thirty seconds ago", which
+        is the question left after a controller gives up and goes quiet.
+
+
+        The trace is lossy by design: oldest entries are dropped to make
+        room, and it does not survive a restart. It is a diagnostic, not
+        an audit trail.
+      tags: [matter]
+      responses:
+        "200":
+          description: Recorded events, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterDiagnosticEventList" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /matter/fabrics:
     get:
       operationId: listMatterFabrics
@@ -9866,6 +9895,33 @@ components:
         fingerprint: { type: string }
         subject: { type: string }
         role: { type: string, enum: [admin, operator, viewer] }
+
+    MatterDiagnosticEvent:
+      type: object
+      required: [at, kind, severity, message]
+      properties:
+        at: { type: string, format: date-time }
+        kind:
+          type: string
+          enum: [pairing, session, discovery]
+        severity:
+          type: string
+          enum: [info, warning, error]
+        message:
+          type: string
+          description: One sentence an operator can act on.
+        detail:
+          type: object
+          additionalProperties: { type: string }
+          description: Identifiers that make the message specific.
+
+    MatterDiagnosticEventList:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/MatterDiagnosticEvent" }
 
     MatterFabric:
       type: object

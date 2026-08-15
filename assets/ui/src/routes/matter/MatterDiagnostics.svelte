@@ -10,6 +10,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import type {
     MatterCompatibility,
+    MatterDiagnosticEvent,
     MatterEndpointInfo,
     MatterMdnsDiagnostics,
     MatterSession,
@@ -23,22 +24,25 @@
   let mdns = $state<MatterMdnsDiagnostics | null>(null);
   let endpoints = $state<MatterEndpointInfo[]>([]);
   let compat = $state<MatterCompatibility | null>(null);
+  let events = $state<MatterDiagnosticEvent[]>([]);
 
   async function load() {
     loading = true;
     error = null;
     try {
-      const [s, m, e, c] = await Promise.all([
+      const [s, m, e, c, ev] = await Promise.all([
         api.matterSessions(),
         api.matterMdns(),
         api.matterEndpoints(),
         api.matterCompatibility(),
+        api.matterDiagnosticEvents(),
       ]);
       sessions = s.sessions;
       occupancy = s.occupancy;
       mdns = m;
       endpoints = e.endpoints;
       compat = c;
+      events = ev.events;
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     } finally {
@@ -275,4 +279,39 @@
       {/if}
     </Card>
   {/if}
+
+  <!-- Recent events: what happened, as opposed to what is currently true -->
+  <Card>
+    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+      {t("matter.diag.events")}
+    </h3>
+    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+      {t("matter.diag.events_hint")}
+    </p>
+    {#if events.length === 0}
+      <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+        {t("matter.diag.events_empty")}
+      </p>
+    {:else}
+      <ul class="mt-3 space-y-2">
+        {#each events as event (event.at + event.message)}
+          <li class="flex gap-3 text-sm">
+            <span
+              class="shrink-0 font-mono text-xs text-slate-500 dark:text-slate-400"
+              >{new Date(event.at).toLocaleTimeString()}</span
+            >
+            <span
+              class="shrink-0 rounded px-1.5 py-0.5 text-xs {event.severity === 'error'
+                ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+                : event.severity === 'warning'
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}"
+              >{t(`matter.diag.kind_${event.kind}`)}</span
+            >
+            <span class="text-slate-700 dark:text-slate-200">{event.message}</span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </Card>
 </div>

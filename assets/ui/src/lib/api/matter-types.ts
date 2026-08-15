@@ -199,3 +199,16 @@ export type MatterCommissioningWindow = {
   qr_code: string;
   manual_code: string;
 };
+
+/** One entry of the bounded pairing/session trace. */
+export type MatterDiagnosticEvent = {
+  at: string;
+  kind: "pairing" | "session" | "discovery";
+  severity: "info" | "warning" | "error";
+  message: string;
+  detail?: Record<string, string>;
+};
+
+export type MatterDiagnosticEventList = {
+  events: MatterDiagnosticEvent[];
+};

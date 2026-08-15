@@ -114,7 +114,12 @@ test.describe('Visual regression - light mode', () => {
     );
     await page.goto('http://localhost:5173/app/#/matter/diagnostics');
     await page.waitForSelector('#main');
-    await page.waitForTimeout(1500);
+    // Wait for the last section to have content rather than for a fixed
+    // interval: this view fans out to five endpoints, and a slower run
+    // screenshotted it mid-load and wrote a blank baseline that the
+    // tolerance check then accepted.
+    await page.getByText('connected but receiving nothing').waitFor();
+    await page.waitForTimeout(300);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-diagnostics-light.png');
   });
@@ -218,7 +223,12 @@ test.describe('Visual regression - dark mode', () => {
     );
     await page.goto('http://localhost:5173/app/#/matter/diagnostics');
     await page.waitForSelector('#main');
-    await page.waitForTimeout(1500);
+    // Wait for the last section to have content rather than for a fixed
+    // interval: this view fans out to five endpoints, and a slower run
+    // screenshotted it mid-load and wrote a blank baseline that the
+    // tolerance check then accepted.
+    await page.getByText('connected but receiving nothing').waitFor();
+    await page.waitForTimeout(300);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-diagnostics-dark.png');
   });

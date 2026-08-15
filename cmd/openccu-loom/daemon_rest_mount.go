@@ -419,6 +419,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		MatterMdnsReporter:          d.matter.mdnsReporter,
 		MatterEndpointInspector:     d.matter.endpointInspector,
 		MatterCompatibilityReporter: d.matter.compatReporter,
+		MatterDiagnosticEvents:      d.matter.diagEvents,
 		// WithDefaults keeps the setup payload aligned with the bridge
 		// runtime: QR / manual code must carry the SAME discriminator the
 		// mDNS record advertises, or commissioners filter the bridge out.

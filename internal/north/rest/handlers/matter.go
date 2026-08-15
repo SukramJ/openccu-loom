@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/setup"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
@@ -511,5 +512,54 @@ func MatterCompatibilityHandler(r MatterCompatibilityReporter) http.HandlerFunc 
 			return
 		}
 		JSON(w, http.StatusOK, r.MatterCompatibility())
+	}
+}
+
+// MatterDiagnosticEventReporter is the narrow facade
+// GET /api/v1/matter/events needs. Implemented by the bridge.
+type MatterDiagnosticEventReporter interface {
+	DiagnosticEvents() []diagevent.Event
+}
+
+// MatterDiagnosticEventResponse is one entry in GET /api/v1/matter/events.
+type MatterDiagnosticEventResponse struct {
+	At       string            `json:"at"`
+	Kind     string            `json:"kind"`
+	Severity string            `json:"severity"`
+	Message  string            `json:"message"`
+	Detail   map[string]string `json:"detail,omitempty"`
+}
+
+// MatterDiagnosticEventList is the GET /api/v1/matter/events body.
+type MatterDiagnosticEventList struct {
+	Events []MatterDiagnosticEventResponse `json:"events"`
+}
+
+// MatterDiagnosticEvents serves the recorded pairing/session trace.
+//
+// A nil reporter means the bridge is off, which is a 503 rather than an
+// empty list: an operator reading an empty trace on a disabled bridge
+// would conclude nothing had happened.
+func MatterDiagnosticEvents(r MatterDiagnosticEventReporter) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if r == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, req,
+					"Matter bridge not enabled",
+					"enable north.matter.enabled to record and read the diagnostic trace"))
+			return
+		}
+		events := r.DiagnosticEvents()
+		out := make([]MatterDiagnosticEventResponse, 0, len(events))
+		for _, e := range events {
+			out = append(out, MatterDiagnosticEventResponse{
+				At:       e.At.UTC().Format(time.RFC3339),
+				Kind:     string(e.Kind),
+				Severity: string(e.Severity),
+				Message:  e.Message,
+				Detail:   e.Detail,
+			})
+		}
+		JSON(w, http.StatusOK, MatterDiagnosticEventList{Events: out})
 	}
 }

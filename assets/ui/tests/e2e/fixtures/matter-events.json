@@ -1,0 +1,24 @@
+{
+  "events": [
+    {
+      "at": "2026-02-14T11:59:12Z",
+      "kind": "pairing",
+      "severity": "error",
+      "message": "The commissioning window was revoked after too many failed pairing attempts. Open a new one and re-check the pairing code.",
+      "detail": { "max_errors": "20" }
+    },
+    {
+      "at": "2026-02-14T11:58:41Z",
+      "kind": "pairing",
+      "severity": "warning",
+      "message": "A commissioner tried to pair while another pairing was already in progress; its attempt was dropped and it will retry.",
+      "detail": { "peer": "fe80::1c4b:2aff:fe3d:9f12" }
+    },
+    {
+      "at": "2026-02-14T11:52:03Z",
+      "kind": "session",
+      "severity": "info",
+      "message": "A controller closed its secure session."
+    }
+  ]
+}

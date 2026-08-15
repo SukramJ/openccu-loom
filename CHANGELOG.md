@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.60.0]
 
+### Added
+
+- **A trace of what happened, next to the state that is true now.**
+  **Matter → Diagnostics** gains a list of the moments that explain a
+  failed pairing: a commissioner refused because another was already
+  mid-handshake, a commissioning window revoked after repeated failures,
+  a session closed. The existing diagnostics report the current state and
+  therefore cannot answer "what happened thirty seconds ago" — the
+  question left after a controller gives up and goes quiet. Until now
+  those moments existed only in the daemon log, which meant having log
+  access, knowing what to grep for, and still having the log. The trace
+  is deliberately bounded and does not survive a restart: it is a
+  diagnostic, not an audit trail. (REST API 5.33.0)
 ### Changed
 
 - **Two unused parameter-channel indexes are gone.** The question "does

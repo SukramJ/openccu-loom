@@ -38,6 +38,7 @@ import (
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	matterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
@@ -2859,6 +2860,7 @@ type matterWiring struct {
 	mdnsReporter      handlers.MatterMdnsReporter
 	endpointInspector handlers.MatterEndpointInspector
 	compatReporter    handlers.MatterCompatibilityReporter
+	diagEvents        handlers.MatterDiagnosticEventReporter
 	opener            handlers.MatterCommissioningOpener
 	statusReader      handlers.MatterStatusReader
 	fabricRevoker     handlers.MatterFabricRevoker
@@ -3226,6 +3228,11 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			fabrics:   mfs,
 			inspector: wiring.endpointInspector,
 		}
+		// The trace has to be attached before the bridge starts serving:
+		// the moments worth recording begin with the first commissioner
+		// that reaches it.
+		mb.AttachDiagnosticEvents(diagevent.NewRing(matterDiagEventCapacity))
+		wiring.diagEvents = mb
 		wiring.exposureStore = mfs
 		wiring.reassembler = mb
 		// Wire the allowlist checker so the assembler only bridges
@@ -3856,3 +3863,8 @@ func (r matterCompatibilityReporter) MatterCompatibility() handlers.MatterCompat
 	}
 	return out
 }
+
+// matterDiagEventCapacity bounds the in-memory pairing trace. Large
+// enough to cover a pairing attempt and the minute around it, small
+// enough that it never competes with the durable records.
+const matterDiagEventCapacity = 200

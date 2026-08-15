@@ -420,6 +420,11 @@ type Deps struct {
 	// ports.
 	MatterSessionLister handlers.MatterSessionLister
 
+	// MatterDiagnosticEvents backs GET /api/v1/matter/events — the
+	// bounded trace of pairing and session moments. Nil serves 503, so a
+	// disabled bridge is distinguishable from one that recorded nothing.
+	MatterDiagnosticEvents handlers.MatterDiagnosticEventReporter
+
 	// MatterMdnsReporter backs GET /api/v1/matter/mdns.
 	MatterMdnsReporter handlers.MatterMdnsReporter
 
@@ -1172,6 +1177,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/matter/mdns", handlers.MatterMdns(d.MatterMdnsReporter))
 			pr.Get("/matter/endpoints", handlers.MatterEndpoints(d.MatterEndpointInspector))
 			pr.Get("/matter/compatibility", handlers.MatterCompatibilityHandler(d.MatterCompatibilityReporter))
+			pr.Get("/matter/events", handlers.MatterDiagnosticEvents(d.MatterDiagnosticEvents))
 			pr.With(admin).Delete("/matter/fabrics/{id}", handlers.MatterFabricRevoke(d.MatterFabricRevoker, d.MatterEventPublisher, d.MatterAuditRecorder))
 			// Admin-gated despite being a GET: the response carries the
 			// cfg:"secret" commissioning passcode and the QR / manual codes
