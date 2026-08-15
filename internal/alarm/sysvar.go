@@ -63,7 +63,8 @@ type sysvarMirror struct {
 	// transitions in the order the engine produced them.
 	queueMu sync.Mutex
 	queue   []hmevent.AlarmStateChangedEvent
-	quit    chan struct{} // non-nil while the worker runs
+	cancel  context.CancelFunc // non-nil while the worker runs
+	done    chan struct{}
 	wake    chan struct{}
 }
 
@@ -83,52 +84,58 @@ func newSysvarMirror(svc *Service) *sysvarMirror {
 	}
 }
 
-// start launches the export worker. Idempotent; paired with stop.
-func (m *sysvarMirror) start() {
+// start launches the export worker. ctx bounds its lifetime the way
+// the engine's lifeCtx bounds timer-driven work — the service start
+// context, never a request. Idempotent; paired with stop.
+func (m *sysvarMirror) start(ctx context.Context) {
 	m.queueMu.Lock()
 	defer m.queueMu.Unlock()
-	if m.quit != nil {
+	if m.cancel != nil {
 		return
 	}
-	quit := make(chan struct{})
-	m.quit = quit
-	go m.run(quit)
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	m.cancel, m.done = cancel, done
+	go m.run(ctx, done)
 }
 
 // stop ends the export worker and discards whatever it has not written
-// yet. It does not wait for an export already on the wire — that would
-// hold daemon shutdown for a CCU round trip — so the worker returns
-// once the current export completes.
+// yet. Cancelling before waiting is what bounds the wait: an export
+// already on the wire aborts instead of running out the CCU's HTTP
+// timeout. The wait itself is not optional — the service closes its
+// database handle right behind this call, and a worker still resolving
+// mirror targets would be reading a store that is going away.
 func (m *sysvarMirror) stop() {
 	m.queueMu.Lock()
-	quit := m.quit
-	m.quit = nil
+	cancel, done := m.cancel, m.done
+	m.cancel, m.done = nil, nil
 	m.queue = nil
 	m.queueMu.Unlock()
-	if quit != nil {
-		close(quit)
+	if cancel == nil {
+		return
 	}
+	cancel()
+	<-done
 }
 
-// run drains the export queue until quit closes.
-func (m *sysvarMirror) run(quit <-chan struct{}) {
+// run drains the export queue until ctx is cancelled.
+func (m *sysvarMirror) run(ctx context.Context, done chan<- struct{}) {
+	defer close(done)
 	for {
 		select {
-		case <-quit:
+		case <-ctx.Done():
 			return
 		case <-m.wake:
 		}
 		for {
-			select {
-			case <-quit:
+			if ctx.Err() != nil {
 				return
-			default:
 			}
 			e, ok := m.dequeue()
 			if !ok {
 				break
 			}
-			m.exportState(e)
+			m.exportState(ctx, e)
 		}
 	}
 }
@@ -138,7 +145,7 @@ func (m *sysvarMirror) run(quit <-chan struct{}) {
 // drops the transition: nothing would ever write it out.
 func (m *sysvarMirror) enqueue(e hmevent.AlarmStateChangedEvent) {
 	m.queueMu.Lock()
-	if m.quit == nil {
+	if m.cancel == nil {
 		m.queueMu.Unlock()
 		return
 	}
@@ -166,8 +173,8 @@ func (m *sysvarMirror) dequeue() (hmevent.AlarmStateChangedEvent, bool) {
 }
 
 // mirrorTargets returns the sysvar-mirror outputs of an zone.
-func (m *sysvarMirror) mirrorTargets(zoneID string) []mirrorTarget {
-	rows, err := m.svc.stores.Outputs.ListByZone(context.Background(), zoneID)
+func (m *sysvarMirror) mirrorTargets(ctx context.Context, zoneID string) []mirrorTarget {
+	rows, err := m.svc.stores.Outputs.ListByZone(ctx, zoneID)
 	if err != nil {
 		m.svc.log.Error("alarm sysvar mirror: load outputs", "zone", zoneID, "error", err)
 		return nil
@@ -221,23 +228,20 @@ func (m *sysvarMirror) onStateChanged(e hmevent.AlarmStateChangedEvent) {
 }
 
 // exportState resolves a queued transition to its mirror targets and
-// writes it out. It runs on the export worker — detached from any
-// caller context by design.
-//
-//nolint:contextcheck // sink callbacks have no caller ctx; exports run on the service lifetime
-func (m *sysvarMirror) exportState(e hmevent.AlarmStateChangedEvent) {
+// writes it out. ctx is the worker's own lifetime, not a caller's — the
+// sink it originates from has none.
+func (m *sysvarMirror) exportState(ctx context.Context, e hmevent.AlarmStateChangedEvent) {
 	idx := sysvarIndexByMode[e.Mode]
 	if e.To == hmenum.AlarmZoneStateTriggered {
 		idx = sysvarAlarmIndex
 	}
-	for _, t := range m.mirrorTargets(e.ZoneID) {
-		m.export(t, idx)
+	for _, t := range m.mirrorTargets(ctx, e.ZoneID) {
+		m.export(ctx, t, idx)
 	}
 }
 
 // export ensures the enum exists once, then writes the state index.
-func (m *sysvarMirror) export(t mirrorTarget, idx int) {
-	ctx := context.Background()
+func (m *sysvarMirror) export(ctx context.Context, t mirrorTarget, idx int) {
 	u, ok := m.svc.reg.Get(t.central)
 	if !ok || u.Hub == nil {
 		return
@@ -286,11 +290,14 @@ func (m *sysvarMirror) export(t mirrorTarget, idx int) {
 // (a higher protection level) are honored; disarm intents are refused
 // unless the zone's mirror explicitly opts in — the refusal is
 // journaled, never silent.
+//
+//nolint:contextcheck // bus dispatch has no caller ctx; the match runs on the service lifetime
 func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEvent) {
 	idx, ok := sysvarValueIndex(e.NewValue)
 	if !ok {
 		return
 	}
+	ctx := context.Background()
 	// Match the sysvar to a mirror target across zones. Two zones
 	// mirroring the same sysvar name would make an inbound intent
 	// ambiguous (and stomp each other's echo guard) — refuse loudly
@@ -303,7 +310,7 @@ func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEven
 	zones := m.svc.engine.Zones()
 	for i := range zones {
 		snap := zones[i]
-		for _, t := range m.mirrorTargets(snap.ID) {
+		for _, t := range m.mirrorTargets(ctx, snap.ID) {
 			if t.existing {
 				// A bool triggered flag carries no mode — never an
 				// inbound intent channel.

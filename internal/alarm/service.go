@@ -426,7 +426,7 @@ func (s *Service) Start(ctx context.Context) error {
 	// Before startInner: the engine's restore pass publishes state
 	// transitions through the sink, and an export queued while the
 	// worker is down is dropped.
-	s.sysvarMirror.start()
+	s.sysvarMirror.start(ctx)
 
 	// Load failures are fail-visible, not fail-fatal: the daemon's
 	// other surfaces (MQTT/REST/UI) must not die because the alarm
