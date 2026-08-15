@@ -68,13 +68,17 @@ type addrParamSet = map[int]struct{}
 // [WarmCache] once at daemon startup to load the full index from the
 // existing database so cold-start lookups also hit the cache.
 //
-// Cache scope: per-(central, interface) lookup. The cache key uses the
-// raw device address (not scoped by central/interface) to match the
-// Python implementation which also does not scope by interface. This is
-// safe because device addresses are globally unique across interfaces
-// for a given central. Multi-CCU safety: distinct ParamsetStore
-// instances are used per daemon (one per db connection); no cross-
-// central sharing occurs.
+// Cache scope: the cache key is the raw device address, NOT scoped by
+// central or interface, while the SQL fallback below it scopes by both.
+// One ParamsetStore is shared by every central (the composition root builds
+// a single instance around the one database connection), so two centrals
+// that hold the same device address — the synthetic `CUX…` and `INT…`
+// spaces above all — would answer for each other on the cached path. This
+// is currently latent rather than a defect: [IsInMultipleChannels] has no
+// production caller (the channel postfix in a data-point name comes from
+// the live model, which reads neither this cache nor the table), so nothing
+// consults the index [Upsert] fills. Anything that starts reading it has to
+// key it by (central, interface) first.
 type ParamsetStore struct {
 	db      *sql.DB
 	cacheMu sync.RWMutex
