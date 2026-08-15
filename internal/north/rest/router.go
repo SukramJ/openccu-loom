@@ -580,7 +580,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	r.Use(middleware.ReqContextWithCentral(d.CentralName))
 	r.Use(middleware.Logger(d.Logger))
 	r.Use(middleware.Recover(d.Logger))
-	r.Use(middleware.Timeout(d.WriteTimeout))
+	r.Use(timeoutExceptStreaming(d.WriteTimeout))
 	if d.StatusMetrics != nil {
 		r.Use(middleware.StatusCounter(d.StatusMetrics))
 	}
@@ -628,7 +628,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// this cannot redirect to a foreign origin.
 			http.Redirect(w, req, target, http.StatusFound) //nolint:gosec // G710: target validated to a local path
 		})
-		r.Handle("/app", http.RedirectHandler("/app/", http.StatusMovedPermanently))
+		// Same Ingress reasoning for the slash-less form: a bare "/app/" here
+		// would send the browser to the Home Assistant origin and out of the
+		// add-on panel — permanently, since the redirect is a 301.
+		r.Handle("/app", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			http.Redirect(w, req, safeIngressPrefix(req)+"/app/", http.StatusMovedPermanently) //nolint:gosec // G710: prefix validated to a local path
+		}))
 		r.Handle("/app/*", http.StripPrefix("/app/", d.SPAHandler))
 	}
 
@@ -1323,6 +1328,35 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		})
 	})
 	return r
+}
+
+// logStreamPath is the one long-lived response this router serves: the
+// server-sent-event log tail writes for as long as an operator keeps the Logs
+// view open.
+const logStreamPath = "/api/v1/diagnostics/logs/stream"
+
+// timeoutExceptStreaming applies the router-wide request deadline everywhere
+// except the SSE log tail.
+//
+// [middleware.Timeout] puts the deadline on r.Context(), and the streaming
+// handler returns as soon as that context is done — so the blanket timeout
+// cut a perfectly healthy live tail after d and left the browser's EventSource
+// reconnecting (and re-sending its original backfill cursor) on a loop. A
+// streaming response is bounded by the client hanging up, which still cancels
+// the request context; it is not a request that can be given a deadline. The
+// WebSocket route escapes the same deadline by hijacking the connection.
+func timeoutExceptStreaming(d time.Duration) func(http.Handler) http.Handler {
+	timeout := middleware.Timeout(d)
+	return func(next http.Handler) http.Handler {
+		timed := timeout(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == logStreamPath {
+				next.ServeHTTP(w, r)
+				return
+			}
+			timed.ServeHTTP(w, r)
+		})
+	}
 }
 
 // safeIngressPrefix returns the Home Assistant Ingress proxy prefix from the
