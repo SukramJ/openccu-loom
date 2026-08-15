@@ -24,8 +24,7 @@ import (
 //
 //	set_value(*, channel_address, paramset_key, parameter, value,
 //	 rx_mode=LEVEL, wait_for_callback=None,
-//	 check_against_pd=False, priority=Low,
-//	 purge_addresses=(), retry=Default)
+//	 check_against_pd=False, priority=Low, retry=Default)
 //
 // openccu-loom's typed Set* paths on `*generic.DataPoint[T]` already
 // validate against the descriptor on input — the [WriteOptions.CheckAgainstPD]
@@ -71,24 +70,14 @@ type WriteOptions struct {
 	// Semantik von WaitForCallbackTimeout: - 0 (Null-Wert) → 60 s Standardwert -
 	// > 0 → wartet genau diese Dauer; danach [ErrStateChangeTimeout].
 	//
-	// Requires the central event bus to be installed via
-	// [ValueWriter.SetEventBus]. Without an installed bus the wait path is
+	// Requires a bus resolver installed via
+	// [ValueWriter.SetBusResolver]. Without one the wait path is
 	// silently skipped (caller behaves as if WaitForCallback were false).
 	WaitForCallback bool
 
 	// WaitForCallbackTimeout bounds the wait. Zero falls back to 60 s
 	// Ignored when WaitForCallback is false.
 	WaitForCallbackTimeout time.Duration
-
-	// PurgeAddresses is the list of channel or device addresses whose pending
-	// retry chains must be canceled before the wire write goes out. Used by
-	// climate state-change orchestration to drop stale optimistic
-	// SET_POINT_TEMPERATURE commits when the CCU reports a different value via
-	// VALVE_STATE.
-	//
-	// Requires a [reliability.Retrier] installed via [ValueWriter.SetRetrier].
-	// Without one the field is accepted but ignored.
-	PurgeAddresses []string
 
 	// SkipRetry, when true, bypasses the per-key retry tracking in the
 	// [reliability.Retrier]. The command is still attempted once through the
@@ -143,23 +132,15 @@ func (w *ValueWriter) SetValueWithOptions(
 		}
 	}
 
-	// PurgeAddresses: cancel pending retry chains for the listed addresses
-	// BEFORE issuing the new wire write.
 	w.mu.RLock()
 	key := keyFor(centralName, interfaceID)
 	b, bOK := w.backends[key]
 	ic := w.icSetters[key]
-	resolved := resolveBus(w.busResolver, w.bus, centralName)
-	retrier := w.retrier
+	resolved := resolveBus(w.busResolver, centralName)
 	ctFn := w.commandTracker
 	w.mu.RUnlock()
 	if !bOK {
 		return fmt.Errorf("%w: central=%s interface=%s", ErrNoBackend, centralName, interfaceID)
-	}
-	if retrier != nil {
-		for _, addr := range opts.PurgeAddresses {
-			retrier.CancelDevice(addr)
-		}
 	}
 
 	// Stage the value as in-flight BEFORE the wire write so that a callback
@@ -209,26 +190,24 @@ func (w *ValueWriter) SetValueWithOptions(
 	return nil
 }
 
-// resolveBus implements the bus-resolution chain: BusResolver (if
-// installed) first, with the central name as key; fallback to the
-// single-bus SetEventBus value otherwise. Returns nil when neither
-// is set or the resolver yields no match — caller treats nil as
-// "skip wait path".
-func resolveBus(resolver BusResolver, single eventBusLike, centralName string) *events.Bus {
-	if resolver != nil {
-		if bus, ok := resolver(centralName); ok {
-			if cb, ok := bus.(*events.Bus); ok {
-				return cb
-			}
-		}
-	}
-	if single == nil {
+// resolveBus asks the installed [BusResolver] for the bus that owns
+// centralName. Returns nil when no resolver is installed or the
+// resolver yields no match — the caller treats nil as "skip wait path".
+func resolveBus(resolver BusResolver, centralName string) *events.Bus {
+	if resolver == nil {
 		return nil
 	}
-	if cb, ok := single.(*events.Bus); ok {
-		return cb
+	bus, ok := resolver(centralName)
+	if !ok {
+		return nil
 	}
-	return nil
+	// The resolver hands back `any` so the daemon can install it without
+	// this package depending on the registry that owns the buses.
+	cb, ok := bus.(*events.Bus)
+	if !ok {
+		return nil
+	}
+	return cb
 }
 
 // PutParamsetWithOptions is the high-level put_paramset entry point.
@@ -272,16 +251,10 @@ func (w *ValueWriter) PutParamsetWithOptions(
 	ppKey := keyFor(centralName, interfaceID)
 	b, bOK := w.backends[ppKey]
 	ic := w.icSetters[ppKey]
-	resolved := resolveBus(w.busResolver, w.bus, centralName)
-	retrier := w.retrier
+	resolved := resolveBus(w.busResolver, centralName)
 	w.mu.RUnlock()
 	if !bOK {
 		return fmt.Errorf("%w: central=%s interface=%s", ErrNoBackend, centralName, interfaceID)
-	}
-	if retrier != nil {
-		for _, addr := range opts.PurgeAddresses {
-			retrier.CancelDevice(addr)
-		}
 	}
 	// Stage all paramset values as in-flight BEFORE the wire write so that
 	// callback echoes arriving concurrently still have a reader fallback.

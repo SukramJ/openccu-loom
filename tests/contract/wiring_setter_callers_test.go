@@ -271,8 +271,15 @@ func injectsCollaborator(fn *types.Func) bool {
 
 // isCollaborator reports whether t is one of the three ways this
 // codebase hands one component to another.
+//
+// The Unalias is load-bearing. `any` is an alias, so a seam declared as
+// Set*(x any) — the shape this codebase uses whenever the setter must
+// not import the collaborator's package — arrived here as *types.Alias,
+// matched no case, and was silently dropped from the walk. Two seams sat
+// in that blind spot, both on ValueWriter, and neither had ever been
+// called by production.
 func isCollaborator(t types.Type) bool {
-	switch t := t.(type) {
+	switch t := types.Unalias(t).(type) {
 	case *types.Pointer:
 		_, named := t.Elem().(*types.Named)
 		return named
