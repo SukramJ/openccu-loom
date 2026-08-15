@@ -37,8 +37,6 @@ var customFieldsNeverFilled = map[string]string{
 		"colour temperature through the white-point level instead — ColorTempLight.colorLevel, which " +
 		"the fleet does fill. The HmIP path is embedded inside DRGDaliLight, and this walk inspects " +
 		"only a custom data point's own fields, not those of a struct it embeds.",
-	"light.FixedColorLight.channelColor": "CHANNEL_COLOR appears in no embedded device description at all, " +
-		"so the fleet cannot witness this field either way.",
 	"siren.SoundPlayer.direction": "HmIP-MP3P is the only SoundPlayer in the fleet and its description " +
 		"carries no DIRECTION parameter.",
 }

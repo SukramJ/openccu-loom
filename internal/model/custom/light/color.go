@@ -359,9 +359,14 @@ type FixedColorLight struct {
 
 	color          *generic.Select
 	colorBehaviour *generic.Select
-	// channelColor carries CHANNEL_COLOR, a read-only ENUM the resolver
-	// projects onto a raw-index Sensor[int32]; the colour-slot label is
-	// resolved on read via [custom.EnumLabelValue].
+	// channelColor is the colour slot the CCU reports as currently
+	// active, which can differ from the commanded COLOR during a
+	// transition. The profile declares it as the `channel_color` channel
+	// field rather than as a wire parameter on this channel, so it is
+	// bound by [FixedColorLight.bindChannelColor] and stays nil for a
+	// profile that declares no such field. The read-only ENUM resolves to
+	// a raw-index Sensor[int32]; the label comes from
+	// [custom.EnumLabelValue] on read.
 	channelColor *generic.Sensor[int32]
 }
 
@@ -371,7 +376,6 @@ func NewFixedColorLight(cfg Config) *FixedColorLight {
 		Light:          New(cfg),
 		color:          custom.SelectField(cfg.Channel, hmenum.ParameterColor),
 		colorBehaviour: custom.SelectField(cfg.Channel, hmenum.ParameterColorBehaviour),
-		channelColor:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterChannelColor),
 	}
 	// Signal lights reset the device-side ON_TIME duration on every plain
 	// turn_on; RGBW/DALI must not (see Light.resetsOnTimeOnTurnOn).
@@ -379,13 +383,49 @@ func NewFixedColorLight(cfg Config) *FixedColorLight {
 	if fc.Float != nil {
 		fc.registerFixedColorLightServices()
 	}
-	if fc.channelColor != nil {
-		_ = fc.channelColor.OnConfirmedUpdate(func(_, _ int32) { fc.dataVersion.Bump() })
-	}
 	if fc.colorBehaviour != nil {
 		_ = fc.colorBehaviour.OnConfirmedUpdate(func(_, _ int32) { fc.dataVersion.Bump() })
 	}
 	return fc
+}
+
+// bindChannelColor resolves the profile's `channel_color` field onto the
+// [FixedColorLight.channelColor] slot.
+//
+// The field names a channel *and* a parameter: an HmIP signal light
+// carries the writable COLOR on the action channel this data point owns
+// and the read-only one on the group's state channel, and the profile
+// declares the latter. Resolving the field name as if it were a wire
+// parameter of this channel found nothing on any device — no CCU
+// description carries a CHANNEL_COLOR parameter — so the slot was nil
+// fleet-wide while the HA discovery payload kept advertising an `hs`
+// colour mode whose state never arrived.
+func (l *FixedColorLight) bindChannelColor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) {
+	if l == nil || ch == nil {
+		return
+	}
+	for chNo, fields := range rebased.ChannelFields {
+		fv, ok := fields[hmenum.FieldChannelColor]
+		if !ok {
+			continue
+		}
+		param, _ := custom.ResolveFieldValue(fv)
+		if param == "" {
+			continue
+		}
+		target := ch
+		if chNo != custom.AnyChannelOffset && chNo != ch.Number {
+			target = siblingChannel(ch, chNo)
+		}
+		dp := custom.EnumSensorField(target, param)
+		if dp == nil {
+			continue
+		}
+		l.channelColor = dp
+		_ = dp.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
+
+		return
+	}
 }
 
 // NamePostfix overrides [Light.NamePostfix] with the "color" suffix
