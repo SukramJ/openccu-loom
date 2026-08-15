@@ -772,8 +772,11 @@ func (p *DevicePipeline) finishIngest(
 	// - Available() reflects the owning device's radio reachability, not
 	//   a hard-coded true; north-bound surfaces (MQTT, REST) can expose the
 	//   "unavailable" state correctly when the device drops off the air.
-	// - WeekProfile DPs publish WeekProfileChangedEvent on FireScheduleUpdated
-	//   so MQTT/WS subscribers see schedule updates without polling.
+	// - WeekProfile DPs publish WeekProfileChangedEvent on FireScheduleUpdated.
+	//   Nothing subscribes to it: north-bound schedule state travels through
+	//   the profile's own OnChange callbacks, and the silence is declared in
+	//   the subscriber-coverage guard. The event is kept as the bus-shaped
+	//   twin of that callback.
 	if p.unit != nil && p.unit.EventBus != nil {
 		centralName := p.unit.Name()
 		for _, d := range p.devicesFor(interfaceID) {

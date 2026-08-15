@@ -1,5 +1,10 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.59.2
+
+Documentation-only release: two code comments described the daemon
+inaccurately and were corrected. No behaviour changes.
+
 ## 0.59.1
 
 A maintenance release built from a full review of the code base. It fixes

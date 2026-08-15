@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.59.2]
+
+### Fixed
+
+- **Two code comments described the daemon inaccurately.** One claimed
+  that MQTT and WebSocket subscribers receive week-profile change events;
+  nothing subscribes to that event, and north-bound schedule state
+  travels a different path. The other said the MCP surface is
+  authorized by the REST listener it mounts behind, when the
+  authorization actually comes from middleware the composition root
+  wraps it in — a mount that skips that wrapper is unauthenticated, and
+  the comment as written invited exactly that mistake.
+
 ## [0.59.1]
 
 ### Added
