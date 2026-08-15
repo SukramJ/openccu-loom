@@ -259,6 +259,35 @@ func TestEvaluateCentralState_InRecoveryBlocksRunning(t *testing.T) {
 	}
 }
 
+// TestEvaluateCentralState_EventMatchesStateMachineOnRejectedTransition pins
+// the payload of the very first system-status event a central emits.
+//
+// Start() leaves the machine in RUNNING while the south-bound bring-up has not
+// registered a single InterfaceClient yet, so the computed target is FAILED —
+// which RUNNING has no edge to. The transition is rejected and the machine
+// stays RUNNING; publishing the computed state anyway told every north-bound
+// consumer the central had failed while the machine, /health and the SPA badge
+// all said RUNNING.
+func TestEvaluateCentralState_EventMatchesStateMachineOnRejectedTransition(t *testing.T) {
+	c := mustNew(t, "eval-rejected-transition")
+
+	drain := drainSystemStatusEvents(c)
+	_ = mustStarted(t, c)
+	evts := drain()
+
+	if len(evts) == 0 {
+		t.Fatal("Start must emit an initial SystemStatusChangedEvent")
+	}
+	if got := c.StateMachine.State(); got != hmenum.CentralStateRunning {
+		t.Fatalf("state machine = %s; want RUNNING (RUNNING -> FAILED is not a valid edge)", got)
+	}
+	for i, e := range evts {
+		if e.CentralState != hmenum.CentralStateRunning {
+			t.Errorf("event[%d].CentralState = %s; want RUNNING to match the state machine", i, e.CentralState)
+		}
+	}
+}
+
 // TestEvaluateCentralState_NilGuard verifies EvaluateCentralState is a no-op
 // when Clients or Health are nil.
 func TestEvaluateCentralState_NilGuard(t *testing.T) {

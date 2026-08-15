@@ -241,3 +241,37 @@ func TestBINRPCListedMethodsAreDispatchable(t *testing.T) {
 		}
 	}
 }
+
+// TestBINRPCListMethodsWithoutInterfaceID probes introspection the way the
+// XML-RPC convention defines it: `system.listMethods` takes no arguments.
+//
+// Routing it through the interface_id preamble faulted the call twice over —
+// once on the missing param, and once more for a peer that does pass an id
+// before its interface has registered a route. The introspection answer is
+// identical for every interface, so it must depend on neither.
+func TestBINRPCListMethodsWithoutInterfaceID(t *testing.T) {
+	t.Parallel()
+
+	const ifaceID = "loom-ccu-CUxD"
+	client := newBINRPCTestServer(t, ifaceID, &binrpcRecordingHandlers{})
+
+	for _, tc := range []struct {
+		name   string
+		params []xmlrpc.Value
+	}{
+		{name: "no params", params: nil},
+		{name: "unregistered interface", params: []xmlrpc.Value{xmlrpc.StringValue("loom-other-CUxD")}},
+	} {
+		res, err := client.Call(context.Background(), "system.listMethods", tc.params)
+		if err != nil {
+			t.Fatalf("%s: system.listMethods must answer, got fault: %v", tc.name, err)
+		}
+		arr, err := xmlrpc.AsStrings(res)
+		if err != nil {
+			t.Fatalf("%s: listMethods result is not a string array: %v", tc.name, err)
+		}
+		if len(arr) != len(BINRPCSupportedMethods()) {
+			t.Errorf("%s: got %d methods, want %d", tc.name, len(arr), len(BINRPCSupportedMethods()))
+		}
+	}
+}

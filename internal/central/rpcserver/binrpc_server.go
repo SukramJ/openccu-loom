@@ -405,6 +405,15 @@ func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrp
 	if req.Method == "system.multicall" {
 		return s.dispatchMulticall(ctx, req.Params)
 	}
+	// Introspection answers the same list for every interface, so it is
+	// exempt from the preamble too. The standard XML-RPC shape carries no
+	// argument at all, and a peer that does pass an id may well probe before
+	// its interface has registered a route — routing it through the lookup
+	// faulted the one call whose whole purpose is to tell a peer what the
+	// listener accepts.
+	if req.Method == "system.listMethods" {
+		return binrpcSupportedMethods(), nil
+	}
 	if len(req.Params) == 0 {
 		return nil, fmt.Errorf("binrpc %s: missing interface_id param", req.Method)
 	}
@@ -465,8 +474,6 @@ func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrp
 		msg, _ := xmlrpc.AsString(rest[1])
 		_ = handlers.Error(ctx, ifaceID, code, msg)
 		return xmlrpc.NilValue{}, nil
-	case "system.listMethods":
-		return binrpcSupportedMethods(), nil
 	default:
 		return nil, fmt.Errorf("binrpc: method not supported: %s", req.Method)
 	}

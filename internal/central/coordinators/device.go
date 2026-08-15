@@ -141,7 +141,10 @@ func (c *DeviceCoordinator) InitialPull(ctx context.Context, lister DeviceLister
 
 // applyPull merges snapshot into the registry. Pre-existing entries
 // missing from the snapshot are dropped + emitted as DeviceRemovedEvent
-// so subscribers (MQTT discovery, audit log) can react.
+// so subscribers (MQTT discovery retraction, the value-cache eviction and
+// the WebSocket device-lifecycle plane) can react. It is NOT an audit
+// source: nothing in the audit domain subscribes to the bus, so a device
+// unpaired at the CCU leaves no change-log row.
 func (c *DeviceCoordinator) applyPull(iface hmtypes.WireInterfaceID, snapshot []hmproto.DeviceDescription, rep *PullReport) {
 	seen := make(map[string]struct{}, len(snapshot))
 	for i := range snapshot {

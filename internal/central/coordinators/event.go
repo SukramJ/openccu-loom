@@ -544,24 +544,6 @@ func (c *EventCoordinator) EmitDeviceRemovedEvent(interfaceID, address string) {
 	})
 }
 
-// EmitHubRefreshedEvent signals north-bound adapters that a full hub-data
-// refresh has completed. Adapters that derive caches from hub state (MQTT
-// discovery, REST ETag tracking) use this event as a flush trigger.
-//
-// The signal is carried as a [hmevent.DataRefreshCompletedEvent] with
-// Scope = "hub" so subscribers can filter without a new event type.
-func (c *EventCoordinator) EmitHubRefreshedEvent() {
-	c.mu.RLock()
-	cn := c.centralName
-	c.mu.RUnlock()
-	events.Publish(c.bus, hmevent.DataRefreshCompletedEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: cn,
-		JobName:     "hub",
-		Success:     true,
-	})
-}
-
 // isTrueBool / isFalseBool extract boolean truthiness from a
 // [hmtypes.ParamValue] without panicking on non-bool kinds.
 func isTrueBool(v hmtypes.ParamValue) bool {

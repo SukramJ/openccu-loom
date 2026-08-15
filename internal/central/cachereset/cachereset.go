@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ScopeKind selects the breadth of a clear.
@@ -135,8 +137,21 @@ type Topology interface {
 // client or the CLI passing the canonical form for an interface- or
 // device-scoped clear) is returned unchanged. An empty central name yields
 // the bare interface, matching how the wire id is composed without one.
+//
+// A bare interface token is prefixed unconditionally, before the
+// already-prefixed test runs. Three of the tokens carry a hyphen themselves
+// (`HmIP-RF`, `BidCos-RF`, `BidCos-Wired`), so a central legitimately named
+// `HmIP` or `BidCos` makes the bare name satisfy a plain prefix test — and
+// returning it unchanged reproduces exactly the zero-row clear this function
+// exists to prevent.
 func StoreInterfaceID(centralName, iface string) string {
-	if centralName == "" || strings.HasPrefix(iface, centralName+"-") {
+	if centralName == "" {
+		return iface
+	}
+	if _, bare := hmenum.InterfacesSupportingRPCCallback[hmenum.Interface(iface)]; bare {
+		return centralName + "-" + iface
+	}
+	if strings.HasPrefix(iface, centralName+"-") {
 		return iface
 	}
 	return centralName + "-" + iface
