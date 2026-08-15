@@ -108,22 +108,26 @@ func TestReceive_SmokeCOAlarm(t *testing.T) {
 		}
 	})
 
-	// RECEIVE — ExpressedState mirrors SmokeState for a smoke-only device
-	// (smokeCOServer.MatterRead: "ExpressedState mirrors SmokeState for
-	// smoke-only devices"); re-firing PRIMARY_ALARM must proactively push
-	// ExpressedState=Critical(2) too, distinct from the Normal(0)
-	// pre-state left by the previous cell.
+	// RECEIVE — ExpressedState carries ExpressedStateEnum, not the
+	// AlarmStateEnum that SmokeState uses: 0=Normal, 1=SmokeAlarm,
+	// 2=CoAlarm (matter.js smoke-co-alarm-cluster.element.ts). So a smoke
+	// alarm on this CO-less device expresses SmokeAlarm(1); pushing
+	// Critical(2) — as mirroring SmokeState did — reports a
+	// carbon-monoxide alarm on a device with no CO sensor, and CoAlarm's
+	// conformance is "CO", which this FeatureMap does not carry.
+	// Re-firing PRIMARY_ALARM must proactively push SmokeAlarm(1),
+	// distinct from the Normal(0) pre-state left by the previous cell.
 	t.Run("receive/expressed-state-primary-alarm", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"smokecoalarm", "expressed-state", ep,
 			func() error { return b.FireDeviceEventEnum(t, address, "SMOKE_DETECTOR_ALARM_STATUS", "PRIMARY_ALARM") },
 			func(out string) bool {
 				v, ok := harness.FindAttrUint(out, "ExpressedState")
-				return ok && v == 2
+				return ok && v == 1
 			},
 			30*time.Second)
 		if err != nil {
-			t.Fatalf("await proactive ExpressedState=Critical(2): %v\n%s", err, out)
+			t.Fatalf("await proactive ExpressedState=SmokeAlarm(1): %v\n%s", err, out)
 		}
 	})
 }

@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 5dbfdb20
-HEAD: 5dbfdb20
+Generated: b1374a05
+HEAD: b1374a05
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28830 |
-| Reachable | 5031 |
-| Whitelisted | 20805 |
-| **Unreachable** | **2994** |
+| Total Exported | 28849 |
+| Reachable | 5033 |
+| Whitelisted | 20811 |
+| **Unreachable** | **3005** |
 
 ## Top-20 Packages by Dead Code
 
@@ -185,7 +185,7 @@ HEAD: 5dbfdb20
 | internal/north/matter/transport/message | 0 | 6 | 12 |
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
-| internal/north/mcp | 0 | 11 | 0 |
+| internal/north/mcp | 0 | 22 | 0 |
 | internal/north/mqtt | 0 | 88 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
