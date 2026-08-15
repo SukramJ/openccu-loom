@@ -1932,7 +1932,9 @@ const EN: Catalog = {
   "config.subgroup.case": "CASE Session",
   "config.subgroup.attestation": "Attestation",
   "config.subgroup.mdns": "mDNS",
+  "config.subgroup.ssdp": "SSDP",
   "config.subgroup.history": "Measurement History",
+  "config.subgroup.values_cache": "VALUES Cache",
   "config.subgroup.behavior": "Behavior",
   // --- Device parameter groups (channel MASTER paramset editor) ---
   "config.paramgroup.temperature": "Temperature",
@@ -2181,6 +2183,8 @@ const EN: Catalog = {
   "roomsfn.col.count": "Channels",
   "roomsfn.col.actions": "Actions",
   "changes.revert": "Revert",
+  "changes.revert_confirm":
+    "Discard your value for “{field}” and fall back to the built-in default? This cannot be undone here.",
   "changes.reverted": "Field reset to default",
   "changes.empty": "No changed settings — everything is at its default.",
   "changes.n_entries": "{count} entries",
@@ -2685,6 +2689,7 @@ const EN: Catalog = {
   "climate.fill_all": "Mo → All",
   "climate.fill_all.tooltip": "Apply Monday to all days",
   "climate.set_active": "Set active",
+  "climate.set_active_failed": "Could not activate the profile",
   "climate.profile_active_badge": "active",
   "channel.expert.tooltip":
     "Show all parameters, even when a profile would hide them",
@@ -5986,7 +5991,9 @@ const DE: Catalog = {
   "config.subgroup.case": "CASE-Sitzung",
   "config.subgroup.attestation": "Attestierung",
   "config.subgroup.mdns": "mDNS",
+  "config.subgroup.ssdp": "SSDP",
   "config.subgroup.history": "Messwert-Verlauf",
+  "config.subgroup.values_cache": "VALUES-Cache",
   "config.subgroup.behavior": "Verhalten",
   // --- Geräte-Parametergruppen (Kanal-MASTER-Paramset-Editor) ---
   "config.paramgroup.temperature": "Temperatur",
@@ -6239,6 +6246,8 @@ const DE: Catalog = {
   "roomsfn.col.count": "Kanäle",
   "roomsfn.col.actions": "Aktionen",
   "changes.revert": "Zurücknehmen",
+  "changes.revert_confirm":
+    "Eigenen Wert für „{field}“ verwerfen und auf den eingebauten Standard zurückfallen? Das lässt sich hier nicht rückgängig machen.",
   "changes.reverted": "Feld auf Standard zurückgesetzt",
   "changes.empty": "Keine geänderten Einstellungen — alles auf Standard.",
   "changes.n_entries": "{count} Einträge",
@@ -6748,6 +6757,7 @@ const DE: Catalog = {
   "climate.fill_all": "Mo → Alle",
   "climate.fill_all.tooltip": "Montag auf alle Tage übertragen",
   "climate.set_active": "Als aktiv setzen",
+  "climate.set_active_failed": "Profil konnte nicht aktiviert werden",
   "climate.profile_active_badge": "aktiv",
   "channel.expert.tooltip":
     "Alle Parameter zeigen, auch wenn ein Profil sie ausblenden würde",

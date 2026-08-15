@@ -334,6 +334,15 @@
     delete cur[parts[parts.length - 1]];
   }
 
+  // The backend masks every stored secret to this sentinel; it is never the
+  // real credential and must never reach the input's value, or an operator who
+  // appends to the field persists "***" + what they typed.
+  const SECRET_MASK = "***";
+
+  function isMaskedSecret(v: unknown): boolean {
+    return v === SECRET_MASK;
+  }
+
   // secretIsSet reports whether a secret field currently holds a value. The
   // backend leaves an unset secret empty instead of masking it, so "" means
   // "not configured" rather than "hidden".
@@ -685,11 +694,11 @@
       <SourceBadge source={sources[f.path] ?? (v ? "db" : "default")} />
       <input
         type="password"
-        value={String(v ?? "")}
+        value={isMaskedSecret(v) ? "" : String(v ?? "")}
         oninput={(e) => (working = setIn(working, rel, (e.target as HTMLInputElement).value))}
         disabled={fromEnv}
         autocomplete="new-password"
-        placeholder={fromEnv ? "•••• (env)" : ""}
+        placeholder={fromEnv ? "•••• (env)" : isMaskedSecret(v) ? "••••" : ""}
         class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-base disabled:opacity-50 sm:w-60 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
       />
     </div>

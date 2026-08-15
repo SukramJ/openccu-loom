@@ -161,7 +161,9 @@
       const blocked = Boolean(values.DUTY_CYCLE);
       out.push({
         icon: blocked ? "mdi:alert-triangle" : "mdi:check-circle",
-        label: t("device.maintenance.duty_cycle_level"),
+        // The blocked flag and the load percentage sit next to each other on
+        // radio modules that report both — they need distinct captions.
+        label: t("device.maintenance.duty_cycle"),
         value: blocked ? t("device.maintenance.blocked") : t("device.maintenance.status_ok"),
         tone: blocked ? "warn" : "ok",
       });

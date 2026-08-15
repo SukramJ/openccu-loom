@@ -10,6 +10,7 @@
   import Input from "$lib/components/ui/Input.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import ClimateScheduleVisualization from "./ClimateScheduleVisualization.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
 
   type Props = {
@@ -27,7 +28,6 @@
   let loadError = $state<string | null>(null);
   let notSupported = $state(false);
   let saving = $state(false);
-  let banner = $state<string | null>(null);
   let activeProfile = $state<string>("P1");
 
   // Clipboard for "copy day to other days" operation.
@@ -87,21 +87,23 @@
     );
   });
 
+  // Detail line for a failure toast. The status separates a device/CCU
+  // rejection (502) from a lock conflict (423), which is the first thing an
+  // operator needs when a schedule did not reach the thermostat.
+  function failureDetail(err: unknown): string {
+    if (err instanceof ApiError) return `${err.status}: ${err.message}`;
+    return err instanceof Error ? err.message : String(err);
+  }
+
   async function save() {
     if (!schedule || !isDirty) return;
     saving = true;
-    banner = null;
     try {
       await api.putDeviceSchedule(address, schedule);
-      banner = t("schedule.saved");
+      toastStore.success(t("schedule.saved_toast"));
       await load();
     } catch (err) {
-      banner =
-        err instanceof ApiError
-          ? `${err.status}: ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err);
+      toastStore.error(t("schedule.save_failed"), failureDetail(err));
     } finally {
       saving = false;
     }
@@ -109,7 +111,6 @@
 
   function reset() {
     if (serverSchedule) schedule = deepClone(serverSchedule);
-    banner = null;
   }
 
   async function switchActiveProfile(pid: string) {
@@ -118,20 +119,14 @@
       return;
     }
     saving = true;
-    banner = null;
     try {
       await api.setDeviceActiveProfile(address, pid);
       activeProfile = pid;
       if (schedule) schedule.active_profile = pid;
       if (serverSchedule) serverSchedule.active_profile = pid;
-      banner = t("schedule.profile_active", { profile: pid });
+      toastStore.success(t("schedule.profile_active", { profile: pid }));
     } catch (err) {
-      banner =
-        err instanceof ApiError
-          ? `${err.status}: ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err);
+      toastStore.error(t("climate.set_active_failed"), failureDetail(err));
     } finally {
       saving = false;
     }
@@ -201,7 +196,7 @@
     const wd = getWeekday(day);
     if (!wd) return;
     clipboard = deepClone(wd);
-    banner = t("climate.day_copied", { count: wd.periods.length });
+    toastStore.success(t("climate.day_copied", { count: wd.periods.length }));
   }
 
   function pasteDay(day: string) {
@@ -210,7 +205,7 @@
     if (!prof) return;
     prof.weekdays[day] = deepClone(clipboard);
     schedule = schedule;
-    banner = t("climate.day_pasted", { day: wd(day) });
+    toastStore.success(t("climate.day_pasted", { day: wd(day) }));
   }
 
   function fillAllDays() {
@@ -223,7 +218,7 @@
       prof.weekdays[day] = deepClone(wd);
     }
     schedule = schedule;
-    banner = t("climate.fill_all_done");
+    toastStore.success(t("climate.fill_all_done"));
   }
 
   function addHour(hhmm: string): string {
@@ -298,9 +293,6 @@
         {/if}
       </div>
       <div class="flex items-center gap-2">
-        {#if banner}
-          <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
-        {/if}
         <Button
           type="button"
           variant="outline"

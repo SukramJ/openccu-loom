@@ -22,11 +22,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, waitFor, fireEvent } from "@testing-library/svelte";
 import type { UISchema, EditSessionResponse } from "$lib/api/types";
 
-const { mockUiSchema, mockOpenEditSession, mockTakeOverEditSession } = vi.hoisted(() => ({
-  mockUiSchema: vi.fn(),
-  mockOpenEditSession: vi.fn(),
-  mockTakeOverEditSession: vi.fn(),
-}));
+const { mockUiSchema, mockOpenEditSession, mockCloseEditSession, mockTakeOverEditSession } =
+  vi.hoisted(() => ({
+    mockUiSchema: vi.fn(),
+    mockOpenEditSession: vi.fn(),
+    mockCloseEditSession: vi.fn(),
+    mockTakeOverEditSession: vi.fn(),
+  }));
 
 vi.mock("$lib/api/client", () => ({
   api: {
@@ -34,7 +36,7 @@ vi.mock("$lib/api/client", () => ({
     listDataPoints: vi.fn().mockResolvedValue([]),
     openEditSession: (...args: unknown[]) => mockOpenEditSession(...args),
     heartbeatEditSession: vi.fn().mockResolvedValue(null),
-    closeEditSession: vi.fn().mockResolvedValue(undefined),
+    closeEditSession: (...args: unknown[]) => mockCloseEditSession(...args),
     getParamset: vi.fn().mockResolvedValue({}),
     putParamset: vi.fn(),
     putLinkParamset: vi.fn(),
@@ -143,6 +145,7 @@ beforeEach(() => {
   mockUiSchema.mockImplementation((_addr: string, ch: number) =>
     Promise.resolve(schemaFor(ch)),
   );
+  mockCloseEditSession.mockResolvedValue(undefined);
 });
 
 afterEach(() => cleanup());
@@ -198,6 +201,31 @@ describe("ChannelPanel — edit-lock banner lifecycle", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(bannerShown(container)).toBe(false);
+  });
+
+  it("releases a lock that only arrives after the panel has switched channels", async () => {
+    const chan1Lock = deferred<EditSessionResponse>();
+    mockOpenEditSession.mockImplementation((key: string) => {
+      if (key === LOCK_KEY_CH1) return chan1Lock.promise;
+      if (key === LOCK_KEY_CH2) return Promise.resolve(session("tok-2", LOCK_KEY_CH2));
+      throw new Error(`unexpected lock key ${key}`);
+    });
+
+    const { rerender } = render(ChannelPanel, {
+      props: { address: "0001ABCD", channel: 1, paramset: "VALUES", locale: "en" },
+    });
+
+    await waitFor(() => expect(mockOpenEditSession).toHaveBeenCalledWith(LOCK_KEY_CH1));
+
+    await rerender({ channel: 2 });
+    await waitFor(() => expect(mockOpenEditSession).toHaveBeenCalledWith(LOCK_KEY_CH2));
+
+    // Channel 1's POST completes after its effect was torn down: the server
+    // holds that lock for the full TTL unless the panel releases it here.
+    const late = session("tok-1", LOCK_KEY_CH1);
+    chan1Lock.resolve(late);
+
+    await waitFor(() => expect(mockCloseEditSession).toHaveBeenCalledWith(late));
   });
 
   it("shows an error toast and leaves the banner in place when take-over fails with a non-423 error", async () => {

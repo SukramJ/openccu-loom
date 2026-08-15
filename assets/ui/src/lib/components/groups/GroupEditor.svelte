@@ -177,7 +177,15 @@
     areaFilter = null;
     query = "";
     selectedOnly = false;
-    await loadMembers(next);
+    try {
+      await loadMembers(next);
+    } catch (err) {
+      // Keeping the previous type's candidates on screen would offer channels
+      // that are not assignable to the type now selected, and the picker would
+      // look like a successful switch.
+      candidates = [];
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    }
   }
 
   // ── grouping / filtering ────────────────────────────────────────────────

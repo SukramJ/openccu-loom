@@ -220,3 +220,35 @@ describe("GroupEditor — config-pending candidates", () => {
     );
   });
 });
+
+describe("GroupEditor — type switch", () => {
+  it("surfaces a failed candidate fetch and drops the previous type's channels", async () => {
+    mockGroupTypes.mockResolvedValue([
+      { id: "hmip.heating.group", label_key: "" },
+      { id: "hmip.security.group", label_key: "" },
+    ]);
+    mockSuitable.mockImplementation((type: string) => {
+      if (type === "hmip.heating.group") {
+        return Promise.resolve({
+          assignable: [{ address: "AAA:1", type: "X", device_name: "Radiator" }],
+          leftover: [],
+        });
+      }
+      return Promise.reject(new Error("jpages timeout"));
+    });
+
+    const { container } = render(GroupEditor, {
+      props: { central: "ccu-a", onClose: vi.fn(), onSaved: vi.fn() },
+    });
+
+    await waitFor(() => expect(screen.getByLabelText("Radiator")).toBeInTheDocument());
+
+    const select = container.querySelector("select") as HTMLSelectElement;
+    await fireEvent.change(select, { target: { value: "hmip.security.group" } });
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    // The heating channels are not assignable to the newly selected type, so
+    // they must not stay on offer.
+    expect(screen.queryByLabelText("Radiator")).not.toBeInTheDocument();
+  });
+});

@@ -323,11 +323,20 @@
     (async () => {
       try {
         const sess = await api.openEditSession(key);
-        if (!cancelled) {
-          lockSession = sess;
-          lockedByOther = null;
-          lockLost = false;
+        if (cancelled) {
+          // The panel moved on (channel/paramset switch, unmount) while the
+          // open was in flight. The server created the lock anyway and holds
+          // it for the full session TTL, blocking the very operator who left —
+          // the cleanup below has already run and cannot see this session, so
+          // release it here.
+          void api.closeEditSession(sess).catch(() => {
+            // ignore — server prunes by TTL
+          });
+          return;
         }
+        lockSession = sess;
+        lockedByOther = null;
+        lockLost = false;
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 423) {
