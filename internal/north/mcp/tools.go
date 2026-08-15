@@ -14,6 +14,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -248,11 +249,32 @@ func registerGetDevice(s *mcpsdk.Server, d Deps) {
 	})
 }
 
+// callerHasRole reports whether the identity the mount's resolve chain
+// attached to the session context may act as want.
+//
+// The mount gates the whole tool set at a single role — viewer, or
+// operator once writes are allowed — which is the right bar for the read
+// surface as a whole but one step below the bar a few individual tools
+// need. A tool whose REST twin is mounted With(admin) re-checks here so
+// both surfaces draw the same boundary; everything else keeps trusting
+// the mount.
+func callerHasRole(ctx context.Context, want auth.Role) bool {
+	id, ok := auth.IdentityFrom(ctx)
+	return ok && id.HasRole(want)
+}
+
 func registerListAudit(s *mcpsdk.Server, d Deps) {
 	mcpsdk.AddTool(s, &mcpsdk.Tool{
 		Name:        "list_audit",
-		Description: "Read the recent configuration change-log (who changed what, when). Newest first.",
-	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listAuditIn) (*mcpsdk.CallToolResult, listAuditOut, error) {
+		Description: "Read the recent configuration change-log (who changed what, when). Newest first. Requires an admin identity.",
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in listAuditIn) (*mcpsdk.CallToolResult, listAuditOut, error) {
+		// REST mounts GET /audit With(admin): the change-log names which
+		// operator changed which credential-bearing section, which device
+		// parameters were written and the notes attached to both. A viewer
+		// identity must not read it here either.
+		if !callerHasRole(ctx, auth.RoleAdmin) {
+			return nil, listAuditOut{}, errors.New("the configuration change-log is admin-only")
+		}
 		limit := in.Limit
 		if limit <= 0 {
 			limit = 50

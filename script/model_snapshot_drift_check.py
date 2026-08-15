@@ -21,6 +21,7 @@
 #
 #   OPENCCU_LOOM_DRIFT_GENERIC=70 OPENCCU_LOOM_DRIFT_CHANNEL=40 \
 #   OPENCCU_LOOM_DRIFT_CUSTOM_ONLY_PY=160 OPENCCU_LOOM_DRIFT_CALC=10 \
+#   OPENCCU_LOOM_DRIFT_MISSING_DEVICES=0 \
 #   make snapshot-diff
 #
 # Usage:
@@ -50,6 +51,14 @@ _BASELINES: dict[str, tuple[str, int]] = {
     "custom_data_points.only_py": ("OPENCCU_LOOM_DRIFT_CUSTOM_ONLY_PY", 0),
     "calculated_data_points.drifted": ("OPENCCU_LOOM_DRIFT_CALC", 0),
 }
+
+# Devices the reference stack built and we did not. The diff reports them
+# outside `drift_counts` (which is computed over the *intersection* of device
+# addresses only), so nothing here would see them without reading the list
+# explicitly — a whole device missing from the model, the loudest regression
+# there is, would score zero drift.
+_MISSING_DEVICES_KEY = "only_in_aiohomematic_devices"
+_MISSING_DEVICES_ENV = "OPENCCU_LOOM_DRIFT_MISSING_DEVICES"
 
 
 def _baseline(env_key: str, default: int) -> int:
@@ -88,12 +97,31 @@ def main() -> int:
         )
         return 2
 
+    # Every check below runs even when `drift_counts` is empty: the counts
+    # cover the intersection of device addresses only, so "no counts" is not
+    # "no drift" — an empty block is exactly what a whole missing device
+    # produces, and the unguarded-bucket check has nothing to say about it
+    # either.
     counts = summary.get("drift_counts", {})
-    if not counts:
-        print("[drift-check] summary reports no drift", file=sys.stderr)
-        return 0
 
     failures: list[str] = []
+
+    missing_devices = summary.get(_MISSING_DEVICES_KEY) or []
+    missing_baseline = _baseline(_MISSING_DEVICES_ENV, 0)
+    if len(missing_devices) > missing_baseline:
+        marker = "FAIL"
+        failures.append(
+            f"{_MISSING_DEVICES_KEY}: actual={len(missing_devices)} > "
+            f"baseline={missing_baseline} ({', '.join(missing_devices[:10])}"
+            f"{', …' if len(missing_devices) > 10 else ''})"
+        )
+    else:
+        marker = "OK"
+    print(
+        f"  {marker:4}  {_MISSING_DEVICES_KEY:42}  "
+        f"actual={len(missing_devices):5}  baseline={missing_baseline}"
+    )
+
     total_actual = 0
     total_baseline = 0
     for bucket, (env_key, default_baseline) in _BASELINES.items():

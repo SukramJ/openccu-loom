@@ -7527,8 +7527,11 @@ export interface components {
             subject: string;
             /** @enum {string} */
             role: "admin" | "operator" | "viewer";
-            /** @enum {string} */
-            scheme?: "basic" | "bearer" | "session" | "oidc";
+            /**
+             * @description How the request authenticated. `ingress` is the Home Assistant Ingress passthrough the add-on deployment uses.
+             * @enum {string}
+             */
+            scheme?: "basic" | "bearer" | "session" | "oidc" | "ingress";
         };
         UserListEntry: {
             username: string;
@@ -7965,6 +7968,17 @@ export interface components {
              * @description RFC3339Nano timestamp the CCU observed the change at.
              */
             modified_at: string;
+            /**
+             * @description Model category of the data point (`switch`, `sensor`, …).
+             *     Only sent to clients that subscribed with `classify: true`;
+             *     omitted otherwise.
+             */
+            category?: string;
+            /**
+             * @description North-bound type the category collapses into. Same
+             *     `classify: true` opt-in as `category`.
+             */
+            data_point_type?: string;
         };
         /**
          * @description Payload of a `custom_data_point.state_changed` broadcast. Topic
@@ -8289,10 +8303,10 @@ export interface components {
             /** @description Stable machine-readable cause token (sensor, adopted, central_lost, restored). */
             cause: string;
             /**
-             * @description Protection mode that was active at trigger time.
+             * @description Protection mode that was active at trigger time. `disarmed` for an always-on trigger (hazard detector, panic) that fires independently of the arm state.
              * @enum {string}
              */
-            mode?: "perimeter" | "full" | "night" | "vacation" | "custom";
+            mode?: "disarmed" | "perimeter" | "full" | "night" | "vacation" | "custom";
         };
         /**
          * @description Alarm-control-panel entity projection (model category

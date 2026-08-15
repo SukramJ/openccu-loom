@@ -64,9 +64,9 @@ type upnpDevice struct {
 
 // parseDeviceDescription parses a `basic_dev.cgi` body and, when it describes a
 // Homematic-family central, returns the corresponding DiscoveredCCU. locationURL
-// is the URL the body was fetched from; it provides the host fallback when the
-// XML carries no usable URLBase. ok is false when the body is not a CCU we care
-// about (wrong manufacturer / unparseable), so the caller can drop it.
+// is the URL the body was fetched from and is the sole source of the adopted
+// address. ok is false when the body is not a CCU we care about (wrong
+// manufacturer / unparseable), so the caller can drop it.
 func parseDeviceDescription(body []byte, locationURL string) (DiscoveredCCU, bool) {
 	var root upnpRoot
 	if err := xml.Unmarshal(body, &root); err != nil {
@@ -76,7 +76,13 @@ func parseDeviceDescription(body []byte, locationURL string) (DiscoveredCCU, boo
 	if !isCentralManufacturer(d.Manufacturer, d.ModelName, d.FriendlyName) {
 		return DiscoveredCCU{}, false
 	}
-	host := hostFromURLs(root.URLBase, d.PresentationURL, locationURL)
+	// The address comes from the URL we fetched, never from the body. SSDP is
+	// unauthenticated: any LAN device can answer the M-SEARCH with a
+	// description that claims an eQ-3 manufacturer, and a body-supplied
+	// URLBase / presentationURL would let it name a *third* host — the one an
+	// operator then adopts and submits the CCU credentials to (ADR 0046 puts
+	// the location host on the CCU address for the same reason).
+	host := hostFromURL(locationURL)
 	if host == "" {
 		return DiscoveredCCU{}, false
 	}
@@ -167,18 +173,15 @@ func serialFrom(udn, modelDescription string) string {
 	return ""
 }
 
-// hostFromURLs returns the first parseable host among the candidate URLs.
-func hostFromURLs(candidates ...string) string {
-	for _, raw := range candidates {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		if u, err := url.Parse(raw); err == nil {
-			if h := u.Hostname(); h != "" {
-				return h
-			}
-		}
+// hostFromURL returns the host of raw, or "" when it carries none.
+func hostFromURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
 	}
-	return ""
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
 }

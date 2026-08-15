@@ -5,6 +5,7 @@ package ssdp
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -228,6 +229,33 @@ func TestDiscovererScanEvictsStaleEntries(t *testing.T) {
 	}
 	if got[0].Serial != "fresh" {
 		t.Errorf("List()[0].Serial = %q, want fresh", got[0].Serial)
+	}
+}
+
+// TestDiscovererScanStopsProbingOnCancel pins that a scan interrupted by
+// shutdown does not walk the remaining interfaces. Each probe blocks for the
+// M-SEARCH read deadline (~3s) and a cancelled context does not shorten it, so
+// on a multi-homed host the daemon's Stop would otherwise wait out one deadline
+// per remaining source address before the loop could exit.
+func TestDiscovererScanStopsProbingOnCancel(t *testing.T) {
+	t.Parallel()
+
+	d := New(time.Minute, nil)
+	d.sourceIPs = func() []net.IP {
+		return []net.IP{net.IPv4(10, 0, 0, 1), net.IPv4(10, 0, 0, 2), net.IPv4(10, 0, 0, 3)}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	probes := 0
+	d.search = func(context.Context, net.IP) ([]string, error) {
+		probes++
+		cancel() // shutdown lands while the first probe is in flight
+		return nil, nil
+	}
+
+	d.scan(ctx)
+
+	if probes != 1 {
+		t.Errorf("probed %d source addresses after cancellation, want 1", probes)
 	}
 }
 

@@ -10,44 +10,36 @@ import (
 	"testing"
 )
 
-// TestCoordinatorMinimumLOC is an early-warning canary for the parity
-// audit's most consequential observation: every Go coordinator is much
-// Smaller than its Python counterpart. The
-// (see) sits at:
+// TestCoordinatorMinimumLOC is a gutting tripwire for the coordinator
+// package: it fails when a coordinator loses most of its body, which is what
+// "we deleted behaviour and nothing noticed" looks like from the outside.
 //
-// - Cache ~300 LOC
-// - Configuration ~500 LOC
-// - ConnectionRecovery ~1700 LOC
-// - Device ~1500 LOC
-// - Event ~500 LOC
-// - Hub ~600 LOC
-// - Link ~380 LOC
+// It is deliberately coarse and nothing more. The floors sit near 60 % of the
+// current non-blank/non-comment line count, so ordinary work — extracting a
+// helper, tightening a switch — never trips it, while a file collapsing to a
+// stub does. A tighter band would fail on every honest refactor and be
+// ratcheted into meaninglessness within a release; the fine-grained coverage
+// lives in the coordinators' own unit tests and in the wiring pins under
+// tests/contract/wiring_pins/.
 //
-// Mapping those 1:1 to Go is unrealistic — the language is more
-// concise — but a coordinator dropping below the floor below means we
-// either accidentally deleted behaviour or never ported it. The floors
-// are chosen to **fail loudly** when a coordinator regresses, not to
-// match the Python LOC.
-//
-// When a coordinator legitimately gains depth (e.g. P0-2 expands
-// connection_recovery.go), bump its floor. When a coordinator legit-
-// imately shrinks (a major refactor lifts logic into a sub-package),
-// move the floor *and* note it in “ §6.2.
+// Keep the floors in that band. When a coordinator legitimately gains depth,
+// raise its floor; when a refactor legitimately lifts logic into a
+// sub-package, lower it in the same change that moves the code — and say so in
+// the commit message, because a floor lowered on its own is indistinguishable
+// from the regression this test exists to catch.
 func TestCoordinatorMinimumLOC(t *testing.T) {
 	t.Parallel()
-	// Floors are set ~10 % below the current non-blank/non-comment
-	// LOC count. Bump after a coordinator legitimately gains depth.
 	floors := map[string]int{
-		"cache.go":               40,
-		"client.go":              60,
-		"configuration.go":       130,
-		"connection_recovery.go": 280,
-		"device.go":              80,
-		"event.go":               120,
-		"hub.go":                 140,
-		"link.go":                115,
-		"reconciler.go":          95,
-		"recovery_stages.go":     50,
+		"cache.go":               200,
+		"client.go":              170,
+		"configuration.go":       120,
+		"connection_recovery.go": 500,
+		"device.go":              550,
+		"event.go":               215,
+		"hub.go":                 360,
+		"link.go":                120,
+		"reconciler.go":          125,
+		"recovery_stages.go":     45,
 	}
 	dir := coordinatorsDir(t)
 	for name, floor := range floors {

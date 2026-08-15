@@ -5,15 +5,20 @@ package hmenum
 
 import "fmt"
 
-// AllDataPointCategories enumerates every known DataPointCategory value. The
-// slice is used by [ValidateStartup] to verify that the three classification
-// sets — [CategoryToType], [HubDataPointCategories], and
-// [BlockedDataPointCategories] — collectively cover every member except
-// [DataPointCategoryUndefined].
+// AllDataPointCategories enumerates every known DataPointCategory value except
+// [DataPointCategoryUndefined]. The slice is used by [ValidateStartup] to verify
+// that the three classification sets — [CategoryToType],
+// [HubDataPointCategories], and [BlockedDataPointCategories] — collectively
+// cover every member.
+//
+// The list is hand-maintained and therefore able to drift from the enum; the
+// contract suite parses the const block and fails on any category missing here,
+// because a category the slice omits is invisible to every check driven from it.
 var AllDataPointCategories = []DataPointCategory{
 	DataPointCategoryAction,
 	DataPointCategoryActionNumber,
 	DataPointCategoryActionSelect,
+	DataPointCategoryAlarmControlPanel,
 	DataPointCategoryBinarySensor,
 	DataPointCategoryButton,
 	DataPointCategoryClimate,
@@ -73,9 +78,10 @@ var BlockedDataPointCategories = map[DataPointCategory]struct{}{
 // - [HubDataPointCategories] (hub data points)
 // - [BlockedDataPointCategories] (blocked from north-bound export)
 //
-// Returns an error listing all uncovered categories. Call this once
-// from the daemon entry point to catch stale enum/set divergences at
-// startup rather than at runtime.
+// Returns an error listing all uncovered categories. The daemon does
+// not call it: an uncovered category is a programming error rather than
+// a deployment condition, so the contract suite drives it at build time
+// instead of a running daemon reporting it once and carrying on.
 func ValidateStartup() error {
 	var missing []DataPointCategory
 	for _, c := range AllDataPointCategories {

@@ -9794,7 +9794,12 @@ components:
       properties:
         subject: { type: string }
         role: { type: string, enum: [admin, operator, viewer] }
-        scheme: { type: string, enum: [basic, bearer, session, oidc] }
+        scheme:
+          type: string
+          enum: [basic, bearer, session, oidc, ingress]
+          description: >-
+            How the request authenticated. `ingress` is the Home
+            Assistant Ingress passthrough the add-on deployment uses.
     UserListEntry:
       type: object
       required: [username, role]
@@ -10443,6 +10448,17 @@ components:
           type: string
           format: date-time
           description: RFC3339Nano timestamp the CCU observed the change at.
+        category:
+          type: string
+          description: |
+            Model category of the data point (`switch`, `sensor`, …).
+            Only sent to clients that subscribed with `classify: true`;
+            omitted otherwise.
+        data_point_type:
+          type: string
+          description: |
+            North-bound type the category collapses into. Same
+            `classify: true` opt-in as `category`.
 
     CustomDataPointStateChangedPayload:
       type: object
@@ -10825,8 +10841,11 @@ components:
           description: Stable machine-readable cause token (sensor, adopted, central_lost, restored).
         mode:
           type: string
-          enum: [perimeter, full, night, vacation, custom]
-          description: Protection mode that was active at trigger time.
+          enum: [disarmed, perimeter, full, night, vacation, custom]
+          description: >-
+            Protection mode that was active at trigger time. `disarmed`
+            for an always-on trigger (hazard detector, panic) that fires
+            independently of the arm state.
 
     AlarmPanelEntity:
       type: object

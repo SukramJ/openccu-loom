@@ -14,8 +14,10 @@ Homematic CCU domain through a small, typed tool surface.
 The MCP adapter is a thin projection of the same domain the REST API
 serves: every tool is scoped per central, reads are always available,
 and writes require a **second, explicit opt-in**. Authorization is the
-REST listener's auth chain — the adapter holds no privilege path of its
-own.
+REST listener's auth chain: the mount authenticates every request and
+gates the whole tool set at one role — viewer, or operator once writes
+are allowed. A tool whose REST twin is admin-only (`list_audit`) checks
+the caller's role itself, so both surfaces draw the same boundary.
 
 - Design rationale: [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
 - Dev-mode surface: [ADR 0026 — MCP dev mode](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0026-mcp-dev-mode.md)

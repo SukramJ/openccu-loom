@@ -13,6 +13,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
@@ -405,6 +406,9 @@ func TestGetDevice_NotFound(t *testing.T) {
 	}
 }
 
+// TestListAudit_WithEntries connects as an admin because the tool is
+// admin-gated (see TestListAudit_DeniedForViewer); it asserts the entry
+// projection, not the gate.
 func TestListAudit_WithEntries(t *testing.T) {
 	buf := audit.NewBuffer(100)
 	buf.Record(audit.Entry{
@@ -421,8 +425,7 @@ func TestListAudit_WithEntries(t *testing.T) {
 		Devices:  devs,
 		Audit:    buf,
 	}
-	cs := connect(t, deps)
-	defer cs.Close()
+	cs := serveMCPAs(t, auth.Identity{Subject: "root", Role: auth.RoleAdmin, Scheme: auth.SchemeBasic}, deps)
 
 	res := callTool(t, cs, "list_audit", map[string]any{})
 	if res.IsError {

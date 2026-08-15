@@ -357,6 +357,42 @@ func TestTeeHandler_WithAttrs_InheritsSink(t *testing.T) {
 	}
 }
 
+// TestTeeHandler_CaptureCarriesHandlerBoundAttrs pins that attributes bound
+// through With(...) reach the capture archive. They live on the handler, not
+// on the record, and they are the ones that say which CCU and which interface
+// a line came from — an archive without them cannot attribute anything in a
+// multi-CCU install, which is the case it exists to diagnose.
+func TestTeeHandler_CaptureCarriesHandlerBoundAttrs(t *testing.T) {
+	t.Parallel()
+	var innerBuf bytes.Buffer
+	inner := slog.NewJSONHandler(&innerBuf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	tee := hmlog.NewTeeHandler(inner)
+
+	sink := hmlog.NewCaptureSink(0, false)
+	tee.Attach(sink)
+
+	child := slog.New(tee.WithAttrs([]slog.Attr{
+		slog.String("central", "ccu1"),
+		slog.String("interface", "ccu1-HmIP-RF"),
+	}))
+	child.Info("xmlrpc.call", slog.String("method", "getValue"))
+
+	line := bytes.TrimRight(sink.Snapshot(), "\n")
+	var got map[string]any
+	if err := json.Unmarshal(line, &got); err != nil {
+		t.Fatalf("captured line is not JSON: %v — got %q", err, line)
+	}
+	for key, want := range map[string]string{
+		"central":   "ccu1",
+		"interface": "ccu1-HmIP-RF",
+		"method":    "getValue",
+	} {
+		if got[key] != want {
+			t.Errorf("captured %q = %v, want %q (line: %s)", key, got[key], want, line)
+		}
+	}
+}
+
 // --------------------------------------------------------------------------
 // TeeHandler — WithGroup inherits sink
 // --------------------------------------------------------------------------
