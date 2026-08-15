@@ -5,6 +5,7 @@ package endpoint
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
@@ -128,21 +129,29 @@ type Endpoint struct {
 	// meaningful value (i.e. for any bridged endpoint with ID ≥ 2).
 	HasParentEndpointID bool
 
-	// RootClusterServers carries the cluster servers the daemon
-	// constructs and attaches to the root endpoint (BasicInformation,
+	// attachedClusters holds the cluster servers that come from OUTSIDE
+	// the assembler: the daemon builds them and hands them to the bridge,
+	// which places them on the root endpoint (BasicInformation,
 	// GeneralCommissioning, OperationalCredentials, NetworkCommissioning,
-	// etc.). Populated only when [Endpoint.IsRoot] is true; nil for
-	// every bridged endpoint. The dispatcher consults this slice via
-	// [ClusterServers] when routing root-endpoint reads / writes.
-	RootClusterServers []interfaces.MatterClusterServer
-
-	// AggregatorClusterServers carries the cluster servers attached to
-	// the Aggregator endpoint (ID 1) — Descriptor (mandatory) +
-	// optionally Identify. Populated only when [Endpoint.IsAggregator]
-	// is true; nil for every other endpoint. Mirrors matter.js's
-	// AggregatorEndpoint requirements (Parts + Index mandatory, Identify
-	// optional) in `packages/node/src/endpoints/aggregator.ts`.
-	AggregatorClusterServers []interfaces.MatterClusterServer
+	// …) and on the Aggregator endpoint (Descriptor — mandatory — plus
+	// optionally Identify, mirroring matter.js's AggregatorEndpoint
+	// requirements in `packages/node/src/endpoints/aggregator.ts`). Every
+	// bridged endpoint materialises its own surface from Source /
+	// Measurement instead and leaves this unset.
+	//
+	// The set is PUBLISHED, never mutated in place, and is only ever read
+	// back through [Endpoint.AttachedClusterServers]. The bridge is
+	// already listening when the daemon attaches these servers, so an IM
+	// dispatch triggered by an early commissioning read walks the very
+	// endpoint the attach targets — assigning to a plain slice field
+	// races on the slice header and hands the reader a torn cluster set.
+	// matter.js has no counterpart because its endpoint owns its
+	// behaviors on a single-threaded event loop (see the private
+	// `#backings` record in
+	// `packages/node/src/endpoint/properties/Behaviors.ts`); in Go the
+	// hand-off between the attaching goroutine and the dispatch
+	// goroutines has to be made explicit.
+	attachedClusters atomic.Pointer[[]interfaces.MatterClusterServer]
 
 	// state holds everything a BRIDGED endpoint must keep BETWEEN
 	// dispatches: the per-cluster DataVersion trackers and the stateful
@@ -173,6 +182,32 @@ type Endpoint struct {
 	// in isolation.
 	stateMu sync.Mutex
 	state   *endpointState
+}
+
+// PublishClusterServers publishes servers as this endpoint's attached
+// cluster set, atomically replacing whatever was published before. The
+// slice is copied first, so the caller may keep mutating its own and a
+// dispatch that already loaded the previous set keeps serving that set to
+// completion instead of observing a half-written one.
+//
+// Only the root (ID 0) and the Aggregator (ID 1) carry an attached set;
+// see [Endpoint.attachedClusters].
+func (e *Endpoint) PublishClusterServers(servers []interfaces.MatterClusterServer) {
+	published := append([]interfaces.MatterClusterServer(nil), servers...)
+	e.attachedClusters.Store(&published)
+}
+
+// AttachedClusterServers returns the cluster set last published via
+// [Endpoint.PublishClusterServers], or nil when nothing was published.
+// The result is a fresh slice on every call — the published set itself is
+// never handed out, so no caller can mutate what a concurrent dispatch is
+// walking.
+func (e *Endpoint) AttachedClusterServers() []interfaces.MatterClusterServer {
+	published := e.attachedClusters.Load()
+	if published == nil {
+		return nil
+	}
+	return append([]interfaces.MatterClusterServer(nil), *published...)
 }
 
 // endpointState returns (lazily creating) the state bound to this

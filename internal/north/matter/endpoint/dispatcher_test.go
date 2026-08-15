@@ -18,6 +18,16 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
+// rootEndpointWith builds the root endpoint (ID 0) carrying servers as its
+// published cluster set — the shape [Bridge.AttachRootClusters] produces in
+// production. The set has to be published rather than assigned, so tests
+// cannot build it in a composite literal.
+func rootEndpointWith(servers ...interfaces.MatterClusterServer) *Endpoint {
+	ep := &Endpoint{ID: 0}
+	ep.PublishClusterServers(servers)
+	return ep
+}
+
 // --- fakeServerFull ---
 
 // fakeServerFull is a richer fake than fakeServer (materialize_test.go):
@@ -116,7 +126,7 @@ func makeTopology(endpoints ...*Endpoint) *Topology {
 	eps = append(
 		eps,
 		&Endpoint{ID: 0},                     // root
-		&Endpoint{ID: 1, DeviceType: 0x000E}, // aggregator — AggregatorClusterServers nil → UnsupportedCluster on wildcard
+		&Endpoint{ID: 1, DeviceType: 0x000E}, // aggregator — nothing published → UnsupportedCluster on wildcard
 	)
 	eps = append(eps, endpoints...)
 	return &Topology{Endpoints: eps, NodeLabel: "test", VendorID: 0xFFF1, ProductID: 0x8000}
@@ -1229,7 +1239,7 @@ func TestCurrentDataVersion_RootUsesInstanceTracker(t *testing.T) {
 	seven := &dvServer{id: 0x0008, ver: 7}
 	top := &Topology{
 		Endpoints: []*Endpoint{
-			{ID: 0, RootClusterServers: []interfaces.MatterClusterServer{noIface, zero, seven}},
+			rootEndpointWith(noIface, zero, seven),
 			{ID: 1, DeviceType: 0x000E},
 		},
 		VendorID: 0xFFF1, ProductID: 0x8000, NodeLabel: "t",
