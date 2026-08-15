@@ -6,8 +6,10 @@ package measurement
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -22,10 +24,21 @@ import (
 // review.
 
 type matterCluster struct {
-	ID         uint32 `json:"id"`
-	Name       string `json:"name"`
-	Revision   uint16 `json:"revision"`
-	FeatureMap uint32 `json:"featureMap"`
+	ID         uint32            `json:"id"`
+	Name       string            `json:"name"`
+	Revision   uint16            `json:"revision"`
+	FeatureMap uint32            `json:"featureMap"`
+	Attributes []matterAttribute `json:"attributes"`
+}
+
+// matterAttribute is one attribute row of the snapshot. Conformance is
+// the raw matter.js conformance expression ("M", "BAT", "IMPE & CUME",
+// "[REPLC]", …) — the contract that decides whether an attribute may,
+// must, or must not be published for a given FeatureMap.
+type matterAttribute struct {
+	ID          uint32 `json:"id"`
+	Name        string `json:"name"`
+	Conformance string `json:"conformance"`
 }
 
 type matterSchema struct {
@@ -136,6 +149,129 @@ type stubBoolSrc bool
 func (s stubBoolSrc) MatterBoolValue() (value, observed bool) { return bool(s), true }
 func (stubBoolSrc) MatterMeasurementClass() interfaces.MatterMeasurementClass {
 	return interfaces.MatterMeasurementBattery
+}
+
+// stubFloatSrc is a minimal MatterFloatMeasurementSource for tests.
+type stubFloatSrc float64
+
+func (s stubFloatSrc) MatterFloatValue() (value float64, observed bool) { return float64(s), true }
+func (stubFloatSrc) MatterMeasurementClass() interfaces.MatterMeasurementClass {
+	return interfaces.MatterMeasurementPower
+}
+
+// featureBitsByCluster pins the FeatureMap bit index of every feature
+// the clusters below can advertise. The embedded schema snapshot carries
+// feature names and their conformance but not the `constraint` field
+// that encodes the bit index, so the indices are pinned here against the
+// matter.js element files:
+//
+//	packages/model/src/standard/elements/power-source-cluster.element.ts
+//	packages/model/src/standard/elements/electrical-energy-measurement.element.ts
+//	packages/model/src/standard/elements/electrical-power-measurement.element.ts
+var featureBitsByCluster = map[uint32]map[string]uint32{
+	ClusterPowerSource:      {"WIRED": 0, "BAT": 1, "RECHG": 2, "REPLC": 3},
+	ClusterElectricalEnergy: {"IMPE": 0, "EXPE": 1, "CUME": 2, "PERE": 3, "APPE": 4, "REAE": 5},
+	ClusterElectricalPower:  {"DIRC": 0, "ALTC": 1, "POLY": 2, "HARM": 3, "PWRQ": 4},
+}
+
+// mandatoryUnderFeatureMap decides whether a matter.js conformance
+// expression obliges a server advertising fm to publish the attribute.
+// Only the unconditional forms are modelled: "M" (always mandatory) and
+// a conjunction of feature names ("BAT", "IMPE & CUME"). Optional forms
+// ("O", "[X]"), choice groups ("[REPLC | RECHG]") and desc-driven
+// expressions carry no publish obligation in either direction and report
+// modelled=false so the caller skips them.
+func mandatoryUnderFeatureMap(conformance string, bits map[string]uint32, fm uint32) (required, modelled bool) {
+	term := conformance
+	// Trailing qualifiers such as ", D" (deprecated) do not change the
+	// publish obligation of the leading term.
+	if i := strings.Index(term, ","); i >= 0 {
+		term = term[:i]
+	}
+	term = strings.TrimSpace(term)
+	if term == "M" {
+		return true, true
+	}
+	if term == "" || strings.ContainsAny(term, "[]|!()<>=") {
+		return false, false
+	}
+	required = true
+	for _, name := range strings.Split(term, "&") {
+		bit, known := bits[strings.TrimSpace(name)]
+		if !known {
+			return false, false
+		}
+		if fm&(1<<bit) == 0 {
+			required = false
+		}
+	}
+	return required, true
+}
+
+// TestParityMatterJS_FeatureGatedAttributesMatchFeatureMap asserts that
+// the attribute set each cluster server publishes is exactly the set its
+// advertised FeatureMap makes mandatory. Both halves bite: a feature bit
+// set without its mandatory attributes leaves a controller reading
+// UnsupportedAttribute for something the cluster declared it has, and an
+// attribute served while its gating feature is clear is a schematically
+// inconsistent cluster — the shape that makes a conformance-checking
+// controller drop the cluster wholesale.
+func TestParityMatterJS_FeatureGatedAttributesMatchFeatureMap(t *testing.T) {
+	t.Parallel()
+	schema := loadMatterSchemaT(t)
+	// A cluster server that also advertises its attribute set — the pair
+	// the dispatcher reads when it answers a wildcard read.
+	type listingServer interface {
+		interfaces.MatterClusterServer
+		interfaces.MatterClusterAttributeLister
+	}
+	cases := []struct {
+		name string
+		srv  listingServer
+	}{
+		{"PowerSource", NewPowerSourceServer(stubBoolSrc(false))},
+		{"ElectricalEnergyMeasurement", NewElectricalEnergyServer(stubFloatSrc(0))},
+		{"ElectricalPowerMeasurement", NewElectricalPowerServer(stubFloatSrc(0))},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			js, ok := clusterByID(schema, c.srv.MatterClusterID())
+			if !ok {
+				t.Fatalf("matter.js schema has no cluster 0x%04X", c.srv.MatterClusterID())
+			}
+			bits, ok := featureBitsByCluster[c.srv.MatterClusterID()]
+			if !ok {
+				t.Fatalf("no pinned feature-bit table for cluster 0x%04X", c.srv.MatterClusterID())
+			}
+			raw, ok := c.srv.MatterRead(cluster.AttrGlobalFeatureMap)
+			if !ok {
+				t.Fatal("MatterRead(FeatureMap) ok = false")
+			}
+			fm, ok := raw.(uint32)
+			if !ok {
+				t.Fatalf("FeatureMap is %T, want uint32", raw)
+			}
+			advertised := make(map[uint32]bool, len(c.srv.MatterAttributes()))
+			for _, id := range c.srv.MatterAttributes() {
+				advertised[id] = true
+			}
+			for _, a := range js.Attributes {
+				required, modelled := mandatoryUnderFeatureMap(a.Conformance, bits, fm)
+				if !modelled {
+					continue
+				}
+				switch {
+				case required && !advertised[a.ID]:
+					t.Errorf("%s (0x%04X) is mandatory under FeatureMap 0x%02X (conformance %q) but is not published",
+						a.Name, a.ID, fm, a.Conformance)
+				case !required && advertised[a.ID]:
+					t.Errorf("%s (0x%04X) is published but its gating feature(s) %q are absent from FeatureMap 0x%02X",
+						a.Name, a.ID, a.Conformance, fm)
+				}
+			}
+		})
+	}
 }
 
 // TestParityMatterJS_ConcentrationClustersShareRevision pins the
