@@ -108,6 +108,13 @@
       if (!selected.includes(name)) onChange([...selected, name]);
       search = "";
       inputEl?.focus();
+    } catch {
+      // Contract: onCreate owns the error surface (it knows which write
+      // failed and against which CCU) and reports it. Swallow here so the
+      // rejection does not escape as an unhandled promise — both call sites
+      // discard the promise — while the chip stays unselected and the typed
+      // text stays in the input, so nothing claims a room that was never
+      // created.
     } finally {
       creating = false;
     }

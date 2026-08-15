@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, screen } from "@testing-library/svelte";
+import {
+  render,
+  cleanup,
+  waitFor,
+  screen,
+  fireEvent,
+} from "@testing-library/svelte";
 
 // ---------------------------------------------------------------------------
 // Mutable mock fns
@@ -187,5 +193,50 @@ describe("Energy — feature-off state", () => {
       { timeout: 3000 },
     );
     expect(screen.queryByText("energy.disabled_title")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Out-of-order responses
+// ---------------------------------------------------------------------------
+
+describe("Energy — overlapping loads", () => {
+  it("keeps the newest selection's data when an earlier response lands last", async () => {
+    // The toolbar stays interactive while a query is in flight and the cost
+    // of a query varies by orders of magnitude with the range, so a slow
+    // earlier response can arrive after a fast later one. Without a
+    // generation guard it overwrites the figures the operator is looking at
+    // while the controls report the newer selection.
+    let resolveSlow!: (value: unknown) => void;
+    const slow = new Promise((resolve) => {
+      resolveSlow = resolve;
+    });
+    const fresh = {
+      ...ENERGY_RESPONSE,
+      devices: [ENERGY_RESPONSE.devices[0]],
+      total_consumed_wh: 42000,
+      total_feed_in_wh: 0,
+    };
+
+    mockGetEnergy.mockReturnValueOnce(slow).mockResolvedValueOnce(fresh);
+    render(Energy);
+
+    // The first (slow) query is in flight; switch the range preset, which
+    // starts the second one.
+    const rangeButton = await waitFor(() =>
+      screen.getByText("energy.preset.24h"),
+    );
+    await fireEvent.click(rangeButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("42.00 kWh")).toBeInTheDocument();
+    });
+
+    // Now let the superseded response land.
+    resolveSlow(ENERGY_RESPONSE);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(screen.getByText("42.00 kWh")).toBeInTheDocument();
+    expect(screen.queryByText("15.00 kWh")).toBeNull();
   });
 });

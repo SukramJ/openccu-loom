@@ -72,8 +72,17 @@
     }
   }
 
+  // Monotonic generation guarding the async load path. The toolbar stays
+  // interactive while a query is in flight and the cost of a query varies by
+  // orders of magnitude with the grouping (a year of hourly buckets against a
+  // handful of monthly ones), so without this a slow earlier response lands
+  // after the fast later one and paints figures for a range the operator has
+  // already left — with the controls still reporting the newer selection.
+  let loadGeneration = 0;
+
   async function load() {
     if (!selectedCentral) return;
+    const generation = ++loadGeneration;
     status = { kind: "loading" };
     const to = new Date();
     const from = new Date(to.getTime() - selectedRangeHours * 60 * 60 * 1000);
@@ -84,6 +93,7 @@
         to: to.toISOString(),
         group,
       });
+      if (generation !== loadGeneration) return;
       // Reset the chart focus when the device set changes (e.g. after
       // switching central) so a stale address never silently empties
       // the chart.
@@ -92,6 +102,7 @@
       }
       status = data.devices.length === 0 ? { kind: "empty" } : { kind: "data", data };
     } catch (err) {
+      if (generation !== loadGeneration) return;
       if (err instanceof HistoryDisabledError) {
         status = { kind: "disabled" };
       } else {

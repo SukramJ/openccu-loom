@@ -250,16 +250,24 @@
 
   // Deep-link into a specific configure sub-tab (e.g. "links" from the global
   // direct-links overview's "edit on device" action), so the view opens on the
-  // requested tab instead of the default channels strip.
-  onMount(() => {
-    if (sub === "links" || sub === "schedule" || sub === "device-config") {
+  // requested tab instead of the default channels strip. Tracks the prop
+  // rather than running once at mount: this component stays mounted while the
+  // router only swaps `address` and `sub` (see the reload effect above), so a
+  // pasted or bookmarked `#/devices/<other>?tab=links` followed with a device
+  // page already open would otherwise land on the previously selected tab.
+  $effect(() => {
+    const want = sub;
+    if (want !== "links" && want !== "schedule" && want !== "device-config") {
+      return;
+    }
+    untrack(() => {
       // A deep link must not land on a tab the surface profile hides —
       // the row in the fleet-wide link list still offers "edit on
       // device", and following it would open an empty Configure shell.
-      if (!surfacesStore.visible(`device.configure.${sub}`)) return;
+      if (!surfacesStore.visible(`device.configure.${want}`)) return;
       topTab = "configure";
-      configSub = sub;
-    }
+      configSub = want;
+    });
   });
 
   onMount(() => {
@@ -422,6 +430,60 @@
     deleteDialogOpen = false;
   }
 
+  // Focus-trap bookkeeping for the remove dialog, mirroring
+  // ConfirmDialog.svelte. Without it focus stays on the "Remove" button
+  // behind the overlay: assistive technology never enters the aria-modal
+  // dialog, a keyboard user has to tab through the whole page to reach
+  // Cancel, and the overlay's own Escape handler is unreachable because the
+  // keydown never travels through the overlay's subtree.
+  let deleteDialogEl = $state<HTMLDivElement | null>(null);
+  let deleteDialogOpener: HTMLElement | null = null;
+
+  function deleteDialogFocusables(): HTMLElement[] {
+    if (!deleteDialogEl) return [];
+    return Array.from(
+      deleteDialogEl.querySelectorAll<HTMLElement>(
+        'input, button, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute("disabled"));
+  }
+
+  $effect(() => {
+    if (!deleteDialogOpen) return;
+    deleteDialogOpener = document.activeElement as HTMLElement | null;
+    // The dialog's DOM is inserted by the {#if} this effect depends on;
+    // queue past the current microtask so Svelte has committed it.
+    queueMicrotask(() => deleteDialogFocusables()[0]?.focus());
+    return () => {
+      deleteDialogOpener?.focus();
+      deleteDialogOpener = null;
+    };
+  });
+
+  // Escape and Tab belong to the dialog as a whole, so they are handled on
+  // the window rather than on the overlay element.
+  function onDeleteDialogKey(e: KeyboardEvent) {
+    if (!deleteDialogOpen) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelDelete();
+      return;
+    }
+    if (e.key === "Tab") {
+      const els = deleteDialogFocusables();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      const active = document.activeElement;
+      const atEdge = e.shiftKey ? active === first : active === last;
+      const outside = !els.includes(active as HTMLElement);
+      if (atEdge || outside) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
+    }
+  }
+
   async function confirmDelete() {
     if (!detail) return;
     deleting = true;
@@ -565,14 +627,28 @@
     }
   }
 
+  // The CCU refuses these writes on a duplicate name, a missing permission
+  // or an unreachable ReGa. The combobox discards the promise it gets back,
+  // so an uncaught rejection surfaces nowhere: no chip, no toast, nothing
+  // to tell the operator the room was never created.
   async function createRoomEntry(name: string) {
-    await api.createRoom(name, detail?.central);
+    try {
+      await api.createRoom(name, detail?.central);
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
     if (!roomOptions.includes(name))
       roomOptions = [...roomOptions, name].sort((a, b) => a.localeCompare(b));
     toastStore.success(t("roomfn.created.room"));
   }
   async function createFunctionEntry(name: string) {
-    await api.createFunction(name, detail?.central);
+    try {
+      await api.createFunction(name, detail?.central);
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
     if (!functionOptions.includes(name))
       functionOptions = [...functionOptions, name].sort((a, b) =>
         a.localeCompare(b),
@@ -663,6 +739,8 @@
     return out.filter((sub) => surfacesStore.visible(`device.configure.${sub.key}`));
   });
 </script>
+
+<svelte:window onkeydown={onDeleteDialogKey} />
 
 <section class="@container mx-auto max-w-6xl px-4 py-6 sm:px-6">
   {#if error}
@@ -1259,6 +1337,7 @@
         }}
       >
         <div
+          bind:this={deleteDialogEl}
           class="w-full max-w-md p-5"
           style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-radius: var(--ha-radius-card); box-shadow: var(--ha-elevation-modal);"
         >
