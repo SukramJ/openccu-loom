@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -383,5 +384,99 @@ func TestSupervisorSwapAfterAFailedBootConnectReachesBoundConsumers(t *testing.T
 	if bound.Bridge() == nil {
 		t.Fatal("the Wiring captured at boot still has no bridge after a successful Swap; " +
 			"the recovered stack never reaches the publishers built at boot")
+	}
+}
+
+// TestSupervisorConcurrentSwapsRetireEveryStackButTheLiveOne pins that a stack
+// transition is atomic end to end.
+//
+// Swap snapshots the live stack, releases the lock to build and connect the
+// replacement, then re-takes it to commit. Two callers exist in production and
+// nothing else serialises them — the config watcher's tick and
+// POST /api/v1/admin/mqtt/reload — so without a lifecycle lock both capture the
+// same predecessor, both commit, and the loser's fully-built stack is
+// referenced by nothing that could tear it down: a connected client and its
+// subscribers leak until the process exits.
+func TestSupervisorConcurrentSwapsRetireEveryStackButTheLiveOne(t *testing.T) {
+	t.Parallel()
+	s := newSup(t)
+	ctx := context.Background()
+
+	var built, stopped atomic.Int64
+	s.SetSubscriberBuilder(func(_ context.Context, _ mqtt.Client, _ *mqtt.Bridge) (func(), error) {
+		built.Add(1)
+		return func() { stopped.Add(1) }, nil
+	})
+
+	if err := s.Start(ctx, mqttCfg(true)); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	const (
+		swappers = 8
+		rounds   = 20
+	)
+	var wg sync.WaitGroup
+	for range swappers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range rounds {
+				if err := s.Swap(ctx, mqttCfg(true)); err != nil {
+					t.Errorf("Swap: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Exactly one generation — the live one — may still hold its subscribers.
+	if live := built.Load() - stopped.Load(); live != 1 {
+		t.Fatalf("%d subscriber sets are still live after %d swaps, want exactly 1 (built=%d stopped=%d)",
+			live, swappers*rounds, built.Load(), stopped.Load())
+	}
+
+	s.Shutdown(ctx)
+	if live := built.Load() - stopped.Load(); live != 0 {
+		t.Fatalf("%d subscriber sets survived shutdown, want 0", live)
+	}
+}
+
+// TestSupervisorSwapDuringShutdownStopsTheOrphanedSubscribers pins the other
+// half of the same invariant: a stack whose commit loses to Shutdown must be
+// torn down rather than left running behind a cleared s.current.
+func TestSupervisorSwapDuringShutdownStopsTheOrphanedSubscribers(t *testing.T) {
+	t.Parallel()
+	s := newSup(t)
+	ctx := context.Background()
+
+	var built, stopped atomic.Int64
+	s.SetSubscriberBuilder(func(_ context.Context, _ mqtt.Client, _ *mqtt.Bridge) (func(), error) {
+		built.Add(1)
+		return func() { stopped.Add(1) }, nil
+	})
+	if err := s.Start(ctx, mqttCfg(true)); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_ = s.Swap(ctx, mqttCfg(true))
+	}()
+	go func() {
+		defer wg.Done()
+		s.Shutdown(ctx)
+	}()
+	wg.Wait()
+	// Whichever order the two ran in, a stack built after the shutdown must
+	// still be torn down by the next Shutdown call.
+	s.Shutdown(ctx)
+
+	if live := built.Load() - stopped.Load(); live != 0 {
+		t.Fatalf("%d subscriber sets outlived shutdown (built=%d stopped=%d)",
+			live, built.Load(), stopped.Load())
 	}
 }

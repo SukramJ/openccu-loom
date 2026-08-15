@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -89,7 +88,7 @@ func cmdAlarmStatus(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	var resp alarmStateResponse
@@ -141,7 +140,7 @@ func cmdAlarmArm(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	body := alarmArmRequest{Mode: *mode, Force: *force, SkipDelay: *skipDelay}
@@ -182,7 +181,7 @@ func cmdAlarmDisarm(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	path := "/api/v1/alarm/zones/" + url.PathEscape(*zone) + "/disarm"
@@ -218,7 +217,7 @@ func cmdAlarmSilence(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	path := "/api/v1/alarm/silence-all"
@@ -252,7 +251,7 @@ func cmdAlarmAck(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	ctx, cancel := f.requestContext()
 	defer cancel()
 
 	path := "/api/v1/alarm/zones/" + url.PathEscape(*zone) + "/acknowledge"

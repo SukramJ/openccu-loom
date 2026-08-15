@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -17,7 +18,16 @@ import (
 // receive the event payload as a JSON object on the wire.
 type matterEventPublisher struct {
 	hub *ws.Hub
+	// fabrics resolves the identity of a freshly commissioned fabric for the
+	// `matter.fabric_added` payload. Nil in minimal wirings, which degrades
+	// the payload to the fabric index alone.
+	fabrics handlers.MatterFabricStore
 }
+
+// fabricLookupTimeout bounds the store read publishFabricAdded does. It runs
+// inside the commissioning callback, so a slow or wedged store must degrade
+// the payload rather than hold up the AddNOC path.
+const fabricLookupTimeout = 3 * time.Second
 
 // PublishMatterEvent implements [handlers.MatterEventPublisher].
 func (p *matterEventPublisher) PublishMatterEvent(_ context.Context, ev handlers.MatterEvent) {
@@ -48,17 +58,55 @@ func (p *matterEventPublisher) publishEndpointAssembled(count int) {
 	})
 }
 
-// publishFabricAdded emits `matter.fabric_added` with the freshly
-// assigned fabric_index. Wired through a wrapping StoreFacade in
-// the daemon so the cluster-side AddNOC + REST-side flows both
-// surface the event.
+// publishFabricAdded emits `matter.fabric_added` for the freshly commissioned
+// fabric. Wired through a wrapping StoreFacade in the daemon so the
+// cluster-side AddNOC + REST-side flows both surface the event.
+//
+// The declared payload is the full MatterFabric identity (assets/wsapi.json →
+// the MatterFabric schema in assets/openapi.yaml), so the index alone leaves
+// every generated client decoding a frame that is missing five required
+// members. The record is already persisted when the hook fires — AddNOC writes
+// it before invoking OnFabricInstalled — so it is read back here; a lookup
+// miss degrades to the index rather than dropping the event.
 func (p *matterEventPublisher) publishFabricAdded(fabricIndex uint8) {
 	p.PublishMatterEvent(context.Background(), handlers.MatterEvent{
 		Topic:   handlers.MatterTopicFabricAdded,
 		Type:    "fabric_added",
 		When:    time.Now().UTC(),
-		Payload: map[string]any{"fabric_index": fabricIndex},
+		Payload: p.fabricPayload(fabricIndex),
 	})
+}
+
+// fabricPayload builds the MatterFabric body for fabricIndex, falling back to
+// the bare index when no store is wired or the fabric cannot be resolved.
+func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
+	if p == nil || p.fabrics == nil {
+		return map[string]any{"fabric_index": fabricIndex}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fabricLookupTimeout)
+	defer cancel()
+	recs, err := p.fabrics.ListFabrics(ctx)
+	if err != nil {
+		return map[string]any{"fabric_index": fabricIndex}
+	}
+	for i := range recs {
+		r := &recs[i]
+		if r.FabricIndex != fabricIndex {
+			continue
+		}
+		// Same projection GET /api/v1/matter/fabrics serves, so a WS
+		// consumer and a REST consumer see one shape for one fabric.
+		return handlers.MatterFabricResponse{
+			FabricIndex:   r.FabricIndex,
+			FabricID:      r.FabricID,
+			NodeID:        r.NodeID,
+			VendorID:      r.VendorID,
+			Label:         r.Label,
+			CompressedID:  hex.EncodeToString(r.CompressedID[:]),
+			RootPublicKey: hex.EncodeToString(r.RootPublicKey),
+		}
+	}
+	return map[string]any{"fabric_index": fabricIndex}
 }
 
 // publishFabricRemoved emits `matter.fabric_removed` with the

@@ -173,6 +173,24 @@ type restMountDeps struct {
 	channelFlagsOverlay *channelflags.Overlay
 }
 
+// channelFlagsWriterFrom boxes the durable channel-flags store into the
+// handler interface, keeping a TRUE nil interface when the app database could
+// not be opened.
+//
+// The route is mounted unconditionally and relies on
+// `if store == nil { 503 }` to signal the degraded state. A nil pointer
+// assigned straight into the interface field is non-nil there, so the guard
+// never fires and the overlay (built unconditionally) cannot substitute for
+// it: the handler reaches the store's nil-receiver Set, which reports success
+// without writing, and answers 200 while the operator's hide/lock choice is
+// lost on the next restart.
+func channelFlagsWriterFrom(s *sqlitestore.ChannelFlagsStore) handlers.ChannelFlagsWriter {
+	if s == nil {
+		return nil
+	}
+	return s
+}
+
 // mountRESTServer stands up the REST router + server (and the optional mDNS
 // advertiser) when REST is enabled, and returns a teardown that stops the mDNS
 // advertiser at daemon exit. When REST is disabled it is a no-op returning a
@@ -458,7 +476,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ValuesCache:           newValuesCacheHandlerAdapter(d.valuesCacheStore),
 		History:               newHistoryHandlerAdapter(d.historyStore),
 		RecordingOverrides:    newRecordingOverrideAdapter(d.recordingOverrides),
-		ChannelFlags:          d.channelFlagsStore,
+		ChannelFlags:          channelFlagsWriterFrom(d.channelFlagsStore),
 		ChannelFlagsOverlay:   d.channelFlagsOverlay,
 		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg, cfg.Persistence.History.EnergyPricePerKWh, cfg.Persistence.History.EnergyCurrency),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),

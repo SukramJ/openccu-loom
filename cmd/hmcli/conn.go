@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
 	"os"
@@ -39,6 +40,19 @@ func (f *connFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&f.insecure, "insecure", false, "skip TLS certificate verification (dangerous; off by default)")
 	fs.DurationVar(&f.timeout, "timeout", 60*time.Second, "request timeout")
 	fs.BoolVar(&f.jsonOut, "json", false, "emit raw JSON instead of a human-readable table")
+}
+
+// requestContext derives the per-request context from the configured timeout.
+//
+// A zero timeout means "no deadline" — the same meaning it already has for
+// [clientConfig.timeout] and for `events tail -timeout 0`. Handing 0 to
+// context.WithTimeout would instead produce a context whose deadline is
+// already past, failing every request before a socket is opened.
+func (f *connFlags) requestContext() (context.Context, context.CancelFunc) {
+	if f.timeout <= 0 {
+		return context.WithCancel(context.Background())
+	}
+	return context.WithTimeout(context.Background(), f.timeout)
 }
 
 // client resolves off-argv credentials, warns if they would cross a plaintext

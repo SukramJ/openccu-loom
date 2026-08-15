@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 )
@@ -40,11 +41,59 @@ func wireVisibilityUnIgnoreStore(cfg *config.Config, logger *slog.Logger) *sqlit
 	return sqlite.NewVisibilityUnIgnoreStore(db)
 }
 
+// visibilityUnIgnoreStoreFrom boxes the concrete store into the handler
+// interface, keeping a TRUE nil interface when no store was opened.
+//
+// Assigning the nil pointer directly would produce a non-nil interface holding
+// a nil pointer, so the handlers' `if store == nil { 503 }` guard never fires:
+// GET would answer 200 with an empty pattern list for every central (the
+// store's nil-receiver guards return no rows), and PUT would run the whole
+// validate-and-persist path against a no-op Replace. A degraded database has
+// to read as unavailable, not as configured-empty.
+func visibilityUnIgnoreStoreFrom(s *sqlite.VisibilityUnIgnoreStore) handlers.VisibilityUnIgnoreStore {
+	if s == nil {
+		return nil
+	}
+	return s
+}
+
+// wireVisibilityUnIgnore keeps the shared visibility registry in step with the
+// fleet. It registers a [central.Registry] observer, which replays over every
+// central already present — the boot-time apply — and runs again for every CCU
+// adopted at runtime, plus once more when one leaves.
+//
+// A single boot-time pass was not enough: the un_ignore union is computed over
+// the centrals registered at that instant, so a CCU adopted through the SPA
+// kept every parameter it had un-ignored suppressed on REST, MQTT and the SPA
+// until the next daemon restart re-ran the walk — with nothing anywhere
+// reporting it, which reads as "the setting needs a restart" rather than a bug.
+// The un-register half matters too: a removed CCU's patterns must stop
+// widening what the other centrals expose.
+//
+// The returned remove detaches the observer; the caller runs it at shutdown.
+func wireVisibilityUnIgnore(
+	ctx context.Context,
+	cfg *config.Config,
+	reg *central.Registry,
+	store *sqlite.VisibilityUnIgnoreStore,
+	visReg *visibility.Registry,
+	logger *slog.Logger,
+) (remove func()) {
+	if reg == nil {
+		return func() {}
+	}
+	apply := func() { applyVisibilityUnIgnore(ctx, cfg, reg, store, visReg, logger) }
+	return reg.OnRegister(func(_ *central.Unit) func() {
+		apply()
+		return apply
+	})
+}
+
 // applyVisibilityUnIgnore reads the per-central un_ignore list from
 // SQLite (seeding it from config.yaml on first start), then writes the
-// union into the shared visibility.Registry. Called once after the
-// device pipeline materialised every central so the suppression marks
-// land on the freshly-built devices.
+// union into the shared visibility.Registry. Runs after the device pipeline
+// materialised a central so the suppression marks land on the built devices;
+// [wireVisibilityUnIgnore] is what re-runs it as the fleet changes.
 //
 // Returns the count of centrals whose patterns were applied (zero is
 // not an error — empty lists are valid).
@@ -98,7 +147,11 @@ func applyVisibilityUnIgnore(
 			union = append(union, p)
 		}
 	}
-	if len(union) == 0 {
+	// An empty union still has to be loaded once something was loaded before:
+	// that is what withdraws the patterns of a central that left the fleet.
+	// With nothing loaded either way there is no work — the common boot with
+	// no un_ignore rules at all skips the full-fleet re-mark below.
+	if len(union) == 0 && len(visReg.Parameter().UnIgnoreEntries()) == 0 {
 		return appliedCount
 	}
 
