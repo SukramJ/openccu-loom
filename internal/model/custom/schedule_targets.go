@@ -34,7 +34,7 @@ type ScheduleTargetGroup struct {
 // plus the per-group channel enumeration of `_build_target_channel_map`:
 //
 //   - Every channel that carries a custom data point contributes its
-//     group (keyed by the channel's GroupNo) with the profile's rebased
+//     group (keyed by the channel's group number) with the profile's rebased
 //     channel-group schema: primary channel first, then the secondary
 //     channels.
 //   - When at least one custom DP's profile declares an explicit
@@ -46,7 +46,7 @@ type ScheduleTargetGroup struct {
 //     CDP-less schedule channel (e.g. HmIP-MIO16-PCB) has no target map.
 //
 // Note: a custom DP whose primary channel is channel 0 carries the Go
-// sentinel GroupNo == 0 ("ungrouped") and is skipped. Such CDPs
+// sentinel group number 0 ("ungrouped") and is skipped. Such CDPs
 // (HmIP-DLP IPButtonLock) are filtered out by the explicit-schedule
 // rule in the reference stack as well, so the result is identical.
 func ScheduleRelevantChannelGroups(dev *device.Device, registry *Registry) []ScheduleTargetGroup {
@@ -61,7 +61,8 @@ func ScheduleRelevantChannelGroups(dev *device.Device, registry *Registry) []Sch
 	scheduled := make(map[int]groupEntry)
 	for _, ch := range dev.Channels() {
 		cdp := ch.CustomDataPoint()
-		if cdp == nil || ch.GroupNo == 0 {
+		groupNo := ch.GroupNumber()
+		if cdp == nil || groupNo == 0 {
 			continue
 		}
 		profile, ok := lookupProfileForCustomDP(registry, dev.Model, cdp)
@@ -69,14 +70,14 @@ func ScheduleRelevantChannelGroups(dev *device.Device, registry *Registry) []Sch
 			continue
 		}
 		entry := groupEntry{
-			rebased:  profile.Rebase(ch.GroupNo),
+			rebased:  profile.Rebase(groupNo),
 			schedule: profile.ScheduleChannelNo != nil,
 		}
-		if _, seen := all[ch.GroupNo]; !seen {
-			all[ch.GroupNo] = entry
+		if _, seen := all[groupNo]; !seen {
+			all[groupNo] = entry
 		}
 		if entry.schedule {
-			scheduled[ch.GroupNo] = entry
+			scheduled[groupNo] = entry
 		}
 	}
 	src := all

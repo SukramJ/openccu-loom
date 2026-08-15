@@ -188,9 +188,9 @@ func CreateCustomDataPoint(dev *device.Device, ch *device.Channel, profile Profi
 
 	// Resolve the channel's group_no. Mirrors Python's
 	// `device.get_channel_group_no(channel_no=channel.no)` — we use the
-	// per-Channel `GroupNo` field that addChannelGroupsToDevice has
-	// already set (zero falls back to the Python-`None` semantics).
-	groupNo := ch.GroupNo
+	// per-Channel group number that addChannelGroupsToDevice has already
+	// set (zero falls back to the Python-`None` semantics).
+	groupNo := ch.GroupNumber()
 
 	rebased := profile.Rebase(groupNo)
 
@@ -234,9 +234,9 @@ func CreateCustomDataPoint(dev *device.Device, ch *device.Channel, profile Profi
 // - the optional state channel offset → group_no = master,
 // - every secondary channel offset → group_no = master.
 //
-// The resolved group_no is also written back to the [device.Channel]
-// `GroupNo` field so [CreateCustomDataPoint] can read it without going
-// through Device.GroupChannels.
+// The resolved group_no is also written back to the [device.Channel] via
+// [device.Channel.AssignGroupNumber] so [CreateCustomDataPoint] can read it
+// without going through Device.GroupChannels.
 //
 // No-op when the profile has no Config or no PrimaryChannel set.
 func addChannelGroupsToDevice(dev *device.Device, profile Profile) {
@@ -260,29 +260,27 @@ func addChannelGroupsToDevice(dev *device.Device, profile Profile) {
 }
 
 // assignChannelGroup writes the group bookkeeping to both the
-// device-level group map *and* the per-Channel GroupNo field so
-// downstream code (Channel.GroupMaster, Room fallback) keeps working
-// without re-walking the registry.
+// device-level group map *and* the channel itself so downstream code
+// (Channel.GroupMaster, Room fallback) keeps working without re-walking
+// the registry.
 //
-// (`model/device.py:622-623`): once a channel has been recorded in
-// the channel-to-group map, a later profile registration MUST NOT
-// overwrite the assignment. Without this guard, devices that match
-// multiple profiles (e.g. HmIP-WGT registers IPDimmer ch=2 and
-// IPSwitch ch=4 — both claim ch3+ch4 via their secondary_channels)
-// Drift away from
-// instead of the first. (found via
-// `channel.group_no` snapshot drift on VCU4105035 / VCU4523900
-// VCU8255833.)
+// Once a channel has been recorded in the channel-to-group map, a later
+// profile registration must not overwrite the assignment (mirrors
+// `model/device.py:622-623`). Devices that match multiple profiles —
+// HmIP-WGT registers IPDimmer on channel 2 and IPSwitch on channel 4, and
+// both claim channels 3 and 4 as secondaries — would otherwise take the
+// group of the last profile materialised instead of the first, which
+// re-points the sub-device split on every reconnect. The first-wins rule
+// lives in [device.Channel.AssignGroupNumber] so the check and the write
+// cannot be split by a concurrent north-bound read.
 //
-// `Channel.GroupNo == 0` is treated as "not yet assigned": Python's
-// `_channel_to_group` returns the same sentinel for an absent key.
-// `dev.AddChannelToGroup` is forward-only (group → channel-set) so
-// it's idempotent on duplicates and remains called every time.
+// `dev.AddChannelToGroup` is forward-only (group → channel-set) so it is
+// idempotent on duplicates and remains called every time.
 func assignChannelGroup(dev *device.Device, channelNo, groupNo int) {
 	dev.AddChannelToGroup(groupNo, channelNo)
 	for _, ch := range dev.Channels() {
-		if ch.Number == channelNo && ch.GroupNo == 0 {
-			ch.GroupNo = groupNo
+		if ch.Number == channelNo {
+			ch.AssignGroupNumber(groupNo)
 		}
 	}
 }

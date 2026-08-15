@@ -682,8 +682,8 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 	if cdp := ch.CustomDataPoint(); cdp != nil {
 		s.CustomDpName = cdp.DataPointKey().Parameter
 	}
-	if ch.GroupNo != 0 {
-		s.GroupNo = ch.GroupNo
+	if groupNo := ch.GroupNumber(); groupNo != 0 {
+		s.GroupNo = groupNo
 		s.IsGroupMaster = ch.IsGroupMaster()
 		if ch.IsInMultiGroup() {
 			s.IsInMultiGroup = true

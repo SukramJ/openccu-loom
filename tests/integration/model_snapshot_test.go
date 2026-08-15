@@ -354,7 +354,7 @@ func (s *snapshotDumper) dumpChannel(ch *device.Channel) snapshotChannel {
 		Name:                 ch.Name(),
 		Rooms:                rooms,
 		Functions:            functions,
-		GroupNo:              ch.GroupNo,
+		GroupNo:              ch.GroupNumber(),
 		Paramsets:            paramsets,
 		OperationMode:        ch.OperationMode(),
 		GenericDataPoints:    s.dumpGenericDPs(ch),
