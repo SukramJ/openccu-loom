@@ -134,6 +134,21 @@ func primaryHostIPs() []string {
 	return filterPrimaryHostIPs(infos)
 }
 
+// parseHostIPs turns the advertised address strings back into net.IP so a
+// published [Service] reports the same addresses the A/AAAA records carry.
+func parseHostIPs(ips []string) []net.IP {
+	if len(ips) == 0 {
+		return nil
+	}
+	out := make([]net.IP, 0, len(ips))
+	for _, s := range ips {
+		if ip := net.ParseIP(s); ip != nil {
+			out = append(out, ip)
+		}
+	}
+	return out
+}
+
 // filterPrimaryHostIPs applies the advertise policy: the routable IPv4 +
 // globally-routable IPv6 addresses from every non-loopback, non-tunnel,
 // multicast-capable interface that is currently UP — excluding container /
@@ -241,6 +256,15 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 		}
 	}
 	ips := primaryHostIPs()
+	// Stamp the effective address set onto the copy we keep: the A/AAAA
+	// records carry primaryHostIPs(), never whatever the caller left in
+	// Service.Addresses, and [Zeroconf.Active] is what the operator-facing
+	// mDNS diagnostics inspect. Without the write-back a perfectly healthy
+	// bridge reports "the record announces no IP address", and the
+	// container-internal-address and missing-IPv6 checks — which exist to
+	// catch a containerised daemon announcing unroutable addresses — can
+	// never run at all.
+	svc.Addresses = parseHostIPs(ips)
 	// Skip the teardown + re-register cycle when nothing changed: the
 	// library's Shutdown broadcasts TTL-0 goodbyes, so re-registering
 	// an identical record set on every periodic re-announce made

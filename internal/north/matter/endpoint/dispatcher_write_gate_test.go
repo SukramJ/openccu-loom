@@ -140,3 +140,39 @@ func TestWrite_WildcardSkipsReadOnlyAttribute(t *testing.T) {
 		t.Errorf("wildcard write did not dispatch writable attr 0x4001; calls=%v", srv.writeCalls)
 	}
 }
+
+// TestWrite_WildcardEndpointSkipsReadOnlyAttributeSilently verifies that a
+// path is only "concrete" when it names the endpoint too: a wildcard-endpoint
+// write to a concrete read-only attribute must skip every match silently
+// instead of reporting one UNSUPPORTED_WRITE per endpoint hosting the
+// cluster. Those statuses enumerate the bridge's topology to a peer whose
+// authorization has not even been evaluated yet — the read-only verdict runs
+// before the access-control gate. matter.js routes exactly this shape
+// (endpointId undefined, clusterId + attributeId set) into
+// #writeAttributeForWildcard, which returns silently
+// (AttributeWriteResponse.ts:329-331).
+func TestWrite_WildcardEndpointSkipsReadOnlyAttributeSilently(t *testing.T) {
+	t.Parallel()
+	// Two endpoints hosting OnOff — the wildcard resolves to both.
+	srvA := &recordingServer{id: 0x0006, attrs: []uint32{0x0000, 0x4001}}
+	srvB := &recordingServer{id: 0x0006, attrs: []uint32{0x0000, 0x4001}}
+	epA := &Endpoint{ID: 3, Source: recordingSource{srv: srvA}}
+	epB := &Endpoint{ID: 4, Source: recordingSource{srv: srvB}}
+	d := NewTopologyDispatcher(makeTopology(epA, epB))
+
+	path := im.ConcreteAttributePath{
+		Cluster:      0x0006,
+		Attribute:    0x0000, // OnOff.OnOff — access "R V"
+		HasEndpoint:  false,  // wildcard endpoint
+		HasCluster:   true,
+		HasAttribute: true,
+	}
+	results := d.Write(context.Background(), path, im.AttributeValue{Value: true})
+
+	if len(results) != 0 {
+		t.Errorf("wildcard-endpoint write to a read-only attribute produced %d status(es) %+v; matter.js skips silently", len(results), results)
+	}
+	if len(srvA.writeCalls) != 0 || len(srvB.writeCalls) != 0 {
+		t.Errorf("read-only write reached a cluster server; calls=%v %v", srvA.writeCalls, srvB.writeCalls)
+	}
+}

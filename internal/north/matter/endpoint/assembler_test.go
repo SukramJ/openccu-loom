@@ -448,8 +448,11 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 	}
 
 	bridged := top.Endpoints[2]
-	if bridged.SourceKey.DPKind != store.DPKindMeasurement {
-		t.Errorf("DPKind=%q, want measurement", bridged.SourceKey.DPKind)
+	// The kind is the source's kind, not its projection: the allowlist
+	// row for a calculated DP is persisted as "calculated" whether the
+	// DP projects an actor endpoint or a standalone sensor endpoint.
+	if bridged.SourceKey.DPKind != store.DPKindCalculated {
+		t.Errorf("DPKind=%q, want calculated", bridged.SourceKey.DPKind)
 	}
 	if bridged.Source != nil {
 		t.Error("Source should be nil for measurement-only endpoint")
@@ -1105,5 +1108,100 @@ func TestAssemble_TopologyCarriesConfigMetadata(t *testing.T) {
 	}
 	if top.NodeLabel != "MyBridge" {
 		t.Errorf("NodeLabel=%q, want MyBridge", top.NodeLabel)
+	}
+}
+
+// ─── Operator-hidden channels / allowlist key space ──────────────────
+
+// kindKeyAllowChecker allows exactly the listed endpoint keys. Unlike
+// [dpKeyAllowChecker] it matches on the full 5-tuple, so a probe that
+// carries a different dp_kind than the persisted row is denied — the
+// way the SQL-backed allowlist behaves.
+type kindKeyAllowChecker struct{ allowed map[store.EndpointKey]bool }
+
+func (c kindKeyAllowChecker) IsExposed(_ context.Context, key store.EndpointKey) (bool, error) {
+	return c.allowed[key], nil
+}
+
+// TestAssemble_HiddenChannelIsNotBridged pins the operator hide against
+// the assembled topology: a channel the operator hid must not keep a
+// Matter endpoint, even while an older allowlist row still says it is
+// exposed. The candidate enumeration already drops hidden channels, so
+// without the same gate here an exposed-then-hidden channel stays a live
+// accessory while disappearing from the only surface that could revoke it.
+func TestAssemble_HiddenChannelIsNotBridged(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	build := func(hidden bool) *device.Device {
+		dev := newDevice("HID0001", "Lampe")
+		ch := addChannel(dev, "HID0001:1", 1)
+		ch.SetCustomDataPoint(&stubEndpointSource{
+			key:        dpKey("HID0001:1", "RGBW_LIGHT"),
+			deviceType: 0x0101,
+		})
+		ch.SetOperatorFlags(hidden, false)
+		return dev
+	}
+
+	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
+	visible, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{build(false)}}})
+	if err != nil {
+		t.Fatalf("Assemble (visible): %v", err)
+	}
+	if got := len(visible.Bridged()); got != 1 {
+		t.Fatalf("visible channel: got %d bridged endpoints, want 1", got)
+	}
+
+	hidden, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{build(true)}}})
+	if err != nil {
+		t.Fatalf("Assemble (hidden): %v", err)
+	}
+	if got := len(hidden.Bridged()); got != 0 {
+		t.Errorf("hidden channel: got %d bridged endpoints, want 0", got)
+	}
+}
+
+// TestAssemble_CalculatedMeasurementProbesCalculatedKind pins the
+// allowlist probe for a calculated measurement DP to the dp_kind the
+// candidate enumeration and the REST allowlist persist ("calculated").
+// Probing a different kind can never match the operator's stored row,
+// so the exposure the operator switched on would stay inert.
+func TestAssemble_CalculatedMeasurementProbesCalculatedKind(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev := newDevice("TEMP0003", "Thermometer")
+	ch := addChannel(dev, "TEMP0003:1", 1)
+	ch.AttachCalculatedDataPoint(&stubMeasurementSource{
+		key:   dpKey("TEMP0003:1", "APPARENT_TEMPERATURE"),
+		class: interfaces.MatterMeasurementTemperature,
+	})
+
+	// The row an operator creates via the Matter allowlist for this
+	// candidate.
+	row := store.EndpointKey{
+		CentralName:   "ccu1",
+		DeviceAddress: "TEMP0003",
+		ChannelNo:     1,
+		DPKind:        store.DPKindCalculated,
+		DPKey:         "APPARENT_TEMPERATURE",
+	}
+
+	cfg := validConfig()
+	cfg.IncludeMeasurements = true
+	a, _ := endpoint.New(newFakeStore(), cfg, nil)
+	a.SetExposureChecker(kindKeyAllowChecker{allowed: map[store.EndpointKey]bool{row: true}})
+
+	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	bridged := top.Bridged()
+	if len(bridged) != 1 {
+		t.Fatalf("got %d bridged endpoints, want 1 (the allowlisted calculated measurement)", len(bridged))
+	}
+	if bridged[0].SourceKey != row {
+		t.Errorf("SourceKey=%+v, want %+v", bridged[0].SourceKey, row)
 	}
 }

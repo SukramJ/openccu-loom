@@ -422,3 +422,51 @@ func TestZeroconfInternal_NewSubtypeResponder_Logger_NonNil(t *testing.T) {
 		t.Fatalf("Close: %v", cerr)
 	}
 }
+
+// TestZeroconfInternal_Publish_RecordsAdvertisedAddresses verifies the
+// published record reports the addresses that actually went on the wire.
+// Production callers build their service configs without addresses — the
+// advertiser resolves them itself — so an address-less stored record makes
+// the operator-facing mDNS diagnostics report "no IP address" on a healthy
+// bridge and silently disables the container-internal and IPv6 checks that
+// only run once an address is present.
+func TestZeroconfInternal_Publish_RecordsAdvertisedAddresses(t *testing.T) {
+	t.Parallel()
+	want := primaryHostIPs()
+	if len(want) == 0 {
+		t.Skip("host advertises no routable address; nothing to assert")
+	}
+
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+
+	// The shape production builds: BuildOperationalService copies an
+	// Addresses field its callers never fill.
+	svc := Service{
+		InstanceName: "1122334455667788-0000000000001234",
+		ServiceType:  ServiceTypeOperational,
+		Port:         5540,
+		HostName:     "advertised-address-test",
+	}
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Skipf("Publish failed (no multicast in this environment): %v", err)
+	}
+
+	active := z.Active()
+	if len(active) != 1 {
+		t.Fatalf("Active() returned %d services, want 1", len(active))
+	}
+	got := make([]string, 0, len(active[0].Addresses))
+	for _, ip := range active[0].Addresses {
+		got = append(got, ip.String())
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("Active() addresses = %v, want the advertised set %v", got, want)
+	}
+
+	for _, f := range Diagnose(active) {
+		if f.Code == "no_addresses" {
+			t.Errorf("diagnostics report %q for a record that advertises %v", f.Code, want)
+		}
+	}
+}
