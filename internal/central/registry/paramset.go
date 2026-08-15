@@ -19,12 +19,6 @@ type ParamsetKey struct {
 	ParamsetKey    hmenum.ParamsetKey
 }
 
-// addrParamCacheKey is the key for the secondary parameter-channel index.
-type addrParamCacheKey struct {
-	deviceAddress string
-	parameter     string
-}
-
 // ParamsetSink mirrors registry mutations into a persistence backend
 // so paramset descriptions survive a daemon restart. Implementations
 // must be safe for concurrent use; they run synchronously on the
@@ -50,11 +44,6 @@ type ParamsetRegistry struct {
 	// patchRegistry applies device-specific corrections at ingestion.
 	// When nil the old normalise-only path is used (backward compat).
 	patchRegistry *patches.Registry
-
-	// addressParamCache maps (deviceAddress, parameter) → set of channel
-	// numbers that contain the parameter. Used by IsInMultipleChannels.
-	// secondary index field.
-	addressParamCache map[addrParamCacheKey]map[int]struct{}
 }
 
 // SetSink installs the persistence sink; nil detaches it. Install the
@@ -72,8 +61,7 @@ func (r *ParamsetRegistry) SetSink(s ParamsetSink) {
 // loom:reachable:reason="called by NewParamsetRegistryWithPatches and directly in tests; production always uses the WithPatches variant"
 func NewParamsetRegistry() *ParamsetRegistry {
 	return &ParamsetRegistry{
-		items:             make(map[ParamsetKey]hmproto.Paramset),
-		addressParamCache: make(map[addrParamCacheKey]map[int]struct{}),
+		items: make(map[ParamsetKey]hmproto.Paramset),
 	}
 }
 
@@ -108,7 +96,6 @@ func (r *ParamsetRegistry) Add(iface hmtypes.WireInterfaceID, channelAddress str
 	key := ParamsetKey{Interface: iface, ChannelAddress: channelAddress, ParamsetKey: psKey}
 	r.mu.Lock()
 	r.items[key] = normalised
-	r.addAddressParamCacheLocked(channelAddress, normalised)
 	sink := r.sink
 	r.mu.Unlock()
 	if sink != nil {
@@ -123,7 +110,6 @@ func (r *ParamsetRegistry) Put(iface hmtypes.WireInterfaceID, channelAddress str
 	normalised := hmproto.NormalizeParamset(ps)
 	r.mu.Lock()
 	r.items[ParamsetKey{Interface: iface, ChannelAddress: channelAddress, ParamsetKey: psKey}] = normalised
-	r.addAddressParamCacheLocked(channelAddress, normalised)
 	sink := r.sink
 	r.mu.Unlock()
 	if sink != nil {
@@ -230,38 +216,6 @@ func (r *ParamsetRegistry) HasParameter(iface hmtypes.WireInterfaceID, channelAd
 	return ok
 }
 
-// IsInMultipleChannels reports whether parameter appears in more than one
-// channel for the device that owns channelAddress.
-//
-// is_in_multiple_channels().
-func (r *ParamsetRegistry) IsInMultipleChannels(channelAddress, parameter string) bool {
-	deviceAddr, _, ok := hmtypes.SplitChannelAddress(channelAddress)
-	if !ok {
-		return false
-	}
-	r.mu.RLock()
-	channels := r.addressParamCache[addrParamCacheKey{deviceAddress: deviceAddr, parameter: parameter}]
-	count := len(channels)
-	r.mu.RUnlock()
-	return count > 1
-}
-
-// RegisterAdditionalParameter adds parameter to the secondary index for
-// channelAddress without requiring a full paramset to be present.
-// This enables cross-channel lookup for calculated / combined DPs that are
-// wired after initial ingestion.
-//
-// register_additional_parameter().
-func (r *ParamsetRegistry) RegisterAdditionalParameter(channelAddress, parameter string) {
-	deviceAddr, channelNo, ok := hmtypes.SplitChannelAddress(channelAddress)
-	if !ok {
-		return
-	}
-	r.mu.Lock()
-	r.registerAddrParamLocked(deviceAddr, parameter, channelNo)
-	r.mu.Unlock()
-}
-
 // Delete removes a paramset entry. Returns true when it existed.
 func (r *ParamsetRegistry) Delete(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey) bool {
 	r.mu.Lock()
@@ -283,18 +237,6 @@ func (r *ParamsetRegistry) DeleteChannel(iface hmtypes.WireInterfaceID, channelA
 			delete(r.items, k)
 		}
 	}
-	// Remove from secondary index.
-	deviceAddr, channelNo, ok := hmtypes.SplitChannelAddress(channelAddress)
-	if ok {
-		for cacheKey, chSet := range r.addressParamCache {
-			if cacheKey.deviceAddress == deviceAddr {
-				delete(chSet, channelNo)
-				if len(chSet) == 0 {
-					delete(r.addressParamCache, cacheKey)
-				}
-			}
-		}
-	}
 	sink := r.sink
 	r.mu.Unlock()
 	if sink != nil {
@@ -310,28 +252,6 @@ func (r *ParamsetRegistry) Len() int {
 }
 
 // ---------- internal helpers ----------
-
-// addAddressParamCacheLocked updates the secondary index for all parameters
-// in ps. Must be called with r.mu held (write).
-func (r *ParamsetRegistry) addAddressParamCacheLocked(channelAddress string, ps hmproto.Paramset) {
-	deviceAddr, channelNo, ok := hmtypes.SplitChannelAddress(channelAddress)
-	if !ok {
-		return
-	}
-	for param := range ps {
-		r.registerAddrParamLocked(deviceAddr, param, channelNo)
-	}
-}
-
-// registerAddrParamLocked inserts (deviceAddress, parameter) → channelNo into
-// the cache. Must be called with r.mu held (write).
-func (r *ParamsetRegistry) registerAddrParamLocked(deviceAddress, parameter string, channelNo int) {
-	cacheKey := addrParamCacheKey{deviceAddress: deviceAddress, parameter: parameter}
-	if r.addressParamCache[cacheKey] == nil {
-		r.addressParamCache[cacheKey] = make(map[int]struct{})
-	}
-	r.addressParamCache[cacheKey][channelNo] = struct{}{}
-}
 
 // isChannelOf reports whether channelAddress belongs to deviceAddress.
 // "ABC:1" belongs to "ABC"; "ABC" also belongs to "ABC".

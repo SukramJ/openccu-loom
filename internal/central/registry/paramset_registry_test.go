@@ -310,59 +310,6 @@ func TestHasParameter(t *testing.T) {
 	}
 }
 
-func TestParamsetRegistryIsInMultipleChannels(t *testing.T) {
-	t.Parallel()
-	r := NewParamsetRegistry()
-	r.Put(wireHmIPRF, "DEV:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": {}})
-	r.Put(wireHmIPRF, "DEV:2", hmenum.ParamsetKeyValues, hmproto.Paramset{"LEVEL": {}})
-
-	if !r.IsInMultipleChannels("DEV:1", "LEVEL") {
-		t.Fatal("IsInMultipleChannels must return true when parameter appears in 2 channels")
-	}
-
-	// single channel
-	r.Put(wireHmIPRF, "DEV2:1", hmenum.ParamsetKeyValues, hmproto.Paramset{"ONLY": {}})
-	if r.IsInMultipleChannels("DEV2:1", "ONLY") {
-		t.Fatal("IsInMultipleChannels must return false for parameter in only 1 channel")
-	}
-
-	// invalid address
-	if r.IsInMultipleChannels("NOCODON", "LEVEL") {
-		t.Fatal("IsInMultipleChannels must return false for address without channel separator")
-	}
-}
-
-func TestIsInMultipleChannels(t *testing.T) {
-	r := NewParamsetRegistry()
-	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-
-	// LEVEL on two different channels of the same device.
-	r.Put(wireHmIPRF, "DEV001:1", hmenum.ParamsetKeyValues, ps)
-	r.Put(wireHmIPRF, "DEV001:2", hmenum.ParamsetKeyValues, ps)
-
-	if !r.IsInMultipleChannels("DEV001:1", "LEVEL") {
-		t.Fatal("LEVEL should be detected as in multiple channels")
-	}
-}
-
-func TestIsInMultipleChannelsFalseForSingleChannel(t *testing.T) {
-	r := NewParamsetRegistry()
-	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(wireHmIPRF, "DEV002:1", hmenum.ParamsetKeyValues, ps)
-
-	if r.IsInMultipleChannels("DEV002:1", "LEVEL") {
-		t.Fatal("LEVEL should NOT be in multiple channels when only one channel has it")
-	}
-}
-
-func TestIsInMultipleChannelsFalseForDeviceAddress(t *testing.T) {
-	// Plain device address (no colon) → always false.
-	r := NewParamsetRegistry()
-	if r.IsInMultipleChannels("DEV003", "LEVEL") {
-		t.Fatal("plain device address must return false")
-	}
-}
-
 func TestParamsetRegistryAddAppliesPatch(t *testing.T) {
 	// Build a registry that has a patch correcting ENERGY_COUNTER unit.
 	pr := patches.NewRegistry()
@@ -488,48 +435,10 @@ func TestParamsetRegistryAddNoPatchRegistry(t *testing.T) {
 	}
 }
 
-func TestRegisterAdditionalParameter(t *testing.T) {
-	r := NewParamsetRegistry()
-	// Only one paramset stored for DEV004:1 initially.
-	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(wireHmIPRF, "DEV004:1", hmenum.ParamsetKeyValues, ps)
-
-	// Register an additional parameter on channel 2 (e.g. for a calculated DP).
-	r.RegisterAdditionalParameter("DEV004:2", "LEVEL")
-
-	// Now LEVEL appears on both channel 1 and channel 2.
-	if !r.IsInMultipleChannels("DEV004:1", "LEVEL") {
-		t.Fatal("LEVEL should be in multiple channels after RegisterAdditionalParameter")
-	}
-}
-
-func TestRegisterAdditionalParameterNoopForDeviceAddress(t *testing.T) {
-	r := NewParamsetRegistry()
-	// Should not panic or mutate anything for a device address without a channel.
-	r.RegisterAdditionalParameter("DEV005", "LEVEL")
-	if r.IsInMultipleChannels("DEV005", "LEVEL") {
-		t.Fatal("plain device address should not be indexed")
-	}
-}
-
-// Secondary index survives DeleteChannel.
-func TestAddressParamCacheCleanedOnDeleteChannel(t *testing.T) {
-	r := NewParamsetRegistry()
-	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
-	r.Put(wireHmIPRF, "DEVCLEAN:1", hmenum.ParamsetKeyValues, ps)
-	r.Put(wireHmIPRF, "DEVCLEAN:2", hmenum.ParamsetKeyValues, ps)
-
-	// LEVEL is in two channels → multiple.
-	if !r.IsInMultipleChannels("DEVCLEAN:1", "LEVEL") {
-		t.Fatal("pre-condition: LEVEL must be in multiple channels")
-	}
-	r.DeleteChannel(wireHmIPRF, "DEVCLEAN:2")
-	// After removing channel 2, only channel 1 remains → not multiple.
-	if r.IsInMultipleChannels("DEVCLEAN:1", "LEVEL") {
-		t.Fatal("after DeleteChannel, LEVEL must not be in multiple channels")
-	}
-}
-
+// TestParamsetRegistryConcurrentAdd exercises the registry's write path
+// from many goroutines at once. It is the race detector's entry point
+// into Add, so it stays after the dead secondary index it also touched
+// was removed.
 func TestParamsetRegistryConcurrentAdd(t *testing.T) {
 	pr := patches.NewRegistry()
 	r := NewParamsetRegistryWithPatches(pr)
@@ -546,7 +455,7 @@ func TestParamsetRegistryConcurrentAdd(t *testing.T) {
 				addr = "CONCURRENT:2"
 			}
 			r.Add(wireHmIPRF, addr, hmenum.ParamsetKeyValues, ps, "SomeModel")
-			_ = r.IsInMultipleChannels("CONCURRENT:1", "LEVEL")
+			_, _ = r.Get(wireHmIPRF, addr, hmenum.ParamsetKeyValues)
 		}(i)
 	}
 	wg.Wait()

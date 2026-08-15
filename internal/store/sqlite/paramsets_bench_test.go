@@ -64,43 +64,6 @@ func buildBenchParamset() hmproto.Paramset {
 	return ps
 }
 
-// seedBenchStore inserts benchDeviceCount × benchChannelsPerDev paramset
-// rows so that every parameter appears in multiple channels. Returns the
-// store and a pre-allocated slice of (channelAddr, param) probe pairs.
-type benchProbe struct{ channelAddr, param string }
-
-func seedBenchStore(b *testing.B, s *ParamsetStore) []benchProbe {
-	b.Helper()
-	ctx := context.Background()
-	ps := buildBenchParamset()
-
-	for d := range benchDeviceCount {
-		for ch := range benchChannelsPerDev {
-			if err := s.Upsert(ctx, ParamsetRecord{
-				CentralName:    "bench",
-				InterfaceID:    "HmIP-RF",
-				ChannelAddress: benchChannelAddr(d, ch),
-				ParamsetKey:    hmenum.ParamsetKeyValues,
-				Hash:           fmt.Sprintf("h-%d-%d", d, ch),
-				Paramset:       ps,
-			}); err != nil {
-				b.Fatalf("seed Upsert: %v", err)
-			}
-		}
-	}
-
-	// Build a mixed probe set: pick the middle parameter for each device's
-	// first channel — these all appear in multiple channels (ch 0, 1, 2).
-	probes := make([]benchProbe, benchDeviceCount)
-	for d := range benchDeviceCount {
-		probes[d] = benchProbe{
-			channelAddr: benchChannelAddr(d, 0),
-			param:       benchParamName(benchParamCount / 2),
-		}
-	}
-	return probes
-}
-
 // freshBenchStore opens a new ParamsetStore backed by a per-benchmark
 // file-backed DB. Cannot use t.TempDir because Benchmark has no TempDir —
 // use b.TempDir (available since Go 1.15).
@@ -124,56 +87,12 @@ func freshBenchStore(b *testing.B) *ParamsetStore {
 // then measures IsInMultipleChannels over the probe set in a loop.
 // ─────────────────────────────────────────────────────────────────────────────
 
-func BenchmarkIsInMultipleChannels_WithCache(b *testing.B) {
-	s := freshBenchStore(b)
-	probes := seedBenchStore(b, s)
-
-	ctx := context.Background()
-	if err := s.WarmCache(ctx); err != nil {
-		b.Fatalf("WarmCache: %v", err)
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := range b.N {
-		p := probes[i%len(probes)]
-		if _, err := s.IsInMultipleChannels(ctx, "bench", "HmIP-RF", p.channelAddr, p.param); err != nil {
-			b.Fatalf("IsInMultipleChannels: %v", err)
-		}
-	}
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // BenchmarkIsInMultipleChannels_NoCache
 //
 // Measures the slow SQL json_extract fallback path. Each iteration clears the
 // in-memory cache so that every call goes to the database.
 // ─────────────────────────────────────────────────────────────────────────────
-
-func BenchmarkIsInMultipleChannels_NoCache(b *testing.B) {
-	s := freshBenchStore(b)
-	probes := seedBenchStore(b, s)
-	ctx := context.Background()
-
-	// Helper to evict the cache for a single device without touching the DB.
-	evictDevice := func(deviceAddr string) {
-		s.cacheMu.Lock()
-		delete(s.cache, deviceAddr)
-		s.cacheMu.Unlock()
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := range b.N {
-		p := probes[i%len(probes)]
-		// Evict this device from the cache to force the SQL fallback.
-		dev, _, _ := splitChannelAddress(p.channelAddr)
-		evictDevice(dev)
-		if _, err := s.IsInMultipleChannels(ctx, "bench", "HmIP-RF", p.channelAddr, p.param); err != nil {
-			b.Fatalf("IsInMultipleChannels (no cache): %v", err)
-		}
-	}
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BenchmarkUpsert_WithCache
@@ -182,33 +101,6 @@ func BenchmarkIsInMultipleChannels_NoCache(b *testing.B) {
 // incremental updates). Seeds the store, warms the cache, then benchmarks
 // repeated upserts of the same set of rows.
 // ─────────────────────────────────────────────────────────────────────────────
-
-func BenchmarkUpsert_WithCache(b *testing.B) {
-	s := freshBenchStore(b)
-	_ = seedBenchStore(b, s)
-	ctx := context.Background()
-	if err := s.WarmCache(ctx); err != nil {
-		b.Fatalf("WarmCache: %v", err)
-	}
-
-	ps := buildBenchParamset()
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := range b.N {
-		d := i % benchDeviceCount
-		ch := i % benchChannelsPerDev
-		if err := s.Upsert(ctx, ParamsetRecord{
-			CentralName:    "bench",
-			InterfaceID:    "HmIP-RF",
-			ChannelAddress: benchChannelAddr(d, ch),
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Hash:           fmt.Sprintf("h-%d-%d-%d", d, ch, i),
-			Paramset:       ps,
-		}); err != nil {
-			b.Fatalf("Upsert: %v", err)
-		}
-	}
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BenchmarkUpsert_Bare

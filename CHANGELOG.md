@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Two unused parameter-channel indexes are gone.** The question "does
+  this parameter appear on more than one channel of the device?" decides
+  the channel suffix in an entity name, and three implementations of it
+  existed. Only one is used: the one that walks the live model's sibling
+  channels. The other two — an in-memory index in the paramset registry
+  and a second one in the SQLite store — were maintained on every write
+  and read by nobody. Removing them drops a per-write index update from
+  device ingestion, a full-table scan from start-up, and one database
+  round-trip from every channel delete. It also removes a trap: the
+  store's index was keyed by bare device address while its SQL fallback
+  scoped by central and interface, so two CCUs holding the same address
+  would have answered for each other the moment anything started reading
+  it.
+
 A minor rather than a patch release: three of the fixes below change
 behaviour an operator may be relying on.
 

@@ -1,6 +1,6 @@
 {
-  "generated": "b1374a05",
-  "head": "b1374a05",
+  "generated": "e80c6362",
+  "head": "e80c6362",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 28849,
+    "total_exported": 28818,
     "reachable": 5033,
-    "whitelisted": 20811,
+    "whitelisted": 20780,
     "unreachable": 3005
   },
   "by_package": [
@@ -4961,21 +4961,21 @@
       "package": "internal/central/registry",
       "identifier": "ParamsetRegistry",
       "file": "internal/central/registry/paramset.go",
-      "line": 45,
+      "line": 39,
       "kind": "type"
     },
     {
       "package": "internal/central/registry",
       "identifier": "ParamsetSink",
       "file": "internal/central/registry/paramset.go",
-      "line": 33,
+      "line": 27,
       "kind": "type"
     },
     {
       "package": "internal/central/registry",
       "identifier": "ParamsetSink",
       "file": "internal/central/registry/paramset.go",
-      "line": 33,
+      "line": 27,
       "kind": "type"
     },
     {
@@ -5458,14 +5458,14 @@
       "package": "internal/client/backends",
       "identifier": "EncodeHMLevel",
       "file": "internal/client/backends/combined.go",
-      "line": 183,
+      "line": 184,
       "kind": "func"
     },
     {
       "package": "internal/client/backends",
       "identifier": "EncodeHMLevel",
       "file": "internal/client/backends/combined.go",
-      "line": 183,
+      "line": 184,
       "kind": "func"
     },
     {
@@ -17764,14 +17764,14 @@
       "package": "internal/store/sqlite",
       "identifier": "ErrParamsetNotFound",
       "file": "internal/store/sqlite/paramsets.go",
-      "line": 22,
+      "line": 21,
       "kind": "var"
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "ErrParamsetNotFound",
       "file": "internal/store/sqlite/paramsets.go",
-      "line": 22,
+      "line": 21,
       "kind": "var"
     },
     {
@@ -18037,14 +18037,14 @@
       "package": "internal/store/sqlite",
       "identifier": "ParamsetRecord",
       "file": "internal/store/sqlite/paramsets.go",
-      "line": 37,
+      "line": 36,
       "kind": "type"
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "ParamsetRecord",
       "file": "internal/store/sqlite/paramsets.go",
-      "line": 37,
+      "line": 36,
       "kind": "type"
     },
     {
@@ -55777,21 +55777,14 @@
       "identifier": "NewParamsetRegistry",
       "reason": "called by NewParamsetRegistryWithPatches and directly in tests; production always uses the WithPatches variant",
       "file": "internal/central/registry/paramset.go",
-      "line": 73
+      "line": 62
     },
     {
       "package": "internal/central/registry",
       "identifier": "NewParamsetRegistry",
       "reason": "called by NewParamsetRegistryWithPatches and directly in tests; production always uses the WithPatches variant",
       "file": "internal/central/registry/paramset.go",
-      "line": 73
-    },
-    {
-      "package": "internal/central/registry",
-      "identifier": "TestAddressParamCacheCleanedOnDeleteChannel",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 516
+      "line": 62
     },
     {
       "package": "internal/central/registry",
@@ -56054,27 +56047,6 @@
     },
     {
       "package": "internal/central/registry",
-      "identifier": "TestIsInMultipleChannels",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 335
-    },
-    {
-      "package": "internal/central/registry",
-      "identifier": "TestIsInMultipleChannelsFalseForDeviceAddress",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 358
-    },
-    {
-      "package": "internal/central/registry",
-      "identifier": "TestIsInMultipleChannelsFalseForSingleChannel",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 348
-    },
-    {
-      "package": "internal/central/registry",
       "identifier": "TestModelRegistryConcurrent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/model_registry_test.go",
@@ -56176,14 +56148,14 @@
       "identifier": "TestParamsetRegistryAddAppliesPatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 366
+      "line": 313
     },
     {
       "package": "internal/central/registry",
       "identifier": "TestParamsetRegistryAddDeviceTypePreFilter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 448
+      "line": 395
     },
     {
       "package": "internal/central/registry",
@@ -56197,21 +56169,21 @@
       "identifier": "TestParamsetRegistryAddNoPatchRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 475
+      "line": 422
     },
     {
       "package": "internal/central/registry",
       "identifier": "TestParamsetRegistryAddPatchChannelNoScopingSkipsOtherChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 421
+      "line": 368
     },
     {
       "package": "internal/central/registry",
       "identifier": "TestParamsetRegistryAddPatchesHMCCVG1",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 390
+      "line": 337
     },
     {
       "package": "internal/central/registry",
@@ -56225,7 +56197,7 @@
       "identifier": "TestParamsetRegistryConcurrentAdd",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 533
+      "line": 442
     },
     {
       "package": "internal/central/registry",
@@ -56306,13 +56278,6 @@
     },
     {
       "package": "internal/central/registry",
-      "identifier": "TestParamsetRegistryIsInMultipleChannels",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 313
-    },
-    {
-      "package": "internal/central/registry",
       "identifier": "TestParamsetRegistryPutFiresSinkWithNormalisedParamset",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/paramset_sink_test.go",
@@ -56324,20 +56289,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/paramset_sink_test.go",
       "line": 145
-    },
-    {
-      "package": "internal/central/registry",
-      "identifier": "TestRegisterAdditionalParameter",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 491
-    },
-    {
-      "package": "internal/central/registry",
-      "identifier": "TestRegisterAdditionalParameterNoopForDeviceAddress",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/registry/paramset_registry_test.go",
-      "line": 506
     },
     {
       "package": "internal/central/rpcserver",
@@ -154621,31 +154572,10 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "BenchmarkIsInMultipleChannels_NoCache",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_bench_test.go",
-      "line": 153
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "BenchmarkIsInMultipleChannels_WithCache",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_bench_test.go",
-      "line": 127
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "BenchmarkUpsert_Bare",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/paramsets_bench_test.go",
-      "line": 220
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "BenchmarkUpsert_WithCache",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_bench_test.go",
-      "line": 186
+      "line": 112
     },
     {
       "package": "internal/store/sqlite",
@@ -155338,14 +155268,14 @@
       "identifier": "TestAuditStore_NilReceiver_Append",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 541
+      "line": 523
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestAuditStore_NilReceiver_List",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 549
+      "line": 531
     },
     {
       "package": "internal/store/sqlite",
@@ -155381,55 +155311,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/auth_sessions_test.go",
       "line": 35
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestCacheAddLookup",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 49
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestCacheClearForInterfaceWipesCache",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 139
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestCacheDeleteChannelInvalidates",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 108
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestCacheIsInMultipleChannelsParamMiss",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 369
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestCacheMultipleChannelsDetected",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 80
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestCacheRegisterAdditionalParameter",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 221
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestCacheWarmCache",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 172
     },
     {
       "package": "internal/store/sqlite",
@@ -155682,20 +155563,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/measurements_rollup_integrity_test.go",
       "line": 69
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestDeviceModelChangeCoherencyViaWipeAndReUpsert",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_store_cache_coherency_test.go",
-      "line": 455
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestDeviceModelChangeNoAutomaticCacheInvalidation",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_store_cache_coherency_test.go",
-      "line": 551
     },
     {
       "package": "internal/store/sqlite",
@@ -156826,20 +156693,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "TestMultiParamsetKeyDeleteChannelRemovesBothKeys",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_store_cache_coherency_test.go",
-      "line": 350
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestMultiParamsetKeyWriteDoesNotCorruptOtherKey",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_store_cache_coherency_test.go",
-      "line": 220
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "TestNewMeasurementStoreFoldsOnProcessLocalTime",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/measurements_local_day_test.go",
@@ -156980,34 +156833,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "TestParamsetStoreIsInMultipleChannelsDifferentParameters",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 320
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestParamsetStoreIsInMultipleChannelsFalseNoSeparator",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 304
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestParamsetStoreIsInMultipleChannelsFalseWhenSingleChannel",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 248
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestParamsetStoreIsInMultipleChannelsTrueWhenMultipleChannels",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 275
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "TestParamsetStoreListByCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/paramsets_test.go",
@@ -157026,13 +156851,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/paramsets_test.go",
       "line": 297
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestParamsetStoreRegisterAdditionalParameterNoOp",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 354
     },
     {
       "package": "internal/store/sqlite",
@@ -157060,14 +156878,14 @@
       "identifier": "TestParamsetStore_ClosedDB_ClearForInterface",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 427
+      "line": 418
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestParamsetStore_ClosedDB_DeleteChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 436
+      "line": 427
     },
     {
       "package": "internal/store/sqlite",
@@ -157120,13 +156938,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "TestParamsetStore_ClosedDB_IsInMultipleChannels",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 418
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "TestParamsetStore_ClosedDB_Size",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
@@ -157141,31 +156952,24 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "TestParamsetStore_ClosedDB_WarmCache",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 454
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "TestParamsetStore_ClosedDB_WipeOutdated",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 445
+      "line": 436
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestParamsetStore_DeleteDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/paramsets_delete_device_test.go",
-      "line": 36
+      "line": 53
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestParamsetStore_DeleteDevice_ZeroRowsNoOp",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/paramsets_delete_device_test.go",
-      "line": 88
+      "line": 36
     },
     {
       "package": "internal/store/sqlite",
@@ -157208,20 +157012,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/paramsets_schema_version_test.go",
       "line": 37
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestPatchApplyThenReUpsertCacheIsUpdated",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_store_cache_coherency_test.go",
-      "line": 135
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestPatchApplyThenUpsertCacheReflectsNewShape",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_store_cache_coherency_test.go",
-      "line": 39
     },
     {
       "package": "internal/store/sqlite",
@@ -157379,13 +157169,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "TestRegisterAdditionalParameterDeviceLevelIsNoop",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 430
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "TestRollupDailyNeverOutrunsTheHourlyTier",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/measurements_rollup_integrity_test.go",
@@ -157501,34 +157284,27 @@
       "identifier": "TestSessionRecorderStore_ClosedDB_CountEntries",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 494
+      "line": 476
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestSessionRecorderStore_ClosedDB_DeleteAll",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 485
+      "line": 467
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestSessionRecorderStore_ClosedDB_Load",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 476
+      "line": 458
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestSessionRecorderStore_ClosedDB_PersistAll",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 465
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestSplitChannelAddressNonNumericSuffix",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
       "line": 447
     },
     {
@@ -157998,56 +157774,49 @@
       "identifier": "TestVisibilityUnIgnoreStore_ClosedDB_List",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 505
+      "line": 487
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestVisibilityUnIgnoreStore_ClosedDB_Patterns",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 558
+      "line": 540
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestVisibilityUnIgnoreStore_ClosedDB_Replace",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 567
+      "line": 549
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestVisibilityUnIgnoreStore_ClosedDB_SeedIfEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 576
+      "line": 558
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestVisibilityUnIgnoreStore_NilReceiver_List",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 516
+      "line": 498
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestVisibilityUnIgnoreStore_NilReceiver_Replace",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 525
+      "line": 507
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "TestVisibilityUnIgnoreStore_NilReceiver_SeedIfEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/closed_db_test.go",
-      "line": 533
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "TestWarmCacheSkipsDeviceLevelAddress",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/store/sqlite/paramsets_cache_test.go",
-      "line": 395
+      "line": 515
     },
     {
       "package": "internal/store/sqlite",
@@ -165401,6 +165170,13 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestDocPurity_CitedMarkdownEntriesExist",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/doc_purity_entries_test.go",
+      "line": 118
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestDocPurity_MarkdownRefsExist",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/doc_purity_test.go",
@@ -165516,7 +165292,7 @@
       "identifier": "TestEveryWiringSetterHasAProductionCaller",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_setter_callers_test.go",
-      "line": 104
+      "line": 103
     },
     {
       "package": "tests/contract",
@@ -165727,6 +165503,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/mqtt_topic_schema_doctest_test.go",
       "line": 45
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestMarkdownEntryCitationsAreExtractedNarrowly",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/doc_purity_entries_test.go",
+      "line": 56
     },
     {
       "package": "tests/contract",

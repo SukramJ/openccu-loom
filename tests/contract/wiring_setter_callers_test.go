@@ -33,7 +33,6 @@ var wiringSettersWithoutCaller = map[string]string{
 
 	// Verified: the surface around the seam has no caller either, so the
 	// seam is dead along with the feature it would have fed.
-	"github.com/SukramJ/openccu-loom/internal/store/sqlite.ParamsetStore.RegisterAdditionalParameter":              "ParamsetStore.IsInMultipleChannels, the cache this feeds, has no production caller: the channel postfix in a data-point name comes from device.Channel.IsParameterInMultipleChannels, which walks the live model's sibling channels and reads neither cache",
 	"github.com/SukramJ/openccu-loom/internal/central.QueryFacade.SetHubStatePathProvider":                         "GetStatePaths and GetStatePathEntries have no production caller; the combined state-path list is unbuilt",
 	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetAcceptInboxFn":                                       "reached only through ServiceRegistry.Invoke, which production never calls; the real accept-inbox path is DeviceAdminDomain.AcceptInboxDevice",
 	"github.com/SukramJ/openccu-loom/internal/central.Unit.SetLoadAndRefreshForInterfaceFn":                        "the method it feeds has no callers at all",

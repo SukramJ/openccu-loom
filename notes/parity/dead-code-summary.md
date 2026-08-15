@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: b1374a05
-HEAD: b1374a05
+Generated: e80c6362
+HEAD: e80c6362
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28849 |
+| Total Exported | 28818 |
 | Reachable | 5033 |
-| Whitelisted | 20811 |
+| Whitelisted | 20780 |
 | **Unreachable** | **3005** |
 
 ## Top-20 Packages by Dead Code
@@ -63,8 +63,8 @@ HEAD: b1374a05
 | internal/central/events | WithPriority | internal/central/events/bus.go | 59 |
 | internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
 | internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
-| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
-| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
+| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 184 |
+| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 184 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
