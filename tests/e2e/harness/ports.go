@@ -18,55 +18,25 @@ import (
 // the other dies with "address already in use". Remembering what we
 // handed out removes that case, which is the one that actually fires:
 // the tests race each other, not the rest of the machine.
+//
+// Only the in-process servers go through here now. The daemon binds its
+// own ports from ":0" and reports them, so nothing hands it a number to
+// lose in the meantime.
 var (
 	portsMu      sync.Mutex
 	portsInUse   = map[int]struct{}{}
 	portAttempts = 40
 )
 
-// pickFreePort asks the OS for an ephemeral TCP port and returns it,
-// never returning the same port twice within this process.
-//
-// A window remains between releasing the probe listener and the daemon
-// binding the port, in which an unrelated process could take it. That is
-// unavoidable without the daemon reporting its effective ports back:
-// the REST and UI servers accept ":0" (internal/north/rest/server.go),
-// but nothing surfaces the resulting port to the test process, and the
-// callback and bin-RPC ports are observable only through the CCU
-// re-advertisement path. Closing the in-process collision leaves that
-// residual window, which is orders of magnitude rarer.
-func pickFreePort(t *testing.T) int {
-	t.Helper()
-	for range portAttempts {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("pickFreePort: listen: %v", err)
-		}
-		port := l.Addr().(*net.TCPAddr).Port
-		if err := l.Close(); err != nil {
-			t.Fatalf("pickFreePort: close: %v", err)
-		}
-		if reservePort(port) {
-			return port
-		}
-	}
-	t.Fatalf("pickFreePort: no unused port after %d attempts", portAttempts)
-	return 0
-}
-
 // pickFreeListener binds an ephemeral loopback port and returns the live
 // listener together with its port.
 //
-// Prefer this over [pickFreePort] whenever the server is in-process and
-// can accept a pre-bound net.Listener. [pickFreePort] has to close its
-// probe listener before returning, leaving a window in which anything on
-// the machine can take the port — that window is what makes a parallel
-// e2e run fail with "address already in use". Handing the bound listener
-// straight to the server removes the window instead of narrowing it,
-// because the port is never unbound in between.
-//
-// A separate process cannot use this: it needs a number, not a file
-// descriptor. Those callers keep [pickFreePort].
+// Handing the bound listener straight to an in-process server is what
+// makes this safe: the port is never unbound between being chosen and
+// being served on, so nothing can take it in between. A helper that
+// returns a bare number cannot offer that, which is why the daemon —
+// a separate process, and unable to inherit a listener — is configured
+// with ":0" and asked afterwards what it bound.
 func pickFreeListener(t *testing.T) (net.Listener, int) {
 	t.Helper()
 	for range portAttempts {
