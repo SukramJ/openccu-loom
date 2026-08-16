@@ -184,12 +184,13 @@ func TestHubDiscoveryPublishedAfterSerialResolvesLate(t *testing.T) {
 // boot-time seed names in `state_topic` must be a topic the reachability path
 // actually writes.
 //
-// The two halves live in different identifier spaces. The client coordinator
-// is keyed by the `<central>-<iface>` wire id, while ConnectivityChangedEvent
-// carries the bare interface name the CCU reports. Seeding from the wire id
-// declared `.../ccu-01-HmIP-RF` and published `.../HmIP-RF`, so the entity HA
-// created at boot stayed unavailable forever and the first reachability change
-// added a second one next to it.
+// ConnectivityChangedEvent.InterfaceID already carries the `<central>-<iface>`
+// wire id that observeProbeLatency stamps before the reconciler publishes,
+// the same id the client coordinator is keyed by. The seed used to key off
+// the bare interface name instead, so it declared `.../HmIP-RF` while the
+// event path published `.../ccu-01-HmIP-RF`: the entity HA created at boot
+// stayed unavailable forever and the first reachability change added a
+// second, live one under the wire id.
 func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 	t.Parallel()
 	c, pub, publisher := hubDiscoveryFixture(t)
@@ -217,12 +218,13 @@ func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 		t.Fatalf("connectivity discovery has no state_topic: %v", body)
 	}
 
-	// The reachability path: the reconciler publishes the CCU's own interface
-	// name (Interface.listInterfaces), never the wire id.
+	// The reachability path: observeProbeLatency stamps the wire id onto the
+	// event before the reconciler publishes it — never the CCU's bare
+	// interface name.
 	events.Publish(c.EventBus, hmevent.ConnectivityChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
-		InterfaceID: string(hmenum.InterfaceHmIPRF),
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
 		Reachable:   true,
 	})
 	publisher.Flush()

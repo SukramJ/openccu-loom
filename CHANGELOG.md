@@ -4,6 +4,27 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.61.3]
+
+Post-release audit of the 0.61.x fix wave. Each item below is a defect the
+0.61.0/0.61.1 audit-fix squash left behind or introduced, found by a
+full-codebase re-review and confirmed by an independent adversarial pass.
+
+### Fixed
+
+- **Per-interface connectivity no longer produces a dead HA entity and a
+  duplicate per radio, and the alarm domain notices a lost radio again.** The
+  0.61.1 fix for #574 moved `ConnectivityChangedEvent.InterfaceID` to the wire
+  form `<central>-<interface>` on the producer side, but two consumers stayed
+  on the bare name: the MQTT discovery seed declared the connectivity
+  binary_sensor under the bare interface name while the state was published
+  under the wire id (one permanently-unavailable entity plus a live duplicate
+  per radio), and the alarm service re-wrapped the already-wire id into
+  `<central>-<central>-<interface>`, so a radio going down degraded no enrolled
+  sensor and never ran the zone's central-loss policy. Both now use the wire id
+  the event carries; the guard tests that fed the bare name (and so could not
+  catch the drift) now feed the wire id production emits.
+
 ## [0.61.2]
 
 ### Fixed

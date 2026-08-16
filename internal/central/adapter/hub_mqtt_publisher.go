@@ -524,13 +524,15 @@ func (p *HubMQTTPublisher) wireInstallMode(
 // not only after the first reachability change. Connection-latency is
 // aggregated central-wide and seeded from the Metrics block instead.
 //
-// The seed keys on the BARE interface name, not on the `<central>-<iface>`
-// wire id the client coordinator is registered under: the state half of this
-// entity rides ConnectivityChangedEvent, whose InterfaceID is the name the
-// CCU itself reports from `Interface.listInterfaces`. Seeding under the wire
-// id declared a state topic nothing ever writes — a permanently unavailable
-// entity per radio — and the first reachability change then added a second,
-// live pair under the bare name.
+// The seed keys on the `<central>-<iface>` wire id, exactly as the state half
+// does: ConnectivityChangedEvent.InterfaceID carries the wire id because
+// observeProbeLatency (hub_wiring.go) stamps it there before the reconciler
+// publishes — the same id GET /interfaces reports and the client looks each
+// sensor's value up by. Seeding under the bare interface name instead declared
+// a state topic nothing ever writes (a permanently unavailable entity per
+// radio) while the first reachability change added a second, live pair under
+// the wire id. Seeding under the wire id and recording it in
+// connectivityDiscovered keeps the seed and the event path on one entity.
 func seedConnectivityDiscovery(
 	ctx context.Context,
 	u *central.Unit,
@@ -546,16 +548,20 @@ func seedConnectivityDiscovery(
 		if entry == nil {
 			continue
 		}
-		iface := string(entry.Interface)
+		iface := entry.Interface
 		if iface == "" {
-			iface = string(BareInterfaceFromWireID(centralName, entry.InterfaceID))
+			iface = BareInterfaceFromWireID(centralName, entry.InterfaceID)
 		}
 		if iface == "" {
 			continue
 		}
-		if !connectivityDiscovered[iface] {
-			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, iface))
-			connectivityDiscovered[iface] = true
+		// The wire id, built the same way observeProbeLatency builds the id it
+		// stamps onto ConnectivityChangedEvent, so the seed's discovery topic
+		// and unique_id match the state the event path later publishes.
+		wireID := WireInterfaceID(centralName, iface)
+		if !connectivityDiscovered[wireID] {
+			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, wireID))
+			connectivityDiscovered[wireID] = true
 		}
 	}
 }
