@@ -33,6 +33,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   remote API, not just its web API, which is the half the ingest actually
   reads. Each was measured against the defect it describes.
 
+- **A refused login is classified as an authentication failure under
+  both error envelopes.** Which shape a CCU answers an error in — its
+  own `version: "1.1"` / `JSONRPCError` form or the JSON-RPC 2.0 codes —
+  is not something the daemon chooses, and the auth path must not depend
+  on it. A wrong password classified as an ordinary client error becomes
+  a login retried through the full backoff, and the operator reads a
+  slow, flaky CCU instead of a credential they can fix.
+
 - **Fault-code classification is tested on the wire.** The simulator can
   answer failures with the HomeMatic catalogue instead of a blanket −1,
   so the retrier's decision — repeat this call or surface the error —
