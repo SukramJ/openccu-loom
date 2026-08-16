@@ -195,6 +195,11 @@ type SourceView struct {
 	// Overridden reports that an operator decision, not the classifier,
 	// produced this verdict.
 	Overridden bool
+	// OverrideIncluded is the stored override's raw inclusion bit. It is
+	// only meaningful when Overridden is true; a read surface seeds its
+	// include/exclude toggle from it rather than assuming "included" so a
+	// prior exclusion is not silently undone on the next save.
+	OverrideIncluded bool
 	// SinceMS is when it last became active; 0 while inactive.
 	SinceMS int64
 }

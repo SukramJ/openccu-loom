@@ -8,8 +8,10 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
 
@@ -66,5 +68,69 @@ func TestWSRecordingCommandsSurviveABootWithoutCentrals(t *testing.T) {
 	}
 	if !unit.Recorder.IsActive() {
 		t.Error("recording.start did not reach the adopted central's recorder")
+	}
+}
+
+// TestWSRecordingStartWritesAnAuditRowAndArmsTheAutoStop pins that a WS
+// recording.start goes through the same recorder domain method the REST
+// /diagnostics/rpc-recording route uses: it writes an audit row (with the
+// operator identity from the command context) and arms the auto-stop safety
+// timer. The old path poked every central's recorder directly and did
+// neither, so a WS-armed recording had no audit trail and could run forever.
+func TestWSRecordingStartWritesAnAuditRowAndArmsTheAutoStop(t *testing.T) {
+	t.Parallel()
+	hub := ws.NewHub()
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: "ccu-audit"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	// The shared recorder instance the WS commands drive; querying it back
+	// proves the auto-stop timer was armed (EndsAt set).
+	rpcRecorder := adapter.NewRPCRecorderAdapter(reg, "")
+	auditBuf := audit.NewBuffer(16)
+	t.Cleanup(func() { rpcRecorder.Stop(nil) }) // cancel the armed timer
+
+	wireWSCommands(hub, wsCommandWiring{
+		registry:    reg,
+		rpcRecorder: rpcRecorder,
+		auditRec:    auditBuf,
+		logger:      slog.New(slog.DiscardHandler),
+	})
+
+	adminCtx := auth.ContextWithIdentity(context.Background(),
+		auth.Identity{Subject: "admin", Role: auth.RoleAdmin})
+	if res := hub.Router().Dispatch(adminCtx, "recording.start", nil); res.Error != nil {
+		t.Fatalf("recording.start: %+v", res.Error)
+	}
+
+	// Audit row written, attributed to the requesting operator.
+	rows := auditBuf.List(0)
+	var found bool
+	for _, e := range rows {
+		if e.Action == "diagnostics.rpc_recording_start" {
+			found = true
+			if e.User != "admin" {
+				t.Errorf("audit row user = %q, want the requesting operator %q", e.User, "admin")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("recording.start wrote no diagnostics.rpc_recording_start audit row; got %d rows", len(rows))
+	}
+
+	// Auto-stop timer armed: the shared recorder reports a deadline.
+	var armed bool
+	for _, s := range rpcRecorder.Status() {
+		if s.Central == "ccu-audit" && s.EndsAt != "" {
+			armed = true
+		}
+	}
+	if !armed {
+		t.Error("recording.start did not arm the auto-stop timer (no EndsAt on the recorder status)")
 	}
 }

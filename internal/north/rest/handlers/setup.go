@@ -254,11 +254,19 @@ func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) erro
 		// on, so the section carries the switch: the persisted overlay is
 		// sparse and `enabled` has no default, so a section without it
 		// leaves the bridge off and the whole step inert.
+		// discovery_enabled is turned on too: with only `enabled` set both
+		// the discovery and raw planes default to off, so the bridge would
+		// connect and publish nothing. Home Assistant discovery is the
+		// common case for a wizard-driven install, and enabling it implies
+		// the raw plane (applyDefaults turns raw_enabled on), so a single
+		// switch yields entity topics that actually carry values. raw is
+		// left at its documented default rather than persisted here.
 		mqttSec, err := json.Marshal(map[string]any{
-			"enabled":    true,
-			"broker_url": req.MQTT.BrokerURL,
-			"username":   req.MQTT.Username,
-			"password":   req.MQTT.Password,
+			"enabled":           true,
+			"discovery_enabled": true,
+			"broker_url":        req.MQTT.BrokerURL,
+			"username":          req.MQTT.Username,
+			"password":          req.MQTT.Password,
 		})
 		if err != nil {
 			return err

@@ -591,6 +591,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 		// hub entities alive in Home Assistant forever. The device entities are
 		// retracted separately by the model eviction below via the event bridge.
 		if o.sbDeps.hubMQTT != nil {
+			//nolint:contextcheck // RetractCentral publishes on the fan-out worker's own context, like every publisher method
 			o.sbDeps.hubMQTT.RetractCentral(unit)
 		}
 		evictModel(unit)

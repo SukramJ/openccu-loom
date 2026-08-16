@@ -359,22 +359,23 @@ func (s *Service) Sources(ctx context.Context) []security.SourceView {
 	out := make([]security.SourceView, 0, len(s.agg.sources))
 	for key, src := range s.agg.sources {
 		at, active := s.agg.active[key]
-		_, overridden := overrides[key]
+		override, overridden := overrides[key]
 		out = append(out, security.SourceView{
-			Ref:            src.ref.Ref,
-			Central:        src.ref.Central,
-			InterfaceID:    src.ref.InterfaceID,
-			ChannelAddress: src.ref.ChannelAddress,
-			DeviceAddress:  src.ref.DeviceAddress,
-			Parameter:      src.ref.Parameter,
-			Name:           src.ref.Name,
-			Class:          src.class,
-			Reason:         src.reason,
-			Active:         active,
-			Relevant:       src.relevant,
-			ZoneID:         src.zoneID,
-			Overridden:     overridden,
-			SinceMS:        at,
+			Ref:              src.ref.Ref,
+			Central:          src.ref.Central,
+			InterfaceID:      src.ref.InterfaceID,
+			ChannelAddress:   src.ref.ChannelAddress,
+			DeviceAddress:    src.ref.DeviceAddress,
+			Parameter:        src.ref.Parameter,
+			Name:             src.ref.Name,
+			Class:            src.class,
+			Reason:           src.reason,
+			Active:           active,
+			Relevant:         src.relevant,
+			ZoneID:           src.zoneID,
+			Overridden:       overridden,
+			OverrideIncluded: override.Included,
+			SinceMS:          at,
 		})
 	}
 	s.mu.Unlock()

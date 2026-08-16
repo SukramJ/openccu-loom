@@ -353,11 +353,19 @@ func PutSecuritySourceOverride(d SecurityDomain, rec audit.Recorder) http.Handle
 }
 
 func apiSecuritySourceView(s security.SourceView) hmapi.SecuritySourceView {
-	return hmapi.SecuritySourceView{
+	view := hmapi.SecuritySourceView{
 		Ref: s.Ref, Central: s.Central, InterfaceID: s.InterfaceID,
 		ChannelAddress: s.ChannelAddress, DeviceAddress: s.DeviceAddress,
 		Parameter: s.Parameter, Name: s.Name, Class: string(s.Class),
 		Reason: string(s.Reason), Active: s.Active, Relevant: s.Relevant,
 		ZoneID: s.ZoneID, Overridden: s.Overridden, Since: msToTime(s.SinceMS),
 	}
+	// Surface the stored inclusion only when an override exists, so the SPA
+	// can seed its toggle from truth. Absent means "no override" — the
+	// default-included behaviour holds. PUT semantics are unchanged.
+	if s.Overridden {
+		included := s.OverrideIncluded
+		view.OverrideIncluded = &included
+	}
+	return view
 }

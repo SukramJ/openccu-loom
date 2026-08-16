@@ -6,8 +6,10 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
@@ -101,8 +103,11 @@ func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 		return handlers.MatterFabricResponse{
 			FabricIndex:   r.FabricIndex,
 			FabricID:      r.FabricID,
+			FabricIDHex:   fmt.Sprintf("%016X", r.FabricID),
 			NodeID:        r.NodeID,
+			NodeIDHex:     fmt.Sprintf("%016X", r.NodeID),
 			VendorID:      r.VendorID,
+			VendorName:    eligibility.VendorName(r.VendorID),
 			Label:         r.Label,
 			CompressedID:  hex.EncodeToString(r.CompressedID[:]),
 			RootPublicKey: hex.EncodeToString(r.RootPublicKey),

@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -273,8 +275,14 @@ type ExtendedCommandsConfig struct {
 	// and `central.links_status`.
 	CentralLinks CentralLinksManager
 	// SessionRecorder backs `recording.start`, `recording.stop`, and
-	// `recording.status`.
+	// `recording.status`. Its Start/Stop route through the same recorder
+	// domain method the REST `/diagnostics/rpc-recording` route uses, so a
+	// WS-started recording arms the same auto-stop safety timer.
 	SessionRecorder SessionRecorder
+	// RecordingAudit records the recording.start / recording.stop lifecycle,
+	// mirroring the audit row the REST route writes so the two transports
+	// leave one audit trail. Nil skips the row (the recorder still toggles).
+	RecordingAudit audit.Recorder
 	// Groups backs `groups.list` — the read-only heating-group listing.
 	Groups GroupsQuery
 	// GroupsAdmin backs the heating-group administration commands (GR02):
@@ -416,8 +424,8 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if cfg.SessionRecorder != nil {
 		// recording.start / recording.stop — toggle the diagnostic RPC
 		// session recorder. Mirrors Python record_session.
-		router.Register("recording.start", recordingStartHandler(cfg.SessionRecorder))
-		router.Register("recording.stop", recordingStopHandler(cfg.SessionRecorder))
+		router.Register("recording.start", recordingStartHandler(cfg.SessionRecorder, cfg.RecordingAudit))
+		router.Register("recording.stop", recordingStopHandler(cfg.SessionRecorder, cfg.RecordingAudit))
 		router.Register("recording.status", recordingStatusHandler(cfg.SessionRecorder))
 	}
 }
@@ -1309,29 +1317,57 @@ func centralLinksStatusHandler(m CentralLinksManager) CommandHandler {
 	}
 }
 
+// Audit actions for the WS recording lifecycle. They are the same dotted
+// strings the REST `/diagnostics/rpc-recording` handler writes
+// (handlers.actionRPCRecordingStart / …Stop, kept private there) so a row
+// resolves the same regardless of which transport armed the recorder.
+const (
+	actionWSRecordingStart audit.Action = "diagnostics.rpc_recording_start"
+	actionWSRecordingStop  audit.Action = "diagnostics.rpc_recording_stop"
+)
+
+// recordRecordingLifecycle appends the recording start/stop to the audit log
+// when a recorder is wired, stamping the requesting operator resolved from the
+// command context — the same actor the REST route records. A nil recorder is a
+// no-op so the recording still toggles on minimal wirings.
+func recordRecordingLifecycle(ctx context.Context, rec audit.Recorder, action audit.Action) {
+	if rec == nil {
+		return
+	}
+	user := "anonymous"
+	if id, ok := auth.IdentityFrom(ctx); ok && id.Subject != "" {
+		user = id.Subject
+	}
+	rec.Record(audit.Entry{User: user, Action: action, Note: "centrals=all"})
+}
+
 // recordingStartHandler implements `recording.start`.
-// Activates the diagnostic RPC session recorder. Mirrors Python
-// record_session (start).
+// Activates the diagnostic RPC session recorder through the shared recorder
+// domain method (arming the auto-stop safety timer) and records the lifecycle
+// to the audit log, matching the REST `/diagnostics/rpc-recording` route.
 //
 // Request: {} (no params required).
 // Response: { "recording": bool }
-func recordingStartHandler(r SessionRecorder) CommandHandler {
-	return func(_ context.Context, _ json.RawMessage) (any, error) {
-		r.Start()
-		return map[string]any{"recording": r.IsActive()}, nil
+func recordingStartHandler(r SessionRecorder, rec audit.Recorder) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		active := r.Start()
+		recordRecordingLifecycle(ctx, rec, actionWSRecordingStart)
+		return map[string]any{"recording": active}, nil
 	}
 }
 
 // recordingStopHandler implements `recording.stop`.
-// Deactivates the diagnostic RPC session recorder. Mirrors Python
-// record_session (stop).
+// Deactivates the diagnostic RPC session recorder through the shared recorder
+// domain method (cancelling the auto-stop timer) and records the lifecycle to
+// the audit log, matching the REST route.
 //
 // Request: {} (no params required).
 // Response: { "recording": bool }
-func recordingStopHandler(r SessionRecorder) CommandHandler {
-	return func(_ context.Context, _ json.RawMessage) (any, error) {
-		r.Stop()
-		return map[string]any{"recording": r.IsActive()}, nil
+func recordingStopHandler(r SessionRecorder, rec audit.Recorder) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		active := r.Stop()
+		recordRecordingLifecycle(ctx, rec, actionWSRecordingStop)
+		return map[string]any{"recording": active}, nil
 	}
 }
 

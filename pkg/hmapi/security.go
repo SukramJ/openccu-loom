@@ -131,8 +131,14 @@ type SecuritySourceView struct {
 	ZoneID string `json:"zone_id,omitempty"`
 	// Overridden reports that an operator decision, not the classifier,
 	// produced this verdict.
-	Overridden bool      `json:"overridden,omitempty"`
-	Since      time.Time `json:"since,omitzero"`
+	Overridden bool `json:"overridden,omitempty"`
+	// OverrideIncluded is the stored override's raw inclusion bit, present
+	// only when Overridden is true. A read surface seeds its include/exclude
+	// toggle from it — assuming "included" instead silently undoes a prior
+	// exclusion on the next save. Absent (nil) means no override is stored,
+	// so the toggle follows the default-included behaviour.
+	OverrideIncluded *bool     `json:"override_included,omitempty"`
+	Since            time.Time `json:"since,omitzero"`
 }
 
 // SecuritySourceOverride is the operator decision about one data point.

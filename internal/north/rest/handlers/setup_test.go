@@ -320,6 +320,52 @@ func TestSetup_MQTTStepEnablesTheBridge(t *testing.T) {
 	}
 }
 
+// TestSetup_MQTTStepEnablesDiscovery pins that the wizard's MQTT step turns on
+// Home Assistant discovery, not just the bridge connection.
+//
+// With only `enabled` set both the discovery and raw planes default to off, so
+// the bridge connects and publishes nothing — no entity topics ever appear.
+// Enabling discovery is the common case for a wizard-driven install; it also
+// implies the raw plane (applyDefaults turns raw_enabled on), so a single
+// switch yields entity topics that actually carry values.
+func TestSetup_MQTTStepEnablesDiscovery(t *testing.T) {
+	svc := newFullSetupService(t)
+	ctx := context.Background()
+
+	body := strings.NewReader(`{
+		"admin":  {"username":"admin","password":"password123"},
+		"locale": {"locale":"en","theme":"dark"},
+		"mqtt":   {"broker_url":"tcp://broker.local:1883","username":"mq","password":"secret"}
+	}`)
+	w := httptest.NewRecorder()
+	Setup(svc).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/setup", body))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("got %d body=%s, want 204", w.Code, w.Body.String())
+	}
+
+	row, err := svc.Sections.Get(ctx, "north.mqtt")
+	if err != nil {
+		t.Fatalf("north.mqtt section not persisted: %v", err)
+	}
+	var sec config.NorthMQTT
+	if err := json.Unmarshal(row.ValueJSON, &sec); err != nil {
+		t.Fatalf("unmarshal north.mqtt: %v", err)
+	}
+	if !sec.DiscoveryEnabled {
+		t.Errorf("north.mqtt.discovery_enabled = false; the wizard enabled MQTT but the bridge would publish no discovery: %s", row.ValueJSON)
+	}
+
+	// The raw plane is left at its documented default in the persisted section;
+	// applyDefaults turns it on because discovery depends on it, so the effective
+	// config publishes both planes.
+	cfg := &config.Config{}
+	cfg.North.MQTT = sec
+	cfg.ApplyDefaults()
+	if !cfg.North.MQTT.RawEnabled {
+		t.Errorf("effective north.mqtt.raw_enabled = false after defaults; discovery would declare entities that never receive a value")
+	}
+}
+
 // recordingCentralAdmin is a [CentralAdminService] that records what the
 // wizard writes. Production wires the live-adopt decorator here, so the
 // recorded Put stands in for "the CCU was adopted, not just persisted".

@@ -266,6 +266,27 @@ func TestInvokeCustomDataPoint_BadParam_Returns422(t *testing.T) {
 	}
 }
 
+func TestInvokeCustomDataPoint_ChannelLocked_Returns423(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0099", "HmIP-BSM")
+	addCustomDP(d, "DEV0099", "STATE", 1, hmenum.DataPointCategorySwitch)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0099": d}}
+	// The operator's per-channel control lock rejects the invoke: a retry
+	// cannot help until the lock is lifted, so this must be 423 Locked —
+	// mirroring the paramset/value PUT routes — never a 502 upstream failure.
+	writer := &stubCustomDPWriter{invokeErr: device.ErrChannelOperationLocked}
+
+	body := bytes.NewBufferString(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0099", "name": "STATE", "operation": "turn_on"}))
+	w := httptest.NewRecorder()
+	InvokeCustomDataPoint(idx, writer).ServeHTTP(w, req)
+
+	if w.Code != http.StatusLocked {
+		t.Fatalf("expected 423 for a locked-channel custom-DP invoke, got %d", w.Code)
+	}
+}
+
 func TestInvokeCustomDataPoint_WriterNil_Returns503(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice("DEV0008", "HmIP-BSM")

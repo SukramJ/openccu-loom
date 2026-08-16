@@ -148,6 +148,46 @@ func TestPublishFabricAddedCarriesTheDeclaredFabricIdentity(t *testing.T) {
 	}
 }
 
+// TestPublishFabricAddedCarriesTheHexIdentifiers pins that the broadcast fills
+// the schema-required fabric_id_hex / node_id_hex the same way
+// GET /matter/fabrics does. FabricID and NodeID are 64-bit and a JSON number
+// carries only 53 bits, so a browser rounds them — a consumer that renders the
+// numeric field prints the wrong id. Omitting the hex members leaves a strict
+// decoder with empty strings for two required fields.
+func TestPublishFabricAddedCarriesTheHexIdentifiers(t *testing.T) {
+	t.Parallel()
+	hub := ws.NewHub()
+	hub.SetReplayCapacity(4)
+	recs := []store.FabricRecord{
+		{
+			FabricIndex: 7, FabricID: 0xAABB, NodeID: 0xCCDD, VendorID: 0x1349, Label: "Apple Home",
+			CompressedID: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}, RootPublicKey: []byte{4, 9, 9},
+		},
+	}
+	pub := &matterEventPublisher{hub: hub, fabrics: stubFabricStore{recs: recs}}
+
+	pub.publishFabricAdded(7)
+
+	events := hub.Replay(0, nil).Events
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	raw, err := json.Marshal(events[0].Payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if got["fabric_id_hex"] != "000000000000AABB" {
+		t.Errorf("fabric_id_hex = %v, want the 16-digit hex of the fabric id: %s", got["fabric_id_hex"], raw)
+	}
+	if got["node_id_hex"] != "000000000000CCDD" {
+		t.Errorf("node_id_hex = %v, want the 16-digit hex of the node id: %s", got["node_id_hex"], raw)
+	}
+}
+
 // TestPublishFabricAddedStillEmitsWhenTheFabricCannotBeResolved keeps the
 // event itself unconditional: a store read that fails must degrade the payload,
 // never swallow the commissioning notification.
