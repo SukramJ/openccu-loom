@@ -15304,7 +15304,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        status?: string;
+                        /**
+                         * @description `shutdown_signalled` — this request sent the shutdown signal. `shutdown_in_progress` — a shutdown signalled less than 30 s ago is still running, so no second signal was sent; retry later if it did not complete.
+                         * @enum {string}
+                         */
+                        status?: "shutdown_signalled" | "shutdown_in_progress";
                         /** Format: date-time */
                         at?: string;
                     };

@@ -53,7 +53,7 @@ func TestServeIndex(t *testing.T) {
 		body := "<!doctype html><title>loom</title>"
 		fsys := fstest.MapFS{"index.html": {Data: []byte(body)}}
 		rec := httptest.NewRecorder()
-		serveIndex(fsys, rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		serveIndex(fsys, rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
 		}
@@ -68,7 +68,7 @@ func TestServeIndex(t *testing.T) {
 	t.Run("falls back to the not-built page when the bundle is empty", func(t *testing.T) {
 		t.Parallel()
 		rec := httptest.NewRecorder()
-		serveIndex(fstest.MapFS{}, rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		serveIndex(fstest.MapFS{}, rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("status = %d, want 503", rec.Code)
 		}
@@ -94,7 +94,7 @@ func TestSPAHandlerRoutesIndexRequestsToServeIndex(t *testing.T) {
 		t.Run(path, func(t *testing.T) {
 			t.Parallel()
 			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, http.NoBody))
 			if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
 				t.Fatalf("%s: Cache-Control = %q, want no-store (should fall through to serveIndex)", path, cc)
 			}
