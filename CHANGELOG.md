@@ -18,6 +18,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Both were verified to fail when the behaviour they describe is
   removed.
 
+- **Four CCU behaviours the simulator could not previously produce are
+  now covered.** Batched event delivery: a burst arrives as one
+  `system.multicall`, and the production callback server must deliver
+  every entry — dropping everything after the first loses values
+  silently while the transport call reports success. The ping/pong round
+  trip the connection monitor is built on: the simulator answers a ping
+  with the CENTRAL PONG carrying the caller id back, so send, echo and
+  match are exercised together instead of the handler being fed its own
+  echo. The unreachability latch: a device that stops answering must
+  produce UNREACH *and* STICKY_UNREACH, because without the sticky flag a
+  device that dropped out overnight looks untroubled by morning. And the
+  readiness gate: a CCU that has not finished booting now refuses its
+  remote API, not just its web API, which is the half the ingest actually
+  reads. Each was measured against the defect it describes.
+
 - **Fault-code classification is tested on the wire.** The simulator can
   answer failures with the HomeMatic catalogue instead of a blanket −1,
   so the retrier's decision — repeat this call or surface the error —
