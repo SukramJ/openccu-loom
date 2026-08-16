@@ -185,7 +185,15 @@ func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string
 			// policy resolves to inert.
 			return "", false, nil
 		}
-		f.recordInvalid(ctx, zoneID, source, "code_missing", opSource)
+		// A code is required here but none was supplied: the verb is
+		// still refused, but an absent code is not a wrong guess and must
+		// not charge the rate limiter. An HA aggregate ("master") panel
+		// disarms code-free and the engine loops it across every zone;
+		// each code-required zone would otherwise record a failure, and a
+		// handful of zones on one code-free press would lock the source
+		// out — refusing the operator's immediately following correct
+		// per-zone PIN. Journal the fault for audit, charge nothing.
+		f.recordInvalid(ctx, zoneID, source, "code_missing", opSource, false)
 		return "", false, engine.ErrInvalidCode
 	}
 
@@ -203,7 +211,9 @@ func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string
 		return c.name, c.duress, nil
 	}
 
-	f.recordInvalid(ctx, zoneID, source, "invalid_code", opSource)
+	// A supplied code that matched no candidate is a genuine wrong guess:
+	// it charges the limiter, preserving the brute-force lockout.
+	f.recordInvalid(ctx, zoneID, source, "invalid_code", opSource, true)
 	return "", false, engine.ErrInvalidCode
 }
 
@@ -217,9 +227,19 @@ func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string
 //
 // The work it does per source is still bounded, through its own probe
 // ledger: verifying an argon2id hash is deliberately expensive, and
-// this path is reachable by anyone who can publish a disarm. Only
-// duress rows are ever verified, so an installation without a duress
-// code does no hashing here at all.
+// this path is reachable by anyone who can publish a disarm. An
+// installation without a duress code does no hashing here at all — the
+// early return below fires before any VerifyPIN call.
+//
+// Only a genuinely unknown code charges the probe ledger. A correct
+// ordinary PIN is a legitimate action, not a failed duress guess: it
+// clears the ledger like the code plane does. Charging it would let the
+// household's routine no-op disarms (the aggregate/master panel republishes
+// the correct PIN across zones) exhaust the probe budget and mute a real
+// duress code entered during that window — the exact scenario the branch
+// exists for. So when the code matches no duress row but does match some
+// enabled PIN, the ordinary rows are verified too, purely to separate a
+// known code from an unknown probe.
 func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source string) (identity string, duress bool) {
 	if code == "" {
 		return "", false
@@ -230,13 +250,14 @@ func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source str
 		f.log.Error("alarm duress match: load codes failed", "zone", zoneID, "error", err)
 		return "", false
 	}
-	var duressCandidates []pinCandidate
+	hasDuress := false
 	for _, c := range candidates {
 		if c.duress && permits(c.perms, verb) {
-			duressCandidates = append(duressCandidates, c)
+			hasDuress = true
+			break
 		}
 	}
-	if len(duressCandidates) == 0 {
+	if !hasDuress {
 		return "", false
 	}
 	// Operator sources are exempt for the same reason they are exempt
@@ -249,8 +270,17 @@ func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source str
 			return "", false
 		}
 	}
-	for _, c := range duressCandidates {
-		if VerifyPIN(c.hash, code) {
+	// Single verification pass over every applicable code. A duress
+	// match fires the covert channel; any other match is the household's
+	// ordinary correct PIN — a success, not a probe. Only a code that
+	// matches nothing is a failed probe.
+	knownCode := false
+	for _, c := range candidates {
+		if !VerifyPIN(c.hash, code) {
+			continue
+		}
+		knownCode = true
+		if c.duress && permits(c.perms, verb) {
 			if limited {
 				f.probes.recordSuccess(source)
 			}
@@ -258,7 +288,11 @@ func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source str
 		}
 	}
 	if limited {
-		f.probes.recordFailure(source, now)
+		if knownCode {
+			f.probes.recordSuccess(source)
+		} else {
+			f.probes.recordFailure(source, now)
+		}
 	}
 	return "", false
 }
@@ -339,14 +373,17 @@ func (f *Facade) pinCandidates(ctx context.Context, zoneID string, nowMS int64) 
 }
 
 // recordInvalid registers a wrong or missing-but-required attempt: it
-// journals the fault, feeds the rate limiter, and journals a second
-// entry plus a warning log ("health note") if that attempt just
-// engaged a new lockout. Operator sources journal only — their wrong
+// journals the fault and, when chargeLimiter is set, feeds the rate
+// limiter and journals a second entry plus a warning log ("health
+// note") if that attempt just engaged a new lockout. Only a genuinely
+// wrong/unknown code charges the limiter; a required-but-absent code is
+// journaled but never counted, so a code-free aggregate disarm cannot
+// lock a source out. Operator sources journal only — their wrong
 // attempts must never accumulate toward a lockout that would later
 // suppress duress detection.
-func (f *Facade) recordInvalid(ctx context.Context, zoneID, source, event string, operatorSource bool) {
+func (f *Facade) recordInvalid(ctx context.Context, zoneID, source, event string, operatorSource, chargeLimiter bool) {
 	f.journalFault(ctx, zoneID, source, event, nil)
-	if operatorSource {
+	if operatorSource || !chargeLimiter {
 		return
 	}
 	lockout := f.limiter.recordFailure(source, f.clk.Now())
