@@ -18,6 +18,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Both were verified to fail when the behaviour they describe is
   removed.
 
+- **The hub's JSON-RPC decode is tested against the CCU's own payload
+  shapes.** `SysVar.getAll` reports its values as strings and carries
+  only the fields that apply to each variable type; rooms and functions
+  report their members as ReGa object ids. The simulator used to answer
+  with Go-native types and every field populated — the one shape that
+  cannot expose a decode assuming a bool or a float — so the typed DTO
+  had never met a realistic payload. A sysvar whose value fails to
+  decode is not a loud failure: it spawns with the zero value, and the
+  operator sees a switch that is off. Ingest is also driven once per
+  interface process against a CCU that serves each protocol family on
+  its own port, which is the only arrangement in which a device filed
+  under the wrong interface can show up at all.
+
+  Two of these tests found defects in the simulator rather than the
+  daemon (object ids sent as JSON numbers, and the pairing automaton
+  missing from JSON-RPC); they are gated on the simulator release that
+  fixes them and skip with that reason until it lands.
+
 - **Four CCU behaviours the simulator could not previously produce are
   now covered.** Batched event delivery: a burst arrives as one
   `system.multicall`, and the production callback server must deliver
