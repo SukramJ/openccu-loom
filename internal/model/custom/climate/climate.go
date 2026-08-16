@@ -707,16 +707,7 @@ func (c *Climate) SetTemperatureOffset(ctx context.Context, v string, priority h
 	if c.writer == nil {
 		return ErrModeNotSupported
 	}
-	// TEMPERATURE_OFFSET lives on a MASTER paramset — on the climate channel
-	// for HmIP thermostats and on the device-root channel for the classic RF
-	// family. A plain setValue only ever reaches VALUES, so the offset never
-	// arrives at the thermostat; resolve the owning channel the way the
-	// TEMPERATURE_MINIMUM / MAXIMUM bounds do and write it through the MASTER
-	// put_paramset path.
-	address, paramset := c.masterConfigWriteTarget(resolveConfigParam(c.channelRef, hmenum.ParameterTemperatureOffset))
-	if err := custom.PutParamsetForce(custom.EnsureContext(ctx), c.writer, address, paramset, map[hmenum.Parameter]any{
-		hmenum.ParameterTemperatureOffset: v,
-	}, priority); err != nil {
+	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, hmenum.ParameterTemperatureOffset, v, priority); err != nil {
 		return fmt.Errorf("climate: set temperature offset: %w", err)
 	}
 	c.mu.Lock()
@@ -1065,26 +1056,18 @@ func (c *Climate) SetProfile(ctx context.Context, p Profile, priority hmenum.Com
 		}
 	case KindRF:
 		// A week-program profile requires the thermostat to be in AUTO mode
-		// with BOOST cleared before the pointer is written. AUTO_MODE and
-		// BOOST_MODE are VALUES parameters on the climate channel, so they go
-		// out together in one VALUES put_paramset (clearing BOOST while setting
-		// AUTO in the same envelope avoids an intermediate inconsistent state).
-		// WEEK_PROGRAM_POINTER is a MASTER parameter that lives on the
-		// device-root channel for the classic RF family — it cannot ride in the
-		// VALUES envelope, so it is written to its own MASTER paramset
-		// separately.
-		modeParams := map[hmenum.Parameter]any{
-			hmenum.ParameterAutoMode:  true,
-			hmenum.ParameterBoostMode: false,
-		}
-		if err := custom.PutOrSet(custom.EnsureContext(ctx), c.writer, c.Address, hmenum.ParamsetKeyValues, modeParams, priority); err != nil {
-			return fmt.Errorf("climate: set profile: %w", err)
-		}
+		// before the pointer is written. Ensure AUTO, clear BOOST and set
+		// WEEK_PROGRAM_POINTER atomically via a single put_paramset — the CCU
+		// applies all three fields together. Sending them as separate SetValues
+		// risks the CCU seeing an intermediate inconsistent state when AUTO is
+		// set but BOOST has not been cleared yet.
 		value := profilePointerEnumLabel(idx)
-		address, paramset := c.masterConfigWriteTarget(resolveWeekProgramPointer(c.channelRef, c.Kind))
-		if err := custom.PutParamsetForce(custom.EnsureContext(ctx), c.writer, address, paramset, map[hmenum.Parameter]any{
+		params := map[hmenum.Parameter]any{
+			hmenum.ParameterAutoMode:           true,
+			hmenum.ParameterBoostMode:          false,
 			hmenum.ParameterWeekProgramPointer: value,
-		}, priority); err != nil {
+		}
+		if err := custom.PutOrSet(custom.EnsureContext(ctx), c.writer, c.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 			return fmt.Errorf("climate: set profile: %w", err)
 		}
 	default:
@@ -1706,14 +1689,10 @@ func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyc
 		}
 	}
 	// TEMPERATURE_OFFSET is a MASTER-paramset DP on HmIP/RF thermostats —
-	// channel-configuration item, not runtime state. It sits on the climate
-	// channel's MASTER for HmIP thermostats but on the device-root MASTER for
-	// the classic RF family, so the resolution has to walk both — a
-	// climate-channel-only lookup left the offset unobserved and the state
-	// payload dropped it. The OPTIMUM_START_STOP and
-	// MIN_MAX_VALUE_NOT_RELEVANT_FOR_MANU_MODE bindings below stay on the
-	// climate channel, where the HmIP family that carries them advertises them.
-	if dp := resolveConfigParam(ch, hmenum.ParameterTemperatureOffset); dp != nil {
+	// channel-configuration item, not runtime state. `ch.Parameter()` only looks
+	// at VALUES; consult MASTER too. Same pattern below for OPTIMUM_START_STOP
+	// and MIN_MAX_VALUE_NOT_RELEVANT_FOR_MANU_MODE.
+	if dp := paramFromAnyParamset(ch, hmenum.ParameterTemperatureOffset); dp != nil {
 		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyTemperatureOffset(next) }))
 		replayCurrentValue(dp, applyTemperatureOffset)
 	}
@@ -1769,12 +1748,8 @@ func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyc
 		}
 		// WEEK_PROGRAM_POINTER drives `preset_mode = week_program_<n>` when the
 		// thermostat is in AUTO. RF firmware delivers a 0-based index;
-		// OnActiveProfile normalises to 1-based week-program labels. The pointer
-		// sits on the device-root MASTER paramset for the classic RF family
-		// (HM-TC-IT-WM-W-EU, HM-CC-VG-1), so it is resolved through the same
-		// MASTER+root walk numWeekPrograms uses — a climate-channel VALUES-only
-		// lookup never observed it and the active week program stayed unknown.
-		if dp := resolveWeekProgramPointer(ch, c.Kind); dp != nil {
+		// OnActiveProfile normalises to 1-based week-program labels.
+		if dp := ch.Parameter(hmenum.ParameterWeekProgramPointer); dp != nil {
 			unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyWeekProgramPointer(next) }))
 			replayCurrentValue(dp, applyWeekProgramPointer)
 		}
@@ -2047,47 +2022,6 @@ func (c *Climate) crossChannelTemperatureBound(p hmenum.Parameter) *generic.Floa
 		}
 	}
 	return nil
-}
-
-// resolveConfigParam locates an operator-configuration parameter that lives on
-// a MASTER paramset. The HmIP thermostat family carries it on the climate
-// channel's own MASTER paramset (TEMPERATURE_OFFSET on <device>:N/MASTER),
-// while the classic RF family carries it on the device-root MASTER paramset
-// (HM-CC-RT-DN, HM-TC-IT-WM-W-EU, HM-CC-VG-1 on <device>/MASTER). The lookup
-// walks the climate channel first and the device-root channel second — the
-// same climate-then-root resolution [Climate.crossChannelTemperatureBound]
-// uses for the TEMPERATURE_MINIMUM / MAXIMUM bounds. Returns nil when neither
-// channel advertises p.
-func resolveConfigParam(ch *device.Channel, p hmenum.Parameter) device.ParameterDataPoint {
-	if ch == nil {
-		return nil
-	}
-	if dp := paramFromAnyParamset(ch, p); dp != nil {
-		return dp
-	}
-	if dev := ch.Device(); dev != nil {
-		if root := dev.RootChannel(); root != nil {
-			if dp := paramFromAnyParamset(root, p); dp != nil {
-				return dp
-			}
-		}
-	}
-	return nil
-}
-
-// masterConfigWriteTarget resolves the (channel address, paramset key) a
-// MASTER-resident configuration parameter must be written to, taken from its
-// resolved owning data point so the write lands on the exact paramset and
-// channel the CCU advertises the parameter on. A nil dp — the parameter has
-// not been materialised on the model yet — falls back to the climate channel's
-// MASTER paramset, the paramset every thermostat in the fleet carries these
-// parameters on.
-func (c *Climate) masterConfigWriteTarget(dp device.ParameterDataPoint) (address string, paramset hmenum.ParamsetKey) {
-	if dp != nil {
-		key := dp.DataPointKey()
-		return key.ChannelAddress, key.ParamsetKey
-	}
-	return c.Address, hmenum.ParamsetKeyMaster
 }
 
 // resolveWeekProgramPointer locates the week-program-pointer DP at
