@@ -605,6 +605,16 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	}
 	if d.AuthResolve != nil {
 		r.Use(d.AuthResolve)
+		// Throttle per-source HTTP Basic credential guessing on every
+		// Resolve-protected route, not just POST /auth/login: a Basic header
+		// that fails verification is charged against the same per-IP buckets
+		// the login limiter uses, so a guessing sweep on GET /auth/me (or any
+		// route) is rate-limited the same way the login route is. Mounted
+		// right after Resolve so the guard reads the identity Resolve attached
+		// — a valid credential costs nothing, only failures charge.
+		if d.LoginRateLimit != nil {
+			r.Use(auth.GuardBasicAuth(d.LoginRateLimit))
+		}
 	}
 	if d.Idempotent {
 		// Mounted after AuthResolve so the cache key can incorporate the
@@ -707,7 +717,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			} else {
 				r.Post("/auth/login", login)
 			}
-			r.Post("/auth/logout", handlers.Logout(d.Auth))
+			r.Post("/auth/logout", handlers.Logout(d.Auth, d.SessionRevoker))
 			r.Get("/auth/me", handlers.Me())
 		}
 		// First-run onboarding. Unauthenticated: no admin exists yet when the
@@ -1003,9 +1013,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/incidents", handlers.ListIncidents(d.Incidents))
 			}
 			if d.IncidentsAdmin != nil {
-				// Mirrors the WS `incidents.clear` role (auth.RoleOperator in
-				// internal/north/rest/ws/commands.go's writeCommandRoles).
-				pr.With(op).Delete("/incidents", handlers.DeleteIncidents(d.IncidentsAdmin, d.AuditRecorder))
+				// Admin-gated to match the published contract: assets/openapi.yaml
+				// declares DELETE /incidents `openIdConnect: [admin]`. Clearing
+				// the incident history is irreversible, so enforcement follows the
+				// spec rather than the operator-tier WS `incidents.clear`.
+				pr.With(admin).Delete("/incidents", handlers.DeleteIncidents(d.IncidentsAdmin, d.AuditRecorder))
 			}
 			if d.Alarm != nil {
 				// Alarm-panel surface: reads authenticate, every mutation
