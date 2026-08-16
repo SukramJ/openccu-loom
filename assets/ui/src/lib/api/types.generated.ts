@@ -5975,13 +5975,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description The stored startup-capture toggle as the daemon reports it. Every field is always present in responses; the write shape with its omitted-key semantics is `StartupCaptureConfigWrite`. */
         StartupCaptureConfig: {
             /** @description When true, the daemon opens a diagnostics capture at boot. */
             enabled: boolean;
             /** @description Duration of the boot-time capture. Zero falls back to the default (300 s). */
             duration_seconds: number;
+            /** @description Whether device-address-shaped values in the recorded archive are hashed. Responses always carry the effective value. */
+            anonymise: boolean;
+        };
+        /** @description Write shape of the startup-capture toggle. `anonymise` may be omitted and then means true — the boot capture has no later chance to ask, so an unstated preference must not end up archiving raw device addresses. */
+        StartupCaptureConfigWrite: {
+            /** @description When true, the daemon opens a diagnostics capture at boot. */
+            enabled: boolean;
+            /** @description Duration of the boot-time capture. Zero falls back to the default (300 s). */
+            duration_seconds: number;
             /**
-             * @description Whether to hash device-address-shaped values in the recorded archive. A write that omits the key means true: the boot capture has no later chance to ask, so an unstated preference must not end up archiving raw device addresses. Send `false` explicitly to switch it off. The response always carries the field.
+             * @description Whether to hash device-address-shaped values in the recorded archive. Omitting the key means true; send `false` explicitly to switch anonymisation off.
              * @default true
              */
             anonymise: boolean;
@@ -15260,7 +15270,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StartupCaptureConfig"];
+                "application/json": components["schemas"]["StartupCaptureConfigWrite"];
             };
         };
         responses: {

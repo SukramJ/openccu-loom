@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.35.0
+  version: 6.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5668,7 +5668,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/StartupCaptureConfig" }
+            schema: { $ref: "#/components/schemas/StartupCaptureConfigWrite" }
       responses:
         "200":
           description: Saved
@@ -7950,8 +7950,35 @@ components:
   schemas:
     StartupCaptureConfig:
       type: object
+      required: [enabled, duration_seconds, anonymise]
+      additionalProperties: false
+      description: >-
+        The stored startup-capture toggle as the daemon reports it. Every
+        field is always present in responses; the write shape with its
+        omitted-key semantics is `StartupCaptureConfigWrite`.
+      properties:
+        enabled:
+          type: boolean
+          description: When true, the daemon opens a diagnostics capture at boot.
+        duration_seconds:
+          type: integer
+          minimum: 0
+          maximum: 1800
+          description: Duration of the boot-time capture. Zero falls back to the default (300 s).
+        anonymise:
+          type: boolean
+          description: >-
+            Whether device-address-shaped values in the recorded archive are
+            hashed. Responses always carry the effective value.
+    StartupCaptureConfigWrite:
+      type: object
       required: [enabled, duration_seconds]
       additionalProperties: false
+      description: >-
+        Write shape of the startup-capture toggle. `anonymise` may be
+        omitted and then means true — the boot capture has no later chance
+        to ask, so an unstated preference must not end up archiving raw
+        device addresses.
       properties:
         enabled:
           type: boolean
@@ -7966,10 +7993,8 @@ components:
           default: true
           description: >-
             Whether to hash device-address-shaped values in the recorded
-            archive. A write that omits the key means true: the boot capture
-            has no later chance to ask, so an unstated preference must not
-            end up archiving raw device addresses. Send `false` explicitly to
-            switch it off. The response always carries the field.
+            archive. Omitting the key means true; send `false` explicitly
+            to switch anonymisation off.
 
     ExportedConfiguration:
       type: object
