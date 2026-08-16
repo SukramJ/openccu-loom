@@ -57,11 +57,11 @@ func TestWSRecordingCommandsSurviveABootWithoutCentrals(t *testing.T) {
 	if err := reg.Register(unit); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
-	// recording.start is role-gated like the REST write path, so dispatch it
-	// with a resolved operator identity.
-	opCtx := auth.ContextWithIdentity(context.Background(),
-		auth.Identity{Subject: "operator", Role: auth.RoleOperator})
-	if res := router.Dispatch(opCtx, "recording.start", nil); res.Error != nil {
+	// recording.start is admin-gated, matching the REST write route; dispatch
+	// it with a resolved admin identity.
+	adminCtx := auth.ContextWithIdentity(context.Background(),
+		auth.Identity{Subject: "admin", Role: auth.RoleAdmin})
+	if res := router.Dispatch(adminCtx, "recording.start", nil); res.Error != nil {
 		t.Fatalf("recording.start after a runtime adopt: %+v", res.Error)
 	}
 	if !unit.Recorder.IsActive() {
