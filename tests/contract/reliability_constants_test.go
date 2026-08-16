@@ -60,11 +60,16 @@ func TestCircuitBreakerNeedsTwoSuccessesToClose(t *testing.T) {
 func TestXMLRPCFaultCodeValues(t *testing.T) {
 	t.Parallel()
 	cases := map[hmerr.XMLRPCFaultCode]int{
-		hmerr.XMLRPCFaultUnreach:             -1,
-		hmerr.XMLRPCFaultTimeout:             -2,
-		hmerr.XMLRPCFaultDutyCycle:           -8,
-		hmerr.XMLRPCFaultDeviceOutOfRange:    -9,
-		hmerr.XMLRPCFaultTransmissionPending: -10,
+		hmerr.XMLRPCFaultGeneral:              -1,
+		hmerr.XMLRPCFaultUnknownDevice:        -2,
+		hmerr.XMLRPCFaultUnknownParamset:      -3,
+		hmerr.XMLRPCFaultAddressExpected:      -4,
+		hmerr.XMLRPCFaultInvalidParameter:     -5,
+		hmerr.XMLRPCFaultOperationUnsupported: -6,
+		hmerr.XMLRPCFaultUpdateNotPossible:    -7,
+		hmerr.XMLRPCFaultDutyCycle:            -8,
+		hmerr.XMLRPCFaultDeviceOutOfRange:     -9,
+		hmerr.XMLRPCFaultTransmissionPending:  -10,
 	}
 	for code, want := range cases {
 		if int(code) != want {
@@ -73,13 +78,18 @@ func TestXMLRPCFaultCodeValues(t *testing.T) {
 	}
 }
 
-// TestXMLRPCFaultCodeRetryability ensures the retry classifier marks
-// the four operational codes (-1, -8, -9, -10) as retryable. Auth /
-// permanent errors must NOT be in the retry set.
+// TestXMLRPCFaultCodeRetryability pins the retry classifier in both
+// directions: the four codes describing a condition that can pass are
+// retryable, and every other catalogue code is not.
+//
+// The positive half alone was not enough. It listed exactly these four
+// and stayed green while the implementation carried a fifth — -2, under
+// a meaning nothing in the daemon produced — so a permanent failure was
+// retried through the whole backoff with a contract test watching.
 func TestXMLRPCFaultCodeRetryability(t *testing.T) {
 	t.Parallel()
 	retryable := []hmerr.XMLRPCFaultCode{
-		hmerr.XMLRPCFaultUnreach,
+		hmerr.XMLRPCFaultGeneral,
 		hmerr.XMLRPCFaultDutyCycle,
 		hmerr.XMLRPCFaultDeviceOutOfRange,
 		hmerr.XMLRPCFaultTransmissionPending,
@@ -87,6 +97,20 @@ func TestXMLRPCFaultCodeRetryability(t *testing.T) {
 	for _, c := range retryable {
 		if !c.IsRetryable() {
 			t.Errorf("%v must be retryable", c)
+		}
+	}
+	permanent := []hmerr.XMLRPCFaultCode{
+		hmerr.XMLRPCFaultUnknownDevice,
+		hmerr.XMLRPCFaultUnknownParamset,
+		hmerr.XMLRPCFaultAddressExpected,
+		hmerr.XMLRPCFaultInvalidParameter,
+		hmerr.XMLRPCFaultOperationUnsupported,
+		hmerr.XMLRPCFaultUpdateNotPossible,
+	}
+	for _, c := range permanent {
+		if c.IsRetryable() {
+			t.Errorf("%v (%d) must not be retryable — the condition it names cannot pass "+
+				"between attempts, so every repeat spends duty cycle for nothing", c, int(c))
 		}
 	}
 }

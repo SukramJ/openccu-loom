@@ -84,34 +84,33 @@ func TestUnknownParameterIsNotRetried(t *testing.T) {
 	}
 }
 
-// TestUnknownDeviceFaultClassification records what the daemon does
-// with the code a CCU sends for an unknown paramset, which is where the
-// two catalogues disagree.
+// TestUnknownDeviceIsNotRetried covers the code that cost the most:
+// the one a CCU sends when it does not know the address at all.
 //
-// The HomeMatic catalogue assigns -2 to "unknown paramset", a permanent
-// failure. The daemon's own table assigns -2 to a timeout it raises
-// itself when a call exceeds its deadline — retryable, and documented
-// there as "not a CCU-native fault code". Now that a CCU-shaped -2 can
-// reach the classifier, the two meanings collide on one number: the
-// permanent failure is retried through the full backoff.
+// It used to sit in the retryable set under the name "timeout", with a
+// comment saying it was not a CCU-native code and that the daemon's own
+// transports raised it. Nothing in the daemon ever raised it — every
+// -2 reaching the classifier came off the wire, where it means the
+// device or channel does not exist. So a call against a device removed
+// on the CCU, or an address a stale automation still holds, ran the
+// full exponential backoff before the operator saw anything, spending
+// duty cycle on a question with a fixed answer.
 //
-// This test characterises the collision rather than endorsing it. If
-// the mapping is changed, this test fails and the change is a decision
-// somebody made, not a side effect.
-func TestUnknownDeviceFaultClassification(t *testing.T) {
+// Verified against the published catalogue (HomeMatic XML-RPC
+// specification §6: "Unbekanntes Gerät / unbekannter Kanal") and read
+// back from a live CCU on both interface processes.
+func TestUnknownDeviceIsNotRetried(t *testing.T) {
 	v := startFaultCodeCCU(t)
 
 	fault := faultFor(t, v, "getValue", "NOSUCHDEVICE:1", "STATE")
 
 	const wireCode = -2
 	if fault.Code != wireCode {
-		t.Fatalf("simulator answered an unknown device with %d, want %d — the catalogue this "+
-			"test characterises has changed", fault.Code, wireCode)
+		t.Fatalf("simulator answered an unknown device with %d, want %d", fault.Code, wireCode)
 	}
-	if !fault.FaultCode().IsRetryable() {
-		t.Errorf("fault -2 now classifies as permanent. That is very likely the correct " +
-			"reading of the CCU catalogue, but it changes retry behaviour on every " +
-			"installation — update this test deliberately, and check the timeout fault the " +
-			"daemon raises under the same number")
+	if fault.FaultCode().IsRetryable() {
+		t.Errorf("fault %d (%q) classifies as retryable — the address will not start existing "+
+			"between attempts, so every repeat spends radio time and delays the error the "+
+			"operator needs to see", fault.Code, fault.Message)
 	}
 }

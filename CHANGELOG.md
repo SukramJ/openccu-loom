@@ -22,11 +22,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   answer failures with the HomeMatic catalogue instead of a blanket −1,
   so the retrier's decision — repeat this call or surface the error —
   is now driven by a real failure rather than a hand-built error value.
-  This surfaced a collision worth deciding on: the catalogue assigns −2
-  to "unknown paramset", a permanent failure, while the daemon uses −2
-  for its own timeouts and therefore retries it through the full
-  backoff. The test characterises the current behaviour and fails if the
-  mapping changes, so any change is deliberate.
+  That is what surfaced the fix below.
 
 
 - **A trace of what happened, next to the state that is true now.**
@@ -40,6 +36,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   access, knowing what to grep for, and still having the log. The trace
   is deliberately bounded and does not survive a restart: it is a
   diagnostic, not an audit trail. (REST API 5.33.0)
+
 ### Changed
 
 - **Two unused parameter-channel indexes are gone.** The question "does
@@ -77,6 +74,28 @@ behaviour an operator may be relying on.
 The REST contract version moves 5.29.0 → 5.31.0.
 
 ### Fixed
+
+- **A call against a device the CCU does not know is no longer retried.**
+  Fault code −2 sat in the retryable set as "timeout", with a comment
+  saying it was not a CCU-native code and that the daemon's own
+  transports raised it. Nothing in the daemon ever raised it: every −2
+  reaching the classifier came off the wire, where the published
+  catalogue and a live CCU both give it one meaning — the device or
+  channel does not exist. A call against a device removed on the CCU,
+  or an address a stale automation still holds, therefore ran the full
+  exponential backoff before failing, spending duty cycle on a question
+  whose answer cannot change and delaying the error the operator needs
+  to see. It is permanent now.
+
+  The rest of the table was reconciled against the specification in the
+  same pass and verified against a live CCU on both interface
+  processes: −3 (unknown paramset), −4 (device address expected), −6
+  (operation not supported by the parameter) and −7 (interface cannot
+  update) are named and documented rather than falling through as
+  unknown codes, and −1 is the catalogue's general fault rather than
+  "unreach" — it stays retryable and stays the only code that triggers
+  the circuit-recovery wait. The retryable set is now the four codes
+  that describe a condition which can pass on its own.
 
 - **Two ecosystems were classified under vendor ids belonging to someone
   else.** A Matter fabric declares the vendor id of the controller that

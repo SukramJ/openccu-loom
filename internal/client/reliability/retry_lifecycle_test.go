@@ -281,12 +281,12 @@ func TestRetrierIsRetryableTable(t *testing.T) {
 		{"json-rpc code 400 not retryable", &hmerr.JSONRPCError{Code: 400, Message: "access denied"}, true},
 		{"circuit breaker not retryable (without waiter)", hmerr.ErrCircuitBreakerOpen, true},
 		{"unsupported not retryable", hmerr.ErrUnsupported, true},
-		{"unreach fault retryable", &hmerr.XMLRPCFault{Code: -1}, false},
-		{"timeout fault retryable", &hmerr.XMLRPCFault{Code: -2}, false},
+		{"general fault retryable", &hmerr.XMLRPCFault{Code: -1}, false},
+		{"unknown device fault not retryable", &hmerr.XMLRPCFault{Code: -2}, true},
 		{"duty cycle fault retryable", &hmerr.XMLRPCFault{Code: -8}, false},
 		{"device out of range fault retryable", &hmerr.XMLRPCFault{Code: -9}, false},
 		{"transmission pending fault retryable", &hmerr.XMLRPCFault{Code: -10}, false},
-		{"unknown fault not retryable", &hmerr.XMLRPCFault{Code: -5}, true},
+		{"unknown parameter fault not retryable", &hmerr.XMLRPCFault{Code: -5}, true},
 		{"generic error retryable", errors.New("generic"), false},
 	}
 	for _, c := range cases {

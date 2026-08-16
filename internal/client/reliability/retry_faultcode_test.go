@@ -13,15 +13,16 @@ import (
 )
 
 func TestRetryClassifiesXMLRPCFaultCodes(t *testing.T) {
-	// The local -2 (timeout) is also kept retryable because some transports
-	// surface generic timeouts as a -2 fault.
+	// -2 is the CCU's "unknown device or channel" and is deliberately
+	// absent from the retryable set: the address will not start
+	// existing between attempts.
 	cases := []struct {
 		name     string
 		code     int
 		retryAtt int
 	}{
-		{"unreach is retryable", -1, 3},
-		{"timeout is retryable", -2, 3},
+		{"general fault is retryable", -1, 3},
+		{"unknown device is permanent", -2, 1},
 		{"duty_cycle is retryable", -8, 3},
 		{"device_out_of_range is retryable", -9, 3},
 		{"transmission_pending is retryable", -10, 3},
