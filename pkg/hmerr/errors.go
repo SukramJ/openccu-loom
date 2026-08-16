@@ -189,26 +189,55 @@ func ErrorContext(err error) (Context, bool) {
 	return Context{}, false
 }
 
-// XMLRPCFaultCode names well-known CCU XML-RPC fault codes. Mirrors the
-// Python reference implementation's fault-code constants, classifying
-// each as retryable (transient — duty cycle, unreachable) or permanent
-// (paramset rejected, backend offline). Additional codes may be
-// emitted by exotic devices; treat unknown codes as permanent.
+// XMLRPCFaultCode names the CCU XML-RPC fault codes, classifying each
+// as retryable (transient — duty cycle, out of range) or permanent
+// (the object does not exist, the operation is refused). The catalogue
+// is the one eQ-3 publishes in the HomeMatic XML-RPC specification §6;
+// the values below were additionally read back off a live CCU on both
+// interface processes, because the two do not word their fault strings
+// alike and one of them reuses a code. Codes outside the catalogue may
+// reach us from exotic devices; treat them as permanent.
 type XMLRPCFaultCode int
 
-// Fault-code constants mirror the Python reference implementation's
-// `_RETRYABLE_FAULT_CODES` frozenset (`client/command_retry.py`). All
-// four CCU codes in that set are transient and worth retrying; unknown
-// codes default to permanent.
+// Fault-code constants follow the published catalogue. The retryable
+// subset is the four transient codes; every other code names a
+// condition that a repeat cannot change, and unknown codes default to
+// permanent.
 const (
-	// XMLRPCFaultUnreach — device or interface temporarily
-	// unreachable; retry after the regular backoff.
-	XMLRPCFaultUnreach XMLRPCFaultCode = -1
-	// XMLRPCFaultTimeout — backend timed out talking to the device;
-	// retryable. Not a CCU-native fault code — openccu-loom's own
-	// transports raise it as a generic timeout fault when a call
-	// exceeds its deadline.
-	XMLRPCFaultTimeout XMLRPCFaultCode = -2
+	// XMLRPCFaultGeneral — the catalogue's "Allgemeiner Fehler", the
+	// code an interface process falls back to when nothing more
+	// specific applies. In practice it is what a device that did not
+	// answer produces, which is why it is retryable and why it, alone,
+	// triggers the circuit-recovery wait: the CCU itself may be the
+	// thing that is unreachable.
+	XMLRPCFaultGeneral XMLRPCFaultCode = -1
+	// XMLRPCFaultUnknownDevice — the address names a device or channel
+	// the interface process does not know. Permanent: a retry asks the
+	// same question of the same CCU.
+	//
+	// Read back live as "Unknown instance" from rfd and "Invalid
+	// device" from the HMIPServer, which also answers getParamset with
+	// this code when the paramset name is the unknown part.
+	XMLRPCFaultUnknownDevice XMLRPCFaultCode = -2
+
+	// XMLRPCFaultUnknownParamset — the paramset name is not one the
+	// object carries. Permanent. Live: "Unknown paramset" (rfd),
+	// "Unknown Paramset: <name>" (HMIPServer).
+	XMLRPCFaultUnknownParamset XMLRPCFaultCode = -3
+
+	// XMLRPCFaultAddressExpected — a device address was required where
+	// a channel address (or nothing) was supplied. Permanent: the call
+	// is malformed, not unlucky.
+	XMLRPCFaultAddressExpected XMLRPCFaultCode = -4
+
+	// XMLRPCFaultOperationUnsupported — the parameter does not support
+	// the requested operation. Permanent.
+	XMLRPCFaultOperationUnsupported XMLRPCFaultCode = -6
+
+	// XMLRPCFaultUpdateNotPossible — the interface cannot carry out a
+	// firmware update in its current state. Permanent for this call;
+	// the operator resolves it, not the retrier.
+	XMLRPCFaultUpdateNotPossible XMLRPCFaultCode = -7
 	// XMLRPCFaultDutyCycle — RF duty-cycle exhausted (CCU code
 	// "INSUFFICIENT_DUTYCYCLE"). Retryable after the throttle drains;
 	// the retrier applies a fixed 40 s delay rather than the
@@ -223,8 +252,10 @@ const (
 	// "TRANSMISSION_PENDING"). Retryable; the retrier applies a fixed
 	// 5 s delay to give the in-flight transmission room to complete.
 	XMLRPCFaultTransmissionPending XMLRPCFaultCode = -10
-	// XMLRPCFaultInvalidParameter — CCU validator rejected the call
-	// with "Invalid parameter or value". For MASTER paramset writes on
+	// XMLRPCFaultInvalidParameter — the catalogue's "Unbekannter
+	// Parameter oder Wert"; read back live as "Unknown parameter"
+	// (rfd) and "Unknown Parameter for value key: <name>"
+	// (HMIPServer). For MASTER paramset writes on
 	// SWITCH_WEEK_PROFILE channels (and possibly other channel types)
 	// this fault is a documented false-positive: the CCU returns it
 	// even when the underlying write actually succeeds. Callers that
@@ -234,15 +265,18 @@ const (
 	XMLRPCFaultInvalidParameter XMLRPCFaultCode = -5
 )
 
-// IsRetryable reports whether c is a transient fault that the
-// Retrier should re-issue. The set mirrors the Python reference
-// implementation's `_RETRYABLE_FAULT_CODES`. Defaults to false for
-// unknown codes — being conservative avoids hammering the CCU on
-// permanent failures the operator only saw once.
+// IsRetryable reports whether c is a transient fault that the Retrier
+// should re-issue. Defaults to false for unknown codes — being
+// conservative avoids hammering the CCU on permanent failures.
+//
+// The set is the four codes that describe a condition which can pass:
+// a general failure, an exhausted duty cycle, a device out of range,
+// and a transmission already in flight. Everything else names
+// something that is missing or refused, where every repeat spends
+// radio time on a question with the same answer.
 func (c XMLRPCFaultCode) IsRetryable() bool {
 	switch c {
-	case XMLRPCFaultUnreach,
-		XMLRPCFaultTimeout,
+	case XMLRPCFaultGeneral,
 		XMLRPCFaultDutyCycle,
 		XMLRPCFaultDeviceOutOfRange,
 		XMLRPCFaultTransmissionPending:

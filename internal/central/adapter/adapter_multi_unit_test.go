@@ -12306,7 +12306,7 @@ func TestIsCCUScheduleFalsePositive_NonFault(t *testing.T) {
 // non-InvalidParameter code → false.
 func TestIsCCUScheduleFalsePositive_WrongCode(t *testing.T) {
 	t.Parallel()
-	fault := &hmerr.XMLRPCFault{Code: int(hmerr.XMLRPCFaultUnreach), Message: "unreachable"}
+	fault := &hmerr.XMLRPCFault{Code: int(hmerr.XMLRPCFaultGeneral), Message: "unreachable"}
 	if isCCUScheduleFalsePositive(fault) {
 		t.Error("isCCUScheduleFalsePositive(Unreach fault) = true, want false")
 	}

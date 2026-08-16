@@ -317,8 +317,7 @@ func TestXMLRPCFaultCodeIsRetryableTrue(t *testing.T) {
 	t.Parallel()
 
 	retryable := []XMLRPCFaultCode{
-		XMLRPCFaultUnreach,
-		XMLRPCFaultTimeout,
+		XMLRPCFaultGeneral,
 		XMLRPCFaultDutyCycle,
 		XMLRPCFaultDeviceOutOfRange,
 		XMLRPCFaultTransmissionPending,
@@ -337,7 +336,19 @@ func TestXMLRPCFaultCodeIsRetryableTrue(t *testing.T) {
 func TestXMLRPCFaultCodeIsRetryableFalse(t *testing.T) {
 	t.Parallel()
 
+	// Every catalogue code that names something missing or refused: a
+	// repeat asks the same CCU the same question, and on RF it spends
+	// duty cycle doing it. -2 is the one that used to be in the
+	// retryable set, under a meaning ("timeout") that nothing in the
+	// daemon ever produced — while a live CCU sends it for a device it
+	// does not know.
 	nonRetryable := []XMLRPCFaultCode{
+		XMLRPCFaultUnknownDevice,
+		XMLRPCFaultUnknownParamset,
+		XMLRPCFaultAddressExpected,
+		XMLRPCFaultInvalidParameter,
+		XMLRPCFaultOperationUnsupported,
+		XMLRPCFaultUpdateNotPossible,
 		0,
 		1,
 		-999,
@@ -406,7 +417,7 @@ func TestXMLRPCFaultAllRetryableCodes(t *testing.T) {
 		want    bool
 	}{
 		{-1, "unreach", true},
-		{-2, "timeout", true},
+		{-2, "unknown device", false},
 		{-8, "duty cycle", true},
 		{-9, "out of range", true},
 		{-10, "transmission pending", true},
@@ -613,7 +624,7 @@ func TestRPCFaultCodeMapping(t *testing.T) {
 		label     string
 	}{
 		{-1, true, "unreach"},
-		{-2, true, "timeout"},
+		{-2, false, "unknown_device"},
 		{-8, true, "duty_cycle"},
 		{-9, true, "out_of_range"},
 		{-10, true, "transmission_pending"},

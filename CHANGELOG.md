@@ -8,6 +8,65 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The boot seed is covered by tests for the first time.** The CCU
+  simulator now answers `fetch_all_device_data` with the object shape
+  the real script emits, so the path that fills every data point before
+  the first event arrives can finally be exercised without a CCU. Two
+  tests run the production ingest against it: one asserts a seeded value
+  reaches the model decoded, the other that a button's stored keypress
+  does **not** — a boot that seeds it publishes a press nobody made.
+  Both were verified to fail when the behaviour they describe is
+  removed.
+
+- **The hub's JSON-RPC decode is tested against the CCU's own payload
+  shapes.** `SysVar.getAll` reports its values as strings and carries
+  only the fields that apply to each variable type; rooms and functions
+  report their members as ReGa object ids. The simulator used to answer
+  with Go-native types and every field populated — the one shape that
+  cannot expose a decode assuming a bool or a float — so the typed DTO
+  had never met a realistic payload. A sysvar whose value fails to
+  decode is not a loud failure: it spawns with the zero value, and the
+  operator sees a switch that is off. Ingest is also driven once per
+  interface process against a CCU that serves each protocol family on
+  its own port, which is the only arrangement in which a device filed
+  under the wrong interface can show up at all.
+
+  Two of these tests found defects in the simulator rather than the
+  daemon — object ids sent as JSON numbers, where a live CCU sends
+  strings, and the pairing automaton missing from JSON-RPC, the very
+  transport the daemon reads install mode over. Both are fixed
+  upstream and both tests run against it.
+
+- **Four CCU behaviours the simulator could not previously produce are
+  now covered.** Batched event delivery: a burst arrives as one
+  `system.multicall`, and the production callback server must deliver
+  every entry — dropping everything after the first loses values
+  silently while the transport call reports success. The ping/pong round
+  trip the connection monitor is built on: the simulator answers a ping
+  with the CENTRAL PONG carrying the caller id back, so send, echo and
+  match are exercised together instead of the handler being fed its own
+  echo. The unreachability latch: a device that stops answering must
+  produce UNREACH *and* STICKY_UNREACH, because without the sticky flag a
+  device that dropped out overnight looks untroubled by morning. And the
+  readiness gate: a CCU that has not finished booting now refuses its
+  remote API, not just its web API, which is the half the ingest actually
+  reads. Each was measured against the defect it describes.
+
+- **A refused login is classified as an authentication failure under
+  both error envelopes.** Which shape a CCU answers an error in — its
+  own `version: "1.1"` / `JSONRPCError` form or the JSON-RPC 2.0 codes —
+  is not something the daemon chooses, and the auth path must not depend
+  on it. A wrong password classified as an ordinary client error becomes
+  a login retried through the full backoff, and the operator reads a
+  slow, flaky CCU instead of a credential they can fix.
+
+- **Fault-code classification is tested on the wire.** The simulator can
+  answer failures with the HomeMatic catalogue instead of a blanket −1,
+  so the retrier's decision — repeat this call or surface the error —
+  is now driven by a real failure rather than a hand-built error value.
+  That is what surfaced the fix below.
+
+
 - **A trace of what happened, next to the state that is true now.**
   **Matter → Diagnostics** gains a list of the moments that explain a
   failed pairing: a commissioner refused because another was already
@@ -19,6 +78,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   access, knowing what to grep for, and still having the log. The trace
   is deliberately bounded and does not survive a restart: it is a
   diagnostic, not an audit trail. (REST API 5.33.0)
+
 ### Changed
 
 - **Two unused parameter-channel indexes are gone.** The question "does
@@ -56,6 +116,28 @@ behaviour an operator may be relying on.
 The REST contract version moves 5.29.0 → 5.31.0.
 
 ### Fixed
+
+- **A call against a device the CCU does not know is no longer retried.**
+  Fault code −2 sat in the retryable set as "timeout", with a comment
+  saying it was not a CCU-native code and that the daemon's own
+  transports raised it. Nothing in the daemon ever raised it: every −2
+  reaching the classifier came off the wire, where the published
+  catalogue and a live CCU both give it one meaning — the device or
+  channel does not exist. A call against a device removed on the CCU,
+  or an address a stale automation still holds, therefore ran the full
+  exponential backoff before failing, spending duty cycle on a question
+  whose answer cannot change and delaying the error the operator needs
+  to see. It is permanent now.
+
+  The rest of the table was reconciled against the specification in the
+  same pass and verified against a live CCU on both interface
+  processes: −3 (unknown paramset), −4 (device address expected), −6
+  (operation not supported by the parameter) and −7 (interface cannot
+  update) are named and documented rather than falling through as
+  unknown codes, and −1 is the catalogue's general fault rather than
+  "unreach" — it stays retryable and stays the only code that triggers
+  the circuit-recovery wait. The retryable set is now the four codes
+  that describe a condition which can pass on its own.
 
 - **Two ecosystems were classified under vendor ids belonging to someone
   else.** A Matter fabric declares the vendor id of the controller that

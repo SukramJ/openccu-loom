@@ -346,8 +346,8 @@ func shouldWaitForRecovery(err error) bool {
 	// have their own fixed delays) — wait for recovery is most
 	// useful when the CCU itself was unreachable.
 	var fault *hmerr.XMLRPCFault
-	// Only XMLRPCFaultUnreach triggers the circuit-recovery wait.
-	if errors.As(err, &fault) && fault.FaultCode() == hmerr.XMLRPCFaultUnreach {
+	// Only the general fault triggers the circuit-recovery wait.
+	if errors.As(err, &fault) && fault.FaultCode() == hmerr.XMLRPCFaultGeneral {
 		return true
 	}
 	return false

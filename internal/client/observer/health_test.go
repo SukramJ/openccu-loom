@@ -66,9 +66,9 @@ func TestHealth_TransientFault_RecordsFailure(t *testing.T) {
 	rec := &recordingTracker{}
 	h := observer.NewHealth(rec)
 
-	// XMLRPCFaultUnreach (-1) IS retryable → counts as a real
+	// XMLRPCFaultGeneral (-1) IS retryable → counts as a real
 	// transport failure on the interface health metric.
-	transient := &hmerr.XMLRPCFault{Code: int(hmerr.XMLRPCFaultUnreach), Message: "Unreach"}
+	transient := &hmerr.XMLRPCFault{Code: int(hmerr.XMLRPCFaultGeneral), Message: "Unreach"}
 	span := h.OnRequestStart(context.Background(), interfaces.RequestInfo{Interface: "HmIP-RF"})
 	h.OnRequestEnd(span, interfaces.RequestResult{Err: transient})
 
