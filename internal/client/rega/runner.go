@@ -491,14 +491,24 @@ func (r *Runner) SetSystemVariableString(ctx context.Context, name, value string
 // referenced in body must have an entry in params; unreferenced params
 // are allowed (they just go unused). The replacement value is escaped
 // via EscapeString so that it cannot break out of a double-quoted ReGa
-// string literal.
+// string literal, and any value carrying a control character is rejected
+// outright (see firstControlChar) so it cannot break out of a `!# …`
+// line comment either. Both failure modes name the offending placeholders
+// and return before any network activity.
 func substitute(body string, params map[string]string) (string, error) {
 	missing := map[string]struct{}{}
+	unsafe := map[string]rune{}
 	out := placeholderPattern.ReplaceAllStringFunc(body, func(match string) string {
 		name := match[2 : len(match)-2]
 		v, ok := params[name]
 		if !ok {
 			missing[name] = struct{}{}
+			return match
+		}
+		if r, bad := firstControlChar(v); bad {
+			if _, seen := unsafe[name]; !seen {
+				unsafe[name] = r
+			}
 			return match
 		}
 		return EscapeString(v)
@@ -511,16 +521,64 @@ func substitute(body string, params map[string]string) (string, error) {
 		sort.Strings(names)
 		return "", fmt.Errorf("missing params: %s", strings.Join(names, ", "))
 	}
+	if len(unsafe) > 0 {
+		names := make([]string, 0, len(unsafe))
+		for n := range unsafe {
+			names = append(names, fmt.Sprintf("%s (U+%04X)", n, unsafe[n]))
+		}
+		sort.Strings(names)
+		return "", fmt.Errorf(
+			"rejected control character in params: %s: %w",
+			strings.Join(names, ", "), hmerr.ErrValidation,
+		)
+	}
 	return out, nil
 }
 
 // EscapeString makes v safe to interpolate inside a double-quoted ReGa
 // string literal. The two dangerous characters are the backslash and
 // the double-quote; everything else passes through unchanged.
+//
+// It deliberately does NOT touch control characters: doubling the
+// backslash and escaping the quote leaves a newline in place, and a
+// newline breaks out of a `!# …` line comment or the surrounding "…"
+// literal regardless of the quoting. Control characters are neutralised
+// one layer up, in substitute, which rejects them before they reach here.
 func EscapeString(v string) string {
 	v = strings.ReplaceAll(v, `\`, `\\`)
 	v = strings.ReplaceAll(v, `"`, `\"`)
 	return v
+}
+
+// firstControlChar reports the first C0 control character (rune < 0x20)
+// or DEL (0x7F) in v, and whether one was found.
+//
+// A ReGa script receives its parameters by textual substitution (see
+// substitute), and several scripts interpolate a placeholder inside a
+// `!# …` line comment — a comment that ends at the first newline. A value
+// carrying a line terminator therefore closes the comment (or the
+// surrounding "…" string literal) and the CCU parses everything after it
+// as privileged ReGa statements on its service session. EscapeString does
+// not stop this: it is the newline, not the quote, that ends the line, so
+// the escaped-quote/backslash combination cannot smuggle a value past this
+// check either — it runs on the raw value before any escaping.
+//
+// The neutralisation therefore has to reject the control character itself.
+// We fail closed rather than re-encode it because the ReGa tokeniser is a
+// closed-source binary whose whitespace / line-break class we cannot
+// verify, so no encoding can be proven reversible. This mirrors the ReGa
+// username defence in internal/auth/ccuauth/store.go, and it is strictly
+// better than the status quo: a benign multi-line value already fails
+// silently on the CCU today (the post-newline text parse-errors and the
+// write returns empty output), so a loud rejection surfaces a failure that
+// was previously invisible.
+func firstControlChar(v string) (rune, bool) {
+	for _, r := range v {
+		if r < 0x20 || r == 0x7f {
+			return r, true
+		}
+	}
+	return 0, false
 }
 
 // SanitizeJSONControls escapes control characters (ASCII < 0x20) that
