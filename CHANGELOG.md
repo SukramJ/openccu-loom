@@ -4,6 +4,43 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.61.1]
+
+Three fixes for the Home Assistant integration "Homematic(IP) Local for
+OpenCCU", all reported against 0.61.0. Each is a daemon-side correctness fix —
+the daemon is the authority the integration reads — and none was covered by
+the 0.60.0/0.61.0 audit, because all three cross the boundary into the
+integration's own client and only surface there.
+
+### Fixed
+
+- **An already-integrated OpenCCU is no longer re-discovered on every Home
+  Assistant restart.** HA de-dupes discovery by matching each CCU serial in
+  the mDNS `ccus=` advertisement against the config entry's id (the
+  `GET /system/ccu` serial), and the compare is case-sensitive. The daemon
+  advertised the lower-cased routing form of the serial while `/system/ccu`
+  reports it case-preserved, so an upper-case-hex CCU serial never matched and
+  HA raised a fresh discovery card every restart. The advertisement now
+  carries the exact `/system/ccu` serial.
+- **The per-interface connectivity sensors no longer read "disconnected"
+  forever.** The integration builds those sensors from `GET /interfaces`
+  (keyed by the wire id `<central>-<interface>`) and looks their value up by
+  the same id, but the daemon reported connectivity under the bare interface
+  name (`HmIP-RF`), so the lookup never matched. Connectivity now carries the
+  wire id on both the REST snapshot and the WebSocket push, matching
+  `/interfaces`.
+- **The "Systemzustand" (system state) diagnostic sensor no longer reads
+  "unknown" forever.** Its value is the `system_health` hub metric, whose only
+  producer — the reconcile pass — was never given a health probe, so the
+  metric was never emitted. The reconcile pass is now wired to the daemon's own
+  per-central health score, so the metric is produced on its slow cadence.
+
+### Changed
+
+- North-bound API contract version 6.0.0 → 6.1.0: the connectivity
+  `interface_id` (REST `GET /hub/data-points` and the `connectivity.changed`
+  WebSocket payload) is documented as the wire id `<central>-<interface>`.
+
 ## [0.61.0]
 
 The follow-up to the 0.60.0 audit. A fresh full-codebase pass found defects

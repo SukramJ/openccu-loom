@@ -52,7 +52,7 @@ func TestRegisterStandardJobsForRegistersUnconditionalJobs(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 
-	registerStandardJobsFor(u, &config.Config{}, logger)
+	registerStandardJobsFor(u, &config.Config{}, logger, nil)
 
 	wantPresent := []string{
 		"central.health_heartbeat",
@@ -111,7 +111,7 @@ func TestRegisterStandardJobsForAppliesCheckConnectionOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New(override): %v", err)
 	}
-	registerStandardJobsFor(uOverride, cfg, logger)
+	registerStandardJobsFor(uOverride, cfg, logger, nil)
 	if got := jobIntervalOf(uOverride, "central.check_connection"); got != overrideInterval {
 		t.Errorf("central.check_connection interval = %v, want override %v", got, overrideInterval)
 	}
@@ -123,13 +123,13 @@ func TestRegisterStandardJobsForAppliesCheckConnectionOverride(t *testing.T) {
 	// plainName has no matching cfg.Centrals entry, so the job must fall
 	// back to the compiled-in default rather than picking up overrideName's
 	// override.
-	registerStandardJobsFor(uPlain, cfg, logger)
+	registerStandardJobsFor(uPlain, cfg, logger, nil)
 
 	uPlainNoCfg, err := central.New(central.Config{Name: plainName + "-nocfg"})
 	if err != nil {
 		t.Fatalf("central.New(plain-nocfg): %v", err)
 	}
-	registerStandardJobsFor(uPlainNoCfg, &config.Config{}, logger)
+	registerStandardJobsFor(uPlainNoCfg, &config.Config{}, logger, nil)
 	defaultInterval := jobIntervalOf(uPlainNoCfg, "central.check_connection")
 	if got := jobIntervalOf(uPlain, "central.check_connection"); got != defaultInterval {
 		t.Errorf("check_connection interval for unit without matching cfg.Centrals entry = %v, want compiled-in default %v", got, defaultInterval)
@@ -159,7 +159,7 @@ func TestRegisterStandardJobsForHonoursANegativeCheckConnectionInterval(t *testi
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	registerStandardJobsFor(u, cfg, logger)
+	registerStandardJobsFor(u, cfg, logger, nil)
 
 	// jobIntervalOf answers -1 for a job that is not registered at all,
 	// which is exactly the outcome a negative interval must produce.
@@ -187,7 +187,7 @@ func TestRegisterStandardJobsForAppliesSysvarScanIntervalOverride(t *testing.T) 
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	registerStandardJobsFor(u, cfg, logger)
+	registerStandardJobsFor(u, cfg, logger, nil)
 
 	if got := jobIntervalOf(u, "hub.sysvar_refresh"); got != overrideInterval {
 		t.Errorf("hub.sysvar_refresh interval = %v, want override %v", got, overrideInterval)
@@ -199,7 +199,7 @@ func TestRegisterStandardJobsForAppliesSysvarScanIntervalOverride(t *testing.T) 
 	if err != nil {
 		t.Fatalf("central.New(other): %v", err)
 	}
-	registerStandardJobsFor(uOther, cfg, logger)
+	registerStandardJobsFor(uOther, cfg, logger, nil)
 	if got := jobIntervalOf(uOther, "hub.sysvar_refresh"); got == overrideInterval {
 		t.Errorf("hub.sysvar_refresh interval for unrelated unit = %v, want compiled-in default, not the override leaking across centrals", got)
 	}
@@ -233,14 +233,14 @@ func TestRegisterStandardJobsMatchesPerUnitExtraction(t *testing.T) {
 		}
 	}
 
-	registerStandardJobs(reg, cfg, logger)
+	registerStandardJobs(reg, cfg, logger, nil)
 
 	for _, name := range []string{"jobs-agg-a", "jobs-agg-b"} {
 		u, err := central.New(central.Config{Name: name})
 		if err != nil {
 			t.Fatalf("central.New(%s) manual: %v", name, err)
 		}
-		registerStandardJobsFor(u, cfg, logger)
+		registerStandardJobsFor(u, cfg, logger, nil)
 
 		regUnit, ok := reg.Get(name)
 		if !ok {
@@ -251,5 +251,45 @@ func TestRegisterStandardJobsMatchesPerUnitExtraction(t *testing.T) {
 		if !slices.Equal(gotViaLoop, gotManual) {
 			t.Errorf("job names for %q: via registerStandardJobs loop = %v, via direct registerStandardJobsFor = %v", name, gotViaLoop, gotManual)
 		}
+	}
+}
+
+// TestRegisterStandardJobsForWiresSystemHealthProbe pins the fix for the HA
+// "Systemzustand" diagnostic sensor reading "unknown" forever: the reconcile
+// pass is the only producer of hub.MetricSystemHealth, and it needs a
+// SystemHealthProbe. With a healthScore the Reconciler.Health must be wired and
+// yield that central's score; with nil it must stay unwired (the old behaviour
+// for WireHub-only tests).
+func TestRegisterStandardJobsForWiresSystemHealthProbe(t *testing.T) {
+	logger := slog.New(slog.DiscardHandler)
+
+	u, err := central.New(central.Config{Name: "health-unit"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	registerStandardJobsFor(u, &config.Config{}, logger, func(name string) int {
+		if name != "health-unit" {
+			t.Errorf("healthScore called with %q, want %q", name, "health-unit")
+		}
+		return 77
+	})
+	if u.Reconciler == nil || u.Reconciler.Health == nil {
+		t.Fatal("Reconciler.Health was not wired from healthScore — MetricSystemHealth would have no producer")
+	}
+	score, err := u.Reconciler.Health.Probe(t.Context())
+	if err != nil {
+		t.Fatalf("Health.Probe: %v", err)
+	}
+	if score != 77 {
+		t.Fatalf("Health.Probe = %d, want 77 (the central's health score)", score)
+	}
+
+	uNil, err := central.New(central.Config{Name: "health-unit-nil"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	registerStandardJobsFor(uNil, &config.Config{}, logger, nil)
+	if uNil.Reconciler != nil && uNil.Reconciler.Health != nil {
+		t.Fatal("nil healthScore must leave Reconciler.Health unwired")
 	}
 }

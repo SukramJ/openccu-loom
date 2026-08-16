@@ -40,6 +40,41 @@ func TestRegistrySerialSuffix(t *testing.T) {
 	}
 }
 
+// TestRegistryCanonicalSerialPreservesCase pins the difference that made the
+// HA integration re-discover an already-configured daemon on every restart:
+// CanonicalSerial must return the exact string GET /system/ccu reports
+// (case-preserved), where SerialSuffix lower-cases it for routing keys. The
+// mDNS ccus= advertisement uses CanonicalSerial so it matches the config
+// entry's unique_id (the /system/ccu serial) under HA's case-sensitive compare.
+func TestRegistryCanonicalSerialPreservesCase(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+	if got := r.CanonicalSerial("no-such-ccu"); got != "" {
+		t.Fatalf("unknown central CanonicalSerial = %q, want %q", got, "")
+	}
+
+	c, err := New(Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := r.Register(c); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	// Upper-case-hex serial: the last 10 chars carry letters.
+	c.SetSystemInformation(SystemInfo{Serial: "3014F711A0001F58"})
+	canonical, suffix := r.CanonicalSerial("ccu-01"), r.SerialSuffix("ccu-01")
+	if want := "11A0001F58"; canonical != want {
+		t.Fatalf("CanonicalSerial = %q, want %q (case-preserved)", canonical, want)
+	}
+	if want := "11a0001f58"; suffix != want {
+		t.Fatalf("SerialSuffix = %q, want %q (lower-cased)", suffix, want)
+	}
+	if canonical == suffix {
+		t.Fatal("CanonicalSerial must differ from the lower-cased SerialSuffix for a letter-bearing serial")
+	}
+}
+
 // TestRegistryUnregister verifies atomic remove with bool return.
 func TestRegistryUnregister(t *testing.T) {
 	r := NewRegistry()

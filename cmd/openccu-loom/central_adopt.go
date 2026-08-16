@@ -69,6 +69,11 @@ type centralOrchestrator struct {
 	masterValuesStore *sqlite.MasterValuesStore
 	historyStore      *sqlite.MeasurementStore
 	recordingStore    *sqlite.RecordingOverrideStore
+	// healthScore returns a central's 0..100 health score for the reconcile
+	// pass's system-health metric producer. Nil leaves the metric unwired
+	// (WireHub-only tests); the daemon passes the shared health tracker's
+	// per-central score.
+	healthScore func(centralName string) int
 
 	mu      sync.Mutex
 	handles map[string]*centralHandle
@@ -354,6 +359,7 @@ func newCentralOrchestrator(
 	masterValuesStore *sqlite.MasterValuesStore,
 	historyStore *sqlite.MeasurementStore,
 	recordingStore *sqlite.RecordingOverrideStore,
+	healthScore func(centralName string) int,
 ) *centralOrchestrator {
 	if bringUp == nil {
 		return nil
@@ -369,6 +375,7 @@ func newCentralOrchestrator(
 		masterValuesStore: masterValuesStore,
 		historyStore:      historyStore,
 		recordingStore:    recordingStore,
+		healthScore:       healthScore,
 		handles:           make(map[string]*centralHandle),
 	}
 }
@@ -463,7 +470,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// runs before registerStandardJobs/StartAll) so the gated hub jobs have a
 	// working gate from t=0 for this central too.
 	unit.WireDevicesCreatedGate()
-	registerStandardJobsFor(unit, o.cfg, o.logger)
+	registerStandardJobsFor(unit, o.cfg, o.logger, o.healthScore)
 	registerFirmwareJobsFor(unit, o.sbDeps.valueWriter, o.logger)
 
 	if err := unit.Start(ctx); err != nil {

@@ -2957,9 +2957,16 @@ func mdnsCCUsValue(serials []string) string {
 	return out
 }
 
-// mdnsCCUSerials collects the resolved serial suffixes (last-10
-// routing form) of every registered central; unresolved centrals are
-// skipped and appear on a later re-announce.
+// mdnsCCUSerials collects the canonical (last-10, case-preserved) serial of
+// every registered central; unresolved centrals are skipped and appear on a
+// later re-announce.
+//
+// The value must be the exact string GET /system/ccu reports: the Home
+// Assistant integration de-dupes discovery by matching each serial in the
+// mDNS ccus= TXT against the config entry's unique_id (the /system/ccu
+// serial) with a case-sensitive string compare. The lower-cased routing form
+// ([Registry.SerialSuffix]) never matches an upper-case-hex CCU serial, so HA
+// re-discovers an already-integrated daemon on every restart.
 func mdnsCCUSerials(reg *central.Registry) []string {
 	if reg == nil {
 		return nil
@@ -2967,7 +2974,7 @@ func mdnsCCUSerials(reg *central.Registry) []string {
 	names := reg.Names()
 	out := make([]string, 0, len(names))
 	for _, name := range names {
-		if sn := reg.SerialSuffix(name); sn != "" {
+		if sn := reg.CanonicalSerial(name); sn != "" {
 			out = append(out, sn)
 		}
 	}

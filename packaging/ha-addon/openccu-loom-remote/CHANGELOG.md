@@ -4,6 +4,15 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.61.1
+
+- Version alignment with OpenCCU-Loom 0.61.1. The proxy itself is
+  unchanged; the release fixes three "Homematic(IP) Local for OpenCCU"
+  integration bugs on the daemon side — an already-integrated OpenCCU being
+  re-discovered on every Home Assistant restart, the per-interface
+  connectivity sensors stuck on "disconnected", and the "Systemzustand"
+  diagnostic sensor stuck on "unknown".
+
 # 0.61.0
 
 - Version alignment with OpenCCU-Loom 0.61.0. The proxy itself is
