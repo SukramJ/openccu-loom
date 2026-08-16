@@ -1,5 +1,5 @@
 !# openccu-loom — set_device_rooms
-!# Params: ##address## (channel or device address), ##rooms## (\n-separated
+!# Params: address (channel or device address), rooms (\n-separated
 !#         room names; empty string clears every existing assignment)
 !# Output: count of assignments after the update.
 !#

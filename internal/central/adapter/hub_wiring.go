@@ -2212,16 +2212,17 @@ func boolFlagParam(b *bool) string {
 	return "false"
 }
 
-// SetDeviceRooms replaces the device's room assignments. `rooms` is
-// taken verbatim; the Rega script joins them with newlines so empty
-// strings clear the assignment.
+// SetDeviceRooms replaces the device's room assignments. The Rega script
+// joins the names with newlines so an empty list clears the assignment;
+// RunLists validates each name individually and lets the structural
+// separators through (a name may not itself contain a control character).
 func (w *hubJSONRPCWriter) SetDeviceRooms(
 	ctx context.Context, deviceAddress string, rooms []string,
 ) error {
-	_, err := w.rega.Run(ctx, hmenum.RegaScriptSetDeviceRooms, map[string]string{
-		"address": deviceAddress,
-		"rooms":   strings.Join(rooms, "\n"),
-	})
+	_, err := w.rega.RunLists(ctx, hmenum.RegaScriptSetDeviceRooms,
+		map[string]string{"address": deviceAddress},
+		map[string][]string{"rooms": rooms},
+	)
 	return err
 }
 
@@ -2230,10 +2231,10 @@ func (w *hubJSONRPCWriter) SetDeviceRooms(
 func (w *hubJSONRPCWriter) SetDeviceFunctions(
 	ctx context.Context, deviceAddress string, functions []string,
 ) error {
-	_, err := w.rega.Run(ctx, hmenum.RegaScriptSetDeviceFunctions, map[string]string{
-		"address":   deviceAddress,
-		"functions": strings.Join(functions, "\n"),
-	})
+	_, err := w.rega.RunLists(ctx, hmenum.RegaScriptSetDeviceFunctions,
+		map[string]string{"address": deviceAddress},
+		map[string][]string{"functions": functions},
+	)
 	return err
 }
 

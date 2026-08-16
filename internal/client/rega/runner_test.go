@@ -340,6 +340,47 @@ func TestRunForwardsSubstitutedScript(t *testing.T) {
 	}
 }
 
+func TestRunListsJoinsElementsWithNewlineSeparators(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "1")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	_, err := r.RunLists(context.Background(), hmenum.RegaScriptSetDeviceRooms,
+		map[string]string{"address": "ABC123:1"},
+		map[string][]string{"rooms": {"Kitchen", "Living Room"}},
+	)
+	if err != nil {
+		t.Fatalf("RunLists: %v", err)
+	}
+	script := capture.lastScript()
+	// The joined list lands inside the quoted string literal the script splits;
+	// the structural separator survives as a real newline (data), not rejected.
+	if !strings.Contains(script, "\"Kitchen\nLiving Room\"") {
+		t.Errorf("list not joined with a newline separator inside the literal: %q", script)
+	}
+}
+
+func TestRunListsRejectsControlCharInAnElement(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	// An element carrying its own newline would forge an extra entry and, before
+	// the comment interpolation was removed, could break out of the script.
+	_, err := r.RunLists(context.Background(), hmenum.RegaScriptSetDeviceRooms,
+		map[string]string{"address": "ABC123:1"},
+		map[string][]string{"rooms": {"Kitchen", "evil\ndom.GetObject(1).State(1)"}},
+	)
+	if err == nil {
+		t.Fatal("expected an element with a control character to be rejected")
+	}
+	if capture.lastScript() != "" {
+		t.Errorf("dispatch should not have happened, server saw: %s", capture.lastScript())
+	}
+}
+
 func TestRunMissingParamErrorsBeforeDispatch(t *testing.T) {
 	capture := &scriptCapture{}
 	srv := newFakeCCU(t, capture, "")
