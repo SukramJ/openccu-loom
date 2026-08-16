@@ -855,9 +855,14 @@ func resolveListIndex(v hmtypes.ParamValue, valueList []string) (int, bool) {
 		if v.Float < 0 || v.Float > math.MaxInt32 {
 			return 0, false
 		}
-		idx := int(v.Float)
-		if idx >= 0 && idx < len(valueList) {
-			return idx, true
+		// Narrow through int64 with an explicit integer-level bound so the
+		// conversion is provably safe for static analysis (CodeQL
+		// go/incorrect-integer-conversion), matching toWire's float branch.
+		if i := int64(v.Float); i >= 0 && i <= math.MaxInt32 {
+			idx := int(i)
+			if idx >= 0 && idx < len(valueList) {
+				return idx, true
+			}
 		}
 	case hmtypes.ValueKindString:
 		for i, label := range valueList {
