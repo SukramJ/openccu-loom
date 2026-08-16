@@ -127,11 +127,12 @@ func registerListSysvars(s *mcpsdk.Server, d Deps) {
 				if sv.Internal() {
 					continue
 				}
+				m := sv.Meta()
 				ss := sysvarSummary{
 					Name:      sv.LegacyName(),
-					Type:      string(sv.ValueType),
-					Unit:      sv.Unit,
-					ValueList: sv.ValueList,
+					Type:      string(m.ValueType),
+					Unit:      m.Unit,
+					ValueList: m.ValueList,
 					Central:   c,
 				}
 				if v, ok := sv.Value(); ok {

@@ -375,12 +375,13 @@ func (o *Outbound) Stop(_ context.Context) error {
 // Healthy implements bridge.HealthReporter. The bridge is always "up" once
 // started: an unreachable receiver is the receiver's problem, and reporting it
 // as a daemon fault would turn every operator's misconfigured endpoint into a
-// red overall health state. The running dropped/failed counters ride along in
-// detail for callers that render it. Note that bridge.Registry.Health only
-// surfaces the detail of services that report *not* healthy, so delivery
-// trouble reaches an operator through the log (webhook.outbound.queue_overflow
-// on the first drop, webhook.outbound.delivery_failed per exhausted delivery)
-// rather than through the health endpoint.
+// red overall health state. The running dropped/failed counters are returned in
+// detail, but no current surface renders them: bridge.Registry.Health
+// aggregates only the detail of reporters that report *not* healthy, and has no
+// production consumer of its own today. Delivery trouble therefore reaches an
+// operator through the log — webhook.outbound.queue_overflow on the first drop,
+// webhook.outbound.delivery_failed per exhausted delivery — not through a
+// health surface. The counters also stay readable directly via Dropped/Failed.
 func (o *Outbound) Healthy() (ok bool, detail string) {
 	dropped, failed := o.dropped.Load(), o.failed.Load()
 	if dropped == 0 && failed == 0 {

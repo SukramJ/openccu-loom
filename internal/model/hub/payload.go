@@ -111,24 +111,25 @@ func (s *Sysvar) Info() payload.InfoPayload {
 	if s == nil {
 		return nil
 	}
+	m := s.Meta()
 	out := &payload.SysvarInfo{
 		Name:        s.LegacyName(),
-		Description: s.Description,
+		Description: m.Description,
 		Category:    "sysvar",
 		UniqueID:    s.UniqueID(),
-		ValueType:   string(s.ValueType),
-		Unit:        s.Unit,
-		Vid:         s.Vid,
-		IsExtended:  s.IsExtended,
+		ValueType:   string(m.ValueType),
+		Unit:        m.Unit,
+		Vid:         m.Vid,
+		IsExtended:  m.IsExtended,
 	}
-	if len(s.ValueList) > 0 {
-		out.ValueList = s.ValueList
+	if len(m.ValueList) > 0 {
+		out.ValueList = m.ValueList
 	}
-	if s.Min != nil {
-		out.Min = s.Min
+	if m.Min != nil {
+		out.Min = m.Min
 	}
-	if s.Max != nil {
-		out.Max = s.Max
+	if m.Max != nil {
+		out.Max = m.Max
 	}
 	return out
 }
@@ -139,7 +140,7 @@ func (s *Sysvar) Config() payload.ConfigPayload {
 		return nil
 	}
 	return &payload.SysvarConfig{
-		EnabledDefault: s.EnabledDefault,
+		EnabledDefault: s.EnabledByDefault(),
 		Writable:       s.Writable(),
 	}
 }
@@ -151,7 +152,7 @@ func (s *Sysvar) State() payload.StatePayload {
 	}
 	out := &payload.SysvarState{
 		StateUncertain: s.StateUncertain(),
-		ValueType:      string(s.ValueType),
+		ValueType:      string(s.Meta().ValueType),
 	}
 	if v, ok := s.Value(); ok {
 		out.Value = v.Unwrap()

@@ -1,1506 +1,1539 @@
 {
-  "version": "1.1",
-  "envelope": {
-    "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
-    "fields": {
-      "seq": "integer (uint64) — monotonic daemon-assigned cursor; clients store the last received value and pass it back as `since` on subscribe to resume the stream after a reconnect",
-      "kind": "string enum (initial|change|refresh) — event family discriminator; default and dominant case is `change`",
-      "topic": "string — routing key the client subscribed to (broadcasts only; absent on command replies)",
-      "type": "string — discriminator naming the event family; matches the `name` field of the matching broadcast entry below",
-      "ts": "string — RFC3339Nano timestamp of the event; UTC",
-      "payload": "object — see the per-broadcast `payload` field for the schema reference"
-    }
+ "version": "1.1",
+ "envelope": {
+  "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
+  "fields": {
+   "seq": "integer (uint64) — monotonic daemon-assigned cursor; clients store the last received value and pass it back as `since` on subscribe to resume the stream after a reconnect",
+   "kind": "string enum (initial|change|refresh) — event family discriminator; default and dominant case is `change`",
+   "topic": "string — routing key the client subscribed to (broadcasts only; absent on command replies)",
+   "type": "string — discriminator naming the event family; matches the `name` field of the matching broadcast entry below",
+   "ts": "string — RFC3339Nano timestamp of the event; UTC",
+   "payload": "object — see the per-broadcast `payload` field for the schema reference"
+  }
+ },
+ "resume": {
+  "description": "Client → server: append `since: N` to a subscribe op to request replay of buffered events with seq > N matching the supplied topic patterns. Server → client: after the replay completes, the daemon sends one of two control frames. `{op:\"replay_done\", seq:N}` confirms the replay finished and carries the last-replayed seq (or the original `since` when the cursor is already at the top and nothing matched). `{op:\"replay_lost\", oldest_seq:M}` signals a gap the client cannot reconstruct — it must take a fresh GET /snapshot to resync and resume above `oldest_seq`. A gap arises in four situations: `since` precedes the oldest buffered event; `since` is above the daemon's current top, which is what a cursor from before a daemon restart looks like (the sequence counter is process-local and restarts at 0, and the envelope carries no epoch a client could compare); replay is disabled (`replay_buffer_capacity` 0), which can never satisfy a resume; or the connection fell behind and the daemon dropped queued events to keep it alive (one frame per overflow episode, not per dropped event). The replay buffer ceiling defaults to 1024 events; the per-connection outbound queue holds 1000.",
+  "replay_buffer_capacity": 1024
+ },
+ "heartbeat": {
+  "description": "The daemon sends a `{\"op\":\"ping\"}` frame every ping_interval_seconds. Clients MUST respond with `{\"op\":\"pong\"}` within read_timeout_seconds or the connection is closed. Clients behind NAT or mobile-data proxies that drop idle connections faster than read_timeout_seconds should additionally issue their own `{\"op\":\"pong\"}` frames pre-emptively — the daemon accepts unsolicited pongs.",
+  "ping_interval_seconds": 30,
+  "read_timeout_seconds": 60
+ },
+ "subscription_ack": {
+  "description": "After a `{op:\"subscribe\", topics:[...]}` or `{op:\"unsubscribe\", topics:[...]}` is processed, the daemon echoes one `{op:\"subscribed\"|\"unsubscribed\", topics:[...]}` frame carrying the topics the client just requested. Reconnect-after-failure logic can use this ACK to confirm the subscription set survived the round trip without needing to inspect daemon-side state. An empty topics array suppresses the ACK to keep no-op subscribes quiet."
+ },
+ "command_schemas": {
+  "description": "Each command entry below may carry an `args` and a `result` field documenting its argument and return shape. `args` is an object whose keys are argument names; each value is a string of the form `<json-type>[?]` (with `?` marking optional fields). `result` follows the same conventions and may also be `\"array\"` or a fully-spelled object. Missing fields mean the command takes no arguments and/or returns an opaque object — the canonical source for the wire shape is then the matching Go handler under internal/north/rest/ws/."
+ },
+ "commands": [
+  {
+   "category": "alarms",
+   "description": "Acknowledge (clear) a single alarm message by id. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "alarm_messages.ack",
+   "args": {
+    "id": "string",
+    "central_name": "string?"
+   }
   },
-  "resume": {
-    "description": "Client → server: append `since: N` to a subscribe op to request replay of buffered events with seq > N matching the supplied topic patterns. Server → client: after the replay completes, the daemon sends one of two control frames. `{op:\"replay_done\", seq:N}` confirms the replay finished and carries the last-replayed seq (or the original `since` when the cursor is already at the top and nothing matched). `{op:\"replay_lost\", oldest_seq:M}` signals a gap the client cannot reconstruct — it must take a fresh GET /snapshot to resync and resume above `oldest_seq`. A gap arises in four situations: `since` precedes the oldest buffered event; `since` is above the daemon's current top, which is what a cursor from before a daemon restart looks like (the sequence counter is process-local and restarts at 0, and the envelope carries no epoch a client could compare); replay is disabled (`replay_buffer_capacity` 0), which can never satisfy a resume; or the connection fell behind and the daemon dropped queued events to keep it alive (one frame per overflow episode, not per dropped event). The replay buffer ceiling defaults to 1024 events; the per-connection outbound queue holds 1000.",
-    "replay_buffer_capacity": 1024
+  {
+   "category": "alarms",
+   "description": "Acknowledge (clear) every active alarm message in one pass. The response carries the number acknowledged. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "alarm_messages.ack_all",
+   "args": {
+    "central_name": "string?"
+   },
+   "result": {
+    "acknowledged": "integer"
+   }
   },
-  "heartbeat": {
-    "description": "The daemon sends a `{\"op\":\"ping\"}` frame every ping_interval_seconds. Clients MUST respond with `{\"op\":\"pong\"}` within read_timeout_seconds or the connection is closed. Clients behind NAT or mobile-data proxies that drop idle connections faster than read_timeout_seconds should additionally issue their own `{\"op\":\"pong\"}` frames pre-emptively — the daemon accepts unsolicited pongs.",
-    "ping_interval_seconds": 30,
-    "read_timeout_seconds": 60
+  {
+   "category": "alarms",
+   "description": "List all active CCU alarm messages. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "alarm_messages.list",
+   "args": {
+    "central_name": "string?"
+   }
   },
-  "subscription_ack": {
-    "description": "After a `{op:\"subscribe\", topics:[...]}` or `{op:\"unsubscribe\", topics:[...]}` is processed, the daemon echoes one `{op:\"subscribed\"|\"unsubscribed\", topics:[...]}` frame carrying the topics the client just requested. Reconnect-after-failure logic can use this ACK to confirm the subscription set survived the round trip without needing to inspect daemon-side state. An empty topics array suppresses the ACK to keep no-op subscribes quiet."
+  {
+   "category": "backup",
+   "description": "Return the current status of a running or last-completed CCU backup operation. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "backup.status",
+   "args": {
+    "central_name": "string?"
+   }
   },
-  "command_schemas": {
-    "description": "Each command entry below may carry an `args` and a `result` field documenting its argument and return shape. `args` is an object whose keys are argument names; each value is a string of the form `<json-type>[?]` (with `?` marking optional fields). `result` follows the same conventions and may also be `\"array\"` or a fully-spelled object. Missing fields mean the command takes no arguments and/or returns an opaque object — the canonical source for the wire shape is then the matching Go handler under internal/north/rest/ws/."
+  {
+   "category": "backup",
+   "description": "Trigger a CCU configuration backup asynchronously. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "backup.trigger",
+   "args": {
+    "central_name": "string?"
+   }
   },
-  "commands": [
-    {
-      "category": "alarms",
-      "description": "Acknowledge (clear) a single alarm message by id. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "alarm_messages.ack",
-      "args": {
-        "id": "string",
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "alarms",
-      "description": "Acknowledge (clear) every active alarm message in one pass. The response carries the number acknowledged. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "alarm_messages.ack_all",
-      "args": {
-        "central_name": "string?"
-      },
-      "result": {
-        "acknowledged": "integer"
-      }
-    },
-    {
-      "category": "alarms",
-      "description": "List all active CCU alarm messages. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "alarm_messages.list",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "backup",
-      "description": "Return the current status of a running or last-completed CCU backup operation. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "backup.status",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "backup",
-      "description": "Trigger a CCU configuration backup asynchronously. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "backup.trigger",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "args": {
-        "central_name": "string"
-      },
-      "category": "backup",
-      "description": "Trigger the create-and-download backup flow for exactly the named central (multi-CCU-correct counterpart to backup.trigger, which always targets the first registered central). Returns the backup/job id.",
-      "name": "backups.trigger",
-      "result": {
-        "id": "string",
-        "central_name": "string"
-      }
-    },
-    {
-      "args": {
-        "central": "string?",
-        "device": "string?",
-        "interface": "string?",
-        "kind": "string?"
-      },
-      "category": "ccu",
-      "description": "Clear CCU-derivable caches scoped by kind (global/central/interface/device) and trigger a re-pull. Omitting kind defaults to global. Mirrors Python ws_clear_cache (websocket_api.py:1885).",
-      "name": "ccu.cache_clear",
-      "result": {
-        "centrals_reinit": "array",
-        "devices": "integer",
-        "master": "integer",
-        "paramsets": "integer",
-        "scope": "string",
-        "values": "integer"
-      }
-    },
-    {
-      "category": "ccu",
-      "description": "Return per-interface device statistics: total, unreachable, and firmware-updatable counts plus grand totals. Mirrors Python ws_get_device_statistics (V8-N11).",
-      "name": "ccu.device_statistics"
-    },
-    {
-      "category": "ccu",
-      "description": "Return service-message count and alarm-message count from hub data points. Mirrors Python ws_get_hub_data (websocket_api.py:2052).",
-      "name": "ccu.get_hub_data"
-    },
-    {
-      "category": "ccu",
-      "description": "Return per-device RF reception strength (RSSI_DEVICE / RSSI_PEER in dBm), battery state (battery_level, low_battery), and reachability, read from the device model's maintenance channel across every central. Works for HmIP and BidCos alike; only devices that report an RSSI reading are listed.",
-      "name": "ccu.get_rssi_info"
-    },
-    {
-      "category": "ccu",
-      "description": "Return RSSI, reachability, and low-battery state for every known device. Mirrors Python ws_get_signal_quality (websocket_api.py:2158).",
-      "name": "ccu.get_signal_quality"
-    },
-    {
-      "category": "ccu",
-      "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
-      "name": "ccu.reload_channel_config",
-      "args": {
-        "channel_address": "string"
-      }
-    },
-    {
-      "category": "ccu",
-      "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_panel_reload_device_config (websocket_api.py:2285). Closes parity_audit gap L-7002.",
-      "name": "ccu.reload_device_config",
-      "args": {
-        "device_address": "string"
-      }
-    },
-    {
-      "category": "ccu",
-      "description": "Return per-interface command-throttle diagnostics (in_flight, waiting, burst_downgrades, waited_for_burst_slot). Mirrors Python ws_get_command_throttle_stats (V8-N9).",
-      "name": "ccu.throttle_stats"
-    },
-    {
-      "category": "central",
-      "description": "Report per-interface connectivity details for all configured centrals.",
-      "name": "central.connectivity"
-    },
-    {
-      "args": {
-        "address": "string?",
-        "channel": "string?",
-        "device_address": "string?"
-      },
-      "category": "central",
-      "description": "Enable CCU click-event forwarding. Without channel every press-event channel of the device is switched on; with channel (a channel address) only that single channel is touched. Mirrors Python create_central_links.",
-      "name": "central.create_links",
-      "result": {
-        "failed": "integer",
-        "skipped": "integer",
-        "touched": "integer"
-      }
-    },
-    {
-      "category": "central",
-      "description": "Return identity and version information for the connected CCU.",
-      "name": "central.info"
-    },
-    {
-      "args": {
-        "address": "string?",
-        "device_address": "string?"
-      },
-      "category": "central",
-      "description": "Report whether a device supports central links, how many channels are eligible, and which channels (address, number, eligible) can drive central click events.",
-      "name": "central.links_status",
-      "result": {
-        "channels": "array?",
-        "eligible_channels": "integer?",
-        "reason": "string?",
-        "supported": "boolean"
-      }
-    },
-    {
-      "category": "central",
-      "description": "Kick off an ad-hoc reconciliation pass against the CCU device registry.",
-      "name": "central.reconcile"
-    },
-    {
-      "args": {
-        "address": "string?",
-        "channel": "string?",
-        "device_address": "string?"
-      },
-      "category": "central",
-      "description": "Tear down CCU click-event forwarding. Without channel the whole device is switched off; with channel (a channel address) only that single channel is touched. Mirrors Python remove_central_links.",
-      "name": "central.remove_links",
-      "result": {
-        "failed": "integer",
-        "skipped": "integer",
-        "touched": "integer"
-      }
-    },
-    {
-      "category": "central",
-      "description": "Server-pushed: a CentralUnit transitioned between lifecycle states (CONNECTING, READY, STOPPED, …).",
-      "kind": "broadcast",
-      "name": "central.state_changed",
-      "topic": "central.{name}.state",
-      "payload": "CentralStateChangedPayload"
-    },
-    {
-      "category": "central",
-      "description": "Server-pushed: a CentralUnit's readiness-gated southbound bring-up advanced a phase (waiting_for_ccu -> loading_hub -> loading_devices -> ready), pushed live so the UI distinguishes a central still initializing from one that is offline.",
-      "kind": "broadcast",
-      "name": "central.readiness_changed",
-      "topic": "central.{name}.readiness",
-      "payload": "CentralReadinessChangedPayload"
-    },
-    {
-      "category": "central",
-      "description": "Return a combined system-health snapshot from the CCU's perspective.",
-      "name": "central.system_health"
-    },
-    {
-      "category": "change_history",
-      "description": "Clear (truncate) the persisted paramset-write history log. Mirrors Python ws_clear_change_history (V8-N16).",
-      "name": "change_history.clear"
-    },
-    {
-      "category": "change_history",
-      "description": "List recent paramset-write history entries, optionally filtered by channel address.",
-      "name": "change_history.list"
-    },
-    {
-      "category": "config",
-      "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
-      "name": "config.reload_channel_config",
-      "args": {
-        "channel_address": "string"
-      }
-    },
-    {
-      "category": "config",
-      "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_reload_device_config (websocket_api.py:1735). Closes parity_audit gap L-7002.",
-      "name": "config.reload_device_config"
-    },
-    {
-      "category": "config",
-      "description": "Return the current pending changes for an open config session.",
-      "name": "config.session.changes"
-    },
-    {
-      "category": "config",
-      "description": "Discard all pending changes and close the config session.",
-      "name": "config.session.discard"
-    },
-    {
-      "category": "config",
-      "description": "Open a config session for a channel/paramset pair and return its initial values.",
-      "name": "config.session.open",
-      "args": {
-        "central_name": "string?",
-        "channel_address": "string",
-        "paramset_key": "string"
-      }
-    },
-    {
-      "category": "config",
-      "description": "Re-apply the most recently undone change in the open config session.",
-      "name": "config.session.redo"
-    },
-    {
-      "category": "config",
-      "description": "Write the pending changes of the open config session to the CCU and close the session.",
-      "name": "config.session.save"
-    },
-    {
-      "category": "config",
-      "description": "Stage a single parameter change into the open config session.",
-      "name": "config.session.set",
-      "args": {
-        "central_name": "string?",
-        "channel_address": "string",
-        "paramset_key": "string",
-        "parameter": "string?",
-        "value": "any"
-      }
-    },
-    {
-      "category": "config",
-      "description": "Undo the most recent staged change in the open config session.",
-      "name": "config.session.undo"
-    },
-    {
-      "category": "custom_data_point",
-      "description": "Server-pushed: a CCU data-point change observable to a Custom-DP altered the CDP's aggregated state. SPA tiles subscribe to one CDP-scoped topic instead of N per-DP topics.",
-      "kind": "broadcast",
-      "name": "custom_data_point.state_changed",
-      "topic": "device.{address}.cdps.{name}",
-      "payload": "CustomDataPointStateChangedPayload"
-    },
-    {
-      "category": "datapoint",
-      "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple. Subscribe with `classify:true` to receive inline category / data_point_type on the payload (default off).",
-      "kind": "broadcast",
-      "name": "datapoint.value_changed",
-      "topic": "device.{address}.channels.{channel}.data_points.{parameter}",
-      "payload": "DataPointValueChangedPayload"
-    },
-    {
-      "category": "datapoint",
-      "description": "Server-pushed: an optimistic write was rolled back (CCU never confirmed within TTL, or rejected it). Rides the same data_points topic as datapoint.value_changed — subscribers route by envelope `type`.",
-      "kind": "broadcast",
-      "name": "datapoint.optimistic_rolled_back",
-      "topic": "device.{address}.channels.{channel}.data_points.{parameter}",
-      "payload": "OptimisticRollbackPayload"
-    },
-    {
-      "category": "devices",
-      "description": "Server-pushed: a device's effective reachability flipped (its interface lost the connection, or the device itself reported UNREACH / STICKY_UNREACH). Rides the same device.{address}.lifecycle topic as device.created — subscribers route by envelope `type`.",
-      "kind": "broadcast",
-      "name": "device.availability_changed",
-      "topic": "device.{address}.lifecycle",
-      "payload": "DeviceAvailabilityChangedPayload"
-    },
-    {
-      "category": "devices",
-      "description": "Server-pushed: a new device was observed in the registry (added via CCU pairing, cache reload, or initial-snapshot import).",
-      "kind": "broadcast",
-      "name": "device.created",
-      "topic": "device.{address}.lifecycle",
-      "payload": "DeviceCreatedPayload"
-    },
-    {
-      "category": "devices",
-      "description": "Put a single device into pairing install-mode for a given duration.",
-      "name": "device.install_mode",
-      "args": {
-        "address": "string",
-        "duration_seconds": "integer?"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Server-pushed: the CCU reported a device deletion. The same topic carries device.created — subscribers route by envelope `type`.",
-      "kind": "broadcast",
-      "name": "device.removed",
-      "topic": "device.{address}.lifecycle",
-      "payload": "DeviceRemovedPayload"
-    },
-    {
-      "category": "devices",
-      "description": "Server-pushed: a non-state device event fired (keypress, impulse, device error) — one topic per (device, channel). Payload event_type / parameter disambiguate which trigger fired. Distinct from datapoint.value_changed.",
-      "kind": "broadcast",
-      "name": "device.trigger",
-      "topic": "device.{address}.channels.{channel}.trigger",
-      "payload": "DeviceTriggerPayload"
-    },
-    {
-      "category": "devices",
-      "description": "Rename a device on the CCU. When include_channels is true every channel is renamed along with the '<name>:<channelNo>' pattern.",
-      "name": "device.rename",
-      "args": {
-        "address": "string",
-        "name": "string",
-        "include_channels": "boolean?"
-      },
-      "result": {
-        "address": "string",
-        "name": "string",
-        "include_channels": "boolean"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Rename a single channel on the CCU.",
-      "name": "device.rename_channel",
-      "args": {
-        "address": "string",
-        "channel": "integer",
-        "name": "string"
-      },
-      "result": {
-        "address": "string",
-        "channel": "integer",
-        "name": "string"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "List the already-paired devices the new (inbox) device may replace. Supported on BidCos-RF and BidCos-Wired only.",
-      "name": "device.replace_candidates",
-      "args": {
-        "address": "string",
-        "central": "string?"
-      },
-      "result": {
-        "candidates": "array"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Swap a paired device for a new one. The CCU migrates direct links, teams and ReGa references; the old device is unpaired. Supported on BidCos-RF and BidCos-Wired only.",
-      "name": "device.replace",
-      "args": {
-        "address": "string",
-        "old_address": "string",
-        "central": "string?"
-      },
-      "result": {
-        "status": "string",
-        "old_address": "string",
-        "new_address": "string",
-        "central": "string"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "List the team channels a channel may be assigned to (same team tag). Supported on BidCos-RF and HmIP-RF only.",
-      "name": "device.team_candidates",
-      "args": {
-        "address": "string",
-        "channel": "integer"
-      },
-      "result": {
-        "candidates": "array"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Assign a channel to a team (e.g. smoke-detector teaming). A null/empty team resets to the channel's default team. BidCos-RF and HmIP-RF only.",
-      "name": "device.set_team",
-      "args": {
-        "address": "string",
-        "channel": "integer",
-        "team": "string?"
-      },
-      "result": {
-        "address": "string",
-        "channel": "integer",
-        "team": "string"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Run the CCU's per-device communication / function test (radio test frame + ACK). Blocks until complete or the poll window elapses. Radio interfaces only.",
-      "name": "device.test",
-      "args": {
-        "address": "string"
-      },
-      "result": {
-        "passed": "boolean",
-        "started_at": "string",
-        "duration_ms": "integer",
-        "timed_out": "boolean"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Re-transmit the centrally stored configuration (all channels' MASTER paramsets + link peerings) to a device after a factory reset. Supported on HmIP-RF and BidCos-RF only.",
-      "name": "device.restore_config",
-      "args": {
-        "address": "string"
-      },
-      "result": {
-        "address": "string"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Replace a single channel's function (Gewerk) assignments. An empty array clears the set.",
-      "name": "device.set_channel_functions",
-      "args": {
-        "address": "string",
-        "channel": "integer",
-        "functions": "array"
-      },
-      "result": {
-        "address": "string",
-        "channel": "integer",
-        "functions": "array"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Replace a single channel's room assignments. An empty array clears the set.",
-      "name": "device.set_channel_rooms",
-      "args": {
-        "address": "string",
-        "channel": "integer",
-        "rooms": "array"
-      },
-      "result": {
-        "address": "string",
-        "channel": "integer",
-        "rooms": "array"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Export a device definition as an aiohomematic-compatible zip (device + paramset descriptions, anonymised). Returns model, filename and base64-encoded zip data.",
-      "name": "devices.export_definition",
-      "args": {
-        "address": "string"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Return the full detail record for a single device by address.",
-      "name": "devices.get",
-      "args": {
-        "address": "string"
-      }
-    },
-    {
-      "category": "devices",
-      "description": "Return a summary list of all registered devices sorted by address.",
-      "name": "devices.list"
-    },
-    {
-      "category": "firmware",
-      "description": "Report the current and available firmware versions and pending update status. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "firmware.info",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "firmware",
-      "description": "Force-refresh the firmware cache from the CCU (re-fetch available firmware metadata). Mirrors Python ws_refresh_firmware_data (V8-N13).",
-      "name": "firmware.refresh"
-    },
-    {
-      "category": "firmware",
-      "description": "Trigger the CCU firmware update and reboot sequence. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "firmware.update",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "groups",
-      "description": "List Homematic heating groups (HmIP / BidCos), grouped by central, read from each CCU's groups.gson via CCU.getHeatingGroupList. Read-only; omit `central` to aggregate over all centrals or set it to scope to one. Creating/editing/deleting groups runs through the CCU jpages proxy (ADR 0055) and is a separate surface.",
-      "name": "groups.list",
-      "args": {
-        "central": "string?"
-      }
-    },
-    {
-      "category": "groups",
-      "description": "Create a heating group via the CCU jpages proxy (ADR 0055, GR02). Admin-gated. `central` selects the target CCU (optional when only one is configured). Returns the created group.",
-      "name": "groups.create",
-      "args": {
-        "type_id": "string",
-        "name": "string",
-        "forbid_single_operation": "boolean?",
-        "members": "array?",
-        "central": "string?"
-      }
-    },
-    {
-      "category": "groups",
-      "description": "Edit an existing heating group (name, members, operate-only-via-group flag) via the jpages save path. Admin-gated.",
-      "name": "groups.update",
-      "args": {
-        "id": "integer",
-        "name": "string",
-        "forbid_single_operation": "boolean?",
-        "members": "array?",
-        "central": "string?"
-      }
-    },
-    {
-      "category": "groups",
-      "description": "Delete a heating group by id via the jpages delete path. Admin-gated.",
-      "name": "groups.delete",
-      "args": {
-        "id": "integer",
-        "central": "string?"
-      }
-    },
-    {
-      "category": "groups",
-      "description": "The devices assignable to a group of the given type (assignable + leftover buckets). Read.",
-      "name": "groups.suitable_members",
-      "args": {
-        "type_id": "string",
-        "central": "string?"
-      }
-    },
-    {
-      "category": "groups",
-      "description": "The group types a new group can be created as. Read.",
-      "name": "groups.types",
-      "args": {
-        "central": "string?"
-      }
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: a CCU program finished executing (Zentralenprogramm). Topic is scoped per central and per program-id.",
-      "kind": "broadcast",
-      "name": "hub.program_executed",
-      "topic": "hub.{central}.programs.{id}",
-      "payload": "ProgramExecutedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: a CCU program's activity flag changed (CCU WebUI toggle or a client write). A program is two controls — the activity flag decides whether it reacts at all, the execution runs it once — and a deactivated program refuses the execution, so `execute_available` travels with the flag. Topic is scoped per central and per program-id.",
-      "kind": "broadcast",
-      "name": "hub.program_changed",
-      "topic": "hub.{central}.programs.{id}",
-      "payload": "ProgramChangedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: a CCU system variable's value changed. Topic is scoped per central and per sysvar name.",
-      "kind": "broadcast",
-      "name": "hub.sysvar_changed",
-      "topic": "hub.{central}.sysvars.{name}",
-      "payload": "SysvarChangedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: the CCU install-mode (pairing window) changed state. Topic is scoped per central.",
-      "kind": "broadcast",
-      "name": "hub.install_mode_changed",
-      "topic": "hub.{central}.install_mode",
-      "payload": "InstallModeChangedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: the central's alarm-message list changed. Payload carries the current count; clients refresh the full list via GET /alarm-messages.",
-      "kind": "broadcast",
-      "name": "hub.alarm_message",
-      "topic": "hub.{central}.alarm_messages",
-      "payload": "HubCountChangedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: the central's service-message list changed. Payload carries the current count; clients refresh the full list via GET /service-messages.",
-      "kind": "broadcast",
-      "name": "hub.service_message",
-      "topic": "hub.{central}.service_messages",
-      "payload": "HubCountChangedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: the central's inbox (pending pairing candidates) changed. Payload carries the current device count; clients refresh via GET /inbox.",
-      "kind": "broadcast",
-      "name": "hub.inbox_changed",
-      "topic": "hub.{central}.inbox",
-      "payload": "HubCountChangedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: a hub metric (system health, connection latency, last-event age) was re-observed. Payload carries the metric name, value and unit.",
-      "kind": "broadcast",
-      "name": "hub.metrics_changed",
-      "topic": "hub.{central}.metrics",
-      "payload": "HubMetricChangedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: per-interface reachability flipped. Topic is scoped per central and per interface id.",
-      "kind": "broadcast",
-      "name": "connectivity.changed",
-      "topic": "hub.{central}.connectivity.{interface_id}",
-      "payload": "HubConnectivityChangedPayload"
-    },
-    {
-      "category": "hub",
-      "description": "Server-pushed: the central's CCU firmware-/system-update state changed. Payload carries the current/available firmware, whether an update is available, and whether one is installing; clients can drop their update-status poll loop and refresh via GET /system/update if needed.",
-      "kind": "broadcast",
-      "name": "hub.system_update_changed",
-      "topic": "hub.{central}.system_update",
-      "payload": "HubSystemUpdateChangedPayload"
-    },
-    {
-      "category": "incidents",
-      "description": "Clear all entries from the incident store. Mirrors Python ws_clear_incidents (V8-N17).",
-      "name": "incidents.clear"
-    },
-    {
-      "category": "incidents",
-      "description": "Alias for incidents.list kept for Python ws_get_incidents name parity (L12). Returns the same payload as incidents.list.",
-      "name": "incidents.get"
-    },
-    {
-      "category": "incidents",
-      "description": "Return all stored diagnostic incidents ordered by last_seen descending. Mirrors Python ws_get_incidents (L12).",
-      "name": "incidents.list"
-    },
-    {
-      "category": "inbox",
-      "description": "Promote a paired-but-unconfigured inbox device into the active device set. A device parked by delay_new_device_creation is materialised at the same time. Optional first-time configuration (name, include_channels, rooms, functions) is applied best-effort right after the accept; omit them to only accept.",
-      "name": "inbox.accept",
-      "args": {
-        "device_address": "string",
-        "name": "string?",
-        "include_channels": "boolean?",
-        "rooms": "array?",
-        "functions": "array?"
-      }
-    },
-    {
-      "category": "inbox",
-      "description": "List devices waiting for acceptance: those the CCU has seen in pairing mode and, when delay_new_device_creation is enabled, those this daemon parked (flagged pending_creation). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "inbox.list",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "install_mode",
-      "description": "Close the pairing window for the named interface. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "install_mode.disable",
-      "args": {
-        "interface_id": "string",
-        "central_name": "string?"
-      },
-      "result": {
-        "enabled": "boolean",
-        "interface_id": "string"
-      }
-    },
-    {
-      "category": "install_mode",
-      "description": "Scan the wired bus (BidCos-Wired) for new devices; returns the count found (they join the inbox for acceptance).",
-      "name": "install_mode.search",
-      "args": {
-        "interface_id": "string",
-        "central": "string?"
-      },
-      "result": {
-        "interface_id": "string",
-        "found": "integer"
-      }
-    },
-    {
-      "category": "install_mode",
-      "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "install_mode.enable",
-      "args": {
-        "interface_id": "string",
-        "duration_seconds": "integer",
-        "sgtin": "string?",
-        "key": "string?",
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "install_mode",
-      "description": "Report the current pairing-mode state per interface. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "install_mode.status",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "links",
-      "description": "Test a direct link at the device: trigger the receiver's LINK paramset for the sender (short or long keypress). Physically actuates the receiver.",
-      "name": "links.activate_paramset",
-      "args": {
-        "receiver_channel_address": "string",
-        "sender_channel_address": "string",
-        "long_press": "boolean"
-      }
-    },
-    {
-      "category": "links",
-      "description": "Create a new direct link between a sender and a receiver channel.",
-      "name": "links.add"
-    },
-    {
-      "category": "links",
-      "description": "Return the form schema (descriptions + current values) for a link paramset between sender and receiver. Mirrors Python ws_get_link_form_schema (websocket_api.py:1057).",
-      "name": "links.get_form_schema"
-    },
-    {
-      "category": "links",
-      "description": "Return available easymode profiles for a link between sender and receiver channel types. Mirrors Python ws_get_link_profiles (websocket_api.py:1123). Stub until Phase-11.",
-      "name": "links.get_profiles"
-    },
-    {
-      "category": "links",
-      "description": "Return the channels eligible to be linked against a given device.",
-      "name": "links.linkable_channels"
-    },
-    {
-      "category": "links",
-      "description": "Read the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_get_link_paramset (websocket_api.py:1313). Closes parity_audit gap G-03.",
-      "name": "links.get_paramset"
-    },
-    {
-      "category": "links",
-      "description": "List all direct links a device participates in.",
-      "name": "links.list"
-    },
-    {
-      "category": "links",
-      "description": "Global direct-link overview across all centrals (or one when 'central' is set). Each link carries its owning central_name and interface_id.",
-      "name": "links.list_all"
-    },
-    {
-      "category": "links",
-      "description": "Write values to the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_put_link_paramset (websocket_api.py:1387). Closes parity_audit gap G-04.",
-      "name": "links.put_paramset"
-    },
-    {
-      "category": "links",
-      "description": "Delete an existing direct link between a sender and a receiver channel.",
-      "name": "links.remove"
-    },
-    {
-      "category": "links",
-      "args": {
-        "sender": "string",
-        "receiver": "string",
-        "name": "string?",
-        "description": "string?"
-      },
-      "description": "Change the name and/or description of an existing direct link.",
-      "name": "links.set_info"
-    },
-    {
-      "category": "links",
-      "description": "Temporarily apply a link profile's default values to a link paramset for preview. Mirrors Python ws_test_link_profile (websocket_api.py:2643). Stub until Phase-11.",
-      "name": "links.test_profile"
-    },
-    {
-      "category": "master_profiles",
-      "description": "Apply a stored master profile to a channel by writing its fixed parameters. This is a MASTER paramset write and is gated behind the same per-resource edit lock as paramset.put: pass edit_token (issued by POST /sessions/edit with key channel:{channel_address}:MASTER) or the write is rejected with a 'locked' command error.",
-      "name": "master_profiles.apply",
-      "args": {
-        "device_type": "string",
-        "channel_type": "string",
-        "channel_address": "string",
-        "id": "integer",
-        "edit_token": "string"
-      },
-      "result": {
-        "applied": "integer",
-        "param_count": "integer"
-      }
-    },
-    {
-      "category": "master_profiles",
-      "description": "Return the full parameter set of a single master profile by device type and id.",
-      "name": "master_profiles.get"
-    },
-    {
-      "category": "master_profiles",
-      "description": "List available master profiles, optionally filtered by device type and channel type.",
-      "name": "master_profiles.list"
-    },
-    {
-      "category": "master_profiles",
-      "description": "Match observed parameter values against the master-profile constraint set and return the active profile ID (0 = Expert / no match).",
-      "name": "master_profiles.match"
-    },
-    {
-      "category": "paramsets",
-      "description": "Copy a paramset (VALUES or MASTER) from a source channel to a target channel by reading + writing the values. Distinct from links.copy (peer-to-peer link-entry copy). Mirrors Python ws_copy_paramset (websocket_api.py:916). Closes parity_audit gap L-7015.",
-      "name": "paramset.copy"
-    },
-    {
-      "category": "paramsets",
-      "description": "Return the parameter descriptors for a channel/paramset pair.",
-      "name": "paramset.description"
-    },
-    {
-      "category": "paramsets",
-      "description": "Auto-detect a parameter value from the device via determine_parameter. Mirrors Python ws_determine_parameter (websocket_api.py:2556). Stub until Phase-11.",
-      "name": "paramset.determine"
-    },
-    {
-      "category": "paramsets",
-      "description": "Return the form schema (descriptions + grouping) for a channel paramset. Mirrors Python ws_get_form_schema (websocket_api.py:252). Closes parity_audit gap G-27.",
-      "name": "paramset.form_schema",
-      "args": {
-        "address": "string",
-        "channel_no": "integer",
-        "paramset": "string?",
-        "locale": "string?",
-        "peer": "string?"
-      }
-    },
-    {
-      "category": "paramsets",
-      "description": "Return the current values for a channel/paramset pair.",
-      "name": "paramset.get",
-      "args": {
-        "central_name": "string?",
-        "channel_address": "string",
-        "paramset_key": "string"
-      }
-    },
-    {
-      "category": "paramsets",
-      "description": "Write a paramset directly to the CCU without a session (non-transactional from a daemon-session perspective, but atomic on the wire: forwarded as one setParamsetValues XML-RPC call so the CCU applies all values together or none). Returns {written: N} on success. The CCU does not surface per-parameter status on this path — for that, use a config.session.* flow. MASTER and LINK writes are configuration changes gated behind the per-resource edit lock: pass edit_token (issued by POST /sessions/edit with key channel:{channel_address}:{paramset_key}) or the write is rejected with a 'locked' command error. VALUES writes are ungated.",
-      "name": "paramset.put",
-      "args": {
-        "channel_address": "string",
-        "paramset_key": "string",
-        "values": "object",
-        "edit_token": "string"
-      },
-      "result": {
-        "written": "integer"
-      }
-    },
-    {
-      "category": "programs",
-      "description": "Execute a CCU program by id. When `check_conditions` is true the CCU evaluates the program's \"if\" condition and runs the program only when it is satisfied; when false (the default) the program runs unconditionally. `executed` reports whether the program actually ran — always true for an unconditional run, false for a condition-checked run whose condition was not met. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "programs.execute",
-      "args": {
-        "id": "string",
-        "check_conditions": "boolean?",
-        "central_name": "string?"
-      },
-      "result": {
-        "id": "string",
-        "executed": "boolean"
-      }
-    },
-    {
-      "category": "programs",
-      "description": "Delete a CCU program by id. Removes the program from the CCU (dom.DeleteObject) and drops it from the hub mirror. Admin-gated, mirroring the REST DELETE /programs/{id} route (deletion is irreversible). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "programs.delete",
-      "args": {
-        "id": "string",
-        "central_name": "string?"
-      },
-      "result": {
-        "deleted": "boolean",
-        "id": "string"
-      }
-    },
-    {
-      "category": "programs",
-      "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card. `include_internal` overrides whether internal (Tmp_*) programs are listed; when omitted the central's include_internal_programs config default applies. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "programs.list",
-      "args": {
-        "include_internal": "boolean?",
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "recording",
-      "description": "Start the diagnostic RPC session recorder across all centrals (clears prior data). Mirrors Python record_session (start).",
-      "name": "recording.start",
-      "result": {
-        "recording": "boolean"
-      }
-    },
-    {
-      "category": "recording",
-      "description": "Report whether the diagnostic RPC session recorder is currently capturing.",
-      "name": "recording.status",
-      "result": {
-        "recording": "boolean"
-      }
-    },
-    {
-      "category": "recording",
-      "description": "Stop the diagnostic RPC session recorder across all centrals. Mirrors Python record_session (stop).",
-      "name": "recording.stop",
-      "result": {
-        "recording": "boolean"
-      }
-    },
-    {
-      "category": "schedules",
-      "description": "Select the active climate profile (P1..P6) on a thermostat channel.",
-      "name": "schedules.active_profile.set"
-    },
-    {
-      "category": "schedules",
-      "description": "Copy a single climate profile from a source channel/profile to a target channel/profile. Mirrors Python copy_schedule_profile.",
-      "name": "schedules.climate.copy_profile",
-      "args": {
-        "source_channel_address": "string",
-        "source_profile": "number",
-        "target_channel_address": "string",
-        "target_profile": "number"
-      }
-    },
-    {
-      "category": "schedules",
-      "description": "Read the active climate week-program for a thermostat channel.",
-      "name": "schedules.climate.get"
-    },
-    {
-      "category": "schedules",
-      "description": "Write a climate week-program back to a thermostat channel.",
-      "name": "schedules.climate.set"
-    },
-    {
-      "category": "schedules",
-      "description": "Copy the whole week schedule from a source device to a target device (channels auto-resolved). Mirrors Python copy_schedule.",
-      "name": "schedules.copy",
-      "args": {
-        "source_device_address": "string",
-        "target_device_address": "string"
-      }
-    },
-    {
-      "category": "schedules",
-      "description": "Select the active climate profile by name (e.g. P1..P6) on the resolved schedule channel of a device.",
-      "name": "schedules.device.active_profile.set"
-    },
-    {
-      "category": "schedules",
-      "description": "Read the unified schedule DTO for a device, resolving the correct channel automatically.",
-      "name": "schedules.device.get"
-    },
-    {
-      "category": "schedules",
-      "description": "Write a schedule back to the resolved schedule channel of a device.",
-      "name": "schedules.device.set"
-    },
-    {
-      "category": "schedules",
-      "description": "List all devices that expose a weekly schedule (week-profile data point). Mirrors Python ws_list_schedule_devices (websocket_api.py:1491).",
-      "name": "schedules.list_devices"
-    },
-    {
-      "category": "schedules",
-      "description": "Enable or disable the weekly program on a device. Mirrors Python ws_set_schedule_enabled (websocket_api.py:1698). Stub until Phase-11.",
-      "name": "schedules.set_enabled"
-    },
-    {
-      "category": "alarms",
-      "description": "Disable (permanently suppress) a single service message by id. Resolves the message's channel + service parameter and suppresses it on the CCU via Interface.suppressServiceMessages until cleared via service_messages.unsuppress.",
-      "name": "service_messages.disable"
-    },
-    {
-      "category": "alarms",
-      "description": "List the permanently-suppressed service-message channel parameters across every central. Reconciled against each CCU's live Interface.getSuppressedServiceMessages.",
-      "name": "service_messages.suppressed"
-    },
-    {
-      "category": "alarms",
-      "description": "Clear a permanent service-message suppression. Params: channel (required), parameter (empty = all parameters of the channel), interface (optional, resolved from the stored suppression).",
-      "name": "service_messages.unsuppress"
-    },
-    {
-      "category": "alarms",
-      "description": "Acknowledge (clear) a single service message by id. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "service_messages.ack",
-      "args": {
-        "id": "string",
-        "central_name": "string?"
-      },
-      "result": {
-        "acknowledged": "boolean",
-        "id": "string"
-      }
-    },
-    {
-      "category": "alarms",
-      "description": "Acknowledge (clear) every quittable service message in one pass. The response carries the number acknowledged. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "service_messages.ack_all",
-      "args": {
-        "central_name": "string?"
-      },
-      "result": {
-        "acknowledged": "integer"
-      }
-    },
-    {
-      "category": "alarms",
-      "description": "List all active CCU service messages (UNREACH, low-battery, config-pending, etc.). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "service_messages.list",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "system",
-      "description": "Return the list of all registered WS command names (introspection endpoint).",
-      "name": "system.commands"
-    },
-    {
-      "category": "system",
-      "description": "Return a health snapshot including overall status, score, and per-component details.",
-      "name": "system.health"
-    },
-    {
-      "category": "system",
-      "description": "Server-pushed: an aggregated system-status transition (component health, callback state, degraded interfaces, …). Topic is scoped per central.",
-      "kind": "broadcast",
-      "name": "system.status_changed",
-      "topic": "system.{central}.status",
-      "payload": "SystemStatusChangedPayload"
-    },
-    {
-      "category": "system",
-      "description": "Return the effective role and permissions for the authenticated user. Mirrors Python ws_get_user_permissions (websocket_api.py:2727).",
-      "name": "system.user_permissions"
-    },
-    {
-      "category": "system",
-      "description": "Kick a release check of the CCU add-on self-updater (ADR 0057). Fire-and-forget: progress and outcome arrive on addon_update.state_changed. Unregistered (unknown command) on platforms without the self-update capability.",
-      "name": "addon_update.check"
-    },
-    {
-      "category": "system",
-      "description": "Start the verified download + firmware install of the latest CCU add-on release (ADR 0057). Fire-and-forget: the daemon restarts on success; failures surface on addon_update.state_changed. Unregistered on platforms without the self-update capability.",
-      "name": "addon_update.install"
-    },
-    {
-      "category": "system",
-      "description": "Server-pushed: the add-on self-updater changed state (check finished, download/install progressing, failure). Only emitted on platforms where self-update is supported.",
-      "kind": "broadcast",
-      "name": "addon_update.state_changed",
-      "topic": "system.addon_update",
-      "payload": "AddonUpdateStatus"
-    },
-    {
-      "category": "sysvars",
-      "description": "Force re-pull the CCU system-variable catalogue into the hub model. Optional central_name scopes the refresh to one CCU. Mirrors Python fetch_system_variables.",
-      "name": "sysvars.fetch",
-      "args": {
-        "central_name": "string"
-      }
-    },
-    {
-      "category": "sysvars",
-      "description": "List all CCU system variables. Each entry carries optional `channel` / `device_address` fields when the variable is associated with a device (explicit CCU channel assignment or a device identifier in the name); absent fields mean the entity belongs on the central hub card. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "sysvars.list",
-      "args": {
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "sysvars",
-      "description": "Update the value of a CCU system variable by name. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
-      "name": "sysvars.set",
-      "args": {
-        "name": "string",
-        "value": "any",
-        "central_name": "string?"
-      }
-    },
-    {
-      "category": "sysvars",
-      "description": "List the CCU programs that reference a system variable (native DPEnumUsagePrograms). Optional central_name disambiguates across CCUs.",
-      "name": "sysvars.usage",
-      "args": {
-        "name": "string",
-        "central_name": "string"
-      }
-    },
-    {
-      "category": "cdp",
-      "description": "List all custom data points of all devices (or a single device when 'device' param is supplied).",
-      "name": "cdp.list"
-    },
-    {
-      "category": "cdp",
-      "description": "Return a single custom data point by device address and name.",
-      "name": "cdp.get"
-    },
-    {
-      "category": "cdp",
-      "description": "Invoke an operation on a custom data point (turn_on, set_temperature, open, …).",
-      "name": "cdp.invoke"
-    },
-    {
-      "category": "calc_dp",
-      "description": "List all calculated data points for all devices (or a single device / channel when params supplied).",
-      "name": "calc_dp.list"
-    },
-    {
-      "category": "calc_dp",
-      "description": "Return a single calculated data point by device address, channel number, and name.",
-      "name": "calc_dp.get"
-    },
-    {
-      "category": "matter",
-      "description": "Server-pushed: an allowlist row was inserted, updated or deleted via /api/v1/matter/exposable. A bulk write emits one frame per affected row.",
-      "kind": "broadcast",
-      "name": "matter.exposable_changed",
-      "topic": "matter.exposable_changed",
-      "payload": "MatterExposureUpdate"
-    },
-    {
-      "category": "matter",
-      "description": "Server-pushed: a Matter commissioning window opened (REST or cluster command). The pairing credential is redacted from the broadcast — `passcode`, `qr_code` and `manual_code` are empty, because the WS event plane has no role filter. Read them from the admin-gated POST /api/v1/matter/commissioning/window response.",
-      "kind": "broadcast",
-      "name": "matter.commissioning_window_opened",
-      "topic": "matter.commissioning_window_opened",
-      "payload": "MatterCommissioningWindowResponse"
-    },
-    {
-      "category": "matter",
-      "description": "Server-pushed: commissioning state transition (PASE / CASE / AddNOC / completion).",
-      "kind": "broadcast",
-      "name": "matter.commissioning_progress",
-      "topic": "matter.commissioning_progress",
-      "payload": "MatterCommissioningProgressPayload"
-    },
-    {
-      "category": "matter",
-      "description": "Server-pushed: a Matter fabric finished commissioning (post-AddNOC, first CASE pickup).",
-      "kind": "broadcast",
-      "name": "matter.fabric_added",
-      "topic": "matter.fabric_added",
-      "payload": "MatterFabric"
-    },
-    {
-      "category": "matter",
-      "description": "Server-pushed: a Matter fabric was revoked via /api/v1/matter/fabrics/{id}.",
-      "kind": "broadcast",
-      "name": "matter.fabric_removed",
-      "topic": "matter.fabric_removed",
-      "payload": "MatterFabricRemovedPayload"
-    },
-    {
-      "category": "matter",
-      "description": "Server-pushed: bridge endpoint topology was reassembled. Payload includes the new endpoint count.",
-      "kind": "broadcast",
-      "name": "matter.endpoint_assembled",
-      "topic": "matter.endpoint_assembled",
-      "payload": "MatterEndpointAssembledPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Arm an alarm zone. May return synchronously as `armed`, or `arming` while counting down the mode's exit delay.",
-      "name": "alarm_panel.arm",
-      "args": {
-        "zone_id": "string",
-        "mode": "string",
-        "force": "boolean?",
-        "skip_delay": "boolean?",
-        "bypass": "array?",
-        "code": "string?"
-      },
-      "result": {
-        "state": "string",
-        "bypassed": "array?",
-        "exit_delay_s": "integer?"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Disarm an alarm zone.",
-      "name": "alarm_panel.disarm",
-      "args": {
-        "zone_id": "string",
-        "code": "string?"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Silence the active incident on an alarm zone without disarming.",
-      "name": "alarm_panel.silence",
-      "args": {
-        "zone_id": "string",
-        "code": "string?"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Silence the active incident on every alarm zone at once.",
-      "name": "alarm_panel.silence_all"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Acknowledge (clear) a finished incident on an alarm zone.",
-      "name": "alarm_panel.acknowledge",
-      "args": {
-        "zone_id": "string",
-        "code": "string?"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Return the live status of every alarm zone: state, mode, bypassed sensors, active incident, running countdown, per-mode readiness, and walk-test-active flag.",
-      "name": "alarm_panel.state"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Return the per-mode arm-readiness of an alarm zone.",
-      "name": "alarm_panel.readiness",
-      "args": {
-        "zone_id": "string"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Query the alarm engine's event journal, newest first.",
-      "name": "alarm_panel.journal",
-      "args": {
-        "zone_id": "string?",
-        "class": "string?",
-        "from": "string?",
-        "to": "string?",
-        "limit": "integer?"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Return the live status of a walk-test session on an alarm zone.",
-      "name": "alarm_panel.walktest_status",
-      "args": {
-        "zone_id": "string"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "List the alarm-control-panel entity projections (HA-state view incl. the master panel).",
-      "name": "alarm_panel.panels"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "List alarm codes (operator). Codes are security material, so even the list is operator-gated; the argon2id hash and cleartext PIN are never returned.",
-      "name": "alarm_panel.codes_list",
-      "result": {
-        "codes": "array"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Create an alarm code (operator). The cleartext PIN is write-only and hashed before persistence.",
-      "name": "alarm_panel.codes_create",
-      "args": {
-        "code": "object"
-      },
-      "result": {
-        "id": "string",
-        "name": "string",
-        "kind": "string",
-        "duress": "boolean?",
-        "perms": "object",
-        "zones": "array?",
-        "binding": "object?",
-        "valid_from_ms": "integer?",
-        "valid_until_ms": "integer?",
-        "enabled": "boolean",
-        "created_ms": "integer?",
-        "updated_ms": "integer?"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Replace an alarm code (operator). An empty PIN keeps the stored hash.",
-      "name": "alarm_panel.codes_update",
-      "args": {
-        "id": "string",
-        "code": "object"
-      },
-      "result": {
-        "id": "string",
-        "name": "string",
-        "kind": "string",
-        "duress": "boolean?",
-        "perms": "object",
-        "zones": "array?",
-        "binding": "object?",
-        "valid_from_ms": "integer?",
-        "valid_until_ms": "integer?",
-        "enabled": "boolean",
-        "created_ms": "integer?",
-        "updated_ms": "integer?"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Delete an alarm code (operator).",
-      "name": "alarm_panel.codes_delete",
-      "args": {
-        "id": "string"
-      },
-      "result": {
-        "deleted": "boolean",
-        "id": "string"
-      }
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: an alarm zone's arm-state-machine transitioned (docs/alarm-concept.md §5).",
-      "kind": "broadcast",
-      "name": "alarm.state_changed",
-      "topic": "alarm.panel",
-      "payload": "AlarmStateChangedPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: a running exit/entry delay on an alarm zone ticked (once per second).",
-      "kind": "broadcast",
-      "name": "alarm.countdown",
-      "topic": "alarm.panel",
-      "payload": "AlarmCountdownPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: an alarm zone's per-mode arm-readiness was recomputed (docs/alarm-concept.md §6.3). Carries the full per-mode map, not a delta.",
-      "kind": "broadcast",
-      "name": "alarm.readiness_changed",
-      "topic": "alarm.panel",
-      "payload": "AlarmReadinessChangedPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: an alarm zone entered `triggered` and an incident was opened (or re-adopted after a restart / reconnect).",
-      "kind": "broadcast",
-      "name": "alarm.triggered",
-      "topic": "alarm.panel",
-      "payload": "AlarmTriggeredPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: one enrolled notification output fired for an alarm — a deliberate, per-zone, mode-filtered notification signal (one-shot at fire time, never cancelled by a later silence).",
-      "kind": "broadcast",
-      "name": "alarm.notification",
-      "topic": "alarm.panel",
-      "payload": "AlarmNotificationPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: a new entry was appended to the alarm engine's event journal. Payload carries the entry head; clients needing full detail call GET /alarm/journal.",
-      "kind": "broadcast",
-      "name": "alarm.journal_appended",
-      "topic": "alarm.panel",
-      "payload": "AlarmJournalAppendedPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: a walk-test session on an alarm zone recorded a sensor activation.",
-      "kind": "broadcast",
-      "name": "alarm.walktest_progress",
-      "topic": "alarm.panel",
-      "payload": "AlarmWalkTestProgressPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: the alarm subsystem's health verdict changed (siren stop-verification, service degradations).",
-      "kind": "broadcast",
-      "name": "alarm.health_changed",
-      "topic": "alarm.panel",
-      "payload": "AlarmHealthChangedPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Alarm-control-panel entity projection changed (state, availability, code policy, identity, or removal).",
-      "kind": "broadcast",
-      "name": "alarm.panel_changed",
-      "topic": "alarm.panel",
-      "payload": "AlarmPanelChangedPayload"
-    },
-    {
-      "category": "alarm_panel",
-      "description": "Server-pushed: an arm schedule elapsed with auto-arm off while the zone was not in the scheduled mode, so the engine notifies rather than arming (docs/alarm-concept.md §15 row 19).",
-      "kind": "broadcast",
-      "name": "alarm.reminder",
-      "topic": "alarm.panel",
-      "payload": "AlarmReminderPayload"
-    },
-    {
-      "category": "security",
-      "description": "Server-pushed: the folded severity of the Security & Safety domain changed. Carries the fold only; read GET /security for the detail.",
-      "kind": "broadcast",
-      "name": "security.state_changed",
-      "topic": "security.state",
-      "payload": "SecurityStateChangedPayload"
-    },
-    {
-      "category": "security",
-      "description": "Server-pushed: one hazard or fault class went active or inactive, or its source set changed while it stayed active.",
-      "kind": "broadcast",
-      "name": "security.class_changed",
-      "topic": "security.state",
-      "payload": "SecurityClassChangedPayload"
-    },
-    {
-      "category": "security",
-      "description": "Server-pushed: one alarm zone's security view changed. Never fires on an installation without an alarm engine, where the domain still reports classes and faults.",
-      "kind": "broadcast",
-      "name": "security.zone_changed",
-      "topic": "security.state",
-      "payload": "SecurityZoneChangedPayload"
-    },
-    {
-      "category": "security",
-      "description": "Server-pushed: a fault opened, cleared or was acknowledged. Carries the standing fault count after the change.",
-      "kind": "broadcast",
-      "name": "security.fault_changed",
-      "topic": "security.faults",
-      "payload": "SecurityFaultChangedPayload"
-    },
-    {
-      "category": "security",
-      "description": "Server-pushed: one rendered report, with prose plus the i18n key and args to re-render it. A covert report (duress code, silent panic) rides this broadcast only under alarm.duress_visibility: full — the WebSocket is a local screen surface.",
-      "kind": "broadcast",
-      "name": "security.notification",
-      "topic": "security.notifications",
-      "payload": "SecurityNotificationPayload"
-    }
-  ]
+  {
+   "args": {
+    "central_name": "string"
+   },
+   "category": "backup",
+   "description": "Trigger the create-and-download backup flow for exactly the named central (multi-CCU-correct counterpart to backup.trigger, which always targets the first registered central). Returns the backup/job id.",
+   "name": "backups.trigger",
+   "result": {
+    "id": "string",
+    "central_name": "string"
+   }
+  },
+  {
+   "args": {
+    "central": "string?",
+    "device": "string?",
+    "interface": "string?",
+    "kind": "string?"
+   },
+   "category": "ccu",
+   "description": "Clear CCU-derivable caches scoped by kind (global/central/interface/device) and trigger a re-pull. Omitting kind defaults to global. Mirrors Python ws_clear_cache (websocket_api.py:1885).",
+   "name": "ccu.cache_clear",
+   "result": {
+    "centrals_reinit": "array",
+    "devices": "integer",
+    "master": "integer",
+    "paramsets": "integer",
+    "scope": "string",
+    "values": "integer"
+   }
+  },
+  {
+   "category": "ccu",
+   "description": "Return per-interface device statistics: total, unreachable, and firmware-updatable counts plus grand totals. Mirrors Python ws_get_device_statistics (V8-N11).",
+   "name": "ccu.device_statistics"
+  },
+  {
+   "category": "ccu",
+   "description": "Return service-message count and alarm-message count from hub data points. Mirrors Python ws_get_hub_data (websocket_api.py:2052).",
+   "name": "ccu.get_hub_data"
+  },
+  {
+   "category": "ccu",
+   "description": "Return per-device RF reception strength (RSSI_DEVICE / RSSI_PEER in dBm), battery state (battery_level, low_battery), and reachability, read from the device model's maintenance channel across every central. Works for HmIP and BidCos alike; only devices that report an RSSI reading are listed.",
+   "name": "ccu.get_rssi_info"
+  },
+  {
+   "category": "ccu",
+   "description": "Return RSSI, reachability, and low-battery state for every known device. Mirrors Python ws_get_signal_quality (websocket_api.py:2158).",
+   "name": "ccu.get_signal_quality"
+  },
+  {
+   "category": "ccu",
+   "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
+   "name": "ccu.reload_channel_config",
+   "args": {
+    "channel_address": "string"
+   }
+  },
+  {
+   "category": "ccu",
+   "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_panel_reload_device_config (websocket_api.py:2285). Closes parity_audit gap L-7002.",
+   "name": "ccu.reload_device_config",
+   "args": {
+    "device_address": "string"
+   }
+  },
+  {
+   "category": "ccu",
+   "description": "Return per-interface command-throttle diagnostics (in_flight, waiting, burst_downgrades, waited_for_burst_slot). Mirrors Python ws_get_command_throttle_stats (V8-N9).",
+   "name": "ccu.throttle_stats"
+  },
+  {
+   "category": "central",
+   "description": "Report per-interface connectivity details for all configured centrals.",
+   "name": "central.connectivity"
+  },
+  {
+   "args": {
+    "address": "string?",
+    "channel": "string?",
+    "device_address": "string?"
+   },
+   "category": "central",
+   "description": "Enable CCU click-event forwarding. Without channel every press-event channel of the device is switched on; with channel (a channel address) only that single channel is touched. Mirrors Python create_central_links.",
+   "name": "central.create_links",
+   "result": {
+    "failed": "integer",
+    "skipped": "integer",
+    "touched": "integer"
+   }
+  },
+  {
+   "category": "central",
+   "description": "Return identity and version information for the connected CCU.",
+   "name": "central.info"
+  },
+  {
+   "args": {
+    "address": "string?",
+    "device_address": "string?"
+   },
+   "category": "central",
+   "description": "Report whether a device supports central links, how many channels are eligible, and which channels (address, number, eligible) can drive central click events.",
+   "name": "central.links_status",
+   "result": {
+    "channels": "array?",
+    "eligible_channels": "integer?",
+    "reason": "string?",
+    "supported": "boolean"
+   }
+  },
+  {
+   "category": "central",
+   "description": "Kick off an ad-hoc reconciliation pass against the CCU device registry.",
+   "name": "central.reconcile"
+  },
+  {
+   "args": {
+    "address": "string?",
+    "channel": "string?",
+    "device_address": "string?"
+   },
+   "category": "central",
+   "description": "Tear down CCU click-event forwarding. Without channel the whole device is switched off; with channel (a channel address) only that single channel is touched. Mirrors Python remove_central_links.",
+   "name": "central.remove_links",
+   "result": {
+    "failed": "integer",
+    "skipped": "integer",
+    "touched": "integer"
+   }
+  },
+  {
+   "category": "central",
+   "description": "Server-pushed: a CentralUnit transitioned between lifecycle states (CONNECTING, READY, STOPPED, …).",
+   "kind": "broadcast",
+   "name": "central.state_changed",
+   "topic": "central.{name}.state",
+   "payload": "CentralStateChangedPayload"
+  },
+  {
+   "category": "central",
+   "description": "Server-pushed: a CentralUnit's readiness-gated southbound bring-up advanced a phase (waiting_for_ccu -> loading_hub -> loading_devices -> ready), pushed live so the UI distinguishes a central still initializing from one that is offline.",
+   "kind": "broadcast",
+   "name": "central.readiness_changed",
+   "topic": "central.{name}.readiness",
+   "payload": "CentralReadinessChangedPayload"
+  },
+  {
+   "category": "central",
+   "description": "Return a combined system-health snapshot from the CCU's perspective.",
+   "name": "central.system_health"
+  },
+  {
+   "category": "change_history",
+   "description": "Clear (truncate) the persisted paramset-write history log. Mirrors Python ws_clear_change_history (V8-N16).",
+   "name": "change_history.clear"
+  },
+  {
+   "category": "change_history",
+   "description": "List recent paramset-write history entries, optionally filtered by channel address.",
+   "name": "change_history.list"
+  },
+  {
+   "category": "config",
+   "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
+   "name": "config.reload_channel_config",
+   "args": {
+    "channel_address": "string"
+   }
+  },
+  {
+   "category": "config",
+   "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_reload_device_config (websocket_api.py:1735). Closes parity_audit gap L-7002.",
+   "name": "config.reload_device_config"
+  },
+  {
+   "category": "config",
+   "description": "Return the current pending changes for an open config session.",
+   "name": "config.session.changes"
+  },
+  {
+   "category": "config",
+   "description": "Discard all pending changes and close the config session.",
+   "name": "config.session.discard"
+  },
+  {
+   "category": "config",
+   "description": "Open a config session for a channel/paramset pair and return its initial values.",
+   "name": "config.session.open",
+   "args": {
+    "central_name": "string?",
+    "channel_address": "string",
+    "paramset_key": "string"
+   }
+  },
+  {
+   "category": "config",
+   "description": "Re-apply the most recently undone change in the open config session.",
+   "name": "config.session.redo"
+  },
+  {
+   "category": "config",
+   "description": "Write the pending changes of the open config session to the CCU and close the session.",
+   "name": "config.session.save"
+  },
+  {
+   "category": "config",
+   "description": "Stage a single parameter change into the open config session.",
+   "name": "config.session.set",
+   "args": {
+    "central_name": "string?",
+    "channel_address": "string",
+    "paramset_key": "string",
+    "parameter": "string?",
+    "value": "any"
+   }
+  },
+  {
+   "category": "config",
+   "description": "Undo the most recent staged change in the open config session.",
+   "name": "config.session.undo"
+  },
+  {
+   "category": "custom_data_point",
+   "description": "Server-pushed: a CCU data-point change observable to a Custom-DP altered the CDP's aggregated state. SPA tiles subscribe to one CDP-scoped topic instead of N per-DP topics.",
+   "kind": "broadcast",
+   "name": "custom_data_point.state_changed",
+   "topic": "device.{address}.cdps.{name}",
+   "payload": "CustomDataPointStateChangedPayload"
+  },
+  {
+   "category": "datapoint",
+   "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple. Subscribe with `classify:true` to receive inline category / data_point_type on the payload (default off).",
+   "kind": "broadcast",
+   "name": "datapoint.value_changed",
+   "topic": "device.{address}.channels.{channel}.data_points.{parameter}",
+   "payload": "DataPointValueChangedPayload"
+  },
+  {
+   "category": "datapoint",
+   "description": "Server-pushed: an optimistic write was rolled back (CCU never confirmed within TTL, or rejected it). Rides the same data_points topic as datapoint.value_changed — subscribers route by envelope `type`.",
+   "kind": "broadcast",
+   "name": "datapoint.optimistic_rolled_back",
+   "topic": "device.{address}.channels.{channel}.data_points.{parameter}",
+   "payload": "OptimisticRollbackPayload"
+  },
+  {
+   "category": "devices",
+   "description": "Server-pushed: a device's effective reachability flipped (its interface lost the connection, or the device itself reported UNREACH / STICKY_UNREACH). Rides the same device.{address}.lifecycle topic as device.created — subscribers route by envelope `type`.",
+   "kind": "broadcast",
+   "name": "device.availability_changed",
+   "topic": "device.{address}.lifecycle",
+   "payload": "DeviceAvailabilityChangedPayload"
+  },
+  {
+   "category": "devices",
+   "description": "Server-pushed: a new device was observed in the registry (added via CCU pairing, cache reload, or initial-snapshot import).",
+   "kind": "broadcast",
+   "name": "device.created",
+   "topic": "device.{address}.lifecycle",
+   "payload": "DeviceCreatedPayload"
+  },
+  {
+   "category": "devices",
+   "description": "Put a single device into pairing install-mode for a given duration.",
+   "name": "device.install_mode",
+   "args": {
+    "address": "string",
+    "duration_seconds": "integer?"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Server-pushed: the CCU reported a device deletion. The same topic carries device.created — subscribers route by envelope `type`.",
+   "kind": "broadcast",
+   "name": "device.removed",
+   "topic": "device.{address}.lifecycle",
+   "payload": "DeviceRemovedPayload"
+  },
+  {
+   "category": "devices",
+   "description": "Server-pushed: a non-state device event fired (keypress, impulse, device error) — one topic per (device, channel). Payload event_type / parameter disambiguate which trigger fired. Distinct from datapoint.value_changed.",
+   "kind": "broadcast",
+   "name": "device.trigger",
+   "topic": "device.{address}.channels.{channel}.trigger",
+   "payload": "DeviceTriggerPayload"
+  },
+  {
+   "category": "devices",
+   "description": "Rename a device on the CCU. When include_channels is true every channel is renamed along with the '<name>:<channelNo>' pattern.",
+   "name": "device.rename",
+   "args": {
+    "address": "string",
+    "name": "string",
+    "include_channels": "boolean?"
+   },
+   "result": {
+    "address": "string",
+    "name": "string",
+    "include_channels": "boolean"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Rename a single channel on the CCU.",
+   "name": "device.rename_channel",
+   "args": {
+    "address": "string",
+    "channel": "integer",
+    "name": "string"
+   },
+   "result": {
+    "address": "string",
+    "channel": "integer",
+    "name": "string"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "List the already-paired devices the new (inbox) device may replace. Supported on BidCos-RF and BidCos-Wired only.",
+   "name": "device.replace_candidates",
+   "args": {
+    "address": "string",
+    "central": "string?"
+   },
+   "result": {
+    "candidates": "array"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Swap a paired device for a new one. The CCU migrates direct links, teams and ReGa references; the old device is unpaired. Supported on BidCos-RF and BidCos-Wired only.",
+   "name": "device.replace",
+   "args": {
+    "address": "string",
+    "old_address": "string",
+    "central": "string?"
+   },
+   "result": {
+    "status": "string",
+    "old_address": "string",
+    "new_address": "string",
+    "central": "string"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "List the team channels a channel may be assigned to (same team tag). Supported on BidCos-RF and HmIP-RF only.",
+   "name": "device.team_candidates",
+   "args": {
+    "address": "string",
+    "channel": "integer"
+   },
+   "result": {
+    "candidates": "array"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Assign a channel to a team (e.g. smoke-detector teaming). A null/empty team resets to the channel's default team. BidCos-RF and HmIP-RF only.",
+   "name": "device.set_team",
+   "args": {
+    "address": "string",
+    "channel": "integer",
+    "team": "string?"
+   },
+   "result": {
+    "address": "string",
+    "channel": "integer",
+    "team": "string"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Run the CCU's per-device communication / function test (radio test frame + ACK). Blocks until complete or the poll window elapses. Radio interfaces only.",
+   "name": "device.test",
+   "args": {
+    "address": "string"
+   },
+   "result": {
+    "passed": "boolean",
+    "started_at": "string",
+    "duration_ms": "integer",
+    "timed_out": "boolean"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Re-transmit the centrally stored configuration (all channels' MASTER paramsets + link peerings) to a device after a factory reset. Supported on HmIP-RF and BidCos-RF only.",
+   "name": "device.restore_config",
+   "args": {
+    "address": "string"
+   },
+   "result": {
+    "address": "string"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Replace a single channel's function (Gewerk) assignments. An empty array clears the set.",
+   "name": "device.set_channel_functions",
+   "args": {
+    "address": "string",
+    "channel": "integer",
+    "functions": "array"
+   },
+   "result": {
+    "address": "string",
+    "channel": "integer",
+    "functions": "array"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Replace a single channel's room assignments. An empty array clears the set.",
+   "name": "device.set_channel_rooms",
+   "args": {
+    "address": "string",
+    "channel": "integer",
+    "rooms": "array"
+   },
+   "result": {
+    "address": "string",
+    "channel": "integer",
+    "rooms": "array"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Export a device definition as an aiohomematic-compatible zip (device + paramset descriptions, anonymised). Returns model, filename and base64-encoded zip data.",
+   "name": "devices.export_definition",
+   "args": {
+    "address": "string"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Return the full detail record for a single device by address.",
+   "name": "devices.get",
+   "args": {
+    "address": "string"
+   }
+  },
+  {
+   "category": "devices",
+   "description": "Return a summary list of all registered devices sorted by address.",
+   "name": "devices.list"
+  },
+  {
+   "category": "firmware",
+   "description": "Report the current and available firmware versions and pending update status. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "firmware.info",
+   "args": {
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "firmware",
+   "description": "Force-refresh the firmware cache from the CCU (re-fetch available firmware metadata). Mirrors Python ws_refresh_firmware_data (V8-N13).",
+   "name": "firmware.refresh"
+  },
+  {
+   "category": "firmware",
+   "description": "Trigger the CCU firmware update and reboot sequence. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "firmware.update",
+   "args": {
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "groups",
+   "description": "List Homematic heating groups (HmIP / BidCos), grouped by central, read from each CCU's groups.gson via CCU.getHeatingGroupList. Read-only; omit `central` to aggregate over all centrals or set it to scope to one. Creating/editing/deleting groups runs through the CCU jpages proxy (ADR 0055) and is a separate surface.",
+   "name": "groups.list",
+   "args": {
+    "central": "string?"
+   }
+  },
+  {
+   "category": "groups",
+   "description": "Create a heating group via the CCU jpages proxy (ADR 0055, GR02). Admin-gated. `central` selects the target CCU (optional when only one is configured). Returns the created group.",
+   "name": "groups.create",
+   "args": {
+    "type_id": "string",
+    "name": "string",
+    "forbid_single_operation": "boolean?",
+    "members": "array?",
+    "central": "string?"
+   }
+  },
+  {
+   "category": "groups",
+   "description": "Edit an existing heating group (name, members, operate-only-via-group flag) via the jpages save path. Admin-gated.",
+   "name": "groups.update",
+   "args": {
+    "id": "integer",
+    "name": "string",
+    "forbid_single_operation": "boolean?",
+    "members": "array?",
+    "central": "string?"
+   }
+  },
+  {
+   "category": "groups",
+   "description": "Delete a heating group by id via the jpages delete path. Admin-gated.",
+   "name": "groups.delete",
+   "args": {
+    "id": "integer",
+    "central": "string?"
+   }
+  },
+  {
+   "category": "groups",
+   "description": "The devices assignable to a group of the given type (assignable + leftover buckets). Read.",
+   "name": "groups.suitable_members",
+   "args": {
+    "type_id": "string",
+    "central": "string?"
+   }
+  },
+  {
+   "category": "groups",
+   "description": "The group types a new group can be created as. Read.",
+   "name": "groups.types",
+   "args": {
+    "central": "string?"
+   }
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: a CCU program finished executing (Zentralenprogramm). Topic is scoped per central and per program-id.",
+   "kind": "broadcast",
+   "name": "hub.program_executed",
+   "topic": "hub.{central}.programs.{id}",
+   "payload": "ProgramExecutedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: a CCU program's activity flag changed (CCU WebUI toggle or a client write). A program is two controls — the activity flag decides whether it reacts at all, the execution runs it once — and a deactivated program refuses the execution, so `execute_available` travels with the flag. Topic is scoped per central and per program-id.",
+   "kind": "broadcast",
+   "name": "hub.program_changed",
+   "topic": "hub.{central}.programs.{id}",
+   "payload": "ProgramChangedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: a CCU system variable's value changed. Topic is scoped per central and per sysvar name.",
+   "kind": "broadcast",
+   "name": "hub.sysvar_changed",
+   "topic": "hub.{central}.sysvars.{name}",
+   "payload": "SysvarChangedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: the CCU install-mode (pairing window) changed state. Topic is scoped per central.",
+   "kind": "broadcast",
+   "name": "hub.install_mode_changed",
+   "topic": "hub.{central}.install_mode",
+   "payload": "InstallModeChangedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: the central's alarm-message list changed. Payload carries the current count; clients refresh the full list via GET /alarm-messages.",
+   "kind": "broadcast",
+   "name": "hub.alarm_message",
+   "topic": "hub.{central}.alarm_messages",
+   "payload": "HubCountChangedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: the central's service-message list changed. Payload carries the current count; clients refresh the full list via GET /service-messages.",
+   "kind": "broadcast",
+   "name": "hub.service_message",
+   "topic": "hub.{central}.service_messages",
+   "payload": "HubCountChangedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: the central's inbox (pending pairing candidates) changed. Payload carries the current device count; clients refresh via GET /inbox.",
+   "kind": "broadcast",
+   "name": "hub.inbox_changed",
+   "topic": "hub.{central}.inbox",
+   "payload": "HubCountChangedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: a hub metric (system health, connection latency, last-event age) was re-observed. Payload carries the metric name, value and unit.",
+   "kind": "broadcast",
+   "name": "hub.metrics_changed",
+   "topic": "hub.{central}.metrics",
+   "payload": "HubMetricChangedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: per-interface reachability flipped. Topic is scoped per central and per interface id.",
+   "kind": "broadcast",
+   "name": "connectivity.changed",
+   "topic": "hub.{central}.connectivity.{interface_id}",
+   "payload": "HubConnectivityChangedPayload"
+  },
+  {
+   "category": "hub",
+   "description": "Server-pushed: the central's CCU firmware-/system-update state changed. Payload carries the current/available firmware, whether an update is available, and whether one is installing; clients can drop their update-status poll loop and refresh via GET /system/update if needed.",
+   "kind": "broadcast",
+   "name": "hub.system_update_changed",
+   "topic": "hub.{central}.system_update",
+   "payload": "HubSystemUpdateChangedPayload"
+  },
+  {
+   "category": "incidents",
+   "description": "Clear all entries from the incident store. Mirrors Python ws_clear_incidents (V8-N17).",
+   "name": "incidents.clear"
+  },
+  {
+   "category": "incidents",
+   "description": "Alias for incidents.list kept for Python ws_get_incidents name parity (L12). Returns the same payload as incidents.list.",
+   "name": "incidents.get"
+  },
+  {
+   "category": "incidents",
+   "description": "Return all stored diagnostic incidents ordered by last_seen descending. Mirrors Python ws_get_incidents (L12).",
+   "name": "incidents.list"
+  },
+  {
+   "category": "inbox",
+   "description": "Promote a paired-but-unconfigured inbox device into the active device set. A device parked by delay_new_device_creation is materialised at the same time. Optional first-time configuration (name, include_channels, rooms, functions) is applied best-effort right after the accept; omit them to only accept.",
+   "name": "inbox.accept",
+   "args": {
+    "device_address": "string",
+    "name": "string?",
+    "include_channels": "boolean?",
+    "rooms": "array?",
+    "functions": "array?"
+   }
+  },
+  {
+   "category": "inbox",
+   "description": "List devices waiting for acceptance: those the CCU has seen in pairing mode and, when delay_new_device_creation is enabled, those this daemon parked (flagged pending_creation). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "inbox.list",
+   "args": {
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "install_mode",
+   "description": "Close the pairing window for the named interface. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "install_mode.disable",
+   "args": {
+    "interface_id": "string",
+    "central_name": "string?"
+   },
+   "result": {
+    "enabled": "boolean",
+    "interface_id": "string"
+   }
+  },
+  {
+   "category": "install_mode",
+   "description": "Scan the wired bus (BidCos-Wired) for new devices; returns the count found (they join the inbox for acceptance).",
+   "name": "install_mode.search",
+   "args": {
+    "interface_id": "string",
+    "central": "string?"
+   },
+   "result": {
+    "interface_id": "string",
+    "found": "integer"
+   }
+  },
+  {
+   "category": "install_mode",
+   "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "install_mode.enable",
+   "args": {
+    "interface_id": "string",
+    "duration_seconds": "integer",
+    "sgtin": "string?",
+    "key": "string?",
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "install_mode",
+   "description": "Report the current pairing-mode state per interface. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "install_mode.status",
+   "args": {
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "links",
+   "description": "Test a direct link at the device: trigger the receiver's LINK paramset for the sender (short or long keypress). Physically actuates the receiver.",
+   "name": "links.activate_paramset",
+   "args": {
+    "receiver_channel_address": "string",
+    "sender_channel_address": "string",
+    "long_press": "boolean"
+   }
+  },
+  {
+   "category": "links",
+   "description": "Create a new direct link between a sender and a receiver channel.",
+   "name": "links.add"
+  },
+  {
+   "category": "links",
+   "description": "Return the form schema (descriptions + current values) for a link paramset between sender and receiver. Mirrors Python ws_get_link_form_schema (websocket_api.py:1057).",
+   "name": "links.get_form_schema"
+  },
+  {
+   "category": "links",
+   "description": "Return available easymode profiles for a link between sender and receiver channel types. Mirrors Python ws_get_link_profiles (websocket_api.py:1123). Stub until Phase-11.",
+   "name": "links.get_profiles"
+  },
+  {
+   "category": "links",
+   "description": "Return the channels eligible to be linked against a given device.",
+   "name": "links.linkable_channels",
+   "args": {
+    "device_address": "string"
+   }
+  },
+  {
+   "category": "links",
+   "description": "Read the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_get_link_paramset (websocket_api.py:1313). Closes parity_audit gap G-03.",
+   "name": "links.get_paramset"
+  },
+  {
+   "category": "links",
+   "description": "List all direct links a device participates in.",
+   "name": "links.list",
+   "args": {
+    "device_address": "string"
+   }
+  },
+  {
+   "category": "links",
+   "description": "Global direct-link overview across all centrals (or one when 'central' is set). Each link carries its owning central_name and interface_id.",
+   "name": "links.list_all"
+  },
+  {
+   "category": "links",
+   "description": "Write values to the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_put_link_paramset (websocket_api.py:1387). Closes parity_audit gap G-04.",
+   "name": "links.put_paramset"
+  },
+  {
+   "category": "links",
+   "description": "Delete an existing direct link between a sender and a receiver channel.",
+   "name": "links.remove"
+  },
+  {
+   "category": "links",
+   "args": {
+    "sender": "string",
+    "receiver": "string",
+    "name": "string?",
+    "description": "string?"
+   },
+   "description": "Change the name and/or description of an existing direct link.",
+   "name": "links.set_info"
+  },
+  {
+   "category": "links",
+   "description": "Temporarily apply a link profile's default values to a link paramset for preview. Mirrors Python ws_test_link_profile (websocket_api.py:2643). Stub until Phase-11.",
+   "name": "links.test_profile"
+  },
+  {
+   "category": "master_profiles",
+   "description": "Apply a stored master profile to a channel by writing its fixed parameters. This is a MASTER paramset write and is gated behind the same per-resource edit lock as paramset.put: pass edit_token (issued by POST /sessions/edit with key channel:{channel_address}:MASTER) or the write is rejected with a 'locked' command error.",
+   "name": "master_profiles.apply",
+   "args": {
+    "device_type": "string",
+    "channel_type": "string",
+    "channel_address": "string",
+    "id": "integer",
+    "edit_token": "string"
+   },
+   "result": {
+    "applied": "integer",
+    "param_count": "integer"
+   }
+  },
+  {
+   "category": "master_profiles",
+   "description": "Return the full parameter set of a single master profile by device type and id.",
+   "name": "master_profiles.get"
+  },
+  {
+   "category": "master_profiles",
+   "description": "List available master profiles, optionally filtered by device type and channel type.",
+   "name": "master_profiles.list"
+  },
+  {
+   "category": "master_profiles",
+   "description": "Match observed parameter values against the master-profile constraint set and return the active profile ID (0 = Expert / no match).",
+   "name": "master_profiles.match"
+  },
+  {
+   "category": "paramsets",
+   "description": "Copy a paramset (VALUES or MASTER) from a source channel to a target channel by reading + writing the values. Distinct from links.copy (peer-to-peer link-entry copy). Mirrors Python ws_copy_paramset (websocket_api.py:916). Closes parity_audit gap L-7015.",
+   "name": "paramset.copy"
+  },
+  {
+   "category": "paramsets",
+   "description": "Return the parameter descriptors for a channel/paramset pair.",
+   "name": "paramset.description",
+   "args": {
+    "channel_address": "string",
+    "paramset_key": "string?",
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "paramsets",
+   "description": "Auto-detect a parameter value from the device via determine_parameter. Mirrors Python ws_determine_parameter (websocket_api.py:2556). Stub until Phase-11.",
+   "name": "paramset.determine"
+  },
+  {
+   "category": "paramsets",
+   "description": "Return the form schema (descriptions + grouping) for a channel paramset. Mirrors Python ws_get_form_schema (websocket_api.py:252). Closes parity_audit gap G-27.",
+   "name": "paramset.form_schema",
+   "args": {
+    "address": "string",
+    "channel_no": "integer",
+    "paramset": "string?",
+    "locale": "string?",
+    "peer": "string?"
+   }
+  },
+  {
+   "category": "paramsets",
+   "description": "Return the current values for a channel/paramset pair.",
+   "name": "paramset.get",
+   "args": {
+    "central_name": "string?",
+    "channel_address": "string",
+    "paramset_key": "string"
+   }
+  },
+  {
+   "category": "paramsets",
+   "description": "Write a paramset directly to the CCU without a session (non-transactional from a daemon-session perspective, but atomic on the wire: forwarded as one setParamsetValues XML-RPC call so the CCU applies all values together or none). Returns {written: N} on success. The CCU does not surface per-parameter status on this path — for that, use a config.session.* flow. MASTER and LINK writes are configuration changes gated behind the per-resource edit lock: pass edit_token (issued by POST /sessions/edit with key channel:{channel_address}:{paramset_key}) or the write is rejected with a 'locked' command error. VALUES writes are ungated.",
+   "name": "paramset.put",
+   "args": {
+    "channel_address": "string",
+    "paramset_key": "string",
+    "values": "object",
+    "edit_token": "string"
+   },
+   "result": {
+    "written": "integer"
+   }
+  },
+  {
+   "category": "programs",
+   "description": "Execute a CCU program by id. When `check_conditions` is true the CCU evaluates the program's \"if\" condition and runs the program only when it is satisfied; when false (the default) the program runs unconditionally. `executed` reports whether the program actually ran — always true for an unconditional run, false for a condition-checked run whose condition was not met. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "programs.execute",
+   "args": {
+    "id": "string",
+    "check_conditions": "boolean?",
+    "central_name": "string?"
+   },
+   "result": {
+    "id": "string",
+    "executed": "boolean"
+   }
+  },
+  {
+   "category": "programs",
+   "description": "Delete a CCU program by id. Removes the program from the CCU (dom.DeleteObject) and drops it from the hub mirror. Admin-gated, mirroring the REST DELETE /programs/{id} route (deletion is irreversible). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "programs.delete",
+   "args": {
+    "id": "string",
+    "central_name": "string?"
+   },
+   "result": {
+    "deleted": "boolean",
+    "id": "string"
+   }
+  },
+  {
+   "category": "programs",
+   "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card. `include_internal` overrides whether internal (Tmp_*) programs are listed; when omitted the central's include_internal_programs config default applies. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "programs.list",
+   "args": {
+    "include_internal": "boolean?",
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "recording",
+   "description": "Start the diagnostic RPC session recorder across all centrals (clears prior data). Mirrors Python record_session (start).",
+   "name": "recording.start",
+   "result": {
+    "recording": "boolean"
+   }
+  },
+  {
+   "category": "recording",
+   "description": "Report whether the diagnostic RPC session recorder is currently capturing.",
+   "name": "recording.status",
+   "result": {
+    "recording": "boolean"
+   }
+  },
+  {
+   "category": "recording",
+   "description": "Stop the diagnostic RPC session recorder across all centrals. Mirrors Python record_session (stop).",
+   "name": "recording.stop",
+   "result": {
+    "recording": "boolean"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "Select the active climate profile (P1..P6) on a thermostat channel.",
+   "name": "schedules.active_profile.set",
+   "args": {
+    "channel_address": "string",
+    "profile_index": "integer"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "Copy a single climate profile from a source channel/profile to a target channel/profile. Mirrors Python copy_schedule_profile.",
+   "name": "schedules.climate.copy_profile",
+   "args": {
+    "source_channel_address": "string",
+    "source_profile": "number",
+    "target_channel_address": "string",
+    "target_profile": "number"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "Read the active climate week-program for a thermostat channel.",
+   "name": "schedules.climate.get",
+   "args": {
+    "channel_address": "string"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "Write a climate week-program back to a thermostat channel.",
+   "name": "schedules.climate.set",
+   "args": {
+    "channel_address": "string",
+    "profile": "object"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "Copy the whole week schedule from a source device to a target device (channels auto-resolved). Mirrors Python copy_schedule.",
+   "name": "schedules.copy",
+   "args": {
+    "source_device_address": "string",
+    "target_device_address": "string"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "Select the active climate profile by name (e.g. P1..P6) on the resolved schedule channel of a device.",
+   "name": "schedules.device.active_profile.set",
+   "args": {
+    "device_address": "string",
+    "profile": "string"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "Read the unified schedule DTO for a device, resolving the correct channel automatically.",
+   "name": "schedules.device.get",
+   "args": {
+    "device_address": "string"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "Write a schedule back to the resolved schedule channel of a device.",
+   "name": "schedules.device.set",
+   "args": {
+    "device_address": "string",
+    "profile": "object"
+   }
+  },
+  {
+   "category": "schedules",
+   "description": "List all devices that expose a weekly schedule (week-profile data point). Mirrors Python ws_list_schedule_devices (websocket_api.py:1491).",
+   "name": "schedules.list_devices"
+  },
+  {
+   "category": "schedules",
+   "description": "Enable or disable the weekly program on a device. Mirrors Python ws_set_schedule_enabled (websocket_api.py:1698). Stub until Phase-11.",
+   "name": "schedules.set_enabled"
+  },
+  {
+   "category": "alarms",
+   "description": "Disable (permanently suppress) a single service message by id. Resolves the message's channel + service parameter and suppresses it on the CCU via Interface.suppressServiceMessages until cleared via service_messages.unsuppress.",
+   "name": "service_messages.disable"
+  },
+  {
+   "category": "alarms",
+   "description": "List the permanently-suppressed service-message channel parameters across every central. Reconciled against each CCU's live Interface.getSuppressedServiceMessages.",
+   "name": "service_messages.suppressed"
+  },
+  {
+   "category": "alarms",
+   "description": "Clear a permanent service-message suppression. Params: channel (required), parameter (empty = all parameters of the channel), interface (optional, resolved from the stored suppression).",
+   "name": "service_messages.unsuppress"
+  },
+  {
+   "category": "alarms",
+   "description": "Acknowledge (clear) a single service message by id. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "service_messages.ack",
+   "args": {
+    "id": "string",
+    "central_name": "string?"
+   },
+   "result": {
+    "acknowledged": "boolean",
+    "id": "string"
+   }
+  },
+  {
+   "category": "alarms",
+   "description": "Acknowledge (clear) every quittable service message in one pass. The response carries the number acknowledged. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "service_messages.ack_all",
+   "args": {
+    "central_name": "string?"
+   },
+   "result": {
+    "acknowledged": "integer"
+   }
+  },
+  {
+   "category": "alarms",
+   "description": "List all active CCU service messages (UNREACH, low-battery, config-pending, etc.). Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "service_messages.list",
+   "args": {
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "system",
+   "description": "Return the list of all registered WS command names (introspection endpoint).",
+   "name": "system.commands"
+  },
+  {
+   "category": "system",
+   "description": "Return a health snapshot including overall status, score, and per-component details.",
+   "name": "system.health"
+  },
+  {
+   "category": "system",
+   "description": "Server-pushed: an aggregated system-status transition (component health, callback state, degraded interfaces, …). Topic is scoped per central.",
+   "kind": "broadcast",
+   "name": "system.status_changed",
+   "topic": "system.{central}.status",
+   "payload": "SystemStatusChangedPayload"
+  },
+  {
+   "category": "system",
+   "description": "Return the effective role and permissions for the authenticated user. Mirrors Python ws_get_user_permissions (websocket_api.py:2727).",
+   "name": "system.user_permissions"
+  },
+  {
+   "category": "system",
+   "description": "Kick a release check of the CCU add-on self-updater (ADR 0057). Fire-and-forget: progress and outcome arrive on addon_update.state_changed. Unregistered (unknown command) on platforms without the self-update capability.",
+   "name": "addon_update.check"
+  },
+  {
+   "category": "system",
+   "description": "Start the verified download + firmware install of the latest CCU add-on release (ADR 0057). Fire-and-forget: the daemon restarts on success; failures surface on addon_update.state_changed. Unregistered on platforms without the self-update capability.",
+   "name": "addon_update.install"
+  },
+  {
+   "category": "system",
+   "description": "Server-pushed: the add-on self-updater changed state (check finished, download/install progressing, failure). Only emitted on platforms where self-update is supported.",
+   "kind": "broadcast",
+   "name": "addon_update.state_changed",
+   "topic": "system.addon_update",
+   "payload": "AddonUpdateStatus"
+  },
+  {
+   "category": "sysvars",
+   "description": "Force re-pull the CCU system-variable catalogue into the hub model. Optional central_name scopes the refresh to one CCU. Mirrors Python fetch_system_variables.",
+   "name": "sysvars.fetch",
+   "args": {
+    "central_name": "string"
+   }
+  },
+  {
+   "category": "sysvars",
+   "description": "List all CCU system variables. Each entry carries optional `channel` / `device_address` fields when the variable is associated with a device (explicit CCU channel assignment or a device identifier in the name); absent fields mean the entity belongs on the central hub card. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "sysvars.list",
+   "args": {
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "sysvars",
+   "description": "Update the value of a CCU system variable by name. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
+   "name": "sysvars.set",
+   "args": {
+    "name": "string",
+    "value": "any",
+    "central_name": "string?"
+   }
+  },
+  {
+   "category": "sysvars",
+   "description": "List the CCU programs that reference a system variable (native DPEnumUsagePrograms). Optional central_name disambiguates across CCUs.",
+   "name": "sysvars.usage",
+   "args": {
+    "name": "string",
+    "central_name": "string"
+   }
+  },
+  {
+   "category": "cdp",
+   "description": "List all custom data points of all devices (or a single device when 'device' param is supplied).",
+   "name": "cdp.list"
+  },
+  {
+   "category": "cdp",
+   "description": "Return a single custom data point by device address and name.",
+   "name": "cdp.get"
+  },
+  {
+   "category": "cdp",
+   "description": "Invoke an operation on a custom data point (turn_on, set_temperature, open, …).",
+   "name": "cdp.invoke"
+  },
+  {
+   "category": "calc_dp",
+   "description": "List all calculated data points for all devices (or a single device / channel when params supplied).",
+   "name": "calc_dp.list"
+  },
+  {
+   "category": "calc_dp",
+   "description": "Return a single calculated data point by device address, channel number, and name.",
+   "name": "calc_dp.get"
+  },
+  {
+   "category": "matter",
+   "description": "Server-pushed: an allowlist row was inserted, updated or deleted via /api/v1/matter/exposable. A bulk write emits one frame per affected row.",
+   "kind": "broadcast",
+   "name": "matter.exposable_changed",
+   "topic": "matter.exposable_changed",
+   "payload": "MatterExposureUpdate"
+  },
+  {
+   "category": "matter",
+   "description": "Server-pushed: a Matter commissioning window opened (REST or cluster command). The pairing credential is redacted from the broadcast — `passcode`, `qr_code` and `manual_code` are empty, because the WS event plane has no role filter. Read them from the admin-gated POST /api/v1/matter/commissioning/window response.",
+   "kind": "broadcast",
+   "name": "matter.commissioning_window_opened",
+   "topic": "matter.commissioning_window_opened",
+   "payload": "MatterCommissioningWindowResponse"
+  },
+  {
+   "category": "matter",
+   "description": "Server-pushed: commissioning state transition (PASE / CASE / AddNOC / completion).",
+   "kind": "broadcast",
+   "name": "matter.commissioning_progress",
+   "topic": "matter.commissioning_progress",
+   "payload": "MatterCommissioningProgressPayload"
+  },
+  {
+   "category": "matter",
+   "description": "Server-pushed: a Matter fabric finished commissioning (post-AddNOC, first CASE pickup).",
+   "kind": "broadcast",
+   "name": "matter.fabric_added",
+   "topic": "matter.fabric_added",
+   "payload": "MatterFabric"
+  },
+  {
+   "category": "matter",
+   "description": "Server-pushed: a Matter fabric was revoked via /api/v1/matter/fabrics/{id}.",
+   "kind": "broadcast",
+   "name": "matter.fabric_removed",
+   "topic": "matter.fabric_removed",
+   "payload": "MatterFabricRemovedPayload"
+  },
+  {
+   "category": "matter",
+   "description": "Server-pushed: bridge endpoint topology was reassembled. Payload includes the new endpoint count.",
+   "kind": "broadcast",
+   "name": "matter.endpoint_assembled",
+   "topic": "matter.endpoint_assembled",
+   "payload": "MatterEndpointAssembledPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Arm an alarm zone. May return synchronously as `armed`, or `arming` while counting down the mode's exit delay.",
+   "name": "alarm_panel.arm",
+   "args": {
+    "zone_id": "string",
+    "mode": "string",
+    "force": "boolean?",
+    "skip_delay": "boolean?",
+    "bypass": "array?",
+    "code": "string?"
+   },
+   "result": {
+    "state": "string",
+    "bypassed": "array?",
+    "exit_delay_s": "integer?"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Disarm an alarm zone.",
+   "name": "alarm_panel.disarm",
+   "args": {
+    "zone_id": "string",
+    "code": "string?"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Silence the active incident on an alarm zone without disarming.",
+   "name": "alarm_panel.silence",
+   "args": {
+    "zone_id": "string",
+    "code": "string?"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Silence the active incident on every alarm zone at once.",
+   "name": "alarm_panel.silence_all"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Acknowledge (clear) a finished incident on an alarm zone.",
+   "name": "alarm_panel.acknowledge",
+   "args": {
+    "zone_id": "string",
+    "code": "string?"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Return the live status of every alarm zone: state, mode, bypassed sensors, active incident, running countdown, per-mode readiness, and walk-test-active flag.",
+   "name": "alarm_panel.state"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Return the per-mode arm-readiness of an alarm zone.",
+   "name": "alarm_panel.readiness",
+   "args": {
+    "zone_id": "string"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Query the alarm engine's event journal, newest first.",
+   "name": "alarm_panel.journal",
+   "args": {
+    "zone_id": "string?",
+    "class": "string?",
+    "from": "string?",
+    "to": "string?",
+    "limit": "integer?"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Return the live status of a walk-test session on an alarm zone.",
+   "name": "alarm_panel.walktest_status",
+   "args": {
+    "zone_id": "string"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "List the alarm-control-panel entity projections (HA-state view incl. the master panel).",
+   "name": "alarm_panel.panels"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "List alarm codes (operator). Codes are security material, so even the list is operator-gated; the argon2id hash and cleartext PIN are never returned.",
+   "name": "alarm_panel.codes_list",
+   "result": {
+    "codes": "array"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Create an alarm code (operator). The cleartext PIN is write-only and hashed before persistence.",
+   "name": "alarm_panel.codes_create",
+   "args": {
+    "code": "object"
+   },
+   "result": {
+    "id": "string",
+    "name": "string",
+    "kind": "string",
+    "duress": "boolean?",
+    "perms": "object",
+    "zones": "array?",
+    "binding": "object?",
+    "valid_from_ms": "integer?",
+    "valid_until_ms": "integer?",
+    "enabled": "boolean",
+    "created_ms": "integer?",
+    "updated_ms": "integer?"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Replace an alarm code (operator). An empty PIN keeps the stored hash.",
+   "name": "alarm_panel.codes_update",
+   "args": {
+    "id": "string",
+    "code": "object"
+   },
+   "result": {
+    "id": "string",
+    "name": "string",
+    "kind": "string",
+    "duress": "boolean?",
+    "perms": "object",
+    "zones": "array?",
+    "binding": "object?",
+    "valid_from_ms": "integer?",
+    "valid_until_ms": "integer?",
+    "enabled": "boolean",
+    "created_ms": "integer?",
+    "updated_ms": "integer?"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Delete an alarm code (operator).",
+   "name": "alarm_panel.codes_delete",
+   "args": {
+    "id": "string"
+   },
+   "result": {
+    "deleted": "boolean",
+    "id": "string"
+   }
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: an alarm zone's arm-state-machine transitioned (docs/alarm-concept.md §5).",
+   "kind": "broadcast",
+   "name": "alarm.state_changed",
+   "topic": "alarm.panel",
+   "payload": "AlarmStateChangedPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: a running exit/entry delay on an alarm zone ticked (once per second).",
+   "kind": "broadcast",
+   "name": "alarm.countdown",
+   "topic": "alarm.panel",
+   "payload": "AlarmCountdownPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: an alarm zone's per-mode arm-readiness was recomputed (docs/alarm-concept.md §6.3). Carries the full per-mode map, not a delta.",
+   "kind": "broadcast",
+   "name": "alarm.readiness_changed",
+   "topic": "alarm.panel",
+   "payload": "AlarmReadinessChangedPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: an alarm zone entered `triggered` and an incident was opened (or re-adopted after a restart / reconnect).",
+   "kind": "broadcast",
+   "name": "alarm.triggered",
+   "topic": "alarm.panel",
+   "payload": "AlarmTriggeredPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: one enrolled notification output fired for an alarm — a deliberate, per-zone, mode-filtered notification signal (one-shot at fire time, never cancelled by a later silence).",
+   "kind": "broadcast",
+   "name": "alarm.notification",
+   "topic": "alarm.panel",
+   "payload": "AlarmNotificationPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: a new entry was appended to the alarm engine's event journal. Payload carries the entry head; clients needing full detail call GET /alarm/journal.",
+   "kind": "broadcast",
+   "name": "alarm.journal_appended",
+   "topic": "alarm.panel",
+   "payload": "AlarmJournalAppendedPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: a walk-test session on an alarm zone recorded a sensor activation.",
+   "kind": "broadcast",
+   "name": "alarm.walktest_progress",
+   "topic": "alarm.panel",
+   "payload": "AlarmWalkTestProgressPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: the alarm subsystem's health verdict changed (siren stop-verification, service degradations).",
+   "kind": "broadcast",
+   "name": "alarm.health_changed",
+   "topic": "alarm.panel",
+   "payload": "AlarmHealthChangedPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Alarm-control-panel entity projection changed (state, availability, code policy, identity, or removal).",
+   "kind": "broadcast",
+   "name": "alarm.panel_changed",
+   "topic": "alarm.panel",
+   "payload": "AlarmPanelChangedPayload"
+  },
+  {
+   "category": "alarm_panel",
+   "description": "Server-pushed: an arm schedule elapsed with auto-arm off while the zone was not in the scheduled mode, so the engine notifies rather than arming (docs/alarm-concept.md §15 row 19).",
+   "kind": "broadcast",
+   "name": "alarm.reminder",
+   "topic": "alarm.panel",
+   "payload": "AlarmReminderPayload"
+  },
+  {
+   "category": "security",
+   "description": "Server-pushed: the folded severity of the Security & Safety domain changed. Carries the fold only; read GET /security for the detail.",
+   "kind": "broadcast",
+   "name": "security.state_changed",
+   "topic": "security.state",
+   "payload": "SecurityStateChangedPayload"
+  },
+  {
+   "category": "security",
+   "description": "Server-pushed: one hazard or fault class went active or inactive, or its source set changed while it stayed active.",
+   "kind": "broadcast",
+   "name": "security.class_changed",
+   "topic": "security.state",
+   "payload": "SecurityClassChangedPayload"
+  },
+  {
+   "category": "security",
+   "description": "Server-pushed: one alarm zone's security view changed. Never fires on an installation without an alarm engine, where the domain still reports classes and faults.",
+   "kind": "broadcast",
+   "name": "security.zone_changed",
+   "topic": "security.state",
+   "payload": "SecurityZoneChangedPayload"
+  },
+  {
+   "category": "security",
+   "description": "Server-pushed: a fault opened, cleared or was acknowledged. Carries the standing fault count after the change.",
+   "kind": "broadcast",
+   "name": "security.fault_changed",
+   "topic": "security.faults",
+   "payload": "SecurityFaultChangedPayload"
+  },
+  {
+   "category": "security",
+   "description": "Server-pushed: one rendered report, with prose plus the i18n key and args to re-render it. A covert report (duress code, silent panic) rides this broadcast only under alarm.duress_visibility: full — the WebSocket is a local screen surface.",
+   "kind": "broadcast",
+   "name": "security.notification",
+   "topic": "security.notifications",
+   "payload": "SecurityNotificationPayload"
+  }
+ ]
 }

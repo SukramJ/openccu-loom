@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -449,48 +450,120 @@ type bootRetainCleanups struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	mu   sync.Mutex
+	mu sync.Mutex
+	// done latches only once both scrubs have actually been attempted (each
+	// either succeeded or failed for a reason other than a busy snapshot
+	// slot). A slot-busy return means "not attempted", so it must NOT latch
+	// done — otherwise the scrub is skipped for the rest of the process life.
 	done bool
+	// running excludes a second, concurrent attempt. run is called from the
+	// boot wiring and from every broker (re)connect, which can overlap; two
+	// attempts would contend for the bridge's single snapshot slot and turn
+	// one of them into a spurious busy return.
+	running bool
 }
+
+// retainScrubber is the subset of the MQTT bridge the boot-time retained
+// scrubs depend on. Narrowed to a local interface so the once-guard's
+// retry-on-busy behaviour can be exercised without a live broker.
+// [*mqtt.Bridge] satisfies it.
+type retainScrubber interface {
+	RunRetainCleanupOnce(ctx context.Context, snapshotWindow time.Duration) (int, error)
+	RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWindow time.Duration) (int, error)
+}
+
+// retainCleanupBudgetSlack is added to the configured snapshot window to size
+// each scrub's context budget. It has to cover the scrub's own teardown plus a
+// generous allowance to WAIT for the bridge's snapshot slot when another sweep
+// (a concurrent (re)connect pass, a per-central orphan sweep) holds it — so a
+// momentarily busy slot is waited out rather than surfaced as
+// [mqtt.ErrSweepSlotBusy] on every attempt. It is comfortably larger than the
+// former flat 8s margin, which had to cover the wait and the teardown at once
+// and could not. When the wait still exceeds this the once-guard is left
+// unlatched and the next (re)connect retries.
+const retainCleanupBudgetSlack = 25 * time.Second
 
 // newBootRetainCleanups returns the once-guard for the two boot-time scrubs.
 func newBootRetainCleanups(cfg *config.Config, logger *slog.Logger) *bootRetainCleanups {
 	return &bootRetainCleanups{cfg: cfg, logger: logger}
 }
 
-// run performs both scrubs against bridge, unless a previous call already did
-// or bridge is nil (no broker link yet — a later caller will bring one).
+// completed reports whether both scrubs have run to completion (the once-guard
+// has latched). Read under the lock so it never straddles a concurrent attempt.
+func (c *bootRetainCleanups) completed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.done
+}
+
+// run performs both scrubs against bridge, unless a previous call already
+// completed them or bridge is nil (no broker link yet — a later caller will
+// bring one).
 func (c *bootRetainCleanups) run(ctx context.Context, bridge *mqtt.Bridge) {
+	// bridge is kept a concrete *mqtt.Bridge here so the nil check is a real
+	// pointer comparison; a nil bridge boxed into retainScrubber would be a
+	// non-nil interface and slip past it.
 	if c == nil || bridge == nil {
 		return
 	}
+	c.runScrub(ctx, bridge)
+}
+
+// runScrub is the testable core: it serialises attempts, runs both scrubs, and
+// latches the once-guard only when neither scrub was skipped for a busy slot.
+func (c *bootRetainCleanups) runScrub(ctx context.Context, s retainScrubber) {
 	c.mu.Lock()
-	if c.done {
+	if c.done || c.running {
 		c.mu.Unlock()
 		return
 	}
-	c.done = true
+	c.running = true
 	c.mu.Unlock()
 
-	window := c.cfg.North.MQTT.EffectiveRetainCleanupWindow()
+	busy := c.scrub(ctx, s)
 
-	cleanupCtx, cleanupCancel := context.WithTimeout(ctx, window+8*time.Second)
-	n, cleanupErr := bridge.RunRetainCleanupOnce(cleanupCtx, window)
+	c.mu.Lock()
+	c.running = false
+	if !busy {
+		// Both passes were attempted (a non-busy error still counts — it was
+		// tried and reported). Latch so no later (re)connect repeats them.
+		c.done = true
+	}
+	c.mu.Unlock()
+}
+
+// scrub runs both retained-store passes and reports whether either was skipped
+// because the bridge's snapshot slot stayed busy for the whole budget
+// ([mqtt.ErrSweepSlotBusy]) — the signal [runScrub] uses to leave the
+// once-guard unlatched so a later (re)connect retries.
+func (c *bootRetainCleanups) scrub(ctx context.Context, s retainScrubber) (busy bool) {
+	window := c.cfg.North.MQTT.EffectiveRetainCleanupWindow()
+	budget := window + retainCleanupBudgetSlack
+
+	cleanupCtx, cleanupCancel := context.WithTimeout(ctx, budget)
+	n, cleanupErr := s.RunRetainCleanupOnce(cleanupCtx, window)
 	cleanupCancel()
+	if errors.Is(cleanupErr, mqtt.ErrSweepSlotBusy) {
+		busy = true
+	}
 	if cleanupErr != nil {
 		c.logger.Warn("mqtt.retain_cleanup", slog.String("err", cleanupErr.Error()))
 	} else if n > 0 {
 		c.logger.Info("mqtt.retain_cleanup", slog.Int("evicted", n))
 	}
 
-	unscopedCtx, unscopedCancel := context.WithTimeout(ctx, window+8*time.Second)
-	cleared, unscopedErr := bridge.RunUnscopedDiscoveryCleanupOnce(unscopedCtx, window)
+	unscopedCtx, unscopedCancel := context.WithTimeout(ctx, budget)
+	cleared, unscopedErr := s.RunUnscopedDiscoveryCleanupOnce(unscopedCtx, window)
 	unscopedCancel()
+	if errors.Is(unscopedErr, mqtt.ErrSweepSlotBusy) {
+		busy = true
+	}
 	if unscopedErr != nil {
 		c.logger.Warn("mqtt.unscoped_discovery_cleanup", slog.String("err", unscopedErr.Error()))
 	} else if cleared > 0 {
 		c.logger.Info("mqtt.unscoped_discovery_cleanup", slog.Int("cleared", cleared))
 	}
+	return busy
 }
 
 // wireRetainedOrphanSweeps installs the EventBridge post-snapshot hook that

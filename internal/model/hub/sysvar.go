@@ -134,7 +134,7 @@ func (s *Sysvar) registerSysvarServices() {
 		if !ok {
 			return fmt.Errorf("%w: %q", payload.ErrServiceMissingParam, "value")
 		}
-		pv, err := sysvarParamValue(s.ValueType, raw)
+		pv, err := sysvarParamValue(s.Meta().ValueType, raw)
 		if err != nil {
 			return err
 		}
@@ -311,7 +311,12 @@ func (s *Sysvar) TranslationKey() string { return "sysvar" }
 // the correct wrapper type.
 //
 // Mirrors the Python reference hub/sysvar.py — is_extended property.
+//
+// IsExtended is rewritten in place by [ApplyMeta] on every hub scan, so it is
+// read under the sysvar lock rather than off the field.
 func (s *Sysvar) Extended() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.IsExtended
 }
 
@@ -334,6 +339,95 @@ func (s *Sysvar) SetInternal(internal bool) {
 	s.mu.Lock()
 	s.IsInternal = internal
 	s.mu.Unlock()
+}
+
+// SysvarMeta is a point-in-time copy of a sysvar's mutable CCU-side
+// descriptor. The hub scan rewrites every one of these fields in place on
+// each refresh (see the adapter's upsertSysvar), while north-bound readers —
+// the REST /sysvars summary, the MQTT discovery fan-out, the payload
+// projections — walk the same live objects from other goroutines. A string
+// or slice-header field read without synchronisation against that rewrite is
+// a torn read. Readers therefore take one whole-descriptor snapshot through
+// [Sysvar.Meta] and the refresh writes the whole descriptor through
+// [Sysvar.ApplyMeta]; both hold s.mu, so a reader never observes a half-
+// updated descriptor.
+//
+// ValueList / Min / Max are shared by reference rather than deep-copied: the
+// refresh replaces each wholesale (a fresh slice, a freshly allocated bound)
+// and never mutates the backing array or pointee in place, so a reader that
+// captured the header under the lock holds an immutable snapshot.
+type SysvarMeta struct {
+	Unit           string
+	ValueType      hmenum.HubValueType
+	ValueList      []string
+	Description    string
+	EnabledDefault bool
+	IsExtended     bool
+	IsVisible      bool
+	IsLogged       bool
+	ValueName0     string
+	ValueName1     string
+	Min            *hmtypes.ParamValue
+	Max            *hmtypes.ParamValue
+	Vid            int
+}
+
+// Meta returns a consistent snapshot of the sysvar's mutable metadata, read
+// under the sysvar lock so it cannot straddle a concurrent [Sysvar.ApplyMeta]
+// from the hub refresh.
+func (s *Sysvar) Meta() SysvarMeta {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return SysvarMeta{
+		Unit:           s.Unit,
+		ValueType:      s.ValueType,
+		ValueList:      s.ValueList,
+		Description:    s.Description,
+		EnabledDefault: s.EnabledDefault,
+		IsExtended:     s.IsExtended,
+		IsVisible:      s.IsVisible,
+		IsLogged:       s.IsLogged,
+		ValueName0:     s.ValueName0,
+		ValueName1:     s.ValueName1,
+		Min:            s.Min,
+		Max:            s.Max,
+		Vid:            s.Vid,
+	}
+}
+
+// ApplyMeta rewrites the sysvar's mutable metadata as one guarded update.
+// The hub refresh routes every in-place descriptor assignment through here so
+// the write lands on the same lock [Sysvar.Meta] reads under. Writer,
+// internal, explicit-channel and value updates keep their own dedicated
+// guarded setters ([SetWriter], [SetInternal], [SetExplicitChannel],
+// [OnValue]) and are not part of this snapshot.
+func (s *Sysvar) ApplyMeta(m SysvarMeta) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Unit = m.Unit
+	s.ValueType = m.ValueType
+	s.ValueList = m.ValueList
+	s.Description = m.Description
+	s.EnabledDefault = m.EnabledDefault
+	s.IsExtended = m.IsExtended
+	s.IsVisible = m.IsVisible
+	s.IsLogged = m.IsLogged
+	s.ValueName0 = m.ValueName0
+	s.ValueName1 = m.ValueName1
+	s.Min = m.Min
+	s.Max = m.Max
+	s.Vid = m.Vid
+}
+
+// EnabledByDefault shadows the promoted [HubDataPoint.EnabledByDefault] so the
+// EnabledDefault field — which the hub refresh rewrites through [ApplyMeta]
+// under s.mu — is read under the same lock. The forced-usage delegation is
+// preserved; ForcedUsage takes the separate BaseDataPointFields lock, so there
+// is no re-entrancy against s.mu.
+func (s *Sysvar) EnabledByDefault() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.HubDataPoint.EnabledByDefault()
 }
 
 // Value returns the effective sysvar value. When an unconfirmed (optimistic)
@@ -554,12 +648,15 @@ func (s *Sysvar) NotifyRemoved() {
 }
 
 // PathData returns the set/state routing paths for this sysvar keyed by its
-// numeric Vid.
+// numeric Vid. Vid is rewritten in place by [ApplyMeta] on every hub scan
+// while the query facade lists state paths, so it is read through the guarded
+// snapshot rather than off the field.
 func (s *Sysvar) PathData() naming.PathData {
-	if s.Vid == 0 {
+	vid := s.Meta().Vid
+	if vid == 0 {
 		return naming.EmptyPathData
 	}
-	return naming.NewSysvarPathData(strconv.Itoa(s.Vid))
+	return naming.NewSysvarPathData(strconv.Itoa(vid))
 }
 
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical
@@ -606,10 +703,15 @@ func (s *Sysvar) toWire(v hmtypes.ParamValue) (any, error) {
 	if v.Kind == hmtypes.ValueKindNone {
 		return nil, fmt.Errorf("sysvar %q: cannot write NoneValue", s.Name)
 	}
-	switch s.ValueType { //nolint:exhaustive // unknown/absent descriptor types fall through to the kind passthrough
+	// One snapshot of the declared type and value list for the whole call: the
+	// hub scan rewrites both in place through [ApplyMeta] while a command is in
+	// flight, so reading them field-by-field could pick the type from one
+	// refresh and the list from the next.
+	m := s.Meta()
+	switch m.ValueType { //nolint:exhaustive // unknown/absent descriptor types fall through to the kind passthrough
 	case hmenum.HubValueTypeList:
-		if len(s.ValueList) > 0 {
-			if idx, ok := s.resolveListIndex(v); ok {
+		if len(m.ValueList) > 0 {
+			if idx, ok := resolveListIndex(v, m.ValueList); ok {
 				return idx, nil
 			}
 			return nil, fmt.Errorf("sysvar %q: value %s not in value list", s.Name, v.AsString())
@@ -729,15 +831,15 @@ func (s *Sysvar) stringToWire(v hmtypes.ParamValue) (any, error) {
 	return nil, fmt.Errorf("sysvar %q: value kind %s cannot write a string sysvar", s.Name, v.Kind)
 }
 
-// resolveListIndex maps a write-side value onto a zero-based index
-// into [Sysvar.ValueList]. Accepts integer indices directly and
-// looks up string labels case-sensitively. Returns (idx, true) on a
-// valid match; (0, false) otherwise (caller emits a descriptive
-// error). Float values coerce to int.
-func (s *Sysvar) resolveListIndex(v hmtypes.ParamValue) (int, bool) {
+// resolveListIndex maps a write-side value onto a zero-based index into
+// valueList (a snapshot of [Sysvar.ValueList] captured under the lock).
+// Accepts integer indices directly and looks up string labels
+// case-sensitively. Returns (idx, true) on a valid match; (0, false)
+// otherwise (caller emits a descriptive error). Float values coerce to int.
+func resolveListIndex(v hmtypes.ParamValue, valueList []string) (int, bool) {
 	switch v.Kind {
 	case hmtypes.ValueKindInt:
-		if v.Int >= 0 && v.Int < len(s.ValueList) {
+		if v.Int >= 0 && v.Int < len(valueList) {
 			return v.Int, true
 		}
 	case hmtypes.ValueKindFloat:
@@ -751,11 +853,11 @@ func (s *Sysvar) resolveListIndex(v hmtypes.ParamValue) (int, bool) {
 			return 0, false
 		}
 		idx := int(v.Float)
-		if idx >= 0 && idx < len(s.ValueList) {
+		if idx >= 0 && idx < len(valueList) {
 			return idx, true
 		}
 	case hmtypes.ValueKindString:
-		for i, label := range s.ValueList {
+		for i, label := range valueList {
 			if label == v.String {
 				return i, true
 			}

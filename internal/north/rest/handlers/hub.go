@@ -1007,22 +1007,26 @@ func PutSysvar(idx HubIndex) http.HandlerFunc {
 
 func toSysvarSummary(s *hub.Sysvar, serialSuffix string) SysvarSummary {
 	v, ok := s.Value()
+	// One guarded snapshot of the mutable descriptor: the hub scan rewrites
+	// these fields in place through Sysvar.ApplyMeta while this handler serves
+	// a request on another goroutine.
+	m := s.Meta()
 	sum := SysvarSummary{
 		Central:        s.Central(),
 		UniqueID:       s.CanonicalUniqueID(serialSuffix),
 		Name:           s.LegacyName(),
-		Description:    s.Description,
-		Unit:           s.Unit,
-		ValueType:      string(s.ValueType),
+		Description:    m.Description,
+		Unit:           m.Unit,
+		ValueType:      string(m.ValueType),
 		Observed:       ok,
-		ValueList:      s.ValueList,
+		ValueList:      m.ValueList,
 		IsInternal:     s.Internal(),
-		IsVisible:      s.IsVisible,
-		IsLogged:       s.IsLogged,
-		ValueName0:     s.ValueName0,
-		ValueName1:     s.ValueName1,
-		IsExtended:     s.IsExtended,
-		Vid:            s.Vid,
+		IsVisible:      m.IsVisible,
+		IsLogged:       m.IsLogged,
+		ValueName0:     m.ValueName0,
+		ValueName1:     m.ValueName1,
+		IsExtended:     m.IsExtended,
+		Vid:            m.Vid,
 		EnabledDefault: s.EnabledByDefault(),
 		Channel:        s.Channel(),
 		DeviceAddress:  s.DeviceAddress(),
@@ -1030,13 +1034,13 @@ func toSysvarSummary(s *hub.Sysvar, serialSuffix string) SysvarSummary {
 	if ok {
 		sum.Value = v.Unwrap()
 	}
-	// H-033: expose declared bounds when the CCU provided them.
-	if s.Min != nil {
-		f := s.Min.Float
+	// Expose declared bounds when the CCU provided them.
+	if m.Min != nil {
+		f := m.Min.Float
 		sum.Min = &f
 	}
-	if s.Max != nil {
-		f := s.Max.Float
+	if m.Max != nil {
+		f := m.Max.Float
 		sum.Max = &f
 	}
 	return sum

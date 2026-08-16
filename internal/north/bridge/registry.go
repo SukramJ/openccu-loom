@@ -152,6 +152,12 @@ func (r *Registry) stopStarted(ctx context.Context) {
 // HealthReporter. ok is false if any reporter is unhealthy; detail then names
 // the unhealthy Services and their reasons. Services that do not implement
 // HealthReporter are treated as healthy.
+//
+// A HealthReporter's detail is carried ONLY when it reports unhealthy: a
+// healthy reporter's own detail (e.g. a webhook's dropped/failed counters) is
+// intentionally not surfaced here — this aggregate is a red/green liveness
+// summary, not a metrics channel. Reporters that want their healthy counters
+// observed expose them directly (Outbound.Dropped/Failed) or through the log.
 func (r *Registry) Health() (ok bool, detail string) {
 	r.mu.Lock()
 	svcs := make([]Service, len(r.entries))

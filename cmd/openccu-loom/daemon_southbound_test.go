@@ -5,7 +5,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -125,6 +127,85 @@ func TestBootRetainCleanupsRunOnTheFirstLiveBridge(t *testing.T) {
 	cleanups.run(ctx, bridge)
 	if got := len(client.Published()); got != before {
 		t.Errorf("a second run published %d more messages, want 0: the scrubs are once-per-process", got-before)
+	}
+}
+
+// fakeRetainScrubber stands in for the MQTT bridge so the busy-slot retry
+// behaviour can be driven without a live broker. While busy is true both
+// passes abort with [mqtt.ErrSweepSlotBusy] — the "not attempted" signal.
+type fakeRetainScrubber struct {
+	mu            sync.Mutex
+	busy          bool
+	retainCalls   int
+	unscopedCalls int
+}
+
+func (f *fakeRetainScrubber) RunRetainCleanupOnce(_ context.Context, _ time.Duration) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.retainCalls++
+	if f.busy {
+		return 0, fmt.Errorf("boot scrub aborted: %w", mqtt.ErrSweepSlotBusy)
+	}
+	return 0, nil
+}
+
+func (f *fakeRetainScrubber) RunUnscopedDiscoveryCleanupOnce(_ context.Context, _ time.Duration) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.unscopedCalls++
+	if f.busy {
+		return 0, fmt.Errorf("boot scrub aborted: %w", mqtt.ErrSweepSlotBusy)
+	}
+	return 0, nil
+}
+
+func (f *fakeRetainScrubber) calls() (retain, unscoped int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.retainCalls, f.unscopedCalls
+}
+
+// TestBootRetainCleanupsRetryAfterBusySlot pins the once-guard's retry
+// contract: an attempt aborted by a busy snapshot slot ([mqtt.ErrSweepSlotBusy])
+// means "not attempted", so it must leave the guard UNLATCHED for the next
+// (re)connect to retry. Latching on busy — as the code did before — skipped the
+// scrub for the rest of the process life. Once both passes are actually
+// attempted the guard latches and never repeats.
+func TestBootRetainCleanupsRetryAfterBusySlot(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	cfg := config.Default()
+	cfg.North.MQTT.RetainCleanupWindowMs = 500
+	cleanups := newBootRetainCleanups(cfg, slog.New(slog.DiscardHandler))
+
+	scrubber := &fakeRetainScrubber{busy: true}
+
+	// First attempt: the slot stays busy for the whole budget, both passes abort.
+	cleanups.runScrub(ctx, scrubber)
+	if latched := cleanups.completed(); latched {
+		t.Fatal("done latched after a busy-slot attempt; the scrub would never retry")
+	}
+	if retain, _ := scrubber.calls(); retain == 0 {
+		t.Fatal("the busy attempt never called the retain scrub")
+	}
+
+	// The slot frees up; a later (re)connect calls run again and both passes are
+	// attempted, so the guard latches this time.
+	scrubber.busy = false
+	cleanups.runScrub(ctx, scrubber)
+	if latched := cleanups.completed(); !latched {
+		t.Fatal("done did not latch after both scrubs were attempted")
+	}
+
+	// A third call is a no-op: once both passes ran they never repeat.
+	retainBefore, unscopedBefore := scrubber.calls()
+	cleanups.runScrub(ctx, scrubber)
+	retainAfter, unscopedAfter := scrubber.calls()
+	if retainAfter != retainBefore || unscopedAfter != unscopedBefore {
+		t.Errorf("a third run re-invoked the scrubs (retain %d→%d, unscoped %d→%d); they are once-per-process",
+			retainBefore, retainAfter, unscopedBefore, unscopedAfter)
 	}
 }
 

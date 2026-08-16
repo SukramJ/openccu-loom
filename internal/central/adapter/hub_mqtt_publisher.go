@@ -673,20 +673,26 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 // including the current device link (DeviceAddress). Shared by wireOneSysvar
 // and republishHubEntityDiscovery so both build an identical payload.
 func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
+	// One guarded snapshot of the mutable descriptor: the hub scan rewrites
+	// these fields in place through Sysvar.ApplyMeta while this fan-out runs on
+	// the bus-dispatch / model-mutation goroutines.
+	m := sv.Meta()
 	return mqtt.HubSysvarSpec{
 		// The name is mutable — a CCU-side rename rewrites it under the data
 		// point's own lock — so it is read through the accessor, never off
 		// the field.
-		Name:           sv.LegacyName(),
-		Description:    sv.Description,
-		Unit:           sv.Unit,
-		ValueList:      sv.ValueList,
-		ValueType:      sv.ValueType,
-		Writable:       sv.Writer != nil,
-		IsExtended:     sv.IsExtended,
+		Name:        sv.LegacyName(),
+		Description: m.Description,
+		Unit:        m.Unit,
+		ValueList:   m.ValueList,
+		ValueType:   m.ValueType,
+		// Writer is swapped in place by the refresh; Writable takes the lock
+		// that swap uses, so a torn interface-header read cannot mis-report it.
+		Writable:       sv.Writable(),
+		IsExtended:     m.IsExtended,
 		EnabledDefault: sv.EnabledByDefault(),
-		Min:            paramValueAsFloat(sv.Min),
-		Max:            paramValueAsFloat(sv.Max),
+		Min:            paramValueAsFloat(m.Min),
+		Max:            paramValueAsFloat(m.Max),
 		DeviceAddress:  sv.DeviceAddress(),
 	}
 }
@@ -773,7 +779,13 @@ func paramValueAsFloat(pv *hmtypes.ParamValue) *float64 {
 // indices fall back to the raw value so HA still surfaces something
 // rather than dropping the update silently.
 func sysvarStateForMQTT(sv *hub.Sysvar, raw any) any {
-	if sv == nil || len(sv.ValueList) == 0 {
+	if sv == nil {
+		return raw
+	}
+	// Snapshot the value list under the lock: the hub scan replaces it in place
+	// through Sysvar.ApplyMeta while this publish runs on the fan-out worker.
+	valueList := sv.Meta().ValueList
+	if len(valueList) == 0 {
 		return raw
 	}
 	var idx int
@@ -787,10 +799,10 @@ func sysvarStateForMQTT(sv *hub.Sysvar, raw any) any {
 	default:
 		return raw
 	}
-	if idx < 0 || idx >= len(sv.ValueList) {
+	if idx < 0 || idx >= len(valueList) {
 		return raw
 	}
-	return sv.ValueList[idx]
+	return valueList[idx]
 }
 
 // publishProgramExecuteAvailability reports each declared role's usability

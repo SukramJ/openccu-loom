@@ -1161,34 +1161,48 @@ func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubS
 	if !ok {
 		existing = hub.NewSysvar(h.CentralName, v.Name, desc, valueType, writer)
 	}
-	existing.Unit = v.Unit
-	existing.ValueType = valueType
-	existing.ValueList = valueList
-	// Through the setter, not the field: this refresh replaces the writer
-	// while commands from the north-bound planes are in flight, and the
-	// setter is what puts that replacement on the lock the command path
-	// reads it under.
+	// The numeric Vid is preserved when a refresh reports an unparseable ID —
+	// only a successful parse overwrites it — matching the pre-snapshot
+	// behaviour where the assignment was guarded by the Atoi success check.
+	vid := 0
+	if parsed, err := strconv.Atoi(v.ID); err == nil {
+		vid = parsed
+	} else if ok {
+		vid = existing.Meta().Vid
+	}
+	// All mutable metadata is written as one guarded update. The refresh
+	// rewrites these fields in place on every pass while north-bound readers
+	// (REST /sysvars, MQTT discovery, payload projections) walk the same live
+	// objects on other goroutines; ApplyMeta puts the write on the lock those
+	// readers snapshot under via Sysvar.Meta. The declared range in particular
+	// is what the north-bound planes advertise (HA gets a min/max on the number
+	// entity) and what the model's range check validates a write against; left
+	// unset, discovery falls back to the full float range and the check can
+	// never fire.
+	existing.ApplyMeta(hub.SysvarMeta{
+		Unit:           v.Unit,
+		ValueType:      valueType,
+		ValueList:      valueList,
+		Description:    desc,
+		EnabledDefault: hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers),
+		IsExtended:     isExtended,
+		IsVisible:      v.IsVisible,
+		IsLogged:       v.IsLogged,
+		ValueName0:     v.ValueName0,
+		ValueName1:     v.ValueName1,
+		Min:            sysvarBound(valueType, v.MinValue),
+		Max:            sysvarBound(valueType, v.MaxValue),
+		Vid:            vid,
+	})
+	// Writer, internal and explicit-channel keep their own dedicated guarded
+	// setters: the refresh replaces the writer while commands from the
+	// north-bound planes are in flight, and the setter is what puts that
+	// replacement on the lock the command path reads it under.
 	existing.SetWriter(writer)
-	existing.IsExtended = isExtended
 	existing.SetInternal(v.IsInternal)
-	existing.IsVisible = v.IsVisible
-	existing.IsLogged = v.IsLogged
-	existing.ValueName0 = v.ValueName0
-	existing.ValueName1 = v.ValueName1
-	existing.Description = desc
-	existing.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
 	if haveDescs || !ok {
 		existing.SetExplicitChannel(explicitChannel)
 	}
-	if vid, err := strconv.Atoi(v.ID); err == nil {
-		existing.Vid = vid
-	}
-	// The declared range is what the north-bound planes advertise (HA gets
-	// a min/max on the number entity) and what the model's range check
-	// validates a write against. Left unset, discovery falls back to the
-	// full float range and the check can never fire.
-	existing.Min = sysvarBound(valueType, v.MinValue)
-	existing.Max = sysvarBound(valueType, v.MaxValue)
 	if pv, pok := parseSysvarValue(valueType, v.Value); pok {
 		existing.OnValue(pv)
 	}

@@ -169,12 +169,15 @@ func TestContextHandlerInjectsTraceFields(t *testing.T) {
 }
 
 // TestContextHandlerInjectsScopeFields pins the fields that make parallel
-// work legible. CentralName in particular is documented as the multi-CCU
-// log-correlation key and is set by the REST middleware on every request, but
-// the enricher never emitted it: two CCUs' call paths interleaved
-// indistinguishably in the output, and no surface anywhere reported the
-// scope. Each field stays absent when unset so untargeted records keep their
-// existing shape.
+// work legible. CentralName in particular is the multi-CCU log-correlation
+// key, but it is filled only where the scope is actually known: a route whose
+// path names the central (via middleware.CentralScope, once chi has resolved
+// the URL parameter) or a daemon wired to a single central (via
+// middleware.ReqContextWithCentral at boot). A request that matches neither is
+// logged without it. The enricher once dropped the field even when present, so
+// two CCUs' call paths interleaved indistinguishably and no surface reported
+// the scope. Each field stays absent when unset so untargeted records keep
+// their existing shape.
 func TestContextHandlerInjectsScopeFields(t *testing.T) {
 	t.Parallel()
 

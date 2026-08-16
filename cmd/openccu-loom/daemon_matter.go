@@ -1014,9 +1014,13 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		if err := bridge.Stop(stopCtx); err != nil {
 			logger.Warn("matter.bridge.stop", slog.String("err", err.Error()))
 		}
-		// After bridge.Stop, so the advertiser's goodbye records (including
-		// the subtype PTR goodbyes) are on the wire before the responder's
-		// own multicast sockets go away.
+		// On this normal shutdown path bridge.Stop has already withdrawn the
+		// mDNS records (goodbyes on the wire) and closed the advertiser, and
+		// closing the Zeroconf advertiser closes the subtype responder attached
+		// to it — so this call is an idempotent second close. It stays because
+		// it is the ONLY responder cleanup on the New / Start failure early
+		// returns above, where bridge.Stop (and thus the advertiser Close that
+		// owns the responder) never runs; running it here too is harmless.
 		closeAdvertiser()
 		// Stop the subscription engine goroutine. The DB handle itself is
 		// shared (owned by the composition root, see openLoomDB) and is
@@ -1675,6 +1679,38 @@ type rootClusterRefs struct {
 	GeneralCommissioning *mattercore.GeneralCommissioning
 }
 
+// resolveBridgeUniqueID returns the root node's stable BasicInformation
+// UniqueID. UniqueID carries Matter §11.1.5.13 quality F — it must not change
+// once a controller has commissioned the bridge — so the value is persisted on
+// first sight and pinned across every later boot, leaving a bridge rename (a
+// node_label change) unable to rotate it. matter.js persists UniqueID through
+// its StorageService and chip through GenerateUniqueId()'s persistent storage
+// for the same reason.
+//
+// The seed reproduces exactly what an un-pinned [mattercore.BasicInformation]
+// would derive — [mattercore.DeriveUniqueID] over the SAME construction
+// NodeLabel and serial the cluster uses (BasicInformation's identityLabel is
+// the construction NodeLabel, not the commissioner-restored one) — so the boot
+// that first persists it on an already-commissioned bridge keeps that bridge's
+// established identity instead of orphaning its pairings.
+//
+// A nil store (test wiring, no persistence) yields the derived value without
+// persisting it — identical to the un-pinned behaviour for that process.
+func resolveBridgeUniqueID(ctx context.Context, store *matterstore.Store, mc config.NorthMatter, rootSerial string, logger *slog.Logger) string {
+	if store != nil {
+		if v, ok, err := store.GetSetting(ctx, matterstore.SettingUniqueID); err == nil && ok && v != "" {
+			return v
+		}
+	}
+	uid := mattercore.DeriveUniqueID(mc.VendorID, mc.ProductID, mc.NodeLabel, rootSerial)
+	if store != nil {
+		if err := store.SetSetting(ctx, matterstore.SettingUniqueID, uid); err != nil {
+			logger.Warn("matter.bridge.basicinfo.persist_unique_id", slog.String("err", err.Error()))
+		}
+	}
+	return uid
+}
+
 // buildRootClusters constructs the cluster servers the bridge mounts
 // on endpoint 0. This is the surface chip-tool's
 // `ReadCommissioningInfo` queries during commissioning — without
@@ -1717,10 +1753,18 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 			mc.VendorID, mc.ProductID, mc.NodeLabel))
 		return hex.EncodeToString(h[:8])
 	}()
+	// UniqueID carries Matter §11.1.5.13 quality F (fixed for the lifetime of
+	// the device): once a controller has commissioned the bridge the value must
+	// never change, or Apple Home / Google Home treat every bridged accessory
+	// as new and force a re-pair. The un-pinned derivation depends on NodeLabel,
+	// so a bridge rename (a node_label edit) would otherwise rotate it. Resolve
+	// it to a persisted, pinned value here and hand it to the cluster.
+	uniqueID := resolveBridgeUniqueID(ctx, store, mc, rootSerial, logger)
 	bi, err := mattercore.NewBasicInformation(mattercore.Config{
 		VendorID:    mc.VendorID,
 		ProductID:   mc.ProductID,
 		NodeLabel:   mc.NodeLabel,
+		UniqueID:    uniqueID,
 		VendorName:  "openccu-loom",
 		ProductName: "openccu-loom Matter Bridge",
 		// SoftwareVersion is derived from the same build string that feeds
