@@ -423,6 +423,90 @@ func TestDetectScheduleDomainNoMatchingChannel(t *testing.T) {
 	}
 }
 
+// addDeviceWithChannelTypes registers a multi-channel device mirroring the real
+// fleet topology (channel number → type). Used to exercise the lock-domain
+// precedence, where a door lock carries a lock actor channel *and* a generic
+// SWITCH_WEEK_PROFILE schedule channel.
+func addDeviceWithChannelTypes(reg *central.Registry, devAddr, model string, channels map[int]string) {
+	c, err := central.New(central.Config{Name: "ccu-sched"})
+	if err != nil {
+		panic("central.New: " + err.Error())
+	}
+	_ = reg.Register(c)
+	dev := device.New(device.Config{Address: devAddr, InterfaceID: "HmIP-RF", Model: model})
+	for no, typ := range channels {
+		dev.AddChannel(fmt.Sprintf("%s:%d", devAddr, no), no, typ, hmenum.ParamsetKeyValues)
+	}
+	c.ModelRegistry.Put(dev)
+}
+
+// TestDetectScheduleDomainLockPrecedence pins that a door lock resolves to the
+// "lock" domain even though its schedule lives on a generic SWITCH_WEEK_PROFILE
+// channel. HmIP-DLD (DOOR_LOCK_STATE_TRANSMITTER) and HmIP-DLP
+// (DOOR_LOCK_TRANSCEIVER) both reuse SWITCH_WEEK_PROFILE, so resolving from the
+// week-profile channel type alone yields "switch" — the SPA then renders an
+// on/off switch instead of the lock action picker, and a save corrupts the
+// slot. Genuine switches and covers must keep their own domain. Channel-type
+// strings are the fleet ground truth from the embedded device descriptions.
+func TestDetectScheduleDomainLockPrecedence(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		model    string
+		channels map[int]string
+		schedCh  int
+		want     string
+	}{
+		{
+			name:     "HmIP-DLD door lock",
+			model:    "HmIP-DLD",
+			channels: map[int]string{0: "MAINTENANCE", 1: "DOOR_LOCK_STATE_TRANSMITTER", 10: "SWITCH_WEEK_PROFILE"},
+			schedCh:  10,
+			want:     "lock",
+		},
+		{
+			name:     "HmIP-DLP door lock",
+			model:    "HmIP-DLP",
+			channels: map[int]string{0: "MAINTENANCE", 12: "DOOR_LOCK_TRANSCEIVER", 14: "SWITCH_WEEK_PROFILE"},
+			schedCh:  14,
+			want:     "lock",
+		},
+		{
+			name:     "KEYMATIC lock",
+			model:    "HM-Sec-Key",
+			channels: map[int]string{0: "MAINTENANCE", 1: "KEYMATIC"},
+			schedCh:  1,
+			want:     "lock",
+		},
+		{
+			name:     "genuine switch stays switch",
+			model:    "HMIP-PS",
+			channels: map[int]string{0: "MAINTENANCE", 2: "SWITCH_TRANSMITTER", 6: "SWITCH_WEEK_PROFILE"},
+			schedCh:  6,
+			want:     "switch",
+		},
+		{
+			name:     "cover stays cover",
+			model:    "HmIP-BROLL",
+			channels: map[int]string{0: "MAINTENANCE", 3: "SHUTTER_TRANSMITTER", 7: "BLIND_WEEK_PROFILE"},
+			schedCh:  7,
+			want:     "cover",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			reg := central.NewRegistry()
+			addr := "DEV_" + tc.model
+			addDeviceWithChannelTypes(reg, addr, tc.model, tc.channels)
+			s := NewSchedulesDomain(reg, nil)
+			if got := s.detectScheduleDomain(addr, tc.schedCh); got != tc.want {
+				t.Errorf("detectScheduleDomain(%s) = %q, want %q", tc.model, got, tc.want)
+			}
+		})
+	}
+}
+
 // ============================================================
 // serializeSimpleSchedule — error branches
 // ============================================================
