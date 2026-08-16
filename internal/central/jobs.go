@@ -471,11 +471,15 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					// breaker advances OPEN → HALF_OPEN → CLOSED on
 					// its own. Without this the CB only refreshes
 					// when an unrelated code path happens to call
-					// `Do(...)` — and an OPEN breaker rejects every
-					// non-bypass call, so a quiet daemon can sit on
-					// a stale OPEN state for minutes. `ping` is on
-					// the breaker's bypass list, so this is the one
-					// call that always reaches the CCU.
+					// `Do(...)`, so a quiet daemon can sit on a stale
+					// OPEN state for minutes. The probe runs under the
+					// operation id "check_connection", which is
+					// deliberately NOT on the breaker's bypass list:
+					// an OPEN breaker sheds it (the tick then reports
+					// the interface as not alive) and the HALF_OPEN
+					// window is what lets it through again. Bypassing
+					// would keep the ping flowing but never drive the
+					// state machine that gates every other call.
 					// Probe with ping-pong tracking enabled: the periodic
 					// keepalive is exactly where outbound PINGs should be
 					// recorded so the matching PONG callbacks correlate and

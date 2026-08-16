@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -274,6 +275,48 @@ func TestSetup_WithCCUAndMQTT_204(t *testing.T) {
 
 	if _, err := svc.Sections.Get(ctx, "north.mqtt"); err != nil {
 		t.Errorf("north.mqtt section not persisted: %v", err)
+	}
+}
+
+// TestSetup_MQTTStepEnablesTheBridge pins that the wizard's MQTT step
+// switches the bridge on rather than only recording where the broker is.
+//
+// The SPA sends the mqtt object only when the operator flipped "Enable
+// MQTT", and the persisted section is overlaid sparsely onto the config, so
+// a section without `enabled` leaves North.MQTT.Enabled at its false zero
+// value: the supervisor never starts the bridge and the step the operator
+// completed publishes nothing.
+func TestSetup_MQTTStepEnablesTheBridge(t *testing.T) {
+	svc := newFullSetupService(t)
+	ctx := context.Background()
+
+	body := strings.NewReader(`{
+		"admin":  {"username":"admin","password":"password123"},
+		"locale": {"locale":"en","theme":"dark"},
+		"mqtt":   {"broker_url":"tcp://broker.local:1883","username":"mq","password":"secret"}
+	}`)
+	w := httptest.NewRecorder()
+	Setup(svc).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/setup", body))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("got %d body=%s, want 204", w.Code, w.Body.String())
+	}
+
+	row, err := svc.Sections.Get(ctx, "north.mqtt")
+	if err != nil {
+		t.Fatalf("north.mqtt section not persisted: %v", err)
+	}
+	// Decode into the real config type: the overlay the daemon applies is
+	// exactly this unmarshal, so a key the section omits stays at its zero
+	// value here too.
+	var sec config.NorthMQTT
+	if err := json.Unmarshal(row.ValueJSON, &sec); err != nil {
+		t.Fatalf("unmarshal north.mqtt: %v", err)
+	}
+	if !sec.Enabled {
+		t.Errorf("north.mqtt.enabled = false; the wizard step that enabled MQTT left the bridge off: %s", row.ValueJSON)
+	}
+	if sec.BrokerURL != "tcp://broker.local:1883" {
+		t.Errorf("broker_url = %q, want tcp://broker.local:1883", sec.BrokerURL)
 	}
 }
 

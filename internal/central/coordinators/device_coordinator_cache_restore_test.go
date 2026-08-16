@@ -92,6 +92,34 @@ func TestCheckAndCreateDevicesFromCacheCreatesNewDevices(t *testing.T) {
 	}
 }
 
+// TestCheckAndCreateDevicesFromCacheAnnouncesOnlyMaterialisedDevices pins the
+// difference between a description the cache still holds and a device that
+// actually exists. A device unpaired while the daemon was down keeps its
+// persisted descriptions, so the cache restore recovers its registry entry —
+// but nothing materialises it, and announcing it creates an entity the
+// WebSocket plane broadcasts while every REST read of it 404s.
+func TestCheckAndCreateDevicesFromCacheAnnouncesOnlyMaterialisedDevices(t *testing.T) {
+	t.Parallel()
+	model := newFakeDeviceModel("LIVE")
+	dc, bus, devs, descs, _ := newDCWithModel(t, model)
+	created := collectCreated(bus)
+
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{Address: "LIVE", Type: "HmIP-X"})
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{Address: "GHOST", Type: "HmIP-Y"})
+
+	if err := dc.CheckAndCreateDevicesFromCache(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Both regain their registry entry — the registry mirrors descriptions.
+	if devs.Len() != 2 {
+		t.Fatalf("DeviceRegistry len=%d, want 2", devs.Len())
+	}
+	if len(*created) != 1 || (*created)[0].Address != "LIVE" {
+		t.Fatalf("created events=%+v, want a single event for the materialised LIVE", *created)
+	}
+}
+
 func TestCheckAndCreateDevicesFromCacheIsIdempotent(t *testing.T) {
 	t.Parallel()
 	dc, bus, devs, descs, _ := newDCFull(t)
@@ -211,6 +239,32 @@ func TestRefreshDeviceDescriptionsAndCreateMissingDevices(t *testing.T) {
 	}
 	if (*created)[0].Source != hmenum.SourceOfDeviceCreationRefresh {
 		t.Fatalf("source=%v, want REFRESH", (*created)[0].Source)
+	}
+}
+
+// TestRefreshDeviceDescriptionsAnnouncesOnlyMaterialisedDevices pins that the
+// refresh path announces a device only once the model can resolve it. The
+// refresh updates registries; the ingest pipeline is what materialises a
+// device, so an address known to the CCU but not yet ingested must stay
+// silent rather than announce an entity no surface can serve.
+func TestRefreshDeviceDescriptionsAnnouncesOnlyMaterialisedDevices(t *testing.T) {
+	t.Parallel()
+	model := newFakeDeviceModel()
+	dc, bus, devs, _, _ := newDCWithModel(t, model)
+	created := collectCreated(bus)
+
+	fetcher := &stubLister{snapshot: []hmproto.DeviceDescription{{Address: "NEW", Type: "HmIP-B"}}}
+	if err := dc.RefreshDeviceDescriptionsAndCreateMissingDevices(
+		context.Background(), fetcher, wireKey(hmenum.InterfaceHmIPRF),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := devs.Get(wireKey(hmenum.InterfaceHmIPRF), "NEW"); !ok {
+		t.Fatal("NEW must be in the DeviceRegistry after the refresh")
+	}
+	if len(*created) != 0 {
+		t.Fatalf("created events=%+v, want none for a device the model does not hold", *created)
 	}
 }
 
@@ -429,6 +483,51 @@ func TestCheckParamsetConsistencyDetectsStaleParams(t *testing.T) {
 	}
 	if len(ic.MissingParameters) != 1 {
 		t.Fatalf("MissingParameters=%v, want [AA:0:PARAM_STALE]", ic.MissingParameters)
+	}
+}
+
+// TestCheckParamsetConsistencyDetectsStaleParamsReportedWithoutOperations
+// pins the firmware quirk the check exists for: an HmIPServer that reports
+// OPERATIONS=0 for MASTER parameters. The device hydration normalises those
+// to READ|WRITE and builds data points from them, so a parameter the live
+// CCU no longer serves is exactly the stale-descriptor symptom — it must not
+// be filtered out of the expectation set.
+func TestCheckParamsetConsistencyDetectsStaleParamsReportedWithoutOperations(t *testing.T) {
+	t.Parallel()
+	dc, _, _, descs, psets := newDCFull(t)
+
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
+		Address:  "DD",
+		Type:     "HmIP-X",
+		Children: []string{"DD:0"},
+	})
+	descs.Put(wireKey(hmenum.InterfaceHmIPRF), hmproto.DeviceDescription{
+		Address: "DD:0",
+		Parent:  "DD",
+		Type:    "MAINTENANCE",
+	})
+	psets.Put(wireKey(hmenum.InterfaceHmIPRF), "DD:0", hmenum.ParamsetKeyMaster, hmproto.Paramset{
+		"PARAM_QUIRKED": hmproto.ParameterData{Operations: hmenum.OperationsNone},
+	})
+
+	// The live CCU serves nothing for that channel any more.
+	checker := &stubParamsetChecker{results: map[string]map[string]any{"DD:0": {}}}
+
+	inconsistencies, err := dc.CheckParamsetConsistency(
+		context.Background(),
+		hmenum.InterfaceHmIPRF,
+		wireKey(hmenum.InterfaceHmIPRF),
+		[]string{"DD"},
+		checker,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inconsistencies) != 1 {
+		t.Fatalf("inconsistencies=%+v, want one for the OPERATIONS=0 MASTER parameter", inconsistencies)
+	}
+	if got := inconsistencies[0].MissingParameters; len(got) != 1 || got[0] != "DD:0:PARAM_QUIRKED" {
+		t.Fatalf("MissingParameters=%v, want [DD:0:PARAM_QUIRKED]", got)
 	}
 }
 

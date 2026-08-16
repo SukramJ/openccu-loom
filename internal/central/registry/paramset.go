@@ -33,9 +33,9 @@ type ParamsetSink interface {
 
 // ParamsetRegistry caches paramset descriptions per channel/key.
 //
-// Add() applies normalisation + patches at ingestion time.
-// Secondary index (addressParamCache) enables
-// get_channel_addresses_by_paramset_key, is_in_multiple_channels, etc.
+// Add() applies normalisation + patches at ingestion time. Lookups that span
+// channels (e.g. [ParamsetRegistry.GetChannelAddressesByParamsetKey]) scan the
+// single composite-key map; the registry keeps no secondary index.
 type ParamsetRegistry struct {
 	mu    sync.RWMutex
 	items map[ParamsetKey]hmproto.Paramset
@@ -84,8 +84,8 @@ func (r *ParamsetRegistry) ApplyPatches(deviceType, channelAddress string, psKey
 	return r.patchRegistry.ApplyParamset(deviceType, channelAddress, psKey, ps)
 }
 
-// Add stores ps under the composite key, normalises it, applies any
-// device-type–specific patches, and updates the secondary index.
+// Add stores ps under the composite key, normalises it and applies any
+// device-type–specific patches.
 // The deviceType parameter carries the device TYPE field from
 // DeviceDescription (e.g. "HM-CC-VG-1") for patch matching.
 func (r *ParamsetRegistry) Add(iface hmtypes.WireInterfaceID, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset, deviceType string) {
@@ -228,8 +228,8 @@ func (r *ParamsetRegistry) Delete(iface hmtypes.WireInterfaceID, channelAddress 
 	return true
 }
 
-// DeleteChannel removes every paramset bound to the given channel and
-// cleans up the secondary index entries for that channel.
+// DeleteChannel removes every paramset bound to the given channel, on the
+// registry and — when a sink is attached — in the persistent store.
 func (r *ParamsetRegistry) DeleteChannel(iface hmtypes.WireInterfaceID, channelAddress string) {
 	r.mu.Lock()
 	for k := range r.items {

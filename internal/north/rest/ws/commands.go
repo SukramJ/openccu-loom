@@ -17,10 +17,15 @@ import (
 )
 
 // writeCommandRoles is the single source of truth for the minimum role a
-// caller must hold to invoke a state-changing WebSocket command. Any command
-// absent from this map is read-only and needs only an authenticated (viewer)
-// identity — the same contract the REST router applies, where reads are open
-// to any authenticated user and writes are wrapped in `.With(op)` / `.With(admin)`.
+// caller must hold to invoke a role-gated WebSocket command. Any command
+// absent from this map needs only an authenticated (viewer) identity — the
+// same contract the REST router applies, where writes are wrapped in
+// `.With(op)` / `.With(admin)`.
+//
+// Most entries are state-changing, but the gate follows the REST twin
+// rather than the verb: a read whose payload is privileged (a credential,
+// the RF matrix) or whose execution costs a CCU round-trip is listed here
+// too, so the two planes cannot disagree about the same operation.
 //
 // Keeping the policy in one table — rather than tagging each of the ~90
 // registration sites across the command files — makes the privilege boundary
@@ -113,6 +118,17 @@ var writeCommandRoles = map[string]auth.Role{
 	"service_messages.disable":            auth.RoleOperator,
 	"service_messages.unsuppress":         auth.RoleOperator,
 	"sysvars.set":                         auth.RoleOperator,
+	// sysvars.fetch reads nothing locally: it forces a fresh catalogue pull
+	// from every addressed CCU, which is why POST /sysvars/fetch is
+	// operator-gated. The socket has to charge the same toll or the REST
+	// gate is a formality.
+	"sysvars.fetch": auth.RoleOperator,
+
+	// Not every gated command mutates. These mirror an admin-gated REST
+	// read whose payload is privileged in itself: the RF matrix names every
+	// device and its per-partner reception quality, which GET
+	// /diagnostics/rssi refuses to anyone below admin.
+	"ccu.get_rssi_info": auth.RoleAdmin,
 }
 
 // readOnlyCommands is the explicit complement of writeCommandRoles: every
@@ -150,7 +166,6 @@ var readOnlyCommands = map[string]struct{}{
 	"calc_dp.list":                {},
 	"ccu.device_statistics":       {},
 	"ccu.get_hub_data":            {},
-	"ccu.get_rssi_info":           {},
 	"ccu.get_signal_quality":      {},
 	"ccu.throttle_stats":          {},
 	"cdp.get":                     {},
@@ -198,7 +213,6 @@ var readOnlyCommands = map[string]struct{}{
 	"system.commands":             {},
 	"system.health":               {},
 	"system.user_permissions":     {},
-	"sysvars.fetch":               {},
 	"sysvars.list":                {},
 	"sysvars.usage":               {},
 }

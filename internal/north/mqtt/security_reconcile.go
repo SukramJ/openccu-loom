@@ -147,6 +147,21 @@ func (p *SecurityMQTTPublisher) declareEntities(snap security.Snapshot) {
 		// configs it cannot find in the declared set.
 		return
 	}
+	if len(snap.Classes) == 0 && len(snap.Zones) == 0 {
+		// The publisher starts before the domain does, so its first
+		// reconcile runs against a snapshot taken while the index is
+		// still empty. That pass publishes the system entities and
+		// nothing else; declaring on it would present a plane holding
+		// none of the installation's class and zone entities to the
+		// orphan sweep, which then clears their retained configs and
+		// takes those safety entities off the consumer until a later
+		// reconcile republishes them.
+		//
+		// An installation that genuinely has neither classes nor zones
+		// has no such configs to sweep either, so withholding the
+		// declaration costs it nothing.
+		return
+	}
 	// The plane has now declared, so its retained configs are eligible
 	// for the orphan sweep. Before this point the sweep cannot tell an
 	// orphan from an entity that has not been published yet.

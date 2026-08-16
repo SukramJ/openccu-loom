@@ -47,7 +47,45 @@ func newDCFull(t *testing.T) (*DeviceCoordinator, *events.Bus, *registry.DeviceR
 	devs := registry.NewDeviceRegistry()
 	descs := registry.NewDeviceDescriptionRegistry()
 	psets := registry.NewParamsetRegistry()
-	dc := NewDeviceCoordinator("c1", bus, devs, descs, psets, nil)
+	dc := NewDeviceCoordinator("c1", bus, devs, descs, psets, nil, nil)
+	return dc, bus, devs, descs, psets
+}
+
+// fakeDeviceModel is a DeviceModel whose materialised device set the test
+// controls, recording every removal it is asked for.
+type fakeDeviceModel struct {
+	present map[string]bool
+	removed []string
+}
+
+func newFakeDeviceModel(addresses ...string) *fakeDeviceModel {
+	m := &fakeDeviceModel{present: make(map[string]bool, len(addresses))}
+	for _, a := range addresses {
+		m.present[a] = true
+	}
+	return m
+}
+
+func (f *fakeDeviceModel) HasDevice(address string) bool { return f.present[address] }
+
+func (f *fakeDeviceModel) RemoveDevice(address string) bool {
+	f.removed = append(f.removed, address)
+	if !f.present[address] {
+		return false
+	}
+	delete(f.present, address)
+	return true
+}
+
+// newDCWithModel is [newDCFull] with an explicit domain model behind the
+// coordinator, as the composition root wires it.
+func newDCWithModel(t *testing.T, model DeviceModel) (*DeviceCoordinator, *events.Bus, *registry.DeviceRegistry, *registry.DeviceDescriptionRegistry, *registry.ParamsetRegistry) {
+	t.Helper()
+	bus := events.NewBus()
+	devs := registry.NewDeviceRegistry()
+	descs := registry.NewDeviceDescriptionRegistry()
+	psets := registry.NewParamsetRegistry()
+	dc := NewDeviceCoordinator("c1", bus, devs, descs, psets, model, nil)
 	return dc, bus, devs, descs, psets
 }
 

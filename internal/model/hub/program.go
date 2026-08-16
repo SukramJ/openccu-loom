@@ -261,9 +261,12 @@ func (p *Program) SetRuleSummary(condition, activity string) {
 // reference to this Program (e.g. via OnUpdate subscriptions) continue
 // to observe the updated state without re-wiring.
 func (p *Program) UpdateMetadata(name string, isInternal bool, writer ProgramWriter) {
+	// The name lives on the embedded data point, which guards it with its
+	// own lock; writing it under the program lock would leave the readers
+	// (Signature / FullName / LegacyName) racing against the refresh.
+	p.SetName(name)
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.Name = name
 	p.IsInternal = isInternal
 	if writer != nil {
 		p.Writer = writer

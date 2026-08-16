@@ -440,6 +440,22 @@ func (b *Bridge) snapshotRetained(
 	window time.Duration,
 	collect func(topic string, payload []byte, retained bool),
 ) error {
+	// One snapshot window at a time per bridge. Every sweep rides the same
+	// subscribe client, which keys its subscriptions by filter: two
+	// concurrent windows on the same filter — the per-central discovery
+	// sweeps and the unscoped pass all use `homeassistant/#` — leave the
+	// second handler installed over the first, and the first teardown
+	// unsubscribes the filter for both. Both sweeps then report nothing
+	// and the orphaned configs they exist to evict survive.
+	//
+	// The sweeps are one-shot boot passes of a couple of seconds each, so
+	// serialising them costs boot time, not correctness. Waiting is
+	// bounded by the holder's own window and its context.
+	if !b.acquireSweepSlot(ctx) {
+		return ctx.Err()
+	}
+	defer b.releaseSweepSlot()
+
 	var closed atomic.Bool
 	gated := func(topic string, payload []byte, retained bool) {
 		if closed.Load() {
@@ -682,7 +698,14 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 	if err := b.snapshotRetained(ctx, subClient, prefix+"#", b.cfg.QoS.Discovery, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
-	for _, topic := range orphans {
+	// Copy under the same lock the deliveries append under: the window is
+	// closed by an atomic flag, so a delivery that passed the gate a
+	// moment earlier can still be inside the append while this goroutine
+	// reads the slice.
+	mu.Lock()
+	topics := append([]string(nil), orphans...)
+	mu.Unlock()
+	for _, topic := range topics {
 		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
 		// Also drop the orphan from `declared` so a subsequent
 		// publish with the same topic is not silently dedup-suppressed
@@ -692,7 +715,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 		b.mu.Unlock()
 	}
 	_ = seen
-	return len(orphans), nil
+	return len(topics), nil
 }
 
 // rawCentralPrefix returns the `<base>/<central>/` prefix the raw plane
@@ -821,10 +844,15 @@ func (b *Bridge) RunRawOrphanCleanupOnce(ctx context.Context, centralName string
 	if err := b.snapshotRetained(ctx, subClient, filter, b.cfg.QoS.State, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
-	for _, topic := range orphans {
+	// Copy under the same lock the deliveries append under — see the
+	// identical note in [Bridge.RunDiscoveryOrphanCleanupOnce].
+	mu.Lock()
+	topics := append([]string(nil), orphans...)
+	mu.Unlock()
+	for _, topic := range topics {
 		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true)
 	}
-	return len(orphans), nil
+	return len(topics), nil
 }
 
 // unscopedUniqueIDMarker is what an entity id looks like when the CCU

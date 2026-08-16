@@ -107,7 +107,7 @@ func TestDeviceCoordinatorChecksForNewDeviceAddresses(t *testing.T) {
 	devs := registry.NewDeviceRegistry()
 	descs := registry.NewDeviceDescriptionRegistry()
 	ps := registry.NewParamsetRegistry()
-	dc := NewDeviceCoordinator("main", bus, devs, descs, ps, nil)
+	dc := NewDeviceCoordinator("main", bus, devs, descs, ps, nil, nil)
 
 	// Seed registry with one known device.
 	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
@@ -170,7 +170,7 @@ func TestDeviceCoordinatorRegistersAndRemoves(t *testing.T) {
 	devs := registry.NewDeviceRegistry()
 	descs := registry.NewDeviceDescriptionRegistry()
 	ps := registry.NewParamsetRegistry()
-	dc := NewDeviceCoordinator("main", bus, devs, descs, ps, nil)
+	dc := NewDeviceCoordinator("main", bus, devs, descs, ps, nil, nil)
 
 	dc.HandleNewDevices(context.Background(), wireKey(hmenum.InterfaceHmIPRF), []hmproto.DeviceDescription{
 		{Address: "A"},

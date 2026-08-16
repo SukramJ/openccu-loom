@@ -4,6 +4,7 @@
 package engine_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -25,6 +26,77 @@ func TestRestore_DisarmedStaysDisarmed(t *testing.T) {
 	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 	if n := h.outputs.fireCount(); n != 0 {
 		t.Fatalf("disarmed restore fired outputs: %d", n)
+	}
+}
+
+// TestRestore_DisarmedZoneSeedsSensorValues pins that a restart reads
+// the current activation value of every sensor, not only of the ones
+// belonging to an armed-side zone. Without the seed a disarmed zone
+// boots with every sensor's activation state unknown, and the
+// open-contact blocker policy — which only classifies a *known* active
+// sensor — passes vacuously until each sensor happens to push: the zone
+// reports ready, arms with a window standing open, and records neither
+// a blocker nor an open-at-arm baseline entry for it.
+func TestRestore_DisarmedZoneSeedsSensorValues(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	h.start()
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+
+	// The window stands open across the restart and never pushes a
+	// value afterwards — the restore read is the only source of truth.
+	h.reader.set("window", true)
+	h.restart(time.Minute)
+
+	rd, ok := h.mustSnapshot("eg").Readiness[hmenum.AlarmModeFull]
+	if !ok {
+		t.Fatal("no readiness verdict for full after restore")
+	}
+	if rd.Ready {
+		t.Errorf("zone reports ready to arm with an open window: %+v", rd)
+	}
+	if got := sortedStrings(rd.Blockers); len(got) != 1 || got[0] != "window" {
+		t.Errorf("blockers = %v, want [window]", got)
+	}
+
+	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
+	var nre *engine.NotReadyError
+	if !errors.As(err, &nre) {
+		t.Fatalf("arm error = %v, want *engine.NotReadyError", err)
+	}
+	if got := sortedStrings(nre.Blockers); len(got) != 1 || got[0] != "window" {
+		t.Errorf("NotReadyError.Blockers = %v, want [window]", got)
+	}
+
+	// Forcing the arm through must record the open sensor, or the
+	// restored zone would treat the standing-open window as a fresh
+	// activation on the next event.
+	res, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, Force: true, By: "tester"})
+	if err != nil {
+		t.Fatalf("force arm: %v", err)
+	}
+	if got := sortedStrings(res.Bypassed); len(got) != 1 || got[0] != "window" {
+		t.Fatalf("bypassed = %v, want [window]", got)
+	}
+}
+
+// TestArm_RefreshesSensorValuesBeforeTheBlockerCheck pins the same
+// guarantee for a sensor the engine has never seen an event for at all
+// (a fresh enrollment): the arm decision is taken against current
+// values, not against whatever happened to arrive on the bus.
+func TestArm_RefreshesSensorValuesBeforeTheBlockerCheck(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	h.start()
+
+	h.reader.set("window", true)
+	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
+	var nre *engine.NotReadyError
+	if !errors.As(err, &nre) {
+		t.Fatalf("arm error = %v, want *engine.NotReadyError", err)
+	}
+	if got := sortedStrings(nre.Blockers); len(got) != 1 || got[0] != "window" {
+		t.Errorf("NotReadyError.Blockers = %v, want [window]", got)
 	}
 }
 

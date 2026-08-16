@@ -139,6 +139,63 @@ func TestCloseBySubjectSkipsFederatedPrincipals(t *testing.T) {
 	}
 }
 
+// TestRevokedTokenLosesItsOpenCommandPlane pins [Hub.CloseByToken]: a bearer
+// token deleted from the store is refused by REST on the next request,
+// because REST re-resolves the credential every time — the socket resolved it
+// once at the upgrade, so without the teardown the revoked token keeps
+// dispatching admin-tier commands for as long as it answers pings.
+func TestRevokedTokenLosesItsOpenCommandPlane(t *testing.T) {
+	t.Parallel()
+	hub, _, _, _, _, _ := newTestHub(t)
+	server := httptest.NewServer(serveWithIdentity(
+		auth.Identity{Subject: "svc", Scheme: auth.SchemeBearer, Role: auth.RoleAdmin, TokenID: "fp-1"},
+		Handler(hub, nil, nil),
+	))
+	t.Cleanup(server.Close)
+
+	c := dialWS(t, server)
+	waitForClientCount(t, hub, 1)
+	if res := c.call("r1", "backup.trigger", map[string]any{}); res.Error != nil {
+		t.Fatalf("admin command before revocation = %+v, want success", res.Error)
+	}
+
+	if n := hub.CloseByToken("fp-1"); n != 1 {
+		t.Fatalf("CloseByToken closed %d connections, want 1", n)
+	}
+	expectConnectionClosed(t, c)
+	waitForClientCount(t, hub, 0)
+}
+
+// TestCloseByTokenLeavesTheSubjectsOtherCredentialsConnected scopes the
+// teardown to the revoked credential: a subject may hold several tokens and an
+// interactive session, and revoking one of them must not disconnect the rest.
+func TestCloseByTokenLeavesTheSubjectsOtherCredentialsConnected(t *testing.T) {
+	t.Parallel()
+	hub, _, _, _, _, _ := newTestHub(t)
+	revoked := httptest.NewServer(serveWithIdentity(
+		auth.Identity{Subject: "svc", Scheme: auth.SchemeBearer, Role: auth.RoleAdmin, TokenID: "fp-1"},
+		Handler(hub, nil, nil),
+	))
+	t.Cleanup(revoked.Close)
+	kept := httptest.NewServer(serveWithIdentity(
+		auth.Identity{Subject: "svc", Scheme: auth.SchemeBearer, Role: auth.RoleAdmin, TokenID: "fp-2"},
+		Handler(hub, nil, nil),
+	))
+	t.Cleanup(kept.Close)
+
+	gone := dialWS(t, revoked)
+	alive := dialWS(t, kept)
+	waitForClientCount(t, hub, 2)
+
+	if n := hub.CloseByToken("fp-1"); n != 1 {
+		t.Fatalf("CloseByToken closed %d connections, want 1", n)
+	}
+	expectConnectionClosed(t, gone)
+	if res := alive.call("r1", "backup.trigger", map[string]any{}); res.Error != nil {
+		t.Fatalf("second token's command after the first was revoked = %+v, want success", res.Error)
+	}
+}
+
 // recordingSessionRevoker is a [SessionRevoking] that records what it was
 // asked to revoke, so the composed revoker can be shown to do both halves
 // rather than silently replacing one with the other.

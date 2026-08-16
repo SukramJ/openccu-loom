@@ -314,7 +314,7 @@ func New(cfg Config) (*Unit, error) {
 		Clients:        coordinators.NewClientCoordinator(),
 		Configuration:  coordinators.NewConfigurationCoordinator(descReg, psReg, devReg),
 		Events:         coordinators.NewEventCoordinator(bus, cache, logger),
-		Devices:        coordinators.NewDeviceCoordinator(cfg.Name, bus, devReg, descReg, psReg, logger),
+		Devices:        nil, // wired below: the coordinator needs the Unit as its domain model
 		Hub:            coordinators.NewHubCoordinator(cfg.Name, bus),
 		Recovery:       coordinators.NewConnectionRecoveryCoordinator(cfg.Name, bus),
 		// Link starts with a nil resolver — the southbound wiring
@@ -338,6 +338,13 @@ func New(cfg Config) (*Unit, error) {
 		// purge_expired pass.
 		Recorder: session.New(session.Config{Active: false, TTL: 600 * time.Second}),
 	}
+	// The device coordinator mirrors the domain model in its registries, so
+	// it takes the Unit itself as that model: a replaced device is evicted on
+	// both sides at once, and a device-created announcement is only made for
+	// an address the model can resolve. Constructed here because the Unit has
+	// to exist first.
+	c.Devices = coordinators.NewDeviceCoordinator(cfg.Name, bus, devReg, descReg, psReg, c, logger)
+
 	c.registerCentralServices()
 
 	// Attach the hub domain model to the hub coordinator. This wires the
@@ -476,19 +483,27 @@ func (u *Unit) WireDevicesCreatedGate() {
 	u.devicesCreatedMu.Unlock()
 }
 
-// IsDevicesCreated reports whether at least one [hmevent.DeviceCreatedEvent]
-// has been observed since [WireDevicesCreatedGate] was last called.
-// Returns true unconditionally when [WireDevicesCreatedGate] has not been
-// called (no gate = no wait).
+// IsDevicesCreated reports whether the device-creation phase has produced
+// devices: either a [hmevent.DeviceCreatedEvent] was observed since
+// [WireDevicesCreatedGate] was last called, or the domain model already holds
+// devices. Returns true unconditionally when [WireDevicesCreatedGate] has not
+// been called (no gate = no wait).
+//
+// The model is consulted because the event is an announcement, not the fact:
+// the ingest pipeline materialises a whole interface without publishing one
+// per device, so a gate that waited for the event alone would hold every
+// gated hub job back on a central whose devices are all present.
 func (u *Unit) IsDevicesCreated() bool {
 	u.devicesCreatedMu.RLock()
-	defer u.devicesCreatedMu.RUnlock()
+	wired := u.devicesCreatedUnsub != nil
+	created := u.devicesCreated
+	u.devicesCreatedMu.RUnlock()
 	// If the gate was never wired (devicesCreatedUnsub == nil), treat as
 	// "already created" so gatedRunWithDevicesCreatedGate is a no-op.
-	if u.devicesCreatedUnsub == nil {
+	if !wired || created {
 		return true
 	}
-	return u.devicesCreated
+	return u.ModelRegistry != nil && u.ModelRegistry.Len() > 0
 }
 
 // MarkSouthboundReady latches the central's initial southbound bring-up as
@@ -883,6 +898,16 @@ func (u *Unit) ResolveDeviceName(address string) string {
 	return address
 }
 
+// HasDevice reports whether address is materialised in the domain model, the
+// question every "may this device be announced?" decision comes down to.
+func (u *Unit) HasDevice(address string) bool {
+	if u == nil || u.ModelRegistry == nil || address == "" {
+		return false
+	}
+	_, ok := u.ModelRegistry.Get(address)
+	return ok
+}
+
 // RemoveDevice drops the device from the model registry, tears down each
 // channel (event groups, calculated-DP subscriptions, custom-DP bindings),
 // clears every EventBus subscription keyed to one of the device's data
@@ -1217,17 +1242,23 @@ func (u *Unit) ServiceWiringComplete() bool {
 //     demoted to DEGRADED, so an in-flight recovery never reads as
 //     all-healthy. The recovery pipeline does not call back here; the next
 //     client-state change re-evaluates once the pipeline has settled.
+//   - A central without a single registered InterfaceClient holds its
+//     current state: connectivity is not observable yet, and reading that
+//     as FAILED would announce an outage on every boot.
 //   - DEGRADED and FAILED are only allowed from operational states
 //     (RUNNING, DEGRADED, RECOVERING, INITIALIZING). The state machine's
-//     transition table already enforces the exact set — TransitionTo
-//     returns ErrInvalidTransition for anything else and we silently skip.
+//     transition table enforces the exact set; a rejected transition is
+//     logged rather than dropped, because the machine then keeps a state
+//     the connectivity picture contradicts.
 func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 	if u.Clients == nil || u.Health == nil {
 		return
 	}
+	entries := u.Clients.List()
 	allConnected := u.Clients.Available()
 	anyConnected := u.Clients.AnyClientActive()
 	allCallbacksAlive := u.Clients.IsAlive()
+	current := u.StateMachine.State()
 
 	// Determine the target state based on client connectivity and callback health:
 	//   RUNNING   — every client is connected and all callbacks are alive
@@ -1236,6 +1267,15 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 	//   FAILED    — no clients are connected
 	var newState hmenum.CentralState
 	switch {
+	case len(entries) == 0:
+		// Not a single InterfaceClient is registered yet: the south-bound
+		// bring-up registers them only once the CCU reports ready, so there
+		// is nothing to judge connectivity by. Hold the current state instead
+		// of reading "no connected client" as an outage — otherwise every
+		// boot and every runtime adopt would announce FAILED before the first
+		// interface has had a chance to come up. The same distinction keeps
+		// the `central` health component healthy during the gated wait.
+		newState = current
 	case allConnected && allCallbacksAlive:
 		newState = hmenum.CentralStateRunning
 	case allConnected && !allCallbacksAlive:
@@ -1265,7 +1305,6 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 		newState = hmenum.CentralStateDegraded
 	}
 
-	current := u.StateMachine.State()
 	if !fromStart && current == newState {
 		return
 	}
@@ -1278,7 +1317,7 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 		// them via MarkInterfaceDegraded. For interfaces not yet marked, use the
 		// catch-all FailureReasonNetwork.
 		smReasons := u.StateMachine.DegradedInterfaces()
-		for _, e := range u.Clients.List() {
+		for _, e := range entries {
 			if !e.Connected() {
 				degradedIfaces = append(degradedIfaces, e.InterfaceID)
 				if degradedReasons == nil {
@@ -1306,21 +1345,32 @@ func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 	}
 
 	// TransitionTo validates against the allowed-transitions table and sets
-	// the degraded-interface map atomically. When the transition is not
-	// permitted from the current state (e.g. STOPPED → DEGRADED) the error
-	// is silently dropped — the guard is already enforced by the state machine.
+	// the degraded-interface map atomically. A rejected transition leaves the
+	// machine on its previous state, which means the daemon keeps reporting a
+	// state the connectivity picture contradicts — never silent, always
+	// logged, so the divergence is diagnosable from the log alone.
 	var smOpts []statemachine.CentralTransitionOption
 	if len(degradedReasons) > 0 {
 		smOpts = append(smOpts, statemachine.WithDegradedInterfaces(degradedReasons))
 	}
-	_ = u.StateMachine.TransitionTo(newState, hmenum.FailureReasonNone, smOpts...)
+	if newState != current {
+		if err := u.StateMachine.TransitionTo(newState, hmenum.FailureReasonNone, smOpts...); err != nil && u.logger != nil {
+			// STOPPED is terminal, so an evaluation racing a shutdown is
+			// expected rather than a defect.
+			if current == hmenum.CentralStateStopped {
+				u.logger.Debug("evaluate_central_state_transition_rejected",
+					"trigger", trigger, "from", current, "to", newState, "err", err)
+			} else {
+				u.logger.Warn("evaluate_central_state_transition_rejected",
+					"trigger", trigger, "from", current, "to", newState, "err", err)
+			}
+		}
+	}
 	// Report what the machine actually holds, not what we asked for. A
 	// rejected transition leaves the machine on its previous state, and the
-	// event is the only place that divergence would otherwise surface: the
-	// first evaluation of every boot and every runtime adopt computes FAILED
-	// (no InterfaceClient is registered yet) from a machine that Start left
-	// in RUNNING, so the payload announced a failed central while the machine,
-	// /health and the SPA badge all said RUNNING.
+	// event is the only place that divergence would otherwise surface — a
+	// payload announcing a state the machine, /health and the SPA badge all
+	// disagree with.
 	published := u.StateMachine.State()
 
 	// Healthy reflects the operator-visible connection quality:

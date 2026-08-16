@@ -353,8 +353,11 @@ func (s *Sysvar) OnValue(v hmtypes.ParamValue) {
 	cbs := make([]func(old, next hmtypes.ParamValue), len(s.callbacks))
 	copy(cbs, s.callbacks)
 	notifier := s.ValueNotifier
-	name := s.Name
 	s.mu.Unlock()
+	// The name is guarded by the embedded data point's lock, not by the
+	// value lock released above — a concurrent rename would otherwise race
+	// with this read.
+	name := s.LegacyName()
 	s.markCertain()
 	if was && prev.Equal(v) {
 		return

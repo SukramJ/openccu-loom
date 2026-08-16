@@ -44,7 +44,7 @@ func newDC(t *testing.T) (*DeviceCoordinator, *events.Bus) {
 	devs := registry.NewDeviceRegistry()
 	descs := registry.NewDeviceDescriptionRegistry()
 	psets := registry.NewParamsetRegistry()
-	return NewDeviceCoordinator("c1", bus, devs, descs, psets, nil), bus
+	return NewDeviceCoordinator("c1", bus, devs, descs, psets, nil, nil), bus
 }
 
 func TestInitialPullCreatesDevicesAndChannels(t *testing.T) {

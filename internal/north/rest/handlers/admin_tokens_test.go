@@ -222,7 +222,7 @@ func TestDeleteTokenAdmin_Happy(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/admin/auth/tokens/…AAABBB", http.NoBody)
 	req = withChiParam(req, "fingerprint", "…AAABBB")
 	w := httptest.NewRecorder()
-	DeleteTokenAdmin(svc, audit.NoopRecorder()).ServeHTTP(w, req)
+	DeleteTokenAdmin(svc, audit.NoopRecorder(), nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
@@ -235,10 +235,64 @@ func TestDeleteTokenAdmin_NotFound_Returns404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/admin/auth/tokens/…XXXXXX", http.NoBody)
 	req = withChiParam(req, "fingerprint", "…XXXXXX")
 	w := httptest.NewRecorder()
-	DeleteTokenAdmin(svc, nil).ServeHTTP(w, req)
+	DeleteTokenAdmin(svc, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+// recordingTokenSockets is a [TokenSocketRevoker] that records which
+// fingerprints it was asked to disconnect.
+type recordingTokenSockets struct {
+	closed []string
+}
+
+func (r *recordingTokenSockets) CloseByToken(fingerprint string) int {
+	r.closed = append(r.closed, fingerprint)
+	return 1
+}
+
+// TestDeleteTokenAdmin_ClosesTheTokensSockets pins that revoking a bearer
+// token reaches the WebSocket plane. REST re-resolves the credential on every
+// request and refuses immediately; a socket resolved it once at the upgrade
+// and gates every later command on that snapshot, so a revocation that stops
+// at the token table leaves the leaked credential dispatching writes for as
+// long as its connection answers pings.
+func TestDeleteTokenAdmin_ClosesTheTokensSockets(t *testing.T) {
+	t.Parallel()
+	svc := newFakeTokenSvc()
+	sockets := &recordingTokenSockets{}
+	req := httptest.NewRequest(http.MethodDelete, "/admin/auth/tokens/…AAABBB", http.NoBody)
+	req = withChiParam(req, "fingerprint", "…AAABBB")
+	w := httptest.NewRecorder()
+	DeleteTokenAdmin(svc, audit.NoopRecorder(), sockets).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(sockets.closed) != 1 || sockets.closed[0] != "…AAABBB" {
+		t.Fatalf("closed sockets for %v, want […AAABBB]", sockets.closed)
+	}
+}
+
+// TestDeleteTokenAdmin_UnknownFingerprintLeavesSocketsAlone keeps the
+// teardown tied to a revocation that really happened: a 404 must not
+// disconnect anybody.
+func TestDeleteTokenAdmin_UnknownFingerprintLeavesSocketsAlone(t *testing.T) {
+	t.Parallel()
+	svc := newFakeTokenSvc()
+	sockets := &recordingTokenSockets{}
+	req := httptest.NewRequest(http.MethodDelete, "/admin/auth/tokens/…XXXXXX", http.NoBody)
+	req = withChiParam(req, "fingerprint", "…XXXXXX")
+	w := httptest.NewRecorder()
+	DeleteTokenAdmin(svc, audit.NoopRecorder(), sockets).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+	if len(sockets.closed) != 0 {
+		t.Fatalf("closed sockets %v on an unknown fingerprint, want none", sockets.closed)
 	}
 }
 

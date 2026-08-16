@@ -545,10 +545,12 @@ func (s *Service) DetachCentral(name string) {
 // Disarm and Silence included, blocks behind it with the siren already
 // sounding.
 func (s *Service) notifyOutputFired(n outputs.Notification) {
-	cause := ""
-	if len(n.Sources) > 0 {
-		cause = incidentCauseKind(n.Incident.CauseJSON)
-	}
+	// The cause comes from the incident document, not from the source
+	// list: the causes that carry no data point at all — a panic key, a
+	// lost central, an adopted siren — record no source, and gating the
+	// label on the list left exactly those notifications unlabelled and
+	// indistinguishable from an intrusion alert.
+	cause := incidentCauseKind(n.Incident.CauseJSON)
 	events.Publish(s.bus, hmevent.AlarmNotificationEvent{
 		Base:       hmevent.NewBaseAt(s.clk.Now()),
 		ZoneID:     n.Row.ZoneID,

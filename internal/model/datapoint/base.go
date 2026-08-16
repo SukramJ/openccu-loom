@@ -326,6 +326,20 @@ func (b *BaseDataPointFields) MarkUnIgnored() {
 	b.mu.Unlock()
 }
 
+// ClearUnIgnored removes the operator-un-ignored flag.
+//
+// The un-ignore configuration is editable at runtime, so the mark is not
+// one-way: when the operator deletes the pattern that promoted this data
+// point, the visibility pass re-runs and has to put the data point back
+// under the static decider's verdict. Without the inverse the parameter
+// keeps surfacing on REST / MQTT / the SPA until the daemon restarts,
+// while the removal is reported as successful.
+func (b *BaseDataPointFields) ClearUnIgnored() {
+	b.mu.Lock()
+	b.unIgnored = false
+	b.mu.Unlock()
+}
+
 // IsUnIgnored reports whether [MarkUnIgnored] has been called. The
 // flag is read by [SuppressUndefinedGenericDataPointsWith] in the
 // custom package so operator-un-ignored DPs survive the suppression

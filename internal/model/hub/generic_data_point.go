@@ -105,7 +105,24 @@ func NewHubDataPoint(centralName, name, description string, enabledDefault bool)
 // into the field directly. This mirrors the Python DelegatedProperty
 // shape where `legacy_name` delegates to `self._legacy_name`.
 func (h *HubDataPoint) LegacyName() string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	return h.Name
+}
+
+// SetName replaces the canonical name of the data point.
+//
+// The name is mutable: an operator renames a system variable or a program
+// on the CCU and the model updates the existing entry in place, so that
+// subscribers wired at registration time keep working. Every mutation goes
+// through this method so writers and the [Signature] / [FullName] /
+// [LegacyName] readers agree on one lock — the data point's own. The
+// containers that hold the data point (the hub's sysvar map, the program
+// index) are guarded by a different mutex, which excludes nothing here.
+func (h *HubDataPoint) SetName(name string) {
+	h.mu.Lock()
+	h.Name = name
+	h.mu.Unlock()
 }
 
 // Channel returns the optional channel-address association for this hub data

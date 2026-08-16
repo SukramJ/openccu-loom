@@ -6,8 +6,11 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -799,5 +802,86 @@ func TestAlarmPlaneDoesNotDeclareBeforeTheEngineLoaded(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if bridge.planeDeclared(alarmDiscoveryNodeID) {
 		t.Fatal("the alarm plane declared before the engine loaded its zones; the sweep would wipe the live plane")
+	}
+}
+
+// discoveryRefusingPublisher accepts every publish except the retained HA
+// discovery configs, which it refuses the way a broker with an open
+// circuit breaker or a denying ACL would.
+type discoveryRefusingPublisher struct {
+	mu    sync.Mutex
+	other []string
+}
+
+var errDiscoveryRefused = errors.New("broker refused discovery config")
+
+func (p *discoveryRefusingPublisher) Publish(_ context.Context, topic string, _ []byte, _ QoS, _ bool, _ ...PublishOption) error {
+	if strings.HasPrefix(topic, "homeassistant/") {
+		return errDiscoveryRefused
+	}
+	p.mu.Lock()
+	p.other = append(p.other, topic)
+	p.mu.Unlock()
+	return nil
+}
+
+func (p *discoveryRefusingPublisher) sawStateTopic() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, t := range p.other {
+		if strings.HasSuffix(t, "/alarm/eg/state") {
+			return true
+		}
+	}
+	return false
+}
+
+// TestAlarmPlaneDoesNotDeclareWhenADiscoveryPublishFailed pins the second
+// half of the declaration gate. The bridge remembers only the configs the
+// broker accepted, so a refused publish leaves a live panel outside the
+// declared set. Declaring the plane anyway arms the orphan sweep against
+// that panel's retained config, and the sweep clears it — the alarm entity
+// disappears from the consumer until a later event republishes it.
+func TestAlarmPlaneDoesNotDeclareWhenADiscoveryPublishFailed(t *testing.T) {
+	t.Parallel()
+	svc := newAlarmFixtureService(t)
+
+	pubClient := &discoveryRefusingPublisher{}
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, pubClient)
+
+	cfgJSON, err := json.Marshal(zeroDelayFullMode())
+	if err != nil {
+		t.Fatalf("marshal zone config: %v", err)
+	}
+	now := time.Now().UnixMilli()
+	if err := svc.Stores().Zones.Upsert(context.Background(), sqlitestore.AlarmZoneRow{
+		ID: "eg", Name: "Erdgeschoss", ConfigJSON: string(cfgJSON), CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		t.Fatalf("seed zone: %v", err)
+	}
+	if err := svc.Reload(context.Background()); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+
+	pub := NewAlarmMQTTPublisher(svc, NewWiring(bridge, slog.Default()), slog.Default())
+	pub.Start()
+	t.Cleanup(pub.Stop)
+
+	// Wait for the reconcile pass to reach its state publish — the step
+	// that follows the refused discovery configs — so the assertion below
+	// measures the completed pass, not a race with it.
+	deadline := time.Now().Add(2 * time.Second)
+	for !pubClient.sawStateTopic() && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !pubClient.sawStateTopic() {
+		t.Fatal("the reconcile pass never published the zone state")
+	}
+	if bridge.planeDeclared(alarmDiscoveryNodeID) {
+		t.Fatal("the alarm plane declared although the broker refused its discovery configs; " +
+			"the orphan sweep would clear the live panel")
 	}
 }

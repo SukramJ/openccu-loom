@@ -25,6 +25,8 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
@@ -33,6 +35,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
@@ -1166,10 +1169,17 @@ func TestLogStreamOutlivesTheGlobalRequestTimeout(t *testing.T) {
 	}
 }
 
-// TestRequestDeadlineAppliesToEveryRouteButTheLogStream is the control for
-// TestLogStreamOutlivesTheGlobalRequestTimeout: exempting the tail must not
-// exempt the rest of the API from the deadline.
-func TestRequestDeadlineAppliesToEveryRouteButTheLogStream(t *testing.T) {
+// TestRequestDeadlineAppliesToEveryRouteButTheStreams is the control for
+// TestLogStreamOutlivesTheGlobalRequestTimeout: exempting the long-lived
+// responses must not exempt the rest of the API from the deadline.
+//
+// Every entry of streamingPaths is probed, so a route added to the map
+// without an exemption — and, more importantly, a long-lived route the map
+// never learned about — is visible here. The event-bus tap is the case that
+// shipped truncated: it derives its window (up to five minutes) from
+// r.Context(), so the router deadline cut the NDJSON stream at 30s with a
+// clean EOF the caller could not distinguish from an idle bus.
+func TestRequestDeadlineAppliesToEveryRouteButTheStreams(t *testing.T) {
 	t.Parallel()
 	var deadlines sync.Map
 	probe := timeoutExceptStreaming(time.Minute)(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
@@ -1177,14 +1187,18 @@ func TestRequestDeadlineAppliesToEveryRouteButTheLogStream(t *testing.T) {
 		deadlines.Store(req.URL.Path, ok)
 	}))
 
-	for _, path := range []string{"/api/v1/devices", logStreamPath} {
-		probe.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, http.NoBody))
-	}
+	probe.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody))
 	if got, _ := deadlines.Load("/api/v1/devices"); got != true {
 		t.Error("regular API request lost its deadline")
 	}
-	if got, _ := deadlines.Load(logStreamPath); got != false {
-		t.Error("log stream request carried a deadline")
+	if _, ok := streamingPaths["/api/v1/diagnostics/eventbus/tap"]; !ok {
+		t.Error("the event-bus tap must be exempt from the request deadline")
+	}
+	for path := range streamingPaths {
+		probe.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, http.NoBody))
+		if got, _ := deadlines.Load(path); got != false {
+			t.Errorf("streaming request %s carried a deadline", path)
+		}
 	}
 }
 
@@ -2022,4 +2036,132 @@ func TestRESTResponsesMatchOpenAPISchema(t *testing.T) {
 		}
 		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
 	})
+}
+
+// fakeConfigAdmin is a [handlers.ConfigAdminService] that answers with empty
+// values; the role-gate tests below assert who reaches it, not what it holds.
+type fakeConfigAdmin struct{}
+
+func (fakeConfigAdmin) Effective(context.Context) (*configstore.EffectiveResult, error) {
+	return &configstore.EffectiveResult{Config: config.Default(), Sources: map[string]configstore.FieldSource{}}, nil
+}
+
+func (fakeConfigAdmin) GetSection(context.Context, configstore.Section) (sqlitestore.SectionRow, error) {
+	return sqlitestore.SectionRow{Section: "north.mqtt", ValueJSON: []byte(`{}`)}, nil
+}
+
+func (fakeConfigAdmin) PutSection(context.Context, configstore.Section, []byte, string) (sqlitestore.SectionRow, error) {
+	return sqlitestore.SectionRow{}, nil
+}
+
+func (fakeConfigAdmin) DeleteSection(context.Context, configstore.Section) error { return nil }
+
+// fakeRPCRecorder is a [handlers.RPCRecorderService] with one central in its
+// status listing.
+type fakeRPCRecorder struct{}
+
+func (fakeRPCRecorder) Start([]string, int, bool) []hmapi.RPCRecordingStatus {
+	return nil
+}
+func (fakeRPCRecorder) Stop([]string) []hmapi.RPCRecordingStatus { return nil }
+func (fakeRPCRecorder) Status() []hmapi.RPCRecordingStatus {
+	return []hmapi.RPCRecordingStatus{{Central: "ccu-01"}}
+}
+func (fakeRPCRecorder) Export(string, string) (any, bool) { return nil, false }
+
+// roleGatedRouter builds a router with an auth chain that stamps role onto
+// every request, so a route's gate — and only its gate — decides the outcome.
+func roleGatedRouter(role auth.Role, d Deps) http.Handler {
+	mw := auth.NewMiddleware(nil, nil)
+	d.StartedAt = time.Now()
+	d.AuthResolve = func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+	d.AuthRequire = mw.Require
+	d.RequireAdmin = func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) }
+	d.RequireOperator = func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleOperator, next) }
+	return NewRouter(d)
+}
+
+// TestRouter_AdminOnlyDiagnosticReads pins the reads whose payload is
+// privileged even though the request changes nothing.
+//
+// The effective config and a single config section name every CCU host, the
+// broker URL, the OIDC issuer and the callback ports (secrets are masked, the
+// topology is not); the recorder listing names every central and whether an
+// RPC trace is running. The published contract restricts all three to admins,
+// and their sibling writes were gated while the reads were mounted bare.
+func TestRouter_AdminOnlyDiagnosticReads(t *testing.T) {
+	t.Parallel()
+	deps := Deps{ConfigAdmin: fakeConfigAdmin{}, RPCRecorder: fakeRPCRecorder{}}
+	for _, path := range []string{
+		"/api/v1/config/effective",
+		"/api/v1/config/sections/north.mqtt",
+		"/api/v1/diagnostics/rpc-recording",
+	} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+			rr := httptest.NewRecorder()
+			roleGatedRouter(auth.RoleViewer, deps).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, http.NoBody))
+			if rr.Code != http.StatusForbidden {
+				t.Fatalf("viewer GET %s = %d, want 403 body=%s", path, rr.Code, rr.Body.String())
+			}
+
+			rr = httptest.NewRecorder()
+			roleGatedRouter(auth.RoleAdmin, deps).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, http.NoBody))
+			if rr.Code != http.StatusOK {
+				t.Fatalf("admin GET %s = %d, want 200 body=%s", path, rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
+
+// recordingTokenSockets records the fingerprints a revocation asked it to
+// disconnect.
+type recordingTokenSockets struct {
+	mu     sync.Mutex
+	closed []string
+}
+
+func (r *recordingTokenSockets) CloseByToken(fingerprint string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.closed = append(r.closed, fingerprint)
+	return 1
+}
+
+// fakeTokenAdmin is a [handlers.TokenAdminService] whose Delete always
+// succeeds.
+type fakeTokenAdmin struct{}
+
+func (fakeTokenAdmin) Create(context.Context, sqlitestore.CreateInput) (sqlitestore.CreateResult, error) {
+	return sqlitestore.CreateResult{}, nil
+}
+func (fakeTokenAdmin) Delete(context.Context, string) error { return nil }
+func (fakeTokenAdmin) List(context.Context) ([]sqlitestore.TokenRow, error) {
+	return nil, nil
+}
+
+// TestRouter_TokenRevocationReachesTheSockets pins the wiring rather than the
+// handler: the route the daemon mounts must carry the socket teardown, or a
+// revoked bearer token keeps its connect-time role on the command plane while
+// REST already refuses it.
+func TestRouter_TokenRevocationReachesTheSockets(t *testing.T) {
+	t.Parallel()
+	sockets := &recordingTokenSockets{}
+	r := roleGatedRouter(auth.RoleAdmin, Deps{TokenAdmin: fakeTokenAdmin{}, TokenSockets: sockets})
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/api/v1/auth/tokens/v2/fp-1", http.NoBody))
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("DELETE token = %d, want 204 body=%s", rr.Code, rr.Body.String())
+	}
+	sockets.mu.Lock()
+	defer sockets.mu.Unlock()
+	if len(sockets.closed) != 1 || sockets.closed[0] != "fp-1" {
+		t.Fatalf("closed sockets for %v, want [fp-1]", sockets.closed)
+	}
 }

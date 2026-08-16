@@ -288,6 +288,71 @@ func TestCodePolicy_DuressCodeActsNormallyAndFiresASilentEvent(t *testing.T) {
 	}
 }
 
+// TestCodePolicy_DuressCodeOnAnAlreadyDisarmedZoneStillFiresDuress
+// covers the state coercion actually produces. An attacker disarms the
+// zone first and then makes the resident "disarm" it at the keypad; if
+// the verb short-circuits on the already-disarmed zone before the code
+// is seen, the covert channel is unavailable in exactly the situation
+// it exists for — no hidden journal row, no event, no webhook.
+//
+// The verb stays an idempotent no-op: state, journal-visible outcome,
+// and return value are unchanged, only the duress fan-out is added.
+func TestCodePolicy_DuressCodeOnAnAlreadyDisarmedZoneStillFiresDuress(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	v := newFakeCodeValidator(map[string]codeResult{"9999": {identity: "Bob", duress: true}})
+	h.startWithValidator(v)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+
+	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "keypad", "9999"); err != nil {
+		t.Fatalf("duress disarm on a disarmed zone: %v", err)
+	}
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+
+	duress := mustJournalEntry(t, h.journal, "duress")
+	if !duress.Hidden || duress.Actor != "Bob" {
+		t.Fatalf("duress journal entry = %+v, want Hidden=true Actor=Bob", duress)
+	}
+	h.sink.mu.Lock()
+	var found bool
+	for _, ev := range h.sink.events {
+		if de, ok := ev.(hmevent.AlarmDuressEvent); ok {
+			found = true
+			if de.By != "Bob" || de.Verb != "disarm" || de.ZoneID != "eg" {
+				t.Fatalf("duress event = %+v, want By=Bob Verb=disarm ZoneID=eg", de)
+			}
+		}
+	}
+	h.sink.mu.Unlock()
+	if !found {
+		t.Fatal("expected an AlarmDuressEvent on the sink")
+	}
+	// The no-op half: a disarm of a disarmed zone still journals no
+	// state change.
+	if h.journal.has("disarmed") {
+		t.Errorf("a no-op disarm journalled a state change; got %v", h.journal.events())
+	}
+}
+
+// TestCodePolicy_WrongCodeOnAnAlreadyDisarmedZoneStaysANoop keeps the
+// other half of that decision explicit: the idempotent no-op must not
+// turn into a refusal, or a probe learns which codes exist from the
+// zone that needs no security decision at all.
+func TestCodePolicy_WrongCodeOnAnAlreadyDisarmedZoneStaysANoop(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	v := newFakeCodeValidator(map[string]codeResult{"9999": {identity: "Bob", duress: true}})
+	h.startWithValidator(v)
+
+	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "keypad", "0000"); err != nil {
+		t.Fatalf("wrong code on a disarmed zone = %v, want nil (idempotent no-op)", err)
+	}
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+	if h.journal.has("duress") {
+		t.Errorf("a non-duress code fired duress; got %v", h.journal.events())
+	}
+}
+
 func TestCodePolicy_OperatorSourceDuressCodeStillFiresDuress(t *testing.T) {
 	h := newHarness(t)
 	h.seedStandardZone()

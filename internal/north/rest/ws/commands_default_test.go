@@ -2110,7 +2110,7 @@ func TestSysvarsFetch_WithCentralName(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
 
 	args, _ := json.Marshal(map[string]any{"central_name": "ccu-01"})
-	res := r.Dispatch(context.Background(), "sysvars.fetch", args)
+	res := r.Dispatch(opCtx(), "sysvars.fetch", args)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %+v", res.Error)
 	}
@@ -2162,7 +2162,7 @@ func TestSysvarsFetch_EmptyBody(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
 
-	res := r.Dispatch(context.Background(), "sysvars.fetch", nil)
+	res := r.Dispatch(opCtx(), "sysvars.fetch", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %+v", res.Error)
 	}

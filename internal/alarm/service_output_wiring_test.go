@@ -159,6 +159,13 @@ func TestNotificationOutputReachesTheBusWithoutBlockingTheEngine(t *testing.T) {
 			t.Fatalf("notification zone name = %q, want Erdgeschoss — the cycle must carry the zone "+
 				"identity, because the sink cannot ask the engine for it", e.ZoneName)
 		}
+		// A panic carries no data point, so it records no source. The
+		// cause comes from the incident document and is independent of
+		// that: without it the payload cannot be told apart from an
+		// intrusion alert on the webhook plane.
+		if e.Cause != "panic" {
+			t.Fatalf("notification cause = %q, want panic", e.Cause)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no AlarmNotificationEvent reached the alarm bus")
 	}

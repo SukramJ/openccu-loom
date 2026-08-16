@@ -503,7 +503,8 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	// program refuses to run — so it has its own topic (see
 	// hub.Program.MQTTRoles).
 	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/set", c.qos, LegacyHandler(c.handleProgramEnable)); err != nil {
-		return err
+		c.incSubscribeFailures()
+		return fmt.Errorf("subscribe hub_program_enable: %w", err)
 	}
 	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", c.qos, LegacyHandler(c.handleProgram)); err != nil {
 		c.incSubscribeFailures()

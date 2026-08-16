@@ -439,3 +439,84 @@ func TestApplyIgnoredParameterMarksStillSuppressesUnpromotedIgnoredParam(t *test
 		t.Errorf("HmIP-STH INHIBIT ForcedUsage = %q, want ignored (not promoted)", u)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ApplyUnIgnoredMarks computes the full set: a rule the operator removed
+// has to take the promotion away again.
+// ---------------------------------------------------------------------------
+
+// TestApplyUnIgnoredMarksReHidesAfterRuleRemoval walks the operator's round
+// trip: un-ignore a statically suppressed parameter, then delete the rule.
+// Re-running the pass must put the data point back under the static verdict
+// instead of leaving it promoted until the next daemon restart.
+func TestApplyUnIgnoredMarksReHidesAfterRuleRemoval(t *testing.T) {
+	t.Parallel()
+
+	const (
+		model = "HM-CC-RT-DN"
+		param = hmenum.Parameter("BOOST_TIME")
+	)
+
+	decider := visibility.NewParameterDecider(nil)
+	decider.LoadUnIgnore([]visibility.UnIgnoreEntry{{Parameter: param, IsSimple: true}})
+
+	dev := device.New(device.Config{
+		InterfaceID: "BidCos-RF",
+		Interface:   hmenum.InterfaceBidCosRF,
+		Address:     "TEST100",
+		Model:       model,
+	})
+	ch := dev.AddChannel("TEST100:1", 1, "CLIMATECONTROL_RT_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	dp := putValuesBoolDP(ch, param)
+
+	// Boot order: the un-ignore mark lands first, the suppression pass
+	// afterwards, so the operator override survives it.
+	visibility.ApplyUnIgnoredMarks(dev, decider)
+	visibility.ApplyIgnoredParameterMarks(dev, decider)
+
+	if !dp.IsUnIgnored() {
+		t.Fatal("un-ignored parameter must carry the mark after the first pass")
+	}
+	if dp.Usage() != hmenum.DataPointUsageDataPoint {
+		t.Fatalf("un-ignored parameter Usage()=%v, want DataPoint", dp.Usage())
+	}
+
+	// The operator deletes the pattern; the registry reloads and the pass
+	// re-runs over the live model.
+	decider.LoadUnIgnore(nil)
+	visibility.ApplyUnIgnoredMarks(dev, decider)
+
+	if dp.IsUnIgnored() {
+		t.Error("mark survived the removal of the rule that set it")
+	}
+	if dp.Usage() == hmenum.DataPointUsageDataPoint {
+		t.Error("parameter still surfaces as a data point after its un-ignore rule was removed")
+	}
+}
+
+// TestApplyUnIgnoredMarksLeavesUnrelatedDataPointsVisible guards the
+// inverse: computing the full set must not suppress parameters the static
+// rules never hid in the first place.
+func TestApplyUnIgnoredMarksLeavesUnrelatedDataPointsVisible(t *testing.T) {
+	t.Parallel()
+
+	decider := visibility.NewParameterDecider(nil)
+
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "TEST101",
+		Model:       "HmIP-PS",
+	})
+	ch := dev.AddChannel("TEST101:4", 4, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	dp := putValuesBoolDP(ch, hmenum.ParameterState)
+
+	visibility.ApplyUnIgnoredMarks(dev, decider)
+
+	if dp.IsUnIgnored() {
+		t.Error("STATE must not be marked un-ignored without a matching rule")
+	}
+	if dp.Usage() != hmenum.DataPointUsageDataPoint {
+		t.Errorf("STATE Usage()=%v, want DataPoint — the pass must not suppress unrelated parameters", dp.Usage())
+	}
+}

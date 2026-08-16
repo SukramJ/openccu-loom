@@ -81,6 +81,13 @@ type scheduleRunner struct {
 
 	mu      sync.Mutex
 	started bool
+	// gen numbers the generations start() builds. A chain re-arms
+	// itself after every fire, and a fire that is still running when
+	// start() rebuilds the runner would otherwise re-arm with an index
+	// into an entry list that no longer exists: the deleted schedule
+	// keeps firing and its cancel overwrites the live entry's slot, so
+	// stop() can never reach the entry that replaced it.
+	gen     uint64
 	cancels []func() // index-aligned with the entries built by the last start()
 }
 
@@ -113,11 +120,13 @@ func (r *scheduleRunner) start(ctx context.Context) {
 		return
 	}
 	r.mu.Lock()
+	r.gen++
+	gen := r.gen
 	r.started = true
 	r.cancels = make([]func(), len(entries))
 	r.mu.Unlock()
 	for i, e := range entries {
-		r.chainAt(i, e)
+		r.chainAt(i, gen, e)
 	}
 }
 
@@ -162,8 +171,14 @@ func (r *scheduleRunner) loadEntries(ctx context.Context) ([]scheduleEntry, erro
 // after every firing, storing the current cancel func at cancels[idx]
 // so stop() never accumulates more than one live timer per entry.
 //
+// gen is the start() generation the entry belongs to. stop() cannot
+// reach a fire that is already running, so a chain whose fire outlives
+// its generation would re-arm a schedule the operator just edited away
+// and write its cancel into the slot the new generation's entry owns.
+// Both halves are refused when the generation moved on.
+//
 //nolint:contextcheck // schedule fires run on the runner lifetime, detached from any caller ctx — mirrors the journal-retention chain in service.go
-func (r *scheduleRunner) chainAt(idx int, e scheduleEntry) {
+func (r *scheduleRunner) chainAt(idx int, gen uint64, e scheduleEntry) {
 	hour, minute, err := parseHHMM(e.sched.Time)
 	if err != nil {
 		r.deps.Logger.Error("alarm schedules: invalid schedule time, skipping", "zone", e.zoneID, "time", e.sched.Time, "error", err)
@@ -176,17 +191,24 @@ func (r *scheduleRunner) chainAt(idx int, e scheduleEntry) {
 		cancel := r.deps.Scheduler.Schedule(d, func() {
 			r.fire(context.Background(), e)
 			r.mu.Lock()
-			started := r.started
+			live := r.started && r.gen == gen
 			r.mu.Unlock()
-			if started {
+			if live {
 				arm()
 			}
 		})
 		r.mu.Lock()
-		if idx < len(r.cancels) {
+		live := r.started && r.gen == gen && idx < len(r.cancels)
+		if live {
 			r.cancels[idx] = cancel
 		}
 		r.mu.Unlock()
+		if !live {
+			// The generation moved on between scheduling and storing:
+			// nothing owns this cancel any more, so cancel it here or
+			// the timer outlives every handle to it.
+			cancel()
+		}
 	}
 	arm()
 }

@@ -884,3 +884,128 @@ func TestRunDiscoveryOrphanCleanupOnceSweepsEveryCentral(t *testing.T) {
 		t.Errorf("the sweep judged another central's topic: %q — that central's snapshot may not have run yet", other)
 	}
 }
+
+// filterKeyedBroker models the one property of the shared subscribe client
+// that makes concurrent sweeps unsafe: subscriptions are keyed by filter,
+// so a second Subscribe on the same filter replaces the first handler, and
+// an Unsubscribe removes the subscription for whoever holds it.
+//
+// Retained delivery is asynchronous — the broker flushes its retained
+// queue after the subscription exists — which is what lets an overlapping
+// window steal the first sweep's deliveries.
+type filterKeyedBroker struct {
+	mu        sync.Mutex
+	handlers  map[string]MessageHandler
+	retained  []retainedMsg
+	published []publishedMsg
+	wg        sync.WaitGroup
+}
+
+func newFilterKeyedBroker(retained []retainedMsg) *filterKeyedBroker {
+	return &filterKeyedBroker{handlers: map[string]MessageHandler{}, retained: retained}
+}
+
+func (b *filterKeyedBroker) Publish(_ context.Context, topic string, payload []byte, _ QoS, retain bool, _ ...PublishOption) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.published = append(b.published, publishedMsg{topic: topic, payload: payload, retain: retain})
+	return nil
+}
+
+func (b *filterKeyedBroker) Subscribe(_ context.Context, filter string, _ QoS, handler MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
+	b.mu.Lock()
+	b.handlers[filter] = handler
+	msgs := make([]retainedMsg, len(b.retained))
+	copy(msgs, b.retained)
+	b.mu.Unlock()
+
+	b.wg.Add(1)
+	go func() {
+		defer b.wg.Done()
+		time.Sleep(20 * time.Millisecond)
+		for _, msg := range msgs {
+			b.mu.Lock()
+			h := b.handlers[filter]
+			b.mu.Unlock()
+			if h == nil {
+				return
+			}
+			h(&Message{Topic: msg.topic, Payload: msg.payload, Retain: true})
+		}
+	}()
+	return SubscribeResult{}, nil
+}
+
+func (b *filterKeyedBroker) Unsubscribe(_ context.Context, filter string) error {
+	b.mu.Lock()
+	delete(b.handlers, filter)
+	b.mu.Unlock()
+	return nil
+}
+
+func (b *filterKeyedBroker) evicted() map[string]bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := map[string]bool{}
+	for _, p := range b.published {
+		if p.retain && len(p.payload) == 0 {
+			out[p.topic] = true
+		}
+	}
+	return out
+}
+
+// TestConcurrentDiscoveryOrphanSweepsDoNotTruncateEachOther pins the
+// per-broker serialisation of the retained-snapshot window.
+//
+// The daemon runs one discovery-orphan sweep per central, and every one of
+// them subscribes the same client to `homeassistant/#`. Overlapping
+// windows used to replace each other's handler and tear the subscription
+// down early, so both sweeps saw an empty broker and reported zero
+// orphans — the phantom entities they exist to remove survived, silently,
+// on every multi-CCU installation.
+func TestConcurrentDiscoveryOrphanSweepsDoNotTruncateEachOther(t *testing.T) {
+	t.Parallel()
+	const (
+		orphanA = "homeassistant/sensor/ccu-a_000a/1_state/config"
+		orphanB = "homeassistant/sensor/ccu-b_000b/1_state/config"
+	)
+	broker := newFilterKeyedBroker([]retainedMsg{
+		{topic: orphanA, payload: []byte(`{"name":"A"}`)},
+		{topic: orphanB, payload: []byte(`{"name":"B"}`)},
+	})
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-a",
+		CentralNames:       []string{"ccu-a", "ccu-b"},
+		RawEnabled:         true,
+		HADiscoveryEnabled: true,
+	}, broker).WithSubscriber(broker)
+
+	var wg sync.WaitGroup
+	counts := make([]int, 2)
+	errs := make([]error, 2)
+	for i, central := range []string{"ccu-a", "ccu-b"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			counts[i], errs[i] = bridge.RunDiscoveryOrphanCleanupOnce(
+				context.Background(), central, 120*time.Millisecond,
+			)
+		}()
+	}
+	wg.Wait()
+	broker.wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("sweep %d: %v", i, err)
+		}
+	}
+	evicted := broker.evicted()
+	if !evicted[orphanA] {
+		t.Errorf("central ccu-a's orphan %q survived the sweep (counts=%v)", orphanA, counts)
+	}
+	if !evicted[orphanB] {
+		t.Errorf("central ccu-b's orphan %q survived the sweep (counts=%v)", orphanB, counts)
+	}
+}

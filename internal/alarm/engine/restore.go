@@ -43,6 +43,14 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 	for _, id := range e.sortedZoneIDs() {
 		a := e.zones[id]
+		// Seed every zone's sensor values before its state is restored.
+		// A sensor whose value is unknown is invisible to the blocker
+		// policy — it only classifies a *known* active sensor — so a
+		// zone that boots without the seed reports ready to arm while a
+		// contact stands open, and stays wrong until that contact
+		// happens to push. The armed-side restore paths re-read the
+		// same values; this pass is what covers the disarmed ones.
+		e.refreshSensorValues(ctx, a)
 		row, ok, err := e.stateStore.Get(ctx, id)
 		if err != nil {
 			// A partial start must not leave live countdowns behind:
@@ -208,6 +216,9 @@ func (e *Engine) restoreZone(ctx context.Context, a *zone, row sqlitestore.Alarm
 	if a.incident == nil || a.silencedIncidentID != a.incident.ID {
 		a.silencedIncidentID = 0
 	}
+	// The accumulator is per-process; the ledger is what carries the
+	// incident's sources across the restart.
+	e.restoreSources(ctx, a)
 	timers := decodeTimers(row.TimersJSON)
 
 	switch row.State {
@@ -235,8 +246,14 @@ func (e *Engine) restoreZone(ctx context.Context, a *zone, row sqlitestore.Alarm
 		e.restoreTriggered(ctx, a, timers, plausible, now)
 
 	default:
-		// Unknown persisted state (downgrade?): fail safe to armed
-		// visibility rather than silently disarming.
+		// Unknown persisted state — a downgrade wrote a token this build
+		// cannot interpret. Come up disarmed rather than guess an
+		// armed-side position whose mode, delays, and output policy this
+		// build cannot reconstruct: the same "disarm loudly instead of
+		// guessing" direction Reload takes when a zone's active mode
+		// disappears from the configuration. The fault entry is what
+		// makes the downgrade visible to the operator — the zone is
+		// unprotected until it is armed again.
 		e.journalFault(ctx, a, "unknown_persisted_state", nil, 0)
 		a.state = hmenum.AlarmZoneStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed

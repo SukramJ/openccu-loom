@@ -239,14 +239,24 @@ func (c *Channel) SetWriter(w ChannelWriter) {
 }
 
 // Writer returns the installed [ChannelWriter], or nil when no writer
-// has been configured. Custom-DP constructors ( D.12) call this
-// to capture the write path without going through SetValue / Set.
+// has been configured. Custom-DP constructors call this to capture the
+// write path without going through SetValue / Set.
 // ChannelWriter is a superset of [generic.Writer] — a constructor that
 // only needs SetValue can assign the result directly to a Writer field.
+//
+// The returned writer enforces the operator channel lock (see
+// [operationLockedWriter]): a captured write path is the only thing a
+// custom data point holds, so the lock has to travel with it rather than
+// live in Set / SetMany alone. The wrapper is stateless apart from the
+// channel reference and re-reads the lock on every call.
 func (c *Channel) Writer() ChannelWriter {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.writer
+	w := c.writer
+	c.mu.RUnlock()
+	if w == nil {
+		return nil
+	}
+	return &operationLockedWriter{origin: c, next: w}
 }
 
 // SetRefresher installs the read-side refresher for Refresh.

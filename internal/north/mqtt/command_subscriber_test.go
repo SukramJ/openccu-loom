@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -914,5 +915,71 @@ func TestWeekProfileCommandDoesNotAlsoIssueADataPointWrite(t *testing.T) {
 	}
 	if got := sink.setValues.Load(); got != 0 {
 		t.Fatalf("CCU data-point writes = %d, want 0 (a bogus `week_profile` parameter reached the CCU)", got)
+	}
+}
+
+// failingNthSubscriber refuses exactly one Subscribe call — the one at
+// index `failAt` — and accepts every other. It lets a test drive
+// [CommandSubscriber.Start] once per registered filter and observe how
+// that single rejection is reported.
+type failingNthSubscriber struct {
+	*NoopClient
+	failAt  int
+	seen    int
+	filters []string
+}
+
+var errSubscribeRefused = errors.New("broker refused subscribe")
+
+func (s *failingNthSubscriber) Subscribe(ctx context.Context, filter string, qos QoS, handler MessageHandler, opts ...SubscribeOption) (SubscribeResult, error) {
+	idx := s.seen
+	s.seen++
+	s.filters = append(s.filters, filter)
+	if idx == s.failAt {
+		return SubscribeResult{}, errSubscribeRefused
+	}
+	return s.NoopClient.Subscribe(ctx, filter, qos, handler, opts...)
+}
+
+// TestCommandSubscriberReportsEverySubscribeFailure pins the two things an
+// operator needs when a broker ACL denies one command filter: the
+// subscribe_failures counter moves, and the returned error names the
+// filter instead of surfacing the broker's bare message. The
+// program-activation subscription used to do neither, so an ACL problem on
+// that one topic left the metric at zero and the log without a subject.
+func TestCommandSubscriberReportsEverySubscribeFailure(t *testing.T) {
+	t.Parallel()
+
+	// Discover how many Subscribe calls Start makes.
+	probe := &failingNthSubscriber{NoopClient: NewNoopClient(), failAt: -1}
+	if err := NewCommandSubscriber(probe, NewTopicBuilder("openccu-loom"), &fakeSink{}, nil).
+		Start(context.Background()); err != nil {
+		t.Fatalf("probe start: %v", err)
+	}
+	total := probe.seen
+	if total == 0 {
+		t.Fatal("Start registered no subscriptions")
+	}
+
+	for i := range total {
+		sub := &failingNthSubscriber{NoopClient: NewNoopClient(), failAt: i}
+		reg := metrics.NewRegistry()
+		col := metrics.NewMqttCollector(reg, fmt.Sprintf("sub_fail_%d", i))
+		cs := NewCommandSubscriber(sub, NewTopicBuilder("openccu-loom"), &fakeSink{}, nil).
+			WithCollector(col)
+		err := cs.Start(context.Background())
+		filter := sub.filters[i]
+		if err == nil {
+			t.Fatalf("filter %q: Start returned nil despite a refused subscribe", filter)
+		}
+		if !errors.Is(err, errSubscribeRefused) {
+			t.Fatalf("filter %q: error does not wrap the broker error: %v", filter, err)
+		}
+		if err.Error() == errSubscribeRefused.Error() {
+			t.Fatalf("filter %q: error is unwrapped, so the log names no subscription: %v", filter, err)
+		}
+		if got := col.SubscribeFailures.Value(); got != 1 {
+			t.Fatalf("filter %q: subscribe_failures = %d, want 1", filter, got)
+		}
 	}
 }

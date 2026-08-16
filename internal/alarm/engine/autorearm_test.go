@@ -151,6 +151,50 @@ func TestAutoRearm_BlockedAtElapseStaysDisarmedAndJournalsFailedToArm(t *testing
 	}
 }
 
+// TestAutoRearm_StopCancelsThePendingRearm pins the shutdown edge: the
+// auto-rearm timer is deliberately separate from the state timers, so a
+// Stop that cancels only the latter leaves it scheduled. It then fires
+// on a stopped engine — chirps and outputs on a daemon that is shutting
+// down, and an armed state row written over the final snapshot Stop
+// just persisted, so the next boot restores a zone nobody armed.
+func TestAutoRearm_StopCancelsThePendingRearm(t *testing.T) {
+	h := newHarness(t)
+	seedAutoRearmZone(h)
+	h.start()
+	triggerAndDisarm(h)
+
+	h.eng.Stop(h.ctx)
+	h.advance(time.Minute) // the whole quiet period elapses after the stop
+
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+	row, ok, err := h.states.Get(h.ctx, "eg")
+	if err != nil || !ok {
+		t.Fatalf("state row: ok=%v err=%v", ok, err)
+	}
+	if row.State != hmenum.AlarmZoneStateDisarmed {
+		t.Fatalf("persisted state = %s, want disarmed — a stopped engine must not arm", row.State)
+	}
+
+	// The final snapshot still carries the pending rearm, so the next
+	// Start resumes it instead of forgetting it.
+	if !hmenum.AlarmMode(decodeAutoRearmMode(t, row.ContextJSON)).Armed() {
+		t.Errorf("persisted context %q lost the pending auto-rearm mode", row.ContextJSON)
+	}
+}
+
+// decodeAutoRearmMode reads the persisted auto-rearm target out of a
+// zone's context document.
+func decodeAutoRearmMode(t *testing.T, contextJSON string) string {
+	t.Helper()
+	var doc struct {
+		AutoRearmMode string `json:"auto_rearm_mode"`
+	}
+	if err := jsonUnmarshal(contextJSON, &doc); err != nil {
+		t.Fatalf("context json: %v", err)
+	}
+	return doc.AutoRearmMode
+}
+
 func TestAutoRearm_RestoreResumesTheRemainingQuietPeriod(t *testing.T) {
 	h := newHarness(t)
 	seedAutoRearmZone(h)

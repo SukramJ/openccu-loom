@@ -328,6 +328,13 @@ func (e *Engine) Stop(ctx context.Context) {
 	for _, a := range e.zones {
 		e.persist(ctx, a)
 		a.cancelTimers()
+		// The auto-rearm timer is deliberately not part of cancelTimers,
+		// so it has to be cancelled here or it fires on a stopped engine:
+		// the rearm would chirp, drive outputs, and persist an armed row
+		// over the snapshot above, leaving the next boot to restore a
+		// zone nobody armed. The snapshot is already written, so the
+		// pending rearm still survives into the next Start.
+		a.cancelAutoRearm()
 	}
 }
 
@@ -465,6 +472,12 @@ func (e *Engine) beginArm(ctx context.Context, a *zone, req ArmRequest, mcfg Mod
 			bypass[id] = true
 		}
 	}
+	// Decide against current values, not against whatever happened to
+	// arrive on the bus: a sensor the engine has never seen an event
+	// for reads as "unknown", which the blocker policy cannot classify,
+	// so the check would pass vacuously and the open-at-arm baseline
+	// below would miss the sensor too.
+	e.refreshSensorValues(ctx, a)
 	rd, autoBypass := a.readinessDetail(req.Mode)
 	for _, id := range autoBypass {
 		bypass[id] = true
@@ -645,9 +658,16 @@ func (e *Engine) Disarm(ctx context.Context, zoneID, by, source string) error {
 }
 
 // DisarmWithCode is Disarm with an alarm code, honoring the zone's
-// CodePolicy (notes/concepts/alarm-concept.md §11). An already-disarmed zone
-// short-circuits before the code check: disarming a disarmed zone is an
-// idempotent no-op and needs no security decision.
+// CodePolicy (notes/concepts/alarm-concept.md §11). Disarming an
+// already-disarmed zone is an idempotent no-op: it never refuses, so a
+// wrong or missing code changes nothing and cannot be used to probe
+// which codes exist.
+//
+// A supplied code is still validated there, for one reason: duress.
+// Coercion frequently starts with the attacker disarming the zone, and
+// gating duress detection on the arm state would make the covert
+// channel unavailable in exactly that situation. The fan-out is silent
+// and the verb's own outcome stays unchanged.
 func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -656,6 +676,14 @@ func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code st
 		return ErrUnknownZone
 	}
 	if a.state == hmenum.AlarmZoneStateDisarmed {
+		if code != "" {
+			if identity, duress, cerr := e.authorize(ctx, a, codeVerbDisarm, code, source); cerr == nil && duress {
+				if identity != "" && by == "" {
+					by = identity
+				}
+				e.fireDuress(ctx, a, codeVerbDisarm, by, source)
+			}
+		}
 		// An explicit disarm of an already-disarmed zone is a no-op, but
 		// it cancels any pending auto-rearm — the operator wants it to
 		// stay off.
@@ -1717,10 +1745,18 @@ func (e *Engine) deferAutoRearm(ctx context.Context, a *zone, sensorID string) {
 // onAutoRearmFired dispatches an auto-rearm timer expiry, discarding
 // stale fires. It runs on the engine lifetime context.
 //
+// A callback already in flight when Stop cancels the timer still
+// reaches this point, so the stopped engine is checked here as well:
+// arming after the final state snapshot would leave the persisted row
+// describing a zone the next boot never armed.
+//
 //nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
 func (e *Engine) onAutoRearmFired(zoneID string, seq uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
 	a, ok := e.zones[zoneID]
 	if !ok || a.autoRearmSeq != seq || a.autoRearmCancel == nil {
 		return

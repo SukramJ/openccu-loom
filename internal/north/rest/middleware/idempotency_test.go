@@ -564,3 +564,44 @@ func TestIdempotency_OversizedResponseIsNotCached(t *testing.T) {
 		t.Fatalf("cache size = %d, want 0 for an oversized response", got)
 	}
 }
+
+// TestIdempotency_CredentialResponseIsNotCached pins that a response minting
+// a cookie never becomes a replayable artefact.
+//
+// The Idempotency-Key is caller-chosen and the cache key folds in a subject
+// that is empty on the anonymous routes — POST /auth/login among them — so a
+// stored Set-Cookie would be handed verbatim to whoever presents the same key
+// within the TTL, authenticating them as the first caller. The retry must
+// re-run the login instead.
+func TestIdempotency_CredentialResponseIsNotCached(t *testing.T) {
+	t.Parallel()
+
+	cache := newIdempotencyCache()
+	var calls atomic.Int32
+	handler := idempotencyMiddleware(cache)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n := calls.Add(1)
+		http.SetCookie(w, &http.Cookie{Name: "session", Value: "sid-" + strconv.Itoa(int(n)), Path: "/"})
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, idempotencyKeyRequest("login-key"))
+	if got := first.Result().Cookies(); len(got) != 1 || got[0].Value != "sid-1" {
+		t.Fatalf("first response cookies = %v, want the freshly minted session", got)
+	}
+	if got := len(cache.items); got != 0 {
+		t.Fatalf("cache size = %d, want 0 for a response carrying Set-Cookie", got)
+	}
+
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, idempotencyKeyRequest("login-key"))
+	if second.Header().Get("Idempotent-Replay") != "" {
+		t.Fatal("a second caller replayed the cached credential response")
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("handler calls = %d, want 2 — the retry must re-authenticate", got)
+	}
+	if got := second.Result().Cookies(); len(got) != 1 || got[0].Value != "sid-2" {
+		t.Fatalf("second response cookies = %v, want its own freshly minted session", got)
+	}
+}

@@ -44,6 +44,13 @@ var roleGateWriteCommands = []struct {
 	{"backups.trigger", `{"central_name":"alpha"}`, auth.RoleAdmin},
 	{"ccu.cache_clear", `{}`, auth.RoleAdmin},
 	{"programs.delete", `{"id":"P1"}`, auth.RoleAdmin},
+	// Reads whose REST twin is gated: POST /sysvars/fetch is operator-gated
+	// because the command forces a CCU round-trip, and GET
+	// /diagnostics/rssi is admin-gated because the RF matrix names every
+	// device and its per-partner reception quality. A socket that served
+	// them to any viewer made both REST gates a formality.
+	{"sysvars.fetch", `{}`, auth.RoleOperator},
+	{"ccu.get_rssi_info", `{}`, auth.RoleAdmin},
 }
 
 // newRoleGateRouter wires just enough of the command surface to exercise
@@ -64,6 +71,7 @@ func newRoleGateRouter() *Router {
 		Paramsets:    &stubParamsetWriter{},
 		CacheClearer: &stubCacheClearer{},
 	})
+	RegisterMissingCommands(r, MissingCommandsConfig{RSSIInfo: &stubRSSI{}})
 	return r
 }
 
@@ -184,6 +192,7 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 
 	RegisterMissingCommands(r, MissingCommandsConfig{
 		ScheduleEnabler: &stubScheduleEnabler{},
+		RSSIInfo:        &stubRSSI{},
 	})
 
 	RegisterCustomDPCommands(r, CustomDPCommandsConfig{

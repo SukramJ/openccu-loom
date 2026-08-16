@@ -11,6 +11,7 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -24,8 +25,9 @@ import (
 // fakeSourceLedger records every Append call so a test can assert what
 // reached the durable half without a real database.
 type fakeSourceLedger struct {
-	mu   sync.Mutex
-	rows []sqlitestore.AlarmIncidentSource
+	mu      sync.Mutex
+	rows    []sqlitestore.AlarmIncidentSource
+	listErr error
 }
 
 func (l *fakeSourceLedger) Append(_ context.Context, row sqlitestore.AlarmIncidentSource) error {
@@ -33,6 +35,21 @@ func (l *fakeSourceLedger) Append(_ context.Context, row sqlitestore.AlarmIncide
 	defer l.mu.Unlock()
 	l.rows = append(l.rows, row)
 	return nil
+}
+
+func (l *fakeSourceLedger) ListByIncident(_ context.Context, incidentID int64) ([]sqlitestore.AlarmIncidentSource, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.listErr != nil {
+		return nil, l.listErr
+	}
+	var out []sqlitestore.AlarmIncidentSource
+	for i := range l.rows {
+		if l.rows[i].IncidentID == incidentID {
+			out = append(out, l.rows[i])
+		}
+	}
+	return out, nil
 }
 
 func (l *fakeSourceLedger) refs() []string {
@@ -79,6 +96,16 @@ func (h *harness) startWithLedger(ledger engine.IncidentSourceLedger) {
 	if err := h.eng.Start(h.ctx); err != nil {
 		h.t.Fatalf("engine.Start: %v", err)
 	}
+}
+
+// restartWithLedger simulates a daemon restart that keeps the durable
+// source ledger, which is what the real daemon does — the ledger lives
+// in SQLite while the accumulator lives in the process.
+func (h *harness) restartWithLedger(downtime time.Duration, ledger engine.IncidentSourceLedger) {
+	h.t.Helper()
+	h.eng.Stop(h.ctx)
+	h.freshPorts(h.clk.Now().Add(downtime))
+	h.startWithLedger(ledger)
 }
 
 // refFor mirrors the routing key the harness's seeded sensors carry
@@ -161,6 +188,79 @@ func TestSources_SecondSensorWhileTriggeredAccumulatesAndRepublishes(t *testing.
 	// (d) the durable ledger received both.
 	if got := ledger.refs(); len(got) != 2 || got[0] != refFor("window") || got[1] != refFor("motion") {
 		t.Errorf("ledger refs = %v, want [%q, %q]", got, refFor("window"), refFor("motion"))
+	}
+}
+
+// TestSources_RestoreRehydratesAccumulatorFromLedger pins the restart
+// half of the accumulator: the in-memory list lives in the process, so
+// a daemon that restarts mid-incident used to resume with an empty one.
+// The restore re-fire then carried no sources at all, and the next
+// detector to fire became sources[0] — the headline sensor of every
+// later trigger event, naming a sensor that did not open the incident.
+func TestSources_RestoreRehydratesAccumulatorFromLedger(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	ledger := &fakeSourceLedger{}
+	h.startWithLedger(ledger)
+	h.armFull()
+
+	h.eng.HandleSensorEvent(h.ctx, "window", true)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+	// Still open across a restart well inside the 60 s trigger window.
+	h.reader.set("window", true)
+	h.restartWithLedger(10*time.Second, ledger)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+	if got := h.eng.IncidentSources("eg"); len(got) != 1 || got[0].Ref != refFor("window") {
+		t.Fatalf("IncidentSources after restore = %+v, want exactly [window]", got)
+	}
+	// (a) the restore re-fire ships the incident's sources, so a
+	// notification output can still say what opened the alarm.
+	fire := h.outputs.lastFire(t)
+	if len(fire.Opts.Sources) != 1 || fire.Opts.Sources[0].Ref != refFor("window") {
+		t.Errorf("restore re-fire Sources = %+v, want exactly [window]", fire.Opts.Sources)
+	}
+	if got := fire.Opts.Sources[0].SensorID; got != "window" {
+		t.Errorf("restore re-fire source SensorID = %q, want window", got)
+	}
+
+	// (b) a second detector afterwards appends, it does not take over
+	// the headline.
+	h.eng.HandleSensorEvent(h.ctx, "motion", true)
+	triggered := h.sink.triggered()
+	if len(triggered) == 0 {
+		t.Fatal("no trigger event republished after the second detector")
+	}
+	last := triggered[len(triggered)-1]
+	if last.SensorID != "window" {
+		t.Errorf("republished headline SensorID = %q, want window (the sensor that opened the incident)", last.SensorID)
+	}
+	if len(last.Sources) != 2 || last.Sources[0].Ref != refFor("window") || last.Sources[1].Ref != refFor("motion") {
+		t.Errorf("republished Sources = %+v, want [window, motion]", last.Sources)
+	}
+}
+
+// TestSources_RestoreSurvivesAnUnreadableLedger pins the degradation
+// direction: a ledger read failure must not keep a triggered zone from
+// restoring — it falls back to the empty accumulator.
+func TestSources_RestoreSurvivesAnUnreadableLedger(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	ledger := &fakeSourceLedger{}
+	h.startWithLedger(ledger)
+	h.armFull()
+
+	h.eng.HandleSensorEvent(h.ctx, "window", true)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+	ledger.listErr = errors.New("ledger unavailable")
+	h.reader.set("window", true)
+	h.restartWithLedger(10*time.Second, ledger)
+
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+	if got := h.eng.IncidentSources("eg"); len(got) != 0 {
+		t.Errorf("IncidentSources = %+v, want empty after a failed ledger read", got)
 	}
 }
 

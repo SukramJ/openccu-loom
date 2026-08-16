@@ -54,7 +54,7 @@ func newReloadChannelCoordinator() (*DeviceCoordinator, *registry.ParamsetRegist
 	devs := registry.NewDeviceRegistry()
 	descs := registry.NewDeviceDescriptionRegistry()
 	ps := registry.NewParamsetRegistry()
-	return NewDeviceCoordinator("main", bus, devs, descs, ps, nil), ps
+	return NewDeviceCoordinator("main", bus, devs, descs, ps, nil, nil), ps
 }
 
 func TestReloadChannelConfigPullsAllParamsetKindsAndStores(t *testing.T) {

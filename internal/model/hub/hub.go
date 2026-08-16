@@ -577,7 +577,10 @@ func (h *Hub) RenameSysvar(oldName, newName string) bool {
 		return false
 	}
 	delete(h.sysvars, oldName)
-	s.Name = newName
+	// The name belongs to the embedded data point and is read through its
+	// own lock by every north-bound reader; the hub mutex held here guards
+	// the map, not the entry.
+	s.SetName(newName)
 	h.sysvars[newName] = s
 	return true
 }

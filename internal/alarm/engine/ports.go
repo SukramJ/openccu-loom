@@ -204,8 +204,14 @@ type Journal interface {
 // incident. Like [Journal] it is best-effort: the engine logs a failed
 // append and continues, because losing an audit row must never mute an
 // alarm. A nil ledger disables recording entirely.
+//
+// ListByIncident is the read half a restore needs: the in-memory
+// accumulator is per-process, so a daemon that restarts mid-incident
+// would otherwise resume with an empty source list and let the next
+// detector to fire become the incident's headline sensor.
 type IncidentSourceLedger interface {
 	Append(ctx context.Context, row sqlitestore.AlarmIncidentSource) error
+	ListByIncident(ctx context.Context, incidentID int64) ([]sqlitestore.AlarmIncidentSource, error)
 }
 
 // SensorReader supplies fresh sensor activation values during restore
