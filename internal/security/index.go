@@ -29,10 +29,12 @@ import (
 func (s *Service) RebuildIndex(ctx context.Context) error {
 	overrides, err := s.loadOverrides(ctx)
 	if err != nil {
+		s.markIndexUnavailable(err)
 		return err
 	}
 	enrolled, alarmDevices, err := s.loadEnrollment(ctx)
 	if err != nil {
+		s.markIndexUnavailable(err)
 		return err
 	}
 
@@ -47,6 +49,9 @@ func (s *Service) RebuildIndex(ctx context.Context) error {
 
 	now := nowMS(s.clk.Now())
 	s.mu.Lock()
+	// The reads above succeeded, so the index once again reflects the live
+	// model: clear any degraded flag a previous failed rebuild set.
+	s.agg.indexHealthy = true
 	// Activation state survives a rebuild for sources that still exist;
 	// dropping it would make every active detector look like it cleared
 	// the moment an operator saved an unrelated override.
@@ -103,6 +108,26 @@ func (s *Service) RebuildIndex(ctx context.Context) error {
 	// happens to reconcile it, which for a latching sensor may be never.
 	s.publishState(snap)
 	return nil
+}
+
+// markIndexUnavailable records that the classification index could not be
+// rebuilt — its SQLite reads failed (lock contention, disk-full, a WAL
+// stall). Every caller of RebuildIndex only logs and continues, and the
+// empty/stale index would otherwise fold into a coherent "all clear"
+// (severity OK, no active classes) published to MQTT/REST/WS — smoke,
+// water, door and duress monitoring reporting "no problems" when the
+// domain in fact knows nothing. Flagging the aggregate unhealthy raises
+// the folded severity to a warning and stamps IndexHealthy=false on the
+// snapshot, so the state reads "unknown/degraded" until a later rebuild
+// succeeds. The degraded snapshot is published so the retained north-bound
+// planes stop advertising the false all-clear.
+func (s *Service) markIndexUnavailable(err error) {
+	s.log.Error("security: classification index unavailable — reporting degraded state", "error", err)
+	s.mu.Lock()
+	s.agg.indexHealthy = false
+	snap := s.agg.snapshot()
+	s.mu.Unlock()
+	s.publishState(snap)
 }
 
 // faultStandsLocked reports whether the ledger holds an open fault for

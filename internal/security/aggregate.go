@@ -39,6 +39,14 @@ type aggregate struct {
 	// so "a test is running" cannot be derived from the bus alone. A
 	// test-mode flag that never turns true would be worse than none.
 	engineHealthy bool
+	// indexHealthy reports whether the classification index reflects the
+	// live model. A failed RebuildIndex (its SQLite reads can error on
+	// lock contention, disk-full or a WAL stall) leaves the index empty or
+	// stale; folding that into a coherent "all clear" would report
+	// smoke/water/door/duress monitoring as fine when the domain in fact
+	// knows nothing. False downgrades the whole domain to a warning until
+	// the next successful rebuild, so the state reads "unknown", not "ok".
+	indexHealthy bool
 	// lastAlarm and lastFault survive across events; a consumer that
 	// restarts has no way to replay an event, so the retained halves
 	// are the only durable record.
@@ -85,6 +93,7 @@ func newAggregate() *aggregate {
 		classSince:    map[hmenum.SecurityClass]int64{},
 		faults:        map[string]*security.Fault{},
 		engineHealthy: true,
+		indexHealthy:  true,
 	}
 }
 
@@ -193,6 +202,11 @@ func (a *aggregate) severity() hmenum.SecuritySeverity {
 	if !a.engineHealthy {
 		raise(hmenum.SecuritySeverityWarning)
 	}
+	// An index that failed to rebuild cannot vouch for any class being
+	// clear, so the domain reports a warning rather than a false all-clear.
+	if !a.indexHealthy {
+		raise(hmenum.SecuritySeverityWarning)
+	}
 	return worst
 }
 
@@ -203,6 +217,7 @@ func (a *aggregate) snapshot() security.Snapshot {
 		Classes:       map[hmenum.SecurityClass]security.ClassState{},
 		Zones:         map[string]security.ZoneState{},
 		EngineHealthy: a.engineHealthy,
+		IndexHealthy:  a.indexHealthy,
 		LastAlarm:     cloneNotification(a.lastAlarm),
 		LastFault:     cloneNotification(a.lastFault),
 	}

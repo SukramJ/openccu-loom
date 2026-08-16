@@ -122,6 +122,12 @@ func hubDataPoints(central string, h *hub.Hub) HubDataPoints {
 			if !ok {
 				continue
 			}
+			// A negative system_health is the not-ready sentinel
+			// ([hub.MetricSystemHealthUnknown]): omit it rather than surface a
+			// stale percentage or a bogus negative when the central is FAILED.
+			if kind == hub.MetricSystemHealth && sample.Value < 0 {
+				continue
+			}
 			dp.Metrics = append(dp.Metrics, HubMetricDataPoint{
 				LegacyName: string(kind),
 				Value:      sample.Value,

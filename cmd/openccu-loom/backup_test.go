@@ -904,3 +904,114 @@ func TestVacuumIntoDoesNotMigrateSource(t *testing.T) {
 		t.Error("backup create migrated the live database it was snapshotting")
 	}
 }
+
+// TestBackupSnapshotsHistoryDBConsistently pins the history.db data-loss fix:
+// history.db is a second live SQLite database the daemon holds open with an
+// active WAL. A byte-for-byte copy of the main file plus its live -wal/-shm
+// sidecars restores to a mismatched trio that silently drops every
+// committed-but-uncheckpointed row. The fix snapshots it with VACUUM INTO (a
+// self-contained copy) and excludes the live sidecars, so the restored
+// history.db is internally consistent with all rows intact.
+func TestBackupSnapshotsHistoryDBConsistently(t *testing.T) {
+	useBackupTestKey(t)
+	srcDir := t.TempDir()
+	seedDB(t, filepath.Join(srcDir, "openccu-loom.db")) // main DB is required by create
+
+	// Open history.db WAL-mode, commit rows, and keep the connection open so
+	// the rows live in the -wal (never checkpointed into the main file) — the
+	// exact hot-database state a naive copy loses.
+	const wantRows = 510
+	histPath := filepath.Join(srcDir, "history.db")
+	histDB := openHistoryWALHeldOpen(t, histPath, wantRows)
+	defer func() { _ = histDB.Close() }()
+
+	configFile := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configFile, []byte("data_dir: "+srcDir+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(t.TempDir(), "history.tar.gz")
+
+	var stdout, stderr bytes.Buffer
+	if err := runBackup([]string{"create", "--config", configFile, "--out", archivePath}, &stdout, &stderr); err != nil {
+		t.Fatalf("backup create: %v\nstderr: %s", err, stderr.String())
+	}
+
+	// Restore into a fresh data dir.
+	dstDir := t.TempDir()
+	stdout.Reset()
+	stderr.Reset()
+	if err := runBackup([]string{
+		"restore", "--data-dir", dstDir, "--config",
+		filepath.Join(t.TempDir(), "cfg.yaml"), archivePath,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("backup restore: %v\nstderr: %s", err, stderr.String())
+	}
+
+	// The restored history.db must stand alone: no stale -wal/-shm sidecars
+	// beside it (the old byte-copy archived and restored them, producing a
+	// mismatched trio).
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(filepath.Join(dstDir, "history.db"+suffix)); err == nil {
+			t.Errorf("restored history.db%s sidecar must not exist — it desyncs the snapshot", suffix)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("stat history.db%s: %v", suffix, err)
+		}
+	}
+
+	// The restored database, opened alone, must contain every committed row.
+	ctx := context.Background()
+	restored, err := sql.Open(sqlite.DriverName, sqlite.FileDSN(filepath.Join(dstDir, "history.db")))
+	if err != nil {
+		t.Fatalf("open restored history.db: %v", err)
+	}
+	defer func() { _ = restored.Close() }()
+	var integrity string
+	if err := restored.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil {
+		t.Fatalf("integrity_check: %v", err)
+	}
+	if integrity != "ok" {
+		t.Fatalf("restored history.db integrity_check = %q, want ok", integrity)
+	}
+	var rows int
+	if err := restored.QueryRowContext(ctx, "SELECT count(*) FROM measurements").Scan(&rows); err != nil {
+		t.Fatalf("count restored rows: %v", err)
+	}
+	if rows != wantRows {
+		t.Fatalf("restored history.db has %d rows, want %d (the uncheckpointed WAL rows were lost)", rows, wantRows)
+	}
+}
+
+// openHistoryWALHeldOpen creates history.db in WAL mode, commits rows without
+// checkpointing them, and returns the still-open connection so the rows stay
+// in the -wal file — the hot-database state a file copy cannot capture. The
+// caller closes the returned handle.
+func openHistoryWALHeldOpen(t *testing.T, path string, rows int) *sql.DB {
+	t.Helper()
+	ctx := context.Background()
+	db, err := sql.Open(sqlite.DriverName, sqlite.FileDSN(path))
+	if err != nil {
+		t.Fatalf("open history: %v", err)
+	}
+	// One connection so the WAL is never checkpointed by pool churn, and
+	// autocheckpoint off so the committed rows stay in the -wal.
+	db.SetMaxOpenConns(1)
+	if _, err := db.ExecContext(ctx, "PRAGMA wal_autocheckpoint=0"); err != nil {
+		t.Fatalf("disable autocheckpoint: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE TABLE measurements (id INTEGER PRIMARY KEY, v REAL)"); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	for i := range rows {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO measurements (v) VALUES (?)", float64(i)); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	return db
+}

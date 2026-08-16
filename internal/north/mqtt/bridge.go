@@ -1505,7 +1505,14 @@ func (b *Bridge) PublishHubSystemHealthScore(ctx context.Context, centralName st
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	body := []byte(strconv.FormatFloat(score, 'f', -1, 64))
+	// A negative score is the not-ready sentinel (the central is FAILED, so
+	// the score is unknown). Clear the retained topic with an empty payload
+	// rather than publishing a bogus "-1", so a reconnecting consumer does
+	// not resurrect the stale reading this outage invalidated.
+	var body []byte
+	if score >= 0 {
+		body = []byte(strconv.FormatFloat(score, 'f', -1, 64))
+	}
 	return b.client.Publish(ctx, b.topics.HubSystemHealthScore(centralName), body, b.cfg.QoS.State, true)
 }
 

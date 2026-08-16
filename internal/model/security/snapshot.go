@@ -41,6 +41,12 @@ type Snapshot struct {
 	// False means the engine reported a problem with itself, which is
 	// distinct from a broker outage and must be distinguishable.
 	EngineHealthy bool
+	// IndexHealthy reports whether the classification index reflects the
+	// live model. False means the last RebuildIndex failed (a SQLite read
+	// error — lock contention, disk-full, WAL stall) and the domain cannot
+	// vouch that any class is clear: the snapshot is a degraded "unknown",
+	// not an all-clear, and Severity is raised accordingly.
+	IndexHealthy bool
 	// LastAlarm and LastFault are the most recent notifications of each
 	// kind; they survive a restart of the consumer, which an event
 	// cannot.

@@ -203,7 +203,11 @@ func GetHubMetrics(idx HubIndex) http.HandlerFunc {
 			}
 			entry := HubMetricsEntry{Central: nh.Central}
 			snap := nh.Hub.Metrics.Snapshot()
-			if s, ok := snap[hub.MetricSystemHealth]; ok {
+			// A negative system_health is the not-ready sentinel
+			// ([hub.MetricSystemHealthUnknown]): the central is FAILED, so the
+			// score is unknown. Leave the field nil (omitted) rather than
+			// reporting a stale percentage or a bogus negative value.
+			if s, ok := snap[hub.MetricSystemHealth]; ok && s.Value >= 0 {
 				v := s.Value
 				entry.SystemHealth = &v
 			}

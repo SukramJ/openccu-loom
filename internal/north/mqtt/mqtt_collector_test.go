@@ -28,7 +28,7 @@ func TestMqttCollectorCountsMessages(t *testing.T) {
 	t.Parallel()
 
 	reg := metrics.NewRegistry()
-	col := metrics.NewMqttCollector(reg, "test_ccu")
+	col := metrics.NewMqttCollector(reg)
 
 	pub := &recordingPublisher{}
 	bridge := NewBridge(BridgeConfig{
@@ -79,7 +79,7 @@ func TestMqttCollectorCountsPublishErrors(t *testing.T) {
 	t.Parallel()
 
 	reg := metrics.NewRegistry()
-	col := metrics.NewMqttCollector(reg, "err_ccu")
+	col := metrics.NewMqttCollector(reg)
 
 	pub := &recordingPublisher{err: errPublish}
 	// HADiscoveryEnabled so publishDiscovery is called and the broker error

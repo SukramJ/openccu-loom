@@ -570,7 +570,7 @@ func TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted(t *testing.T) {
 	t.Parallel()
 
 	reg := metrics.NewRegistry()
-	collector := metrics.NewMqttCollector(reg, "ccu-01")
+	collector := metrics.NewMqttCollector(reg)
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base: "openccu-loom", CentralName: "ccu-01",
 		RawEnabled: true, HADiscoveryEnabled: true,
@@ -605,7 +605,7 @@ func TestPublishCombinedDPSnapshotDiscardedErrorIsCounted(t *testing.T) {
 	t.Parallel()
 
 	reg := metrics.NewRegistry()
-	collector := metrics.NewMqttCollector(reg, "ccu-01")
+	collector := metrics.NewMqttCollector(reg)
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base: "openccu-loom", CentralName: "ccu-01",
 		RawEnabled: true, HADiscoveryEnabled: true,

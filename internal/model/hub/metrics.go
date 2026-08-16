@@ -22,6 +22,15 @@ const (
 	MetricLastEventAgeSecs MetricKind = "last_event_age_seconds"
 )
 
+// MetricSystemHealthUnknown is the not-ready sentinel for
+// [MetricSystemHealth]. A negative score means the producing central is not
+// operational (a CCU outage), so the value is unknown rather than a live
+// percentage. North-bound consumers render a negative system_health as
+// "unknown" instead of a stale reading; the reconcile pass leaves a negative
+// probe result untouched. Only system_health carries a sentinel — the other
+// metrics are simply absent (unobserved) while unknown.
+const MetricSystemHealthUnknown = -1.0
+
 // MetricSample is one observation of a metric.
 type MetricSample struct {
 	Kind  MetricKind
