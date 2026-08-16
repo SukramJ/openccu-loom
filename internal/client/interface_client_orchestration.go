@@ -26,6 +26,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	paramconvert "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -246,7 +247,7 @@ func (c *InterfaceClient) Reconnect( //nolint:funlen // composition/wiring: long
 			hmenum.ClientStateDisconnected,
 			"reconnect failed",
 			true,
-			hmenum.FailureReasonNetwork,
+			reconnectFailureReason(err),
 		)
 		c.cfg.Logger.Warn(
 			"Reconnect: ReinitProxy failed",
@@ -1150,4 +1151,20 @@ func (c *InterfaceClient) CreateSystemVariableFloat(
 		return nil, nil
 	}
 	return b.CreateSystemVariableFloat(ctx, name, minValue, maxValue)
+}
+
+// reconnectFailureReason classifies why a reconnect attempt failed so the
+// state a REST/WS consumer reads names the cause rather than the call site.
+// Rejected credentials surface as "auth" and a breaker that is still open as
+// "circuit_breaker" instead of every failure reading "network".
+//
+// An error the classifier cannot place stays "network": a reconnect that
+// fails for an unrecognised reason is, from the operator's side, the
+// interface not coming back on the wire.
+func reconnectFailureReason(err error) hmenum.FailureReason {
+	reason := hmerr.ExceptionToFailureReason(err)
+	if reason == hmenum.FailureReasonUnknown || reason == hmenum.FailureReasonNone {
+		return hmenum.FailureReasonNetwork
+	}
+	return reason
 }

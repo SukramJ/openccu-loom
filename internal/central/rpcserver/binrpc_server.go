@@ -46,11 +46,36 @@ type BINRPCServer struct {
 	// shutdown path and the explicit [Close] method. Without it both
 	// paths race on the listener's internal teardown state under -race.
 	closeOnce sync.Once
-	// closed flips to true after closeOnce fires so Serve's accept loop
-	// can refuse to launch new handler goroutines once shutdown started
-	// — closing the wg.Add / wg.Wait race window for late-arriving
-	// connections.
+	// closeMu orders the shutdown flag against wg.Add. Reading the flag
+	// and adding to the WaitGroup have to happen as one step: a plain
+	// check-then-Add still allows shutdown to land in between, and the Add
+	// then runs concurrently with the Wait that Close has already entered
+	// — the WaitGroup misuse the flag exists to prevent. See [trackConn].
+	closeMu sync.Mutex
+	// closed flips to true (under closeMu) after closeOnce fires so
+	// Serve's accept loop refuses to launch new handler goroutines once
+	// shutdown started.
 	closed atomic.Bool
+
+	// metrics is the optional per-request observation sink. Nil means the
+	// listener runs unobserved.
+	metrics CallbackObserver
+}
+
+// trackConn registers one in-flight handler, reporting false when shutdown
+// has begun and the connection must be dropped instead.
+//
+// The lock is what makes the answer binding: every Add that returns true
+// completed before [BINRPCServer.closeListener] could set the flag, so it
+// also completed before any Wait that follows the flag being set.
+func (s *BINRPCServer) trackConn() bool {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if s.closed.Load() {
+		return false
+	}
+	s.wg.Add(1)
+	return true
 }
 
 // BINRPCConfig configures the server.
@@ -78,6 +103,11 @@ type BINRPCConfig struct {
 	// connections close. <= 0 means uncapped; the daemon supplies a
 	// secure default from cfg.Callback.MaxConnections.
 	MaxConnections int
+
+	// Metrics, when non-nil, receives one observation per dispatched
+	// callback (see [CallbackObserver]). Nil leaves the listener
+	// unobserved.
+	Metrics CallbackObserver
 }
 
 // NewBINRPCServer binds a listener.
@@ -96,7 +126,9 @@ func NewBINRPCServer(cfg BINRPCConfig) (*BINRPCServer, error) {
 		return nil, fmt.Errorf("rpcserver: binrpc listen %s: %w", cfg.Addr, err)
 	}
 	ln = limitListener(ln, cfg.MaxConnections)
-	return newBINRPCServerOn(ln, logger, cfg.IOTimeout, cfg.PeerAllowlist), nil
+	s := newBINRPCServerOn(ln, logger, cfg.IOTimeout, cfg.PeerAllowlist)
+	s.metrics = cfg.Metrics
+	return s, nil
 }
 
 // newBINRPCServerOn assembles the server around an already-bound
@@ -191,13 +223,6 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 			return fmt.Errorf("rpcserver: accept: %w", err)
 		}
 		retryDelay = 0
-		// Refuse late-arriving connections that race the shutdown path.
-		// Without this guard wg.Add can fire after Close has already
-		// entered wg.Wait, which is a documented race.
-		if s.closed.Load() {
-			_ = conn.Close()
-			continue
-		}
 		// Enforce the source-IP allowlist before spawning a handler
 		// goroutine so a disallowed peer costs nothing but an immediate
 		// close (defence in depth on top of the connection cap).
@@ -207,7 +232,11 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 			_ = conn.Close()
 			continue
 		}
-		s.wg.Add(1)
+		// Refuse late-arriving connections that race the shutdown path.
+		if !s.trackConn() {
+			_ = conn.Close()
+			continue
+		}
 		s.activeTasks.Add(1)
 		go func() {
 			defer s.wg.Done()
@@ -221,7 +250,12 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 // the Serve ctx-cancel goroutine and the explicit [Close] method.
 func (s *BINRPCServer) closeListener() {
 	s.closeOnce.Do(func() {
+		// Under closeMu so an accept-loop iteration is either wholly
+		// before this flag (its wg.Add is done) or wholly after it (it
+		// drops the connection and adds nothing).
+		s.closeMu.Lock()
 		s.closed.Store(true)
+		s.closeMu.Unlock()
 		_ = s.listener.Close()
 	})
 }
@@ -398,6 +432,10 @@ func faultStruct(f *hmerr.XMLRPCFault) xmlrpc.StructValue {
 	}}
 }
 
+// dispatch routes one callback — a bare call, or one sub-call of a batch —
+// and reports it to the metrics observer. A multicall envelope is not
+// observed itself: every sub-call runs through here on its own, so counting
+// the envelope too would double every batched CUxD event.
 func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrpc.Value, error) {
 	// Unwrap batched callbacks before the interface_id lookup — a
 	// multicall envelope carries the id inside each sub-call, not in
@@ -405,6 +443,44 @@ func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrp
 	if req.Method == "system.multicall" {
 		return s.dispatchMulticall(ctx, req.Params)
 	}
+	finish := observeCallbackStart(s.metrics, s.binrpcRouteKey(req))
+	val, err := s.dispatchCall(ctx, req)
+	finish(err != nil)
+	return val, err
+}
+
+// binrpcRouteKey reports the interface id [BINRPCServer.dispatchCall] will
+// route req by, or "" when the request has no route: introspection, a
+// malformed envelope, or an interface id nothing is registered for. It
+// mirrors the extraction below rather than sharing it because the
+// observation has to happen around the dispatch, not inside it.
+//
+// The registration lookup is what keeps the observation inside the
+// [CallbackObserver] contract. An interface id without handlers belongs to
+// no central — a CCU that kept pushing to a registration the daemon lost on
+// an unclean shutdown does exactly this — and charging its callbacks to that
+// route key would report a healthy CCU as failing, on a metric nobody can
+// act on.
+func (s *BINRPCServer) binrpcRouteKey(req *binrpc.Request) string {
+	if req.Method == "system.listMethods" || len(req.Params) == 0 {
+		return ""
+	}
+	id, err := xmlrpc.AsString(req.Params[0])
+	if err != nil {
+		return ""
+	}
+	s.mu.RLock()
+	handlers := s.routes[id]
+	s.mu.RUnlock()
+	if handlers == nil {
+		return ""
+	}
+	return id
+}
+
+// dispatchCall routes a single non-batched callback to the handlers
+// registered for its interface id.
+func (s *BINRPCServer) dispatchCall(ctx context.Context, req *binrpc.Request) (xmlrpc.Value, error) {
 	// Introspection answers the same list for every interface, so it is
 	// exempt from the preamble too. The standard XML-RPC shape carries no
 	// argument at all, and a peer that does pass an id may well probe before

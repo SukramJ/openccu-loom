@@ -102,9 +102,12 @@ type SysvarCreateSpec struct {
 // renames the variable. Visible and Logged are tri-state: nil leaves the
 // flag as-is, a non-nil pointer sets it.
 type SysvarUpdateSpec struct {
-	Name        string // current (target) sysvar name
-	NewName     string
-	Unit        string
+	Name    string // current (target) sysvar name
+	NewName string
+	Unit    string
+	// Min / Max are the numeric-bound controls. An empty string leaves the
+	// stored bound alone; a non-empty numeric string sets it. There is no
+	// removal path — a numeric sysvar always carries both bounds.
 	Min         string
 	Max         string
 	Description string
@@ -435,11 +438,17 @@ func (h *Hub) DeleteProgramRemote(ctx context.Context, id string) error {
 // insert so late-bound consumers (MQTT publisher, UI cache) can wire
 // per-sysvar subscriptions.
 func (h *Hub) PutSysvar(s *Sysvar) {
-	if s == nil || s.Name == "" {
+	if s == nil {
+		return
+	}
+	// The map key is the current name, read through the data point's own
+	// lock — a rename may be rewriting it from another goroutine.
+	name := s.LegacyName()
+	if name == "" {
 		return
 	}
 	h.mu.Lock()
-	h.sysvars[s.Name] = s
+	h.sysvars[name] = s
 	observers := append([]func(*Sysvar){}, h.sysvarObservers...)
 	h.mu.Unlock()
 	for _, cb := range observers {
@@ -530,7 +539,7 @@ func (h *Hub) Sysvars() []*Sysvar {
 	for _, s := range h.sysvars {
 		out = append(out, s)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool { return out[i].LegacyName() < out[j].LegacyName() })
 	return out
 }
 
@@ -545,14 +554,21 @@ func (h *Hub) ClearSysvars() {
 // RemoveSysvar drops a sysvar from the in-memory cache and reports
 // whether one existed. Use DeleteSysvarRemote for full CCU-side
 // removal — this method is the local-only path used during
-// re-snapshots.
+// re-snapshots. Fires the sysvar's [Sysvar.NotifyRemoved] hooks after
+// the entry is dropped so subscribers (MQTT discovery, UI state) can
+// clean up. Mirrors [Hub.RemoveProgram].
 func (h *Hub) RemoveSysvar(name string) bool {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	if _, ok := h.sysvars[name]; !ok {
+	sv, ok := h.sysvars[name]
+	if !ok {
+		h.mu.Unlock()
 		return false
 	}
 	delete(h.sysvars, name)
+	h.mu.Unlock()
+	if sv != nil {
+		sv.NotifyRemoved()
+	}
 	return true
 }
 
@@ -577,7 +593,10 @@ func (h *Hub) RenameSysvar(oldName, newName string) bool {
 		return false
 	}
 	delete(h.sysvars, oldName)
-	s.Name = newName
+	// The name belongs to the embedded data point and is read through its
+	// own lock by every north-bound reader; the hub mutex held here guards
+	// the map, not the entry.
+	s.SetName(newName)
 	h.sysvars[newName] = s
 	return true
 }

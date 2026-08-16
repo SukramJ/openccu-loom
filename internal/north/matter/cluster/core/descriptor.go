@@ -7,8 +7,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -22,9 +24,16 @@ import (
 // PartsList enumerates every bridged endpoint; bridged endpoints
 // have an empty PartsList (no sub-endpoints).
 type Descriptor struct {
-	deviceTypes        []DeviceTypeStruct
+	deviceTypes []DeviceTypeStruct
+	clientList  []uint32
+
+	// mu guards the fields the topology assembler installs after the
+	// endpoint is already serving reads. The daemon attaches the
+	// PartsList / ServerList providers well after bridge.Start, so a
+	// commissioner re-establishing CASE can be inside MatterRead while
+	// the provider is written.
+	mu                 sync.RWMutex
 	serverList         []uint32
-	clientList         []uint32
 	partsList          []uint16
 	partsListProvider  func() []uint16
 	serverListProvider func() []uint32
@@ -90,10 +99,21 @@ func (d *Descriptor) MatterRead(attrID uint32) (any, bool) {
 		// the openccu-loom equivalent — set after endpoint composition
 		// is complete so the list cannot drift from the actual mounted
 		// cluster set (Bug K).
-		if d.serverListProvider != nil {
-			return d.serverListProvider(), true
+		d.mu.RLock()
+		provider := d.serverListProvider
+		var static []uint32
+		if provider == nil {
+			// Copy only on the fallback path: every assembled endpoint
+			// installs a provider, so materialising the static list first
+			// would allocate on every read Apple Home drives post-CASE and
+			// then throw the copy away.
+			static = append(static, d.serverList...)
 		}
-		return append([]uint32(nil), d.serverList...), true
+		d.mu.RUnlock()
+		if provider != nil {
+			return provider(), true
+		}
+		return static, true
 	case descriptorAttrClientList:
 		// Always return a non-nil slice — Apple Home's IM-decoder
 		// rejects `null` for a list-typed attribute (matter.js spec
@@ -104,11 +124,19 @@ func (d *Descriptor) MatterRead(attrID uint32) (any, bool) {
 		out = append(out, d.clientList...)
 		return out, true
 	case descriptorAttrPartsList:
-		if d.partsListProvider != nil {
-			return d.partsListProvider(), true
+		d.mu.RLock()
+		provider := d.partsListProvider
+		var out []uint16
+		if provider == nil {
+			// Same as ServerList above: the copy is only needed when no
+			// provider answers the read.
+			out = make([]uint16, 0, len(d.partsList))
+			out = append(out, d.partsList...)
 		}
-		out := make([]uint16, 0, len(d.partsList))
-		out = append(out, d.partsList...)
+		d.mu.RUnlock()
+		if provider != nil {
+			return provider(), true
+		}
 		return out, true
 	case descriptorAttrTagList:
 		// TagList (Matter 1.4 §9.5.6.5) is conformance "TAGLIST" —
@@ -136,7 +164,7 @@ func (d *Descriptor) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmen
 
 // MatterInvoke always rejects — Descriptor has no commands.
 func (d *Descriptor) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: Descriptor has no commands (got 0x%02X)", cmdID)
+	return nil, im.UnsupportedCommandf("matter: Descriptor has no commands (got 0x%02X)", cmdID)
 }
 
 // MatterReportable returns the attributes that subscribe-able. PartsList
@@ -182,6 +210,8 @@ func (d *Descriptor) MatterAttributes() []uint32 {
 // endpoint assembler when the topology changes — typically only
 // relevant on the Root endpoint's Descriptor.
 func (d *Descriptor) SetPartsList(partsList []uint16) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.partsList = append([]uint16(nil), partsList...)
 }
 
@@ -196,6 +226,8 @@ func (d *Descriptor) SetPartsList(partsList []uint16) {
 //
 // Pass nil to revert to the static list.
 func (d *Descriptor) SetPartsListProvider(p func() []uint16) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.partsListProvider = p
 }
 
@@ -213,5 +245,7 @@ func (d *Descriptor) SetPartsListProvider(p func() []uint16) {
 // Pass nil to revert to the static list (only used by unit tests that
 // pre-populate a synthetic ServerList).
 func (d *Descriptor) SetServerListProvider(p func() []uint32) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.serverListProvider = p
 }

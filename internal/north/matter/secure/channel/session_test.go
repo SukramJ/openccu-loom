@@ -225,3 +225,39 @@ func TestNonceConstructionMatchesSpec(t *testing.T) {
 		t.Fatalf("nonce=% X, want % X", got, want)
 	}
 }
+
+// TestCloseDropsCipherReferences pins the second half of the Close
+// contract: the AES-CCM instances built from the session keys are
+// released, not just the raw key bytes. crypto/aes keeps the expanded
+// round-key schedule inside the cipher (for AES-128 the first round key
+// is the key), so a closed session that still held its ciphers would
+// still carry live I2R / R2I key material.
+func TestCloseDropsCipherReferences(t *testing.T) {
+	aCfg, bCfg := aliceBobConfigs()
+	alice, err := New(aCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := New(bCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hdr := message.Header{SessionID: 1}
+	out, err := alice.Encrypt(&hdr, 0, []byte("hello"))
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	alice.Close()
+	if alice.encCipher.Load() != nil {
+		t.Error("encCipher still referenced after Close")
+	}
+	if alice.decCipher.Load() != nil {
+		t.Error("decCipher still referenced after Close")
+	}
+
+	bob.Close()
+	if _, _, err := bob.Decrypt(&hdr, 0, out.Ciphertext); !errors.Is(err, ErrSessionInactive) {
+		t.Fatalf("Decrypt after Close: err = %v, want ErrSessionInactive", err)
+	}
+}

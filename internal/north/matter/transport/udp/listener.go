@@ -7,8 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
+	"runtime/debug"
 	"sync"
+	"sync/atomic"
 )
 
 // MatterPort is the IANA-registered Matter operational port (5540).
@@ -73,6 +76,12 @@ type Listener struct {
 	// sem bounds concurrent per-datagram dispatch goroutines; see
 	// [maxConcurrentDispatch].
 	sem chan struct{}
+
+	// recoveredPanics counts handler panics [Listener.safeDispatch]
+	// recovered. Exposed via [Listener.RecoveredPanics] so a diagnostic
+	// surface can report "datagrams were dropped by a panic" instead of
+	// leaving the operator with an unexplained silence.
+	recoveredPanics atomic.Uint64
 
 	mu     sync.Mutex
 	closed bool
@@ -184,7 +193,7 @@ func (l *Listener) Serve(ctx context.Context, handler Handler) error {
 		case l.sem <- struct{}{}:
 			go func() {
 				defer func() { <-l.sem }()
-				safeDispatch(handler, datagram, src)
+				l.safeDispatch(handler, datagram, src)
 			}()
 		default:
 		}
@@ -196,17 +205,36 @@ func (l *Listener) Serve(ctx context.Context, handler Handler) error {
 // during commissioning) send a wide variety of payload shapes; a
 // malformed TLV decode that panics two layers up should NOT take
 // down the listener and starve every other in-flight exchange.
-// The recovered panic is silently dropped — handlers are responsible
-// for their own diagnostics, and panics here always indicate bugs in
-// the parsing layer that must be fixed at the source.
-func safeDispatch(handler Handler, buf []byte, src *net.UDPAddr) {
+//
+// This is the only recover on the Matter datagram path, so it is also
+// the only place a wire-triggered panic can be attributed: the panic
+// value, the peer address and a stack are logged at ERROR and counted
+// in [Listener.RecoveredPanics]. Without that record the symptom is a
+// datagram that vanishes — pairing hangs, /health stays green, and the
+// log holds nothing to grep for.
+func (l *Listener) safeDispatch(handler Handler, buf []byte, src *net.UDPAddr) {
 	defer func() {
 		if r := recover(); r != nil {
-			_ = r // intentionally suppressed — see comment above
+			total := l.recoveredPanics.Add(1)
+			peer := "<nil>"
+			if src != nil {
+				peer = src.String()
+			}
+			slog.Default().Error("matter.udp.dispatch_panic",
+				slog.Any("panic", r),
+				slog.String("src", peer),
+				slog.Int("datagram_bytes", len(buf)),
+				slog.Uint64("recovered_total", total),
+				slog.String("stack", string(debug.Stack())))
 		}
 	}()
 	handler(buf, src)
 }
+
+// RecoveredPanics reports how many handler panics this listener has
+// recovered since it was created. Non-zero means a wire-triggered bug
+// in the parsing or crypto layer swallowed at least one datagram.
+func (l *Listener) RecoveredPanics() uint64 { return l.recoveredPanics.Load() }
 
 // Send transmits a datagram to dst. Returns [ErrPayloadTooLarge] if
 // the payload exceeds [MaxDatagramSize] and [ErrListenerClosed] after

@@ -22,10 +22,17 @@ type stubCommunicationTestPort struct {
 	result      hmapi.CommunicationTestResult
 	err         error
 	lastAddress string
+	// awaitCtx makes the stub behave like the CCU poll loop: it blocks
+	// until the caller's context ends and reports that context error.
+	awaitCtx bool
 }
 
-func (s *stubCommunicationTestPort) TestDeviceCommunication(_ context.Context, addr string) (hmapi.CommunicationTestResult, error) {
+func (s *stubCommunicationTestPort) TestDeviceCommunication(ctx context.Context, addr string) (hmapi.CommunicationTestResult, error) {
 	s.lastAddress = addr
+	if s.awaitCtx {
+		<-ctx.Done()
+		return hmapi.CommunicationTestResult{}, ctx.Err()
+	}
 	if s.err != nil {
 		return hmapi.CommunicationTestResult{}, s.err
 	}
@@ -104,6 +111,54 @@ func TestDeviceCommunicationTest_ServiceError_Returns502(t *testing.T) {
 	svc := &stubCommunicationTestPort{err: errors.New("CCU unreachable")}
 	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+	w := httptest.NewRecorder()
+	TestDeviceCommunication(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestDeviceCommunicationTest_PollBudgetElapsed_Returns200TimedOut
+// verifies an unreachable device reports the documented timed-out result
+// instead of a 502: the handler keeps a response margin of the request
+// deadline, so its own poll budget ends first while the request is still
+// alive.
+func TestDeviceCommunicationTest_PollBudgetElapsed_Returns200TimedOut(t *testing.T) {
+	t.Parallel()
+	svc := &stubCommunicationTestPort{awaitCtx: true}
+	ctx, cancel := context.WithTimeout(t.Context(), comTestResponseMargin+500*time.Millisecond)
+	defer cancel()
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody).WithContext(ctx)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+	w := httptest.NewRecorder()
+	TestDeviceCommunication(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body hmapi.CommunicationTestResult
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !body.TimedOut || body.Passed {
+		t.Fatalf("expected timed_out=true passed=false, got %+v", body)
+	}
+	if body.DurationMs <= 0 {
+		t.Errorf("expected a positive duration_ms, got %d", body.DurationMs)
+	}
+}
+
+// TestDeviceCommunicationTest_RequestCanceled_Returns502 verifies the
+// timed-out result is only reported for the handler's own poll budget: a
+// caller-side cancellation stays an upstream error.
+func TestDeviceCommunicationTest_RequestCanceled_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubCommunicationTestPort{awaitCtx: true}
+	ctx, cancel := context.WithCancel(t.Context())
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody).WithContext(ctx)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+	cancel()
 	w := httptest.NewRecorder()
 	TestDeviceCommunication(svc, nil).ServeHTTP(w, req)
 

@@ -67,7 +67,19 @@ type BridgeConfig struct {
 	// carries a retired spelling of one CCU's name can be the live topic
 	// of another CCU, and clearing it would blank a value the daemon
 	// still publishes. Empty falls back to CentralName.
-	CentralNames         []string
+	//
+	// It is the boot snapshot: prefer CentralNamesSupplier wherever the
+	// caller can resolve the live fleet.
+	CentralNames []string
+
+	// CentralNamesSupplier resolves the centrals the daemon serves right
+	// now. A CCU adopted at runtime never reaches the CentralNames
+	// snapshot, so a sweep running after the adopt would judge that CCU's
+	// live topics against a fleet it is not part of and clear them. When
+	// set, it wins over CentralNames; a nil supplier, or one that returns
+	// nothing, falls back to the snapshot.
+	CentralNamesSupplier func() []string
+
 	RawEnabled           bool
 	HADiscoveryEnabled   bool
 	QoS                  QoSProfile
@@ -489,6 +501,32 @@ type Bridge struct {
 	// collector is the optional MqttCollector for per-bridge counters.
 	// Nil when no collector was wired in BridgeConfig.Collector.
 	collector *metrics.MqttCollector
+	// sweepSlot admits one retained-snapshot window at a time. The sweeps
+	// share one subscribe client, and that client keys its subscriptions
+	// by filter, so two overlapping windows on the same filter truncate
+	// each other. Created on first use so a zero-value Bridge is safe.
+	sweepSlot chan struct{}
+	sweepOnce sync.Once
+}
+
+// acquireSweepSlot blocks until this bridge's retained-snapshot slot is
+// free, reporting false when ctx is cancelled first.
+func (b *Bridge) acquireSweepSlot(ctx context.Context) bool {
+	b.sweepOnce.Do(func() { b.sweepSlot = make(chan struct{}, 1) })
+	select {
+	case b.sweepSlot <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// releaseSweepSlot hands the slot back to the next waiting sweep.
+func (b *Bridge) releaseSweepSlot() {
+	select {
+	case <-b.sweepSlot:
+	default:
+	}
 }
 
 // NewBridge constructs the bridge.
@@ -1371,14 +1409,25 @@ func (b *Bridge) resolvedCentral(centralName string) string {
 }
 
 // cleanupCentralNames returns every central the retained sweeps have to
-// reason about: the full configured set when the composition root wired
-// it, otherwise the bridge's default central alone.
+// reason about: the live fleet when the composition root wired a supplier,
+// the boot snapshot when it only wired the list, otherwise the bridge's
+// default central alone.
+//
+// The supplier is asked on every sweep rather than once at construction
+// because a CCU adopted at runtime is in no boot-time list — and a sweep
+// that does not know a central clears the topics that central is actively
+// publishing.
 //
 // The fallback keeps a single-CCU deployment covered, and it stays safe
 // for a multi-CCU one: a candidate topic is only ever cleared when it is
 // no configured central's live topic, so a shorter list clears less, not
 // more.
 func (b *Bridge) cleanupCentralNames() []string {
+	if b.cfg.CentralNamesSupplier != nil {
+		if live := b.cfg.CentralNamesSupplier(); len(live) > 0 {
+			return live
+		}
+	}
 	if len(b.cfg.CentralNames) > 0 {
 		return b.cfg.CentralNames
 	}
@@ -1658,43 +1707,77 @@ func (b *Bridge) publishTextDisplayNotify(ctx context.Context, ev Event) {
 // suppressing a re-publish should the same address reappear later.
 //
 // The discovery topic shape is
-// `homeassistant/<component>/<node_id>/<object_id>/config`
-// where node_id is `<central>_<lower(address)>`. We match on `_<lower(addr)>/`
-// which is unambiguous for the node_id segment — addresses are formatted as
-// hex strings (e.g. `000c9709aef157`) and can only collide if two devices
-// share the same address string, which the CCU prevents.
+// `homeassistant/<component>/<node_id>/<object_id>/config` where node_id is
+// `<central-slug>_<lower(address)>`. This form matches on `_<lower(addr)>/`
+// alone, so it reaches the node ids of EVERY central the bridge serves.
+// Device addresses are unique per CCU but not across CCUs — the virtual
+// remote and the BidCoS pseudo devices carry the identical address on every
+// one of them — so prefer [Bridge.RetractDiscoveryForCentralDevice] wherever
+// the removal's central is known, and reserve this form for the case where
+// the address is to be cleared everywhere.
 //
 // Returns the number of config topics retracted. A no-op when HA Discovery is
 // disabled or the address declared no configs.
 func (b *Bridge) RetractDiscoveryForDevice(ctx context.Context, deviceAddress string) int {
+	return b.RetractDiscoveryForCentralDevice(ctx, "", deviceAddress)
+}
+
+// RetractDiscoveryForCentralDevice is [Bridge.RetractDiscoveryForDevice]
+// scoped to one central: it clears only the configs published under that
+// central's node-id namespace.
+//
+// The scope is the whole point. The `declared` map is bridge-wide, the
+// bridge is daemon-global, and a removal always belongs to exactly one CCU.
+// An unscoped needle therefore retracted a second CCU's live entities
+// whenever the address repeats verbatim across centrals, which it does for
+// every virtual-remote and BidCoS pseudo device — deleting one CCU, or
+// resetting its cache, took those entities off the consumer for every other
+// CCU until the next daemon restart republished them.
+//
+// An empty centralName keeps the bridge-wide behaviour.
+func (b *Bridge) RetractDiscoveryForCentralDevice(ctx context.Context, centralName, deviceAddress string) int {
 	if deviceAddress == "" || !b.cfg.HADiscoveryEnabled {
 		return 0
 	}
-	needle := "_" + strings.ToLower(deviceAddress) + "/"
-	return b.retractTopicsMatching(ctx, b.declared, needle, b.cfg.QoS.Discovery)
+	addr := strings.ToLower(deviceAddress)
+	match := func(topic string) bool { return strings.Contains(topic, "_"+addr+"/") }
+	// Both node-id spellings the sweep recognises: the canonical
+	// discovery slug and the plain topic-safe escape an earlier build
+	// wrote. A retained config under either belongs to this central.
+	if prefixes := discoveryNodePrefixes(centralName); len(prefixes) > 0 {
+		match = func(topic string) bool {
+			for _, p := range prefixes {
+				if strings.Contains(topic, "/"+p+addr+"/") {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return b.retractTopicsMatching(ctx, b.declared, match, b.cfg.QoS.Discovery)
 }
 
-// retractTopicsMatching walks m for every topic containing needle,
-// publishes an empty retained payload to clear it from the broker, and
-// removes the matched entries from m so a re-declare (e.g. the same
-// address re-pairing later) is not suppressed by a stale dedup entry.
-// Shared by [Bridge.RetractDiscoveryForDevice] (declared map) and
+// retractTopicsMatching walks m for every topic match accepts, publishes
+// an empty retained payload to clear it from the broker, and removes the
+// matched entries from m so a re-declare (e.g. the same address
+// re-pairing later) is not suppressed by a stale dedup entry. Shared by
+// [Bridge.RetractDiscoveryForCentralDevice] (declared map) and
 // [Bridge.RetractRawStateForDevice] (rawTopics / configCache maps).
 //
-// The match is case-insensitive because the two planes spell the address
-// differently: discovery node ids lower-case it, raw topics upper-case
-// it, and the removal event carries the CCU's own spelling — which is
-// mixed case for the virtual remote and the BidCoS pseudo devices. A
-// case-sensitive needle silently matched none of their retained topics.
+// match receives the lower-cased topic, because the two planes spell the
+// address differently: discovery node ids lower-case it, raw topics
+// upper-case it, and the removal event carries the CCU's own spelling —
+// which is mixed case for the virtual remote and the BidCoS pseudo
+// devices. A case-sensitive comparison silently matched none of their
+// retained topics.
 //
 // Best-effort: a publish error is counted but does not abort the sweep
 // — a boot-time orphan-cleanup pass (where one exists) is the backstop.
-func (b *Bridge) retractTopicsMatching(ctx context.Context, m map[string][]byte, needle string, qos QoS) int {
-	needle = strings.ToLower(needle)
+func (b *Bridge) retractTopicsMatching(ctx context.Context, m map[string][]byte, match func(lowerTopic string) bool, qos QoS) int {
 	b.mu.Lock()
 	topics := make([]string, 0)
 	for topic := range m {
-		if strings.Contains(strings.ToLower(topic), needle) {
+		if match(strings.ToLower(topic)) {
 			topics = append(topics, topic)
 			delete(m, topic)
 		}
@@ -1760,9 +1843,35 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	if centralName == "" {
 		centralName = b.cfg.CentralName
 	}
-	needle := "/" + deviceAddress + "/"
-	n := b.retractTopicsMatching(ctx, b.rawTopics, needle, b.cfg.QoS.State)
-	n += b.retractTopicsMatching(ctx, b.configCache, needle, b.cfg.QoS.State)
+	// Scope the match to the removal's own central. Both indexes are
+	// bridge-wide, and a device address is unique per CCU but not across
+	// CCUs — the virtual remote and the BidCoS pseudo devices carry the
+	// identical address on every one of them, so an address-only needle
+	// blanked a second CCU's live retained state.
+	//
+	// The legacy-alias mirror is the one exception: its topology
+	// (`<legacy_base>/device/status/<addr>/…`) predates the central
+	// segment and cannot be scoped at all, so a removal clears it for the
+	// address regardless of central. That mirror is a single-CCU
+	// migration shim; a multi-CCU deployment already has its two CCUs
+	// overwriting each other there.
+	addr := strings.ToLower(deviceAddress)
+	rawPrefix := strings.ToLower(rawCentralPrefix(b.cfg.Base, centralName))
+	var legacyPrefix string
+	if b.legacy != nil {
+		legacyPrefix = strings.ToLower(b.legacy.Base + "/device/")
+	}
+	match := func(topic string) bool {
+		if !strings.Contains(topic, "/"+addr+"/") {
+			return false
+		}
+		if strings.HasPrefix(topic, rawPrefix) {
+			return true
+		}
+		return legacyPrefix != "" && strings.HasPrefix(topic, legacyPrefix)
+	}
+	n := b.retractTopicsMatching(ctx, b.rawTopics, match, b.cfg.QoS.State)
+	n += b.retractTopicsMatching(ctx, b.configCache, match, b.cfg.QoS.State)
 	for _, topic := range []string{
 		b.topics.DeviceAvailability(centralName, iface, deviceAddress),
 		b.topics.DeviceInfo(centralName, iface, deviceAddress),
@@ -1784,6 +1893,10 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	return n
 }
 
+// publishDiscovery publishes one retained HA-Discovery config through the
+// shared dedup cache. An empty payload retracts the config: it is published
+// (clearing the retained message) and the topic leaves the `declared` set, so
+// that set keeps naming exactly the entities the bridge currently drives.
 func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, objectID string, payload []byte) error {
 	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
 	b.mu.Lock()
@@ -1804,8 +1917,18 @@ func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, object
 	// publish; caching the payload anyway would make the next identical
 	// payload hit the dedup gate above and publish nothing, leaving the
 	// entity absent from Home Assistant until the operator restarts it.
+	//
+	// An empty payload is a retraction, not a declaration: it tells every
+	// consumer the entity is gone. Keeping the topic in `declared` would
+	// leave the retracted entity in the set the orphan sweeps treat as
+	// live, and the HA-birth replay would re-publish the empty payload to
+	// a topic the broker no longer retains.
 	b.mu.Lock()
-	b.declared[topic] = payload
+	if len(payload) == 0 {
+		delete(b.declared, topic)
+	} else {
+		b.declared[topic] = payload
+	}
 	b.mu.Unlock()
 	b.incDiscoverySent()
 	return nil

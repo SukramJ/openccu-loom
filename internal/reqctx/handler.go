@@ -11,9 +11,9 @@ import (
 // ContextHandler wraps a [slog.Handler] and injects [RequestContext] fields
 // into every log record.
 //
-// When a [RequestContext] is present in the record's context the following
-// attributes are appended: - "request_id" (string) - "operation"  (string) -
-// "elapsed_ms" (float64)
+// When a [RequestContext] is present in the record's context, "request_id"
+// and "operation" are always appended, plus "elapsed_ms" and the scope and
+// trace fields whenever they are populated.
 type ContextHandler struct {
 	inner slog.Handler
 }
@@ -50,6 +50,20 @@ func (h *ContextHandler) Handle(ctx context.Context, record slog.Record) error {
 		// elapsed_ms.
 		if !rc.StartedAt.IsZero() {
 			record.AddAttrs(slog.Float64("elapsed_ms", rc.ElapsedMS()))
+		}
+		// The scope fields are what make parallel work legible: without
+		// central_name, two CCUs' call paths interleave indistinguishably
+		// in the output, which is precisely what the field was added for.
+		// Each is emitted only when set, so a record from a call path that
+		// never resolved a scope keeps the shape it always had.
+		if rc.CentralName != "" {
+			record.AddAttrs(slog.String("central_name", rc.CentralName))
+		}
+		if rc.InterfaceID != "" {
+			record.AddAttrs(slog.String("interface_id", rc.InterfaceID))
+		}
+		if rc.DeviceAddress != "" {
+			record.AddAttrs(slog.String("device_address", rc.DeviceAddress))
 		}
 		if rc.TraceID != "" {
 			record.AddAttrs(slog.String("trace_id", rc.TraceID))

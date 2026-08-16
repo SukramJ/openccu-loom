@@ -92,16 +92,29 @@ type AckObligation struct {
 	DueAt time.Time
 }
 
-// ExchangeKey identifies an exchange scoped to its session. Exchange
-// IDs are picked independently by every peer, so two concurrent
-// controllers (or an old and a new CASE session of the same
-// controller) can carry the same 16-bit exchange ID — matter.js
-// treats an exchange whose session no longer matches as a different
-// exchange (ExchangeManager.ts:287 invalidates the lookup when
+// ExchangeKey identifies an exchange scoped to its session AND to the
+// local side's role on it. Exchange IDs are picked independently by
+// every peer, so two concurrent controllers (or an old and a new CASE
+// session of the same controller) can carry the same 16-bit exchange ID
+// — matter.js treats an exchange whose session no longer matches as a
+// different exchange (ExchangeManager.ts:287 invalidates the lookup when
 // `exchange.session.id !== session.id`).
+//
+// Initiator is the same distinction matter.js encodes by ORing 0x10000
+// into its exchange-index key (ExchangeManager.ts:138: "the exchangeID
+// can be the same" for an exchange we initiated and one we received).
+// Both kinds are live at once here: an ongoing subscription report runs
+// on a bridge-opened exchange while the controller drives its own
+// requests on peer-opened ones, and without the role in the key the two
+// collide in a single obligation slot — one peer's reliable message
+// then never gets its StandaloneAck and retransmits to its cap.
 type ExchangeKey struct {
 	SessionID  uint16
 	ExchangeID uint16
+	// Initiator is true when the LOCAL side opened the exchange. It
+	// matches [AckObligation.Initiator], which the pump stamps onto the
+	// standalone ACK it emits.
+	Initiator bool
 }
 
 // AckTracker bookkeeps outstanding ACK obligations across exchanges.
@@ -135,7 +148,7 @@ func NewAckTracker(delay time.Duration) *AckTracker {
 // pair, it is replaced with the higher counter — only the latest ACK
 // needs to ride the wire (Matter §4.12.4.2 cumulative-ACK semantics).
 func (t *AckTracker) Owe(ackCounter uint32, sessionID, exchangeID uint16, initiator bool, now time.Time) {
-	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID, Initiator: initiator}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	prev, ok := t.pending[key]
@@ -153,13 +166,14 @@ func (t *AckTracker) Owe(ackCounter uint32, sessionID, exchangeID uint16, initia
 	}
 }
 
-// Discharge removes the pending obligation for the (session,
-// exchange) pair. Returns true when an obligation existed (so the
-// caller can decide whether to skip a redundant standalone-ACK
-// emission). Called by the dispatcher when an outbound message
-// piggybacks the ACK or when the exchange is torn down.
-func (t *AckTracker) Discharge(sessionID, exchangeID uint16) bool {
-	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+// Discharge removes the pending obligation for the (session, exchange,
+// role) triple. Returns true when an obligation existed (so the caller
+// can decide whether to skip a redundant standalone-ACK emission).
+// Called by the dispatcher when an outbound message piggybacks the ACK
+// or when the exchange is torn down. initiator is the LOCAL side's role
+// on the exchange — the same value [AckTracker.Owe] was given.
+func (t *AckTracker) Discharge(sessionID, exchangeID uint16, initiator bool) bool {
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID, Initiator: initiator}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.pending[key]
@@ -185,8 +199,8 @@ func (t *AckTracker) Discharge(sessionID, exchangeID uint16) bool {
 // chip-tool's ReliableMessaging drops the reply with
 // `Dropping message without piggyback ack when we are waiting for
 // an ack` and the subscription times out.
-func (t *AckTracker) LookupAndDischarge(sessionID, exchangeID uint16) (uint32, bool) {
-	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+func (t *AckTracker) LookupAndDischarge(sessionID, exchangeID uint16, initiator bool) (uint32, bool) {
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID, Initiator: initiator}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	obl, ok := t.pending[key]
@@ -205,8 +219,8 @@ func (t *AckTracker) LookupAndDischarge(sessionID, exchangeID uint16) (uint32, b
 // further retransmits. Mirrors matter.js MessageExchange.ts:428-433
 // (duplicate + requiresAck → sendStandaloneAckForMessage immediately).
 // Returns whether an obligation existed.
-func (t *AckTracker) ExpediteDue(sessionID, exchangeID uint16) bool {
-	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+func (t *AckTracker) ExpediteDue(sessionID, exchangeID uint16, initiator bool) bool {
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID, Initiator: initiator}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	obl, ok := t.pending[key]

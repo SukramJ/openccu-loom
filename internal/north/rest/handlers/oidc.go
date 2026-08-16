@@ -153,8 +153,23 @@ func OIDCStart(d *OIDCDeps) http.HandlerFunc {
 			http.Error(w, "OIDC start failed", http.StatusInternalServerError)
 			return
 		}
+		// The authorize endpoint comes from provider metadata, which the
+		// client discovers lazily. An IdP that is currently unreachable
+		// yields an empty URL — redirecting to it would send the browser
+		// back to the SPA root and read as "SSO silently does nothing",
+		// so answer with the transient status the situation actually is.
+		authURL := d.Client.AuthURL(state, pkce, nonce) //nolint:contextcheck // AuthURL has no ctx parameter; its lazy discovery is bounded by the client's own provider timeout
+		if authURL == "" {
+			logger := slog.Default()
+			if d.Logger != nil {
+				logger = d.Logger
+			}
+			logger.Warn("oidc.discovery_unavailable")
+			http.Error(w, "OIDC temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		writeOIDCStateCookie(w, state, d.secureCookie())
-		http.Redirect(w, r, d.Client.AuthURL(state, pkce, nonce), http.StatusSeeOther)
+		http.Redirect(w, r, authURL, http.StatusSeeOther)
 	}
 }
 

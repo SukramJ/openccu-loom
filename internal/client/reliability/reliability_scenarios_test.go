@@ -245,98 +245,73 @@ func TestCircuitHalfOpenCallbackCanCallBack(t *testing.T) {
 	}
 }
 
-// ─── 4. Coalescer Clear: leader's own Do returns its own result ──────────────
+// ─── 4. Coalescer Clear: every participant is released with an error ────────
 
-// TestCoalescerClearLeaderRetainsOwnResult verifies that when Clear is called
-// while the leader goroutine is running:
-// - the leader's own Do call returns the result produced by its fn (not nil)
-// - followers that were waiting receive nil/nil (as documented in Clear)
+// TestCoalescerClearAbandonsLeaderAndFollowers verifies what Clear does to a
+// call that is still running: the shared call's context is cancelled, and
+// every participant — the caller that started it as well as the ones that
+// coalesced onto it — is released with [ErrCoalescerCleared].
 //
-// This pins the cleared-flag guard introduced in coalesce.go so a second
-// close(call.done) is never attempted by the leader after Clear already closed
-// the channel.
-func TestCoalescerClearLeaderRetainsOwnResult(t *testing.T) {
+// The error is the load-bearing part. Clear runs when the transport is gone,
+// so nobody's call was carried out; releasing a waiter with a nil result and
+// a nil error instead would report an abandoned write as a success.
+func TestCoalescerClearAbandonsLeaderAndFollowers(t *testing.T) {
 	t.Parallel()
 
 	c := NewCoalescer()
 
-	leaderStarted := make(chan struct{})
-	leaderContinue := make(chan struct{})
-	clearDone := make(chan struct{})
-
-	sentinelVal := "leader-result"
-	sentinelErr := errors.New("leader-error")
-
-	// Leader goroutine blocks inside fn until clearDone (so Clear happens first).
-	leaderResult := make(chan struct {
+	type outcome struct {
 		val any
 		err error
-	}, 1)
+	}
+
+	started := make(chan struct{})
+	callCtxDone := make(chan struct{})
+	leaderResult := make(chan outcome, 1)
 	go func() {
-		v, err := c.Do(context.Background(), "key", func(_ context.Context) (any, error) {
-			close(leaderStarted)
-			<-clearDone // wait until Clear has already been called
-			<-leaderContinue
-			return sentinelVal, sentinelErr
+		v, err := c.Do(context.Background(), "key", func(ctx context.Context) (any, error) {
+			close(started)
+			<-ctx.Done()
+			close(callCtxDone)
+			return "leader-result", nil
 		})
-		leaderResult <- struct {
-			val any
-			err error
-		}{v, err}
+		leaderResult <- outcome{v, err}
 	}()
+	<-started
 
-	// Wait until leader is inside fn.
-	<-leaderStarted
-
-	// Start follower — it coalesces.
-	followerResult := make(chan struct {
-		val any
-		err error
-	}, 1)
+	followerResult := make(chan outcome, 1)
 	go func() {
 		v, err := c.Do(context.Background(), "key", func(_ context.Context) (any, error) {
 			return "should-not-run", nil
 		})
-		followerResult <- struct {
-			val any
-			err error
-		}{v, err}
+		followerResult <- outcome{v, err}
 	}()
-
-	// Wait until the follower has actually registered with the coalescer
-	// (leader=1 + follower=2 callers) before clearing, so Clear()
-	// deterministically unblocks a parked follower instead of racing its
-	// registration. A fixed sleep was racy under scheduling jitter.
 	waitForCoalescerCallers(t, c, 2)
 
-	// Clear unblocks the follower.
 	c.Clear()
-	close(clearDone)
 
-	// Follower must see nil/nil (cleared).
-	select {
-	case fr := <-followerResult:
-		if fr.val != nil || fr.err != nil {
-			t.Errorf("follower: got (%v, %v), want (nil, nil)", fr.val, fr.err)
+	for name, ch := range map[string]chan outcome{"leader": leaderResult, "follower": followerResult} {
+		select {
+		case got := <-ch:
+			if !errors.Is(got.err, ErrCoalescerCleared) {
+				t.Errorf("%s: err=%v, want %v", name, got.err, ErrCoalescerCleared)
+			}
+			if got.val != nil {
+				t.Errorf("%s: val=%v, want nil", name, got.val)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("%s did not unblock after Clear", name)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("follower did not unblock after Clear")
 	}
 
-	// Now release the leader fn.
-	close(leaderContinue)
-
-	// Leader must see its own fn's return values, not nil/nil.
 	select {
-	case lr := <-leaderResult:
-		if lr.val != sentinelVal {
-			t.Errorf("leader val=%v, want %q", lr.val, sentinelVal)
-		}
-		if !errors.Is(lr.err, sentinelErr) {
-			t.Errorf("leader err=%v, want %v", lr.err, sentinelErr)
-		}
+	case <-callCtxDone:
 	case <-time.After(time.Second):
-		t.Fatal("leader did not complete after leaderContinue")
+		t.Fatal("Clear did not cancel the shared call's context")
+	}
+
+	if n := c.InFlight(); n != 0 {
+		t.Errorf("InFlight after Clear=%d, want 0", n)
 	}
 }
 

@@ -138,9 +138,16 @@ func UnmarshalReadRequestTLV(dec *tlv.Decoder) (ReadRequest, error) { //nolint:g
 			// packages/types/src/protocol/types/TlvEventFilter.ts:16-17.
 			// Mirrors chip src/app/ReadHandler.cpp:598 ProcessEventFilters.
 			if !el.IsContainer || el.Type != tlv.TypeArray {
-				// Malformed but non-fatal: skip the field.
-				if err := skipContainer(dec); err != nil {
-					return ReadRequest{}, err
+				// Malformed but non-fatal: skip the field. Only a
+				// container has elements left to drain — a scalar has
+				// already been fully consumed by dec.Next(), and
+				// draining "its" container would eat the enclosing
+				// ReadRequest struct's EndContainer and make the rest
+				// of the message unparseable.
+				if el.IsContainer {
+					if err := skipContainer(dec); err != nil {
+						return ReadRequest{}, err
+					}
 				}
 				continue
 			}

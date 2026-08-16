@@ -296,7 +296,8 @@ func TestIngressPassthrough_ExistingIdentityWins(t *testing.T) {
 // CSRF-exempt (per-request proxy-trusted, not a browser-ambient cookie).
 func TestIngressSchemeCSRFExempt(t *testing.T) {
 	t.Parallel()
-	if !csrfSchemeExempt(SchemeIngress) {
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/something", http.NoBody)
+	if !csrfExempt(r, SchemeIngress) {
 		t.Error("SchemeIngress must be CSRF-exempt")
 	}
 }

@@ -421,6 +421,29 @@ func TestResolveOfflineDSNGlobalNeedsConfigEvenWithDB(t *testing.T) {
 	}
 }
 
+// TestResolveOfflineDSNAppliesDataDirEnvOverlay pins that the offline path
+// resolves the database through the same env overlay the daemon applies. The
+// container image and the HA add-on set OPENCCU_LOOM_DATA_DIR; resolving the
+// YAML data_dir instead points the clear at a database the daemon never uses.
+func TestResolveOfflineDSNAppliesDataDirEnvOverlay(t *testing.T) {
+	envDir := t.TempDir()
+	yamlDir := t.TempDir()
+	t.Setenv("OPENCCU_LOOM_DATA_DIR", envDir)
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("data_dir: "+yamlDir+"\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, dbFile, _, err := resolveOfflineDSN("interface", cfgPath, "")
+	if err != nil {
+		t.Fatalf("resolveOfflineDSN: %v", err)
+	}
+	if want := filepath.Join(envDir, "openccu-loom.db"); dbFile != want {
+		t.Errorf("dbFile = %q, want %q (OPENCCU_LOOM_DATA_DIR must win over data_dir)", dbFile, want)
+	}
+}
+
 func TestRunCacheClearOfflineMissingConfigErrors(t *testing.T) {
 	t.Parallel()
 	var stdout, stderr bytes.Buffer

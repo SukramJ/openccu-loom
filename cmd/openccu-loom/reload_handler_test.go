@@ -254,7 +254,7 @@ func TestHotReloadHandler_MQTT_NoSupervisorBound_LogsDeferred(t *testing.T) {
 func TestHotReloadHandler_MQTT_StructuralDiff_TriggersSwap(t *testing.T) {
 	ctx := context.Background()
 
-	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker())
+	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker(), nil)
 	startCfg := config.Default()
 	startCfg.North.MQTT.Enabled = true
 	startCfg.North.MQTT.BrokerURL = ""
@@ -309,7 +309,7 @@ func TestHotReloadHandler_MQTT_StructuralDiff_TriggersSwap(t *testing.T) {
 func TestHotReloadHandler_MQTT_NoDiff_NoSwap(t *testing.T) {
 	ctx := context.Background()
 
-	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker())
+	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker(), nil)
 	startCfg := config.Default()
 	startCfg.North.MQTT.Enabled = true
 	startCfg.North.MQTT.BrokerURL = ""
@@ -456,7 +456,7 @@ func TestMQTTDiffersStructurally(t *testing.T) {
 func TestHotReloadHandler_MQTT_EnableSwap_ReseedsSnapshot(t *testing.T) {
 	ctx := context.Background()
 
-	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker())
+	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker(), nil)
 	startCfg := config.Default()
 	startCfg.North.MQTT.Enabled = true
 	startCfg.North.MQTT.BrokerURL = ""
@@ -497,7 +497,7 @@ func TestHotReloadHandler_MQTT_EnableSwap_ReseedsSnapshot(t *testing.T) {
 func TestHotReloadHandler_MQTT_DisableSwap_NoReseed(t *testing.T) {
 	ctx := context.Background()
 
-	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker())
+	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker(), nil)
 	startCfg := config.Default()
 	startCfg.North.MQTT.Enabled = true
 	startCfg.North.MQTT.BrokerURL = ""
@@ -533,7 +533,7 @@ func TestHotReloadHandler_MQTT_DisableSwap_NoReseed(t *testing.T) {
 func TestHotReloadHandler_MQTT_NoDiff_NoReseed(t *testing.T) {
 	ctx := context.Background()
 
-	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker())
+	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker(), nil)
 	startCfg := config.Default()
 	startCfg.North.MQTT.Enabled = true
 	startCfg.North.MQTT.BrokerURL = ""
@@ -573,7 +573,7 @@ func TestHotReloadHandler_MQTT_NoDiff_NoReseed(t *testing.T) {
 func TestHotReloadHandlerMQTTSwapRebuildsFromTheAssembledConfig(t *testing.T) {
 	ctx := context.Background()
 
-	sup := newMQTTSupervisor(slog.New(slog.DiscardHandler), health.NewTracker())
+	sup := newMQTTSupervisor(slog.New(slog.DiscardHandler), health.NewTracker(), nil)
 	startCfg := config.Default()
 	startCfg.North.MQTT.Enabled = true
 	startCfg.North.MQTT.BrokerURL = ""

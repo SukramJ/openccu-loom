@@ -247,6 +247,20 @@ func (a *AccessPermission) State() payload.StatePayload {
 	return st
 }
 
+// serviceAccessPermission is the service method that carries the
+// grant/revoke command Home Assistant multiplexes onto a switch entity's
+// single `command_topic`.
+//
+// It cannot be a wire-parameter topic: the writable slot is
+// ACCESS_AUTHORIZATION, a write-only ENUM this custom DP consumes hidden
+// (no_create), and the readable slot STATE takes no writes at all.
+const serviceAccessPermission = "set_permission"
+
+// argAccessPermission is the scalar-argument key
+// [serviceAccessPermission] expects. The MQTT bridge wraps a bare
+// payload under it before the invoke reaches the handler.
+const argAccessPermission = "granted"
+
 // registerServices registers the turn_on / turn_off service methods on
 // top of the embedded ServiceRegistry.
 func (a *AccessPermission) registerServices() {
@@ -256,4 +270,45 @@ func (a *AccessPermission) registerServices() {
 	a.RegisterService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return a.TurnOff(ctx, priority)
 	})
+	a.RegisterServiceWithArg(serviceAccessPermission, argAccessPermission,
+		func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+			granted, err := payload.ParamBool(params, argAccessPermission)
+			if err != nil {
+				return err
+			}
+			if granted {
+				return a.TurnOn(ctx, priority)
+			}
+			return a.TurnOff(ctx, priority)
+		})
+}
+
+// HADiscoveryPayload returns the HA Switch-platform payload for a
+// per-user access permission.
+//
+// Both constituent wire data points are invisible on their own — STATE
+// is suppressed on a custom-DP channel and ACCESS_AUTHORIZATION is
+// forced to no_create — so without this builder the permission has no HA
+// entity at all. State therefore reads from the custom-DP aggregate
+// topic and the command goes to [serviceAccessPermission].
+func (a *AccessPermission) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+	if a == nil || ctx == nil {
+		return "", nil
+	}
+	body = map[string]any{
+		"command_topic": ctx.ServiceMethodCommandTopic(serviceAccessPermission),
+		"payload_on":    "true",
+		"payload_off":   "false",
+		"state_topic":   ctx.CustomDPStateTopic(),
+		// The aggregate omits is_on until STATE has been observed; the
+		// `is defined` guard keeps HA from logging a template error on the
+		// retained pre-observation payload.
+		"value_template": `{% if value_json.is_on is defined %}{{ value_json.is_on | lower }}{% endif %}`,
+		"state_on":       "true",
+		"state_off":      "false",
+		// The CCU confirms the grant on STATE; HA must not flip the entity
+		// locally before that echo arrives.
+		"optimistic": false,
+	}
+	return "switch", body
 }

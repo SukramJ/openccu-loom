@@ -51,8 +51,38 @@ type matterEphemeralProvider struct {
 
 	// mu serialises GenerateAndInstall against itself + the Restore
 	// closure so a window opening that races a previous Restore
-	// observes a consistent paseHandler on the bridge.
+	// observes a consistent paseHandler on the bridge. It also guards
+	// `active`.
 	mu sync.Mutex
+	// active is the per-exchange provider currently attached to the bridge
+	// (concurrent mode only). Each one runs a reaper goroutine that only
+	// [matterbridge.PerExchangePaseProvider.Stop] ends, so every swap — and
+	// the daemon shutdown — has to release the one it replaces. Without
+	// that every opened commissioning window plus its close left a ticker
+	// goroutine behind for the process lifetime.
+	active *matterbridge.PerExchangePaseProvider
+}
+
+// swapActive installs next as the live per-exchange provider and stops the
+// one it replaces. Caller holds p.mu.
+func (p *matterEphemeralProvider) swapActive(next *matterbridge.PerExchangePaseProvider) {
+	prev := p.active
+	p.active = next
+	if prev != nil {
+		prev.Stop()
+	}
+}
+
+// Close releases the provider this one still holds. The daemon's Matter
+// teardown calls it; a window left open at shutdown would otherwise keep its
+// reaper ticking past the bridge it belonged to.
+func (p *matterEphemeralProvider) Close() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.swapActive(nil)
 }
 
 // newMatterEphemeralProvider returns a provider ready to be wired
@@ -83,7 +113,7 @@ func newMatterEphemeralProvider(
 }
 
 // GenerateAndInstall implements [matterbridge.EphemeralProvider].
-func (p *matterEphemeralProvider) GenerateAndInstall(ctx context.Context) (matterbridge.EphemeralCredentials, error) {
+func (p *matterEphemeralProvider) GenerateAndInstall(_ context.Context) (matterbridge.EphemeralCredentials, error) {
 	if p == nil || p.bridge == nil || p.opMgr == nil {
 		return matterbridge.EphemeralCredentials{}, errors.New("ephemeral provider: not wired")
 	}
@@ -125,8 +155,12 @@ func (p *matterEphemeralProvider) GenerateAndInstall(ctx context.Context) (matte
 			}
 			return a
 		})
-		ephem.StartReaper(ctx, 30*time.Second, 60*time.Second)
+		// The reaper spans the commissioning window, not the exchange
+		// that opened it: a request-scoped ctx would stop it the moment
+		// the REST call returns. swapActive / Close end it instead.
+		ephem.StartReaper(context.Background(), 30*time.Second, 60*time.Second) //nolint:contextcheck // see above: the reaper outlives the invoking exchange
 		p.bridge.AttachPaseHandlerProvider(ephem.Resolve)
+		p.swapActive(ephem)
 	} else {
 		// Singleton ephemeral: build one PaseAdapter and swap it onto
 		// the bridge.
@@ -149,11 +183,10 @@ func (p *matterEphemeralProvider) GenerateAndInstall(ctx context.Context) (matte
 	configuredFactory := p.configuredFactory
 	logger := p.logger
 	bridge := p.bridge
-	mu := &p.mu
 
 	restore := func() { //nolint:contextcheck // restore callback has no ctx parameter; StartReaper needs a daemon-lifetime context independent of the commissioning window's ctx
-		mu.Lock()
-		defer mu.Unlock()
+		p.mu.Lock()
+		defer p.mu.Unlock()
 		if concurrent {
 			// Restore the long-lived configured per-exchange provider.
 			// Clearing the provider (nil) would force the bridge back
@@ -163,6 +196,9 @@ func (p *matterEphemeralProvider) GenerateAndInstall(ctx context.Context) (matte
 			restored := matterbridge.NewPerExchangePaseProvider(configuredFactory)
 			restored.StartReaper(context.Background(), 30*time.Second, 60*time.Second)
 			bridge.AttachPaseHandlerProvider(restored.Resolve)
+			// Releases the window's own provider: its ephemeral passcode
+			// is dead the moment the window closes.
+			p.swapActive(restored)
 		} else {
 			bridge.AttachPaseHandler(configured) // nil → bridge reverts to noop
 		}

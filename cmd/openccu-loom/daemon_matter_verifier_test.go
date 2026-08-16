@@ -13,10 +13,15 @@ package main
 // spake2.NewVerifierFromValue.
 
 import (
+	"bytes"
 	"crypto/elliptic"
 	"log/slog"
+	"runtime/pprof"
+	"strings"
 	"testing"
+	"time"
 
+	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 )
 
@@ -83,4 +88,79 @@ func TestBuildPaseAdapterFromVerifier_WrongLength_ReturnsError(t *testing.T) {
 	if adapter != nil {
 		t.Error("expected nil PaseAdapter on length error")
 	}
+}
+
+// reaperGoroutines counts the live per-exchange PASE reaper goroutines by
+// name in the runtime's own goroutine profile. Counting by stack rather than
+// by total goroutine count keeps the assertion immune to whatever else the
+// test binary is running.
+func reaperGoroutines(t *testing.T) int {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := pprof.Lookup("goroutine").WriteTo(&buf, 2); err != nil {
+		t.Fatalf("goroutine profile: %v", err)
+	}
+	return strings.Count(buf.String(), "PerExchangePaseProvider).StartReaper.func")
+}
+
+// awaitReaperGoroutines waits for the reaper count to settle on want.
+func awaitReaperGoroutines(t *testing.T, want int, because string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got := reaperGoroutines(t)
+		if got == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s: %d PASE reaper goroutines alive, want %d", because, got, want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestVerifierInstallerStopsThePaseProvidersItReplaces pins the lifecycle of
+// the per-exchange PASE providers in concurrent-pairings mode.
+//
+// Each provider runs a 30s-ticker reaper goroutine that only Stop ends. While
+// nothing stopped them, every commissioning window opened through the
+// AdministratorCommissioning cluster leaked one goroutine on open and another
+// on close, and a daemon that had been re-paired a few dozen times carried
+// them all until the process exited.
+func TestVerifierInstallerStopsThePaseProvidersItReplaces(t *testing.T) {
+	mgr := buildTestOperationalManager(t)
+	salt := []byte("openccu-loom-dev0")
+	verifier := verifierBytesFromPasscode(t, 20202021, salt, 1000)
+
+	base := reaperGoroutines(t)
+	installer := newMatterVerifierInstaller(
+		&matterbridge.Bridge{}, mgr, nil, nil,
+		func() *matterbridge.PaseAdapter { return nil },
+		slog.New(slog.DiscardHandler),
+	)
+	t.Cleanup(installer.Close)
+
+	restore, err := installer.InstallVerifier(verifier, 1000, salt)
+	if err != nil {
+		t.Fatalf("InstallVerifier: %v", err)
+	}
+	awaitReaperGoroutines(t, base+1, "after opening a window")
+
+	// Re-opening a window before the previous one was restored must not
+	// stack providers: the multi-admin path installs a fresh verifier.
+	restore2, err := installer.InstallVerifier(verifier, 1000, salt)
+	if err != nil {
+		t.Fatalf("second InstallVerifier: %v", err)
+	}
+	awaitReaperGoroutines(t, base+1, "after re-opening a window")
+
+	// Closing the window swaps in the between-windows provider; the window's
+	// own provider must go with it.
+	restore2()
+	awaitReaperGoroutines(t, base+1, "after closing the window")
+	restore()
+	awaitReaperGoroutines(t, base+1, "after a stale restore")
+
+	installer.Close()
+	awaitReaperGoroutines(t, base, "after the bridge teardown closed the installer")
 }

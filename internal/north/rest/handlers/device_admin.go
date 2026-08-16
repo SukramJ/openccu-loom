@@ -108,19 +108,26 @@ func PatchDevice(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
+		// Each assignment is its own CCU call. A later one failing does
+		// not undo an earlier one, so the audit trail records what
+		// actually reached the CCU, not only the all-or-nothing case.
+		var appliedRooms, appliedFunctions *[]string
 		if req.Rooms != nil {
 			if err := admin.SetRooms(r.Context(), addr, *req.Rooms); err != nil {
 				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Room assignment failed", err)
 				return
 			}
+			appliedRooms = req.Rooms
 		}
 		if req.Functions != nil {
 			if err := admin.SetFunctions(r.Context(), addr, *req.Functions); err != nil {
+				recordAssignment(r, rec, addr, appliedRooms, appliedFunctions, true)
 				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Function assignment failed", err)
 				return
 			}
+			appliedFunctions = req.Functions
 		}
-		recordAssignment(r, rec, addr, req.Rooms, req.Functions)
+		recordAssignment(r, rec, addr, appliedRooms, appliedFunctions, false)
 		w.WriteHeader(http.StatusAccepted)
 	}
 }
@@ -159,19 +166,23 @@ func PatchChannel(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
+		var appliedRooms, appliedFunctions *[]string
 		if req.Rooms != nil {
 			if err := admin.SetChannelRooms(r.Context(), addr, no, *req.Rooms); err != nil {
 				writeAssignmentError(w, r, "Room assignment failed", err)
 				return
 			}
+			appliedRooms = req.Rooms
 		}
 		if req.Functions != nil {
 			if err := admin.SetChannelFunctions(r.Context(), addr, no, *req.Functions); err != nil {
+				recordAssignment(r, rec, addr+":"+strconv.Itoa(no), appliedRooms, appliedFunctions, true)
 				writeAssignmentError(w, r, "Function assignment failed", err)
 				return
 			}
+			appliedFunctions = req.Functions
 		}
-		recordAssignment(r, rec, addr+":"+strconv.Itoa(no), req.Rooms, req.Functions)
+		recordAssignment(r, rec, addr+":"+strconv.Itoa(no), appliedRooms, appliedFunctions, false)
 		w.WriteHeader(http.StatusAccepted)
 	}
 }
@@ -188,10 +199,12 @@ func writeAssignmentError(w http.ResponseWriter, r *http.Request, title string, 
 	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, title, err)
 }
 
-// recordAssignment appends the audit entry for a successful room /
-// function assignment patch. Rename-only patches record nothing — the
-// name change is already observable through the device model itself.
-func recordAssignment(r *http.Request, rec audit.Recorder, address string, rooms, functions *[]string) {
+// recordAssignment appends the audit entry for the room / function
+// assignments that reached the CCU. Rename-only patches record nothing —
+// the name change is already observable through the device model itself.
+// partial marks a patch whose remaining assignments failed, so the row
+// says what landed rather than implying the whole patch did.
+func recordAssignment(r *http.Request, rec audit.Recorder, address string, rooms, functions *[]string, partial bool) {
 	if rec == nil || (rooms == nil && functions == nil) {
 		return
 	}
@@ -201,6 +214,9 @@ func recordAssignment(r *http.Request, rec audit.Recorder, address string, rooms
 	}
 	if functions != nil {
 		parts = append(parts, fmt.Sprintf("functions=%v", *functions))
+	}
+	if partial {
+		parts = append(parts, "(partial: the rest of the patch failed)")
 	}
 	rec.Record(audit.Entry{
 		User:          identityFromCtx(r.Context()),

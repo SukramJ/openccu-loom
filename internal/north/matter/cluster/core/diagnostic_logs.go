@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -150,7 +151,7 @@ func (d *DiagnosticLogs) MatterWrite(_ context.Context, attrID uint32, _ any, _ 
 // access logs", which fits any provider exception).
 func (d *DiagnosticLogs) MatterInvoke(ctx context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
 	if cmdID != diaglogsCmdRetrieveLogsRequest {
-		return nil, fmt.Errorf("matter: DiagnosticLogs command 0x%02X not supported", cmdID)
+		return nil, im.UnsupportedCommandf("matter: DiagnosticLogs command 0x%02X not supported", cmdID)
 	}
 	intent := decodeRetrieveLogsIntent(fields)
 

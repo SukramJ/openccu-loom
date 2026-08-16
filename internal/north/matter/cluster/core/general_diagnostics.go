@@ -335,7 +335,7 @@ func (g *GeneralDiagnostics) MatterInvoke(_ context.Context, cmdID uint32, _ any
 		// it simply never enables a trigger on the bridge.
 		return nil, gendiagConstraintErr{}
 	}
-	return nil, fmt.Errorf("matter: GeneralDiagnostics command 0x%02X not supported", cmdID)
+	return nil, im.UnsupportedCommandf("matter: GeneralDiagnostics command 0x%02X not supported", cmdID)
 }
 
 // gendiagConstraintErr is the typed [im.StatusCodeError] returned by

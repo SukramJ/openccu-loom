@@ -5,6 +5,8 @@ package jsonrpc
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -133,5 +135,94 @@ func TestReloginLockedConcurrentAuthFailuresLogInOnce(t *testing.T) {
 		t.Fatalf("Session.login called %d times during the concurrent phase, want exactly 1 — %d "+
 			"concurrent reloginLocked callers sharing the same stale session id must serialize into a "+
 			"single relogin, the rest reusing the session the first one installed", got, n)
+	}
+}
+
+// TestCallOnceAuthRetryInvalidatesTheSessionTheRequestUsed pins which session
+// an auth failure is allowed to discard: the one the failed request carried,
+// never whatever the client holds when the reply arrives.
+//
+// Several callers share one client, so a concurrent caller can log in again
+// between send and reply. Judging the reply against the current session then
+// declares that brand-new session stale — the client invalidates it and logs
+// it out on the CCU, killing a live session and pushing every concurrent
+// caller through its own login, which is exactly what exhausts the CCU's
+// small session pool after a reboot.
+//
+// The interleaving is produced deterministically: the CCU handler for the
+// call logs the client in again (standing in for the concurrent caller) and
+// only then answers 401.
+func TestCallOnceAuthRetryInvalidatesTheSessionTheRequestUsed(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu           sync.Mutex
+		logins       int
+		loggedOut    []string
+		callSessions []string
+	)
+	var c *Client
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Session.login": func(envelope) any {
+			mu.Lock()
+			logins++
+			id := fmt.Sprintf("session-%d", logins)
+			mu.Unlock()
+			return okResult(id)
+		},
+		"Session.logout": func(env envelope) any {
+			mu.Lock()
+			loggedOut = append(loggedOut, sessionOf(env.Params))
+			mu.Unlock()
+			return okResult(true)
+		},
+		"Foo": func(env envelope) any {
+			session := sessionOf(env.Params)
+			mu.Lock()
+			callSessions = append(callSessions, session)
+			mu.Unlock()
+			if session != "session-1" {
+				return okResult("ok")
+			}
+			// A concurrent caller notices the dead session first and
+			// establishes a new one while this request is in flight.
+			if err := c.Login(context.Background()); err != nil {
+				t.Errorf("concurrent relogin: %v", err)
+			}
+			return http.StatusUnauthorized
+		},
+	})
+	defer srv.Close()
+
+	var err error
+	c, err = New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := c.Login(context.Background()); err != nil {
+		t.Fatalf("setup Login: %v", err)
+	}
+
+	if err := c.Call(context.Background(), "Foo", nil, nil); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, s := range loggedOut {
+		if s == "session-2" {
+			t.Fatalf("the session established by the concurrent caller was logged out on the CCU "+
+				"(logouts=%v) — only the session the failed request carried may be discarded", loggedOut)
+		}
+	}
+	if logins != 2 {
+		t.Fatalf("Session.login calls = %d, want 2 (setup + the concurrent caller's) — the retry must "+
+			"reuse the session that already exists, not open another one", logins)
+	}
+	if got := callSessions[len(callSessions)-1]; got != "session-2" {
+		t.Fatalf("retried call carried session %q, want %q", got, "session-2")
+	}
+	if got := c.SessionID(); got != "session-2" {
+		t.Fatalf("SessionID() = %q, want %q", got, "session-2")
 	}
 }

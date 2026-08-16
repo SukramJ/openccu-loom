@@ -4,6 +4,8 @@
 package adapter
 
 import (
+	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -144,4 +147,66 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("condition not reached within deadline")
+}
+
+// availabilityPublishCount counts how often the device-availability topic of
+// addr appears in what the fake client received.
+func availabilityPublishCount(pub *mqtt.NoopClient, addr string) int {
+	n := 0
+	for _, p := range pub.Published() {
+		if strings.Contains(p.Topic, addr) && strings.HasSuffix(p.Topic, "/availability") {
+			n++
+		}
+	}
+	return n
+}
+
+// TestPublishInitialSnapshotResetsAvailabilityGate pins that the transition
+// gate does not outlive the retained topics it describes. The snapshot runs
+// on every broker (re)connect, and a broker that came back without its
+// retained store needs the availability topic re-published — the gate would
+// otherwise report "no transition" forever and leave every HA entity of the
+// device unavailable until the daemon restarts.
+func TestPublishInitialSnapshotResetsAvailabilityGate(t *testing.T) {
+	t.Parallel()
+	eb, pub := buildBridgeEnv(t)
+	ctx := context.Background()
+
+	if !eb.markAvailability(ctx, "ccu-01", "HmIP-RF", "AVAILGATE01", true) {
+		t.Fatal("first markAvailability must report a transition")
+	}
+	if eb.markAvailability(ctx, "ccu-01", "HmIP-RF", "AVAILGATE01", true) {
+		t.Fatal("repeated markAvailability must stay deduped")
+	}
+	before := availabilityPublishCount(pub, "AVAILGATE01")
+
+	eb.PublishInitialSnapshot(ctx)
+
+	if !eb.markAvailability(ctx, "ccu-01", "HmIP-RF", "AVAILGATE01", true) {
+		t.Fatal("markAvailability after a snapshot pass must publish again")
+	}
+	if got := availabilityPublishCount(pub, "AVAILGATE01"); got <= before {
+		t.Fatalf("availability publishes = %d, want more than %d", got, before)
+	}
+}
+
+// TestOnDeviceRemovedForgetsAvailability pins the same invariant for a single
+// device: the removal retracts the availability topic, so a device readopted
+// under the same address must be able to publish `online` again.
+func TestOnDeviceRemovedForgetsAvailability(t *testing.T) {
+	t.Parallel()
+	eb, _ := buildBridgeEnv(t)
+	ctx := context.Background()
+
+	eb.markAvailability(ctx, "ccu-01", "HmIP-RF", "AVAILGATE02", true)
+
+	eb.onDeviceRemoved(ctx, hmevent.DeviceRemovedEvent{
+		CentralName: "ccu-01",
+		InterfaceID: "HmIP-RF",
+		Address:     "AVAILGATE02",
+	})
+
+	if !eb.markAvailability(ctx, "ccu-01", "HmIP-RF", "AVAILGATE02", true) {
+		t.Fatal("availability must be publishable again after the topic was retracted")
+	}
 }

@@ -351,7 +351,7 @@ func (h *scenarioHarness) run() {
 		case kindExpectNoTX:
 			h.expectNoTX(stepCtx, st)
 		case kindSendStatusResponse:
-			h.sendStatusResponse(stepCtx, st)
+			h.sendStatusResponse(stepCtx, st, false)
 		case kindExpectLog:
 			h.expectLog(stepCtx, st)
 		case kindCloseSession:
@@ -633,7 +633,7 @@ func (h *scenarioHarness) expectTX(ctx string, st scenarioStep) {
 // fires signalStatusResponseRX(exchange) and emits the
 // matter.rx.im.status_ack debug log, which is the observable signal
 // downstream steps assert.
-func (h *scenarioHarness) sendStatusResponse(ctx string, st scenarioStep) {
+func (h *scenarioHarness) sendStatusResponse(ctx string, st scenarioStep, peerOpenedExchange bool) {
 	h.t.Helper()
 	exch, ok := h.resolveExchange(st.Exchange)
 	if !ok {
@@ -652,7 +652,12 @@ func (h *scenarioHarness) sendStatusResponse(ctx string, st scenarioStep) {
 		return
 	}
 	proto := message.ProtocolHeader{
-		Initiator:  false, // bridge initiated the fresh exchange, peer responds
+		// Matter §4.4.3.1: the I flag says whether the SENDER opened the
+		// exchange, and it stays set on every message that side sends.
+		// On a bridge-opened exchange (an ongoing report) the peer answers
+		// with I=0; on a peer-opened one (its own SubscribeRequest, whose
+		// initial chunks it acks) the peer keeps I=1.
+		Initiator:  peerOpenedExchange,
 		Opcode:     im.OpcodeStatusResponse,
 		ExchangeID: exch,
 		ProtocolID: im.InteractionModelProtocolID,
@@ -830,7 +835,9 @@ func (h *scenarioHarness) drainSubscribeChunks(ctx string, st scenarioStep) {
 			// proto.ExchangeID — no $var indirection needed.
 			h.bindings["$__drain_exch"] = proto.ExchangeID
 			ackStep.Exchange = "$__drain_exch"
-			h.sendStatusResponse(ctx, ackStep)
+			// The chunks ride the exchange the peer opened with its
+			// SubscribeRequest, so its ack keeps I=1.
+			h.sendStatusResponse(ctx, ackStep, true)
 		case im.OpcodeSubscribeResponse:
 			if st.BindExchangeIDTo != "" {
 				h.bindings[st.BindExchangeIDTo] = proto.ExchangeID

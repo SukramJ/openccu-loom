@@ -184,6 +184,13 @@ func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitesto
 				a.pendingCause = ""
 			}
 		}
+		// A sensor enrolled by this write has never seen an event, so
+		// its activation state is unknown — and the blocker policy only
+		// classifies a *known* active sensor. Without the seed a contact
+		// enrolled while it stands open leaves the zone reporting ready
+		// to arm on every surface until it happens to push. Reads come
+		// from the same cached channel model the live event path feeds.
+		e.refreshSensorValues(ctx, a)
 		e.persist(ctx, a)
 		e.refreshReadiness(a)
 	}

@@ -5,11 +5,13 @@ package core_test
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -335,5 +337,43 @@ func TestIdentify_CloseStopsTheCountdownAndIsIdempotent(t *testing.T) {
 	}
 	if got != uint16(5) {
 		t.Fatalf("IdentifyTime = %v, want uint16(5)", got)
+	}
+}
+
+// TestCoreClustersRejectUnknownCommandsWithTypedStatus pins that the
+// default branch of MatterInvoke carries the typed
+// [im.ErrUnsupportedCommand] rather than a plain error whose wording the
+// dispatcher has to guess at. Matter §10.6.7.4 wants UnsupportedCommand
+// (0x81) for a command a cluster does not implement; FAILURE (0x01) —
+// what an unrecognised error string maps to — reads as a device fault.
+func TestCoreClustersRejectUnknownCommandsWithTypedStatus(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ac := newAccessControl(t)
+	descriptor := defaultDescriptor(t)
+
+	for name, invoke := range map[string]func() error{
+		"Identify": func() error {
+			_, err := core.NewIdentify().MatterInvoke(ctx, 0x7F, nil, hmenum.CommandPriorityHigh)
+			return err
+		},
+		"AccessControl": func() error {
+			_, err := ac.MatterInvoke(ctx, 0x00, nil, hmenum.CommandPriorityHigh)
+			return err
+		},
+		"Descriptor": func() error {
+			_, err := descriptor.MatterInvoke(ctx, 0x00, nil, hmenum.CommandPriorityHigh)
+			return err
+		},
+	} {
+		err := invoke()
+		if !errors.Is(err, im.ErrUnsupportedCommand) {
+			t.Errorf("%s: err = %v, want an error matching im.ErrUnsupportedCommand", name, err)
+		}
+		var sce im.StatusCodeError
+		errors.As(err, &sce)
+		if sce == nil || sce.MatterStatusCode() != im.StatusUnsupportedCommand {
+			t.Errorf("%s: status = %v, want StatusUnsupportedCommand", name, err)
+		}
 	}
 }

@@ -197,3 +197,40 @@ describe("SimpleScheduleEditor — universal-light colour (W02)", () => {
     });
   });
 });
+
+describe("SimpleScheduleEditor — expanded rows survive a delete", () => {
+  function threeSlots(): ClimateSchedule {
+    return {
+      ...baseSchedule(),
+      simple_entries: [1, 2, 3].map((slot) => ({
+        slot_no: slot,
+        weekdays: ["MONDAY"],
+        time: `0${slot}:00`,
+        level: 1,
+      })),
+    } as ClimateSchedule;
+  }
+
+  function advancedToggle(slotNo: number): HTMLElement {
+    const row = document.getElementById(`schedule-slot-${slotNo}`);
+    expect(row).not.toBeNull();
+    return within(row as HTMLElement).getByText(/schedule\.advanced/);
+  }
+
+  it("keeps the advanced panel on the slot the operator opened", async () => {
+    render(SimpleScheduleEditor, {
+      props: { address: ADDRESS, schedule: threeSlots(), onReload: vi.fn() },
+    });
+
+    await fireEvent.click(advancedToggle(3));
+    expect(advancedToggle(3).getAttribute("aria-expanded")).toBe("true");
+
+    // Deleting slot 1 renumbers the array indices of slots 2 and 3.
+    const firstRow = document.getElementById("schedule-slot-1") as HTMLElement;
+    await fireEvent.click(within(firstRow).getByTitle("common.remove"));
+
+    await waitFor(() => expect(document.getElementById("schedule-slot-1")).toBeNull());
+    expect(advancedToggle(3).getAttribute("aria-expanded")).toBe("true");
+    expect(advancedToggle(2).getAttribute("aria-expanded")).toBe("false");
+  });
+});

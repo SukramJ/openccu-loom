@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -128,9 +129,10 @@ func (p *ParamsetsDomain) GetParamset(ctx context.Context, deviceAddress string,
 // the authoritative values and pushes them back through the channel's
 // data points so the SPA always sees post-write state.
 //
-// LINK paramsets are NOT routed here; they use the legacy backend path
-// in [PutLinkParamset]. Adding a LinkPair aggregate to the model is a
-// Phase-A.3 follow-up.
+// LINK paramsets are not routed through the model — it holds no
+// channel-level LINK data points — and go straight to the backend. The
+// per-peer route [ParamsetsDomain.PutLinkParamset] stays the addressed
+// form of the same write.
 //
 // When the channel is not found in the model registry (diagnostic
 // tooling, unknown address), the call falls through to a direct backend
@@ -148,6 +150,15 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 	before, _ := b.GetParamset(ctx, deviceAddress, key)
 
 	ch := p.resolveChannel(deviceAddress)
+	if key == hmenum.ParamsetKeyLink {
+		// A LINK paramset exists per peer and has no channel-level data
+		// point, so the model's parameter lookup resolves nothing and
+		// SetMany rejects every LINK write with ErrUnknownParameter — even
+		// though this route accepts LINK as a paramset key and locks it for
+		// editing. Send it down the backend path, exactly as a channel the
+		// model does not hold is sent.
+		ch = nil
+	}
 	if ch != nil {
 		// Route through the model: Channel.SetMany validates + dispatches.
 		paramValues, convErr := anyMapToParamValues(ch, key, values)
@@ -175,7 +186,7 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 		}
 	}
 	p.refreshAfterPut(ctx, b, deviceAddress, key)
-	p.recordParamsetWrite(deviceAddress, string(key), before, values)
+	p.recordParamsetWrite(ctx, deviceAddress, string(key), before, values)
 	return nil
 }
 
@@ -220,17 +231,26 @@ func auditRedacted(before any) any {
 	return auditRedactedMask
 }
 
-func (p *ParamsetsDomain) recordParamsetWrite(channelAddress, paramset string, before, after map[string]any) {
+// recordParamsetWrite appends the write to the change log.
+//
+// The caller's operation label travels on the context and is recorded as
+// the entry's note. Every surface funnels into the same domain method, so
+// without it the log cannot tell a paramset an operator edited in the UI
+// from one an assistant wrote over MCP — which is the first question
+// asked of an unexplained configuration change.
+func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddress, paramset string, before, after map[string]any) {
 	if p.audit == nil {
 		return
 	}
 	changes := auditChanges(before, after)
+	rc, _ := reqctx.FromContext(ctx)
 	p.audit.Record(audit.Entry{
 		Action:        audit.ActionParamsetWrite,
 		DeviceAddress: deviceAddressOf(channelAddress),
 		ChannelNo:     channelNumberOf(channelAddress),
 		Paramset:      paramset,
 		Changes:       changes,
+		Note:          rc.Operation,
 	})
 }
 

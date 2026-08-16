@@ -119,6 +119,12 @@ and `north.mqtt.discovery_enabled` are on, pointed at your MQTT broker.
 HA's MQTT integration picks up the devices. *Homematic(IP) Local* is
 **not** installed (or not pointed at the same CCU).
 
+`north.mqtt.raw_enabled` belongs to this setup too: the discovery
+payloads only declare entities, while the values they read live on the
+raw topic plane. Leaving it off would give you every device in HA with
+every entity stuck at `unavailable`, so the daemon switches it on for you
+and logs a warning — set it explicitly to keep your config honest.
+
 This is the mainstream path today.
 
 **What you get in HA:** `sensor`, `binary_sensor`, `switch`, `light`,

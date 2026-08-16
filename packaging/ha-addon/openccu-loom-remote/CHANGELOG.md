@@ -4,6 +4,19 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.61.0
+
+- Version alignment with OpenCCU-Loom 0.61.0. The proxy itself is
+  unchanged; the release is the follow-up to the 0.60.0 audit — a fresh
+  full-codebase pass and three defect waves headlined by security fixes
+  (token revocation now severs live WebSocket sessions, the channel lock is
+  enforced on every write path, HTTP Basic no longer bypasses CSRF), data
+  integrity (a redacted config export no longer wipes stored secrets on
+  import; backup restore clears the stale write-ahead log), and Home Assistant
+  discovery no longer creating permanently-unavailable entities. The MQTT
+  transport moves to go-mqtt v1.3.0. API clients: the north-bound contract
+  version moves to 6.0.0 to match what the daemon already did.
+
 # 0.60.0
 
 - Version alignment with OpenCCU-Loom 0.60.0. The proxy itself is

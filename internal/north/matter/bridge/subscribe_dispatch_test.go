@@ -153,7 +153,10 @@ func TestRegisterSubscription_NoManager_ReturnsZeroSubID(t *testing.T) {
 	req := im.SubscribeRequest{}
 	report := im.ReportData{}
 
-	subID := b.registerSubscription(src, hdr, proto, req, &report)
+	subID, err := b.registerSubscription(src, hdr, proto, req, &report)
+	if err != nil {
+		t.Fatalf("no manager: err = %v, want nil", err)
+	}
 	if subID != 0 {
 		t.Errorf("no manager: subID = %d, want 0", subID)
 	}

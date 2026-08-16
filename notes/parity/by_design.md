@@ -3962,3 +3962,27 @@ Dropping an unreachable row changes no observable behaviour today; it removes a
 trap for the day the model gains the parameter. The window-contact siblings are
 untouched, so the reference's intent for the family is preserved. Should the
 reference ever be re-imported wholesale, this row must be dropped again.
+
+## Homegear XML-RPC sysvar hub-wiring removed (dead until backend detection lands)
+
+The XML-RPC sysvar loader for a Homegear-backed central
+(`homegear_hub_wiring.go`, `wireHomegearHubIfPresent`) was removed along with
+its wiring pin. It was correct code but unreachable: backend classification
+(`backends.KindFor`) only ever yields `CCU` or `CUxD`, `backendKind` is never
+mutated before `FactoryWithKind`, and `DetectBackend` — the only thing that
+would classify a central as Homegear — has no production caller. So
+`backendRegistry.homegearBackend()` always returned nil and the wiring was a
+guaranteed no-op on every boot.
+
+This matches the standing scope decision (`SPECIFICATION.md` §2.2: *No Homegear
+depth-parity*; the backend abstraction exists but full parity is a post-0.1.0
+milestone). Homegear support is not partially live — the whole detection path
+is unwired, so the hub half was vestigial, not load-bearing.
+
+When Homegear detection is eventually wired, the XML-RPC sysvar path has to come
+back with it: Homegear speaks no JSON-RPC, so the CCU hub path
+(`WireHub` → `loadSysvars` via `SysVar.getAll`) fails at login and never
+populates the hub model. The reference shape is preserved in Git history
+(`internal/central/adapter/homegear_hub_wiring.go` before its removal); the
+per-sysvar writer routed through the XML-RPC `setSystemVariable` method and left
+the create/update/delete mutator nil, which the milestone should restore.

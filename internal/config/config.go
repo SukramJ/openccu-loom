@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -1416,14 +1417,22 @@ func (n NorthUI) SurfaceOverrides(profile string) map[string]SurfaceState {
 
 // NorthMQTT configures the MQTT bridge.
 type NorthMQTT struct {
-	Enabled          bool   `yaml:"enabled" json:"enabled" cfg:"basic"`
-	BrokerURL        string `yaml:"broker_url" json:"broker_url" cfg:"basic"` // tcp://host:1883
-	ClientID         string `yaml:"client_id" json:"client_id" cfg:"basic"`
-	Username         string `yaml:"username" json:"username" cfg:"basic"`
-	Password         string `yaml:"password" json:"password" cfg:"secret"`
-	TopicBase        string `yaml:"topic_base" json:"topic_base" cfg:"basic"`
-	RawEnabled       bool   `yaml:"raw_enabled" json:"raw_enabled" cfg:"basic"`
-	DiscoveryEnabled bool   `yaml:"discovery_enabled" json:"discovery_enabled" cfg:"basic"`
+	Enabled   bool   `yaml:"enabled" json:"enabled" cfg:"basic"`
+	BrokerURL string `yaml:"broker_url" json:"broker_url" cfg:"basic"` // tcp://host:1883
+	ClientID  string `yaml:"client_id" json:"client_id" cfg:"basic"`
+	Username  string `yaml:"username" json:"username" cfg:"basic"`
+	Password  string `yaml:"password" json:"password" cfg:"secret"`
+	TopicBase string `yaml:"topic_base" json:"topic_base" cfg:"basic"`
+	// RawEnabled turns on the raw topic plane: the state, availability and
+	// command topics under TopicBase. It carries the actual values, so the
+	// HA discovery plane depends on it — see DiscoveryEnabled.
+	RawEnabled bool `yaml:"raw_enabled" json:"raw_enabled" cfg:"basic"`
+	// DiscoveryEnabled turns on the Home Assistant discovery plane, which
+	// declares entities that reference raw-plane topics. Enabling it implies
+	// RawEnabled: [Config.applyDefaults] turns the raw plane on (with a
+	// warning) rather than letting the daemon publish a device tree whose
+	// entities can never receive a value.
+	DiscoveryEnabled bool `yaml:"discovery_enabled" json:"discovery_enabled" cfg:"basic"`
 
 	// ProtocolVersion selects the MQTT wire dialect: "5" (default when
 	// empty) or "3.1.1" for brokers without MQTT 5.0 support. There is
@@ -1799,23 +1808,36 @@ func Default() *Config {
 	return cfg
 }
 
-// Clone returns an independent deep copy of c via a JSON round-trip, so a
-// caller can layer changes onto a snapshot without mutating the config the
-// running daemon holds. Callers that re-assemble the effective config (the
-// reload path overlays the DB-tier sections onto the YAML base) need this
-// because the overlay mutates its target in place. A nil receiver or a
-// marshalling failure yields [Default] rather than nil, keeping the result
-// safe to dereference.
+// Clone returns an independent deep copy of c, so a caller can layer changes
+// onto a snapshot without mutating the config the running daemon holds.
+// Callers that re-assemble the effective config (the reload path overlays the
+// DB-tier sections onto the YAML base) need this because the overlay mutates
+// its target in place. A nil argument yields [Default] rather than nil,
+// keeping the result safe to dereference.
+//
+// The copy goes through a JSON round-trip, which cannot express non-finite
+// floats. Substituting [Default] when that fails would be silent data loss of
+// the worst kind — the caller writes the result back over the running config
+// (`*cfg = *staged`), so one unrepresentable leaf would replace the operator's
+// centrals, data directory and listen addresses with built-in defaults while
+// every layer reports success. The fallback is therefore the config's own
+// on-disk encoding, which represents everything the operator can write.
 func Clone(c *Config) *Config {
 	if c == nil {
 		return Default()
 	}
-	raw, err := json.Marshal(c)
+	if raw, err := json.Marshal(c); err == nil {
+		out := &Config{}
+		if err := json.Unmarshal(raw, out); err == nil {
+			return out
+		}
+	}
+	raw, err := yaml.Marshal(c)
 	if err != nil {
 		return Default()
 	}
 	out := &Config{}
-	if err := json.Unmarshal(raw, out); err != nil {
+	if err := yaml.Unmarshal(raw, out); err != nil {
 		return Default()
 	}
 	return out
@@ -1861,6 +1883,19 @@ func (c *Config) applyDefaults() {
 	c.North.MQTT.TopicBase = strings.Trim(c.North.MQTT.TopicBase, "/")
 	if c.North.MQTT.TopicBase == "" {
 		c.North.MQTT.TopicBase = "openccu-loom"
+	}
+	// The two MQTT planes are not independent: every entity the discovery
+	// plane declares points at state, availability and command topics that
+	// only the raw plane publishes. Discovery on with the raw plane off is
+	// therefore not a narrower setup but a broken one — Home Assistant shows
+	// the full device tree and every entity in it stays "unavailable" forever,
+	// with no error anywhere to explain it. The combination is corrected
+	// rather than rejected so an existing installation that saved it keeps
+	// starting; the warning names the field the operator has to look at.
+	if c.North.MQTT.DiscoveryEnabled && !c.North.MQTT.RawEnabled {
+		c.North.MQTT.RawEnabled = true
+		slog.Warn("config: north.mqtt.discovery_enabled requires the raw topic plane; enabling north.mqtt.raw_enabled",
+			slog.String("field", "north.mqtt.raw_enabled"))
 	}
 	if c.North.REST.WS.ReplayCapacity == 0 {
 		c.North.REST.WS.ReplayCapacity = 1024

@@ -4,6 +4,8 @@
 package reliability
 
 import (
+	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -11,16 +13,11 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// TestCircuitPanicingListenerInRefreshLockedDoesNotCrash verifies that a
-// state-change listener that panics during the async OPEN→HALF_OPEN
-// transition fired by refreshLocked does not kill the dispatcher goroutine
-// and does not prevent subsequent listeners from being called.
-//
-// Background: refreshLocked fires listeners asynchronously (via safeFire)
-// to avoid running user code while holding the mutex. A panicking listener
-// would previously kill its goroutine silently; safeFire now recovers and
-// logs, so the breaker continues operating normally.
-func TestCircuitPanicingListenerInRefreshLockedDoesNotCrash(t *testing.T) {
+// TestCircuitPanickingListenerDoesNotUnwindTheBreaker verifies that a
+// state-change listener which panics neither reaches the caller that
+// produced the transition nor stops the remaining listeners — for every
+// transition, whichever call publishes it.
+func TestCircuitPanickingListenerDoesNotUnwindTheBreaker(t *testing.T) {
 	t.Parallel()
 
 	tick := time.Unix(0, 0)
@@ -43,22 +40,10 @@ func TestCircuitPanicingListenerInRefreshLockedDoesNotCrash(t *testing.T) {
 		Clock:            clock,
 	})
 
-	// Trip the breaker to OPEN before registering any listeners so the
-	// synchronous callbacks in record() do not fire against the panicking
-	// listener below (record() fires synchronously and would propagate the
-	// panic to this goroutine before we even reach the refreshLocked path).
-	c.RecordFailure()
-	if c.State() != hmenum.CircuitStateOpen {
-		t.Fatalf("expected OPEN after RecordFailure, got %s", c.State())
-	}
-
-	// Now install the panicking listener. It will only be called when
-	// refreshLocked fires the OPEN→HALF_OPEN transition asynchronously.
 	c.OnStateChange(func(_, _ hmenum.CircuitState) {
-		panic("intentional panic from test listener in refreshLocked")
+		panic("intentional panic from test listener")
 	})
 
-	// Non-panicking second listener that records the state it receives.
 	var (
 		callsMu sync.Mutex
 		gotTo   []hmenum.CircuitState
@@ -69,32 +54,36 @@ func TestCircuitPanicingListenerInRefreshLockedDoesNotCrash(t *testing.T) {
 		callsMu.Unlock()
 	})
 
-	// Advance past ResetTimeout — State() calls refreshLocked which fires
-	// listeners asynchronously via safeFire. The panicking listener must not
-	// propagate to this goroutine.
-	advanceClock(2 * time.Second)
+	// CLOSED → OPEN is published by record().
+	_ = c.Do(context.Background(), "setValue", func(_ context.Context) error {
+		return errors.New("boom")
+	})
+	if got := c.State(); got != hmenum.CircuitStateOpen {
+		t.Fatalf("state = %s, want OPEN", got)
+	}
 
-	// This call triggers refreshLocked → safeFire for the OPEN→HALF_OPEN
-	// transition. The panicking listener fires in its own goroutine;
-	// the test goroutine must not crash.
-	got := c.State()
-	if got != hmenum.CircuitStateHalfOpen {
+	// OPEN → HALF_OPEN is published by the caller of refreshLocked.
+	advanceClock(2 * time.Second)
+	if got := c.State(); got != hmenum.CircuitStateHalfOpen {
 		t.Fatalf("state = %s, want HALF_OPEN", got)
 	}
 
-	// Drain in-flight callback goroutines deterministically instead of
-	// sleeping: WaitCallbacks blocks until every safeFire goroutine from the
-	// most recent state transition has returned.
-	c.WaitCallbacks()
+	// HALF_OPEN → CLOSED is published by Reset().
+	c.Reset()
 
-	// The non-panicking listener must have been called for the transition.
 	callsMu.Lock()
 	defer callsMu.Unlock()
-	if len(gotTo) == 0 {
-		t.Fatal("second listener was never called — safeFire goroutines must be independent")
+	want := []hmenum.CircuitState{
+		hmenum.CircuitStateOpen,
+		hmenum.CircuitStateHalfOpen,
+		hmenum.CircuitStateClosed,
 	}
-	last := gotTo[len(gotTo)-1]
-	if last != hmenum.CircuitStateHalfOpen {
-		t.Fatalf("second listener last seen to = %s, want HALF_OPEN", last)
+	if len(gotTo) != len(want) {
+		t.Fatalf("listener saw %v, want %v — a panicking listener must not stop the ones after it", gotTo, want)
+	}
+	for i, w := range want {
+		if gotTo[i] != w {
+			t.Fatalf("transition[%d] = %s, want %s (saw %v)", i, gotTo[i], w, gotTo)
+		}
 	}
 }

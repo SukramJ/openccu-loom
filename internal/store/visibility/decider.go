@@ -28,6 +28,14 @@ type ParameterDecider struct {
 	unIgnore           []UnIgnoreEntry
 	cacheVal           map[ignoreCacheKey]bool
 	requiredParameters map[hmenum.Parameter]struct{} // VALUES-only whitelist
+
+	// ruleGen counts the rule-set changes that invalidate memoised
+	// verdicts. Verdicts are computed without the lock held, so a
+	// concurrent rule change can land between the computation and the
+	// store; the generation observed before computing is what tells the
+	// two apart. Without it a verdict from the previous rule set is
+	// written into the freshly emptied cache and outlives the change.
+	ruleGen uint64
 }
 
 // maxCacheEntries bounds the memoisation cache so an ever-growing set of
@@ -78,7 +86,7 @@ func (d *ParameterDecider) SetRequiredParameters(params []hmenum.Parameter) {
 	}
 	// Invalidate cache so memoised ignore decisions are recomputed with
 	// the new whitelist.
-	d.cacheVal = make(map[ignoreCacheKey]bool)
+	d.invalidateCacheLocked()
 	d.mu.Unlock()
 }
 
@@ -105,7 +113,7 @@ const channelNoUnknown = -1
 func (d *ParameterDecider) LoadUnIgnore(entries []UnIgnoreEntry) {
 	d.mu.Lock()
 	d.unIgnore = append(d.unIgnore[:0], entries...)
-	d.cacheVal = make(map[ignoreCacheKey]bool)
+	d.invalidateCacheLocked()
 	d.mu.Unlock()
 }
 
@@ -131,22 +139,46 @@ func (d *ParameterDecider) IsParameterIgnored(model, channelType string, channel
 		paramsetKey: paramset,
 		parameter:   p,
 	}
-	d.mu.RLock()
-	if v, ok := d.cacheVal[key]; ok {
+	// The verdict is computed without the lock so concurrent lookups do not
+	// serialise on it. That leaves a window in which the rule set changes
+	// between the computation and the store, so the generation observed
+	// before computing is carried through and re-checked: a verdict from a
+	// superseded rule set is recomputed instead of being written into the
+	// cache the change just emptied.
+	for {
+		d.mu.RLock()
+		if v, ok := d.cacheVal[key]; ok {
+			d.mu.RUnlock()
+			return v
+		}
+		gen := d.ruleGen
 		d.mu.RUnlock()
-		return v
+
+		ignored := d.computeIgnored(model, channelNo, paramset, p)
+
+		if d.storeVerdictIfCurrent(key, ignored, gen) {
+			return ignored
+		}
 	}
-	d.mu.RUnlock()
+}
 
-	ignored := d.computeIgnored(model, channelNo, paramset, p)
-
+// storeVerdictIfCurrent memoises `ignored` under `key` unless the rule set
+// changed since generation `gen` was observed. It reports whether the
+// verdict was accepted; a rejected verdict has to be recomputed, because it
+// answers a question the current rules may answer differently.
+func (d *ParameterDecider) storeVerdictIfCurrent(key ignoreCacheKey, ignored bool, gen uint64) bool {
 	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.ruleGen != gen {
+		return false
+	}
 	if len(d.cacheVal) >= maxCacheEntries {
+		// Size eviction alone does not change any answer, so it leaves the
+		// generation untouched.
 		d.cacheVal = make(map[ignoreCacheKey]bool)
 	}
 	d.cacheVal[key] = ignored
-	d.mu.Unlock()
-	return ignored
+	return true
 }
 
 // computeIgnored performs the actual ignore decision without caching.
@@ -417,8 +449,17 @@ func (d *ParameterDecider) UnIgnoreEntries() []UnIgnoreEntry {
 // ClearCache resets the memoisation map without touching the un-ignore rules.
 func (d *ParameterDecider) ClearCache() {
 	d.mu.Lock()
-	d.cacheVal = make(map[ignoreCacheKey]bool)
+	d.invalidateCacheLocked()
 	d.mu.Unlock()
+}
+
+// invalidateCacheLocked empties the memoisation map and advances the rule
+// generation. Callers must hold d.mu for writing. The generation bump is
+// what stops a verdict that is already being computed under the previous
+// rule set from being stored afterwards.
+func (d *ParameterDecider) invalidateCacheLocked() {
+	d.cacheVal = make(map[ignoreCacheKey]bool)
+	d.ruleGen++
 }
 
 // InvalidatePrefixCache is a no-op in Go: the Go implementation uses a flat

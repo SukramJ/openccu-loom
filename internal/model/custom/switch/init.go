@@ -46,6 +46,7 @@ package switchdev
 import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -55,6 +56,12 @@ func init() {
 	reg.MustRegisterConstructor(hmenum.DeviceProfileIPSwitch, ipSwitchConstructor)
 	reg.MustRegisterConstructor(hmenum.DeviceProfileRfSwitch, rfSwitchConstructor)
 	reg.MustRegisterConstructor(hmenum.DeviceProfileIPAccessPermission, ipAccessPermissionConstructor)
+
+	// Pre-populate the package-level scalar-arg key table so north-bound
+	// adapters can resolve the key before any device has materialised. The
+	// same mapping is re-applied per Source by
+	// [AccessPermission.registerServices].
+	payload.RegisterGlobalScalarArgKey(serviceAccessPermission, argAccessPermission)
 }
 
 // ipAccessPermissionConstructor materialises the per-user access-permission

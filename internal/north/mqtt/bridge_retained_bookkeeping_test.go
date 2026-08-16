@@ -9,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // stateSource is the narrow read side [Bridge.PublishSourceState] takes.
@@ -205,6 +207,61 @@ func TestRetractRawStateForDeviceMatchesMixedCaseAddresses(t *testing.T) {
 	}
 }
 
+// TestHubDiscoveryRetractionLeavesTheDeclaredSet pins that retracting a hub
+// entity — the empty-payload publish the hub publisher emits when the CCU
+// operator deletes a program or a system variable — removes the topic from the
+// `declared` set instead of parking an empty entry there.
+//
+// The set is what the retained-orphan sweeps treat as "the entities this build
+// drives" and what the HA-birth replay re-publishes. A retracted entity left in
+// it shields its own topic from the sweep forever and makes every replay push
+// an empty payload to a topic the broker no longer retains.
+func TestHubDiscoveryRetractionLeavesTheDeclaredSet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom", HADiscoveryEnabled: true}, mp)
+	item := DiscoveryItem{
+		Component: "button", NodeID: "ccu01_hub_program", ObjectID: "morning_press",
+		Payload: []byte(`{"name":"Morning"}`), OK: true,
+	}
+	topic := b.topics.DiscoveryConfig(item.Component, item.NodeID, item.ObjectID)
+
+	if err := b.PublishHubDiscovery(ctx, item); err != nil {
+		t.Fatalf("PublishHubDiscovery: %v", err)
+	}
+	b.mu.Lock()
+	_, declared := b.declared[topic]
+	b.mu.Unlock()
+	if !declared {
+		t.Fatalf("%q is not in the declared set after the config was published", topic)
+	}
+
+	retraction := item
+	retraction.Payload = nil
+	if err := b.PublishHubDiscovery(ctx, retraction); err != nil {
+		t.Fatalf("PublishHubDiscovery (retraction): %v", err)
+	}
+	if got := len(mp.publications()); got != 2 {
+		t.Fatalf("publications = %d, want 2 (the retraction was swallowed by the dedup gate)", got)
+	}
+	b.mu.Lock()
+	_, stillDeclared := b.declared[topic]
+	b.mu.Unlock()
+	if stillDeclared {
+		t.Fatalf("%q is still in the declared set after its config was retracted", topic)
+	}
+
+	before := len(mp.publications())
+	if err := b.RepublishDiscovery(ctx); err != nil {
+		t.Fatalf("RepublishDiscovery: %v", err)
+	}
+	if got := len(mp.publications()) - before; got != 0 {
+		t.Fatalf("republished topics = %d, want 0 (the retracted entity was resurrected)", got)
+	}
+}
+
 // failingPublisher fails every publish whose topic contains failFor, so a
 // test can model a broker outage or an open circuit breaker that affects
 // part of the traffic only.
@@ -300,5 +357,89 @@ func TestRepublishDiscoveryContinuesPastAFailedTopic(t *testing.T) {
 	}
 	if got := len(mp.publications()) - before; got != 2 {
 		t.Fatalf("republished topics = %d, want 2 (the replay aborted on the first failure)", got)
+	}
+}
+
+// TestRetractionForOneCentralLeavesTheOtherCentralsTopics pins the scope of
+// device retraction on a daemon serving two CCUs.
+//
+// Device addresses are unique per CCU but not across CCUs: the virtual
+// remote and the BidCoS pseudo devices carry the identical address on every
+// one of them. An address-only match therefore reached the second CCU's
+// live entities whenever the first CCU was deleted or had its cache reset —
+// the entities vanished from Home Assistant, and their raw-plane state was
+// blanked, until the next daemon restart republished them.
+func TestRetractionForOneCentralLeavesTheOtherCentralsTopics(t *testing.T) {
+	t.Parallel()
+
+	const (
+		centralA = "ccu-a"
+		centralB = "ccu-b"
+		iface    = "BidCos-RF"
+		addr     = "BidCoS-RF" // repeats verbatim on every CCU
+	)
+	ctx := context.Background()
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{
+		Base: "loom", CentralName: centralA, CentralNames: []string{centralA, centralB},
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, mp)
+
+	slot := pload.TopicSlot{Address: addr, Channel: 1, Bucket: pload.BucketValues, Parameter: "PRESS_SHORT"}
+	discoveryTopics := map[string]string{}
+	stateTopics := map[string]string{}
+	for _, central := range []string{centralA, centralB} {
+		if err := b.PublishSlotState(ctx, central, iface, slot,
+			pload.PerDPState{Value: true, Available: true}); err != nil {
+			t.Fatalf("%s: PublishSlotState: %v", central, err)
+		}
+		stateTopics[central] = b.topics.SlotState(central, iface, slot)
+
+		nodeID := naming.NewDevicePathData(hmtypes.ParseWireInterfaceID(iface), addr).DiscoveryNodeID(central)
+		if err := b.publishDiscovery(ctx, "event", nodeID, "1_press_short",
+			[]byte(`{"name":"`+central+`"}`)); err != nil {
+			t.Fatalf("%s: publishDiscovery: %v", central, err)
+		}
+		discoveryTopics[central] = b.topics.DiscoveryConfig("event", nodeID, "1_press_short")
+	}
+	if discoveryTopics[centralA] == discoveryTopics[centralB] {
+		t.Fatalf("both centrals produced the same discovery topic %q — the fixture cannot show the scoping",
+			discoveryTopics[centralA])
+	}
+
+	b.RetractDiscoveryForCentralDevice(ctx, centralA, addr)
+	b.RetractRawStateForDevice(ctx, centralA, iface, addr)
+
+	b.mu.Lock()
+	_, declaredA := b.declared[discoveryTopics[centralA]]
+	_, declaredB := b.declared[discoveryTopics[centralB]]
+	_, rawA := b.rawTopics[stateTopics[centralA]]
+	_, rawB := b.rawTopics[stateTopics[centralB]]
+	b.mu.Unlock()
+
+	if declaredA {
+		t.Errorf("the removed central's discovery config %q survived", discoveryTopics[centralA])
+	}
+	if rawA {
+		t.Errorf("the removed central's raw state topic %q survived", stateTopics[centralA])
+	}
+	if !declaredB {
+		t.Errorf("removing %s retracted %s's discovery config %q", centralA, centralB, discoveryTopics[centralB])
+	}
+	if !rawB {
+		t.Errorf("removing %s retracted %s's raw state topic %q", centralA, centralB, stateTopics[centralB])
+	}
+
+	cleared := map[string]bool{}
+	for _, p := range mp.publications() {
+		if p.retain && p.payload == "" {
+			cleared[p.topic] = true
+		}
+	}
+	if !cleared[discoveryTopics[centralA]] || !cleared[stateTopics[centralA]] {
+		t.Errorf("the removed central's topics were not cleared on the broker: %v", cleared)
+	}
+	if cleared[discoveryTopics[centralB]] || cleared[stateTopics[centralB]] {
+		t.Errorf("the surviving central's topics were cleared on the broker: %v", cleared)
 	}
 }

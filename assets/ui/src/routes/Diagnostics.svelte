@@ -119,7 +119,6 @@
   // RPC recording state
   let rpcRecordings = $state<RpcRecordingStatus[]>([]);
   let rpcRecordingStopping = $state(false);
-  let rpcPollTimer = $state<ReturnType<typeof setInterval> | null>(null);
 
   // Unified recordings hub state
   let recType = $state<"log" | "rpc" | "both">("log");
@@ -364,13 +363,24 @@
     void load();
     void loadReliability();
     void loadValuesCacheStats();
-    // Poll RPC recording status every 5 s while any recording is active.
-    rpcPollTimer = setInterval(() => {
+  });
+
+  // Poll RPC recording status at two rates. A running recording changes on
+  // its own — its entry count grows and its window expires — so it is
+  // followed closely. An idle list still changes without this page: a
+  // recording started from the CLI, the REST API or a second browser
+  // session has to become visible here too, otherwise the operator starts
+  // a second one on top of it. The slow background poll finds that case
+  // without paying the fast rate for it.
+  const RPC_POLL_ACTIVE_MS = 5000;
+  const RPC_POLL_IDLE_MS = 60000;
+
+  $effect(() => {
+    const period = anyRpcActive ? RPC_POLL_ACTIVE_MS : RPC_POLL_IDLE_MS;
+    const timer = setInterval(() => {
       void refreshRpcRecordings();
-    }, 5000);
-    return () => {
-      if (rpcPollTimer !== null) clearInterval(rpcPollTimer);
-    };
+    }, period);
+    return () => clearInterval(timer);
   });
 
   function statusVariant(s: string): "success" | "warning" | "danger" | "muted" {

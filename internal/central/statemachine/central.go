@@ -58,7 +58,15 @@ var centralTransitions = map[hmenum.CentralState]map[hmenum.CentralState]struct{
 		hmenum.CentralStateStopped:  {},
 	},
 	hmenum.CentralStateRunning: {
-		hmenum.CentralStateDegraded:   {},
+		hmenum.CentralStateDegraded: {},
+		// A central loses every interface at once — a single-interface CCU
+		// going offline, or a CCU reboot dropping all of them between two
+		// evaluations. DEGRADED is not reachable then (it requires at least
+		// one connected client), so without this edge the computed FAILED is
+		// rejected and the central reports RUNNING for as long as the outage
+		// lasts: /health stays green and every north-bound consumer is told
+		// the central is fine.
+		hmenum.CentralStateFailed:     {},
 		hmenum.CentralStateRecovering: {},
 		hmenum.CentralStateStopped:    {},
 	},

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -548,4 +550,118 @@ func TestCentralWriteRefusedForCleartextPasswordReturns400(t *testing.T) {
 			}
 		})
 	}
+}
+
+// centralRowRequest issues a GET against h with the given identity attached,
+// or none at all when id is nil (which is what an auth-disabled daemon
+// produces).
+func centralRowRequest(t *testing.T, h http.HandlerFunc, target string, id *auth.Identity) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, target, http.NoBody)
+	if name := strings.TrimPrefix(target, "/api/v1/centrals/"); name != target {
+		req = withChiParam(req, "name", name)
+	}
+	if id != nil {
+		req = req.WithContext(auth.ContextWithIdentity(req.Context(), *id))
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET %s: status %d, body %s", target, w.Code, w.Body.String())
+	}
+	return w
+}
+
+// TestCentralRowsAreNarrowedForNonAdmins pins the reconnaissance boundary on
+// the two read routes: they are not admin-gated because the energy, backup
+// and rooms/functions views need the central list, so the row itself has to
+// stop naming the CCU's address, account and TLS posture for anyone below
+// admin. The identity-less case is the auth-disabled deployment, where there
+// is no viewer to narrow the row for.
+func TestCentralRowsAreNarrowedForNonAdmins(t *testing.T) {
+	t.Parallel()
+	svc := newFakeCentralSvc()
+	svc.centrals["home"] = sqlite.CentralRow{
+		Name:                  "home",
+		Host:                  "192.168.1.10",
+		Serial:                "3014F711A0001F58A99",
+		Port:                  2010,
+		JSONRPCPort:           80,
+		Username:              "Admin",
+		PasswordPlain:         "s3cret",
+		PasswordEnv:           "CCU_PW",
+		TLS:                   true,
+		TLSInsecureSkipVerify: true,
+		Enabled:               true,
+		Interfaces:            []config.InterfaceSpec{{Name: "HmIP-RF"}},
+	}
+
+	viewer := auth.Identity{Subject: "vera", Role: auth.RoleViewer}
+	admin := auth.Identity{Subject: "ada", Role: auth.RoleAdmin}
+
+	t.Run("viewer sees only what the open views read", func(t *testing.T) {
+		t.Parallel()
+		w := centralRowRequest(t, GetCentral(svc), "/api/v1/centrals/home", &viewer)
+		var row sqlite.CentralRow
+		if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if row.Name != "home" || !row.Enabled || len(row.Interfaces) != 1 {
+			t.Errorf("the fields the non-admin views read must survive: %+v", row)
+		}
+		if row.Host != "" || row.Username != "" || row.Port != 0 || row.JSONRPCPort != 0 || row.Serial != "" {
+			t.Errorf("viewer must not learn where the CCU lives: %+v", row)
+		}
+		if row.TLS || row.TLSInsecureSkipVerify || row.PasswordEnv != "" {
+			t.Errorf("viewer must not learn how the CCU is reached: %+v", row)
+		}
+		if strings.Contains(w.Body.String(), "s3cret") {
+			t.Error("the CCU password must never reach a response body")
+		}
+	})
+
+	t.Run("admin sees the full row with the password masked", func(t *testing.T) {
+		t.Parallel()
+		w := centralRowRequest(t, GetCentral(svc), "/api/v1/centrals/home", &admin)
+		var row sqlite.CentralRow
+		if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if row.Host != "192.168.1.10" || row.Username != "Admin" || row.Port != 2010 || row.Serial == "" {
+			t.Errorf("admin must keep the full row: %+v", row)
+		}
+		if row.PasswordPlain != maskSentinel {
+			t.Errorf("password_plain = %q, want the mask sentinel", row.PasswordPlain)
+		}
+	})
+
+	t.Run("list is narrowed for a viewer too", func(t *testing.T) {
+		t.Parallel()
+		w := centralRowRequest(t, ListCentrals(svc), "/api/v1/centrals", &viewer)
+		var rows []sqlite.CentralRow
+		if err := json.Unmarshal(w.Body.Bytes(), &rows); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("want 1 row, got %d", len(rows))
+		}
+		if rows[0].Host != "" || rows[0].Username != "" {
+			t.Errorf("the list route must narrow the same fields as the single-row route: %+v", rows[0])
+		}
+	})
+
+	t.Run("no identity means auth is off and the row stays whole", func(t *testing.T) {
+		t.Parallel()
+		w := centralRowRequest(t, GetCentral(svc), "/api/v1/centrals/home", nil)
+		var row sqlite.CentralRow
+		if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if row.Host != "192.168.1.10" {
+			t.Errorf("an auth-disabled daemon has no viewer to narrow for: %+v", row)
+		}
+		if row.PasswordPlain != maskSentinel {
+			t.Errorf("the password mask is unconditional; got %q", row.PasswordPlain)
+		}
+	})
 }

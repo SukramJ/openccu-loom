@@ -26,6 +26,7 @@
   import ControlButton from "../controls/ControlButton.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { enumValueToken } from "$lib/sensor-actor/classify";
   import { t } from "$lib/i18n";
 
   type Props = {
@@ -83,8 +84,12 @@
     "PARTY-MODE": t("climate.mode.away"),
     "BOOST-MODE": t("climate.mode.boost"),
   });
+  // The RF CONTROL_MODE is read-only, so the wire carries the value_list
+  // index — never the token the mode table is keyed on. Resolve it back
+  // before comparing, otherwise no mode ever matches.
+  const rfModeToken = $derived<string>((modeDP ? enumValueToken(modeDP) : undefined) ?? "");
   const currentRfModeLabel = $derived<string>(
-    typeof modeValue === "string" ? (RF_MODE_LABEL[modeValue] ?? modeValue) : "",
+    rfModeToken ? (RF_MODE_LABEL[rfModeToken] ?? rfModeToken) : "",
   );
 
   const tileColor = $derived(
@@ -164,7 +169,7 @@
       <ControlButtonGroup>
         {#if autoAction}
           <ControlButton
-            active={modeValue === "AUTO-MODE"}
+            active={rfModeToken === "AUTO-MODE"}
             color={tileColor}
             label={t("climate.mode.auto")}
             onClick={() => onSetSlot("AUTO", true)}
@@ -172,7 +177,7 @@
         {/if}
         {#if boostAction}
           <ControlButton
-            active={modeValue === "BOOST-MODE"}
+            active={rfModeToken === "BOOST-MODE"}
             color={tileColor}
             label={t("climate.mode.boost")}
             onClick={() => onSetSlot("BOOST", true)}

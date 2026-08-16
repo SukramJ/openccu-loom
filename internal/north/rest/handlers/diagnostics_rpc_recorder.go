@@ -21,6 +21,16 @@ type RPCRecorderService = interfaces.RPCRecorderService
 // RPCRecordingStatus is an alias for the canonical DTO in pkg/hmapi.
 type RPCRecordingStatus = hmapi.RPCRecordingStatus
 
+// Audit actions for the RPC-recorder lifecycle. Starting a recorder
+// changes what the daemon captures about its own CCU traffic, which is
+// why it is audited alongside the other operator-diagnostics verbs. The
+// dotted strings are the values already written to the audit store, kept
+// verbatim so existing rows keep resolving.
+const (
+	actionRPCRecordingStart audit.Action = "diagnostics.rpc_recording_start"
+	actionRPCRecordingStop  audit.Action = "diagnostics.rpc_recording_stop"
+)
+
 // RPCRecordingStartRequest is the body of `POST /diagnostics/rpc-recording`.
 type RPCRecordingStartRequest struct {
 	// Centrals scopes the recording; empty/omitted records on every CCU.
@@ -50,7 +60,7 @@ func StartRPCRecording(svc RPCRecorderService, rec audit.Recorder) http.HandlerF
 			}
 		}
 		out := svc.Start(req.Centrals, req.DurationSeconds, req.Randomize)
-		auditRecord(rec, "diagnostics.rpc_recording_start", req.Centrals)
+		auditRecord(rec, r, actionRPCRecordingStart, req.Centrals)
 		JSON(w, http.StatusAccepted, out)
 	}
 }
@@ -73,7 +83,7 @@ func StopRPCRecording(svc RPCRecorderService, rec audit.Recorder) http.HandlerFu
 			}
 		}
 		out := svc.Stop(req.Centrals)
-		auditRecord(rec, "diagnostics.rpc_recording_stop", req.Centrals)
+		auditRecord(rec, r, actionRPCRecordingStop, req.Centrals)
 		JSON(w, http.StatusOK, out)
 	}
 }
@@ -116,8 +126,9 @@ func DownloadRPCRecording(svc RPCRecorderService) http.HandlerFunc {
 }
 
 // auditRecord appends a recorder lifecycle entry when an audit recorder is
-// wired. The central scope is carried in the Note.
-func auditRecord(rec audit.Recorder, action string, centrals []string) {
+// wired. The requesting operator is stamped as the actor and the central
+// scope is carried in the Note.
+func auditRecord(rec audit.Recorder, r *http.Request, action audit.Action, centrals []string) {
 	if rec == nil {
 		return
 	}
@@ -125,7 +136,11 @@ func auditRecord(rec audit.Recorder, action string, centrals []string) {
 	if len(centrals) > 0 {
 		note = "centrals=" + joinComma(centrals)
 	}
-	rec.Record(audit.Entry{Action: audit.Action(action), Note: note})
+	rec.Record(audit.Entry{
+		User:   identityFromCtx(r.Context()),
+		Action: action,
+		Note:   note,
+	})
 }
 
 func joinComma(s []string) string {

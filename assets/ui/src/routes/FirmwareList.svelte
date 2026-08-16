@@ -238,9 +238,15 @@
     }
   }
 
+  // Localizes a firmware update state. The wire value is passed through
+  // unvalidated, so a state the catalogue does not know yet has to fall
+  // back to the raw CCU token — t() answers with the key itself on a
+  // miss, which would otherwise print `firmware.state.<token>`.
   function stateLabel(state: string | undefined): string {
     if (!state) return "";
-    return t(`firmware.state.${state}`, {}) || state;
+    const key = `firmware.state.${state}`;
+    const label = t(key, {});
+    return label === key ? state : label;
   }
 
   function stateBadgeVariant(

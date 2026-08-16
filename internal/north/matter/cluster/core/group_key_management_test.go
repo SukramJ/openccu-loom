@@ -846,3 +846,48 @@ func TestGroupKeyMgmt_MatterGeneratedCommands(t *testing.T) {
 		t.Fatal("MatterGeneratedCommands() is empty")
 	}
 }
+
+// TestGKM_WriteGroupKeyMapRemovesDroppedBindings pins the replace
+// semantics of Matter §11.2.10.4.1: writing the fabric-scoped
+// GroupKeyMap list replaces it, so a binding the controller left out is
+// unbound. Applying only the entries present leaves the dropped binding
+// readable, and the next read then contradicts the write the bridge
+// just acknowledged.
+func TestGKM_WriteGroupKeyMapRemovesDroppedBindings(t *testing.T) {
+	t.Parallel()
+	gkm := newGKM(t)
+	gkm.SetCurrentFabric(2)
+	ctx := context.Background()
+
+	initial := []core.GroupKeyMapStruct{
+		{GroupID: 100, GroupKeySetID: 1, FabricIndex: 2},
+		{GroupID: 200, GroupKeySetID: 2, FabricIndex: 2},
+	}
+	if err := gkm.MatterWrite(ctx, 0x0000, initial, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite GroupKeyMap (initial): %v", err)
+	}
+
+	// Controller unbinds group 100 by writing a shortened list.
+	shortened := []core.GroupKeyMapStruct{{GroupID: 200, GroupKeySetID: 2, FabricIndex: 2}}
+	if err := gkm.MatterWrite(ctx, 0x0000, shortened, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite GroupKeyMap (shortened): %v", err)
+	}
+
+	v, ok := gkm.MatterRead(0x0000)
+	if !ok {
+		t.Fatal("GroupKeyMap: ok=false after write")
+	}
+	got := v.([]core.GroupKeyMapStruct)
+	if len(got) != 1 || got[0].GroupID != 200 {
+		t.Fatalf("GroupKeyMap = %+v, want exactly the written binding for group 200", got)
+	}
+
+	// An empty write clears the whole fabric-scoped list.
+	if err := gkm.MatterWrite(ctx, 0x0000, []core.GroupKeyMapStruct{}, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite GroupKeyMap (empty): %v", err)
+	}
+	v, _ = gkm.MatterRead(0x0000)
+	if got := v.([]core.GroupKeyMapStruct); len(got) != 0 {
+		t.Fatalf("GroupKeyMap after empty write = %+v, want empty", got)
+	}
+}

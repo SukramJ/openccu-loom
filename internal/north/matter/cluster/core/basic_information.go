@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bootid"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -57,6 +58,20 @@ type BasicInformation struct {
 	// Mutable.
 	nodeLabel string
 	location  string
+	// identityLabel is the NodeLabel the cluster was constructed with.
+	// It feeds [BasicInformation.uniqueID] instead of the live
+	// nodeLabel: UniqueID carries quality F (fixed for the lifetime of
+	// the device, Matter §11.1.5.13), and SerialNumber falls back to a
+	// UniqueID slice — deriving either from a value a controller can
+	// write means renaming the bridge in Apple or Google Home silently
+	// changes the node's identity under the controller's cache.
+	identityLabel string
+	// pinnedUniqueID holds a UniqueID the caller persisted on an earlier
+	// boot ([Config.UniqueID]). Empty means the value is derived from the
+	// construction-time identity. A pinned value is what makes the
+	// attribute survive a config edit to the label: the derivation is
+	// stable only for as long as its inputs are.
+	pinnedUniqueID string
 	// onPersistentWrite, when non-nil, fires after every successful
 	// Matter write to a non-volatile attribute (NodeLabel / Location)
 	// so the daemon can persist the value across restarts. See
@@ -153,23 +168,33 @@ var errBasicInfoUnknown = errors.New("matter: BasicInformation unknown / read-on
 // the Matter BasicInformation attributes; non-empty values pass
 // through to the cluster as-is.
 type Config struct {
-	DataModelRevision    uint16 // Matter §11.1.5.1 — 1.5.1 = 19 (matter.js HEAD Specification.ts:67)
-	VendorName           string
-	VendorID             uint16
-	ProductName          string
-	ProductID            uint16
-	ProductLabel         string
-	ProductURL           string
-	ProductAppearance    ProductAppearanceStruct
-	HardwareVersion      uint16
-	HardwareVersionStr   string
-	SoftwareVersion      uint32
-	SoftwareVersionStr   string
-	ManufacturingDate    string // ISO 8601 YYYYMMDD
-	PartNumber           string
-	SerialNumber         string
-	NodeLabel            string // user-writable; supplied default
-	Location             string // user-writable; "XX" for unset per spec
+	DataModelRevision  uint16 // Matter §11.1.5.1 — 1.5.1 = 19 (matter.js HEAD Specification.ts:67)
+	VendorName         string
+	VendorID           uint16
+	ProductName        string
+	ProductID          uint16
+	ProductLabel       string
+	ProductURL         string
+	ProductAppearance  ProductAppearanceStruct
+	HardwareVersion    uint16
+	HardwareVersionStr string
+	SoftwareVersion    uint32
+	SoftwareVersionStr string
+	ManufacturingDate  string // ISO 8601 YYYYMMDD
+	PartNumber         string
+	SerialNumber       string
+	NodeLabel          string // user-writable; supplied default
+	Location           string // user-writable; "XX" for unset per spec
+	// UniqueID pins the UniqueID attribute (Matter §11.1.5.13) to a
+	// previously persisted value. Empty means "derive one"
+	// ([DeriveUniqueID]); a caller that persists the derived value on
+	// first boot and passes it back on every later boot gives the
+	// attribute the quality-F lifetime the spec asks for, independent of
+	// any later config edit. Mirrors matter.js
+	// packages/node/src/behaviors/basic-information/BasicInformationServer.ts
+	// (`uniqueId` carries quality "FN": created once, then restored from
+	// persisted state).
+	UniqueID             string
 	CapabilityMinima     CapabilityMinimaStruct
 	ConfigurationVersion uint32
 	MaxPathsPerInvoke    uint16
@@ -192,6 +217,15 @@ func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 	}
 	if cfg.NodeLabel == "" {
 		return nil, errors.New("matter: BasicInformation Config.NodeLabel must be non-empty")
+	}
+	// A pinned UniqueID goes on the wire verbatim, so it has to satisfy
+	// the attribute's own constraint: Matter §11.1.5.13 caps UniqueID at
+	// 32 UTF-8 bytes. (UniqueID == SerialNumber is a separate, softer
+	// concern — matter.js only warns about it in
+	// packages/node/src/behaviors/basic-information/basic-information-validators.ts:42-44,
+	// and so does validateBasicInfoAttributes below.)
+	if len(cfg.UniqueID) > 32 {
+		return nil, fmt.Errorf("matter: BasicInformation Config.UniqueID exceeds 32 utf-8 bytes (got %d)", len(cfg.UniqueID))
 	}
 	loc := cfg.Location
 	if loc == "" {
@@ -277,6 +311,8 @@ func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 		partNumber:           cfg.PartNumber,
 		serialNumber:         cfg.SerialNumber,
 		nodeLabel:            cfg.NodeLabel,
+		identityLabel:        cfg.NodeLabel,
+		pinnedUniqueID:       cfg.UniqueID,
 		location:             loc,
 		capabilityMinima:     defaultCapabilityMinima(cfg.CapabilityMinima),
 		configurationVersion: cfgVer,
@@ -353,6 +389,11 @@ func SoftwareVersionFromString(version string) uint32 {
 // advisory — none block construction, and each has a printable fallback, so
 // they log at debug rather than warn to avoid operational noise.
 func validateBasicInfoAttributes(cfg Config) {
+	if cfg.UniqueID != "" && cfg.UniqueID == cfg.SerialNumber {
+		slog.Default().Debug("matter.basic_information.validate",
+			slog.String("field", "UniqueID/SerialNumber"),
+			slog.String("reason", "pinned UniqueID equals SerialNumber — controller caches key on the pair, so they should differ"))
+	}
 	if cfg.SerialNumber != "" && cfg.SerialNumber == fmt.Sprintf("%04X-%04X", cfg.VendorID, cfg.ProductID) {
 		slog.Default().Debug("matter.basic_information.validate",
 			slog.String("field", "UniqueID/SerialNumber"),
@@ -575,26 +616,44 @@ func basicInfoSerialFromUniqueID(uid string) string {
 	return uid[:16]
 }
 
-// uniqueID derives a stable 32-character hex identifier from
-// VendorID + ProductID + NodeLabel + SerialNumber. Mirrors matter.js
-// `BasicInformationServer.createUniqueId()` (32-char random a–zA–Z0–9
-// persisted with Quality "FN") in length and shape, but uses a
-// deterministic SHA-256 prefix so the value survives bridge restarts
-// without an additional persistence layer. The previous
-// `"%04X-%04X" % (vendorID, productID)` form (≤ 9 chars, identical
-// across every openccu-loom instance running the same test
-// VendorID+ProductID) looked like a class identifier to Apple's
-// HAP-Service mapper — MTRDevice rejects the topology silently and
-// the bridge surfaces as "added but not supported". The hex output
-// also satisfies the Matter Core Spec §11.1.5.13 32-byte UTF-8
-// ceiling.
-func (b *BasicInformation) uniqueID() string {
-	// Mix in the per-boot salt so Apple's HAP cache sees a fresh
-	// fingerprint after every daemon restart; see package bootid.
+// DeriveUniqueID computes the deterministic 32-character hex UniqueID
+// for a bridge identity: VendorID + ProductID + label + SerialNumber,
+// mixed with the per-boot salt (see package bootid, all-zero unless
+// rotation is enabled).
+//
+// Mirrors matter.js `BasicInformationServer.createUniqueId()` (32-char
+// random a–zA–Z0–9 persisted with Quality "FN") in length and shape, but
+// derives instead of randomising so a caller without a persistence layer
+// still gets the same value on every boot. The previous
+// `"%04X-%04X" % (vendorID, productID)` form (≤ 9 chars, identical across
+// every openccu-loom instance running the same test VendorID+ProductID)
+// looked like a class identifier to Apple's HAP-Service mapper —
+// MTRDevice rejects the topology silently and the bridge surfaces as
+// "added but not supported". The hex output also satisfies the Matter
+// Core Spec §11.1.5.13 32-byte UTF-8 ceiling.
+//
+// Exported so a caller that migrates to a persisted UniqueID
+// ([Config.UniqueID]) can seed the store with the value the same
+// identity produced before, instead of letting the attribute change
+// underneath a controller that has already cached it.
+func DeriveUniqueID(vendorID, productID uint16, label, serialNumber string) string {
 	salt := bootid.Salt()
 	h := sha256.Sum256(fmt.Appendf(nil, "%s|%04X|%04X|%s|%s",
-		hex.EncodeToString(salt[:]), b.vendorID, b.productID, b.nodeLabel, b.serialNumber))
+		hex.EncodeToString(salt[:]), vendorID, productID, label, serialNumber))
 	return hex.EncodeToString(h[:16])
+}
+
+// uniqueID returns the pinned [Config.UniqueID] when the caller supplied
+// one and otherwise derives it via [DeriveUniqueID] from the identity
+// fixed at construction — in particular the configured label, never the
+// live [BasicInformation.nodeLabel] a controller can write, because
+// UniqueID carries quality F (fixed for the lifetime of the device,
+// Matter §11.1.5.13) and SerialNumber falls back to a UniqueID slice.
+func (b *BasicInformation) uniqueID() string {
+	if b.pinnedUniqueID != "" {
+		return b.pinnedUniqueID
+	}
+	return DeriveUniqueID(b.vendorID, b.productID, b.identityLabel, b.serialNumber)
 }
 
 // MatterWrite accepts NodeLabel, Location, and LocalConfigDisabled
@@ -643,7 +702,7 @@ func (b *BasicInformation) MatterWrite(_ context.Context, attrID uint32, value a
 
 // MatterInvoke always rejects — BasicInformation has no commands.
 func (b *BasicInformation) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: BasicInformation has no commands (got 0x%02X)", cmdID)
+	return nil, im.UnsupportedCommandf("matter: BasicInformation has no commands (got 0x%02X)", cmdID)
 }
 
 // MatterReportable lists the subscribe-able attributes.

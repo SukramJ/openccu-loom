@@ -30,6 +30,22 @@ type DeviceLister interface {
 	ListDevices(ctx context.Context, iface hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error)
 }
 
+// DeviceModel is the domain-model half of a device's lifecycle. The
+// coordinator owns the registry mirrors (descriptions, paramsets, device
+// entries); the model owns the device objects every north-bound surface
+// reads. The two have to be evicted together — a device dropped from the
+// registries but left in the model keeps answering REST / WebSocket reads
+// and keeps its data points alive — and an announcement must only be made
+// for a device the model can actually resolve.
+type DeviceModel interface {
+	// HasDevice reports whether address is materialised in the domain model.
+	HasDevice(address string) bool
+	// RemoveDevice tears the device down (channels, data-point
+	// subscriptions), drops it from the model and reports whether it
+	// existed. Implementations publish their own removal event.
+	RemoveDevice(address string) bool
+}
+
 // DeviceCoordinator reconciles device-level events against the
 // [registry.DeviceRegistry] and [registry.DeviceDescriptionRegistry].
 type DeviceCoordinator struct {
@@ -38,8 +54,11 @@ type DeviceCoordinator struct {
 	devices     *registry.DeviceRegistry
 	descs       *registry.DeviceDescriptionRegistry
 	paramsets   *registry.ParamsetRegistry
-	logger      *slog.Logger
-	recorder    observability.Recorder
+	// model is the domain model this coordinator keeps in step with the
+	// registries. Nil only in tests that exercise the registry side alone.
+	model    DeviceModel
+	logger   *slog.Logger
+	recorder observability.Recorder
 
 	// mu guards delayedDescs, which stores device descriptions that
 	// have been announced (newDevices callback) but not yet accepted.
@@ -58,13 +77,15 @@ type DeviceCoordinator struct {
 	wg sync.WaitGroup
 }
 
-// NewDeviceCoordinator wires the coordinator.
+// NewDeviceCoordinator wires the coordinator. model is the domain model the
+// registries mirror; pass nil only when the caller has no model at all.
 func NewDeviceCoordinator(
 	centralName string,
 	bus *events.Bus,
 	devices *registry.DeviceRegistry,
 	descs *registry.DeviceDescriptionRegistry,
 	paramsets *registry.ParamsetRegistry,
+	model DeviceModel,
 	logger *slog.Logger,
 ) *DeviceCoordinator {
 	if logger == nil {
@@ -76,6 +97,7 @@ func NewDeviceCoordinator(
 		devices:      devices,
 		descs:        descs,
 		paramsets:    paramsets,
+		model:        model,
 		logger:       logger,
 		recorder:     observability.NoopRecorder{},
 		delayedDescs: make(map[string]map[string][]hmproto.DeviceDescription),
@@ -496,11 +518,18 @@ func (c *DeviceCoordinator) HandleDeleteDevices(_ context.Context, iface hmtypes
 	}
 }
 
-// CheckAndCreateDevicesFromCache materialises devices from the persisted
+// CheckAndCreateDevicesFromCache registers devices from the persisted
 // description cache. This is the cache-based restart path: after a reboot the
 // descriptions are already in the DeviceDescriptionRegistry (loaded from
-// store), so we can create Device objects without issuing a new ListDevices
-// pull to the CCU.
+// store), so the device entries are recovered without issuing a new
+// ListDevices pull to the CCU.
+//
+// It records registry entries only — the domain model is materialised by the
+// ingest pipeline, which runs before this method. An address the pipeline did
+// not materialise (a device unpaired while the daemon was down still has its
+// cached descriptions) therefore gets its registry entry back but is NOT
+// announced: a DeviceCreatedEvent is published only for addresses the model
+// resolves.
 //
 // Concurrency: c.mu serialises this method against itself and against
 // [HandleNewDevices] — the two production entry points that turn a
@@ -560,6 +589,9 @@ func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) 
 	c.mu.Unlock()
 
 	for _, nd := range newlyCreated {
+		if !c.materialised(nd.addr) {
+			continue
+		}
 		events.Publish(c.bus, hmevent.DeviceCreatedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: c.centralName,
@@ -572,6 +604,21 @@ func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) 
 	return nil
 }
 
+// materialised reports whether address exists in the domain model, i.e.
+// whether a DeviceCreatedEvent for it can be resolved by its subscribers.
+//
+// Announcing a device the model does not hold produces an entity that every
+// north-bound surface disagrees about: the WebSocket device-lifecycle plane
+// broadcasts the creation, the MQTT bridge finds nothing to publish, and a
+// REST read of the device 404s. Without a wired model the coordinator cannot
+// tell and keeps announcing — the composition root always wires one.
+func (c *DeviceCoordinator) materialised(address string) bool {
+	if c.model == nil {
+		return true
+	}
+	return c.model.HasDevice(address)
+}
+
 // DeviceDescriptionFetcher is the south-bound contract the coordinator
 // uses during RefreshDeviceDescriptionsAndCreateMissingDevices to pull
 // fresh descriptions from the CCU.
@@ -581,13 +628,18 @@ type DeviceDescriptionFetcher interface {
 }
 
 // RefreshDeviceDescriptionsAndCreateMissingDevices re-pulls all descriptions
-// from the CCU for iface, updates the registry, and creates Device entries
-// for any address that is now in the description registry but not yet in the
-// device registry.
+// from the CCU for iface, updates the description registry, and creates
+// device-registry entries for any address that is now described but not yet
+// registered.
 //
 // This is the post-reconnect path: after a circuit-breaker recovery the
 // daemon may have missed newDevices callbacks while offline. Calling this
-// method closes the gap.
+// method closes the registry-side gap.
+//
+// Domain devices are materialised by the ingest pipeline, not here, so a
+// DeviceCreatedEvent is published only for an address the model already
+// resolves — announcing one for an address that exists nowhere but in these
+// registries produces an entity no north-bound surface can serve.
 func (c *DeviceCoordinator) RefreshDeviceDescriptionsAndCreateMissingDevices(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,
@@ -619,6 +671,9 @@ func (c *DeviceCoordinator) RefreshDeviceDescriptionsAndCreateMissingDevices(
 			Model:     d.Type,
 		}
 		c.devices.Put(entry)
+		if !c.materialised(d.Address) {
+			continue
+		}
 		events.Publish(c.bus, hmevent.DeviceCreatedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: c.centralName,
@@ -972,10 +1027,20 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 				continue
 			}
 
-			// Filter to parameters with operations > 0 (visible/writable).
+			// Filter to parameters with operations > 0 (visible/writable) —
+			// unless the whole descriptor reports OPERATIONS=0. The registry
+			// stores the wire descriptor, and some CCU firmwares under-report
+			// OPERATIONS=0 for every MASTER parameter of a channel; the
+			// device hydration normalises exactly that case to READ|WRITE
+			// before it builds data points. Applying the plain filter there
+			// emptied the expectation set and reported the channel clean —
+			// silencing the check on the firmware it exists for — while a
+			// single zero among non-zero entries stays what it looks like: a
+			// parameter the CCU does not serve.
 			expectedParams := make(map[string]struct{})
+			quirkedDescriptor := allOperationsNone(masterDesc)
 			for name := range masterDesc {
-				if masterDesc[name].Operations > 0 {
+				if quirkedDescriptor || masterDesc[name].Operations > 0 {
 					expectedParams[name] = struct{}{}
 				}
 			}
@@ -1011,6 +1076,22 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 		}
 	}
 	return result, nil
+}
+
+// allOperationsNone reports whether every parameter of ps carries
+// OPERATIONS=0, the signature of a firmware that under-reports the field for
+// a whole paramset rather than hiding one parameter. Empty paramsets are not
+// treated as quirked — there is nothing to expect from them.
+func allOperationsNone(ps hmproto.Paramset) bool {
+	if len(ps) == 0 {
+		return false
+	}
+	for name := range ps {
+		if ps[name].Operations != hmenum.OperationsNone {
+			return false
+		}
+	}
+	return true
 }
 
 // ReaddDevice handles re-pairing of a known device that was put into
@@ -1207,8 +1288,9 @@ func (c *DeviceCoordinator) RefreshFirmwareData(ctx context.Context, fetcher Dev
 }
 
 // ReplaceDevice handles a CCU device-replacement event: the old device is
-// evicted from every registry layer and a DeviceRemovedEvent is emitted, then
-// the replacement device is fetched and ingested via the standard pipeline.
+// evicted from every registry layer and from the domain model, a
+// DeviceRemovedEvent is emitted, then the replacement device's descriptions
+// are fetched and stored.
 //
 // Substitution constraint: both devices are on the same interface. The
 // CCU (rfd / hs485d) owns the type-compatibility check and legitimately
@@ -1252,7 +1334,16 @@ func (c *DeviceCoordinator) ReplaceDevice(
 			c.descs.Delete(iface, allDescs[i].Address)
 		}
 	}
-	if c.devices.Remove(iface, oldAddr) {
+	// The domain model has to lose the device too, or REST / WebSocket keep
+	// serving the replaced device — with all its data points — until the
+	// daemon restarts. The model's own removal tears the channels down and
+	// publishes the removal event, so the registry eviction below only
+	// announces the drop when the model had nothing to announce.
+	removedFromModel := false
+	if c.model != nil {
+		removedFromModel = c.model.RemoveDevice(oldAddr)
+	}
+	if c.devices.Remove(iface, oldAddr) && !removedFromModel {
 		events.Publish(c.bus, hmevent.DeviceRemovedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: c.centralName,

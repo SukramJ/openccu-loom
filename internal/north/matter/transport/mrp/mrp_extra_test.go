@@ -110,7 +110,7 @@ func TestLookupAndDischargePresent(t *testing.T) {
 	tracker := mrp.NewAckTracker(0)
 	tracker.Owe(42, 0, 7, false, t0)
 
-	counter, ok := tracker.LookupAndDischarge(0, 7)
+	counter, ok := tracker.LookupAndDischarge(0, 7, false)
 	if !ok {
 		t.Fatal("LookupAndDischarge should return true for present obligation")
 	}
@@ -128,7 +128,7 @@ func TestLookupAndDischargeAbsent(t *testing.T) {
 	t.Parallel()
 
 	tracker := mrp.NewAckTracker(0)
-	counter, ok := tracker.LookupAndDischarge(0, 99)
+	counter, ok := tracker.LookupAndDischarge(0, 99, false)
 	if ok {
 		t.Fatal("LookupAndDischarge should return false for absent obligation")
 	}

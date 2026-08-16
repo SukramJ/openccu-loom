@@ -168,6 +168,47 @@ describe("Settings — schema load failure uses the shared ErrorState", () => {
   });
 });
 
+// GET /config/effective is admin-gated (the assembled config names every CCU
+// host, the broker URL and the OIDC issuer) while GET /config/schema is not.
+// The Settings entry itself is open to every identity, so a viewer must get
+// the schema-only read-only view — an ErrorState over an empty page would
+// make the whole view look broken for everyone but the admin.
+describe("Settings — a forbidden effective-config read degrades, not fails", () => {
+  it("renders the page with a note instead of the ErrorState on 403", async () => {
+    // The mocked ApiError class is what `instanceof` checks against, so build
+    // the rejection from it rather than from a plain Error.
+    const { ApiError } = await import("$lib/api/client");
+    mockGetEffectiveConfig.mockRejectedValue(new ApiError(403, null, "forbidden"));
+    mockGetConfigSchema.mockResolvedValue({
+      sections: ["north.mqtt"],
+      fields: [{ path: "north.mqtt.enabled", class: "basic", go_type: "bool" }],
+    });
+
+    render(Settings);
+
+    await waitFor(() => expect(mockGetEffectiveConfig).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByText("settings.values_admin_only")).toBeInTheDocument(),
+    );
+
+    // No error banner, and the page itself still renders its tabs.
+    expect(screen.queryByText(/common\.error/)).toBeNull();
+    expect(screen.getByText("settings.interface")).toBeInTheDocument();
+  });
+
+  it("still surfaces a non-403 failure as the ErrorState", async () => {
+    const { ApiError } = await import("$lib/api/client");
+    mockGetEffectiveConfig.mockRejectedValue(new ApiError(500, null, "config store down"));
+
+    render(Settings);
+
+    await waitFor(() =>
+      expect(screen.getByText(/config store down/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("settings.values_admin_only")).toBeNull();
+  });
+});
+
 describe("Settings — MQTT reload uses toastStore, not an inline banner", () => {
   it("shows a success toast and no inline banner span on success", async () => {
     mockReloadMQTT.mockResolvedValue({ reloaded: true, took_ms: 42 });

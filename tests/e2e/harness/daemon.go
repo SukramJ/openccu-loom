@@ -65,8 +65,9 @@ type Options struct {
 	// EnableMatter is reserved for v1.1; no-op today.
 	EnableMatter bool
 
-	// StartupDeadline overrides the default 60 s wait for the
-	// /api/v1/health endpoint to start returning 200. When zero, the
+	// StartupDeadline overrides the default 60 s budget for start-up —
+	// both the wait for the daemon to report its bound REST address and
+	// the wait for /api/v1/health to start returning 200. When zero, the
 	// default applies and OPENCCU_LOOM_E2E_STARTUP_DEADLINE (a Go
 	// duration) can override it without a rebuild.
 	StartupDeadline time.Duration
@@ -175,6 +176,8 @@ func Start(t *testing.T, opts Options) *Harness {
 	// the one exception — the test client has to address it — and the
 	// daemon logs it.
 
+	restListen := restListenFor(t, opts.AuthMode)
+
 	h.dataDir = t.TempDir()
 	h.cfgPath = filepath.Join(h.dataDir, "config.yaml")
 	cfgYAML := buildConfigYAML(configInputs{
@@ -182,7 +185,7 @@ func Start(t *testing.T, opts Options) *Harness {
 		// ":0" and port 0 are the daemon's documented dynamic-port
 		// modes. The UI shares the REST listener (ADR 0044), so its
 		// address is configured but never bound.
-		RESTListen: ":0",
+		RESTListen: restListen,
 		UIListen:   ":0",
 		// A wide window, walked until something binds. `port: 0` would
 		// mean the default 8120 here, not "let the OS choose".
@@ -230,21 +233,7 @@ func Start(t *testing.T, opts Options) *Harness {
 	}
 	h.restAddr = restAddr
 
-	deadline := opts.StartupDeadline
-	if deadline == 0 {
-		// Default generously: every e2e test spawns its own daemon +
-		// godevccu, and under parallel CI load the fleet-loading startup
-		// can exceed a tight budget (a loaded runner was observed taking
-		// >30s). 60s is still a meaningful "genuinely stuck" bound, not a
-		// real performance assertion. OPENCCU_LOOM_E2E_STARTUP_DEADLINE
-		// (a Go duration, e.g. "90s") overrides it without a rebuild.
-		deadline = 60 * time.Second
-		if v := os.Getenv("OPENCCU_LOOM_E2E_STARTUP_DEADLINE"); v != "" {
-			if d, err := time.ParseDuration(v); err == nil && d > 0 {
-				deadline = d
-			}
-		}
-	}
+	deadline := startupDeadline(opts.StartupDeadline)
 	if err := waitForHealth(h.t, h.restAddr, deadline, h.cmdDone); err != nil {
 		t.Logf("daemon stdout:\n%s", h.stdoutBuf.String())
 		t.Logf("daemon stderr:\n%s", h.stderrBuf.String())
@@ -385,6 +374,53 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
+// restListenFor returns the value to configure as north.rest.listen.
+//
+// ":0" is the rule: the daemon binds its own port and reports it, so nothing
+// can take the port between a probe unbinding it and the daemon binding it.
+// The OIDC runs are the exception, and only because of the redirect_uri: it
+// has to name the port the callback route is served on, and it is written
+// into the config the daemon reads before it binds anything. Templating ":0"
+// there advertises 127.0.0.1:0 — a dead address — to the provider, so those
+// runs pin the listener to a port reserved for this process instead.
+func restListenFor(t *testing.T, mode AuthMode) string {
+	t.Helper()
+	if mode != AuthOIDC {
+		return ":0"
+	}
+	ln, port := pickFreeListener(t)
+	if err := ln.Close(); err != nil {
+		t.Fatalf("releasing the reserved REST port: %v", err)
+	}
+	return fmt.Sprintf(":%d", port)
+}
+
+// startupDeadline resolves how long start-up may take.
+//
+// An explicit Options.StartupDeadline wins. Otherwise the default is
+// generous: every e2e test spawns its own daemon + godevccu, and under
+// parallel CI load the fleet-loading start-up can exceed a tight budget (a
+// loaded runner was observed taking >30 s). 60 s is a "genuinely stuck"
+// bound, not a performance assertion, and OPENCCU_LOOM_E2E_STARTUP_DEADLINE
+// (a Go duration, e.g. "90s") raises it without a rebuild.
+//
+// Both halves of start-up go through here. The wait for the bound REST
+// address used to cap itself at a hardcoded minute, so on the very runner the
+// env var exists for the harness still failed before the override could
+// apply.
+func startupDeadline(explicit time.Duration) time.Duration {
+	if explicit > 0 {
+		return explicit
+	}
+	deadline := 60 * time.Second
+	if v := os.Getenv("OPENCCU_LOOM_E2E_STARTUP_DEADLINE"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			deadline = d
+		}
+	}
+	return deadline
+}
+
 // awaitRESTAddr reads the daemon's own report of the address its REST
 // server bound, from the structured log it writes at start-up.
 //
@@ -394,9 +430,7 @@ func (b *syncBuffer) String() string {
 // with its output attached, rather than a test that hangs against an
 // address nothing is listening on.
 func awaitRESTAddr(h *Harness, deadline time.Duration) (string, error) {
-	if deadline <= 0 {
-		deadline = 60 * time.Second
-	}
+	deadline = startupDeadline(deadline)
 	const poll = 20 * time.Millisecond
 	until := time.Now().Add(deadline)
 	for {

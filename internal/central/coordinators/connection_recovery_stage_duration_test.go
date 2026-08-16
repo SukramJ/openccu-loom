@@ -303,7 +303,7 @@ func newTestDevCoord(t *testing.T) *DeviceCoordinator {
 	devReg := registry.NewDeviceRegistry()
 	descReg := registry.NewDeviceDescriptionRegistry()
 	paramReg := registry.NewParamsetRegistry()
-	return NewDeviceCoordinator("c1", bus, devReg, descReg, paramReg, nil)
+	return NewDeviceCoordinator("c1", bus, devReg, descReg, paramReg, nil, nil)
 }
 
 func seedDeviceDescs(t *testing.T, coord *DeviceCoordinator, iface hmtypes.WireInterfaceID, descs []hmproto.DeviceDescription) {

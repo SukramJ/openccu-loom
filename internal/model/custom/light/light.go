@@ -662,14 +662,20 @@ type OnConfig struct {
 // A [generic.CallParameterCollector] is attached to ctx so any future routing
 // that consults [generic.CollectorFromContext] can batch this operation
 // uniformly.
-func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.CommandPriority) error {
+func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.CommandPriority) (err error) {
 	ctx = custom.EnsureContext(ctx)
 	// Attach a collector for forward-compatible batching. The internal
-	// PutOrSet already handles atomicity for current callers.
+	// PutOrSet already handles atomicity for current callers. Anything
+	// staged on it only reaches the wire in the flush, so the flush
+	// error is part of this command's result.
 	if l.Float != nil && l.Writer != nil {
 		coll := generic.NewCollector(generic.WriterAsBackend(l.Writer), generic.WithPriority(priority))
 		ctx = generic.ContextWithCollector(ctx, coll)
-		defer func() { _ = coll.Send(ctx) }()
+		defer func() {
+			if err = generic.FlushCollector(ctx, coll, err); err != nil {
+				l.clearLastSent()
+			}
+		}()
 	}
 	addr := cfg.Address
 	if addr == "" && l.Float != nil {
@@ -712,7 +718,7 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 		params[hmenum.ParameterRampTime] = cfg.RampTime.Seconds()
 	}
 	l.recordLastSent(level)
-	if err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority); err != nil {
+	if err = custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority); err != nil {
 		l.clearLastSent()
 		return err
 	}
@@ -749,13 +755,15 @@ func (l *Light) TurnOffWithRamp(ctx context.Context, ramp time.Duration, priorit
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
-	defer func() { _ = coll.Send(ctx) }()
 	l.recordLastSent(0.0)
-	if err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, map[hmenum.Parameter]any{
+	err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, map[hmenum.Parameter]any{
 		hmenum.ParameterOnTime:   NotUsed,
 		hmenum.ParameterRampTime: ramp.Seconds(),
 		hmenum.ParameterLevel:    0.0,
-	}, priority); err != nil {
+	}, priority)
+	// Anything staged on the collector only reaches the wire in the
+	// flush, so its error is part of this command's result.
+	if err = generic.FlushCollector(ctx, coll, err); err != nil {
 		l.clearLastSent()
 		return err
 	}

@@ -44,14 +44,26 @@ type deviceIconProxy struct {
 	resolve  adapter.CentralConfigResolver
 	secure   *http.Client
 	insecure *http.Client
+	// negativeTTL bounds how long a failed fetch is remembered.
+	negativeTTL time.Duration
 
 	mu    sync.RWMutex
 	cache map[string]cachedIcon // address → bytes (empty data = known-missing)
 }
 
+// negativeIconTTL bounds a cached miss. A CCU that is briefly
+// unreachable — a reboot, a restarted web server — must not leave its
+// devices without artwork until the daemon restarts, while remembering
+// the miss for a few minutes still keeps an unreachable CCU from being
+// re-dialled on every render of the device list.
+const negativeIconTTL = 5 * time.Minute
+
 type cachedIcon struct {
 	data        []byte
 	contentType string
+	// expires bounds a negative entry. A successful fetch carries the
+	// zero time and never expires — the artwork is static.
+	expires time.Time
 }
 
 // newDeviceIconProxy wires the proxy against the live central registry.
@@ -83,9 +95,10 @@ func newDeviceIconProxyWith(
 	resolve adapter.CentralConfigResolver,
 ) *deviceIconProxy {
 	return &deviceIconProxy{
-		locate:  locate,
-		resolve: resolve,
-		secure:  httpx.NewClient(15 * time.Second),
+		locate:      locate,
+		resolve:     resolve,
+		negativeTTL: negativeIconTTL,
+		secure:      httpx.NewClient(15 * time.Second),
 		insecure: &http.Client{
 			Timeout:   15 * time.Second,
 			Transport: insecureIconTransport(),
@@ -106,8 +119,10 @@ func insecureIconTransport() *http.Transport {
 	return t
 }
 
-// Icon implements handlers.DeviceIconProxy. Cached results — including a
-// cached miss (empty data) — short-circuit the upstream fetch.
+// Icon implements handlers.DeviceIconProxy. A cached hit short-circuits
+// the upstream fetch; a cached miss does the same until it expires, so a
+// transient CCU outage costs the artwork for minutes, not for the rest
+// of the daemon's lifetime.
 //
 // The route is unauthenticated (an <img> tag cannot carry auth), so an
 // unknown address must NEVER create a cache entry: otherwise a caller
@@ -126,13 +141,21 @@ func (p *deviceIconProxy) Icon(ctx context.Context, address string) (data []byte
 	p.mu.RLock()
 	c, cached := p.cache[address]
 	p.mu.RUnlock()
-	if cached {
+	if cached && (c.expires.IsZero() || time.Now().Before(c.expires)) {
 		return c.data, c.contentType, len(c.data) > 0
 	}
 
 	data, contentType = p.fetch(ctx, filename, centralName)
+	entry := cachedIcon{data: data, contentType: contentType}
+	if len(data) == 0 {
+		ttl := p.negativeTTL
+		if ttl <= 0 {
+			ttl = negativeIconTTL
+		}
+		entry.expires = time.Now().Add(ttl)
+	}
 	p.mu.Lock()
-	p.cache[address] = cachedIcon{data: data, contentType: contentType}
+	p.cache[address] = entry
 	p.mu.Unlock()
 	return data, contentType, len(data) > 0
 }

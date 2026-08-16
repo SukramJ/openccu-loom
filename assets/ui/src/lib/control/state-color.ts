@@ -46,7 +46,10 @@ export function resolveTileColor(
     case "SHUTTER_VIRTUAL_RECEIVER":
     case "WINDOW":
     case "WINDOW_DRIVE_RECEIVER":
-      return numeric(value) > 0 && numeric(value) < 1
+      // LEVEL 1.0 is fully open — the cover's normal end position — so it
+      // is as "active" as any intermediate position. Only the closed end
+      // position (0) resolves to the neutral token.
+      return numeric(value) > 0
         ? "var(--state-cover-active-color, var(--ha-primary-color))"
         : "var(--ha-secondary-text-color)";
 

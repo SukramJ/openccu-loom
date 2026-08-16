@@ -13,6 +13,7 @@
   import { matterStore } from "$lib/stores/matter.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
   import type { EmbeddedScope, ProfileName, SurfaceInfo } from "$lib/api/surface-types";
   import Badge from "$lib/components/ui/Badge.svelte";
@@ -25,6 +26,10 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   type Filter = "all" | "visible" | "hidden" | "changed";
+
+  // The fixed save bar spans the content column, so it has to start where
+  // the sidebar ends — which is 64px while the navigation is collapsed.
+  const sidebarOffset = $derived(prefs.navCollapsed ? "md:left-[64px]" : "md:left-[240px]");
 
   let query = $state("");
   let filter = $state<Filter>("all");
@@ -665,7 +670,7 @@
 
   {#if surfacesStore.hasChanges()}
     <div
-      class="fixed inset-x-0 bottom-0 z-20 flex items-center gap-4 border-t border-slate-200 bg-white px-6 py-3 shadow-lg md:left-[240px] dark:border-slate-800 dark:bg-slate-950"
+      class="fixed inset-x-0 bottom-0 z-20 flex items-center gap-4 border-t border-slate-200 bg-white px-6 py-3 shadow-lg dark:border-slate-800 dark:bg-slate-950 {sidebarOffset}"
     >
       <span class="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
         {t("navviews.save.count", { count: String(surfacesStore.changeCount()) })}

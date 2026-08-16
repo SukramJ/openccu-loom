@@ -95,7 +95,18 @@ func (s *MQTTCommandSink) canonicalChannelAddress(centralName, channelAddress st
 	return channelAddress
 }
 
-// SetValue routes the DP command to the configured writer.
+// SetValue routes the DP command to the addressed channel's writer.
+//
+// The channel is resolved in the central's model first, so the command
+// travels through [device.Channel.Writer] — the writer that enforces the
+// operator channel lock. Writing straight through the raw value writer let
+// an MQTT VALUES command switch a channel the operator had locked, while
+// REST, WS and the SPA all refused it.
+//
+// A channel the model does not know (an address that never materialised as a
+// device, an unregistered central) falls back to the raw writer, which is the
+// behaviour every such command had before: no model entry means no lock to
+// enforce, and the write is the CCU's to accept or reject.
 func (s *MQTTCommandSink) SetValue(
 	ctx context.Context, centralName, interfaceID, channelAddress string,
 	parameter hmenum.Parameter, value any, priority hmenum.CommandPriority,
@@ -104,7 +115,57 @@ func (s *MQTTCommandSink) SetValue(
 		return ErrNoWriter
 	}
 	channelAddress = s.canonicalChannelAddress(centralName, channelAddress)
+	if ch, err := s.resolveChannel(centralName, interfaceID, channelAddress); err == nil && ch != nil {
+		if w := ch.Writer(); w != nil {
+			return w.SetValue(ctx, channelAddress, parameter, value, priority)
+		}
+		// The channel exists but carries no writer (hydration has not
+		// reached it yet). Its lock still governs the command.
+		if ch.IsLocked() {
+			return device.ErrChannelOperationLocked
+		}
+	}
 	return s.writer.SetValue(ctx, centralName, interfaceID, channelAddress, parameter, value, priority)
+}
+
+// resolveChannel maps a topic-derived (central, interface, channel address)
+// tuple onto the model channel that owns it. The channel address must already
+// be canonical — call [MQTTCommandSink.canonicalChannelAddress] first.
+//
+// Returns a descriptive error for every stage that cannot be resolved so
+// callers can surface which half of the tuple was wrong.
+func (s *MQTTCommandSink) resolveChannel(
+	centralName, interfaceID, channelAddress string,
+) (*device.Channel, error) {
+	if s.registry == nil {
+		return nil, errors.New("mqtt_sink: no central registry wired")
+	}
+	c, ok := s.registry.Get(centralName)
+	if !ok {
+		return nil, fmt.Errorf("mqtt_sink: unknown central %q", centralName)
+	}
+	deviceAddress := channelAddress
+	if i := strings.LastIndexByte(channelAddress, ':'); i > 0 {
+		deviceAddress = channelAddress[:i]
+	}
+	dev, ok := c.ModelRegistry.Get(deviceAddress)
+	if !ok || dev == nil {
+		return nil, fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
+	}
+	// When the caller supplies an interface hint, verify the resolved
+	// device actually belongs to that interface. Within a single central
+	// the model registry is keyed on device address so there can only
+	// ever be one entry — the check still guards against an operator
+	// misconfiguration where the same address is used on two interfaces.
+	if interfaceID != "" && dev.InterfaceID != "" && dev.InterfaceID != interfaceID {
+		return nil, fmt.Errorf("mqtt_sink: device %q belongs to interface %q, not %q",
+			deviceAddress, dev.InterfaceID, interfaceID)
+	}
+	ch := dev.Channel(channelAddress)
+	if ch == nil {
+		return nil, fmt.Errorf("mqtt_sink: unknown channel %s on %s", channelAddress, centralName)
+	}
+	return ch, nil
 }
 
 // SetMasterValue implements [mqtt.CommandSink]. It resolves the channel
@@ -127,31 +188,10 @@ func (s *MQTTCommandSink) SetMasterValue(
 	ctx context.Context, centralName, interfaceID, channelAddress string,
 	parameter hmenum.Parameter, value any, priority hmenum.CommandPriority,
 ) error {
-	c, ok := s.registry.Get(centralName)
-	if !ok {
-		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
-	}
 	channelAddress = s.canonicalChannelAddress(centralName, channelAddress)
-	deviceAddress := channelAddress
-	if i := strings.LastIndexByte(channelAddress, ':'); i > 0 {
-		deviceAddress = channelAddress[:i]
-	}
-	dev, ok := c.ModelRegistry.Get(deviceAddress)
-	if !ok || dev == nil {
-		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
-	}
-	// When the caller supplies an interface hint, verify the resolved
-	// device actually belongs to that interface. Within a single central
-	// the model registry is keyed on device address so there can only
-	// ever be one entry — the check still guards against an operator
-	// misconfiguration where the same address is used on two interfaces.
-	if interfaceID != "" && dev.InterfaceID != "" && dev.InterfaceID != interfaceID {
-		return fmt.Errorf("mqtt_sink: device %q belongs to interface %q, not %q",
-			deviceAddress, dev.InterfaceID, interfaceID)
-	}
-	ch := dev.Channel(channelAddress)
-	if ch == nil {
-		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", channelAddress, centralName)
+	ch, err := s.resolveChannel(centralName, interfaceID, channelAddress)
+	if err != nil {
+		return err
 	}
 	if ch.MasterParameter(parameter) == nil {
 		return fmt.Errorf("mqtt_sink: parameter %q not in MASTER paramset of %s", parameter, channelAddress)

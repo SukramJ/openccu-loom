@@ -4,6 +4,7 @@
 package visibility
 
 import (
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -216,12 +217,25 @@ type forceSensorMarker interface {
 // unIgnoredMarker is the narrow contract a [device.ParameterDataPoint]
 // must satisfy to participate in the un-ignored mark-back from the
 // visibility decider.
+//
+// Both directions belong to the contract. The un-ignore configuration is
+// editable while the daemon runs, so the pass has to be able to take the
+// mark away again; a marker that can only set the flag turns every
+// promotion into a permanent one.
 type unIgnoredMarker interface {
 	MarkUnIgnored()
+	ClearUnIgnored()
 }
 
-// ApplyUnIgnoredMarks walks every channel of dev and flags every VALUES
-// paramset entry that the [ParameterDecider] reports as un-ignored.
+// ApplyUnIgnoredMarks walks every channel of dev and brings every VALUES
+// paramset entry in line with the [ParameterDecider]'s current un-ignore
+// verdict: matches are marked, non-matches are cleared.
+//
+// Computing the full set — rather than only adding marks — is what makes
+// the pass usable after a configuration change. The un-ignore rules are
+// edited at runtime (REST PUT, SPA), and the operator's removal of a
+// pattern is only observable if the re-run can put the data point back
+// under the static decider's verdict.
 //
 // The mark survives the custom-DP suppression pass
 // ([SuppressUndefinedGenericDataPointsWith] explicitly skips un-ignored DPs)
@@ -234,23 +248,53 @@ func ApplyUnIgnoredMarks(dev *device.Device, decider *ParameterDecider) {
 	if dev == nil || decider == nil {
 		return
 	}
+	withdrawn := false
 	for _, ch := range dev.Channels() {
 		for _, dp := range ch.DataPoints() {
-			// Py:716
-			// custom_only=True): only user-provided `un_ignore.txt`
-			// entries set the DP-level flag. Built-in
-			// `unIgnoreParametersByDevice` rules are honoured by the
-			// suppression / hidden / internal passes via the decider
-			// directly so the DP-level mark stays snapshot-symmetric
-			// With.
-			if !decider.IsUnIgnored(dev.Model, ch.Type, hmenum.ParamsetKeyValues, dp.Parameter()) {
+			m, ok := dp.(unIgnoredMarker)
+			if !ok {
 				continue
 			}
-			if m, ok := dp.(unIgnoredMarker); ok {
+			// Only user-provided `un_ignore` entries set the DP-level
+			// flag. Built-in un-ignore rules are honoured by the
+			// suppression / hidden / internal passes via the decider
+			// directly so the DP-level mark stays snapshot-symmetric.
+			if decider.IsUnIgnored(dev.Model, ch.Type, hmenum.ParamsetKeyValues, dp.Parameter()) {
 				m.MarkUnIgnored()
+				continue
 			}
+			m.ClearUnIgnored()
+			reapplyValuesSuppression(dev, ch, dp, decider)
+			withdrawn = true
 		}
 	}
+	if withdrawn {
+		// The fourth pass that honours the mark is device-scoped, so it
+		// cannot run per data point: on a device that carries a custom
+		// data point every VALUES parameter without a forced usage is
+		// suppressed, and un-ignored ones are skipped. A parameter that
+		// was visible only because it carried the mark therefore keeps
+		// `usage=data_point` on REST, MQTT and the SPA until the daemon
+		// restarts unless that pass runs again here.
+		//
+		// Idempotent and cheap: it re-derives the same verdict for every
+		// data point whose mark did not change.
+		custom.SuppressUndefinedGenericDataPoints(dev)
+	}
+}
+
+// reapplyValuesSuppression restores the static suppression verdict for a
+// VALUES data point whose operator un-ignore mark was just withdrawn.
+//
+// Dropping the mark alone is not enough: the three suppression passes skip
+// un-ignored data points, so a parameter promoted at boot never received
+// its `no_create` mark. Without re-running them here the parameter would
+// keep surfacing on every north-bound plane even though the rule that
+// promoted it is gone.
+func reapplyValuesSuppression(dev *device.Device, ch *device.Channel, dp device.ParameterDataPoint, decider *ParameterDecider) {
+	markIfIgnored(dev, ch, dp, hmenum.ParamsetKeyValues, decider)
+	markIfInternal(dp, dev.Model, ch.Type, hmenum.ParamsetKeyValues, nil)
+	markIfHidden(dp, dev.Model, ch.Type, ch.Number, hmenum.ParamsetKeyValues, nil)
 }
 
 // ApplyIgnoredParameterMarks walks every channel of dev and force-usages

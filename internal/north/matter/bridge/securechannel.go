@@ -82,13 +82,15 @@ type CaseHandler interface {
 // that carries HasAck=true regardless of opcode, so the IM and
 // SecureChannel paths share this hook.
 type AckHandler interface {
-	// Discharge marks the obligation for the (session, exchange)
-	// pair as fulfilled (the peer ACKed our outbound message).
-	// Exchange IDs are only unique per session, so the session half
-	// keeps concurrent controllers from discharging each other's
-	// obligations. Returns whether an obligation existed
+	// Discharge marks the obligation for the (session, exchange, role)
+	// triple as fulfilled (the peer ACKed our outbound message).
+	// Exchange IDs are only unique per session AND per side, so both
+	// extra dimensions are needed to keep concurrent controllers — and a
+	// bridge-opened exchange colliding with a peer-opened one — from
+	// discharging each other's obligations. initiator is the LOCAL
+	// side's role. Returns whether an obligation existed
 	// (informational; the router does not branch on the result).
-	Discharge(sessionID, exchangeID uint16) bool
+	Discharge(sessionID, exchangeID uint16, initiator bool) bool
 }
 
 // noopPaseHandler is the default when no PASE handler is wired.
@@ -125,7 +127,7 @@ func (noopCaseHandler) ProcessSigma2Resume([]byte) (opcode uint8, payload []byte
 // every Discharge returns false (obligation never existed).
 type noopAckHandler struct{}
 
-func (noopAckHandler) Discharge(uint16, uint16) bool { return false }
+func (noopAckHandler) Discharge(uint16, uint16, bool) bool { return false }
 
 // AttachPaseHandler wires the PASE port. Pass nil to revert to noop.
 // Calling this twice replaces the previous handler.
@@ -291,7 +293,7 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		ack := b.ackHandler
 		b.mu.RUnlock()
 		if ack != nil {
-			ack.Discharge(requestHdr.SessionID, proto.ExchangeID)
+			ack.Discharge(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 		}
 	}
 
@@ -315,45 +317,24 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 			slog.Int("ack_counter", int(proto.AckCounter)))
 		return nil
 
-	case mrp.SCOpcodePBKDFParamRequest:
-		if !b.claimPaseInFlight(proto.ExchangeID) {
-			// Single-active-PASE (Matter §4.13.1): a second
-			// commissioner's PBKDFParamRequest while a handshake is in
-			// progress is IGNORED — matter.js PaseServer.ts:80-86
-			// onNewExchange logs "Pairing already in progress" and
-			// drops the exchange. The MRP layer has already acked the
-			// datagram; the rejected commissioner times out and
-			// retries after the active handshake finished or expired.
-			b.logger.Info("matter.rx.sc.pase_busy",
+	case mrp.SCOpcodePBKDFParamRequest, mrp.SCOpcodePake1, mrp.SCOpcodePake3:
+		if b.paseLockedOut() {
+			// Brute-force cap reached for the currently installed
+			// acceptor: stop processing PASE entirely until the lockout
+			// cooldown expires or a new commissioning window installs a
+			// fresh acceptor. matter.js aborts commissioning at
+			// PASE_COMMISSIONING_MAX_ERRORS (PaseServer.ts:95-110) and its
+			// PaseServer dies with the window; ours can outlive every
+			// window, so the refusal has to live on the receive path — and
+			// has to expire, or the refusal itself becomes the denial of
+			// service.
+			b.logger.Warn("matter.rx.sc.pase_locked_out",
 				slog.String("src", srcString(src)),
-				slog.Int("exchange_id", int(proto.ExchangeID)))
-			b.diagEvents.Record(diagevent.Event{
-				Kind:     diagevent.KindPairing,
-				Severity: diagevent.SeverityWarning,
-				Message: "A commissioner tried to pair while another pairing was already " +
-					"in progress; its attempt was dropped and it will retry.",
-				Detail: map[string]string{"peer": srcString(src)},
-			})
+				slog.Int("opcode", int(proto.Opcode)),
+				slog.String("hint", "too many failed pairing attempts; PASE re-enables after the lockout period, or immediately when a new pairing window is opened"))
 			return nil
 		}
-		h := b.resolvePaseHandler(proto.ExchangeID)
-		return b.handlePase(src, requestHdr, proto, payload, "pbkdf_param_req",
-			h.ProcessPBKDFParamRequest)
-	case mrp.SCOpcodePake1:
-		h := b.resolvePaseHandler(proto.ExchangeID)
-		return b.handlePase(src, requestHdr, proto, payload, "pake1",
-			h.ProcessPake1)
-	case mrp.SCOpcodePake3:
-		h := b.resolvePaseHandler(proto.ExchangeID)
-		err := b.handlePase(src, requestHdr, proto, payload, "pake3",
-			h.ProcessPake3)
-		// Pake3 terminates the handshake either way (success installs
-		// the session, failure aborts the attempt) — release the
-		// single-active-PASE claim so the next commissioner can start.
-		// matter.js clears #pairingMessenger in the finally block of
-		// onNewExchange (PaseServer.ts:112-118).
-		b.releasePaseInFlight(proto.ExchangeID)
-		return err
+		return b.dispatchPase(src, requestHdr, proto, payload)
 
 	case mrp.SCOpcodeSigma1:
 		// Apple iOS multicasts the same Sigma1 onto IPv4 + IPv6-LL +
@@ -389,6 +370,16 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		// per-exchange Sigma1 dedupe entry so a later exchange-id
 		// rollover starts clean.
 		b.forgetSigma1Replied(proto.ExchangeID)
+		// A completed Sigma3 is the moment a secure session exists. An
+		// operator reading the trace after a controller went quiet needs
+		// the open as much as the close: "it never came back after 14:02"
+		// is only readable when both ends of the session are recorded.
+		b.diagRing().Record(diagevent.Event{
+			Kind:     diagevent.KindSession,
+			Severity: diagevent.SeverityInfo,
+			Message:  "A controller completed a secure-session handshake with the bridge.",
+			Detail:   map[string]string{"peer": srcString(src)},
+		})
 		// Sigma3 receive implicitly acks every prior Sigma2 on the same
 		// exchange — the commissioner has progressed past Sigma2, so any
 		// still-pending Sigma2 retransmits in our outbound-reliable
@@ -427,6 +418,60 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 	}
 }
 
+// dispatchPase routes one inbound PASE opcode to the handler resolved
+// for its exchange. Split out of the Secure-Channel opcode switch so the
+// single-active-PASE claim, the handler resolution and the post-Pake3
+// release stay together while the switch keeps one entry per family.
+func (b *Bridge) dispatchPase(
+	src *net.UDPAddr,
+	requestHdr *message.Header,
+	proto message.ProtocolHeader,
+	payload []byte,
+) error {
+	switch proto.Opcode {
+	case mrp.SCOpcodePBKDFParamRequest:
+		if !b.claimPaseInFlight(proto.ExchangeID) {
+			// Single-active-PASE (Matter §4.13.1): a second
+			// commissioner's PBKDFParamRequest while a handshake is in
+			// progress is IGNORED — matter.js PaseServer.ts:80-86
+			// onNewExchange logs "Pairing already in progress" and
+			// drops the exchange. The MRP layer has already acked the
+			// datagram; the rejected commissioner times out and
+			// retries after the active handshake finished or expired.
+			b.logger.Info("matter.rx.sc.pase_busy",
+				slog.String("src", srcString(src)),
+				slog.Int("exchange_id", int(proto.ExchangeID)))
+			b.diagRing().Record(diagevent.Event{
+				Kind:     diagevent.KindPairing,
+				Severity: diagevent.SeverityWarning,
+				Message: "A commissioner tried to pair while another pairing was already " +
+					"in progress; its attempt was dropped and it will retry.",
+				Detail: map[string]string{"peer": srcString(src)},
+			})
+			return nil
+		}
+		h := b.resolvePaseHandler(proto.ExchangeID)
+		return b.handlePase(src, requestHdr, proto, payload, "pbkdf_param_req",
+			h.ProcessPBKDFParamRequest)
+	case mrp.SCOpcodePake1:
+		h := b.resolvePaseHandler(proto.ExchangeID)
+		return b.handlePase(src, requestHdr, proto, payload, "pake1",
+			h.ProcessPake1)
+	case mrp.SCOpcodePake3:
+		h := b.resolvePaseHandler(proto.ExchangeID)
+		err := b.handlePase(src, requestHdr, proto, payload, "pake3",
+			h.ProcessPake3)
+		// Pake3 terminates the handshake either way (success installs
+		// the session, failure aborts the attempt) — release the
+		// single-active-PASE claim so the next commissioner can start.
+		// matter.js clears #pairingMessenger in the finally block of
+		// onNewExchange (PaseServer.ts:112-118).
+		b.releasePaseInFlight(proto.ExchangeID)
+		return err
+	}
+	return nil
+}
+
 // paseMaxErrors is the number of PASE pairing failures within a
 // commissioning window that aborts the window. Mirrors matter.js
 // PaseServer.ts PASE_COMMISSIONING_MAX_ERRORS (= 20). Without this cap an
@@ -449,6 +494,40 @@ const maxUnsecuredWindows = 256
 // crashed between PBKDFParamRequest and Pake3) self-expires so pairing
 // is not locked out for the rest of the window.
 const pasePairingTimeout = 60 * time.Second
+
+// paseLockoutCooldown is how long PASE stays refused after the first time
+// [paseMaxErrors] is reached, and [paseLockoutMaxCooldown] is the ceiling
+// the doubling backoff runs into.
+//
+// matter.js and chip both end the refusal with the commissioning window:
+// matter.js throws MaximumPasePairingErrorsReachedError and lets the
+// PaseServer die with the window (PaseServer.ts:106-110), chip calls
+// CommissioningWindowManager::Cleanup once mFailedCommissioningAttempts
+// reaches kMaxFailedCommissioningAttempts
+// (CommissioningWindowManager.cpp:160-192). Neither can lock pairing out
+// beyond the window, because neither keeps a passcode acceptor armed once
+// the window closes. This bridge does: an uncommissioned daemon answers
+// PASE from its configured passcode with no window open, so the refusal
+// needs its own expiry or 20 malformed Pake1s from any LAN host would
+// disable pairing until the operator restarts the daemon.
+//
+// 20 guesses per 15 min (80/h) leaves the ~10^8 valid-passcode space out
+// of reach while keeping an operator who mistyped the code waiting
+// minutes, not hours — and opening a pairing window clears the lockout
+// immediately.
+const (
+	paseLockoutCooldown    = 15 * time.Minute
+	paseLockoutMaxCooldown = 4 * time.Hour
+)
+
+// now reads the wall clock through [Bridge.nowFn] so the PASE lockout
+// cooldown is testable without sleeping. Production leaves nowFn nil.
+func (b *Bridge) now() time.Time {
+	if b.nowFn != nil {
+		return b.nowFn()
+	}
+	return time.Now()
+}
 
 // claimPaseInFlight attempts to claim the single-active-PASE slot for
 // exchangeID. Returns true when the claim succeeds: the slot was idle,
@@ -480,41 +559,98 @@ func (b *Bridge) releasePaseInFlight(exchangeID uint16) {
 
 // recordPaseFailure increments the PASE failure counter and, when it
 // reaches [paseMaxErrors], revokes the open commissioning window and
-// resets the counter. Mirrors matter.js PaseServer.ts:95-110 (count →
-// MaximumPasePairingErrorsReachedError) + DeviceCommissioner.ts:70-72
+// engages a timed PASE lockout. Mirrors matter.js PaseServer.ts:95-110
+// (count → MaximumPasePairingErrorsReachedError) + DeviceCommissioner.ts:70-72
 // (tooManyPaseErrors → endCommissioning). Called from the handlePase
 // error path for genuine pairing failures only (not missing-handler or
 // state-replay retransmits).
 func (b *Bridge) recordPaseFailure() {
-	if b.paseFailures.Add(1) < paseMaxErrors {
+	if b.paseFailures.Add(1) != paseMaxErrors {
+		// Below the cap, or a straggler arriving between the cap and the
+		// lockout taking effect. Only the transition to exactly
+		// paseMaxErrors engages the lockout, so the revoke + diagnostic
+		// fire once per batch.
 		return
 	}
-	b.paseFailures.Store(0)
+	cooldown := b.engagePaseLockout()
 	win := b.CommissioningWindow()
-	if win == nil {
-		return
-	}
 	b.logger.Warn("matter.rx.sc.pase_bruteforce",
 		slog.Int("max_errors", paseMaxErrors),
-		slog.String("hint", "too many PASE pairing failures; revoking commissioning window"))
-	b.diagEvents.Record(diagevent.Event{
+		slog.Duration("lockout", cooldown),
+		slog.String("hint", "too many PASE pairing failures; revoking commissioning window and refusing PASE for the lockout period"))
+	b.diagRing().Record(diagevent.Event{
 		Kind:     diagevent.KindPairing,
 		Severity: diagevent.SeverityError,
-		Message: "The commissioning window was revoked after too many failed pairing " +
-			"attempts. Open a new one and re-check the pairing code.",
-		Detail: map[string]string{"max_errors": strconv.Itoa(paseMaxErrors)},
+		Message: "Pairing was locked after too many failed attempts. It unlocks " +
+			"again after the lockout period; opening a new pairing window " +
+			"unlocks it immediately.",
+		Detail: map[string]string{
+			"max_errors":       strconv.Itoa(paseMaxErrors),
+			"lockout_duration": cooldown.String(),
+		},
 	})
-	_ = win.RevokeWindow(context.Background())
+	if win != nil {
+		_ = win.RevokeWindow(context.Background())
+	}
 }
 
-// resetPaseFailures clears the per-window PASE state — the failure counter
-// and the unsecured duplicate-detection windows. Called when a fresh PASE
-// acceptor is installed ([Bridge.AttachPaseHandler] /
+// engagePaseLockout refuses PASE for a bounded cooldown and returns the
+// cooldown that was applied. Consecutive lockouts without an operator
+// intervention double it, up to [paseLockoutMaxCooldown], so a host that
+// keeps guessing pays an ever-growing price while a genuine operator
+// waits the base cooldown at worst.
+//
+// The failure counter starts over: from here on the cooldown — not the
+// counter — is what keeps PASE closed, and the next budget must be a
+// full [paseMaxErrors] once it expires.
+func (b *Bridge) engagePaseLockout() time.Duration {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.paseLockoutStreak++
+	cooldown := paseLockoutCooldown
+	for range b.paseLockoutStreak - 1 {
+		if cooldown >= paseLockoutMaxCooldown {
+			break
+		}
+		cooldown *= 2
+	}
+	cooldown = min(cooldown, paseLockoutMaxCooldown)
+	b.paseLockoutUntil = b.now().Add(cooldown)
+	b.paseFailures.Store(0)
+	return cooldown
+}
+
+// paseLockedOut reports whether PASE is currently refused because the
+// brute-force cap fired. Revoking the commissioning window is not enough
+// on its own: an uncommissioned bridge keeps a long-lived
+// configured-passcode acceptor armed with no window open, so without this
+// refusal the guessing continues after the cap.
+//
+// The refusal expires by itself after the cooldown
+// ([Bridge.engagePaseLockout]) — a permanent latch would hand any LAN
+// host a pairing kill switch for the daemon's lifetime. Installing a
+// fresh acceptor (opening a pairing window) clears it immediately, which
+// is the operator-visible way back.
+func (b *Bridge) paseLockedOut() bool {
+	b.mu.RLock()
+	until := b.paseLockoutUntil
+	b.mu.RUnlock()
+	return !until.IsZero() && b.now().Before(until)
+}
+
+// resetPaseFailures clears the per-window PASE state — the failure counter,
+// any active lockout and its backoff streak, and the unsecured
+// duplicate-detection windows. Called when a fresh PASE acceptor is
+// installed ([Bridge.AttachPaseHandler] /
 // [Bridge.AttachPaseHandlerProvider]) — a commissioning-window boundary —
-// so each window gets its own [paseMaxErrors] budget and a clean set of
-// per-source dedup windows.
+// so each window gets its own [paseMaxErrors] budget, an unlocked PASE
+// path and a clean set of per-source dedup windows.
 func (b *Bridge) resetPaseFailures() {
 	b.paseFailures.Store(0)
+	b.mu.Lock()
+	b.paseLockoutUntil = time.Time{}
+	b.paseLockoutStreak = 0
+	b.mu.Unlock()
 	b.unsecuredWindows.Clear()
 	b.unsecuredWindowCount.Store(0)
 }
@@ -583,9 +719,21 @@ func (b *Bridge) handlePase(
 					slog.String("err", sendErr.Error()))
 			}
 			// Brute-force protection: a genuine pairing failure (bad Pake1
-			// decode, confirmation mismatch, …). Count it and abort the
-			// window once too many accumulate.
+			// decode, confirmation mismatch, …). Count it and lock PASE
+			// once too many accumulate.
 			b.recordPaseFailure()
+		}
+		// The handshake is over: it died before Pake3, so the Pake3
+		// branch's release never runs and the single-active-PASE slot
+		// would stay held for the full pasePairingTimeout — an operator
+		// retrying immediately after a failed attempt would be refused
+		// with pase_busy for up to a minute. A state-machine replay is
+		// the exception: the original handshake still owns the slot and
+		// is still progressing. Mirrors matter.js PaseServer.ts:112-118,
+		// where the finally block clears #pairingMessenger on every
+		// termination, not only on success.
+		if !isStateReplay {
+			b.releasePaseInFlight(proto.ExchangeID)
 		}
 		return err
 	}
@@ -605,7 +753,7 @@ func (b *Bridge) handlePase(
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 	return nil
 }
 
@@ -685,7 +833,7 @@ func (b *Bridge) handleCase(
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 	return nil
 }
 
@@ -869,6 +1017,15 @@ func (b *Bridge) handleSecureChannelStatusReport(src *net.UDPAddr, requestHdr *m
 	b.logger.Info("matter.rx.sc.close_session",
 		slog.String("src", srcString(src)),
 		slog.Int("session_id", int(requestHdr.SessionID)))
+	b.diagRing().Record(diagevent.Event{
+		Kind:     diagevent.KindSession,
+		Severity: diagevent.SeverityInfo,
+		Message:  "A controller closed its secure session with the bridge.",
+		Detail: map[string]string{
+			"peer":       srcString(src),
+			"session_id": strconv.Itoa(int(requestHdr.SessionID)),
+		},
+	})
 	return nil
 }
 
@@ -1036,6 +1193,15 @@ func (b *Bridge) triggerSessionReannounce() {
 		}
 		b.logger.Debug("matter.mdns.session_reannounce.done")
 	}()
+	// An mDNS advertisement change is exactly what an operator needs in
+	// the trace when a controller stopped finding the bridge: the
+	// re-announce says the records went back on the wire, and its
+	// absence says they did not.
+	b.diagRing().Record(diagevent.Event{
+		Kind:     diagevent.KindDiscovery,
+		Severity: diagevent.SeverityInfo,
+		Message:  "The bridge re-announced itself on the network after a controller's last session ended.",
+	})
 }
 
 // closeSecureSessionsForShutdown drains every operational session with

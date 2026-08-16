@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func TestWithContextNilPassthrough(t *testing.T) {
@@ -547,68 +549,42 @@ func TestErrorContextDeepChain(t *testing.T) {
 // ExceptionToFailureReason
 // ---------------------------------------------------------------------------
 
-func TestExceptionToFailureReason_NilIsNone(t *testing.T) {
+func TestExceptionToFailureReason(t *testing.T) {
 	t.Parallel()
-	if got := ExceptionToFailureReason(nil, nil); got != "none" {
-		t.Fatalf("nil err => %q, want %q", got, "none")
+	cases := []struct {
+		name string
+		err  error
+		want hmenum.FailureReason
+	}{
+		{"nil", nil, hmenum.FailureReasonNone},
+		{"auth failure", fmt.Errorf("transport: %w", ErrAuthFailure), hmenum.FailureReasonAuth},
+		{"no connection", fmt.Errorf("dial: %w", ErrNoConnection), hmenum.FailureReasonNetwork},
+		{"circuit open", fmt.Errorf("client: %w", ErrCircuitBreakerOpen), hmenum.FailureReasonCircuitBreaker},
+		{"internal backend", fmt.Errorf("rpc: %w", ErrInternalBackendException), hmenum.FailureReasonInternal},
+		{"context deadline", fmt.Errorf("call: %w", context.DeadlineExceeded), hmenum.FailureReasonTimeout},
+		{"net timeout", fmt.Errorf("read: %w", timeoutNetError{}), hmenum.FailureReasonTimeout},
+		// A bare client exception names no cause the operator can act on.
+		{"client exception", ErrClientException, hmenum.FailureReasonUnknown},
+		{"unclassified", errors.New("some unexpected error"), hmenum.FailureReasonUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ExceptionToFailureReason(tc.err); got != tc.want {
+				t.Fatalf("ExceptionToFailureReason(%v) = %q, want %q", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 
-func TestExceptionToFailureReason_AuthFailure(t *testing.T) {
-	t.Parallel()
-	err := fmt.Errorf("transport: %w", ErrAuthFailure)
-	if got := ExceptionToFailureReason(err, nil); got != "auth" {
-		t.Fatalf("auth err => %q, want %q", got, "auth")
-	}
-}
+// timeoutNetError is a net.Error that reports a timeout, the shape a
+// transport read deadline produces without wrapping the context error.
+type timeoutNetError struct{}
 
-func TestExceptionToFailureReason_NoConnection(t *testing.T) {
-	t.Parallel()
-	err := fmt.Errorf("dial: %w", ErrNoConnection)
-	if got := ExceptionToFailureReason(err, nil); got != "network" {
-		t.Fatalf("no-connection err => %q, want %q", got, "network")
-	}
-}
-
-func TestExceptionToFailureReason_CircuitBreaker(t *testing.T) {
-	t.Parallel()
-	err := fmt.Errorf("client: %w", ErrCircuitBreakerOpen)
-	if got := ExceptionToFailureReason(err, nil); got != "circuit_breaker" {
-		t.Fatalf("cb err => %q, want %q", got, "circuit_breaker")
-	}
-}
-
-func TestExceptionToFailureReason_Internal(t *testing.T) {
-	t.Parallel()
-	err := fmt.Errorf("rpc: %w", ErrInternalBackendException)
-	if got := ExceptionToFailureReason(err, nil); got != "internal" {
-		t.Fatalf("internal err => %q, want %q", got, "internal")
-	}
-}
-
-func TestExceptionToFailureReason_Timeout(t *testing.T) {
-	t.Parallel()
-	err := context.DeadlineExceeded
-	if got := ExceptionToFailureReason(err, context.DeadlineExceeded); got != "timeout" {
-		t.Fatalf("timeout err => %q, want %q", got, "timeout")
-	}
-}
-
-func TestExceptionToFailureReason_Unknown(t *testing.T) {
-	t.Parallel()
-	err := errors.New("some unexpected error")
-	if got := ExceptionToFailureReason(err, nil); got != "unknown" {
-		t.Fatalf("unknown err => %q, want %q", got, "unknown")
-	}
-}
-
-func TestExceptionToFailureReason_ClientExceptionUnknown(t *testing.T) {
-	t.Parallel()
-	// A bare ErrClientException (not auth/no-conn/cb/internal) maps to "unknown"
-	err := ErrClientException
-	if got := ExceptionToFailureReason(err, nil); got != "unknown" {
-		t.Fatalf("ErrClientException => %q, want %q", got, "unknown")
-	}
+func (timeoutNetError) Error() string { return "i/o timeout" }
+func (timeoutNetError) Timeout() bool { return true }
+func (timeoutNetError) Temporary() bool {
+	return true
 }
 
 // ---------------------------------------------------------------------------
@@ -690,7 +666,7 @@ func TestErrorChainJSONRPCError32603(t *testing.T) {
 	}
 
 	// ExceptionToFailureReason must map to "internal".
-	if got := ExceptionToFailureReason(wrapped, nil); got != "internal" {
+	if got := ExceptionToFailureReason(wrapped); got != "internal" {
 		t.Fatalf("failure reason = %q, want %q", got, "internal")
 	}
 }
@@ -708,7 +684,7 @@ func TestErrorChainJSONRPCErrorNonInternal(t *testing.T) {
 	}
 
 	// ExceptionToFailureReason must map to "unknown" (ErrClientException is not auth/network/cb/internal).
-	if got := ExceptionToFailureReason(wrapped, nil); got != "unknown" {
+	if got := ExceptionToFailureReason(wrapped); got != "unknown" {
 		t.Fatalf("failure reason = %q, want %q", got, "unknown")
 	}
 }
@@ -738,7 +714,7 @@ func TestContextualErrorSurvivesFmtWrapping(t *testing.T) {
 	}
 
 	// ExceptionToFailureReason must still see auth.
-	if got := ExceptionToFailureReason(outer, nil); got != "auth" {
+	if got := ExceptionToFailureReason(outer); got != "auth" {
 		t.Fatalf("failure reason = %q, want auth", got)
 	}
 }

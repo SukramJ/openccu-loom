@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -342,19 +343,34 @@ func (g *GroupKeyManagement) MatterWrite(ctx context.Context, attrID uint32, val
 		g.mu.RUnlock()
 	}
 
-	// Matter spec semantics: writing GroupKeyMap is a *replace* per
-	// fabric — every entry is set. We naively apply each mapping;
-	// removals require explicit absence (the IM layer expands).
+	// Matter §11.2.10.4.1 semantics: writing GroupKeyMap REPLACES the
+	// fabric's list. Entries the controller left out are unbound, so the
+	// write has to delete them — keeping them would make a read
+	// contradict the controller's own write it just acknowledged.
 	for _, m := range list {
 		if m.FabricIndex != fabric {
 			return fmt.Errorf("%w: cross-fabric write rejected", errGroupKeyMgmtInvalidArg)
 		}
+	}
+	existing, err := g.store.ListGroupKeyMappings(ctx, fabric)
+	if err != nil {
+		return fmt.Errorf("matter: GroupKeyMap write: list current bindings: %w", err)
+	}
+	for _, m := range list {
 		if err := g.store.SetGroupKeyMapping(ctx, store.GroupKeyMapping{
 			FabricIndex:   fabric,
 			GroupID:       m.GroupID,
 			GroupKeySetID: m.GroupKeySetID,
 		}); err != nil {
 			return fmt.Errorf("matter: GroupKeyMap write: %w", err)
+		}
+	}
+	for _, prev := range existing {
+		if slices.ContainsFunc(list, func(m GroupKeyMapStruct) bool { return m.GroupID == prev.GroupID }) {
+			continue
+		}
+		if err := g.store.RemoveGroupKeyMapping(ctx, fabric, prev.GroupID); err != nil {
+			return fmt.Errorf("matter: GroupKeyMap write: remove dropped binding %d: %w", prev.GroupID, err)
 		}
 	}
 	// Bump DataVersion after a successful GroupKeyMap mutation so
@@ -417,7 +433,7 @@ func (g *GroupKeyManagement) MatterInvoke(ctx context.Context, cmdID uint32, fie
 	case groupKeyMgmtCmdKeySetReadAllIndices:
 		return g.handleKeySetReadAllIndices(ctx, fabric)
 	}
-	return nil, fmt.Errorf("matter: GroupKeyManagement command 0x%02X not supported", cmdID)
+	return nil, im.UnsupportedCommandf("matter: GroupKeyManagement command 0x%02X not supported", cmdID)
 }
 
 // MatterReportable lists subscribe-able attributes.

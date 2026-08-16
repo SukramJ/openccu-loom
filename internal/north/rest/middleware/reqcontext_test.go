@@ -51,18 +51,18 @@ func TestReqContextPopulatesContext(t *testing.T) {
 		t.Error("StartedAt was not set")
 	}
 	if seen.CentralName != "" {
-		t.Errorf("CentralName=%q want empty (filled lazily by handlers)", seen.CentralName)
+		t.Errorf("CentralName=%q want empty (the scope arrives per route via CentralScope)", seen.CentralName)
 	}
 }
 
-// TestCentralFromURLPopulatesScope verifies that handlers can use the
-// CentralFromURL helper to enrich the request with the chi-resolved
-// central_name URL parameter.
+// TestCentralFromURLPopulatesScope verifies the helper behind
+// [CentralScope]: it enriches the request with the chi-resolved
+// central_name URL parameter without losing the rest of the context.
 func TestCentralFromURLPopulatesScope(t *testing.T) {
 	var seen reqctx.RequestContext
 
 	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Handler enriches the request with the central scope.
+		// CentralScope calls this once chi has matched the route.
 		r = CentralFromURL(r)
 		seen, _ = reqctx.FromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
@@ -82,6 +82,69 @@ func TestCentralFromURLPopulatesScope(t *testing.T) {
 	}
 	if seen.RequestID == "" {
 		t.Error("RequestID was lost during enrichment")
+	}
+}
+
+// TestCentralScopeFillsTheScopePerRoute pins the production mechanism:
+// the scope reaches the log records because the route was assembled with
+// [CentralScope], not because a handler asked for it. A sibling route
+// without the middleware is logged unscoped — which is what makes the
+// per-route attachment the thing worth asserting.
+func TestCentralScopeFillsTheScopePerRoute(t *testing.T) {
+	var seen reqctx.RequestContext
+
+	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen, _ = reqctx.FromContext(r.Context())
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	r := chi.NewRouter()
+	r.Use(RequestID)
+	r.Use(ReqContext)
+	r.With(CentralScope).Get("/api/v1/centrals/{central_name}/devices", leaf)
+	r.Get("/api/v1/centrals/{central_name}/programs", leaf)
+
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{path: "/api/v1/centrals/ccu-01/devices", want: "ccu-01"},
+		{path: "/api/v1/centrals/ccu-01/programs", want: ""},
+	} {
+		seen = reqctx.RequestContext{}
+		req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("%s: status=%d want 204", tc.path, rr.Code)
+		}
+		if seen.CentralName != tc.want {
+			t.Errorf("%s: CentralName=%q want %q", tc.path, seen.CentralName, tc.want)
+		}
+	}
+}
+
+// TestCentralScopeAcceptsBothURLParamSpellings pins that the middleware
+// covers the `{central}` routes as well as the spelled-out
+// `{central_name}` ones — the router uses both.
+func TestCentralScopeAcceptsBothURLParamSpellings(t *testing.T) {
+	var seen reqctx.RequestContext
+
+	leaf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen, _ = reqctx.FromContext(r.Context())
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	r := chi.NewRouter()
+	r.Use(RequestID)
+	r.Use(ReqContext)
+	r.With(CentralScope).Get("/api/v1/system/ccu/{central}/reboot", leaf)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/ccu/ccu-02/reboot", http.NoBody)
+	r.ServeHTTP(httptest.NewRecorder(), req)
+
+	if seen.CentralName != "ccu-02" {
+		t.Fatalf("CentralName=%q want ccu-02", seen.CentralName)
 	}
 }
 

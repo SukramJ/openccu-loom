@@ -5,7 +5,6 @@ package wire
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -466,9 +465,23 @@ func (admCommWindowNotOpenErr) Error() string {
 func (admCommWindowNotOpenErr) MatterStatusCode() im.StatusCode { return im.StatusFailure }
 func (admCommWindowNotOpenErr) MatterClusterStatus() uint8      { return 0x04 } // WindowNotOpen
 
+// admCommInvalidFieldsErr is the typed backing value for
+// [ErrAdmCommInvalidFields]. A malformed command field is
+// InvalidCommand (0x85) per Matter §10.6.7.4 — matter.js
+// AdministratorCommissioningServer.ts validates the same fields and
+// raises StatusResponseError(InvalidCommand). Typed rather than plain so
+// the dispatcher maps it by type instead of by matching prose.
+type admCommInvalidFieldsErr struct{}
+
+func (admCommInvalidFieldsErr) Error() string {
+	return "matter: AdministratorCommissioning fields malformed"
+}
+func (admCommInvalidFieldsErr) MatterStatusCode() im.StatusCode { return im.StatusInvalidCommand }
+
 // Compile-time assertions: typed errors satisfy [im.StatusCodeError]
 // and (for the cluster-specific paths) [im.MatterClusterStatusError].
 var (
+	_ im.StatusCodeError          = admCommInvalidFieldsErr{}
 	_ im.StatusCodeError          = admCommBusyErr{}
 	_ im.StatusCodeError          = admCommPakeErr{}
 	_ im.MatterClusterStatusError = admCommPakeErr{}
@@ -485,8 +498,8 @@ var (
 //   - [ErrAdmCommWindowNotOpen]       → §11.19.8.3 WindowNotOpen cluster-specific failure
 var (
 	errAdmCommBusy               = admCommBusyErr{}
-	errAdmCommUnsupportedCommand = errors.New("matter: AdministratorCommissioning command unsupported")
-	errAdmCommInvalidFields      = errors.New("matter: AdministratorCommissioning fields malformed")
+	errAdmCommUnsupportedCommand = im.UnsupportedCommandf("matter: AdministratorCommissioning command unsupported")
+	errAdmCommInvalidFields      = admCommInvalidFieldsErr{}
 	// errAdmCommPakeParameter mirrors Matter §11.19.7.3
 	// PakeParameterError (0x02). Surfaces when OpenCommissioningWindow
 	// receives Iterations / Salt / PAKEPasscodeVerifier values outside

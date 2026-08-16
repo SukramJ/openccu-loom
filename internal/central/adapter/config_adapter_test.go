@@ -9,6 +9,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // ============================================================
@@ -115,6 +116,51 @@ func TestConfigAdapterMultipleCentrals(t *testing.T) {
 	snap := a.SanitizedConfig()
 	if len(snap.Centrals) != 2 {
 		t.Fatalf("Centrals = %d, want 2", len(snap.Centrals))
+	}
+}
+
+// TestConfigAdapterReportsTheLiveCentralSet pins that the endpoint reports
+// the CCUs the daemon actually serves. A CCU adopted or removed through the
+// SPA never reaches the boot config, so reading that slice made the endpoint
+// documented as the *effective* configuration go stale until the next restart.
+func TestConfigAdapterReportsTheLiveCentralSet(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Centrals: []config.CentralConfig{
+			{Name: "ccu-boot", Host: "10.0.0.1", Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}}},
+			{Name: "ccu-gone", Host: "10.0.0.2", Interfaces: []config.InterfaceSpec{{Name: "BidCos-RF"}}},
+		},
+	}
+	reg := central.NewRegistry()
+	for _, name := range []string{"ccu-boot", "ccu-adopted"} {
+		c, err := central.New(central.Config{Name: name})
+		if err != nil {
+			t.Fatalf("central.New(%s): %v", name, err)
+		}
+		if err := reg.Register(c); err != nil {
+			t.Fatalf("reg.Register(%s): %v", name, err)
+		}
+	}
+
+	snap := NewConfigAdapter(cfg, reg).SanitizedConfig()
+
+	got := make(map[string]hmapi.ConfigCentral, len(snap.Centrals))
+	for _, c := range snap.Centrals {
+		got[c.Name] = c
+	}
+	if len(got) != 2 {
+		t.Fatalf("centrals = %v, want exactly the two registered ones", snap.Centrals)
+	}
+	if _, ok := got["ccu-adopted"]; !ok {
+		t.Error("a central adopted at runtime is missing from the effective config")
+	}
+	if _, ok := got["ccu-gone"]; ok {
+		t.Error("a central that is no longer registered is still reported")
+	}
+	// A registered central that has not wired an interface yet still reports
+	// the wiring its boot row declares.
+	if boot := got["ccu-boot"]; boot.Host != "10.0.0.1" || len(boot.Interfaces) != 1 {
+		t.Errorf("boot central = %+v, want host 10.0.0.1 with one interface", boot)
 	}
 }
 

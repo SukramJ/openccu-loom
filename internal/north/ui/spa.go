@@ -44,20 +44,44 @@ func SPAHandler() http.Handler {
 			serveIndex(sub, w, r)
 			return
 		}
+		if path == "index.html" {
+			// Same no-store answer as every client-side route, so a fresh
+			// deploy is picked up immediately however the entry point is
+			// addressed.
+			serveIndex(sub, w, r)
+			return
+		}
 		f, err := sub.Open(path)
 		if err != nil {
 			serveIndex(sub, w, r)
 			return
 		}
 		_ = f.Close()
-		// Static assets get long cache headers; the index.html
-		// itself is served by `serveIndex` and stays uncacheable so
-		// a fresh deploy is picked up immediately.
-		if path != "index.html" {
-			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		}
+		w.Header().Set("Cache-Control", cacheControlFor(path))
 		server.ServeHTTP(w, r)
 	})
+}
+
+// hashedAssetDir is the bundle directory the build writes content-hashed
+// files into. Everything outside it is copied verbatim from the SPA's
+// public/ directory and keeps its name across releases.
+const hashedAssetDir = "assets/"
+
+// cacheControlFor picks the caching policy for one bundle file.
+//
+// Only a content-hashed name may be served immutable: its URL changes
+// whenever its content does, so a year-long cache can never go stale. The
+// bundle also carries verbatim public files — the web manifest, the
+// favicons, the wordmark — whose names are identical in every release. Marked
+// immutable, a returning browser would keep the previous logo or manifest for
+// up to a year and, because `immutable` suppresses revalidation, would not
+// even ask; the operator has no client-side remedy short of clearing the
+// cache. Those files get a short cache that revalidates instead.
+func cacheControlFor(path string) string {
+	if strings.HasPrefix(path, hashedAssetDir) {
+		return "public, max-age=31536000, immutable"
+	}
+	return "public, max-age=3600, must-revalidate"
 }
 
 func serveIndex(sub fs.FS, w http.ResponseWriter, r *http.Request) {

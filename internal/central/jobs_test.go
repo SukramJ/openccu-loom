@@ -1119,3 +1119,100 @@ func TestHubScanDefaultsMatchTheReference(t *testing.T) {
 		t.Errorf("defaultProgramRefreshSlot = %s, want 30s", defaultProgramRefreshSlot)
 	}
 }
+
+// TestCheckConnectionJobReportsTheRecordedFailureReason pins that the
+// ConnectionLostEvent names why the interface is down, not where the
+// probe noticed.
+//
+// The job used to stamp FailureReasonNetwork on every unreachable
+// interface, so an operator whose CCU had rejected the daemon's
+// credentials was told the network was down — and every fix that
+// suggests is the wrong one. The client's own state machine already
+// classified the transport error; the event must carry that verdict.
+func TestCheckConnectionJobReportsTheRecordedFailureReason(t *testing.T) {
+	c, err := New(Config{Name: "reason-cc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reasons := make(chan hmenum.FailureReason, 4)
+	unsub := events.Subscribe(c.EventBus, func(e hmevent.ConnectionLostEvent) {
+		if e.InterfaceID == "HmIP-RF" {
+			reasons <- e.Reason
+		}
+	})
+	defer unsub()
+
+	ic, err := client.New(client.Config{
+		CentralName: c.cfg.Name,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Caller:      client.CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) { return nil, nil }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Walk to FAILED carrying the reason the transport classified, then on
+	// to DISCONNECTED — the state the recovery pipeline leaves behind and
+	// the state the probe finds on the next tick.
+	for _, step := range []struct {
+		target hmenum.ClientState
+		reason hmenum.FailureReason
+	}{
+		{hmenum.ClientStateInitializing, hmenum.FailureReasonNone},
+		{hmenum.ClientStateFailed, hmenum.FailureReasonAuth},
+		{hmenum.ClientStateDisconnected, hmenum.FailureReasonAuth},
+	} {
+		if err := ic.TransitionTo(step.target, "test", false, step.reason); err != nil {
+			t.Fatalf("transition %s: %v", step.target, err)
+		}
+	}
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Client:      ic,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := RegisterStandardJobs(c, StandardJobs{
+		CheckConnectionInterval: 10 * time.Second,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	run := findJobRun(c, "central.check_connection")
+	if run == nil {
+		t.Fatal("central.check_connection job not registered")
+	}
+	if err := run(context.Background()); err != nil {
+		t.Fatalf("job run: %v", err)
+	}
+
+	select {
+	case got := <-reasons:
+		if got != hmenum.FailureReasonAuth {
+			t.Errorf("ConnectionLostEvent reason = %q, want %q", got, hmenum.FailureReasonAuth)
+		}
+	default:
+		t.Fatal("no ConnectionLostEvent published for the disconnected interface")
+	}
+}
+
+// A client that never recorded a verdict still has to produce one: from
+// the operator's side an interface that does not answer is the interface
+// not being on the wire.
+func TestCheckConnectionJobFallsBackToNetworkWithoutAVerdict(t *testing.T) {
+	if got := recordedClientFailureReason(nil); got != hmenum.FailureReasonNetwork {
+		t.Errorf("nil client = %q, want %q", got, hmenum.FailureReasonNetwork)
+	}
+	ic, err := client.New(client.Config{
+		CentralName: "reason-cc2",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Caller:      client.CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) { return nil, nil }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := recordedClientFailureReason(ic); got != hmenum.FailureReasonNetwork {
+		t.Errorf("client with no recorded failure = %q, want %q", got, hmenum.FailureReasonNetwork)
+	}
+}

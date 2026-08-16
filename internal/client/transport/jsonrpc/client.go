@@ -251,8 +251,16 @@ func (c *Client) Call(ctx context.Context, method string, params map[string]any,
 }
 
 // callOnce performs one round trip. If allowRetry is true and the CCU
-// answered with 401/403 or an auth-coded JSON-RPC error, the session is
-// invalidated, a fresh Login is attempted, and the call is retried once.
+// answered with 401/403 or an auth-coded JSON-RPC error, a fresh Login is
+// attempted and the call is retried once.
+//
+// The session the reply is judged against is the one the request actually
+// carried (read back from the merged parameters), never the client's
+// current session: several callers share one client, so a concurrent
+// caller may already have logged in again between send and reply.
+// Treating that fresh session as the failed one would invalidate it and
+// log it out on the CCU — killing a live session and sending every
+// concurrent caller through its own login.
 func (c *Client) callOnce(ctx context.Context, method string, params map[string]any, out any, allowRetry bool) error {
 	merged := c.paramsWithSession(params)
 
@@ -298,12 +306,12 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 	case http.StatusOK:
 		// fall through
 	case http.StatusUnauthorized, http.StatusForbidden:
-		stale := c.SessionID()
-		c.invalidateSession()
 		if allowRetry && c.cfg.Username != "" {
-			if loginErr := c.reloginLocked(ctx, stale); loginErr == nil {
+			if loginErr := c.reloginLocked(ctx, sessionOf(merged)); loginErr == nil {
 				return c.callOnce(ctx, method, params, out, false)
 			}
+		} else {
+			c.invalidateStaleSession(sessionOf(merged))
 		}
 		return c.wrap(method, hmerr.ErrAuthFailure)
 	default:
@@ -327,9 +335,7 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 		// session self-heals, a genuine privilege mismatch fails again
 		// with 400 on the fresh session and propagates below.
 		if parsed.Error.Code == ccuAccessDeniedCode && allowRetry && c.cfg.Username != "" {
-			stale := c.SessionID()
-			c.invalidateSession()
-			if loginErr := c.reloginLocked(ctx, stale); loginErr == nil {
+			if loginErr := c.reloginLocked(ctx, sessionOf(merged)); loginErr == nil {
 				return c.callOnce(ctx, method, params, out, false)
 			}
 		}
@@ -658,6 +664,28 @@ func (c *Client) invalidateSession() {
 	c.mu.Lock()
 	c.sessionID = ""
 	c.mu.Unlock()
+}
+
+// invalidateStaleSession drops the cached session only while it is still
+// the one that failed. A session another caller established in the
+// meantime is left alone — it has not been shown to be unusable, and
+// dropping it would send every subsequent call through a needless login.
+func (c *Client) invalidateStaleSession(stale string) {
+	if stale == "" {
+		return
+	}
+	c.mu.Lock()
+	if c.sessionID == stale {
+		c.sessionID = ""
+	}
+	c.mu.Unlock()
+}
+
+// sessionOf returns the session ID a request carried, or "" when it was
+// sent unauthenticated.
+func sessionOf(params map[string]any) string {
+	s, _ := params[sessionParamKey].(string)
+	return s
 }
 
 // CheckSupportedMethods probes the CCU for all available JSON-RPC method

@@ -804,6 +804,31 @@ func TestPutDataPointValue_ReadOnlyParam_Returns400(t *testing.T) {
 	}
 }
 
+// TestPutDataPointValue_LockedChannel_Returns423 verifies an operator
+// channel lock surfaces as 423 Locked: the write is a deliberate local
+// policy rejection that never reached the CCU, so it must be
+// distinguishable from a 502 upstream failure.
+func TestPutDataPointValue_LockedChannel_Returns423(t *testing.T) {
+	t.Parallel()
+	d := newDeviceWithDP(t, "0001ABCD", "HmIP-BSM", 1, hmenum.ParameterState)
+	d.Channel("0001ABCD:1").SetOperatorFlags(false, true)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	body := strings.NewReader(`{"value":true}`)
+	req := httptest.NewRequest(http.MethodPut, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{
+		"addr":  "0001ABCD",
+		"no":    "1",
+		"param": "STATE",
+	}))
+	w := httptest.NewRecorder()
+	PutDataPointValue(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusLocked {
+		t.Fatalf("expected 423, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
 // --- ListDevices central filter ---
 
 // multiCentralDeviceIndex is a DeviceIndex stub that maps each device address

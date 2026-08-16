@@ -175,6 +175,27 @@ type CodeValidator interface {
 	Validate(ctx context.Context, zoneID, verb, code, source string) (identity string, duress bool, err error)
 }
 
+// DuressMatcher is the side-effect-free half of [CodeValidator]: it
+// reports whether a supplied code is an enabled duress code for the
+// zone and verb, and does nothing else. It never consumes the source's
+// rate-limit budget, never journals a fault, and never refuses a verb.
+//
+// The engine needs it wherever the verb's outcome is a no-op whatever
+// the code is — a disarm of an already-disarmed zone. Duress detection
+// has to stay available there, because coercion typically starts with
+// the attacker disarming the zone; but running the full validator on a
+// path that decides nothing would let anyone able to publish a disarm
+// lock the code plane out for every zone by aiming wrong codes at a
+// disarmed one, and would fill the journal with faults for attempts
+// that were never a security decision.
+//
+// A CodeValidator that does not implement it loses duress detection on
+// those no-op paths and gains nothing else; the codes facade does
+// implement it.
+type DuressMatcher interface {
+	MatchDuress(ctx context.Context, zoneID, verb, code, source string) (identity string, duress bool)
+}
+
 // EventSink receives the engine's domain events for bus publishing.
 type EventSink interface {
 	Publish(e hmevent.Event)
@@ -204,8 +225,14 @@ type Journal interface {
 // incident. Like [Journal] it is best-effort: the engine logs a failed
 // append and continues, because losing an audit row must never mute an
 // alarm. A nil ledger disables recording entirely.
+//
+// ListByIncident is the read half a restore needs: the in-memory
+// accumulator is per-process, so a daemon that restarts mid-incident
+// would otherwise resume with an empty source list and let the next
+// detector to fire become the incident's headline sensor.
 type IncidentSourceLedger interface {
 	Append(ctx context.Context, row sqlitestore.AlarmIncidentSource) error
+	ListByIncident(ctx context.Context, incidentID int64) ([]sqlitestore.AlarmIncidentSource, error)
 }
 
 // SensorReader supplies fresh sensor activation values during restore

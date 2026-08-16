@@ -434,6 +434,12 @@ func (p *AlarmMQTTPublisher) reconcile() {
 	}
 	p.mu.Unlock()
 
+	// accepted tracks whether the broker took every discovery config this
+	// pass offered. It gates the plane declaration at the end: a plane
+	// declared while one of its configs was refused arms the orphan sweep
+	// against a topic that is not in the bridge's declared set, and the
+	// sweep then clears the retained config of a panel that still exists.
+	accepted := true
 	tokens := make([]string, 0, len(snaps))
 	union := map[hmenum.AlarmMode]bool{}
 	for i := range snaps {
@@ -445,6 +451,7 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		armReq, disarmReq := p.zoneCodePolicy(ctx, s.ID)
 		item := BuildAlarmPanelDiscovery(base, s.ID, s.Name, modes, false, armReq, disarmReq)
 		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
+			accepted = false
 			p.logger.Warn("mqtt.alarm.discovery", slog.String("zone", s.ID), slog.String("err", err.Error()))
 		}
 		if err := b.PublishAlarmAvailability(ctx, alarmAvailabilityTopic(base, s.ID), healthy); err != nil {
@@ -455,7 +462,7 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		if err := b.PublishAlarmState(ctx, alarmStateTopic(base, s.ID), token); err != nil {
 			p.logger.Warn("mqtt.alarm.state", slog.String("zone", s.ID), slog.String("err", err.Error()))
 		}
-		p.publishMotionEntities(ctx, b, base, s.ID, s.Name, false)
+		accepted = p.publishMotionEntities(ctx, b, base, s.ID, s.Name, false) && accepted
 		p.knownZones[s.ID] = true
 	}
 
@@ -474,6 +481,7 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		// code-free (code entry happens on the individual zone panels).
 		item := BuildAlarmPanelDiscovery(base, alarmMasterZone, p.masterName(), modes, true, false, false)
 		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
+			accepted = false
 			p.logger.Warn("mqtt.alarm.discovery", slog.String("zone", alarmMasterZone), slog.String("err", err.Error()))
 		}
 		if err := b.PublishAlarmAvailability(ctx, alarmAvailabilityTopic(base, alarmMasterZone), healthy); err != nil {
@@ -482,7 +490,7 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		if err := b.PublishAlarmState(ctx, alarmStateTopic(base, alarmMasterZone), alarmpanel.MasterStateToken(tokens)); err != nil {
 			p.logger.Warn("mqtt.alarm.state", slog.String("zone", alarmMasterZone), slog.String("err", err.Error()))
 		}
-		p.publishMotionEntities(ctx, b, base, alarmMasterZone, p.masterName(), true)
+		accepted = p.publishMotionEntities(ctx, b, base, alarmMasterZone, p.masterName(), true) && accepted
 		p.masterKnown = true
 	} else if p.masterKnown {
 		p.retractPanel(ctx, b, base, alarmMasterZone)
@@ -501,7 +509,12 @@ func (p *AlarmMQTTPublisher) reconcile() {
 	// would present an empty plane to the sweep, which would classify
 	// every live panel as an orphan and wipe the alarm surface — the
 	// exact failure the declaration gate exists to prevent.
-	if b.cfg.HADiscoveryEnabled && eng.ZonesLoaded() {
+	//
+	// Gated on `accepted` for the same reason: the bridge remembers only
+	// the configs the broker took, so a refused publish leaves a live
+	// panel outside the declared set. A later pass re-offers every panel
+	// and declares once they all land.
+	if b.cfg.HADiscoveryEnabled && eng.ZonesLoaded() && accepted {
 		b.MarkPlaneDeclared(alarmDiscoveryNodeID)
 	}
 }
@@ -699,18 +712,23 @@ func (b *Bridge) PublishAlarmEvent(ctx context.Context, topic string, body []byt
 // state topic that nobody writes leaves the entity `unavailable`
 // forever in Home Assistant, which is the exact failure the plane's
 // round-trip guard exists to catch.
-func (p *AlarmMQTTPublisher) publishMotionEntities(ctx context.Context, b *Bridge, base, zone, name string, master bool) {
+// Reports whether the broker accepted every discovery config it offered;
+// the caller folds that into the plane-declaration gate.
+func (p *AlarmMQTTPublisher) publishMotionEntities(ctx context.Context, b *Bridge, base, zone, name string, master bool) bool {
 	eng := p.svc.Engine()
 	if eng == nil {
-		return
+		return false
 	}
+	accepted := true
 	if err := b.PublishAlarmDiscovery(ctx, BuildAlarmMotionResetDiscovery(base, zone, name,
 		p.localized(alarmResetMotionNameKey, alarmResetMotionNameFallback), master)); err != nil {
+		accepted = false
 		p.logger.Warn("mqtt.alarm.discovery.reset_motion",
 			slog.String("zone", zone), slog.String("err", err.Error()))
 	}
 	if err := b.PublishAlarmDiscovery(ctx, BuildAlarmTriggeredMotionDiscovery(base, zone, name,
 		p.localized(alarmTriggeredMotionNameKey, alarmTriggeredMotionNameFallback), master)); err != nil {
+		accepted = false
 		p.logger.Warn("mqtt.alarm.discovery.triggered_motion",
 			slog.String("zone", zone), slog.String("err", err.Error()))
 	}
@@ -725,4 +743,5 @@ func (p *AlarmMQTTPublisher) publishMotionEntities(ctx context.Context, b *Bridg
 		p.logger.Warn("mqtt.alarm.triggered_motion",
 			slog.String("zone", zone), slog.String("err", err.Error()))
 	}
+	return accepted
 }

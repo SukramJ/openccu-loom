@@ -30,7 +30,7 @@ func newDCWithDescs(t *testing.T, iface hmtypes.WireInterfaceID, descs ...hmprot
 	devs := registry.NewDeviceRegistry()
 	descReg := registry.NewDeviceDescriptionRegistry()
 	psets := registry.NewParamsetRegistry()
-	dc := NewDeviceCoordinator("c1", bus, devs, descReg, psets, nil)
+	dc := NewDeviceCoordinator("c1", bus, devs, descReg, psets, nil, nil)
 	for i := range descs {
 		descReg.Put(iface, descs[i])
 	}

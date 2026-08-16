@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 33afdc40
-HEAD: 33afdc40
+Generated: 6c8ff468
+HEAD: 6c8ff468
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28879 |
-| Reachable | 5051 |
-| Whitelisted | 20823 |
-| **Unreachable** | **3005** |
+| Total Exported | 29167 |
+| Reachable | 5087 |
+| Whitelisted | 21061 |
+| **Unreachable** | **3019** |
 
 ## Top-20 Packages by Dead Code
 
@@ -23,7 +23,6 @@ HEAD: 33afdc40
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
-| pkg/hmerr | 4 | 5 | 32 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 23 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
@@ -36,6 +35,7 @@ HEAD: 33afdc40
 | internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
 | pkg/hmenum | 2 | 105 | 46 |
+| pkg/hmerr | 2 | 5 | 38 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -43,8 +43,8 @@ HEAD: 33afdc40
 |---|---|---|---|
 | internal/audit | AsyncSink | internal/audit/persist.go | 293 |
 | internal/audit | AsyncSink | internal/audit/persist.go | 293 |
-| internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
-| internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
+| internal/auth | CSRFToken | internal/auth/csrf.go | 29 |
+| internal/auth | CSRFToken | internal/auth/csrf.go | 29 |
 | internal/ccudata | SnapshotVersion | internal/ccudata/embed.go | 35 |
 | internal/ccudata | SnapshotVersion | internal/ccudata/embed.go | 35 |
 | internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
@@ -81,16 +81,16 @@ HEAD: 33afdc40
 | internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
-| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
-| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
+| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 111 |
+| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 111 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 105 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 105 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 102 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 102 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 106 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 106 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 103 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 103 |
 
 ## Full By-Package Breakdown
 
@@ -103,7 +103,6 @@ HEAD: 33afdc40
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 236 | 6 |
-| pkg/hmerr | 4 | 5 | 32 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 23 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
@@ -116,11 +115,12 @@ HEAD: 33afdc40
 | internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
 | pkg/hmenum | 2 | 105 | 46 |
+| pkg/hmerr | 2 | 5 | 38 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 | internal/addonupdate | 0 | 18 | 18 |
 | internal/alarm | 0 | 25 | 0 |
 | internal/alarm/codes | 0 | 13 | 0 |
-| internal/alarm/engine | 0 | 29 | 6 |
+| internal/alarm/engine | 0 | 30 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
 | internal/alarm/outputs | 0 | 26 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
@@ -129,21 +129,21 @@ HEAD: 33afdc40
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 26 | 2 |
 | internal/central/cachereset | 0 | 18 | 0 |
-| internal/central/coordinators | 0 | 108 | 6 |
+| internal/central/coordinators | 0 | 110 | 6 |
 | internal/central/registry | 0 | 15 | 0 |
-| internal/central/rpcserver | 0 | 12 | 4 |
+| internal/central/rpcserver | 0 | 14 | 4 |
 | internal/channelflags | 0 | 2 | 0 |
-| internal/client | 0 | 26 | 8 |
+| internal/client | 0 | 28 | 8 |
 | internal/client/observer | 0 | 3 | 0 |
 | internal/client/transport/jsonrpc | 0 | 13 | 0 |
 | internal/clock | 0 | 5 | 0 |
 | internal/configstore | 0 | 17 | 0 |
 | internal/configui | 0 | 16 | 0 |
-| internal/diagnostics | 0 | 7 | 4 |
+| internal/diagnostics | 0 | 6 | 4 |
 | internal/health | 0 | 16 | 0 |
 | internal/history | 0 | 13 | 0 |
 | internal/i18n | 0 | 2 | 2 |
-| internal/metrics | 0 | 63 | 2 |
+| internal/metrics | 0 | 65 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
 | internal/model/alarmpanel | 0 | 1 | 0 |
 | internal/model/calculated | 0 | 10 | 0 |
@@ -169,7 +169,7 @@ HEAD: 33afdc40
 | internal/north/matter/bridge | 0 | 51 | 38 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
 | internal/north/matter/endpoint | 0 | 8 | 0 |
-| internal/north/matter/im | 0 | 78 | 14 |
+| internal/north/matter/im | 0 | 78 | 16 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/mdns | 0 | 8 | 4 |
 | internal/north/matter/schema | 0 | 0 | 8 |

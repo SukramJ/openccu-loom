@@ -149,7 +149,7 @@ func TestCaseAdapter_Sigma2ResumeNotImplemented(t *testing.T) {
 func TestMRPAckAdapter_NilTrackerReturnsFalse(t *testing.T) {
 	t.Parallel()
 	a := NewMRPAckAdapter(nil)
-	if a.Discharge(0, 42) {
+	if a.Discharge(0, 42, true) {
 		t.Fatal("expected false from Discharge with nil tracker")
 	}
 }
@@ -165,10 +165,10 @@ func TestMRPAckAdapter_DischargeRoundTrip(t *testing.T) {
 		exchangeID uint16 = 7
 	)
 	tracker.Owe(100, sessionID, exchangeID, true, time.Now())
-	if !a.Discharge(sessionID, exchangeID) {
+	if !a.Discharge(sessionID, exchangeID, true) {
 		t.Fatal("expected true from first Discharge after Owe")
 	}
-	if a.Discharge(sessionID, exchangeID) {
+	if a.Discharge(sessionID, exchangeID, true) {
 		t.Fatal("expected false from second Discharge (already discharged)")
 	}
 }
@@ -186,13 +186,13 @@ func TestMRPAckAdapter_DischargeIsSessionScoped(t *testing.T) {
 	tracker.Owe(100, 1, exchangeID, true, time.Now())
 	tracker.Owe(200, 2, exchangeID, false, time.Now())
 
-	if a.Discharge(3, exchangeID) {
+	if a.Discharge(3, exchangeID, true) {
 		t.Fatal("expected false discharging an unrelated session on the same exchange")
 	}
-	if !a.Discharge(1, exchangeID) {
+	if !a.Discharge(1, exchangeID, true) {
 		t.Fatal("expected true discharging session 1's own obligation")
 	}
-	if !a.Discharge(2, exchangeID) {
+	if !a.Discharge(2, exchangeID, false) {
 		t.Fatal("expected true discharging session 2's own obligation (must have survived session 1's discharge)")
 	}
 }

@@ -19,9 +19,11 @@ import (
 // e.g. a no-frills HmIP-PSM with just a STATE writable. The endpoint
 // assembler materialises one OnOffPlugInUnit endpoint per such DP.
 var (
-	_ interfaces.MatterEndpointSource = (*Switch)(nil)
-	_ interfaces.MatterClusterServer  = (*Switch)(nil)
-	_ interfaces.MatterChangeNotifier = (*Switch)(nil)
+	_ interfaces.MatterEndpointSource         = (*Switch)(nil)
+	_ interfaces.MatterClusterServer          = (*Switch)(nil)
+	_ interfaces.MatterChangeNotifier         = (*Switch)(nil)
+	_ interfaces.MatterClusterAttributeLister = (*Switch)(nil)
+	_ interfaces.MatterClusterCommandLister   = (*Switch)(nil)
 )
 
 // Matter Device Type IDs and OnOff cluster IDs follow the Matter 1.5.1
@@ -148,15 +150,21 @@ func (s *Switch) MatterClusterServers() []interfaces.MatterClusterServer {
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (s *Switch) MatterClusterID() uint32 { return matterGenericSwitchClusterOnOff }
 
-// MatterRead implements [interfaces.MatterClusterServer]. Returns
-// (nil, false) when the underlying STATE wire DP has not been
-// observed yet — the bridge maps that to a stale-data status.
+// MatterRead implements [interfaces.MatterClusterServer].
 func (s *Switch) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case matterGenericSwitchAttrOnOff:
 		on, observed := s.Value()
 		if !observed {
-			return nil, false
+			// OnOff is mandatory and not spec-nullable — matter.js
+			// packages/types/src/clusters/definitions/OnOffCluster.ts:35
+			// declares it TlvBoolean, and matter.js's OnOffServer defaults
+			// it to false rather than emitting null. Answering "unknown"
+			// here would surface as UnsupportedAttribute on the first
+			// Subscribe-Initial-Report, which makes Apple Home's HAP mapper
+			// drop the whole OnOffPlugInUnit accessory. Default to OFF; the
+			// first CCU push overwrites it with the real state.
+			return false, true
 		}
 		return on, true
 	case matterGenericSwitchAttrGlobalSceneControl:
@@ -211,14 +219,14 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 		}
 		return s.Set(ctx, on, priority)
 	case matterGenericSwitchAttrOnTime:
-		v, ok := value.(uint16)
+		v, ok := matterGenericWriteUint16(value)
 		if !ok {
 			return fmt.Errorf("%w: OnTime write expected uint16, got %T", errMatterGenericSwitchValueType, value)
 		}
 		s.matterLT.onTime.Store(uint32(v))
 		return nil
 	case matterGenericSwitchAttrOffWaitTime:
-		v, ok := value.(uint16)
+		v, ok := matterGenericWriteUint16(value)
 		if !ok {
 			return fmt.Errorf("%w: OffWaitTime write expected uint16, got %T", errMatterGenericSwitchValueType, value)
 		}
@@ -229,7 +237,7 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 			s.matterLT.startUpOnOff.Store(matterGenericStartUpOnOffNull)
 			return nil
 		}
-		v, ok := value.(uint8)
+		v, ok := matterGenericWriteUint8(value)
 		if !ok {
 			return fmt.Errorf("%w: StartUpOnOff write expected uint8 or nil, got %T", errMatterGenericSwitchValueType, value)
 		}
@@ -311,5 +319,60 @@ func (s *Switch) MatterAttributes() []uint32 {
 		matterGenericSwitchAttrOnTime,
 		matterGenericSwitchAttrOffWaitTime,
 		matterGenericSwitchAttrStartUpOnOff,
+	}
+}
+
+// MatterAcceptedCommands implements
+// [interfaces.MatterClusterCommandLister] for the OnOff cluster
+// (0x0006): the three baseline commands plus the three the LT feature
+// this endpoint advertises makes mandatory.
+//
+// Without the lister the dispatcher answers AcceptedCommandList (0xFFF9)
+// with an empty list, so a controller that derives write capability from
+// that list renders a plug it believes it cannot command — while
+// [Switch.MatterInvoke] handles all six.
+// matter.js packages/model/src/standard/elements/on-off.element.ts:38-55.
+func (s *Switch) MatterAcceptedCommands() []uint32 {
+	return []uint32{
+		matterGenericSwitchCmdOff,
+		matterGenericSwitchCmdOn,
+		matterGenericSwitchCmdToggle,
+		matterGenericSwitchCmdOffWithEffect,
+		matterGenericSwitchCmdOnWithRecallGlobalScene,
+		matterGenericSwitchCmdOnWithTimedOff,
+	}
+}
+
+// MatterGeneratedCommands implements
+// [interfaces.MatterClusterCommandLister]. OnOff commands have no
+// response payload.
+func (s *Switch) MatterGeneratedCommands() []uint32 { return nil }
+
+// matterGenericWriteUint16 coerces an attribute-write value into uint16.
+// The IM write layer decodes every unsigned TLV integer to uint64, so a
+// bare `value.(uint16)` assertion rejects every write a real controller
+// sends; the narrower type is accepted too so in-package callers keep
+// working.
+func matterGenericWriteUint16(value any) (uint16, bool) {
+	switch v := value.(type) {
+	case uint64:
+		return uint16(v & 0xFFFF), true
+	case uint16:
+		return v, true
+	default:
+		return 0, false
+	}
+}
+
+// matterGenericWriteUint8 coerces an attribute-write value into uint8,
+// with the same uint64 decode path [matterGenericWriteUint16] documents.
+func matterGenericWriteUint8(value any) (uint8, bool) {
+	switch v := value.(type) {
+	case uint64:
+		return uint8(v & 0xFF), true
+	case uint8:
+		return v, true
+	default:
+		return 0, false
 	}
 }

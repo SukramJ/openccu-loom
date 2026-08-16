@@ -178,11 +178,12 @@ func TestWSHandlerForwardedHostAllowed(t *testing.T) {
 }
 
 // TestWSHandlerAuthorizationHeaderExemptsOriginCheck pins that a handshake
-// carrying an Authorization header (Bearer/Basic — e.g. injected by the
-// remote-proxy add-on, which strips the session cookie) skips the Origin
-// allow-list entirely: it is not a CSRF vector, so the browser's external
-// Origin need not be reconciled with the daemon's internal Host across a proxy
-// chain. Cookie-path handshakes (no Authorization) keep the CSRF protection.
+// carrying a non-empty Bearer token (e.g. injected by the remote-proxy add-on,
+// which strips the session cookie) skips the Origin allow-list entirely: a
+// browser never attaches a bearer token by itself, so the handshake is not a
+// CSRF vector and the browser's external Origin need not be reconciled with the
+// daemon's internal Host across a proxy chain. Cookie-path handshakes (no
+// Authorization) keep the CSRF protection.
 func TestWSHandlerAuthorizationHeaderExemptsOriginCheck(t *testing.T) {
 	t.Parallel()
 	hub, _, _, _, _, _ := newTestHub(t)
@@ -199,5 +200,44 @@ func TestWSHandlerAuthorizationHeaderExemptsOriginCheck(t *testing.T) {
 	// Same handshake without Authorization stays rejected (cookie CSRF path).
 	if got := wsHandshakeStatus(t, server, "https://evil.example"); got != http.StatusForbidden {
 		t.Fatalf("cookie-path cross-origin handshake: status = %d, want %d", got, http.StatusForbidden)
+	}
+}
+
+// TestWSHandlerBasicAuthDoesNotExemptOriginCheck pins the boundary of that
+// exemption. Basic credentials are ambient authority once the browser has
+// cached them for this origin: it replays the Authorization header on
+// handshakes any other site triggers, exactly like a session cookie. A
+// cross-origin Basic handshake must therefore still face the allow-list, and a
+// malformed or empty Bearer header must not buy the exemption either.
+func TestWSHandlerBasicAuthDoesNotExemptOriginCheck(t *testing.T) {
+	t.Parallel()
+	hub, _, _, _, _, _ := newTestHub(t)
+	server := httptest.NewServer(Handler(hub, nil, []string{"http://localhost:9999"}))
+	t.Cleanup(server.Close)
+
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{"basic", "Basic dXNlcjpwYXNz"},
+		{"empty bearer", "Bearer "},
+		{"bearer without token", "Bearer"},
+	} {
+		got := wsHandshakeStatusWithHeaders(t, server,
+			"https://evil.example",
+			map[string]string{"Authorization": tc.value})
+		if got != http.StatusForbidden {
+			t.Errorf("%s cross-origin handshake: status = %d, want %d", tc.name, got, http.StatusForbidden)
+		}
+	}
+
+	// A same-origin Basic handshake is not a cross-site vector and stays allowed.
+	u, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	if got := wsHandshakeStatusWithHeaders(t, server, "http://"+u.Host,
+		map[string]string{"Authorization": "Basic dXNlcjpwYXNz"}); got != http.StatusSwitchingProtocols {
+		t.Fatalf("same-origin basic handshake: status = %d, want %d", got, http.StatusSwitchingProtocols)
 	}
 }

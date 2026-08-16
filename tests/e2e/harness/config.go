@@ -83,10 +83,11 @@ func buildConfigYAML(in configInputs) string {
 	if in.AuthMode == AuthOIDC {
 		// The redirect_url MUST match the route mounted on the REST
 		// listener (not the UI listener) — the OIDC callback handler
-		// lives in internal/north/rest/handlers/oidc.go. Bumping the
-		// daemon to listen on a free REST port means we have to embed
-		// that port in the redirect URL too, hence the templated
-		// substitution.
+		// lives in internal/north/rest/handlers/oidc.go — and it must
+		// name the port the daemon actually binds. RESTListen therefore
+		// carries a concrete port on this path (see the OIDC branch in
+		// StartDaemon); templating ":0" in here would advertise
+		// 127.0.0.1:0, a dead address, to the provider.
 		oidcBlock = fmt.Sprintf(""+
 			"      oidc:\n"+
 			"        enabled: true\n"+

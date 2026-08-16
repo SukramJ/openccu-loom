@@ -103,6 +103,27 @@ describe("FirmwareList", () => {
     expect(queryAllByText("Up to date")).toEqual([]);
   });
 
+  // The CCU's UpdateState reaches the badge unvalidated, so a value
+  // outside the catalogue has to read as the raw token an operator can
+  // look up — not as the dotted catalogue key.
+  it("falls back to the raw CCU token for an unknown update state", async () => {
+    mockGetDevice.mockResolvedValue({
+      address: wsm.address,
+      update_available: false,
+      firmware: {
+        Current: "1.2.2",
+        Available: "1.4.10",
+        Updatable: true,
+        UpdateState: "PERFORMING_UNKNOWN_RITUAL",
+      },
+    });
+
+    const { findByText, queryByText } = render(FirmwareList);
+
+    await findByText("PERFORMING_UNKNOWN_RITUAL");
+    expect(queryByText("firmware.state.PERFORMING_UNKNOWN_RITUAL")).toBeNull();
+  });
+
   it("explains that the image is still awaiting transfer instead of offering an impossible install", async () => {
     const { findByText, queryByRole } = render(FirmwareList);
 

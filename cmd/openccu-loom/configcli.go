@@ -63,12 +63,19 @@ func printConfigUsage(w io.Writer) {
 
 // configExportDoc is the JSON document written by config export.
 type configExportDoc struct {
-	ExportedAt    string                     `json:"exported_at"`
-	DaemonVersion string                     `json:"daemon_version"`
-	Sections      map[string]json.RawMessage `json:"sections"`
-	Centrals      []sqlite.CentralRow        `json:"centrals"`
-	Users         []exportedUser             `json:"users"`
-	Tokens        []exportedToken            `json:"tokens"`
+	ExportedAt    string `json:"exported_at"`
+	DaemonVersion string `json:"daemon_version"`
+	// Redacted marks a document whose secrets were withheld (the default —
+	// anything but --include-secrets). Import reads it to tell "the operator
+	// never saw this credential" from "the operator cleared this credential",
+	// which decides whether a null secret leaf keeps the stored value or
+	// overwrites it. Without the marker an import of the default export would
+	// replace every stored credential with null.
+	Redacted bool                       `json:"redacted,omitempty"`
+	Sections map[string]json.RawMessage `json:"sections"`
+	Centrals []sqlite.CentralRow        `json:"centrals"`
+	Users    []exportedUser             `json:"users"`
+	Tokens   []exportedToken            `json:"tokens"`
 }
 
 // exportedUser carries subject + role only — no password hashes.
@@ -173,6 +180,7 @@ func configExport(args []string, stdout, stderr io.Writer) error {
 	doc := configExportDoc{
 		ExportedAt:    time.Now().UTC().Format(time.RFC3339),
 		DaemonVersion: build.Version,
+		Redacted:      !*includeSecrets,
 		Sections:      sections,
 		Centrals:      centrals,
 		Users:         users,
@@ -228,6 +236,13 @@ func configImport(args []string, stdout, stderr io.Writer) error { //nolint:funl
 		return fmt.Errorf("config import: parse: %w", err)
 	}
 
+	// Warn that a redacted document cannot carry credentials back.
+	if doc.Redacted {
+		_, _ = fmt.Fprintln(stderr,
+			"config import: this file was exported without --include-secrets — every secret in it is "+
+				"withheld; the values already stored in the database are kept for those fields")
+	}
+
 	// Warn that user/token entries are always skipped.
 	if len(doc.Users) > 0 || len(doc.Tokens) > 0 {
 		_, _ = fmt.Fprintln(stderr,
@@ -262,46 +277,140 @@ func configImport(args []string, stdout, stderr io.Writer) error { //nolint:funl
 	centralsStore := sqlite.NewCentralsStore(db)
 	wireConfigStoreCrypto(sectionStore, centralsStore, bc.DataDir)
 
+	// A redacted document carries JSON null for every secret leaf and an empty
+	// password_plain; the stored values are the only place those credentials
+	// still exist. Read them before --replace deletes anything, so the merge
+	// below has something to fall back to in both modes.
+	var (
+		storedSections map[string][]byte
+		storedCentrals map[string]sqlite.CentralRow
+	)
+	if doc.Redacted {
+		storedSections, storedCentrals, err = snapshotStoredSecrets(ctx, sectionStore, centralsStore)
+		if err != nil {
+			return err
+		}
+	}
+
 	if *replaceMode {
-		// Delete all existing sections.
-		existing, err := sectionStore.List(ctx)
-		if err != nil {
-			return fmt.Errorf("config import: list sections: %w", err)
-		}
-		for _, r := range existing {
-			if err := sectionStore.Delete(ctx, r.Section); err != nil {
-				return fmt.Errorf("config import: delete section %s: %w", r.Section, err)
-			}
-		}
-		// Delete all existing centrals.
-		existingCentrals, err := centralsStore.List(ctx)
-		if err != nil {
-			return fmt.Errorf("config import: list centrals: %w", err)
-		}
-		for i := range existingCentrals {
-			if err := centralsStore.Delete(ctx, existingCentrals[i].Name); err != nil {
-				return fmt.Errorf("config import: delete central %s: %w", existingCentrals[i].Name, err)
-			}
+		if err := deleteAllConfigRows(ctx, sectionStore, centralsStore); err != nil {
+			return err
 		}
 	}
 
-	// Upsert sections.
-	for section, valueJSON := range doc.Sections {
-		if _, err := sectionStore.Put(ctx, section, []byte(valueJSON), "cli-import"); err != nil {
-			return fmt.Errorf("config import: put section %s: %w", section, err)
-		}
+	if err := upsertImportedSections(ctx, sectionStore, doc, storedSections); err != nil {
+		return err
 	}
-
-	// Upsert centrals.
-	for i := range doc.Centrals {
-		if err := centralsStore.Put(ctx, doc.Centrals[i]); err != nil {
-			return fmt.Errorf("config import: put central %s: %w", doc.Centrals[i].Name, err)
-		}
+	if err := upsertImportedCentrals(ctx, centralsStore, doc, storedCentrals); err != nil {
+		return err
 	}
 
 	_, _ = fmt.Fprintf(stdout, "config import: imported %d section(s) and %d central(s)\n",
 		len(doc.Sections), len(doc.Centrals))
 	return nil
+}
+
+// deleteAllConfigRows clears every stored section and central, the first half
+// of an import in --replace mode.
+func deleteAllConfigRows(
+	ctx context.Context,
+	sectionStore *sqlite.ConfigSectionStore,
+	centralsStore *sqlite.CentralsStore,
+) error {
+	existing, err := sectionStore.List(ctx)
+	if err != nil {
+		return fmt.Errorf("config import: list sections: %w", err)
+	}
+	for _, r := range existing {
+		if err := sectionStore.Delete(ctx, r.Section); err != nil {
+			return fmt.Errorf("config import: delete section %s: %w", r.Section, err)
+		}
+	}
+	existingCentrals, err := centralsStore.List(ctx)
+	if err != nil {
+		return fmt.Errorf("config import: list centrals: %w", err)
+	}
+	for i := range existingCentrals {
+		if err := centralsStore.Delete(ctx, existingCentrals[i].Name); err != nil {
+			return fmt.Errorf("config import: delete central %s: %w", existingCentrals[i].Name, err)
+		}
+	}
+	return nil
+}
+
+// upsertImportedSections writes the document's sections. For a redacted
+// document every withheld secret leaf falls back to the value stored in the
+// database, so importing an export that was never allowed to carry the
+// credentials cannot destroy them.
+func upsertImportedSections(
+	ctx context.Context,
+	sectionStore *sqlite.ConfigSectionStore,
+	doc configExportDoc,
+	stored map[string][]byte,
+) error {
+	for section, valueJSON := range doc.Sections {
+		payload := []byte(valueJSON)
+		if doc.Redacted {
+			payload = configstore.RestoreRedactedSecrets(configstore.Section(section), payload, stored[section])
+		}
+		if _, err := sectionStore.Put(ctx, section, payload, "cli-import"); err != nil {
+			return fmt.Errorf("config import: put section %s: %w", section, err)
+		}
+	}
+	return nil
+}
+
+// upsertImportedCentrals writes the document's centrals. An empty
+// password_plain in a redacted document is a withheld credential, not a
+// cleared one, so the stored CCU login survives the round-trip; an operator
+// who wants it gone clears it on the stored row.
+func upsertImportedCentrals(
+	ctx context.Context,
+	centralsStore *sqlite.CentralsStore,
+	doc configExportDoc,
+	stored map[string]sqlite.CentralRow,
+) error {
+	for i := range doc.Centrals {
+		row := doc.Centrals[i]
+		if doc.Redacted && row.PasswordPlain == "" {
+			if prev, ok := stored[row.Name]; ok {
+				row.PasswordPlain = prev.PasswordPlain
+			}
+		}
+		if err := centralsStore.Put(ctx, row); err != nil {
+			return fmt.Errorf("config import: put central %s: %w", row.Name, err)
+		}
+	}
+	return nil
+}
+
+// snapshotStoredSecrets reads the section payloads and central rows currently
+// in the database, keyed for the redacted-import merge. Both stores decrypt on
+// read (see wireConfigStoreCrypto), so the snapshot carries the cleartext the
+// import has to preserve; it never leaves the process.
+func snapshotStoredSecrets(
+	ctx context.Context,
+	sectionStore *sqlite.ConfigSectionStore,
+	centralsStore *sqlite.CentralsStore,
+) (sections map[string][]byte, centrals map[string]sqlite.CentralRow, err error) {
+	rows, err := sectionStore.List(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("config import: list sections: %w", err)
+	}
+	sections = make(map[string][]byte, len(rows))
+	for _, r := range rows {
+		sections[r.Section] = r.ValueJSON
+	}
+
+	centralRows, err := centralsStore.List(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("config import: list centrals: %w", err)
+	}
+	centrals = make(map[string]sqlite.CentralRow, len(centralRows))
+	for i := range centralRows {
+		centrals[centralRows[i].Name] = centralRows[i]
+	}
+	return sections, centrals, nil
 }
 
 // dbDSN returns the DSN for the daemon SQLite database given a DataDir.

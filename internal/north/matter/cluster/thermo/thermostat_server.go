@@ -369,7 +369,7 @@ func (s *ThermostatServer) MatterInvoke(_ context.Context, cmdID uint32, fields 
 	case 0x00: // SetpointRaiseLower
 		return nil, s.handleSetpointRaiseLower(fields)
 	default:
-		return nil, fmt.Errorf("thermostat: command 0x%02X not supported", cmdID)
+		return nil, im.UnsupportedCommandf("thermostat: command 0x%02X not supported", cmdID)
 	}
 }
 

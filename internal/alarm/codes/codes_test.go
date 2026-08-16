@@ -393,6 +393,117 @@ func TestFacadeValidateOperatorSourceFailuresNeverJournalLockout(t *testing.T) {
 	}
 }
 
+// TestFacadeMatchDuressWrongCodesNeverLockOutTheCodePlane is the
+// reason MatchDuress exists at all: it is called where the verb is a
+// no-op whatever the code is (a disarm of an already-disarmed zone),
+// which is reachable by anyone who can publish an alarm command. A run
+// of wrong codes there must leave both the code plane's lockout ledger
+// and the fault journal untouched, or that path becomes a remote
+// lockout of every zone for the source.
+func TestFacadeMatchDuressWrongCodesNeverLockOutTheCodePlane(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Markus", "1234", false, Perms{Disarm: true}, nil),
+		pinRow(t, "c2", "Under Duress", "9999", true, Perms{Disarm: true}, nil),
+	}}
+	j := &fakeJournal{}
+	f := New(Deps{Store: store, Journal: j, Clock: clock.NewFake(time.Unix(0, 0))})
+	ctx := context.Background()
+
+	for i := range rateLimitMaxAttempts * 3 {
+		if identity, duress := f.MatchDuress(ctx, "zone-1", "disarm", "0000", "mqtt"); duress || identity != "" {
+			t.Fatalf("attempt %d: MatchDuress(wrong code)=(%q,%v) want ('',false)", i, identity, duress)
+		}
+	}
+
+	if events := j.events(); len(events) != 0 {
+		t.Errorf("journal events=%v want none — a no-op path records no fault", events)
+	}
+	// The code plane is still usable for the same source.
+	identity, _, err := f.Validate(ctx, "zone-1", "disarm", "1234", "mqtt")
+	if err != nil {
+		t.Fatalf("Validate after duress probes: %v, want the source not locked out", err)
+	}
+	if identity != "Markus" {
+		t.Errorf("identity=%q want Markus", identity)
+	}
+}
+
+// TestFacadeMatchDuressResolvesTheDuressCodeOnly verifies the covert
+// channel still works through the pure matcher: the duress code
+// reports its identity, an ordinary valid code does not, and neither
+// call can refuse anything.
+func TestFacadeMatchDuressResolvesTheDuressCodeOnly(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Markus", "1234", false, Perms{Disarm: true}, nil),
+		pinRow(t, "c2", "Under Duress", "9999", true, Perms{Disarm: true}, nil),
+	}}
+	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
+	ctx := context.Background()
+
+	identity, duress := f.MatchDuress(ctx, "zone-1", "disarm", "9999", "mqtt")
+	if !duress || identity != "Under Duress" {
+		t.Errorf("MatchDuress(duress code)=(%q,%v) want (%q,true)", identity, duress, "Under Duress")
+	}
+	if identity, duress := f.MatchDuress(ctx, "zone-1", "disarm", "1234", "mqtt"); duress || identity != "" {
+		t.Errorf("MatchDuress(ordinary code)=(%q,%v) want ('',false)", identity, duress)
+	}
+	if identity, duress := f.MatchDuress(ctx, "zone-1", "disarm", "", "mqtt"); duress || identity != "" {
+		t.Errorf("MatchDuress(no code)=(%q,%v) want ('',false)", identity, duress)
+	}
+}
+
+// TestFacadeMatchDuressHonorsZoneScopeAndVerbPermission verifies the
+// matcher applies the same applicability rules Validate does: a code
+// scoped to another zone, or without the verb's permission, is not a
+// duress match.
+func TestFacadeMatchDuressHonorsZoneScopeAndVerbPermission(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Other Zone", "9999", true, Perms{Disarm: true}, []string{"zone-2"}),
+		pinRow(t, "c2", "Arm Only", "8888", true, Perms{Arm: true}, nil),
+	}}
+	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
+	ctx := context.Background()
+
+	if identity, duress := f.MatchDuress(ctx, "zone-1", "disarm", "9999", "mqtt"); duress {
+		t.Errorf("MatchDuress(other zone)=(%q,%v) want ('',false)", identity, duress)
+	}
+	if identity, duress := f.MatchDuress(ctx, "zone-1", "disarm", "8888", "mqtt"); duress {
+		t.Errorf("MatchDuress(no disarm permission)=(%q,%v) want ('',false)", identity, duress)
+	}
+}
+
+// TestFacadeMatchDuressBoundsProbeWorkPerSource verifies the probe
+// ledger: verifying an argon2id hash is expensive, so a source that
+// keeps missing is cut off after the same attempt budget the code
+// plane uses — on its own ledger, recovering when the window elapses,
+// and without ever refusing a verb.
+func TestFacadeMatchDuressBoundsProbeWorkPerSource(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Under Duress", "9999", true, Perms{Disarm: true}, nil),
+	}}
+	fc := clock.NewFake(time.Unix(0, 0))
+	f := New(Deps{Store: store, Clock: fc})
+	ctx := context.Background()
+
+	for i := range rateLimitMaxAttempts {
+		if _, duress := f.MatchDuress(ctx, "zone-1", "disarm", "0000", "mqtt"); duress {
+			t.Fatalf("attempt %d: wrong code reported duress", i)
+		}
+	}
+	if _, duress := f.MatchDuress(ctx, "zone-1", "disarm", "9999", "mqtt"); duress {
+		t.Error("probe budget exhausted: want no verification work until the window elapses")
+	}
+	// Another source is unaffected by the first one's budget.
+	if _, duress := f.MatchDuress(ctx, "zone-1", "disarm", "9999", "keypad:1"); !duress {
+		t.Error("a second source must have its own probe budget")
+	}
+
+	fc.Advance(rateLimitBaseLockout + time.Second)
+	if _, duress := f.MatchDuress(ctx, "zone-1", "disarm", "9999", "mqtt"); !duress {
+		t.Error("duress code after the probe window elapsed: want a match")
+	}
+}
+
 // TestFacadeRowsProjectsHardwareBindings verifies Rows parses a
 // keypad_slot row's binding and omits the hash field entirely (there
 // is none to omit — Row carries no Hash field at all).

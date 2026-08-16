@@ -594,3 +594,72 @@ func TestMapToScheduleEmptyMap(t *testing.T) {
 		t.Error("mapToSchedule empty: expected non-nil")
 	}
 }
+
+// recordingScheduleWriter is the [weekprofile.ScheduleWriter] the pipeline
+// attaches in production, reduced to a call recorder.
+type recordingScheduleWriter struct{ calls []setValueCall }
+
+func (w *recordingScheduleWriter) SetValue(
+	_ context.Context, channelAddress string, parameter hmenum.Parameter, value any, _ hmenum.CommandPriority,
+) error {
+	w.calls = append(w.calls, setValueCall{address: channelAddress, parameter: parameter, value: value})
+	return nil
+}
+
+// TestSetScheduleEnabledWritesTheCombinedParameterOnce pins that one operator
+// click costs exactly one CCU write. The modelled week profile performs the
+// wire write itself whenever the pipeline attached its writer, so a second
+// write issued by the domain sent the identical frame to the device twice —
+// double radio and duty-cycle cost — and a failure of the second one rolled
+// the model back to a state the CCU no longer held.
+func TestSetScheduleEnabledWritesTheCombinedParameterOnce(t *testing.T) {
+	t.Parallel()
+	const (
+		centralName   = "ccu-01"
+		interfaceID   = "HmIP-RF"
+		deviceAddress = "VCU0900"
+	)
+
+	fakeOps := &scheduleEnabledFakeOps{}
+	c, _ := central.New(central.Config{Name: centralName})
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+
+	d := device.New(device.Config{
+		Address:     deviceAddress,
+		Interface:   hmenum.InterfaceHmIPRF,
+		InterfaceID: interfaceID,
+	})
+	ch := d.AddChannel(deviceAddress+":1", 1, "SWITCH_VIRTUAL_RECEIVER_WEEK_PROFILE", hmenum.ParamsetKeyValues)
+	wp := weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		CentralName:    centralName,
+		ChannelAddress: ch.Address,
+		ScheduleType:   weekprofile.ScheduleTypeDefault,
+		ProfileCount:   1,
+	})
+	wp.RegisterChannel("1_1", true)
+	scheduleWriter := &recordingScheduleWriter{}
+	wp.AttachWriter(scheduleWriter, ch.Address)
+	ch.AttachWeekProfile(wp)
+	c.ModelRegistry.Put(d)
+
+	w := client.NewValueWriter()
+	w.Register(centralName, interfaceID, fakeOps)
+	domain := NewSchedulesDomain(reg, w)
+
+	if err := domain.SetScheduleEnabled(context.Background(), deviceAddress, false, "1_1"); err != nil {
+		t.Fatalf("SetScheduleEnabled: %v", err)
+	}
+
+	total := len(scheduleWriter.calls) + len(fakeOps.setValueCalls)
+	if total != 1 {
+		t.Fatalf("COMBINED_PARAMETER writes = %d (model %d + backend %d), want exactly 1",
+			total, len(scheduleWriter.calls), len(fakeOps.setValueCalls))
+	}
+	if got := scheduleWriter.calls[0].value; got != "WPTCLS=1,WPTCL=0" {
+		t.Fatalf("written value = %v, want WPTCLS=1,WPTCL=0", got)
+	}
+	if enabled := wp.ScheduleEnabled()["1_1"]; enabled {
+		t.Fatal("model state must reflect the disabled schedule")
+	}
+}

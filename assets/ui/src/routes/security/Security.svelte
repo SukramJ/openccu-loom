@@ -2,6 +2,7 @@
   import { t } from "$lib/i18n";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Section shell for the Security & Safety domain
   // (docs/security-safety-concept.md §7.8). Runs independently of the
@@ -36,6 +37,16 @@
     { tab: "faults", href: "#/security/faults" },
   ];
 </script>
+
+<!--
+  A code-split chunk can fail to load — a stale hashed filename after a
+  daemon update, a dropped connection mid-navigation. Without this the
+  rejected import leaves the tab body empty and the operator sees a page
+  that renders its own chrome around nothing.
+-->
+{#snippet tabLoadFailed()}
+  <ErrorState message={t("app.route_load_failed")} onRetry={() => location.reload()} />
+{/snippet}
 
 <section class="mx-auto max-w-6xl px-4 sm:px-6 py-8">
   <PageHeader title={t("security.title")} subtitle={t("security.subtitle")} />
@@ -73,18 +84,24 @@
         <LoadingState />
       {:then { default: SecurityOverview }}
         <SecurityOverview />
+      {:catch}
+        {@render tabLoadFailed()}
       {/await}
     {:else if activeTab === "sources"}
       {#await loadSources()}
         <LoadingState />
       {:then { default: SecuritySources }}
         <SecuritySources />
+      {:catch}
+        {@render tabLoadFailed()}
       {/await}
     {:else if activeTab === "faults"}
       {#await loadFaults()}
         <LoadingState />
       {:then { default: SecurityFaults }}
         <SecurityFaults />
+      {:catch}
+        {@render tabLoadFailed()}
       {/await}
     {/if}
   </div>

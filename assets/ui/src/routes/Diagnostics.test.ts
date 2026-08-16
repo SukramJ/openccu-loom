@@ -385,3 +385,82 @@ describe("Diagnostics — daemon enums reach the operator localized", () => {
     expect(screen.queryByText("critical")).not.toBeInTheDocument();
   });
 });
+
+// The RPC-recording poll costs one request per interval for as long as the
+// view is open, so a running recording is followed at 5 s while an idle list
+// is only checked once a minute. The idle poll is not optional: a recording
+// started from the CLI, the REST API or a second session must still become
+// visible on an already-open page.
+describe("Diagnostics — RPC recording poll", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function settle() {
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  it("does not poll at the fast rate while no recording is running", async () => {
+    mockListRpcRecordings.mockResolvedValue([
+      { central: "ccu1", active: false, entries: 0, randomize: false },
+    ]);
+    render(Diagnostics);
+    await settle();
+    const afterLoad = mockListRpcRecordings.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(20000);
+
+    expect(mockListRpcRecordings.mock.calls.length).toBe(afterLoad);
+  });
+
+  it("keeps a slow background poll while idle", async () => {
+    mockListRpcRecordings.mockResolvedValue([
+      { central: "ccu1", active: false, entries: 0, randomize: false },
+    ]);
+    render(Diagnostics);
+    await settle();
+    const afterLoad = mockListRpcRecordings.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(61000);
+
+    expect(mockListRpcRecordings.mock.calls.length).toBeGreaterThan(afterLoad);
+  });
+
+  it("notices a recording started elsewhere and follows it at the fast rate", async () => {
+    mockListRpcRecordings.mockResolvedValue([
+      { central: "ccu1", active: false, entries: 0, randomize: false },
+    ]);
+    render(Diagnostics);
+    await settle();
+
+    // Someone else starts a recording — this page never asked for it.
+    mockListRpcRecordings.mockResolvedValue([
+      { central: "ccu1", active: true, entries: 7, randomize: false },
+    ]);
+    await vi.advanceTimersByTimeAsync(61000);
+    await settle();
+
+    expect(screen.getByText("diagnostics.rpc_recording.active")).toBeInTheDocument();
+
+    const afterDetect = mockListRpcRecordings.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(11000);
+    expect(mockListRpcRecordings.mock.calls.length).toBeGreaterThan(afterDetect);
+  });
+
+  it("polls while a recording is running", async () => {
+    mockListRpcRecordings.mockResolvedValue([
+      { central: "ccu1", active: true, entries: 3, randomize: false },
+    ]);
+    render(Diagnostics);
+    await settle();
+    const afterLoad = mockListRpcRecordings.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(11000);
+
+    expect(mockListRpcRecordings.mock.calls.length).toBeGreaterThan(afterLoad);
+  });
+});

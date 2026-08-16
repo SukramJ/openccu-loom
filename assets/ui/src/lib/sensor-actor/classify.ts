@@ -171,22 +171,34 @@ export function enumValueToken(dp: DataPointSummary): string | undefined {
 export function enumValueLabel(dp: DataPointSummary): string | undefined {
   const token = enumValueToken(dp);
   if (token === undefined) return undefined;
-  return enumValueText(token);
+  return enumValueText(token, dp.value_translations);
 }
 
 /**
- * Localised caption for an ENUM *value* token. Wire tokens like
- * `CLOSED` / `UNKNOWN` carry no server-resolved label (only parameter
- * names do), so the SPA owns their translation: look up
- * `enum.<TOKEN>` in the i18n catalogue and fall back to a title-cased
- * form (`IDLE_OFF` → `Idle Off`) for the long tail. Shared with the
- * Enum/Boolean readouts so every surface renders the same caption.
+ * Localised caption for an ENUM *value* token. Resolution order:
+ *
+ *  1. `enum.<TOKEN>` from the SPA catalogue — a curated set of generic
+ *     tokens (`OPEN`, `WET`, …) that always follows the locale the user
+ *     picked in the SPA.
+ *  2. The data point's `value_translations`, the daemon's per-value
+ *     labels resolved from the OCCU value tables. This covers the long
+ *     tail (`VENTILATION_POSITION`, `IDLE_OFF`, …) the SPA catalogue
+ *     deliberately does not carry.
+ *  3. A title-cased form of the raw token as the last resort.
+ *
+ * Shared with the Enum/Boolean readouts so every surface renders the
+ * same caption.
  */
-export function enumValueText(token: string): string {
+export function enumValueText(
+  token: string,
+  translations?: Record<string, string>,
+): string {
   if (!token) return "";
   const key = "enum." + token.toUpperCase();
   const translated = t(key);
   if (translated !== key) return translated;
+  const resolved = translations?.[token];
+  if (resolved) return resolved;
   return titleCase(token);
 }
 

@@ -576,7 +576,7 @@ func (p *HubMQTTPublisher) wireOneProgram(
 	b *mqtt.Bridge,
 	w *mqtt.Wiring,
 ) {
-	if prog == nil || prog.IsInternal {
+	if prog == nil || prog.Internal() {
 		return
 	}
 	active, _ := prog.Active()
@@ -599,6 +599,33 @@ func (p *HubMQTTPublisher) wireOneProgram(
 			p.publishProgramExecuteAvailability(ctx, b, roles, prog)
 		})
 	}))
+	// A program the operator deleted in the CCU WebUI is dropped from the
+	// model by the next refresh, but its retained discovery config keeps the
+	// entity alive in every consumer — frozen at its last state, and across
+	// daemon restarts, because nothing ever clears a retained topic that the
+	// model no longer knows about. Retract the configs this program declared
+	// the moment the model drops it.
+	p.addUnsub(prog.OnRemoved(func() {
+		p.publish(func() {
+			retractHubDiscoveryItems(ctx, b,
+				disco.BuildProgramDiscoveryRoles(centralName, programSpecFor(prog), roles))
+		})
+	}))
+}
+
+// retractHubDiscoveryItems clears the retained HA-Discovery config of every
+// item by re-publishing it with an empty payload, which is how Home Assistant
+// (and every other consumer of the discovery plane) is told the entity is
+// gone. Items the builder refused (`OK == false`) are skipped, exactly as on
+// the declare side.
+func retractHubDiscoveryItems(ctx context.Context, b *mqtt.Bridge, items []mqtt.DiscoveryItem) {
+	for _, item := range items {
+		if !item.OK {
+			continue
+		}
+		item.Payload = nil
+		_ = b.PublishHubDiscovery(ctx, item)
+	}
 }
 
 // wireOneSysvar queues discovery + the current state if observed,
@@ -627,23 +654,45 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 			w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, next.Unwrap()))
 		})
 	}))
+	// A system variable the operator deleted in the CCU WebUI is dropped
+	// from the model by the next refresh, but its retained discovery config
+	// keeps the entity alive in every consumer — frozen at its last value,
+	// and across daemon restarts, because nothing ever clears a retained
+	// topic the model no longer knows about. Retract the config this sysvar
+	// declared the moment the model drops it, exactly as wireOneProgram
+	// does for programs.
+	p.addUnsub(sv.OnRemoved(func() {
+		p.publish(func() {
+			retractHubDiscoveryItems(ctx, b,
+				[]mqtt.DiscoveryItem{disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv))})
+		})
+	}))
 }
 
 // sysvarSpecFor projects a model sysvar onto the narrow discovery contract,
 // including the current device link (DeviceAddress). Shared by wireOneSysvar
 // and republishHubEntityDiscovery so both build an identical payload.
 func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
+	// One guarded snapshot of the mutable descriptor: the hub scan rewrites
+	// these fields in place through Sysvar.ApplyMeta while this fan-out runs on
+	// the bus-dispatch / model-mutation goroutines.
+	m := sv.Meta()
 	return mqtt.HubSysvarSpec{
-		Name:           sv.Name,
-		Description:    sv.Description,
-		Unit:           sv.Unit,
-		ValueList:      sv.ValueList,
-		ValueType:      sv.ValueType,
-		Writable:       sv.Writer != nil,
-		IsExtended:     sv.IsExtended,
+		// The name is mutable — a CCU-side rename rewrites it under the data
+		// point's own lock — so it is read through the accessor, never off
+		// the field.
+		Name:        sv.LegacyName(),
+		Description: m.Description,
+		Unit:        m.Unit,
+		ValueList:   m.ValueList,
+		ValueType:   m.ValueType,
+		// Writer is swapped in place by the refresh; Writable takes the lock
+		// that swap uses, so a torn interface-header read cannot mis-report it.
+		Writable:       sv.Writable(),
+		IsExtended:     m.IsExtended,
 		EnabledDefault: sv.EnabledByDefault(),
-		Min:            paramValueAsFloat(sv.Min),
-		Max:            paramValueAsFloat(sv.Max),
+		Min:            paramValueAsFloat(m.Min),
+		Max:            paramValueAsFloat(m.Max),
 		DeviceAddress:  sv.DeviceAddress(),
 	}
 }
@@ -653,8 +702,10 @@ func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
 // both build an identical payload.
 func programSpecFor(prog *hub.Program) mqtt.HubProgramSpec {
 	return mqtt.HubProgramSpec{
-		ID:             prog.ID,
-		Name:           prog.Name,
+		ID: prog.ID,
+		// Mutable under the data point's own lock (a CCU-side rename lands
+		// through UpdateMetadata), so read it through the accessor.
+		Name:           prog.LegacyName(),
 		DeviceAddress:  prog.DeviceAddress(),
 		EnabledDefault: prog.EnabledByDefault(),
 	}
@@ -675,7 +726,7 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 	b *mqtt.Bridge,
 ) {
 	for _, prog := range hubModel.Programs() {
-		if prog == nil || prog.IsInternal {
+		if prog == nil || prog.Internal() {
 			continue
 		}
 		for _, item := range disco.BuildProgramDiscoveryRoles(
@@ -728,7 +779,13 @@ func paramValueAsFloat(pv *hmtypes.ParamValue) *float64 {
 // indices fall back to the raw value so HA still surfaces something
 // rather than dropping the update silently.
 func sysvarStateForMQTT(sv *hub.Sysvar, raw any) any {
-	if sv == nil || len(sv.ValueList) == 0 {
+	if sv == nil {
+		return raw
+	}
+	// Snapshot the value list under the lock: the hub scan replaces it in place
+	// through Sysvar.ApplyMeta while this publish runs on the fan-out worker.
+	valueList := sv.Meta().ValueList
+	if len(valueList) == 0 {
 		return raw
 	}
 	var idx int
@@ -742,10 +799,10 @@ func sysvarStateForMQTT(sv *hub.Sysvar, raw any) any {
 	default:
 		return raw
 	}
-	if idx < 0 || idx >= len(sv.ValueList) {
+	if idx < 0 || idx >= len(valueList) {
 		return raw
 	}
-	return sv.ValueList[idx]
+	return valueList[idx]
 }
 
 // publishProgramExecuteAvailability reports each declared role's usability

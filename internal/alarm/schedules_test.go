@@ -107,9 +107,20 @@ type fakeScheduleEngine struct {
 	zones    map[string]engine.ZoneSnapshot
 	armErr   error
 	armCalls []engine.ArmRequest
+	// onZone runs once, outside the lock, before the first Zone lookup
+	// answers. It is the seam a test needs to interleave a config
+	// reload with a fire that is already running.
+	onZone func()
 }
 
 func (f *fakeScheduleEngine) Zone(id string) (engine.ZoneSnapshot, bool) {
+	f.mu.Lock()
+	hook := f.onZone
+	f.onZone = nil
+	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	snap, ok := f.zones[id]
@@ -525,6 +536,61 @@ func TestScheduleStartRecomputesChainsOnReload(t *testing.T) {
 
 	if got := sched.pendingCount(); got != 0 {
 		t.Fatalf("expected the stale chain to be cancelled on reload, got %d pending", got)
+	}
+}
+
+// TestScheduleReloadDuringAFireDoesNotResurrectTheStaleChain pins the
+// generation boundary between two start() calls. A chain that is
+// already firing when a config write rebuilds the runner re-reads
+// started afterwards and re-arms itself — with the index of the
+// generation that built it. It then overwrites the live entry's cancel
+// slot, so the schedule the operator deleted keeps firing daily and the
+// entry that replaced it can never be cancelled.
+func TestScheduleReloadDuringAFireDoesNotResurrectTheStaleChain(t *testing.T) {
+	clk := clock.NewFake(scheduleTestStart) // Tuesday 12:00 UTC
+	sched := newManualScheduler(clk)
+	store := &fakeZoneStore{rows: []sqlitestore.AlarmZoneRow{
+		zoneRow(t, "a1", "House", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
+			{Time: "22:00", Mode: hmenum.AlarmModeFull},
+		}}),
+	}}
+	journal := &fakeJournalRecorder{}
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
+		"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed},
+	}}
+	r := newScheduleRunner(scheduleRunnerDeps{
+		Zones: store, Engine: eng, Journal: journal, Clock: clk, Scheduler: sched,
+	})
+	r.start(context.Background())
+
+	// The operator saves a new configuration while the 22:00 fire is
+	// running: the old entry is gone, a different one takes its index.
+	eng.onZone = func() {
+		store.rows = []sqlitestore.AlarmZoneRow{
+			zoneRow(t, "a1", "House", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
+				{Time: "06:00", Mode: hmenum.AlarmModePerimeter},
+			}}),
+		}
+		r.start(context.Background())
+	}
+	clk.Advance(10 * time.Hour) // 22:00
+	sched.run()
+
+	// Exactly the new generation's single chain is live.
+	if got := sched.pendingCount(); got != 1 {
+		t.Fatalf("pending chains = %d, want 1 (only the new generation's entry)", got)
+	}
+	// And stop() reaches it: a stale cancel in its slot would leave the
+	// live chain unreachable.
+	r.stop()
+	if got := sched.pendingCount(); got != 0 {
+		t.Fatalf("pending chains after stop = %d, want 0 — a stale chain overwrote the live cancel slot", got)
+	}
+	fires := len(journal.snapshot())
+	clk.Advance(48 * time.Hour)
+	sched.run()
+	if got := len(journal.snapshot()); got != fires {
+		t.Fatalf("journal grew from %d to %d entries after stop() — a deleted schedule kept firing", fires, got)
 	}
 }
 

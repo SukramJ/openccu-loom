@@ -429,7 +429,7 @@ func (g *GeneralCommissioning) dispatchCmd(ctx context.Context, cmdID uint32, fi
 	case gencommCmdCommissioningComplete:
 		return g.handleCommissioningComplete(ctx)
 	}
-	return nil, fmt.Errorf("matter: GeneralCommissioning command 0x%02X not supported", cmdID)
+	return nil, im.UnsupportedCommandf("matter: GeneralCommissioning command 0x%02X not supported", cmdID)
 }
 
 func gencommCmdName(cmdID uint32) string {

@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -376,24 +377,65 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:goco
 	return nil
 }
 
-// vacuumInto opens src with a read-only connection and executes
-// `VACUUM INTO dest`. The dest file must not exist.
+// vacuumInto snapshots the database at src into dest with `VACUUM INTO`. The
+// dest file must not exist; a missing src is an error rather than an empty
+// snapshot.
+//
+// The source is opened with a bare driver connection, not [sqlite.Open]: that
+// helper runs the goose migrations and the stale-paramset wipe, which would let
+// a backup taken with a binary newer than the running daemon migrate the live
+// database underneath it. A backup must never write to what it backs up.
+//
+// The DSN must be a `file:` URI: the driver strips the query string from a DSN
+// that is not one, which silently turns `mode=ro` into a read-write open.
 func vacuumInto(src, dest string) error {
+	if _, err := os.Stat(src); err != nil {
+		return fmt.Errorf("vacuum: source database %s: %w", src, err)
+	}
 	ctx := context.Background()
-	db, err := sqlite.Open(ctx, src+"?mode=ro")
+	db, err := openForVacuum(ctx, src)
 	if err != nil {
-		// Fallback: open without read-only hint for compatibility.
-		db, err = sqlite.Open(ctx, src)
-		if err != nil {
-			return fmt.Errorf("vacuum: open src: %w", err)
-		}
+		return err
 	}
 	defer func() { _ = db.Close() }()
-	_, err = db.ExecContext(ctx, "VACUUM INTO ?", dest)
-	if err != nil {
+	if _, err := db.ExecContext(ctx, "VACUUM INTO ?", dest); err != nil {
 		return fmt.Errorf("vacuum: exec: %w", err)
 	}
 	return nil
+}
+
+// openForVacuum opens the database at path for the snapshot read, preferring a
+// read-only connection.
+//
+// The read-only attempt can legitimately fail: a database left in WAL mode by
+// an unclean daemon exit has a populated `-wal` but no `-shm`, and SQLite
+// cannot build the missing wal-index over a read-only handle. Falling back to a
+// writable handle lets that database be backed up with its committed WAL frames
+// instead of failing, and still never migrates anything.
+func openForVacuum(ctx context.Context, path string) (*sql.DB, error) {
+	const busyTimeout = "_pragma=busy_timeout(5000)"
+	var firstErr error
+	for _, dsn := range []string{
+		"file:" + path + "?mode=ro&" + busyTimeout,
+		"file:" + path + "?mode=rw&" + busyTimeout,
+	} {
+		db, err := sql.Open(sqlite.DriverName, dsn)
+		if err == nil {
+			// Reading the schema forces the open of the database file and its
+			// wal-index, which is where a read-only handle over a hot WAL
+			// fails — sql.Open alone is lazy and would defer that to VACUUM.
+			var probe sql.NullString
+			err = db.QueryRowContext(ctx, "SELECT name FROM sqlite_schema LIMIT 1").Scan(&probe)
+			if err == nil || errors.Is(err, sql.ErrNoRows) {
+				return db, nil
+			}
+			_ = db.Close()
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return nil, fmt.Errorf("vacuum: open src: %w", firstErr)
 }
 
 // addFileToTar adds the file at diskPath to tw with the given archivePath and
@@ -770,12 +812,26 @@ func checkSchemaCompat(manifest backupManifest, force bool) error {
 	return nil
 }
 
+// sqliteSidecarSuffixes are the write-ahead log and shared-memory files SQLite
+// keeps beside a database opened in WAL mode.
+var sqliteSidecarSuffixes = [...]string{"-wal", "-shm"}
+
+// asideEntry records a live file moved out of the way during commit so a
+// failure can put it back.
+type asideEntry struct{ live, backup string }
+
 // commitRestore swaps every staged temp file into its live destination. It is
 // all-or-nothing on a best-effort basis: existing live files are moved aside
 // first (a same-directory rename), and any failure rolls the whole set back so
 // a mid-restore error never leaves half-applied live data.
+//
+// A restored `.db` takes its WAL and SHM sidecars with it. They belong to the
+// database that was there before — a daemon killed uncleanly leaves a populated
+// `-wal` behind — and SQLite recovers a `-wal` it finds next to a database file
+// on the next open, replaying the previous database's pages into the restored
+// one. The sidecars are moved aside in the same all-or-nothing set as the
+// database itself, so a failed commit puts the original trio back together.
 func commitRestore(staged []stagedRestoreFile) error {
-	type asideEntry struct{ live, backup string }
 	var (
 		movedAside []asideEntry
 		placed     []string
@@ -811,6 +867,14 @@ func commitRestore(staged []stagedRestoreFile) error {
 			}
 			movedAside = append(movedAside, asideEntry{live: s.live, backup: backup})
 		}
+		if strings.HasSuffix(s.live, ".db") {
+			aside, err := moveSidecarsAside(s.live)
+			movedAside = append(movedAside, aside...)
+			if err != nil {
+				rollback()
+				return err
+			}
+		}
 		if err := os.Rename(s.tempPath, s.live); err != nil {
 			rollback()
 			return fmt.Errorf("place %s: %w", s.live, err)
@@ -819,6 +883,29 @@ func commitRestore(staged []stagedRestoreFile) error {
 	}
 	cleanup()
 	return nil
+}
+
+// moveSidecarsAside renames the WAL/SHM sidecars of the database at dbPath out
+// of the way and returns what it moved, so the caller can roll them back or
+// discard them with the rest of the commit set. The entries collected so far
+// are returned even on error — they still have to be rolled back.
+func moveSidecarsAside(dbPath string) ([]asideEntry, error) {
+	var moved []asideEntry
+	for _, suffix := range sqliteSidecarSuffixes {
+		sidecar := dbPath + suffix
+		if _, err := os.Stat(sidecar); err != nil {
+			continue
+		}
+		backup, err := uniqueSidecar(sidecar)
+		if err != nil {
+			return moved, err
+		}
+		if err := os.Rename(sidecar, backup); err != nil {
+			return moved, fmt.Errorf("move aside %s: %w", sidecar, err)
+		}
+		moved = append(moved, asideEntry{live: sidecar, backup: backup})
+	}
+	return moved, nil
 }
 
 // uniqueSidecar returns a fresh, unique path in the same directory as live,

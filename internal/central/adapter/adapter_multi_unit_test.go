@@ -3658,7 +3658,7 @@ func TestAnyMapToParamValues_ConversionError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// recordParamsetWrite — nil audit guard (paramsets.go:177-179)
+// recordParamsetWrite — nil audit guard
 // Directly create a ParamsetsDomain with audit==nil and call recordParamsetWrite.
 // ---------------------------------------------------------------------------
 
@@ -3668,7 +3668,7 @@ func TestRecordParamsetWrite_NilAudit(t *testing.T) {
 		audit: nil, // deliberately nil, bypassing NewParamsetsDomain's NoopRecorder
 	}
 	// Must not panic — the nil guard returns immediately.
-	p.recordParamsetWrite("DEV001:1", "VALUES",
+	p.recordParamsetWrite(t.Context(), "DEV001:1", "VALUES",
 		map[string]any{"PARAM": "before"},
 		map[string]any{"PARAM": "after"})
 }

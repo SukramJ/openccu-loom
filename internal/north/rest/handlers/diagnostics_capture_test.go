@@ -15,6 +15,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
@@ -310,5 +312,33 @@ func TestDownloadCapture_InternalError_Returns500(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestStartCapture_AuditEntryNamesTheOperator verifies the capture-start
+// audit row carries the requesting admin: a log capture can contain
+// request and host detail, so an unattributable row defeats the trail.
+func TestStartCapture_AuditEntryNamesTheOperator(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCaptureService{
+		startResult: diagnostics.Summary{ID: "cap_aabbccdd", Status: diagnostics.StatusRunning},
+	}
+	rec := audit.NewBuffer(10)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/capture",
+		strings.NewReader(`{"duration_seconds": 60}`))
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(),
+		auth.Identity{Subject: "alice", Role: auth.RoleAdmin}))
+	w := httptest.NewRecorder()
+	handlers.StartCapture(svc, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	entries := rec.List(10)
+	if len(entries) != 1 {
+		t.Fatalf("audit entries=%d, want 1", len(entries))
+	}
+	if entries[0].User != "alice" {
+		t.Fatalf("audit user=%q, want alice", entries[0].User)
 	}
 }

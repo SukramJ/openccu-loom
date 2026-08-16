@@ -6,6 +6,8 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -440,6 +442,45 @@ func (b *Bridge) snapshotRetained(
 	window time.Duration,
 	collect func(topic string, payload []byte, retained bool),
 ) error {
+	// One snapshot window at a time per bridge. Every sweep rides the same
+	// subscribe client, which keys its subscriptions by filter: two
+	// concurrent windows on the same filter — the per-central discovery
+	// sweeps and the unscoped pass all use `homeassistant/#` — leave the
+	// second handler installed over the first, and the first teardown
+	// unsubscribes the filter for both. Both sweeps then report nothing
+	// and the orphaned configs they exist to evict survive.
+	//
+	// The sweeps are one-shot boot passes of a couple of seconds each, so
+	// serialising them costs boot time, not correctness. Waiting is
+	// bounded by the holder's own window and its context.
+	if !b.acquireSweepSlot(ctx) {
+		return fmt.Errorf("%w: %w", ErrSweepSlotBusy, ctx.Err())
+	}
+	defer b.releaseSweepSlot()
+
+	// Spend what is left of the caller's budget rather than the full
+	// window it asked for. Waiting for the slot eats into that budget,
+	// and a caller whose budget is the window plus a small margin — the
+	// boot scrubs are — would otherwise open a window it cannot finish
+	// and return DeadlineExceeded having evicted nothing. A short window
+	// only means fewer retained messages are seen, and the sweeps evict
+	// strictly what they saw, so trading window length for a completed
+	// pass is safe in a way that returning empty-handed is not.
+	if deadline, ok := ctx.Deadline(); ok {
+		// Leave room for the unsubscribe and the eviction publishes that
+		// follow the window; a window that runs to the last microsecond
+		// cancels its own teardown. The reserve is a quarter of what is
+		// left for a small budget and a flat second once the budget is
+		// large enough to spare one.
+		remaining := time.Until(deadline)
+		margin := min(snapshotWindowMargin, remaining/4)
+		usable := remaining - margin
+		if usable <= 0 {
+			return fmt.Errorf("%w: no budget left for a snapshot window", ErrSweepSlotBusy)
+		}
+		window = min(window, usable)
+	}
+
 	var closed atomic.Bool
 	gated := func(topic string, payload []byte, retained bool) {
 		if closed.Load() {
@@ -483,6 +524,21 @@ func (b *Bridge) cleanupSubscriber() (Subscriber, bool) {
 	}
 	return nil, false
 }
+
+// ErrSweepSlotBusy reports that a retained-snapshot pass never opened its
+// window because another sweep held the bridge's snapshot slot for longer
+// than the caller's budget allowed.
+//
+// It is a distinct sentinel because it means "not attempted", not
+// "attempted and found nothing": a caller that runs its sweeps once per
+// process must retry on this rather than latch its once-guard, or the
+// scrub is skipped for the rest of the daemon's life.
+var ErrSweepSlotBusy = errors.New("mqtt: retained-snapshot slot busy")
+
+// snapshotWindowMargin is the slice of a caller's remaining budget the
+// snapshot window leaves untouched, so the unsubscribe and the eviction
+// publishes that follow it still have a live context.
+const snapshotWindowMargin = time.Second
 
 // ErrCleanupNeedsSubscriber surfaces when the bridge has neither a
 // [Bridge.WithSubscriber]-wired client nor a publish client that
@@ -682,7 +738,19 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 	if err := b.snapshotRetained(ctx, subClient, prefix+"#", b.cfg.QoS.Discovery, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
-	for _, topic := range orphans {
+	// Copy under the same lock the deliveries append under: the window is
+	// closed by an atomic flag, so a delivery that passed the gate a
+	// moment earlier can still be inside the append while this goroutine
+	// reads the slice.
+	// Both are read under the same lock the deliveries write under: the
+	// window is closed by an atomic flag, so a delivery that passed the
+	// gate a moment earlier can still be inside the handler while this
+	// goroutine reads.
+	mu.Lock()
+	topics := append([]string(nil), orphans...)
+	inspected := seen
+	mu.Unlock()
+	for _, topic := range topics {
 		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
 		// Also drop the orphan from `declared` so a subsequent
 		// publish with the same topic is not silently dedup-suppressed
@@ -691,8 +759,15 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 		delete(b.declared, topic)
 		b.mu.Unlock()
 	}
-	_ = seen
-	return len(orphans), nil
+	// The pair is what makes a silent sweep diagnosable: zero inspected
+	// means the snapshot window saw none of our retained configs, which
+	// is a different fault from a window that saw them all and found
+	// nothing orphaned.
+	slog.Default().Debug("mqtt.discovery_orphan_cleanup.snapshot",
+		slog.String("central", rawCentral),
+		slog.Int("inspected", inspected),
+		slog.Int("evicted", len(topics)))
+	return len(topics), nil
 }
 
 // rawCentralPrefix returns the `<base>/<central>/` prefix the raw plane
@@ -821,10 +896,15 @@ func (b *Bridge) RunRawOrphanCleanupOnce(ctx context.Context, centralName string
 	if err := b.snapshotRetained(ctx, subClient, filter, b.cfg.QoS.State, snapshotWindow, handler); err != nil {
 		return 0, err
 	}
-	for _, topic := range orphans {
+	// Copy under the same lock the deliveries append under — see the
+	// identical note in [Bridge.RunDiscoveryOrphanCleanupOnce].
+	mu.Lock()
+	topics := append([]string(nil), orphans...)
+	mu.Unlock()
+	for _, topic := range topics {
 		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true)
 	}
-	return len(orphans), nil
+	return len(topics), nil
 }
 
 // unscopedUniqueIDMarker is what an entity id looks like when the CCU

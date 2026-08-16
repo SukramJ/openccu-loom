@@ -4,11 +4,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -60,6 +62,41 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			localUserCount:  0,
 			persistedTokens: true,
 			want:            false,
+		},
+		{
+			// A token whose scheme is switched off resolves nobody, but it
+			// is still a credential the operator configured — and switching
+			// the scheme back on is a config edit, while POST /api/v1/setup
+			// is reachable by anyone who reaches the listener. Reporting
+			// first run here trades a dormant scheme for anonymous admin
+			// creation; the state is logged instead (auth.scheme.dormant).
+			name:           "YAML bearer token present but the bearer scheme is off",
+			localUserCount: 0,
+			mutate: func(c *config.Config) {
+				c.North.REST.Auth.Tokens = map[string]string{"s3cr3t": "admin"}
+				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+			},
+			want: false,
+		},
+		{
+			name:            "persisted API token present but the bearer scheme is off",
+			localUserCount:  0,
+			persistedTokens: true,
+			mutate: func(c *config.Config) {
+				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+			},
+			want: false,
+		},
+		{
+			// The scheme gate only removes the token sources; a local admin
+			// still logs in through the SPA session route.
+			name:            "bearer scheme off but a local user exists",
+			localUserCount:  1,
+			persistedTokens: true,
+			mutate: func(c *config.Config) {
+				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+			},
+			want: false,
 		},
 		{
 			name:           "CCU auth explicitly enabled with a configured central",
@@ -168,6 +205,53 @@ func TestFirstRunProbeClosesSetupOnceATokenExists(t *testing.T) {
 	if probe(ctx) {
 		t.Error("probe with a persisted API token = true; the daemon can authenticate, " +
 			"so the anonymous setup endpoint must be closed")
+	}
+}
+
+// TestDormantBearerSchemeIsLoggedInsteadOfOpeningSetup covers the state the
+// first-run gate deliberately does not answer with the onboarding wizard: an
+// API token as the only credential while `bearer_enabled` is false.
+//
+// Opening anonymous admin creation there would hand the daemon to anyone who
+// can reach the listener, so the gate stays closed and the boot log is the
+// only place that can name the cause. Without the record the operator sees a
+// login that rejects a token the config clearly contains, and nothing
+// anywhere says why.
+func TestDormantBearerSchemeIsLoggedInsteadOfOpeningSetup(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "dormant.db")))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	cfg := config.Default()
+	cfg.North.REST.Auth.CCU.Enabled = ptrBool(false)
+	cfg.North.REST.Auth.BearerEnabled = ptrBool(false)
+	cfg.North.REST.Auth.Tokens = map[string]string{"s3cr3t": "admin"}
+
+	src := authSources{}
+	if firstRunNeedsSetup(cfg, src) {
+		t.Error("firstRunNeedsSetup = true with an API token configured; " +
+			"POST /api/v1/setup is then open to anyone on the network")
+	}
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	warnOnDormantOnboarding(ctx, cfg, sqlitestore.NewUserStore(db), sqlitestore.NewTokenStore(db), nil, logger)
+	if !strings.Contains(buf.String(), "auth.scheme.dormant") {
+		t.Errorf("boot log does not report the dormant bearer scheme; got %q", buf.String())
+	}
+
+	// With the scheme on, the same configuration is an ordinary token-only
+	// deployment and must stay silent.
+	buf.Reset()
+	cfg.North.REST.Auth.BearerEnabled = ptrBool(true)
+	warnOnDormantOnboarding(ctx, cfg, sqlitestore.NewUserStore(db), sqlitestore.NewTokenStore(db), nil, logger)
+	if buf.Len() != 0 {
+		t.Errorf("a working token-only deployment logged %q, want nothing", buf.String())
 	}
 }
 

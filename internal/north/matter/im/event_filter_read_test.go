@@ -213,3 +213,63 @@ func TestConcreteEventPath_WildcardHelpers(t *testing.T) {
 		t.Error("IsWildcardEvent should be false when HasEvent=true")
 	}
 }
+
+// TestUnmarshalReadRequest_ScalarEventFiltersFieldIsSkipped pins the
+// malformed-but-non-fatal contract: a controller that encodes
+// EventFilters as a scalar instead of an array must have the field
+// skipped, leaving the remaining ReadRequest fields decodable. Skipping
+// it as if it were a container consumes the enclosing struct's
+// EndContainer and rejects the whole request.
+func TestUnmarshalReadRequest_ScalarEventFiltersFieldIsSkipped(t *testing.T) {
+	t.Parallel()
+	enc := tlv.NewEncoder()
+	enc.StartStruct(tlv.AnonymousTag())
+	enc.PutUint(tlv.ContextTag(tagReadReqEventFilters), 1) // scalar, not an array
+	enc.PutBool(tlv.ContextTag(tagReadReqFabricFiltered), true)
+	if err := enc.EndContainer(); err != nil {
+		t.Fatalf("EndContainer ReadRequest: %v", err)
+	}
+	wire, err := enc.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+
+	req, err := UnmarshalReadRequestTLV(tlv.NewDecoder(wire))
+	if err != nil {
+		t.Fatalf("UnmarshalReadRequestTLV: %v", err)
+	}
+	if len(req.EventFilters) != 0 {
+		t.Errorf("EventFilters: got %d entries, want 0", len(req.EventFilters))
+	}
+	if !req.FabricFiltered {
+		t.Error("FabricFiltered: got false — the field after the malformed one was not decoded")
+	}
+}
+
+// TestUnmarshalSubscribeRequest_ScalarEventFiltersFieldIsSkipped is the
+// SubscribeRequest twin of the ReadRequest case above.
+func TestUnmarshalSubscribeRequest_ScalarEventFiltersFieldIsSkipped(t *testing.T) {
+	t.Parallel()
+	enc := tlv.NewEncoder()
+	enc.StartStruct(tlv.AnonymousTag())
+	enc.PutUint(tlv.ContextTag(tagSubReqEventFilters), 1) // scalar, not an array
+	enc.PutBool(tlv.ContextTag(tagSubReqFabricFiltered), true)
+	if err := enc.EndContainer(); err != nil {
+		t.Fatalf("EndContainer SubscribeRequest: %v", err)
+	}
+	wire, err := enc.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+
+	req, err := UnmarshalSubscribeRequestTLV(tlv.NewDecoder(wire))
+	if err != nil {
+		t.Fatalf("UnmarshalSubscribeRequestTLV: %v", err)
+	}
+	if len(req.EventFilters) != 0 {
+		t.Errorf("EventFilters: got %d entries, want 0", len(req.EventFilters))
+	}
+	if !req.FabricFiltered {
+		t.Error("FabricFiltered: got false — the field after the malformed one was not decoded")
+	}
+}

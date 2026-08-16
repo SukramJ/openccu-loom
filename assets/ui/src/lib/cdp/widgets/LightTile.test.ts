@@ -97,4 +97,25 @@ describe("LightTile — fixed-colour palette", () => {
       label: color,
     });
   });
+
+  it("names the active colour when the wire value is the descriptor index", async () => {
+    const dps = dataPoints();
+    // A writable ENUM is published as its value_list index — RED sits at 4.
+    (dps[1] as { value: unknown }).value = 4;
+    mockListDataPoints.mockResolvedValue(dps);
+
+    render(LightTile, { props: { address: ADDRESS, cdp: fixedColorCdp() } });
+
+    await waitFor(() => expect(screen.getByText(/· Red$/)).toBeTruthy());
+  });
+
+  it("omits the colour name while the light is set to BLACK", async () => {
+    const dps = dataPoints();
+    (dps[1] as { value: unknown }).value = 0;
+    mockListDataPoints.mockResolvedValue(dps);
+
+    render(LightTile, { props: { address: ADDRESS, cdp: fixedColorCdp() } });
+
+    await waitFor(() => expect(screen.getByText("100 %")).toBeTruthy());
+  });
 });

@@ -651,6 +651,36 @@ func TestPutParamsetFallsBackToBackendWhenNoChannel(t *testing.T) {
 	}
 }
 
+// TestPutParamsetLinkKeyReachesTheBackendOnAModelledChannel pins the LINK
+// route on a channel the model holds. A LINK paramset exists per peer and has
+// no channel-level data point, so routing it through the model rejected every
+// LINK write with ErrUnknownParameter — which the handler reports as a 502,
+// although the route accepts LINK as a paramset key and locks it for editing.
+func TestPutParamsetLinkKeyReachesTheBackendOnAModelledChannel(t *testing.T) {
+	t.Parallel()
+
+	domain, chw, fakeOps := buildParamsetFixture(t)
+	var gotKey hmenum.ParamsetKey
+	putCalled := false
+	fakeOps.putParamsetFn = func(_ context.Context, _ string, key hmenum.ParamsetKey, _ map[string]any) error {
+		putCalled = true
+		gotKey = key
+		return nil
+	}
+
+	values := map[string]any{string(hmenum.ParameterLevel): float64(0.5)}
+	if err := domain.PutParamset(context.Background(), "0001ABCD:1", hmenum.ParamsetKeyLink, values); err != nil {
+		t.Fatalf("PutParamset(LINK): %v", err)
+	}
+	if !putCalled || gotKey != hmenum.ParamsetKeyLink {
+		t.Fatalf("backend PutParamset called=%v key=%q, want true/LINK", putCalled, gotKey)
+	}
+	if chw.putCallCount() != 0 || chw.setCallCount() != 0 {
+		t.Fatalf("LINK write must not go through the channel writer (put=%d set=%d)",
+			chw.putCallCount(), chw.setCallCount())
+	}
+}
+
 // ---------- Visibility gate fires before Channel.SetMany ---------------
 
 // TestPutParamsetVisibilityGateFiresBeforeChannelSetMany asserts that

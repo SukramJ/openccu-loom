@@ -22,6 +22,16 @@ const (
 	// SettingLocation holds the commissioner-written
 	// BasicInformation.Location (ISO-3166 2-letter code).
 	SettingLocation = "basic_information.location"
+	// SettingUniqueID holds BasicInformation.UniqueID. The attribute
+	// carries quality F (fixed for the lifetime of the device, Matter
+	// §11.1.5.13), which a derivation can only approximate: it is stable
+	// exactly as long as its inputs are, so a config edit to the bridge
+	// label would move the node's identity under every controller cache.
+	// Persisting the value on first boot and feeding it back through
+	// core.Config.UniqueID makes the attribute genuinely fixed — the same
+	// shape matter.js uses (BasicInformationServer's uniqueId, quality
+	// "FN": created once, restored from state afterwards).
+	SettingUniqueID = "basic_information.unique_id"
 )
 
 // MetadataKeyEventNumber is the matter_metadata key holding the

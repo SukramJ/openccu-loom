@@ -315,10 +315,13 @@ func PostCopyProfile(svc ScheduleService) http.HandlerFunc {
 	}
 }
 
-// ErrNoSchedule is re-exported so the handler file can match against
-// the adapter's sentinel without a direct dep on the adapter package.
-var ErrNoSchedule = errors.New("schedule not supported on this channel")
-
+// writeScheduleError maps a schedule-domain failure onto a problem
+// response.
+//
+// The schedule sentinels live in pkg/hmerr, which both layers import:
+// the domain package that raises them depends on this one (through the
+// WebSocket command surface), so a direct import here is impossible and
+// the classification would otherwise have to match error messages.
 func writeScheduleError(w http.ResponseWriter, r *http.Request, err error) {
 	// Device-not-found at the adapter layer maps to 404 — see
 	// SchedulesDomain.resolve / FindScheduleChannel.
@@ -327,11 +330,24 @@ func writeScheduleError(w http.ResponseWriter, r *http.Request, err error) {
 			problem.New(problem.TypeNotFound, r, "Device not found", ""))
 		return
 	}
-	// Map adapter-level "no schedule keys" errors to 404 so the SPA
-	// can display a friendly "device has no schedule" message.
-	if err != nil && err.Error() == "schedules: channel exposes no climate schedule parameters" {
+	// A channel without schedule parameters is a 404 so the SPA can show
+	// a friendly "device has no schedule" message. The copy source is
+	// read through the same path, which wraps the sentinel.
+	if errors.Is(err, hmerr.ErrNoSchedule) {
 		problem.Write(w, http.StatusNotFound,
 			problem.New(problem.TypeNotFound, r, "Channel has no climate schedule", ""))
+		return
+	}
+	// A copy onto itself and an out-of-range profile index are caller
+	// mistakes the domain rejects before any wire call: 422, never 502.
+	if errors.Is(err, hmerr.ErrScheduleCopyNoOp) {
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Copy source and destination are identical", ""))
+		return
+	}
+	if errors.Is(err, hmerr.ErrScheduleCopyProfileRange) {
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Profile index out of range (1..6)", ""))
 		return
 	}
 	// A schedule write reaches the CCU through the backend; any remaining

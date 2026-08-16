@@ -194,6 +194,38 @@ func TestReplaceDeviceEvictsOldAndIngestsNew(t *testing.T) {
 	}
 }
 
+// TestReplaceDeviceEvictsOldFromDomainModel pins that a replaced device also
+// leaves the domain model. The registries feed the discovery and cache
+// layers, but REST, the WebSocket API and the SPA read the model — a device
+// dropped from the registries alone keeps being served, with all its data
+// points, until the daemon restarts.
+func TestReplaceDeviceEvictsOldFromDomainModel(t *testing.T) {
+	t.Parallel()
+	model := newFakeDeviceModel("OLD001")
+	dc, bus, devs, descs, _ := newDCWithModel(t, model)
+	removed := collectRemoved(bus)
+
+	descs.Put(wireKey(hmenum.InterfaceBidCosRF), hmproto.DeviceDescription{Address: "OLD001", Type: "HM-Sec-SC"})
+	devs.Put(registry.DeviceEntry{Interface: wireKey(hmenum.InterfaceBidCosRF), Address: "OLD001", Model: "HM-Sec-SC"})
+
+	fetcher := &stubLister{snapshot: []hmproto.DeviceDescription{{Address: "NEW001", Type: "HM-Sec-SC"}}}
+	if err := dc.ReplaceDevice(context.Background(), fetcher, wireKey(hmenum.InterfaceBidCosRF), "OLD001", "NEW001"); err != nil {
+		t.Fatalf("ReplaceDevice: %v", err)
+	}
+
+	if model.HasDevice("OLD001") {
+		t.Error("OLD001 must be gone from the domain model after a replace")
+	}
+	if len(model.removed) != 1 || model.removed[0] != "OLD001" {
+		t.Errorf("model removals=%v, want exactly [OLD001]", model.removed)
+	}
+	// The model publishes its own removal event; a second one from the
+	// registry eviction would retract the same entity twice.
+	if len(*removed) != 0 {
+		t.Errorf("removed events=%+v, want none — the model already announced the removal", *removed)
+	}
+}
+
 // TestReplaceDeviceModelMismatchErrors verifies that when the new device
 // description is already cached but has a different model, ReplaceDevice
 // returns an error and leaves state unchanged.

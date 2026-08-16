@@ -6,6 +6,7 @@ package hub
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -502,3 +503,54 @@ func TestHubSysvarByTopicSegmentRefusesAmbiguity(t *testing.T) {
 		t.Fatal("an ambiguous segment was routed to one of the two sysvars")
 	}
 }
+
+// TestRenameSysvarSerialisesWithNameReaders is a race tripwire for the
+// operator rename path: PATCH /sysvars/{name} re-keys the entry while the
+// hub refresh delivers values and north-bound publishers read the name.
+// The rename must take the same lock the readers take. Run with -race.
+func TestRenameSysvarSerialisesWithNameReaders(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub("rename-central")
+	sv := NewSysvar("rename-central", "name0", "", hmenum.HubValueTypeFloat, nil)
+	h.PutSysvar(sv)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := range 500 {
+			h.RenameSysvar(sysvarNameAt(i), sysvarNameAt(i+1))
+		}
+	}()
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 500 {
+				_ = sv.LegacyName()
+				_ = sv.Signature()
+				_ = sv.FullName()
+				// The north-bound assembly paths: REST/WS identity, the
+				// canonical unique id, the MQTT topic pair and the hub's
+				// sorted listing all render the name while it moves.
+				_ = sv.Info()
+				_ = sv.CanonicalUniqueID("ABC123")
+				_ = sv.MQTTTopics("loom", "rename-central")
+				_ = h.Sysvars()
+				sv.OnValue(hmtypes.FloatValue(1))
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := sv.LegacyName(); got != sysvarNameAt(500) {
+		t.Fatalf("LegacyName()=%q after 500 renames, want %q", got, sysvarNameAt(500))
+	}
+	if _, ok := h.Sysvar(sysvarNameAt(500)); !ok {
+		t.Fatalf("sysvar not reachable under its final name %q", sysvarNameAt(500))
+	}
+}
+
+// sysvarNameAt renders the deterministic name of the i-th rename step.
+func sysvarNameAt(i int) string { return "name" + strconv.Itoa(i) }

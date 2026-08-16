@@ -81,6 +81,16 @@ func stringsToAny(in []string) []any {
 	return out
 }
 
+// haWriteCommandTemplate turns HA's bare text payload into the JSON
+// object the `write` service method takes.
+//
+// The device carries [maxDisplayID] rows behind one custom DP while HA's
+// text platform offers a single input, so the entity addresses row 1;
+// callers that need another row use the `write` service method with an
+// explicit id. `tojson` quotes and escapes the operator's input, so
+// quotes or backslashes in the text cannot break the object.
+const haWriteCommandTemplate = `{"id": 1, "text": {{ value | tojson }}}`
+
 // HADiscoveryPayload returns the HA Text-platform-specific payload
 // skeleton for a TextDisplay (HmIP-WRCD). write is a distinct service
 // method → service-method command topic. State from the aggregated
@@ -97,6 +107,12 @@ func (t *TextDisplay) HADiscoveryPayload(ctx payload.HADiscoveryContext) (compon
 	body = map[string]any{
 		// write is a distinct service method → service-method topic.
 		"command_topic": ctx.ServiceMethodCommandTopic("write"),
+		// HA's text platform publishes the bare string the operator typed.
+		// `write` addresses one of the display's [maxDisplayID] rows and
+		// rejects a call without an id, so the payload is templated into
+		// the JSON object the service method expects — a bare string
+		// reaches the handler as {"value": …} and can never succeed.
+		"command_template": haWriteCommandTemplate,
 		// mode=text signals HA free-form text input (not a number).
 		"mode": "text",
 		// Max characters per row matches [MaxRowLength] (24).

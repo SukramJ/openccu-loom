@@ -102,6 +102,37 @@ const (
 	StatusInvalidTransportType      StatusCode = 0xd1
 )
 
+// unsupportedCommandError is the typed carrier for "this cluster does
+// not implement that command". Cluster servers return it from the
+// default branch of MatterInvoke so the dispatcher maps the failure to
+// UnsupportedCommand (0x81) by type rather than by matching prose in the
+// error message — a controller probing an optional command must see
+// 0x81, not FAILURE (0x01), which reads as a device fault.
+type unsupportedCommandError struct{ msg string }
+
+func (e unsupportedCommandError) Error() string { return e.msg }
+
+// MatterStatusCode implements [StatusCodeError].
+func (unsupportedCommandError) MatterStatusCode() StatusCode { return StatusUnsupportedCommand }
+
+// Is makes every [UnsupportedCommandf] value match [ErrUnsupportedCommand]
+// under errors.Is regardless of its message.
+func (unsupportedCommandError) Is(target error) bool {
+	_, ok := target.(unsupportedCommandError)
+	return ok
+}
+
+// ErrUnsupportedCommand is the sentinel [UnsupportedCommandf] values
+// match under errors.Is. Matter §10.6.7.4 UnsupportedCommand (0x81).
+var ErrUnsupportedCommand StatusCodeError = unsupportedCommandError{"matter: unsupported command"}
+
+// UnsupportedCommandf builds an error that carries the message verbatim
+// and maps to [StatusUnsupportedCommand]. Use it in the default branch
+// of a cluster server's MatterInvoke.
+func UnsupportedCommandf(format string, args ...any) error {
+	return unsupportedCommandError{msg: fmt.Sprintf(format, args...)}
+}
+
 // String returns a short label for diagnostics; not part of the wire
 // format.
 func (s StatusCode) String() string {

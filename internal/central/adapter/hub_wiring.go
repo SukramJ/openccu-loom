@@ -315,29 +315,34 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 		slog.String("central", cc.Name),
 		slog.Int("count", len(names)))
 
+	// Rooms and functions are read at the same point as the names above and
+	// are stamped onto each channel exactly once by the same pipeline pass,
+	// so the same reasoning applies: substituting an empty map for a failed
+	// read leaves every channel of the fleet without a room and without a
+	// function — on the SPA, REST, MQTT `suggested_area` and the alarm room
+	// grouping alike — for the rest of the daemon run, because nothing
+	// re-stamps a built model. Returning to the readiness gate costs one
+	// re-probe; an empty answer is still not a failure, so a CCU that
+	// genuinely defines no rooms comes up unaffected.
 	rooms, err := loadRoomAssignments(ctx, jc, iseToAddress)
 	if err != nil {
-		logger.Warn("hub.rooms.load",
-			slog.String("central", cc.Name),
-			slog.String("err", err.Error()))
-		rooms = AssignmentMap{}
-	} else {
-		logger.Info("hub.rooms.ok",
-			slog.String("central", cc.Name),
-			slog.Int("count", len(rooms)))
+		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
+		_ = jc.Logout(context.Background())
+		return nil, HubData{}, nil, fmt.Errorf("hub room assignments (room source for every channel): %w", err)
 	}
+	logger.Info("hub.rooms.ok",
+		slog.String("central", cc.Name),
+		slog.Int("count", len(rooms)))
 
 	functions, err := loadFunctionAssignments(ctx, jc, iseToAddress)
 	if err != nil {
-		logger.Warn("hub.functions.load",
-			slog.String("central", cc.Name),
-			slog.String("err", err.Error()))
-		functions = AssignmentMap{}
-	} else {
-		logger.Info("hub.functions.ok",
-			slog.String("central", cc.Name),
-			slog.Int("count", len(functions)))
+		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
+		_ = jc.Logout(context.Background())
+		return nil, HubData{}, nil, fmt.Errorf("hub function assignments (function source for every channel): %w", err)
 	}
+	logger.Info("hub.functions.ok",
+		slog.String("central", cc.Name),
+		slog.Int("count", len(functions)))
 
 	// Populate the DeviceDetails cache from the already-loaded hub data.
 	// This re-uses the three payloads fetched above (names+iseToAddress,
@@ -382,13 +387,28 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 			slog.String("err", err.Error()))
 	}
 
+	// gated wraps a refresh hook so a torn-down generation never reaches the
+	// CCU. The closer logs this generation's JSON-RPC session out, but the
+	// hooks stay installed until the next successful WireHub replaces them —
+	// and a re-init may leave that gate waiting minutes. A call through the
+	// logged-out client logs transparently back in, minting a CCU session the
+	// already-executed closer can never release, from a pool the WebUI shares.
+	gated := func(fn func(context.Context) error) func(context.Context) error {
+		return func(ctx context.Context) error {
+			if !generationActive.Load() {
+				return nil
+			}
+			return fn(ctx)
+		}
+	}
+
 	// Wire periodic-refresh hooks on the HubCoordinator. The background
 	// scheduler's hub.*_refresh jobs delegate through c.Hub.Refresh*,
 	// which call these closures. Without this step the scheduler jobs
 	// are registered but run as no-ops because the inner hook is nil.
 	if unit.Hub != nil {
 		unit.Hub.SetRefreshHooks(coordinators.RefreshHooks{
-			Programs: func(ctx context.Context) error {
+			Programs: gated(func(ctx context.Context) error {
 				if err := loadPrograms(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
 					return err
 				}
@@ -397,35 +417,35 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 				// on the right card.
 				assignHubChannels(unit, logger)
 				return nil
-			},
-			Sysvars: func(ctx context.Context) error {
+			}),
+			Sysvars: gated(func(ctx context.Context) error {
 				if err := loadSysvars(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
 					return err
 				}
 				assignHubChannels(unit, logger)
 				return nil
-			},
-			Inbox: func(ctx context.Context) error {
+			}),
+			Inbox: gated(func(ctx context.Context) error {
 				return loadInbox(ctx, runner, unit)
-			},
-			ServiceMessages: func(ctx context.Context) error {
+			}),
+			ServiceMessages: gated(func(ctx context.Context) error {
 				return loadServiceMessages(ctx, runner, unit, catalogs, locale)
-			},
-			AlarmMessages: func(ctx context.Context) error {
+			}),
+			AlarmMessages: gated(func(ctx context.Context) error {
 				return loadAlarmMessages(ctx, runner, unit.HubModel, catalogs, locale)
-			},
-			SystemUpdate: func(ctx context.Context) error {
+			}),
+			SystemUpdate: gated(func(ctx context.Context) error {
 				return loadSystemUpdate(ctx, runner, unit.HubModel)
-			},
-			InstallMode: func(ctx context.Context) error {
+			}),
+			InstallMode: gated(func(ctx context.Context) error {
 				return loadInstallMode(ctx, jc, unit)
-			},
-			Connectivity: func(ctx context.Context) error {
+			}),
+			Connectivity: gated(func(ctx context.Context) error {
 				return loadConnectivity(ctx, unit)
-			},
-			BidcosInterfaces: func(ctx context.Context) error {
+			}),
+			BidcosInterfaces: gated(func(ctx context.Context) error {
 				return loadBidcosInterfaces(ctx, jc, unit)
-			},
+			}),
 		})
 		// Initial system-update fetch. The reference stack's scheduler
 		// runs every job immediately at start (next_run = now), so the
@@ -1102,13 +1122,29 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		freshNames[v.Name] = struct{}{}
 		upsertSysvar(h, v, writer, opts, rawDesc, valueType, valueList, chanByID[v.ID], haveDescs)
 	}
-	// Remove sysvars that are no longer present on the CCU.
+	pruneRemovedSysvars(h, freshNames)
+	return nil
+}
+
+// pruneRemovedSysvars drops every cached sysvar the CCU no longer
+// reports.
+//
+// The name is read through [hub.HubDataPoint.LegacyName], never off the
+// field: it is mutable — an operator rename rewrites it under the data
+// point's own lock, on a request goroutine, while this refresh runs on
+// the scheduler job — and this is the destructive call site. An
+// unsynchronised read here drops the wrong entry, which retracts a live
+// variable's retained discovery and leaves the removed one published.
+func pruneRemovedSysvars(h *hub.Hub, fresh map[string]struct{}) {
+	if h == nil {
+		return
+	}
 	for _, existing := range h.Sysvars() {
-		if _, ok := freshNames[existing.Name]; !ok {
-			h.RemoveSysvar(existing.Name)
+		name := existing.LegacyName()
+		if _, ok := fresh[name]; !ok {
+			h.RemoveSysvar(name)
 		}
 	}
-	return nil
 }
 
 // upsertSysvar creates or in-place-updates the [hub.Sysvar] for one
@@ -1125,23 +1161,47 @@ func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubS
 	if !ok {
 		existing = hub.NewSysvar(h.CentralName, v.Name, desc, valueType, writer)
 	}
-	existing.Unit = v.Unit
-	existing.ValueType = valueType
-	existing.ValueList = valueList
-	existing.Writer = writer
-	existing.IsExtended = isExtended
-	existing.IsInternal = v.IsInternal
-	existing.IsVisible = v.IsVisible
-	existing.IsLogged = v.IsLogged
-	existing.ValueName0 = v.ValueName0
-	existing.ValueName1 = v.ValueName1
-	existing.Description = desc
-	existing.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
+	// The numeric Vid is preserved when a refresh reports an unparseable ID —
+	// only a successful parse overwrites it — matching the pre-snapshot
+	// behaviour where the assignment was guarded by the Atoi success check.
+	vid := 0
+	if parsed, err := strconv.Atoi(v.ID); err == nil {
+		vid = parsed
+	} else if ok {
+		vid = existing.Meta().Vid
+	}
+	// All mutable metadata is written as one guarded update. The refresh
+	// rewrites these fields in place on every pass while north-bound readers
+	// (REST /sysvars, MQTT discovery, payload projections) walk the same live
+	// objects on other goroutines; ApplyMeta puts the write on the lock those
+	// readers snapshot under via Sysvar.Meta. The declared range in particular
+	// is what the north-bound planes advertise (HA gets a min/max on the number
+	// entity) and what the model's range check validates a write against; left
+	// unset, discovery falls back to the full float range and the check can
+	// never fire.
+	existing.ApplyMeta(hub.SysvarMeta{
+		Unit:           v.Unit,
+		ValueType:      valueType,
+		ValueList:      valueList,
+		Description:    desc,
+		EnabledDefault: hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers),
+		IsExtended:     isExtended,
+		IsVisible:      v.IsVisible,
+		IsLogged:       v.IsLogged,
+		ValueName0:     v.ValueName0,
+		ValueName1:     v.ValueName1,
+		Min:            sysvarBound(valueType, v.MinValue),
+		Max:            sysvarBound(valueType, v.MaxValue),
+		Vid:            vid,
+	})
+	// Writer, internal and explicit-channel keep their own dedicated guarded
+	// setters: the refresh replaces the writer while commands from the
+	// north-bound planes are in flight, and the setter is what puts that
+	// replacement on the lock the command path reads it under.
+	existing.SetWriter(writer)
+	existing.SetInternal(v.IsInternal)
 	if haveDescs || !ok {
 		existing.SetExplicitChannel(explicitChannel)
-	}
-	if vid, err := strconv.Atoi(v.ID); err == nil {
-		existing.Vid = vid
 	}
 	if pv, pok := parseSysvarValue(valueType, v.Value); pok {
 		existing.OnValue(pv)
@@ -1204,7 +1264,7 @@ func assignHubChannels(unit *central.Unit, logger *slog.Logger) {
 			} else {
 				logger.Debug("hub.sysvar.explicit_channel_unresolved",
 					slog.String("central", unit.Name()),
-					slog.String("name", sv.Name),
+					slog.String("name", sv.LegacyName()),
 					slog.String("channel_address", explicit))
 			}
 		}
@@ -1218,7 +1278,7 @@ func assignHubChannels(unit *central.Unit, logger *slog.Logger) {
 			changed = true
 			logger.Info("hub.sysvar.channel_assigned",
 				slog.String("central", unit.Name()),
-				slog.String("name", sv.Name),
+				slog.String("name", sv.LegacyName()),
 				slog.String("source", source),
 				slog.String("channel", next))
 		}
@@ -1233,7 +1293,7 @@ func assignHubChannels(unit *central.Unit, logger *slog.Logger) {
 			changed = true
 			logger.Info("hub.program.channel_assigned",
 				slog.String("central", unit.Name()),
-				slog.String("name", p.Name),
+				slog.String("name", p.LegacyName()),
 				slog.String("source", source),
 				slog.String("channel", next))
 		}
@@ -1817,6 +1877,31 @@ func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.Para
 	}
 	// Fallback: preserve as string so the caller at least sees something.
 	return hmtypes.StringValue(s), true
+}
+
+// sysvarBound coerces a declared minValue / maxValue payload into the bound
+// the model carries. Bounds are only meaningful for the numeric types — the
+// CCU also reports them for LOGIC / ALARM / LIST / STRING variables, where
+// they describe the wire encoding rather than an operator-facing range, so
+// those stay nil. Returns nil when the CCU omitted the field or the payload
+// does not parse as a number, because [parseSysvarValue] would otherwise fall
+// back to a string bound that no range check can compare against.
+func sysvarBound(vt hmenum.HubValueType, raw json.RawMessage) *hmtypes.ParamValue {
+	switch vt { //nolint:exhaustive // every non-numeric type carries no operator-facing range
+	case hmenum.HubValueTypeInteger, hmenum.HubValueTypeNumber, hmenum.HubValueTypeFloat:
+	default:
+		return nil
+	}
+	pv, ok := parseSysvarValue(vt, raw)
+	if !ok {
+		return nil
+	}
+	switch pv.Kind { //nolint:exhaustive // a non-numeric parse result means the CCU sent no usable bound
+	case hmtypes.ValueKindInt, hmtypes.ValueKindFloat:
+		return &pv
+	default:
+		return nil
+	}
 }
 
 // hubMessageAck adapts the ReGa [rega.Runner] to the model's

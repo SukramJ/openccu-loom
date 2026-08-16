@@ -183,7 +183,11 @@ func (h *HubCoordinator) wireSysvarNotifier(sv *hub.Sysvar) {
 		return
 	}
 	sv.ValueNotifier = func(name string, old, next hmtypes.ParamValue) {
-		h.NotifySysvarChanged(name, old, next, sv.ValueType)
+		// ValueType is rewritten in place by the hub scan through
+		// Sysvar.ApplyMeta; read it through the guarded snapshot so this
+		// notifier (which also fires from the callback-driven value push on a
+		// different goroutine) cannot race that rewrite.
+		h.NotifySysvarChanged(name, old, next, sv.Meta().ValueType)
 	}
 }
 

@@ -171,6 +171,14 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 			t.Errorf("recovery.attempts=%d, want 1", snap.Recovery.AttemptsTotal)
 		}
 	}
+	// The coordinator dates every attempt; the snapshot used to declare
+	// last_recovery_time and never fill it, so "when did recovery last run"
+	// answered nothing on a daemon that had just run one.
+	if snap.Recovery.LastRecoveryTime == nil {
+		t.Error("recovery.last_recovery_time is nil after a recovery run")
+	} else if snap.Recovery.LastRecoveryTime.IsZero() {
+		t.Error("recovery.last_recovery_time is the zero time after a recovery run")
+	}
 	if snap.Health.ClientsHealthy != 1 {
 		t.Errorf("health.clientsHealthy=%d, want 1", snap.Health.ClientsHealthy)
 	}

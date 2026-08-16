@@ -32,6 +32,18 @@ type TokenAdminService interface {
 	List(ctx context.Context) ([]sqlite.TokenRow, error)
 }
 
+// TokenSocketRevoker closes the WebSocket connections a bearer token
+// authenticated. Revoking a token stops REST calls immediately because
+// every request re-resolves the credential, while a socket resolves it
+// once at the upgrade and gates every later command on that snapshot —
+// so the revocation only lands on both planes when the socket is torn
+// down as well. *ws.Hub satisfies it; a nil revoker disables the hook.
+type TokenSocketRevoker interface {
+	// CloseByToken closes every connection that authenticated with the
+	// token identified by fingerprint and reports how many it closed.
+	CloseByToken(fingerprint string) int
+}
+
 // createTokenRequest is the body of POST /admin/auth/tokens.
 // ExpiresInDays, when set and positive, bounds the token's lifetime; a
 // nil or non-positive value creates a token that never expires.
@@ -139,8 +151,10 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 }
 
 // DeleteTokenAdmin handles DELETE /admin/auth/tokens/{fingerprint}.
-// Returns 404 when the fingerprint is unknown.
-func DeleteTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFunc {
+// Returns 404 when the fingerprint is unknown. On success the sockets the
+// token opened are closed too, so the revocation reaches the command
+// plane and not just REST (see [TokenSocketRevoker]).
+func DeleteTokenAdmin(svc TokenAdminService, rec audit.Recorder, sockets TokenSocketRevoker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fp := chi.URLParam(r, "fingerprint")
 		if fp == "" {
@@ -157,6 +171,9 @@ func DeleteTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 		if err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Token deletion failed", err)
 			return
+		}
+		if sockets != nil {
+			sockets.CloseByToken(fp)
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {

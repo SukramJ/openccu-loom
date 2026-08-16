@@ -21,6 +21,8 @@ import (
 var (
 	_ payload.Source                    = (*Switch)(nil)
 	_ payload.HADiscoveryPayloadBuilder = (*Switch)(nil)
+	_ payload.Source                    = (*AccessPermission)(nil)
+	_ payload.HADiscoveryPayloadBuilder = (*AccessPermission)(nil)
 )
 
 // HADiscoveryPayload returns the HA Switch-platform-specific payload

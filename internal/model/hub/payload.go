@@ -39,7 +39,7 @@ func (p *Program) CanonicalUniqueID(serialSuffix string) string {
 	if p == nil {
 		return ""
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, "program", routingkey.HubSlug(p.Name), "")
+	return routingkey.CanonicalUniqueID(serialSuffix, "program", routingkey.HubSlug(p.LegacyName()), "")
 }
 
 // Info returns identity-level fields for a Program.
@@ -49,11 +49,11 @@ func (p *Program) Info() payload.InfoPayload {
 	}
 	return &payload.ProgramInfo{
 		ID:          p.ID,
-		Name:        p.Name,
+		Name:        p.LegacyName(),
 		Description: p.Description,
 		Category:    "program",
 		UniqueID:    p.UniqueID(),
-		IsInternal:  p.IsInternal,
+		IsInternal:  p.Internal(),
 	}
 }
 
@@ -103,7 +103,7 @@ func (s *Sysvar) CanonicalUniqueID(serialSuffix string) string {
 	if s == nil {
 		return ""
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(s.Name), "")
+	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(s.LegacyName()), "")
 }
 
 // Info returns identity-level fields for a Sysvar.
@@ -111,24 +111,25 @@ func (s *Sysvar) Info() payload.InfoPayload {
 	if s == nil {
 		return nil
 	}
+	m := s.Meta()
 	out := &payload.SysvarInfo{
-		Name:        s.Name,
-		Description: s.Description,
+		Name:        s.LegacyName(),
+		Description: m.Description,
 		Category:    "sysvar",
 		UniqueID:    s.UniqueID(),
-		ValueType:   string(s.ValueType),
-		Unit:        s.Unit,
-		Vid:         s.Vid,
-		IsExtended:  s.IsExtended,
+		ValueType:   string(m.ValueType),
+		Unit:        m.Unit,
+		Vid:         m.Vid,
+		IsExtended:  m.IsExtended,
 	}
-	if len(s.ValueList) > 0 {
-		out.ValueList = s.ValueList
+	if len(m.ValueList) > 0 {
+		out.ValueList = m.ValueList
 	}
-	if s.Min != nil {
-		out.Min = s.Min
+	if m.Min != nil {
+		out.Min = m.Min
 	}
-	if s.Max != nil {
-		out.Max = s.Max
+	if m.Max != nil {
+		out.Max = m.Max
 	}
 	return out
 }
@@ -139,8 +140,8 @@ func (s *Sysvar) Config() payload.ConfigPayload {
 		return nil
 	}
 	return &payload.SysvarConfig{
-		EnabledDefault: s.EnabledDefault,
-		Writable:       s.Writer != nil,
+		EnabledDefault: s.EnabledByDefault(),
+		Writable:       s.Writable(),
 	}
 }
 
@@ -151,7 +152,7 @@ func (s *Sysvar) State() payload.StatePayload {
 	}
 	out := &payload.SysvarState{
 		StateUncertain: s.StateUncertain(),
-		ValueType:      string(s.ValueType),
+		ValueType:      string(s.Meta().ValueType),
 	}
 	if v, ok := s.Value(); ok {
 		out.Value = v.Unwrap()

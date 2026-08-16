@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
@@ -39,16 +40,17 @@ func CSRFToken(ctx context.Context) string {
 //
 // Safe methods (GET/HEAD/OPTIONS) pass through unchanged.
 //
-// Per-request credential schemes — [SchemeBasic] and [SchemeBearer] —
-// also pass through: those carry their credential in a per-request
-// Authorization header that browsers never auto-include on cross-
-// origin requests, so they cannot be forged by a malicious page.
-// CSRF protection is fundamentally about ambient credentials (session
-// cookies); enforcing it on header-auth scripts (curl, the chip-tool
-// test harness, ops automation) would block legitimate clients while
-// adding no real protection. OWASP CSRF Cheat Sheet §"Token-based
-// mitigation" — "CSRF tokens are not needed for endpoints that do not
-// use cookies for authentication".
+// [SchemeBearer] passes through: a browser never attaches a bearer
+// token by itself, so a malicious page cannot produce an authenticated
+// request, and demanding the double-submit token would only break
+// header-auth clients (curl, CI, ops automation).
+//
+// [SchemeBasic] is ambient authority as soon as a browser has cached
+// the credentials for this origin — it then replays the Authorization
+// header on requests another site triggered, exactly like a session
+// cookie. Basic therefore keeps the exemption only for requests that
+// cannot have been ambient-authenticated by a browser; see
+// [csrfExempt].
 func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +87,7 @@ func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
 				return
 			}
 			//nolint:contextcheck // r carries a context derived from r.Context() via WithValue above; reading it back is not a new detached context
-			if id, ok := IdentityFrom(r.Context()); ok && csrfSchemeExempt(id.Scheme) {
+			if id, ok := IdentityFrom(r.Context()); ok && csrfExempt(r, id.Scheme) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -130,16 +132,32 @@ func hasBearerAuthHeader(r *http.Request) bool {
 	return strings.HasPrefix(h, "Bearer ") && strings.TrimSpace(strings.TrimPrefix(h, "Bearer ")) != ""
 }
 
-// csrfSchemeExempt reports whether an authenticated scheme bypasses
-// the double-submit token check. Per-request credential schemes —
-// Authorization: Basic and Authorization: Bearer — are not in scope
-// because browsers do not auto-include those headers on cross-origin
-// requests. Only ambient credentials (session cookies) require the
-// double-submit defence.
-func csrfSchemeExempt(s Scheme) bool {
+// csrfExempt reports whether an authenticated request bypasses the
+// double-submit token check.
+//
+// The distinction is not "header credential vs cookie" but "can a page
+// on another site cause this credential to be attached without knowing
+// it". A bearer token cannot: nothing in the browser adds it on its own.
+// Basic credentials can: once the user has answered the browser's Basic
+// prompt for this origin, the browser replays the Authorization header
+// on requests that any other site initiates — a cross-site form POST
+// then arrives fully authenticated. Exempting Basic unconditionally
+// would leave every mutating endpoint forgeable for exactly the
+// operators who use the browser prompt.
+//
+// Basic therefore keeps the exemption only while the request carries no
+// evidence of a browser having sent it from another site
+// ([csrfBrowserCrossSite]). Scripts (curl, CI, ops automation) send no
+// such markers and stay exempt; a browser-initiated cross-site request
+// must present the double-submit token, which a foreign origin cannot
+// read.
+func csrfExempt(r *http.Request, s Scheme) bool {
 	switch s {
-	case SchemeBasic, SchemeBearer:
+	case SchemeBearer:
+		// A browser never attaches a bearer token by itself.
 		return true
+	case SchemeBasic:
+		return !csrfBrowserCrossSite(r)
 	case SchemeIngress:
 		// Per-request, proxy-trusted (network + X-Ingress-Path), not a
 		// browser-ambient cookie — the double-submit defence does not apply.
@@ -148,6 +166,55 @@ func csrfSchemeExempt(s Scheme) bool {
 		// Both ride the browser-ambient session cookie, whichever authority
 		// minted the identity — the double-submit defence applies to both.
 		return false
+	}
+	return false
+}
+
+// csrfBrowserCrossSite reports whether r shows evidence of having been
+// initiated by a browser from a site other than the daemon's own origin.
+//
+// `Sec-Fetch-Site` is the primary signal: browsers set it on every
+// request and page script cannot (it is a forbidden header name), so its
+// value is trustworthy where it exists. `Origin` is the fallback for
+// clients too old to send fetch metadata — browsers attach it to every
+// unsafe-method request, and an Origin whose host is neither the request
+// host nor the proxy-forwarded host identifies another site.
+//
+// Absence of both means a non-browser client: no ambient authority is in
+// play and the request stays exempt.
+func csrfBrowserCrossSite(r *http.Request) bool {
+	switch strings.ToLower(r.Header.Get("Sec-Fetch-Site")) {
+	case "cross-site", "same-site":
+		return true
+	case "same-origin", "none":
+		return false
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" || strings.EqualFold(origin, "null") {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		// An Origin the daemon cannot resolve to a host cannot be proven
+		// same-origin, so it counts as another site.
+		return true
+	}
+	return !csrfSameOriginHost(u.Host, r)
+}
+
+// csrfSameOriginHost reports whether originHost addresses the same host
+// the request itself was sent to. Behind a reverse proxy the browser's
+// Origin names the external host while r.Host names the internal one, so
+// the first entry of an X-Forwarded-Host chain counts as well.
+func csrfSameOriginHost(originHost string, r *http.Request) bool {
+	if strings.EqualFold(originHost, r.Host) {
+		return true
+	}
+	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
+		if first := strings.TrimSpace(strings.SplitN(fwd, ",", 2)[0]); first != "" &&
+			strings.EqualFold(originHost, first) {
+			return true
+		}
 	}
 	return false
 }

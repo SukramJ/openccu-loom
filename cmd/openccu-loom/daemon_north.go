@@ -215,24 +215,37 @@ func hasPersistedToken(ctx context.Context, sqTokens *sqlitestore.TokenStore) bo
 	return n > 0
 }
 
-// warnOnDormantOnboarding logs once at boot when the operator has closed the
-// first-run surface on a daemon that cannot authenticate anyone. The lockout
-// is the point of `bootstrap.allow_first_run_setup: false`, but from the SPA
-// it is indistinguishable from a broken login — the log record is the only
-// place that can name the cause and the way out.
+// warnOnDormantOnboarding logs once at boot when nobody can log into this
+// daemon. Two states produce that, and from the SPA both are indistinguishable
+// from a broken login — the log record is the only place that can name the
+// cause and the way out.
+//
+// The first is the deliberate lockout: `bootstrap.allow_first_run_setup: false`
+// on a daemon with no authentication source at all. The second is an API token
+// as the only credential while `north.rest.auth.bearer_enabled` is false — the
+// token then resolves nobody, and onboarding stays closed on purpose, because a
+// configured credential must never re-open anonymous admin creation.
 func warnOnDormantOnboarding(ctx context.Context, cfg *config.Config, sqUsers *sqlitestore.UserStore, sqTokens *sqlitestore.TokenStore, sqCentrals *sqlitestore.CentralsStore, logger *slog.Logger) {
-	if cfg.Bootstrap.FirstRunSetupAllowed() || sqUsers == nil {
+	if sqUsers == nil {
 		return
 	}
 	n, err := sqUsers.Count(ctx)
 	if err != nil {
 		return
 	}
-	if !noAuthSourceConfigured(cfg, authSources{
+	sources := configuredAuthSources(cfg, authSources{
 		localUsers:      n,
 		persistedTokens: hasPersistedToken(ctx, sqTokens),
 		hasCentral:      hasConfiguredCentral(ctx, cfg, sqCentrals),
-	}) {
+	})
+	if len(sources) == 1 && sources[0] == authSourceAPIToken && !cfg.North.REST.Auth.BearerAuthEnabled() {
+		logger.Warn("auth.scheme.dormant",
+			slog.String("reason", "an API token is the only configured credential and north.rest.auth.bearer_enabled is false"),
+			slog.String("effect", "the token authenticates nobody, and onboarding stays closed because a configured credential must not open anonymous admin creation"),
+			slog.String("remedy", "set north.rest.auth.bearer_enabled: true in the config file (or seed a local admin) and restart"))
+		return
+	}
+	if cfg.Bootstrap.FirstRunSetupAllowed() || len(sources) > 0 {
 		return
 	}
 	logger.Warn("setup.onboarding.dormant",
@@ -315,23 +328,56 @@ type authSources struct {
 // login is off outside the add-on — authenticated its operator perfectly
 // while still reporting "first run", which leaves the unauthenticated
 // POST /api/v1/setup open for anyone on the network to mint an admin.
+//
+// A configured credential counts even when the scheme that resolves it is
+// currently off. Tokens reach the middleware exclusively through the Bearer
+// scheme — [gatedAuthMiddleware] hands it a nil token store when
+// `bearer_enabled` is false — so with the scheme off a stored token
+// authenticates nobody, and that state does need to be diagnosable. It must
+// not be answered by opening anonymous admin creation: an operator who holds
+// API tokens has credentials, and re-enabling their scheme is a config edit,
+// while POST /api/v1/setup is reachable by anyone who can reach the listener.
+// [warnOnDormantOnboarding] names the state in the log instead. Local users
+// likewise count regardless of `basic_enabled`: SPA session login resolves
+// them without the header scheme.
 func noAuthSourceConfigured(cfg *config.Config, src authSources) bool {
-	switch {
-	case src.localUsers > 0:
-		return false // a persisted local admin exists
-	case src.persistedTokens:
-		return false // a persisted API token authenticates as its role
-	case len(cfg.North.REST.Auth.Users) > 0:
-		return false // a YAML-pinned local user exists
-	case len(cfg.North.REST.Auth.Tokens) > 0:
-		return false // a YAML-pinned bearer token (seeded into the store on upgrade)
-	case ccuAuthEnabled(cfg.North.REST.Auth.CCU) && src.hasCentral:
-		return false // CCU-delegated login is available (ADR 0043)
-	case cfg.North.REST.Auth.OIDC.Enabled:
-		return false // OIDC SSO is available
-	default:
-		return true
+	return len(configuredAuthSources(cfg, src)) == 0
+}
+
+// The credential sources, named as the boot log names them.
+const (
+	authSourceLocalUser = "local-user"
+	authSourceAPIToken  = "api-token"
+	authSourceCCU       = "ccu"
+	authSourceOIDC      = "oidc"
+)
+
+// configuredAuthSources lists every credential source the operator has
+// configured. It is the single enumeration of them: [noAuthSourceConfigured]
+// asks whether the list is empty, and [warnOnDormantOnboarding] asks whether
+// the only entry is one whose scheme is currently switched off. Splitting the
+// two questions across two lists is how one of them would start missing a
+// credential again.
+func configuredAuthSources(cfg *config.Config, src authSources) []string {
+	sources := make([]string, 0, 4)
+	// A persisted local admin, or a YAML-pinned local user.
+	if src.localUsers > 0 || len(cfg.North.REST.Auth.Users) > 0 {
+		sources = append(sources, authSourceLocalUser)
 	}
+	// A persisted API token, or a YAML-pinned one (seeded into the store on
+	// upgrade).
+	if src.persistedTokens || len(cfg.North.REST.Auth.Tokens) > 0 {
+		sources = append(sources, authSourceAPIToken)
+	}
+	// CCU-delegated login authenticates against a CCU's user database, so it
+	// only counts once a central exists (ADR 0043).
+	if ccuAuthEnabled(cfg.North.REST.Auth.CCU) && src.hasCentral {
+		sources = append(sources, authSourceCCU)
+	}
+	if cfg.North.REST.Auth.OIDC.Enabled {
+		sources = append(sources, authSourceOIDC)
+	}
+	return sources
 }
 
 // awaitShutdown blocks until ctx is cancelled, then runs the graceful
@@ -533,10 +579,10 @@ func (s *alarmMQTTSink) emitArmFailure(zoneID, zoneName string, mode hmenum.Alar
 	hook(zoneID, zoneName, mode, blockers)
 }
 
-// buildOIDCRest discovers the IdP and constructs the REST OIDC deps backing
-// the SPA's SSO flow (`/api/v1/auth/oidc/{start,callback}`). Returns nil when
-// OIDC is disabled or discovery fails — the SPA then hides the SSO button.
-func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.AuthDeps) *handlers.OIDCDeps { //nolint:contextcheck // test callers outside owned set prevent ctx signature; buildOIDCClient uses context.Background() with a nolint inside
+// buildOIDCRest constructs the REST OIDC deps backing the SPA's SSO flow
+// (`/api/v1/auth/oidc/{start,callback}`). Returns nil when OIDC is disabled
+// or misconfigured — the SPA then hides the SSO button.
+func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.AuthDeps) *handlers.OIDCDeps {
 	client := buildOIDCClient(cfg, logger)
 	if client == nil {
 		return nil
@@ -544,15 +590,18 @@ func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.A
 	return handlers.NewOIDCDeps(client, authDeps, logger)
 }
 
+// buildOIDCClient builds the OIDC client from the configured issuer without
+// contacting it. Provider discovery is deferred to the first login, so an IdP
+// that happens to be down while the daemon boots does not disable SSO until
+// the next restart — it recovers on its own once the IdP answers again. Only
+// a configuration error (missing issuer / client id / redirect URL, or a
+// non-HTTPS issuer) yields nil.
 func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 	oc := cfg.North.REST.Auth.OIDC
 	if !oc.Enabled || oc.Issuer == "" {
 		return nil
 	}
-	//nolint:contextcheck // test callers outside owned set prevent threading ctx through here; discovery uses a short independent timeout
-	discoCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	client, err := oidc.New(discoCtx, oidc.Config{
+	client, err := oidc.NewDeferred(oidc.Config{
 		Issuer:       oc.Issuer,
 		ClientID:     oc.ClientID,
 		ClientSecret: oc.ClientSecret,
@@ -566,9 +615,20 @@ func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 	return client
 }
 
-func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool) *mqttStack {
+// buildMQTT assembles one MQTT stack generation (client, bridge, lifecycle)
+// from cfg. Returns nil when MQTT is disabled.
+//
+// centralNames resolves the centrals the daemon currently serves. It is a
+// function, not a slice, because a CCU adopted at runtime never reaches
+// cfg.Centrals: the retained `bridge/health` payload is rebuilt on every
+// AnnounceOnline and must name the live fleet. A nil func falls back to the
+// boot config.
+func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool, centralNames func() []string) *mqttStack {
 	if !cfg.North.MQTT.Enabled {
 		return nil
+	}
+	if centralNames == nil {
+		centralNames = func() []string { return configuredCentralNames(cfg) }
 	}
 	var client mqtt.Client
 	var connector mqtt.Connector
@@ -634,14 +694,19 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// topics of every configured CCU, not just the default one — a
 		// retired spelling of one CCU's name can be another CCU's live
 		// topic, and clearing that would blank a value in use.
-		CentralNames:       configuredCentralNames(cfg),
-		RawEnabled:         cfg.North.MQTT.RawEnabled,
-		HADiscoveryEnabled: cfg.North.MQTT.DiscoveryEnabled,
-		SubDevicesEnabled:  cfg.North.MQTT.SubDevicesEnabled,
-		Locale:             cfg.Locale,
-		HealthSupplier:     bridgeHealthSupplier(cfg, startedAt),
-		Collector:          collector,
-		ChannelHidden:      channelHidden,
+		CentralNames: centralNames(),
+		// The snapshot above is taken at boot. A CCU adopted afterwards is
+		// not in it, so a sweep would judge that CCU's live topics against
+		// a fleet it is not part of and clear them; the supplier is asked
+		// per sweep instead.
+		CentralNamesSupplier: centralNames,
+		RawEnabled:           cfg.North.MQTT.RawEnabled,
+		HADiscoveryEnabled:   cfg.North.MQTT.DiscoveryEnabled,
+		SubDevicesEnabled:    cfg.North.MQTT.SubDevicesEnabled,
+		Locale:               cfg.Locale,
+		HealthSupplier:       bridgeHealthSupplier(centralNames, startedAt),
+		Collector:            collector,
+		ChannelHidden:        channelHidden,
 	}, pub).WithSubscriber(client)
 	wiring := mqtt.NewWiring(bridge, logger)
 
@@ -670,11 +735,9 @@ func buildLWTTopic(cfg *config.Config) string {
 	return mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).BridgeStatus()
 }
 
-// bridgeHealthSupplier returns a closure the MQTT bridge invokes on
-// every AnnounceOnline to compose the `<base>/bridge/health` payload.
-// The body carries operator-visible metadata that is more useful than
-// a bare "online" flag — build identity, daemon boot timestamp, and
-// the configured centrals.
+// buildRateLimitConfig projects the YAML config into the middleware
+// shape, returning nil when rate limiting is disabled so the router
+// skips the middleware wiring entirely.
 func buildRateLimitConfig(cfg *config.Config) *middleware.RateLimitConfig {
 	rl := cfg.North.REST.RateLimit
 	if !rl.Enabled {
@@ -712,31 +775,10 @@ func (r runtimeCapabilityDetector) HasAlarm() bool             { return r.alarm 
 func (r runtimeCapabilityDetector) HasHistory() bool           { return r.history }
 func (r runtimeCapabilityDetector) HasAddonSelfUpdate() bool   { return r.addonSelfUpdate }
 
-// detectSupervisedRestart reports whether the daemon is running
-// under a supervisor that will restart it after a clean shutdown.
-// The check is cheap + heuristic — we do not try to verify the
-// supervisor's restart policy; we look for tight markers that
-// imply the daemon's IMMEDIATE parent (or runtime) is a
-// supervisor, not just the terminal session.
-//
-// Signals (any one fires):
-//
-//   - OPENCCU_LOOM_SUPERVISOR=1 — explicit operator override.
-//   - JOURNAL_STREAM set AND getppid()==1 — systemd attached the
-//     daemon's stdout/stderr to journald and re-parented it to PID 1
-//     (the unambiguous "I am a systemd service" signal; INVOCATION_ID
-//     alone is too lax because gnome-terminal inherits it).
-//   - getppid()==1 AND /run/systemd/system exists — fallback when
-//     JOURNAL_STREAM was suppressed but systemd is still PID 1.
-//   - KUBERNETES_SERVICE_HOST set — Kubernetes injects it into
-//     every Pod and the kubelet always restarts dead containers.
-//   - /.dockerenv exists — Docker / Podman containers; restart
-//     policy is operator-chosen but presence is the usual signal.
-//
-// Missing all of these means the binary is running on bare metal
-// from a shell. The SPA disables the Restart-Daemon button in
-// that case so an operator does not accidentally take the daemon
-// permanently offline.
+// splitListenPort returns the TCP port from a Go net.Listen-style
+// address (":8119", "0.0.0.0:8119", "[::]:8119"). Reports ok=false
+// for addresses without a numeric port (e.g. Unix sockets, malformed
+// strings) so the caller can degrade gracefully.
 func splitListenPort(addr string) (int, bool) {
 	_, portStr, err := net.SplitHostPort(addr)
 	if err != nil || portStr == "" {
@@ -775,6 +817,12 @@ func wsAllowedOrigins(cfg *config.Config) []string {
 	return origins
 }
 
+// buildOpenAPIValidator loads the OpenAPI spec from the configured
+// path and returns a ready validator, or nil when the file is missing
+// or fails to parse. Failures are logged but never abort the daemon —
+// a missing spec must not take the REST surface offline; operators
+// see the warning and can either supply the spec or flip
+// OpenAPIValidate off.
 func buildOpenAPIValidator(cfg *config.Config, logger *slog.Logger) *middleware.OpenAPIValidator {
 	path := cfg.North.REST.OpenAPISpecPath
 	if path == "" {
@@ -803,10 +851,3 @@ func buildOpenAPIValidator(cfg *config.Config, logger *slog.Logger) *middleware.
 		slog.String("path", path))
 	return v
 }
-
-// singleCentralName returns the name of the registered central when
-// the registry contains exactly one entry, otherwise the empty
-// string. The REST router uses the result to pre-populate
-// `central_name` in every request's [reqctx.RequestContext]. Multi-
-// central deployments leave the request scope unset and rely on
-// per-handler resolution.

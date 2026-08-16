@@ -249,7 +249,7 @@ func TestAckPump_Discharge(t *testing.T) {
 	b.owedInboundAck(peerAddr, hdr, proto)
 	// Discharge before pump fires — simulates a piggybacked ACK on a reply.
 	// buildMsgHdr always sets SessionID 0, matching owedInboundAck's key.
-	b.dischargeOwedAck(0, exchangeID)
+	b.dischargeOwedAck(0, exchangeID, true)
 
 	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
 		t.Errorf("RunAckPumpOnce after Discharge: want 0, got %d", n)
@@ -302,7 +302,7 @@ func TestAckPump_SessionScopedExchangeCollision(t *testing.T) {
 	}
 
 	// Discharge session 99's obligation — session 0's must survive intact.
-	b.dischargeOwedAck(dischargeSession, exchangeID)
+	b.dischargeOwedAck(dischargeSession, exchangeID, true)
 	if got := tracker.Pending(); got != 1 {
 		t.Fatalf("Pending() = %d after discharging session %d, want 1 (session %d must survive)", got, dischargeSession, survivorSession)
 	}
@@ -549,7 +549,7 @@ func TestAckPump_ExpediteDuplicateAck(t *testing.T) {
 	}
 
 	// Simulate the duplicate-retransmit path: expedite, then pump.
-	b.expediteDuplicateAck(0, exchangeID)
+	b.expediteDuplicateAck(0, exchangeID, true)
 	if n := b.RunAckPumpOnce(time.Now()); n != 1 {
 		t.Fatalf("RunAckPumpOnce after expedite: want 1, got %d", n)
 	}
@@ -588,7 +588,7 @@ func TestAckPump_ExpediteDuplicateAck_UnknownObligationNoOp(t *testing.T) {
 	tracker := mrp.NewAckTracker(mrp.DefaultStandaloneAckDelay)
 	b.AttachAckTracker(tracker)
 
-	b.expediteDuplicateAck(0, 4242)
+	b.expediteDuplicateAck(0, 4242, true)
 	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
 		t.Errorf("RunAckPumpOnce after expediting an unknown obligation: want 0, got %d", n)
 	}
@@ -609,8 +609,11 @@ func TestAckPump_AttachAckTrackerAlsoSetsAckHandler(t *testing.T) {
 		msgCounter uint32 = 500
 	)
 
-	// Plant an obligation so Discharge has something to clear.
-	tracker.Owe(msgCounter, 0, exchangeID, false, time.Now())
+	// Plant an obligation so Discharge has something to clear. The
+	// inbound StandaloneAck below carries Initiator=false (the peer is
+	// responding on an exchange WE opened), so our role on that exchange
+	// is initiator=true — the obligation has to be keyed the same way.
+	tracker.Owe(msgCounter, 0, exchangeID, true, time.Now())
 	if tracker.Pending() != 1 {
 		t.Fatalf("pre-condition: tracker.Pending() = %d, want 1", tracker.Pending())
 	}

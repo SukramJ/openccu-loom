@@ -417,3 +417,38 @@ func TestEditSessions_Prune_ExpiresExpiredLock(t *testing.T) {
 		t.Fatal("expected second open to succeed after expiry")
 	}
 }
+
+// TestCloseEditSession_NoBody_Returns422 pins the honest answer to a
+// bodyless close: the handler needs key + token to release a lock, so an
+// empty body must be reported as the missing key rather than answered
+// 204 while the lock stays held until its TTL expires.
+func TestCloseEditSession_NoBody_Returns422(t *testing.T) {
+	t.Parallel()
+	s := NewEditSessions()
+	key := "channel:DEV009:1:MASTER"
+	s.Open(key, "user1") //nolint:errcheck // return value is not meaningful in this test setup
+	req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	CloseEditSession(s).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+	if lock, ok := s.Open(key, "user2"); ok {
+		t.Fatalf("lock was released by a bodyless close (now held by %q)", lock.Subject)
+	}
+}
+
+// TestHeartbeatEditSession_NoBody_Returns422 pins the same for the
+// refresh: an absent body is a missing key, not malformed JSON.
+func TestHeartbeatEditSession_NoBody_Returns422(t *testing.T) {
+	t.Parallel()
+	s := NewEditSessions()
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	HeartbeatEditSession(s).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}

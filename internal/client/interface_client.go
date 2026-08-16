@@ -28,6 +28,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -186,6 +187,46 @@ type Config struct {
 	// from the CacheCoordinator.RecordSession passthrough. Closes
 	// the Item 2 gap in (RecordSession-Wiring).
 	SessionRecorderHook func(rpcType, method string, params, response any)
+
+	// RPCOutcomeHook, when non-nil, is called once per south-bound RPC
+	// this client resolves, with how the reliability stack ended it.
+	//
+	// It is the only source the per-central RPC and service metrics have
+	// for failures and rejections. Left unwired, the diagnostics dump
+	// reports zero failures and zero rejections beside a non-zero request
+	// count — which reads as a flawless link rather than an unmeasured
+	// one, and reads the same however broken the link is.
+	//
+	// Typed as a plain function, like [Config.SessionRecorderHook], to
+	// keep the client package free of a metrics dependency.
+	RPCOutcomeHook func(method string, duration time.Duration, outcome RPCOutcome)
+}
+
+// RPCOutcome classifies how one south-bound RPC ended, as the
+// reliability stack saw it.
+type RPCOutcome uint8
+
+const (
+	// RPCOutcomeSuccess means the call was attempted and returned no error.
+	RPCOutcomeSuccess RPCOutcome = iota
+	// RPCOutcomeFailed means the call was attempted and failed.
+	RPCOutcomeFailed
+	// RPCOutcomeRejected means an open circuit breaker shed the call
+	// before it reached the wire. Distinct from a failure — nothing was
+	// measured about the CCU, only about this daemon's own back-pressure.
+	RPCOutcomeRejected
+)
+
+// classifyRPCOutcome maps a reliability-stack error onto an [RPCOutcome].
+func classifyRPCOutcome(err error) RPCOutcome {
+	switch {
+	case err == nil:
+		return RPCOutcomeSuccess
+	case errors.Is(err, hmerr.ErrCircuitBreakerOpen):
+		return RPCOutcomeRejected
+	default:
+		return RPCOutcomeFailed
+	}
 }
 
 // InterfaceClient wraps a transport caller with the reliability stack.
@@ -354,6 +395,16 @@ func (c *InterfaceClient) Capabilities() backends.Capabilities {
 	return c.cfg.Capabilities
 }
 
+// observeRPCOutcome reports one completed RPC to the configured hook.
+// started is the instant the call entered the reliability stack.
+func (c *InterfaceClient) observeRPCOutcome(method string, started time.Time, err error) {
+	hook := c.cfg.RPCOutcomeHook
+	if hook == nil {
+		return
+	}
+	hook(method, time.Since(started), classifyRPCOutcome(err))
+}
+
 // Call executes method/params through the reliability stack.
 // Priority governs throttle ordering. coalesceKey, when non-empty,
 // deduplicates concurrent in-flight calls against the same key.
@@ -382,6 +433,7 @@ func (c *InterfaceClient) Call(
 	}
 	c.mu.Unlock()
 
+	started := time.Now()
 	c.totalRequests.Add(1)
 	c.pendingRequests.Add(1)
 	defer c.pendingRequests.Add(-1)
@@ -431,6 +483,7 @@ func (c *InterfaceClient) Call(
 		c.lastFailureAt = time.Now()
 		c.failureMu.Unlock()
 	}
+	c.observeRPCOutcome(method, started, err)
 	return out, err
 }
 
@@ -464,6 +517,7 @@ func (c *InterfaceClient) CallOrdered(
 		return nil, fmt.Errorf("client: ordered calls unsupported on interface %s", c.cfg.Interface)
 	}
 
+	started := time.Now()
 	c.totalRequests.Add(1)
 	c.pendingRequests.Add(1)
 	defer c.pendingRequests.Add(-1)
@@ -491,6 +545,7 @@ func (c *InterfaceClient) CallOrdered(
 		c.lastFailureAt = time.Now()
 		c.failureMu.Unlock()
 	}
+	c.observeRPCOutcome(method, started, err)
 	return result, err
 }
 
@@ -564,6 +619,12 @@ func (c *InterfaceClient) Close() {
 	// after the interface shuts down.
 	if c.cfg.Retrier != nil {
 		c.cfg.Retrier.CancelInterface()
+	}
+	// Release everyone parked on a coalesced call. Their transport is gone,
+	// so waiting for a result that can no longer arrive only holds the
+	// caller — the shutdown error tells them the call was not carried out.
+	if c.cfg.Coalescer != nil {
+		c.cfg.Coalescer.Clear()
 	}
 	c.closeThrottles()
 }
@@ -866,9 +927,11 @@ func (c *InterfaceClient) ReinitProxy(ctx context.Context, b backends.Operations
 //
 // When handlePingPong is true and the backend declares ping_pong capability,
 // a unique token is generated and embedded in the caller_id sent to the CCU
-// as "<interfaceID>#<token>". The token is recorded in the tracker BEFORE the
-// RPC call — the CCU may echo the PONG back before Call() returns, so the
-// tracker must have the entry in place first. The CCU echoes the full
+// as "<interfaceID>#<token>". The token is recorded in the tracker once the
+// circuit breaker admits the probe and immediately BEFORE the RPC call — the
+// CCU may echo the PONG back before Call() returns, so the tracker must have
+// the entry in place first, while a probe the breaker sheds must leave no
+// pending entry behind at all. The CCU echoes the full
 // caller_id string in the PONG event; the event coordinator extracts the
 // token suffix and calls RecordPong to close the round-trip.
 //
@@ -886,13 +949,11 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 	// a distinguishable caller_id and its broadcast PONGs are not mistaken for
 	// ours. See [InterfaceClient.WireBoundaryID].
 	callerID := c.WireBoundaryID()
+	token := ""
 	if handlePingPong && c.cfg.Capabilities.PingPong {
 		seq := c.pingSeq.Add(1)
-		token := strconv.FormatUint(seq, 10)
+		token = strconv.FormatUint(seq, 10)
 		callerID = c.WireBoundaryID() + "#" + token
-		// Record the pending ping before sending — the CCU may deliver the
-		// PONG event before the RPC call returns on fast transports.
-		c.RecordPing(token)
 	}
 	// Use the circuit breaker's PROBE path — operation name
 	// "check_connection" is deliberately NOT on the bypass list so
@@ -906,6 +967,15 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 	// path.
 	var callErr error
 	err := c.cfg.Circuit.Do(ctx, "check_connection", func(ctx context.Context) error {
+		// Record the pending ping inside the breaker's admission, and
+		// immediately before the call: the CCU may deliver the PONG event
+		// before Call returns on fast transports, so the tracker needs the
+		// entry first — but a probe the breaker sheds never reaches the wire,
+		// and a token recorded for it can only expire into a pending-TTL
+		// mismatch that degrades interface health for a ping nobody sent.
+		if token != "" {
+			c.RecordPing(token)
+		}
 		_, callErr = c.cfg.Caller.Call(ctx, "ping", []any{callerID})
 		return callErr
 	})

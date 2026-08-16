@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -195,7 +196,7 @@ func (s *GenericSwitch) MatterWrite(_ context.Context, attrID uint32, _ any, _ h
 
 // MatterInvoke rejects all commands — Switch cluster has no commands.
 func (s *GenericSwitch) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: GenericSwitch has no command 0x%02X", cmdID)
+	return nil, im.UnsupportedCommandf("matter: GenericSwitch has no command 0x%02X", cmdID)
 }
 
 // MatterReportable lists the attributes that emit reports.

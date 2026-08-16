@@ -47,8 +47,37 @@ type matterVerifierInstaller struct {
 
 	// mu serialises InstallVerifier against its own Restore closure so a
 	// window open racing a previous close observes a consistent bridge
-	// PASE handler.
+	// PASE handler. It also guards `active`.
 	mu sync.Mutex
+	// active is the per-exchange provider currently attached to the bridge
+	// (concurrent mode only). Each one runs a reaper goroutine that only
+	// [matterbridge.PerExchangePaseProvider.Stop] ends, so every swap — and
+	// the daemon shutdown — has to release the one it replaces. Without that
+	// every opened commissioning window plus its close left a ticker
+	// goroutine behind for the process lifetime.
+	active *matterbridge.PerExchangePaseProvider
+}
+
+// swapActive installs next as the live per-exchange provider and stops the one
+// it replaces. Caller holds p.mu.
+func (p *matterVerifierInstaller) swapActive(next *matterbridge.PerExchangePaseProvider) {
+	prev := p.active
+	p.active = next
+	if prev != nil {
+		prev.Stop()
+	}
+}
+
+// Close releases the provider the installer still holds. The daemon's Matter
+// teardown calls it; a window left open at shutdown would otherwise keep its
+// reaper ticking past the bridge it belonged to.
+func (p *matterVerifierInstaller) Close() {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.swapActive(nil)
 }
 
 // newMatterVerifierInstaller returns an installer ready to be wired onto a
@@ -101,8 +130,9 @@ func (p *matterVerifierInstaller) InstallVerifier(verifier []byte, iterations ui
 			}
 			return a
 		})
-		vp.StartReaper(context.Background(), 30*time.Second, 60*time.Second)
+		vp.StartReaper(context.Background(), 30*time.Second, 60*time.Second) //nolint:contextcheck // the reaper spans the commissioning window, not the invoking exchange; swapActive / Close end it
 		p.bridge.AttachPaseHandlerProvider(vp.Resolve)
+		p.swapActive(vp)
 	} else {
 		adapter, err := buildPaseAdapterFromVerifier(verifier, salt, iters, p.opMgr, p.opCreds, p.logger)
 		if err != nil {
@@ -122,15 +152,17 @@ func (p *matterVerifierInstaller) InstallVerifier(verifier []byte, iterations ui
 	configuredFactory := p.configuredFactory
 	logger := p.logger
 	bridge := p.bridge
-	mu := &p.mu
 
 	restore := func() {
-		mu.Lock()
-		defer mu.Unlock()
+		p.mu.Lock()
+		defer p.mu.Unlock()
 		if concurrent {
 			restored := matterbridge.NewPerExchangePaseProvider(configuredFactory)
-			restored.StartReaper(context.Background(), 30*time.Second, 60*time.Second)
+			restored.StartReaper(context.Background(), 30*time.Second, 60*time.Second) //nolint:contextcheck // the between-windows reaper spans daemon lifetime; swapActive / Close end it
 			bridge.AttachPaseHandlerProvider(restored.Resolve)
+			// Releases the window's own provider: the verifier it was built
+			// from is dead the moment the window closes.
+			p.swapActive(restored)
 		} else {
 			bridge.AttachPaseHandler(configured) // nil → bridge reverts to noop
 		}

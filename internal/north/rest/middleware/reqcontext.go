@@ -20,10 +20,11 @@ import (
 //
 // CentralName and InterfaceID are intentionally NOT filled here — at the
 // outer middleware position chi has not yet resolved URL parameters, so
-// neither value is available. Handlers that know the scope (e.g. after
-// `chi.URLParam(r, "central_name")`) call [SetCentralName] /
-// [reqctx.RequestContext.WithCentralName] to enrich the stored context with
-// the central scope.
+// neither value is available. Two paths fill the central scope instead:
+// routes whose path names the central attach [CentralScope], which reads
+// the URL parameter once routing has run, and a daemon wired to a single
+// central captures the name at boot through [ReqContextWithCentral].
+// A request that matches neither is logged without a central scope.
 //
 // The middleware MUST be mounted before [Logger] but after [RequestID] so
 // that the request id is already populated when the context is constructed.
@@ -35,11 +36,10 @@ func ReqContext(next http.Handler) http.Handler {
 // [reqctx.RequestContext] with [centralName] pre-filled. Used by the
 // daemon when the REST router is wired to a single central — the
 // closure captures the central scope at boot time, so every downstream
-// slog record carries `central_name` automatically without each
-// handler needing to call [SetCentralName].
+// slog record carries `central_name` automatically.
 //
-// Pass an empty string to fall back to the URL-parameter / handler-
-// driven model (handlers call [SetCentralName] dynamically).
+// Pass an empty string to fall back to the URL-parameter model, where
+// [CentralScope] fills the scope per route once chi has matched.
 func ReqContextWithCentral(centralName string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,9 +76,12 @@ func traceFromHeader(header string) (traceID, spanID, parentSpanID string) {
 }
 
 // SetCentralName replaces (or installs) the [reqctx.RequestContext] in
-// r.Context() with CentralName set. Called from handlers that have
-// already resolved the central from a URL parameter or session, so
-// downstream slog records carry the central scope.
+// r.Context() with CentralName set, so downstream slog records carry the
+// central scope. [CentralFromURL] is its caller once the URL parameter is
+// resolved; it stays exported because it is the only way to install the
+// scope on a request that reached the handler some other way, and it
+// rebuilds the whole request context when [ReqContext] never ran rather
+// than dropping the scope silently.
 func SetCentralName(r *http.Request, name string) *http.Request {
 	rc, ok := reqctx.FromContext(r.Context())
 	if !ok {
@@ -96,14 +99,34 @@ func SetCentralName(r *http.Request, name string) *http.Request {
 	return r.WithContext(reqctx.WithRequestContext(r.Context(), rc))
 }
 
-// CentralFromURL is a convenience that reads the chi `central_name`
-// URL parameter, calls [SetCentralName] with it, and returns the
-// enriched request. Handlers mounted on a route shaped like
-// `/api/v1/centrals/{central_name}/...` should call this on entry.
+// CentralFromURL reads the central-scoping URL parameter, calls
+// [SetCentralName] with it, and returns the enriched request. Both
+// spellings the router uses are accepted (`{central}` on the CCU-host
+// and diagnostics routes, `{central_name}` on any route that spells it
+// out); a request carrying neither is returned unchanged.
 func CentralFromURL(r *http.Request) *http.Request {
-	name := chi.URLParam(r, "central_name")
-	if name == "" {
-		return r
+	for _, param := range [...]string{"central", "central_name"} {
+		if name := chi.URLParam(r, param); name != "" {
+			return SetCentralName(r, name)
+		}
 	}
-	return SetCentralName(r, name)
+	return r
+}
+
+// CentralScope is [CentralFromURL] as middleware, for routes whose path
+// names the central.
+//
+// It must be attached per route (chi `With`), not with `Use` on a
+// router: a `Use` chain runs before that router has matched the request,
+// so the URL parameter this reads is not populated yet and the
+// middleware silently does nothing.
+//
+// Without it a multi-CCU daemon logs a CCU reboot with no central scope
+// at all — the single-central deployment gets the name from
+// [ReqContextWithCentral] at boot, which is exactly the case where the
+// missing scope does not show.
+func CentralScope(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, CentralFromURL(r))
+	})
 }

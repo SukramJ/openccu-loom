@@ -146,9 +146,12 @@ type SysvarDpNumber struct {
 // Returns an error when the value is out of range or the underlying
 // write fails.
 func (n *SysvarDpNumber) SendVariable(ctx context.Context, value float64) error {
-	if n.Min != nil && n.Max != nil {
-		minVal := paramValueToFloat64(*n.Min)
-		maxVal := paramValueToFloat64(*n.Max)
+	// Snapshot the declared bounds under the lock: the hub scan rewrites Min /
+	// Max in place through [Sysvar.ApplyMeta] while a write is in flight.
+	m := n.Meta()
+	if m.Min != nil && m.Max != nil {
+		minVal := paramValueToFloat64(*m.Min)
+		maxVal := paramValueToFloat64(*m.Max)
 		if value < minVal || value > maxVal {
 			return fmt.Errorf("sysvar %q: value %v out of range [%v, %v]", n.Name, value, minVal, maxVal)
 		}
@@ -180,11 +183,12 @@ func (s *SysvarDpSelect) SelectValue() (string, bool) {
 	if v.Kind != hmtypes.ValueKindInt {
 		return "", false
 	}
+	valueList := s.Meta().ValueList
 	idx := v.Int
-	if idx < 0 || idx >= len(s.ValueList) {
+	if idx < 0 || idx >= len(valueList) {
 		return "", false
 	}
-	return s.ValueList[idx], true
+	return valueList[idx], true
 }
 
 // SendVariable writes a new selection. value may be:
@@ -194,7 +198,8 @@ func (s *SysvarDpSelect) SelectValue() (string, bool) {
 // Returns an error when the index is out of range, the string is not
 // found in ValueList, or the underlying write fails.
 func (s *SysvarDpSelect) SendVariable(ctx context.Context, value any) error {
-	if len(s.ValueList) == 0 {
+	valueList := s.Meta().ValueList
+	if len(valueList) == 0 {
 		return fmt.Errorf("sysvar %q: no value list configured", s.Name)
 	}
 	idx := -1
@@ -204,7 +209,7 @@ func (s *SysvarDpSelect) SendVariable(ctx context.Context, value any) error {
 	case float64:
 		idx = int(v)
 	case string:
-		for i, label := range s.ValueList {
+		for i, label := range valueList {
 			if label == v {
 				idx = i
 				break
@@ -216,8 +221,8 @@ func (s *SysvarDpSelect) SendVariable(ctx context.Context, value any) error {
 	default:
 		return fmt.Errorf("sysvar %q: unsupported value type %T", s.Name, value)
 	}
-	if idx < 0 || idx >= len(s.ValueList) {
-		return fmt.Errorf("sysvar %q: index %d out of range [0, %d)", s.Name, idx, len(s.ValueList))
+	if idx < 0 || idx >= len(valueList) {
+		return fmt.Errorf("sysvar %q: index %d out of range [0, %d)", s.Name, idx, len(valueList))
 	}
 	return s.Set(ctx, hmtypes.IntValue(idx))
 }
@@ -258,11 +263,12 @@ func (s *SysvarDpSensor) SensorValue() (label string, observed bool) {
 	if !ok {
 		return "", false
 	}
-	if s.ValueType == hmenum.HubValueTypeList && len(s.ValueList) > 0 {
+	m := s.Meta()
+	if m.ValueType == hmenum.HubValueTypeList && len(m.ValueList) > 0 {
 		if v.Kind == hmtypes.ValueKindInt {
 			idx := v.Int
-			if idx >= 0 && idx < len(s.ValueList) {
-				return s.ValueList[idx], true
+			if idx >= 0 && idx < len(m.ValueList) {
+				return m.ValueList[idx], true
 			}
 		}
 	}
@@ -300,28 +306,29 @@ func (s *SysvarDpSensor) SensorValue() (label string, observed bool) {
 // the concrete DataPoint subclass based on data_type and writability
 // (model/hub/hub.py).
 func WrapSysvar(sv *Sysvar) HubDataPointer {
-	switch sv.ValueType {
+	m := sv.Meta()
+	switch m.ValueType {
 	case hmenum.HubValueTypeLogic, hmenum.HubValueTypeAlarm:
-		if sv.Writer != nil {
+		if sv.Writable() {
 			return &SysvarDpSwitch{Sysvar: sv}
 		}
 		return &SysvarDpBinarySensor{Sysvar: sv}
 	case hmenum.HubValueTypeString:
 		return &SysvarDpText{Sysvar: sv}
 	case hmenum.HubValueTypeList:
-		if sv.Writer != nil {
+		if sv.Writable() {
 			return &SysvarDpSelect{Sysvar: sv}
 		}
 		// Read-only list sysvar: use SysvarDpSensor for label transform.
 		// Extended sysvars are returned as-is (Python _is_extended=True
 		// subclasses behave differently; we keep the base until a
 		// concrete extended type is defined).
-		if !sv.IsExtended {
+		if !m.IsExtended {
 			return &SysvarDpSensor{Sysvar: sv}
 		}
 		return sv
 	case hmenum.HubValueTypeFloat, hmenum.HubValueTypeInteger:
-		if sv.Writer != nil {
+		if sv.Writable() {
 			return &SysvarDpNumber{Sysvar: sv}
 		}
 		return sv

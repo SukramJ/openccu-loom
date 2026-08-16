@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -531,5 +532,107 @@ func TestOutboundDisabledIsNoop(t *testing.T) {
 
 	if ft.count() != 0 {
 		t.Errorf("expected 0 POSTs for disabled bridge, got %d", ft.count())
+	}
+}
+
+// TestOutboundEnqueueRacingStopDropsInsteadOfPanicking pins the lifecycle
+// boundary between the publishing goroutines and Stop.
+//
+// Stop clears the queue field and then closes the channel; an enqueue that
+// read the field before that and sends afterwards hits a closed channel and
+// panics the publisher — which, on the event-bus goroutine, surfaces only as
+// deliveries that silently stop. Every queue operation must therefore happen
+// under the same mutex that Stop uses.
+//
+// The window is narrow, so one pass proves little: the race is sampled over
+// many rounds, each with a fresh bridge, and every publishing goroutine
+// converts a panic into a test failure instead of taking the process down.
+// The deterministic half is the assertion below it — after Stop, an enqueue
+// must be a no-op rather than a panic — which fails on any build that lets
+// the send escape the mutex.
+func TestOutboundEnqueueRacingStopDropsInsteadOfPanicking(t *testing.T) {
+	t.Parallel()
+	const (
+		rounds     = 40
+		publishers = 8
+	)
+	panics := make(chan any, rounds*publishers)
+
+	for range rounds {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{Enabled: true, URL: "http://hook.test"}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+			WithClock(fixedClock),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+
+		var wg sync.WaitGroup
+		stop := make(chan struct{})
+		for range publishers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						panics <- r
+					}
+				}()
+				for {
+					select {
+					case <-stop:
+						return
+					default:
+					}
+					o.enqueue(envelope{Schema: schemaVersion, Event: "test", TS: "now"})
+				}
+			}()
+		}
+		// Let the publishers saturate the queue, then stop underneath them;
+		// they keep going for a moment after Stop returns, which is the
+		// window a send outside the mutex falls into.
+		time.Sleep(time.Millisecond)
+		if err := o.Stop(context.Background()); err != nil {
+			t.Fatalf("Stop: %v", err)
+		}
+		time.Sleep(time.Millisecond)
+		close(stop)
+		wg.Wait()
+
+		// Deterministic half: the queue is gone, so an enqueue after Stop
+		// has to drop the delivery silently.
+		o.enqueue(envelope{Schema: schemaVersion, Event: "after-stop", TS: "now"})
+	}
+
+	close(panics)
+	for r := range panics {
+		t.Fatalf("enqueue panicked while Stop was closing the queue: %v", r)
+	}
+}
+
+// TestOutboundHealthyReportsCounters checks that the delivery counters the doc
+// promises actually reach the health detail once something went wrong; a clean
+// bridge stays silent.
+func TestOutboundHealthyReportsCounters(t *testing.T) {
+	t.Parallel()
+	o := NewOutbound(makeRegistry(t), config.NorthWebhook{Enabled: true, URL: "http://hook.test"}, nil)
+
+	if ok, detail := o.Healthy(); !ok || detail != "" {
+		t.Fatalf("fresh bridge: Healthy() = (%v, %q), want (true, \"\")", ok, detail)
+	}
+	o.dropped.Add(2)
+	o.failed.Add(3)
+	ok, detail := o.Healthy()
+	if !ok {
+		t.Error("delivery trouble must not report the bridge as unhealthy")
+	}
+	if !strings.Contains(detail, "dropped=2") || !strings.Contains(detail, "failed=3") {
+		t.Errorf("Healthy() detail = %q, want it to name dropped=2 and failed=3", detail)
 	}
 }

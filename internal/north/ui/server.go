@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
+	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
@@ -172,8 +173,15 @@ func handleHealth(d Deps, tpl *templateSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := healthData{Status: "unknown"}
 		if d.Health != nil {
-			data.Status = string(d.Health.Overall())
-			for _, c := range d.Health.Snapshot() {
+			snap := d.Health.Snapshot()
+			// The same collapse GET /api/v1/health applies, not the raw
+			// worst-of: on a multi-CCU daemon a single non-critical
+			// interface being down degrades service without making this
+			// surface unavailable. This page is what an operator opens
+			// while the SPA is down, so it must not answer "unhealthy"
+			// where every other surface says "degraded".
+			data.Status = string(health.ServiceAvailability(snap))
+			for _, c := range snap {
 				data.Components = append(data.Components, handlers.HealthComponent{
 					Name: c.Name, Status: string(c.Status), Note: c.LastSample.Note, NoteKey: c.LastSample.NoteKey, RecordedAt: c.LastSample.Timestamp,
 				})

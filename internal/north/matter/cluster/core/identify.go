@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -196,7 +197,7 @@ func (i *Identify) MatterInvoke(_ context.Context, cmdID uint32, fields any, _ h
 		// not flag the cluster as broken during the topology probe.
 		return nil, nil
 	}
-	return nil, fmt.Errorf("matter: Identify command 0x%02X not supported", cmdID)
+	return nil, im.UnsupportedCommandf("matter: Identify command 0x%02X not supported", cmdID)
 }
 
 // MatterReportable returns the attributes that change over the

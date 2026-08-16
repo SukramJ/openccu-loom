@@ -138,4 +138,38 @@ describe("AlarmJournal — filter narrows the result set", () => {
     expect(rows).toHaveLength(2);
     expect(within(rows[1]).getByText("disarmed")).toBeTruthy();
   });
+
+  it("ignores a broad response that lands after a narrower filter was applied", async () => {
+    // Filter changes race: a broad query started first can answer last, and
+    // without a generation guard it repaints rows the filter controls no
+    // longer describe.
+    let resolveBroad!: (v: AlarmJournalEntry[]) => void;
+    const broad = new Promise<AlarmJournalEntry[]>((res) => (resolveBroad = res));
+    mockListAlarmJournal.mockReturnValueOnce(broad);
+
+    const { getByText, findByRole, getAllByRole } = render(AlarmJournal);
+
+    // Narrow the range while the initial broad query is still in flight.
+    mockListAlarmJournal.mockResolvedValueOnce([
+      entry({ id: 2, event: "disarmed", class: "disarm" }),
+    ]);
+    const fromInput = getByText("alarm.journal.filter.from").parentElement!.querySelector(
+      "input",
+    ) as HTMLInputElement;
+    await fireEvent.input(fromInput, { target: { value: "2026-07-14T09:00" } });
+
+    await findByRole("table");
+    expect(getAllByRole("row")).toHaveLength(2);
+
+    // The superseded broad query answers now — it must not repaint the table.
+    resolveBroad([
+      entry({ id: 1, event: "armed" }),
+      entry({ id: 2, event: "disarmed", class: "disarm" }),
+    ]);
+    await new Promise((r) => setTimeout(r, 0));
+
+    const rows = getAllByRole("row");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[1]).getByText("disarmed")).toBeTruthy();
+  });
 });

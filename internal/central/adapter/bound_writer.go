@@ -102,7 +102,18 @@ func (a *channelWriterAdapter) SetValue(
 	return a.bw.SetValue(ctx, channelAddress, parameter, value, priority)
 }
 
-// PutParamset routes through the backend's PutParamset directly.
+// PutParamset routes through the bound writer when that carries the
+// paramset capability, and only falls back to the raw backend when it
+// does not.
+//
+// The routing matters because every data point of a channel writes
+// through this adapter (it is what [device.Channel.Writer] wraps, and
+// that wrapper is the writer the data points capture). Going to the
+// backend directly would take the whole write-policy layer off the
+// data-point path — the (central, interface) resolution with its
+// missing-backend guard, the in-flight staging that lets a concurrent
+// callback echo find a reader, and the write options — while the
+// identical write issued through Channel.Set still had it.
 func (a *channelWriterAdapter) PutParamset(
 	ctx context.Context,
 	channelAddress string,
@@ -110,7 +121,38 @@ func (a *channelWriterAdapter) PutParamset(
 	values map[string]any,
 	priority hmenum.CommandPriority,
 ) error {
+	if pw, ok := a.bw.(generic.ParamsetWriter); ok {
+		return pw.PutParamset(ctx, channelAddress, paramsetKey, values, priority)
+	}
+	if a.backend == nil {
+		return ErrNoWriter
+	}
 	return a.backend.PutParamset(ctx, channelAddress, paramsetKey, values, priority, hmenum.CommandRxModeUnset)
 }
 
 var _ device.ChannelWriter = (*channelWriterAdapter)(nil)
+
+// dataPointWriter returns the writer every data point of ch must be built
+// with: the channel's own writer, which wraps the raw bound writer in the
+// operator-lock guard ([device.Channel.Writer]).
+//
+// A data point captures its write path once, at construction time, and a
+// custom data point composed on top of it captures whichever writer the
+// generic data point carries (light and switch read it straight off the
+// generic field). Handing out the raw bound writer here therefore produced
+// control surfaces that reached the device while the channel advertised an
+// operator lock — the lock has to travel with the captured path, not live in
+// Channel.Set alone.
+//
+// Falls back to the raw writer only when the channel has none installed,
+// which happens when the pipeline runs without a value writer at all; the
+// fallback keeps that path behaving exactly as before.
+func dataPointWriter(ch *device.Channel, bw generic.Writer) generic.Writer {
+	if ch == nil {
+		return bw
+	}
+	if w := ch.Writer(); w != nil {
+		return w
+	}
+	return bw
+}

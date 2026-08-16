@@ -42,6 +42,9 @@
   let serverEntries = $state<SimpleScheduleEntry[]>([]);
   let entries = $state<SimpleScheduleEntry[]>([]);
   let saving = $state(false);
+  // Keyed by slot number, not by list index: the list is keyed by
+  // slot_no and removing an entry renumbers every index after it, which
+  // would move the open advanced panel to a different slot.
   let expanded = $state<Set<number>>(new Set());
 
   $effect(() => {
@@ -110,7 +113,13 @@
   }
 
   function removeEntry(idx: number) {
+    const gone = entries[idx]?.slot_no;
     entries = entries.filter((_, i) => i !== idx);
+    if (gone !== undefined && expanded.has(gone)) {
+      const next = new Set(expanded);
+      next.delete(gone);
+      expanded = next;
+    }
   }
 
   function toggleWeekday(idx: number, day: string) {
@@ -144,10 +153,10 @@
     expanded = new Set();
   }
 
-  function toggleExpanded(idx: number) {
+  function toggleExpanded(slotNo: number) {
     const next = new Set(expanded);
-    if (next.has(idx)) next.delete(idx);
-    else next.add(idx);
+    if (next.has(slotNo)) next.delete(slotNo);
+    else next.add(slotNo);
     expanded = next;
   }
 
@@ -155,11 +164,10 @@
   // marker. Scrolls the corresponding list row into view and expands
   // its advanced section so the user lands on the editable detail.
   function focusSlot(slotNo: number) {
-    const idx = entries.findIndex((e) => e.slot_no === slotNo);
-    if (idx < 0) return;
-    if (!expanded.has(idx)) {
+    if (!entries.some((e) => e.slot_no === slotNo)) return;
+    if (!expanded.has(slotNo)) {
       const next = new Set(expanded);
-      next.add(idx);
+      next.add(slotNo);
       expanded = next;
     }
     // requestAnimationFrame so the (now expanded) row has a layout
@@ -280,7 +288,7 @@
     </div>
     <ul class="space-y-2">
       {#each entries as entry, idx (entry.slot_no)}
-        {@const isExpanded = expanded.has(idx)}
+        {@const isExpanded = expanded.has(entry.slot_no)}
         {@const astro = involvesAstro(entry.condition)}
         <li
           id="schedule-slot-{entry.slot_no}"
@@ -500,7 +508,7 @@
               type="button"
               class="ml-auto text-xs text-[var(--ha-secondary-text-color)] hover:text-brand-700"
               aria-expanded={isExpanded}
-              onclick={() => toggleExpanded(idx)}
+              onclick={() => toggleExpanded(entry.slot_no)}
               title={t("schedule.advanced")}
             >
               {isExpanded ? "▾" : "▸"} {t("schedule.advanced")}

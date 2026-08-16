@@ -43,8 +43,19 @@ type CallbackHandlers struct {
 	unit   *central.Unit
 	logger *slog.Logger
 	// wg tracks every background goroutine spawned by this handler.
-	// Stop() blocks until all goroutines have returned.
+	// Stop() blocks until all goroutines have returned. Every start goes
+	// through [CallbackHandlers.goBackground], never through wg.Go
+	// directly — see stopMu.
 	wg sync.WaitGroup
+	// stopMu orders goroutine starts against Stop. Deregistering a route
+	// does not drain the callbacks already dispatched on it, so one of
+	// them can still reach a wg.Go while Stop is parked in wg.Wait — the
+	// Add-concurrent-with-Wait misuse the runtime panics on. Taking this
+	// lock on both sides makes "started" and "stopping" mutually
+	// exclusive: a start that wins the race is waited for, a start that
+	// loses it does not happen.
+	stopMu   sync.Mutex
+	stopping bool
 	// ctx / cancel control background tasks; Stop() cancels this context
 	// so long-running tasks (e.g. reload fetches) can abort promptly.
 	ctx    context.Context
@@ -145,11 +156,42 @@ func truncateWireID(s string) string {
 	return strings.ToValidUTF8(s[:maxBytes], "") + "…"
 }
 
+// truncateCallbackMessage bounds an untrusted free-text field of a callback
+// before it is logged, published on the bus or persisted as an incident.
+// The same reasoning as [truncateWireID] applies, with a limit generous
+// enough to keep every real CCU error text intact. Byte-sliced first so a
+// huge message is never fully copied.
+func truncateCallbackMessage(s string) string {
+	const maxBytes = 512
+	if len(s) <= maxBytes {
+		return s
+	}
+	return strings.ToValidUTF8(s[:maxBytes], "") + "…"
+}
+
 // Stop cancels all in-flight background goroutines and waits for them to
-// finish. Safe to call multiple times.
+// finish. Safe to call multiple times. After it returns, no callback can
+// start a new background goroutine on this handler.
 func (h *CallbackHandlers) Stop() {
+	h.stopMu.Lock()
+	h.stopping = true
+	h.stopMu.Unlock()
 	h.cancel()
 	h.wg.Wait()
+}
+
+// goBackground runs fn on the handler's WaitGroup and reports whether it
+// started. It does not start after Stop has begun; the handler context is
+// cancelled by then, so the work would abort on its first ctx check anyway.
+// Callers that hold a resource for fn release it when the start is refused.
+func (h *CallbackHandlers) goBackground(fn func()) bool {
+	h.stopMu.Lock()
+	defer h.stopMu.Unlock()
+	if h.stopping {
+		return false
+	}
+	h.wg.Go(fn)
+	return true
 }
 
 // noteCallbackAndRoutePong refreshes the per-client callback-liveness
@@ -454,7 +496,7 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 		ParamsetKey:    hmenum.ParamsetKeyValues,
 		Parameter:      parameter,
 	}
-	h.wg.Go(func() { //nolint:contextcheck // background reload uses h.ctx, not the caller's ctx which may be short-lived
+	started := h.goBackground(func() { //nolint:contextcheck // background reload uses h.ctx, not the caller's ctx which may be short-lived
 		defer func() { <-h.selfReloadSem }()
 		ctx, cancel := context.WithTimeout(h.ctx, 5*time.Second)
 		defer cancel()
@@ -465,6 +507,10 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 				slog.String("err", err.Error()))
 		}
 	})
+	if !started {
+		// The goroutine that would have released the permit never ran.
+		<-h.selfReloadSem
+	}
 }
 
 // NewDevices acknowledges a hot-plug announcement. It hands the incoming
@@ -517,7 +563,7 @@ func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, des
 			slog.Int("count", len(descriptions)))
 		return nil
 	}
-	h.wg.Go(func() { //nolint:contextcheck // background ingest uses h.ctx — the callback ctx dies when the RPC response is written
+	h.goBackground(func() { //nolint:contextcheck // background ingest uses h.ctx — the callback ctx dies when the RPC response is written
 		bgCtx, cancel := context.WithTimeout(h.ctx, newDevicesIngestTimeout)
 		defer cancel()
 		if err := h.unit.IngestDevices(bgCtx, interfaceID, descriptions); err != nil {
@@ -615,7 +661,7 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 		return nil
 	}
 	fetcher := &callbackDescFetcher{ops: b}
-	h.wg.Go(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
+	h.goBackground(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
@@ -648,7 +694,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 	}
 	fetcher := &callbackDescFetcher{ops: b}
 	iface := hmtypes.ParseWireInterfaceID(interfaceID)
-	h.wg.Go(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
+	h.goBackground(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		if err := h.unit.Devices.ReplaceDevice(bgCtx, fetcher, iface, oldAddress, newAddress); err != nil {
@@ -681,7 +727,7 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 	}
 	fetcher := &callbackDescFetcher{ops: b}
 	iface := hmtypes.ParseWireInterfaceID(interfaceID)
-	h.wg.Go(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
+	h.goBackground(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		for _, addr := range addresses {
@@ -730,7 +776,12 @@ func (h *CallbackHandlers) ListDevices(_ context.Context, interfaceID string) (x
 // Always returns nil — the CCU does not interpret a non-nil response and a
 // failed local handler must not break the callback channel.
 func (h *CallbackHandlers) Error(ctx context.Context, interfaceID string, errorCode int, msg string) error {
-	interfaceID = h.canonicalInterfaceID(interfaceID)
+	interfaceID = truncateWireID(h.canonicalInterfaceID(interfaceID))
+	// Both strings arrive from the callback listener, which takes no
+	// authentication and whose source-IP allow-list is off by default. Bound
+	// them before they reach the log, the bus and the incident store — the
+	// request body limit alone allows a 10 MiB message per call.
+	msg = truncateCallbackMessage(msg)
 	h.logger.Warn("callback.error",
 		slog.String("interface", interfaceID),
 		slog.Int("error_code", errorCode),

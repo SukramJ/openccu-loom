@@ -33,10 +33,11 @@ const (
 	// KindPairing covers commissioning: window open and close, PASE
 	// refusals, fabric added and removed.
 	KindPairing Kind = "pairing"
-	// KindSession covers secure sessions opening, closing and being
-	// evicted.
+	// KindSession covers secure sessions opening and closing: a
+	// completed CASE handshake, and a peer's CloseSession.
 	KindSession Kind = "session"
-	// KindDiscovery covers mDNS advertisement changes.
+	// KindDiscovery covers mDNS advertisement changes, such as the
+	// re-announce that follows a peer losing its last session.
 	KindDiscovery Kind = "discovery"
 )
 
@@ -55,7 +56,7 @@ const (
 
 // Event is one recorded moment.
 //
-// loom:reachable:reason="constructed by the bridge's PASE and fabric paths in securechannel.go, returned by Bridge.DiagnosticEvents, and copied out by the GET /api/v1/matter/events handler; a data struct whose fields the REST layer reads, invisible to the analyzer's method-based type heuristic"
+// loom:reachable:reason="constructed by the bridge's PASE, secure-session and mDNS re-announce paths in securechannel.go, returned by Bridge.DiagnosticEvents, and copied out by the GET /api/v1/matter/events handler; a data struct whose fields the REST layer reads, invisible to the analyzer's method-based type heuristic"
 type Event struct {
 	At       time.Time
 	Kind     Kind

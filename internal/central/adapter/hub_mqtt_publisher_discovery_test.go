@@ -250,3 +250,54 @@ func TestConnectivityDiscoveryStateTopicIsPublished(t *testing.T) {
 		t.Fatalf("published %d connectivity discovery configs, want exactly 1; topics=%v", configs, publishedTopics(pub))
 	}
 }
+
+// TestRemovedProgramDiscoveryIsRetracted pins that a program the operator
+// deleted in the CCU WebUI also disappears from the discovery plane. The
+// refresh drops it from the model, but the retained `.../config` topic keeps
+// the entity alive in Home Assistant — frozen at its last state and surviving
+// daemon restarts — unless the publisher clears it.
+func TestRemovedProgramDiscoveryIsRetracted(t *testing.T) {
+	t.Parallel()
+	c, pub, publisher := hubDiscoveryFixture(t)
+	c.SetSystemInformation(central.SystemInfo{
+		Model:   "HomeMatic Central",
+		Version: "3.79.6",
+		Serial:  "3014F711A0001F5A4993D962",
+	})
+
+	prog := &hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Abend"}, ID: "prog-9"}
+	prog.OnActive(false)
+	c.HubModel.PutProgram(prog)
+
+	publisher.Start(context.Background())
+	defer publisher.Stop()
+	publisher.Flush()
+
+	declared := map[string]bool{}
+	for _, p := range pub.Published() {
+		if strings.HasSuffix(p.Topic, "/config") && strings.Contains(p.Topic, "prog-9") && len(p.Payload) > 0 {
+			declared[p.Topic] = true
+		}
+	}
+	if len(declared) == 0 {
+		t.Fatalf("no discovery config published for the program; topics=%v", publishedTopics(pub))
+	}
+
+	// The refresh pass drops a program the CCU no longer reports.
+	if !c.HubModel.RemoveProgram("prog-9") {
+		t.Fatal("RemoveProgram reported no such program")
+	}
+	publisher.Flush()
+
+	retracted := map[string]bool{}
+	for _, p := range pub.Published() {
+		if declared[p.Topic] && len(p.Payload) == 0 {
+			retracted[p.Topic] = true
+		}
+	}
+	for topic := range declared {
+		if !retracted[topic] {
+			t.Errorf("retained discovery config %s was never cleared after the program vanished", topic)
+		}
+	}
+}

@@ -117,3 +117,45 @@ func TestCredentialRevokerWithoutSessionsStaysUnwired(t *testing.T) {
 		t.Fatal("credentialRevoker must stay nil without a session store")
 	}
 }
+
+// TestTokenSocketRevokerClosesTheRevokedTokensSockets pins the second half of
+// the same rule for bearer tokens: DELETE /auth/tokens/v2/{fingerprint}
+// removes the row, and REST refuses the credential on the next request
+// because it re-resolves it every time — the socket resolved it once at the
+// upgrade, so without this seam the revoked token keeps its role on the
+// command plane.
+func TestTokenSocketRevokerClosesTheRevokedTokensSockets(t *testing.T) {
+	t.Parallel()
+
+	hub := ws.NewHub()
+	d := restMountDeps{wsHub: hub}
+
+	id := auth.Identity{Subject: "svc", Scheme: auth.SchemeBearer, Role: auth.RoleAdmin, TokenID: "fp-1"}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws.Handler(hub, nil, nil).ServeHTTP(w, r.WithContext(auth.ContextWithIdentity(r.Context(), id)))
+	}))
+	t.Cleanup(server.Close)
+
+	dialUpgradedWS(t, server)
+	waitForHubClients(t, hub, 1)
+
+	sockets := d.tokenSocketRevoker()
+	if sockets == nil {
+		t.Fatal("composition root wired no token socket revoker")
+	}
+	if n := sockets.CloseByToken("fp-1"); n != 1 {
+		t.Fatalf("closed %d sockets, want 1", n)
+	}
+	waitForHubClients(t, hub, 0)
+}
+
+// TestTokenSocketRevokerWithoutHubStaysNil keeps the handler's nil contract:
+// a daemon without a WebSocket surface must hand it a genuinely nil interface
+// rather than a typed nil it would call through.
+func TestTokenSocketRevokerWithoutHubStaysNil(t *testing.T) {
+	t.Parallel()
+	d := restMountDeps{}
+	if d.tokenSocketRevoker() != nil {
+		t.Fatal("tokenSocketRevoker must stay nil without a hub")
+	}
+}

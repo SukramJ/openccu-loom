@@ -100,6 +100,9 @@ func TestOf_SingleFlavourCategories(t *testing.T) {
 		{"Lock", (*lock.Lock)(nil), KindLock},
 		{"Siren", (*siren.Siren)(nil), KindSiren},
 		{"Switch", (*switchdev.Switch)(nil), KindSwitch},
+		// A per-user access permission shares the switch widget: an
+		// unresolved kind renders it as an unknown tile in the SPA.
+		{"AccessPermission", (*switchdev.AccessPermission)(nil), KindSwitch},
 		{"TextDisplay", (*textdisplay.TextDisplay)(nil), KindTextDisplay},
 		{"ValveIrrigation", (*valve.Irrigation)(nil), KindValveIrr},
 		{"ValveModulating", (*valve.Modulating)(nil), KindValveMod},

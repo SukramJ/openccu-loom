@@ -329,20 +329,32 @@
   }
 
   // --- data loading ------------------------------------------------
+  // Monotonic generation guarding the zone-scoped fetch. save() PUTs the
+  // roster on screen back under the zone the selector points at *then*, so a
+  // response for a zone the operator has already left must never land — it
+  // would leave zone A's sirens staged under zone B, and the PUT replaces the
+  // whole set.
+  let loadGeneration = 0;
+
   async function loadOutputs() {
-    if (!zoneId) {
+    const generation = ++loadGeneration;
+    const zone = zoneId;
+    if (!zone) {
       outputs = [];
       return;
     }
     loading = true;
     loadError = null;
     try {
-      outputs = await api.listAlarmZoneOutputs(zoneId);
+      const next = await api.listAlarmZoneOutputs(zone);
+      if (generation !== loadGeneration) return;
+      outputs = next;
       dirty = false;
     } catch (err) {
+      if (generation !== loadGeneration) return;
       loadError = friendlyError(err, t);
     } finally {
-      loading = false;
+      if (generation === loadGeneration) loading = false;
     }
   }
 
@@ -545,10 +557,42 @@
     }
   });
 
+  // Remount key for the zone selector. The Select keeps its own copy of the
+  // chosen value, so a switch the operator cancels has to be pushed back into
+  // it; remounting is what restores the previously selected label.
+  let selectorEpoch = $state(0);
+
+  // Operator-driven zone change. The roster belongs to exactly one zone, so
+  // an unsaved edit cannot travel with the selector — offer to keep it
+  // (cancel, save first) before it is dropped.
+  async function selectZone(next: string) {
+    if (!next || next === zoneId) return;
+    if (dirty) {
+      const ok = await confirmStore.ask({
+        title: t("alarm.zone_switch.discard.title"),
+        body: t("alarm.zone_switch.discard.body"),
+        confirmLabel: t("alarm.zone_switch.discard.confirm"),
+        destructive: true,
+      });
+      if (!ok) {
+        selectorEpoch += 1;
+        return;
+      }
+    }
+    zoneId = next;
+  }
+
   let loadedFor = $state("");
   $effect(() => {
     if (zoneId && zoneId !== loadedFor) {
       loadedFor = zoneId;
+      // Drop the previous zone's roster before the new one arrives. Save
+      // writes what is on screen to the *selected* zone, so leaving the old
+      // set (and its dirty flag) visible during the fetch would let it be
+      // saved into the zone just switched to.
+      outputs = [];
+      dirty = false;
+      loadError = null;
       void loadOutputs();
     }
   });
@@ -585,7 +629,9 @@
     <label class="flex items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]">
       <span>{t("alarm.sensors.zone")}</span>
       <div class="min-w-48">
-        <Select options={zoneOptions} bind:value={zoneId} />
+        {#key selectorEpoch}
+          <Select options={zoneOptions} value={zoneId} onValueChange={(v) => void selectZone(v)} />
+        {/key}
       </div>
     </label>
     <Button size="sm" class="ml-auto" onclick={openAdd}>

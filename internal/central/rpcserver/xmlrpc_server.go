@@ -39,6 +39,11 @@ type XMLRPCServer struct {
 	requestCount atomic.Int64
 	errorCount   atomic.Int64
 	started      atomic.Bool
+
+	// metrics is the optional per-request observation sink. Nil means the
+	// listener runs unobserved, which is the case in every test that does
+	// not assert on metrics.
+	metrics CallbackObserver
 }
 
 // XMLRPCConfig configures the server.
@@ -72,6 +77,11 @@ type XMLRPCConfig struct {
 	// connections close. <= 0 means uncapped; the daemon supplies a
 	// secure default from cfg.Callback.MaxConnections.
 	MaxConnections int
+
+	// Metrics, when non-nil, receives one observation per dispatched
+	// callback (see [CallbackObserver]). Nil leaves the listener
+	// unobserved.
+	Metrics CallbackObserver
 }
 
 // NewXMLRPCServer binds a listener immediately so callers can read
@@ -97,6 +107,7 @@ func NewXMLRPCServer(cfg XMLRPCConfig) (*XMLRPCServer, error) {
 		routes:   make(map[string]Handlers),
 		listener: ln,
 		shutdown: cfg.ShutdownTimeout,
+		metrics:  cfg.Metrics,
 	}
 	if s.shutdown <= 0 {
 		s.shutdown = 5 * time.Second
@@ -202,11 +213,29 @@ func (s *XMLRPCServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	finish := observeCallbackStart(s.metrics, centralName)
+
 	// Build a scoped xmlrpc.Handler that dispatches through handlers.
 	h := xmlrpc.NewHandler()
 	h.Logger = s.logger
 	bindXMLRPCMethods(h.Mux, handlers)
-	h.ServeHTTP(w, r)
+	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	h.ServeHTTP(rec, r)
+	finish(rec.status >= http.StatusBadRequest)
+}
+
+// statusRecorder captures the response status so a dispatched callback that
+// failed can be counted as an error. The XML-RPC handler answers faults with
+// a 200 body in the classic shape, so this only catches transport-level
+// failures — which is exactly the split the health counters already use.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
 }
 
 // serveHealth responds to GET /health with a JSON body that.

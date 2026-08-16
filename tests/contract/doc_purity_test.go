@@ -12,6 +12,47 @@ import (
 	"testing"
 )
 
+// germanWordRule builds the match for one forbidden German word.
+//
+// Go's `\b` is defined over ASCII word characters only, so the leading
+// boundary in a literal like `\büber\b` demands a transition between two
+// characters that are both non-word from its point of view — the preceding
+// space and the `ü`. That transition never exists, so the rule compiles, reads
+// as though it works, and matches nothing at all. Delimiting on "not a Unicode
+// letter" instead preserves the word-boundary intent for every word, whichever
+// alphabet it starts or ends in.
+//
+// The match stays case-sensitive on purpose: German nouns that legitimately
+// appear in prose ("Übersicht", "Übersetzung") are capitalised and are not what
+// this rule is after.
+func germanWordRule(word string) *regexp.Regexp {
+	return regexp.MustCompile(`(?:^|[^\p{L}])` + regexp.QuoteMeta(word) + `(?:[^\p{L}]|$)`)
+}
+
+// TestGermanWordRuleBites measures the rule instead of trusting it. The
+// umlaut-initial word is the case a plain `\b` literal never matched, so the
+// build reported a clean German-comment surface it had never actually checked.
+func TestGermanWordRuleBites(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		word string
+		line string
+		want bool
+	}{
+		{"über", "// der Wert wird über den Bus geliefert", true},
+		{"über", "// überall", false},
+		{"über", "// Übersicht over the cluster set", false},
+		{"müssen", "// beide müssen gesetzt sein", true},
+		{"nicht", "// darf nicht leer sein", true},
+		{"soll", "// solid state, not a German word", false},
+		{"damit", "// damitigation is not a word either", false},
+	} {
+		if got := germanWordRule(tc.word).MatchString(tc.line); got != tc.want {
+			t.Errorf("germanWordRule(%q).MatchString(%q) = %v, want %v", tc.word, tc.line, got, tc.want)
+		}
+	}
+}
+
 // TestDocPurity walks every .go source file under internal/, pkg/, and cmd/
 // and fails if any comment line contains a wave-numbering or audit-tag
 // pattern that belongs only to the internal tracking system, not to
@@ -126,27 +167,30 @@ func TestDocPurity(t *testing.T) {
 		{"parity sweep reference", regexp.MustCompile(`\bparity sweep\b`)},
 		// German/English audit-hybrid token `MANDATORY-FEHLT`.
 		{"audit token: MANDATORY-FEHLT", regexp.MustCompile(`\bMANDATORY-FEHLT\b`)},
-		// German common words that should not appear in code comments.
-		// Heuristic: short German function-words that almost never occur
-		// in English technical prose. The `\b...\b` boundaries avoid
-		// false positives on identifiers.
-		{"German: darf", regexp.MustCompile(`\bdarf\b`)},
-		{"German: soll", regexp.MustCompile(`\bsoll\b`)},
-		{"German: muss", regexp.MustCompile(`\bmuss\b`)},
-		{"German: nicht", regexp.MustCompile(`\bnicht\b`)},
-		{"German: über", regexp.MustCompile(`\büber\b`)},
-		{"German: dürfen", regexp.MustCompile(`\bdürfen\b`)},
-		{"German: müssen", regexp.MustCompile(`\bmüssen\b`)},
-		{"German: während", regexp.MustCompile(`\bwährend\b`)},
-		{"German: damit", regexp.MustCompile(`\bdamit\b`)},
-		{"German: dafür", regexp.MustCompile(`\bdafür\b`)},
-		{"German: daher", regexp.MustCompile(`\bdaher\b`)},
-		{"German: liefert", regexp.MustCompile(`\bliefert\b`)},
-		{"German: enthält", regexp.MustCompile(`\benthält\b`)},
-		{"German: erlaubt", regexp.MustCompile(`\berlaubt\b`)},
-		{"German: ergänzt", regexp.MustCompile(`\bergänzt\b`)},
+		// German abbreviations. Both start and end on ASCII, so the plain
+		// `\b` word boundary is sound here.
 		{"German abbrev: bzw.", regexp.MustCompile(`\bbzw\.`)},
 		{"German abbrev: z.B.", regexp.MustCompile(`\bz\.\s?B\.`)},
+		// German common words that should not appear in code comments.
+		// Heuristic: short German function-words that almost never occur in
+		// English technical prose. They go through germanWordRule rather than
+		// being written as `\bword\b` literals — see that helper for why a
+		// plain `\b` silently disarms any word that starts with an umlaut.
+		{"German: darf", germanWordRule("darf")},
+		{"German: soll", germanWordRule("soll")},
+		{"German: muss", germanWordRule("muss")},
+		{"German: nicht", germanWordRule("nicht")},
+		{"German: über", germanWordRule("über")},
+		{"German: dürfen", germanWordRule("dürfen")},
+		{"German: müssen", germanWordRule("müssen")},
+		{"German: während", germanWordRule("während")},
+		{"German: damit", germanWordRule("damit")},
+		{"German: dafür", germanWordRule("dafür")},
+		{"German: daher", germanWordRule("daher")},
+		{"German: liefert", germanWordRule("liefert")},
+		{"German: enthält", germanWordRule("enthält")},
+		{"German: erlaubt", germanWordRule("erlaubt")},
+		{"German: ergänzt", germanWordRule("ergänzt")},
 	}
 
 	repoRoot := filepath.Join("..", "..")

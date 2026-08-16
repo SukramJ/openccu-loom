@@ -131,6 +131,13 @@
     }
   }
 
+  // Renders a declared numeric bound for the edit form. An absent bound
+  // stays an empty field, which is also what the CCU reads as "leave the
+  // stored bound alone" on save.
+  function boundText(bound: number | undefined): string {
+    return bound === undefined ? "" : String(bound);
+  }
+
   function startEdit(sv: SysvarEntry) {
     editing = sv;
     editChannel = sv.channel ?? "";
@@ -138,8 +145,8 @@
     editForm = {
       name: sv.name,
       unit: sv.unit ?? "",
-      min: "",
-      max: "",
+      min: boundText(sv.min),
+      max: boundText(sv.max),
       value_list: (sv.value_list ?? []).join(";"),
       description: sv.description ?? "",
       value_name_0: sv.value_name_0 ?? "",
@@ -151,14 +158,35 @@
 
   async function saveEdit() {
     if (!editing) return;
+    // A numeric system variable on the CCU always carries both bounds:
+    // the CCU's own WebUI writes ValueMin and ValueMax on every save, and
+    // ReGa coerces a blank one to 0 rather than dropping the constraint,
+    // so "no bound" is not a state the CCU can be put into. An emptied
+    // field is therefore an edit that cannot be performed — and it used
+    // to be dropped in silence, leaving the operator with a success toast
+    // and the old bound still in place.
+    if (
+      isNumberSysvar(editing.value_type) &&
+      ((boundText(editing.min) !== "" && editForm.min.trim() === "") ||
+        (boundText(editing.max) !== "" && editForm.max.trim() === ""))
+    ) {
+      toastStore.error(t("sysvars.edit.bound_required"));
+      return;
+    }
     savingName = editing.name;
     try {
       const body: Record<string, unknown> = {};
       const newName = editForm.name.trim();
       if (newName && newName !== editing.name) body.name = newName;
       if (editForm.unit) body.unit = editForm.unit;
-      if (editForm.min) body.min = editForm.min;
-      if (editForm.max) body.max = editForm.max;
+      // Bounds are pre-filled from the CCU, so only a genuinely changed
+      // value is sent — an untouched field must not rewrite the declared
+      // bound. An emptied field never reaches here; the guard above
+      // refuses it, because the CCU cannot drop a bound.
+      if (editForm.min && editForm.min !== boundText(editing.min))
+        body.min = editForm.min;
+      if (editForm.max && editForm.max !== boundText(editing.max))
+        body.max = editForm.max;
       if (editForm.description) body.description = editForm.description;
       if (editForm.value_list && isListSysvar(editing.value_type)) {
         body.value_list = editForm.value_list

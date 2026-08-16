@@ -178,6 +178,46 @@ func (h *Hub) CloseBySubject(subject string) int {
 	return len(targets)
 }
 
+// CloseByToken tears down every open connection that authenticated with
+// the bearer token identified by fingerprint, and reports how many it
+// closed.
+//
+// Revoking a token has to reach the socket for the same reason a role
+// change does (see [Hub.CloseBySubject]): the connection captured its
+// identity at the upgrade and the command router gates every later write
+// on that snapshot, so a token deleted from the store keeps its role on
+// the command plane until the client happens to reconnect — unbounded for
+// a client that answers pings, while REST already answers 401.
+//
+// The match is on the token fingerprint rather than the subject: a
+// subject may hold several tokens plus interactive sessions, and revoking
+// one credential must not tear down the connections the others opened.
+func (h *Hub) CloseByToken(fingerprint string) int {
+	if fingerprint == "" {
+		return 0
+	}
+	h.mu.RLock()
+	targets := make([]*client, 0, len(h.clients))
+	for c := range h.clients {
+		if c.isClosed() {
+			continue
+		}
+		id := c.Identity()
+		if id.Scheme != auth.SchemeBearer || id.TokenID != fingerprint {
+			continue
+		}
+		targets = append(targets, c)
+	}
+	h.mu.RUnlock()
+
+	// close() deregisters, which takes h.mu for writing — hence the two
+	// phases, mirroring [Hub.CloseBySubject].
+	for _, c := range targets {
+		c.close()
+	}
+	return len(targets)
+}
+
 // SetTokenStore wires the bearer-token resolver the in-band reauth
 // op consults. Nil disables reauth: a client sending {op:"reauth"}
 // then receives {op:"reauth_failed"} and the connection is closed —

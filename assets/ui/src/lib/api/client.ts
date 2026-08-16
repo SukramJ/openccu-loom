@@ -2510,6 +2510,14 @@ export function friendlyError(
     if (err.status === 429) {
       return t("api.error.rate_limited");
     }
+    if (err.status === 423) {
+      // A control write against a locked channel. The daemon's detail
+      // names the REST path that lifts the lock, which is the wrong
+      // instruction for someone looking at the SPA — point at the
+      // channel flags instead. Surfaces that need the lock *holder*
+      // (the edit-session banner) branch on 423 before reaching here.
+      return t("api.error.locked");
+    }
     if (err.status >= 500) {
       // Surface the daemon's problem.detail when available — it
       // carries the actual failure reason (e.g.

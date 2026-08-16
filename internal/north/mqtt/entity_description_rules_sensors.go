@@ -175,25 +175,25 @@ var sensorRulesByParam = map[string]EntityDescription{
 	// Enthalpy (no device_class, custom icon, disabled by default)
 	"ENTHALPY": {Key: "ENTHALPY", StateClass: "measurement", UnitOfMeasurement: "kJ/kg", Icon: "mdi:fire", EnabledByDefault: false, SuggestedDisplayPrecision: -1},
 
-	// PM1 mass concentration (μg/m³)
-	"MASS_CONCENTRATION_PM_1":             {Key: "MASS_CONCENTRATION_PM_1", DeviceClass: "pm1", StateClass: "measurement", UnitOfMeasurement: "μg/m³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
-	"MASS_CONCENTRATION_PM_1_24H_AVERAGE": {Key: "MASS_CONCENTRATION_PM_1", DeviceClass: "pm1", StateClass: "measurement", UnitOfMeasurement: "μg/m³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+	// PM1 mass concentration (µg/m³)
+	"MASS_CONCENTRATION_PM_1":             {Key: "MASS_CONCENTRATION_PM_1", DeviceClass: "pm1", StateClass: "measurement", UnitOfMeasurement: unitMicrogramsPerM3, EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+	"MASS_CONCENTRATION_PM_1_24H_AVERAGE": {Key: "MASS_CONCENTRATION_PM_1", DeviceClass: "pm1", StateClass: "measurement", UnitOfMeasurement: unitMicrogramsPerM3, EnabledByDefault: true, SuggestedDisplayPrecision: -1},
 
-	// PM10 mass concentration (μg/m³)
-	"MASS_CONCENTRATION_PM_10":             {Key: "MASS_CONCENTRATION_PM_10", DeviceClass: "pm10", StateClass: "measurement", UnitOfMeasurement: "μg/m³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
-	"MASS_CONCENTRATION_PM_10_24H_AVERAGE": {Key: "MASS_CONCENTRATION_PM_10", DeviceClass: "pm10", StateClass: "measurement", UnitOfMeasurement: "μg/m³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+	// PM10 mass concentration (µg/m³)
+	"MASS_CONCENTRATION_PM_10":             {Key: "MASS_CONCENTRATION_PM_10", DeviceClass: "pm10", StateClass: "measurement", UnitOfMeasurement: unitMicrogramsPerM3, EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+	"MASS_CONCENTRATION_PM_10_24H_AVERAGE": {Key: "MASS_CONCENTRATION_PM_10", DeviceClass: "pm10", StateClass: "measurement", UnitOfMeasurement: unitMicrogramsPerM3, EnabledByDefault: true, SuggestedDisplayPrecision: -1},
 
-	// PM2.5 mass concentration (μg/m³)
-	"MASS_CONCENTRATION_PM_2_5":             {Key: "MASS_CONCENTRATION_PM_2_5", DeviceClass: "pm25", StateClass: "measurement", UnitOfMeasurement: "μg/m³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
-	"MASS_CONCENTRATION_PM_2_5_24H_AVERAGE": {Key: "MASS_CONCENTRATION_PM_2_5", DeviceClass: "pm25", StateClass: "measurement", UnitOfMeasurement: "μg/m³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+	// PM2.5 mass concentration (µg/m³)
+	"MASS_CONCENTRATION_PM_2_5":             {Key: "MASS_CONCENTRATION_PM_2_5", DeviceClass: "pm25", StateClass: "measurement", UnitOfMeasurement: unitMicrogramsPerM3, EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+	"MASS_CONCENTRATION_PM_2_5_24H_AVERAGE": {Key: "MASS_CONCENTRATION_PM_2_5", DeviceClass: "pm25", StateClass: "measurement", UnitOfMeasurement: unitMicrogramsPerM3, EnabledByDefault: true, SuggestedDisplayPrecision: -1},
 
 	// PM number concentrations (1/cm³)
 	"NUMBER_CONCENTRATION_PM_1":   {Key: "NUMBER_CONCENTRATION_PM_1", StateClass: "measurement", UnitOfMeasurement: "1/cm³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
 	"NUMBER_CONCENTRATION_PM_10":  {Key: "NUMBER_CONCENTRATION_PM_10", StateClass: "measurement", UnitOfMeasurement: "1/cm³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
 	"NUMBER_CONCENTRATION_PM_2_5": {Key: "NUMBER_CONCENTRATION_PM_2_5", StateClass: "measurement", UnitOfMeasurement: "1/cm³", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
 
-	// Typical particle size (μm)
-	"TYPICAL_PARTICLE_SIZE": {Key: "TYPICAL_PARTICLE_SIZE", StateClass: "measurement", UnitOfMeasurement: "µm", EnabledByDefault: true, SuggestedDisplayPrecision: -1},
+	// Typical particle size (µm)
+	"TYPICAL_PARTICLE_SIZE": {Key: "TYPICAL_PARTICLE_SIZE", StateClass: "measurement", UnitOfMeasurement: unitMicrometers, EnabledByDefault: true, SuggestedDisplayPrecision: -1},
 
 	// Air pressure (hPa)
 	"AIR_PRESSURE": {Key: "AIR_PRESSURE", DeviceClass: "pressure", StateClass: "measurement", UnitOfMeasurement: "hPa", EnabledByDefault: true, SuggestedDisplayPrecision: -1},

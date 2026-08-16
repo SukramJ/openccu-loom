@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
@@ -471,11 +472,15 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					// breaker advances OPEN → HALF_OPEN → CLOSED on
 					// its own. Without this the CB only refreshes
 					// when an unrelated code path happens to call
-					// `Do(...)` — and an OPEN breaker rejects every
-					// non-bypass call, so a quiet daemon can sit on
-					// a stale OPEN state for minutes. `ping` is on
-					// the breaker's bypass list, so this is the one
-					// call that always reaches the CCU.
+					// `Do(...)`, so a quiet daemon can sit on a stale
+					// OPEN state for minutes. The probe runs under the
+					// operation id "check_connection", which is
+					// deliberately NOT on the breaker's bypass list:
+					// an OPEN breaker sheds it (the tick then reports
+					// the interface as not alive) and the HALF_OPEN
+					// window is what lets it through again. Bypassing
+					// would keep the ping flowing but never drive the
+					// state machine that gates every other call.
 					// Probe with ping-pong tracking enabled: the periodic
 					// keepalive is exactly where outbound PINGs should be
 					// recorded so the matching PONG callbacks correlate and
@@ -506,12 +511,22 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					if alive && connected && callbackAlive {
 						continue
 					}
-					reason := hmenum.FailureReasonUnknown
-					if !alive {
-						reason = hmenum.FailureReasonNetwork
-					} else if !connected {
-						reason = hmenum.FailureReasonNetwork
-					} else if !callbackAlive {
+					// Why the interface is down decides what an operator is
+					// shown for it. A literal per branch names where the
+					// probe noticed rather than what happened: rejected
+					// credentials and a tripped breaker both read "network".
+					// The client already classified its own last failure
+					// from the transport error, so that verdict is used
+					// wherever it applies.
+					var reason hmenum.FailureReason
+					switch {
+					case !alive, !connected:
+						reason = recordedClientFailureReason(entry.Client)
+					default:
+						// RPC works and the client is connected; the CCU has
+						// simply stopped pushing. Nothing in the client's
+						// error chain describes that, so the freshness
+						// verdict stands on its own.
 						reason = hmenum.FailureReasonTimeout
 					}
 					events.Publish(unit.EventBus, hmevent.ConnectionLostEvent{
@@ -695,4 +710,24 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 	}
 
 	return registered, nil
+}
+
+// recordedClientFailureReason returns the failure category the client's
+// own state machine recorded for its last failed transition, which the
+// transport derived from the actual error.
+//
+// It falls back to Network for a client that has no verdict yet: from
+// the operator's side an interface that does not answer is the interface
+// not being on the wire. Mirrors the fallback the boot-time bring-up
+// applies for the same reason.
+func recordedClientFailureReason(c *clientpkg.InterfaceClient) hmenum.FailureReason {
+	if c == nil {
+		return hmenum.FailureReasonNetwork
+	}
+	switch reason := c.FailureReason(); reason {
+	case hmenum.FailureReasonUnknown, hmenum.FailureReasonNone:
+		return hmenum.FailureReasonNetwork
+	default:
+		return reason
+	}
 }

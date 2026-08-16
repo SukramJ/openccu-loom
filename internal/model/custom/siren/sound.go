@@ -293,14 +293,18 @@ type PlayConfig struct {
 //
 // A [generic.CallParameterCollector] is attached to ctx for
 // forward-compatible batching.
-func (sp *SoundPlayer) PlaySound(ctx context.Context, cfg PlayConfig, priority hmenum.CommandPriority) error {
+func (sp *SoundPlayer) PlaySound(
+	ctx context.Context, cfg PlayConfig, priority hmenum.CommandPriority,
+) (err error) {
 	if sp.writer == nil {
 		return errors.New("soundplayer: writer required")
 	}
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(sp.writer), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
-	defer func() { _ = coll.Send(ctx) }()
+	// Anything staged on the collector only reaches the wire in the
+	// flush, so its error is part of this command's result.
+	defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	const defaultVolume = 0.5
 	params := make(map[hmenum.Parameter]any, 6)
 	if cfg.SoundfileIndex >= minSoundfileIndex && cfg.SoundfileIndex <= maxSoundfileIndex {
@@ -335,7 +339,7 @@ func (sp *SoundPlayer) PlaySound(ctx context.Context, cfg PlayConfig, priority h
 		volume = defaultVolume
 	}
 	params[hmenum.ParameterLevel] = volume
-	if err := custom.PutOrSet(ctx, sp.writer, sp.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
+	if err = custom.PutOrSet(ctx, sp.writer, sp.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 		return fmt.Errorf("soundplayer: play: %w", err)
 	}
 	return nil
@@ -345,20 +349,22 @@ func (sp *SoundPlayer) PlaySound(ctx context.Context, cfg PlayConfig, priority h
 // single put_paramset bundle. Both DURATION_VALUE and DURATION_UNIT must be
 // written together so the CombinedTimerField on the device side sees a
 // consistent pair.
-func (sp *SoundPlayer) StopSound(ctx context.Context, priority hmenum.CommandPriority) error {
+func (sp *SoundPlayer) StopSound(ctx context.Context, priority hmenum.CommandPriority) (err error) {
 	if sp.writer == nil {
 		return errors.New("soundplayer: writer required")
 	}
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(sp.writer), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
-	defer func() { _ = coll.Send(ctx) }()
+	// Anything staged on the collector only reaches the wire in the
+	// flush, so its error is part of this command's result.
+	defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	params := map[hmenum.Parameter]any{
 		hmenum.ParameterLevel:         float64(0),
 		hmenum.ParameterDurationValue: int32(0),
 		hmenum.ParameterDurationUnit:  int32(0),
 	}
-	if err := custom.PutOrSet(ctx, sp.writer, sp.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
+	if err = custom.PutOrSet(ctx, sp.writer, sp.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 		return fmt.Errorf("soundplayer: stop: %w", err)
 	}
 	return nil

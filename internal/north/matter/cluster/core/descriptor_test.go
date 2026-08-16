@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -360,5 +361,86 @@ func TestDescriptor_SetPartsListProvider(t *testing.T) {
 	}
 	if len(parts) != 3 {
 		t.Fatalf("PartsList len = %d, want 3", len(parts))
+	}
+}
+
+// TestDescriptorProviderInstallRacesRead pins that installing the
+// PartsList / ServerList providers is safe while the IM layer is already
+// dispatching reads. The daemon attaches both well after the bridge
+// started serving, so a previously-paired commissioner re-establishing
+// CASE reads 0:0x001D:0x0003 concurrently with the install. Run under
+// -race, which is where the unsynchronised field write shows up.
+func TestDescriptorProviderInstallRacesRead(t *testing.T) {
+	d := defaultDescriptor(t)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for range 500 {
+			_, _ = d.MatterRead(0x0003)
+			_, _ = d.MatterRead(0x0001)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := range 500 {
+			parts := []uint16{uint16(i)}
+			d.SetPartsListProvider(func() []uint16 { return parts })
+			d.SetServerListProvider(func() []uint32 { return []uint32{0x001D} })
+			d.SetPartsList(parts)
+		}
+	}()
+	wg.Wait()
+
+	got, ok := d.MatterRead(0x0003)
+	if !ok {
+		t.Fatal("PartsList read failed after concurrent installs")
+	}
+	if _, isSlice := got.([]uint16); !isSlice {
+		t.Fatalf("PartsList = %T, want []uint16", got)
+	}
+}
+
+// TestDescriptor_ProviderReadDoesNotCopyStaticLists pins that a read
+// answered by a provider costs the same whether the static fallback list
+// is empty or large. Every assembled endpoint installs providers, so
+// materialising the static copy before the provider check allocated on
+// each of the reads Apple Home drives after CASE and then discarded the
+// result.
+func TestDescriptor_ProviderReadDoesNotCopyStaticLists(t *testing.T) {
+	build := func(t *testing.T, staticLen int) *core.Descriptor {
+		t.Helper()
+		servers := make([]uint32, staticLen)
+		parts := make([]uint16, staticLen)
+		for i := range servers {
+			servers[i] = uint32(0x1000 + i)
+			parts[i] = uint16(1 + i)
+		}
+		d, err := core.NewDescriptor(
+			[]core.DeviceTypeStruct{{DeviceType: 0x000E, Revision: 1}},
+			servers, []uint32{}, parts,
+		)
+		if err != nil {
+			t.Fatalf("NewDescriptor: %v", err)
+		}
+		providedServers := []uint32{0x001D}
+		providedParts := []uint16{7}
+		d.SetServerListProvider(func() []uint32 { return providedServers })
+		d.SetPartsListProvider(func() []uint16 { return providedParts })
+		return d
+	}
+
+	for name, attrID := range map[string]uint32{"ServerList": 0x0001, "PartsList": 0x0003} {
+		t.Run(name, func(t *testing.T) {
+			empty := build(t, 0)
+			large := build(t, 512)
+			emptyAllocs := testing.AllocsPerRun(200, func() { _, _ = empty.MatterRead(attrID) })
+			largeAllocs := testing.AllocsPerRun(200, func() { _, _ = large.MatterRead(attrID) })
+			if largeAllocs > emptyAllocs {
+				t.Errorf("%s read with a provider allocates %.0f with a 512-entry static list vs %.0f with an empty one — the static copy is built and thrown away",
+					name, largeAllocs, emptyAllocs)
+			}
+		})
 	}
 }

@@ -376,3 +376,32 @@ func TestMatterClusterServerInterfaceSatisfaction(t *testing.T) {
 		t.Fatalf("cluster ID = 0x%04X, want 0x0006", srv.MatterClusterID())
 	}
 }
+
+// TestMatterWriteLTAttributesAcceptDecodedUint64 pins the type the IM
+// layer actually delivers: the bridge decodes every unsigned TLV integer
+// to uint64, so a uint16/uint8 assertion rejected every controller write
+// to the three LT attributes the FeatureMap advertises as writable.
+func TestMatterWriteLTAttributesAcceptDecodedUint64(t *testing.T) {
+	cases := []struct {
+		name  string
+		attr  uint32
+		write any
+		want  any
+	}{
+		{"OnTime", matterAttrOnTime, uint64(42), uint16(42)},
+		{"OffWaitTime", matterAttrOffWaitTime, uint64(7), uint16(7)},
+		{"StartUpOnOff", matterAttrStartUpOnOff, uint64(1), uint8(1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestSwitch(t, "HmIP-PS:3", "", &stubWriter{})
+			err := s.MatterWrite(context.Background(), tc.attr, tc.write, hmenum.CommandPriorityHigh)
+			if err != nil {
+				t.Fatalf("MatterWrite(%s, uint64) error: %v", tc.name, err)
+			}
+			if v, _ := s.MatterRead(tc.attr); v != tc.want {
+				t.Errorf("%s after write: got %v (%T), want %v", tc.name, v, v, tc.want)
+			}
+		})
+	}
+}

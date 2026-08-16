@@ -250,7 +250,12 @@ func finalizeSetup(ctx context.Context, s *SetupService, req *setupRequest) erro
 	}
 
 	if req.MQTT != nil {
-		mqttSec, err := json.Marshal(map[string]string{
+		// The wizard sends the object only when the operator switched MQTT
+		// on, so the section carries the switch: the persisted overlay is
+		// sparse and `enabled` has no default, so a section without it
+		// leaves the bridge off and the whole step inert.
+		mqttSec, err := json.Marshal(map[string]any{
+			"enabled":    true,
 			"broker_url": req.MQTT.BrokerURL,
 			"username":   req.MQTT.Username,
 			"password":   req.MQTT.Password,

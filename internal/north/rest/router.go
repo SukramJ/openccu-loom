@@ -231,6 +231,12 @@ type Deps struct {
 	// Nil skips the purge; wired to the *sqlite.TokenStore in production.
 	TokenPurger handlers.TokenPurger
 
+	// TokenSockets closes the WebSocket connections a revoked bearer token
+	// opened, so DELETE /auth/tokens/v2/{fingerprint} ends the token's
+	// command plane too. Nil skips the teardown; wired to the *ws.Hub in
+	// production.
+	TokenSockets handlers.TokenSocketRevoker
+
 	// Preferences backs per-user UI state (favorites, dashboard) at
 	// /me/preferences/{key}. Nil disables those routes.
 	Preferences handlers.UserPreferencesService
@@ -1068,17 +1074,17 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/system/ccu", handlers.SystemCCU(d.SystemCCU))
 			// Reboot one CCU host. Admin-gated like DELETE /devices; the
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
-			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
 			// Astro reference position. Admin-gated: it moves every
 			// sunrise/sunset time the CCU computes, for its own programs
 			// as well as the weekly profiles this daemon edits.
-			pr.With(admin).Put("/system/ccu/{central}/position", handlers.PutCCUPosition(d.CCUPosition, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Put("/system/ccu/{central}/position", handlers.PutCCUPosition(d.CCUPosition, d.AuditRecorder))
 			// Host power and boot mode. All three take the CCU out of
 			// normal service, so they sit next to the reboot: admin-gated,
 			// audited, and confirmed in the UI before dispatch.
-			pr.With(admin).Post("/system/ccu/{central}/poweroff", handlers.PostCCUPoweroff(d.CCUHostActions, d.AuditRecorder))
-			pr.With(admin).Post("/system/ccu/{central}/safe-mode", handlers.PostCCUSafeMode(d.CCUHostActions, d.AuditRecorder))
-			pr.With(admin).Post("/system/ccu/{central}/recovery-mode", handlers.PostCCURecoveryMode(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Post("/system/ccu/{central}/poweroff", handlers.PostCCUPoweroff(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Post("/system/ccu/{central}/safe-mode", handlers.PostCCUSafeMode(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Post("/system/ccu/{central}/recovery-mode", handlers.PostCCURecoveryMode(d.CCUHostActions, d.AuditRecorder))
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
 			// Add-on self-update (ADR 0057). GET always answers 200 (a nil
 			// d.AddonUpdate reports supported:false) — mounted unconditionally
@@ -1154,8 +1160,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.RPCRecorder != nil {
 				pr.With(admin).Post("/diagnostics/rpc-recording", handlers.StartRPCRecording(d.RPCRecorder, d.AuditRecorder))
 				pr.With(admin).Post("/diagnostics/rpc-recording/stop", handlers.StopRPCRecording(d.RPCRecorder, d.AuditRecorder))
-				pr.Get("/diagnostics/rpc-recording", handlers.ListRPCRecordings(d.RPCRecorder))
-				pr.With(admin).Get("/diagnostics/rpc-recording/{central}/download", handlers.DownloadRPCRecording(d.RPCRecorder))
+				pr.With(admin).Get("/diagnostics/rpc-recording", handlers.ListRPCRecordings(d.RPCRecorder))
+				pr.With(admin, middleware.CentralScope).Get("/diagnostics/rpc-recording/{central}/download", handlers.DownloadRPCRecording(d.RPCRecorder))
 			}
 			if d.Metrics != nil {
 				pr.Get("/metrics", handlers.MetricsHandler(d.Metrics))
@@ -1288,8 +1294,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// Settings page can render at least the read-only view).
 			pr.Get("/config/schema", handlers.GetConfigSchema())
 			if d.ConfigAdmin != nil {
-				pr.Get("/config/effective", handlers.GetEffectiveConfig(d.ConfigAdmin))
-				pr.Get("/config/sections/{section}", handlers.GetConfigSection(d.ConfigAdmin))
+				// The reads are admin-gated like the writes: the assembled
+				// config names every CCU host, the broker URL, the OIDC
+				// issuer and the callback ports. Secrets are masked, the
+				// topology they describe is not.
+				pr.With(admin).Get("/config/effective", handlers.GetEffectiveConfig(d.ConfigAdmin))
+				pr.With(admin).Get("/config/sections/{section}", handlers.GetConfigSection(d.ConfigAdmin))
 				pr.With(admin).Put("/config/sections/{section}", handlers.PutConfigSection(d.ConfigAdmin, d.AuditRecorder))
 				pr.With(admin).Delete("/config/sections/{section}", handlers.DeleteConfigSection(d.ConfigAdmin, d.AuditRecorder))
 				// Per-field reset: revert a single config field to its default.
@@ -1310,7 +1320,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.TokenAdmin != nil {
 				pr.With(admin).Get("/auth/tokens/v2", handlers.ListTokensV2(d.TokenAdmin))
 				pr.With(admin).Post("/auth/tokens/v2", handlers.CreateTokenAdmin(d.TokenAdmin, d.AuditRecorder))
-				pr.With(admin).Delete("/auth/tokens/v2/{fingerprint}", handlers.DeleteTokenAdmin(d.TokenAdmin, d.AuditRecorder))
+				pr.With(admin).Delete("/auth/tokens/v2/{fingerprint}",
+					handlers.DeleteTokenAdmin(d.TokenAdmin, d.AuditRecorder, d.TokenSockets))
 			}
 			if d.CentralAdmin != nil {
 				pr.Get("/centrals", handlers.ListCentrals(d.CentralAdmin))
@@ -1347,13 +1358,17 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	return r
 }
 
-// logStreamPath is the one long-lived response this router serves: the
-// server-sent-event log tail writes for as long as an operator keeps the Logs
-// view open.
-const logStreamPath = "/api/v1/diagnostics/logs/stream"
+// streamingPaths are the long-lived responses this router serves: the
+// server-sent-event log tail, which writes for as long as an operator keeps
+// the Logs view open, and the NDJSON event-bus tap, which streams for the
+// window the caller asked for (up to five minutes).
+var streamingPaths = map[string]struct{}{
+	"/api/v1/diagnostics/logs/stream":  {},
+	"/api/v1/diagnostics/eventbus/tap": {},
+}
 
 // timeoutExceptStreaming applies the router-wide request deadline everywhere
-// except the SSE log tail.
+// except the streaming routes.
 //
 // [middleware.Timeout] puts the deadline on r.Context(), and the streaming
 // handler returns as soon as that context is done — so the blanket timeout
@@ -1367,7 +1382,7 @@ func timeoutExceptStreaming(d time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		timed := timeout(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == logStreamPath {
+			if _, streaming := streamingPaths[r.URL.Path]; streaming {
 				next.ServeHTTP(w, r)
 				return
 			}

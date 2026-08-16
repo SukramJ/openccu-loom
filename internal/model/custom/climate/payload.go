@@ -105,7 +105,7 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 			body["preset_mode_command_topic"] = ctx.ServiceMethodCommandTopic("set_profile")
 		}
 	}
-	if c.humidity != nil {
+	if c.HasHumidity() {
 		body["current_humidity_topic"] = ctx.WireParameterStateTopic("HUMIDITY")
 		body["current_humidity_template"] = "{{ value_json.value }}"
 	}
@@ -387,11 +387,14 @@ func (c *Climate) State() payload.StatePayload {
 			}
 		}
 	}
-	// Layer-trennung: Address ist identity, lebt in Info-Payload und
-	// HA-discovery `device.identifiers`. ValueState ist eine reine
-	// Übersetzung von StateUncertain und wird im HA-discovery
-	// json_attributes_template aus value_json.state_uncertain
-	// abgeleitet — keine Wire-Redundanz auf dem State-Topic.
+	// Two fields deliberately absent from the state payload, both because
+	// they belong to a different layer: the address is identity, carried
+	// by the info payload and the discovery `device.identifiers`; and
+	// ValueState is a pure restatement of StateUncertain, which the
+	// discovery `json_attributes_template` derives from
+	// value_json.state_uncertain. Repeating either on the state topic
+	// would put the same fact on the wire twice, with two chances to
+	// disagree.
 	return out
 }
 

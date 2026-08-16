@@ -65,6 +65,12 @@ type Zeroconf struct {
 	// (MdnsAdvertisement.ts broadcast() vs expire()).
 	published map[string]string
 	closed    bool
+	// afterSnapshot, when non-nil, runs between the snapshot of the
+	// active keys and the re-announce in [Zeroconf.republishAll]. It is
+	// the seam a test uses to land a Withdraw exactly in that gap —
+	// the interleaving that decides whether a re-announce can resurrect
+	// a record. Nil in production; set before any concurrent use.
+	afterSnapshot func()
 }
 
 // NewZeroconf returns a multicast advertiser backed by zeroconf. The
@@ -85,6 +91,10 @@ func NewZeroconf() *Zeroconf {
 // short discriminator, vendor, and commissioning mode. Must be called
 // before [Zeroconf.Publish] for the responder to receive the
 // subtype-mappings of subsequent publishes.
+//
+// Attaching transfers the responder's shutdown to this advertiser:
+// [Zeroconf.Close] closes it, releasing both receive goroutines and both
+// multicast sockets.
 func (z *Zeroconf) AttachSubtypeResponder(r *SubtypeResponder) {
 	z.mu.Lock()
 	z.responder = r
@@ -218,6 +228,16 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 
 	z.mu.Lock()
 	defer z.mu.Unlock()
+	return z.publishLocked(svc)
+}
+
+// publishLocked is [Zeroconf.Publish] minus validation and locking.
+// Caller must hold z.mu for writing. Split out so [Zeroconf.republishAll]
+// can re-check that a record is still wanted and re-register it in the
+// same critical section — a Withdraw landing between the check and the
+// register would otherwise be undone and the record would stay on the
+// wire for the process lifetime.
+func (z *Zeroconf) publishLocked(svc Service) error {
 	if z.closed {
 		return errors.New("mdns: zeroconf advertiser is closed")
 	}
@@ -450,19 +470,50 @@ func (z *Zeroconf) StartReannounceLoop(ctx context.Context, interval time.Durati
 // each entry. Republish replaces the prior server bundle (see
 // Publish docstring), so the wire effect is a Probe + Announce burst
 // for every active service.
-func (z *Zeroconf) republishAll(ctx context.Context) {
+func (z *Zeroconf) republishAll(_ context.Context) {
+	keys := z.snapshotKeys()
+	if z.afterSnapshot != nil {
+		z.afterSnapshot()
+	}
+	z.republishKeys(keys)
+}
+
+// snapshotKeys returns the keys of the currently active services, or
+// nil once the advertiser is closed.
+func (z *Zeroconf) snapshotKeys() []string {
 	z.mu.RLock()
+	defer z.mu.RUnlock()
 	if z.closed {
-		z.mu.RUnlock()
-		return
+		return nil
 	}
-	snapshot := make([]Service, 0, len(z.items))
+	keys := make([]string, 0, len(z.items))
 	for k := range z.items {
-		snapshot = append(snapshot, z.items[k])
+		keys = append(keys, k)
 	}
-	z.mu.RUnlock()
-	for i := range snapshot {
-		_ = z.Publish(ctx, snapshot[i])
+	return keys
+}
+
+// republishKeys re-announces the named services. The Service value is
+// re-read from z.items under the write lock and republished in the same
+// critical section, so a key that was withdrawn between the snapshot and
+// its turn here is skipped.
+//
+// Republishing from a snapshot of Service VALUES instead resurrects a
+// record that was withdrawn in the meantime — Publish re-registers it and
+// nothing withdraws it a second time, so a removed fabric would keep
+// answering commissioner browses until the daemon restarts. Splitting the
+// snapshot from the republish keeps that gap explicit (and testable)
+// rather than implicit in one long function.
+func (z *Zeroconf) republishKeys(keys []string) {
+	for _, k := range keys {
+		z.mu.Lock()
+		svc, ok := z.items[k]
+		if !ok || z.closed {
+			z.mu.Unlock()
+			continue
+		}
+		_ = z.publishLocked(svc)
+		z.mu.Unlock()
 	}
 }
 
@@ -488,6 +539,15 @@ func (z *Zeroconf) Close() error {
 		}
 		delete(z.subFQDNs, k)
 	}
+	// The side-car responder's receive goroutines and its two
+	// multicast :5353 sockets are bound to the advertiser's lifetime —
+	// attaching one hands its shutdown to us. Without this the loops and
+	// the group memberships outlive every Matter teardown.
+	var err error
+	if z.responder != nil {
+		err = z.responder.Close()
+		z.responder = nil
+	}
 	z.closed = true
-	return nil
+	return err
 }

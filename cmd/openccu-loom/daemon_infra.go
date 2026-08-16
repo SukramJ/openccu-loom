@@ -170,7 +170,12 @@ func wireSharedInfrastructure(
 	// Discovery so the very first payload already carries it.
 	mqtt.SetOriginVersion(build.Version)
 	si.mqttCollector = metrics.NewMqttCollector(si.metricsReg, pickFirstCentral(cfg))
-	si.mqttSup = newMQTTSupervisor(logger, si.healthTracker)
+	// The bridge/health payload names the live fleet, not the boot config: a
+	// CCU adopted through the SPA joins the registry without ever reaching
+	// cfg.Centrals.
+	si.mqttSup = newMQTTSupervisor(logger, si.healthTracker, func() []string {
+		return liveCentralNames(cfg, reg)
+	})
 	si.mqttSup.SetCollector(si.mqttCollector)
 	// G12: let every (re)built MQTT bridge skip operator-hidden channels, so a
 	// hidden channel disappears from the MQTT plane like it does from the REST

@@ -12,20 +12,15 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 )
 
-// TestHomegearGetAllSystemVariablesOverXMLRPC exercises the real
-// Homegear sysvar wire path: a godevccu instance in Homegear mode
-// (XML-RPC only, no JSON-RPC) answers getAllSystemVariables, and a
-// HomegearBackend reads the variables back through the XML-RPC
-// transport. This is the path the JSON-RPC hub bootstrap
-// (WireHub → SysVar.getAll) cannot serve for Homegear; the adapter's
-// loadHomegearSysvars consumes exactly this []map[string]any shape
-// (unit-tested in internal/central/adapter/homegear_hub_wiring_test.go,
-// which also covers the bool / float / named-transport-type cases).
+// TestHomegearGetAllSystemVariablesOverXMLRPC exercises the real Homegear
+// sysvar wire path: a godevccu instance in Homegear mode (XML-RPC only, no
+// JSON-RPC) answers getAllSystemVariables, and a HomegearBackend reads the
+// variables back through the XML-RPC transport. This is the path the
+// JSON-RPC hub bootstrap (SysVar.getAll) cannot serve for Homegear.
 //
-// The assertion confirms the transport delivers native Go scalar types
-// (string, int) so the value-type inference in classifyHomegearSysvar
-// lands on the right HubValueType (String / Integer) rather than seeing
-// an unrecognised wrapper type.
+// The assertions confirm the transport delivers native Go scalar types
+// (string, int) rather than a wrapper type, which is what any value-type
+// inference on top of this shape depends on.
 func TestHomegearGetAllSystemVariablesOverXMLRPC(t *testing.T) {
 	mock := startMockCCUWithDevices(t, []string{}) // no devices: this test is about sysvars
 

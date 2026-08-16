@@ -562,3 +562,61 @@ func setAllDurationLeavesNegative(rv reflect.Value, count *int) {
 		}
 	}
 }
+
+// TestValidateRejectsNonFiniteFloats pins the finite-float rule on a leaf that
+// has no range check of its own. YAML spells `.nan` and `.inf`, both survive
+// parsing, and both are unrepresentable in JSON — the encoding every deep copy
+// of the config goes through. Accepting one would make [Clone] fail on a
+// config the operator wrote and validated.
+func TestValidateRejectsNonFiniteFloats(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		price float64
+		want  bool
+	}{
+		{"a real tariff", 0.32, false},
+		{"unset", 0, false},
+		{"not a number", math.NaN(), true},
+		{"positive infinity", math.Inf(1), true},
+		{"negative infinity", math.Inf(-1), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := Default()
+			cfg.Centrals = []CentralConfig{validCentral()}
+			cfg.Persistence.History.EnergyPricePerKWh = tc.price
+			err := cfg.Validate()
+			if tc.want {
+				assertRejected(t, err, "persistence.history.energy_price_per_kwh")
+				return
+			}
+			assertAccepted(t, err)
+		})
+	}
+}
+
+// TestParseRejectsNonFiniteFloatLiteral crosses the YAML boundary the value
+// actually enters through: `.nan` is a legal YAML float, so only Validate can
+// keep it out of a running config.
+func TestParseRejectsNonFiniteFloatLiteral(t *testing.T) {
+	t.Parallel()
+
+	const doc = `
+persistence:
+  history:
+    energy_price_per_kwh: .nan
+centrals:
+  - name: ccu1
+    host: 192.0.2.10
+    interfaces:
+      - HmIP-RF
+`
+	if _, err := Parse([]byte(doc)); err == nil {
+		t.Fatal("Parse accepted energy_price_per_kwh: .nan")
+	} else if !strings.Contains(err.Error(), "energy_price_per_kwh") {
+		t.Errorf("error does not name the offending field: %v", err)
+	}
+}

@@ -59,7 +59,7 @@ func buildCoordinator(
 		psReg.Put(wireKey(iface), ch, hmenum.ParamsetKeyMaster, ps)
 	}
 
-	return NewDeviceCoordinator(testCentralName, bus, devReg, descReg, psReg, nil)
+	return NewDeviceCoordinator(testCentralName, bus, devReg, descReg, psReg, nil, nil)
 }
 
 // ─── Test 1: nil checker returns error ───────────────────────────────────────

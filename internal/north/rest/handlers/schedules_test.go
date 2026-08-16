@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -432,7 +433,7 @@ func TestWriteScheduleError_NoScheduleParams_Returns404(t *testing.T) {
 	t.Parallel()
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	writeScheduleError(w, r, errors.New("schedules: channel exposes no climate schedule parameters"))
+	writeScheduleError(w, r, fmt.Errorf("read source profile: %w", hmerr.ErrNoSchedule))
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
 	}
@@ -493,6 +494,60 @@ func TestPostCopySchedule_EmptyTarget_Returns422(t *testing.T) {
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV1"}))
 	w := httptest.NewRecorder()
 	PostCopySchedule(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPostCopySchedule_SourceWithoutSchedule_Returns404 verifies the
+// wrapped "no climate schedule" sentinel from the copy path is mapped to
+// 404, not to a 502 upstream failure.
+func TestPostCopySchedule_SourceWithoutSchedule_Returns404(t *testing.T) {
+	t.Parallel()
+	svc := &stubScheduleService{
+		copyErr: fmt.Errorf("schedules: copy read source: %w", hmerr.ErrNoSchedule),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"target_device_address":"DEV2"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV1"}))
+	w := httptest.NewRecorder()
+	PostCopySchedule(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPostCopySchedule_NoOp_Returns422 verifies copying a device onto
+// itself is reported as a caller mistake, not an upstream failure.
+func TestPostCopySchedule_NoOp_Returns422(t *testing.T) {
+	t.Parallel()
+	svc := &stubScheduleService{
+		copyErr: hmerr.ErrScheduleCopyNoOp,
+	}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"target_device_address":"DEV1"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV1"}))
+	w := httptest.NewRecorder()
+	PostCopySchedule(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPostCopyProfile_DomainProfileRange_Returns422 verifies the domain's
+// profile-range rejection maps to 422 even when it reaches the handler
+// (the handler pre-validates the same range).
+func TestPostCopyProfile_DomainProfileRange_Returns422(t *testing.T) {
+	t.Parallel()
+	svc := &stubScheduleService{
+		copyProfileErr: hmerr.ErrScheduleCopyProfileRange,
+	}
+	body := strings.NewReader(`{"source_profile":1,"target_channel_address":"DEV2:2","target_profile":2}`)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV1", "no": "1"}))
+	w := httptest.NewRecorder()
+	PostCopyProfile(svc).ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())

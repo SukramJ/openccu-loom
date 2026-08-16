@@ -494,17 +494,20 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		if owner := d.Devices.CentralOf(deviceAddressOf(address)); owner != central {
 			return nil, writeParamsetOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
 		}
+		// The paramset domain this tool writes through records the change
+		// itself, with the per-parameter before/after pairs. A row added
+		// here would be a second entry for one write — the change history
+		// would show the same write twice, once with values and once
+		// without, so an operator counting or diffing changes sees one that
+		// never happened.
+		//
+		// Provenance rides the request context instead, the same way the
+		// program trigger below stamps itself: without it an assistant's
+		// write and an operator's write are indistinguishable afterwards,
+		// and "who changed this" is the first question asked about one.
+		ctx = reqctx.WithOperation(ctx, "mcp:paramset-write")
 		if err := d.Paramsets.PutParamset(ctx, address, key, in.Values); err != nil {
 			return nil, writeParamsetOut{}, fmt.Errorf("write paramset: %w", err)
-		}
-		if d.Audit != nil {
-			d.Audit.Record(audit.Entry{
-				Timestamp:     time.Now().UTC(),
-				Action:        audit.ActionParamsetWrite,
-				DeviceAddress: address,
-				Paramset:      string(key),
-				Note:          "via mcp",
-			})
 		}
 		return nil, writeParamsetOut{OK: true}, nil
 	})
@@ -537,7 +540,7 @@ func registerTriggerProgram(s *mcpsdk.Server, d Deps) {
 		if d.Audit != nil {
 			d.Audit.Record(audit.Entry{
 				Timestamp: time.Now().UTC(),
-				Action:    audit.Action("program_execute"),
+				Action:    audit.ActionProgramExecute,
 				Note:      "program=" + programID + " via mcp",
 			})
 		}

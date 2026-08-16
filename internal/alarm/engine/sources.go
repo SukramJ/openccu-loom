@@ -7,6 +7,7 @@ import (
 	"context"
 
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -74,6 +75,59 @@ func (e *Engine) recordSource(ctx context.Context, a *zone, incidentID int64, ca
 	return true
 }
 
+// restoreSources rehydrates the in-memory source accumulator of a
+// restored incident from the durable ledger.
+//
+// Without it a daemon that restarts mid-incident resumes with an empty
+// list: the restore re-fire ships no sources at all, and the next
+// detector to fire becomes sources[0] — the headline sensor of every
+// later trigger event, so MQTT and the SPA name a sensor that did not
+// open the incident. The ledger is the same list, keyed by ref, so the
+// dedupe set is rebuilt from it too.
+//
+// A read failure degrades to the empty accumulator (the pre-existing
+// behaviour) rather than failing the restore: an unreadable audit row
+// must never keep a triggered zone from coming back up.
+//
+// The caller holds the lock.
+func (e *Engine) restoreSources(ctx context.Context, a *zone) {
+	a.resetSources()
+	if e.ledger == nil || a.incident == nil || a.incident.ID == 0 {
+		return
+	}
+	rows, err := e.ledger.ListByIncident(ctx, a.incident.ID)
+	if err != nil {
+		e.log.Error("alarm incident source restore failed",
+			"zone", a.id, "incident", a.incident.ID, "error", err)
+		return
+	}
+	if len(rows) == 0 {
+		return
+	}
+	a.sourceSeen = make(map[string]bool, len(rows))
+	a.sources = make([]hmevent.SecuritySourceRef, 0, len(rows))
+	for i := range rows {
+		row := &rows[i]
+		if a.sourceSeen[row.Ref] {
+			continue
+		}
+		a.sourceSeen[row.Ref] = true
+		a.sources = append(a.sources, hmevent.SecuritySourceRef{
+			Ref:            row.Ref,
+			Central:        row.CentralName,
+			InterfaceID:    row.InterfaceID,
+			ChannelAddress: row.ChannelAddress,
+			DeviceAddress:  row.DeviceAddress,
+			Parameter:      row.Parameter,
+			SensorID:       row.SensorID,
+			Name:           row.Name,
+			SensorType:     hmenum.AlarmSensorType(row.SensorType),
+			Class:          hmenum.SecurityClass(row.Class),
+			AtMS:           row.AtMS,
+		})
+	}
+}
+
 // fireCycle hands one output cycle to the driver layer. It stamps the
 // zone snapshot every cycle carries — the display name and the sources
 // accumulated so far — and journals a driver failure.
@@ -121,9 +175,11 @@ func (e *Engine) publishSourcesChanged(a *zone, incidentID int64) {
 // incident, oldest first. It returns nil for an unknown zone or one
 // without a running incident.
 //
-// Consumers that need the sources off the engine goroutine — the
-// notification fan-out, REST — read them here instead of the database,
-// so a notification never waits on a query.
+// It is an inspection accessor, not the path any live surface takes,
+// and deliberately so. The notification fan-out cannot call it: its
+// sink runs with the engine lock already held, so every cycle carries
+// its own snapshot instead ([FireOptions.Sources]). REST answers from
+// the durable ledger, which also covers incidents that have closed.
 func (e *Engine) IncidentSources(zoneID string) []hmevent.SecuritySourceRef {
 	e.mu.Lock()
 	defer e.mu.Unlock()

@@ -191,3 +191,92 @@ func (s *mutableSecuritySnapshot) rename(slug, name string) {
 	z.Name = name
 	s.snap.Zones[slug] = z
 }
+
+// set replaces the whole snapshot, mirroring the domain's own transition
+// from "index not built yet" to "index built".
+func (s *mutableSecuritySnapshot) set(snap security.Snapshot) {
+	s.mu.Lock()
+	s.snap = snap
+	s.mu.Unlock()
+}
+
+// TestSecurityPlaneDoesNotDeclareBeforeTheIndexIsBuilt pins the
+// declaration gate against the boot order the daemon actually uses: the
+// MQTT publisher starts before the domain builds its index, so its eager
+// reconcile sees no classes and no zones.
+//
+// Declaring on that pass presents a plane holding only the system
+// entities to the orphan sweep, which then classifies every retained
+// class and zone config from the previous boot as an orphan and clears
+// it — the installation's safety entities leave the consumer.
+func TestSecurityPlaneDoesNotDeclareBeforeTheIndexIsBuilt(t *testing.T) {
+	t.Parallel()
+	src := &mutableSecuritySnapshot{snap: security.Snapshot{
+		Severity:      hmenum.SecuritySeverityInfo,
+		EngineHealthy: true,
+	}}
+	pub := &refusingPublisher{}
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, pub)
+	p := NewSecurityMQTTPublisher(src, NewWiring(bridge, slog.Default()), "en", "", slog.Default())
+	bus := events.NewBus()
+	p.Start(bus)
+	t.Cleanup(p.Stop)
+
+	if bridge.planeDeclared(securityDiscoveryNodeID) {
+		t.Fatal("the security plane declared on the empty pre-index snapshot; " +
+			"the orphan sweep would clear every class and zone config the broker still holds")
+	}
+
+	// The domain finishes building its index and publishes state, which
+	// drives the reconcile that declares for real.
+	src.set(smokeClassSnapshot())
+	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+
+	if !bridge.planeDeclared(securityDiscoveryNodeID) {
+		t.Fatal("the security plane never declared after the index was built; its orphans could never be swept")
+	}
+}
+
+// TestSecurityPlaneDeclaresWhenTheInstallationIsGenuinelyEmpty is the
+// other half of the declaration gate.
+//
+// An installation whose last class or zone disappeared while the daemon
+// was down starts with an empty snapshot AND with the previous boot's
+// retained class/zone configs still on the broker. Treating emptiness
+// itself as "the index is not built" withholds the declaration forever,
+// the orphan sweep skips the plane, and those configs keep phantom
+// entities alive in the consumer for the life of the broker. The domain's
+// own announcement — published once it has built its index — is what
+// separates the two cases.
+func TestSecurityPlaneDeclaresWhenTheInstallationIsGenuinelyEmpty(t *testing.T) {
+	t.Parallel()
+	src := &mutableSecuritySnapshot{snap: security.Snapshot{
+		Severity:      hmenum.SecuritySeverityOK,
+		EngineHealthy: true,
+	}}
+	pub := &refusingPublisher{}
+	bridge := NewBridge(BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, pub)
+	p := NewSecurityMQTTPublisher(src, NewWiring(bridge, slog.Default()), "en", "", slog.Default())
+	bus := events.NewBus()
+	p.Start(bus)
+	t.Cleanup(p.Stop)
+
+	if bridge.planeDeclared(securityDiscoveryNodeID) {
+		t.Fatal("the plane declared before the domain reported anything")
+	}
+
+	// The domain finished its start: index built, state announced — and
+	// the installation really has neither a class nor a zone.
+	events.Publish(bus, hmevent.SecurityStateChangedEvent{Base: hmevent.NewBaseAt(time.Now())})
+
+	if !bridge.planeDeclared(securityDiscoveryNodeID) {
+		t.Fatal("an installation with no classes and no zones never declares, " +
+			"so its leftover retained configs can never be swept")
+	}
+}

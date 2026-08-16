@@ -468,7 +468,10 @@ func (c *CommandSubscriber) commandParts(topic string) ([]string, bool) {
 	return strings.Split(rest, "/"), true
 }
 
-// Start attaches the four subscriptions.
+// Start attaches every command-topic subscription the bridge answers on.
+// A failure on any one of them aborts Start: a subscriber that came up
+// with a partial filter set accepts some commands and silently drops the
+// rest, which reads like a broken CCU rather than a broken subscribe.
 func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if c.sub == nil {
 		return errors.New("mqtt/command: no subscriber")
@@ -503,7 +506,8 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	// program refuses to run — so it has its own topic (see
 	// hub.Program.MQTTRoles).
 	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/set", c.qos, LegacyHandler(c.handleProgramEnable)); err != nil {
-		return err
+		c.incSubscribeFailures()
+		return fmt.Errorf("subscribe hub_program_enable: %w", err)
 	}
 	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", c.qos, LegacyHandler(c.handleProgram)); err != nil {
 		c.incSubscribeFailures()

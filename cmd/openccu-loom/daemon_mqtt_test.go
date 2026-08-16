@@ -24,7 +24,7 @@ func TestBuildMQTT_Disabled_ReturnsNil(t *testing.T) {
 	cfg := config.Default()
 	cfg.North.MQTT.Enabled = false
 	logger := slog.Default()
-	if got := buildMQTT(cfg, logger, nil, nil); got != nil {
+	if got := buildMQTT(cfg, logger, nil, nil, nil); got != nil {
 		t.Errorf("expected nil when MQTT disabled, got %v", got)
 	}
 }
@@ -35,7 +35,7 @@ func TestBuildMQTT_EnabledNoBroker_ReturnsStackWithNoopClient(t *testing.T) {
 	cfg.North.MQTT.Enabled = true
 	cfg.North.MQTT.BrokerURL = "" // no broker → noop client
 	logger := slog.Default()
-	got := buildMQTT(cfg, logger, nil, nil)
+	got := buildMQTT(cfg, logger, nil, nil, nil)
 	if got == nil {
 		t.Fatal("expected non-nil stack when MQTT enabled without broker")
 	}
@@ -55,7 +55,7 @@ func TestBuildMQTT_EnabledWithBroker_ReturnsStackWithLifecycle(t *testing.T) {
 	cfg.North.MQTT.BrokerURL = "tcp://192.0.2.1:1883" // unreachable but valid URL
 	cfg.North.MQTT.ClientID = "openccu-loom-test"
 	logger := slog.Default()
-	got := buildMQTT(cfg, logger, nil, nil)
+	got := buildMQTT(cfg, logger, nil, nil, nil)
 	if got == nil {
 		t.Fatal("expected non-nil stack when MQTT enabled with broker")
 	}
@@ -78,7 +78,7 @@ func TestBuildMQTT_BrokerPath_CleanupPassesGetASubscriber(t *testing.T) {
 	cfg.North.MQTT.BrokerURL = "tcp://192.0.2.1:1883" // unreachable but valid URL
 	cfg.North.MQTT.ClientID = "openccu-loom-test"
 	cfg.North.MQTT.RawEnabled = true
-	got := buildMQTT(cfg, slog.Default(), nil, nil)
+	got := buildMQTT(cfg, slog.Default(), nil, nil, nil)
 	if got == nil {
 		t.Fatal("expected non-nil stack")
 	}
@@ -116,7 +116,7 @@ func TestBuildMQTT_RetainedSweepKnowsEveryConfiguredCentral(t *testing.T) {
 	cfg.North.MQTT.TopicBase = "openccu-loom"
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}, {Name: "Haus CCÜ"}}
 
-	got := buildMQTT(cfg, slog.Default(), nil, nil)
+	got := buildMQTT(cfg, slog.Default(), nil, nil, nil)
 	if got == nil {
 		t.Fatal("expected non-nil stack")
 	}
@@ -135,6 +135,45 @@ func TestBuildMQTT_RetainedSweepKnowsEveryConfiguredCentral(t *testing.T) {
 		if strings.Contains(topic, "/ccu-01/") {
 			t.Fatalf("candidate %q is a live topic of ccu-01 — clearing it blanks a value in use", topic)
 		}
+	}
+}
+
+// TestBuildMQTT_RetainedSweepFollowsARuntimeAdoptedCentral pins that the
+// bridge resolves the fleet per sweep rather than from the boot snapshot.
+//
+// A CCU adopted after boot is in no configured list, so a sweep that
+// reads the snapshot judges that CCU's live topics against a fleet it is
+// not part of. The failure is silent in both directions: the adopted
+// CCU's orphans are never cleared, and its live topics can be — and the
+// counters report the same numbers either way.
+func TestBuildMQTT_RetainedSweepFollowsARuntimeAdoptedCentral(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.MQTT.Enabled = true
+	cfg.North.MQTT.BrokerURL = "tcp://192.0.2.1:1883"
+	cfg.North.MQTT.ClientID = "openccu-loom-test"
+	cfg.North.MQTT.RawEnabled = true
+	cfg.North.MQTT.TopicBase = "openccu-loom"
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}}
+
+	// The live fleet, as the registry would report it after an adopt.
+	fleet := make([]string, 0, 2)
+	fleet = append(fleet, "ccu-01")
+	got := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return fleet })
+	if got == nil {
+		t.Fatal("expected non-nil stack")
+	}
+	bridge := got.wiring.Bridge()
+	if bridge == nil {
+		t.Fatal("expected non-nil bridge")
+	}
+
+	fleet = append(fleet, "Haus CCÜ")
+
+	want := "openccu-loom/" + strings.ToLower("Haus CCÜ") + "/system/health_score"
+	candidates := bridge.RetiredMetricTopics()
+	if !slices.Contains(candidates, want) {
+		t.Fatalf("retained-sweep candidates %v do not cover %q — the sweep is still reading the boot snapshot", candidates, want)
 	}
 }
 

@@ -6,8 +6,10 @@ package adapter
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
@@ -108,4 +110,77 @@ func TestPublishCentralSnapshotUnknownCentralIsNoop(t *testing.T) {
 	if got := len(pub.Published()); got != 0 {
 		t.Fatalf("unknown-central snapshot published %d topics, want 0", got)
 	}
+}
+
+// snapshotUnitWithDevice returns a registry whose single central is
+// southbound-ready and holds one device with a seeded data point, so a
+// snapshot pass has something to publish.
+func snapshotUnitWithDevice(t *testing.T) *central.Registry {
+	t.Helper()
+	reg, dev := registryWithDevice(t)
+	ch := dev.AddChannel("0001ABCD:1", 1, "TEST", hmenum.ParamsetKeyValues)
+	dp := generic.NewDataPoint[bool](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: "0001ABCD:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "STATE",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	ch.Put(dp)
+	if !dp.OnWireValue(true) {
+		t.Fatal("OnWireValue refused to seed")
+	}
+	unit, ok := reg.Get("ccu-01")
+	if !ok {
+		t.Fatal("unit ccu-01 not registered")
+	}
+	unit.MarkSouthboundReady()
+	return reg
+}
+
+// snapshotHookBridge builds an EventBridge over pub and returns a reader for
+// how often the post-snapshot hook fired.
+func snapshotHookBridge(t *testing.T, reg *central.Registry, pub mqtt.Publisher) (eb *EventBridge, hookFired func() int) {
+	t.Helper()
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, pub)
+	eb = NewEventBridge(reg, nil, mqtt.NewWiring(bridge, nil))
+	var fired atomic.Int64
+	eb.SetPostCentralSnapshotHook(func(context.Context, string) { fired.Add(1) })
+	return eb, func() int { return int(fired.Load()) }
+}
+
+// TestPublishCentralSnapshotArmsSweepsOnlyOnFullSuccess pins the guard on the
+// retained-orphan sweeps. The bridge records a discovery topic as declared
+// only after the broker accepted it, and the sweeps the hook launches delete
+// every retained config that is not in that set. A pass that lost publishes
+// must therefore not arm them, or it deletes exactly the entities that failed
+// to publish.
+func TestPublishCentralSnapshotArmsSweepsOnlyOnFullSuccess(t *testing.T) {
+	t.Parallel()
+
+	t.Run("broker_rejects", func(t *testing.T) {
+		t.Parallel()
+		eb, fired := snapshotHookBridge(t, snapshotUnitWithDevice(t), failingPublisher{})
+		eb.PublishInitialSnapshot(context.Background())
+		if got := fired(); got != 0 {
+			t.Fatalf("post-snapshot hook fired %d times after failed publishes, want 0", got)
+		}
+	})
+
+	t.Run("broker_accepts", func(t *testing.T) {
+		t.Parallel()
+		eb, fired := snapshotHookBridge(t, snapshotUnitWithDevice(t), mqtt.NewNoopClient())
+		eb.PublishInitialSnapshot(context.Background())
+		if got := fired(); got != 1 {
+			t.Fatalf("post-snapshot hook fired %d times after a clean pass, want 1", got)
+		}
+	})
 }

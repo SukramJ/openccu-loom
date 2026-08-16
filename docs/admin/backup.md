@@ -110,6 +110,17 @@ a staging directory, then atomically renames the database into place.
 If `openccu-loom.db` already exists it refuses unless `--force` is
 given. Start the daemon again after a successful restore.
 
+!!! info "Restore also clears the old WAL/SHM sidecars"
+    A database restored next to the previous database's
+    `openccu-loom.db-wal` / `-shm` would not be the database you
+    restored: SQLite recovers a write-ahead log it finds beside a
+    database file on the next open and replays the *old* pages into the
+    new file. Restore therefore moves those sidecars aside together with
+    the database, in the same all-or-nothing set — a failed commit puts
+    the original database and its sidecars back together, a successful
+    one discards them. You do not have to delete them by hand, and you
+    must not copy them back in afterwards.
+
 ## A scheduled backup (cron)
 
 ```sh
@@ -171,6 +182,36 @@ between instances, not for disaster recovery.
 openccu-loom config export --config /etc/openccu-loom/config.yaml --out config-dump.json
 openccu-loom config import --config /etc/openccu-loom/config.yaml config-dump.json
 ```
+
+### The redacted round-trip
+
+By default the export is **redacted**: every secret-classed leaf (CCU
+password, MQTT password, OIDC client secret, Matter passcode, …) is
+withheld — written as JSON `null`, with an empty `password_plain` on
+each central — and the document is stamped `"redacted": true`. Pass
+`--include-secrets` to export the cleartext instead; that file then
+carries live credentials and belongs in a secrets store, not in a chat
+window.
+
+Importing a redacted document **keeps the credentials already stored in
+the target database**. The import reads the stored values first and
+merges them into every withheld leaf, so re-importing your own export
+cannot silently null out the daemon's own credentials. Two consequences
+worth knowing:
+
+- A redacted export cannot *transfer* secrets to a fresh instance.
+  Importing one into an empty database leaves those fields empty — set
+  them in the SPA afterwards, or export with `--include-secrets`.
+- Clearing a credential is not something an import can express. A
+  withheld leaf means "unchanged", not "delete"; clear it on the target
+  instance instead.
+
+`--replace` deletes the stored sections and centrals before writing, but
+the merge still applies: the stored secrets are snapshotted before the
+delete, so a redacted `--replace` import does not lose them either. Use
+`--dry-run` to see how many sections and centrals a document would
+touch before it writes anything. `import` prints a reminder to stderr
+whenever it is fed a redacted document.
 
 ## CCU-side backups (REST)
 

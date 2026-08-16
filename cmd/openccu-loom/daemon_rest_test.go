@@ -284,3 +284,48 @@ func TestWireRESTPurgeCoversTheLegacyTokenStore(t *testing.T) {
 		t.Error("the durable token still authenticates after its account was purged")
 	}
 }
+
+// TestWireREST_IngressPassthroughWiredWithoutTheAppDatabase pins ADR
+// 0044's passthrough on the boot path that has no app database. That
+// path keeps the boot-time auth chain, and an Ingress deployment whose
+// data directory failed to open resolves no identity at all when the
+// passthrough is skipped — every request 401s and the operator cannot
+// reach the UI that would show them why.
+func TestWireREST_IngressPassthroughWiredWithoutTheAppDatabase(t *testing.T) {
+	t.Setenv("OPENCCU_LOOM_SUPERVISOR", "1")
+
+	cfg := config.Default()
+	enabled := true
+	cfg.North.REST.Auth.HAIngress.Enabled = &enabled
+	cfg.North.REST.Auth.HAIngress.TrustedProxyCIDR = "127.0.0.0/8"
+
+	passthrough := func(next http.Handler) http.Handler { return next }
+	w := wireREST(context.Background(), restWiringDeps{
+		cfg:            cfg,
+		logger:         slog.New(slog.DiscardHandler),
+		authMw:         auth.NewMiddleware(auth.NewMemoryUserStore(), auth.NewMemoryTokenStore(nil)),
+		restResolve:    passthrough,
+		sessionResolve: passthrough,
+		// auditDB stays nil: the app database could not be opened.
+	})
+	if w.authResolve == nil {
+		t.Fatal("wireREST: authResolve is nil")
+	}
+
+	var got auth.Identity
+	var resolved bool
+	h := w.authResolve(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got, resolved = auth.IdentityFrom(r.Context())
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
+	req.Header.Set("X-Ingress-Path", "/api/hassio_ingress/abc")
+	req.RemoteAddr = "127.0.0.1:41234"
+	h.ServeHTTP(httptest.NewRecorder(), req)
+
+	if !resolved {
+		t.Fatal("no identity resolved: the HA Ingress passthrough is not wired on this boot path")
+	}
+	if got.Scheme != auth.SchemeIngress {
+		t.Fatalf("identity scheme = %q, want %q", got.Scheme, auth.SchemeIngress)
+	}
+}

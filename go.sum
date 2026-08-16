@@ -1,5 +1,5 @@
-github.com/SukramJ/go-mqtt v1.2.0 h1:bYRR2Vpo2tyEt5IvFJMdMhPhDUCJpHD+Lhl2DRUfIMw=
-github.com/SukramJ/go-mqtt v1.2.0/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
+github.com/SukramJ/go-mqtt v1.3.0 h1:kCL4oWtxNFIRKd9GrxlsWOn6C6O/QXzBXwUntkG45MY=
+github.com/SukramJ/go-mqtt v1.3.0/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
 github.com/SukramJ/go-openccu-data v0.1.3 h1:5nhTomKWT7rp2zFkT1GLpkhhf+fKQfmhRSsUnqOS4cE=
 github.com/SukramJ/go-openccu-data v0.1.3/go.mod h1:hDzB2WgqBuex/oNyfkCwB6mRKeJ2+TZDA8iSMkyPznQ=
 github.com/SukramJ/godevccu v0.2.2 h1:kkxpRxf/s2neaEoPUiOOKyF9X/+6Bx+HincYw/HqvE8=

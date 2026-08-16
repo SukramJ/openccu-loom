@@ -455,13 +455,13 @@ func snapshotPrograms(idx HubIndex) []ProgramSummary {
 		includeInternal := nh.Hub.IncludeInternalProgramsDefault()
 		serial := idx.SerialSuffix(nh.Central)
 		for _, p := range nh.Hub.Programs() {
-			if p.IsInternal && !includeInternal {
+			if p.Internal() && !includeInternal {
 				continue
 			}
 			active, observed := p.Active()
 			entry := ProgramSummary{
 				ID:          p.ID,
-				Name:        p.Name,
+				Name:        p.LegacyName(),
 				Description: p.Description,
 				Central:     nh.Central,
 				UniqueID:    p.CanonicalUniqueID(serial),

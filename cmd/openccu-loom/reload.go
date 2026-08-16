@@ -25,7 +25,6 @@ import (
 //
 //   - logging.level         → swaps the slog handler at runtime
 //   - logging.format        → swaps the slog handler at runtime
-//   - north.rest.cors       → operator-supplied CORS origins (next request)
 //   - north.mqtt.*          → tears down + rebuilds the MQTT stack atomically
 //     (broker URL, client_id, credentials, topic base, discovery toggles,
 //     payload format, enabled flag — see [mqttDiffersStructurally])
@@ -40,6 +39,9 @@ import (
 //   - north.rest.listen / north.mqtt.listen
 //   - north.rest.public_url (add-on hint file is written once at boot)
 //   - north.rest.openapi_validate (router middleware is fixed at boot)
+//   - north.rest.cors (the allowed-origin list is captured when the CORS
+//     middleware is constructed at router assembly, and an empty list
+//     installs no middleware at all)
 //   - data_dir (SQLite / backup paths committed at boot)
 //   - locale, auth, oidc
 //

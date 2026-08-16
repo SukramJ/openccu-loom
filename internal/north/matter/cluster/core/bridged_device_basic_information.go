@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -404,7 +405,7 @@ func (b *BridgedDeviceBasicInformation) MatterWrite(_ context.Context, attrID ui
 // MatterInvoke always rejects — BridgedDeviceBasicInformation has no
 // commands.
 func (b *BridgedDeviceBasicInformation) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: BridgedDeviceBasicInformation has no commands (got 0x%02X)", cmdID)
+	return nil, im.UnsupportedCommandf("matter: BridgedDeviceBasicInformation has no commands (got 0x%02X)", cmdID)
 }
 
 // MatterReportable returns the list of subscribe-able attributes.

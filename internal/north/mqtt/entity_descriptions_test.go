@@ -4,7 +4,9 @@
 package mqtt
 
 import (
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -443,5 +445,79 @@ func TestDoorbellEventType(t *testing.T) {
 				t.Errorf("DoorbellEventType(%q, %q) = %q, want %q", tc.model, tc.pressType, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestEntityDescriptionUnitsUseMicroSign pins the spelling of the micro
+// prefix across every description table, hand-written and generated alike.
+//
+// Unicode encodes the prefix twice — U+00B5 MICRO SIGN and U+03BC GREEK
+// SMALL LETTER MU — and the two are indistinguishable on screen. Home
+// Assistant validates a sensor's advertised unit against its own canonical
+// U+00B5 string for the declared device class and refuses the whole config
+// when they differ, so a PM entity published with the Greek letter never
+// appears at all. The check scans the package source rather than a list of
+// tables so a newly added table, or a regenerated one, cannot reintroduce
+// it unnoticed.
+func TestEntityDescriptionUnitsUseMicroSign(t *testing.T) {
+	t.Parallel()
+	const greekMu = "μ"
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read package dir: %v", err)
+	}
+	scanned := 0
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		body, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		scanned++
+		for i, line := range strings.Split(string(body), "\n") {
+			if strings.Contains(line, greekMu) {
+				t.Errorf("%s:%d uses U+03BC GREEK SMALL LETTER MU; use U+00B5 MICRO SIGN: %s",
+					name, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("no package sources scanned")
+	}
+}
+
+// TestParticulateMatterUnitsAreCanonical asserts the spelling through the
+// two lookup paths a discovery payload actually takes — the hand-written
+// per-parameter rules and the generated registry table — so the guard
+// survives a refactor that moves the literal somewhere the source scan
+// above no longer covers.
+func TestParticulateMatterUnitsAreCanonical(t *testing.T) {
+	t.Parallel()
+	const wantPM = "µg/m³"
+	for _, param := range []string{
+		"MASS_CONCENTRATION_PM_1",
+		"MASS_CONCENTRATION_PM_10",
+		"MASS_CONCENTRATION_PM_2_5",
+		"MASS_CONCENTRATION_PM_1_24H_AVERAGE",
+		"MASS_CONCENTRATION_PM_10_24H_AVERAGE",
+		"MASS_CONCENTRATION_PM_2_5_24H_AVERAGE",
+	} {
+		d, ok := LookupSensorRule("", param)
+		if !ok {
+			t.Fatalf("%s: no sensor rule", param)
+		}
+		if d.UnitOfMeasurement != wantPM {
+			t.Errorf("%s: unit %q, want %q", param, d.UnitOfMeasurement, wantPM)
+		}
+		reg := HARegistryDescriptionLookup("sensor", param, "", "", "", "")
+		if reg == nil {
+			t.Fatalf("%s: no registry description", param)
+		}
+		if reg.UnitOfMeasurement != wantPM {
+			t.Errorf("%s: registry unit %q, want %q", param, reg.UnitOfMeasurement, wantPM)
+		}
 	}
 }

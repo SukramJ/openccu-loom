@@ -48,19 +48,63 @@ type Config struct {
 	RoleClaim string
 }
 
+// discoveryRetryInterval is how long a failed discovery is remembered
+// before the next call contacts the provider again. It keeps a login
+// burst against an unreachable IdP from turning into a request storm
+// while still letting the daemon pick the provider up on its own once
+// it is healthy again.
+const discoveryRetryInterval = 30 * time.Second
+
 // Client drives the authorization-code-with-PKCE flow.
+//
+// Provider metadata is resolved on demand and cached, so a Client
+// constructed while the IdP is unreachable heals as soon as the IdP
+// answers — the alternative, resolving once at construction, turns a
+// boot-time IdP outage into SSO that stays off until the daemon is
+// restarted.
 type Client struct {
-	cfg       Config
-	providers *Providers
-	http      *http.Client
-	jwks      *JWKSCache
+	cfg  Config
+	http *http.Client
+	// retryInterval is the floor between two discovery attempts after a
+	// failure. Defaults to [discoveryRetryInterval].
+	retryInterval time.Duration
+
+	mu          sync.Mutex
+	providers   *Providers
+	jwks        *JWKSCache
+	lastErr     error
+	lastAttempt time.Time
 }
 
-// New constructs a Client. httpClient may be nil, in which case the
-// package's own bounded client is used.
+// New constructs a Client and resolves the provider metadata before
+// returning, so a caller that wants construction to prove the IdP is
+// configured correctly gets that error here. httpClient may be nil, in
+// which case the package's own bounded client is used.
+//
+// A caller that must not fail on a transient IdP outage uses
+// [NewDeferred] instead.
 func New(ctx context.Context, cfg Config, httpClient *http.Client) (*Client, error) {
+	c, err := NewDeferred(cfg, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := c.resolve(ctx); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// NewDeferred constructs a Client without contacting the identity
+// provider. Discovery runs on the first flow that needs it and is
+// retried after a failure (at most once per [discoveryRetryInterval]),
+// so an IdP that is down while the daemon boots does not disable SSO
+// until the next restart. Only configuration errors are reported here.
+func NewDeferred(cfg Config, httpClient *http.Client) (*Client, error) {
 	if cfg.Issuer == "" || cfg.ClientID == "" || cfg.RedirectURL == "" {
 		return nil, errors.New("oidc: Issuer + ClientID + RedirectURL required")
+	}
+	if err := requireHTTPSURL(cfg.Issuer); err != nil {
+		return nil, err
 	}
 	if cfg.RoleClaim == "" {
 		cfg.RoleClaim = "role"
@@ -71,16 +115,44 @@ func New(ctx context.Context, cfg Config, httpClient *http.Client) (*Client, err
 	if httpClient == nil {
 		httpClient = defaultHTTPClient()
 	}
-	prov, err := Discover(ctx, httpClient, cfg.Issuer)
+	return &Client{cfg: cfg, http: httpClient, retryInterval: discoveryRetryInterval}, nil
+}
+
+// resolve returns the provider metadata, discovering it when the client
+// does not hold it yet. Discovery is serialised: a burst of logins
+// against a provider that just came back performs one discovery, not one
+// per login. A failure is remembered for [discoveryRetryInterval] so the
+// same burst against a provider that is still down fails fast instead of
+// queueing one request per caller behind the provider timeout.
+func (c *Client) resolve(ctx context.Context) (*Providers, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.providers != nil {
+		return c.providers, nil
+	}
+	if c.lastErr != nil && time.Since(c.lastAttempt) < c.retryInterval {
+		return nil, c.lastErr
+	}
+	prov, err := Discover(ctx, c.http, c.cfg.Issuer)
+	c.lastAttempt = time.Now()
 	if err != nil {
+		c.lastErr = err
 		return nil, err
 	}
-	return &Client{
-		cfg:       cfg,
-		providers: prov,
-		http:      httpClient,
-		jwks:      NewJWKSCache(prov.JWKSURI, httpClient),
-	}, nil
+	c.lastErr = nil
+	c.providers = prov
+	c.jwks = NewJWKSCache(prov.JWKSURI, c.http)
+	return prov, nil
+}
+
+// keySource returns the JWKS cache bound to the resolved provider.
+func (c *Client) keySource(ctx context.Context) (*JWKSCache, error) {
+	if _, err := c.resolve(ctx); err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.jwks, nil
 }
 
 // NewNonce mints a cryptographically-random OIDC nonce (OIDC Core
@@ -106,7 +178,21 @@ func NewNonce() (string, error) {
 // and MUST be passed back into [Client.VerifyIDToken] as the
 // expectedNonce so the returned ID token's nonce claim is checked
 // against it.
+//
+// The returned string is empty when the provider metadata cannot be
+// resolved (the IdP is unreachable). Callers must treat that as "SSO is
+// temporarily unavailable" and surface an error rather than redirecting
+// the browser to it.
 func (c *Client) AuthURL(state string, pkce PKCEPair, nonce ...string) string {
+	// The authorization endpoint may still need to be discovered, which is
+	// I/O this signature has no context for. Bound it by the same deadline
+	// every other provider call carries, detached from any request context.
+	ctx, cancel := context.WithTimeout(context.Background(), providerTimeout)
+	defer cancel()
+	prov, err := c.resolve(ctx) //nolint:contextcheck // no caller context available; discovery is bounded by providerTimeout
+	if err != nil {
+		return ""
+	}
 	q := url.Values{}
 	q.Set("response_type", "code")
 	q.Set("client_id", c.cfg.ClientID)
@@ -118,7 +204,7 @@ func (c *Client) AuthURL(state string, pkce PKCEPair, nonce ...string) string {
 	if len(nonce) > 0 && nonce[0] != "" {
 		q.Set("nonce", nonce[0])
 	}
-	return c.providers.AuthorizationEndpoint + "?" + q.Encode()
+	return prov.AuthorizationEndpoint + "?" + q.Encode()
 }
 
 // TokenResponse is the subset of the token-endpoint response the
@@ -133,6 +219,10 @@ type TokenResponse struct {
 
 // Exchange swaps the authorization code for tokens.
 func (c *Client) Exchange(ctx context.Context, code, verifier string) (*TokenResponse, error) {
+	prov, err := c.resolve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("oidc.Exchange: %w", err)
+	}
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
@@ -144,7 +234,7 @@ func (c *Client) Exchange(ctx context.Context, code, verifier string) (*TokenRes
 	form.Set("code_verifier", verifier)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.providers.TokenEndpoint, strings.NewReader(form.Encode()))
+		prov.TokenEndpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -249,12 +339,20 @@ const idTokenLeeway = 2 * time.Minute
 // exists only to keep pre-nonce call sites compiling during rollout
 // and must not be relied on as a long-term opt-out.
 func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string, expectedNonce ...string) (*IDClaims, error) {
-	claims, err := Verify(ctx, rawIDToken, c.jwks)
+	prov, err := c.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if claims.Issuer == "" || claims.Issuer != c.providers.Issuer {
-		return nil, fmt.Errorf("oidc: issuer mismatch: got %q want %q", claims.Issuer, c.providers.Issuer)
+	keys, err := c.keySource(ctx)
+	if err != nil {
+		return nil, err
+	}
+	claims, err := Verify(ctx, rawIDToken, keys)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Issuer == "" || claims.Issuer != prov.Issuer {
+		return nil, fmt.Errorf("oidc: issuer mismatch: got %q want %q", claims.Issuer, prov.Issuer)
 	}
 	if !claims.Audience.contains(c.cfg.ClientID) {
 		return nil, fmt.Errorf("oidc: audience %v does not include client %q", []string(claims.Audience), c.cfg.ClientID)

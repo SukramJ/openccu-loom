@@ -69,22 +69,27 @@ func wireSecurityService(cfg *config.Config, reg *central.Registry, db *gosql.DB
 }
 
 // securityCentralHook adapts the domain onto the orchestrator's
-// central-added hook.
+// per-central hook pair.
 //
 // The detach half is load-bearing rather than symmetric bookkeeping:
 // without it a removed central leaves ghost sources in the aggregate
 // that pin their class permanently active, so `smoke` would stay on for
-// a CCU that is no longer configured.
+// a CCU that is no longer configured. It is reachable by name alone so a
+// boot-registered central can be detached without running AttachCentral —
+// whose index rebuild has no business firing while a CCU is being deleted.
 //
 //nolint:contextcheck // central-adoption hooks detach from the request ctx by design
-func securityCentralHook(svc *security.Service) func(u *central.Unit) (unwire func()) {
+func securityCentralHook(svc *security.Service) perCentralHook {
 	if svc == nil {
-		return nil
+		return perCentralHook{}
 	}
-	return func(u *central.Unit) (unwire func()) {
-		name := u.Name()
-		svc.AttachCentral(name)
-		return func() { svc.DetachCentral(name) }
+	return perCentralHook{
+		attach: func(u *central.Unit) (unwire func()) {
+			name := u.Name()
+			svc.AttachCentral(name)
+			return func() { svc.DetachCentral(name) }
+		},
+		detach: svc.DetachCentral,
 	}
 }
 

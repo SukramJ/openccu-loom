@@ -6,6 +6,8 @@ package sqlite
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -164,4 +166,47 @@ func TestIsMemoryDSN(t *testing.T) {
 		t.Skip("in-memory DSN open failed:", err)
 	}
 	_ = db.Close()
+}
+
+// TestSchemaVersionOfFileReadsStampedVersion checks the happy path: a database
+// that has been migrated reports a non-zero schema version through the
+// read-only file handle.
+func TestSchemaVersionOfFileReadsStampedVersion(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "stamped.db")
+	db, err := Open(ctx, FileDSN(path))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	want, err := SchemaVersion(ctx, db)
+	if err != nil {
+		t.Fatalf("SchemaVersion: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	got, err := SchemaVersionOfFile(ctx, path)
+	if err != nil {
+		t.Fatalf("SchemaVersionOfFile: %v", err)
+	}
+	if got != want || got == 0 {
+		t.Fatalf("SchemaVersionOfFile = %d, want %d (non-zero)", got, want)
+	}
+}
+
+// TestSchemaVersionOfFileMissingPathDoesNotCreateDatabase pins the read-only
+// contract of the DSN. The driver strips the query string from a DSN that is
+// not a `file:` URI, so a plain `path?mode=ro` opens READWRITE|CREATE: probing
+// the schema version of a backup snapshot that is not there would then leave a
+// freshly created empty database behind instead of reporting the missing file.
+func TestSchemaVersionOfFileMissingPathDoesNotCreateDatabase(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "absent.db")
+	if _, err := SchemaVersionOfFile(context.Background(), path); err == nil {
+		t.Fatal("SchemaVersionOfFile on a missing file: want error, got nil")
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("read-only probe created %s (stat err = %v)", path, err)
+	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -47,7 +48,11 @@ func (r cacheIncidentRecorder) RecordIncident(ctx context.Context, inc reliabili
 //     diagnostics event tap) and recorded as incidents,
 //   - coalesced request followers are published as
 //     [hmevent.RequestCoalescedEvent] for the diagnostics event tap,
-//   - ping/pong mismatches are recorded as incidents.
+//   - ping/pong mismatches are recorded as incidents,
+//   - transitions and coalesced calls are counted on the central's
+//     metrics observer, which is what the diagnostics `rpc` section
+//     renders. The per-call half of that section comes from
+//     [newRPCOutcomeHook], installed on the client itself.
 //
 // Call it once per client, right after construction; the hooks live
 // as long as the client.
@@ -60,13 +65,66 @@ func wireClientReliability(unit *central.Unit, ic *client.InterfaceClient, inter
 	rec := cacheIncidentRecorder{cache: unit.Cache}
 
 	reliability.WireCircuitBus(ic.Circuit(), reliability.CircuitEventPublisherFunc(
-		func(e hmevent.CircuitBreakerStateChangedEvent) { events.Publish(bus, e) },
+		func(e hmevent.CircuitBreakerStateChangedEvent) {
+			events.Publish(bus, e)
+			if obs := unitObserver(unit); obs != nil {
+				obs.ObserveCounter(metrics.MetricKeys.CircuitStateTransition(interfaceID).String(), 1)
+			}
+		},
 	), name, interfaceID)
 	reliability.WireCircuitIncidents(ic.Circuit(), rec, name, interfaceID)
 	reliability.WireCoalesceBus(ic.Coalescer(), reliability.CoalesceEventPublisherFunc(
-		func(e hmevent.RequestCoalescedEvent) { events.Publish(bus, e) },
+		func(e hmevent.RequestCoalescedEvent) {
+			events.Publish(bus, e)
+			if obs := unitObserver(unit); obs != nil {
+				// The event names how many followers the leader absorbed;
+				// the counter tracks calls saved, not coalesce groups.
+				obs.ObserveCounter(metrics.MetricKeys.CoalescerCoalesced(interfaceID).String(), int64(max(e.Waiters, 1)))
+			}
+		},
 	), name, interfaceID)
 	reliability.WirePingPongIncidents(ic.PingPong(), rec, name, interfaceID)
+}
+
+// newRPCOutcomeHook returns the [client.Config.RPCOutcomeHook] that feeds
+// one interface's outcomes into its central's metrics observer.
+//
+// The observer is resolved per call rather than captured: the aggregator
+// is attached to the central during boot wiring, which can run after the
+// interface clients are built, so a hook that bound it here would stay
+// nil for the life of the daemon.
+func newRPCOutcomeHook(unit *central.Unit, interfaceID string) func(string, time.Duration, client.RPCOutcome) {
+	if unit == nil {
+		return nil
+	}
+	return func(method string, duration time.Duration, outcome client.RPCOutcome) {
+		obs := unitObserver(unit)
+		if obs == nil {
+			return
+		}
+		ms := float64(duration.Nanoseconds()) / float64(time.Millisecond)
+		// A rejected call never reached the CCU, so it is not a service
+		// call and must not be averaged into the per-method durations.
+		if outcome != client.RPCOutcomeRejected {
+			obs.ObserveService(method, ms, outcome == client.RPCOutcomeFailed)
+		}
+		switch outcome {
+		case client.RPCOutcomeFailed:
+			obs.ObserveCounter(metrics.MetricKeys.CircuitFailure(interfaceID).String(), 1)
+		case client.RPCOutcomeRejected:
+			obs.ObserveCounter(metrics.MetricKeys.CircuitRejection(interfaceID).String(), 1)
+		case client.RPCOutcomeSuccess:
+		}
+	}
+}
+
+// unitObserver resolves the central's metrics observation sink, or nil
+// when no aggregator has been attached yet.
+func unitObserver(unit *central.Unit) *metrics.Observer {
+	if unit == nil || unit.Aggregator == nil {
+		return nil
+	}
+	return unit.Aggregator.Observer()
 }
 
 // newClientRetrier builds the retrier for one interface client with

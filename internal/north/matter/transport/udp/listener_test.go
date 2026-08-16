@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -170,4 +172,98 @@ func TestCloseIsIdempotent(t *testing.T) {
 	if err := a.Close(); err != nil {
 		t.Fatalf("second Close: %v", err)
 	}
+}
+
+// TestPanicInHandlerIsRecoveredCountedAndLogged pins the diagnostic
+// half of the recover: a handler panic must not kill the receive loop,
+// must be counted, and must reach the log — a datagram that vanishes
+// without a trace is the failure mode this listener is meant to make
+// attributable.
+func TestPanicInHandlerIsRecoveredCountedAndLogged(t *testing.T) {
+	a, b := newLoopbackPair(t)
+
+	var logBuf bytes.Buffer
+	var logMu sync.Mutex
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&lockedWriter{mu: &logMu, w: &logBuf}, &slog.HandlerOptions{Level: slog.LevelError})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	survived := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		_ = a.Serve(ctx, func(buf []byte, _ *net.UDPAddr) {
+			if string(buf) == "boom" {
+				panic("handler exploded")
+			}
+			survived <- struct{}{}
+		})
+	})
+
+	if err := b.Send(a.LocalAddr(), []byte("boom")); err != nil {
+		t.Fatalf("Send boom: %v", err)
+	}
+	// The second datagram proves the receive loop is still alive.
+	deadline := time.After(2 * time.Second)
+	for {
+		if err := b.Send(a.LocalAddr(), []byte("ok")); err != nil {
+			t.Fatalf("Send ok: %v", err)
+		}
+		select {
+		case <-survived:
+			cancel()
+			wg.Wait()
+			// The panicking datagram is dispatched on its own goroutine,
+			// so the recovery can land after the second datagram was
+			// handled — poll rather than sampling once.
+			var recovered uint64
+			for range 100 {
+				recovered = a.RecoveredPanics()
+				if recovered > 0 {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if recovered != 1 {
+				t.Errorf("RecoveredPanics = %d, want 1", recovered)
+			}
+			// The counter is bumped before the log line is written, so
+			// poll for the record rather than sampling once.
+			var logged string
+			for range 100 {
+				logMu.Lock()
+				logged = logBuf.String()
+				logMu.Unlock()
+				if strings.Contains(logged, "matter.udp.dispatch_panic") {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if !strings.Contains(logged, "matter.udp.dispatch_panic") {
+				t.Errorf("recovered panic was not logged; log = %q", logged)
+			}
+			if !strings.Contains(logged, "handler exploded") {
+				t.Errorf("panic value missing from log; log = %q", logged)
+			}
+			return
+		case <-time.After(50 * time.Millisecond):
+		case <-deadline:
+			t.Fatal("receive loop did not survive the handler panic")
+		}
+	}
+}
+
+// lockedWriter serialises writes from the dispatch goroutine and the
+// test goroutine onto one buffer.
+type lockedWriter struct {
+	mu *sync.Mutex
+	w  *bytes.Buffer
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
 }

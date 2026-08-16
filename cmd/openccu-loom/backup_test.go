@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -753,5 +754,153 @@ func TestBackupRestoreAtomicRollbackOnError(t *testing.T) {
 	}
 	if string(got) != original {
 		t.Fatalf("live DB was mutated by a failed restore: got %q want %q", got, original)
+	}
+}
+
+// TestBackupRestoreRemovesStaleWALSidecars pins that a restored database does
+// not inherit the previous database's write-ahead log. A daemon killed
+// uncleanly leaves a populated `openccu-loom.db-wal` behind; SQLite recovers
+// whatever `-wal` it finds beside a database file on the next open, so leaving
+// it in place replays pre-restore pages into the restored database.
+func TestBackupRestoreRemovesStaleWALSidecars(t *testing.T) {
+	dstDir := t.TempDir()
+	liveDB := filepath.Join(dstDir, "openccu-loom.db")
+	if err := os.WriteFile(liveDB, []byte("OLD-DB"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if err := os.WriteFile(liveDB+suffix, []byte("STALE"+suffix), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	archivePath := filepath.Join(t.TempDir(), "sidecars.tar.gz")
+	buildPlaintextBackup(t, archivePath, []backupFile{
+		{name: "state/openccu-loom.db", data: []byte("RESTORED-DB")},
+	}, 0)
+
+	var stdout, stderr bytes.Buffer
+	if err := runBackup([]string{"restore", "--data-dir", dstDir, "--force", archivePath}, &stdout, &stderr); err != nil {
+		t.Fatalf("restore: %v\nstderr: %s", err, stderr.String())
+	}
+
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(liveDB + suffix); err == nil {
+			t.Errorf("stale %s sidecar survived the restore", suffix)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("stat %s: %v", liveDB+suffix, err)
+		}
+	}
+	got, err := os.ReadFile(liveDB) //nolint:gosec // test-controlled path
+	if err != nil {
+		t.Fatalf("read restored db: %v", err)
+	}
+	if string(got) != "RESTORED-DB" {
+		t.Errorf("restored db = %q, want the archived content", got)
+	}
+}
+
+// TestBackupRestoreRollbackRestoresWALSidecars pins that the sidecars ride in
+// the same all-or-nothing set as the database: a commit that fails halfway
+// must leave the original database and its WAL together, not a database with
+// its log removed.
+func TestBackupRestoreRollbackRestoresWALSidecars(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("commit-failure induction relies on Unix rename semantics")
+	}
+	dstDir := t.TempDir()
+	liveDB := filepath.Join(dstDir, "openccu-loom.db")
+	if err := os.WriteFile(liveDB, []byte("ORIGINAL-DB"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(liveDB+"-wal", []byte("ORIGINAL-WAL"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	blockedDir := filepath.Join(dstDir, "blocked")
+	if err := os.Mkdir(blockedDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blockedDir, "keep"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	archivePath := filepath.Join(t.TempDir(), "rollback-sidecars.tar.gz")
+	buildPlaintextBackup(t, archivePath, []backupFile{
+		{name: "state/openccu-loom.db", data: []byte("NEW-DB")},
+		{name: "state/blocked", data: []byte("payload")},
+	}, 0)
+
+	var stdout, stderr bytes.Buffer
+	if err := runBackup([]string{"restore", "--data-dir", dstDir, "--force", archivePath}, &stdout, &stderr); err == nil {
+		t.Fatal("expected commit failure, got nil")
+	}
+
+	for path, want := range map[string]string{liveDB: "ORIGINAL-DB", liveDB + "-wal": "ORIGINAL-WAL"} {
+		got, err := os.ReadFile(path) //nolint:gosec // test-controlled path
+		if err != nil {
+			t.Fatalf("%s missing after rollback: %v", path, err)
+		}
+		if string(got) != want {
+			t.Errorf("%s = %q after rollback, want %q", path, got, want)
+		}
+	}
+}
+
+// TestVacuumIntoMissingSourceErrors pins that a snapshot of a database that is
+// not there fails loudly. The driver opens with CREATE, so a mistyped data dir
+// used to yield a freshly created, migrated, empty database and a "successful"
+// backup containing nothing.
+func TestVacuumIntoMissingSourceErrors(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := filepath.Join(dir, "openccu-loom.db")
+	dest := filepath.Join(dir, "snapshot.db")
+
+	if err := vacuumInto(src, dest); err == nil {
+		t.Fatal("expected an error for a missing source database, got nil")
+	}
+	if _, err := os.Stat(src); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("source database was created by the backup: stat err = %v", err)
+	}
+}
+
+// TestVacuumIntoDoesNotMigrateSource pins that taking a backup never writes to
+// the database it backs up. Opening through the store helper runs the goose
+// migrations and the stale-cache wipe, so a backup taken with a binary newer
+// than the running daemon would migrate the live database underneath it.
+func TestVacuumIntoDoesNotMigrateSource(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := filepath.Join(dir, "openccu-loom.db")
+
+	ctx := context.Background()
+	db, err := sql.Open(sqlite.DriverName, sqlite.FileDSN(src))
+	if err != nil {
+		t.Fatalf("open src: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE TABLE probe (id INTEGER PRIMARY KEY)`); err != nil {
+		t.Fatalf("create probe table: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close src: %v", err)
+	}
+
+	dest := filepath.Join(dir, "snapshot.db")
+	if err := vacuumInto(src, dest); err != nil {
+		t.Fatalf("vacuumInto: %v", err)
+	}
+
+	check, err := sql.Open(sqlite.DriverName, sqlite.FileDSN(src))
+	if err != nil {
+		t.Fatalf("reopen src: %v", err)
+	}
+	defer func() { _ = check.Close() }()
+	var tables int
+	if err := check.QueryRowContext(ctx,
+		`SELECT count(*) FROM sqlite_schema WHERE name = 'goose_db_version'`).Scan(&tables); err != nil {
+		t.Fatalf("query src schema: %v", err)
+	}
+	if tables != 0 {
+		t.Error("backup create migrated the live database it was snapshotting")
 	}
 }

@@ -331,6 +331,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		SelfPassword:      d.passwordSvc,
 		SessionRevoker:    d.credentialRevoker(),
 		TokenPurger:       d.tokenPurger,
+		TokenSockets:      d.tokenSocketRevoker(),
 		Preferences:       d.prefSvc,
 		Diagrams:          d.diagramSvc,
 		Areas:             d.areaSvc,
@@ -628,6 +629,20 @@ func (d restMountDeps) credentialRevoker() handlers.SessionRevoker {
 		return nil
 	}
 	return ws.RevokeWithSockets(d.sessions, d.wsHub)
+}
+
+// tokenSocketRevoker resolves the teardown DELETE
+// /auth/tokens/v2/{fingerprint} runs after the token row is gone. REST
+// re-resolves the credential per request and refuses immediately; a socket
+// resolved it once at the upgrade, so without this the revoked token keeps
+// dispatching commands under its connect-time role. A nil hub yields a
+// genuinely nil interface so the handler skips the hook instead of calling
+// through a nil pointer.
+func (d restMountDeps) tokenSocketRevoker() handlers.TokenSocketRevoker {
+	if d.wsHub == nil {
+		return nil
+	}
+	return d.wsHub
 }
 
 // mountMCP wraps the REST router so the configured MCP path serves the

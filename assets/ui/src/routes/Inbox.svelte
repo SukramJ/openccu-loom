@@ -235,6 +235,12 @@
   });
 
   function onDialogKey(e: KeyboardEvent) {
+    // The shared confirm dialog opens on top of the replace dialog, which
+    // stays mounted underneath it. While it is pending the keyboard
+    // belongs to it alone: trapping here as well would pull every Tab
+    // back into the backgrounded dialog — leaving Confirm and Cancel
+    // unreachable — and Escape would dismiss both layers at once.
+    if (confirmStore.pending) return;
     const busy = acceptTarget ? acceptSubmitting : replaceSubmitting;
     const el = acceptTarget
       ? acceptDialogEl

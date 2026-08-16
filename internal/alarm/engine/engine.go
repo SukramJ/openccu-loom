@@ -243,6 +243,10 @@ type Engine struct {
 	ledger       IncidentSourceLedger
 	reader       SensorReader
 	validator    CodeValidator
+	// duress resolves a code without the validator's side effects, for
+	// the no-op paths that must still open the covert channel. It is
+	// the validator itself when that implements DuressMatcher.
+	duress       DuressMatcher
 	log          *slog.Logger
 	loopBreakerK int
 
@@ -293,6 +297,9 @@ func New(deps Deps) (*Engine, error) {
 	if k <= 0 {
 		k = DefaultRestartLoopBreakerK
 	}
+	// A validator that can answer "is this the duress code?" without
+	// side effects is resolved once here; see [DuressMatcher].
+	matcher, _ := deps.Validator.(DuressMatcher)
 	return &Engine{
 		clk:          clk,
 		sched:        sched,
@@ -308,6 +315,7 @@ func New(deps Deps) (*Engine, error) {
 		ledger:       deps.SourceLedger,
 		reader:       deps.SensorReader,
 		validator:    deps.Validator,
+		duress:       matcher,
 		log:          logger,
 		loopBreakerK: k,
 		zones:        map[string]*zone{},
@@ -328,6 +336,13 @@ func (e *Engine) Stop(ctx context.Context) {
 	for _, a := range e.zones {
 		e.persist(ctx, a)
 		a.cancelTimers()
+		// The auto-rearm timer is deliberately not part of cancelTimers,
+		// so it has to be cancelled here or it fires on a stopped engine:
+		// the rearm would chirp, drive outputs, and persist an armed row
+		// over the snapshot above, leaving the next boot to restore a
+		// zone nobody armed. The snapshot is already written, so the
+		// pending rearm still survives into the next Start.
+		a.cancelAutoRearm()
 	}
 }
 
@@ -465,6 +480,12 @@ func (e *Engine) beginArm(ctx context.Context, a *zone, req ArmRequest, mcfg Mod
 			bypass[id] = true
 		}
 	}
+	// Decide against current values, not against whatever happened to
+	// arrive on the bus: a sensor the engine has never seen an event
+	// for reads as "unknown", which the blocker policy cannot classify,
+	// so the check would pass vacuously and the open-at-arm baseline
+	// below would miss the sensor too.
+	e.refreshSensorValues(ctx, a)
 	rd, autoBypass := a.readinessDetail(req.Mode)
 	for _, id := range autoBypass {
 		bypass[id] = true
@@ -594,6 +615,20 @@ func (e *Engine) authorize(ctx context.Context, a *zone, verb, code, source stri
 	return identity, duress, nil
 }
 
+// matchDuress resolves a supplied code against the zone's duress codes
+// only, without any of the validator's side effects (see
+// [DuressMatcher]). It is what the verbs use where the outcome is a
+// no-op regardless of the code, so a wrong code neither refuses, nor
+// counts toward a lockout, nor journals a fault. An absent or
+// non-matching matcher simply reports "not duress". The caller holds
+// the lock.
+func (e *Engine) matchDuress(ctx context.Context, a *zone, verb, code, source string) (identity string, duress bool) {
+	if code == "" || e.duress == nil {
+		return "", false
+	}
+	return e.duress.MatchDuress(ctx, a.id, verb, code, source)
+}
+
 // fireDuress emits the silent duress fan-out: a Hidden journal entry
 // (the journal facade suppresses the append event for hidden rows) plus
 // a dedicated AlarmDuressEvent on the bus. The verb itself proceeds
@@ -645,9 +680,19 @@ func (e *Engine) Disarm(ctx context.Context, zoneID, by, source string) error {
 }
 
 // DisarmWithCode is Disarm with an alarm code, honoring the zone's
-// CodePolicy (notes/concepts/alarm-concept.md §11). An already-disarmed zone
-// short-circuits before the code check: disarming a disarmed zone is an
-// idempotent no-op and needs no security decision.
+// CodePolicy (notes/concepts/alarm-concept.md §11). Disarming an
+// already-disarmed zone is an idempotent no-op: it never refuses, so a
+// wrong or missing code changes nothing and cannot be used to probe
+// which codes exist.
+//
+// A supplied code is still looked at there, for one reason: duress.
+// Coercion frequently starts with the attacker disarming the zone, and
+// gating duress detection on the arm state would make the covert
+// channel unavailable in exactly that situation. The look-up goes
+// through [DuressMatcher], not through the validator: on a path that
+// decides nothing, a wrong code must cost nothing either — no
+// rate-limit budget, no fault row. The fan-out is silent and the
+// verb's own outcome stays unchanged.
 func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -656,6 +701,12 @@ func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code st
 		return ErrUnknownZone
 	}
 	if a.state == hmenum.AlarmZoneStateDisarmed {
+		if identity, duress := e.matchDuress(ctx, a, codeVerbDisarm, code, source); duress {
+			if identity != "" && by == "" {
+				by = identity
+			}
+			e.fireDuress(ctx, a, codeVerbDisarm, by, source)
+		}
 		// An explicit disarm of an already-disarmed zone is a no-op, but
 		// it cancels any pending auto-rearm — the operator wants it to
 		// stay off.
@@ -1717,10 +1768,18 @@ func (e *Engine) deferAutoRearm(ctx context.Context, a *zone, sensorID string) {
 // onAutoRearmFired dispatches an auto-rearm timer expiry, discarding
 // stale fires. It runs on the engine lifetime context.
 //
+// A callback already in flight when Stop cancels the timer still
+// reaches this point, so the stopped engine is checked here as well:
+// arming after the final state snapshot would leave the persisted row
+// describing a zone the next boot never armed.
+//
 //nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
 func (e *Engine) onAutoRearmFired(zoneID string, seq uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
 	a, ok := e.zones[zoneID]
 	if !ok || a.autoRearmSeq != seq || a.autoRearmCancel == nil {
 		return

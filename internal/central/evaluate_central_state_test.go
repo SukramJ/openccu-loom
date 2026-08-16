@@ -170,15 +170,11 @@ func TestEvaluateCentralState_Degraded(t *testing.T) {
 	}
 }
 
-// TestEvaluateCentralState_Failed verifies FAILED is set and event is emitted
-// when no clients are CONNECTED. The state machine requires passing through
-// DEGRADED before FAILED (RUNNING → FAILED is not a valid direct transition).
+// TestEvaluateCentralState_Failed verifies FAILED is set and an event is
+// emitted when no registered client is CONNECTED.
 func TestEvaluateCentralState_Failed(t *testing.T) {
 	c := mustNew(t, "eval-failed")
 	_ = mustStarted(t, c)
-
-	// Place machine in DEGRADED so the FAILED transition is valid.
-	_ = c.StateMachine.ForceTransitionTo(hmenum.CentralStateDegraded, hmenum.FailureReasonNone)
 
 	registerDisconnectedClient(t, c, "ccu-HmIP-RF", hmenum.InterfaceHmIPRF)
 
@@ -259,17 +255,52 @@ func TestEvaluateCentralState_InRecoveryBlocksRunning(t *testing.T) {
 	}
 }
 
-// TestEvaluateCentralState_EventMatchesStateMachineOnRejectedTransition pins
-// the payload of the very first system-status event a central emits.
+// TestEvaluateCentralState_SoleInterfaceOfflineReportsFailed pins the outage
+// case that a single-interface central cannot express through DEGRADED:
+// DEGRADED needs at least one connected client, so a central whose only
+// interface drops has to reach FAILED directly from RUNNING or it keeps
+// reporting a healthy central for the whole outage.
+func TestEvaluateCentralState_SoleInterfaceOfflineReportsFailed(t *testing.T) {
+	c := mustNew(t, "eval-sole-interface-offline")
+	_ = mustStarted(t, c)
+
+	entry := registerConnectedClient(t, c, "ccu-HmIP-RF", hmenum.InterfaceHmIPRF)
+	c.EvaluateCentralState("connected", false)
+	if got := c.StateMachine.State(); got != hmenum.CentralStateRunning {
+		t.Fatalf("state = %s; want RUNNING with the sole interface connected", got)
+	}
+
+	entry.Client.SetState(hmenum.ClientStateDisconnected)
+
+	drain := drainSystemStatusEvents(c)
+	c.EvaluateCentralState("connection_lost", false)
+	evts := drain()
+
+	if got := c.StateMachine.State(); got != hmenum.CentralStateFailed {
+		t.Fatalf("state = %s; want FAILED after the sole interface disconnected", got)
+	}
+	if len(evts) == 0 {
+		t.Fatal("expected a SystemStatusChangedEvent for the FAILED flip")
+	}
+	last := evts[len(evts)-1]
+	if last.CentralState != hmenum.CentralStateFailed {
+		t.Errorf("event.CentralState = %s; want FAILED", last.CentralState)
+	}
+	if last.Healthy {
+		t.Error("event.Healthy = true; want false with no connected client")
+	}
+}
+
+// TestEvaluateCentralState_NoRegisteredClientsHoldsState pins the payload of
+// the very first system-status event a central emits.
 //
 // Start() leaves the machine in RUNNING while the south-bound bring-up has not
-// registered a single InterfaceClient yet, so the computed target is FAILED —
-// which RUNNING has no edge to. The transition is rejected and the machine
-// stays RUNNING; publishing the computed state anyway told every north-bound
-// consumer the central had failed while the machine, /health and the SPA badge
-// all said RUNNING.
-func TestEvaluateCentralState_EventMatchesStateMachineOnRejectedTransition(t *testing.T) {
-	c := mustNew(t, "eval-rejected-transition")
+// registered a single InterfaceClient yet. Connectivity is not observable in
+// that window, so the evaluation must hold the current state instead of
+// reading "no connected client" as an outage — otherwise every boot announces
+// a failed central to /health, MQTT and the SPA badge.
+func TestEvaluateCentralState_NoRegisteredClientsHoldsState(t *testing.T) {
+	c := mustNew(t, "eval-no-registered-clients")
 
 	drain := drainSystemStatusEvents(c)
 	_ = mustStarted(t, c)
@@ -279,7 +310,7 @@ func TestEvaluateCentralState_EventMatchesStateMachineOnRejectedTransition(t *te
 		t.Fatal("Start must emit an initial SystemStatusChangedEvent")
 	}
 	if got := c.StateMachine.State(); got != hmenum.CentralStateRunning {
-		t.Fatalf("state machine = %s; want RUNNING (RUNNING -> FAILED is not a valid edge)", got)
+		t.Fatalf("state machine = %s; want RUNNING while no InterfaceClient is registered", got)
 	}
 	for i, e := range evts {
 		if e.CentralState != hmenum.CentralStateRunning {

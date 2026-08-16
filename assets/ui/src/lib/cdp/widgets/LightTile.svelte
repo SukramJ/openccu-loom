@@ -22,6 +22,7 @@
   import { api, friendlyError } from "$lib/api/client";
   import type { CustomDPSummary, DataPointSummary } from "$lib/api/types";
   import { onResync, subscribe } from "$lib/stores/events.svelte";
+  import { enumValueLabel, enumValueToken } from "$lib/sensor-actor/classify";
   import { t } from "$lib/i18n";
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
@@ -79,6 +80,11 @@
   const kelvin = $derived(typeof ctDP?.value === "number" ? ctDP.value : 3000);
 
   const colorOptions = $derived<string[]>(colorDP?.value_list ?? []);
+  // A writable ENUM publishes the value_list index, so the wire value of
+  // COLOR is a number: resolve it back to the palette token before
+  // comparing it, and to its caption before showing it.
+  const colorToken = $derived(colorDP ? enumValueToken(colorDP) : undefined);
+  const colorCaption = $derived(colorDP ? enumValueLabel(colorDP) : undefined);
   const effectOptions = $derived<string[]>(effectDP?.value_list ?? []);
 
   const observed = $derived(levelDP?.observed ?? false);
@@ -112,9 +118,10 @@
     const parts = [`${Math.round(level * 100)} %`];
     if (mode === "color" && hasHsvColor) parts.push(`H ${Math.round(hue)}°`);
     if (mode === "temp" && hasColorTemp) parts.push(`${Math.round(kelvin)} K`);
-    const c = colorDP?.value;
-    if (hasFixedColor && typeof c === "string" && c && c !== "BLACK") {
-      parts.push(c.toLowerCase());
+    // COLOR is an ENUM whose wire value is the value_list index, so the
+    // palette entry has to be resolved back before it can be named.
+    if (hasFixedColor && colorToken && colorToken !== "BLACK") {
+      parts.push(colorCaption ?? colorToken);
     }
     return parts.join(" · ");
   });

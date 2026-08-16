@@ -240,8 +240,15 @@ func (c *idempotencyCache) sweepLocked(now time.Time) {
 // carries no mutation to replay, and an oversized body would let one
 // call dominate the table. Both drop the reservation instead, so a
 // retry of the same key re-executes rather than answering 409 forever.
+//
+// A response that mints a credential is dropped for a different reason: the
+// Idempotency-Key is caller-chosen and the cache key folds in a subject that
+// is empty on the anonymous mutating routes — the login POST above all — so a stored
+// Set-Cookie would be replayed verbatim to whoever presents the same key
+// next — handing out a live session. Re-running the login is the correct
+// answer to that retry.
 func (c *idempotencyCache) complete(id string, e idempotentEntry) {
-	if !isReplayableStatus(e.status) || len(e.body) > idempotencyBodyLimit {
+	if !isReplayableStatus(e.status) || len(e.body) > idempotencyBodyLimit || carriesCredential(e.header) {
 		c.release(id)
 		return
 	}
@@ -262,6 +269,13 @@ func isReplayableStatus(status int) bool {
 		return false
 	}
 	return true
+}
+
+// carriesCredential reports whether a response hands the caller a cookie.
+// Such a response is never replayable: replaying it would give a second
+// caller the first caller's credential.
+func carriesCredential(h http.Header) bool {
+	return len(h.Values("Set-Cookie")) > 0
 }
 
 // release drops a pending reservation without recording a result —

@@ -5,6 +5,7 @@
   import { deviceStore } from "$lib/stores/devices.svelte";
   import { areasStore } from "$lib/stores/areas.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
   import { makeTextMatcher } from "$lib/utils";
   import {
@@ -420,6 +421,31 @@
     }
   });
 
+  // Remount key for the zone selector. The Select keeps its own copy of the
+  // chosen value, so a switch the operator cancels has to be pushed back into
+  // it; remounting is what restores the previously selected label.
+  let selectorEpoch = $state(0);
+
+  // Operator-driven zone change. The roster belongs to exactly one zone, so
+  // an unsaved edit cannot travel with the selector — offer to keep it
+  // (cancel, save first) before the effect below drops it.
+  async function selectZone(next: string) {
+    if (!next || next === zoneId) return;
+    if (dirty) {
+      const ok = await confirmStore.ask({
+        title: t("alarm.zone_switch.discard.title"),
+        body: t("alarm.zone_switch.discard.body"),
+        confirmLabel: t("alarm.zone_switch.discard.confirm"),
+        destructive: true,
+      });
+      if (!ok) {
+        selectorEpoch += 1;
+        return;
+      }
+    }
+    zoneId = next;
+  }
+
   // Reload sensors whenever the pinned zone id changes.
   let loadedFor = $state("");
   $effect(() => {
@@ -475,7 +501,9 @@
     <label class="flex items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]">
       <span>{t("alarm.sensors.zone")}</span>
       <div class="min-w-48">
-        <Select options={zoneOptions} bind:value={zoneId} />
+        {#key selectorEpoch}
+          <Select options={zoneOptions} value={zoneId} onValueChange={(v) => void selectZone(v)} />
+        {/key}
       </div>
     </label>
 

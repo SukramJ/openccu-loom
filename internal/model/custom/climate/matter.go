@@ -206,9 +206,12 @@ func celsiusToMatter(c float64) int16 {
 func matterToCelsius(m int16) float64 { return float64(m) / 100 }
 
 // humidityToMatter encodes an HM humidity (% RH, 0..100) into Matter's
-// uint16 0.01% convention.
+// uint16 0.01% convention. The product is rounded for the same reason
+// [celsiusToMatter] rounds: 20.4*100 is 2039.9999999999998 in binary64,
+// and truncating it reports 20.39 % where every other surface shows
+// 20.4 %.
 func humidityToMatter(h float64) uint16 {
-	v := h * 100
+	v := math.Round(h * 100)
 	if v < 0 {
 		return 0
 	}
@@ -265,7 +268,7 @@ func (c *Climate) MatterClusterServers() []interfaces.MatterClusterServer {
 		climateThermostatUIServer{c: c},
 		climateTempMeasServer{c: c},
 	}
-	if c.humidity != nil {
+	if c.HasHumidity() {
 		servers = append(servers, climateHumidityServer{c: c})
 	}
 	return servers

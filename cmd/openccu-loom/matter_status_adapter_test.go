@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
+	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // TestMatterStatusAdapter_NilBridge_Returns_Disabled verifies that when
@@ -184,5 +185,140 @@ func TestMatterStatusAdapter_Advertising_Propagated(t *testing.T) {
 	// Advertising should remain false — cfg is never consulted when bridge==nil.
 	if resp.Advertising {
 		t.Error("expected Advertising=false when bridge is nil")
+	}
+}
+
+// TestRevokeFabricRunsTheSameTeardownTheWireCommandDoes pins that the
+// operator path is not a store delete.
+//
+// Removing the row alone reads as a success on every surface — the SPA says
+// "removed", fabric_count drops to zero — while the unpaired controller keeps
+// its live CASE session, its subscription and the operational `_matter._tcp`
+// record until the daemon restarts. The assertion is on the effects the
+// caller cannot see: the teardown fan-out ran, and it ran for the fabric that
+// was removed, with the identity read off the row before it was deleted.
+func TestRevokeFabricRunsTheSameTeardownTheWireCommandDoes(t *testing.T) {
+	t.Parallel()
+
+	store := matterstore.New(openMigratedTestDB(t, "matter_revoke_test.db"))
+	ctx := context.Background()
+	idx, err := store.AddFabric(ctx, matterstore.FabricRecord{
+		FabricID:      0x1122,
+		NodeID:        0x3344,
+		RootPublicKey: make([]byte, 65),
+		CompressedID:  [8]byte{9, 8, 7, 6, 5, 4, 3, 2},
+	})
+	if err != nil {
+		t.Fatalf("AddFabric: %v", err)
+	}
+
+	var (
+		tornDown  []uint8
+		withdrawn [][8]byte
+		withdrewN []uint64
+	)
+	a := &matterFabricRevokerAdapter{
+		store:    store,
+		teardown: func(_ context.Context, fabricIndex uint8) { tornDown = append(tornDown, fabricIndex) },
+		withdraw: func(_ context.Context, compressedID [8]byte, nodeID uint64) {
+			withdrawn = append(withdrawn, compressedID)
+			withdrewN = append(withdrewN, nodeID)
+		},
+	}
+	if err := a.RevokeFabric(ctx, idx); err != nil {
+		t.Fatalf("RevokeFabric: %v", err)
+	}
+
+	if _, err := store.GetFabric(ctx, idx); err == nil {
+		t.Error("fabric row survived RevokeFabric")
+	}
+	if len(tornDown) != 1 || tornDown[0] != idx {
+		t.Errorf("teardown ran for %v, want exactly [%d] — the controller keeps its session otherwise", tornDown, idx)
+	}
+	if len(withdrawn) != 1 || withdrawn[0] != [8]byte{9, 8, 7, 6, 5, 4, 3, 2} {
+		t.Errorf("withdraw ran for %v, want the removed fabric's compressed id", withdrawn)
+	}
+	if len(withdrewN) != 1 || withdrewN[0] != 0x3344 {
+		t.Errorf("withdraw ran for node ids %v, want [0x3344]", withdrewN)
+	}
+}
+
+// TestRevokeFabricOfAnUnknownIndexRunsNoTeardown keeps the fan-out tied to a
+// row that actually existed: a repeated DELETE must not re-emit a
+// fabric-removed to controllers that are still paired on other fabrics.
+func TestRevokeFabricOfAnUnknownIndexRunsNoTeardown(t *testing.T) {
+	t.Parallel()
+
+	store := matterstore.New(openMigratedTestDB(t, "matter_revoke_missing_test.db"))
+	var ran int
+	a := &matterFabricRevokerAdapter{
+		store:    store,
+		teardown: func(context.Context, uint8) { ran++ },
+		withdraw: func(context.Context, [8]byte, uint64) { ran++ },
+	}
+	if err := a.RevokeFabric(context.Background(), 7); err == nil {
+		t.Fatal("RevokeFabric for an unknown index returned nil; want ErrFabricNotFound")
+	}
+	if ran != 0 {
+		t.Errorf("teardown ran %d times for a fabric that was never there", ran)
+	}
+}
+
+// TestRevokeFabricKeepsTheRowWhenTheIdentityCannotBeRead pins the failure
+// direction of the pre-read.
+//
+// The operational advertisement is keyed by the fabric's compressed ID and
+// node ID, and the row is the only place that knows them: a revoke that
+// cannot read them cannot retire the record. Deleting the row anyway and
+// treating the failed read as "no withdraw needed" answers 204, drops
+// fabric_count to zero and leaves the unpaired controller's `_matter._tcp`
+// instance advertised until the daemon restarts — with no surface left that
+// could tell anyone. Failing the revoke keeps the two halves together and
+// leaves the operator something to retry.
+func TestRevokeFabricKeepsTheRowWhenTheIdentityCannotBeRead(t *testing.T) {
+	t.Parallel()
+
+	db := openMigratedTestDB(t, "matter_revoke_unreadable_test.db")
+	store := matterstore.New(db)
+	ctx := context.Background()
+	idx, err := store.AddFabric(ctx, matterstore.FabricRecord{
+		FabricID:      0x1122,
+		NodeID:        0x3344,
+		RootPublicKey: make([]byte, 65),
+		CompressedID:  [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
+	})
+	if err != nil {
+		t.Fatalf("AddFabric: %v", err)
+	}
+	// A row whose identity no longer decodes: the read fails while the
+	// DELETE would still succeed, which is the shape every unreadable-row
+	// failure has (a truncated column here, a busy table under a concurrent
+	// write in production).
+	if _, err := db.ExecContext(ctx,
+		`UPDATE matter_fabrics SET compressed_id = ? WHERE fabric_index = ?`, []byte{1, 2}, idx); err != nil {
+		t.Fatalf("corrupt the fabric row: %v", err)
+	}
+
+	var ran int
+	a := &matterFabricRevokerAdapter{
+		store:    store,
+		teardown: func(context.Context, uint8) { ran++ },
+		withdraw: func(context.Context, [8]byte, uint64) { ran++ },
+	}
+	if err := a.RevokeFabric(ctx, idx); err == nil {
+		t.Fatal("RevokeFabric returned nil although the fabric's identity could not be read; " +
+			"the caller is told the controller was unpaired while its record stays advertised")
+	}
+	if ran != 0 {
+		t.Errorf("the removal fan-out ran %d times without the identity it needs", ran)
+	}
+	var rows int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM matter_fabrics WHERE fabric_index = ?`, idx).Scan(&rows); err != nil {
+		t.Fatalf("count fabric rows: %v", err)
+	}
+	if rows != 1 {
+		t.Error("the fabric row was deleted although its advertisement could not be retired; " +
+			"nothing can withdraw it after this point")
 	}
 }

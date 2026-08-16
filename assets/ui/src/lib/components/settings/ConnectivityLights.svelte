@@ -100,12 +100,15 @@
     grey: "bg-slate-400",
   };
 
-  const labels: Record<LightStatus, string> = {
+  // $derived, not a plain const: t() only re-evaluates inside a reactive
+  // scope, and these words go into the tooltip and the aria-label, which
+  // have to follow a language switch like every other caption.
+  const labels = $derived<Record<LightStatus, string>>({
     green: t("connectivity.green"),
     amber: t("connectivity.amber"),
     red: t("connectivity.red"),
     grey: t("connectivity.grey"),
-  };
+  });
 </script>
 
 <div class="flex flex-wrap items-center gap-3 text-xs">

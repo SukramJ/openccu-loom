@@ -251,8 +251,23 @@ func NewVerifierFromValue(w0Bytes, lBytes []byte) (*VerifierContext, error) {
 	if x == nil {
 		return nil, ErrInvalidPoint
 	}
+	w0 := new(big.Int).SetBytes(w0Bytes)
+	// A w0 that is zero modulo the group order makes w0·M and w0·N the
+	// point at infinity, which crypto/elliptic represents as (0, 0).
+	// Negating it for the subtraction yields (0, P) — an encoding that is
+	// neither on the curve nor the conventional infinity, and Add panics
+	// on it ("crypto/elliptic: Add was called on an invalid point"). The verifier is
+	// commissioner-supplied (OpenCommissioningWindow carries the
+	// PAKEPasscodeVerifier verbatim), so the degenerate value has to be
+	// rejected here rather than reaching the Pake1 arithmetic. Every
+	// verifier a conformant commissioner derives lands in [1, n-1]
+	// (chip Spake2p::ComputeW0W1 reduces mod n-1 and adds 1), so this
+	// rejects only malformed input.
+	if new(big.Int).Mod(w0, curve().Params().N).Sign() == 0 {
+		return nil, fmt.Errorf("%w: w0 is zero modulo the group order", ErrInvalidPasscode)
+	}
 	return &VerifierContext{
-		W0: new(big.Int).SetBytes(w0Bytes),
+		W0: w0,
 		L:  &ecdsa.PublicKey{Curve: curve(), X: x, Y: y},
 	}, nil
 }
@@ -336,8 +351,21 @@ func (v *Verifier) ProcessPake1(pA []byte) (*Pake2Output, error) {
 	w0MNegX, w0MNegY := curve().ScalarMult(mPoint.X, mPoint.Y, v.ctx.W0.Bytes()) //nolint:staticcheck // SA1019: see curve()
 	w0MNegY = new(big.Int).Sub(curve().Params().P, w0MNegY)                      // negate
 	xMinusW0Mx, xMinusW0My := curve().Add(xPoint.X, xPoint.Y, w0MNegX, w0MNegY)  //nolint:staticcheck // SA1019: see curve()
-	zX, zY := curve().ScalarMult(xMinusW0Mx, xMinusW0My, y.Bytes())              //nolint:staticcheck // SA1019: see curve()
-	v.zMarshal = elliptic.Marshal(curve(), zX, zY)                               //nolint:staticcheck // SA1019: see curve()
+	// X - w0·M is the point at infinity when the prover sends exactly
+	// X = w0·M. crypto/elliptic encodes infinity as (0, 0) and tolerates
+	// it: ScalarMult((0,0), y) returns (0, 0) and Marshal((0,0)) emits an
+	// all-zero uncompressed point rather than panicking. That is the
+	// hazard — the handshake continues quietly with Z and V fixed to a
+	// value the peer chose, so the transcript no longer binds the
+	// passcode. RFC 9383 §3.3 requires the protocol to abort when the
+	// computed group element is the identity; chip validates the peer
+	// point on the same step (CHIPCryptoPAL.cpp:424 PointIsValid inside
+	// ComputeRoundTwo).
+	if xMinusW0Mx.Sign() == 0 && xMinusW0My.Sign() == 0 {
+		return nil, fmt.Errorf("%w: X equals w0*M (X - w0*M is the identity)", ErrInvalidPoint)
+	}
+	zX, zY := curve().ScalarMult(xMinusW0Mx, xMinusW0My, y.Bytes()) //nolint:staticcheck // SA1019: see curve()
+	v.zMarshal = elliptic.Marshal(curve(), zX, zY)                  //nolint:staticcheck // SA1019: see curve()
 
 	// V = y·L.
 	vX, vY := curve().ScalarMult(v.ctx.L.X, v.ctx.L.Y, y.Bytes()) //nolint:staticcheck // SA1019: see curve()
@@ -454,8 +482,19 @@ func (p *Prover) ProcessPake2(yBytes, cB []byte) (cA []byte, err error) {
 	w0NNegX, w0NNegY := curve().ScalarMult(nPoint.X, nPoint.Y, p.w0.Bytes())    //nolint:staticcheck // SA1019: see curve()
 	w0NNegY = new(big.Int).Sub(curve().Params().P, w0NNegY)                     // negate
 	yMinusW0Nx, yMinusW0Ny := curve().Add(yPoint.X, yPoint.Y, w0NNegX, w0NNegY) //nolint:staticcheck // SA1019: see curve()
-	zX, zY := curve().ScalarMult(yMinusW0Nx, yMinusW0Ny, p.x.Bytes())           //nolint:staticcheck // SA1019: see curve()
-	p.zMarshal = elliptic.Marshal(curve(), zX, zY)                              //nolint:staticcheck // SA1019: see curve()
+	// Mirror image of the identity guard in [Verifier.ProcessPake1]: a
+	// peer that answers with exactly Y = w0*N makes Y - w0*N the point at
+	// infinity, which crypto/elliptic carries through as (0, 0) without
+	// complaint — Z and V then collapse to a value the peer chose and the
+	// transcript stops binding the passcode. RFC 9383 §3.3 requires the
+	// abort for both roles; chip runs the same peer-point validation on
+	// the prover side (CHIPCryptoPAL.cpp:424 PointIsValid inside
+	// ComputeRoundTwo, which serves PROVER and VERIFIER alike).
+	if yMinusW0Nx.Sign() == 0 && yMinusW0Ny.Sign() == 0 {
+		return nil, fmt.Errorf("%w: Y equals w0*N (Y - w0*N is the identity)", ErrInvalidPoint)
+	}
+	zX, zY := curve().ScalarMult(yMinusW0Nx, yMinusW0Ny, p.x.Bytes()) //nolint:staticcheck // SA1019: see curve()
+	p.zMarshal = elliptic.Marshal(curve(), zX, zY)                    //nolint:staticcheck // SA1019: see curve()
 
 	// V = w1·(Y - w0·N).
 	vX, vY := curve().ScalarMult(yMinusW0Nx, yMinusW0Ny, p.w1.Bytes()) //nolint:staticcheck // SA1019: see curve()

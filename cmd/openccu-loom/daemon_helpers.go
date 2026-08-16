@@ -33,15 +33,54 @@ func configuredCentralNames(cfg *config.Config) []string {
 	return names
 }
 
-func bridgeHealthSupplier(cfg *config.Config, startedAt time.Time) func() map[string]any {
-	centrals := configuredCentralNames(cfg)
+// liveCentralNames returns every central the daemon currently serves: the
+// boot-config tier in configuration order, followed by any central registered
+// since. Both tiers are needed — a runtime adopt writes the registry and the
+// centrals table but never cfg.Centrals, while the config tier still names a
+// central whose bring-up has not registered it yet.
+func liveCentralNames(cfg *config.Config, reg *central.Registry) []string {
+	names := configuredCentralNames(cfg)
+	if reg == nil {
+		return names
+	}
+	seen := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		seen[n] = struct{}{}
+	}
+	for _, n := range reg.Names() {
+		if _, dup := seen[n]; dup {
+			continue
+		}
+		seen[n] = struct{}{}
+		names = append(names, n)
+	}
+	return names
+}
+
+// bridgeHealthSupplier returns a closure the MQTT bridge invokes on
+// every AnnounceOnline to compose the `<base>/bridge/health` payload.
+// The body carries operator-visible metadata that is more useful than
+// a bare "online" flag — build identity, daemon boot timestamp, and
+// the centrals the daemon serves.
+//
+// centralNames is resolved per call, never captured: the payload is retained
+// and republished on every broker reconnect, so a list snapshotted when the
+// MQTT stack was built would keep announcing the boot fleet — a CCU adopted
+// at runtime would be missing from it until a config reload or a restart.
+func bridgeHealthSupplier(centralNames func() []string, startedAt time.Time) func() map[string]any {
 	return func() map[string]any {
+		names := []string{}
+		if centralNames != nil {
+			if resolved := centralNames(); resolved != nil {
+				names = resolved
+			}
+		}
 		return map[string]any{
 			"version":    build.Version,
 			"commit":     build.Commit,
 			"build_date": build.BuildDate,
 			"started_at": startedAt.Format(time.RFC3339),
-			"centrals":   centrals,
+			"centrals":   names,
 		}
 	}
 }
@@ -65,7 +104,7 @@ func bridgeHealthSupplier(cfg *config.Config, startedAt time.Time) func() map[st
 //
 // The effective port is always read from srv.Addr() after construction,
 // never from the configured value.
-func startCallbackServer(ctx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, logger *slog.Logger) (*rpcserver.XMLRPCServer, int, error) {
+func startCallbackServer(ctx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, obs rpcserver.CallbackObserver, logger *slog.Logger) (*rpcserver.XMLRPCServer, int, error) {
 	host := cfg.Callback.Host
 	if host == "" {
 		host = "0.0.0.0"
@@ -87,6 +126,7 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, allowlist rpcs
 		Addr:           addr,
 		Logger:         logger.With(slog.String("component", "callback.xmlrpc")),
 		MaxConnections: cfg.Callback.MaxConnections,
+		Metrics:        obs,
 		PeerAllowlist:  allowlist,
 		PortRange:      portRange,
 	}
@@ -300,14 +340,10 @@ func egressHostToward(host string) string { //nolint:contextcheck // UDP bind us
 	return addr.IP.String()
 }
 
-// loadTranslations resolves the translation archive in this order:
-// 1. cfg.CCUData.TranslationsPath (explicit operator override)
-// 2. Embedded extract (shipped with the binary, see
-// internal/ccudata/embedded)
-// 3. Empty fallback (raw CCU strings in the UI)
-//
-// Every transition is logged at INFO so operators can tell at a
-// glance which source their daemon is running against.
+// pickFirstCentral returns the first configured central's name, or "" when
+// none is configured. It is only for daemon-global surfaces that need one
+// default label (the MQTT metrics collector, the discovery TXT bundle);
+// anything that acts on a specific CCU must resolve the name it means.
 func pickFirstCentral(cfg *config.Config) string {
 	if len(cfg.Centrals) == 0 {
 		return ""
@@ -315,12 +351,12 @@ func pickFirstCentral(cfg *config.Config) string {
 	return cfg.Centrals[0].Name
 }
 
-// buildOpenAPIValidator loads the OpenAPI spec from the configured
-// path and returns a ready validator, or nil when the file is missing
-// or fails to parse. Failures are logged but never abort the daemon —
-// a missing spec must not take the REST surface offline; operators
-// see the warning and can either supply the spec or flip
-// OpenAPIValidate off.
+// singleCentralName returns the name of the registered central when
+// the registry contains exactly one entry, otherwise the empty
+// string. The REST router uses the result to pre-populate
+// `central_name` in every request's [reqctx.RequestContext]. Multi-
+// central deployments leave the request scope unset and rely on
+// per-handler resolution.
 func singleCentralName(reg *central.Registry) string {
 	names := reg.Names()
 	if len(names) == 1 {
@@ -334,16 +370,31 @@ func singleCentralName(reg *central.Registry) string {
 // case in the MVP composition).
 var _ handlers.ConfigReader = (*adapter.ConfigAdapter)(nil)
 
-// startMatterBridge constructs and starts the Matter bridge when
-// matter.enabled is set. Returns the bridge and a stop function the
-// caller defers; both are nil when the feature flag is off or the
-// bridge cannot stand up. Errors are logged at warn level but never
-// abort the daemon — the bridge is feature-flagged and
-// failing to start it must not take REST / MQTT down with it.
+// detectSupervisedRestart reports whether the daemon is running
+// under a supervisor that will restart it after a clean shutdown.
+// The check is cheap + heuristic — we do not try to verify the
+// supervisor's restart policy; we look for tight markers that
+// imply the daemon's IMMEDIATE parent (or runtime) is a
+// supervisor, not just the terminal session.
 //
-// Defaults applied here mirror the [config.NorthMatter] doc strings:
-// VendorID 0xFFF1 (test vendor block — never ship), ProductID 0x8000,
-// NodeLabel "openccu-loom", Discriminator 0xF00, Listen ":5540".
+// Signals (any one fires):
+//
+//   - OPENCCU_LOOM_SUPERVISOR=1 — explicit operator override.
+//   - JOURNAL_STREAM set AND getppid()==1 — systemd attached the
+//     daemon's stdout/stderr to journald and re-parented it to PID 1
+//     (the unambiguous "I am a systemd service" signal; INVOCATION_ID
+//     alone is too lax because gnome-terminal inherits it).
+//   - getppid()==1 AND /run/systemd/system exists — fallback when
+//     JOURNAL_STREAM was suppressed but systemd is still PID 1.
+//   - KUBERNETES_SERVICE_HOST set — Kubernetes injects it into
+//     every Pod and the kubelet always restarts dead containers.
+//   - /.dockerenv exists — Docker / Podman containers; restart
+//     policy is operator-chosen but presence is the usual signal.
+//
+// Missing all of these means the binary is running on bare metal
+// from a shell. The SPA disables the Restart-Daemon button in
+// that case so an operator does not accidentally take the daemon
+// permanently offline.
 func detectSupervisedRestart() bool {
 	if os.Getenv("OPENCCU_LOOM_SUPERVISOR") == "1" {
 		return true
@@ -365,11 +416,3 @@ func detectSupervisedRestart() bool {
 	}
 	return false
 }
-
-// startMDNSAdvertiser parses the REST listen address, builds the
-// daemon-discovery TXT bundle, and starts a multicast advertiser.
-// Returns (nil, nil) when the listen address has no usable port
-// (Unix socket etc.) so the caller can skip without an error path.
-// Returns (nil, err) when the port is malformed or zeroconf fails to
-// register; the caller is expected to log and continue (mDNS is a
-// convenience, not a hard dependency).

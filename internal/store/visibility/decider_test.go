@@ -138,3 +138,77 @@ func TestDeciderLenRaceSafe(t *testing.T) {
 		t.Fatal("cache must be non-empty after concurrent writes")
 	}
 }
+
+// TestDeciderRejectsVerdictFromSupersededRuleSet pins the memoisation
+// contract that keeps a runtime un_ignore edit from being undone: a verdict
+// computed before the rule change must not land in the cache the change
+// emptied, where it would outlive the new rules for the process lifetime.
+func TestDeciderRejectsVerdictFromSupersededRuleSet(t *testing.T) {
+	t.Parallel()
+
+	const param = hmenum.Parameter("BOOST_TIME")
+	d := NewParameterDecider(nil)
+	key := ignoreCacheKey{
+		model:       "HM-CC-RT-DN",
+		channelType: "CLIMATECONTROL_RT_TRANSCEIVER",
+		channelNo:   1,
+		paramsetKey: hmenum.ParamsetKeyValues,
+		parameter:   param,
+	}
+
+	// A lookup snapshots the generation, then the operator saves a new
+	// un_ignore pattern before the lookup gets to store its answer.
+	d.mu.RLock()
+	gen := d.ruleGen
+	d.mu.RUnlock()
+
+	d.LoadUnIgnore([]UnIgnoreEntry{{Parameter: param, IsSimple: true}})
+
+	if d.storeVerdictIfCurrent(key, true, gen) {
+		t.Fatal("verdict computed under the previous rule set was accepted")
+	}
+	if got := d.Len(); got != 0 {
+		t.Fatalf("cache size %d after a rejected store, want 0", got)
+	}
+	if d.IsParameterIgnored("HM-CC-RT-DN", "CLIMATECONTROL_RT_TRANSCEIVER", 1, hmenum.ParamsetKeyValues, param) {
+		t.Error("parameter still reported as ignored after its un_ignore pattern was saved")
+	}
+
+	// A verdict computed under the current rules is memoised as before.
+	d.mu.RLock()
+	fresh := d.ruleGen
+	d.mu.RUnlock()
+	if !d.storeVerdictIfCurrent(key, false, fresh) {
+		t.Fatal("verdict computed under the current rule set was rejected")
+	}
+}
+
+// TestDeciderRuleChangesAdvanceTheGeneration covers every entry point that
+// empties the cache: each has to advance the generation, or an in-flight
+// verdict computed under the old rules stays acceptable.
+func TestDeciderRuleChangesAdvanceTheGeneration(t *testing.T) {
+	t.Parallel()
+
+	d := NewParameterDecider(nil)
+	for _, tc := range []struct {
+		name   string
+		change func()
+	}{
+		{"LoadUnIgnore", func() { d.LoadUnIgnore([]UnIgnoreEntry{{Parameter: "LOW_BAT", IsSimple: true}}) }},
+		{"SetRequiredParameters", func() { d.SetRequiredParameters([]hmenum.Parameter{"LOW_BAT"}) }},
+		{"ClearCache", d.ClearCache},
+	} {
+		d.mu.RLock()
+		before := d.ruleGen
+		d.mu.RUnlock()
+
+		tc.change()
+
+		d.mu.RLock()
+		after := d.ruleGen
+		d.mu.RUnlock()
+		if after == before {
+			t.Errorf("%s did not advance the rule generation", tc.name)
+		}
+	}
+}

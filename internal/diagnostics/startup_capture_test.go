@@ -124,3 +124,59 @@ func TestSaveStartupCapture_MkdirError_ReturnsError(t *testing.T) {
 		t.Fatal("expected mkdir error when dataDir collides with a file")
 	}
 }
+
+// TestStartupCaptureAnonymiseDefaultsToTrue pins the privacy default across
+// every path that produces a config. A payload or file that names only
+// `enabled` must not decode to `anonymise: false`: the boot capture always
+// carries a trigger, so the manager's anonymise-when-untriggered fallback
+// never rescues it, and the next boot would archive raw device addresses.
+func TestStartupCaptureAnonymiseDefaultsToTrue(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"key absent", `{"enabled":true,"duration_seconds":30}`, true},
+		{"explicit true", `{"enabled":true,"anonymise":true}`, true},
+		{"explicit false is honoured", `{"enabled":true,"anonymise":false}`, false},
+		{"empty object", `{}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var cfg diagnostics.StartupCaptureConfig
+			if err := json.Unmarshal([]byte(tc.body), &cfg); err != nil {
+				t.Fatalf("unmarshal %s: %v", tc.body, err)
+			}
+			if cfg.Anonymise != tc.want {
+				t.Errorf("Anonymise = %v for %s, want %v", cfg.Anonymise, tc.body, tc.want)
+			}
+		})
+	}
+
+	// A daemon that has never been configured must report the same default,
+	// so a UI round-trip of the rendered config cannot introduce a false.
+	dir := t.TempDir()
+	cfg, err := diagnostics.LoadStartupCapture(dir)
+	if err != nil {
+		t.Fatalf("LoadStartupCapture: %v", err)
+	}
+	if !cfg.Anonymise {
+		t.Errorf("unconfigured daemon: Anonymise = false, want true")
+	}
+	if cfg.Enabled {
+		t.Errorf("unconfigured daemon: Enabled = true, want false")
+	}
+}
+
+// TestStartupCaptureRejectsUnknownKeys keeps the decode as strict as the REST
+// decoder is for every other request body: a config we cannot fully interpret
+// must not silently steer what the daemon records about itself.
+func TestStartupCaptureRejectsUnknownKeys(t *testing.T) {
+	t.Parallel()
+	var cfg diagnostics.StartupCaptureConfig
+	if err := json.Unmarshal([]byte(`{"enabled":true,"anonymize":false}`), &cfg); err == nil {
+		t.Fatal("misspelled key accepted; want a decode error")
+	}
+}

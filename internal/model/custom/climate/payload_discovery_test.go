@@ -453,3 +453,47 @@ func TestClimateHumidityIntegerTyped(t *testing.T) {
 		t.Fatalf("Humidity() = (%v,%v), want (51,true)", v, ok)
 	}
 }
+
+// newIntegerHumidityClimate builds a bare Climate whose only humidity
+// slot is the INTEGER one HmIP wall thermostats resolve into.
+func newIntegerHumidityClimate() *Climate {
+	return &Climate{humidityInt: generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: "HmIP-BWTH:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterHumidity),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})}
+}
+
+// TestClimateDiscoveryAdvertisesIntegerHumidity pins that the HA
+// discovery humidity plane follows the same both-slots rule
+// [Climate.Humidity] does: an HmIP thermostat types HUMIDITY INTEGER,
+// so gating on the FLOAT slot alone drops current_humidity_topic and
+// the humidity never reaches Home Assistant.
+func TestClimateDiscoveryAdvertisesIntegerHumidity(t *testing.T) {
+	t.Parallel()
+	c := newIntegerHumidityClimate()
+	_, body := c.HADiscoveryPayload(discoveryCtx{})
+	if _, ok := body["current_humidity_topic"]; !ok {
+		t.Fatal("current_humidity_topic missing for an INTEGER-typed HUMIDITY channel")
+	}
+	if v, _ := body["current_humidity_template"].(string); v != "{{ value_json.value }}" {
+		t.Errorf("current_humidity_template = %q", v)
+	}
+}
+
+// TestClimateDiscoveryOmitsHumidityWithoutSlot is the negative half:
+// a channel without any HUMIDITY parameter must not advertise the plane.
+func TestClimateDiscoveryOmitsHumidityWithoutSlot(t *testing.T) {
+	t.Parallel()
+	c := &Climate{}
+	_, body := c.HADiscoveryPayload(discoveryCtx{})
+	if _, ok := body["current_humidity_topic"]; ok {
+		t.Fatal("current_humidity_topic advertised without a HUMIDITY parameter")
+	}
+}

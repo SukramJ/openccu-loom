@@ -256,7 +256,7 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 		// OnTime (uint16): on-timer countdown in 1/10 s increments.
 		// Accept and store; bridge has no on-timer engine.
 		// matter.js OnOffServer.ts:102.
-		v, ok := value.(uint16)
+		v, ok := matterWriteUint16(value)
 		if !ok {
 			return fmt.Errorf("%w: OnTime write expected uint16, got %T", errMatterValueType, value)
 		}
@@ -267,7 +267,7 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 		// OffWaitTime (uint16): delayed-off wait in 1/10 s increments.
 		// Accept and store; bridge has no delayed-off engine.
 		// matter.js OnOffServer.ts:80.
-		v, ok := value.(uint16)
+		v, ok := matterWriteUint16(value)
 		if !ok {
 			return fmt.Errorf("%w: OffWaitTime write expected uint16, got %T", errMatterValueType, value)
 		}
@@ -282,7 +282,7 @@ func (s *Switch) MatterWrite(ctx context.Context, attrID uint32, value any, prio
 			s.startUpOnOff.Store(startUpOnOffNull)
 			return nil
 		}
-		v, ok := value.(uint8)
+		v, ok := matterWriteUint8(value)
 		if !ok {
 			return fmt.Errorf("%w: StartUpOnOff write expected uint8 or nil, got %T", errMatterValueType, value)
 		}
@@ -413,3 +413,31 @@ var (
 	_ interfaces.MatterClusterAttributeLister = (*Switch)(nil)
 	_ interfaces.MatterClusterCommandLister   = (*Switch)(nil)
 )
+
+// matterWriteUint16 coerces an attribute-write value into uint16. The IM
+// write layer decodes every unsigned TLV integer to uint64, so a bare
+// `value.(uint16)` assertion rejects every write a real controller sends;
+// the narrower type is accepted too so in-package callers keep working.
+func matterWriteUint16(value any) (uint16, bool) {
+	switch v := value.(type) {
+	case uint64:
+		return uint16(v & 0xFFFF), true
+	case uint16:
+		return v, true
+	default:
+		return 0, false
+	}
+}
+
+// matterWriteUint8 coerces an attribute-write value into uint8, with the
+// same uint64 decode path [matterWriteUint16] documents.
+func matterWriteUint8(value any) (uint8, bool) {
+	switch v := value.(type) {
+	case uint64:
+		return uint8(v & 0xFF), true
+	case uint8:
+		return v, true
+	default:
+		return 0, false
+	}
+}

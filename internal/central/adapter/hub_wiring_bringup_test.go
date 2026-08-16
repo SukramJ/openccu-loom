@@ -79,6 +79,65 @@ func TestWireHubFailsWhenDeviceNamesCannotBeLoaded(t *testing.T) {
 	}
 }
 
+// TestWireHubFailsWhenRoomOrFunctionAssignmentsCannotBeLoaded pins rooms and
+// functions as hard prerequisites of the bring-up, for the same reason as the
+// device names: both are read at the same point and stamped onto each channel
+// exactly once by the same pipeline pass, so an empty substitute leaves the
+// whole fleet without a room and without a function — on the SPA, REST, MQTT
+// `suggested_area` and the alarm room grouping alike — until a full re-ingest.
+// A CCU that genuinely defines none still comes up (the companion case below).
+func TestWireHubFailsWhenRoomOrFunctionAssignmentsCannotBeLoaded(t *testing.T) {
+	t.Parallel()
+
+	listAllDetail := func(_ map[string]any) any {
+		return []map[string]any{{
+			"id": "1234", "address": "0001ABCD", "name": "Flur",
+			"channels": []map[string]any{{"id": "1235", "address": "0001ABCD:1", "name": "Flur Licht"}},
+		}}
+	}
+	for _, tc := range []struct {
+		name    string
+		methods map[string]func(map[string]any) any
+	}{
+		{
+			name: "rooms",
+			methods: map[string]func(map[string]any) any{
+				"ReGa.runScript":       func(_ map[string]any) any { return `{"serial":"VCU1234567"}` },
+				"Device.listAllDetail": listAllDetail,
+				// Room.getAll missing -> the fake answers 404.
+				"Subsection.getAll": func(_ map[string]any) any { return []map[string]any{} },
+			},
+		},
+		{
+			name: "functions",
+			methods: map[string]func(map[string]any) any{
+				"ReGa.runScript":       func(_ map[string]any) any { return `{"serial":"VCU1234567"}` },
+				"Device.listAllDetail": listAllDetail,
+				"Room.getAll":          func(_ map[string]any) any { return []map[string]any{} },
+				// Subsection.getAll missing -> the fake answers 404.
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := newJSONRPCFake(t, tc.methods)
+			c, err := central.New(central.Config{Name: "ccu-01"})
+			if err != nil {
+				t.Fatalf("central.New: %v", err)
+			}
+			_, _, closer, err := WireHub(
+				context.Background(), hubWiringCentralConfig(t, srv.URL), c, wireHubTestLogger(), nil, "en",
+			)
+			if closer != nil {
+				closer()
+			}
+			if err == nil {
+				t.Fatalf("WireHub must fail when the CCU cannot serve its %s", tc.name)
+			}
+		})
+	}
+}
+
 // TestWireHubLoadsDeviceNamesAndRegistersRefreshJob is the companion to the
 // failure pin: with the name payload present the wiring completes, hands the
 // names to the caller and seeds the detail cache.
@@ -183,6 +242,51 @@ func TestWireHubStaleDeviceDetailsJobStopsTouchingTheCCU(t *testing.T) {
 	}
 	if detailCalls.Load() <= before {
 		t.Error("the live device-details job must still refresh the cache")
+	}
+}
+
+// TestWireHubStaleRefreshHooksStopTouchingTheCCU is the sibling of the
+// device-details case for the hub refresh hooks. They close over the same
+// JSON-RPC session and stay installed until the next successful WireHub
+// replaces them — which a re-init can leave minutes away. A tick in that
+// window would call through the logged-out client, which logs transparently
+// back in and holds a CCU session the already-executed closer can never
+// release.
+func TestWireHubStaleRefreshHooksStopTouchingTheCCU(t *testing.T) {
+	t.Parallel()
+
+	var sysvarCalls atomic.Int32
+	srv := newJSONRPCFake(t, map[string]func(map[string]any) any{
+		"ReGa.runScript":       func(_ map[string]any) any { return `{"serial":"VCU1234567"}` },
+		"Device.listAllDetail": func(_ map[string]any) any { return []map[string]any{} },
+		"Room.getAll":          func(_ map[string]any) any { return []map[string]any{} },
+		"Subsection.getAll":    func(_ map[string]any) any { return []map[string]any{} },
+		"SysVar.getAll": func(_ map[string]any) any {
+			sysvarCalls.Add(1)
+			return []map[string]any{}
+		},
+	})
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	_, _, closer, err := WireHub(
+		context.Background(), hubWiringCentralConfig(t, srv.URL), c, wireHubTestLogger(), nil, "en",
+	)
+	if err != nil {
+		t.Fatalf("WireHub: %v", err)
+	}
+
+	// Teardown of this generation, as a re-init performs it.
+	closer()
+
+	before := sysvarCalls.Load()
+	if err := c.Hub.RefreshSysvars(context.Background()); err != nil {
+		t.Fatalf("RefreshSysvars after teardown: %v", err)
+	}
+	if got := sysvarCalls.Load(); got != before {
+		t.Errorf("stale sysvar refresh hook issued %d CCU call(s) after its session was closed, want 0", got-before)
 	}
 }
 

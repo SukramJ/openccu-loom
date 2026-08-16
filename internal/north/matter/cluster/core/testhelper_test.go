@@ -29,6 +29,7 @@ type fakeStore struct {
 	identity  map[uint8]mstore.IdentityRecord
 	groupKeys map[[2]uint64]mstore.GroupKeySet     // key: [fabric, gks-id]
 	groupMaps map[[2]uint64]mstore.GroupKeyMapping // key: [fabric, group-id]
+	acls      map[uint8][]mstore.ACLEntry          // key: fabric
 }
 
 func newFakeStore() *fakeStore {
@@ -38,6 +39,7 @@ func newFakeStore() *fakeStore {
 		identity:  make(map[uint8]mstore.IdentityRecord),
 		groupKeys: make(map[[2]uint64]mstore.GroupKeySet),
 		groupMaps: make(map[[2]uint64]mstore.GroupKeyMapping),
+		acls:      make(map[uint8][]mstore.ACLEntry),
 	}
 }
 
@@ -150,11 +152,24 @@ func (f *fakeStore) GetIdentity(_ context.Context, fabricIndex uint8) (mstore.Id
 	return r, nil
 }
 
-// ReplaceACL is the AddNOC default-entry insertion path. Tests do
-// not assert on ACL contents yet, so the fake just records the call
-// without persistence.
-func (f *fakeStore) ReplaceACL(_ context.Context, _ uint8, _ []mstore.ACLEntry) error {
+// ReplaceACL is the AddNOC default-entry insertion path. Entries are
+// kept so a test can assert on what AddNOC actually persisted.
+func (f *fakeStore) ReplaceACL(_ context.Context, fabricIndex uint8, entries []mstore.ACLEntry) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(entries) == 0 {
+		delete(f.acls, fabricIndex)
+		return nil
+	}
+	f.acls[fabricIndex] = append([]mstore.ACLEntry(nil), entries...)
 	return nil
+}
+
+// ListACL returns the entries persisted for fabricIndex.
+func (f *fakeStore) ListACL(_ context.Context, fabricIndex uint8) ([]mstore.ACLEntry, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return append([]mstore.ACLEntry(nil), f.acls[fabricIndex]...), nil
 }
 
 // GroupStoreFacade methods.

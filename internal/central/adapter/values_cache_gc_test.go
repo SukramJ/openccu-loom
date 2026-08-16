@@ -69,6 +69,11 @@ func buildGCTestRegistry(t *testing.T) (reg *central.Registry, centralName strin
 	})
 	ch.Put(dp)
 
+	// GC only trusts a central whose bring-up has completed — a mid-ingest
+	// model does not speak for its own scopes. Model the post-ready state.
+	c.MarkSouthboundReady()
+	c.SetReadiness(hmenum.ReadinessReady, 1, 1)
+
 	reg = central.NewRegistry()
 	if err := reg.Register(c); err != nil {
 		t.Fatalf("reg.Register: %v", err)
@@ -189,6 +194,45 @@ func TestGCOnce_KeepsRowsOfCentralWhoseModelIsEmpty(t *testing.T) {
 	}
 	if len(rows) != 1 {
 		t.Fatalf("gcOnce deleted the offline central's rows: got %d rows, want 1", len(rows))
+	}
+}
+
+// TestGCOnce_KeepsRowsOfCentralStillIngesting pins the partial-model case. A
+// cache reset or a CCU reboot empties the model and the devices stream back in
+// over minutes; the first one that lands puts its interface into the sweep's
+// scope set while every device still pending is absent from the alive set. A
+// GC tick inside that window would delete exactly the rows of the devices that
+// had not arrived yet — and the next cold boot then has no cached value for
+// them, so a battery device reads `unknown` until it next reports on its own.
+func TestGCOnce_KeepsRowsOfCentralStillIngesting(t *testing.T) {
+	t.Parallel()
+
+	store := openGCTestStore(t)
+	reg, centralName := buildGCTestRegistry(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	unit, ok := reg.Get(centralName)
+	if !ok {
+		t.Fatalf("central %q not registered", centralName)
+	}
+	// Mid-ingest: the bring-up is re-running and only the first device of
+	// the interface is back in the model.
+	unit.SetReadiness(hmenum.ReadinessLoadingDevices, 0, 1)
+
+	// A row of a device that has not been re-ingested yet.
+	if err := store.SaveValue(ctx, centralName, "if1", "PENDING:1", "STATE", true, now, now); err != nil {
+		t.Fatalf("SaveValue(pending): %v", err)
+	}
+
+	gcOnce(ctx, reg, store, slog.New(slog.DiscardHandler))
+
+	rows, err := store.LoadChannel(ctx, centralName, "if1", "PENDING:1")
+	if err != nil {
+		t.Fatalf("LoadChannel: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("gcOnce deleted the cache of a device the re-ingest had not reached yet: got %d rows, want 1", len(rows))
 	}
 }
 

@@ -3,6 +3,8 @@
 
 package metrics
 
+import "time"
+
 // Provider interfaces used by Aggregator to pull metrics from system
 // components. Defined here (not in pkg/interfaces) to avoid circular imports.
 //
@@ -97,6 +99,21 @@ type RecoveryStateMetrics interface {
 	ConsecutiveFailures() int
 	// CanRetry reports whether further retries are permitted.
 	CanRetry() bool
+}
+
+// RecoveryStateTimestamps is the optional half of RecoveryStateMetrics: a
+// state source that can date its last recovery attempt implements it, and
+// Aggregator.Recovery then reports the newest one as LastRecoveryTime.
+//
+// It is separate from RecoveryStateMetrics because the counter half is
+// satisfied by a plain value snapshot, while the timestamp has to be read
+// from the live coordinator — the adapter in internal/metrics/wiring joins
+// the two. Without this the aggregator declared a LastRecoveryTime it had no
+// way to fill, so "when did recovery last run" answered nothing forever.
+type RecoveryStateTimestamps interface {
+	// LastAttempt returns the wall time of the most recent recovery attempt.
+	// The zero value means no attempt has been recorded.
+	LastAttempt() time.Time
 }
 
 // EventBusForMetrics is the minimal event bus interface needed by the

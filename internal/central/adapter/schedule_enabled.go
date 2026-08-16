@@ -25,6 +25,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -88,6 +89,24 @@ func (s *SchedulesDomain) SetScheduleEnabled(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
+	// A modelled week profile with an attached writer already performs this
+	// exact CCU write: it renders the same `WPTCLS=<bits>,WPTCL=<0|2>` value,
+	// targets the same schedule channel, and additionally arms the echo hold
+	// window and rolls its optimistic state back when the CCU rejects the
+	// write. Writing here as well sent the identical frame to the device twice
+	// per operator click — double radio and duty-cycle cost — and left the
+	// model reverting a write the CCU had already taken. Delegate instead; the
+	// backend path below stays for devices whose schedule is not modelled or
+	// whose writer the pipeline has not attached.
+	if wp := s.scheduleProfileFor(deviceAddress); wp != nil && wp.ScheduleChannelAddress() != "" &&
+		(channelKey != "" || len(wp.ScheduleEnabled()) > 0) {
+		if err := wp.SetScheduleEnabled(ctx, channelKey, enabled, hmenum.CommandPriorityHigh); err != nil {
+			return fmt.Errorf("schedules.SetScheduleEnabled: %w", err)
+		}
+		return nil
+	}
+
 	// Resolve the backend and the schedule channel number.
 	channelNo, err := s.FindScheduleChannel(ctx, deviceAddress)
 	if err != nil {
@@ -183,12 +202,12 @@ func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, 
 	return scheduleActorChannelBitmasks["1_1"], nil
 }
 
-// applyScheduleEnabledToModel updates the in-model ProfileDataPoint for
-// the device so the SPA sees the change without waiting for a CCU event.
-// Best-effort: silently returns when the device or channel cannot be found.
-func (s *SchedulesDomain) applyScheduleEnabledToModel(ctx context.Context, deviceAddress, channelKey string, enabled bool) {
+// scheduleProfileFor returns the week-profile data point of the first
+// channel of deviceAddress that carries one, or nil when the device is
+// unknown or has no modelled schedule.
+func (s *SchedulesDomain) scheduleProfileFor(deviceAddress string) *weekprofile.ProfileDataPoint {
 	if s.registry == nil {
-		return
+		return nil
 	}
 	for _, u := range s.registry.List() {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
@@ -196,14 +215,23 @@ func (s *SchedulesDomain) applyScheduleEnabledToModel(ctx context.Context, devic
 			continue
 		}
 		for _, ch := range dev.Channels() {
-			wp := ch.WeekProfile()
-			if wp == nil {
-				continue
+			if wp := ch.WeekProfile(); wp != nil {
+				return wp
 			}
-			_ = wp.SetScheduleEnabled(ctx, channelKey, enabled, hmenum.CommandPriorityHigh)
-			return
 		}
-		return
+		return nil
+	}
+	return nil
+}
+
+// applyScheduleEnabledToModel updates the in-model ProfileDataPoint for
+// the device so the SPA sees the change without waiting for a CCU event.
+// Only reached on the backend-write fallback, where the data point holds no
+// writer of its own — so this stays an in-memory update.
+// Best-effort: silently returns when the device or channel cannot be found.
+func (s *SchedulesDomain) applyScheduleEnabledToModel(ctx context.Context, deviceAddress, channelKey string, enabled bool) {
+	if wp := s.scheduleProfileFor(deviceAddress); wp != nil {
+		_ = wp.SetScheduleEnabled(ctx, channelKey, enabled, hmenum.CommandPriorityHigh)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -468,5 +469,139 @@ func TestZeroconfInternal_Publish_RecordsAdvertisedAddresses(t *testing.T) {
 		if f.Code == "no_addresses" {
 			t.Errorf("diagnostics report %q for a record that advertises %v", f.Code, want)
 		}
+	}
+}
+
+// TestZeroconfInternal_RepublishAllDoesNotResurrectWithdrawn pins that a
+// Withdraw racing the periodic re-announce stays withdrawn. republishAll
+// used to snapshot the record set and then re-Publish from that copy, so
+// a Withdraw landing in the gap was undone — the record stayed on the
+// wire for the process lifetime and commissioners kept resolving a dead
+// identity. The gap is reproduced deterministically here by driving the
+// snapshot and the re-announce as two steps. The invariant checked is
+// structural: every registered server must still have an entry in
+// z.items.
+func TestZeroconfInternal_RepublishAllDoesNotResurrectWithdrawn(t *testing.T) {
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+
+	ctx := context.Background()
+	keep := Service{
+		InstanceName: "CCCC000011112222",
+		ServiceType:  ServiceTypeOperational,
+		Port:         5540,
+		HostName:     "test",
+	}
+	doomed := Service{
+		InstanceName: "DDDD000011112222",
+		ServiceType:  ServiceTypeCommissionable,
+		Port:         5540,
+		HostName:     "test",
+		Subtypes:     []string{"_CM"},
+	}
+	for _, svc := range []Service{keep, doomed} {
+		if err := z.Publish(ctx, svc); err != nil {
+			t.Fatalf("Publish %s: %v", svc.InstanceName, err)
+		}
+	}
+
+	// Land the Withdraw exactly in the gap between the snapshot and the
+	// re-announce — the one interleaving that reproduces the defect.
+	// Racing a goroutine against Withdraw instead makes the test a coin
+	// flip: a Withdraw that lands after both re-publishes leaves the
+	// record withdrawn even with the defect present.
+	withdrawn := false
+	z.afterSnapshot = func() {
+		if withdrawn {
+			return
+		}
+		withdrawn = true
+		if err := z.Withdraw(ctx, doomed.InstanceName, doomed.ServiceType); err != nil {
+			t.Errorf("Withdraw: %v", err)
+		}
+	}
+	z.republishAll(ctx)
+	if !withdrawn {
+		t.Fatal("the re-announce never reached its snapshot gap; the test did not exercise the race it names")
+	}
+
+	z.mu.RLock()
+	defer z.mu.RUnlock()
+	doomedKey := noopKey(doomed.InstanceName, doomed.ServiceType)
+	if _, ok := z.items[doomedKey]; ok {
+		t.Error("withdrawn service is back in items after republishAll")
+	}
+	for key := range z.servers {
+		if _, ok := z.items[key]; !ok {
+			t.Errorf("server %q survives with no item — the record was resurrected by republishAll", key)
+		}
+	}
+}
+
+// TestZeroconfInternal_CloseClosesAttachedResponder pins that attaching a
+// side-car responder hands its shutdown to the advertiser: without it the
+// responder's receive goroutines and its two multicast :5353 sockets
+// outlive every Matter teardown.
+func TestZeroconfInternal_CloseClosesAttachedResponder(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+	r.Start(context.Background())
+
+	if err := z.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if r.cancel != nil {
+		t.Error("responder still running after Zeroconf.Close — its goroutines outlive the advertiser")
+	}
+	z.mu.RLock()
+	defer z.mu.RUnlock()
+	if z.responder != nil {
+		t.Error("responder reference retained after Close")
+	}
+}
+
+// TestZeroconfInternal_ResponderCloseIsIdempotentUnderTwoOwners pins that
+// closing an attached responder twice, concurrently, is safe. The daemon
+// keeps its own close func for the responder it constructed while the
+// advertiser closes the same responder on teardown, so the second Close
+// is normal operation rather than a bug — but only if it neither races
+// the first on the cancel func and packet conns nor reports an error.
+func TestZeroconfInternal_ResponderCloseIsIdempotentUnderTwoOwners(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+	r.Start(context.Background())
+
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	wg.Add(2)
+	go func() { defer wg.Done(); errs[0] = z.Close() }()
+	go func() { defer wg.Done(); errs[1] = r.Close() }()
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("close %d returned %v, want nil — a second owner closing the responder must be a no-op", i, err)
+		}
+	}
+	if err := r.Close(); err != nil {
+		t.Errorf("third Close returned %v, want nil", err)
+	}
+	// The shutdown must have run exactly once. This package cannot run
+	// under -race (see TestMain), so the serialisation itself is pinned
+	// structurally: `closed` is the flag that turns every later Close
+	// into a no-op instead of a second, unsynchronised teardown.
+	r.lifecycleMu.Lock()
+	defer r.lifecycleMu.Unlock()
+	if !r.closed {
+		t.Error("responder not marked closed; a later Close would tear the sockets down a second time")
+	}
+	if r.cancel != nil {
+		t.Error("responder still running after Close — its goroutines outlive both owners")
 	}
 }

@@ -35,7 +35,7 @@ require github.com/SukramJ/go-openccu-data v0.1.3
 require golang.org/x/term v0.45.0
 
 require (
-	github.com/SukramJ/go-mqtt v1.2.0
+	github.com/SukramJ/go-mqtt v1.3.0
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect

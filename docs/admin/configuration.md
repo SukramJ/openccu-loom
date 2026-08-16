@@ -354,6 +354,16 @@ The MQTT bridge (Home Assistant Discovery and/or raw topic planes).
 `tcp`, `mqtt`, `tls`, `ssl`, `mqtts` (or a bare `host:port`). For the
 topic layout see the [MQTT topic schema](../mqtt-topic-schema.md).
 
+The two topic planes are not independent. `raw_enabled` publishes the
+state, availability and command topics; `discovery_enabled` publishes the
+Home Assistant discovery payloads, and every entity they declare points at
+a raw-plane topic. Turning discovery on therefore turns the raw plane on:
+the daemon corrects `raw_enabled` to `true` at startup and logs a warning
+naming the field. Without that correction Home Assistant would show the
+full device tree with every entity stuck at `unavailable`, and nothing
+would report an error. The reverse is fine — the raw plane alone is the
+supported setup for non-Home-Assistant MQTT consumers.
+
 `retain_cleanup_window_ms` is how long (500–30000 ms; `0` = 2000)
 the bridge waits at boot for the broker to deliver retained messages
 before evicting stale discovery/legacy topics — raise it on

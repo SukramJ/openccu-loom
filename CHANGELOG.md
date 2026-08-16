@@ -4,6 +4,116 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.61.0]
+
+The follow-up to the 0.60.0 audit. A fresh full-codebase pass found defects
+the previous audit had missed — the failure classes were different:
+teardown/disable paths (the earlier audit hardened the setup side), success
+reported before the effect landed, unvalidated config-flag combinations, and
+half-applied fixes. Everything below was verified against the code, most of it
+through a failing reproducer, before the fix landed; an adversarial review of
+the whole branch caught and reverted the regressions the fixes themselves
+introduced.
+
+### Security
+
+- **Revoking a bearer token now closes the WebSocket sessions it opened.**
+  `DELETE` of an API token previously left any live WS connection that token
+  had authenticated fully privileged until it disconnected on its own.
+- **The operator channel lock is enforced on every write path.** A channel
+  marked locked against control writes still accepted commands over MQTT and
+  through the SPA tiles (REST/WS/MQTT/Matter custom data-point writes); the
+  lock now gates them all. `MASTER`-paramset writes stay exempt by design.
+- **HTTP Basic no longer bypasses CSRF**, and the WebSocket origin check no
+  longer waives itself for a Basic `Authorization` header — a browser can
+  replay cached Basic credentials cross-site, so the per-request-credential
+  exemption was unsound for that scheme (bearer and the ingress scheme keep it).
+- **Config-read and diagnostics endpoints match their declared admin gating.**
+  `GET /config/effective`, `GET /config/sections/{section}`,
+  `GET /diagnostics/rpc-recording` and the RSSI/sysvar-fetch WS commands are
+  admin/operator-gated in line with the spec; central connection details
+  (host, ports, username) are masked from non-admin identities.
+- **A wrong alarm code aimed at an already-disarmed zone can no longer lock
+  out the code plane** for every zone of that source (an MQTT/keypad
+  denial-of-service vector), while duress detection on that path is kept.
+
+### Changed
+
+- **North-bound API contract version is now 6.0.0** (a breaking bump for
+  generated clients). Two operations now state the request body they have
+  always required — `DELETE /sessions/edit` and
+  `POST /sessions/edit/heartbeat` both demand `key` and `token` — and the
+  startup-capture schema splits into an honest read shape (responses always
+  carry `anonymise`) and a write shape (an omitted `anonymise` still means
+  "anonymise", the privacy-preserving default). No daemon behaviour changed;
+  the spec now matches what the handlers already did.
+- **The MQTT transport moves to `go-mqtt` v1.3.0** (its own 42-finding audit
+  release; API additive). Flapping broker connections now back off
+  exponentially, a broker-sent Server Keep Alive of 0 disables pinging per
+  MQTT 5 §3.1.2.10, and shared-subscription filters match their delivery
+  topics.
+
+### Added
+
+- **The Matter fabric list carries exact 64-bit identifiers.** Each fabric
+  now reports `fabric_id_hex` / `node_id_hex` alongside the numeric fields.
+  A JSON number holds only 53 bits, so every operational node id a real
+  controller assigns was being rounded before it reached the UI; the hex
+  fields are the 16-digit values controllers and chip-tool print, and the
+  fabric view renders and sorts on them.
+- **The change log distinguishes who wrote a paramset.** A write driven by
+  an AI assistant over MCP is now recorded as such, told apart from a REST
+  or WS edit, so an unexplained configuration change can be attributed.
+
+### Fixed
+
+- **`config import` of a default export no longer wipes stored secrets.** A
+  plain `config export` redacts every secret and the CCU passwords; importing
+  that document back (a rollback, say) used to overwrite the real values with
+  null. Import now keeps each stored secret unless the document explicitly
+  carries a replacement, and marks a redacted export so it is recognised.
+- **`backup restore` removes the target database's stale WAL/SHM sidecars**,
+  so SQLite can no longer replay the previous database's write-ahead log over
+  the restored file; **`backup create` can no longer migrate or create the
+  live database** — it opens the source strictly read-only.
+- **The Home Assistant discovery plane no longer publishes entities that stay
+  permanently unavailable.** Turning discovery on now implies the raw state
+  plane (with a logged warning) instead of registering thousands of entities
+  whose availability topics were never written; a retracted availability topic
+  is republished after a broker restart; the first-run wizard's MQTT step now
+  actually enables the bridge, and enabling MQTT at runtime publishes without
+  a restart.
+- **A disarmed alarm zone seeds its sensor state at boot.** After a restart an
+  open window that had not pushed a fresh value left the zone reporting ready,
+  so it could be armed with a contact standing open; the open-contact blocker
+  now sees reality. The SPA alarm views no longer write one zone's policies,
+  outputs or sensors into another when the zone selector changes mid-edit.
+- **A single-interface CCU that goes offline now reports failed** instead of
+  staying `RUNNING` forever, and a device replaced on the CCU is evicted from
+  the domain model so it stops appearing on REST and in the SPA.
+- **Matter lifecycle and protocol correctness.** Fabric revoke / factory reset
+  run the full session-and-subscription teardown (not just a store delete);
+  `BasicInformation.UniqueID` stays stable across a bridge rename; the PASE
+  brute-force cap is enforced with an expiry so a LAN host cannot permanently
+  disable pairing; SPAKE2+ rejects degenerate verifiers without panicking;
+  unsupported commands answer `UNSUPPORTED_COMMAND`.
+- **Custom device coverage.** HmIP wall thermostats surface humidity in HA and
+  the Matter humidity cluster; HA JSON light commands apply colour, colour
+  temperature and effect; button-lock commands reach the parameter the CCU
+  actually carries; per-user access-permission switches reach MQTT/HA; a timed
+  switch-on that fails on the wire is reported as a failure instead of success.
+- **Config, metrics and diagnostics.** Settings that only apply at boot now
+  report `restart_required`; the diagnostics dump reports real client-side RPC
+  metrics (failures, circuit-breaker rejections, coalesced calls, per-method
+  timings) that previously stayed at zero; a down interface names its cause
+  (auth / timeout / network) from the actual error rather than always blaming
+  the network; MQTT retained-topic cleanup follows CCUs adopted at runtime;
+  OIDC discovery survives a boot-time identity-provider outage; MCP sessions
+  are reaped and admin tools gate on the calling request.
+- The full third defect wave across the UI, MQTT, Matter, central, client,
+  REST and store layers, plus the two earlier waves and a round of review-fix
+  regressions, all from the 2026-08-16 code-base audit.
+
 ## [0.60.0]
 
 ### Added

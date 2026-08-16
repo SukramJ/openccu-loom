@@ -10,8 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 func TestNewRejectsEmptyName(t *testing.T) {
@@ -50,6 +53,50 @@ func TestCentralCoordinatorsAreWired(t *testing.T) {
 		c.ParamsetReg == nil || c.Clients == nil ||
 		c.Scheduler == nil || c.Health == nil {
 		t.Fatal("some coordinator/registry is nil")
+	}
+}
+
+// replaceLister is a coordinators.DeviceDescriptionFetcher that answers with
+// a fixed snapshot, standing in for the CCU's post-swap inventory.
+type replaceLister struct {
+	snapshot []hmproto.DeviceDescription
+}
+
+func (l *replaceLister) ListDevices(_ context.Context, _ hmtypes.WireInterfaceID) ([]hmproto.DeviceDescription, error) {
+	return l.snapshot, nil
+}
+
+// TestReplacedDeviceLeavesTheModelOfACentralBuiltByNew pins the device
+// coordinator's model wiring through the composition root: a device replaced
+// on the CCU has to disappear from the domain model — the source REST, the
+// WebSocket API and the SPA read — not only from the registries.
+func TestReplacedDeviceLeavesTheModelOfACentralBuiltByNew(t *testing.T) {
+	c, err := New(Config{Name: "replace-wiring"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	iface := hmtypes.ParseWireInterfaceID("replace-wiring-BidCos-RF")
+	const oldAddr = "OLD001"
+
+	c.ModelRegistry.Put(device.New(device.Config{
+		Interface:   hmenum.InterfaceBidCosRF,
+		Address:     oldAddr,
+		Model:       "HM-Sec-SC",
+		InterfaceID: string(iface),
+	}))
+	c.DescRegistry.Put(iface, hmproto.DeviceDescription{Address: oldAddr, Type: "HM-Sec-SC"})
+	c.DeviceRegistry.Put(registry.DeviceEntry{Interface: iface, Address: oldAddr, Model: "HM-Sec-SC"})
+
+	lister := &replaceLister{snapshot: []hmproto.DeviceDescription{{Address: "NEW001", Type: "HM-Sec-SC"}}}
+	if err := c.Devices.ReplaceDevice(context.Background(), lister, iface, oldAddr, "NEW001"); err != nil {
+		t.Fatalf("ReplaceDevice: %v", err)
+	}
+
+	if _, ok := c.ModelRegistry.Get(oldAddr); ok {
+		t.Error("the replaced device must be gone from the model registry")
+	}
+	if c.DeviceRegistry.Has(iface, oldAddr) {
+		t.Error("the replaced device must be gone from the device registry")
 	}
 }
 

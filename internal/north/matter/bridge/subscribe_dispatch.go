@@ -5,6 +5,7 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -173,8 +174,15 @@ func (b *Bridge) buildInitialReport(
 // registerSubscription registers the subscribe request in the subscription
 // manager (handling KeepSubscriptions teardown), captures the routing
 // subTarget, and stamps HasSubscription + SubscriptionID on initialReport in
-// place. Returns the allocated subID (0 when no manager is wired or Subscribe
-// fails — the orchestrator falls through with a synthetic subID=0 reply).
+// place. Returns the allocated subID, or 0 with a nil error when no manager
+// is wired (test fixtures — the orchestrator then answers with a synthetic
+// subID=0 reply).
+//
+// A Subscribe the manager REJECTS returns the manager's error so the caller
+// answers with a StatusResponse. Answering a rejected Subscribe with a normal
+// SubscribeResponse tells the controller the subscription exists when it does
+// not: no report ever arrives, and the device goes stale with nothing on the
+// wire to explain it.
 //
 // Mirrors matter.js packages/node/src/node/server/InteractionServer.ts:549-566
 // for the KeepSubscriptions teardown, and
@@ -186,7 +194,7 @@ func (b *Bridge) registerSubscription(
 	proto message.ProtocolHeader,
 	req im.SubscribeRequest,
 	initialReport *im.ReportData,
-) uint32 {
+) (uint32, error) {
 	// Subscribe in the manager so quota + cadence bookkeeping is
 	// centralised there. The report pump is wired in the daemon bring-up
 	// (SetEventReporter / SubscriptionReporter in daemon_matter.go); the
@@ -259,16 +267,36 @@ func (b *Bridge) registerSubscription(
 			b.logger.Warn("matter.rx.im.subscribe.manager",
 				slog.String("src", srcString(src)),
 				slog.String("err", err.Error()))
-			// Fall through with subID=0; controller treats this as
-			// "subscription request denied" and may retry.
-		} else {
-			subID = sub.ID
-			initialReport.HasSubscription = true
-			initialReport.SubscriptionID = subID
-			b.captureSubTarget(subID, src, requestHdr, proto, req.FabricFiltered)
+			return 0, err
 		}
+		subID = sub.ID
+		initialReport.HasSubscription = true
+		initialReport.SubscriptionID = subID
+		b.captureSubTarget(subID, src, requestHdr, proto, req.FabricFiltered)
 	}
-	return subID
+	return subID, nil
+}
+
+// subscribeRejectStatus maps a subscription-manager rejection to the IM
+// status the controller gets back.
+//
+// Cadence violations are InvalidAction: matter.js
+// packages/node/src/node/server/InteractionServer.ts:665-682 raises
+// StatusResponseError(..., Status.InvalidAction) for every
+// minIntervalFloor / maxIntervalCeiling constraint it checks. A quota
+// rejection is ResourceExhausted — the request is well-formed, the
+// publisher has no room for it (Matter §8.10 ResourceExhausted, the code
+// chip's ReadHandler returns once the subscription table is full).
+func subscribeRejectStatus(err error) im.StatusCode {
+	switch {
+	case errors.Is(err, subscription.ErrFabricQuotaExceeded):
+		return im.StatusResourceExhausted
+	case errors.Is(err, subscription.ErrCadenceOutOfRange),
+		errors.Is(err, subscription.ErrCadenceInvertedAfterClamp):
+		return im.StatusInvalidAction
+	default:
+		return im.StatusFailure
+	}
 }
 
 // streamInitialReportChunks encodes initialReport into per-datagram chunks
@@ -367,7 +395,7 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		// Arm the per-exchange StatusResponse waiter BEFORE the send
 		// to avoid a missed-wakeup race: Apple can reply faster than
 		// our scheduler returns from sendReplyReliable.
-		waitCh := b.armStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+		waitCh := b.armStatusResponseWait(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 		// Piggyback the latest peer-sent counter on this chunk's
 		// AckCounter. Without this rewrite every chunk carries the
 		// stale SubscribeRequest counter, and python-matter-server's
@@ -375,9 +403,9 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		// StatusResponse-acked chunk N — "Dropping message without
 		// piggyback ack when we are waiting for an ack".
 		chunkHdr := *requestHdr
-		b.refreshAckCounter(&chunkHdr, proto.ExchangeID)
+		b.refreshAckCounter(&chunkHdr, proto.ExchangeID, !proto.Initiator)
 		if err := b.sendReplyReliable(src, &chunkHdr, proto, im.OpcodeReportData, body); err != nil {
-			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 			debugReplyError(b.logger, "send_initial_report", src, err)
 			return err
 		}
@@ -395,9 +423,9 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		// diagnostic only.
 		select {
 		case <-waitCh:
-			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 		case <-time.After(perChunkStatusRespTimeout):
-			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 			b.logger.Debug("matter.tx.subscribe.chunk_ack_timeout",
 				slog.String("src", srcString(src)),
 				slog.Int("chunk", i),
@@ -481,7 +509,7 @@ func (b *Bridge) sendSubscribeResponse(
 	ackTracker := b.ackTracker
 	b.mu.RUnlock()
 	if ackTracker != nil {
-		if counter, ok := ackTracker.LookupAndDischarge(requestHdr.SessionID, proto.ExchangeID); ok {
+		if counter, ok := ackTracker.LookupAndDischarge(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator); ok {
 			subRespHdr.MessageCounter = counter
 		}
 	}

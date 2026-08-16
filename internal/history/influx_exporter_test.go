@@ -374,3 +374,101 @@ func TestInfluxExporter_Shutdown_Bounded(t *testing.T) {
 		t.Error("Shutdown did not return within 2s with a cancelled context")
 	}
 }
+
+// ============================================================
+// Failed flush keeps the batch
+// ============================================================
+
+// TestInfluxExporter_RetryableFailure_RequeuesBatch pins that a transient
+// Influx outage does not cost the samples buffered since the last flush: the
+// batch goes back into the buffer and the next tick retries it. Without the
+// requeue every sample drained into a failing POST is gone for good, which is
+// silent data loss on the export plane.
+func TestInfluxExporter_RetryableFailure_RequeuesBatch(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		status int
+	}{
+		{"server error", http.StatusInternalServerError},
+		{"rate limited", http.StatusTooManyRequests},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.ReadAll(r.Body)
+				w.WriteHeader(tc.status)
+			}))
+			t.Cleanup(srv.Close)
+
+			e := newTestExporter(t, srv.URL)
+			e.Export(fixedSample())
+			e.flush(context.Background())
+
+			if m := e.Metrics(); m.Failures != 1 || m.Exported != 0 || m.Dropped != 0 {
+				t.Errorf("metrics = %+v, want Failures=1 Exported=0 Dropped=0", m)
+			}
+			left := e.drain()
+			if len(left) != 1 {
+				t.Fatalf("buffer holds %d samples after a failed flush, want 1 (batch requeued)", len(left))
+			}
+			if left[0].Value != 21.5 {
+				t.Errorf("requeued sample = %+v, want the original", left[0])
+			}
+		})
+	}
+}
+
+// TestInfluxExporter_PermanentFailure_DropsBatch pins the other side of the
+// requeue: a payload or token Influx rejects will be rejected again on every
+// retry, so keeping it would wedge the bounded buffer full of poison and push
+// live samples out of it. Such a batch is dropped and counted instead.
+func TestInfluxExporter_PermanentFailure_DropsBatch(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+
+	e := newTestExporter(t, srv.URL)
+	e.Export(fixedSample())
+	e.flush(context.Background())
+
+	if m := e.Metrics(); m.Failures != 1 || m.Dropped != 1 {
+		t.Errorf("metrics = %+v, want Failures=1 Dropped=1", m)
+	}
+	if left := e.drain(); len(left) != 0 {
+		t.Errorf("buffer holds %d samples after a rejected batch, want 0", len(left))
+	}
+}
+
+// TestInfluxExporter_RequeueRespectsMaxBuffer checks that the requeue stays
+// bounded: samples that arrived during the failed flush are kept, and the
+// oldest are dropped and counted when the combined batch exceeds MaxBuffer.
+func TestInfluxExporter_RequeueRespectsMaxBuffer(t *testing.T) {
+	t.Parallel()
+
+	e := newTestExporter(t, "http://127.0.0.1:19999", func(cfg *InfluxConfig) {
+		cfg.MaxBuffer = 2
+	})
+	newest := fixedSample()
+	newest.Value = 9.0
+	e.Export(newest)
+
+	old1 := fixedSample()
+	old1.Value = 1.0
+	old2 := fixedSample()
+	old2.Value = 2.0
+	e.requeue([]sqlite.MeasurementSample{old1, old2})
+
+	if m := e.Metrics(); m.Dropped != 1 {
+		t.Errorf("Metrics.Dropped = %d, want 1 (oldest evicted at MaxBuffer)", m.Dropped)
+	}
+	got := e.drain()
+	if len(got) != 2 || got[0].Value != 2.0 || got[1].Value != 9.0 {
+		t.Fatalf("buffer = %+v, want [2.0, 9.0] (requeued batch first, newest last)", got)
+	}
+}

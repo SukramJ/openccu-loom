@@ -1271,3 +1271,126 @@ func TestBasicInfo_SoftwareVersionDerivedFromVersionString(t *testing.T) {
 		}
 	})
 }
+
+// TestBasicInfo_UniqueIDSurvivesNodeLabelWrite pins Matter §11.1.5.13
+// quality F on UniqueID (0x0012) and on the SerialNumber (0x000F)
+// fallback derived from it: a controller renaming the bridge writes
+// NodeLabel with Manage privilege, and the node's identity must not move
+// under the controller's cache when it does.
+func TestBasicInfo_UniqueIDSurvivesNodeLabelWrite(t *testing.T) {
+	t.Parallel()
+	cfg := validBasicInfoConfig()
+	cfg.SerialNumber = "" // force the UniqueID-derived SerialNumber fallback
+	b, err := core.NewBasicInformation(cfg)
+	if err != nil {
+		t.Fatalf("NewBasicInformation: %v", err)
+	}
+	uidBefore, _ := b.MatterRead(0x0012)
+	serialBefore, _ := b.MatterRead(0x000F)
+
+	if err := b.MatterWrite(context.Background(), 0x0005, "Wohnzimmer", hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite(NodeLabel): %v", err)
+	}
+
+	uidAfter, _ := b.MatterRead(0x0012)
+	if uidAfter != uidBefore {
+		t.Errorf("UniqueID changed on a NodeLabel write: %v → %v", uidBefore, uidAfter)
+	}
+	serialAfter, _ := b.MatterRead(0x000F)
+	if serialAfter != serialBefore {
+		t.Errorf("SerialNumber changed on a NodeLabel write: %v → %v", serialBefore, serialAfter)
+	}
+	if label, _ := b.MatterRead(0x0005); !strings.Contains(fmt.Sprint(label), "Wohnzimmer") {
+		t.Errorf("NodeLabel = %v, want the written value", label)
+	}
+}
+
+// TestBasicInfo_UniqueIDSurvivesRestoredNodeLabel covers the boot path a
+// MatterWrite test cannot reach: the daemon constructs the cluster from
+// the configured label and only afterwards restores the commissioner-
+// written NodeLabel it persisted on an earlier run. UniqueID (and the
+// SerialNumber fallback derived from it) must not move when it does —
+// both carry quality F (Matter §11.1.5.13).
+func TestBasicInfo_UniqueIDSurvivesRestoredNodeLabel(t *testing.T) {
+	t.Parallel()
+	cfg := validBasicInfoConfig()
+	cfg.SerialNumber = "" // force the UniqueID-derived SerialNumber fallback
+	b, err := core.NewBasicInformation(cfg)
+	if err != nil {
+		t.Fatalf("NewBasicInformation: %v", err)
+	}
+	uidBefore, _ := b.MatterRead(0x0012)
+	serialBefore, _ := b.MatterRead(0x000F)
+
+	if err := b.SetNodeLabel("Wohnzimmer"); err != nil {
+		t.Fatalf("SetNodeLabel: %v", err)
+	}
+
+	if uidAfter, _ := b.MatterRead(0x0012); uidAfter != uidBefore {
+		t.Errorf("UniqueID changed when the persisted NodeLabel was restored: %v → %v", uidBefore, uidAfter)
+	}
+	if serialAfter, _ := b.MatterRead(0x000F); serialAfter != serialBefore {
+		t.Errorf("SerialNumber changed when the persisted NodeLabel was restored: %v → %v", serialBefore, serialAfter)
+	}
+}
+
+// TestBasicInfo_PinnedUniqueIDIsAuthoritative pins that a caller which
+// persists the UniqueID keeps it across a change of every derivation
+// input. Without the pin the attribute is only as stable as the config
+// that feeds it: renaming the bridge in the config file (or migrating the
+// derivation) hands controllers a node whose UniqueID moved, which
+// invalidates their cached accessory identity.
+func TestBasicInfo_PinnedUniqueIDIsAuthoritative(t *testing.T) {
+	t.Parallel()
+	cfg := validBasicInfoConfig()
+	cfg.SerialNumber = ""
+	// The value a first boot derived and the daemon persisted.
+	persisted := core.DeriveUniqueID(cfg.VendorID, cfg.ProductID, cfg.NodeLabel, cfg.SerialNumber)
+	if got, _ := newValidBasicInfoWithSerial(t, cfg).MatterRead(0x0012); got != persisted {
+		t.Fatalf("DeriveUniqueID = %q, want the value the cluster derives (%v) — a migration could not seed the store from it", persisted, got)
+	}
+
+	// A later boot with a renamed bridge, but the persisted value fed back.
+	renamed := cfg
+	renamed.NodeLabel = "Wohnzimmer"
+	renamed.UniqueID = persisted
+	b, err := core.NewBasicInformation(renamed)
+	if err != nil {
+		t.Fatalf("NewBasicInformation: %v", err)
+	}
+	if got, _ := b.MatterRead(0x0012); got != persisted {
+		t.Errorf("UniqueID = %v, want the persisted %q — the attribute is quality F and must not follow the label", got, persisted)
+	}
+	want := persisted[:16]
+	if got, _ := b.MatterRead(0x000F); got != want {
+		t.Errorf("SerialNumber = %v, want the pinned-UniqueID slice %q", got, want)
+	}
+}
+
+// TestBasicInfo_PinnedUniqueIDValidation pins the constraint a verbatim
+// wire value has to satisfy: UniqueID is capped at 32 UTF-8 bytes
+// (Matter §11.1.5.13), so a longer pinned value must be refused at
+// construction rather than put on the wire.
+func TestBasicInfo_PinnedUniqueIDValidation(t *testing.T) {
+	t.Parallel()
+	cfg := validBasicInfoConfig()
+	cfg.UniqueID = strings.Repeat("a", 33)
+	if _, err := core.NewBasicInformation(cfg); err == nil {
+		t.Error("NewBasicInformation accepted a UniqueID above the 32-byte ceiling")
+	}
+	cfg.UniqueID = strings.Repeat("a", 32)
+	if _, err := core.NewBasicInformation(cfg); err != nil {
+		t.Errorf("NewBasicInformation rejected a UniqueID at the ceiling: %v", err)
+	}
+}
+
+// newValidBasicInfoWithSerial builds a cluster from cfg, failing the test
+// on a construction error.
+func newValidBasicInfoWithSerial(t *testing.T, cfg core.Config) *core.BasicInformation {
+	t.Helper()
+	b, err := core.NewBasicInformation(cfg)
+	if err != nil {
+		t.Fatalf("NewBasicInformation: %v", err)
+	}
+	return b
+}

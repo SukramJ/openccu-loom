@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -185,5 +186,87 @@ func TestNewAccessPermissionNilWhenFieldsAbsent(t *testing.T) {
 	}))
 	if ap := NewAccessPermission(ch); ap != nil {
 		t.Fatal("NewAccessPermission returned non-nil with ACCESS_AUTHORIZATION absent")
+	}
+}
+
+// TestAccessPermissionIsSlottedAndDiscoverable pins the north-bound
+// surface. Both wire data points behind this custom DP are invisible on
+// their own — STATE is suppressed on a custom-DP channel and
+// ACCESS_AUTHORIZATION is forced to no_create — so a permission that is
+// neither slotted nor discoverable reaches no plane at all: the event
+// bridge drops it at its payload.Slotted assertion and MQTT discovery at
+// its HADiscoveryPayloadBuilder assertion.
+func TestAccessPermissionIsSlottedAndDiscoverable(t *testing.T) {
+	ap, _, _ := newTestAccessPermission(t, "VCU0002:2", &stubWriter{})
+	if ap == nil {
+		t.Fatal("NewAccessPermission returned nil")
+	}
+
+	var slotted payload.Slotted = ap
+	slot := slotted.TopicSlot()
+	if slot.Address != "VCU0002" || slot.Channel != 2 {
+		t.Errorf("TopicSlot address/channel = %q/%d, want VCU0002/2", slot.Address, slot.Channel)
+	}
+	if slot.Bucket != payload.BucketCustom {
+		t.Errorf("TopicSlot bucket = %v, want custom", slot.Bucket)
+	}
+	if slot.Parameter == "" {
+		t.Error("TopicSlot parameter must not be empty")
+	}
+
+	var entity payload.HAEntity = ap
+	if got := entity.HAComponent(); got != "switch" {
+		t.Errorf("HAComponent = %q, want switch", got)
+	}
+
+	ctx := &stubDiscoveryCtx{customStateTopic: "state/custom"}
+	component, body := ap.HADiscoveryPayload(ctx)
+	if component != "switch" {
+		t.Fatalf("component = %q, want switch", component)
+	}
+	if v, _ := body["state_topic"].(string); v != ctx.CustomDPStateTopic() {
+		t.Errorf("state_topic = %q, want the custom-DP aggregate topic", v)
+	}
+	cmd, _ := body["command_topic"].(string)
+	if cmd != ctx.ServiceMethodCommandTopic(serviceAccessPermission) {
+		t.Errorf("command_topic = %q, want the service-method topic", cmd)
+	}
+}
+
+// TestAccessPermissionHACommandGrantsAndRevokes crosses the seam the
+// discovery payload names: the payloads it advertises, fed through the
+// invoke path the MQTT bridge uses, must reach the wire.
+func TestAccessPermissionHACommandGrantsAndRevokes(t *testing.T) {
+	cases := []struct {
+		name      string
+		bodyKey   string
+		wantLabel string
+	}{
+		{"grant", "payload_on", accessAuthorizationEnable},
+		{"revoke", "payload_off", accessAuthorizationDisable},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &stubWriter{}
+			ap, state, _ := newTestAccessPermission(t, "VCU0002:2", w)
+			if ap == nil {
+				t.Fatal("NewAccessPermission returned nil")
+			}
+			// Observe the opposite value so the state-change gate lets the
+			// command through.
+			state.OnEvent(tc.wantLabel == accessAuthorizationDisable)
+
+			_, body := ap.HADiscoveryPayload(&stubDiscoveryCtx{customStateTopic: "state/custom"})
+			arg, _ := body[tc.bodyKey].(string)
+			err := ap.Invoke(context.Background(), serviceAccessPermission,
+				map[string]any{argAccessPermission: arg}, hmenum.CommandPriorityHigh)
+			if err != nil {
+				t.Fatalf("invoke %s(%s=%q): %v", serviceAccessPermission, argAccessPermission, arg, err)
+			}
+			if w.lastParm != hmenum.ParameterAccessAuthorization || w.lastVal != tc.wantLabel {
+				t.Errorf("wire write = %s=%v, want ACCESS_AUTHORIZATION=%s",
+					w.lastParm, w.lastVal, tc.wantLabel)
+			}
+		})
 	}
 }

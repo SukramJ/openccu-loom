@@ -128,9 +128,11 @@ func privacyHeaderEnd(buf []byte) int {
 // final wire bytes (header || ciphertext || MIC); this helper masks
 // the privacy-protected header suffix in place.
 //
-// Outbound Privacy is opt-in per session — currently no bridge code
-// path sets the P bit, so this helper is reachable only via tests
-// and a future negotiation hook.
+// Called from the secure reply path in reply.go: the response header
+// echoes the request's Privacy flag, so a peer that sends
+// privacy-protected unicast gets a reply whose header suffix is masked
+// as the P bit announces. Ordinary traffic clears the bit and the
+// helper returns immediately.
 func applyOutboundPrivacy(sess *channel.Session, sessionID uint16, datagram []byte) error {
 	if sess == nil || len(datagram) < 4 {
 		return nil

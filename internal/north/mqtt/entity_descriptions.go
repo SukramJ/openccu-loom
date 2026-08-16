@@ -31,7 +31,7 @@ type EntityDescription struct {
 	StateClass string
 
 	// UnitOfMeasurement overrides the CCU-reported unit. Used for
-	// quantities the CCU sends with non-SI units (mHz, μm).
+	// quantities the CCU sends with non-SI units (mHz, µm).
 	UnitOfMeasurement string
 
 	// EntityCategory is HA's classification of the entity ("config",
@@ -59,10 +59,18 @@ const (
 	EntityCategoryDiagnostic = "diagnostic"
 )
 
+// Unit spellings that carry a prefix Unicode encodes twice. Every one of
+// them uses U+00B5 MICRO SIGN, never U+03BC GREEK SMALL LETTER MU: the
+// consumer compares the advertised unit against its own canonical string
+// for the device class, and rejects the whole entity config when the two
+// differ — a PM sensor published with the Greek letter never appears at
+// all. The same spelling is what the domain model normalises CCU units to,
+// so the discovery override and the raw plane agree.
 const (
 	unitConcentrationCm3     = "1/cm³"
 	unitConcentrationGramsM3 = "g/m³"
-	unitMicrometers          = "µm" // U+00B5 MICRO SIGN
+	unitMicrogramsPerM3      = "µg/m³"
+	unitMicrometers          = "µm"
 )
 
 // devParam is the composite key for device-and-parameter lookups

@@ -63,7 +63,7 @@ func newDCForW10(t *testing.T) (*DeviceCoordinator, *events.Bus, *registry.Devic
 	devs := registry.NewDeviceRegistry()
 	descs := registry.NewDeviceDescriptionRegistry()
 	psets := registry.NewParamsetRegistry()
-	dc := NewDeviceCoordinator("c1", bus, devs, descs, psets, nil)
+	dc := NewDeviceCoordinator("c1", bus, devs, descs, psets, nil, nil)
 	return dc, bus, devs, descs
 }
 

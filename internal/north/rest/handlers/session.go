@@ -4,6 +4,8 @@
 package handlers
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -186,10 +188,19 @@ func HeartbeatEditSession(s *EditSessions) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Session locks unavailable", ""))
 			return
 		}
+		// An absent body decodes to io.EOF. It is not malformed JSON, so
+		// it is reported as the missing key it is rather than as a parse
+		// failure.
 		var req EditSessionResponse
-		if err := DecodeJSON(r, &req); err != nil {
+		if err := DecodeJSON(r, &req); err != nil && !errors.Is(err, io.EOF) {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.Key == "" {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "key required",
+					"send the key and token of the session to refresh"))
 			return
 		}
 		lock, ok := s.Heartbeat(req.Key, req.Token)
@@ -235,10 +246,19 @@ func CloseEditSession(s *EditSessions) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Session locks unavailable", ""))
 			return
 		}
+		// An absent body decodes to io.EOF. Answering 204 for it would
+		// claim a lock was released while it stays held until its TTL
+		// expires, so the missing key is reported instead.
 		var req EditSessionResponse
-		if err := DecodeJSON(r, &req); err != nil {
+		if err := DecodeJSON(r, &req); err != nil && !errors.Is(err, io.EOF) {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.Key == "" {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "key required",
+					"send the key and token of the session to close"))
 			return
 		}
 		s.Close(req.Key, req.Token)

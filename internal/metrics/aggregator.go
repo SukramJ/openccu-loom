@@ -7,6 +7,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // Observer accumulates metric events published on the event bus and
@@ -241,6 +243,13 @@ func NewAggregator(centralName string, observer *Observer, opts ...AggregatorOpt
 // CentralName returns the CCU name this aggregator is scoped to.
 func (a *Aggregator) CentralName() string { return a.centralName }
 
+// Observer returns the observation sink this aggregator reads from. It is
+// the write end of every section the aggregator renders from counters,
+// gauges and latency samples, so producers that are constructed after the
+// aggregator (the shared callback listeners, most notably) can reach the
+// right central's sink through the central registry.
+func (a *Aggregator) Observer() *Observer { return a.observer }
+
 // RPC returns aggregated outbound RPC metrics.
 func (a *Aggregator) RPC() RpcMetrics {
 	failedRequests := a.observer.AggregatedCounter("circuit.failure.")
@@ -385,17 +394,18 @@ func (a *Aggregator) Events() EventMetrics {
 		AvgHandlerDurationMs: avgHandlerDurationMs,
 		MaxHandlerDurationMs: maxHandlerDurationMs,
 		EventsByType:         stats,
-		CircuitBreakerTrips:  stats["client.circuit_breaker_state_changed"],
-		StateChanges:         stats["client.state_changed"] + stats["central.state_changed"],
+		CircuitBreakerTrips:  eventCount(stats, hmevent.EventTypeCircuitBreakerStateChanged),
+		StateChanges: eventCount(stats, hmevent.EventTypeClientStateChanged) +
+			eventCount(stats, hmevent.EventTypeCentralStateChanged),
 		// The scheduler's background refresh job publishes both halves
 		// on the same bus as every counter above. Leaving them unread
 		// made the dump report "no background refresh ever ran" next to
 		// sibling fields carrying real counts.
-		DataRefreshesTriggered: stats["scheduler.refresh_triggered"],
-		DataRefreshesCompleted: stats["scheduler.refresh_completed"],
-		ProgramsExecuted:       stats["hub.program_executed"],
-		RequestsCoalesced:      stats["client.request_coalesced"],
-		HealthRecords:          stats["health.recorded"],
+		DataRefreshesTriggered: eventCount(stats, hmevent.EventTypeDataRefreshTriggered),
+		DataRefreshesCompleted: eventCount(stats, hmevent.EventTypeDataRefreshCompleted),
+		ProgramsExecuted:       eventCount(stats, hmevent.EventTypeProgramExecuted),
+		RequestsCoalesced:      eventCount(stats, hmevent.EventTypeRequestCoalesced),
+		HealthRecords:          eventCount(stats, hmevent.EventTypeConnectionHealthChanged),
 	}
 }
 
@@ -467,6 +477,14 @@ func (a *Aggregator) Recovery() RecoveryMetrics {
 		}
 		if !st.CanRetry() {
 			maxRetriesReached++
+		}
+		// The newest attempt across all interfaces answers "when did
+		// recovery last run" for the central as a whole.
+		if ts, ok := st.(RecoveryStateTimestamps); ok {
+			if at := ts.LastAttempt(); !at.IsZero() && (lastRecoveryTime == nil || at.After(*lastRecoveryTime)) {
+				cp := at
+				lastRecoveryTime = &cp
+			}
 		}
 	}
 
@@ -579,6 +597,17 @@ func (a *Aggregator) Snapshot(_ context.Context) MetricsSnapshot {
 		Model:     a.Model(),
 		Services:  a.Services(),
 	}
+}
+
+// eventCount reads one event type's publish count out of the bus snapshot.
+//
+// It takes the typed constant rather than a string so a key that names no
+// event cannot compile. The field it was introduced for read
+// "health.recorded", which is not an event type at all, so the diagnostics
+// dump reported zero health records however many the tracker had made — and
+// nothing failed, because a missing map key and a genuine zero look the same.
+func eventCount(stats map[string]int, t hmevent.EventType) int {
+	return stats[string(t)]
 }
 
 // sumMapValues sums all int values of a map.

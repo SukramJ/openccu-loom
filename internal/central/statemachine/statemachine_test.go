@@ -246,6 +246,7 @@ func TestCentralAllLegalTransitions(t *testing.T) {
 		{"Initializing→Stopped", []hmenum.CentralState{hmenum.CentralStateInitializing}, hmenum.CentralStateStopped},
 		// From Running
 		{"Running→Degraded", []hmenum.CentralState{hmenum.CentralStateInitializing, hmenum.CentralStateRunning}, hmenum.CentralStateDegraded},
+		{"Running→Failed", []hmenum.CentralState{hmenum.CentralStateInitializing, hmenum.CentralStateRunning}, hmenum.CentralStateFailed},
 		{"Running→Recovering", []hmenum.CentralState{hmenum.CentralStateInitializing, hmenum.CentralStateRunning}, hmenum.CentralStateRecovering},
 		{"Running→Stopped", []hmenum.CentralState{hmenum.CentralStateInitializing, hmenum.CentralStateRunning}, hmenum.CentralStateStopped},
 		// From Degraded

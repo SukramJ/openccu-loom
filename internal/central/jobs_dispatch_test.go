@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
-// jobs_a4_l24_test.go covers parity item// the devices_created gate for Hub-level scheduler jobs.
+// Covers the devices_created gate for hub-level scheduler jobs.
 
 package central
 
@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -55,6 +57,33 @@ func TestWireDevicesCreatedGateOpenedByEvent(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 	t.Error("IsDevicesCreated did not become true after DeviceCreatedEvent")
+}
+
+// TestIsDevicesCreatedTrueWhenTheModelHoldsDevices pins that the gate opens
+// on the fact, not only on the announcement. The ingest pipeline materialises
+// a whole interface without publishing one DeviceCreatedEvent per device, so
+// a gate that waited for the event alone would hold every gated hub job back
+// on a central whose devices are all present.
+func TestIsDevicesCreatedTrueWhenTheModelHoldsDevices(t *testing.T) {
+	c, err := New(Config{Name: "test-dcg-model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.WireDevicesCreatedGate()
+	if c.IsDevicesCreated() {
+		t.Fatal("gate must be closed while the model is empty")
+	}
+
+	c.ModelRegistry.Put(device.New(device.Config{
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "GATE0001",
+		Model:       "HmIP-PS",
+		InterfaceID: "test-dcg-model-HmIP-RF",
+	}))
+
+	if !c.IsDevicesCreated() {
+		t.Error("gate must be open once the model holds devices")
+	}
 }
 
 // TestIsDevicesCreatedTrueWithoutGate verifies that IsDevicesCreated

@@ -6,6 +6,8 @@ package light
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strconv"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -105,6 +107,116 @@ func onOff(on bool) string {
 	return "OFF"
 }
 
+// toNumber coerces JSON-decoded numerics to float64. JSON numbers always
+// decode to float64, but callers (REST handlers, test fakes) may pass
+// int / int32 / int64 directly, so be generous in what we accept.
+func toNumber(v any) (float64, error) {
+	switch x := v.(type) {
+	case float64:
+		return x, nil
+	case float32:
+		return float64(x), nil
+	case int:
+		return float64(x), nil
+	case int32:
+		return float64(x), nil
+	case int64:
+		return float64(x), nil
+	}
+	return 0, payload.ErrServiceInvalidParam
+}
+
+// hasHALightAttributes reports whether the HA JSON-schema light payload
+// carries any attribute beyond the on/off + brightness axis.
+func hasHALightAttributes(params map[string]any) bool {
+	for _, k := range []string{"color", "color_temp_kelvin", "color_temp", "effect"} {
+		if _, ok := params[k]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// haColorHS extracts HA's canonical hue/saturation pair from the `color`
+// object of a JSON-schema light command. HA emits `{"h":0-360,"s":0-100}`
+// for every light that advertises the `hs` colour mode, which is the only
+// colour mode any light type here advertises.
+func haColorHS(v any) (hue int32, saturation float64, ok bool) {
+	obj, isObj := v.(map[string]any)
+	if !isObj {
+		return 0, 0, false
+	}
+	h, hErr := toNumber(obj["h"])
+	s, sErr := toNumber(obj["s"])
+	if hErr != nil || sErr != nil {
+		return 0, 0, false
+	}
+	return int32(h), s, true
+}
+
+// haColorTempKelvin resolves the colour temperature of a JSON-schema
+// light command to kelvin. The discovery payload sets
+// `color_temp_kelvin: true`, so HA sends kelvin; the mired form is
+// accepted as well because HA falls back to it for a light that was
+// discovered before that flag existed.
+func haColorTempKelvin(params map[string]any) (int32, bool) {
+	if v, ok := params["color_temp_kelvin"]; ok {
+		if k, err := toNumber(v); err == nil && k > 0 {
+			return int32(k), true
+		}
+	}
+	if v, ok := params["color_temp"]; ok {
+		if mireds, err := toNumber(v); err == nil && mireds > 0 {
+			return int32(1e6 / mireds), true
+		}
+	}
+	return 0, false
+}
+
+// applyHALightAttributes routes the colour / colour-temperature / effect
+// keys of an HA JSON-schema light command to the service method that owns
+// each one.
+//
+// Routing rather than re-implementing is what makes this correct for
+// every light type: the concrete type (ColorLight, FixedColorLight,
+// ColorTempLight, RGBWLight, EffectLight) registers its own set_color /
+// set_kelvin / set_effect on the *same* ServiceRegistry this base type
+// carries, so the pointer-embedded chain resolves the semantics the
+// device actually has — a discrete colour slot for a FixedColorLight, a
+// HUE/SATURATION pair for a ColorLight.
+//
+// An attribute HA sends to a light whose type never registered the
+// matching method is an error, not a silent drop: the discovery payload
+// only advertises the axes the type supports, so such a command means
+// the two sides disagree and the operator has to see it.
+func (l *Light) applyHALightAttributes(
+	ctx context.Context, params map[string]any, priority hmenum.CommandPriority,
+) error {
+	if c, ok := params["color"]; ok {
+		hue, sat, valid := haColorHS(c)
+		if !valid {
+			return fmt.Errorf("%w: color must be {\"h\":…,\"s\":…}", payload.ErrServiceInvalidParam)
+		}
+		if err := l.Invoke(ctx, "set_color", map[string]any{
+			"hue":        hue,
+			"saturation": sat,
+		}, priority); err != nil {
+			return err
+		}
+	}
+	if kelvin, ok := haColorTempKelvin(params); ok {
+		if err := l.Invoke(ctx, "set_kelvin", map[string]any{"kelvin": kelvin}, priority); err != nil {
+			return err
+		}
+	}
+	if e, ok := params["effect"]; ok {
+		if err := l.Invoke(ctx, "set_effect", map[string]any{"effect": e}, priority); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // registerLightServices registers the base light service methods (turn_on,
 // turn_off, set_level) onto the ServiceRegistry inherited from
 // *generic.Float.
@@ -115,52 +227,55 @@ func (l *Light) registerLightServices() {
 	l.RegisterService("turn_off", func(ctx context.Context, _ map[string]any, priority hmenum.CommandPriority) error {
 		return l.TurnOff(ctx, priority)
 	})
-	// toFloat64 coerces JSON-decoded numerics to float64. JSON
-	// numbers always decode to float64, but callers (REST handlers,
-	// test fakes) may pass int / int32 / int64 directly, so be
-	// generous in what we accept.
-	toFloat64 := func(v any) (float64, error) {
-		switch x := v.(type) {
-		case float64:
-			return x, nil
-		case float32:
-			return float64(x), nil
-		case int:
-			return float64(x), nil
-		case int32:
-			return float64(x), nil
-		case int64:
-			return float64(x), nil
-		}
-		return 0, payload.ErrServiceInvalidParam
-	}
 	l.RegisterServiceWithArg("set_level", "level", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
-		// `set_level` accepts three payload shapes — the HA-Discovery builder
-		// advertises this method as the Light's `command_topic`, so HA's
-		// `mqtt-light schema=json` component sends the rich form:
+		// `set_level` accepts several payload shapes — the HA-Discovery
+		// builder advertises this method as the Light's single
+		// `command_topic`, so HA's `mqtt-light schema=json` component
+		// sends the rich form, one object per user action:
 		//
-		// {"state":"ON","brightness":<0-255>}  — turn on at brightness
-		// {"state":"OFF"}                      — turn off {"brightness":<0-255>}
-		// — set brightness only {"level":<0-1>}                      — legacy
-		// scalar form
+		//	{"state":"ON","brightness":<0-255>}     — turn on at brightness
+		//	{"state":"OFF"}                         — turn off
+		//	{"brightness":<0-255>}                  — set brightness only
+		//	{"state":"ON","color":{"h":H,"s":S}}    — pick a colour
+		//	{"state":"ON","color_temp_kelvin":K}    — pick a colour temperature
+		//	{"state":"ON","effect":"<label>"}       — pick an effect
+		//	{"level":<0-1>}                         — legacy scalar form
+		//
+		// The colour / colour-temperature / effect keys travel on the same
+		// topic as on/off and brightness, so this handler has to apply them
+		// as well: dropping them makes an HA colour pick silently do
+		// nothing but toggle the lamp.
 		if state, ok := params["state"]; ok {
 			s, _ := state.(string)
 			switch s {
 			case "OFF", "off", "Off":
+				// Colour / effect keys are irrelevant for a switch-off.
 				return l.TurnOff(ctx, priority)
 			case "ON", "on", "On":
 				if br, hasBr := params["brightness"]; hasBr {
-					if f, err := toFloat64(br); err == nil {
-						return l.SetLevel(ctx, f/255.0, priority)
+					if f, err := toNumber(br); err == nil {
+						if err := l.SetLevel(ctx, f/255.0, priority); err != nil {
+							return err
+						}
+						return l.applyHALightAttributes(ctx, params, priority)
 					}
 				}
-				return l.TurnOn(ctx, priority)
+				if err := l.TurnOn(ctx, priority); err != nil {
+					return err
+				}
+				return l.applyHALightAttributes(ctx, params, priority)
 			}
 		}
 		if br, hasBr := params["brightness"]; hasBr {
-			if f, err := toFloat64(br); err == nil {
-				return l.SetLevel(ctx, f/255.0, priority)
+			if f, err := toNumber(br); err == nil {
+				if err := l.SetLevel(ctx, f/255.0, priority); err != nil {
+					return err
+				}
+				return l.applyHALightAttributes(ctx, params, priority)
 			}
+		}
+		if hasHALightAttributes(params) {
+			return l.applyHALightAttributes(ctx, params, priority)
 		}
 		// Legacy scalar form: {"level": 0.5}.
 		v, err := payload.ParamFloat64(params, "level")
@@ -349,6 +464,22 @@ func (l *FixedColorLight) State() payload.StatePayload {
 // on top of the base light service methods.
 func (l *FixedColorLight) registerFixedColorLightServices() {
 	l.RegisterServiceWithArg("set_color", "color", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		// The HA JSON-schema form carries a free hue/saturation pair
+		// because the discovery payload projects the discrete colour slot
+		// onto HA's `hs` colour mode; snap it onto the nearest slot the
+		// hardware actually has. The index form stays for REST/SPA
+		// callers that pick a slot directly.
+		if _, hasHue := params["hue"]; hasHue {
+			hue, err := payload.ParamInt32(params, "hue")
+			if err != nil {
+				return err
+			}
+			sat, err := payload.ParamFloat64(params, "saturation")
+			if err != nil {
+				return err
+			}
+			return l.SetColor(ctx, HSToFixedColor(hue, sat), priority)
+		}
 		v, err := payload.ParamInt32(params, "color")
 		if err != nil {
 			return err
@@ -415,6 +546,28 @@ func (l *EffectLight) State() payload.StatePayload {
 // color light service methods.
 func (l *EffectLight) registerEffectLightServices() {
 	l.RegisterServiceWithArg("set_effect", "effect", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		// "effect" is the key this method advertises — as its scalar-arg
+		// key and in [EffectLight.LocalisableSelections] — so it has to be
+		// the key it accepts. Home Assistant picks an effect by label, the
+		// bare-scalar MQTT form arrives as a numeric string, and REST/SPA
+		// callers pass the index; all three resolve here.
+		if raw, ok := params["effect"]; ok {
+			if label, isStr := raw.(string); isStr {
+				if slices.Contains(l.Effects(), label) {
+					return l.SetEffectByLabel(ctx, label, priority)
+				}
+				idx, err := strconv.ParseInt(label, 10, 32)
+				if err != nil {
+					return fmt.Errorf("effectlight: unknown effect label %q", label)
+				}
+				return l.SetEffect(ctx, int32(idx), priority)
+			}
+			v, err := payload.ParamInt32(params, "effect")
+			if err != nil {
+				return err
+			}
+			return l.SetEffect(ctx, v, priority)
+		}
 		v, err := payload.ParamInt32(params, "effect_index")
 		if err != nil {
 			return err

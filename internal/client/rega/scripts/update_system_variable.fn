@@ -2,7 +2,7 @@
 !# Params: ##name##  (target sysvar name)
 !#         ##newname## (optional new name; "" leaves the name unchanged)
 !#         ##unit##  (optional unit string; "" leaves untouched)
-!#         ##min##   / ##max## (FLOAT/INTEGER bounds; "" untouched)
+!#         ##min##   / ##max## (FLOAT/INTEGER bounds; "" untouched — see below)
 !#         ##values## (semicolon-separated ENUM keys; "" untouched)
 !#         ##description## (optional description text; "" untouched)
 !#         ##valuename0## / ##valuename1## (BOOL/ALARM false/true labels; "" untouched)
@@ -19,6 +19,12 @@
 !# `SysVar.deleteSysVarByName`) and recreate (JSON-RPC
 !# `SysVar.createBool/createFloat/createEnum` or the
 !# create_system_variable Rega script for INTEGER/STRING/Unit).
+!#
+!# An empty min/max means "leave the stored bound alone", and there is no
+!# third state that removes one: a numeric sysvar always carries both
+!# bounds, ValueMin/ValueMax coerce a blank argument to 0 rather than
+!# dropping the constraint, and the CCU's own WebUI writes both on every
+!# save. Callers must therefore send a replacement bound or nothing.
 
 string sName = "##name##";
 string sNewName = "##newname##";

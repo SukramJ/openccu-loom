@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/operational"
@@ -528,5 +529,45 @@ func TestSendCloseSessionReport_ForgetsPeerAddrEvenWhenTheFarewellFails(t *testi
 
 	if _, ok := b.sessionPeerAddrs.Load(sessionID); ok {
 		t.Error("peer address for the closed session survived the failed farewell")
+	}
+}
+
+// TestDiagnosticEventsRecordSessionAndDiscoveryKinds pins that the two
+// non-pairing kinds the trace declares — and the operator-facing
+// /matter/events surface promises — are actually produced. A declared
+// kind no producer ever records reads to an operator as "nothing
+// happened", which is indistinguishable from a healthy quiet bridge.
+func TestDiagnosticEventsRecordSessionAndDiscoveryKinds(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	ring := diagevent.NewRing(64)
+	b.AttachDiagnosticEvents(ring)
+
+	// A peer closing its secure session records KindSession.
+	reg := &fakeSessionRegistry{}
+	b.AttachSessionRegistry(reg)
+	closeBody := mrp.EncodeStatusReport(
+		mrp.SCStatusGeneralSuccess,
+		uint32(mrp.SecureChannelProtocolID),
+		scStatusProtocolCloseSession,
+		nil,
+	)
+	hdr := scHdr()
+	hdr.SessionID = 42
+	if err := b.dispatchSecureChannel(loopbackSrc(), hdr, scProto(mrp.SCOpcodeStatusReport, 3, false, 0), closeBody); err != nil {
+		t.Fatalf("dispatchSecureChannel(CloseSession): %v", err)
+	}
+
+	// The mDNS re-announce that follows a teardown records KindDiscovery.
+	b.triggerSessionReannounce()
+
+	kinds := map[diagevent.Kind]bool{}
+	for _, ev := range b.DiagnosticEvents() {
+		kinds[ev.Kind] = true
+	}
+	for _, want := range []diagevent.Kind{diagevent.KindSession, diagevent.KindDiscovery} {
+		if !kinds[want] {
+			t.Errorf("no %q event recorded; the kind is declared and surfaced but never produced", want)
+		}
 	}
 }

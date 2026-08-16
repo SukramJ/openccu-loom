@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -36,15 +37,44 @@ type CentralAdminService interface {
 }
 
 // maskCentralRow returns row with its cleartext CCU password replaced by
-// the mask sentinel, so a central row is safe to return in an API
-// response / log. The store decrypts password_plain on read; without this
-// mask GET /admin/centrals would leak the live CCU credential in the clear.
+// the mask sentinel, and — for a caller below [auth.RoleAdmin] — with the
+// CCU's network coordinates and account name removed as well.
+//
+// The password mask is unconditional: the store decrypts password_plain on
+// read, so without it GET /admin/centrals would hand out the live CCU
+// credential in the clear.
+//
+// The rest of the row is role-scoped because the two read routes are
+// deliberately NOT admin-gated — the energy, backup and rooms/functions
+// views need the central list, and all three read only Name, Enabled and
+// Interfaces. Everything else (host, ports, username, the TLS posture)
+// tells an authenticated viewer exactly where the CCU lives and how it is
+// reached, which is reconnaissance rather than anything those views use.
+// Gating the routes instead would break them, so the row is narrowed and
+// the routes stay open.
+//
+// An absent identity means authentication is switched off entirely; there
+// is no viewer to distinguish from an admin then, so the full row is
+// returned.
+//
 // password_env holds only the env-variable NAME (not a secret) and stays
-// visible so the operator can see which variable is referenced.
-// [restoreCentralSecret] swaps the sentinel back on write.
-func maskCentralRow(row sqlite.CentralRow) sqlite.CentralRow {
+// visible for an admin so the operator can see which variable is
+// referenced. [restoreCentralSecret] swaps the sentinel back on write.
+func maskCentralRow(ctx context.Context, row sqlite.CentralRow) sqlite.CentralRow {
 	if row.PasswordPlain != "" {
 		row.PasswordPlain = maskSentinel
+	}
+	if id, ok := auth.IdentityFrom(ctx); ok && !id.HasRole(auth.RoleAdmin) {
+		row.Host = ""
+		row.Serial = ""
+		row.Port = 0
+		row.JSONRPCPort = 0
+		row.Ports = nil
+		row.Username = ""
+		row.PasswordEnv = ""
+		row.PasswordPlain = ""
+		row.TLS = false
+		row.TLSInsecureSkipVerify = false
 	}
 	return row
 }
@@ -112,7 +142,7 @@ func ListCentrals(svc CentralAdminService) http.HandlerFunc {
 		}
 		masked := make([]sqlite.CentralRow, 0, len(rows))
 		for i := range rows {
-			masked = append(masked, maskCentralRow(rows[i]))
+			masked = append(masked, maskCentralRow(r.Context(), rows[i]))
 		}
 		JSON(w, http.StatusOK, masked)
 	}
@@ -138,7 +168,7 @@ func GetCentral(svc CentralAdminService) http.HandlerFunc {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central lookup failed", err)
 			return
 		}
-		JSON(w, http.StatusOK, maskCentralRow(row))
+		JSON(w, http.StatusOK, maskCentralRow(r.Context(), row))
 	}
 }
 
@@ -191,7 +221,7 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				Note:   "name=" + row.Name,
 			})
 		}
-		JSON(w, http.StatusCreated, maskCentralRow(row))
+		JSON(w, http.StatusCreated, maskCentralRow(r.Context(), row))
 	}
 }
 

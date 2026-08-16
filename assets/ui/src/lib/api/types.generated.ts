@@ -572,6 +572,7 @@ export interface paths {
                 };
                 400: components["responses"]["BadRequest"];
                 404: components["responses"]["NotFound"];
+                423: components["responses"]["Locked"];
                 502: components["responses"]["BadGateway"];
                 503: components["responses"]["ServiceUnavailable"];
             };
@@ -2722,6 +2723,12 @@ export interface paths {
          *     BidCos-Wired); VirtualDevices and CUxD answer 422. Consult
          *     `DeviceSummary.communication_test_supported` before offering the
          *     action.
+         *
+         *     A device that does not answer is a **200** carrying
+         *     `timed_out: true`, not an error: the poll runs on the request
+         *     deadline minus a two-second response margin, and when that budget
+         *     elapses first the daemon reports the un-answered test as the result
+         *     it is. 502 is reserved for a genuine upstream failure.
          */
         post: operations["testDeviceCommunication"];
         delete?: never;
@@ -3890,7 +3897,10 @@ export interface paths {
         put?: never;
         /** Acquire a 5-min edit lock on a resource key */
         post: operations["openEditSession"];
-        /** Release an edit lock */
+        /**
+         * Release an edit lock
+         * @description Names the session to release. A body without `key` — or no body at all — is rejected 422 rather than answered 204, because a 204 would claim a lock was released while it stays held until its TTL expires. A `token` that does not hold the lock leaves it in place and still answers 204.
+         */
         delete: operations["closeEditSession"];
         options?: never;
         head?: never;
@@ -3906,7 +3916,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Refresh an edit lock's TTL */
+        /**
+         * Refresh an edit lock's TTL
+         * @description Names the session to refresh. A body without `key` — or no body at all — is rejected 422. A `key`/`token` pair that no longer holds a live lock answers 410.
+         */
         post: operations["heartbeatEditSession"];
         delete?: never;
         options?: never;
@@ -4531,7 +4544,10 @@ export interface paths {
         };
         /** Read the persisted startup-capture toggle (admin-only) */
         get: operations["getStartupCapture"];
-        /** Persist the startup-capture toggle (admin-only) */
+        /**
+         * Persist the startup-capture toggle (admin-only)
+         * @description Takes effect on the next daemon boot — pair it with `POST /system/restart` for an end-to-end "capture the bootstrap" workflow. Unknown properties are rejected: a body the daemon cannot fully interpret must not silently configure what it records about itself.
+         */
         put: operations["putStartupCapture"];
         post?: never;
         delete?: never;
@@ -4704,7 +4720,7 @@ export interface paths {
         };
         /**
          * Recent Matter pairing, session and discovery events
-         * @description A bounded, in-memory trace of the moments that explain a failed pairing — a commissioner refused while another was mid-handshake, a commissioning window revoked after repeated failures, a session closed. The existing Matter diagnostics report state and therefore cannot answer "what happened thirty seconds ago", which is the question left after a controller gives up and goes quiet.
+         * @description A bounded, in-memory trace of the moments that explain a failed pairing — a commissioner refused while another was mid-handshake, pairing locked after repeated failed attempts, a session closed. The existing Matter diagnostics report state and therefore cannot answer "what happened thirty seconds ago", which is the question left after a controller gives up and goes quiet.
          *
          *     The trace is lossy by design: oldest entries are dropped to make room, and it does not survive a restart. It is a diagnostic, not an audit trail.
          */
@@ -5171,7 +5187,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke an API token by fingerprint (admin) */
+        /**
+         * Revoke an API token by fingerprint (admin)
+         * @description The revocation reaches both planes. REST stops immediately because every request re-resolves the credential; the WebSocket connections the token opened are closed as part of this call, because a socket resolves its identity once at the upgrade and would otherwise keep the revoked token's role until the client happened to reconnect.
+         */
         delete: operations["deleteTokenV2"];
         options?: never;
         head?: never;
@@ -5185,7 +5204,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all configured centrals */
+        /**
+         * List all configured centrals
+         * @description Open to any authenticated identity, because the energy, backup and rooms/functions views need the central list — but the row is narrowed below the admin role. A non-admin caller receives `name`, `enabled` and `interfaces`; `host` comes back empty and `serial`, `port`, `json_rpc_port`, `ports`, `username`, `password_env` and both TLS flags are omitted. Those fields say where the CCU lives and how it is reached, which none of the lower-privileged views use.
+         */
         get: operations["listCentrals"];
         put?: never;
         /** Create a new central (admin) */
@@ -5265,7 +5287,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Get a single central by name */
+        /**
+         * Get a single central by name
+         * @description Open to any authenticated identity, and narrowed below the admin role exactly as `GET /centrals` is — see that operation for which fields a non-admin caller does and does not receive.
+         */
         get: operations["getCentral"];
         /** Replace a central (admin) */
         put: operations["putCentral"];
@@ -5950,12 +5975,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description The stored startup-capture toggle as the daemon reports it. Every field is always present in responses; the write shape with its omitted-key semantics is `StartupCaptureConfigWrite`. */
         StartupCaptureConfig: {
             /** @description When true, the daemon opens a diagnostics capture at boot. */
             enabled: boolean;
             /** @description Duration of the boot-time capture. Zero falls back to the default (300 s). */
             duration_seconds: number;
-            /** @description Whether to hash device-address-shaped values in the recorded archive. */
+            /** @description Whether device-address-shaped values in the recorded archive are hashed. Responses always carry the effective value. */
+            anonymise: boolean;
+        };
+        /** @description Write shape of the startup-capture toggle. `anonymise` may be omitted and then means true — the boot capture has no later chance to ask, so an unstated preference must not end up archiving raw device addresses. */
+        StartupCaptureConfigWrite: {
+            /** @description When true, the daemon opens a diagnostics capture at boot. */
+            enabled: boolean;
+            /** @description Duration of the boot-time capture. Zero falls back to the default (300 s). */
+            duration_seconds: number;
+            /**
+             * @description Whether to hash device-address-shaped values in the recorded archive. Omitting the key means true; send `false` explicitly to switch anonymisation off.
+             * @default true
+             */
             anonymise: boolean;
         };
         /**
@@ -7671,8 +7709,12 @@ export interface components {
             fabric_index: number;
             /** Format: int64 */
             fabric_id: number;
+            /** @description The exact 64-bit fabric id as 16 uppercase hex digits. A JSON number carries only 53 bits of integer precision, so a client that renders `fabric_id` shows rounded low digits for any id above 2^53. Render this field. */
+            fabric_id_hex: string;
             /** Format: int64 */
             node_id: number;
+            /** @description The exact 64-bit operational node id as 16 uppercase hex digits, in the form controllers and chip-tool print it. Render this field rather than `node_id`, which loses precision in transport. */
+            node_id_hex: string;
             vendor_id: number;
             /** @description Human-readable name of the controller vendor behind vendor_id (e.g. "Apple", "Google"). A vendor the daemon has no name for renders as its id in `0xNNNN` form rather than an empty string, so the row still identifies the controller. */
             vendor_name?: string;
@@ -9175,7 +9217,7 @@ export interface components {
              *     request, subscription and payload for this CCU.
              */
             name: string;
-            /** @description CCU hostname or IP address. */
+            /** @description CCU hostname or IP address. Present but empty on the two read operations when the caller is below the admin role; the sibling connection fields are omitted outright there. */
             host: string;
             /** @description CCU hardware serial, set when the central is adopted from SSDP/UPnP discovery. Empty for YAML / manually-entered rows. Lets discovery mark a CCU "already configured" by serial regardless of its host. */
             serial?: string;
@@ -9555,6 +9597,11 @@ export interface components {
             bytes: number;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description Identifies a live edit session on the heartbeat and close routes. The token is what proves ownership; a request that omits it is accepted syntactically but cannot refresh or release the lock. */
+        EditSessionRequest: {
+            key: string;
+            token: string;
         };
         /** @description Lock state returned on open and heartbeat. */
         EditSessionResponse: {
@@ -10300,7 +10347,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description The resource is locked by an edit session and the request did not present a valid X-Edit-Token that currently holds that lock. */
+        /** @description The write was refused by a lock, not by the CCU — nothing reached the wire and a retry cannot help until the lock is lifted. Either the resource is held by an edit session and the request did not present a valid X-Edit-Token for it, or the operator has locked the channel against control writes (see `PUT /devices/{addr}/channels/{no}/flags`). */
         Locked: {
             headers: {
                 [name: string]: unknown;
@@ -14115,7 +14162,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditSessionRequest"];
+            };
+        };
         responses: {
             /** @description Released */
             204: {
@@ -14125,6 +14176,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -14135,7 +14187,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditSessionRequest"];
+            };
+        };
         responses: {
             /** @description Refreshed */
             200: {
@@ -14154,6 +14210,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            422: components["responses"]["UnprocessableEntity"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -15200,6 +15257,8 @@ export interface operations {
                     "application/json": components["schemas"]["StartupCaptureConfig"];
                 };
             };
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     putStartupCapture: {
@@ -15211,7 +15270,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StartupCaptureConfig"];
+                "application/json": components["schemas"]["StartupCaptureConfigWrite"];
             };
         };
         responses: {
@@ -15224,6 +15283,9 @@ export interface operations {
                     "application/json": components["schemas"]["StartupCaptureConfig"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     systemRestart: {
@@ -15242,7 +15304,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        status?: string;
+                        /**
+                         * @description `shutdown_signalled` — this request sent the shutdown signal. `shutdown_in_progress` — a shutdown signalled less than 30 s ago is still running, so no second signal was sent; retry later if it did not complete.
+                         * @enum {string}
+                         */
+                        status?: "shutdown_signalled" | "shutdown_in_progress";
                         /** Format: date-time */
                         at?: string;
                     };
@@ -15431,6 +15497,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            500: components["responses"]["InternalError"];
             /** @description Matter bridge not enabled */
             503: {
                 headers: {
@@ -15467,6 +15534,15 @@ export interface operations {
             };
             /** @description Confirmation missing or wrong */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The reset did not complete. It may be partial: the fabrics already revoked stay revoked, and the problem detail names how many of how many were removed. Re-run to finish. */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15778,9 +15854,11 @@ export interface operations {
                 };
             };
             500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled */
+            /** @description Matter bridge not enabled, or its endpoint topology has not finished assembling yet — the latter carries a `Retry-After` header and clears on its own. */
             503: {
                 headers: {
+                    /** @description Seconds to wait before retrying, when the topology is still assembling. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -15861,9 +15939,11 @@ export interface operations {
                 };
             };
             500: components["responses"]["InternalError"];
-            /** @description Matter bridge not enabled */
+            /** @description Matter bridge not enabled, or its endpoint topology has not finished assembling yet — the latter carries a `Retry-After` header and clears on its own. */
             503: {
                 headers: {
+                    /** @description Seconds to wait before retrying, when the topology is still assembling. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -16287,7 +16367,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Central list */
+            /** @description Central list (narrowed below the admin role — see description) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -16441,7 +16521,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description OK (narrowed below the admin role — see description) */
             200: {
                 headers: {
                     [name: string]: unknown;

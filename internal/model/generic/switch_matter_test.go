@@ -77,12 +77,22 @@ func TestSwitchMatter_MatterClusterID(t *testing.T) {
 	}
 }
 
+// TestSwitchMatter_MatterRead_Unobserved pins that a not-yet-observed
+// STATE still answers the mandatory OnOff attribute with a concrete
+// boolean.
+//
+// (nil, false) makes the dispatcher answer StatusUnsupportedAttribute for
+// an attribute the device type mandates, and a controller commissioned
+// before the first CCU push reads exactly that on its initial wildcard
+// read. OnOff is not spec-nullable — matter.js OnOffCluster.ts:35
+// declares it TlvBoolean — so the pre-observation answer is OFF, the same
+// default matter.js's OnOffServer carries.
 func TestSwitchMatter_MatterRead_Unobserved(t *testing.T) {
 	t.Parallel()
 	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool, hmenum.OperationsRead))
 	v, ok := s.MatterRead(matterGenericSwitchAttrOnOff)
-	if ok || v != nil {
-		t.Errorf("unobserved: want (nil, false), got (%v, %v)", v, ok)
+	if !ok || v != false {
+		t.Errorf("unobserved: want (false, true), got (%v, %v)", v, ok)
 	}
 }
 
@@ -312,5 +322,77 @@ func TestSwitchMatter_MatterAttributes(t *testing.T) {
 		if !listed[want] {
 			t.Errorf("attribute 0x%04X not listed; got %v", want, s.MatterAttributes())
 		}
+	}
+}
+
+// TestSwitchMatter_LTWritesAcceptDecodedUint64 pins the type the IM
+// layer actually delivers: the bridge decodes every unsigned TLV integer
+// to uint64, so a uint16/uint8 assertion rejected every write a real
+// controller sent for the three LT attributes the FeatureMap advertises
+// as writable.
+func TestSwitchMatter_LTWritesAcceptDecodedUint64(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	cases := []struct {
+		name  string
+		attr  uint32
+		write any
+		want  any
+	}{
+		{"OnTime", matterGenericSwitchAttrOnTime, uint64(42), uint16(42)},
+		{"OffWaitTime", matterGenericSwitchAttrOffWaitTime, uint64(7), uint16(7)},
+		{"StartUpOnOff", matterGenericSwitchAttrStartUpOnOff, uint64(1), uint8(1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
+				hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
+			if err := s.MatterWrite(ctx, tc.attr, tc.write, hmenum.CommandPriorityHigh); err != nil {
+				t.Fatalf("write %s: %v", tc.name, err)
+			}
+			if v, _ := s.MatterRead(tc.attr); v != tc.want {
+				t.Errorf("%s after write: got %v (%T), want %v", tc.name, v, v, tc.want)
+			}
+		})
+	}
+}
+
+// TestSwitchMatter_AcceptedCommandsMatchInvoke pins that every command
+// MatterInvoke handles is advertised in AcceptedCommandList. Without the
+// lister the dispatcher answers an empty list, so a controller that
+// derives write capability from it renders a plug it believes it cannot
+// command.
+func TestSwitchMatter_AcceptedCommandsMatchInvoke(t *testing.T) {
+	t.Parallel()
+	s := NewSwitch(baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
+		hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
+	s.Writer = &stubWriter{}
+
+	want := []uint32{
+		matterGenericSwitchCmdOff,
+		matterGenericSwitchCmdOn,
+		matterGenericSwitchCmdToggle,
+		matterGenericSwitchCmdOffWithEffect,
+		matterGenericSwitchCmdOnWithRecallGlobalScene,
+		matterGenericSwitchCmdOnWithTimedOff,
+	}
+	got := s.MatterAcceptedCommands()
+	if len(got) != len(want) {
+		t.Fatalf("MatterAcceptedCommands = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("MatterAcceptedCommands = %v, want %v", got, want)
+		}
+	}
+	// Each advertised command must actually dispatch.
+	for _, cmd := range got {
+		if _, err := s.MatterInvoke(t.Context(), cmd, nil, hmenum.CommandPriorityHigh); err != nil {
+			t.Errorf("advertised command 0x%02X is rejected: %v", cmd, err)
+		}
+	}
+	if s.MatterGeneratedCommands() != nil {
+		t.Error("OnOff commands carry no response payload")
 	}
 }

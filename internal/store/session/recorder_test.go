@@ -55,20 +55,61 @@ func TestRecorderIsActiveAfterStop(t *testing.T) {
 // StartSession / — StopSession
 // ---------------------------------------------------------------------------
 
-func TestRecorderStartSessionIdempotent(t *testing.T) {
+// TestRecorderStartSessionRefusesToWipeAnInFlightTrace pins the guard
+// StartSession documents. Nothing used to mark the recorder as recording, so
+// the guard never fired: a second start silently discarded everything captured
+// so far, and Metadata reported is_recording:false throughout an active
+// recording.
+func TestRecorderStartSessionRefusesToWipeAnInFlightTrace(t *testing.T) {
 	t.Parallel()
 	r := New(Config{})
-	ok1 := r.StartSession()
-	if !ok1 {
+	if !r.StartSession() {
 		t.Fatal("first StartSession must return true")
 	}
-	// A second Start while isRecording is set returns false.
-	// isRecording is only set by timed activation; regular StartSession
-	// always returns true if already active (it just resets data).
-	// But if already recording, StartSession returns false.
-	// Since StartSession doesn't set isRecording, calling it twice is OK.
-	ok2 := r.StartSession()
-	_ = ok2 // second call clears data; return value may be true or false
+	if got := r.Metadata()["is_recording"]; got != true {
+		t.Errorf("is_recording=%v during an active session, want true", got)
+	}
+
+	r.RecordRequest(RPCTypeXML, "getValue", []any{"ADDR:1", "STATE"})
+	r.RecordResponse(RPCTypeXML, "getValue", []any{"ADDR:1", "STATE"}, true)
+	before := r.Metadata()["total_entries"]
+
+	if r.StartSession() {
+		t.Error("a second StartSession during an active session must return false")
+	}
+	if after := r.Metadata()["total_entries"]; after != before {
+		t.Errorf("the in-flight trace was discarded: total_entries %v → %v", before, after)
+	}
+
+	// Stopping ends the session, so a fresh one may start and clear.
+	if !r.StopSession() {
+		t.Fatal("StopSession must return true for an active session")
+	}
+	if got := r.Metadata()["is_recording"]; got != false {
+		t.Errorf("is_recording=%v after StopSession, want false", got)
+	}
+	if !r.StartSession() {
+		t.Error("StartSession after StopSession must return true")
+	}
+	if n := r.Metadata()["total_entries"]; n != 0 {
+		t.Errorf("a new session must start empty, got total_entries=%v", n)
+	}
+}
+
+// TestRecorderResumeMarksTheSessionRecording pins the carried-over-restart
+// path: a resumed recording is a session in progress, so it reports
+// is_recording and is equally protected from being wiped by a stray start.
+func TestRecorderResumeMarksTheSessionRecording(t *testing.T) {
+	t.Parallel()
+	r := New(Config{})
+	r.RecordRequest(RPCTypeXML, "listDevices", nil)
+	r.Resume()
+	if got := r.Metadata()["is_recording"]; got != true {
+		t.Errorf("is_recording=%v after Resume, want true", got)
+	}
+	if r.StartSession() {
+		t.Error("StartSession must not wipe a resumed session")
+	}
 }
 
 func TestRecorderStopSessionIdle(t *testing.T) {

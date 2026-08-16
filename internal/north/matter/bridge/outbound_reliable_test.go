@@ -525,8 +525,8 @@ func TestArmStatusResponseWait_OrphanPreviousWaiter(t *testing.T) {
 	b := newStartedBridge(t)
 	const exch = uint16(13)
 
-	ch1 := b.armStatusResponseWait(0, exch)
-	ch2 := b.armStatusResponseWait(0, exch) // second arm → ch1 is orphaned
+	ch1 := b.armStatusResponseWait(0, exch, true)
+	ch2 := b.armStatusResponseWait(0, exch, true) // second arm → ch1 is orphaned
 
 	// ch1 must be closed by the second arm (orphan path).
 	select {
@@ -545,7 +545,7 @@ func TestArmStatusResponseWait_OrphanPreviousWaiter(t *testing.T) {
 	}
 
 	// Clean up.
-	b.disarmStatusResponseWait(0, exch)
+	b.disarmStatusResponseWait(0, exch, true)
 }
 
 // TestSubscription_CloseUnknownCounterNoOp verifies that the close
