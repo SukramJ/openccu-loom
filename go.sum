@@ -2,12 +2,6 @@ github.com/SukramJ/go-mqtt v1.2.0 h1:bYRR2Vpo2tyEt5IvFJMdMhPhDUCJpHD+Lhl2DRUfIMw
 github.com/SukramJ/go-mqtt v1.2.0/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
 github.com/SukramJ/go-openccu-data v0.1.3 h1:5nhTomKWT7rp2zFkT1GLpkhhf+fKQfmhRSsUnqOS4cE=
 github.com/SukramJ/go-openccu-data v0.1.3/go.mod h1:hDzB2WgqBuex/oNyfkCwB6mRKeJ2+TZDA8iSMkyPznQ=
-github.com/SukramJ/godevccu v0.1.10 h1:+h9hqB8b4Ebjd2oyL4lG6dcOd/Q6VKl310p/t/wsrjM=
-github.com/SukramJ/godevccu v0.1.10/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
-github.com/SukramJ/godevccu v0.2.0 h1:bFAWNMmrrWtrw6Y/YnuxiJAFstoPwhSneTyQ/xqQprE=
-github.com/SukramJ/godevccu v0.2.0/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
-github.com/SukramJ/godevccu v0.2.1 h1:TOLb3Y8t5zmA0s86aIuY0WV/azxYfHruS7rYdLePAKE=
-github.com/SukramJ/godevccu v0.2.1/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
 github.com/SukramJ/godevccu v0.2.2 h1:kkxpRxf/s2neaEoPUiOOKyF9X/+6Bx+HincYw/HqvE8=
 github.com/SukramJ/godevccu v0.2.2/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
