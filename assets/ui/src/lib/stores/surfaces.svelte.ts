@@ -66,7 +66,15 @@ function createSurfacesStore() {
 
   const byId = $derived(new Map(surfaces.map((s) => [s.id, s])));
 
-  function apply(resp: SurfacesResponse) {
+  /**
+   * `resetDraft: false` is for the mode/scope PUTs (`setEmbedded`,
+   * `setEmbeddedScope`): those calls don't carry the row edits at all,
+   * so overwriting `draft` from their response would silently discard
+   * whatever the operator has changed but not saved yet — the save bar
+   * would vanish along with it. `saved` still refreshes either way,
+   * since the response is the daemon's current stored profiles.
+   */
+  function apply(resp: SurfacesResponse, opts: { resetDraft?: boolean } = {}) {
     embedded = resp.embedded;
     embeddedScope = resp.embedded_scope ?? "inside_ha";
     insideHA = resp.inside_ha ?? false;
@@ -75,7 +83,9 @@ function createSurfacesStore() {
     effective = resp.effective ?? {};
     centrals = resp.centrals ?? 0;
     saved = cloneProfiles(resp.profiles);
-    draft = cloneProfiles(resp.profiles);
+    if (opts.resetDraft ?? true) {
+      draft = cloneProfiles(resp.profiles);
+    }
     editing = resp.profile;
     loaded = true;
     markDirty();
@@ -229,7 +239,7 @@ function createSurfacesStore() {
    * already see the effects of.
    */
   async function setEmbedded(next: boolean): Promise<void> {
-    apply(await api.putUISurfaces({ embedded: next }));
+    apply(await api.putUISurfaces({ embedded: next }), { resetDraft: false });
   }
 
   /**
@@ -239,7 +249,7 @@ function createSurfacesStore() {
    * is already on screen.
    */
   async function setEmbeddedScope(next: EmbeddedScope): Promise<void> {
-    apply(await api.putUISurfaces({ embedded_scope: next }));
+    apply(await api.putUISurfaces({ embedded_scope: next }), { resetDraft: false });
   }
 
   function setEditing(next: ProfileName) {

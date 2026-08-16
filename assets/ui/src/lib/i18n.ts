@@ -2634,10 +2634,10 @@ const EN: Catalog = {
   "schedule.title": "Schedule",
   "schedule.subtitle": "",
   "schedule.simple_title": "Switching schedule",
-  "schedule.slots_count": "{count} / 24 slots",
+  "schedule.slots_count": "{count} / {max} slots",
   "schedule.add_slot": "+ Slot",
   "schedule.empty_slots": "No switching slots yet — click '+' to add one.",
-  "schedule.max_reached": "Maximum of 24 entries reached.",
+  "schedule.max_reached": "Maximum of {max} entries reached.",
   "schedule.weekday_select_one": "Slot {n}: select at least one weekday.",
   "schedule.invalid_time": "Slot {n}: invalid time {time}.",
   "schedule.saved_toast": "Schedule saved.",
@@ -3177,6 +3177,7 @@ const EN: Catalog = {
   "api.error.request": "Request rejected ({status}).",
   "api.error.locked":
     "Locked — this channel is protected against control writes. Lift the lock in the channel's flags.",
+  "api.error.locked_reason": "Locked ({status}).",
   // --- Matter bridge ---
   "nav.matter": "Matter",
   "sidebar.cluster.bridges": "Bridges",
@@ -6750,11 +6751,11 @@ const DE: Catalog = {
   "schedule.title": "Zeitplan",
   "schedule.subtitle": "",
   "schedule.simple_title": "Schaltzeiten",
-  "schedule.slots_count": "{count} / 24 Schaltpunkte",
+  "schedule.slots_count": "{count} / {max} Schaltpunkte",
   "schedule.add_slot": "+ Schaltzeit",
   "schedule.empty_slots":
     "Keine Schaltzeiten — auf '+' klicken um eine anzulegen.",
-  "schedule.max_reached": "Maximum von 24 Schaltzeiten erreicht.",
+  "schedule.max_reached": "Maximum von {max} Schaltzeiten erreicht.",
   "schedule.weekday_select_one": "Slot {n}: Mindestens ein Wochentag wählen.",
   "schedule.invalid_time": "Slot {n}: Zeit {time} ist ungültig.",
   "schedule.saved_toast": "Zeitplan gespeichert.",
@@ -7303,6 +7304,7 @@ const DE: Catalog = {
   "api.error.request": "Anfrage abgelehnt ({status}).",
   "api.error.locked":
     "Gesperrt — dieser Kanal ist gegen Steuerbefehle gesperrt. Die Sperre lässt sich in den Kanal-Flags aufheben.",
+  "api.error.locked_reason": "Gesperrt ({status}).",
   // --- Matter-Bridge ---
   "nav.matter": "Matter",
   "sidebar.cluster.bridges": "Bridges",

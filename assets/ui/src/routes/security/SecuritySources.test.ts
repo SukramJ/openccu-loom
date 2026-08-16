@@ -176,6 +176,55 @@ describe("SecuritySources — override flow", () => {
     expect(queryByRole("table")).toBeTruthy();
   });
 
+  it("seeds the included switch OFF for a source the operator already excluded", async () => {
+    mockListSecuritySources.mockResolvedValue([
+      source({ overridden: true, relevant: false }),
+    ]);
+    const { findByRole, getByText } = render(SecuritySources);
+    await findByRole("table");
+
+    const row = getByText("Kitchen smoke").closest("tr")!;
+    const toggle = within(row).getByRole("switch");
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("seeds the included switch ON for a source with no override", async () => {
+    mockListSecuritySources.mockResolvedValue([
+      source({ overridden: false, relevant: true }),
+    ]);
+    const { findByRole, getByText } = render(SecuritySources);
+    await findByRole("table");
+
+    const row = getByText("Kitchen smoke").closest("tr")!;
+    const toggle = within(row).getByRole("switch");
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("re-saving an excluded source (e.g. adding a note) keeps it excluded", async () => {
+    // Before the fix, freshDraft() hard-coded included:true, so this
+    // save silently re-included a source the operator had excluded.
+    mockListSecuritySources.mockResolvedValue([
+      source({ overridden: true, relevant: false }),
+    ]);
+    const { findByRole, getByText } = render(SecuritySources);
+    await findByRole("table");
+
+    const row = getByText("Kitchen smoke").closest("tr")!;
+    const note = within(row).getByPlaceholderText(
+      "security.sources.override.note_placeholder",
+    );
+    await fireEvent.input(note, { target: { value: "still a false positive" } });
+    await fireEvent.click(
+      within(row).getByRole("button", { name: "security.sources.override.save" }),
+    );
+
+    await waitFor(() => expect(mockPutSecuritySourceOverride).toHaveBeenCalledTimes(1));
+    expect(mockPutSecuritySourceOverride).toHaveBeenCalledWith(source().ref, {
+      included: false,
+      note: "still a false positive",
+    });
+  });
+
   it("surfaces a save failure via the error toast without a silent abort", async () => {
     mockListSecuritySources.mockResolvedValue([source()]);
     mockPutSecuritySourceOverride.mockRejectedValueOnce(new Error("rega down"));

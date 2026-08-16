@@ -198,6 +198,44 @@ describe("SimpleScheduleEditor — universal-light colour (W02)", () => {
   });
 });
 
+describe("SimpleScheduleEditor — slot cap mirrors the daemon's raised limit", () => {
+  function entriesUpTo(n: number): ClimateSchedule {
+    return {
+      ...baseSchedule(),
+      simple_entries: Array.from({ length: n }, (_, i) => ({
+        slot_no: i + 1,
+        weekdays: ["MONDAY"],
+        time: "07:00",
+        level: 1,
+      })),
+    } as ClimateSchedule;
+  }
+
+  it("adds a 25th slot instead of warning at the old 24-slot cap", async () => {
+    render(SimpleScheduleEditor, {
+      props: { address: ADDRESS, schedule: entriesUpTo(24), onReload: vi.fn() },
+    });
+
+    expect(screen.getByText('schedule.slots_count:{"count":24,"max":75}')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByText("schedule.add_slot"));
+
+    expect(mockToastWarn).not.toHaveBeenCalled();
+    expect(screen.getByText('schedule.slots_count:{"count":25,"max":75}')).toBeInTheDocument();
+  });
+
+  it("still caps at the daemon's raised limit (75) once every slot is used", async () => {
+    render(SimpleScheduleEditor, {
+      props: { address: ADDRESS, schedule: entriesUpTo(75), onReload: vi.fn() },
+    });
+
+    await fireEvent.click(screen.getByText("schedule.add_slot"));
+
+    expect(mockToastWarn).toHaveBeenCalledWith('schedule.max_reached:{"max":75}');
+    expect(screen.getByText('schedule.slots_count:{"count":75,"max":75}')).toBeInTheDocument();
+  });
+});
+
 describe("SimpleScheduleEditor — expanded rows survive a delete", () => {
   function threeSlots(): ClimateSchedule {
     return {
