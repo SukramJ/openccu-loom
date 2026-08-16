@@ -312,6 +312,16 @@ type Bridge struct {
 	paseLockoutUntil  time.Time
 	paseLockoutStreak int
 
+	// preserveLockoutOnReset makes [Bridge.resetPaseFailures] keep an
+	// in-force lockout instead of clearing it. It is raised only while
+	// [Bridge.recordPaseFailure] drives the cap's own RevokeWindow — that
+	// revoke runs the window's restore closure synchronously, which
+	// re-attaches the configured PASE acceptor and would otherwise clear
+	// the lockout microseconds after it was engaged (the guessing then
+	// continues at full rate). An operator-initiated fresh window open
+	// leaves the flag clear and still starts with a clean budget.
+	preserveLockoutOnReset atomic.Bool
+
 	// nowFn is the wall-clock seam for the PASE lockout bookkeeping.
 	// Nil (the production value) means [time.Now]; tests replace it
 	// before any traffic is dispatched so the cooldown can be crossed

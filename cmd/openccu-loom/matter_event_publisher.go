@@ -51,8 +51,10 @@ func (p *matterEventPublisher) PublishMatterEvent(_ context.Context, ev handlers
 // `Bridge.SetOnReassembled` hook.
 func (p *matterEventPublisher) publishEndpointAssembled(count int) {
 	p.PublishMatterEvent(context.Background(), handlers.MatterEvent{
-		Topic:   handlers.MatterTopicEndpointAssembled,
-		Type:    "endpoint_assembled",
+		Topic: handlers.MatterTopicEndpointAssembled,
+		// The wire `type` carries the full dotted name, identical to the
+		// topic — both WS consumers key on `matter.<event>`.
+		Type:    handlers.MatterTopicEndpointAssembled,
 		When:    time.Now().UTC(),
 		Payload: map[string]any{"endpoint_count": count},
 	})
@@ -71,7 +73,7 @@ func (p *matterEventPublisher) publishEndpointAssembled(count int) {
 func (p *matterEventPublisher) publishFabricAdded(fabricIndex uint8) {
 	p.PublishMatterEvent(context.Background(), handlers.MatterEvent{
 		Topic:   handlers.MatterTopicFabricAdded,
-		Type:    "fabric_added",
+		Type:    handlers.MatterTopicFabricAdded,
 		When:    time.Now().UTC(),
 		Payload: p.fabricPayload(fabricIndex),
 	})
@@ -115,7 +117,7 @@ func (p *matterEventPublisher) fabricPayload(fabricIndex uint8) any {
 func (p *matterEventPublisher) publishFabricRemoved(fabricIndex uint8) {
 	p.PublishMatterEvent(context.Background(), handlers.MatterEvent{
 		Topic:   handlers.MatterTopicFabricRemoved,
-		Type:    "fabric_removed",
+		Type:    handlers.MatterTopicFabricRemoved,
 		When:    time.Now().UTC(),
 		Payload: map[string]any{"fabric_index": fabricIndex},
 	})
