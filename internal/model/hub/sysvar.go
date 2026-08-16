@@ -811,8 +811,11 @@ func (s *Sysvar) intToWire(v hmtypes.ParamValue) (any, error) {
 		}
 	case hmtypes.ValueKindString:
 		// bitSize 32 bounds the parse so the int conversion is safe on
-		// 32-bit builds (armv7) too.
-		if n, err := strconv.ParseInt(v.String, 10, 32); err == nil {
+		// 32-bit builds (armv7) too. The redundant-looking integer-level
+		// bounds check keeps the narrowing provably safe for static
+		// analysis (CodeQL go/incorrect-integer-conversion), matching the
+		// float case above.
+		if n, err := strconv.ParseInt(v.String, 10, 32); err == nil && n >= math.MinInt32 && n <= math.MaxInt32 {
 			return int(n), nil
 		}
 	}
