@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
+	paramcoerce "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -116,6 +117,21 @@ func (s *MQTTCommandSink) SetValue(
 	}
 	channelAddress = s.canonicalChannelAddress(centralName, channelAddress)
 	if ch, err := s.resolveChannel(centralName, interfaceID, channelAddress); err == nil && ch != nil {
+		// Coerce the descriptor-blind topic payload against the resolved
+		// parameter's descriptor before it reaches the wire, mirroring the
+		// REST PUT /value path (PutDataPointValue in
+		// internal/north/rest/handlers/devices.go). Without it an ENUM select
+		// write forwards the option label (e.g. "DIGITAL_OUTPUT") verbatim
+		// while the CCU expects the integer index, and a whole-number FLOAT
+		// lands as an int with no MIN/MAX check. A rejection here (out of
+		// range, not in VALUE_LIST, wrong type) never reaches the wire.
+		if dp := ch.Parameter(parameter); dp != nil {
+			pv, cerr := paramcoerce.Coerce(dp.ParameterData(), value)
+			if cerr != nil {
+				return fmt.Errorf("mqtt_sink: coerce %q on %s: %w", parameter, channelAddress, cerr)
+			}
+			value = pv.Unwrap()
+		}
 		if w := ch.Writer(); w != nil {
 			return w.SetValue(ctx, channelAddress, parameter, value, priority)
 		}
@@ -193,16 +209,24 @@ func (s *MQTTCommandSink) SetMasterValue(
 	if err != nil {
 		return err
 	}
-	if ch.MasterParameter(parameter) == nil {
+	mp := ch.MasterParameter(parameter)
+	if mp == nil {
 		return fmt.Errorf("mqtt_sink: parameter %q not in MASTER paramset of %s", parameter, channelAddress)
 	}
-	pv, err := hmtypes.NewParamValue(value)
+	// Coerce against the MASTER descriptor and validate — the same
+	// descriptor-aware path the REST PUT /value handler takes. The previous
+	// hmtypes.NewParamValue guess was descriptor-blind (a whole-number "21"
+	// for a FLOAT became int64(21)) and Channel.Set was called without
+	// Validate, so no MIN/MAX/enum check ran on the configuration write.
+	pv, err := paramcoerce.Coerce(mp.ParameterData(), value)
 	if err != nil {
-		return fmt.Errorf("mqtt_sink: value normalisation for %q: %w", parameter, err)
+		return fmt.Errorf("mqtt_sink: coerce %q on %s: %w", parameter, channelAddress, err)
 	}
 	return ch.Set(ctx, hmenum.ParamsetKeyMaster, parameter, pv, device.SetOptions{
+		Validate:   true,
 		Optimistic: true,
 		Priority:   priority,
+		Source:     "mqtt:command",
 	})
 }
 

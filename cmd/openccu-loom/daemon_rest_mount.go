@@ -689,8 +689,12 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 		Alarm:        mcpAlarmSeam(d),
 		AlarmControl: mcpAlarmControlSeam(d),
 		Security:     mcpSecuritySeam(d),
-		AllowWrites:  cfg.North.MCP.AllowWrites,
-		Version:      build.Version,
+		// The shared edit-lock registry REST and WS gate MASTER/LINK writes
+		// on, so an assistant's write_paramset obeys the same lock a human
+		// editor's open session holds.
+		EditLocks:   d.editSessions,
+		AllowWrites: cfg.North.MCP.AllowWrites,
+		Version:     build.Version,
 	})))
 	path := cfg.North.MCP.MountPath()
 	mux := http.NewServeMux()

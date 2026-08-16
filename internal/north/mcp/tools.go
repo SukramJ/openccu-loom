@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	paramcoerce "github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -130,6 +131,27 @@ func deviceAddressOf(address string) string {
 		return address[:i]
 	}
 	return address
+}
+
+// resolveDataPoint resolves the VALUES data point for a channel address +
+// parameter through the device model, returning nil when the model does
+// not carry it (channel not hydrated, unknown parameter). It is the seam
+// the write path uses to reach a parameter's descriptor so it can coerce
+// the incoming value against it, exactly as the REST PUT /value handler
+// does.
+func resolveDataPoint(devices DeviceLister, channelAddress, parameterName string) device.ParameterDataPoint {
+	if devices == nil {
+		return nil
+	}
+	dev, ok := devices.Device(deviceAddressOf(channelAddress))
+	if !ok || dev == nil {
+		return nil
+	}
+	ch := dev.Channel(channelAddress)
+	if ch == nil {
+		return nil
+	}
+	return ch.Parameter(hmenum.Parameter(parameterName))
 }
 
 func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
@@ -402,6 +424,11 @@ type writeParamsetIn struct {
 	Address     string         `json:"address" jsonschema:"the channel address, e.g. 0001D3C99C1234:1"`
 	Key         string         `json:"key" jsonschema:"the paramset key: MASTER or VALUES"`
 	Values      map[string]any `json:"values" jsonschema:"the parameter→value map to write"`
+	// EditToken carries the edit-lock token a MASTER/LINK write must
+	// present under strict enforcement, mirroring the WS paramset.put
+	// `edit_token` field. Open an edit session first to obtain it.
+	// Ignored for VALUES writes.
+	EditToken string `json:"edit_token,omitempty" jsonschema:"edit-lock token for a MASTER write; obtain it by opening an edit session for the channel"`
 }
 
 type writeParamsetOut struct {
@@ -456,9 +483,25 @@ func registerSetDatapoint(s *mcpsdk.Server, d Deps) {
 		if owner := d.Devices.CentralOf(deviceAddressOf(address)); owner != central {
 			return nil, setDatapointOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
 		}
+		// Coerce the JSON value against the parameter descriptor before it
+		// reaches the wire — the same first step the REST PUT /value handler
+		// takes. MCP JSON numbers arrive as float64, so an INTEGER given 21
+		// or a BOOL given a number would otherwise reach the CCU mistyped,
+		// and an ENUM given its option label would be sent verbatim instead
+		// of the integer index the CCU expects. A parameter the model does
+		// not carry (unhydrated channel, unknown parameter) falls through
+		// with the raw value, preserving the prior best-effort behaviour.
+		writeValue := in.Value
+		if dp := resolveDataPoint(d.Devices, address, parameter); dp != nil {
+			pv, cerr := paramcoerce.Coerce(dp.ParameterData(), in.Value)
+			if cerr != nil {
+				return nil, setDatapointOut{}, fmt.Errorf("coerce value: %w", cerr)
+			}
+			writeValue = pv.Unwrap()
+		}
 		// CommandPriorityHigh mirrors the REST default for user-initiated
 		// writes — never the zero value (CommandPriorityCritical).
-		if err := d.Writer.SetValue(ctx, address, hmenum.Parameter(parameter), in.Value, hmenum.CommandPriorityHigh); err != nil {
+		if err := d.Writer.SetValue(ctx, address, hmenum.Parameter(parameter), writeValue, hmenum.CommandPriorityHigh); err != nil {
 			return nil, setDatapointOut{}, fmt.Errorf("set value: %w", err)
 		}
 		if d.Audit != nil {
@@ -493,6 +536,22 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		}
 		if owner := d.Devices.CentralOf(deviceAddressOf(address)); owner != central {
 			return nil, writeParamsetOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
+		}
+		// Strict edit-lock enforcement for configuration paramsets, mirroring
+		// the REST enforceEditLock gate and the WS paramset.put handler:
+		// MASTER (and LINK, though parseParamsetKey keeps LINK unreachable
+		// here) are configuration writes that require holding the per-channel
+		// edit lock, so a write another editor's open session is protected
+		// against cannot arrive through this sibling instead. Verify returns
+		// false when no session holds the lock and when the token does not
+		// match, so the lock is required always — not only under contention.
+		// A nil verifier disables enforcement (test-only escape hatch).
+		if d.EditLocks != nil && (key == hmenum.ParamsetKeyMaster || key == hmenum.ParamsetKeyLink) {
+			lockKey := "channel:" + address + ":" + string(key)
+			if !d.EditLocks.Verify(lockKey, strings.TrimSpace(in.EditToken)) {
+				return nil, writeParamsetOut{}, fmt.Errorf(
+					"edit lock required for %s write on %s; open an edit session and pass edit_token", key, address)
+			}
 		}
 		// The paramset domain this tool writes through records the change
 		// itself, with the per-parameter before/after pairs. A row added

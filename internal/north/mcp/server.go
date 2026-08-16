@@ -74,6 +74,18 @@ type HealthReader interface {
 	Snapshot() []health.Component
 }
 
+// EditLockVerifier reports whether `token` currently holds the edit
+// lock for a resource `key`. It mirrors the strict edit-lock gate the
+// REST `PUT /devices/{addr}/paramsets/{key}` handler (enforceEditLock)
+// and the WS `paramset.put` command enforce for MASTER/LINK writes, so
+// a configuration write over MCP obeys the same lock a human editor's
+// open session is protected by. *handlers.EditSessions satisfies it.
+// A nil verifier disables enforcement — a test-only escape hatch; the
+// production mount is expected to wire the shared registry.
+type EditLockVerifier interface {
+	Verify(key, token string) bool
+}
+
 // HubResolver resolves a central's hub model by name — the seam the
 // gated trigger_program tool uses to find and run a CCU program.
 // *central.Registry satisfies it.
@@ -101,6 +113,11 @@ type Deps struct {
 	Hubs      HubResolver
 	Audit     audit.Recorder
 	Incidents IncidentsReader
+	// EditLocks gates MASTER/LINK paramset writes through write_paramset
+	// on holding the edit lock, exactly as the REST and WS siblings do.
+	// Nil disables enforcement (test-only escape hatch); the production
+	// composition root wires the shared *handlers.EditSessions instance.
+	EditLocks EditLockVerifier
 	// Alarm / AlarmControl project the alarm system; Security projects
 	// the Security & Safety domain. Each is optional: a nil seam leaves
 	// its tools unregistered rather than advertising a tool that
