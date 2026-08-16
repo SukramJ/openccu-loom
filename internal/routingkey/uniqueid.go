@@ -25,6 +25,15 @@ import "strings"
 // two CCUs do not collide.
 const internalAddressPrefix = "INT000"
 
+// cuxdAddressPrefix marks CUxD device addresses (e.g. CUX2801001). CUxD hands
+// out the same synthetic addresses on every CCU it runs on, so — like the
+// internal and virtual-remote families — their key is namespaced by the central.
+// This is a deliberate multi-CCU divergence from the single-per-central Python
+// reference (which does not scope CUxD): two CCUs bridged into one Home
+// Assistant would otherwise declare identical CUxD unique_ids and HA would drop
+// one CCU's entities, permanently once the payload is retained.
+const cuxdAddressPrefix = "CUX"
+
 // virtualRemoteRoots are the address roots whose channels are derived
 // from a virtual remote bus. Their key carries the central prefix even
 // though the channel address itself repeats across CCUs.
@@ -85,8 +94,8 @@ func addressRoot(address string) string {
 
 // NeedsCentralScope reports whether an address only becomes unique once
 // the CCU's serial is prepended — the hub pseudo-addresses, the internal
-// INT000* addresses, and the virtual-remote buses, all of which repeat
-// verbatim on every CCU.
+// INT000* addresses, the virtual-remote buses, and the CUxD addresses, all
+// of which repeat verbatim on every CCU.
 //
 // A north-bound plane that keys entities by unique_id has to consult
 // this before publishing without a serial: two CCUs would otherwise
@@ -97,12 +106,16 @@ func NeedsCentralScope(address string) bool { return needsCentralPrefix(address)
 
 // needsCentralPrefix reports whether the parameter-level key for the
 // given address is namespaced by the central: hub-level pseudo
-// addresses, internal addresses, and virtual-remote channels.
+// addresses, internal addresses, virtual-remote channels, and CUxD
+// addresses.
 func needsCentralPrefix(address string) bool {
 	if _, ok := centralPrefixAddresses[address]; ok {
 		return true
 	}
 	if strings.HasPrefix(address, internalAddressPrefix) {
+		return true
+	}
+	if strings.HasPrefix(address, cuxdAddressPrefix) {
 		return true
 	}
 	_, ok := virtualRemoteRoots[addressRoot(address)]

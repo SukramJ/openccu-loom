@@ -582,6 +582,17 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	}
 
 	if unit, live := o.reg.Get(name); live {
+		// Retract this central's hub-plane discovery (programs, sysvars,
+		// connectivity, install-mode, system/messages) BEFORE the model is torn
+		// down: the per-entity OnRemoved hooks only clear an entity the CCU
+		// drops one at a time, and the orphan sweep is scoped to registered
+		// centrals, so nothing else ever reaches a whole central that is
+		// leaving. Its retained configs would otherwise keep the removed CCU's
+		// hub entities alive in Home Assistant forever. The device entities are
+		// retracted separately by the model eviction below via the event bridge.
+		if o.sbDeps.hubMQTT != nil {
+			o.sbDeps.hubMQTT.RetractCentral(unit)
+		}
 		evictModel(unit)
 		unit.Stop() //nolint:contextcheck // Unit.Stop takes no ctx parameter; teardown always runs to completion regardless of the caller's ctx
 	}
