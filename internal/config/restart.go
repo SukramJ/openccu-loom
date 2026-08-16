@@ -49,6 +49,8 @@ func restartRules() []RestartRule {
 	groups := [][]RestartRule{
 		processRestartRules(),
 		matterRestartRules(),
+		restSurfaceRestartRules(),
+		discoveryRestartRules(),
 		northBridgeRestartRules(),
 		authRestartRules(),
 		alarmRestartRules(),
@@ -105,6 +107,13 @@ func processRestartRules() []RestartRule {
 		{
 			Path:    "callback.port_range",
 			Differs: func(b, e *Config) bool { return b.Callback.PortRange != e.Callback.PortRange },
+		},
+		// The NAT override is read once per central while the callback URL
+		// is assembled during south-bound bring-up; a later change never
+		// reaches the CCU, which keeps pushing to the old address.
+		{
+			Path:    "callback.public_host",
+			Differs: func(b, e *Config) bool { return b.Callback.PublicHost != e.Callback.PublicHost },
 		},
 		// The source-IP filter and the connection cap are decided once, at
 		// listener construction: an allowlist is only built when the flag is
@@ -202,6 +211,81 @@ func matterRestartRules() []RestartRule {
 			Path: "north.matter.mdns_advertise",
 			Differs: func(b, e *Config) bool {
 				return b.North.Matter.WithDefaults().MDNSAdvertise != e.North.Matter.WithDefaults().MDNSAdvertise
+			},
+		},
+	}
+}
+
+// restSurfaceRestartRules covers the HTTP surfaces whose middleware chain and
+// mounts are decided exactly once, while the router is assembled: a middleware
+// that was not installed at assembly time cannot start running later, and one
+// that was cannot be removed. The same holds for the server-rendered no-JS
+// surface, which is either mounted onto the REST listener at boot or not at all.
+func restSurfaceRestartRules() []RestartRule {
+	return []RestartRule{
+		// The double-submit guard and its Secure-cookie flag are both bound
+		// when the middleware is installed. Compare the resolved tri-states so
+		// unset → the explicit default is not a phantom restart.
+		{
+			Path: "north.rest.csrf_enabled",
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.CSRFIsEnabled() != e.North.REST.CSRFIsEnabled()
+			},
+		},
+		{
+			Path:    "north.rest.csrf_secure",
+			Differs: func(b, e *Config) bool { return b.North.REST.CSRFSecure != e.North.REST.CSRFSecure },
+		},
+		// The OpenAPI request validator is loaded and wrapped around the
+		// router at boot only.
+		{
+			Path: "north.rest.openapi_validate",
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.OpenAPIValidateEnabled() != e.North.REST.OpenAPIValidateEnabled()
+			},
+		},
+		// The no-JS diagnostic router (/health, /about) is built during
+		// north-bound assembly and mounted onto the REST listener, or skipped.
+		{
+			Path: "north.ui.enabled",
+			Differs: func(b, e *Config) bool {
+				return b.North.UI.IsEnabled() != e.North.UI.IsEnabled()
+			},
+		},
+	}
+}
+
+// discoveryRestartRules covers the LAN-discovery surfaces (ADR 0021). The mDNS
+// advertiser and the SSDP scan loop are each started once during bring-up with
+// their parameters captured then, so a later edit leaves the daemon advertising
+// (or scanning) exactly as before — the opposite of what an operator who just
+// switched LAN visibility off expects.
+func discoveryRestartRules() []RestartRule {
+	return []RestartRule{
+		{
+			Path: "north.discovery.mdns.enabled",
+			Differs: func(b, e *Config) bool {
+				return b.North.Discovery.MDNS.IsEnabled() != e.North.Discovery.MDNS.IsEnabled()
+			},
+		},
+		// The instance name is also the leading component of the wire
+		// interface_id (ADR 0024), which the CCU learns at init() time.
+		{
+			Path: "north.discovery.mdns.instance_name",
+			Differs: func(b, e *Config) bool {
+				return b.North.Discovery.MDNS.ResolveInstanceName() != e.North.Discovery.MDNS.ResolveInstanceName()
+			},
+		},
+		{
+			Path: "north.discovery.ssdp.enabled",
+			Differs: func(b, e *Config) bool {
+				return b.North.Discovery.SSDP.IsEnabled() != e.North.Discovery.SSDP.IsEnabled()
+			},
+		},
+		{
+			Path: "north.discovery.ssdp.interval",
+			Differs: func(b, e *Config) bool {
+				return b.North.Discovery.SSDP.ResolveInterval() != e.North.Discovery.SSDP.ResolveInterval()
 			},
 		},
 	}

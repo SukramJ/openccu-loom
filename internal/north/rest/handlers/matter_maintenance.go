@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
@@ -89,15 +90,23 @@ func MatterFactoryReset(p MatterFabricPurger, publisher MatterEventPublisher, re
 				problem.TypeInternal, "Failed to list fabrics", err)
 			return
 		}
+		removed := make([]uint8, 0, len(indexes))
 		for _, idx := range indexes {
 			if err := p.RevokeFabric(req.Context(), idx); err != nil {
 				// Reported rather than skipped: a partial reset leaves
 				// the bridge paired to a controller the operator
-				// believes they removed.
+				// believes they removed. The fabrics already removed are
+				// gone for good, so they are audited before the request
+				// fails — the audit log is the only durable record of
+				// who unpaired them.
+				recordMatterAudit(recorder, req, audit.ActionMatterFactoryReset,
+					fmt.Sprintf("partial: removed %d of %d fabrics %v", len(removed), len(indexes), removed))
 				writeServerError(w, req, http.StatusInternalServerError,
-					problem.TypeInternal, "Failed to remove every fabric", err)
+					problem.TypeInternal,
+					fmt.Sprintf("Factory reset incomplete: removed %d of %d fabrics", len(removed), len(indexes)), err)
 				return
 			}
+			removed = append(removed, idx)
 			publishMatterEvent(req.Context(), publisher,
 				MatterTopicFabricRemoved, map[string]any{"fabric_index": idx})
 		}

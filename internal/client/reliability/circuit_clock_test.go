@@ -193,16 +193,13 @@ func TestCircuitStateChangeCallbackFiredOnHalfOpen(t *testing.T) {
 		t.Fatalf("expected HALF_OPEN after Advance, got %s", got)
 	}
 
-	// The callback fires asynchronously via safeFire — wait for it.
-	c.WaitCallbacks()
-
 	select {
 	case tr := <-transitions:
 		if tr.from != hmenum.CircuitStateOpen || tr.to != hmenum.CircuitStateHalfOpen {
 			t.Fatalf("expected OPEN→HALF_OPEN callback, got %s→%s", tr.from, tr.to)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("OPEN→HALF_OPEN callback did not fire within 1s after WaitCallbacks")
+		t.Fatal("OPEN→HALF_OPEN callback did not fire")
 	}
 }
 

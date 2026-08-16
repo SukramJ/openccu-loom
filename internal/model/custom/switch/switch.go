@@ -187,12 +187,14 @@ func (s *Switch) TurnOff(ctx context.Context, priority hmenum.CommandPriority) e
 // forward-compatible batching of ON_TIME + STATE.
 func (s *Switch) TurnOnFor(ctx context.Context, d time.Duration, priority hmenum.CommandPriority) error {
 	ctx = custom.EnsureContext(ctx)
-	if s.Writer != nil {
-		coll := generic.NewCollector(generic.WriterAsBackend(s.Writer), generic.WithPriority(priority))
-		ctx = generic.ContextWithCollector(ctx, coll)
-		defer func() { _ = coll.Send(ctx) }()
+	if s.Writer == nil {
+		return s.TurnOnWithTimer(ctx, d, priority)
 	}
-	return s.TurnOnWithTimer(ctx, d, priority)
+	coll := generic.NewCollector(generic.WriterAsBackend(s.Writer), generic.WithPriority(priority))
+	ctx = generic.ContextWithCollector(ctx, coll)
+	// ON_TIME + STATE are only staged by TurnOnWithTimer; the wire call
+	// happens in the flush, so its error is the result of the command.
+	return generic.FlushCollector(ctx, coll, s.TurnOnWithTimer(ctx, d, priority))
 }
 
 // SetTimerOnTime stores `d` for the next [TurnOn] call.

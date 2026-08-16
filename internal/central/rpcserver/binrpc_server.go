@@ -46,11 +46,32 @@ type BINRPCServer struct {
 	// shutdown path and the explicit [Close] method. Without it both
 	// paths race on the listener's internal teardown state under -race.
 	closeOnce sync.Once
-	// closed flips to true after closeOnce fires so Serve's accept loop
-	// can refuse to launch new handler goroutines once shutdown started
-	// — closing the wg.Add / wg.Wait race window for late-arriving
-	// connections.
+	// closeMu orders the shutdown flag against wg.Add. Reading the flag
+	// and adding to the WaitGroup have to happen as one step: a plain
+	// check-then-Add still allows shutdown to land in between, and the Add
+	// then runs concurrently with the Wait that Close has already entered
+	// — the WaitGroup misuse the flag exists to prevent. See [trackConn].
+	closeMu sync.Mutex
+	// closed flips to true (under closeMu) after closeOnce fires so
+	// Serve's accept loop refuses to launch new handler goroutines once
+	// shutdown started.
 	closed atomic.Bool
+}
+
+// trackConn registers one in-flight handler, reporting false when shutdown
+// has begun and the connection must be dropped instead.
+//
+// The lock is what makes the answer binding: every Add that returns true
+// completed before [BINRPCServer.closeListener] could set the flag, so it
+// also completed before any Wait that follows the flag being set.
+func (s *BINRPCServer) trackConn() bool {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if s.closed.Load() {
+		return false
+	}
+	s.wg.Add(1)
+	return true
 }
 
 // BINRPCConfig configures the server.
@@ -191,13 +212,6 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 			return fmt.Errorf("rpcserver: accept: %w", err)
 		}
 		retryDelay = 0
-		// Refuse late-arriving connections that race the shutdown path.
-		// Without this guard wg.Add can fire after Close has already
-		// entered wg.Wait, which is a documented race.
-		if s.closed.Load() {
-			_ = conn.Close()
-			continue
-		}
 		// Enforce the source-IP allowlist before spawning a handler
 		// goroutine so a disallowed peer costs nothing but an immediate
 		// close (defence in depth on top of the connection cap).
@@ -207,7 +221,11 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 			_ = conn.Close()
 			continue
 		}
-		s.wg.Add(1)
+		// Refuse late-arriving connections that race the shutdown path.
+		if !s.trackConn() {
+			_ = conn.Close()
+			continue
+		}
 		s.activeTasks.Add(1)
 		go func() {
 			defer s.wg.Done()
@@ -221,7 +239,12 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 // the Serve ctx-cancel goroutine and the explicit [Close] method.
 func (s *BINRPCServer) closeListener() {
 	s.closeOnce.Do(func() {
+		// Under closeMu so an accept-loop iteration is either wholly
+		// before this flag (its wg.Add is done) or wholly after it (it
+		// drops the connection and adds nothing).
+		s.closeMu.Lock()
 		s.closed.Store(true)
+		s.closeMu.Unlock()
 		_ = s.listener.Close()
 	})
 }

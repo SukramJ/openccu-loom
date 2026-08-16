@@ -114,6 +114,11 @@ func Of(dp device.AttachableDataPoint) string {
 		return KindSirenSound
 	case *switchdev.Switch:
 		return KindSwitch
+	case *switchdev.AccessPermission:
+		// A per-user access permission is a switch on every surface —
+		// SWITCH category, `switch` HA component, granted/revoked — so it
+		// shares the switch widget rather than carrying a kind of its own.
+		return KindSwitch
 	case *textdisplay.TextDisplay:
 		return KindTextDisplay
 	case *valve.Irrigation:

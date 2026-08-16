@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -468,5 +469,86 @@ func TestZeroconfInternal_Publish_RecordsAdvertisedAddresses(t *testing.T) {
 		if f.Code == "no_addresses" {
 			t.Errorf("diagnostics report %q for a record that advertises %v", f.Code, want)
 		}
+	}
+}
+
+// TestZeroconfInternal_RepublishAllDoesNotResurrectWithdrawn pins that a
+// Withdraw racing the periodic re-announce stays withdrawn. republishAll
+// used to snapshot the record set and then re-Publish from that copy, so
+// a Withdraw landing in the gap was undone — the record stayed on the
+// wire for the process lifetime and commissioners kept resolving a dead
+// identity. The invariant checked here is structural: every registered
+// server must still have an entry in z.items.
+func TestZeroconfInternal_RepublishAllDoesNotResurrectWithdrawn(t *testing.T) {
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+
+	ctx := context.Background()
+	keep := Service{
+		InstanceName: "CCCC000011112222",
+		ServiceType:  ServiceTypeOperational,
+		Port:         5540,
+		HostName:     "test",
+	}
+	doomed := Service{
+		InstanceName: "DDDD000011112222",
+		ServiceType:  ServiceTypeCommissionable,
+		Port:         5540,
+		HostName:     "test",
+		Subtypes:     []string{"_CM"},
+	}
+	for _, svc := range []Service{keep, doomed} {
+		if err := z.Publish(ctx, svc); err != nil {
+			t.Fatalf("Publish %s: %v", svc.InstanceName, err)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		z.republishAll(ctx)
+	}()
+	if err := z.Withdraw(ctx, doomed.InstanceName, doomed.ServiceType); err != nil {
+		t.Fatalf("Withdraw: %v", err)
+	}
+	wg.Wait()
+
+	z.mu.RLock()
+	defer z.mu.RUnlock()
+	doomedKey := noopKey(doomed.InstanceName, doomed.ServiceType)
+	if _, ok := z.items[doomedKey]; ok {
+		t.Error("withdrawn service is back in items after republishAll")
+	}
+	for key := range z.servers {
+		if _, ok := z.items[key]; !ok {
+			t.Errorf("server %q survives with no item — the record was resurrected by republishAll", key)
+		}
+	}
+}
+
+// TestZeroconfInternal_CloseClosesAttachedResponder pins that attaching a
+// side-car responder hands its shutdown to the advertiser: without it the
+// responder's receive goroutines and its two multicast :5353 sockets
+// outlive every Matter teardown.
+func TestZeroconfInternal_CloseClosesAttachedResponder(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+	r.Start(context.Background())
+
+	if err := z.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if r.cancel != nil {
+		t.Error("responder still running after Zeroconf.Close — its goroutines outlive the advertiser")
+	}
+	z.mu.RLock()
+	defer z.mu.RUnlock()
+	if z.responder != nil {
+		t.Error("responder reference retained after Close")
 	}
 }

@@ -9,9 +9,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 )
 
@@ -150,6 +153,7 @@ func TestPutStartupCapture_AuditRecorderCalled_OnEnable(t *testing.T) {
 	rec := audit.NewBuffer(10)
 	body := `{"enabled":true,"duration_seconds":30}`
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/system/startup-capture", strings.NewReader(body))
+	req = withIdentity(req, auth.Identity{Subject: "alice", Role: auth.RoleAdmin})
 	w := httptest.NewRecorder()
 	PutStartupCapture(svc, rec).ServeHTTP(w, req)
 
@@ -162,6 +166,10 @@ func TestPutStartupCapture_AuditRecorderCalled_OnEnable(t *testing.T) {
 	}
 	if entries[0].Action != audit.Action("diagnostics.startup_capture_enabled") {
 		t.Fatalf("unexpected action: %q", entries[0].Action)
+	}
+	// The row must name the admin who changed the capture configuration.
+	if entries[0].User != "alice" {
+		t.Fatalf("audit user=%q, want alice", entries[0].User)
 	}
 }
 
@@ -183,5 +191,47 @@ func TestPutStartupCapture_AuditRecorderCalled_OnDisable(t *testing.T) {
 	}
 	if entries[0].Action != audit.Action("diagnostics.startup_capture_disabled") {
 		t.Fatalf("unexpected action: %q", entries[0].Action)
+	}
+}
+
+// TestRestart_DoubleRequest_SignalsOnce verifies the double-fire latch:
+// the SIGTERM is sent from a detached goroutine after the handler has
+// returned, so two rapid requests must still produce exactly one signal
+// while both are acknowledged and audited.
+func TestRestart_DoubleRequest_SignalsOnce(t *testing.T) {
+	var signals atomic.Int32
+	origSignal := restartSignal
+	restartSignal = func() { signals.Add(1) }
+	restartSignalled.Store(false)
+	t.Cleanup(func() {
+		restartSignal = origSignal
+		restartSignalled.Store(false)
+	})
+
+	rec := audit.NewBuffer(10)
+	h := Restart(rec)
+	for range 2 {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/system/restart", http.NoBody)
+		req = withIdentity(req, auth.Identity{Subject: "alice", Role: auth.RoleAdmin})
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusAccepted {
+			t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+		}
+	}
+	// The signal is scheduled 100 ms out; wait past it.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && signals.Load() == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := signals.Load(); got != 1 {
+		t.Fatalf("shutdown signals=%d, want exactly 1", got)
+	}
+	entries := rec.List(10)
+	if len(entries) != 2 {
+		t.Fatalf("audit entries=%d, want 2 (both requests are recorded)", len(entries))
+	}
+	if entries[0].User != "alice" {
+		t.Fatalf("audit user=%q, want alice", entries[0].User)
 	}
 }

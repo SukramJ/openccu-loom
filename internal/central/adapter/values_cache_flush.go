@@ -676,6 +676,17 @@ func buildGCSweep(reg *central.Registry) sqlite.GCSweep {
 		if unit == nil || unit.ModelRegistry == nil {
 			continue
 		}
+		// Only a central whose model is complete may speak for its own
+		// scopes. Devices enter the model one at a time, so a central that
+		// is still ingesting — at boot, or after a cache reset / CCU reboot
+		// cleared the model and started over — has its first interface in
+		// Scopes while every device still pending is absent from Alive, and
+		// GC would delete the cached VALUES rows of exactly those devices.
+		// The next cold boot then has no cache for them, and a battery
+		// device reads `unknown` until it next reports on its own.
+		if !unit.IsSouthboundReady() || unit.Readiness().Phase != hmenum.ReadinessReady {
+			continue
+		}
 		name := unit.Name()
 		for _, d := range unit.ModelRegistry.List() {
 			if d == nil {

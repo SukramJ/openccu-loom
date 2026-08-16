@@ -146,3 +146,63 @@ func TestRegisterCentralCallbacksDeregisterDrainsHandler(t *testing.T) {
 			"CallbackHandlers.Stop() must be wired into the deregister closure")
 	}
 }
+
+// TestCallbackHandlersStopRacesInFlightDispatch pins that a callback which
+// resolved the handler just before its route was deregistered cannot start a
+// goroutine while Stop is parked in wg.Wait — the "WaitGroup Add called
+// concurrently with Wait" misuse the runtime panics on. Deregistering a route
+// does not drain the dispatches already in flight, so the two really do race
+// during a live RemoveCentral on a busy CCU.
+func TestCallbackHandlersStopRacesInFlightDispatch(t *testing.T) {
+	t.Parallel()
+
+	for range 200 {
+		h := NewCallbackHandlers(nil, slog.New(slog.DiscardHandler))
+		var wg sync.WaitGroup
+		wg.Add(2)
+		start := make(chan struct{})
+		go func() {
+			defer wg.Done()
+			<-start
+			for range 20 {
+				h.goBackground(func() {})
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			h.Stop()
+		}()
+		close(start)
+		wg.Wait()
+
+		// After Stop no start is accepted any more.
+		if h.goBackground(func() {}) {
+			t.Fatal("goBackground started a goroutine after Stop")
+		}
+	}
+}
+
+// TestCallbackHandlersRefusedSelfReloadReleasesItsPermit pins that a
+// self-reload refused because the handler is stopping gives its concurrency
+// permit back. The permit is taken before the goroutine starts and released
+// inside it, so a refused start would leak one slot of the fixed-size pool per
+// occurrence and eventually silence every later self-reload.
+func TestCallbackHandlersRefusedSelfReloadReleasesItsPermit(t *testing.T) {
+	t.Parallel()
+
+	h := NewCallbackHandlers(nil, slog.New(slog.DiscardHandler))
+	d := device.New(device.Config{
+		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
+		Address: "PERMIT0001", Model: "HmIP-STH",
+	})
+	d.SetValueLoader(newCtxBlockingLoader())
+	h.Stop()
+
+	for range selfReloadConcurrency + 5 {
+		h.scheduleSelfReload(d, "PERMIT0001:1", "TESTNUM")
+	}
+	if got := len(h.selfReloadSem); got != 0 {
+		t.Fatalf("held self-reload permits = %d, want 0", got)
+	}
+}

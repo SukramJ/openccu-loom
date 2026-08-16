@@ -278,12 +278,14 @@ func (s *Siren) ValidateTone(tone string) error {
 //
 // A [generic.CallParameterCollector] is attached to ctx for
 // forward-compatible batching.
-func (s *Siren) TurnOn(ctx context.Context, cfg OnConfig, priority hmenum.CommandPriority) error {
+func (s *Siren) TurnOn(ctx context.Context, cfg OnConfig, priority hmenum.CommandPriority) (err error) {
 	ctx = custom.EnsureContext(ctx)
 	if s.writer != nil {
 		coll := generic.NewCollector(generic.WriterAsBackend(s.writer), generic.WithPriority(priority))
 		ctx = generic.ContextWithCollector(ctx, coll)
-		defer func() { _ = coll.Send(ctx) }()
+		// Anything staged on the collector only reaches the wire in the
+		// flush, so its error is part of this command's result.
+		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	params := make(map[hmenum.Parameter]any, 5)
 	if s.Capabilities.SupportsDuration {
@@ -356,12 +358,14 @@ func (s *Siren) TurnOn(ctx context.Context, cfg OnConfig, priority hmenum.Comman
 //
 // A [generic.CallParameterCollector] is attached to ctx for
 // forward-compatible batching.
-func (s *Siren) TurnOff(ctx context.Context, priority hmenum.CommandPriority) error {
+func (s *Siren) TurnOff(ctx context.Context, priority hmenum.CommandPriority) (err error) {
 	ctx = custom.EnsureContext(ctx)
 	if s.writer != nil {
 		coll := generic.NewCollector(generic.WriterAsBackend(s.writer), generic.WithPriority(priority))
 		ctx = generic.ContextWithCollector(ctx, coll)
-		defer func() { _ = coll.Send(ctx) }()
+		// Anything staged on the collector only reaches the wire in the
+		// flush, so its error is part of this command's result.
+		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	params := make(map[hmenum.Parameter]any, 4)
 	if s.Capabilities.SupportsAcoustic {

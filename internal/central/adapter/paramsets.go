@@ -128,9 +128,10 @@ func (p *ParamsetsDomain) GetParamset(ctx context.Context, deviceAddress string,
 // the authoritative values and pushes them back through the channel's
 // data points so the SPA always sees post-write state.
 //
-// LINK paramsets are NOT routed here; they use the legacy backend path
-// in [PutLinkParamset]. Adding a LinkPair aggregate to the model is a
-// Phase-A.3 follow-up.
+// LINK paramsets are not routed through the model — it holds no
+// channel-level LINK data points — and go straight to the backend. The
+// per-peer route [ParamsetsDomain.PutLinkParamset] stays the addressed
+// form of the same write.
 //
 // When the channel is not found in the model registry (diagnostic
 // tooling, unknown address), the call falls through to a direct backend
@@ -148,6 +149,15 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 	before, _ := b.GetParamset(ctx, deviceAddress, key)
 
 	ch := p.resolveChannel(deviceAddress)
+	if key == hmenum.ParamsetKeyLink {
+		// A LINK paramset exists per peer and has no channel-level data
+		// point, so the model's parameter lookup resolves nothing and
+		// SetMany rejects every LINK write with ErrUnknownParameter — even
+		// though this route accepts LINK as a paramset key and locks it for
+		// editing. Send it down the backend path, exactly as a channel the
+		// model does not hold is sent.
+		ch = nil
+	}
 	if ch != nil {
 		// Route through the model: Channel.SetMany validates + dispatches.
 		paramValues, convErr := anyMapToParamValues(ch, key, values)

@@ -35,6 +35,15 @@ import (
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
+// daemonServe boots the full process: config → registry → REST + UI
+// + MQTT servers → blocks on ctx.Done(). It is the real composition
+// root callers reach through `openccu-loom run --config path.yaml`.
+//
+// Production wires ctx via [signal.NotifyContext] so SIGINT / SIGTERM
+// triggers shutdown. Tests pass a cancellable ctx and call cancel()
+// instead of delivering a signal — that avoids syscall.Kill against
+// the test process's own PID, which would tear down the test
+// framework itself.
 func daemonServe(ctx context.Context, cfg *config.Config, stdout, stderr io.Writer) error {
 	return daemonServeWithDeps(ctx, cfg, stdout, stderr, nil)
 }
@@ -285,12 +294,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Wiring, so the same call routes to whichever bridge is live.
 	deps.SetMQTTReseed(bridge.PublishInitialSnapshot)
 
-	// Wire hub entity → MQTT publisher. Only active when MQTT is
-	// configured; guards on mqttWiring == nil so the daemon degrades
-	// gracefully without a broker. Re-fires on every broker reconnect
-	// so retained hub state (sysvars, programs, alarm/service messages)
-	// is restored after the broker drops its retained store or the
-	// supervisor swaps the stack — Start() is idempotent (Stop+rewire).
+	// The two retained-store scrubs that must run once, against the first
+	// live bridge. wireSouthbound offers the boot-time one; the connect hook
+	// below covers a daemon that came up beside a broker that was still down.
+	bootCleanups := newBootRetainCleanups(cfg, logger)
+
+	// Wire hub entity → MQTT publisher. Built whatever the boot config says,
+	// because the supervisor hands out one stable Wiring for the process:
+	// publishing through it while MQTT is off is a no-op, and an operator who
+	// enables MQTT at runtime gets the hub plane without a restart. Re-fires
+	// on every broker reconnect so retained hub state (sysvars, programs,
+	// alarm/service messages) is restored after the broker drops its retained
+	// store or the supervisor swaps the stack — Start() is idempotent
+	// (Stop+rewire).
 	//
 	// hubMQTT is declared outside the guard so wireSouthbound can re-run
 	// Start after stamping the per-central HubInfo (CCU serials) — hub
@@ -320,7 +336,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// after a broker restart drops its retained store. Snapshot is
 		// idempotent (retained topics, same payload) and a no-op before
 		// hydration has populated the model.
+		//
+		// The scrubs share this hook rather than owning their own so the
+		// order the boot path establishes survives here: the unscoped-id
+		// clear has to precede the snapshot that re-announces those entities
+		// under a serial-carrying id. They are a no-op once either path has
+		// run them.
 		mqttSup.OnConnect(func(ctx context.Context) {
+			bootCleanups.run(ctx, mqttWiring.Bridge())
 			bridge.PublishInitialSnapshot(ctx)
 		})
 	}
@@ -466,6 +489,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		healthTracker:           healthTracker,
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		mqttWiring:              mqttWiring,
+		bootCleanups:            bootCleanups,
 		bridge:                  bridge,
 		hubMQTT:                 hubMQTT,
 		postHubReady:            deps.RefreshMDNSTXT,
@@ -740,65 +764,68 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS
 	// stop defer.
 	restMountTeardown := mountRESTServer(ctx, cfg, logger, northBridges, restMountDeps{
-		reg:                     reg,
-		bootstrap:               bootstrapRouter,
-		noUsers:                 noUsers,
-		sqUsers:                 sqUsers,
-		sqCentrals:              sqCentrals,
-		sqSections:              sqSections,
-		sqTokens:                sqTokens,
-		tokenPurger:             rw.tokenPurger,
-		sessions:                sessions,
-		matter:                  matter,
-		reload:                  deps,
-		healthAdapter:           healthAdapter,
-		configAdapter:           configAdapter,
-		devicesAdapter:          devicesAdapter,
-		deviceAdminDomain:       deviceAdminDomain,
-		ccuMaintenanceDomain:    ccuMaintenanceDomain,
-		addonUpdater:            addonUpdater,
-		groupsDomain:            groupsDomain,
-		deviceReloader:          deviceReloader,
-		firmwareRefresher:       adapter.NewFirmwareDomain(reg, valueWriter),
-		editSessions:            editSessions,
-		dpWriterAdapter:         dpWriterAdapter,
-		customDPDispatcher:      customDPDispatcher,
-		paramsetsDomain:         paramsetsDomain,
-		parameterDeterminer:     adapter.NewParameterDeterminerAdapter(reg, valueWriter),
-		hubAdapter:              hubAdapter,
-		ifaceAdapter:            ifaceAdapter,
-		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
-		alarm:                   alarmSvc,
-		security:                securitySvc,
-		masterProfiles:          masterProfilesStore,
-		sysStatusBuf:            sysStatusBuf,
-		visFilter:               visFilter,
-		metricsReg:              metricsReg,
-		uiSchemaAdapter:         uiSchemaAdapter,
-		linksDomain:             linksDomain,
-		schedulesDomain:         schedulesDomain,
-		centralLinksDomain:      centralLinksDomain,
-		definitionExportDomain:  definitionExportDomain,
-		backupAdapter:           backupAdapter,
-		roomFunctionAdmin:       roomFunctionAdmin,
-		cacheResetSvc:           cacheResetReset(cacheResetSvc),
-		auditBuf:                auditBuf,
-		auditRead:               auditRead,
-		auditRec:                auditRec,
-		restAuth:                restAuth,
-		configSvc:               configAdminSvc,
-		userSvc:                 userAdminSvc,
-		passwordSvc:             selfPasswordSvc,
-		prefSvc:                 prefSvc,
-		diagramSvc:              diagramSvc,
-		areaSvc:                 areaSvc,
-		tokenSvc:                tokenAdminSvc,
-		centSvc:                 centralAdminSvc,
-		discovery:               discoveryDeps,
-		translations:            translations,
-		catalogs:                catalogs,
-		mqttSup:                 mqttSup,
-		mqttAvailable:           mqttWiring != nil,
+		reg:                    reg,
+		bootstrap:              bootstrapRouter,
+		noUsers:                noUsers,
+		sqUsers:                sqUsers,
+		sqCentrals:             sqCentrals,
+		sqSections:             sqSections,
+		sqTokens:               sqTokens,
+		tokenPurger:            rw.tokenPurger,
+		sessions:               sessions,
+		matter:                 matter,
+		reload:                 deps,
+		healthAdapter:          healthAdapter,
+		configAdapter:          configAdapter,
+		devicesAdapter:         devicesAdapter,
+		deviceAdminDomain:      deviceAdminDomain,
+		ccuMaintenanceDomain:   ccuMaintenanceDomain,
+		addonUpdater:           addonUpdater,
+		groupsDomain:           groupsDomain,
+		deviceReloader:         deviceReloader,
+		firmwareRefresher:      adapter.NewFirmwareDomain(reg, valueWriter),
+		editSessions:           editSessions,
+		dpWriterAdapter:        dpWriterAdapter,
+		customDPDispatcher:     customDPDispatcher,
+		paramsetsDomain:        paramsetsDomain,
+		parameterDeterminer:    adapter.NewParameterDeterminerAdapter(reg, valueWriter),
+		hubAdapter:             hubAdapter,
+		ifaceAdapter:           ifaceAdapter,
+		incidents:              adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
+		alarm:                  alarmSvc,
+		security:               securitySvc,
+		masterProfiles:         masterProfilesStore,
+		sysStatusBuf:           sysStatusBuf,
+		visFilter:              visFilter,
+		metricsReg:             metricsReg,
+		uiSchemaAdapter:        uiSchemaAdapter,
+		linksDomain:            linksDomain,
+		schedulesDomain:        schedulesDomain,
+		centralLinksDomain:     centralLinksDomain,
+		definitionExportDomain: definitionExportDomain,
+		backupAdapter:          backupAdapter,
+		roomFunctionAdmin:      roomFunctionAdmin,
+		cacheResetSvc:          cacheResetReset(cacheResetSvc),
+		auditBuf:               auditBuf,
+		auditRead:              auditRead,
+		auditRec:               auditRec,
+		restAuth:               restAuth,
+		configSvc:              configAdminSvc,
+		userSvc:                userAdminSvc,
+		passwordSvc:            selfPasswordSvc,
+		prefSvc:                prefSvc,
+		diagramSvc:             diagramSvc,
+		areaSvc:                areaSvc,
+		tokenSvc:               tokenAdminSvc,
+		centSvc:                centralAdminSvc,
+		discovery:              discoveryDeps,
+		translations:           translations,
+		catalogs:               catalogs,
+		mqttSup:                mqttSup,
+		// The capability token tracks the operator's setting, not the
+		// pointer: the supervisor now hands out its stable Wiring even with
+		// MQTT off, so a non-nil Wiring no longer means the plane is on.
+		mqttAvailable:           cfg.North.MQTT.Enabled,
 		restResolve:             restResolve,
 		authMw:                  authMw,
 		wsHandler:               wsHandler,

@@ -192,6 +192,30 @@ var ErrCollectorConsumed = errors.New("generic: CallParameterCollector already c
 // without a [CollectorBackend].
 var ErrNoBackend = errors.New("generic: CallParameterCollector has no backend")
 
+// FlushCollector dispatches whatever `coll` has staged and folds the
+// wire result into the operation error the caller already has.
+//
+// It exists because staging is not sending: a command that hands its
+// parameters to a collector returns nil as soon as they are buffered,
+// and the put_paramset only happens in [CallParameterCollector.Send].
+// Dropping that error reports a failed CCU write as success — the
+// collector has already rolled the optimistic value back, so the
+// caller's 200/OK contradicts the state the very next event carries.
+//
+// `opErr` wins when both fail: it describes the earlier failure, and
+// the staged batch is flushed either way so the dispatch semantics of
+// a partially-staged operation stay what they were.
+func FlushCollector(ctx context.Context, coll *CallParameterCollector, opErr error) error {
+	if coll == nil {
+		return opErr
+	}
+	sendErr := coll.Send(ctx)
+	if opErr != nil {
+		return opErr
+	}
+	return sendErr
+}
+
 // Add buffers a sub-DP set. order steers dispatch sequence within a
 // paramsetKey — lower orders fire first. Items added with the same
 // order on the same channel collapse into one PutParamset.

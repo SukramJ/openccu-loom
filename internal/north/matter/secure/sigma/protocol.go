@@ -650,9 +650,12 @@ func (r *Responder) ProcessSigma1WithResume(sigma1Bytes []byte) (Sigma1ProcessRe
 		len(sigma1.InitiatorResumeMIC) == ResumptionIDSize {
 		result, ok, resumeErr := r.tryResume(sigma1)
 		if resumeErr != nil {
-			// Unrecoverable error (store I/O failure, crypto error
-			// other than bad-MIC). Propagate — do not silently fall
-			// through to Full Sigma.
+			// Crypto / KDF failure on an otherwise matching resumption
+			// record. Propagate — do not silently fall through to Full
+			// Sigma. A resumption-store lookup failure is NOT in this
+			// class: tryResume folds it into a miss so a transient
+			// store error downgrades to a Full Sigma handshake instead
+			// of aborting the peer's CASE attempt.
 			return Sigma1ProcessResult{}, resumeErr
 		}
 		if ok {
@@ -684,7 +687,12 @@ func (r *Responder) tryResume(sigma1 Sigma1) (Sigma1ProcessResult, bool, error) 
 	sessionIDBefore := r.sessionID
 	rec, err := r.resumptionStore.GetByID(sigma1.ResumptionID)
 	if err != nil || rec == nil {
-		// Unknown id → fall through to Full Sigma.
+		// Unknown id — or a store lookup that failed — both fall
+		// through to Full Sigma. A lookup failure is deliberately not
+		// distinguished from a miss: the fall-through is always safe
+		// (the peer completes a Full Sigma handshake), while
+		// propagating would turn a transient store error into a failed
+		// CASE establishment.
 		return Sigma1ProcessResult{}, false, nil //nolint:nilerr // miss is non-fatal; caller retries with full Sigma
 	}
 

@@ -67,20 +67,49 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 }
 
 // matterFabricRevokerAdapter implements [handlers.MatterFabricRevoker].
+//
+// It carries the runtime teardown because no cluster command runs on this
+// path: the OperationalCredentials RemoveFabric hooks that close sessions and
+// retire the mDNS instance fire only for a commissioner's wire invocation, so
+// the operator surfaces have to run the same fan-out themselves.
 type matterFabricRevokerAdapter struct {
 	store *matterstore.Store
+	// teardown is the shared fabric-removal fan-out (session + subscription
+	// close, resumption purge, fabric-removed emission). Nil only in tests
+	// that exercise the store half alone.
+	teardown func(ctx context.Context, fabricIndex uint8)
+	// withdraw retires the removed identity's operational mDNS instance and
+	// republishes the remaining fabric set.
+	withdraw func(ctx context.Context, compressedID [8]byte, nodeID uint64)
 }
 
-// RevokeFabric implements [handlers.MatterFabricRevoker]. Closes the
-// fabric in the store; the live bridge picks up the change at the
-// next reassemble. CASE sessions tied to the revoked fabric are
-// dropped through the existing `subscription.Manager.CloseFabric`
-// hook (wired by the daemon at boot).
+// RevokeFabric implements [handlers.MatterFabricRevoker]: it removes the
+// fabric row AND runs every runtime consequence the wire command's
+// RemoveFabric would have triggered.
+//
+// Removing the row alone was the whole implementation once, and it read as a
+// success on every surface: the SPA reported "removed", fabric_count dropped
+// to zero, and the unpaired controller kept its live CASE session, its
+// subscription and the operational `_matter._tcp` record until the daemon
+// restarted.
 func (a *matterFabricRevokerAdapter) RevokeFabric(ctx context.Context, fabricIndex uint8) error {
 	if a == nil || a.store == nil {
 		return matterbridge.ErrCommissioningWindowNotConfigured
 	}
-	return a.store.RemoveFabric(ctx, fabricIndex)
+	// Read before delete: the operational advertisement is keyed by the
+	// fabric's compressed ID + node ID, and the row is the only place that
+	// knows them.
+	rec, recErr := a.store.GetFabric(ctx, fabricIndex)
+	if err := a.store.RemoveFabric(ctx, fabricIndex); err != nil {
+		return err
+	}
+	if recErr == nil && a.withdraw != nil {
+		a.withdraw(ctx, rec.CompressedID, rec.NodeID)
+	}
+	if a.teardown != nil {
+		a.teardown(ctx, fabricIndex)
+	}
+	return nil
 }
 
 // ListFabricIndexes implements [handlers.MatterFabricPurger]. The

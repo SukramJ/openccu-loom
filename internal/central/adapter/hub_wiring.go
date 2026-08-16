@@ -315,29 +315,34 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 		slog.String("central", cc.Name),
 		slog.Int("count", len(names)))
 
+	// Rooms and functions are read at the same point as the names above and
+	// are stamped onto each channel exactly once by the same pipeline pass,
+	// so the same reasoning applies: substituting an empty map for a failed
+	// read leaves every channel of the fleet without a room and without a
+	// function — on the SPA, REST, MQTT `suggested_area` and the alarm room
+	// grouping alike — for the rest of the daemon run, because nothing
+	// re-stamps a built model. Returning to the readiness gate costs one
+	// re-probe; an empty answer is still not a failure, so a CCU that
+	// genuinely defines no rooms comes up unaffected.
 	rooms, err := loadRoomAssignments(ctx, jc, iseToAddress)
 	if err != nil {
-		logger.Warn("hub.rooms.load",
-			slog.String("central", cc.Name),
-			slog.String("err", err.Error()))
-		rooms = AssignmentMap{}
-	} else {
-		logger.Info("hub.rooms.ok",
-			slog.String("central", cc.Name),
-			slog.Int("count", len(rooms)))
+		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
+		_ = jc.Logout(context.Background())
+		return nil, HubData{}, nil, fmt.Errorf("hub room assignments (room source for every channel): %w", err)
 	}
+	logger.Info("hub.rooms.ok",
+		slog.String("central", cc.Name),
+		slog.Int("count", len(rooms)))
 
 	functions, err := loadFunctionAssignments(ctx, jc, iseToAddress)
 	if err != nil {
-		logger.Warn("hub.functions.load",
-			slog.String("central", cc.Name),
-			slog.String("err", err.Error()))
-		functions = AssignmentMap{}
-	} else {
-		logger.Info("hub.functions.ok",
-			slog.String("central", cc.Name),
-			slog.Int("count", len(functions)))
+		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
+		_ = jc.Logout(context.Background())
+		return nil, HubData{}, nil, fmt.Errorf("hub function assignments (function source for every channel): %w", err)
 	}
+	logger.Info("hub.functions.ok",
+		slog.String("central", cc.Name),
+		slog.Int("count", len(functions)))
 
 	// Populate the DeviceDetails cache from the already-loaded hub data.
 	// This re-uses the three payloads fetched above (names+iseToAddress,
@@ -382,13 +387,28 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 			slog.String("err", err.Error()))
 	}
 
+	// gated wraps a refresh hook so a torn-down generation never reaches the
+	// CCU. The closer logs this generation's JSON-RPC session out, but the
+	// hooks stay installed until the next successful WireHub replaces them —
+	// and a re-init may leave that gate waiting minutes. A call through the
+	// logged-out client logs transparently back in, minting a CCU session the
+	// already-executed closer can never release, from a pool the WebUI shares.
+	gated := func(fn func(context.Context) error) func(context.Context) error {
+		return func(ctx context.Context) error {
+			if !generationActive.Load() {
+				return nil
+			}
+			return fn(ctx)
+		}
+	}
+
 	// Wire periodic-refresh hooks on the HubCoordinator. The background
 	// scheduler's hub.*_refresh jobs delegate through c.Hub.Refresh*,
 	// which call these closures. Without this step the scheduler jobs
 	// are registered but run as no-ops because the inner hook is nil.
 	if unit.Hub != nil {
 		unit.Hub.SetRefreshHooks(coordinators.RefreshHooks{
-			Programs: func(ctx context.Context) error {
+			Programs: gated(func(ctx context.Context) error {
 				if err := loadPrograms(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
 					return err
 				}
@@ -397,35 +417,35 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 				// on the right card.
 				assignHubChannels(unit, logger)
 				return nil
-			},
-			Sysvars: func(ctx context.Context) error {
+			}),
+			Sysvars: gated(func(ctx context.Context) error {
 				if err := loadSysvars(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
 					return err
 				}
 				assignHubChannels(unit, logger)
 				return nil
-			},
-			Inbox: func(ctx context.Context) error {
+			}),
+			Inbox: gated(func(ctx context.Context) error {
 				return loadInbox(ctx, runner, unit)
-			},
-			ServiceMessages: func(ctx context.Context) error {
+			}),
+			ServiceMessages: gated(func(ctx context.Context) error {
 				return loadServiceMessages(ctx, runner, unit, catalogs, locale)
-			},
-			AlarmMessages: func(ctx context.Context) error {
+			}),
+			AlarmMessages: gated(func(ctx context.Context) error {
 				return loadAlarmMessages(ctx, runner, unit.HubModel, catalogs, locale)
-			},
-			SystemUpdate: func(ctx context.Context) error {
+			}),
+			SystemUpdate: gated(func(ctx context.Context) error {
 				return loadSystemUpdate(ctx, runner, unit.HubModel)
-			},
-			InstallMode: func(ctx context.Context) error {
+			}),
+			InstallMode: gated(func(ctx context.Context) error {
 				return loadInstallMode(ctx, jc, unit)
-			},
-			Connectivity: func(ctx context.Context) error {
+			}),
+			Connectivity: gated(func(ctx context.Context) error {
 				return loadConnectivity(ctx, unit)
-			},
-			BidcosInterfaces: func(ctx context.Context) error {
+			}),
+			BidcosInterfaces: gated(func(ctx context.Context) error {
 				return loadBidcosInterfaces(ctx, jc, unit)
-			},
+			}),
 		})
 		// Initial system-update fetch. The reference stack's scheduler
 		// runs every job immediately at start (next_run = now), so the

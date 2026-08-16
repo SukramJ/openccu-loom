@@ -52,15 +52,19 @@ type mqttSupervisor struct {
 	mu     sync.Mutex
 	logger *slog.Logger
 
-	wiring *mqtt.Wiring // stable across swaps; nil when MQTT disabled at boot
+	wiring *mqtt.Wiring // stable across swaps; allocated by Start, nil before it
 
 	healthTracker *health.Tracker
 	collector     *metrics.MqttCollector // nil when no metrics registry provided
 	// channelHidden reports whether the operator has hidden a channel (G12) so
 	// the (re)built bridge skips its MQTT state. Nil disables the gate.
 	channelHidden func(central, channelAddress string) bool
-	subBuilder    SubscriberBuilder
-	onConnect     []func(context.Context) // forwarded to every (re)built lifecycle
+	// centralNames resolves the centrals the daemon currently serves, for the
+	// retained bridge/health payload every (re)built bridge republishes. Nil
+	// falls back to the boot config, which misses a CCU adopted at runtime.
+	centralNames func() []string
+	subBuilder   SubscriberBuilder
+	onConnect    []func(context.Context) // forwarded to every (re)built lifecycle
 
 	current *mqttSwap // nil when no stack is active (MQTT disabled or pre-Start)
 
@@ -106,13 +110,19 @@ type SubscriberBuilder func(ctx context.Context, client mqtt.Client, bridge *mqt
 // newMQTTSupervisor returns a supervisor that has not yet built a
 // stack. Call [mqttSupervisor.Start] to materialise the initial
 // stack from the boot config.
-func newMQTTSupervisor(logger *slog.Logger, healthTracker *health.Tracker) *mqttSupervisor {
+//
+// centralNames resolves the live central set for every stack generation the
+// supervisor builds; a nil func makes each generation fall back to the boot
+// config. It is a constructor argument rather than a setter because a bridge
+// captures the supplier at build time and offers no way to re-point it.
+func newMQTTSupervisor(logger *slog.Logger, healthTracker *health.Tracker, centralNames func() []string) *mqttSupervisor {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &mqttSupervisor{
 		logger:        logger,
 		healthTracker: healthTracker,
+		centralNames:  centralNames,
 		retryDelay:    defaultMQTTRetryDelay,
 		retryMaxDelay: defaultMQTTRetryMaxDelay,
 	}
@@ -216,11 +226,29 @@ func (s *mqttSupervisor) AttachSubscribers(ctx context.Context) error {
 
 // Wiring returns the stable [*mqtt.Wiring] pointer used by all
 // downstream consumers (EventBridge, HubMQTTPublisher, hub-MQTT
-// publisher). Returns nil when MQTT was disabled in the boot config
-// — consumers must handle the nil case (they already do).
+// publisher). [Start] allocates it whatever the boot config says, so a
+// consumer that binds it after Start binds the pointer every later stack
+// is installed into. Returns nil only before Start has run — consumers
+// must still handle that case (they already do).
 func (s *mqttSupervisor) Wiring() *mqtt.Wiring {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.wiring
+}
+
+// ensureWiring returns the process-stable Wiring pointing at b, allocating
+// it on first use. Every north-bound consumer captures this pointer once at
+// composition time, so the supervisor has to keep handing out the same one
+// for its whole lifetime; a bridge-less Wiring drops publishes instead of
+// routing them, which is exactly what "MQTT is off right now" should do.
+func (s *mqttSupervisor) ensureWiring(b *mqtt.Bridge) *mqtt.Wiring {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.wiring == nil {
+		s.wiring = mqtt.NewWiring(b, s.logger)
+		return s.wiring
+	}
+	s.wiring.SwapBridge(b)
 	return s.wiring
 }
 
@@ -250,11 +278,20 @@ func (s *mqttSupervisor) CurrentBridge() *mqtt.Bridge {
 
 // Start materialises the initial MQTT stack from cfg and wires the
 // subscribers. A nil-or-disabled cfg leaves the supervisor in a
-// no-stack state and returns nil.
+// no-stack state — but with the stable Wiring allocated — and returns nil.
 func (s *mqttSupervisor) Start(ctx context.Context, cfg *config.Config) error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 	if cfg == nil || !cfg.North.MQTT.Enabled {
+		// The Wiring is allocated even with MQTT off, for the same reason the
+		// failed-connect branch below allocates it: every consumer binds this
+		// pointer once at composition time, so handing them nil is permanent.
+		// An operator who enables MQTT later (SPA save + reload, config
+		// watcher) would otherwise get a connected broker that no bridge, hub
+		// or system-status publisher ever reaches — the Swap installs its
+		// bridge into a Wiring nobody holds. A bridge-less Wiring publishes
+		// nowhere, so it costs nothing while MQTT stays off.
+		s.ensureWiring(nil)
 		s.logger.Info("mqtt.supervisor.start.skipped",
 			slog.String("reason", "mqtt disabled in config"))
 		return nil
@@ -274,24 +311,18 @@ func (s *mqttSupervisor) Start(ctx context.Context, cfg *config.Config) error {
 		//
 		// Second, the lifecycle's reconnect loop only starts after a
 		// successful first connect, so nothing retries on its own.
-		s.mu.Lock()
-		if s.wiring == nil {
-			s.wiring = mqtt.NewWiring(nil, s.logger)
-		}
-		s.mu.Unlock()
+		s.ensureWiring(nil)
 		s.retryInitialConnect(ctx, cfg)
 		return err
 	}
+	wiring := s.ensureWiring(swap.bridge)
 	s.mu.Lock()
-	if s.wiring == nil {
-		s.wiring = mqtt.NewWiring(swap.bridge, s.logger)
-	} else {
-		s.wiring.SwapBridge(swap.bridge)
-	}
-	wiring := s.wiring
 	subBuilder := s.subBuilder
 	s.current = swap
 	s.mu.Unlock()
+	// Only now, with the new bridge live behind the shared Wiring, may the
+	// connect callbacks run — see [mqttSupervisor.announceConnected].
+	s.announceConnected(ctx, swap)
 
 	if subBuilder != nil {
 		stop, sErr := subBuilder(ctx, swap.client, wiring.Bridge())
@@ -397,7 +428,6 @@ func (s *mqttSupervisor) Swap(ctx context.Context, newCfg *config.Config) error 
 	// Snapshot current state under the lock.
 	s.mu.Lock()
 	oldSwap := s.current
-	wiring := s.wiring
 	subBuilder := s.subBuilder
 	s.mu.Unlock()
 
@@ -431,14 +461,13 @@ func (s *mqttSupervisor) Swap(ctx context.Context, newCfg *config.Config) error 
 	// the new broker the instant this returns. The old stack's
 	// publishers still hold a reference to the old bridge but
 	// nothing new is routed through them.
+	s.ensureWiring(newSwap.bridge)
 	s.mu.Lock()
-	if s.wiring == nil {
-		s.wiring = mqtt.NewWiring(newSwap.bridge, s.logger)
-	} else {
-		s.wiring.SwapBridge(newSwap.bridge)
-	}
 	s.current = newSwap
 	s.mu.Unlock()
+	// Republish hooks run against the committed bridge, never against the
+	// predecessor — see [mqttSupervisor.announceConnected].
+	s.announceConnected(ctx, newSwap)
 
 	// Build new subscribers against the new client. Order matters:
 	// the new stack is already publishing, so any inbound command
@@ -467,9 +496,6 @@ func (s *mqttSupervisor) Swap(ctx context.Context, newCfg *config.Config) error 
 	if oldSwap != nil {
 		s.teardown(ctx, oldSwap)
 	}
-
-	// Suppress unused-var warning when subBuilder is nil at swap time.
-	_ = wiring
 
 	s.logger.Info("mqtt.supervisor.swap.completed",
 		slog.String("broker", redactBrokerURL(newCfg.North.MQTT.BrokerURL)),
@@ -510,8 +536,9 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 	s.mu.Lock()
 	col := s.collector
 	hidden := s.channelHidden
+	names := s.centralNames
 	s.mu.Unlock()
-	stack := buildMQTT(cfg, s.logger, col, hidden)
+	stack := buildMQTT(cfg, s.logger, col, hidden, names)
 	if stack == nil {
 		return nil, errors.New("mqtt.supervisor.build: buildMQTT returned nil with MQTT enabled")
 	}
@@ -526,15 +553,14 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 		lifecycle: stack.lifecycle,
 	}
 	if sw.lifecycle != nil {
-		// Forward any supervisor-level OnConnect callbacks to the new
-		// lifecycle before Start so they fire on the initial connect.
-		s.mu.Lock()
-		hooks := make([]func(context.Context), len(s.onConnect))
-		copy(hooks, s.onConnect)
-		s.mu.Unlock()
-		for _, fn := range hooks {
-			sw.lifecycle.OnConnect(fn)
-		}
+		// The supervisor's OnConnect callbacks are deliberately NOT forwarded
+		// here: Lifecycle.Start performs the first connect synchronously and
+		// fires them from inside it, which is before the caller commits this
+		// bridge into the shared Wiring — so every republish would route
+		// through the predecessor bridge (or, after a failed boot connect,
+		// through none at all) and silently reach nothing.
+		// [mqttSupervisor.announceConnected] attaches and runs them once the
+		// commit has happened.
 		if err := sw.lifecycle.Start(ctx); err != nil {
 			logConnectFailure(s.logger, cfg.North.MQTT, err)
 			return nil, fmt.Errorf("lifecycle.Start: %w", err)
@@ -544,6 +570,33 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 		sw.cancelHealth = mqtt.StartHealthProbe(ctx, cs, s.healthTracker, mqtt.DefaultProbeInterval)
 	}
 	return sw, nil
+}
+
+// announceConnected hands the supervisor's connect callbacks to the freshly
+// built lifecycle — so later reconnects fire them — and runs them once for the
+// connect [buildSwap] already performed.
+//
+// It must be called AFTER the new bridge is committed into the shared Wiring.
+// Every callback republishes through that Wiring (hub discovery, the raw-plane
+// snapshot), and Lifecycle.Start fires the first connect synchronously, before
+// any commit could have happened: a callback attached ahead of Start therefore
+// publishes onto the previous bridge, or onto no bridge at all when the boot
+// connect had failed. That is what left a recovered link with a live broker and
+// no state on it.
+func (s *mqttSupervisor) announceConnected(ctx context.Context, sw *mqttSwap) {
+	if sw == nil || sw.lifecycle == nil {
+		return
+	}
+	s.mu.Lock()
+	hooks := make([]func(context.Context), len(s.onConnect))
+	copy(hooks, s.onConnect)
+	s.mu.Unlock()
+	for _, fn := range hooks {
+		sw.lifecycle.OnConnect(fn)
+	}
+	for _, fn := range hooks {
+		fn(ctx)
+	}
 }
 
 // teardown runs the per-swap shutdown sequence in safe order:

@@ -412,14 +412,18 @@ func (s *Sysvar) ResetUnconfirmedValue() {
 // (unconfirmed) value is stored only after the CCU call succeeds, so a failed
 // write never causes a transient cache flash for readers.
 func (s *Sysvar) Set(ctx context.Context, v hmtypes.ParamValue) error {
+	// The name addresses the variable on the wire and can be rewritten by a
+	// concurrent rename, so it is read once through the data point's lock and
+	// the same value is used for the write and its error message.
+	name := s.LegacyName()
 	if s.Writer == nil {
-		return fmt.Errorf("sysvar %q: no writer configured", s.Name)
+		return fmt.Errorf("sysvar %q: no writer configured", name)
 	}
 	wireValue, err := s.toWire(v)
 	if err != nil {
 		return err
 	}
-	if err := s.Writer.SetSysvar(ctx, s.Name, wireValue); err != nil {
+	if err := s.Writer.SetSysvar(ctx, name, wireValue); err != nil {
 		return err
 	}
 	// Apply optimistic value only after a successful backend write.
@@ -462,14 +466,18 @@ func (s *Sysvar) PathData() naming.PathData {
 // Legacy mirror topics are a bridge-operations detail and live
 // behind LegacyAliasConfig in the north/mqtt package.
 func (s *Sysvar) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
-	if s.Name == "" {
+	// One read of the name for the whole topic set: a rename between the
+	// state and the command topic would otherwise publish a pair that does
+	// not belong to the same variable.
+	name := s.LegacyName()
+	if name == "" {
 		return payload.MQTTTopicSet{}
 	}
 	set := payload.MQTTTopicSet{
-		State: naming.MQTTHubSysvarState(base, centralName, s.Name),
+		State: naming.MQTTHubSysvarState(base, centralName, name),
 	}
 	if s.Writer != nil {
-		set.Set = naming.MQTTHubSysvarCommand(base, centralName, s.Name)
+		set.Set = naming.MQTTHubSysvarCommand(base, centralName, name)
 	}
 	return set
 }

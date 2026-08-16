@@ -6,6 +6,9 @@ package engine_test
 import (
 	"testing"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // This file covers Reload's zone-drop path: a direct store deletion of
@@ -19,6 +22,39 @@ func (h *harness) pendingTimerCount() int {
 	h.sched.mu.Lock()
 	defer h.sched.mu.Unlock()
 	return len(h.sched.timers)
+}
+
+// TestReload_SeedsCurrentValuesForNewlyEnrolledSensors pins the
+// configuration-write half of the same guarantee Start carries: a
+// sensor the engine has never seen an event for reads as "unknown",
+// and the blocker policy classifies only a *known* active sensor. A
+// contact enrolled while it stands open would therefore leave the zone
+// reporting ready to arm — on the SPA, on MQTT, everywhere readiness is
+// surfaced — until that contact happens to push.
+func TestReload_SeedsCurrentValuesForNewlyEnrolledSensors(t *testing.T) {
+	h := newHarness(t)
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
+	h.start()
+
+	// The operator enrolls a window contact that stands open right now.
+	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+		Modes: []hmenum.AlarmMode{hmenum.AlarmModePerimeter, hmenum.AlarmModeFull},
+	})
+	h.reader.set("window", true)
+	if err := h.eng.Reload(h.ctx); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+
+	rd, ok := h.mustSnapshot("eg").Readiness[hmenum.AlarmModeFull]
+	if !ok {
+		t.Fatal("no readiness verdict for full after the reload")
+	}
+	if rd.Ready {
+		t.Errorf("zone reports ready to arm with the freshly enrolled window open: %+v", rd)
+	}
+	if got := sortedStrings(rd.Blockers); len(got) != 1 || got[0] != "window" {
+		t.Errorf("blockers = %v, want [window]", got)
+	}
 }
 
 func TestReload_DroppingAZoneCancelsItsPendingAutoRearmTimer(t *testing.T) {

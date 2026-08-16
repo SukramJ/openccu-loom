@@ -565,6 +565,12 @@ func (c *InterfaceClient) Close() {
 	if c.cfg.Retrier != nil {
 		c.cfg.Retrier.CancelInterface()
 	}
+	// Release everyone parked on a coalesced call. Their transport is gone,
+	// so waiting for a result that can no longer arrive only holds the
+	// caller — the shutdown error tells them the call was not carried out.
+	if c.cfg.Coalescer != nil {
+		c.cfg.Coalescer.Clear()
+	}
 	c.closeThrottles()
 }
 

@@ -44,13 +44,13 @@ func TestAckTrackerOweAndPending(t *testing.T) {
 func TestAckTrackerDischarge(t *testing.T) {
 	tracker := mrp.NewAckTracker(0)
 	tracker.Owe(100, 0, 1, true, t0)
-	if !tracker.Discharge(0, 1) {
+	if !tracker.Discharge(0, 1, true) {
 		t.Fatal("Discharge(0, 1) = false on first call, want true")
 	}
 	if tracker.Pending() != 0 {
 		t.Fatalf("Pending() = %d after Discharge, want 0", tracker.Pending())
 	}
-	if tracker.Discharge(0, 1) {
+	if tracker.Discharge(0, 1, true) {
 		t.Fatal("Discharge(0, 1) = true on second call, want false")
 	}
 }
@@ -206,7 +206,7 @@ func TestAckTrackerSessionScopedExchangeCollision(t *testing.T) {
 	}
 
 	// Discharging session 10's obligation must not touch session 20's.
-	if !tracker.Discharge(10, exch) {
+	if !tracker.Discharge(10, exch, true) {
 		t.Fatal("Discharge(10, 5) = false, want true (obligation existed)")
 	}
 	if got := tracker.Pending(); got != 1 {
@@ -215,7 +215,7 @@ func TestAckTrackerSessionScopedExchangeCollision(t *testing.T) {
 
 	// LookupAndDischarge on the surviving session returns its own counter,
 	// not session 10's (already-discharged) one.
-	counter, ok := tracker.LookupAndDischarge(20, exch)
+	counter, ok := tracker.LookupAndDischarge(20, exch, false)
 	if !ok {
 		t.Fatal("LookupAndDischarge(20, 5) = (_, false), want (_, true)")
 	}
@@ -243,7 +243,7 @@ func TestAckTrackerExpediteDue(t *testing.T) {
 		t.Fatalf("Due at t0 before ExpediteDue: got %d obligations, want 0", len(got))
 	}
 
-	if !tracker.ExpediteDue(0, 1) {
+	if !tracker.ExpediteDue(0, 1, true) {
 		t.Fatal("ExpediteDue(0, 1) = false, want true (obligation existed)")
 	}
 
@@ -259,7 +259,55 @@ func TestAckTrackerExpediteDue(t *testing.T) {
 	}
 
 	// Unknown (session, exchange) pair — no obligation to expedite.
-	if tracker.ExpediteDue(0, 999) {
+	if tracker.ExpediteDue(0, 999, true) {
 		t.Error("ExpediteDue(0, 999) = true, want false (no obligation exists)")
+	}
+}
+
+// TestAckTrackerRoleScopedExchangeCollision verifies that a peer-opened
+// and a bridge-opened exchange carrying the SAME id on the SAME session
+// keep independent obligations. Both kinds are live at once — an ongoing
+// subscription report runs on a bridge-opened exchange while the
+// controller drives its own requests on peer-opened ones — and with the
+// role missing from the key the second Owe overwrites the first, so one
+// peer's reliable message never gets its StandaloneAck and retransmits
+// to its cap. Mirrors matter.js ExchangeManager.ts:138, which ORs
+// 0x10000 into the key precisely because "the exchangeID can be the
+// same" for an initiated and a received exchange.
+func TestAckTrackerRoleScopedExchangeCollision(t *testing.T) {
+	tracker := mrp.NewAckTracker(0)
+	const (
+		sess = uint16(3)
+		exch = uint16(5)
+	)
+	tracker.Owe(111, sess, exch, true, t0)  // exchange the bridge opened
+	tracker.Owe(222, sess, exch, false, t0) // exchange the peer opened
+
+	if got := tracker.Pending(); got != 2 {
+		t.Fatalf("Pending() = %d for both roles on one (session, exchange), want 2", got)
+	}
+
+	// Each obligation carries its own role onto the standalone ACK.
+	due := tracker.Due(t0)
+	if len(due) != 2 {
+		t.Fatalf("Due() = %d obligations, want 2", len(due))
+	}
+	roles := map[bool]uint32{}
+	for _, obl := range due {
+		roles[obl.Initiator] = obl.AckCounter
+	}
+	if roles[true] != 111 || roles[false] != 222 {
+		t.Fatalf("obligations by role = %v, want {true:111, false:222}", roles)
+	}
+
+	// Discharging one role must leave the other intact.
+	tracker.Owe(333, sess, exch, true, t0)
+	tracker.Owe(444, sess, exch, false, t0)
+	if !tracker.Discharge(sess, exch, true) {
+		t.Fatal("Discharge(role=initiator) = false, want true")
+	}
+	counter, ok := tracker.LookupAndDischarge(sess, exch, false)
+	if !ok || counter != 444 {
+		t.Fatalf("LookupAndDischarge(role=responder) = (%d, %v), want (444, true)", counter, ok)
 	}
 }

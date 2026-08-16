@@ -62,6 +62,39 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			want:            false,
 		},
 		{
+			// A token the middleware cannot use is not an authentication
+			// source: gatedAuthMiddleware hands it a nil token store while
+			// bearer_enabled is false. Counting it closed the wizard on a
+			// daemon nobody could log into.
+			name:           "YAML bearer token present but the bearer scheme is off",
+			localUserCount: 0,
+			mutate: func(c *config.Config) {
+				c.North.REST.Auth.Tokens = map[string]string{"s3cr3t": "admin"}
+				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+			},
+			want: true,
+		},
+		{
+			name:            "persisted API token present but the bearer scheme is off",
+			localUserCount:  0,
+			persistedTokens: true,
+			mutate: func(c *config.Config) {
+				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+			},
+			want: true,
+		},
+		{
+			// The scheme gate only removes the token sources; a local admin
+			// still logs in through the SPA session route.
+			name:            "bearer scheme off but a local user exists",
+			localUserCount:  1,
+			persistedTokens: true,
+			mutate: func(c *config.Config) {
+				c.North.REST.Auth.BearerEnabled = ptrBool(false)
+			},
+			want: false,
+		},
+		{
 			name:           "CCU auth explicitly enabled with a configured central",
 			localUserCount: 0,
 			hasCentral:     true,

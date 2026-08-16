@@ -168,20 +168,21 @@ func MatterCommissioningWindow(opener MatterCommissioningOpener, publisher Matte
 		}
 		res, err := opener.OpenCommissioningWindow(req.Context(), duration)
 		if err != nil {
-			status := http.StatusInternalServerError
-			pType := problem.TypeInternal
+			const title = "Failed to open commissioning window"
 			switch {
 			case errors.Is(err, ErrCommissioningInProgress):
-				status = http.StatusConflict
-				pType = problem.TypeConflict
+				problem.Write(w, http.StatusConflict,
+					problem.New(problem.TypeConflict, req, title, err.Error()))
 			case errors.Is(err, ErrBridgeTopologyNotReady):
-				status = http.StatusServiceUnavailable
-				pType = problem.TypeServiceUnready
 				w.Header().Set("Retry-After", "30")
+				writeServerError(w, req, http.StatusServiceUnavailable,
+					problem.TypeServiceUnready, title, err)
+			default:
+				// The cause can carry store paths and socket detail, so it
+				// goes to the log only.
+				writeServerError(w, req, http.StatusInternalServerError,
+					problem.TypeInternal, title, err)
 			}
-			problem.Write(w, status,
-				problem.New(pType, req,
-					"Failed to open commissioning window", err.Error()))
 			return
 		}
 		response := MatterCommissioningWindowResponse(res)

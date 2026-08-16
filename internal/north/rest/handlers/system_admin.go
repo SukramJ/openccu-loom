@@ -6,7 +6,7 @@ package handlers
 import (
 	"net/http"
 	"os"
-	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -90,6 +90,7 @@ func PutStartupCapture(svc StartupCaptureService, rec audit.Recorder) http.Handl
 				action = "diagnostics.startup_capture_enabled"
 			}
 			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
 				Action: audit.Action(action),
 			})
 		}
@@ -97,11 +98,24 @@ func PutStartupCapture(svc StartupCaptureService, rec audit.Recorder) http.Handl
 	}
 }
 
-// restartTriggerOnce guards against double-fire when an impatient
-// operator double-clicks the SPA button. Without the lock the second
-// call would send a second SIGTERM after the first one already
-// scheduled the shutdown, producing a confusing 500 in the log.
-var restartTriggerOnce sync.Mutex
+// restartSignalled latches the first accepted restart request. The
+// signal is sent from a detached goroutine after the response has been
+// flushed, so a lock held for the handler's duration would not stop an
+// impatient double-click from firing a second SIGTERM into a shutdown
+// that is already running. The daemon exits after the first one, so the
+// latch is never reset.
+var restartSignalled atomic.Bool
+
+// restartSignal asks the daemon's own process to shut down. It is a
+// variable so the double-fire latch can be exercised without
+// terminating the test process.
+var restartSignal = func() {
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		return
+	}
+	_ = p.Signal(syscall.SIGTERM)
+}
 
 // Restart sends a SIGTERM to the daemon's own process and returns
 // immediately. The response body acknowledges the request; the
@@ -113,8 +127,7 @@ var restartTriggerOnce sync.Mutex
 // after the role middleware has accepted the request.
 func Restart(rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		restartTriggerOnce.Lock()
-		defer restartTriggerOnce.Unlock()
+		alreadySignalled := restartSignalled.Swap(true)
 		// Acknowledge before the signal lands — once SIGTERM fires
 		// the shutdown sequence may close the connection before we
 		// can send the response.
@@ -124,8 +137,15 @@ func Restart(rec audit.Recorder) http.HandlerFunc {
 		})
 		if rec != nil {
 			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
 				Action: audit.Action("system.restart_requested"),
 			})
+		}
+		if alreadySignalled {
+			// The shutdown is already running: the request is
+			// acknowledged and audited, but a second signal would only
+			// interrupt the graceful sequence.
+			return
 		}
 		// Send the signal on a goroutine so the response writer
 		// finishes flushing first. The 100 ms gap is comfortably
@@ -133,11 +153,7 @@ func Restart(rec audit.Recorder) http.HandlerFunc {
 		// operator wait noticeably.
 		go func() {
 			time.Sleep(100 * time.Millisecond)
-			p, err := os.FindProcess(os.Getpid())
-			if err != nil {
-				return
-			}
-			_ = p.Signal(syscall.SIGTERM)
+			restartSignal()
 		}()
 	}
 }

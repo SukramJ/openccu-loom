@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -237,7 +238,7 @@ func (n *NetworkCommissioning) MatterWrite(_ context.Context, attrID uint32, val
 // MatterInvoke rejects every command — openccu-loom ships Ethernet-only
 // and Ethernet has no commissioning surface.
 func (n *NetworkCommissioning) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: NetworkCommissioning command 0x%02X not supported (Ethernet-only)", cmdID)
+	return nil, im.UnsupportedCommandf("matter: NetworkCommissioning command 0x%02X not supported (Ethernet-only)", cmdID)
 }
 
 // MatterReportable lists the subscribe-able attributes.

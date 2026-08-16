@@ -17,6 +17,8 @@
 package wiring
 
 import (
+	"time"
+
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
@@ -169,6 +171,12 @@ func (p *RecoveryProvider) InRecovery() bool {
 }
 
 // RecoveryStates implements metrics.RecoveryProviderForMetrics.
+//
+// The counter snapshot carries no timestamp, so each entry is joined with the
+// coordinator's live per-interface state to also satisfy
+// metrics.RecoveryStateTimestamps — otherwise the aggregator's
+// last_recovery_time could never be filled although the daemon holds the
+// value in memory.
 func (p *RecoveryProvider) RecoveryStates() map[string]metrics.RecoveryStateMetrics {
 	if p.src == nil {
 		return nil
@@ -176,10 +184,23 @@ func (p *RecoveryProvider) RecoveryStates() map[string]metrics.RecoveryStateMetr
 	src := p.src.MetricsRecoveryStates()
 	out := make(map[string]metrics.RecoveryStateMetrics, len(src))
 	for k, v := range src {
-		out[k] = v
+		out[k] = timedRecoveryState{
+			RecoveryStateMetrics: v,
+			lastAttempt:          p.src.State(k).LastAttempt,
+		}
 	}
 	return out
 }
+
+// timedRecoveryState pairs the counter snapshot with the attempt timestamp
+// the coordinator records alongside it.
+type timedRecoveryState struct {
+	metrics.RecoveryStateMetrics
+	lastAttempt time.Time
+}
+
+// LastAttempt implements metrics.RecoveryStateTimestamps.
+func (s timedRecoveryState) LastAttempt() time.Time { return s.lastAttempt }
 
 // EventBusProvider adapts an *events.Bus to the
 // metrics.EventBusForMetrics protocol.

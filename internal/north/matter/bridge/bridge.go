@@ -1451,8 +1451,18 @@ func udpPort(listen string) int {
 
 // AttachDiagnosticEvents wires the ring the bridge records pairing and
 // session moments into. Passing nil detaches it.
+//
+// Call it before [Bridge.Start]: the receive path reads the field without
+// taking b.mu — the record calls sit on the per-datagram hot path — so the
+// serve goroutine must not be running yet when the ring is installed. The
+// lock taken here only orders concurrent attachers.
 func (b *Bridge) AttachDiagnosticEvents(ring *diagevent.Ring) {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
 	b.diagEvents = ring
+	b.mu.Unlock()
 }
 
 // DiagnosticEvents returns the recorded trace, newest first. Empty when

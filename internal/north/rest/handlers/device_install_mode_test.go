@@ -132,3 +132,22 @@ func TestPostDeviceInstallMode_InvalidJSON_Returns400(t *testing.T) {
 		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+// TestPostDeviceInstallMode_NoBody_DefaultsTo60 pins the optional body:
+// the operation declares no required request body, so a bodyless POST
+// must open the default window instead of failing the request.
+func TestPostDeviceInstallMode_NoBody_DefaultsTo60(t *testing.T) {
+	t.Parallel()
+	svc := &fakeInstallMode{}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV002"}))
+	w := httptest.NewRecorder()
+	PostDeviceInstallMode(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.lastSeconds != 60 {
+		t.Fatalf("expected lastSeconds=60 (default), got %d", svc.lastSeconds)
+	}
+}

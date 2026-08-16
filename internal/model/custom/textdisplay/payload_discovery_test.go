@@ -4,9 +4,13 @@
 package textdisplay
 
 import (
+	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // discoveryCtx is a minimal stub for payload.HADiscoveryContext used in
@@ -133,5 +137,48 @@ func TestTextDisplayHADiscoveryPayload_StateTopicPresent(t *testing.T) {
 	}
 	if v, _ := body["state_topic"].(string); v != ctx.CustomDPStateTopic() {
 		t.Errorf("state_topic = %q, want %q", v, ctx.CustomDPStateTopic())
+	}
+}
+
+// TestTextDisplayHACommandCarriesRowID pins that the HA text entity can
+// actually write. HA's text platform publishes the bare string the
+// operator typed; the `write` service method addresses one of the
+// display's rows and returns before touching the device when no id is
+// present, so the discovery payload has to template the id in.
+func TestTextDisplayHACommandCarriesRowID(t *testing.T) {
+	t.Parallel()
+	td := New("VCU3756007:3", &stubWriter{})
+	_, body := td.HADiscoveryPayload(discoveryCtx{})
+
+	tmpl, ok := body["command_template"].(string)
+	if !ok {
+		t.Fatal("command_template missing — HA would publish a bare string the write method rejects")
+	}
+	if !strings.Contains(tmpl, `"id"`) {
+		t.Errorf("command_template %q carries no row id", tmpl)
+	}
+	if !strings.Contains(tmpl, "value | tojson") {
+		t.Errorf("command_template %q must JSON-quote the operator's text", tmpl)
+	}
+}
+
+// TestTextDisplayWriteAcceptsTemplatedPayload feeds the object the
+// command template renders through the invoke path the MQTT bridge uses
+// and asserts it reaches the wire.
+func TestTextDisplayWriteAcceptsTemplatedPayload(t *testing.T) {
+	t.Parallel()
+	w := &stubWriter{}
+	td := New("VCU3756007:3", w)
+
+	// What HA publishes after rendering the command template.
+	var params map[string]any
+	if err := json.Unmarshal([]byte(`{"id": 1, "text": "Hello"}`), &params); err != nil {
+		t.Fatal(err)
+	}
+	if err := td.Invoke(context.Background(), "write", params, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if len(w.calls) == 0 {
+		t.Fatal("write produced no wire call")
 	}
 }

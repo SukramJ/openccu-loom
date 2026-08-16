@@ -830,6 +830,8 @@ func PutDataPointValue(idx DeviceIndex, _ DataPointWriter) http.HandlerFunc {
 			case errors.Is(err, device.ErrUnknownParameter):
 				problem.Write(w, http.StatusNotFound,
 					problem.New(problem.TypeNotFound, r, "Parameter not found", err.Error()))
+			case errors.Is(err, device.ErrChannelOperationLocked):
+				writeChannelLocked(w, r)
 			case problem.IsUpstreamUnavailable(err):
 				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Upstream temporarily unavailable", err)
 			default:
@@ -842,6 +844,16 @@ func PutDataPointValue(idx DeviceIndex, _ DataPointWriter) http.HandlerFunc {
 }
 
 // --- helpers ---
+
+// writeChannelLocked answers a control write that the operator's own
+// channel lock rejected. The value never reached the wire and a retry
+// cannot help until the lock is lifted, so this is a 423 Locked — the
+// same status the edit-lock uses — and never a 502 upstream failure.
+func writeChannelLocked(w http.ResponseWriter, r *http.Request) {
+	problem.Write(w, http.StatusLocked,
+		problem.New(problem.TypeConflict, r, "Channel locked",
+			"the channel is locked against control writes; lift the lock via PUT /devices/{addr}/channels/{no}/flags"))
+}
 
 func lookupChannel(idx DeviceIndex, r *http.Request) (*device.Channel, error) {
 	addr := chi.URLParam(r, "addr")

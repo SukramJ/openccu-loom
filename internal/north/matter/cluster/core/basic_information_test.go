@@ -1271,3 +1271,36 @@ func TestBasicInfo_SoftwareVersionDerivedFromVersionString(t *testing.T) {
 		}
 	})
 }
+
+// TestBasicInfo_UniqueIDSurvivesNodeLabelWrite pins Matter §11.1.5.13
+// quality F on UniqueID (0x0012) and on the SerialNumber (0x000F)
+// fallback derived from it: a controller renaming the bridge writes
+// NodeLabel with Manage privilege, and the node's identity must not move
+// under the controller's cache when it does.
+func TestBasicInfo_UniqueIDSurvivesNodeLabelWrite(t *testing.T) {
+	t.Parallel()
+	cfg := validBasicInfoConfig()
+	cfg.SerialNumber = "" // force the UniqueID-derived SerialNumber fallback
+	b, err := core.NewBasicInformation(cfg)
+	if err != nil {
+		t.Fatalf("NewBasicInformation: %v", err)
+	}
+	uidBefore, _ := b.MatterRead(0x0012)
+	serialBefore, _ := b.MatterRead(0x000F)
+
+	if err := b.MatterWrite(context.Background(), 0x0005, "Wohnzimmer", hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite(NodeLabel): %v", err)
+	}
+
+	uidAfter, _ := b.MatterRead(0x0012)
+	if uidAfter != uidBefore {
+		t.Errorf("UniqueID changed on a NodeLabel write: %v → %v", uidBefore, uidAfter)
+	}
+	serialAfter, _ := b.MatterRead(0x000F)
+	if serialAfter != serialBefore {
+		t.Errorf("SerialNumber changed on a NodeLabel write: %v → %v", serialBefore, serialAfter)
+	}
+	if label, _ := b.MatterRead(0x0005); !strings.Contains(fmt.Sprint(label), "Wohnzimmer") {
+		t.Errorf("NodeLabel = %v, want the written value", label)
+	}
+}

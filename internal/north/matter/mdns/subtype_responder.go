@@ -288,6 +288,7 @@ func (r *SubtypeResponder) Close() error {
 func (r *SubtypeResponder) serveV4(ctx context.Context) {
 	defer r.wg.Done()
 	buf := make([]byte, 9000) // mDNS messages cap below this; larger frame is overkill but cheap.
+	consecutiveErrs := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -300,9 +301,12 @@ func (r *SubtypeResponder) serveV4(ctx context.Context) {
 			if isTimeout(err) {
 				continue
 			}
-			r.logger.Debug("matter.mdns.subtype.read4_err", slog.String("err", err.Error()))
-			return
+			if !r.survivesReadError(ctx, "v4", err, &consecutiveErrs) {
+				return
+			}
+			continue
 		}
+		consecutiveErrs = 0
 		r.handleV4(ctx, buf[:n], cm, src)
 	}
 }
@@ -310,6 +314,7 @@ func (r *SubtypeResponder) serveV4(ctx context.Context) {
 func (r *SubtypeResponder) serveV6(ctx context.Context) {
 	defer r.wg.Done()
 	buf := make([]byte, 9000)
+	consecutiveErrs := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -322,11 +327,59 @@ func (r *SubtypeResponder) serveV6(ctx context.Context) {
 			if isTimeout(err) {
 				continue
 			}
-			r.logger.Debug("matter.mdns.subtype.read6_err", slog.String("err", err.Error()))
-			return
+			if !r.survivesReadError(ctx, "v6", err, &consecutiveErrs) {
+				return
+			}
+			continue
 		}
+		consecutiveErrs = 0
 		r.handleV6(ctx, buf[:n], cm, src)
 	}
+}
+
+// maxConsecutiveReadErrors bounds how many back-to-back non-timeout read
+// errors a receive loop tolerates before it gives up. A transient socket
+// error must not end subtype PTR answering — the bridge would stay
+// resolvable by chip-tool while becoming invisible to the Apple Home and
+// Google Home browses, which filter on `_L<disc>._sub` — but a socket
+// that fails on every read would otherwise spin.
+const maxConsecutiveReadErrors = 20
+
+// readErrorBackoff paces the retry after a non-timeout read error so a
+// permanently broken socket cannot burn a core before the give-up cap is
+// reached.
+const readErrorBackoff = 100 * time.Millisecond
+
+// survivesReadError decides whether a receive loop continues after a
+// non-timeout read error. Returns false when the loop must exit: the
+// socket is closed, the context is done, or the error repeated past
+// [maxConsecutiveReadErrors].
+func (r *SubtypeResponder) survivesReadError(ctx context.Context, family string, err error, consecutive *int) bool {
+	if errors.Is(err, net.ErrClosed) || ctx.Err() != nil {
+		r.logger.Debug("matter.mdns.subtype.read_closed",
+			slog.String("family", family),
+			slog.String("err", err.Error()))
+		return false
+	}
+	*consecutive++
+	if *consecutive >= maxConsecutiveReadErrors {
+		r.logger.Error("matter.mdns.subtype.read_giving_up",
+			slog.String("family", family),
+			slog.String("err", err.Error()),
+			slog.Int("consecutive_errors", *consecutive),
+			slog.String("hint", "subtype PTR answering stopped; Apple Home / Google Home discovery of this bridge will fail until the daemon restarts"))
+		return false
+	}
+	r.logger.Warn("matter.mdns.subtype.read_err",
+		slog.String("family", family),
+		slog.String("err", err.Error()),
+		slog.Int("consecutive_errors", *consecutive))
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(readErrorBackoff):
+	}
+	return true
 }
 
 func (r *SubtypeResponder) handleV4(ctx context.Context, buf []byte, cm *ipv4.ControlMessage, src net.Addr) {

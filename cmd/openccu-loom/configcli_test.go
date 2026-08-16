@@ -377,3 +377,115 @@ func TestConfigImportSkipsUsersAndTokensWithWarning(t *testing.T) {
 		t.Errorf("expected 0 users after import (users skipped), got %d", count)
 	}
 }
+
+// TestConfigExportImportRoundTripKeepsStoredSecrets pins the export → import
+// round-trip of the default (redacted) export: the section secret and the
+// central's plaintext password must still be in the database afterwards, while
+// the non-secret fields the document carries are applied.
+//
+// A redacted export nulls every secret leaf and empties password_plain; writing
+// that document back verbatim replaced the operator's MQTT / OIDC / Matter
+// credentials and CCU logins with nothing, and the import still exited 0.
+func TestConfigExportImportRoundTripKeepsStoredSecrets(t *testing.T) {
+	dir := t.TempDir()
+	cfgFile := makeConfigDB(t, dir)
+	seedConfigDB(t, dir)
+
+	exportFile := filepath.Join(t.TempDir(), "export.json")
+	var stdout, stderr bytes.Buffer
+	if err := runConfigCLI([]string{"export", "--config", cfgFile, "--out", exportFile}, &stdout, &stderr); err != nil {
+		t.Fatalf("config export: %v\nstderr: %s", err, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := runConfigCLI([]string{"import", "--config", cfgFile, "--merge", exportFile}, &stdout, &stderr); err != nil {
+		t.Fatalf("config import: %v\nstderr: %s", err, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--include-secrets") {
+		t.Errorf("expected a redacted-import warning on stderr, got: %s", stderr.String())
+	}
+
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, filepath.Join(dir, "openccu-loom.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ss := sqlite.NewConfigSectionStore(db)
+	cs := sqlite.NewCentralsStore(db)
+	wireConfigStoreCrypto(ss, cs, dir)
+
+	row, err := ss.Get(ctx, "north.mqtt")
+	if err != nil {
+		t.Fatalf("get section after import: %v", err)
+	}
+	if !strings.Contains(string(row.ValueJSON), "mqtt-s3cret") {
+		t.Errorf("section secret was destroyed by the round-trip: %s", row.ValueJSON)
+	}
+	if !strings.Contains(string(row.ValueJSON), "mqtt://localhost") {
+		t.Errorf("non-secret section field lost by the round-trip: %s", row.ValueJSON)
+	}
+
+	central, err := cs.Get(ctx, "ccu1")
+	if err != nil {
+		t.Fatalf("get central after import: %v", err)
+	}
+	if central.PasswordPlain != "secret123" {
+		t.Errorf("central password_plain = %q, want the stored password to survive", central.PasswordPlain)
+	}
+}
+
+// TestConfigImportNonRedactedDocumentClearsSecrets pins the other half of the
+// contract: a document that is not marked redacted is authoritative, so an
+// operator can still clear a secret by importing it empty.
+func TestConfigImportNonRedactedDocumentClearsSecrets(t *testing.T) {
+	dir := t.TempDir()
+	cfgFile := makeConfigDB(t, dir)
+	seedConfigDB(t, dir)
+
+	importDoc := configExportDoc{
+		Sections: map[string]json.RawMessage{
+			"north.mqtt": json.RawMessage(`{"broker":"mqtt://localhost","password":""}`),
+		},
+		Centrals: []sqlite.CentralRow{{Name: "ccu1", Host: "192.168.0.1", Enabled: true}},
+	}
+	importFile := filepath.Join(t.TempDir(), "import.json")
+	data, _ := json.MarshalIndent(importDoc, "", "  ")
+	if err := os.WriteFile(importFile, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := runConfigCLI([]string{"import", "--config", cfgFile, "--merge", importFile}, &stdout, &stderr); err != nil {
+		t.Fatalf("config import: %v\nstderr: %s", err, stderr.String())
+	}
+
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, filepath.Join(dir, "openccu-loom.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ss := sqlite.NewConfigSectionStore(db)
+	cs := sqlite.NewCentralsStore(db)
+	wireConfigStoreCrypto(ss, cs, dir)
+
+	row, err := ss.Get(ctx, "north.mqtt")
+	if err != nil {
+		t.Fatalf("get section after import: %v", err)
+	}
+	if strings.Contains(string(row.ValueJSON), "mqtt-s3cret") {
+		t.Errorf("explicit empty secret did not clear the stored value: %s", row.ValueJSON)
+	}
+
+	central, err := cs.Get(ctx, "ccu1")
+	if err != nil {
+		t.Fatalf("get central after import: %v", err)
+	}
+	if central.PasswordPlain != "" {
+		t.Errorf("central password_plain = %q, want cleared by a non-redacted import", central.PasswordPlain)
+	}
+}

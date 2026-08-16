@@ -6,14 +6,18 @@ package client_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
@@ -795,3 +799,75 @@ func TestICAcknowledgeMessageBackendErrorPropagated(t *testing.T) {
 
 // orchIface is the interface constant used by helpers in this test file.
 const orchIface hmenum.Interface = hmenum.InterfaceHmIPRF
+
+// TestReconnectFailureReasonNamesTheCause pins that a failed reconnect
+// reports what went wrong, not merely where. The reason travels on the
+// ClientStateChangedEvent every north-bound consumer reads, so rejected
+// credentials must arrive as "auth" and a breaker that is still open as
+// "circuit_breaker" — publishing "network" for those sends the operator to
+// check the wire while the CCU password is wrong.
+func TestReconnectFailureReasonNamesTheCause(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want hmenum.FailureReason
+	}{
+		{"rejected credentials", fmt.Errorf("init: %w", hmerr.ErrAuthFailure), hmenum.FailureReasonAuth},
+		{"breaker still open", fmt.Errorf("init: %w", hmerr.ErrCircuitBreakerOpen), hmenum.FailureReasonCircuitBreaker},
+		{"no connection", fmt.Errorf("dial: %w", hmerr.ErrNoConnection), hmenum.FailureReasonNetwork},
+		{"deadline", fmt.Errorf("init: %w", context.DeadlineExceeded), hmenum.FailureReasonTimeout},
+		// Unclassifiable failures keep the historic default: the interface
+		// did not come back on the wire.
+		{"unclassified", errors.New("boom"), hmenum.FailureReasonNetwork},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ic := newOrchIC(t, hmenum.InterfaceHmIPRF)
+			_ = ic.TransitionTo(hmenum.ClientStateInitialized, "", true, hmenum.FailureReasonNone)
+			_ = ic.TransitionTo(hmenum.ClientStateDisconnected, "", true, hmenum.FailureReasonNone)
+
+			bus := events.NewBus()
+			var (
+				mu     sync.Mutex
+				failed []hmevent.ClientStateChangedEvent
+			)
+			unsub := events.Subscribe(bus, func(ev hmevent.ClientStateChangedEvent) {
+				if ev.To != hmenum.ClientStateDisconnected {
+					return
+				}
+				mu.Lock()
+				failed = append(failed, ev)
+				mu.Unlock()
+			})
+			defer unsub()
+			ic.SetStateChangedBus(bus, "")
+
+			attempts := 0
+			cfg := &client.ReconnectConfig{
+				InitialDelay:  1 * time.Millisecond,
+				MaxDelay:      10 * time.Millisecond,
+				BackoffFactor: 2.0,
+			}
+			if _, err := ic.Reconnect(context.Background(), &orchBackend{initErr: tc.err},
+				"id", "url", cfg, &attempts); err == nil {
+				t.Fatal("expected the reconnect to fail")
+			}
+
+			var got hmenum.FailureReason
+			deadline := time.Now().Add(2 * time.Second)
+			for time.Now().Before(deadline) {
+				mu.Lock()
+				if len(failed) > 0 {
+					got = failed[len(failed)-1].Reason
+					mu.Unlock()
+					break
+				}
+				mu.Unlock()
+				time.Sleep(time.Millisecond)
+			}
+			if got != tc.want {
+				t.Fatalf("published failure reason = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

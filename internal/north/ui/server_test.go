@@ -241,3 +241,94 @@ func TestSPAHandlerEmptyPath(t *testing.T) {
 		t.Fatalf("unexpected status %d", rr.Code)
 	}
 }
+
+// TestUIHealthPageMirrorsTheAPIVerdict pins the two health surfaces to one
+// verdict. The page used to render the tracker's raw worst-of while
+// GET /api/v1/health collapses through health.ServiceAvailability, so a
+// single non-critical interface down made this page — the one an operator
+// opens precisely when the SPA is unreachable — read "unhealthy" while every
+// other surface, and any load balancer, read "degraded".
+func TestUIHealthPageMirrorsTheAPIVerdict(t *testing.T) {
+	t.Parallel()
+
+	cats, err := i18n.NewCatalogs()
+	if err != nil {
+		t.Fatalf("catalogs: %v", err)
+	}
+	tracker := health.NewTracker()
+	tracker.Record("central", health.Sample{Healthy: true})
+	tracker.Record("sqlite", health.Sample{Healthy: true})
+	tracker.Record("ccu1-HmIP-RF", health.Sample{Healthy: true})
+	tracker.Record("ccu2-HmIP-RF", health.Sample{Healthy: false})
+
+	snap := tracker.Snapshot()
+	want := string(health.ServiceAvailability(snap))
+	if want == string(tracker.Overall()) {
+		t.Fatalf("fixture does not separate the two verdicts: both say %q", want)
+	}
+
+	h := NewRouter(Deps{Lang: "en", Catalogs: cats, Health: tracker})
+	rr := get(t, h, "/health")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	// The overall verdict is the <strong class="status-…"> right after the
+	// heading; the per-component cells carry their own raw statuses, so the
+	// assertion has to name the overall element rather than search the page.
+	body := rr.Body.String()
+	overall := `<strong class="status-` + want + `">`
+	if !strings.Contains(body, overall) {
+		t.Errorf("page does not report the service-availability verdict %q; body: %s", want, body)
+	}
+	if raw := `<strong class="status-` + string(tracker.Overall()) + `">`; strings.Contains(body, raw) {
+		t.Errorf("page still reports the raw worst-of verdict %q", tracker.Overall())
+	}
+}
+
+// TestSPAHandlerUnhashedAssetsRevalidate pins the caching split. Only the
+// content-hashed files under assets/ may carry `immutable`: the bundle also
+// ships verbatim public files whose names never change across releases
+// (manifest.webmanifest, the favicons, the wordmark). Marked immutable, a
+// rebranded logo or an updated manifest would stay stale in returning
+// browsers for up to a year without a single revalidation request.
+func TestSPAHandlerUnhashedAssetsRevalidate(t *testing.T) {
+	t.Parallel()
+	h := http.StripPrefix("/app", SPAHandler())
+
+	for _, name := range []string{"manifest.webmanifest", "favicon.svg", "wordmark.svg"} {
+		req := httptest.NewRequest(http.MethodGet, "/app/"+name, http.NoBody)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code == http.StatusServiceUnavailable {
+			t.Skip("no built SPA bundle present")
+		}
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s: status %d", name, rr.Code)
+		}
+		cc := rr.Header().Get("Cache-Control")
+		if strings.Contains(cc, "immutable") {
+			t.Errorf("%s has a stable name across releases but is served %q", name, cc)
+		}
+		if !strings.Contains(cc, "must-revalidate") {
+			t.Errorf("%s: expected a revalidating cache header, got %q", name, cc)
+		}
+	}
+}
+
+// TestSPAHandlerIndexIsNeverCached pins that the entry point is uncacheable
+// however it is addressed — the deep-link fallback and the explicit
+// /app/index.html have to agree, or a deploy is picked up on one path and not
+// on the other.
+func TestSPAHandlerIndexIsNeverCached(t *testing.T) {
+	t.Parallel()
+	h := http.StripPrefix("/app", SPAHandler())
+
+	for _, p := range []string{"/app/", "/app/index.html"} {
+		req := httptest.NewRequest(http.MethodGet, p, http.NoBody)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if cc := rr.Header().Get("Cache-Control"); cc != "no-store" {
+			t.Errorf("%s: Cache-Control=%q, want no-store", p, cc)
+		}
+	}
+}

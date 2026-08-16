@@ -171,12 +171,19 @@ func UnmarshalSubscribeRequestTLV(dec *tlv.Decoder) (SubscribeRequest, error) { 
 			req.EventRequests = eventPaths
 		case tagSubReqEventFilters:
 			// EventFilters: Array of EventFilterIB structs per Matter §10.6.9.
-			// Each entry carries NodeID (tag 1, optional) and EventMin (tag 2,
-			// mandatory). Mirrors chip src/app/ReadHandler.cpp:598 ProcessEventFilters.
+			// Each entry carries NodeID (tag 0, optional) and EventMin (tag 1,
+			// mandatory) — matter.js
+			// packages/types/src/protocol/types/TlvEventFilter.ts:16-17.
+			// Mirrors chip src/app/ReadHandler.cpp:598 ProcessEventFilters.
 			if !el.IsContainer || el.Type != tlv.TypeArray {
-				// Malformed but non-fatal: skip the field.
-				if err := skipContainer(dec); err != nil {
-					return SubscribeRequest{}, err
+				// Malformed but non-fatal: skip the field. Draining is
+				// only correct for a container — a scalar is already
+				// consumed, and skipContainer would swallow the
+				// enclosing SubscribeRequest struct's EndContainer.
+				if el.IsContainer {
+					if err := skipContainer(dec); err != nil {
+						return SubscribeRequest{}, err
+					}
 				}
 				continue
 			}

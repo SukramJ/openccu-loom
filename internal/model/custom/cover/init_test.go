@@ -138,8 +138,22 @@ func TestIPHdmConstructorProducesBlind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IPHdm constructor error: %v", err)
 	}
-	if _, ok := dp.(*Blind); !ok {
+	blind, ok := dp.(*Blind)
+	if !ok {
 		t.Errorf("IPHdm constructor returned %T, want *Blind", dp)
+		return
+	}
+	// The HDM drives LEVEL, so it must advertise position: HA gates the
+	// position slider and set_position path on this capability alone, and
+	// a shade without it ships as open/close/stop only.
+	if !blind.Capabilities.SupportsPosition {
+		t.Error("IPHdm blind must advertise SupportsPosition")
+	}
+	_, body := blind.HADiscoveryPayload(discoveryCtx{})
+	for _, key := range []string{"position_topic", "set_position_topic"} {
+		if _, has := body[key]; !has {
+			t.Errorf("IPHdm HA payload is missing %q", key)
+		}
 	}
 }
 

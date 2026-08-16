@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
@@ -111,6 +112,10 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 			if errors.Is(err, hmerr.ErrParameterHidden) {
 				problem.Write(w, http.StatusForbidden,
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
+				return
+			}
+			if errors.Is(err, device.ErrChannelOperationLocked) {
+				writeChannelLocked(w, r)
 				return
 			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Paramset write failed", err)

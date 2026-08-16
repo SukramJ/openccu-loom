@@ -4,6 +4,7 @@
 package configstore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -917,5 +918,76 @@ func TestPlaintextSecretsAllowedWithoutSectionStore(t *testing.T) {
 	s := New(defaultBootstrap(), nil, nil)
 	if s.PlaintextSecretsAllowed(context.Background()) {
 		t.Error("PlaintextSecretsAllowed() = true without a section store, want false")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Secret redaction round-trip
+// ---------------------------------------------------------------------------
+
+// TestRestoreRedactedSecretsRoundTrip pins the export → import round-trip:
+// [RedactSectionSecrets] nulls the secret leaf, and RestoreRedactedSecrets puts
+// the stored value back so importing a redacted document cannot destroy the
+// operator's credentials, while every non-secret edit in the document wins.
+func TestRestoreRedactedSecretsRoundTrip(t *testing.T) {
+	t.Parallel()
+	stored := []byte(`{"broker_url":"mqtt://old","password":"s3cret"}`)
+
+	redacted := RedactSectionSecrets(SectionMQTT, stored)
+	if !bytes.Contains(redacted, []byte(`"password":null`)) {
+		t.Fatalf("export did not null the secret leaf: %s", redacted)
+	}
+
+	// The operator edits the broker URL in the exported file.
+	edited := bytes.ReplaceAll(redacted, []byte(`mqtt://old`), []byte(`mqtt://new`))
+
+	merged := RestoreRedactedSecrets(SectionMQTT, edited, stored)
+	var tree map[string]any
+	if err := json.Unmarshal(merged, &tree); err != nil {
+		t.Fatalf("unmarshal merged: %v", err)
+	}
+	if got := tree["password"]; got != "s3cret" {
+		t.Errorf("password = %v, want the stored secret to survive the round-trip", got)
+	}
+	if got := tree["broker_url"]; got != "mqtt://new" {
+		t.Errorf("broker_url = %v, want the imported edit to win", got)
+	}
+}
+
+// TestRestoreRedactedSecretsKeepsExplicitValues pins that only a null leaf is
+// treated as withheld: a document that carries a real value (an export made
+// with --include-secrets) imports verbatim, and an empty string still clears
+// the secret.
+func TestRestoreRedactedSecretsKeepsExplicitValues(t *testing.T) {
+	t.Parallel()
+	stored := []byte(`{"broker_url":"mqtt://old","password":"s3cret"}`)
+
+	for name, incoming := range map[string]string{
+		"explicit value": `{"broker_url":"mqtt://new","password":"other"}`,
+		"explicit clear": `{"broker_url":"mqtt://new","password":""}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			merged := RestoreRedactedSecrets(SectionMQTT, []byte(incoming), stored)
+			if string(merged) != incoming {
+				t.Errorf("merged = %s, want the document unchanged (%s)", merged, incoming)
+			}
+		})
+	}
+}
+
+// TestRestoreRedactedSecretsDropsUnbackedNull pins that a null leaf with no
+// stored counterpart is removed rather than persisted: writing JSON null into
+// a typed string field is not a value the config layer can carry.
+func TestRestoreRedactedSecretsDropsUnbackedNull(t *testing.T) {
+	t.Parallel()
+	merged := RestoreRedactedSecrets(SectionMQTT,
+		[]byte(`{"broker_url":"mqtt://new","password":null}`), nil)
+	var tree map[string]any
+	if err := json.Unmarshal(merged, &tree); err != nil {
+		t.Fatalf("unmarshal merged: %v", err)
+	}
+	if _, ok := tree["password"]; ok {
+		t.Errorf("password key survived without a stored value: %s", merged)
 	}
 }

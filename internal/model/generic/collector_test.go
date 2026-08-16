@@ -695,3 +695,52 @@ func TestApplyOptimisticBurstSkipKeepsWorkingRollback(t *testing.T) {
 	// rollback is a safe no-op.
 	rb1()
 }
+
+// TestFlushCollectorSurfacesSendError pins that the staged batch's wire
+// error reaches the caller: staging is not sending, so a command that
+// only buffered its parameters has no result of its own yet.
+func TestFlushCollectorSurfacesSendError(t *testing.T) {
+	t.Parallel()
+	wireErr := errors.New("wire down")
+	b := &recordingBackend{failOnSet: wireErr}
+	coll := NewCollector(b)
+	if err := coll.Add(dpForCollector(t, "VCU1:1", "LEVEL"), 1.0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := FlushCollector(context.Background(), coll, nil); !errors.Is(err, wireErr) {
+		t.Fatalf("FlushCollector error = %v, want %v", err, wireErr)
+	}
+}
+
+// TestFlushCollectorKeepsOperationError pins the precedence: the
+// operation's own error describes the earlier failure and wins, while
+// the batch is still flushed so a partially staged operation keeps the
+// dispatch semantics it had.
+func TestFlushCollectorKeepsOperationError(t *testing.T) {
+	t.Parallel()
+	opErr := errors.New("validation failed")
+	b := &recordingBackend{failOnSet: errors.New("wire down")}
+	coll := NewCollector(b)
+	if err := coll.Add(dpForCollector(t, "VCU1:1", "LEVEL"), 1.0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := FlushCollector(context.Background(), coll, opErr); !errors.Is(err, opErr) {
+		t.Fatalf("FlushCollector error = %v, want %v", err, opErr)
+	}
+	if sets, _ := b.snapshot(); len(sets) != 1 {
+		t.Fatalf("staged batch was not flushed: %d set calls", len(sets))
+	}
+}
+
+// TestFlushCollectorNilCollectorPassesThrough covers the writer-less
+// call sites, which pass no collector at all.
+func TestFlushCollectorNilCollectorPassesThrough(t *testing.T) {
+	t.Parallel()
+	opErr := errors.New("boom")
+	if err := FlushCollector(context.Background(), nil, opErr); !errors.Is(err, opErr) {
+		t.Fatalf("FlushCollector error = %v, want %v", err, opErr)
+	}
+	if err := FlushCollector(context.Background(), nil, nil); err != nil {
+		t.Fatalf("FlushCollector error = %v, want nil", err)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -110,7 +111,7 @@ func (t *TimeSynchronization) MatterInvoke(_ context.Context, cmdID uint32, _ an
 		// time-coordinator.
 		return nil, nil
 	}
-	return nil, fmt.Errorf("matter: TimeSynchronization command 0x%02X not supported", cmdID)
+	return nil, im.UnsupportedCommandf("matter: TimeSynchronization command 0x%02X not supported", cmdID)
 }
 
 // MatterReportable lists subscribe-able attributes.

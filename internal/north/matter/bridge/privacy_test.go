@@ -6,7 +6,9 @@ package bridge
 import (
 	"bytes"
 	"testing"
+	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
 )
@@ -379,5 +381,73 @@ func TestMaybeUnmaskPrivacy_TooShortForMIC_AfterSessionResolve(t *testing.T) {
 	})
 	if err := b.maybeUnmaskPrivacy(buf); err == nil {
 		t.Error("maybeUnmaskPrivacy with short MIC tail: want error, got nil")
+	}
+}
+
+// TestSendReply_PrivacyFlaggedRequestGetsMaskedReply pins the outbound
+// half of Matter §4.7.3.1 on the production reply path: the response
+// header echoes the request's Privacy flag, so the header suffix it
+// announces as masked MUST actually be masked. Shipping the P bit over
+// an unmasked counter makes the peer XOR-unmask valid bytes, derive the
+// wrong nonce, and drop every reply on the exchange until MRP gives up.
+func TestSendReply_PrivacyFlaggedRequestGetsMaskedReply(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	const (
+		localSessionID uint16 = 7
+		peerSessionID  uint16 = 0x1234
+	)
+	bridgeSess, peerSess := activitySessionPair(t, peerSessionID)
+	b.AttachSessionLookup(sessionLookupFunc(func(id uint16) (*channel.Session, bool) {
+		if id == localSessionID {
+			return bridgeSess, true
+		}
+		return nil, false
+	}))
+
+	peerConn, peerAddr := newSubscribeTestPeer(t)
+	requestHdr := &message.Header{SessionID: localSessionID, MessageCounter: 42, Privacy: true}
+	requestProto := message.ProtocolHeader{
+		Initiator:  true,
+		ExchangeID: 1,
+		ProtocolID: im.InteractionModelProtocolID,
+	}
+	body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusSuccess})
+	if err != nil {
+		t.Fatalf("EncodeStatusResponse: %v", err)
+	}
+	if err := b.sendReply(peerAddr, requestHdr, requestProto, im.OpcodeStatusResponse, body); err != nil {
+		t.Fatalf("sendReply: %v", err)
+	}
+
+	_ = peerConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	rbuf := make([]byte, 1500)
+	n, _, err := peerConn.ReadFromUDP(rbuf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP: %v", err)
+	}
+	datagram := rbuf[:n]
+	if datagram[3]&secFlagPrivacyBit == 0 {
+		t.Fatal("reply did not carry the P bit — precondition for this test")
+	}
+
+	// The peer unmasks with its own view of the session, then decrypts.
+	// Both only work when the bridge applied the mask.
+	peer := &Bridge{}
+	peer.sessions = sessionLookupFunc(func(id uint16) (*channel.Session, bool) {
+		if id == peerSessionID {
+			return peerSess, true
+		}
+		return nil, false
+	})
+	if err := peer.maybeUnmaskPrivacy(datagram); err != nil {
+		t.Fatalf("peer maybeUnmaskPrivacy: %v", err)
+	}
+	hdr, hdrLen, err := message.UnmarshalHeader(datagram)
+	if err != nil {
+		t.Fatalf("UnmarshalHeader after unmask: %v", err)
+	}
+	if _, _, err := peerSess.Decrypt(&hdr, datagram[3], datagram[hdrLen:]); err != nil {
+		t.Fatalf("peer Decrypt of the privacy-protected reply: %v", err)
 	}
 }

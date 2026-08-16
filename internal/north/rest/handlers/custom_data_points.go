@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -367,8 +368,11 @@ func InvokeCustomDataPoint(idx DeviceIndex, writer CustomDPWriter) http.HandlerF
 				problem.New(problem.TypeBadRequest, r, "operation is required", ""))
 			return
 		}
+		// The body is optional: a parameterless operation (turn_off,
+		// stop, …) is invoked with an empty request stream, which decodes
+		// to io.EOF.
 		var req CustomDPOperationRequest
-		if err := DecodeJSON(r, &req); err != nil {
+		if err := DecodeJSON(r, &req); err != nil && !errors.Is(err, io.EOF) {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return

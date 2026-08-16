@@ -5,6 +5,8 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -44,8 +46,10 @@ func PostDeviceInstallMode(svc DeviceInstallModePort, rec audit.Recorder) http.H
 				problem.New(problem.TypeValidation, r, "Missing address", "addr path parameter is required"))
 			return
 		}
+		// The body is optional: an empty request stream decodes to io.EOF
+		// and means "use the default window".
 		var body deviceInstallModeRequest
-		if err := DecodeJSON(r, &body); err != nil {
+		if err := DecodeJSON(r, &body); err != nil && !errors.Is(err, io.EOF) {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return

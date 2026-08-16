@@ -42,17 +42,19 @@ func (r *reachableRecorder) snapshot() []reachableCall {
 }
 
 // TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter drives the
-// live-adopt shape end to end: a central wired through the hook (not through
-// the boot-time loops) fires its CentralSouthboundReadyEvent, and that must
-// (a) latch the SAME readiness tracker the snapshotter reads, so the adopted
-// central's snapshot stamps ModelComplete, and (b) run the reassemble
-// callback through the shared debounce pipeline. Without the hook an adopted
+// live-adopt shape end to end, through the two halves production wires: the
+// registry observer that owns the readiness latch and the per-central hook
+// that owns the reassemble pipeline. An adopted central firing its
+// CentralSouthboundReadyEvent must (a) latch the tracker the snapshotter
+// reads, so its snapshot stamps ModelComplete, and (b) run the reassemble
+// callback through the shared debounce pipeline. Without both an adopted
 // central stays model-incomplete forever and its persisted exposures never
 // assemble.
 func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-boot", "ccu-adopted")
-	readiness := newMatterCentralReadiness()
+	readiness, unwireReadiness := wireMatterCentralReadiness(reg)
+	t.Cleanup(unwireReadiness)
 
 	var reassembles atomic.Int32
 	reassembled := make(chan struct{}, 8)
@@ -65,7 +67,7 @@ func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.
 		return nil
 	}, 20*time.Millisecond, discardLogger())
 
-	hook := newMatterCentralHook(readiness, trigger, nil)
+	hook := newMatterCentralHook(trigger, nil)
 	adopted, _ := reg.Get("ccu-adopted")
 	unwire := hook(adopted)
 	if unwire == nil {
@@ -106,29 +108,24 @@ func TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter(t *testing.
 	}
 }
 
-// TestMatterCentralHook_SeedsAlreadyReadyCentral pins the adopt-window race:
-// a central whose bring-up completed BEFORE the hook ran (the ready event is
-// gone) must still be latched — from the unit's queryable flag — and must
-// receive a reassemble kick, since the event that would have triggered one
-// will never re-fire.
-func TestMatterCentralHook_SeedsAlreadyReadyCentral(t *testing.T) {
+// TestMatterCentralHook_KicksAnAlreadyReadyCentral pins the adopt-window
+// race: a central whose bring-up completed BEFORE the hook ran must still
+// receive a reassemble kick, since the ready event that would have triggered
+// one is gone and will never re-fire.
+func TestMatterCentralHook_KicksAnAlreadyReadyCentral(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-adopted")
 	adopted, _ := reg.Get("ccu-adopted")
 	adopted.MarkSouthboundReady() // ready before the hook exists
 
-	readiness := newMatterCentralReadiness()
 	var triggers atomic.Int32
-	hook := newMatterCentralHook(readiness, func() { triggers.Add(1) }, nil)
+	hook := newMatterCentralHook(func() { triggers.Add(1) }, nil)
 	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire")
 	}
 	t.Cleanup(unwire)
 
-	if !readiness.isReady("ccu-adopted") {
-		t.Error("already-ready central not seeded into the readiness tracker")
-	}
 	if got := triggers.Load(); got != 1 {
 		t.Errorf("reassemble trigger fired %d times, want 1 (kick for the missed ready event)", got)
 	}
@@ -144,7 +141,7 @@ func TestMatterCentralHook_ForwardsAvailabilityChanges(t *testing.T) {
 	adopted, _ := reg.Get("ccu-adopted")
 
 	rec := &reachableRecorder{}
-	hook := newMatterCentralHook(newMatterCentralReadiness(), nil, rec.notify)
+	hook := newMatterCentralHook(nil, rec.notify)
 	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire")
@@ -178,17 +175,15 @@ func TestMatterCentralHook_ForwardsAvailabilityChanges(t *testing.T) {
 
 // TestMatterCentralHook_UnwireStopsSubscriptions verifies live-remove
 // hygiene: after the unwire runs, neither a late ready event nor a late
-// lifecycle event mutates the readiness tracker, the reassemble pipeline, or
-// the reachable notifier.
+// lifecycle event reaches the reassemble pipeline or the reachable notifier.
 func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-adopted")
 	adopted, _ := reg.Get("ccu-adopted")
 
-	readiness := newMatterCentralReadiness()
 	var triggers atomic.Int32
 	rec := &reachableRecorder{}
-	hook := newMatterCentralHook(readiness, func() { triggers.Add(1) }, rec.notify)
+	hook := newMatterCentralHook(func() { triggers.Add(1) }, rec.notify)
 	unwire := hook(adopted)
 	if unwire == nil {
 		t.Fatal("hook returned nil unwire")
@@ -206,9 +201,6 @@ func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 		Available: true,
 	})
 
-	if readiness.isReady("ccu-adopted") {
-		t.Error("ready event after unwire must not latch readiness")
-	}
 	if got := triggers.Load(); got != 0 {
 		t.Errorf("reassemble trigger fired %d times after unwire, want 0", got)
 	}
@@ -222,7 +214,7 @@ func TestMatterCentralHook_UnwireStopsSubscriptions(t *testing.T) {
 // without an event bus) must yield a nil unwire instead of panicking.
 func TestMatterCentralHook_NilUnitIsNoop(t *testing.T) {
 	t.Parallel()
-	hook := newMatterCentralHook(newMatterCentralReadiness(), func() {}, nil)
+	hook := newMatterCentralHook(func() {}, nil)
 	if unwire := hook(nil); unwire != nil {
 		t.Error("hook(nil unit) returned a non-nil unwire, want nil")
 	}
@@ -246,8 +238,9 @@ func TestMatterCentralHook_ReAdoptedCentralStartsModelIncomplete(t *testing.T) {
 	const name = "ccu-readopted"
 
 	reg := buildTestRegistry(t, name)
-	readiness := newMatterCentralReadiness()
-	hook := newMatterCentralHook(readiness, func() {}, nil)
+	readiness, unwireReadiness := wireMatterCentralReadiness(reg)
+	t.Cleanup(unwireReadiness)
+	hook := newMatterCentralHook(func() {}, nil)
 
 	first, _ := reg.Get(name)
 	unwire := hook(first)

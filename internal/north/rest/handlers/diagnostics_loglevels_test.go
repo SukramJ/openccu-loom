@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
 
@@ -208,6 +209,7 @@ func TestPutLogLevel_AuditRecorderCalled(t *testing.T) {
 	r := chi.NewRouter()
 	r.Put("/diagnostics/log-levels/{path}", PutLogLevel(svc, rec))
 	req := httptest.NewRequest(http.MethodPut, "/diagnostics/log-levels/client", strings.NewReader(`{"level":"debug","ttl_seconds":60}`))
+	req = withIdentity(req, auth.Identity{Subject: "alice", Role: auth.RoleAdmin})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -220,6 +222,10 @@ func TestPutLogLevel_AuditRecorderCalled(t *testing.T) {
 	}
 	if entries[0].Action != audit.Action("logging.override_set") {
 		t.Fatalf("unexpected action: %q", entries[0].Action)
+	}
+	// The row must name who raised the level, else it cannot be attributed.
+	if entries[0].User != "alice" {
+		t.Fatalf("audit user=%q, want alice", entries[0].User)
 	}
 }
 

@@ -531,6 +531,13 @@ func TestRenameSysvarSerialisesWithNameReaders(t *testing.T) {
 				_ = sv.LegacyName()
 				_ = sv.Signature()
 				_ = sv.FullName()
+				// The north-bound assembly paths: REST/WS identity, the
+				// canonical unique id, the MQTT topic pair and the hub's
+				// sorted listing all render the name while it moves.
+				_ = sv.Info()
+				_ = sv.CanonicalUniqueID("ABC123")
+				_ = sv.MQTTTopics("loom", "rename-central")
+				_ = h.Sysvars()
 				sv.OnValue(hmtypes.FloatValue(1))
 			}
 		}()

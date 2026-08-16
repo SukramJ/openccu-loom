@@ -71,9 +71,14 @@ func freezeParams(params any) string {
 type Recorder struct {
 	mu sync.Mutex
 
-	// active controls whether new entries are accepted.
+	// active controls whether new entries are accepted. It can be set from
+	// the constructor config alone, without any session having been started
+	// (golden capture / replay helpers do that).
 	active bool
-	// isRecording is true while a timed activation is in progress.
+	// isRecording is true while a session opened through [Recorder.StartSession]
+	// or [Recorder.Resume] is in progress, and is what makes StartSession
+	// refuse to wipe an in-flight trace. It is deliberately narrower than
+	// active: a recorder that is merely config-active is not mid-session.
 	isRecording bool
 	// ttl is the entry time-to-live. Zero means entries never expire.
 	ttl time.Duration
@@ -121,7 +126,11 @@ func (r *Recorder) SetTTL(ttl time.Duration) {
 }
 
 // StartSession activates the recorder and clears any existing data.
-// Returns false if already recording (idempotent on same active state).
+//
+// Returns false — without touching the store — when a session is already in
+// progress. Clearing unconditionally would discard an in-flight trace with no
+// signal to the operator who started it, which is the whole point of the
+// guard; a caller that really wants a fresh trace stops the session first.
 func (r *Recorder) StartSession() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -130,6 +139,7 @@ func (r *Recorder) StartSession() bool {
 	}
 	r.store = make(map[key][]Entry)
 	r.active = true
+	r.isRecording = true
 	return true
 }
 
@@ -140,6 +150,7 @@ func (r *Recorder) StartSession() bool {
 func (r *Recorder) Resume() {
 	r.mu.Lock()
 	r.active = true
+	r.isRecording = true
 	r.mu.Unlock()
 }
 

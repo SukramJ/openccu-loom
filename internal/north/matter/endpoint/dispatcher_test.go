@@ -1584,3 +1584,27 @@ func (s *internalFakeStore) RemoveEndpoint(_ context.Context, key store.Endpoint
 }
 
 var _ Store = (*internalFakeStore)(nil)
+
+// TestInvokeUnsupportedCommandMapsTo0x81 pins that a cluster server
+// rejecting a command it does not implement reaches the wire as
+// UnsupportedCommand (0x81), not FAILURE (0x01). A controller probing an
+// optional command (Identify.IdentifyQuery,
+// AdministratorCommissioning.OpenBasicCommissioningWindow, any
+// AccessControl command) branches on 0x81; 0x01 reads as a device fault
+// and conformance tooling treats the bridge as broken.
+func TestInvokeUnsupportedCommandMapsTo0x81(t *testing.T) {
+	t.Parallel()
+	for name, err := range map[string]error{
+		"typed sentinel":     im.ErrUnsupportedCommand,
+		"typed with message": im.UnsupportedCommandf("matter: Identify command 0x%02X not supported", 0x01),
+		"legacy string form": errors.New("matter: unknown command 0x01"),
+		"legacy no-commands": errors.New("measurement: cluster has no commands"),
+	} {
+		srv := &fakeServerFull{id: 0x0003, invokeErr: err}
+		d := NewTopologyDispatcher(makeTopology(makeEndpointFull(2, srv)))
+		r := d.Invoke(context.Background(), concreteCmdPath(2, 0x0003, 0x01), nil)
+		if r.Status != im.StatusUnsupportedCommand {
+			t.Errorf("%s: status = %v, want StatusUnsupportedCommand (0x81)", name, r.Status)
+		}
+	}
+}

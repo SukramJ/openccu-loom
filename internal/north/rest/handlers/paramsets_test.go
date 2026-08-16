@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
@@ -201,6 +202,25 @@ func TestPutParamset_HiddenParam_Returns403(t *testing.T) {
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
 		t.Errorf("expected problem+json content type, got %q", ct)
+	}
+}
+
+// TestPutParamset_LockedChannel_Returns423 asserts that an operator
+// channel lock surfaces as 423 Locked: the VALUES write never reached the
+// CCU, so it must not look like an upstream failure.
+func TestPutParamset_LockedChannel_Returns423(t *testing.T) {
+	t.Parallel()
+	svc := &stubParamsetService{
+		putErr: fmt.Errorf("put paramset: %w", device.ErrChannelOperationLocked),
+	}
+	body := strings.NewReader(`{"LEVEL": 0.5}`)
+	req := httptest.NewRequest(http.MethodPut, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "VALUES"}))
+	w := httptest.NewRecorder()
+	PutParamset(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusLocked {
+		t.Fatalf("expected 423 for a locked channel, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 

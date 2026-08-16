@@ -17,30 +17,42 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
 )
 
-// safeFire invokes cb(from, to) in a goroutine that recovers from panics.
-// A panicking state-change listener must not silently kill the dispatcher
-// goroutine, so we recover, log the panic, and continue normal operation.
-// wg, when non-nil, is incremented before the goroutine starts and decremented
-// on exit so callers can drain in-flight callbacks (e.g. before Reset races a
-// removed handler on shutdown).
-func safeFire(wg *sync.WaitGroup, cb func(from, to hmenum.CircuitState), from, to hmenum.CircuitState) {
-	if wg != nil {
-		wg.Add(1)
+// stateNotice is one pending state-change notification: the transition
+// plus the listeners registered when it happened. It is built while the
+// breaker lock is held and published once the caller has released it, so
+// listener code never runs under c.mu.
+type stateNotice struct {
+	from, to  hmenum.CircuitState
+	listeners []func(from, to hmenum.CircuitState)
+}
+
+// publish delivers the transition to every listener inline, in
+// registration order.
+//
+// Every transition is published this way — the lazy OPEN → HALF_OPEN one
+// included. Dispatching that single transition on a goroutine instead let
+// it arrive after the HALF_OPEN → OPEN transition a probe that failed
+// immediately had already published, so the incident log and the
+// diagnostics stream ended on "half-open" while the breaker was OPEN.
+func (n stateNotice) publish() {
+	for _, cb := range n.listeners {
+		safeCall(cb, n.from, n.to)
 	}
-	go func() {
-		if wg != nil {
-			defer wg.Done()
+}
+
+// safeCall invokes cb and recovers from a panicking listener: a
+// misbehaving subscriber must not unwind the call that produced the
+// transition, nor stop the remaining subscribers from being notified.
+func safeCall(cb func(from, to hmenum.CircuitState), from, to hmenum.CircuitState) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Default().Error("circuit.state_listener_panic",
+				slog.String("from", from.String()),
+				slog.String("to", to.String()),
+				slog.String("panic", fmt.Sprintf("%v", r)))
 		}
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Default().Error("circuit.state_listener_panic",
-					slog.String("from", from.String()),
-					slog.String("to", to.String()),
-					slog.String("panic", fmt.Sprintf("%v", r)))
-			}
-		}()
-		cb(from, to)
 	}()
+	cb(from, to)
 }
 
 // CircuitConfig configures a [CircuitBreaker].
@@ -114,13 +126,6 @@ type CircuitBreaker struct {
 	// historic single-listener semantics and replaces the *primary*
 	// listener at index 0; AddOnStateChange appends.
 	listeners []func(from, to hmenum.CircuitState)
-
-	// callbackWG tracks in-flight state-change callback goroutines
-	// launched by safeFire. WaitCallbacks blocks until all goroutines
-	// started by the most recent state transition have returned, which
-	// prevents a Reset() call from racing a stale callback goroutine
-	// that refers to a handler registered before the reset.
-	callbackWG sync.WaitGroup
 }
 
 // NewCircuit returns a breaker in CLOSED state. cfg fields that are
@@ -200,8 +205,10 @@ func (c *CircuitBreaker) snapshotListenersLocked() []func(from, to hmenum.Circui
 // State returns the current state.
 func (c *CircuitBreaker) State() hmenum.CircuitState {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.refreshLocked()
+	state, notice := c.refreshLocked()
+	c.mu.Unlock()
+	notice.publish()
+	return state
 }
 
 // TotalRequests returns the cumulative count of non-bypass calls that
@@ -244,23 +251,29 @@ func (c *CircuitBreaker) DoWithPriority(ctx context.Context, operationID string,
 	}
 
 	c.mu.Lock()
-	state := c.refreshLocked()
+	// The lazy OPEN → HALF_OPEN flip is published before fn runs, so a
+	// probe that fails immediately cannot publish its HALF_OPEN → OPEN
+	// transition first.
+	state, notice := c.refreshLocked()
 	if state == hmenum.CircuitStateOpen {
 		if priority == hmenum.CommandPriorityCritical {
 			if !c.halfOpenInFlight.CompareAndSwap(0, 1) {
 				c.totalRequests++
 				c.mu.Unlock()
+				notice.publish()
 				return hmerr.ErrCircuitBreakerOpen
 			}
 			defer c.halfOpenInFlight.Store(0)
 			c.totalRequests++
 			c.mu.Unlock()
+			notice.publish()
 			err := fn(ctx)
 			c.record(ctx, err)
 			return err
 		}
 		c.totalRequests++
 		c.mu.Unlock()
+		notice.publish()
 		return hmerr.ErrCircuitBreakerOpen
 	}
 	// HALF_OPEN: allow exactly one concurrent probe. Additional callers
@@ -269,6 +282,7 @@ func (c *CircuitBreaker) DoWithPriority(ctx context.Context, operationID string,
 		if !c.halfOpenInFlight.CompareAndSwap(0, 1) {
 			c.totalRequests++
 			c.mu.Unlock()
+			notice.publish()
 			return hmerr.ErrCircuitBreakerOpen
 		}
 		// We are the probe. Decrement the in-flight counter after fn returns.
@@ -276,6 +290,7 @@ func (c *CircuitBreaker) DoWithPriority(ctx context.Context, operationID string,
 	}
 	c.totalRequests++
 	c.mu.Unlock()
+	notice.publish()
 
 	err := fn(ctx)
 	c.record(ctx, err)
@@ -313,9 +328,7 @@ func (c *CircuitBreaker) record(ctx context.Context, err error) {
 	c.mu.Unlock()
 
 	if from != to {
-		for _, cb := range listeners {
-			cb(from, to)
-		}
+		stateNotice{from: from, to: to, listeners: listeners}.publish()
 	}
 }
 
@@ -381,9 +394,9 @@ func isCallerGone(ctx context.Context, err error) bool {
 }
 
 // isSemanticFault reports whether err is a permanent CCU-side
-// classification (Unknown Parameter, missing entity, validation
-// rejection) that should not advance the breaker's failure counter.
-// Retryable transport faults (UNREACH, TIMEOUT, DUTYCYCLE,
+// classification (Unknown Device, Unknown Parameter, missing entity,
+// validation rejection) that should not advance the breaker's failure
+// counter. The retryable faults (GENERAL, DUTYCYCLE,
 // DEVICE_OUT_OF_RANGE, TRANSMISSION_PENDING) keep their failure-
 // counting semantics — those signal a wire-side condition the breaker
 // is supposed to react to.
@@ -410,14 +423,6 @@ func (c *CircuitBreaker) RecordRejection() {
 // state machine as if it had come from a [Do] call.
 func (c *CircuitBreaker) RecordSuccess() {
 	c.record(context.Background(), nil)
-}
-
-// WaitCallbacks blocks until all state-change callback goroutines launched
-// by the most recent OPEN→HALF_OPEN transition have returned. Intended for
-// shutdown paths and tests that need to confirm no goroutines remain in
-// flight after a state flip.
-func (c *CircuitBreaker) WaitCallbacks() {
-	c.callbackWG.Wait()
 }
 
 // LastFailureTime returns the wall-clock time of the most recent failure that
@@ -447,29 +452,22 @@ func (c *CircuitBreaker) Reset() {
 	c.halfOpenInFlight.Store(0)
 
 	if from != hmenum.CircuitStateClosed {
-		for _, cb := range listeners {
-			cb(from, hmenum.CircuitStateClosed)
-		}
+		stateNotice{from: from, to: hmenum.CircuitStateClosed, listeners: listeners}.publish()
 	}
 }
 
 // refreshLocked moves OPEN → HALF_OPEN when ResetTimeout has elapsed.
-// Must be called with c.mu held; returns the possibly-updated state.
-func (c *CircuitBreaker) refreshLocked() hmenum.CircuitState {
+// Must be called with c.mu held; returns the possibly-updated state and
+// the notification the caller must publish after releasing c.mu (the
+// zero value when nothing changed).
+func (c *CircuitBreaker) refreshLocked() (hmenum.CircuitState, stateNotice) {
 	if c.state != hmenum.CircuitStateOpen {
-		return c.state
+		return c.state, stateNotice{}
 	}
 	if c.cfg.Clock().Sub(c.openedAt) >= c.cfg.ResetTimeout {
 		from := c.state
 		c.state = hmenum.CircuitStateHalfOpen
-		// Snapshot listeners under lock and fire asynchronously to avoid
-		// running user code while holding c.mu. Each goroutine is wrapped
-		// with panic recovery so a misbehaving listener cannot kill the
-		// dispatcher goroutine silently.
-		listeners := c.snapshotListenersLocked()
-		for _, cb := range listeners {
-			safeFire(&c.callbackWG, cb, from, c.state)
-		}
+		return c.state, stateNotice{from: from, to: c.state, listeners: c.snapshotListenersLocked()}
 	}
-	return c.state
+	return c.state, stateNotice{}
 }

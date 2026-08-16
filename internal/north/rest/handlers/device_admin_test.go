@@ -1202,3 +1202,32 @@ func TestRefreshFirmwareData_HappyPath_Returns204(t *testing.T) {
 		t.Errorf("expected 1 call to RefreshFirmwareData, got %d", refresher.calls)
 	}
 }
+
+// TestPatchDevice_RoomsAppliedFunctionsFailed_AuditsWhatLanded pins the
+// audit trail for a half-applied patch: rooms and functions are separate
+// CCU calls, so a rooms write that succeeded before a functions failure
+// is live on the CCU and must appear in the change log.
+func TestPatchDevice_RoomsAppliedFunctionsFailed_AuditsWhatLanded(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{setFunctionsErr: errors.New("functions fail")}
+	rec := &captureRecorder{}
+	req := httptest.NewRequest(http.MethodPatch, "/",
+		strings.NewReader(`{"rooms":["Living Room"],"functions":["Lights"]}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	PatchDevice(admin, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("audit entries=%d, want 1 for the room assignment that reached the CCU", len(rec.entries))
+	}
+	note := rec.entries[0].Note
+	if !strings.Contains(note, "rooms=") || strings.Contains(note, "functions=") {
+		t.Fatalf("audit note=%q, want only the rooms that landed", note)
+	}
+	if !strings.Contains(note, "partial") {
+		t.Errorf("audit note=%q, want it marked partial", note)
+	}
+}

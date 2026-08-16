@@ -171,11 +171,13 @@ func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr stri
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
-	defer func() { _ = coll.Send(ctx) }()
-	return custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, map[hmenum.Parameter]any{
-		hmenum.ParameterColor:  fixedColorNames[FixedColorBlack],
-		hmenum.ParameterOnTime: 0.0,
-	}, priority)
+	// Anything staged on the collector only reaches the wire in the
+	// flush, so its error is part of this command's result.
+	return generic.FlushCollector(ctx, coll,
+		custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, map[hmenum.Parameter]any{
+			hmenum.ParameterColor:  fixedColorNames[FixedColorBlack],
+			hmenum.ParameterOnTime: 0.0,
+		}, priority))
 }
 
 // TurnOn turns on the LED with optional colour, brightness, flash
@@ -247,8 +249,10 @@ func (l *SoundPlayerLED) TurnOn(ctx context.Context, cfg LedOnConfig, w custom.W
 
 	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
-	defer func() { _ = coll.Send(ctx) }()
-	return custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority)
+	// Anything staged on the collector only reaches the wire in the
+	// flush, so its error is part of this command's result.
+	return generic.FlushCollector(ctx, coll,
+		custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority))
 }
 
 // currentColorOrWhite returns the last observed COLOR sensor value, or

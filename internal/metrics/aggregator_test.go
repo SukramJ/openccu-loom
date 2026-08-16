@@ -7,6 +7,8 @@ import (
 	"context"
 	"math"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // -----------------------------------------------------------------------
@@ -244,16 +246,20 @@ func TestAggregatorRecoveryCollectsFromProvider(t *testing.T) {
 func TestAggregatorEventsCollectsFromBus(t *testing.T) {
 	t.Parallel()
 
+	// Keyed from the event-type catalogue rather than hand-written strings:
+	// the bus keys its snapshot by hmevent.EventType, so a field that reads a
+	// key naming no event silently reports zero forever. Spelling the keys out
+	// here would let the test agree with the aggregator on a typo.
 	bus := &stubEventBus{
 		stats: map[string]int{
-			"client.state_changed":                 5,
-			"central.state_changed":                2,
-			"hub.program_executed":                 3,
-			"client.request_coalesced":             10,
-			"scheduler.refresh_triggered":          8,
-			"scheduler.refresh_completed":          7,
-			"health.recorded":                      4,
-			"client.circuit_breaker_state_changed": 1,
+			string(hmevent.EventTypeClientStateChanged):         5,
+			string(hmevent.EventTypeCentralStateChanged):        2,
+			string(hmevent.EventTypeProgramExecuted):            3,
+			string(hmevent.EventTypeRequestCoalesced):           10,
+			string(hmevent.EventTypeDataRefreshTriggered):       8,
+			string(hmevent.EventTypeDataRefreshCompleted):       7,
+			string(hmevent.EventTypeConnectionHealthChanged):    4,
+			string(hmevent.EventTypeCircuitBreakerStateChanged): 1,
 		},
 		subs: 42,
 	}

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // baseConfig returns a fully populated Config whose restart-required
@@ -459,6 +460,46 @@ func TestRestartRequiredDiff_BootWiredSurfacesAreDiffed(t *testing.T) {
 			path:   "north.matter.commissioning",
 			mutate: func(c *Config) { c.North.Matter.Commissioning.EphemeralWindow = true },
 		},
+		// The HTTP middleware chain is fixed while the router is assembled:
+		// a guard that was not installed then cannot start running later.
+		{
+			path:   "north.rest.csrf_enabled",
+			mutate: func(c *Config) { off := false; c.North.REST.CSRFEnabled = &off },
+		},
+		{
+			path:   "north.rest.csrf_secure",
+			mutate: func(c *Config) { c.North.REST.CSRFSecure = !c.North.REST.CSRFSecure },
+		},
+		{
+			path:   "north.rest.openapi_validate",
+			mutate: func(c *Config) { off := false; c.North.REST.OpenAPIValidate = &off },
+		},
+		{
+			path:   "north.ui.enabled",
+			mutate: func(c *Config) { off := false; c.North.UI.Enabled = &off },
+		},
+		// The discovery surfaces are started once during bring-up; switching
+		// LAN visibility off must not answer "applied".
+		{
+			path:   "north.discovery.mdns.enabled",
+			mutate: func(c *Config) { off := false; c.North.Discovery.MDNS.Enabled = &off },
+		},
+		{
+			path:   "north.discovery.mdns.instance_name",
+			mutate: func(c *Config) { c.North.Discovery.MDNS.InstanceName = "loom-b" },
+		},
+		{
+			path:   "north.discovery.ssdp.enabled",
+			mutate: func(c *Config) { off := false; c.North.Discovery.SSDP.Enabled = &off },
+		},
+		{
+			path:   "north.discovery.ssdp.interval",
+			mutate: func(c *Config) { c.North.Discovery.SSDP.Interval = 5 * time.Minute },
+		},
+		{
+			path:   "callback.public_host",
+			mutate: func(c *Config) { c.Callback.PublicHost = "loom.example.de" },
+		},
 	}
 
 	for _, tc := range cases {
@@ -471,6 +512,63 @@ func TestRestartRequiredDiff_BootWiredSurfacesAreDiffed(t *testing.T) {
 			got := RestartRequiredDiff(boot, eff)
 			if !slices.Contains(got, tc.path) {
 				t.Errorf("expected %q in diff, got %v", tc.path, got)
+			}
+		})
+	}
+}
+
+// TestRestartRequiredDiff_ResolvedDefaultsAreNotPhantomRestarts verifies that
+// the tri-state and defaulting surfaces compare their resolved views: an unset
+// value that the SPA saves back as its own documented default must not report
+// a pending restart for a change the operator never made.
+func TestRestartRequiredDiff_ResolvedDefaultsAreNotPhantomRestarts(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		path   string
+		mutate func(c *Config)
+	}{
+		{
+			path:   "north.rest.csrf_enabled",
+			mutate: func(c *Config) { on := true; c.North.REST.CSRFEnabled = &on },
+		},
+		{
+			path:   "north.rest.openapi_validate",
+			mutate: func(c *Config) { on := true; c.North.REST.OpenAPIValidate = &on },
+		},
+		{
+			path:   "north.ui.enabled",
+			mutate: func(c *Config) { on := true; c.North.UI.Enabled = &on },
+		},
+		{
+			path:   "north.discovery.mdns.enabled",
+			mutate: func(c *Config) { on := true; c.North.Discovery.MDNS.Enabled = &on },
+		},
+		{
+			path:   "north.discovery.ssdp.enabled",
+			mutate: func(c *Config) { on := true; c.North.Discovery.SSDP.Enabled = &on },
+		},
+		{
+			path:   "north.discovery.ssdp.interval",
+			mutate: func(c *Config) { c.North.Discovery.SSDP.Interval = 60 * time.Second },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			t.Parallel()
+			boot := baseConfig()
+			boot.North.REST.CSRFEnabled = nil
+			boot.North.REST.OpenAPIValidate = nil
+			boot.North.UI.Enabled = nil
+			boot.North.Discovery.MDNS.Enabled = nil
+			boot.North.Discovery.SSDP.Enabled = nil
+			boot.North.Discovery.SSDP.Interval = 0
+			eff := clone(boot)
+			tc.mutate(eff)
+
+			if got := RestartRequiredDiff(boot, eff); slices.Contains(got, tc.path) {
+				t.Errorf("unset → explicit default: unexpected %q in diff %v", tc.path, got)
 			}
 		})
 	}

@@ -119,16 +119,3 @@ func TestPin_SetSysvarValueWriter_WiredInHubWiring(t *testing.T) {
 		"internal/central/coordinators", "SetSysvarValueWriter",
 	)
 }
-
-// TestPin_SetSysvarValueWriter_WiredInHomegearHubWiring pins the same
-// seam on the Homegear path. Homegear wires no sysvar *creator* — its
-// backend models none of the ReGa metadata — but writing a value is the
-// actual parity surface, so the write path must be present or the alarm
-// mirror is inert there for the same reason.
-func TestPin_SetSysvarValueWriter_WiredInHomegearHubWiring(t *testing.T) {
-	contract.MustFindCallerInFile(
-		t,
-		"internal/central/adapter/homegear_hub_wiring.go",
-		"internal/central/coordinators", "SetSysvarValueWriter",
-	)
-}

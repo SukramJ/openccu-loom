@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -493,5 +494,40 @@ func TestDeviceIconProxy_Icon_Non200Upstream_Returns_False(t *testing.T) {
 	_, _, ok := proxy.Icon(context.Background(), "AABB0001")
 	if ok {
 		t.Fatal("expected ok=false for non-200 upstream response")
+	}
+}
+
+// TestDeviceIconProxy_Icon_MissExpires_RefetchesAfterOutage pins the
+// bounded negative cache: a CCU that was briefly unreachable must serve
+// the icon again once it is back, without a daemon restart.
+func TestDeviceIconProxy_Icon_MissExpires_RefetchesAfterOutage(t *testing.T) {
+	t.Parallel()
+
+	var reachable atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if !reachable.Load() {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte("PNGDATA"))
+	}))
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
+	locate := func(_ string) (string, string, bool) { return "swdo.png", "ccu", true }
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
+	// Expire the miss immediately so the outage window is over by the
+	// time the second call runs.
+	proxy.negativeTTL = time.Nanosecond
+
+	if _, _, ok := proxy.Icon(context.Background(), "AABB0001"); ok {
+		t.Fatal("during the outage: expected ok=false")
+	}
+	reachable.Store(true)
+	data, _, ok := proxy.Icon(context.Background(), "AABB0001")
+	if !ok || string(data) != "PNGDATA" {
+		t.Fatalf("after the outage: expected the icon to be served again, got ok=%v data=%q", ok, data)
 	}
 }

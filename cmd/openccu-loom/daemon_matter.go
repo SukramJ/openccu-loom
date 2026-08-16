@@ -85,15 +85,26 @@ func bridgeSessionParameters() *sigma.SessionParameters {
 // instead of delivering a signal — that avoids syscall.Kill against
 // the test process's own PID, which would tear down the test
 // framework itself.
-func buildMatterAdvertiser(mc config.NorthMatter, logger *slog.Logger) mdns.Advertiser {
+// buildMatterAdvertiser returns the advertiser plus the closer that releases
+// what it owns beyond the Advertiser interface.
+//
+// The closer exists for the subtype responder: it holds two multicast sockets
+// and a receive goroutine per address family, and the Zeroconf close path only
+// retires the subtype NAMES it registered. Every caller therefore has to
+// release it explicitly — on shutdown and on every early return, or a bridge
+// that failed to bind its UDP port leaves both sockets and both goroutines
+// alive for the process lifetime.
+func buildMatterAdvertiser(mc config.NorthMatter, logger *slog.Logger) (adv mdns.Advertiser, closeAdv func()) {
+	noClose := func() {}
 	switch mc.MDNSAdvertise {
 	case "noop":
 		// Explicit opt-out only. A commissioner can never discover a
 		// bridge that does not advertise, so "quiet" must be a conscious
 		// choice, not the unset default.
-		return mdns.NewNoop()
+		return mdns.NewNoop(), noClose
 	case "", "zeroconf":
 		z := mdns.NewZeroconf()
+		closeAdv = noClose
 		// Side-car responder so service-subtype browses
 		// (`_L<long>._sub`, `_S<short>._sub`, `_V<vid>._sub`,
 		// `_CM._sub`) hit a PTR pointing at the primary instance —
@@ -105,19 +116,25 @@ func buildMatterAdvertiser(mc config.NorthMatter, logger *slog.Logger) mdns.Adve
 				slog.String("err", err.Error()),
 				slog.String("hint", "primary records will publish, but Apple Home / Google Home subtype-filtered discovery may fail"))
 		} else {
-			r.Start(context.Background()) //nolint:contextcheck // test callers outside owned set prevent signature change; subtype responder needs daemon-lifetime context
+			r.Start(context.Background()) //nolint:contextcheck // the responder serves for the advertiser's lifetime, which is longer than any caller ctx; closeAdv ends it
 			z.AttachSubtypeResponder(r)
+			closeAdv = func() {
+				if err := r.Close(); err != nil {
+					logger.Debug("matter.bridge.mdns.subtype_close",
+						slog.String("err", err.Error()))
+				}
+			}
 			logger.Info("matter.bridge.mdns.subtype_responder_started",
 				slog.String("hint", "PTR responder for `_L*._sub`, `_S*._sub`, `_V*._sub`, `_CM._sub` queries active"))
 		}
 		logger.Info("matter.bridge.mdns.zeroconf",
 			slog.String("hint", "primary record via grandcat/zeroconf, subtypes via side-car responder"))
-		return z
+		return z, closeAdv
 	default:
 		logger.Warn("matter.bridge.mdns.unknown",
 			slog.String("value", mc.MDNSAdvertise),
 			slog.String("hint", "falling back to noop; valid: noop|zeroconf"))
-		return mdns.NewNoop()
+		return mdns.NewNoop(), noClose
 	}
 }
 
@@ -143,11 +160,16 @@ type matterBridgeBundle struct {
 	opCreds        *mattercore.OperationalCredentials
 	configuredPase *matterbridge.PaseAdapter // nil when ConcurrentPairings is enabled or no passcode is configured
 	rootRefs       rootClusterRefs           // typed handles for daemon-side lifecycle wiring
-	// readiness is the per-central model-complete latch feeding the
-	// snapshotter. Exposed so wireMatterRuntime can hand it to the
-	// live-adopt hook ([newMatterCentralHook]) — a runtime-added central
-	// must latch into the SAME tracker the snapshotter reads.
-	readiness *matterCentralReadiness
+	// fabricTeardown runs every runtime consequence of a fabric leaving.
+	// Exposed so the REST revoke / factory-reset path runs the SAME fan-out
+	// the OperationalCredentials wire command triggers instead of deleting
+	// the row and leaving the controller's session, subscription and
+	// operational advertisement alive.
+	fabricTeardown func(ctx context.Context, fabricIndex uint8)
+	// withdrawFabric retires one fabric's operational mDNS instance and
+	// republishes the remaining set. The wire command reaches it through the
+	// cluster's own hooks; the REST path has no cluster to fire them.
+	withdrawFabric func(ctx context.Context, compressedID [8]byte, nodeID uint64)
 }
 
 // db is the shared <DataDir>/openccu-loom.db handle opened once by
@@ -189,15 +211,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// assembler's vanished-source GC would read that as "all devices
 	// removed" and wipe the persisted endpoint-ID rows on every boot,
 	// renumbering the bridged fleet for paired controllers.
-	readiness, readinessUnsubs := wireMatterCentralReadiness(reg)
-	unwireReadiness := func() {
-		for _, unsub := range readinessUnsubs {
-			unsub()
-		}
-	}
+	readiness, unwireReadiness := wireMatterCentralReadiness(reg)
 	snap := matterSnapshotter(reg, readiness)
 
-	advertiser := buildMatterAdvertiser(mc, logger) //nolint:contextcheck // buildMatterAdvertiser has no ctx; subtype responder uses context.Background() with a nolint inside
+	advertiser, closeAdvertiser := buildMatterAdvertiser(mc, logger) //nolint:contextcheck // buildMatterAdvertiser has no ctx; the subtype responder runs for the advertiser's lifetime and is released through closeAdvertiser
 	bridge, err := matterbridge.New(store, snap, advertiser, matterbridge.Config{
 		Listen:                  mc.Listen,
 		PreferIPv4:              mc.PreferIPv4,
@@ -212,6 +229,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))
 		unwireReadiness()
+		closeAdvertiser()
 		return nil
 	}
 
@@ -220,9 +238,17 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// dispatcher already gates reads / writes / invokes.
 	bridge.AttachACLLister(store)
 
+	// The pairing trace has to be attached before the bridge starts serving:
+	// the moments worth recording begin with the first commissioner that
+	// reaches it, and the receive path reads the ring without the bridge lock
+	// — attaching after Start would both lose those moments and race the
+	// serve goroutine.
+	bridge.AttachDiagnosticEvents(diagevent.NewRing(matterDiagEventCapacity))
+
 	if err := bridge.Start(ctx); err != nil {
 		logger.Warn("matter.bridge.start", slog.String("err", err.Error()))
 		unwireReadiness()
+		closeAdvertiser()
 		return nil
 	}
 	// mDNS Re-Announce-Loop: grandcat/zeroconf only Probe+Announce on
@@ -599,47 +625,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// chain) leaves the operational session and ongoing subscription
 	// alive — the next pair retry collides on session-id 1 with
 	// `aesccm: authentication failed` and Apple gives up.
+	fabricTeardown := matterFabricTeardown(bridge, rootRefs.BasicInformation, opMgr, subMgr, store, logger)
 	if opCreds != nil {
-		biRefRemove := rootRefs.BasicInformation
-		opCreds.SetOnFabricRemoved(func(ctx context.Context, fabricIndex uint8) {
-			// Defer the operational + subscription teardown so the
-			// in-flight RemoveFabric NOCResponse can ride out on the
-			// just-removed CASE session before its keys are dropped.
-			// matter.js's CaseServer fires the equivalent
-			// "fabricRemoved" event AFTER the IM reply ships
-			// (`InteractionMessenger` flushes the reply, then the
-			// behaviors pipeline closes the session). With a sync
-			// CloseFabric we'd close session N inline, the reply
-			// encoder finds session N gone, and Apple sees a missing
-			// NOCResponse → retries until the pair times out.
-			//
-			// 100ms is enough for the synchronous reply path to drain
-			// (the IM dispatcher returns NOCResponse immediately, the
-			// bridge encrypts + sends in < 5ms in practice).
-			bridge.EmitFabricRemoved(fabricIndex)
-			if biRefRemove != nil {
-				biRefRemove.EmitLeave(fabricIndex)
-			}
-			logger.Info("matter.bridge.fabric.removed",
-				slog.Int("fabric_index", int(fabricIndex)))
-			go func() { //nolint:contextcheck // delayed teardown goroutine uses background ctx; the outer ctx (OnFabricRemoved) has already returned
-				time.Sleep(100 * time.Millisecond)
-				opMgr.CloseFabric(fabricIndex)
-				subMgr.CloseFabric(fabricIndex)
-				// Explicit resumption-record cleanup. SQLite FK CASCADE
-				// would also catch this once the matter_fabrics row is
-				// deleted, but the store API decouples the two tables
-				// — call RemoveResumptionsByFabric directly so the
-				// teardown is defense-in-depth and visible in logs.
-				// Mirrors chip src/credentials/FabricTable.cpp Delete().
-				if store != nil {
-					if err := store.RemoveResumptionsByFabric(context.Background(), fabricIndex); err != nil {
-						logger.Debug("matter.bridge.fabric.remove_resumptions",
-							slog.Int("fabric_index", int(fabricIndex)),
-							slog.String("err", err.Error()))
-					}
-				}
-			}()
+		opCreds.SetOnFabricRemoved(func(_ context.Context, fabricIndex uint8) {
+			fabricTeardown(context.Background(), fabricIndex) //nolint:contextcheck // the teardown outlives the invoking exchange by design; see matterFabricTeardown
 		})
 
 		// Wire fabric-updated cleanup. After UpdateNOC installs a new
@@ -1021,6 +1010,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		if err := bridge.Stop(stopCtx); err != nil {
 			logger.Warn("matter.bridge.stop", slog.String("err", err.Error()))
 		}
+		// After bridge.Stop, so the advertiser's goodbye records (including
+		// the subtype PTR goodbyes) are on the wire before the responder's
+		// own multicast sockets go away.
+		closeAdvertiser()
 		// Stop the subscription engine goroutine. The DB handle itself is
 		// shared (owned by the composition root, see openLoomDB) and is
 		// closed by its opener, not here.
@@ -1036,7 +1029,84 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		opCreds:        opCreds,
 		configuredPase: configuredPase,
 		rootRefs:       rootRefs,
-		readiness:      readiness,
+		fabricTeardown: fabricTeardown,
+		withdrawFabric: func(ctx context.Context, compressedID [8]byte, nodeID uint64) {
+			// Retire the removed identity's operational instance, then
+			// republish what is left. The wire command reaches both through
+			// the cluster's OnFabricWithdraw / OnMDNSReannounce hooks; the
+			// operator paths have no cluster invocation to fire them, so an
+			// unpaired controller's `_matter._tcp` record would keep being
+			// advertised until the next daemon restart.
+			bridge.WithdrawFabric(ctx, compressedID, nodeID)
+			if z, ok := advertiser.(*mdns.Zeroconf); ok {
+				z.TriggerReannounce(ctx)
+			}
+		},
+	}
+}
+
+// matterFabricTeardown builds the runtime fan-out every fabric removal owes,
+// whichever surface removed it: the OperationalCredentials RemoveFabric wire
+// command, the REST revoke and the factory reset all run this one closure.
+// Deleting the persisted row alone leaves the removed controller's CASE
+// session and its subscription live — keepalive reports keep flowing, the
+// session slot stays occupied, and the next pair retry collides on the same
+// session id with `aesccm: authentication failed`.
+//
+// The operational + subscription close is deferred so an in-flight
+// RemoveFabric NOCResponse can still ride out on the just-removed CASE
+// session before its keys are dropped. matter.js's CaseServer fires the
+// equivalent "fabricRemoved" event AFTER the IM reply ships
+// (`InteractionMessenger` flushes the reply, then the behaviors pipeline
+// closes the session). With a synchronous CloseFabric we would close session
+// N inline, the reply encoder would find session N gone, and Apple would see
+// a missing NOCResponse and retry until the pair times out. 100ms is enough
+// for the synchronous reply path to drain (the IM dispatcher returns
+// NOCResponse immediately, the bridge encrypts + sends in < 5ms in practice).
+//
+// The ctx argument is deliberately unused: the teardown outlives whatever
+// invoked it — an exchange whose reply has shipped, or an HTTP request that
+// has already answered — so cancelling that caller must not cut the cleanup
+// short.
+func matterFabricTeardown(
+	bridge *matterbridge.Bridge,
+	basicInfo *mattercore.BasicInformation,
+	opMgr *operational.Manager,
+	subMgr *subscription.Manager,
+	store *matterstore.Store,
+	logger *slog.Logger,
+) func(ctx context.Context, fabricIndex uint8) {
+	return func(_ context.Context, fabricIndex uint8) {
+		if bridge != nil {
+			bridge.EmitFabricRemoved(fabricIndex)
+		}
+		if basicInfo != nil {
+			basicInfo.EmitLeave(fabricIndex)
+		}
+		logger.Info("matter.bridge.fabric.removed",
+			slog.Int("fabric_index", int(fabricIndex)))
+		go func() { //nolint:contextcheck // delayed teardown goroutine uses a background ctx by design; the caller that triggered the removal has already returned
+			time.Sleep(100 * time.Millisecond)
+			if opMgr != nil {
+				opMgr.CloseFabric(fabricIndex)
+			}
+			if subMgr != nil {
+				subMgr.CloseFabric(fabricIndex)
+			}
+			// Explicit resumption-record cleanup. SQLite FK CASCADE would
+			// also catch this once the matter_fabrics row is deleted, but
+			// the store API decouples the two tables — call
+			// RemoveResumptionsByFabric directly so the teardown is
+			// defense-in-depth and visible in logs. Mirrors chip
+			// src/credentials/FabricTable.cpp Delete().
+			if store != nil {
+				if err := store.RemoveResumptionsByFabric(context.Background(), fabricIndex); err != nil {
+					logger.Debug("matter.bridge.fabric.remove_resumptions",
+						slog.Int("fabric_index", int(fabricIndex)),
+						slog.String("err", err.Error()))
+				}
+			}
+		}()
 	}
 }
 
@@ -2872,8 +2942,10 @@ type matterWiring struct {
 	reassembler       handlers.MatterTopologyReassembler
 	bi                *mattercore.BasicInformation
 	// centralHook wires a runtime-adopted central into the running bridge
-	// (readiness latch + reassemble-on-ready + reachable forward). Nil when
-	// the bridge is disabled; the live-adopt orchestrator skips it then.
+	// (reassemble-on-ready, hot-plug lifecycle, reachable forward). Nil when
+	// the bridge is disabled; the live-adopt orchestrator skips it then. The
+	// model-complete latch is not part of it — that rides a registry
+	// observer, which reaches boot-time and adopted centrals alike.
 	centralHook matterCentralHook
 }
 
@@ -3013,9 +3085,9 @@ func runMatterReassemble(ctx context.Context, reassemble func(context.Context) e
 //
 // Ready survives mid-life CCU reconnects — the loaded model does too, so the
 // registry view stays authoritative once the initial load has completed. It is
-// dropped in exactly one place: when a central is torn down (see
-// [newMatterCentralHook]), because the next unit registered under that name
-// starts with an empty model again. Safe for concurrent use — the snapshotter
+// dropped in exactly one place: when a central leaves the registry (see
+// [wireMatterCentralReadiness]), because the next unit registered under that
+// name starts with an empty model again. Safe for concurrent use — the snapshotter
 // reads from the bridge's assembly path while the event-bus dispatch writes.
 type matterCentralReadiness struct {
 	mu    sync.RWMutex
@@ -3052,27 +3124,40 @@ func (r *matterCentralReadiness) isReady(centralName string) bool {
 	return ok
 }
 
-// wireMatterCentralReadiness subscribes to every registered central's
-// CentralSouthboundReadyEvent and latches per-central readiness into the
-// returned tracker. Returns the tracker plus the subscription closers.
+// wireMatterCentralReadiness latches per-central readiness for every central
+// the registry carries — the ones already registered and every one registered
+// later — and returns the tracker plus the observer removal.
+//
+// It is a registry observer and not a walk because the latch is the one piece
+// of per-central Matter state that does NOT ride the central's own EventBus:
+// Unit.Stop drops the subscription, nothing drops the latch. A central removed
+// at runtime therefore left it set, and the next unit registered under that
+// name starts with an empty ModelRegistry — the stale latch stamps that empty
+// snapshot ModelComplete, the assembler reads every persisted endpoint of the
+// central as vanished and deletes it, and the refill renumbers the whole fleet
+// so controllers lose every accessory of that CCU. [central.Registry.Unregister]
+// runs the observer's unwire, so a boot-registered and a runtime-adopted
+// central clear the latch through the same path.
 //
 // Failure direction is deliberate: a central whose ready event is never
 // observed stays "model-incomplete", which only defers the assembler's
 // vanished-source GC for that central — persisted endpoint IDs are never
 // deleted on stale information.
-func wireMatterCentralReadiness(reg *central.Registry) (readiness *matterCentralReadiness, unsubs []func()) {
+func wireMatterCentralReadiness(reg *central.Registry) (readiness *matterCentralReadiness, remove func()) {
 	readiness = newMatterCentralReadiness()
 	if reg == nil {
-		return readiness, nil
+		return readiness, func() {}
 	}
-	units := reg.List()
-	unsubs = make([]func(), 0, len(units))
-	for _, u := range units {
-		if unsub := wireMatterCentralReadinessForUnit(readiness, u); unsub != nil {
-			unsubs = append(unsubs, unsub)
+	return readiness, reg.OnRegister(func(u *central.Unit) func() {
+		unsub := wireMatterCentralReadinessForUnit(readiness, u)
+		name := u.Name()
+		return func() {
+			if unsub != nil {
+				unsub()
+			}
+			readiness.clearReady(name)
 		}
-	}
-	return readiness, unsubs
+	})
 }
 
 // wireMatterCentralReadinessForUnit latches one central's readiness into the
@@ -3140,21 +3225,24 @@ func wireMatterDeviceReachableForward(u *central.Unit, notify func(centralName, 
 }
 
 // matterCentralHook wires one central into the running Matter bridge:
-// readiness latch (+ seed from the unit's queryable ready flag),
-// reassemble-on-ready onto the shared debounce pipeline, and the
-// device-availability → BridgedDeviceBasicInformation.Reachable forward.
-// The live-adopt orchestrator invokes it for runtime-added centrals so an
-// adopted central is wired into the bridge exactly like a boot-time one;
-// the returned unwire drops the subscriptions on live remove. Nil when the
-// Matter bridge is disabled.
+// reassemble-on-ready onto the shared debounce pipeline, hot-plug device
+// lifecycle, and the device-availability →
+// BridgedDeviceBasicInformation.Reachable forward. The live-adopt
+// orchestrator invokes it for runtime-added centrals so an adopted central is
+// wired into the bridge exactly like a boot-time one; the returned unwire
+// drops the subscriptions on live remove. Nil when the Matter bridge is
+// disabled.
+//
+// The readiness latch is deliberately NOT part of this hook: it is the only
+// per-central Matter state that outlives the unit's EventBus, so it rides the
+// registry observer in [wireMatterCentralReadiness], which covers boot-time
+// and runtime-adopted centrals in one place and clears the latch when the
+// central leaves the registry.
 type matterCentralHook func(u *central.Unit) (unwire func())
 
 // newMatterCentralHook builds the per-central Matter wiring hook from the
-// bridge-start artefacts. Thanks to the readiness seed inside
-// [wireMatterCentralReadinessForUnit], an adopted central that became ready
-// before the hook ran is still latched.
+// bridge-start artefacts.
 func newMatterCentralHook(
-	readiness *matterCentralReadiness,
 	reassembleTrigger func(),
 	notifyReachable func(centralName, address string, reachable bool),
 ) matterCentralHook {
@@ -3163,9 +3251,6 @@ func newMatterCentralHook(
 			return nil
 		}
 		var unsubs []func()
-		if unsub := wireMatterCentralReadinessForUnit(readiness, u); unsub != nil {
-			unsubs = append(unsubs, unsub)
-		}
 		if unsub := subscribeMatterReadyTrigger(u.EventBus, reassembleTrigger); unsub != nil {
 			unsubs = append(unsubs, unsub)
 		}
@@ -3181,24 +3266,13 @@ func newMatterCentralHook(
 		if unsub := wireMatterDeviceReachableForward(u, notifyReachable); unsub != nil {
 			unsubs = append(unsubs, unsub)
 		}
-		if len(unsubs) == 0 && readiness == nil {
+		if len(unsubs) == 0 {
 			return nil
 		}
-		name := u.Name()
 		return func() {
 			for _, unsub := range unsubs {
 				unsub()
 			}
-			// Dropping the readiness latch is as much a part of the teardown
-			// as the subscriptions are. A central re-registered under the
-			// same name — a re-add, or the disable/enable toggle — starts
-			// with an empty ModelRegistry, and a stale latch would let the
-			// very next assembly stamp that empty snapshot ModelComplete.
-			// The assembler then reads every persisted endpoint of the
-			// central as vanished and deletes it, so the refill renumbers
-			// the whole fleet and controllers lose every accessory of that
-			// CCU (rooms, names, automations included).
-			readiness.clearReady(name)
 		}
 	}
 }
@@ -3229,10 +3303,9 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			fabrics:   mfs,
 			inspector: wiring.endpointInspector,
 		}
-		// The trace has to be attached before the bridge starts serving:
-		// the moments worth recording begin with the first commissioner
-		// that reaches it.
-		mb.AttachDiagnosticEvents(diagevent.NewRing(matterDiagEventCapacity))
+		// The ring itself is attached inside startMatterBridge, before the
+		// bridge serves its first datagram; here we only expose the bridge as
+		// the REST surface's reporter.
 		wiring.diagEvents = mb
 		wiring.exposureStore = mfs
 		// Wire the allowlist checker so the assembler only bridges
@@ -3290,9 +3363,9 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			closers = append(closers, subscribeMatterDeviceLifecycleTrigger(u, reassembleTrigger)...)
 		}
 		// Per-central hook for the live-adopt orchestrator: a runtime-added
-		// central gets the same readiness latch, reassemble-on-ready and
-		// reachable-forward wiring as the boot-time centrals above.
-		wiring.centralHook = newMatterCentralHook(bundle.readiness, reassembleTrigger, mb.NotifyDeviceReachable)
+		// central gets the same reassemble-on-ready and reachable-forward
+		// wiring as the boot-time centrals above.
+		wiring.centralHook = newMatterCentralHook(reassembleTrigger, mb.NotifyDeviceReachable)
 		// Wire the Root Descriptor's dynamic PartsList provider to
 		// the bridge's live topology so `0:0x001D:0x0003` reflects the
 		// freshly-assembled bridged endpoints. Apple Home reads
@@ -3390,9 +3463,18 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 				return a
 			}
 		}
-		window.SetPaseVerifierInstaller(newMatterVerifierInstaller(
+		verifierInstaller := newMatterVerifierInstaller(
 			mb, bundle.opMgr, bundle.opCreds, bundle.configuredPase, verifierConfiguredFactory, logger,
-		))
+		)
+		window.SetPaseVerifierInstaller(verifierInstaller)
+		// The installer owns the live per-exchange PASE provider, whose reaper
+		// goroutine outlives every window it was opened for unless something
+		// stops it. Chain it into the Matter teardown so shutdown ends it.
+		stopBridge := teardown
+		teardown = func() {
+			verifierInstaller.Close()
+			stopBridge()
+		}
 		opener := matterbridge.NewCommissioningWindowOpener(
 			window,
 			mcfg.Discriminator,
@@ -3560,7 +3642,11 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		if healthTracker != nil {
 			_ = startMatterHealthProbe(ctx, wiring.statusReader, healthTracker, matterHealthProbeInterval)
 		}
-		revoker := &matterFabricRevokerAdapter{store: mfs}
+		revoker := &matterFabricRevokerAdapter{
+			store:    mfs,
+			teardown: bundle.fabricTeardown,
+			withdraw: bundle.withdrawFabric,
+		}
 		wiring.fabricRevoker = revoker
 		wiring.fabricPurger = revoker
 		wiring.reassembler = mb

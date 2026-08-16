@@ -616,8 +616,8 @@ func TestCoalescerInFlightDuringLeaderRun(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestCoalescerClearReleasesWaiters verifies that a follower waiting in Do
-// is unblocked when Clear is called. After Clear the follower receives
-// nil result and nil error.
+// is unblocked when Clear is called, carrying [ErrCoalescerCleared]: its
+// call was abandoned, which must not read as a successful empty result.
 func TestCoalescerClearReleasesWaiters(t *testing.T) {
 	t.Parallel()
 
@@ -661,9 +661,8 @@ func TestCoalescerClearReleasesWaiters(t *testing.T) {
 		t.Fatal("follower did not unblock after Clear")
 	}
 
-	// After Clear the follower receives zero values (nil/nil).
-	if followerVal != nil || followerErr != nil {
-		t.Errorf("follower got (%v, %v), want (nil, nil)", followerVal, followerErr)
+	if followerVal != nil || !errors.Is(followerErr, ErrCoalescerCleared) {
+		t.Errorf("follower got (%v, %v), want (nil, %v)", followerVal, followerErr, ErrCoalescerCleared)
 	}
 
 	// InFlight must be 0 after Clear.
@@ -687,5 +686,104 @@ func TestCoalescerClearOnEmptyIsNoop(t *testing.T) {
 	})
 	if err != nil || val != 99 {
 		t.Errorf("Do after Clear: got (%v, %v), want (99, nil)", val, err)
+	}
+}
+
+// TestCoalescerLeaderCancellationDoesNotFailFollowers pins that the shared
+// call belongs to the group, not to the caller that happened to start it.
+//
+// Concretely: a REST client aborting its request must not fail an MQTT
+// command that coalesced onto the same write. Both asked for the identical
+// (priority, address, parameter, value) tuple, the wire call is already in
+// flight, and the follower's own context is alive — reporting
+// "context canceled" to it would call a write failed that is on its way to
+// the CCU.
+func TestCoalescerLeaderCancellationDoesNotFailFollowers(t *testing.T) {
+	t.Parallel()
+
+	c := NewCoalescer()
+	leaderCtx, cancelLeader := context.WithCancel(context.Background())
+	defer cancelLeader()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	leaderErr := make(chan error, 1)
+	go func() {
+		_, err := c.Do(leaderCtx, "setValue|0|ABC:1|STATE|bool|true", func(ctx context.Context) (any, error) {
+			close(started)
+			<-release
+			// The shared call must not have been cancelled with the
+			// leader: its own error is what the followers receive.
+			return "written", ctx.Err()
+		})
+		leaderErr <- err
+	}()
+	<-started
+
+	type outcome struct {
+		val any
+		err error
+	}
+	followerOut := make(chan outcome, 1)
+	go func() {
+		v, err := c.Do(context.Background(), "setValue|0|ABC:1|STATE|bool|true", func(_ context.Context) (any, error) {
+			return "should-not-run", nil
+		})
+		followerOut <- outcome{v, err}
+	}()
+	waitAllEntered(t, c, 2)
+
+	cancelLeader()
+
+	select {
+	case err := <-leaderErr:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("leader err=%v, want context.Canceled — a caller still returns on its own context", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("leader did not return after its own context was cancelled")
+	}
+
+	close(release)
+
+	select {
+	case got := <-followerOut:
+		if got.err != nil {
+			t.Fatalf("follower err=%v, want nil — the leader's caller disconnecting must not fail it", got.err)
+		}
+		if got.val != "written" {
+			t.Fatalf("follower val=%v, want %q", got.val, "written")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("follower did not receive the shared call's result")
+	}
+}
+
+// TestCoalescerCancelsSharedCallWhenEveryCallerLeaves pins the other half of
+// the same rule: once nobody is waiting for the result any more, the shared
+// call is cancelled instead of running on and occupying the wire.
+func TestCoalescerCancelsSharedCallWhenEveryCallerLeaves(t *testing.T) {
+	t.Parallel()
+
+	c := NewCoalescer()
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	callCtxDone := make(chan struct{})
+	go func() {
+		_, _ = c.Do(ctx, "key", func(callCtx context.Context) (any, error) {
+			close(started)
+			<-callCtx.Done()
+			close(callCtxDone)
+			return nil, callCtx.Err()
+		})
+	}()
+	<-started
+
+	cancel()
+
+	select {
+	case <-callCtxDone:
+	case <-time.After(time.Second):
+		t.Fatal("the shared call kept running although its last participant had left")
 	}
 }

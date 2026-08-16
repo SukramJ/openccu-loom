@@ -791,7 +791,15 @@ func (b *Bridge) handleSubscribeRequest(
 	if matchedPaths == 0 {
 		return b.rejectSubscribeInvalidAction(src, requestHdr, proto, "no_match")
 	}
-	subID := b.registerSubscription(src, requestHdr, proto, req, &initialReport)
+	subID, regErr := b.registerSubscription(src, requestHdr, proto, req, &initialReport)
+	if regErr != nil {
+		// The manager refused the subscription (per-fabric quota, cadence
+		// out of range, cadence inverted after clamp). The controller must
+		// hear that as a StatusResponse: a SubscribeResponse would tell it
+		// a subscription exists, and it would then wait forever for
+		// reports the bridge never sends.
+		return b.rejectSubscribeStatus(src, requestHdr, proto, "manager", subscribeRejectStatus(regErr))
+	}
 	if err := b.streamInitialReportChunks(src, requestHdr, proto, subID, initialReport); err != nil {
 		return err
 	}
@@ -803,7 +811,14 @@ func (b *Bridge) handleSubscribeRequest(
 // established (illegal paths, no paths, or zero matching paths) and
 // discharges the owed MRP ack. stage tags the debug log line.
 func (b *Bridge) rejectSubscribeInvalidAction(src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, stage string) error {
-	body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusInvalidAction})
+	return b.rejectSubscribeStatus(src, requestHdr, proto, stage, im.StatusInvalidAction)
+}
+
+// rejectSubscribeStatus ships a top-level StatusResponse carrying status
+// for a Subscribe that cannot be established and discharges the owed MRP
+// ack. stage tags the debug log line.
+func (b *Bridge) rejectSubscribeStatus(src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, stage string, status im.StatusCode) error {
+	body, err := EncodeStatusResponse(im.StatusResponse{Status: status})
 	if err != nil {
 		debugReplyError(b.logger, "encode_subscribe_reject_"+stage, src, err)
 		return err
@@ -812,10 +827,11 @@ func (b *Bridge) rejectSubscribeInvalidAction(src *net.UDPAddr, requestHdr *mess
 		debugReplyError(b.logger, "send_subscribe_reject_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 	b.logger.Debug("matter.rx.im.subscribe.reject",
 		slog.String("src", srcString(src)),
-		slog.String("stage", stage))
+		slog.String("stage", stage),
+		slog.String("status", status.String()))
 	return nil
 }
 

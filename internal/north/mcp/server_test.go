@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"iter"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -770,16 +773,12 @@ func TestWriteParamset_SuccessfulWrite(t *testing.T) {
 		t.Errorf("PutParamset key: want MASTER, got %q", call.key)
 	}
 
-	// Verify audit entry was recorded with the paramset_write action.
-	entries := buf.List(10)
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(entries))
-	}
-	if entries[0].Action != audit.ActionParamsetWrite {
-		t.Errorf("audit action: want %q, got %q", audit.ActionParamsetWrite, entries[0].Action)
-	}
-	if entries[0].DeviceAddress != "ADDR001" {
-		t.Errorf("audit device_address: want ADDR001, got %q", entries[0].DeviceAddress)
+	// The paramset domain behind this seam records the change itself, with
+	// the per-parameter before/after pairs. The tool must not add one too:
+	// a second row for the same write shows up in the change history as a
+	// write that never happened, and the extra row carries no values.
+	if entries := buf.List(10); len(entries) != 0 {
+		t.Errorf("write_paramset recorded %d audit entries of its own; the paramset domain already records the write: %+v", len(entries), entries)
 	}
 }
 
@@ -1014,5 +1013,43 @@ func TestWriteTools_ChannelAddressPassesOwnershipCheck(t *testing.T) {
 	})
 	if !res.IsError {
 		t.Fatal("set_datapoint must reject a central that does not own the device")
+	}
+}
+
+// TestHandlerRetainsNoSession pins that the mount does not accumulate state
+// per connecting client. A retained session is only released by an explicit
+// DELETE, which a client that simply restarts never sends: every reconnect
+// would leave a session and its reader goroutine behind for the daemon's
+// lifetime. Stateless serving also keeps each tool call on its own request
+// context, which is what lets the admin-gated tools judge the actual caller.
+func TestHandlerRetainsNoSession(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	handler := mcp.Handler(mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1"}},
+		Devices:  devs,
+	})
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":` +
+		`{"protocolVersion":"2025-06-18","capabilities":{},` +
+		`"clientInfo":{"name":"test","version":"1"}}}`
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, srv.URL, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("initialize: status %d", resp.StatusCode)
+	}
+	if id := resp.Header.Get("Mcp-Session-Id"); id != "" {
+		t.Errorf("handler handed out session id %q — the session outlives the request that made it", id)
 	}
 }

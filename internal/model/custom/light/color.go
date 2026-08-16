@@ -119,7 +119,9 @@ func (l *ColorLight) Color() (hue int32, saturation float64, observed bool) {
 // sendAndObserve which adds them to the collector, and the deferred Send
 // dispatches a single put_paramset. Mirrors the CombinedDpHsColor collector
 // pattern (hs_color.py:82-91).
-func (l *ColorLight) SetColor(ctx context.Context, hue int32, saturation float64, priority hmenum.CommandPriority) error {
+func (l *ColorLight) SetColor(
+	ctx context.Context, hue int32, saturation float64, priority hmenum.CommandPriority,
+) (err error) {
 	hue = ((hue % 360) + 360) % 360
 	if saturation < 0 {
 		saturation = 0
@@ -143,12 +145,17 @@ func (l *ColorLight) SetColor(ctx context.Context, hue int32, saturation float64
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(l.hue.Writer), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
-	defer func() { _ = coll.Send(ctx) }()
-	if err := l.hue.Set(ctx, hue, priority); err != nil {
-		return fmt.Errorf("colorlight: HUE: %w", err)
+	// HUE and SATURATION are staged into the collector, so the
+	// put_paramset only happens in the flush: its error is the wire
+	// result of the whole colour change and must reach the caller.
+	defer func() { err = generic.FlushCollector(ctx, coll, err) }()
+	if err = l.hue.Set(ctx, hue, priority); err != nil {
+		err = fmt.Errorf("colorlight: HUE: %w", err)
+		return err
 	}
-	if err := l.saturation.Set(ctx, wireSat, priority); err != nil {
-		return fmt.Errorf("colorlight: SATURATION: %w", err)
+	if err = l.saturation.Set(ctx, wireSat, priority); err != nil {
+		err = fmt.Errorf("colorlight: SATURATION: %w", err)
+		return err
 	}
 	return nil
 }
@@ -699,9 +706,11 @@ func (l *FixedColorLight) TurnOnFixedColor(ctx context.Context, cfg FixedColorOn
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
 	ctx = generic.ContextWithCollector(ctx, coll)
-	defer func() { _ = coll.Send(ctx) }()
 	l.recordLastSent(level)
-	if err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority); err != nil {
+	err := custom.PutOrSet(ctx, w, addr, hmenum.ParamsetKeyValues, params, priority)
+	// Anything staged on the collector only reaches the wire in the
+	// flush, so its error is part of this command's result.
+	if err = generic.FlushCollector(ctx, coll, err); err != nil {
 		l.clearLastSent()
 		return err
 	}

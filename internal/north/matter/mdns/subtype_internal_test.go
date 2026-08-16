@@ -7,6 +7,8 @@
 package mdns
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"testing"
@@ -514,4 +516,45 @@ func TestSubtypeResponder_AnnounceEmptyMappings(t *testing.T) {
 	nilResponder.Announce() // must not panic
 	r := &SubtypeResponder{logger: slog.Default(), mappings: map[string]string{}}
 	r.Announce() // empty table: no packet, no panic
+}
+
+// TestSurvivesReadError pins the receive-loop policy: a transient read
+// error keeps the loop alive, a closed socket or a cancelled context
+// stops it, and a socket that fails on every read is abandoned after the
+// cap rather than spun on. Ending the loop on the first transient error
+// silently stops subtype PTR answering for the process lifetime — the
+// bridge stays resolvable by chip-tool but disappears from the Apple
+// Home and Google Home browses, which filter on `_L<disc>._sub`.
+func TestSurvivesReadError(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	transient := errors.New("recvmsg: interrupted system call")
+
+	consecutive := 0
+	if !r.survivesReadError(context.Background(), "v4", transient, &consecutive) {
+		t.Fatal("a single transient read error ended the loop")
+	}
+	if consecutive != 1 {
+		t.Errorf("consecutive = %d, want 1", consecutive)
+	}
+
+	// A closed socket is terminal regardless of the counter.
+	consecutive = 0
+	if r.survivesReadError(context.Background(), "v4", net.ErrClosed, &consecutive) {
+		t.Error("loop continued after net.ErrClosed")
+	}
+
+	// A cancelled context is terminal too.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	consecutive = 0
+	if r.survivesReadError(ctx, "v6", transient, &consecutive) {
+		t.Error("loop continued after the context was cancelled")
+	}
+
+	// Persistent failure gives up at the cap instead of spinning.
+	consecutive = maxConsecutiveReadErrors - 1
+	if r.survivesReadError(context.Background(), "v6", transient, &consecutive) {
+		t.Error("loop continued past maxConsecutiveReadErrors")
+	}
 }

@@ -51,20 +51,74 @@ func (a *ConfigAdapter) SanitizedConfig() hmapi.ConfigSnapshot {
 			"hub.sysvars.include_all":    true,
 			"hub.devices.include_hidden": false,
 		}
+	}
+	snap.Centrals = a.centrals()
+	return snap
+}
+
+// centrals reports the per-central wiring the daemon actually serves.
+//
+// The registry is the authority, not the boot config: a CCU adopted or
+// removed through the SPA never reaches `cfg.Centrals`, so reading the boot
+// slice made this endpoint — documented as the *effective* configuration —
+// go stale until the next daemon restart. Each central's host and interface
+// list comes from its live client entries, and falls back to the boot row of
+// the same name while the central is still waiting for its CCU (registered,
+// nothing wired yet). Without a registry the boot list is all there is.
+func (a *ConfigAdapter) centrals() []hmapi.ConfigCentral {
+	byName := make(map[string]*config.CentralConfig)
+	var bootOrder []hmapi.ConfigCentral
+	if a.source != nil {
 		for i := range a.source.Centrals {
 			cc := &a.source.Centrals[i]
-			ifaceNames := make([]string, len(cc.Interfaces))
-			for j, spec := range cc.Interfaces {
-				ifaceNames[j] = spec.Name
-			}
-			snap.Centrals = append(snap.Centrals, hmapi.ConfigCentral{
+			byName[cc.Name] = cc
+			bootOrder = append(bootOrder, hmapi.ConfigCentral{
 				Name:       cc.Name,
 				Host:       cc.Host,
-				Interfaces: ifaceNames,
+				Interfaces: configuredInterfaceNames(cc),
 			})
 		}
 	}
-	return snap
+	if a.registry == nil {
+		return bootOrder
+	}
+	units := a.registry.List()
+	out := make([]hmapi.ConfigCentral, 0, len(units))
+	for _, u := range units {
+		if u == nil {
+			continue
+		}
+		entry := hmapi.ConfigCentral{Name: u.Name()}
+		if u.Clients != nil {
+			for _, ce := range u.Clients.List() {
+				if ce == nil {
+					continue
+				}
+				if entry.Host == "" {
+					entry.Host = ce.Host
+				}
+				entry.Interfaces = append(entry.Interfaces, string(ce.Interface))
+			}
+		}
+		if len(entry.Interfaces) == 0 {
+			if cc, ok := byName[entry.Name]; ok {
+				entry.Host = cc.Host
+				entry.Interfaces = configuredInterfaceNames(cc)
+			}
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+// configuredInterfaceNames projects a central's configured interface specs
+// onto their bare names.
+func configuredInterfaceNames(cc *config.CentralConfig) []string {
+	names := make([]string, len(cc.Interfaces))
+	for i, spec := range cc.Interfaces {
+		names[i] = spec.Name
+	}
+	return names
 }
 
 // HealthAdapter aggregates the daemon-global health tracker plus every

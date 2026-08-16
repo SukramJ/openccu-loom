@@ -446,10 +446,6 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	}
 
-	// Homegear has no JSON-RPC layer; wire its XML-RPC sysvar surface now that
-	// the interface backend is up.
-	wireHomegearHubIfPresent(ctx, unit, backendsByInterface, logger)
-
 	// Periodic data-refresh handler (the fetch-all-device-data reconciliation
 	// safety net). runner is non-nil here — the hub load above succeeded.
 	wireLoadAndRefresh(unit, pipeline, cc.Interfaces, runner, logger)
@@ -506,23 +502,6 @@ func (r *backendRegistry) put(interfaceID string, b backends.Operations) {
 	r.mu.Lock()
 	r.m[interfaceID] = b
 	r.mu.Unlock()
-}
-
-// homegearBackend returns the first registered Homegear backend, or nil
-// when none of the central's interfaces is Homegear. Used to wire the
-// XML-RPC sysvar path that the JSON-RPC hub bootstrap cannot serve.
-func (r *backendRegistry) homegearBackend() backends.Operations {
-	if r == nil {
-		return nil
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for _, b := range r.m {
-		if b != nil && b.Kind() == backends.KindHomegear {
-			return b
-		}
-	}
-	return nil
 }
 
 // operations returns the raw backend registered for interfaceID, or nil

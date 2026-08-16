@@ -24,6 +24,7 @@ package lock
 import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -34,6 +35,11 @@ func init() {
 	reg.MustRegisterConstructor(hmenum.DeviceProfileRfLock, rfLockConstructor)
 	reg.MustRegisterConstructor(hmenum.DeviceProfileIPButtonLock, ipButtonLockConstructor)
 	reg.MustRegisterConstructor(hmenum.DeviceProfileRFButtonLock, rfButtonLockConstructor)
+
+	// Pre-populate the package-level scalar-arg key table so north-bound
+	// adapters can resolve the key before any lock has materialised. The
+	// same mapping is re-applied per Source by [Lock.registerServices].
+	payload.RegisterGlobalScalarArgKey(serviceLockCommand, argLockCommand)
 }
 
 // Predefined capability presets mirror

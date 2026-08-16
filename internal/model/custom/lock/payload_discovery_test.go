@@ -114,25 +114,27 @@ func TestLockHADiscoveryPayload_KindRFUsesState(t *testing.T) {
 	}
 }
 
-// TestLockHADiscoveryPayload_KindButtonUsesBUTTONLOCK pins that KindButton
-// command_topic points at BUTTON_LOCK. HmIP-DLD ch0 has no STATE wire
-// parameter — pointing at it causes an XML-RPC fault on every HA command.
-func TestLockHADiscoveryPayload_KindButtonUsesBUTTONLOCK(t *testing.T) {
+// TestLockHADiscoveryPayload_KindButtonUsesServiceMethod pins that the
+// button-lock command topic is the service-method one. The slot a button
+// lock writes is GLOBAL_BUTTON_LOCK in the MASTER paramset, so a
+// wire-parameter topic cannot carry it: the VALUES setValue it produces
+// faults with XML-RPC -5, and BUTTON_LOCK is not on the channel at all —
+// every lock/unlock from Home Assistant was silently lost.
+func TestLockHADiscoveryPayload_KindButtonUsesServiceMethod(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:0", KindButton, &stubWriter{}, custom.LockCapabilities{})
 	ctx := discoveryCtx{}
 	_, body := r.lock.HADiscoveryPayload(ctx)
 
-	wantCmd := ctx.WireParameterCommandTopic("BUTTON_LOCK")
+	wantCmd := ctx.ServiceMethodCommandTopic(serviceLockCommand)
 	if v, _ := body["command_topic"].(string); v != wantCmd {
 		t.Errorf("KindButton command_topic = %q, want %q", v, wantCmd)
 	}
-	// BUTTON_LOCK: true=locked, false=unlocked (inverted vs STATE).
-	if v, _ := body["payload_lock"].(string); v != "true" {
-		t.Errorf("KindButton payload_lock = %q, want %q", v, "true")
+	if v, _ := body["payload_lock"].(string); v != commandTokenLock {
+		t.Errorf("KindButton payload_lock = %q, want %q", v, commandTokenLock)
 	}
-	if v, _ := body["payload_unlock"].(string); v != "false" {
-		t.Errorf("KindButton payload_unlock = %q, want %q", v, "false")
+	if v, _ := body["payload_unlock"].(string); v != commandTokenUnlock {
+		t.Errorf("KindButton payload_unlock = %q, want %q", v, commandTokenUnlock)
 	}
 }
 

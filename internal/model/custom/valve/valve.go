@@ -108,12 +108,14 @@ func (v *Irrigation) OnState(open bool) { v.OnEvent(open) }
 func (v *Irrigation) Open(ctx context.Context, duration time.Duration, priority hmenum.CommandPriority) error {
 	ctx = custom.EnsureContext(ctx)
 	if duration > 0 {
-		if v.Writer != nil {
-			coll := generic.NewCollector(generic.WriterAsBackend(v.Writer), generic.WithPriority(priority))
-			ctx = generic.ContextWithCollector(ctx, coll)
-			defer func() { _ = coll.Send(ctx) }()
+		if v.Writer == nil {
+			return v.TurnOnWithTimer(ctx, duration, priority)
 		}
-		return v.TurnOnWithTimer(ctx, duration, priority)
+		coll := generic.NewCollector(generic.WriterAsBackend(v.Writer), generic.WithPriority(priority))
+		ctx = generic.ContextWithCollector(ctx, coll)
+		// ON_TIME + STATE are only staged by TurnOnWithTimer; the wire
+		// call happens in the flush, so its error is the command result.
+		return generic.FlushCollector(ctx, coll, v.TurnOnWithTimer(ctx, duration, priority))
 	}
 	if !v.IsStateChange(true) {
 		return nil

@@ -46,6 +46,9 @@ func validateFieldRanges(c *Config) error {
 	if err := validateRESTLimits(&c.North.REST); err != nil {
 		return err
 	}
+	if err := validateFiniteFloats(c); err != nil {
+		return err
+	}
 	return validateNonNegativeDurations(c)
 }
 
@@ -228,7 +231,11 @@ func negativeIsMeaningful(path string) bool {
 // table.
 func validateNonNegativeDurations(c *Config) error {
 	var negative []string
-	walkDurationLeaves(reflect.ValueOf(c), "", func(path string, d time.Duration) {
+	walkLeaves(reflect.ValueOf(c), "", func(path string, v reflect.Value) {
+		if v.Type() != durationType {
+			return
+		}
+		d := time.Duration(v.Int())
 		if d < 0 && !negativeIsMeaningful(path) {
 			negative = append(negative, fmt.Sprintf("%s (%s)", path, d))
 		}
@@ -240,11 +247,41 @@ func validateNonNegativeDurations(c *Config) error {
 		strings.Join(negative, ", "))
 }
 
-// walkDurationLeaves visits every time.Duration leaf under rv, building
-// the dotted config path from the yaml tags so a rejection names the
-// field the operator typed. Maps are left opaque: they carry credential
-// and override tables, never duration knobs.
-func walkDurationLeaves(rv reflect.Value, prefix string, visit func(path string, d time.Duration)) {
+// validateFiniteFloats rejects NaN and ±Inf on any float leaf anywhere in
+// the config.
+//
+// YAML spells all three (`.nan`, `.inf`, `-.inf`) and they survive parsing
+// and every range check — but JSON cannot encode them. The daemon deep-copies
+// the config through a JSON round-trip whenever it re-assembles the effective
+// config (the DB-tier overlay does this on every boot and every section save),
+// so a single non-finite leaf would make the copy fail. Rejecting the value at
+// the boundary that ingests it keeps that failure impossible instead of
+// discovering it several layers away from the field that caused it.
+//
+// The check is reflective for the same reason the duration check is: a
+// hand-written list of float leaves is the part that rots.
+func validateFiniteFloats(c *Config) error {
+	var bad []string
+	walkLeaves(reflect.ValueOf(c), "", func(path string, v reflect.Value) {
+		switch v.Kind() { //nolint:exhaustive // only float leaves are of interest here
+		case reflect.Float32, reflect.Float64:
+			if f := v.Float(); math.IsNaN(f) || math.IsInf(f, 0) {
+				bad = append(bad, fmt.Sprintf("%s (%v)", path, f))
+			}
+		}
+	})
+	if len(bad) == 0 {
+		return nil
+	}
+	return fmt.Errorf("config: numeric fields must be finite (no .nan / .inf): %s",
+		strings.Join(bad, ", "))
+}
+
+// walkLeaves visits every scalar leaf under rv, building the dotted config
+// path from the yaml tags so a rejection names the field the operator typed.
+// Maps are left opaque: they carry credential and override tables, never
+// numeric knobs.
+func walkLeaves(rv reflect.Value, prefix string, visit func(path string, v reflect.Value)) {
 	for rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
 			return
@@ -272,15 +309,13 @@ func walkDurationLeaves(rv reflect.Value, prefix string, visit func(path string,
 			} else if prefix != "" {
 				path = prefix + "." + tag
 			}
-			walkDurationLeaves(rv.Field(i), path, visit)
+			walkLeaves(rv.Field(i), path, visit)
 		}
 	case reflect.Slice, reflect.Array:
 		for i := range rv.Len() {
-			walkDurationLeaves(rv.Index(i), fmt.Sprintf("%s[%d]", prefix, i), visit)
+			walkLeaves(rv.Index(i), fmt.Sprintf("%s[%d]", prefix, i), visit)
 		}
 	default:
-		if rv.Type() == durationType {
-			visit(prefix, time.Duration(rv.Int()))
-		}
+		visit(prefix, rv)
 	}
 }

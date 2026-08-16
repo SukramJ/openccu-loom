@@ -133,12 +133,33 @@ func NewServer(d Deps) *mcpsdk.Server {
 }
 
 // Handler returns the Streamable-HTTP handler to mount on the REST
-// listener (e.g. at /mcp). The server is built once and shared across
-// sessions; the SDK manages per-session state.
+// listener (e.g. at /mcp). The server is built once and shared by every
+// request.
+//
+// The transport runs stateless: each POST is served by its own short-lived
+// session that is closed when the request completes. Two properties follow,
+// and this adapter depends on both.
+//
+// Authorization is per request. The mount wraps this handler in the daemon's
+// identity-resolve and role-gate middleware, so a tool handler's context is
+// the calling request's context and the tools that re-check a role
+// (callerHasRole) judge the caller. A retained session would instead hand
+// every later call the context captured when the session was opened: an
+// identity that has since been demoted, or that belongs to whoever first used
+// the session id, would keep its old privileges for the session's lifetime.
+//
+// Nothing accumulates. Retained sessions are only released by an explicit
+// DELETE, which a client that simply restarts never sends, so every
+// reconnect would leave a session and its reader goroutine behind for the
+// daemon's lifetime.
+//
+// The cost is that server-initiated traffic (GET event streams, sampling,
+// elicitation) is unavailable — this adapter exposes plain
+// request/response tools, so nothing here needs it.
 func Handler(d Deps) http.Handler {
 	srv := NewServer(d)
 	return mcpsdk.NewStreamableHTTPHandler(
 		func(*http.Request) *mcpsdk.Server { return srv },
-		nil,
+		&mcpsdk.StreamableHTTPOptions{Stateless: true},
 	)
 }

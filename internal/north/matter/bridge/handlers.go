@@ -699,12 +699,13 @@ func NewMRPAckAdapter(t *mrp.AckTracker) *MRPAckAdapter {
 	return &MRPAckAdapter{tracker: t}
 }
 
-// Discharge forwards to [mrp.AckTracker.Discharge].
-func (a *MRPAckAdapter) Discharge(sessionID, exchangeID uint16) bool {
+// Discharge forwards to [mrp.AckTracker.Discharge]. initiator is the
+// LOCAL side's role on the exchange.
+func (a *MRPAckAdapter) Discharge(sessionID, exchangeID uint16, initiator bool) bool {
 	if a.tracker == nil {
 		return false
 	}
-	return a.tracker.Discharge(sessionID, exchangeID)
+	return a.tracker.Discharge(sessionID, exchangeID, initiator)
 }
 
 // OperationalSessionLookup wraps a session-lookup function from the

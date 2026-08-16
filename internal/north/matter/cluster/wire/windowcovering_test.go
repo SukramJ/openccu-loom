@@ -11,12 +11,14 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 )
 
-// TestDecodeGoToLiftPercentageTag1 verifies that context tag 1 carries
-// the canonical 16-bit percent100ths value as-is (5000 → 5000).
-func TestDecodeGoToLiftPercentageTag1(t *testing.T) {
+// TestDecodeGoToLiftPercentageField0 verifies that field 0 carries the
+// canonical 16-bit percent100ths value as-is (5000 → 5000), matching
+// matter.js window-covering-cluster.element.ts:95 (LiftPercent100thsValue
+// id 0x0).
+func TestDecodeGoToLiftPercentageField0(t *testing.T) {
 	t.Parallel()
 	payload := buildPayload(t, func(e *tlv.Encoder) {
-		e.PutUint(tlv.ContextTag(1), 5000)
+		e.PutUint(tlv.ContextTag(0), 5000)
 	})
 	got, err := wire.DecodeGoToLiftPercentage(payload)
 	if err != nil {
@@ -27,20 +29,22 @@ func TestDecodeGoToLiftPercentageTag1(t *testing.T) {
 	}
 }
 
-// TestDecodeGoToLiftPercentageTag0Legacy verifies that context tag 0
-// carries the deprecated 8-bit percentage and is scaled up by ×100
-// (50 → 5000).
-func TestDecodeGoToLiftPercentageTag0Legacy(t *testing.T) {
+// TestDecodeGoToLiftPercentageField1Ignored verifies that field 1 — the
+// removed 8-bit percentage, conformance "X" in matter.js
+// window-covering-cluster.element.ts:96 — is ignored rather than taken
+// as the position.
+func TestDecodeGoToLiftPercentageField1Ignored(t *testing.T) {
 	t.Parallel()
 	payload := buildPayload(t, func(e *tlv.Encoder) {
-		e.PutUint(tlv.ContextTag(0), 50)
+		e.PutUint(tlv.ContextTag(0), 5000)
+		e.PutUint(tlv.ContextTag(1), 50)
 	})
 	got, err := wire.DecodeGoToLiftPercentage(payload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got.LiftPercent100thsValue != 5000 {
-		t.Errorf("LiftPercent100thsValue = %d, want 5000 (50 × 100)", got.LiftPercent100thsValue)
+		t.Errorf("LiftPercent100thsValue = %d, want 5000 (field 1 must be ignored)", got.LiftPercent100thsValue)
 	}
 }
 
@@ -54,12 +58,13 @@ func TestDecodeGoToLiftPercentageMalformed(t *testing.T) {
 	}
 }
 
-// TestDecodeGoToTiltPercentageTag1 verifies that context tag 1 carries
-// the canonical 16-bit percent100ths value as-is (3000 → 3000).
-func TestDecodeGoToTiltPercentageTag1(t *testing.T) {
+// TestDecodeGoToTiltPercentageField0 verifies that field 0 carries the
+// canonical 16-bit percent100ths value as-is (3000 → 3000), matching
+// matter.js window-covering-cluster.element.ts:104.
+func TestDecodeGoToTiltPercentageField0(t *testing.T) {
 	t.Parallel()
 	payload := buildPayload(t, func(e *tlv.Encoder) {
-		e.PutUint(tlv.ContextTag(1), 3000)
+		e.PutUint(tlv.ContextTag(0), 3000)
 	})
 	got, err := wire.DecodeGoToTiltPercentage(payload)
 	if err != nil {
@@ -70,20 +75,20 @@ func TestDecodeGoToTiltPercentageTag1(t *testing.T) {
 	}
 }
 
-// TestDecodeGoToTiltPercentageTag0Legacy verifies that context tag 0
-// carries the deprecated 8-bit percentage and is scaled up by ×100
-// (30 → 3000).
-func TestDecodeGoToTiltPercentageTag0Legacy(t *testing.T) {
+// TestDecodeGoToTiltPercentageField1Ignored verifies that field 1 — the
+// removed 8-bit percentage, conformance "X" — is ignored.
+func TestDecodeGoToTiltPercentageField1Ignored(t *testing.T) {
 	t.Parallel()
 	payload := buildPayload(t, func(e *tlv.Encoder) {
-		e.PutUint(tlv.ContextTag(0), 30)
+		e.PutUint(tlv.ContextTag(0), 3000)
+		e.PutUint(tlv.ContextTag(1), 30)
 	})
 	got, err := wire.DecodeGoToTiltPercentage(payload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got.TiltPercent100thsValue != 3000 {
-		t.Errorf("TiltPercent100thsValue = %d, want 3000 (30 × 100)", got.TiltPercent100thsValue)
+		t.Errorf("TiltPercent100thsValue = %d, want 3000 (field 1 must be ignored)", got.TiltPercent100thsValue)
 	}
 }
 

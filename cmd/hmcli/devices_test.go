@@ -222,6 +222,26 @@ func TestDevicesListJSONFlagEmitsRawJSON(t *testing.T) {
 	}
 }
 
+// TestDevicesListJSONEmptyFleetEmitsEmptyArray pins the output contract for a
+// daemon that has no devices yet: the JSON mode must emit `[]`, not `null`, so
+// a wrapper piping the output into `jq '.[]'` yields nothing instead of failing
+// with "Cannot iterate over null".
+func TestDevicesListJSONEmptyFleetEmitsEmptyArray(t *testing.T) {
+	t.Parallel()
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/devices": func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON200(w, deviceListResponse{Items: nil, Total: 0})
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"devices", "list", "--host", ts.URL, "--json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "[]" {
+		t.Errorf("empty fleet JSON output = %q, want %q", got, "[]")
+	}
+}
+
 func TestDevicesListNon2xxReturnsError(t *testing.T) {
 	t.Parallel()
 	ts := newDevicesServer(t, map[string]http.HandlerFunc{

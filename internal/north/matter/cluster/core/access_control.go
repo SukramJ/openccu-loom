@@ -635,7 +635,7 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 
 // MatterInvoke — no commands; AccessControl in 1.5.1 is attribute-only.
 func (a *AccessControl) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: AccessControl has no command 0x%X", cmdID)
+	return nil, im.UnsupportedCommandf("matter: AccessControl has no command 0x%X", cmdID)
 }
 
 // MatterReportable returns the attributes that emit reports on

@@ -335,6 +335,11 @@ func TestMatterCommissioningWindow_OpenerError_Returns500(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
 	}
+	// The internal cause is an operator-only diagnostic: it belongs in
+	// the log, never in the response body.
+	if strings.Contains(w.Body.String(), "chip stack crash") {
+		t.Fatalf("500 body leaks the raw error: %s", w.Body.String())
+	}
 }
 
 func TestMatterCommissioningWindow_HappyPath_Returns200(t *testing.T) {

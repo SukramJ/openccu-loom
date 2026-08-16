@@ -167,3 +167,59 @@ func TestContextHandlerInjectsTraceFields(t *testing.T) {
 		})
 	}
 }
+
+// TestContextHandlerInjectsScopeFields pins the fields that make parallel
+// work legible. CentralName in particular is documented as the multi-CCU
+// log-correlation key and is set by the REST middleware on every request, but
+// the enricher never emitted it: two CCUs' call paths interleaved
+// indistinguishably in the output, and no surface anywhere reported the
+// scope. Each field stays absent when unset so untargeted records keep their
+// existing shape.
+func TestContextHandlerInjectsScopeFields(t *testing.T) {
+	t.Parallel()
+
+	emit := func(t *testing.T, rc reqctx.RequestContext) map[string]any {
+		t.Helper()
+		var buf bytes.Buffer
+		logger := slog.New(reqctx.NewContextHandler(
+			slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}),
+		))
+		logger.InfoContext(reqctx.WithRequestContext(context.Background(), rc), "test message")
+		var record map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &record); err != nil {
+			t.Fatalf("log line is not valid JSON: %v\n%s", err, buf.String())
+		}
+		return record
+	}
+
+	t.Run("scoped_request_carries_every_field", func(t *testing.T) {
+		t.Parallel()
+		record := emit(t, reqctx.RequestContext{
+			RequestID:     "r1",
+			Operation:     "put_paramset",
+			CentralName:   "ccu-nord",
+			InterfaceID:   "HmIP-RF",
+			DeviceAddress: "0001ABCD:4",
+			StartedAt:     time.Now(),
+		})
+		for field, want := range map[string]string{
+			"central_name":   "ccu-nord",
+			"interface_id":   "HmIP-RF",
+			"device_address": "0001ABCD:4",
+		} {
+			if got, ok := record[field]; !ok || got != want {
+				t.Errorf("%s: got %v (present=%v), want %q", field, got, ok, want)
+			}
+		}
+	})
+
+	t.Run("unscoped_request_omits_them", func(t *testing.T) {
+		t.Parallel()
+		record := emit(t, reqctx.RequestContext{RequestID: "r2", StartedAt: time.Now()})
+		for _, field := range []string{"central_name", "interface_id", "device_address"} {
+			if _, ok := record[field]; ok {
+				t.Errorf("%s present on an unscoped request: %v", field, record[field])
+			}
+		}
+	})
+}

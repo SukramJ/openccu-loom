@@ -156,3 +156,60 @@ func TestHandleSubscribeRequest_NoMatchingPaths_RejectsInvalidAction(t *testing.
 		t.Errorf("mgr.Active() = %d, want 0 — a Subscribe matching zero paths must not register a subscription", n)
 	}
 }
+
+// TestHandleSubscribeRequest_ManagerRejection_SendsStatusResponse pins
+// that a Subscribe the subscription manager refuses is answered with a
+// StatusResponse — never with a SubscribeResponse. A SubscribeResponse
+// carrying SubscriptionID=0 tells the controller the subscription was
+// established: it then waits for reports that no subscription will ever
+// produce, and the bridged devices go stale with nothing on the wire
+// explaining why.
+//
+// Status mapping mirrors matter.js
+// packages/node/src/node/server/InteractionServer.ts:665-682 (cadence
+// constraints → InvalidAction); a quota rejection is ResourceExhausted
+// per Matter §8.10.
+func TestHandleSubscribeRequest_ManagerRejection_SendsStatusResponse(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		cfg        subscription.Config
+		req        im.SubscribeRequest
+		wantStatus im.StatusCode
+	}{
+		"cadence inverted": {
+			cfg:        subscription.Config{},
+			req:        im.SubscribeRequest{MinIntervalFloor: 120, MaxIntervalCeiling: 60},
+			wantStatus: im.StatusInvalidAction,
+		},
+		"cadence inverted after clamp": {
+			cfg:        subscription.Config{MaxIntervalCeilingSeconds: 30, MinIntervalFloorSeconds: 60},
+			req:        im.SubscribeRequest{MinIntervalFloor: 0, MaxIntervalCeiling: 3600},
+			wantStatus: im.StatusInvalidAction,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			b := newStartedBridge(t)
+			mgr := subscription.NewManager(tc.cfg, nil, nil)
+			b.AttachSubscriptionManager(mgr)
+
+			hdr := &message.Header{SessionID: 0, MessageCounter: 102}
+			proto := message.ProtocolHeader{ProtocolID: im.InteractionModelProtocolID, Opcode: im.OpcodeSubscribeRequest, ExchangeID: 1}
+			req := tc.req
+			req.AttributeRequests = []im.ConcreteAttributePath{
+				{HasEndpoint: true, Endpoint: 0, HasCluster: true, Cluster: 0x001D, HasAttribute: true, Attribute: 0x0003},
+			}
+
+			got := dispatchSubscribeTestRequest(t, b, hdr, proto, req)
+			if status := decodeSubscribeStatusResponse(t, got); status != tc.wantStatus {
+				t.Errorf("StatusResponse status = %v, want %v", status, tc.wantStatus)
+			}
+			if n := mgr.Active(); n != 0 {
+				t.Errorf("mgr.Active() = %d, want 0", n)
+			}
+		})
+	}
+}

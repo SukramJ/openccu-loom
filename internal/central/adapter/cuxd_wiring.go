@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -34,7 +35,7 @@ import (
 // HmIP-RF / BidCos / VirtualDevices is not applicable here. Each
 // CUxD interface gets its own outbound [binrpc.Client] plus a
 // registration on the shared [rpcserver.BINRPCServer] callback listener.
-func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential setup
+func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long sequential setup
 	ctx context.Context,
 	cc config.CentralConfig,
 	unit *central.Unit,
@@ -212,73 +213,70 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		pipeline.WithMasterRefreshHook(wireID, nil)
 	}
 
-	if err := pipeline.IngestFromBackend(ctx, wireID, iface, backend, writer, runner, logger); err != nil {
-		if poller != nil {
-			poller.Close()
-		}
-		ensureDisconnectedClientState(ic, logger)
-		return nil, fmt.Errorf("ingest: %w", err)
-	}
-	logger.Info("wire.ingest.ok",
-		slog.String("central", cc.Name),
-		slog.String("interface", wireID))
+	// Set once activate() installed the hot-plug ingestor, so the closer
+	// only resets the seam it actually claimed.
+	var hotplugInstalled atomic.Bool
 
-	// Hot-plug: CUxD announces newly created virtual devices through the
-	// same newDevices callback shape. Installed AFTER the bring-up ingest
-	// (and before init announces the callback), mirroring the XML-RPC
-	// path's ordering rationale in bringUpCentral.
-	if cbHandlers != nil {
-		var ddLoader *devicedetails.Loader
-		if runner != nil {
-			ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
+	// Boot-time activation of this interface. Wrapped in activate() so a
+	// transient failure can be retried in the background instead of leaving
+	// the interface permanently empty: CUxD is an addon that starts
+	// independently of ReGaHss, so its BIN-RPC port is regularly still
+	// closed when the readiness gate reports the CCU up. Without a retry the
+	// first listDevices failure is terminal for this interface — the central
+	// latches southbound-ready with zero CUxD devices and nothing re-runs the
+	// ingest until the daemon restarts. Mirrors the XML-RPC path's retry in
+	// wireInterface.
+	activate := func(activateCtx context.Context) error {
+		if err := pipeline.IngestFromBackend(activateCtx, wireID, iface, backend, writer, runner, logger); err != nil {
+			return fmt.Errorf("ingest: %w", err)
 		}
-		cuxdBackend := backend
-		unit.SetDeviceIngestFn(newHotplugIngestor(
-			unit, pipeline, writer, runner,
-			func(string) backends.Operations { return cuxdBackend },
-			ddLoader, logger,
-		))
-	}
+		logger.Info("wire.ingest.ok",
+			slog.String("central", cc.Name),
+			slog.String("interface", wireID))
 
-	// (Re)establish hub-data-point device links now that this interface's
-	// devices are materialised — see assignHubChannels. Idempotent across the
-	// multiple per-interface ingests of one central.
-	assignHubChannels(unit, logger)
-
-	for _, d := range unit.ModelRegistry.List() {
-		if d.InterfaceID != wireID {
-			continue
+		// Hot-plug: CUxD announces newly created virtual devices through the
+		// same newDevices callback shape. Installed AFTER the bring-up ingest
+		// (and before init announces the callback), mirroring the XML-RPC
+		// path's ordering rationale in bringUpCentral.
+		if cbHandlers != nil {
+			var ddLoader *devicedetails.Loader
+			if runner != nil {
+				ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
+			}
+			cuxdBackend := backend
+			unit.SetDeviceIngestFn(newHotplugIngestor(
+				unit, pipeline, writer, runner,
+				func(string) backends.Operations { return cuxdBackend },
+				ddLoader, logger,
+			))
+			hotplugInstalled.Store(true)
 		}
-		d.SetValueLoader(backend)
-	}
 
-	seedRelevantInitParameters(ctx, unit, iface, logger)
-	seedReadableEvents(ctx, unit, iface, logger)
+		// (Re)establish hub-data-point device links now that this interface's
+		// devices are materialised — see assignHubChannels. Idempotent across the
+		// multiple per-interface ingests of one central.
+		assignHubChannels(unit, logger)
 
-	if callbackURL != "" {
-		if err := backend.Deinit(ctx, callbackURL); err != nil {
-			logger.Debug("wire.deinit.pre_init",
-				slog.String("central", cc.Name),
-				slog.String("interface", initID),
-				slog.String("err", err.Error()))
+		for _, d := range unit.ModelRegistry.List() {
+			if d.InterfaceID != wireID {
+				continue
+			}
+			d.SetValueLoader(backend)
 		}
-		if err := backend.Init(ctx, initID, callbackURL); err != nil {
-			logger.Warn("wire.init.failed",
-				slog.String("central", cc.Name),
-				slog.String("interface", initID),
-				slog.String("err", err.Error()))
-		} else {
-			logger.Info("wire.init.ok",
-				slog.String("central", cc.Name),
-				slog.String("interface", initID))
-			// Drive the client state machine to CONNECTED — the XML-RPC path
-			// does this too. Without it CUxD sits at its initial state, so the
-			// central check_connection job sees ClientState != CONNECTED and
-			// keeps flagging the interface as a (false) connection loss.
-			ensureConnectedClientState(ic, logger)
-		}
+
+		seedRelevantInitParameters(activateCtx, unit, iface, logger)
+		seedReadableEvents(activateCtx, unit, iface, logger)
+
+		announceCUxDCallback(activateCtx, backend, ic, cc.Name, initID, callbackURL, logger)
+		return nil
 	}
 
+	runCUxDActivation(ctx, cuxdIngestBackoff, activate, ic, cc.Name, wireID, logger)
+
+	// The closer is returned unconditionally — every registration above
+	// (writer backend, client entry, metrics client, BIN-RPC callback
+	// routes) happens before the ingest, so an ingest that never succeeds
+	// must still be releasable on teardown.
 	//nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx; see deinitOnShutdown
 	closer := func() {
 		if binrpcCallbackServer != nil {
@@ -297,8 +295,111 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		if poller != nil {
 			poller.Close()
 		}
+		if hotplugInstalled.Load() {
+			unit.SetDeviceIngestFn(nil)
+		}
+		writer.Deregister(cc.Name, hmtypes.ParseWireInterfaceID(wireID))
+		if unit.Clients != nil {
+			unit.Clients.Remove(wireID)
+		}
+		if unit.MetricsClients != nil {
+			unit.MetricsClients.Deregister(iface)
+		}
 	}
 	return closer, nil
+}
+
+// announceCUxDCallback tells CUxD where to push its events. A blank
+// callbackURL means this deployment has no BIN-RPC listener, so the
+// interface stays in read-through mode. Best-effort: a failed announce is
+// logged, because the recovery pipeline re-announces on its next cycle.
+func announceCUxDCallback(
+	ctx context.Context,
+	backend backends.Operations,
+	ic *client.InterfaceClient,
+	centralName, initID, callbackURL string,
+	logger *slog.Logger,
+) {
+	if callbackURL == "" {
+		return
+	}
+	// Pre-Init Deinit: tell CUxD to forget any registration made for this
+	// callback URL before installing the fresh one. Best-effort — a previous
+	// run may have left none.
+	if err := backend.Deinit(ctx, callbackURL); err != nil {
+		logger.Debug("wire.deinit.pre_init",
+			slog.String("central", centralName),
+			slog.String("interface", initID),
+			slog.String("err", err.Error()))
+	}
+	if err := backend.Init(ctx, initID, callbackURL); err != nil {
+		logger.Warn("wire.init.failed",
+			slog.String("central", centralName),
+			slog.String("interface", initID),
+			slog.String("err", err.Error()))
+		return
+	}
+	logger.Info("wire.init.ok",
+		slog.String("central", centralName),
+		slog.String("interface", initID))
+	// Drive the client state machine to CONNECTED — the XML-RPC path does
+	// this too. Without it CUxD sits at its initial state, so the central
+	// check_connection job sees ClientState != CONNECTED and keeps flagging
+	// the interface as a (false) connection loss.
+	ensureConnectedClientState(ic, logger)
+}
+
+// cuxdIngestBackoff is the boot-time retry schedule for the CUxD ingest.
+// Same shape as the XML-RPC path: a handful of short waits that cover the
+// window in which the CUxD addon is still starting up behind a CCU that
+// already reports ready.
+var cuxdIngestBackoff = []time.Duration{
+	1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second,
+}
+
+// runCUxDActivation drives activate through the boot-time retry schedule.
+// It returns once the activation succeeded, the retries are spent, or the
+// wiring context is cancelled; the interface is reported as wired either
+// way, because the caller's closer owns the registrations made before the
+// first attempt.
+func runCUxDActivation(
+	ctx context.Context,
+	backoff []time.Duration,
+	activate func(context.Context) error,
+	ic *client.InterfaceClient,
+	centralName, wireID string,
+	logger *slog.Logger,
+) {
+	for attempt := 0; ; attempt++ {
+		err := activate(ingestAttemptContext(ctx, attempt, len(backoff)))
+		if err == nil {
+			return
+		}
+		if attempt >= len(backoff) {
+			// Every retry is spent and the interface stayed empty. Walk the
+			// client to DISCONNECTED so the recovery pipeline finds a
+			// CanReconnect-friendly state on its first probe success.
+			logger.Error("wire.interface.ingest_failed",
+				slog.String("central", centralName),
+				slog.String("interface", wireID),
+				slog.String("err", err.Error()))
+			ensureDisconnectedClientState(ic, logger)
+			return
+		}
+		logger.Debug("wire.interface.ingest_retry",
+			slog.String("central", centralName),
+			slog.String("interface", wireID),
+			slog.Int("attempt", attempt+1),
+			slog.String("err", err.Error()))
+		t := time.NewTimer(backoff[attempt])
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			ensureDisconnectedClientState(ic, logger)
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // cuxdRecoveryTarget bundles what the recovery stages need to reach one

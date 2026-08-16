@@ -857,6 +857,103 @@ func RedactSectionSecrets(sec Section, raw []byte) []byte {
 	return out
 }
 
+// RestoreRedactedSecrets returns incoming with every cfg:"secret" leaf of
+// section sec that arrives as JSON null replaced by the value the same leaf
+// carries in stored — or dropped entirely when stored has none.
+//
+// It is the inverse of [RedactSectionSecrets] and the reason a redacted export
+// can be imported at all: the document a redacted export produces carries null
+// where the credential was, and writing that back verbatim replaces the
+// operator's live MQTT / OIDC / Matter credentials with null. The merge is per
+// leaf, so everything the operator did edit in the exported file still wins —
+// only the leaves the export refused to disclose fall back to the database.
+//
+// A payload that is not a JSON object is returned unchanged; there is nothing
+// to walk.
+func RestoreRedactedSecrets(sec Section, incoming, stored []byte) []byte {
+	var tree map[string]any
+	if err := json.Unmarshal(incoming, &tree); err != nil || tree == nil {
+		return incoming
+	}
+	var storedTree map[string]any
+	if len(stored) > 0 {
+		if err := json.Unmarshal(stored, &storedTree); err != nil {
+			storedTree = nil
+		}
+	}
+	var restored bool
+	for _, f := range config.ClassifyFields(&config.Config{}) {
+		if f.Class != config.FieldSecret {
+			continue
+		}
+		rel := relativeFieldPath(sec, f.Path)
+		if rel == "" || rel == f.Path {
+			// Not a leaf of this section.
+			continue
+		}
+		if restorePath(tree, storedTree, rel) {
+			restored = true
+		}
+	}
+	if !restored {
+		return incoming
+	}
+	out, err := json.Marshal(tree)
+	if err != nil {
+		return incoming
+	}
+	return out
+}
+
+// restorePath replaces the null leaf at dotted inside tree with the value
+// stored carries at the same path, deleting the key when stored has none, and
+// reports whether it touched anything. A leaf that is absent or non-null in
+// tree is left alone: only a redaction marker (null) may be overridden, so an
+// operator who deliberately cleared a secret in the exported document still
+// clears it.
+func restorePath(tree, stored map[string]any, dotted string) bool {
+	parts := strings.Split(dotted, ".")
+	cur := tree
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			v, ok := cur[part]
+			if !ok || v != nil {
+				return false
+			}
+			if sv, ok := lookupPath(stored, parts); ok && sv != nil {
+				cur[part] = sv
+			} else {
+				delete(cur, part)
+			}
+			return true
+		}
+		next, ok := cur[part].(map[string]any)
+		if !ok {
+			return false
+		}
+		cur = next
+	}
+	return false
+}
+
+// lookupPath resolves the dotted path parts inside tree, reporting whether the
+// leaf key exists.
+func lookupPath(tree map[string]any, parts []string) (any, bool) {
+	cur := tree
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			v, ok := cur[part]
+			return v, ok
+		}
+		next, ok := cur[part].(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		cur = next
+	}
+	return nil, false
+}
+
 // redactPath nulls the leaf at dotted inside tree, reporting whether it was
 // present. Nulling rather than deleting keeps the key visible, so a reader can
 // tell "withheld" from "never set" — the same reason the audit log masks

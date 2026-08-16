@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -84,7 +85,7 @@ func (i *ICDManagement) MatterWrite(_ context.Context, attrID uint32, _ any, _ h
 // commands (RegisterClient / UnregisterClient / StayActiveRequest)
 // all require feature flags we don't advertise.
 func (i *ICDManagement) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: ICDManagement command 0x%02X not supported", cmdID)
+	return nil, im.UnsupportedCommandf("matter: ICDManagement command 0x%02X not supported", cmdID)
 }
 
 // MatterReportable lists subscribe-able attributes.

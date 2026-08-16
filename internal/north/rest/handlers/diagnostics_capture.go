@@ -74,6 +74,7 @@ func StartCapture(svc CaptureService, rec audit.Recorder) http.HandlerFunc {
 		}
 		if rec != nil {
 			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
 				Action: audit.Action("diagnostics.capture_start"),
 				Note:   summary.ID,
 			})
@@ -108,6 +109,7 @@ func StopCapture(svc CaptureService, rec audit.Recorder) http.HandlerFunc {
 		}
 		if rec != nil {
 			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
 				Action: audit.Action("diagnostics.capture_stop"),
 				Note:   summary.ID,
 			})

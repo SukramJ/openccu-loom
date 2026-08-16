@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -360,5 +361,43 @@ func TestDescriptor_SetPartsListProvider(t *testing.T) {
 	}
 	if len(parts) != 3 {
 		t.Fatalf("PartsList len = %d, want 3", len(parts))
+	}
+}
+
+// TestDescriptorProviderInstallRacesRead pins that installing the
+// PartsList / ServerList providers is safe while the IM layer is already
+// dispatching reads. The daemon attaches both well after the bridge
+// started serving, so a previously-paired commissioner re-establishing
+// CASE reads 0:0x001D:0x0003 concurrently with the install. Run under
+// -race, which is where the unsynchronised field write shows up.
+func TestDescriptorProviderInstallRacesRead(t *testing.T) {
+	d := defaultDescriptor(t)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for range 500 {
+			_, _ = d.MatterRead(0x0003)
+			_, _ = d.MatterRead(0x0001)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := range 500 {
+			parts := []uint16{uint16(i)}
+			d.SetPartsListProvider(func() []uint16 { return parts })
+			d.SetServerListProvider(func() []uint32 { return []uint32{0x001D} })
+			d.SetPartsList(parts)
+		}
+	}()
+	wg.Wait()
+
+	got, ok := d.MatterRead(0x0003)
+	if !ok {
+		t.Fatal("PartsList read failed after concurrent installs")
+	}
+	if _, isSlice := got.([]uint16); !isSlice {
+		t.Fatalf("PartsList = %T, want []uint16", got)
 	}
 }

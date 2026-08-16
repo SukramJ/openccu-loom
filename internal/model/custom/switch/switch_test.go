@@ -5,6 +5,7 @@ package switchdev
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"testing"
 	"time"
@@ -118,5 +119,40 @@ func TestSwitchRoundTrip(t *testing.T) {
 	on, ok = s.IsOn()
 	if on || !ok {
 		t.Fatalf("after OnState IsOn=%v ok=%v", on, ok)
+	}
+}
+
+// failingPutWriter fails every put_paramset, the wire shape TurnOnFor
+// produces once ON_TIME + STATE are staged together.
+type failingPutWriter struct {
+	stubWriter
+	err error
+}
+
+func (p *failingPutWriter) PutParamset(
+	_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority,
+) error {
+	return p.err
+}
+
+// TestSwitchTurnOnForReportsWireFailure pins that a failed timed
+// switch-on reaches the caller. TurnOnFor only *stages* ON_TIME + STATE
+// on the collector; the put_paramset happens when the batch is flushed,
+// so dropping that error reported an unreachable relay as success —
+// REST/MQTT answered 200/OK while the collector had already rolled the
+// optimistic STATE back.
+func TestSwitchTurnOnForReportsWireFailure(t *testing.T) {
+	wireErr := errors.New("ccu unreachable")
+	w := &failingPutWriter{err: wireErr}
+	s := newTestSwitch(t, "VCU2128127:4", "", w)
+	err := s.TurnOnFor(context.Background(), 60*time.Second, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("TurnOnFor returned nil although the put_paramset failed")
+	}
+	if !errors.Is(err, wireErr) {
+		t.Fatalf("TurnOnFor error = %v, want it to wrap %v", err, wireErr)
+	}
+	if on, ok := s.IsOn(); on && ok {
+		t.Error("optimistic STATE stayed on after the wire call failed")
 	}
 }

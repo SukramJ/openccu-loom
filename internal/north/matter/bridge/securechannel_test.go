@@ -88,7 +88,7 @@ type recordingAckHandler struct {
 	lastExchangeID atomic.Uint32
 }
 
-func (h *recordingAckHandler) Discharge(sessionID, exchangeID uint16) bool {
+func (h *recordingAckHandler) Discharge(sessionID, exchangeID uint16, _ bool) bool {
 	h.discharges.Add(1)
 	h.lastSessionID.Store(uint32(sessionID))
 	h.lastExchangeID.Store(uint32(exchangeID))

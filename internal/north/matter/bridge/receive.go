@@ -160,7 +160,7 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 	// Mirrors matter.js MessageExchange.ts:428-433 (duplicate +
 	// requiresAck → sendStandaloneAckForMessage without delay).
 	if duplicate {
-		b.expediteDuplicateAck(hdr.SessionID, proto.ExchangeID)
+		b.expediteDuplicateAck(hdr.SessionID, proto.ExchangeID, !proto.Initiator)
 		b.RunAckPumpOnce(time.Now())
 		b.logger.Debug("matter.rx.duplicate_acked",
 			slog.String("src", srcString(src)),
@@ -558,7 +558,7 @@ func (b *Bridge) replyTimedStatus(src *net.UDPAddr, requestHdr *message.Header, 
 		debugReplyError(b.logger, "send_timed_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 	b.logger.Debug("matter.rx.im.timed_reject",
 		slog.String("src", srcString(src)),
 		slog.String("stage", stage),

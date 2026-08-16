@@ -15,6 +15,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 )
 
@@ -32,7 +33,7 @@ func mqttCfg(enabled bool) *config.Config {
 
 func newSup(t *testing.T) *mqttSupervisor {
 	t.Helper()
-	return newMQTTSupervisor(supervisorLogger(), health.NewTracker())
+	return newMQTTSupervisor(supervisorLogger(), health.NewTracker(), nil)
 }
 
 func TestSupervisor_StartDisabled_NoStack(t *testing.T) {
@@ -43,8 +44,13 @@ func TestSupervisor_StartDisabled_NoStack(t *testing.T) {
 	if err := s.Start(ctx, mqttCfg(false)); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if s.Wiring() != nil {
-		t.Fatal("Wiring() must be nil when MQTT is disabled")
+	// No stack, but the stable Wiring exists: consumers bind it at
+	// composition time and a runtime enable has to reach them.
+	if s.Wiring() == nil {
+		t.Fatal("Wiring() must be non-nil even when MQTT is disabled")
+	}
+	if s.Wiring().Bridge() != nil {
+		t.Fatal("Wiring().Bridge() must be nil when MQTT is disabled, so publishes are dropped")
 	}
 	if s.CurrentClient() != nil {
 		t.Fatal("CurrentClient() must be nil when MQTT is disabled")
@@ -174,6 +180,12 @@ func TestSupervisor_AttachSubscribers_Idempotent(t *testing.T) {
 	}
 }
 
+// TestSupervisor_Swap_DisabledToEnabled pins the whole runtime-enable path,
+// not just the swap: a consumer binds the Wiring once, at composition time,
+// while MQTT is still disabled, and must publish through it after the operator
+// enables MQTT and reloads. Handing out no Wiring at boot — or a second one at
+// swap time — leaves every publisher built at boot permanently MQTT-dead with
+// a connected broker to look at.
 func TestSupervisor_Swap_DisabledToEnabled(t *testing.T) {
 	t.Parallel()
 	s := newSup(t)
@@ -182,18 +194,34 @@ func TestSupervisor_Swap_DisabledToEnabled(t *testing.T) {
 	if err := s.Start(ctx, mqttCfg(false)); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if s.Wiring() != nil {
-		t.Fatal("Wiring() must be nil after disabled Start")
+	// What EventBridge / HubMQTTPublisher / the system-status publishers
+	// capture when the daemon composes them.
+	bound := s.Wiring()
+	if bound == nil {
+		t.Fatal("Wiring() must be non-nil after a disabled Start; consumers bind it once and never re-read it")
+	}
+	if bound.Bridge() != nil {
+		t.Fatal("the disabled Wiring must carry no bridge, so publishes are dropped rather than panicking")
 	}
 
-	if err := s.Swap(ctx, mqttCfg(true)); err != nil {
+	enabled := mqttCfg(true)
+	enabled.North.MQTT.RawEnabled = true // the plane the assertion below observes
+	if err := s.Swap(ctx, enabled); err != nil {
 		t.Fatalf("Swap to enabled: %v", err)
 	}
-	if s.Wiring() == nil {
-		t.Fatal("Wiring() must be non-nil after Swap to enabled")
+	if s.Wiring() != bound {
+		t.Fatal("Swap handed out a different Wiring; every consumer still holds the boot-time pointer")
 	}
-	if _, ok := s.CurrentClient().(*mqtt.NoopClient); !ok {
+	client, ok := s.CurrentClient().(*mqtt.NoopClient)
+	if !ok {
 		t.Fatalf("expected *mqtt.NoopClient after swap, got %T", s.CurrentClient())
+	}
+
+	// A hub aggregate is the smallest real consumer payload: it addresses its
+	// own retained topic, exactly as HubMQTTPublisher publishes it.
+	bound.PublishSysvar(ctx, "ccu", hub.NewServiceMessages(nil), 3)
+	if len(client.Published()) == 0 {
+		t.Fatal("a consumer publishing through the boot-time Wiring reached nothing after the runtime enable")
 	}
 }
 

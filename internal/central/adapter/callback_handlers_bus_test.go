@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -364,6 +365,35 @@ func TestCallbackHandlersErrorPublishesSystemStatus(t *testing.T) {
 	}
 	if gotEvent.Healthy {
 		t.Fatal("Error must mark the component as unhealthy")
+	}
+}
+
+// TestCallbackHandlersErrorBoundsUntrustedStrings pins the length cap on the
+// interface id and the message of an `error` callback. The callback listener
+// takes no authentication and accepts a 10 MiB body, so an unbounded field
+// lets any peer that reaches the port write log records and incident rows of
+// arbitrary size.
+func TestCallbackHandlersErrorBoundsUntrustedStrings(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	var got hmevent.SystemStatusChangedEvent
+	unsub := events.Subscribe(c.EventBus, func(e hmevent.SystemStatusChangedEvent) { got = e })
+	defer unsub()
+
+	huge := strings.Repeat("A", 100_000)
+	h := NewCallbackHandlers(c, nil)
+	if err := h.Error(context.Background(), huge, 7, huge); err != nil {
+		t.Fatalf("Error: %v", err)
+	}
+
+	if len(got.Reason) > 1024 {
+		t.Fatalf("event reason len = %d, want bounded", len(got.Reason))
+	}
+	if len(got.InterfaceID) > 1024 {
+		t.Fatalf("event interface id len = %d, want bounded", len(got.InterfaceID))
 	}
 }
 

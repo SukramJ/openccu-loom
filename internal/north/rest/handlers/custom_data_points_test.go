@@ -207,6 +207,29 @@ func TestInvokeCustomDataPoint_HappyPath(t *testing.T) {
 	}
 }
 
+// TestInvokeCustomDataPoint_NoBody_Invokes pins the optional request
+// body: a parameterless operation is invoked without one, so a bodyless
+// POST must reach the writer instead of failing as invalid JSON.
+func TestInvokeCustomDataPoint_NoBody_Invokes(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0005", "HmIP-BSM")
+	addCustomDP(d, "DEV0005", "STATE", 1, hmenum.DataPointCategorySwitch)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0005": d}}
+	writer := &stubCustomDPWriter{}
+
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0005", "name": "STATE", "operation": "turn_off"}))
+	w := httptest.NewRecorder()
+	InvokeCustomDataPoint(idx, writer).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(writer.calls) != 1 {
+		t.Fatalf("expected 1 invoke call, got %d", len(writer.calls))
+	}
+}
+
 func TestInvokeCustomDataPoint_UnknownOperation_Returns400(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice("DEV0006", "HmIP-BSM")

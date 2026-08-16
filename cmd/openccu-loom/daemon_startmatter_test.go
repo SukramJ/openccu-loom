@@ -4,12 +4,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"log/slog"
+	"runtime/pprof"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -120,10 +124,54 @@ func TestBuildMatterAdvertiser_ZeroconfBranch_ReturnsNonNil(t *testing.T) {
 	t.Parallel()
 	mc := config.NorthMatter{MDNSAdvertise: "zeroconf"}
 	logger := slog.New(slog.DiscardHandler)
-	got := buildMatterAdvertiser(mc, logger)
+	got, closeAdv := buildMatterAdvertiser(mc, logger)
+	t.Cleanup(closeAdv)
 	if got == nil {
 		t.Fatal("expected non-nil advertiser for zeroconf")
 	}
+	if closeAdv == nil {
+		t.Fatal("zeroconf advertiser returned no closer; its subtype responder would outlive the bridge")
+	}
+}
+
+// TestBuildMatterAdvertiserCloserReleasesTheSubtypeResponder pins that the
+// closer actually ends what the advertiser started.
+//
+// The side-car subtype responder runs a receive goroutine per address family
+// on multicast sockets it owns, and the Zeroconf close path only retires the
+// subtype NAMES. While nothing called its Close, a bridge that failed to bind
+// its UDP port — or any daemon shutdown — left both goroutines and both
+// sockets alive for the process lifetime.
+//
+// Counting by stack keeps the assertion immune to whatever else the test
+// binary runs; on a host where the multicast sockets cannot be opened the
+// responder never starts and the counts are zero on both sides.
+func TestBuildMatterAdvertiserCloserReleasesTheSubtypeResponder(t *testing.T) {
+	base := subtypeResponderGoroutines(t)
+	_, closeAdv := buildMatterAdvertiser(config.NorthMatter{MDNSAdvertise: "zeroconf"}, slog.New(slog.DiscardHandler))
+	closeAdv()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got := subtypeResponderGoroutines(t)
+		if got <= base {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d subtype-responder goroutines still running after the closer, want %d", got, base)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// subtypeResponderGoroutines counts the responder's serve loops by stack.
+func subtypeResponderGoroutines(t *testing.T) int {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := pprof.Lookup("goroutine").WriteTo(&buf, 2); err != nil {
+		t.Fatalf("goroutine profile: %v", err)
+	}
+	return strings.Count(buf.String(), "SubtypeResponder).serve")
 }
 
 // ── announcePersistedFabric with actual fabrics ───────────────────────────────

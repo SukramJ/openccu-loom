@@ -15,8 +15,8 @@
 // into sub-packages — see ADR 0034. To keep a ~60-file package
 // navigable, the files group into these clusters:
 //
-//   - Composition root / wiring: ccu_wiring, hub_wiring,
-//     homegear_hub_wiring, cuxd_wiring, pingpong_wiring, health_wiring,
+//   - Composition root / wiring: ccu_wiring, hub_wiring, cuxd_wiring,
+//     pingpong_wiring, health_wiring,
 //     relevant_init, config, interfaces, stubs — assemble a Unit's
 //     coordinators and register the south-bound clients.
 //   - Transport callers & callbacks: xmlrpc_caller, jsonrpc_caller,

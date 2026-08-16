@@ -435,6 +435,19 @@ func (c *Climate) Humidity() (float64, bool) {
 	return 0, false
 }
 
+// HasHumidity reports whether the channel carries a HUMIDITY parameter
+// at all, in either of the two wire types [Climate.Humidity] reads.
+// Surfaces that decide *whether to advertise* a humidity plane — the HA
+// discovery payload, the Matter RelativeHumidityMeasurement server —
+// must ask this rather than probing one slot, otherwise every HmIP wall
+// thermostat (INTEGER-typed HUMIDITY) silently loses the plane.
+func (c *Climate) HasHumidity() bool {
+	if c == nil {
+		return false
+	}
+	return c.humidity != nil || c.humidityInt != nil
+}
+
 // Modes returns the list of modes this climate device supports,
 // Derived from the capability flags.
 // state-property (climate.py:511, :755) which the UI layer reads to
@@ -1137,7 +1150,9 @@ func (c *Climate) DisableBoost(ctx context.Context, priority hmenum.CommandPrior
 // KindSimpleRF: returns [ErrModeNotSupported].
 //
 // `away` is the temperature held while away; pass 0 for the device default.
-func (c *Climate) SetAway(ctx context.Context, until time.Time, away float64, priority hmenum.CommandPriority) error {
+func (c *Climate) SetAway(
+	ctx context.Context, until time.Time, away float64, priority hmenum.CommandPriority,
+) (err error) {
 	if !c.Capabilities.SupportsAway {
 		return ErrModeNotSupported
 	}
@@ -1147,7 +1162,9 @@ func (c *Climate) SetAway(ctx context.Context, until time.Time, away float64, pr
 	if c.writer != nil {
 		coll := generic.NewCollector(generic.WriterAsBackend(c.writer), generic.WithPriority(priority))
 		ctx = generic.ContextWithCollector(ctx, coll)
-		defer func() { _ = coll.Send(ctx) }()
+		// Anything staged on the collector only reaches the wire in the
+		// flush, so its error is part of this command's result.
+		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	switch c.Kind {
 	case KindIP:
@@ -1197,7 +1214,7 @@ func (c *Climate) SetAwayForDuration(ctx context.Context, d time.Duration, away 
 
 // DisableAway leaves away/party mode and returns the device to its previous
 // schedule.
-func (c *Climate) DisableAway(ctx context.Context, priority hmenum.CommandPriority) error {
+func (c *Climate) DisableAway(ctx context.Context, priority hmenum.CommandPriority) (err error) {
 	if !c.Capabilities.SupportsAway {
 		return ErrModeNotSupported
 	}
@@ -1207,7 +1224,9 @@ func (c *Climate) DisableAway(ctx context.Context, priority hmenum.CommandPriori
 	if c.writer != nil {
 		coll := generic.NewCollector(generic.WriterAsBackend(c.writer), generic.WithPriority(priority))
 		ctx = generic.ContextWithCollector(ctx, coll)
-		defer func() { _ = coll.Send(ctx) }()
+		// Anything staged on the collector only reaches the wire in the
+		// flush, so its error is part of this command's result.
+		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	switch c.Kind {
 	case KindIP:

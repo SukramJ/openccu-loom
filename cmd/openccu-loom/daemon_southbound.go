@@ -55,7 +55,11 @@ type southboundWiringDeps struct {
 	healthTracker           *health.Tracker
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
 	mqttWiring              *mqtt.Wiring
-	bridge                  *adapter.EventBridge
+	// bootCleanups holds the once-per-process retained-store scrubs. It is
+	// shared with the supervisor's connect hook so whichever of the two first
+	// sees a live bridge runs them. Nil-safe.
+	bootCleanups *bootRetainCleanups
+	bridge       *adapter.EventBridge
 	// hubMQTT is re-started on each central's CentralSouthboundReadyEvent so
 	// hub discovery payloads — skipped while the CCU serial that gates them is
 	// still unresolved during the async bring-up — are published once the serial
@@ -376,52 +380,11 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		hubReadyTriggerFn = hubReadyTrigger
 	}
 
-	// Boot-time stale cleanup — clear retained channel-aggregate
-	// state topics from the previous build before the inventory wave.
-	// Necessary when the discovery payload structure changes and
-	// brokers still hold incompatible JSON: HA refuses to bind the
-	// stale message and the entity stays unavailable until the
-	// retained content is replaced. Runs against the legacy aggregate
-	// shape (`<base>/<central>/<iface>/<addr>/<ch>/state`) — the
-	// follow-up PublishInitialSnapshot republishes the current view
-	// for every observed DP.
-	//
-	// Best-effort: a broker that doesn't support the cleanup
-	// subscription path returns errCleanupClientLacksSubscribe; the
-	// daemon logs and proceeds.
+	// Boot-time stale cleanup, ahead of the inventory wave. A broker that
+	// was not reachable at this point runs it from the first successful
+	// (re)connect instead — see [bootRetainCleanups].
 	if d.mqttWiring != nil {
-		if mqttBridge := d.mqttWiring.Bridge(); mqttBridge != nil {
-			cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
-			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, cleanupWindow+8*time.Second)
-			n, cleanupErr := mqttBridge.RunRetainCleanupOnce(cleanupCtx, cleanupWindow)
-			cleanupCancel()
-			if cleanupErr != nil {
-				logger.Warn("mqtt.retain_cleanup", slog.String("err", cleanupErr.Error()))
-			} else if n > 0 {
-				logger.Info("mqtt.retain_cleanup", slog.Int("evicted", n))
-			}
-
-			// Clear discovery configs a previous build published with an
-			// empty CCU-serial slot (`loom__…`). Those ids are ambiguous
-			// across CCUs, and the consumer keys its entity registry on
-			// them: republishing the corrected payload on the same topic
-			// creates a second entity beside the stale one instead of
-			// replacing it. An empty retained payload is what makes the
-			// consumer forget the old identity.
-			//
-			// This runs BEFORE the snapshot, unlike the orphan sweeps
-			// after it: the snapshot is what re-announces these entities
-			// under an id that carries the serial, so the clear has to
-			// come first or it would wipe the payload just written.
-			unscopedCtx, unscopedCancel := context.WithTimeout(ctx, cleanupWindow+8*time.Second)
-			cleared, unscopedErr := mqttBridge.RunUnscopedDiscoveryCleanupOnce(unscopedCtx, cleanupWindow)
-			unscopedCancel()
-			if unscopedErr != nil {
-				logger.Warn("mqtt.unscoped_discovery_cleanup", slog.String("err", unscopedErr.Error()))
-			} else if cleared > 0 {
-				logger.Info("mqtt.unscoped_discovery_cleanup", slog.Int("cleared", cleared))
-			}
-		}
+		d.bootCleanups.run(ctx, d.mqttWiring.Bridge())
 	}
 
 	wireRetainedOrphanSweeps(ctx, d, cfg, logger)
@@ -457,6 +420,79 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	return result, teardown
 }
 
+// bootRetainCleanups owns the two retained-store scrubs that have to run once
+// per process, before the inventory wave publishes anything:
+//
+//   - the legacy channel-aggregate state topics
+//     (`<base>/<central>/<iface>/<addr>/<ch>/state`) a previous build left
+//     behind. When the discovery payload structure changes, brokers still hold
+//     incompatible JSON, HA refuses to bind it, and the entity stays
+//     unavailable until the retained content is replaced.
+//   - discovery configs a previous build published with an empty CCU-serial
+//     slot (`loom__…`). Those ids are ambiguous across CCUs and the consumer
+//     keys its entity registry on them: republishing the corrected payload on
+//     the same topic creates a second entity beside the stale one instead of
+//     replacing it. An empty retained payload is what makes the consumer
+//     forget the old identity — which is why this must precede the snapshot
+//     that re-announces the same entities under a serial-carrying id, unlike
+//     the orphan sweeps that deliberately run after it.
+//
+// Both need a live bridge. The boot path offers one as soon as the model is
+// hydrated; when the broker was still down then, the first successful
+// (re)connect offers one instead. run consumes the first live bridge it is
+// given and is a no-op afterwards, so exactly one of those paths pays for it.
+//
+// Best-effort throughout: a broker that doesn't support the cleanup
+// subscription path returns errCleanupClientLacksSubscribe; the daemon logs
+// and proceeds.
+type bootRetainCleanups struct {
+	cfg    *config.Config
+	logger *slog.Logger
+
+	mu   sync.Mutex
+	done bool
+}
+
+// newBootRetainCleanups returns the once-guard for the two boot-time scrubs.
+func newBootRetainCleanups(cfg *config.Config, logger *slog.Logger) *bootRetainCleanups {
+	return &bootRetainCleanups{cfg: cfg, logger: logger}
+}
+
+// run performs both scrubs against bridge, unless a previous call already did
+// or bridge is nil (no broker link yet — a later caller will bring one).
+func (c *bootRetainCleanups) run(ctx context.Context, bridge *mqtt.Bridge) {
+	if c == nil || bridge == nil {
+		return
+	}
+	c.mu.Lock()
+	if c.done {
+		c.mu.Unlock()
+		return
+	}
+	c.done = true
+	c.mu.Unlock()
+
+	window := c.cfg.North.MQTT.EffectiveRetainCleanupWindow()
+
+	cleanupCtx, cleanupCancel := context.WithTimeout(ctx, window+8*time.Second)
+	n, cleanupErr := bridge.RunRetainCleanupOnce(cleanupCtx, window)
+	cleanupCancel()
+	if cleanupErr != nil {
+		c.logger.Warn("mqtt.retain_cleanup", slog.String("err", cleanupErr.Error()))
+	} else if n > 0 {
+		c.logger.Info("mqtt.retain_cleanup", slog.Int("evicted", n))
+	}
+
+	unscopedCtx, unscopedCancel := context.WithTimeout(ctx, window+8*time.Second)
+	cleared, unscopedErr := bridge.RunUnscopedDiscoveryCleanupOnce(unscopedCtx, window)
+	unscopedCancel()
+	if unscopedErr != nil {
+		c.logger.Warn("mqtt.unscoped_discovery_cleanup", slog.String("err", unscopedErr.Error()))
+	} else if cleared > 0 {
+		c.logger.Info("mqtt.unscoped_discovery_cleanup", slog.Int("cleared", cleared))
+	}
+}
+
 // wireRetainedOrphanSweeps installs the EventBridge post-snapshot hook that
 // runs the retained-orphan sweeps. They are deferred until a central's
 // snapshot pass has actually published, because both compare the broker's
@@ -477,17 +513,26 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 // other CCU's orphans unreachable forever. Best-effort — a broker without
 // subscribe support just skips.
 func wireRetainedOrphanSweeps(ctx context.Context, d southboundWiringDeps, cfg *config.Config, logger *slog.Logger) {
-	if d.mqttWiring == nil || d.mqttWiring.Bridge() == nil {
+	// Only the Wiring has to exist here, never its bridge: the boot connect
+	// may still be failing, and the background retry installs a bridge into
+	// this same Wiring minutes later. Returning on a nil bridge left the hook
+	// uninstalled for the whole process lifetime, so a daemon that started
+	// beside a still-booting broker never swept a single retained orphan.
+	if d.mqttWiring == nil {
 		return
 	}
 	cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
 	var sweptCentrals sync.Map
 	d.bridge.SetPostCentralSnapshotHook(func(_ context.Context, centralName string) {
-		if _, already := sweptCentrals.LoadOrStore(centralName, struct{}{}); already {
-			return
-		}
+		// Resolve the bridge BEFORE claiming the central: a snapshot pass that
+		// ran while the link was down published nothing, so recording it as
+		// swept would retire the central's only sweep against a broker it
+		// never reached.
 		mqttBridge := d.mqttWiring.Bridge()
 		if mqttBridge == nil {
+			return
+		}
+		if _, already := sweptCentrals.LoadOrStore(centralName, struct{}{}); already {
 			return
 		}
 		// The sweeps block on a subscribe window; keep them off the

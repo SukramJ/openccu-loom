@@ -255,3 +255,49 @@ func TestInterfaceClientCloseCanelsActiveRetries(t *testing.T) {
 		t.Fatalf("ActiveRetryCount after Close = %d, want 0", got)
 	}
 }
+
+// TestInterfaceClientCloseReleasesCoalescedCallers pins that Close leaves no
+// caller parked on a coalesced call. Their transport is gone, so the result
+// they wait for can never arrive; Close releases them with
+// [reliability.ErrCoalescerCleared] so the abandoned call is reported as the
+// failure it is instead of hanging or reading as a success.
+func TestInterfaceClientCloseReleasesCoalescedCallers(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	c, err := New(Config{
+		CentralName: "main",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Caller: CallerFunc(func(ctx context.Context, _ string, _ []any) (any, error) {
+			close(started)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-release:
+				return nil, nil
+			}
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	callDone := make(chan error, 1)
+	go func() {
+		_, callErr := c.Call(context.Background(), "setValue", []any{"VCU1234567:1", "STATE", true},
+			hmenum.CommandPriorityLow, "setValue|0|VCU1234567:1|STATE|bool|true")
+		callDone <- callErr
+	}()
+	<-started
+
+	c.Close()
+
+	select {
+	case callErr := <-callDone:
+		if !errors.Is(callErr, reliability.ErrCoalescerCleared) {
+			t.Fatalf("Call after Close returned %v, want %v", callErr, reliability.ErrCoalescerCleared)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("coalesced caller was never released by Close")
+	}
+}

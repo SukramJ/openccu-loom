@@ -105,7 +105,7 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 			body["preset_mode_command_topic"] = ctx.ServiceMethodCommandTopic("set_profile")
 		}
 	}
-	if c.humidity != nil {
+	if c.HasHumidity() {
 		body["current_humidity_topic"] = ctx.WireParameterStateTopic("HUMIDITY")
 		body["current_humidity_template"] = "{{ value_json.value }}"
 	}

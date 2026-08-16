@@ -273,6 +273,30 @@ func (p *Program) UpdateMetadata(name string, isInternal bool, writer ProgramWri
 	}
 }
 
+// Internal reports whether the CCU created this program for its own
+// bookkeeping (the Tmp_* family), so north-bound listings can omit it.
+//
+// The flag is refreshed in place by [UpdateMetadata] on every hub scan, so
+// it is read under the program lock rather than off the field.
+func (p *Program) Internal() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.IsInternal
+}
+
+// programWriter returns the currently installed execution backend.
+//
+// [UpdateMetadata] replaces the writer in place while commands are in
+// flight, and an interface value is two words wide — reading the field
+// directly can observe one half of the old value and one of the new. Every
+// command path therefore takes one snapshot through this accessor and uses
+// it for the whole call.
+func (p *Program) programWriter() ProgramWriter {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.Writer
+}
+
 // OnActive records an observed active/inactive state and notifies
 // subscribers when the flag actually changed (a first observation counts as
 // a change). Re-observing the same value on every hub scan is silent.
@@ -332,10 +356,11 @@ func (p *Program) OnExecution(success bool, trigger hmenum.ProgramTrigger) {
 // if one is wired. The notifier receives the trigger type API and success=true
 // on a clean round-trip, success=false when the writer returns an error.
 func (p *Program) Execute(ctx context.Context) error {
-	if p.Writer == nil {
+	w := p.programWriter()
+	if w == nil {
 		return fmt.Errorf("program %q: no writer configured", p.ID)
 	}
-	err := p.Writer.ExecuteProgram(ctx, p.ID)
+	err := w.ExecuteProgram(ctx, p.ID)
 	p.mu.RLock()
 	notifier := p.ExecuteNotifier
 	p.mu.RUnlock()
@@ -356,10 +381,11 @@ func (p *Program) Execute(ctx context.Context) error {
 // not support condition checking, the call falls back to the unconditional
 // [Program.Execute] path and reports executed=true on a clean round-trip.
 func (p *Program) ExecuteWithConditionCheck(ctx context.Context) (bool, error) {
-	if p.Writer == nil {
+	w := p.programWriter()
+	if w == nil {
 		return false, fmt.Errorf("program %q: no writer configured", p.ID)
 	}
-	cw, ok := p.Writer.(ConditionalProgramWriter)
+	cw, ok := w.(ConditionalProgramWriter)
 	if !ok {
 		if err := p.Execute(ctx); err != nil {
 			return false, err
@@ -378,10 +404,11 @@ func (p *Program) ExecuteWithConditionCheck(ctx context.Context) (bool, error) {
 
 // SetEnabled flips the program's active state.
 func (p *Program) SetEnabled(ctx context.Context, enabled bool) error {
-	if p.Writer == nil {
+	w := p.programWriter()
+	if w == nil {
 		return fmt.Errorf("program %q: no writer configured", p.ID)
 	}
-	if err := p.Writer.SetProgramEnabled(ctx, p.ID, enabled); err != nil {
+	if err := w.SetProgramEnabled(ctx, p.ID, enabled); err != nil {
 		return err
 	}
 	p.OnActive(enabled)
@@ -394,10 +421,11 @@ func (p *Program) SetEnabled(ctx context.Context, enabled bool) error {
 // owning [Hub.DeleteProgramRemote] drops the entry (and fires
 // [Program.NotifyRemoved]) only after the CCU round-trip succeeds.
 func (p *Program) Delete(ctx context.Context) error {
-	if p.Writer == nil {
+	w := p.programWriter()
+	if w == nil {
 		return fmt.Errorf("program %q: no writer configured", p.ID)
 	}
-	d, ok := p.Writer.(ProgramDeleter)
+	d, ok := w.(ProgramDeleter)
 	if !ok {
 		return ErrProgramDeleteUnsupported
 	}

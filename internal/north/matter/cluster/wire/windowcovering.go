@@ -66,14 +66,14 @@ type GoToTiltValueRequest struct {
 func DecodeGoToLiftPercentage(payload []byte) (GoToLiftPercentageRequest, error) {
 	var req GoToLiftPercentageRequest
 	if err := walkContext(payload, ErrWindowCoveringMalformed, func(tag uint32, el tlv.Element) {
-		// Matter 1.4+ moved the value to context tag 1; older devices
-		// may send tag 0 with the deprecated 8-bit field. We accept
-		// both: tag 0 gets scaled up, tag 1 is canonical.
-		switch tag {
-		case 0:
-			req.LiftPercent100thsValue = uint16(el.Uint&0xFF) * 100 // 8-bit percent → 16-bit percent100ths
-		case 1:
-			req.LiftPercent100thsValue = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
+		// Field 0 is LiftPercent100thsValue (uint16 percent100ths);
+		// field 1 is the removed 8-bit percentage, conformance "X"
+		// (disallowed) and therefore ignored. Mirrors matter.js
+		// packages/model/src/standard/elements/window-covering-cluster.element.ts:95-96
+		// (GoToLiftPercentage: Field LiftPercent100thsValue id 0x0,
+		// Field "Ignored" id 0x1 conformance "X").
+		if tag == 0 {
+			req.LiftPercent100thsValue = uint16(el.Uint & 0xFFFF)
 		}
 	}); err != nil {
 		return req, err
@@ -85,11 +85,11 @@ func DecodeGoToLiftPercentage(payload []byte) (GoToLiftPercentageRequest, error)
 func DecodeGoToTiltPercentage(payload []byte) (GoToTiltPercentageRequest, error) {
 	var req GoToTiltPercentageRequest
 	if err := walkContext(payload, ErrWindowCoveringMalformed, func(tag uint32, el tlv.Element) {
-		switch tag {
-		case 0:
-			req.TiltPercent100thsValue = uint16(el.Uint&0xFF) * 100 // 8-bit percent → 16-bit percent100ths
-		case 1:
-			req.TiltPercent100thsValue = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
+		// Field 0 is TiltPercent100thsValue; field 1 is the removed
+		// 8-bit percentage with conformance "X". Mirrors matter.js
+		// window-covering-cluster.element.ts:104-105.
+		if tag == 0 {
+			req.TiltPercent100thsValue = uint16(el.Uint & 0xFFFF)
 		}
 	}); err != nil {
 		return req, err

@@ -5,6 +5,8 @@ package lock
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -81,6 +83,30 @@ func (l *Lock) State() payload.StatePayload {
 	return st
 }
 
+// serviceLockCommand is the service method that carries the command
+// Home Assistant multiplexes onto a lock entity's single
+// `command_topic`. It exists for the button-lock kind, whose wire slot
+// is GLOBAL_BUTTON_LOCK in the MASTER paramset: a MASTER parameter
+// faults on setValue with XML-RPC -5, so the command has to travel
+// through the domain operation that writes it via put_paramset instead
+// of through a wire-parameter topic.
+const serviceLockCommand = "lock_command"
+
+// argLockCommand is the scalar-argument key [serviceLockCommand]
+// expects. The MQTT bridge wraps a bare payload under it before the
+// invoke reaches the handler.
+const argLockCommand = "command"
+
+// The command tokens advertised as payload_lock / payload_unlock /
+// payload_open. Spelled as words rather than as wire values so a payload
+// that lands on the wrong topic cannot be mistaken for a level or a
+// boolean.
+const (
+	commandTokenLock   = "LOCK"
+	commandTokenUnlock = "UNLOCK"
+	commandTokenOpen   = "OPEN"
+)
+
 // registerServices wires the lock operations onto the embedded
 // ServiceRegistry. Service-method names mirror
 // service_method_names for lock custom DPs (lock, unlock, open).
@@ -96,19 +122,48 @@ func (l *Lock) registerServices() {
 			return l.Open(ctx, priority)
 		})
 	}
+	l.RegisterServiceWithArg(serviceLockCommand, argLockCommand, l.invokeLockCommand)
+}
+
+// invokeLockCommand routes one of the [commandTokenLock] /
+// [commandTokenUnlock] / [commandTokenOpen] tokens onto the matching
+// operation.
+//
+// Dispatch goes back through the registry rather than calling
+// l.Lock / l.Unlock / l.Open directly so the token resolves to whatever
+// the registry holds for this device — including the absence of "open"
+// on a kind that does not support it, which then answers with the
+// unknown-method error instead of silently doing nothing.
+func (l *Lock) invokeLockCommand(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+	raw, err := payload.ParamString(params, argLockCommand)
+	if err != nil {
+		return err
+	}
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case commandTokenLock:
+		return l.Invoke(ctx, "lock", nil, priority)
+	case commandTokenUnlock:
+		return l.Invoke(ctx, "unlock", nil, priority)
+	case commandTokenOpen:
+		return l.Invoke(ctx, "open", nil, priority)
+	}
+	return fmt.Errorf("%w: %s=%q", payload.ErrServiceInvalidParam, argLockCommand, raw)
 }
 
 // HADiscoveryPayload returns the HA Lock-platform-specific payload
 // skeleton. HA lock platform uses a single command_topic with
 // payload_lock / payload_unlock — not separate lock/unlock topics.
 //
-// command_topic is Kind-aware: IP locks write LOCK_TARGET_LEVEL (0/1/2);
-// RF locks write STATE (false/true); Button locks write BUTTON_LOCK
-// (false/true). Each kind's wire parameter is real — pointing at a
-// non-existent parameter causes an XML-RPC fault on every HA command.
+// command_topic is Kind-aware: IP locks write LOCK_TARGET_LEVEL (0/1/2)
+// and RF locks write STATE (false/true), both real VALUES parameters
+// reachable by a wire-parameter topic. Button locks have no such
+// parameter — their slot is GLOBAL_BUTTON_LOCK in MASTER — so they use
+// the [serviceLockCommand] service-method topic instead.
 //
 // Per ADR 0010: lock/unlock multiplexing on one HA command_topic
-// → wire-parameter command topic fallback. State reads from aggregated topic.
+// → wire-parameter command topic where a real VALUES parameter carries
+// the operation, service-method topic otherwise. State reads from the
+// aggregated topic.
 func (l *Lock) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
 	if l == nil || ctx == nil {
 		return "", nil
@@ -123,10 +178,15 @@ func (l *Lock) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component str
 		payloadLock = "false"
 		payloadUnlock = "true"
 	case KindButton:
-		// Button locks expose BUTTON_LOCK: false = unlocked, true = locked.
-		commandTopic = ctx.WireParameterCommandTopic("BUTTON_LOCK")
-		payloadLock = "true"
-		payloadUnlock = "false"
+		// A button lock's slot is GLOBAL_BUTTON_LOCK in the MASTER
+		// paramset (see [Lock.writeButtonParam]), so no wire-parameter
+		// command topic can carry it: the VALUES setValue such a topic
+		// produces faults, and the parameter it named does not exist on
+		// the channel at all. The command travels through the service
+		// method that reaches the put_paramset write path instead.
+		commandTopic = ctx.ServiceMethodCommandTopic(serviceLockCommand)
+		payloadLock = commandTokenLock
+		payloadUnlock = commandTokenUnlock
 	default: // KindIP
 		// HmIP locks use LOCK_TARGET_LEVEL ENUM: 0 = lock, 1 = unlock, 2 = open.
 		commandTopic = ctx.WireParameterCommandTopic("LOCK_TARGET_LEVEL")

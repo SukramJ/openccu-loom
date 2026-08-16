@@ -262,6 +262,20 @@ func (fakeLogFeedService) Subscribe(_ slog.Level) (records <-chan hmlog.LogRecor
 	return make(chan hmlog.LogRecord), func() {}
 }
 
+// fakeIntrospectService is a silent event-bus tap: it resolves any central
+// and then blocks until the request context ends, so the stream's lifetime is
+// exactly the lifetime the router grants it — which is what the timeout tests
+// measure.
+type fakeIntrospectService struct{}
+
+func (fakeIntrospectService) ReliabilitySnapshot(_ string) []hmapi.ReliabilityState { return nil }
+
+func (fakeIntrospectService) ResolveCentral(_ string) (string, bool) { return "ccu-01", true }
+
+func (fakeIntrospectService) TapEventBus(ctx context.Context, _ string, _ []string, _ func(hmapi.DiagnosticsEvent)) {
+	<-ctx.Done()
+}
+
 type fakeStartupCaptureService struct{}
 
 func (fakeStartupCaptureService) Load() (diagnostics.StartupCaptureConfig, error) {
@@ -1166,6 +1180,49 @@ func TestLogStreamOutlivesTheGlobalRequestTimeout(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("log stream did not end after the client disconnected")
+	}
+}
+
+// TestEventBusTapOutlivesTheGlobalRequestTimeout crosses the seam the
+// exemption map only describes: the route as the router actually mounts it
+// must outlive the request deadline.
+//
+// The tap derives its own window from r.Context() (up to five minutes), so a
+// deadline on that context ended the NDJSON stream early with a clean EOF —
+// indistinguishable from an idle bus. Asserting membership in streamingPaths
+// would not catch a renamed route; running the real request does.
+func TestEventBusTapOutlivesTheGlobalRequestTimeout(t *testing.T) {
+	t.Parallel()
+	r := NewRouter(Deps{
+		StartedAt:    time.Now(),
+		WriteTimeout: 50 * time.Millisecond,
+		Introspect:   fakeIntrospectService{},
+	})
+
+	ctx, disconnect := context.WithCancel(context.Background())
+	defer disconnect()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/diagnostics/eventbus/tap?seconds=300", http.NoBody).WithContext(ctx)
+	rr := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		r.ServeHTTP(rr, req)
+	}()
+
+	select {
+	case <-done:
+		t.Fatalf("event-bus tap ended on the request deadline; it must run for the window the caller asked for (status %d)", rr.Code)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	// Dropping the deadline must not drop cancellation: the stream still ends
+	// as soon as the client hangs up.
+	disconnect()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("event-bus tap did not end after the client disconnected")
 	}
 }
 

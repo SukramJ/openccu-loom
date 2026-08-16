@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -19,15 +20,8 @@ import (
 func TestWireMatterCentralReadiness_LatchesOnSouthboundReady(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-a", "ccu-b")
-	readiness, unsubs := wireMatterCentralReadiness(reg)
-	t.Cleanup(func() {
-		for _, u := range unsubs {
-			u()
-		}
-	})
-	if len(unsubs) != 2 {
-		t.Fatalf("unsubs = %d, want 2 (one subscription per central)", len(unsubs))
-	}
+	readiness, unwire := wireMatterCentralReadiness(reg)
+	t.Cleanup(unwire)
 	if readiness.isReady("ccu-a") || readiness.isReady("ccu-b") {
 		t.Fatal("centrals must start model-incomplete before their ready event")
 	}
@@ -62,12 +56,8 @@ func TestWireMatterCentralReadiness_SeedsFromLatchedUnitFlag(t *testing.T) {
 	// wiring exists — only the latched flag survives.
 	unitA.MarkSouthboundReady()
 
-	readiness, unsubs := wireMatterCentralReadiness(reg)
-	t.Cleanup(func() {
-		for _, u := range unsubs {
-			u()
-		}
-	})
+	readiness, unwire := wireMatterCentralReadiness(reg)
+	t.Cleanup(unwire)
 
 	if !readiness.isReady("ccu-a") {
 		t.Error("ccu-a should be seeded ready from the unit's latched flag, without any event")
@@ -93,10 +83,8 @@ func TestWireMatterCentralReadiness_SeedsFromLatchedUnitFlag(t *testing.T) {
 func TestWireMatterCentralReadiness_UnsubscribeStopsLatching(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-a")
-	readiness, unsubs := wireMatterCentralReadiness(reg)
-	for _, u := range unsubs {
-		u()
-	}
+	readiness, unwire := wireMatterCentralReadiness(reg)
+	unwire()
 
 	unitA, _ := reg.Get("ccu-a")
 	events.Publish(unitA.EventBus, hmevent.CentralSouthboundReadyEvent{
@@ -113,13 +101,14 @@ func TestWireMatterCentralReadiness_UnsubscribeStopsLatching(t *testing.T) {
 // model-incomplete) latch and no closers so callers stay nil-safe.
 func TestWireMatterCentralReadiness_NilRegistry(t *testing.T) {
 	t.Parallel()
-	readiness, unsubs := wireMatterCentralReadiness(nil)
+	readiness, unwire := wireMatterCentralReadiness(nil)
 	if readiness == nil {
 		t.Fatal("readiness must be non-nil even without a registry")
 	}
-	if len(unsubs) != 0 {
-		t.Fatalf("unsubs = %d, want 0 for nil registry", len(unsubs))
+	if unwire == nil {
+		t.Fatal("the removal closure must be non-nil even without a registry")
 	}
+	unwire()
 	if readiness.isReady("anything") {
 		t.Error("nil-registry latch must report model-incomplete for every central")
 	}
@@ -134,12 +123,8 @@ func TestWireMatterCentralReadiness_NilRegistry(t *testing.T) {
 func TestMatterSnapshotter_StampsModelCompletePerCentral(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-a", "ccu-b")
-	readiness, unsubs := wireMatterCentralReadiness(reg)
-	t.Cleanup(func() {
-		for _, u := range unsubs {
-			u()
-		}
-	})
+	readiness, unwire := wireMatterCentralReadiness(reg)
+	t.Cleanup(unwire)
 	snap := matterSnapshotter(reg, readiness)
 
 	// Boot shape: registered centrals, no device load completed yet.
@@ -189,5 +174,56 @@ func TestMatterSnapshotter_NilReadinessFailsSafe(t *testing.T) {
 	}
 	if snaps[0].ModelComplete {
 		t.Error("nil readiness must stamp ModelComplete = false")
+	}
+}
+
+// TestUnregisteringACentralClearsItsReadinessLatch is the endpoint-wipe
+// regression for centrals the live-adopt orchestrator never adopted.
+//
+// The latch is the one piece of per-central Matter state that does not ride
+// the unit's own EventBus, so nothing about stopping the unit drops it. While
+// it was wired per adopted central only, disabling a boot-configured CCU and
+// re-enabling it left the latch set: the fresh unit registers with an empty
+// ModelRegistry, the stale latch stamps that empty snapshot ModelComplete, and
+// the assembler deletes every persisted endpoint row of the CCU — the fleet
+// renumbers and controllers lose all of its accessories.
+func TestUnregisteringACentralClearsItsReadinessLatch(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-boot")
+	readiness, unwire := wireMatterCentralReadiness(reg)
+	t.Cleanup(unwire)
+
+	unit, _ := reg.Get("ccu-boot")
+	events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "ccu-boot",
+	})
+	if !readiness.isReady("ccu-boot") {
+		t.Fatal("central should be latched ready after its southbound-ready event")
+	}
+
+	if !reg.Unregister("ccu-boot") {
+		t.Fatal("Unregister reported the central was not registered")
+	}
+	if readiness.isReady("ccu-boot") {
+		t.Fatal("readiness latch survived the central leaving the registry — the next unit under that name would be stamped model-complete while empty")
+	}
+
+	// The re-add: a fresh unit under the same name must start
+	// model-incomplete so its persisted endpoint rows survive the refill.
+	fresh, err := central.New(central.Config{Name: "ccu-boot", Logger: discardTestLogger()})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(fresh); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	if readiness.isReady("ccu-boot") {
+		t.Error("a re-registered central must start model-incomplete")
+	}
+	for _, s := range matterSnapshotter(reg, readiness)(context.Background()) {
+		if s.CentralName == "ccu-boot" && s.ModelComplete {
+			t.Error("snapshot of a re-registered, still-empty central is stamped ModelComplete — the assembler would GC its endpoints")
+		}
 	}
 }

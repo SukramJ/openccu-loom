@@ -435,11 +435,17 @@ func (h *Hub) DeleteProgramRemote(ctx context.Context, id string) error {
 // insert so late-bound consumers (MQTT publisher, UI cache) can wire
 // per-sysvar subscriptions.
 func (h *Hub) PutSysvar(s *Sysvar) {
-	if s == nil || s.Name == "" {
+	if s == nil {
+		return
+	}
+	// The map key is the current name, read through the data point's own
+	// lock — a rename may be rewriting it from another goroutine.
+	name := s.LegacyName()
+	if name == "" {
 		return
 	}
 	h.mu.Lock()
-	h.sysvars[s.Name] = s
+	h.sysvars[name] = s
 	observers := append([]func(*Sysvar){}, h.sysvarObservers...)
 	h.mu.Unlock()
 	for _, cb := range observers {
@@ -530,7 +536,7 @@ func (h *Hub) Sysvars() []*Sysvar {
 	for _, s := range h.sysvars {
 		out = append(out, s)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool { return out[i].LegacyName() < out[j].LegacyName() })
 	return out
 }
 

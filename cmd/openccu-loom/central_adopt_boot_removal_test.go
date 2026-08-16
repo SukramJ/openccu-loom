@@ -68,3 +68,68 @@ func TestRemoveCentralTearsDownABootTimeCentral(t *testing.T) {
 		t.Errorf("removeCentral for an unknown name = %v, want errCentralNotLive", err)
 	}
 }
+
+// TestRemovingABootCentralRunsEveryPerCentralDetach is the second half of the
+// boot-removal gap.
+//
+// The per-central domain hooks are attach/detach pairs, and only the adopt
+// path kept their unwires: a boot-configured CCU deleted (or disabled) at
+// runtime reached none of them. The subscriptions themselves ride the unit's
+// EventBus and Unit.Stop drops those, but the detach halves carry state that
+// lives outside the unit — the Security & Safety aggregate and its fault
+// ledger above all — so the removed CCU kept reporting its hazard classes as
+// active on REST, MQTT and the SPA, and its open faults survived every
+// restart.
+//
+// The hooks here stand in for the real domains; what is pinned is that
+// removeCentral reaches every one of them for a central this orchestrator
+// never adopted.
+func TestRemovingABootCentralRunsEveryPerCentralDetach(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	const name = "boot-central-hooks"
+	cfg := &config.Config{Centrals: []config.CentralConfig{{
+		Name:       name,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}},
+	}}}
+
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: name, Logger: discardTestLogger()})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	if err := unit.Start(ctx); err != nil {
+		t.Fatalf("unit.Start: %v", err)
+	}
+
+	orch := buildLiveTestOrchestrator(ctx, t, reg, cfg)
+	wireCentralNorthbound(orch.sbDeps, unit)
+
+	detached := map[string]int{}
+	hook := func(domain string) func(u *central.Unit) (unwire func()) {
+		return func(u *central.Unit) func() {
+			if u.Name() != name {
+				t.Errorf("%s hook attached to %q, want %q", domain, u.Name(), name)
+			}
+			return func() { detached[domain]++ }
+		}
+	}
+	orch.setMatterCentralHook(hook("matter"))
+	orch.setAlarmCentralHook(hook("alarm"))
+	orch.setSecurityCentralHook(hook("security"))
+	orch.setEventSourceCentralHook(hook("event-source"))
+
+	if err := orch.removeCentral(ctx, name); err != nil {
+		t.Fatalf("removeCentral for a boot-time central: %v", err)
+	}
+
+	for _, domain := range []string{"matter", "alarm", "security", "event-source"} {
+		if detached[domain] != 1 {
+			t.Errorf("%s detach ran %d times for a removed boot-time central, want 1", domain, detached[domain])
+		}
+	}
+}

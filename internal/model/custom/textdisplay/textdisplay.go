@@ -499,7 +499,7 @@ func applyRowDefaults(r Row) Row {
 //
 // A [generic.CallParameterCollector] is attached to ctx for
 // forward-compatible batching.
-func (t *TextDisplay) Write(ctx context.Context, r Row, priority hmenum.CommandPriority) error {
+func (t *TextDisplay) Write(ctx context.Context, r Row, priority hmenum.CommandPriority) (err error) {
 	if r.ID < 1 || r.ID > maxDisplayID {
 		return fmt.Errorf("%w: id=%d (must be 1..%d)", ErrInvalidRow, r.ID, maxDisplayID)
 	}
@@ -524,7 +524,9 @@ func (t *TextDisplay) Write(ctx context.Context, r Row, priority hmenum.CommandP
 	if t.Writer != nil {
 		coll := generic.NewCollector(generic.WriterAsBackend(t.Writer), generic.WithPriority(priority))
 		ctx = generic.ContextWithCollector(ctx, coll)
-		defer func() { _ = coll.Send(ctx) }()
+		// Anything staged on the collector only reaches the wire in the
+		// flush, so its error is part of this command's result.
+		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	if pw, ok := t.Writer.(generic.ParamsetWriter); ok {
 		values := map[string]any{
@@ -676,7 +678,11 @@ func (t *TextDisplay) writeRowFieldsToAddr(ctx context.Context, r Row, rowAddr, 
 //
 // A [generic.CallParameterCollector] is attached to ctx for
 // forward-compatible batching.
-func (t *TextDisplay) WriteWithSound(ctx context.Context, r Row, opts SoundOptions, priority hmenum.CommandPriority) error { //nolint:gocyclo // single-purpose text-display write with many option/validation branches
+//
+//nolint:gocyclo // single-purpose text-display write with many option/validation branches
+func (t *TextDisplay) WriteWithSound(
+	ctx context.Context, r Row, opts SoundOptions, priority hmenum.CommandPriority,
+) (err error) {
 	if r.ID < 1 || r.ID > maxDisplayID {
 		return fmt.Errorf("%w: id=%d (must be 1..%d)", ErrInvalidRow, r.ID, maxDisplayID)
 	}
@@ -715,7 +721,9 @@ func (t *TextDisplay) WriteWithSound(ctx context.Context, r Row, opts SoundOptio
 	if t.Writer != nil {
 		coll := generic.NewCollector(generic.WriterAsBackend(t.Writer), generic.WithPriority(priority))
 		ctx = generic.ContextWithCollector(ctx, coll)
-		defer func() { _ = coll.Send(ctx) }()
+		// Anything staged on the collector only reaches the wire in the
+		// flush, so its error is part of this command's result.
+		defer func() { err = generic.FlushCollector(ctx, coll, err) }()
 	}
 	if pw, ok := t.Writer.(generic.ParamsetWriter); ok {
 		values := map[string]any{

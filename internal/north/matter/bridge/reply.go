@@ -239,6 +239,18 @@ func (b *Bridge) sendReplyOpts(
 	datagram := make([]byte, 0, len(hdrBytes)+len(enc.Ciphertext))
 	datagram = append(datagram, hdrBytes...)
 	datagram = append(datagram, enc.Ciphertext...)
+	// The response header echoes the request's Privacy flag, so when the
+	// peer sent a privacy-protected message our reply announces the P bit
+	// too — and a header that announces the mask MUST carry it. Without
+	// this the peer XOR-unmasks an unmasked counter / DestNodeID, derives
+	// the wrong nonce, and drops every reply on the exchange. No-op on
+	// the ordinary path: applyOutboundPrivacy returns immediately when
+	// the P bit is clear. Mirrors matter.js
+	// packages/protocol/src/codec/MessageCodec.ts encodeMessage, which
+	// applies the privacy transform whenever the session negotiated it.
+	if err := applyOutboundPrivacy(sess, respHdr.SessionID, datagram); err != nil {
+		return fmt.Errorf("%w: %w", ErrReplyEncrypt, err)
+	}
 	if err := listener.Send(src, datagram); err != nil {
 		return fmt.Errorf("%w: %w", ErrReplySend, err)
 	}

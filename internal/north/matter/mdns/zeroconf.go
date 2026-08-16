@@ -85,6 +85,10 @@ func NewZeroconf() *Zeroconf {
 // short discriminator, vendor, and commissioning mode. Must be called
 // before [Zeroconf.Publish] for the responder to receive the
 // subtype-mappings of subsequent publishes.
+//
+// Attaching transfers the responder's shutdown to this advertiser:
+// [Zeroconf.Close] closes it, releasing both receive goroutines and both
+// multicast sockets.
 func (z *Zeroconf) AttachSubtypeResponder(r *SubtypeResponder) {
 	z.mu.Lock()
 	z.responder = r
@@ -218,6 +222,16 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 
 	z.mu.Lock()
 	defer z.mu.Unlock()
+	return z.publishLocked(svc)
+}
+
+// publishLocked is [Zeroconf.Publish] minus validation and locking.
+// Caller must hold z.mu for writing. Split out so [Zeroconf.republishAll]
+// can re-check that a record is still wanted and re-register it in the
+// same critical section — a Withdraw landing between the check and the
+// register would otherwise be undone and the record would stay on the
+// wire for the process lifetime.
+func (z *Zeroconf) publishLocked(svc Service) error {
 	if z.closed {
 		return errors.New("mdns: zeroconf advertiser is closed")
 	}
@@ -450,19 +464,32 @@ func (z *Zeroconf) StartReannounceLoop(ctx context.Context, interval time.Durati
 // each entry. Republish replaces the prior server bundle (see
 // Publish docstring), so the wire effect is a Probe + Announce burst
 // for every active service.
-func (z *Zeroconf) republishAll(ctx context.Context) {
+func (z *Zeroconf) republishAll(_ context.Context) {
 	z.mu.RLock()
 	if z.closed {
 		z.mu.RUnlock()
 		return
 	}
-	snapshot := make([]Service, 0, len(z.items))
+	keys := make([]string, 0, len(z.items))
 	for k := range z.items {
-		snapshot = append(snapshot, z.items[k])
+		keys = append(keys, k)
 	}
 	z.mu.RUnlock()
-	for i := range snapshot {
-		_ = z.Publish(ctx, snapshot[i])
+	// Re-read each entry under the write lock and republish it in the
+	// same critical section. Republishing from a snapshot taken earlier
+	// resurrects a record that was withdrawn in the meantime — Publish
+	// re-registers it and nothing withdraws it a second time, so a
+	// removed fabric would keep answering commissioner browses until the
+	// daemon restarts.
+	for _, k := range keys {
+		z.mu.Lock()
+		svc, ok := z.items[k]
+		if !ok || z.closed {
+			z.mu.Unlock()
+			continue
+		}
+		_ = z.publishLocked(svc)
+		z.mu.Unlock()
 	}
 }
 
@@ -488,6 +515,15 @@ func (z *Zeroconf) Close() error {
 		}
 		delete(z.subFQDNs, k)
 	}
+	// The side-car responder's receive goroutines and its two
+	// multicast :5353 sockets are bound to the advertiser's lifetime —
+	// attaching one hands its shutdown to us. Without this the loops and
+	// the group memberships outlive every Matter teardown.
+	var err error
+	if z.responder != nil {
+		err = z.responder.Close()
+		z.responder = nil
+	}
 	z.closed = true
-	return nil
+	return err
 }

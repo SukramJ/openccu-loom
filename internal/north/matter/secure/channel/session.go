@@ -42,8 +42,15 @@ type Session struct {
 	encKey []byte
 	decKey []byte
 
-	encCipher *aesccm.CCM
-	decCipher *aesccm.CCM
+	// encCipher / decCipher hold the AES-CCM instances built from
+	// encKey / decKey. atomic.Pointer rather than a plain field so
+	// [Session.Close] can drop the reference while Encrypt / Decrypt
+	// run concurrently: crypto/aes keeps the expanded round-key
+	// schedule inside the cipher (for AES-128 the first round key IS
+	// the key), so zeroising encKey / decKey alone leaves live key
+	// material reachable from a closed session.
+	encCipher atomic.Pointer[aesccm.CCM]
+	decCipher atomic.Pointer[aesccm.CCM]
 
 	localNodeID uint64
 	peerNodeID  uint64
@@ -136,11 +143,9 @@ func New(cfg Config) (*Session, error) {
 	if len(cfg.PeerCATs) > 0 {
 		peerCATs = append(peerCATs, cfg.PeerCATs...)
 	}
-	return &Session{
+	sess := &Session{
 		encKey:        append([]byte(nil), cfg.EncryptKey...),
 		decKey:        append([]byte(nil), cfg.DecryptKey...),
-		encCipher:     enc,
-		decCipher:     dec,
 		localNodeID:   cfg.LocalNodeID,
 		peerNodeID:    cfg.PeerNodeID,
 		peerCATs:      peerCATs,
@@ -151,7 +156,10 @@ func New(cfg Config) (*Session, error) {
 		// session re-establishes before the counter rolls over. Mirrors
 		// matter.js NodeSession.ts:118 (MessageReceptionStateEncryptedWithoutRollover).
 		in: mrp.NewWindowNoRollover(),
-	}, nil
+	}
+	sess.encCipher.Store(enc)
+	sess.decCipher.Store(dec)
+	return sess, nil
 }
 
 // PeerSessionID returns the SessionID the peer expects in our
@@ -201,7 +209,11 @@ func (s *Session) Encrypt(header *message.Header, secFlags uint8, plaintext []by
 	// Outbound AAD binds to the header we are about to marshal onto the
 	// wire (matter.js encode uses encodePacketHeader for AAD).
 	aad := header.Marshal()
-	sealed, err := s.encCipher.Seal(nil, nonce, plaintext, aad)
+	encCipher := s.encCipher.Load()
+	if encCipher == nil {
+		return nil, ErrSessionInactive
+	}
+	sealed, err := encCipher.Seal(nil, nonce, plaintext, aad)
 	if err != nil {
 		return nil, fmt.Errorf("channel: seal: %w", err)
 	}
@@ -241,7 +253,11 @@ func (s *Session) Decrypt(header *message.Header, secFlags uint8, ciphertext []b
 	// received header (ExchangeManager.ts:196-197). Falls back to Marshal
 	// for in-memory headers (Raw nil).
 	aad := header.AAD()
-	plain, openErr := s.decCipher.Open(nil, nonce, ciphertext, aad)
+	decCipher := s.decCipher.Load()
+	if decCipher == nil {
+		return nil, false, ErrSessionInactive
+	}
+	plain, openErr := decCipher.Open(nil, nonce, ciphertext, aad)
 	if openErr != nil {
 		return nil, false, fmt.Errorf("%w: %w", ErrUnauthenticated, openErr)
 	}
@@ -274,8 +290,19 @@ func (s *Session) PeerCATs() []uint32 {
 	return out
 }
 
-// Close zeroises the session keys and prevents further Encrypt /
-// Decrypt calls. Idempotent.
+// Close destroys the session key material and prevents further
+// Encrypt / Decrypt calls. Idempotent.
+//
+// Destroying means both halves: the raw key bytes are zeroised in
+// place, and the AES-CCM instances built from them are dropped. The
+// second half matters because crypto/aes retains the expanded round-key
+// schedule — for AES-128 its first round key is the key itself — so a
+// closed session that still referenced its ciphers would still carry
+// the I2R / R2I keys. Go cannot zeroise memory inside crypto/aes, so
+// dropping the reference (making it collectable) is the strongest
+// guarantee available; the pointers are atomic so a concurrent
+// Encrypt / Decrypt observes the drop as [ErrSessionInactive] rather
+// than a nil dereference.
 //
 // Close is the LOCAL half of session teardown only. A graceful
 // (locally-initiated) close must notify the peer with a
@@ -309,6 +336,8 @@ func (s *Session) Close() {
 	s.privacyKey = nil
 	s.peerPrivacyKey = nil
 	s.privacyMu.Unlock()
+	s.encCipher.Store(nil)
+	s.decCipher.Store(nil)
 }
 
 // buildNonce assembles the 13-byte Matter Secure Channel nonce per

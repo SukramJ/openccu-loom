@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -515,6 +516,14 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 	// their callbacks over. Release them here or they stay installed for
 	// the life of the daemon.
 	b.releaseLiveSubsForDevice(e.CentralName, e.Address)
+	// Drop the availability transition state together with the topic it
+	// describes: RetractRawStateForDevice writes an empty retained payload
+	// to the device-availability topic, so a device that comes back under
+	// the same address must be able to publish `online` again. A stale
+	// cached `true` would classify that as "no transition" and leave every
+	// HA entity of the readopted device unavailable for the life of the
+	// daemon.
+	b.forgetAvailability(e.CentralName, e.InterfaceID, e.Address)
 	if b.mqtt == nil {
 		return
 	}
@@ -550,6 +559,14 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 	if b.registry == nil {
 		return
 	}
+	// This runs on every broker (re)connect, and a broker without a
+	// persistent retained store comes back empty. The availability
+	// transition gate would otherwise suppress the republish of every
+	// device-availability topic — the topic HA's `availability_mode: all`
+	// requires — leaving every entity unavailable until the daemon
+	// restarts. Clearing the gate makes the snapshot authoritative again;
+	// the per-event dedupe resumes from the values this pass publishes.
+	b.availabilityCache.Clear()
 	for _, u := range b.registry.List() {
 		b.publishCentralSnapshot(ctx, u)
 	}
@@ -610,6 +627,7 @@ func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Uni
 	// the registry here removes the ordering question instead of timing
 	// around it.
 	b.stampHubSerial(u)
+	ctx, tracker := withSnapshotPublishTracking(ctx)
 	for _, d := range u.ModelRegistry.List() {
 		b.publishDeviceSnapshot(ctx, centralName, d)
 	}
@@ -620,8 +638,72 @@ func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Uni
 	if b.wsHub != nil {
 		b.wsHub.SignalResync()
 	}
+	if tracker.failed.Load() {
+		// Arming the sweeps now would hand them a declared-set that is
+		// missing exactly the topics the broker rejected, and the sweep
+		// deletes every retained config it cannot find there. The next
+		// snapshot pass against a healthy broker arms them instead.
+		slog.Default().Warn("mqtt.snapshot.incomplete",
+			slog.String("central", centralName),
+			slog.String("detail", "broker rejected at least one publish; retained-orphan sweeps not armed for this pass"))
+		return
+	}
 	if b.postSnapshotHook != nil {
 		b.postSnapshotHook(ctx, centralName)
+	}
+}
+
+// snapshotPublishTracker records whether any broker publish of one snapshot
+// pass was rejected. It exists because the pass is best-effort per topic:
+// every publish helper below swallows its error so one unreachable topic
+// cannot abort a whole model's snapshot.
+//
+// The aggregate outcome still matters. The bridge records a discovery topic
+// as `declared` only after the broker accepted it, and the retained-orphan
+// sweeps delete every retained config that is not in that set. A pass that
+// lost publishes therefore presents an incomplete declared-set to the sweep,
+// which then evicts exactly the entities that failed to publish — they
+// disappear from every consumer until a later boot against a healthy broker.
+type snapshotPublishTracker struct{ failed atomic.Bool }
+
+// snapshotPublishTrackerKey is the private context key of the tracker.
+type snapshotPublishTrackerKey struct{}
+
+// withSnapshotPublishTracking scopes a fresh tracker to ctx. Only publishes
+// made under the returned context are counted, so the live value-change path
+// (which carries no tracker) is unaffected.
+func withSnapshotPublishTracking(ctx context.Context) (context.Context, *snapshotPublishTracker) {
+	t := &snapshotPublishTracker{}
+	return context.WithValue(ctx, snapshotPublishTrackerKey{}, t), t
+}
+
+// notePublish records the outcome of one broker publish. A call outside a
+// tracked snapshot pass, or one that succeeded, is a no-op.
+func notePublish(ctx context.Context, err error) {
+	if err == nil {
+		return
+	}
+	if t, ok := ctx.Value(snapshotPublishTrackerKey{}).(*snapshotPublishTracker); ok && t != nil {
+		t.failed.Store(true)
+	}
+}
+
+// publishEvent routes one per-data-point event through the MQTT wiring.
+// Inside a tracked snapshot pass it publishes through the bridge directly so
+// the rejected publish is recorded; the pass logs one summary line instead of
+// the wiring's per-topic warning.
+func (b *EventBridge) publishEvent(ctx context.Context, ev mqtt.Event) {
+	t, tracked := ctx.Value(snapshotPublishTrackerKey{}).(*snapshotPublishTracker)
+	if !tracked || t == nil {
+		b.mqtt.Publish(ctx, ev)
+		return
+	}
+	bridge := b.mqtt.Bridge()
+	if bridge == nil {
+		return
+	}
+	if err := bridge.PublishState(ctx, ev); err != nil {
+		t.failed.Store(true)
 	}
 }
 
@@ -782,7 +864,7 @@ func (b *EventBridge) publishDeviceSnapshot(ctx context.Context, centralName str
 // Errors are swallowed at debug level — the broker not having the
 // device-availability topic is a degraded-but-not-fatal state.
 func (b *EventBridge) markAvailability(ctx context.Context, centralName, iface, deviceAddr string, online bool) bool {
-	key := centralName + "|" + iface + "|" + deviceAddr
+	key := availabilityCacheKey(centralName, iface, deviceAddr)
 	if prev, ok := b.availabilityCache.Load(key); ok {
 		// availabilityCache only ever stores bool values written by this
 		// method, so the assertion cannot fail.
@@ -798,8 +880,25 @@ func (b *EventBridge) markAvailability(ctx context.Context, centralName, iface, 
 	if bridge == nil {
 		return true
 	}
-	_ = bridge.PublishAvailability(ctx, centralName, iface, deviceAddr, online)
+	notePublish(ctx, bridge.PublishAvailability(ctx, centralName, iface, deviceAddr, online))
 	return true
+}
+
+// forgetAvailability drops one device's cached availability state so the
+// next [markAvailability] call publishes unconditionally. Used whenever the
+// retained topic itself is cleared — the cache must not outlive the topic
+// it describes.
+func (b *EventBridge) forgetAvailability(centralName, iface, deviceAddr string) {
+	if b == nil {
+		return
+	}
+	b.availabilityCache.Delete(availabilityCacheKey(centralName, iface, deviceAddr))
+}
+
+// availabilityCacheKey scopes the transition gate by central, interface and
+// device address, so the same device address on two CCUs stays distinct.
+func availabilityCacheKey(centralName, iface, deviceAddr string) string {
+	return centralName + "|" + iface + "|" + deviceAddr
 }
 
 // isReachabilityParameter reports whether a parameter change implies
@@ -978,7 +1077,7 @@ func (b *EventBridge) publishDiscoveryForUnobservedDP(
 	// siren aggregate would be republished and the standalone select /
 	// number entity for whitelisted action DPs never lands).
 	ev.Source = nil
-	_ = bridge.PublishDiscoveryOnly(ctx, ev)
+	notePublish(ctx, bridge.PublishDiscoveryOnly(ctx, ev))
 }
 
 // registerAndLoadUnobservedCalculatedDP is the calculated-DP counterpart
@@ -1251,7 +1350,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 	// references resolve to live values.
 	if ev.Source != nil {
 		// Aggregate path (Source set → aggregateChannel → climate/cover/...).
-		b.mqtt.Publish(ctx, ev)
+		b.publishEvent(ctx, ev)
 	}
 	if discoveryEligible {
 		if ev.Source != nil {
@@ -1270,11 +1369,11 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 			// path, so an unguarded dereference would crash the daemon on
 			// the first event after a config swap.
 			if bridge := b.mqtt.Bridge(); bridge != nil {
-				_ = bridge.PublishDiscoveryOnly(ctx, perDP)
+				notePublish(ctx, bridge.PublishDiscoveryOnly(ctx, perDP))
 			}
 		} else {
 			// No Custom-DP on the channel → straight per-DP path.
-			b.mqtt.Publish(ctx, ev)
+			b.publishEvent(ctx, ev)
 		}
 	}
 
@@ -1705,7 +1804,7 @@ func (b *EventBridge) publishSlotState(
 	}
 	state.Value = value
 
-	_ = bridge.PublishSlotState(ctx, centralName, iface, slot, state)
+	notePublish(ctx, bridge.PublishSlotState(ctx, centralName, iface, slot, state))
 
 	// ADR 0011: every DP also gets a `/config` companion carrying the
 	// descriptor (min/max/value_list/unit/multiplier/usage). Diff-gated
@@ -1713,7 +1812,7 @@ func (b *EventBridge) publishSlotState(
 	// typed [payload.ConfigPayload] flows through as-is; the bridge
 	// JSON-marshals it directly.
 	if src != nil {
-		_ = bridge.PublishSlotConfig(ctx, centralName, iface, slot, src.Config())
+		notePublish(ctx, bridge.PublishSlotConfig(ctx, centralName, iface, slot, src.Config()))
 	}
 }
 
@@ -1837,7 +1936,7 @@ func (b *EventBridge) republishBaseForStatusPair(
 		Bucket:    payload.BucketValues,
 		Parameter: string(base),
 	}
-	_ = bridge.PublishSlotState(ctx, centralName, iface, slot, state)
+	notePublish(ctx, bridge.PublishSlotState(ctx, centralName, iface, slot, state))
 }
 
 // lookupDPSource returns the DP and (if available) the payload.Source
@@ -1924,7 +2023,7 @@ func (b *EventBridge) publishDeviceInfo(ctx context.Context, centralName, iface 
 		rows = append(rows, row)
 	}
 	info.Channels = rows
-	_ = bridge.PublishDeviceInfo(ctx, centralName, iface, d.Address, &info)
+	notePublish(ctx, bridge.PublishDeviceInfo(ctx, centralName, iface, d.Address, &info))
 }
 
 // publishDeviceDiagnostics aggregates the maintenance-channel DPs
@@ -1961,7 +2060,7 @@ func (b *EventBridge) publishDeviceDiagnostics(ctx context.Context, centralName,
 	if len(diag) == 0 {
 		return
 	}
-	_ = bridge.PublishDeviceDiagnostics(ctx, centralName, iface, d.Address, diag)
+	notePublish(ctx, bridge.PublishDeviceDiagnostics(ctx, centralName, iface, d.Address, diag))
 }
 
 // publishCustomDPState publishes the curated derived-state JSON for
@@ -2008,7 +2107,7 @@ func (b *EventBridge) publishCustomDPState(
 	if slot.Address == "" {
 		slot.Address = deviceAddr
 	}
-	_ = bridge.PublishCustomDPState(ctx, centralName, iface, slot, src.State())
+	notePublish(ctx, bridge.PublishCustomDPState(ctx, centralName, iface, slot, src.State()))
 }
 
 // publishCustomDPConfig publishes the custom-DP's ConfigPayload
@@ -2057,7 +2156,7 @@ func (b *EventBridge) publishCustomDPConfig(
 	if slot.Address == "" {
 		slot.Address = deviceAddr
 	}
-	_ = bridge.PublishSlotConfig(ctx, centralName, iface, slot, src.Config())
+	notePublish(ctx, bridge.PublishSlotConfig(ctx, centralName, iface, slot, src.Config()))
 }
 
 // isCalculatedParameter reports whether the parameter name maps to a
@@ -2128,7 +2227,7 @@ func (b *EventBridge) publishChannelEventState(
 	if bridge == nil {
 		return
 	}
-	_ = bridge.PublishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, model, parameter)
+	notePublish(ctx, bridge.PublishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, model, parameter))
 }
 
 // publishChannelEventDiscoverySnapshot publishes the HA `event`
@@ -2181,10 +2280,9 @@ func (b *EventBridge) publishChannelEventDiscoverySnapshot(
 		Channel:        ch,
 		Device:         d,
 	}
-	if err := bridge.PublishChannelEventDiscovery(ctx, ev); err != nil {
-		// Snapshot pass is best-effort.
-		_ = err
-	}
+	// Best-effort per topic; the pass-level tracker still records the
+	// rejection so an incomplete snapshot does not arm the orphan sweeps.
+	notePublish(ctx, bridge.PublishChannelEventDiscovery(ctx, ev))
 }
 
 // firstPressParameter returns the first click-event parameter the channel
@@ -2257,10 +2355,9 @@ func (b *EventBridge) publishCustomDPDiscoverySnapshot(
 		Source:         src,
 	}
 	ev.SelectionLabels = b.selectionLabelsFor(ch, src)
-	if err := bridge.PublishCustomDPDiscovery(ctx, ev); err != nil {
-		// Snapshot pass is best-effort.
-		_ = err
-	}
+	// Best-effort per topic; the pass-level tracker still records the
+	// rejection so an incomplete snapshot does not arm the orphan sweeps.
+	notePublish(ctx, bridge.PublishCustomDPDiscovery(ctx, ev))
 }
 
 func (b *EventBridge) onCentralState(centralName string, e hmevent.CentralStateChangedEvent) {
@@ -2494,7 +2591,7 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 	// The state topic is still useful internally (REST snapshots,
 	// retain-cleanup baselines), so we keep PublishWeekProfileState
 	// active; only the HA-Discovery `select` is dropped.
-	_ = bridge.PublishWeekProfileState(ctx, centralName, iface, d.Address, channelNo, wp.CurrentProfile())
+	notePublish(ctx, bridge.PublishWeekProfileState(ctx, centralName, iface, d.Address, channelNo, wp.CurrentProfile()))
 	// Eagerly load the climate schedule so Custom-DP `StatePayload`'s
 	// `schedule_data` field surfaces P1..P6 per-day periods on the
 	// HA card from boot. Without this, `wp.Climate().Current()`
@@ -2619,9 +2716,9 @@ func (b *EventBridge) publishUpdateSnapshot(
 	}
 
 	// Publish HA Discovery (deduplicated by the bridge's declared cache).
-	_ = bridge.PublishUpdateDiscovery(ctx, centralName, ev)
+	notePublish(ctx, bridge.PublishUpdateDiscovery(ctx, centralName, ev))
 	// Publish the current firmware state.
-	_ = bridge.PublishUpdateState(ctx, centralName, iface, d.Address, upd.State())
+	notePublish(ctx, bridge.PublishUpdateState(ctx, centralName, iface, d.Address, upd.State()))
 
 	// Wire live updates: when the firmware tracker fires OnChange (via
 	// CCU-reported firmware-state transitions), re-publish the state
@@ -2691,7 +2788,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 		Model:         d.Model,
 		Device:        d,
 	}
-	_ = bridge.PublishScheduleEntityDiscovery(ctx, centralName, ev)
+	notePublish(ctx, bridge.PublishScheduleEntityDiscovery(ctx, centralName, ev))
 
 	// Per-channel switches (non-climate only).
 	b.publishScheduleSwitchSnapshot(ctx, centralName, iface, d, channelNo, wp)
@@ -2906,7 +3003,7 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 		if info.Name != "" && info.Name != fmt.Sprintf("Channel %d", info.ChannelNo) {
 			label = b.tr("discovery.schedule_named", "name", info.Name)
 		}
-		_ = bridge.PublishScheduleSwitchDiscovery(ctx, centralName, mqtt.ScheduleSwitchEvent{
+		notePublish(ctx, bridge.PublishScheduleSwitchDiscovery(ctx, centralName, mqtt.ScheduleSwitchEvent{
 			Central:           centralName,
 			Interface:         iface,
 			DeviceAddress:     d.Address,
@@ -2917,12 +3014,12 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 			Key:               key,
 			TargetChannelNo:   info.ChannelNo,
 			Label:             label,
-		})
+		}))
 		st := true
 		if enabled != nil {
 			st = enabled[key]
 		}
-		_ = bridge.PublishScheduleSwitchState(ctx, centralName, iface, d.Address, scheduleChannelNo, key, st)
+		notePublish(ctx, bridge.PublishScheduleSwitchState(ctx, centralName, iface, d.Address, scheduleChannelNo, key, st))
 	}
 	// Wire OnChange to re-publish every switch's state. The same
 	// callback fires for both wire-read sync and user-driven writes.
@@ -3047,7 +3144,7 @@ func (b *EventBridge) publishScheduleEntityPayload(
 		attrs["schedule_data"] = map[string]any{"entries": simpleScheduleEntriesJSON(wp)}
 		attrs["schedule_domain"] = "switch"
 	}
-	_ = bridge.PublishScheduleEntityAttrs(ctx, centralName, iface, address, channelNo, attrs)
+	notePublish(ctx, bridge.PublishScheduleEntityAttrs(ctx, centralName, iface, address, channelNo, attrs))
 	// state := count of active entries. Currently 0 until the
 	// non-climate schedule-data hydrator lands; climate counters are
 	// available via CountClimateEntries.
@@ -3062,7 +3159,7 @@ func (b *EventBridge) publishScheduleEntityPayload(
 			count = len(sched.Entries)
 		}
 	}
-	_ = bridge.PublishScheduleEntityState(ctx, centralName, iface, address, channelNo, count)
+	notePublish(ctx, bridge.PublishScheduleEntityState(ctx, centralName, iface, address, channelNo, count))
 }
 
 // Currently only [combined.Timer] is wired (HSColor / LevelCombined
@@ -3129,9 +3226,9 @@ func (b *EventBridge) publishCombinedTimer(
 		MaxSeconds: 24 * 60 * 60,
 		Step:       1,
 	}
-	_ = bridge.PublishCombinedTimerDiscovery(ctx, centralName, ev)
+	notePublish(ctx, bridge.PublishCombinedTimerDiscovery(ctx, centralName, ev))
 	if seconds, observed := timer.ValueSeconds(); observed {
-		_ = bridge.PublishCombinedTimerState(ctx, centralName, iface, d.Address, channelNo, "duration", seconds)
+		notePublish(ctx, bridge.PublishCombinedTimerState(ctx, centralName, iface, d.Address, channelNo, "duration", seconds))
 	}
 	capturedCentral := centralName
 	capturedIface := iface
@@ -3177,10 +3274,10 @@ func (b *EventBridge) publishCombinedLevelSensor(
 		Label:         b.tr("discovery.level_combined"),
 		ValueTemplate: "{{ value_json.level }}",
 	}
-	_ = bridge.PublishCombinedSensorDiscovery(ctx, centralName, ev)
+	notePublish(ctx, bridge.PublishCombinedSensorDiscovery(ctx, centralName, ev))
 	if composite, observed := lc.Value(); observed {
 		stateJSON := encodeLevelCompositeJSON(composite)
-		_ = bridge.PublishCombinedSensorState(ctx, centralName, iface, d.Address, channelNo, "level_combined", stateJSON)
+		notePublish(ctx, bridge.PublishCombinedSensorState(ctx, centralName, iface, d.Address, channelNo, "level_combined", stateJSON))
 	}
 	capturedCentral := centralName
 	capturedIface := iface
@@ -3224,10 +3321,10 @@ func (b *EventBridge) publishCombinedHSColorSensor(
 		Label:         b.tr("discovery.hs_color"),
 		ValueTemplate: "{{ value_json.hue }}",
 	}
-	_ = bridge.PublishCombinedSensorDiscovery(ctx, centralName, ev)
+	notePublish(ctx, bridge.PublishCombinedSensorDiscovery(ctx, centralName, ev))
 	if hsVal, observed := hs.Value(); observed {
 		stateJSON := encodeHSJSON(hsVal)
-		_ = bridge.PublishCombinedSensorState(ctx, centralName, iface, d.Address, channelNo, "hs_color", stateJSON)
+		notePublish(ctx, bridge.PublishCombinedSensorState(ctx, centralName, iface, d.Address, channelNo, "hs_color", stateJSON))
 	}
 	capturedCentral := centralName
 	capturedIface := iface

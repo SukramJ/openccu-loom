@@ -620,3 +620,50 @@ func TestClimateOnMatterValueChangedNilSafe(t *testing.T) {
 	}
 	r.setpoint.OnEvent(20.0) // must not panic with no subscriber
 }
+
+// TestClimateMountsHumidityServerForIntegerSlot pins that
+// RelativeHumidityMeasurement (0x0405) is mounted for an HmIP wall
+// thermostat, whose HUMIDITY parameter is INTEGER-typed and therefore
+// resolves into the integer slot only.
+func TestClimateMountsHumidityServerForIntegerSlot(t *testing.T) {
+	t.Parallel()
+	c := newIntegerHumidityClimate()
+	var found interfaces.MatterClusterServer
+	for _, s := range c.MatterClusterServers() {
+		if s.MatterClusterID() == matterClusterRelativeHumidityMeasurement {
+			found = s
+		}
+	}
+	if found == nil {
+		t.Fatal("RelativeHumidityMeasurement not mounted for an INTEGER-typed HUMIDITY channel")
+	}
+	c.humidityInt.OnEvent(int32(51))
+	v, ok := found.MatterRead(matterAttrMeasuredValue)
+	if !ok || v != uint16(5100) {
+		t.Fatalf("MeasuredValue = (%v,%v), want (5100,true)", v, ok)
+	}
+}
+
+// TestHumidityToMatterRounds pins the same rounding contract
+// [celsiusToMatter] carries: 20.4*100 is 2039.9999999999998 in binary64,
+// and truncation would report 20.39 % where every other surface shows
+// 20.4 %.
+func TestHumidityToMatterRounds(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   float64
+		want uint16
+	}{
+		{20.4, 2040},
+		{55.7, 5570},
+		{0, 0},
+		{100, 10000},
+		{-1, 0},
+		{101, 10000},
+	}
+	for _, tc := range cases {
+		if got := humidityToMatter(tc.in); got != tc.want {
+			t.Errorf("humidityToMatter(%v) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}

@@ -251,8 +251,21 @@ func NewVerifierFromValue(w0Bytes, lBytes []byte) (*VerifierContext, error) {
 	if x == nil {
 		return nil, ErrInvalidPoint
 	}
+	w0 := new(big.Int).SetBytes(w0Bytes)
+	// A w0 that is zero modulo the group order makes w0·M and w0·N the
+	// point at infinity, which crypto/elliptic represents as (0, 0) — an
+	// invalid point its Add / ScalarMult panic on. The verifier is
+	// commissioner-supplied (OpenCommissioningWindow carries the
+	// PAKEPasscodeVerifier verbatim), so the degenerate value has to be
+	// rejected here rather than reaching the Pake1 arithmetic. Every
+	// verifier a conformant commissioner derives lands in [1, n-1]
+	// (chip Spake2p::ComputeW0W1 reduces mod n-1 and adds 1), so this
+	// rejects only malformed input.
+	if new(big.Int).Mod(w0, curve().Params().N).Sign() == 0 {
+		return nil, fmt.Errorf("%w: w0 is zero modulo the group order", ErrInvalidPasscode)
+	}
 	return &VerifierContext{
-		W0: new(big.Int).SetBytes(w0Bytes),
+		W0: w0,
 		L:  &ecdsa.PublicKey{Curve: curve(), X: x, Y: y},
 	}, nil
 }
@@ -336,8 +349,17 @@ func (v *Verifier) ProcessPake1(pA []byte) (*Pake2Output, error) {
 	w0MNegX, w0MNegY := curve().ScalarMult(mPoint.X, mPoint.Y, v.ctx.W0.Bytes()) //nolint:staticcheck // SA1019: see curve()
 	w0MNegY = new(big.Int).Sub(curve().Params().P, w0MNegY)                      // negate
 	xMinusW0Mx, xMinusW0My := curve().Add(xPoint.X, xPoint.Y, w0MNegX, w0MNegY)  //nolint:staticcheck // SA1019: see curve()
-	zX, zY := curve().ScalarMult(xMinusW0Mx, xMinusW0My, y.Bytes())              //nolint:staticcheck // SA1019: see curve()
-	v.zMarshal = elliptic.Marshal(curve(), zX, zY)                               //nolint:staticcheck // SA1019: see curve()
+	// X - w0·M is the point at infinity when the prover sends exactly
+	// X = w0·M. crypto/elliptic encodes infinity as (0, 0), a point that
+	// is not on the curve: every derived value from here on is
+	// degenerate, and feeding it back into the curve arithmetic is
+	// undefined. RFC 9383 §3.3 requires the protocol to abort when the
+	// computed group element is the identity, so reject instead.
+	if xMinusW0Mx.Sign() == 0 && xMinusW0My.Sign() == 0 {
+		return nil, fmt.Errorf("%w: X equals w0*M (X - w0*M is the identity)", ErrInvalidPoint)
+	}
+	zX, zY := curve().ScalarMult(xMinusW0Mx, xMinusW0My, y.Bytes()) //nolint:staticcheck // SA1019: see curve()
+	v.zMarshal = elliptic.Marshal(curve(), zX, zY)                  //nolint:staticcheck // SA1019: see curve()
 
 	// V = y·L.
 	vX, vY := curve().ScalarMult(v.ctx.L.X, v.ctx.L.Y, y.Bytes()) //nolint:staticcheck // SA1019: see curve()

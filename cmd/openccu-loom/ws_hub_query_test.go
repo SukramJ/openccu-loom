@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -74,6 +75,55 @@ func TestWSHubMessageCounts_LiveHub_ReturnsCounts(t *testing.T) {
 	}
 	if *svc != 0 || *alarm != 0 {
 		t.Errorf("fresh hub: expected svc=0 alarm=0; got svc=%d alarm=%d", *svc, *alarm)
+	}
+}
+
+// TestWSHubMessageCounts_TwoCentrals_SumsEveryHub pins the fleet reading of
+// `ccu.get_hub_data`: the command carries no central parameter, so answering
+// with one CCU's counts drops every other CCU's service and alarm messages
+// from the only number the command reports.
+func TestWSHubMessageCounts_TwoCentrals_SumsEveryHub(t *testing.T) {
+	t.Parallel()
+
+	reg := central.NewRegistry()
+	registerHub(t, reg, "ccu-a", 2, 1)
+	registerHub(t, reg, "ccu-b", 5, 3)
+
+	w := &wsHubMessageCounts{hub: adapter.NewHubAdapter(reg)}
+	svc, alarm := w.HubMessageCounts()
+	if svc == nil || alarm == nil {
+		t.Fatal("expected non-nil counts from two live hubs")
+	}
+	if *svc != 7 {
+		t.Errorf("service messages = %d, want 7 (2 + 5 across both centrals)", *svc)
+	}
+	if *alarm != 4 {
+		t.Errorf("alarm messages = %d, want 4 (1 + 3 across both centrals)", *alarm)
+	}
+}
+
+// registerHub adds a central named `name` to reg whose hub carries the given
+// number of service and alarm messages.
+func registerHub(t *testing.T, reg *central.Registry, name string, services, alarms int) {
+	t.Helper()
+	cu, err := central.New(central.Config{Name: name})
+	if err != nil {
+		t.Fatalf("central.New(%s): %v", name, err)
+	}
+	h := hub.NewHub(name)
+	svc := make([]hub.ServiceMessage, 0, services)
+	for i := range services {
+		svc = append(svc, hub.ServiceMessage{ID: fmt.Sprintf("%s-svc-%d", name, i)})
+	}
+	h.ServiceMessages.Replace(svc)
+	alarmMsgs := make([]hub.AlarmMessage, 0, alarms)
+	for i := range alarms {
+		alarmMsgs = append(alarmMsgs, hub.AlarmMessage{ID: fmt.Sprintf("%s-alarm-%d", name, i)})
+	}
+	h.Messages.Replace(alarmMsgs)
+	cu.HubModel = h
+	if err := reg.Register(cu); err != nil {
+		t.Fatalf("reg.Register(%s): %v", name, err)
 	}
 }
 

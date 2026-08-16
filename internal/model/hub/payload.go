@@ -39,7 +39,7 @@ func (p *Program) CanonicalUniqueID(serialSuffix string) string {
 	if p == nil {
 		return ""
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, "program", routingkey.HubSlug(p.Name), "")
+	return routingkey.CanonicalUniqueID(serialSuffix, "program", routingkey.HubSlug(p.LegacyName()), "")
 }
 
 // Info returns identity-level fields for a Program.
@@ -49,11 +49,11 @@ func (p *Program) Info() payload.InfoPayload {
 	}
 	return &payload.ProgramInfo{
 		ID:          p.ID,
-		Name:        p.Name,
+		Name:        p.LegacyName(),
 		Description: p.Description,
 		Category:    "program",
 		UniqueID:    p.UniqueID(),
-		IsInternal:  p.IsInternal,
+		IsInternal:  p.Internal(),
 	}
 }
 
@@ -103,7 +103,7 @@ func (s *Sysvar) CanonicalUniqueID(serialSuffix string) string {
 	if s == nil {
 		return ""
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(s.Name), "")
+	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(s.LegacyName()), "")
 }
 
 // Info returns identity-level fields for a Sysvar.
@@ -112,7 +112,7 @@ func (s *Sysvar) Info() payload.InfoPayload {
 		return nil
 	}
 	out := &payload.SysvarInfo{
-		Name:        s.Name,
+		Name:        s.LegacyName(),
 		Description: s.Description,
 		Category:    "sysvar",
 		UniqueID:    s.UniqueID(),

@@ -140,7 +140,10 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	logger := d.logger
 
 	authMw := d.authMw
-	restResolve := d.restResolve
+	// baseResolve is the auth + session chain this phase hands to the
+	// router: the boot-time one, or the chained-store one built below
+	// when the app database opened.
+	baseResolve := d.restResolve
 
 	// Optional CCU authentication provider (ADR 0043). Its position in
 	// the login chain is governed by `auth.ccu.primary`: when primary
@@ -225,15 +228,23 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 		if d.wsHub != nil && cfg.North.REST.Auth.BearerAuthEnabled() {
 			d.wsHub.SetTokenStore(chainedTokens)
 		}
-		// Re-bind the resolver after swapping the middleware so the
-		// REST chain picks up the chained stores. The HA Ingress
-		// passthrough (ADR 0044) is the INNERMOST resolver so real
-		// credentials (bearer/session/basic) always win — it only
-		// injects an admin identity when nothing else resolved.
-		ingressMW := auth.IngressPassthrough(buildIngressTrust(cfg, logger), logger)
-		restResolve = func(next http.Handler) http.Handler {
-			return authMw.Resolve(d.sessionResolve(ingressMW(next)))
+		// Re-bind the chain after swapping the middleware so the REST
+		// resolver picks up the chained stores.
+		baseResolve = func(next http.Handler) http.Handler {
+			return authMw.Resolve(d.sessionResolve(next))
 		}
+	}
+
+	// The HA Ingress passthrough (ADR 0044) is the INNERMOST resolver so
+	// real credentials (bearer/session/basic) always win — it only
+	// injects an admin identity when nothing else resolved. It is wired
+	// on both paths: gating it on the app database would leave an
+	// Ingress-only deployment whose data directory failed to open with
+	// no way to authenticate at all, which is exactly the boot the
+	// operator needs the UI for.
+	ingressMW := auth.IngressPassthrough(buildIngressTrust(cfg, logger), logger)
+	restResolve := func(next http.Handler) http.Handler {
+		return baseResolve(ingressMW(next))
 	}
 
 	// REST status metrics — 5xx/4xx counters surfaced as health

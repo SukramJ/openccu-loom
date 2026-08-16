@@ -137,3 +137,49 @@ func TestNewVerifierFromValue_RejectsMalformedInput(t *testing.T) {
 		}
 	})
 }
+
+// TestNewVerifierFromValue_RejectsDegenerateW0 pins the guard against a
+// commissioner-supplied verifier whose w0 is zero modulo the group
+// order. Accepting it makes w0*M the point at infinity, which
+// crypto/elliptic represents as (0, 0) and panics on in the Pake1
+// arithmetic — a single malformed OpenCommissioningWindow would then
+// kill every inbound Pake1 for the life of the window.
+func TestNewVerifierFromValue_RejectsDegenerateW0(t *testing.T) {
+	t.Parallel()
+	salt := testSalt()
+	orig, err := NewVerifierContext(testPasscode, salt, testIterations)
+	if err != nil {
+		t.Fatalf("NewVerifierContext: %v", err)
+	}
+	_, lBytes := verifierBytesFor(orig)
+
+	for name, w0Bytes := range map[string][]byte{
+		"zero":        make([]byte, VerifierW0Size),
+		"group-order": curve().Params().N.FillBytes(make([]byte, VerifierW0Size)),
+	} {
+		if _, err := NewVerifierFromValue(w0Bytes, lBytes); !errors.Is(err, ErrInvalidPasscode) {
+			t.Errorf("%s w0: err = %v, want ErrInvalidPasscode", name, err)
+		}
+	}
+}
+
+// TestProcessPake1_RejectsIdentityDifference pins the second half of the
+// same guard: a prover that sends exactly X = w0*M makes X - w0*M the
+// identity, which the following ScalarMult would panic on.
+func TestProcessPake1_RejectsIdentityDifference(t *testing.T) {
+	t.Parallel()
+	salt := testSalt()
+	vc, err := NewVerifierContext(testPasscode, salt, testIterations)
+	if err != nil {
+		t.Fatalf("NewVerifierContext: %v", err)
+	}
+	v := NewVerifier(vc, nil, nil, nil)
+
+	// X = w0*M — a valid curve point, so unmarshalAndValidate accepts it.
+	mx, my := curve().ScalarMult(mPoint.X, mPoint.Y, vc.W0.Bytes()) //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
+	pA := elliptic.Marshal(curve(), mx, my)                         //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
+
+	if _, err := v.ProcessPake1(pA); !errors.Is(err, ErrInvalidPoint) {
+		t.Fatalf("ProcessPake1(w0*M): err = %v, want ErrInvalidPoint", err)
+	}
+}

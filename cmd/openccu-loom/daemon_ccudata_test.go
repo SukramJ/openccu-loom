@@ -127,7 +127,8 @@ func TestBuildMatterAdvertiser_EmptyValue_ReturnsZeroconf(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	mc := config.NorthMatter{MDNSAdvertise: ""}
-	got := buildMatterAdvertiser(mc, logger)
+	got, closeAdv := buildMatterAdvertiser(mc, logger)
+	t.Cleanup(closeAdv)
 	if got == nil {
 		t.Fatal("expected non-nil advertiser for empty MDNSAdvertise")
 	}
@@ -144,7 +145,8 @@ func TestBuildMatterAdvertiser_NoopValue_ReturnsNoop(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	mc := config.NorthMatter{MDNSAdvertise: "noop"}
-	got := buildMatterAdvertiser(mc, logger)
+	got, closeAdv := buildMatterAdvertiser(mc, logger)
+	t.Cleanup(closeAdv)
 	if _, ok := got.(*mdns.Noop); !ok {
 		t.Fatalf("expected *mdns.Noop for explicit noop MDNSAdvertise, got %T", got)
 	}
@@ -155,7 +157,8 @@ func TestBuildMatterAdvertiser_UnknownValue_FallsBackToNoop(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	mc := config.NorthMatter{MDNSAdvertise: "invalid-backend"}
-	got := buildMatterAdvertiser(mc, logger)
+	got, closeAdv := buildMatterAdvertiser(mc, logger)
+	t.Cleanup(closeAdv)
 	if _, ok := got.(*mdns.Noop); !ok {
 		t.Fatalf("expected *mdns.Noop fallback for an unknown MDNSAdvertise value, got %T", got)
 	}

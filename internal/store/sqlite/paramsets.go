@@ -42,14 +42,13 @@ type ParamsetRecord struct {
 	Paramset       hmproto.Paramset
 }
 
-// ParamsetStore persists paramset descriptions.
+// ParamsetStore persists paramset descriptions. Every read and write goes
+// to SQLite; the store holds no in-memory index of its own.
 type ParamsetStore struct {
 	db *sql.DB
-	// cache[deviceAddress][parameter][channelNo]
 }
 
-// NewParamsetStore returns a store backed by db with an empty
-// address-parameter cache.
+// NewParamsetStore returns a store backed by db.
 func NewParamsetStore(db *sql.DB) *ParamsetStore {
 	return &ParamsetStore{
 		db: db,
@@ -59,10 +58,6 @@ func NewParamsetStore(db *sql.DB) *ParamsetStore {
 // Upsert writes or replaces rec. The schema_version column is always written
 // as [ParamsetCacheSchemaVersion]; older versions are removed by
 // [ParamsetStore.WipeOutdated].
-//
-// After a successful DB write, the address-parameter cache is updated so that
-// subsequent [IsInMultipleChannels] calls for the same (deviceAddress,
-// parameter) pair reflect the new channel without a SQL round-trip.
 func (s *ParamsetStore) Upsert(ctx context.Context, rec ParamsetRecord) error {
 	defer hmlog.WatchSlow(ctx, slog.Default(), "paramsets.upsert", 0)()
 	raw, err := json.Marshal(rec.Paramset)
@@ -280,11 +275,7 @@ ORDER BY paramset_key, channel_address`
 }
 
 // ClearForInterface removes all paramset records for (central, ifaceID) from
-// the database AND drops the entire address-parameter cache.
-//
-// The cache is cleared completely (not just for this interface) because the
-// cache keys are device addresses, which are not scoped by interface — a full
-// clear is the safe conservative choice. The cache will be repopulated by
+// the database.
 //
 // Returns the number of rows deleted.
 func (s *ParamsetStore) ClearForInterface(ctx context.Context, centralName, ifaceID string) (int64, error) {
@@ -315,8 +306,7 @@ func (s *ParamsetStore) DeleteChannel(ctx context.Context, centralName, ifaceID,
 }
 
 // DeleteDevice removes every paramset row for every channel of the device
-// (channel_address = deviceAddress or deviceAddress:<n>) and drops the
-// device from the in-memory address-parameter cache.
+// (channel_address = deviceAddress or deviceAddress:<n>).
 func (s *ParamsetStore) DeleteDevice(ctx context.Context, centralName, ifaceID, deviceAddress string) (int64, error) {
 	prefix := strings.TrimRight(deviceAddress, ":") + ":"
 	res, err := s.db.ExecContext(ctx, `

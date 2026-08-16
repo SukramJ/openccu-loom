@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -224,4 +225,130 @@ func fakeIDToken(payload map[string]any) string {
 	b, _ := json.Marshal(payload)
 	body := base64.RawURLEncoding.EncodeToString(b)
 	return strings.Join([]string{header, body, "sig"}, ".")
+}
+
+// TestNewDeferredRecoversAfterIdPOutage pins the behaviour that keeps SSO
+// alive across an IdP restart: a client built while discovery fails must
+// resolve the provider on its own once the IdP answers again, without being
+// reconstructed. Resolving once at construction instead turns a few seconds
+// of IdP downtime into SSO that stays off until the daemon restarts.
+func TestNewDeferredRecoversAfterIdPOutage(t *testing.T) {
+	var (
+		mu        sync.Mutex
+		down      = true
+		discovery int
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		mu.Lock()
+		discovery++
+		isDown := down
+		mu.Unlock()
+		if isDown {
+			http.Error(w, "idp restarting", http.StatusServiceUnavailable)
+			return
+		}
+		issuer := "http://" + r.Host
+		_, _ = fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
+			issuer, issuer+"/auth", issuer+"/token", issuer+"/jwks")
+	}))
+	defer srv.Close()
+
+	c, err := NewDeferred(Config{
+		Issuer:      srv.URL,
+		ClientID:    "openccu-loom",
+		RedirectURL: "http://localhost/cb",
+	}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewDeferred: %v", err)
+	}
+	// No re-attempt floor in the test: the point here is recovery, and the
+	// floor has its own test below.
+	c.retryInterval = 0
+
+	pkce, _ := NewPKCEPair()
+	if u := c.AuthURL("state-xyz", pkce); u != "" {
+		t.Fatalf("AuthURL while the IdP is down = %q, want empty", u)
+	}
+
+	mu.Lock()
+	down = false
+	mu.Unlock()
+
+	u := c.AuthURL("state-xyz", pkce)
+	parsed, err := url.Parse(u)
+	if err != nil || parsed.Host == "" {
+		t.Fatalf("AuthURL after the IdP recovered = %q (err=%v) — discovery must be retried, not "+
+			"decided once at construction", u, err)
+	}
+	if parsed.Query().Get("state") != "state-xyz" {
+		t.Fatalf("auth URL: %s", u)
+	}
+
+	// The resolved metadata is cached: a second flow does not re-discover.
+	before := discoveryCount(&mu, &discovery)
+	_ = c.AuthURL("state-2", pkce)
+	if after := discoveryCount(&mu, &discovery); after != before {
+		t.Fatalf("discovery ran again after success (%d → %d); resolved metadata must be cached", before, after)
+	}
+}
+
+// TestNewDeferredFailedDiscoveryIsNotRetriedImmediately pins the re-attempt
+// floor: a burst of logins against an IdP that is still down must not turn
+// into one discovery request per login.
+func TestNewDeferredFailedDiscoveryIsNotRetriedImmediately(t *testing.T) {
+	var (
+		mu        sync.Mutex
+		discovery int
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		discovery++
+		mu.Unlock()
+		http.Error(w, "idp down", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	c, err := NewDeferred(Config{
+		Issuer:      srv.URL,
+		ClientID:    "openccu-loom",
+		RedirectURL: "http://localhost/cb",
+	}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewDeferred: %v", err)
+	}
+
+	pkce, _ := NewPKCEPair()
+	for range 5 {
+		if u := c.AuthURL("state", pkce); u != "" {
+			t.Fatalf("AuthURL while the IdP is down = %q, want empty", u)
+		}
+	}
+	if got := discoveryCount(&mu, &discovery); got != 1 {
+		t.Fatalf("discovery attempts = %d, want 1 — a failure must be remembered for the retry interval", got)
+	}
+}
+
+// TestNewDeferredRejectsMisconfiguration pins that configuration errors are
+// still reported at construction: they never heal on their own.
+func TestNewDeferredRejectsMisconfiguration(t *testing.T) {
+	if _, err := NewDeferred(Config{ClientID: "c", RedirectURL: "http://localhost/cb"}, nil); err == nil {
+		t.Error("missing issuer must be rejected")
+	}
+	if _, err := NewDeferred(Config{
+		Issuer:      "http://idp.example",
+		ClientID:    "c",
+		RedirectURL: "http://localhost/cb",
+	}, nil); err == nil {
+		t.Error("plain-http issuer on a non-loopback host must be rejected")
+	}
+}
+
+func discoveryCount(mu *sync.Mutex, n *int) int {
+	mu.Lock()
+	defer mu.Unlock()
+	return *n
 }

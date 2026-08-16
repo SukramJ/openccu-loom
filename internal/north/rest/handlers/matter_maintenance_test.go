@@ -25,6 +25,9 @@ func (f *fakeReassembler) Reassemble(context.Context) error {
 type fakeFabricPurger struct {
 	revoked []uint8
 	err     error
+	// revokeErrOn makes RevokeFabric fail for one fabric index, so the
+	// partial-reset path can be exercised.
+	revokeErrOn uint8
 }
 
 func (f *fakeFabricPurger) ListFabricIndexes(context.Context) ([]uint8, error) {
@@ -32,6 +35,9 @@ func (f *fakeFabricPurger) ListFabricIndexes(context.Context) ([]uint8, error) {
 }
 
 func (f *fakeFabricPurger) RevokeFabric(_ context.Context, idx uint8) error {
+	if f.revokeErrOn != 0 && idx == f.revokeErrOn {
+		return errors.New("fabric not found")
+	}
 	f.revoked = append(f.revoked, idx)
 	return nil
 }
@@ -143,5 +149,33 @@ func TestMaintenanceActionsNeedAnEnabledBridge(t *testing.T) {
 			strings.NewReader(`{"confirm":"remove-all-fabrics"}`)))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("factory-reset on a disabled bridge = %d, want 503", rec.Code)
+	}
+}
+
+// TestFactoryResetAuditsThePartOfTheResetThatLanded pins the durable
+// record for the unrecoverable half of a failed reset: the fabrics that
+// were already removed stay removed, so the audit log has to name them
+// even though the request fails.
+func TestFactoryResetAuditsThePartOfTheResetThatLanded(t *testing.T) {
+	t.Parallel()
+
+	p := &fakeFabricPurger{revokeErrOn: 2}
+	auditRec := &captureRecorder{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/factory-reset",
+		strings.NewReader(`{"confirm":"remove-all-fabrics"}`))
+	MatterFactoryReset(p, nil, auditRec)(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if len(auditRec.entries) != 1 {
+		t.Fatalf("audit entries = %d, want 1 for the fabric that was removed", len(auditRec.entries))
+	}
+	if !strings.Contains(auditRec.entries[0].Note, "removed 1 of 2") {
+		t.Errorf("audit note = %q, want it to name what was removed", auditRec.entries[0].Note)
+	}
+	if !strings.Contains(rec.Body.String(), "removed 1 of 2") {
+		t.Errorf("response = %s, want an honest partial-reset title", rec.Body.String())
 	}
 }

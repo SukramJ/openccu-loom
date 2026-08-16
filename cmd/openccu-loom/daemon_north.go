@@ -315,15 +315,25 @@ type authSources struct {
 // login is off outside the add-on — authenticated its operator perfectly
 // while still reporting "first run", which leaves the unauthenticated
 // POST /api/v1/setup open for anyone on the network to mint an admin.
+//
+// A credential only counts while the scheme that resolves it is on. Tokens
+// reach the middleware exclusively through the Bearer scheme — [gatedAuthMiddleware]
+// hands it a nil token store when `bearer_enabled` is false — so with the
+// scheme off a stored token authenticates nobody. Counting it anyway closed
+// the onboarding wizard AND silenced [warnOnDormantOnboarding] on a daemon
+// whose users table is empty (fresh volume, restored DB), leaving no way in
+// at all. Local users keep counting regardless of `basic_enabled`: SPA session
+// login resolves them without the header scheme.
 func noAuthSourceConfigured(cfg *config.Config, src authSources) bool {
+	bearer := cfg.North.REST.Auth.BearerAuthEnabled()
 	switch {
 	case src.localUsers > 0:
 		return false // a persisted local admin exists
-	case src.persistedTokens:
+	case bearer && src.persistedTokens:
 		return false // a persisted API token authenticates as its role
 	case len(cfg.North.REST.Auth.Users) > 0:
 		return false // a YAML-pinned local user exists
-	case len(cfg.North.REST.Auth.Tokens) > 0:
+	case bearer && len(cfg.North.REST.Auth.Tokens) > 0:
 		return false // a YAML-pinned bearer token (seeded into the store on upgrade)
 	case ccuAuthEnabled(cfg.North.REST.Auth.CCU) && src.hasCentral:
 		return false // CCU-delegated login is available (ADR 0043)
@@ -566,9 +576,20 @@ func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 	return client
 }
 
-func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool) *mqttStack {
+// buildMQTT assembles one MQTT stack generation (client, bridge, lifecycle)
+// from cfg. Returns nil when MQTT is disabled.
+//
+// centralNames resolves the centrals the daemon currently serves. It is a
+// function, not a slice, because a CCU adopted at runtime never reaches
+// cfg.Centrals: the retained `bridge/health` payload is rebuilt on every
+// AnnounceOnline and must name the live fleet. A nil func falls back to the
+// boot config.
+func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool, centralNames func() []string) *mqttStack {
 	if !cfg.North.MQTT.Enabled {
 		return nil
+	}
+	if centralNames == nil {
+		centralNames = func() []string { return configuredCentralNames(cfg) }
 	}
 	var client mqtt.Client
 	var connector mqtt.Connector
@@ -634,12 +655,12 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// topics of every configured CCU, not just the default one — a
 		// retired spelling of one CCU's name can be another CCU's live
 		// topic, and clearing that would blank a value in use.
-		CentralNames:       configuredCentralNames(cfg),
+		CentralNames:       centralNames(),
 		RawEnabled:         cfg.North.MQTT.RawEnabled,
 		HADiscoveryEnabled: cfg.North.MQTT.DiscoveryEnabled,
 		SubDevicesEnabled:  cfg.North.MQTT.SubDevicesEnabled,
 		Locale:             cfg.Locale,
-		HealthSupplier:     bridgeHealthSupplier(cfg, startedAt),
+		HealthSupplier:     bridgeHealthSupplier(centralNames, startedAt),
 		Collector:          collector,
 		ChannelHidden:      channelHidden,
 	}, pub).WithSubscriber(client)
@@ -670,11 +691,9 @@ func buildLWTTopic(cfg *config.Config) string {
 	return mqtt.NewTopicBuilder(cfg.North.MQTT.TopicBase).BridgeStatus()
 }
 
-// bridgeHealthSupplier returns a closure the MQTT bridge invokes on
-// every AnnounceOnline to compose the `<base>/bridge/health` payload.
-// The body carries operator-visible metadata that is more useful than
-// a bare "online" flag — build identity, daemon boot timestamp, and
-// the configured centrals.
+// buildRateLimitConfig projects the YAML config into the middleware
+// shape, returning nil when rate limiting is disabled so the router
+// skips the middleware wiring entirely.
 func buildRateLimitConfig(cfg *config.Config) *middleware.RateLimitConfig {
 	rl := cfg.North.REST.RateLimit
 	if !rl.Enabled {
@@ -712,31 +731,10 @@ func (r runtimeCapabilityDetector) HasAlarm() bool             { return r.alarm 
 func (r runtimeCapabilityDetector) HasHistory() bool           { return r.history }
 func (r runtimeCapabilityDetector) HasAddonSelfUpdate() bool   { return r.addonSelfUpdate }
 
-// detectSupervisedRestart reports whether the daemon is running
-// under a supervisor that will restart it after a clean shutdown.
-// The check is cheap + heuristic — we do not try to verify the
-// supervisor's restart policy; we look for tight markers that
-// imply the daemon's IMMEDIATE parent (or runtime) is a
-// supervisor, not just the terminal session.
-//
-// Signals (any one fires):
-//
-//   - OPENCCU_LOOM_SUPERVISOR=1 — explicit operator override.
-//   - JOURNAL_STREAM set AND getppid()==1 — systemd attached the
-//     daemon's stdout/stderr to journald and re-parented it to PID 1
-//     (the unambiguous "I am a systemd service" signal; INVOCATION_ID
-//     alone is too lax because gnome-terminal inherits it).
-//   - getppid()==1 AND /run/systemd/system exists — fallback when
-//     JOURNAL_STREAM was suppressed but systemd is still PID 1.
-//   - KUBERNETES_SERVICE_HOST set — Kubernetes injects it into
-//     every Pod and the kubelet always restarts dead containers.
-//   - /.dockerenv exists — Docker / Podman containers; restart
-//     policy is operator-chosen but presence is the usual signal.
-//
-// Missing all of these means the binary is running on bare metal
-// from a shell. The SPA disables the Restart-Daemon button in
-// that case so an operator does not accidentally take the daemon
-// permanently offline.
+// splitListenPort returns the TCP port from a Go net.Listen-style
+// address (":8119", "0.0.0.0:8119", "[::]:8119"). Reports ok=false
+// for addresses without a numeric port (e.g. Unix sockets, malformed
+// strings) so the caller can degrade gracefully.
 func splitListenPort(addr string) (int, bool) {
 	_, portStr, err := net.SplitHostPort(addr)
 	if err != nil || portStr == "" {
@@ -775,6 +773,12 @@ func wsAllowedOrigins(cfg *config.Config) []string {
 	return origins
 }
 
+// buildOpenAPIValidator loads the OpenAPI spec from the configured
+// path and returns a ready validator, or nil when the file is missing
+// or fails to parse. Failures are logged but never abort the daemon —
+// a missing spec must not take the REST surface offline; operators
+// see the warning and can either supply the spec or flip
+// OpenAPIValidate off.
 func buildOpenAPIValidator(cfg *config.Config, logger *slog.Logger) *middleware.OpenAPIValidator {
 	path := cfg.North.REST.OpenAPISpecPath
 	if path == "" {
@@ -803,10 +807,3 @@ func buildOpenAPIValidator(cfg *config.Config, logger *slog.Logger) *middleware.
 		slog.String("path", path))
 	return v
 }
-
-// singleCentralName returns the name of the registered central when
-// the registry contains exactly one entry, otherwise the empty
-// string. The REST router uses the result to pre-populate
-// `central_name` in every request's [reqctx.RequestContext]. Multi-
-// central deployments leave the request scope unset and rely on
-// per-handler resolution.

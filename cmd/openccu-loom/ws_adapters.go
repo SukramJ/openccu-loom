@@ -252,8 +252,13 @@ func (w *wsAllDevices) AllDevices() []*device.Device {
 // ── wsHubMessageCounts ───────────────────────────────────────────────────────
 
 // wsHubMessageCounts adapts *adapter.HubAdapter onto ws.HubDataProvider.
-// HubAdapter exposes Hub() *hub.Hub; this wrapper extracts the message
+// HubAdapter exposes the per-central hubs; this wrapper sums their message
 // counts without importing hub directly.
+//
+// The command carries no central parameter, so its answer is the fleet's:
+// summing every registered central is the only reading that stays true with
+// more than one CCU. Reporting the first central's counts instead hid every
+// other CCU's service messages from the command, permanently and silently.
 type wsHubMessageCounts struct {
 	hub *adapter.HubAdapter
 }
@@ -262,12 +267,18 @@ func (w *wsHubMessageCounts) HubMessageCounts() (serviceMessages, alarmMessages 
 	if w.hub == nil {
 		return nil, nil
 	}
-	h := w.hub.Hub()
-	if h == nil {
+	hubs := w.hub.Hubs()
+	if len(hubs) == 0 {
 		return nil, nil
 	}
-	svc := h.ServiceMessages.Count()
-	alarmCount := h.Messages.Count()
+	var svc, alarmCount int
+	for _, nh := range hubs {
+		if nh.Hub == nil {
+			continue
+		}
+		svc += nh.Hub.ServiceMessages.Count()
+		alarmCount += nh.Hub.Messages.Count()
+	}
 	return &svc, &alarmCount
 }
 

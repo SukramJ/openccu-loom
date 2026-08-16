@@ -4,12 +4,21 @@
 package hub_test
 
 import (
+	"context"
 	"strconv"
 	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 )
+
+// noopProgramWriter is an execution backend that records nothing; the
+// metadata race test only needs distinct instances to swap in.
+type noopProgramWriter struct{}
+
+func (noopProgramWriter) ExecuteProgram(context.Context, string) error { return nil }
+
+func (noopProgramWriter) SetProgramEnabled(context.Context, string, bool) error { return nil }
 
 // TestUpdateMetadataSerialisesWithNameReaders is a race tripwire for the
 // periodic program refresh: it rewrites the program name in place while
@@ -25,7 +34,9 @@ func TestUpdateMetadataSerialisesWithNameReaders(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range 500 {
-			p.UpdateMetadata("program"+strconv.Itoa(i+1), false, nil)
+			// A fresh writer every round: the refresh replaces the
+			// execution backend in place while commands run against it.
+			p.UpdateMetadata("program"+strconv.Itoa(i+1), i%2 == 0, noopProgramWriter{})
 		}
 	}()
 	for range 4 {
@@ -36,6 +47,13 @@ func TestUpdateMetadataSerialisesWithNameReaders(t *testing.T) {
 				_ = p.LegacyName()
 				_ = p.Signature()
 				_ = p.FullName()
+				// The north-bound assembly paths render the name too: the
+				// REST/WS identity payload and the canonical unique id.
+				_ = p.Info()
+				_ = p.Internal()
+				_ = p.CanonicalUniqueID("ABC123")
+				// The command path reads the writer the refresh swaps.
+				_ = p.Execute(context.Background())
 			}
 		}()
 	}

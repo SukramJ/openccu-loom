@@ -15,9 +15,14 @@
 package hmerr
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
+	"os"
 	"strings"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // Sentinel errors. Wrap with fmt.Errorf("...: %w", ...); compare with
@@ -443,43 +448,59 @@ func redactHexToken(msg string, start int) (end int, ok bool) {
 }
 
 // ExceptionToFailureReason maps a Go error to the machine-readable
-// [hmenum.FailureReason] enum that the state machine stores on FAILED
-// transitions.
+// [hmenum.FailureReason] a state machine records on a failed transition.
 //
-// loom:reachable:reason="called by the connection state-machine when recording a FAILED transition reason"
+// It walks the error chain with errors.Is:
+//   - [ErrAuthFailure] → [hmenum.FailureReasonAuth]
+//   - [ErrNoConnection] → [hmenum.FailureReasonNetwork]
+//   - [ErrCircuitBreakerOpen] → [hmenum.FailureReasonCircuitBreaker]
+//   - [ErrInternalBackendException] → [hmenum.FailureReasonInternal]
+//   - a deadline or a net.Error that reports Timeout →
+//     [hmenum.FailureReasonTimeout]
+//   - nil → [hmenum.FailureReasonNone]
+//   - anything else → [hmenum.FailureReasonUnknown]
 //
-// The mapping uses errors.Is to walk the error chain: - [ErrAuthFailure] →
-// [hmenum.FailureReasonAuth] - [ErrNoConnection] →
-// [hmenum.FailureReasonNetwork] - [ErrCircuitBreakerOpen] →
-// [hmenum.FailureReasonCircuitBreaker] - [ErrInternalBackendException] →
-// [hmenum.FailureReasonInternal] - Timeout (errors.Is
-// context.DeadlineExceeded) → [hmenum.FailureReasonTimeout] - nil →
-// [hmenum.FailureReasonNone] - anything else → [hmenum.FailureReasonUnknown]
+// The reason is what an operator is shown for an interface that is not
+// working, so a call site that hard-codes one literal per site tells
+// every failure apart by where it happened rather than by what happened:
+// rejected credentials and a tripped breaker both read as the site's
+// literal. Passing the actual error through this converter is what makes
+// "auth" and "circuit_breaker" distinguishable.
 //
-// The hmenum import is deliberate: the mapping is the authoritative
-// cross-cutting converter between the transport error taxonomy and the
-// state-machine taxonomy, so it lives in the same package as the error
-// sentinels.
-func ExceptionToFailureReason(err, timeoutErr error) string {
+// The hmenum dependency is deliberate: this is the cross-cutting
+// converter between the transport error taxonomy and the state-machine
+// taxonomy, so it belongs next to the sentinels it classifies.
+func ExceptionToFailureReason(err error) hmenum.FailureReason {
 	if err == nil {
-		return "none"
+		return hmenum.FailureReasonNone
 	}
 	if errors.Is(err, ErrAuthFailure) {
-		return "auth"
+		return hmenum.FailureReasonAuth
 	}
 	if errors.Is(err, ErrNoConnection) {
-		return "network"
+		return hmenum.FailureReasonNetwork
 	}
 	if errors.Is(err, ErrCircuitBreakerOpen) {
-		return "circuit_breaker"
+		return hmenum.FailureReasonCircuitBreaker
 	}
 	if errors.Is(err, ErrInternalBackendException) {
-		return "internal"
+		return hmenum.FailureReasonInternal
 	}
-	if timeoutErr != nil && errors.Is(err, timeoutErr) {
-		return "timeout"
+	if isTimeoutError(err) {
+		return hmenum.FailureReasonTimeout
 	}
-	return "unknown"
+	return hmenum.FailureReasonUnknown
+}
+
+// isTimeoutError reports whether err is a deadline being exceeded, in
+// either of the two shapes the transports produce: the context deadline
+// and a network timeout (which does not wrap the context error).
+func isTimeoutError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 // JSONRPCError is the typed representation of a JSON-RPC error object.

@@ -82,13 +82,15 @@ type CaseHandler interface {
 // that carries HasAck=true regardless of opcode, so the IM and
 // SecureChannel paths share this hook.
 type AckHandler interface {
-	// Discharge marks the obligation for the (session, exchange)
-	// pair as fulfilled (the peer ACKed our outbound message).
-	// Exchange IDs are only unique per session, so the session half
-	// keeps concurrent controllers from discharging each other's
-	// obligations. Returns whether an obligation existed
+	// Discharge marks the obligation for the (session, exchange, role)
+	// triple as fulfilled (the peer ACKed our outbound message).
+	// Exchange IDs are only unique per session AND per side, so both
+	// extra dimensions are needed to keep concurrent controllers — and a
+	// bridge-opened exchange colliding with a peer-opened one — from
+	// discharging each other's obligations. initiator is the LOCAL
+	// side's role. Returns whether an obligation existed
 	// (informational; the router does not branch on the result).
-	Discharge(sessionID, exchangeID uint16) bool
+	Discharge(sessionID, exchangeID uint16, initiator bool) bool
 }
 
 // noopPaseHandler is the default when no PASE handler is wired.
@@ -125,7 +127,7 @@ func (noopCaseHandler) ProcessSigma2Resume([]byte) (opcode uint8, payload []byte
 // every Discharge returns false (obligation never existed).
 type noopAckHandler struct{}
 
-func (noopAckHandler) Discharge(uint16, uint16) bool { return false }
+func (noopAckHandler) Discharge(uint16, uint16, bool) bool { return false }
 
 // AttachPaseHandler wires the PASE port. Pass nil to revert to noop.
 // Calling this twice replaces the previous handler.
@@ -291,7 +293,7 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		ack := b.ackHandler
 		b.mu.RUnlock()
 		if ack != nil {
-			ack.Discharge(requestHdr.SessionID, proto.ExchangeID)
+			ack.Discharge(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 		}
 	}
 
@@ -315,6 +317,116 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 			slog.Int("ack_counter", int(proto.AckCounter)))
 		return nil
 
+	case mrp.SCOpcodePBKDFParamRequest, mrp.SCOpcodePake1, mrp.SCOpcodePake3:
+		if b.paseLockedOut() {
+			// Brute-force cap reached for the currently installed
+			// acceptor: stop processing PASE entirely until a new
+			// commissioning window installs a fresh one. matter.js
+			// aborts commissioning at PASE_COMMISSIONING_MAX_ERRORS
+			// (PaseServer.ts:95-110) and its PaseServer dies with the
+			// window; ours can outlive every window, so the refusal has
+			// to live on the receive path.
+			b.logger.Warn("matter.rx.sc.pase_locked_out",
+				slog.String("src", srcString(src)),
+				slog.Int("opcode", int(proto.Opcode)),
+				slog.String("hint", "too many failed pairing attempts; open a new pairing window to re-enable PASE"))
+			return nil
+		}
+		return b.dispatchPase(src, requestHdr, proto, payload)
+
+	case mrp.SCOpcodeSigma1:
+		// Apple iOS multicasts the same Sigma1 onto IPv4 + IPv6-LL +
+		// IPv6-Global, so we observe 5 identical inbound Sigma1
+		// datagrams on the same exchange in <1 ms. Bug A's responder-
+		// mutex + equality cache makes every parallel ProcessSigma1
+		// return byte-identical Sigma2 bytes, but `handleCase` still
+		// calls `sendReply` 5 times — Apple processes the first, sends
+		// Sigma3, and rejects our late copies with `CASESession.cpp:
+		// 2507: CHIP Error 0x0000002A: Invalid message type` (state 3
+		// no longer accepts Sigma2). Dedupe at the router by hashing
+		// the Sigma1 payload and short-circuiting replays on the same
+		// (exchangeID, sigma1Hash) tuple. Mirrors matter.js's
+		// `CaseServer.ts::onSigma1` which discards duplicate Sigma1
+		// arrivals on the same exchange via `fabric.locked`.
+		h := sha256.Sum256(payload)
+		if b.markSigma1Replied(proto.ExchangeID, h) {
+			b.logger.Debug("matter.rx.sc.sigma1.replay_dropped",
+				slog.String("src", srcString(src)),
+				slog.Int("exchange_id", int(proto.ExchangeID)))
+			return nil
+		}
+		ch := b.resolveCaseHandler(proto.ExchangeID)
+		return b.handleCase(src, requestHdr, proto, payload, "sigma1",
+			ch.ProcessSigma1)
+	case mrp.SCOpcodeSigma3:
+		ch := b.resolveCaseHandler(proto.ExchangeID)
+		if err := b.handleCase(src, requestHdr, proto, payload, "sigma3",
+			ch.ProcessSigma3); err != nil {
+			return err
+		}
+		// Sigma3 closes the CASE handshake on the wire — forget the
+		// per-exchange Sigma1 dedupe entry so a later exchange-id
+		// rollover starts clean.
+		b.forgetSigma1Replied(proto.ExchangeID)
+		// A completed Sigma3 is the moment a secure session exists. An
+		// operator reading the trace after a controller went quiet needs
+		// the open as much as the close: "it never came back after 14:02"
+		// is only readable when both ends of the session are recorded.
+		b.diagEvents.Record(diagevent.Event{
+			Kind:     diagevent.KindSession,
+			Severity: diagevent.SeverityInfo,
+			Message:  "A controller completed a secure-session handshake with the bridge.",
+			Detail:   map[string]string{"peer": srcString(src)},
+		})
+		// Sigma3 receive implicitly acks every prior Sigma2 on the same
+		// exchange — the commissioner has progressed past Sigma2, so any
+		// still-pending Sigma2 retransmits in our outbound-reliable
+		// tracker are wasted bandwidth at best and confuse Apple iOS's
+		// MRP layer at worst (it drops the late Sigma2 retransmits with
+		// `Dropping message without piggyback ack when we are waiting
+		// for an ack`, then aborts the CASE handshake). Mirrors
+		// matter.js's `MessageExchange.ts::close` which discards every
+		// retx-pending message of the exchange when the receiver
+		// advances state.
+		b.mu.RLock()
+		tracker := b.outboundReliable
+		b.mu.RUnlock()
+		if tracker != nil {
+			if cleared := tracker.AbandonExchange(proto.ExchangeID); cleared > 0 {
+				b.logger.Debug("matter.sc.sigma3.abandon_prior",
+					slog.Int("exchange_id", int(proto.ExchangeID)),
+					slog.Int("cleared", cleared))
+			}
+		}
+		return nil
+	case mrp.SCOpcodeSigma2Resume:
+		ch := b.resolveCaseHandler(proto.ExchangeID)
+		return b.handleCase(src, requestHdr, proto, payload, "sigma2_resume",
+			ch.ProcessSigma2Resume)
+
+	case mrp.SCOpcodeStatusReport:
+		return b.handleSecureChannelStatusReport(src, requestHdr, payload)
+
+	default:
+		b.logger.Debug("matter.rx.sc.unhandled",
+			slog.String("src", srcString(src)),
+			slog.Int("opcode", int(proto.Opcode)),
+			slog.Int("payload_bytes", len(payload)))
+		return nil
+	}
+}
+
+// dispatchPase routes one inbound PASE opcode to the handler resolved
+// for its exchange. Split out of the Secure-Channel opcode switch so the
+// single-active-PASE claim, the handler resolution and the post-Pake3
+// release stay together while the switch keeps one entry per family.
+func (b *Bridge) dispatchPase(
+	src *net.UDPAddr,
+	requestHdr *message.Header,
+	proto message.ProtocolHeader,
+	payload []byte,
+) error {
+	switch proto.Opcode {
 	case mrp.SCOpcodePBKDFParamRequest:
 		if !b.claimPaseInFlight(proto.ExchangeID) {
 			// Single-active-PASE (Matter §4.13.1): a second
@@ -354,77 +466,8 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		// onNewExchange (PaseServer.ts:112-118).
 		b.releasePaseInFlight(proto.ExchangeID)
 		return err
-
-	case mrp.SCOpcodeSigma1:
-		// Apple iOS multicasts the same Sigma1 onto IPv4 + IPv6-LL +
-		// IPv6-Global, so we observe 5 identical inbound Sigma1
-		// datagrams on the same exchange in <1 ms. Bug A's responder-
-		// mutex + equality cache makes every parallel ProcessSigma1
-		// return byte-identical Sigma2 bytes, but `handleCase` still
-		// calls `sendReply` 5 times — Apple processes the first, sends
-		// Sigma3, and rejects our late copies with `CASESession.cpp:
-		// 2507: CHIP Error 0x0000002A: Invalid message type` (state 3
-		// no longer accepts Sigma2). Dedupe at the router by hashing
-		// the Sigma1 payload and short-circuiting replays on the same
-		// (exchangeID, sigma1Hash) tuple. Mirrors matter.js's
-		// `CaseServer.ts::onSigma1` which discards duplicate Sigma1
-		// arrivals on the same exchange via `fabric.locked`.
-		h := sha256.Sum256(payload)
-		if b.markSigma1Replied(proto.ExchangeID, h) {
-			b.logger.Debug("matter.rx.sc.sigma1.replay_dropped",
-				slog.String("src", srcString(src)),
-				slog.Int("exchange_id", int(proto.ExchangeID)))
-			return nil
-		}
-		ch := b.resolveCaseHandler(proto.ExchangeID)
-		return b.handleCase(src, requestHdr, proto, payload, "sigma1",
-			ch.ProcessSigma1)
-	case mrp.SCOpcodeSigma3:
-		ch := b.resolveCaseHandler(proto.ExchangeID)
-		if err := b.handleCase(src, requestHdr, proto, payload, "sigma3",
-			ch.ProcessSigma3); err != nil {
-			return err
-		}
-		// Sigma3 closes the CASE handshake on the wire — forget the
-		// per-exchange Sigma1 dedupe entry so a later exchange-id
-		// rollover starts clean.
-		b.forgetSigma1Replied(proto.ExchangeID)
-		// Sigma3 receive implicitly acks every prior Sigma2 on the same
-		// exchange — the commissioner has progressed past Sigma2, so any
-		// still-pending Sigma2 retransmits in our outbound-reliable
-		// tracker are wasted bandwidth at best and confuse Apple iOS's
-		// MRP layer at worst (it drops the late Sigma2 retransmits with
-		// `Dropping message without piggyback ack when we are waiting
-		// for an ack`, then aborts the CASE handshake). Mirrors
-		// matter.js's `MessageExchange.ts::close` which discards every
-		// retx-pending message of the exchange when the receiver
-		// advances state.
-		b.mu.RLock()
-		tracker := b.outboundReliable
-		b.mu.RUnlock()
-		if tracker != nil {
-			if cleared := tracker.AbandonExchange(proto.ExchangeID); cleared > 0 {
-				b.logger.Debug("matter.sc.sigma3.abandon_prior",
-					slog.Int("exchange_id", int(proto.ExchangeID)),
-					slog.Int("cleared", cleared))
-			}
-		}
-		return nil
-	case mrp.SCOpcodeSigma2Resume:
-		ch := b.resolveCaseHandler(proto.ExchangeID)
-		return b.handleCase(src, requestHdr, proto, payload, "sigma2_resume",
-			ch.ProcessSigma2Resume)
-
-	case mrp.SCOpcodeStatusReport:
-		return b.handleSecureChannelStatusReport(src, requestHdr, payload)
-
-	default:
-		b.logger.Debug("matter.rx.sc.unhandled",
-			slog.String("src", srcString(src)),
-			slog.Int("opcode", int(proto.Opcode)),
-			slog.Int("payload_bytes", len(payload)))
-		return nil
 	}
+	return nil
 }
 
 // paseMaxErrors is the number of PASE pairing failures within a
@@ -486,25 +529,41 @@ func (b *Bridge) releasePaseInFlight(exchangeID uint16) {
 // error path for genuine pairing failures only (not missing-handler or
 // state-replay retransmits).
 func (b *Bridge) recordPaseFailure() {
-	if b.paseFailures.Add(1) < paseMaxErrors {
+	if b.paseFailures.Add(1) != paseMaxErrors {
+		// Below the cap, or already past it. The counter is deliberately
+		// NOT reset at the cap: it is the latch [Bridge.paseLockedOut]
+		// reads, and only a fresh acceptor clears it (see
+		// [Bridge.resetPaseFailures]). Resetting handed an attacker an
+		// endless series of paseMaxErrors batches, because the
+		// configured-passcode acceptor stays armed for the daemon's
+		// lifetime and revoking a window that is not open is a no-op.
 		return
 	}
-	b.paseFailures.Store(0)
 	win := b.CommissioningWindow()
-	if win == nil {
-		return
-	}
 	b.logger.Warn("matter.rx.sc.pase_bruteforce",
 		slog.Int("max_errors", paseMaxErrors),
 		slog.String("hint", "too many PASE pairing failures; revoking commissioning window"))
 	b.diagEvents.Record(diagevent.Event{
 		Kind:     diagevent.KindPairing,
 		Severity: diagevent.SeverityError,
-		Message: "The commissioning window was revoked after too many failed pairing " +
-			"attempts. Open a new one and re-check the pairing code.",
+		Message: "Pairing was locked after too many failed attempts. Open a new " +
+			"pairing window and re-check the pairing code.",
 		Detail: map[string]string{"max_errors": strconv.Itoa(paseMaxErrors)},
 	})
-	_ = win.RevokeWindow(context.Background())
+	if win != nil {
+		_ = win.RevokeWindow(context.Background())
+	}
+}
+
+// paseLockedOut reports whether the PASE brute-force cap has been reached
+// since the current acceptor was installed. Revoking the commissioning
+// window is not enough on its own: an uncommissioned bridge keeps a
+// long-lived configured-passcode acceptor armed with no window open, so
+// without this latch the guessing continues after the cap. Cleared by
+// [Bridge.resetPaseFailures], which every acceptor install runs — opening
+// a new pairing window is the operator-visible way back.
+func (b *Bridge) paseLockedOut() bool {
+	return b.paseFailures.Load() >= paseMaxErrors
 }
 
 // resetPaseFailures clears the per-window PASE state — the failure counter
@@ -583,9 +642,21 @@ func (b *Bridge) handlePase(
 					slog.String("err", sendErr.Error()))
 			}
 			// Brute-force protection: a genuine pairing failure (bad Pake1
-			// decode, confirmation mismatch, …). Count it and abort the
-			// window once too many accumulate.
+			// decode, confirmation mismatch, …). Count it and lock PASE
+			// once too many accumulate.
 			b.recordPaseFailure()
+		}
+		// The handshake is over: it died before Pake3, so the Pake3
+		// branch's release never runs and the single-active-PASE slot
+		// would stay held for the full pasePairingTimeout — an operator
+		// retrying immediately after a failed attempt would be refused
+		// with pase_busy for up to a minute. A state-machine replay is
+		// the exception: the original handshake still owns the slot and
+		// is still progressing. Mirrors matter.js PaseServer.ts:112-118,
+		// where the finally block clears #pairingMessenger on every
+		// termination, not only on success.
+		if !isStateReplay {
+			b.releasePaseInFlight(proto.ExchangeID)
 		}
 		return err
 	}
@@ -605,7 +676,7 @@ func (b *Bridge) handlePase(
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 	return nil
 }
 
@@ -685,7 +756,7 @@ func (b *Bridge) handleCase(
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID, !proto.Initiator)
 	return nil
 }
 
@@ -869,6 +940,15 @@ func (b *Bridge) handleSecureChannelStatusReport(src *net.UDPAddr, requestHdr *m
 	b.logger.Info("matter.rx.sc.close_session",
 		slog.String("src", srcString(src)),
 		slog.Int("session_id", int(requestHdr.SessionID)))
+	b.diagEvents.Record(diagevent.Event{
+		Kind:     diagevent.KindSession,
+		Severity: diagevent.SeverityInfo,
+		Message:  "A controller closed its secure session with the bridge.",
+		Detail: map[string]string{
+			"peer":       srcString(src),
+			"session_id": strconv.Itoa(int(requestHdr.SessionID)),
+		},
+	})
 	return nil
 }
 
@@ -1036,6 +1116,15 @@ func (b *Bridge) triggerSessionReannounce() {
 		}
 		b.logger.Debug("matter.mdns.session_reannounce.done")
 	}()
+	// An mDNS advertisement change is exactly what an operator needs in
+	// the trace when a controller stopped finding the bridge: the
+	// re-announce says the records went back on the wire, and its
+	// absence says they did not.
+	b.diagEvents.Record(diagevent.Event{
+		Kind:     diagevent.KindDiscovery,
+		Severity: diagevent.SeverityInfo,
+		Message:  "The bridge re-announced itself on the network after a controller's last session ended.",
+	})
 }
 
 // closeSecureSessionsForShutdown drains every operational session with

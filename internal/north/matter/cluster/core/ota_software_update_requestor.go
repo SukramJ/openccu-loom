@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -112,7 +113,7 @@ func (o *OTASoftwareUpdateRequestor) MatterWrite(_ context.Context, attrID uint3
 // announcement but takes no action.
 func (o *OTASoftwareUpdateRequestor) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
 	if cmdID != otaRequestorCmdAnnounceOTAProvider {
-		return nil, fmt.Errorf("matter: OTASoftwareUpdateRequestor command 0x%02X not supported", cmdID)
+		return nil, im.UnsupportedCommandf("matter: OTASoftwareUpdateRequestor command 0x%02X not supported", cmdID)
 	}
 	return nil, nil
 }

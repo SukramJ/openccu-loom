@@ -348,6 +348,12 @@ type ifaceUnit struct{ central, iface string }
 // computed from the config DataDir (default ./var), mirroring the daemon's
 // values_cache wiring. Config is loaded whenever a path is given so the
 // global/central scopes can enumerate interfaces from it.
+//
+// The load goes through [config.LoadWithEnv]: any pre-database path that opens
+// the SQLite store directly has to apply the OPENCCU_LOOM_* overlay, or it
+// resolves the YAML data_dir while the daemon runs against the env-provided
+// one (the container image and the HA add-on both set OPENCCU_LOOM_DATA_DIR)
+// and the clear either aborts as missing or empties a stale sibling database.
 func resolveOfflineDSN(kind cachereset.ScopeKind, cfgPath, dbOverride string) (dsn, dbFile string, cfg *config.Config, err error) {
 	needsConfig := kind == cachereset.ScopeGlobal || kind == cachereset.ScopeCentral
 	if dbOverride == "" && cfgPath == "" {
@@ -358,7 +364,7 @@ func resolveOfflineDSN(kind cachereset.ScopeKind, cfgPath, dbOverride string) (d
 	}
 
 	if cfgPath != "" {
-		cfg, err = config.Load(cfgPath)
+		cfg, err = config.LoadWithEnv(cfgPath)
 		if err != nil {
 			return "", "", nil, fmt.Errorf("cache clear: load config: %w", err)
 		}

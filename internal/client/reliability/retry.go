@@ -463,7 +463,7 @@ func isNonRetryable(err error) bool {
 	}
 	// CCU XML-RPC fault classification: unknown codes (and any code
 	// not in the retryable set defined in pkg/hmerr) short-circuit
-	// retry. Transient codes (UNREACH, TIMEOUT, DUTY_CYCLE,
+	// retry. The transient codes (GENERAL, DUTY_CYCLE,
 	// DEVICE_OUT_OF_RANGE, TRANSMISSION_PENDING) flow through to
 	// the regular backoff or to the special-delay path.
 	var fault *hmerr.XMLRPCFault

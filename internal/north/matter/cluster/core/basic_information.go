@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bootid"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -57,6 +58,14 @@ type BasicInformation struct {
 	// Mutable.
 	nodeLabel string
 	location  string
+	// identityLabel is the NodeLabel the cluster was constructed with.
+	// It feeds [BasicInformation.uniqueID] instead of the live
+	// nodeLabel: UniqueID carries quality F (fixed for the lifetime of
+	// the device, Matter §11.1.5.13), and SerialNumber falls back to a
+	// UniqueID slice — deriving either from a value a controller can
+	// write means renaming the bridge in Apple or Google Home silently
+	// changes the node's identity under the controller's cache.
+	identityLabel string
 	// onPersistentWrite, when non-nil, fires after every successful
 	// Matter write to a non-volatile attribute (NodeLabel / Location)
 	// so the daemon can persist the value across restarts. See
@@ -277,6 +286,7 @@ func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 		partNumber:           cfg.PartNumber,
 		serialNumber:         cfg.SerialNumber,
 		nodeLabel:            cfg.NodeLabel,
+		identityLabel:        cfg.NodeLabel,
 		location:             loc,
 		capabilityMinima:     defaultCapabilityMinima(cfg.CapabilityMinima),
 		configurationVersion: cfgVer,
@@ -576,7 +586,11 @@ func basicInfoSerialFromUniqueID(uid string) string {
 }
 
 // uniqueID derives a stable 32-character hex identifier from
-// VendorID + ProductID + NodeLabel + SerialNumber. Mirrors matter.js
+// VendorID + ProductID + the configured NodeLabel + SerialNumber.
+// Every input is fixed at construction — in particular the label is the
+// configured one, never the live [BasicInformation.nodeLabel] a
+// controller can write, because UniqueID carries quality F (fixed for
+// the lifetime of the device, Matter §11.1.5.13). Mirrors matter.js
 // `BasicInformationServer.createUniqueId()` (32-char random a–zA–Z0–9
 // persisted with Quality "FN") in length and shape, but uses a
 // deterministic SHA-256 prefix so the value survives bridge restarts
@@ -593,7 +607,7 @@ func (b *BasicInformation) uniqueID() string {
 	// fingerprint after every daemon restart; see package bootid.
 	salt := bootid.Salt()
 	h := sha256.Sum256(fmt.Appendf(nil, "%s|%04X|%04X|%s|%s",
-		hex.EncodeToString(salt[:]), b.vendorID, b.productID, b.nodeLabel, b.serialNumber))
+		hex.EncodeToString(salt[:]), b.vendorID, b.productID, b.identityLabel, b.serialNumber))
 	return hex.EncodeToString(h[:16])
 }
 
@@ -643,7 +657,7 @@ func (b *BasicInformation) MatterWrite(_ context.Context, attrID uint32, value a
 
 // MatterInvoke always rejects — BasicInformation has no commands.
 func (b *BasicInformation) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: BasicInformation has no commands (got 0x%02X)", cmdID)
+	return nil, im.UnsupportedCommandf("matter: BasicInformation has no commands (got 0x%02X)", cmdID)
 }
 
 // MatterReportable lists the subscribe-able attributes.

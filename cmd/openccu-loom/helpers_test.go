@@ -4,8 +4,11 @@
 package main
 
 import (
+	"slices"
 	"testing"
+	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 )
@@ -90,6 +93,65 @@ func TestPickFirstCentral_Multiple(t *testing.T) {
 	}
 	if got := pickFirstCentral(cfg); got != "first" {
 		t.Errorf("pickFirstCentral multi: got %q, want %q", got, "first")
+	}
+}
+
+// ── liveCentralNames / bridgeHealthSupplier ─────────────────────────────────
+
+// TestBridgeHealthSupplierSeesACentralAdoptedAfterTheStackWasBuilt pins the
+// retained `<base>/bridge/health` payload against a runtime adopt. The payload
+// is rebuilt on every AnnounceOnline — i.e. on every broker reconnect — so a
+// central list captured when the MQTT stack was built keeps announcing the
+// boot fleet for the daemon's lifetime, and a CCU the operator added through
+// the SPA never appears to anyone reading that topic.
+func TestBridgeHealthSupplierSeesACentralAdoptedAfterTheStackWasBuilt(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.Centrals = []config.CentralConfig{{Name: "boot-ccu"}}
+	reg := buildTestRegistry(t, "boot-ccu")
+
+	supplier := bridgeHealthSupplier(func() []string { return liveCentralNames(cfg, reg) }, time.Now())
+	if got := supplier()["centrals"]; !slices.Equal(got.([]string), []string{"boot-ccu"}) {
+		t.Fatalf("boot payload centrals = %v, want [boot-ccu]", got)
+	}
+
+	// A runtime adopt writes the registry and the centrals table; it never
+	// touches cfg.Centrals.
+	adopted, err := central.New(central.Config{Name: "adopted-ccu"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(adopted); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+
+	got, ok := supplier()["centrals"].([]string)
+	if !ok {
+		t.Fatalf("centrals is %T, want []string", supplier()["centrals"])
+	}
+	if !slices.Contains(got, "adopted-ccu") {
+		t.Errorf("centrals = %v after adopt, want it to include adopted-ccu", got)
+	}
+	if !slices.Contains(got, "boot-ccu") {
+		t.Errorf("centrals = %v after adopt, want it to still include boot-ccu", got)
+	}
+}
+
+// TestLiveCentralNamesUnionsBothTiers documents the two tiers: a central that
+// is configured but not yet registered (bring-up still running) must not
+// vanish from the payload, and a registered one that is not in the config must
+// appear exactly once.
+func TestLiveCentralNamesUnionsBothTiers(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.Centrals = []config.CentralConfig{{Name: "configured-only"}, {Name: "both"}}
+	reg := buildTestRegistry(t, "both", "registered-only")
+
+	got := liveCentralNames(cfg, reg)
+	want := []string{"configured-only", "both", "registered-only"}
+	if !slices.Equal(got, want) {
+		t.Errorf("liveCentralNames = %v, want %v", got, want)
 	}
 }
 

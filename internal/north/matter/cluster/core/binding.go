@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -97,7 +98,7 @@ func (b *Binding) MatterWrite(_ context.Context, attrID uint32, value any, _ hme
 
 // MatterInvoke always rejects — Binding has no commands.
 func (b *Binding) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("matter: Binding has no commands (got 0x%02X)", cmdID)
+	return nil, im.UnsupportedCommandf("matter: Binding has no commands (got 0x%02X)", cmdID)
 }
 
 // MatterReportable lists the subscribe-able attributes.

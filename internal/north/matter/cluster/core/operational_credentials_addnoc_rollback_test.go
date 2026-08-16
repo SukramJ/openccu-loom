@@ -209,3 +209,84 @@ func TestAddNOC_UpsertIdentityFailure_RevertsViaCanonicalHelper(t *testing.T) {
 		t.Errorf("fabric table after UpsertIdentity failure: len=%d, want 0 (canonical rollback expected)", len(fabrics))
 	}
 }
+
+// TestAddNOC_InvalidCaseAdminSubject_PersistsNothing pins that the
+// CaseAdminSubject range check runs before the fabric, the identity
+// (including its private key) and the IPK key set are written. A subject
+// the bridge refuses must not leave a half-installed fabric behind: a
+// retry inside the same fail-safe window would hit fabricAlreadyInstalled
+// and answer FabricConflict instead of re-running cleanly.
+//
+// The Group node ID case additionally pins the operational-node upper
+// bound: chip src/lib/core/NodeId.h:59 kMaxOperationalNodeId is
+// 0xFFFF_FFEF_FFFF_FFFF, so every reserved subrange above it must be
+// refused rather than persisted as an unmatchable Administer ACL.
+func TestAddNOC_InvalidCaseAdminSubject_PersistsNothing(t *testing.T) {
+	t.Parallel()
+
+	for name, subject := range map[string]uint64{
+		"undefined":       0,
+		"group":           0xFFFF_FFFF_FFFF_FF01,
+		"temporary-local": 0xFFFF_FFFE_0000_0001,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			store := newFakeStore()
+			oc, err := core.NewOperationalCredentials(store, core.OpcredsConfig{SupportedFabrics: 5})
+			if err != nil {
+				t.Fatalf("NewOperationalCredentials: %v", err)
+			}
+			oc.SetIsFailSafeArmed(func() bool { return true })
+
+			rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			if err != nil {
+				t.Fatalf("GenerateKey root: %v", err)
+			}
+			rootRaw := buildCoreSignedCert(t, rootPriv, true, rootPriv)
+			if _, err := oc.MatterInvoke(ctx, 0x0B,
+				core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
+				hmenum.CommandPriorityHigh); err != nil {
+				t.Fatalf("AddTrustedRootCertificate: %v", err)
+			}
+			pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
+			nocRaw := buildCoreSignedCertForPubKey(t, pendingPub, false, rootPriv, testDefaultFabricID, testDefaultNodeID)
+
+			resp, err := oc.MatterInvoke(ctx, 0x06,
+				core.AddNOCRequest{
+					NOCValue:         nocRaw,
+					IPKValue:         make([]byte, 16),
+					CaseAdminSubject: subject,
+					AdminVendorID:    0x1234,
+				},
+				hmenum.CommandPriorityHigh)
+			if err != nil {
+				t.Fatalf("AddNOC: unexpected IM error: %v", err)
+			}
+			nocResp, ok := resp.(core.NOCResponse)
+			if !ok {
+				t.Fatalf("AddNOC response type = %T, want NOCResponse", resp)
+			}
+			if nocResp.StatusCode != core.NOCStatusInvalidAdminSubject {
+				t.Fatalf("AddNOC StatusCode = %v, want InvalidAdminSubject", nocResp.StatusCode)
+			}
+
+			fabrics, err := store.ListFabrics(ctx)
+			if err != nil {
+				t.Fatalf("ListFabrics: %v", err)
+			}
+			if len(fabrics) != 0 {
+				t.Errorf("fabric table after rejected CaseAdminSubject: len=%d, want 0", len(fabrics))
+			}
+			for fi := uint8(1); fi <= 5; fi++ {
+				keys, err := store.ListGroupKeySets(ctx, fi)
+				if err != nil {
+					t.Fatalf("ListGroupKeySets(fi=%d): %v", fi, err)
+				}
+				if len(keys) != 0 {
+					t.Errorf("group keys for fabricIndex=%d: want 0, got %d", fi, len(keys))
+				}
+			}
+		})
+	}
+}

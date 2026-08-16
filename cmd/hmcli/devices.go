@@ -131,7 +131,11 @@ const devicesListPageSize = 500
 // request returns the first 50 devices and nothing else — silently, since the
 // envelope's `total` still reports the full fleet. A CLI that shows a table (or
 // emits JSON a script greps for a device address) must not stop there.
+// The accumulator starts non-nil so an empty fleet marshals as `[]` rather
+// than `null`: scripts pipe `devices list --json` into `jq '.[]'`, which aborts
+// on a null document but yields nothing on an empty array.
 func fetchAllDevices(ctx context.Context, client *daemonClient) (items []deviceSummary, total int, err error) {
+	items = []deviceSummary{}
 	for page := 1; ; page++ {
 		var resp deviceListResponse
 		path := fmt.Sprintf("/api/v1/devices?page=%d&per_page=%d", page, devicesListPageSize)

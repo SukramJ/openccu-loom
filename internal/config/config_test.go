@@ -5,6 +5,7 @@ package config
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 
@@ -953,4 +954,96 @@ func TestOrDefault(t *testing.T) {
 	if got := orDefault(&v, true); got != false {
 		t.Errorf("explicit false must win over default true, got %v", got)
 	}
+}
+
+// TestCloneKeepsOperatorValuesWhenJSONCannotEncodeThem pins the failure mode
+// that made a deep copy destructive: Clone used to answer Default() whenever
+// the JSON round-trip failed, and callers write the result straight back over
+// the running config. One non-finite float — which JSON cannot encode at all —
+// therefore replaced the operator's centrals, data directory and listen
+// addresses with built-in defaults, with every layer reporting success.
+func TestCloneKeepsOperatorValuesWhenJSONCannotEncodeThem(t *testing.T) {
+	t.Parallel()
+
+	src := Default()
+	src.DataDir = "/var/lib/loom"
+	src.North.REST.Listen = ":9119"
+	src.Centrals = []CentralConfig{{Name: "ccu1", Host: "192.0.2.10"}}
+	src.Persistence.History.EnergyPricePerKWh = math.NaN()
+
+	got := Clone(src)
+	if got.DataDir != src.DataDir {
+		t.Errorf("data_dir: got %q, want %q", got.DataDir, src.DataDir)
+	}
+	if got.North.REST.Listen != src.North.REST.Listen {
+		t.Errorf("north.rest.listen: got %q, want %q", got.North.REST.Listen, src.North.REST.Listen)
+	}
+	if len(got.Centrals) != 1 || got.Centrals[0].Name != "ccu1" {
+		t.Errorf("centrals: got %+v, want the operator's single ccu1", got.Centrals)
+	}
+	if !math.IsNaN(got.Persistence.History.EnergyPricePerKWh) {
+		t.Errorf("energy_price_per_kwh: got %v, want NaN preserved", got.Persistence.History.EnergyPricePerKWh)
+	}
+}
+
+// TestCloneIsIndependentOfItsSource pins the property every caller relies on:
+// the copy shares no backing array with the source, so layering changes onto a
+// snapshot cannot reach back into the config the running daemon holds.
+func TestCloneIsIndependentOfItsSource(t *testing.T) {
+	t.Parallel()
+
+	src := Default()
+	src.Centrals = []CentralConfig{{Name: "ccu1", Host: "192.0.2.10"}}
+	src.North.REST.CORS = []string{"https://a.example"}
+
+	got := Clone(src)
+	got.Centrals[0].Host = "192.0.2.99"
+	got.North.REST.CORS[0] = "https://b.example"
+
+	if src.Centrals[0].Host != "192.0.2.10" {
+		t.Errorf("mutating the clone changed the source central host: %q", src.Centrals[0].Host)
+	}
+	if src.North.REST.CORS[0] != "https://a.example" {
+		t.Errorf("mutating the clone changed the source CORS list: %q", src.North.REST.CORS[0])
+	}
+}
+
+// TestMQTTDiscoveryImpliesTheRawPlane pins the coupling between the two MQTT
+// planes. Every entity the discovery plane declares points at state,
+// availability and command topics that only the raw plane publishes, so
+// discovery-without-raw produces a full Home Assistant device tree in which
+// every entity stays "unavailable" forever and nothing reports an error.
+func TestMQTTDiscoveryImpliesTheRawPlane(t *testing.T) {
+	t.Parallel()
+
+	t.Run("discovery_alone_enables_the_raw_plane", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		cfg.North.MQTT.Enabled = true
+		cfg.North.MQTT.DiscoveryEnabled = true
+		cfg.ApplyDefaults()
+		if !cfg.North.MQTT.RawEnabled {
+			t.Error("discovery_enabled without raw_enabled must not survive defaulting")
+		}
+	})
+
+	t.Run("raw_alone_stays_untouched", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		cfg.North.MQTT.Enabled = true
+		cfg.North.MQTT.RawEnabled = true
+		cfg.ApplyDefaults()
+		if cfg.North.MQTT.DiscoveryEnabled {
+			t.Error("the raw plane must not switch the discovery plane on")
+		}
+	})
+
+	t.Run("both_off_stays_off", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		cfg.ApplyDefaults()
+		if cfg.North.MQTT.RawEnabled || cfg.North.MQTT.DiscoveryEnabled {
+			t.Error("neither plane may be enabled by defaulting alone")
+		}
+	})
 }

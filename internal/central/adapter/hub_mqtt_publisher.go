@@ -599,6 +599,33 @@ func (p *HubMQTTPublisher) wireOneProgram(
 			p.publishProgramExecuteAvailability(ctx, b, roles, prog)
 		})
 	}))
+	// A program the operator deleted in the CCU WebUI is dropped from the
+	// model by the next refresh, but its retained discovery config keeps the
+	// entity alive in every consumer — frozen at its last state, and across
+	// daemon restarts, because nothing ever clears a retained topic that the
+	// model no longer knows about. Retract the configs this program declared
+	// the moment the model drops it.
+	p.addUnsub(prog.OnRemoved(func() {
+		p.publish(func() {
+			retractHubDiscoveryItems(ctx, b,
+				disco.BuildProgramDiscoveryRoles(centralName, programSpecFor(prog), roles))
+		})
+	}))
+}
+
+// retractHubDiscoveryItems clears the retained HA-Discovery config of every
+// item by re-publishing it with an empty payload, which is how Home Assistant
+// (and every other consumer of the discovery plane) is told the entity is
+// gone. Items the builder refused (`OK == false`) are skipped, exactly as on
+// the declare side.
+func retractHubDiscoveryItems(ctx context.Context, b *mqtt.Bridge, items []mqtt.DiscoveryItem) {
+	for _, item := range items {
+		if !item.OK {
+			continue
+		}
+		item.Payload = nil
+		_ = b.PublishHubDiscovery(ctx, item)
+	}
 }
 
 // wireOneSysvar queues discovery + the current state if observed,
