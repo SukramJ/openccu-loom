@@ -8,6 +8,7 @@ package harness
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -113,11 +115,9 @@ type Harness struct {
 	ccu  *MockCCU
 
 	// Effective listener addresses, populated before Start returns.
-	restAddr     string // 127.0.0.1:<port>
-	callbackPort int
-	binPort      int
-	mqttBroker   string // tcp://127.0.0.1:<port>, "" if MQTT disabled
-	opIssuer     string // http://127.0.0.1:<port>, "" unless AuthOIDC
+	restAddr   string // 127.0.0.1:<port>
+	mqttBroker string // tcp://127.0.0.1:<port>, "" if MQTT disabled
+	opIssuer   string // http://127.0.0.1:<port>, "" unless AuthOIDC
 
 	stopOnce sync.Once
 }
@@ -157,24 +157,37 @@ func Start(t *testing.T, opts Options) *Harness {
 		}
 	}
 
-	// Pre-allocate the four daemon-side ports. Pre-allocation has a
-	// small TOCTOU window between Close and the daemon's Listen; if
-	// it bites, the daemon fails to bind and the test fails loudly,
-	// which is preferable to silent flake.
-	restPort := pickFreePort(t)
-	uiPort := pickFreePort(t)
-	h.callbackPort = pickFreePort(t)
-	h.binPort = pickFreePort(t)
-	h.restAddr = loopbackAddr(restPort)
+	// Every daemon-side port is left to the OS: the daemon binds it and
+	// reports what it got, rather than being handed a number a probe
+	// listener held open a moment ago.
+	//
+	// Pre-allocation had a window between the probe's Close and the
+	// daemon's Listen roughly a second wide — process spawn, migrations,
+	// bring-up — and under a parallel CI run something else on the
+	// machine took the port inside it often enough to redden unrelated
+	// PRs with "address already in use". No amount of bookkeeping closes
+	// that window; not unbinding does.
+	//
+	// The callback ports need no resolution here at all. Nothing in the
+	// harness reads them back, and dynamic callback ports are a
+	// supported production mode: the daemon re-advertises the effective
+	// port to the CCU on every init() and reconnect. The REST port is
+	// the one exception — the test client has to address it — and the
+	// daemon logs it.
 
 	h.dataDir = t.TempDir()
 	h.cfgPath = filepath.Join(h.dataDir, "config.yaml")
 	cfgYAML := buildConfigYAML(configInputs{
-		DataDir:                 h.dataDir,
-		RESTListen:              ":" + itoa(restPort),
-		UIListen:                ":" + itoa(uiPort),
-		CallbackPort:            h.callbackPort,
-		BinPort:                 h.binPort,
+		DataDir: h.dataDir,
+		// ":0" and port 0 are the daemon's documented dynamic-port
+		// modes. The UI shares the REST listener (ADR 0044), so its
+		// address is configured but never bound.
+		RESTListen: ":0",
+		UIListen:   ":0",
+		// A wide window, walked until something binds. `port: 0` would
+		// mean the default 8120 here, not "let the OS choose".
+		CallbackPortRange:       "20000-60000",
+		BinPort:                 0,
 		AuthMode:                opts.AuthMode,
 		MQTTBroker:              h.mqttBroker,
 		OIDCIssuer:              h.opIssuer,
@@ -206,6 +219,16 @@ func Start(t *testing.T, opts Options) *Harness {
 		close(h.cmdDone)
 		cancel()
 	}()
+
+	// Resolve the REST address from the daemon's own report before
+	// anything tries to reach it.
+	restAddr, err := awaitRESTAddr(h, opts.StartupDeadline)
+	if err != nil {
+		t.Logf("daemon stdout:\n%s", h.stdoutBuf.String())
+		t.Logf("daemon stderr:\n%s", h.stderrBuf.String())
+		t.Fatalf("resolving the daemon's REST address: %v", err)
+	}
+	h.restAddr = restAddr
 
 	deadline := opts.StartupDeadline
 	if deadline == 0 {
@@ -362,6 +385,67 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
-// itoa formats a port (always positive) without pulling strconv into
-// the public API surface.
-func itoa(n int) string { return fmt.Sprintf("%d", n) }
+// awaitRESTAddr reads the daemon's own report of the address its REST
+// server bound, from the structured log it writes at start-up.
+//
+// The daemon is the only thing that knows: it was configured with ":0",
+// and the OS chose. Waiting for the line also makes the failure legible
+// — a daemon that dies before it binds produces "no rest.listen line"
+// with its output attached, rather than a test that hangs against an
+// address nothing is listening on.
+func awaitRESTAddr(h *Harness, deadline time.Duration) (string, error) {
+	if deadline <= 0 {
+		deadline = 60 * time.Second
+	}
+	const poll = 20 * time.Millisecond
+	until := time.Now().Add(deadline)
+	for {
+		if addr := restAddrFrom(h.stdoutBuf.String()); addr != "" {
+			return addr, nil
+		}
+		select {
+		case <-h.cmdDone:
+			// One last look: the line may have arrived in the same
+			// breath as the exit.
+			if addr := restAddrFrom(h.stdoutBuf.String()); addr != "" {
+				return addr, nil
+			}
+			return "", errors.New("daemon exited before reporting its REST address")
+		default:
+		}
+		if time.Now().After(until) {
+			return "", fmt.Errorf("no rest.listen line within %s", deadline)
+		}
+		time.Sleep(poll)
+	}
+}
+
+// restAddrFrom scans structured log output for the REST listener's
+// bound address, returning "" until it appears.
+//
+// The daemon logs `{"msg":"rest.listen","addr":"127.0.0.1:45123",…}`.
+// A wildcard bind reports "[::]:45123" or "0.0.0.0:45123"; the test
+// client talks to loopback, so only the port is taken from the line.
+func restAddrFrom(out string) string {
+	for line := range strings.SplitSeq(out, "\n") {
+		if !strings.Contains(line, `"rest.listen"`) {
+			continue
+		}
+		var rec struct {
+			Msg  string `json:"msg"`
+			Addr string `json:"addr"`
+		}
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			continue
+		}
+		if rec.Msg != "rest.listen" || rec.Addr == "" {
+			continue
+		}
+		_, port, err := net.SplitHostPort(rec.Addr)
+		if err != nil || port == "" || port == "0" {
+			continue
+		}
+		return net.JoinHostPort("127.0.0.1", port)
+	}
+	return ""
+}

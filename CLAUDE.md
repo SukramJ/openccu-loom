@@ -389,10 +389,18 @@ on the same type.
 
 ### Callback ports must be re-advertised on every reconnect
 
-If `rpc_callback.port` is `0` (dynamic), the OS assigns an ephemeral
-port at bind time. Every `init()` call to the CCU must carry the
+When the callback listener does not bind a fixed port — a
+`rpc_callback.port_range`, or `bin_port: 0` — the effective port is only
+known at bind time. Every `init()` call to the CCU must carry that
 **effective** port, not the configured value. A reconnect after restart
 may change the port; the CCU learns the new one at reconnect time.
+
+Note that `rpc_callback.port: 0` is **not** the dynamic mode it looks
+like: `applyDefaults` rewrites it to 8120, so a config that means "let
+the OS choose" has to say `port_range`. `bin_port: 0` *is* dynamic. The
+asymmetry is deliberate — see the rationale on `CallbackConfig` — but it
+is easy to assume otherwise, and two daemons that both fall back to 8120
+fail to bind rather than picking free ports.
 
 ### matter.js HEAD is the Matter gold standard
 
@@ -857,9 +865,12 @@ Two listeners, one each protocol, both shared across all centrals:
 - BIN-RPC over raw TCP on `rpc_callback.bin_port` (default `:8129`).
   Routes by `interface_id` inside the envelope.
 
-Both listeners accept fixed / dynamic (`0`, OS-assigned) / range
-(`"<lo>-<hi>"`) port modes. The *effective* port is re-advertised to
-the CCU in every `init()` call and every reconnect.
+The XML-RPC listener accepts a fixed port or a range
+(`port_range: "<lo>-<hi>"`, bound to the first free port in it); its
+`port: 0` means the 8120 default, not an OS-assigned port. The BIN-RPC
+listener accepts a fixed port or `bin_port: 0` for an OS-assigned one.
+The *effective* port is re-advertised to the CCU in every `init()` call
+and every reconnect.
 
 ### Event bus usage
 

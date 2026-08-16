@@ -16,17 +16,24 @@ import (
 // read and to extend without churn through buildConfigYAML's
 // signature.
 type configInputs struct {
-	DataDir      string
-	RESTListen   string // ":<port>"
-	UIListen     string // ":<port>"
-	CallbackPort int
-	BinPort      int
-	AuthMode     AuthMode
-	MQTTBroker   string // "tcp://127.0.0.1:<port>" or ""
-	OIDCIssuer   string // "http://127.0.0.1:<port>" or ""
-	CCUHost      string // "127.0.0.1"
-	CCUXMLRPC    int    // godevccu XML-RPC port
-	CCUJSONRPC   int    // godevccu JSON-RPC port (CentralConfig.JSONRPCPort)
+	DataDir    string
+	RESTListen string // ":<port>"
+	UIListen   string // ":<port>"
+	// CallbackPortRange bounds the XML-RPC callback listener to
+	// "<lo>-<hi>". A range rather than a port because `callback.port: 0`
+	// is not the dynamic mode it looks like — applyDefaults rewrites it
+	// to 8120, so every parallel daemon would fight over one port. The
+	// range is the configuration that actually reaches the binder, and
+	// it retries within the window instead of failing on a collision.
+	CallbackPortRange string
+	// BinPort is the BIN-RPC listener; 0 is genuinely dynamic there.
+	BinPort    int
+	AuthMode   AuthMode
+	MQTTBroker string // "tcp://127.0.0.1:<port>" or ""
+	OIDCIssuer string // "http://127.0.0.1:<port>" or ""
+	CCUHost    string // "127.0.0.1"
+	CCUXMLRPC  int    // godevccu XML-RPC port
+	CCUJSONRPC int    // godevccu JSON-RPC port (CentralConfig.JSONRPCPort)
 	// CheckConnectionInterval overrides the central's check_connection job cadence.
 	// Zero uses the compiled-in default. Use a short value (e.g. 5 s) in tests
 	// that need fast degraded-state detection.
@@ -96,7 +103,7 @@ func buildConfigYAML(in configInputs) string {
 	fmt.Fprintf(&b, "logging:\n  level: info\n  format: json\n")
 	fmt.Fprintf(&b, "callback:\n")
 	fmt.Fprintf(&b, "  host: 127.0.0.1\n")
-	fmt.Fprintf(&b, "  port: %d\n", in.CallbackPort)
+	fmt.Fprintf(&b, "  port_range: %q\n", in.CallbackPortRange)
 	fmt.Fprintf(&b, "  bin_port: %d\n", in.BinPort)
 	fmt.Fprintf(&b, "north:\n")
 	fmt.Fprintf(&b, "  rest:\n")

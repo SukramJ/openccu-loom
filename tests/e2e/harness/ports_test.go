@@ -69,27 +69,6 @@ func TestReservePortIsConcurrencySafe(t *testing.T) {
 	}
 }
 
-// TestPickFreePortHandsOutUsablePorts is the smoke check: every port it
-// returns must be distinct and bindable. It cannot fail the way the
-// reservation guard can, so it does not stand in for the tests above.
-func TestPickFreePortHandsOutUsablePorts(t *testing.T) {
-	seen := make(map[int]struct{}, 20)
-	for range 20 {
-		p := pickFreePort(t)
-		if _, dup := seen[p]; dup {
-			t.Fatalf("port %d handed out twice", p)
-		}
-		seen[p] = struct{}{}
-		l, err := net.Listen("tcp", loopbackAddr(p))
-		if err != nil {
-			t.Fatalf("port %d not bindable: %v", p, err)
-		}
-		if err := l.Close(); err != nil {
-			t.Fatalf("close: %v", err)
-		}
-	}
-}
-
 // TestPickFreeListenerHoldsThePort is the whole point of the helper: the
 // returned listener is already bound, so nothing else on the machine can
 // take the port between handing it out and serving on it. That is the
@@ -113,9 +92,8 @@ func TestPickFreeListenerHoldsThePort(t *testing.T) {
 	}
 }
 
-// TestPickFreeListenerPortsAreDistinct pins that the listener helper
-// shares the same reservation bookkeeping as pickFreePort, so the two
-// can be mixed within one harness without colliding.
+// TestPickFreeListenerPortsAreDistinct pins the reservation bookkeeping:
+// two callers within one process never receive the same port.
 func TestPickFreeListenerPortsAreDistinct(t *testing.T) {
 	seen := make(map[int]struct{}, 10)
 	for range 5 {
@@ -126,12 +104,5 @@ func TestPickFreeListenerPortsAreDistinct(t *testing.T) {
 			t.Fatalf("port %d handed out twice", port)
 		}
 		seen[port] = struct{}{}
-
-		p := pickFreePort(t)
-		forgetPort(t, p)
-		if _, dup := seen[p]; dup {
-			t.Fatalf("port %d handed out by both helpers", p)
-		}
-		seen[p] = struct{}{}
 	}
 }
