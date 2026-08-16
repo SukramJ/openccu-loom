@@ -33,7 +33,11 @@ type Sysvar struct {
 	Unit         string
 	ValueList    []string
 	ValueType    hmenum.HubValueType
-	Writer       SysvarWriter
+	// Writer is the write backend. Replace it through [Sysvar.SetWriter]
+	// rather than by assignment: the hub scan swaps it on every refresh
+	// while command paths read it, and only the setter puts that swap on
+	// the lock those reads take.
+	Writer SysvarWriter
 
 	// ValueNotifier is called by [OnValue] whenever the confirmed value
 	// actually changes. The hub coordinator wires this to publish a
@@ -438,19 +442,55 @@ func (s *Sysvar) Set(ctx context.Context, v hmtypes.ParamValue) error {
 	// concurrent rename, so it is read once through the data point's lock and
 	// the same value is used for the write and its error message.
 	name := s.LegacyName()
-	if s.Writer == nil {
+	// One snapshot of the writer for the whole call: the hub scan replaces
+	// it in place, and a nil check against one field read followed by a
+	// call against another is a torn read away from a nil dereference.
+	writer := s.sysvarWriter()
+	if writer == nil {
 		return fmt.Errorf("sysvar %q: no writer configured", name)
 	}
 	wireValue, err := s.toWire(v)
 	if err != nil {
 		return err
 	}
-	if err := s.Writer.SetSysvar(ctx, name, wireValue); err != nil {
+	if err := writer.SetSysvar(ctx, name, wireValue); err != nil {
 		return err
 	}
 	// Apply optimistic value only after a successful backend write.
 	s.WriteUnconfirmedValue(v)
 	return nil
+}
+
+// SetWriter installs the write backend.
+//
+// The hub scan refreshes every sysvar in place on each pass, so the writer
+// is replaced while commands are in flight. Going through this setter keeps
+// that replacement on the same lock [Sysvar.sysvarWriter] reads under.
+// Mirrors [Program.UpdateMetadata], which does the same for the program
+// half.
+func (s *Sysvar) SetWriter(w SysvarWriter) {
+	s.mu.Lock()
+	s.Writer = w
+	s.mu.Unlock()
+}
+
+// sysvarWriter returns the currently installed write backend.
+//
+// An interface value is two words wide, so reading the field directly
+// while the hub scan replaces it can observe one half of the old value and
+// one of the new. Every path that needs the writer therefore takes one
+// snapshot through this accessor and uses it for the whole call.
+func (s *Sysvar) sysvarWriter() SysvarWriter {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Writer
+}
+
+// Writable reports whether a write backend is installed. Read through the
+// same lock the refresh writes under, so the answer cannot straddle a
+// replacement.
+func (s *Sysvar) Writable() bool {
+	return s.sysvarWriter() != nil
 }
 
 // OnUpdate registers a change handler and returns an idempotent
@@ -538,7 +578,7 @@ func (s *Sysvar) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	set := payload.MQTTTopicSet{
 		State: naming.MQTTHubSysvarState(base, centralName, name),
 	}
-	if s.Writer != nil {
+	if s.Writable() {
 		set.Set = naming.MQTTHubSysvarCommand(base, centralName, name)
 	}
 	return set

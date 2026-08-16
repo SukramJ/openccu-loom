@@ -468,7 +468,10 @@ func (c *CommandSubscriber) commandParts(topic string) ([]string, bool) {
 	return strings.Split(rest, "/"), true
 }
 
-// Start attaches the four subscriptions.
+// Start attaches every command-topic subscription the bridge answers on.
+// A failure on any one of them aborts Start: a subscriber that came up
+// with a partial filter set accepts some commands and silently drops the
+// rest, which reads like a broken CCU rather than a broken subscribe.
 func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if c.sub == nil {
 		return errors.New("mqtt/command: no subscriber")

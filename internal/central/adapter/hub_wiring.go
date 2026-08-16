@@ -1122,13 +1122,29 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		freshNames[v.Name] = struct{}{}
 		upsertSysvar(h, v, writer, opts, rawDesc, valueType, valueList, chanByID[v.ID], haveDescs)
 	}
-	// Remove sysvars that are no longer present on the CCU.
+	pruneRemovedSysvars(h, freshNames)
+	return nil
+}
+
+// pruneRemovedSysvars drops every cached sysvar the CCU no longer
+// reports.
+//
+// The name is read through [hub.HubDataPoint.LegacyName], never off the
+// field: it is mutable — an operator rename rewrites it under the data
+// point's own lock, on a request goroutine, while this refresh runs on
+// the scheduler job — and this is the destructive call site. An
+// unsynchronised read here drops the wrong entry, which retracts a live
+// variable's retained discovery and leaves the removed one published.
+func pruneRemovedSysvars(h *hub.Hub, fresh map[string]struct{}) {
+	if h == nil {
+		return
+	}
 	for _, existing := range h.Sysvars() {
-		if _, ok := freshNames[existing.Name]; !ok {
-			h.RemoveSysvar(existing.Name)
+		name := existing.LegacyName()
+		if _, ok := fresh[name]; !ok {
+			h.RemoveSysvar(name)
 		}
 	}
-	return nil
 }
 
 // upsertSysvar creates or in-place-updates the [hub.Sysvar] for one
@@ -1148,7 +1164,11 @@ func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubS
 	existing.Unit = v.Unit
 	existing.ValueType = valueType
 	existing.ValueList = valueList
-	existing.Writer = writer
+	// Through the setter, not the field: this refresh replaces the writer
+	// while commands from the north-bound planes are in flight, and the
+	// setter is what puts that replacement on the lock the command path
+	// reads it under.
+	existing.SetWriter(writer)
 	existing.IsExtended = isExtended
 	existing.SetInternal(v.IsInternal)
 	existing.IsVisible = v.IsVisible
@@ -1230,7 +1250,7 @@ func assignHubChannels(unit *central.Unit, logger *slog.Logger) {
 			} else {
 				logger.Debug("hub.sysvar.explicit_channel_unresolved",
 					slog.String("central", unit.Name()),
-					slog.String("name", sv.Name),
+					slog.String("name", sv.LegacyName()),
 					slog.String("channel_address", explicit))
 			}
 		}
@@ -1244,7 +1264,7 @@ func assignHubChannels(unit *central.Unit, logger *slog.Logger) {
 			changed = true
 			logger.Info("hub.sysvar.channel_assigned",
 				slog.String("central", unit.Name()),
-				slog.String("name", sv.Name),
+				slog.String("name", sv.LegacyName()),
 				slog.String("source", source),
 				slog.String("channel", next))
 		}
@@ -1259,7 +1279,7 @@ func assignHubChannels(unit *central.Unit, logger *slog.Logger) {
 			changed = true
 			logger.Info("hub.program.channel_assigned",
 				slog.String("central", unit.Name()),
-				slog.String("name", p.Name),
+				slog.String("name", p.LegacyName()),
 				slog.String("source", source),
 				slog.String("channel", next))
 		}

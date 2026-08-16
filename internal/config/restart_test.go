@@ -471,6 +471,13 @@ func TestRestartRequiredDiff_BootWiredSurfacesAreDiffed(t *testing.T) {
 			mutate: func(c *Config) { c.North.REST.CSRFSecure = !c.North.REST.CSRFSecure },
 		},
 		{
+			// The middleware is only constructed when the list is
+			// non-empty, so adding the first allowed origin cannot take
+			// effect in a running daemon.
+			path:   "north.rest.cors",
+			mutate: func(c *Config) { c.North.REST.CORS = []string{"https://loom.example.de"} },
+		},
+		{
 			path:   "north.rest.openapi_validate",
 			mutate: func(c *Config) { off := false; c.North.REST.OpenAPIValidate = &off },
 		},
@@ -512,6 +519,53 @@ func TestRestartRequiredDiff_BootWiredSurfacesAreDiffed(t *testing.T) {
 			got := RestartRequiredDiff(boot, eff)
 			if !slices.Contains(got, tc.path) {
 				t.Errorf("expected %q in diff, got %v", tc.path, got)
+			}
+		})
+	}
+}
+
+// TestRestartRequiredDiff_CORSListEdits covers the other two edits an
+// operator makes to the allowed-origin list. Removing the last origin
+// leaves the running daemon serving CORS headers it was just told to
+// stop sending, and swapping one origin for another keeps answering the
+// old one — both because the middleware closure is built during router
+// assembly. Reordering the same origins changes nothing, so it must not
+// raise a restart banner.
+func TestRestartRequiredDiff_CORSListEdits(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		boot []string
+		eff  []string
+		want bool
+	}{
+		{name: "last origin removed", boot: []string{"https://a.example"}, eff: nil, want: true},
+		{
+			name: "origin replaced",
+			boot: []string{"https://a.example"},
+			eff:  []string{"https://b.example"},
+			want: true,
+		},
+		{
+			name: "reordered",
+			boot: []string{"https://a.example", "https://b.example"},
+			eff:  []string{"https://a.example", "https://b.example"},
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			boot := baseConfig()
+			boot.North.REST.CORS = tc.boot
+			eff := clone(boot)
+			eff.North.REST.CORS = tc.eff
+
+			got := slices.Contains(RestartRequiredDiff(boot, eff), "north.rest.cors")
+			if got != tc.want {
+				t.Errorf("north.rest.cors in diff = %v, want %v", got, tc.want)
 			}
 		})
 	}

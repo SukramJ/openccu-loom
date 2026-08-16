@@ -52,6 +52,13 @@ type SubtypeResponder struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
+	// lifecycleMu serialises Start and Close and guards cancel/closed
+	// plus the pc4 / pc6 handles those two touch. The responder is owned
+	// by both its constructor and the advertiser it is attached to, so
+	// Close can arrive twice, from two goroutines.
+	lifecycleMu sync.Mutex
+	closed      bool
+
 	mu sync.RWMutex
 	// mappings is a lower-cased qname (`_l3840._sub._matterc._udp.local.`)
 	// → primary instance FQDN
@@ -233,7 +240,12 @@ func (r *SubtypeResponder) fanOutV6(out []byte, dst *net.UDPAddr) {
 
 // Start begins the receive loops. Idempotent — repeated calls are no-ops.
 func (r *SubtypeResponder) Start(ctx context.Context) {
-	if r == nil || r.cancel != nil {
+	if r == nil {
+		return
+	}
+	r.lifecycleMu.Lock()
+	defer r.lifecycleMu.Unlock()
+	if r.cancel != nil || r.closed {
 		return
 	}
 	cctx, cancel := context.WithCancel(ctx)
@@ -252,10 +264,21 @@ func (r *SubtypeResponder) Start(ctx context.Context) {
 }
 
 // Close cancels the receive loops and releases the multicast sockets.
+// Idempotent and safe from several goroutines: the responder has two
+// owners in practice — whoever constructed it and the advertiser it was
+// attached to — and neither can know whether the other already shut it
+// down. Without the lock the second Close would race the first on the
+// cancel func and the two packet conns.
 func (r *SubtypeResponder) Close() error {
 	if r == nil {
 		return nil
 	}
+	r.lifecycleMu.Lock()
+	defer r.lifecycleMu.Unlock()
+	if r.closed {
+		return nil
+	}
+	r.closed = true
 	if r.cancel != nil {
 		r.cancel()
 		r.cancel = nil

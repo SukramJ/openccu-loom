@@ -243,6 +243,10 @@ type Engine struct {
 	ledger       IncidentSourceLedger
 	reader       SensorReader
 	validator    CodeValidator
+	// duress resolves a code without the validator's side effects, for
+	// the no-op paths that must still open the covert channel. It is
+	// the validator itself when that implements DuressMatcher.
+	duress       DuressMatcher
 	log          *slog.Logger
 	loopBreakerK int
 
@@ -293,6 +297,9 @@ func New(deps Deps) (*Engine, error) {
 	if k <= 0 {
 		k = DefaultRestartLoopBreakerK
 	}
+	// A validator that can answer "is this the duress code?" without
+	// side effects is resolved once here; see [DuressMatcher].
+	matcher, _ := deps.Validator.(DuressMatcher)
 	return &Engine{
 		clk:          clk,
 		sched:        sched,
@@ -308,6 +315,7 @@ func New(deps Deps) (*Engine, error) {
 		ledger:       deps.SourceLedger,
 		reader:       deps.SensorReader,
 		validator:    deps.Validator,
+		duress:       matcher,
 		log:          logger,
 		loopBreakerK: k,
 		zones:        map[string]*zone{},
@@ -607,6 +615,20 @@ func (e *Engine) authorize(ctx context.Context, a *zone, verb, code, source stri
 	return identity, duress, nil
 }
 
+// matchDuress resolves a supplied code against the zone's duress codes
+// only, without any of the validator's side effects (see
+// [DuressMatcher]). It is what the verbs use where the outcome is a
+// no-op regardless of the code, so a wrong code neither refuses, nor
+// counts toward a lockout, nor journals a fault. An absent or
+// non-matching matcher simply reports "not duress". The caller holds
+// the lock.
+func (e *Engine) matchDuress(ctx context.Context, a *zone, verb, code, source string) (identity string, duress bool) {
+	if code == "" || e.duress == nil {
+		return "", false
+	}
+	return e.duress.MatchDuress(ctx, a.id, verb, code, source)
+}
+
 // fireDuress emits the silent duress fan-out: a Hidden journal entry
 // (the journal facade suppresses the append event for hidden rows) plus
 // a dedicated AlarmDuressEvent on the bus. The verb itself proceeds
@@ -663,11 +685,14 @@ func (e *Engine) Disarm(ctx context.Context, zoneID, by, source string) error {
 // wrong or missing code changes nothing and cannot be used to probe
 // which codes exist.
 //
-// A supplied code is still validated there, for one reason: duress.
+// A supplied code is still looked at there, for one reason: duress.
 // Coercion frequently starts with the attacker disarming the zone, and
 // gating duress detection on the arm state would make the covert
-// channel unavailable in exactly that situation. The fan-out is silent
-// and the verb's own outcome stays unchanged.
+// channel unavailable in exactly that situation. The look-up goes
+// through [DuressMatcher], not through the validator: on a path that
+// decides nothing, a wrong code must cost nothing either — no
+// rate-limit budget, no fault row. The fan-out is silent and the
+// verb's own outcome stays unchanged.
 func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -676,13 +701,11 @@ func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code st
 		return ErrUnknownZone
 	}
 	if a.state == hmenum.AlarmZoneStateDisarmed {
-		if code != "" {
-			if identity, duress, cerr := e.authorize(ctx, a, codeVerbDisarm, code, source); cerr == nil && duress {
-				if identity != "" && by == "" {
-					by = identity
-				}
-				e.fireDuress(ctx, a, codeVerbDisarm, by, source)
+		if identity, duress := e.matchDuress(ctx, a, codeVerbDisarm, code, source); duress {
+			if identity != "" && by == "" {
+				by = identity
 			}
+			e.fireDuress(ctx, a, codeVerbDisarm, by, source)
 		}
 		// An explicit disarm of an already-disarmed zone is a no-op, but
 		// it cancels any pending auto-rearm — the operator wants it to

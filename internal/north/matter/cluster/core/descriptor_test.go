@@ -401,3 +401,46 @@ func TestDescriptorProviderInstallRacesRead(t *testing.T) {
 		t.Fatalf("PartsList = %T, want []uint16", got)
 	}
 }
+
+// TestDescriptor_ProviderReadDoesNotCopyStaticLists pins that a read
+// answered by a provider costs the same whether the static fallback list
+// is empty or large. Every assembled endpoint installs providers, so
+// materialising the static copy before the provider check allocated on
+// each of the reads Apple Home drives after CASE and then discarded the
+// result.
+func TestDescriptor_ProviderReadDoesNotCopyStaticLists(t *testing.T) {
+	build := func(t *testing.T, staticLen int) *core.Descriptor {
+		t.Helper()
+		servers := make([]uint32, staticLen)
+		parts := make([]uint16, staticLen)
+		for i := range servers {
+			servers[i] = uint32(0x1000 + i)
+			parts[i] = uint16(1 + i)
+		}
+		d, err := core.NewDescriptor(
+			[]core.DeviceTypeStruct{{DeviceType: 0x000E, Revision: 1}},
+			servers, []uint32{}, parts,
+		)
+		if err != nil {
+			t.Fatalf("NewDescriptor: %v", err)
+		}
+		providedServers := []uint32{0x001D}
+		providedParts := []uint16{7}
+		d.SetServerListProvider(func() []uint32 { return providedServers })
+		d.SetPartsListProvider(func() []uint16 { return providedParts })
+		return d
+	}
+
+	for name, attrID := range map[string]uint32{"ServerList": 0x0001, "PartsList": 0x0003} {
+		t.Run(name, func(t *testing.T) {
+			empty := build(t, 0)
+			large := build(t, 512)
+			emptyAllocs := testing.AllocsPerRun(200, func() { _, _ = empty.MatterRead(attrID) })
+			largeAllocs := testing.AllocsPerRun(200, func() { _, _ = large.MatterRead(attrID) })
+			if largeAllocs > emptyAllocs {
+				t.Errorf("%s read with a provider allocates %.0f with a 512-entry static list vs %.0f with an empty one — the static copy is built and thrown away",
+					name, largeAllocs, emptyAllocs)
+			}
+		})
+	}
+}

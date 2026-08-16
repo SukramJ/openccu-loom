@@ -91,12 +91,26 @@ func (m *callbackMetrics) observerFor(routeKey string) (string, *metrics.Observe
 	// with the same function the ingest path uses, so the daemon's own
 	// prefix and instance name are stripped exactly once and the result
 	// is the canonical `<central>-<interface>` shape.
-	var fallback *central.Unit
-	ambiguous := false
+	var owner, fallback *central.Unit
+	ownerTied, ambiguous := false, false
 	for _, u := range m.reg.List() {
 		canonical := adapter.CanonicalInterfaceID(u.InstanceName(), u.Name(), routeKey)
 		if strings.HasPrefix(canonical, u.Name()+"-") {
-			return u.Name(), observerOfCentral(u)
+			// A central name that is a dash-prefix of another one matches its
+			// neighbour's ids as well: with `ccu` and `ccu-2` registered, the
+			// canonical id `ccu-2-HmIP-RF` starts with `ccu-` too, and the
+			// registry is walked in ascending name order — so every CUxD
+			// callback of ccu-2 was charged to ccu and ccu-2's rpc_server
+			// diagnostics stayed at zero. The longest matching name is the
+			// owner: a shorter one only matched because the id continues with
+			// the rest of its neighbour's name.
+			switch {
+			case owner == nil || len(u.Name()) > len(owner.Name()):
+				owner, ownerTied = u, false
+			case len(u.Name()) == len(owner.Name()):
+				ownerTied = true
+			}
+			continue
 		}
 		// The reduction above needs the instance name the id was built
 		// with. An id minted by an earlier daemon identity (or by a
@@ -112,7 +126,13 @@ func (m *callbackMetrics) observerFor(routeKey string) (string, *metrics.Observe
 			fallback = u
 		}
 	}
-	if fallback != nil && !ambiguous {
+	// Two equally long names can only both match through different
+	// canonicalisations; charging either one would be a guess, so the sample
+	// is dropped like every other unattributable callback.
+	if owner != nil && !ownerTied {
+		return owner.Name(), observerOfCentral(owner)
+	}
+	if owner == nil && fallback != nil && !ambiguous {
 		return fallback.Name(), observerOfCentral(fallback)
 	}
 	return "", nil

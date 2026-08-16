@@ -263,3 +263,62 @@ func TestRevokeFabricOfAnUnknownIndexRunsNoTeardown(t *testing.T) {
 		t.Errorf("teardown ran %d times for a fabric that was never there", ran)
 	}
 }
+
+// TestRevokeFabricKeepsTheRowWhenTheIdentityCannotBeRead pins the failure
+// direction of the pre-read.
+//
+// The operational advertisement is keyed by the fabric's compressed ID and
+// node ID, and the row is the only place that knows them: a revoke that
+// cannot read them cannot retire the record. Deleting the row anyway and
+// treating the failed read as "no withdraw needed" answers 204, drops
+// fabric_count to zero and leaves the unpaired controller's `_matter._tcp`
+// instance advertised until the daemon restarts — with no surface left that
+// could tell anyone. Failing the revoke keeps the two halves together and
+// leaves the operator something to retry.
+func TestRevokeFabricKeepsTheRowWhenTheIdentityCannotBeRead(t *testing.T) {
+	t.Parallel()
+
+	db := openMigratedTestDB(t, "matter_revoke_unreadable_test.db")
+	store := matterstore.New(db)
+	ctx := context.Background()
+	idx, err := store.AddFabric(ctx, matterstore.FabricRecord{
+		FabricID:      0x1122,
+		NodeID:        0x3344,
+		RootPublicKey: make([]byte, 65),
+		CompressedID:  [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
+	})
+	if err != nil {
+		t.Fatalf("AddFabric: %v", err)
+	}
+	// A row whose identity no longer decodes: the read fails while the
+	// DELETE would still succeed, which is the shape every unreadable-row
+	// failure has (a truncated column here, a busy table under a concurrent
+	// write in production).
+	if _, err := db.ExecContext(ctx,
+		`UPDATE matter_fabrics SET compressed_id = ? WHERE fabric_index = ?`, []byte{1, 2}, idx); err != nil {
+		t.Fatalf("corrupt the fabric row: %v", err)
+	}
+
+	var ran int
+	a := &matterFabricRevokerAdapter{
+		store:    store,
+		teardown: func(context.Context, uint8) { ran++ },
+		withdraw: func(context.Context, [8]byte, uint64) { ran++ },
+	}
+	if err := a.RevokeFabric(ctx, idx); err == nil {
+		t.Fatal("RevokeFabric returned nil although the fabric's identity could not be read; " +
+			"the caller is told the controller was unpaired while its record stays advertised")
+	}
+	if ran != 0 {
+		t.Errorf("the removal fan-out ran %d times without the identity it needs", ran)
+	}
+	var rows int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM matter_fabrics WHERE fabric_index = ?`, idx).Scan(&rows); err != nil {
+		t.Fatalf("count fabric rows: %v", err)
+	}
+	if rows != 1 {
+		t.Error("the fabric row was deleted although its advertisement could not be retired; " +
+			"nothing can withdraw it after this point")
+	}
+}

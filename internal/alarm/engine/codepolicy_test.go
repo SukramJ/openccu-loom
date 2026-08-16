@@ -38,10 +38,15 @@ type codeResult struct {
 // present in results is refused with engine.ErrInvalidCode, matching the
 // CodeValidator contract for "a supplied code that does not
 // authenticate".
+// It also implements engine.DuressMatcher, the side-effect-free half
+// of the port: MatchDuress resolves the same table but records its
+// calls separately, so a test can tell which of the two the engine
+// reached.
 type fakeCodeValidator struct {
-	mu      sync.Mutex
-	results map[string]codeResult
-	calls   []codeValidateCall
+	mu           sync.Mutex
+	results      map[string]codeResult
+	calls        []codeValidateCall
+	duressProbes []codeValidateCall
 }
 
 func newFakeCodeValidator(results map[string]codeResult) *fakeCodeValidator {
@@ -59,10 +64,48 @@ func (f *fakeCodeValidator) Validate(_ context.Context, zoneID, verb, code, sour
 	return r.identity, r.duress, r.err
 }
 
+func (f *fakeCodeValidator) MatchDuress(_ context.Context, zoneID, verb, code, source string) (identity string, duress bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.duressProbes = append(f.duressProbes, codeValidateCall{zoneID, verb, code, source})
+	r, ok := f.results[code]
+	if !ok || !r.duress || r.err != nil {
+		return "", false
+	}
+	return r.identity, true
+}
+
 func (f *fakeCodeValidator) callCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.calls)
+}
+
+func (f *fakeCodeValidator) duressProbeCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.duressProbes)
+}
+
+// plainCodeValidator implements only engine.CodeValidator, without the
+// duress matcher, to pin what the engine does with a validator that
+// cannot answer the pure question.
+type plainCodeValidator struct {
+	mu    sync.Mutex
+	calls []codeValidateCall
+}
+
+func (p *plainCodeValidator) Validate(_ context.Context, zoneID, verb, code, source string) (identity string, duress bool, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.calls = append(p.calls, codeValidateCall{zoneID, verb, code, source})
+	return "", false, engine.ErrInvalidCode
+}
+
+func (p *plainCodeValidator) callCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.calls)
 }
 
 // startWithValidator builds and starts an engine on the harness's
@@ -338,18 +381,53 @@ func TestCodePolicy_DuressCodeOnAnAlreadyDisarmedZoneStillFiresDuress(t *testing
 // other half of that decision explicit: the idempotent no-op must not
 // turn into a refusal, or a probe learns which codes exist from the
 // zone that needs no security decision at all.
+//
+// It also pins how the code is looked at: through the pure duress
+// matcher, never through the validator. The validator is the surface
+// that consumes the source's rate-limit budget and journals faults, so
+// running it here would let anyone able to publish a disarm lock the
+// code plane out for every zone by aiming wrong codes at a disarmed
+// one.
 func TestCodePolicy_WrongCodeOnAnAlreadyDisarmedZoneStaysANoop(t *testing.T) {
 	h := newHarness(t)
 	h.seedStandardZone()
 	v := newFakeCodeValidator(map[string]codeResult{"9999": {identity: "Bob", duress: true}})
 	h.startWithValidator(v)
 
-	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "keypad", "0000"); err != nil {
-		t.Fatalf("wrong code on a disarmed zone = %v, want nil (idempotent no-op)", err)
+	const attempts = 10
+	for i := range attempts {
+		if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", "0000"); err != nil {
+			t.Fatalf("attempt %d: wrong code on a disarmed zone = %v, want nil (idempotent no-op)", i, err)
+		}
 	}
 	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 	if h.journal.has("duress") {
 		t.Errorf("a non-duress code fired duress; got %v", h.journal.events())
+	}
+	if got := v.callCount(); got != 0 {
+		t.Errorf("Validate called %d times on a no-op disarm; want 0 — the no-op path must not touch the rate limiter or the fault journal", got)
+	}
+	if got := v.duressProbeCount(); got != attempts {
+		t.Errorf("MatchDuress called %d times; want %d — the code is still checked for duress", got, attempts)
+	}
+}
+
+// TestCodePolicy_DisarmedZoneWithoutADuressMatcherNeverValidates pins
+// the fallback: a validator that cannot answer the pure question loses
+// duress detection on the no-op path and gains nothing else. Falling
+// back to Validate there would reintroduce the side effects the
+// matcher exists to avoid.
+func TestCodePolicy_DisarmedZoneWithoutADuressMatcherNeverValidates(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	v := &plainCodeValidator{}
+	h.startWithValidator(v)
+
+	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", "0000"); err != nil {
+		t.Fatalf("wrong code on a disarmed zone = %v, want nil (idempotent no-op)", err)
+	}
+	if got := v.callCount(); got != 0 {
+		t.Errorf("Validate called %d times on a no-op disarm; want 0", got)
 	}
 }
 

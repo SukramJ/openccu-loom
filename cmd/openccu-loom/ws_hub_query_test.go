@@ -764,3 +764,54 @@ func TestWSHubQuery_CentralHub_RejectsAnUnknownCentral(t *testing.T) {
 		t.Fatalf("CentralHub for an unknown central = %v, want ErrCentralUnknown", err)
 	}
 }
+
+// TestWSHubQueryReadsProgramMetadataUnderTheProgramsLock is a race test: it
+// only fails under -race, and it fails there deterministically.
+//
+// Every hub scan refreshes the live program entries in place
+// (Program.UpdateMetadata rewrites the name through the data point's lock and
+// the internal flag under the program lock) rather than replacing the
+// pointers, precisely so subscribers keep working. A north-bound plane that
+// reads the fields instead of the accessors therefore races the refresh, and
+// a string header read while it is being replaced yields neither the old nor
+// the new name.
+func TestWSHubQueryReadsProgramMetadataUnderTheProgramsLock(t *testing.T) {
+	t.Parallel()
+	q, h := liveHubQuery(t)
+	h.PutProgram(hub.NewProgram("test-ccu", "prog-1", "Morning", "", false, nil))
+	h.PutProgram(hub.NewProgram("test-ccu", "Tmp_2", "Tmp_2", "", true, nil))
+
+	ctx := context.Background()
+	stop, done := make(chan struct{}), make(chan struct{})
+	// The refresh runs for as long as the reader does, so the two overlap
+	// regardless of how fast either side turns out to be.
+	go func() {
+		defer close(done)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			p, ok := h.Program("prog-1")
+			if !ok {
+				continue
+			}
+			// What a hub scan does on every pass.
+			if i%2 == 0 {
+				p.UpdateMetadata("Morning routine (renamed)", true, nil)
+			} else {
+				p.UpdateMetadata("Morning", false, nil)
+			}
+		}
+	}()
+	for range 2000 {
+		if _, err := q.ListPrograms(ctx, nil); err != nil {
+			close(stop)
+			<-done
+			t.Fatalf("ListPrograms: %v", err)
+		}
+	}
+	close(stop)
+	<-done
+}

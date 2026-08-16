@@ -443,22 +443,36 @@ func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrp
 	if req.Method == "system.multicall" {
 		return s.dispatchMulticall(ctx, req.Params)
 	}
-	finish := observeCallbackStart(s.metrics, binrpcRouteKey(req))
+	finish := observeCallbackStart(s.metrics, s.binrpcRouteKey(req))
 	val, err := s.dispatchCall(ctx, req)
 	finish(err != nil)
 	return val, err
 }
 
 // binrpcRouteKey reports the interface id [BINRPCServer.dispatchCall] will
-// route req by, or "" when the request carries none — introspection, or a
-// malformed envelope. It mirrors the extraction below rather than sharing it
-// because the observation has to happen around the dispatch, not inside it.
-func binrpcRouteKey(req *binrpc.Request) string {
+// route req by, or "" when the request has no route: introspection, a
+// malformed envelope, or an interface id nothing is registered for. It
+// mirrors the extraction below rather than sharing it because the
+// observation has to happen around the dispatch, not inside it.
+//
+// The registration lookup is what keeps the observation inside the
+// [CallbackObserver] contract. An interface id without handlers belongs to
+// no central — a CCU that kept pushing to a registration the daemon lost on
+// an unclean shutdown does exactly this — and charging its callbacks to that
+// route key would report a healthy CCU as failing, on a metric nobody can
+// act on.
+func (s *BINRPCServer) binrpcRouteKey(req *binrpc.Request) string {
 	if req.Method == "system.listMethods" || len(req.Params) == 0 {
 		return ""
 	}
 	id, err := xmlrpc.AsString(req.Params[0])
 	if err != nil {
+		return ""
+	}
+	s.mu.RLock()
+	handlers := s.routes[id]
+	s.mu.RUnlock()
+	if handlers == nil {
 		return ""
 	}
 	return id

@@ -474,15 +474,21 @@ func (w *wsHubQuery) ListPrograms(_ context.Context, includeInternal *bool) ([]m
 	progs := h.Programs()
 	out := make([]map[string]any, 0, len(progs))
 	for _, p := range progs {
-		if p.IsInternal && !include {
+		// Name and the internal flag are refreshed in place by every hub
+		// scan (Program.UpdateMetadata), so both are read through the
+		// accessors that take the program's own lock — reading the fields
+		// races the refresh, and a string header read mid-replacement is
+		// not a stale name but a corrupt one.
+		internal := p.Internal()
+		if internal && !include {
 			continue
 		}
 		active, observed := p.Active()
 		e := map[string]any{
 			"id":          p.ID,
-			"name":        p.Name,
+			"name":        p.LegacyName(),
 			"description": p.Description,
-			"is_internal": p.IsInternal,
+			"is_internal": internal,
 		}
 		if observed {
 			e["active"] = active
@@ -540,7 +546,10 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 	out := make([]map[string]any, 0, len(sysvars))
 	for _, s := range sysvars {
 		e := map[string]any{
-			"name":        s.Name,
+			// Renaming a system variable on the CCU rewrites the name in
+			// place on the live entry (Hub.RenameSysvar), so it is read
+			// through the data point's own lock.
+			"name":        s.LegacyName(),
 			"description": s.Description,
 			"unit":        s.Unit,
 			"value_type":  string(s.ValueType),
@@ -634,11 +643,13 @@ func (w *wsHubQuery) SysvarUsagePrograms(ctx context.Context, centralName, name 
 	for _, u := range usage {
 		e := map[string]any{"id": u.ID, "name": u.Name, "active": u.Active}
 		if p, ok := h.Program(u.ID); ok {
-			if p.Name != "" {
-				e["name"] = p.Name
+			// Both fields are rewritten in place by the hub scan; read them
+			// through the locked accessors, as the REST plane does.
+			if n := p.LegacyName(); n != "" {
+				e["name"] = n
 			}
 			e["unique_id"] = p.CanonicalUniqueID(serial)
-			e["is_internal"] = p.IsInternal
+			e["is_internal"] = p.Internal()
 			if a, observed := p.Active(); observed {
 				e["active"] = a
 			}

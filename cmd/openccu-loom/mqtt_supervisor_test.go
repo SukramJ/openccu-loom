@@ -508,3 +508,55 @@ func TestSupervisorSwapDuringShutdownStopsTheOrphanedSubscribers(t *testing.T) {
 			live, built.Load(), stopped.Load())
 	}
 }
+
+// instantConnector is a broker adapter whose connect always succeeds
+// immediately, so a lifecycle can be driven without a socket.
+type instantConnector struct{}
+
+func (instantConnector) Connect(context.Context) error { return nil }
+
+func (instantConnector) Disconnect(context.Context) error { return nil }
+
+// TestSupervisorRegistersEachConnectHookExactlyOnce pins the registration of
+// the connect callbacks against the window between publishing a stack and
+// handing it those callbacks.
+//
+// Start and Swap publish s.current first and call announceConnected after, and
+// announceConnected forwards the whole callback list to the new lifecycle. A
+// callback registered in between is in that list AND sees a published stack,
+// so registering it on the spot as well makes it fire twice on every later
+// reconnect: the initial raw-plane snapshot is republished twice and the hub
+// publisher is re-Started twice per broker drop. The boot goroutine registers
+// hooks while the connect-retry goroutine may be running a Swap, so the window
+// is reachable in production.
+func TestSupervisorRegistersEachConnectHookExactlyOnce(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	s := newSup(t)
+	lifecycle := mqtt.NewLifecycle(mqtt.DefaultLifecycle(), instantConnector{})
+	sw := &mqttSwap{lifecycle: lifecycle}
+
+	// The published-but-not-yet-announced state Start and Swap pass through.
+	s.mu.Lock()
+	s.current = sw
+	s.mu.Unlock()
+
+	var fired atomic.Int64
+	s.OnConnect(func(context.Context) { fired.Add(1) })
+	s.announceConnected(ctx, sw)
+	if got := fired.Load(); got != 1 {
+		t.Fatalf("connect hook fired %d times for the connect the stack already performed, want 1", got)
+	}
+
+	// One reconnect: every callback the lifecycle holds runs once.
+	if err := lifecycle.Start(ctx); err != nil {
+		t.Fatalf("lifecycle.Start: %v", err)
+	}
+	t.Cleanup(func() { _ = lifecycle.Stop(context.Background()) })
+	if got := fired.Load(); got != 2 {
+		t.Errorf("connect hook fired %d times over one announce plus one connect, want 2; "+
+			"a hook registered while the stack was published but not yet announced is registered twice", got)
+	}
+}

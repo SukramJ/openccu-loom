@@ -98,12 +98,21 @@ func (a *matterFabricRevokerAdapter) RevokeFabric(ctx context.Context, fabricInd
 	}
 	// Read before delete: the operational advertisement is keyed by the
 	// fabric's compressed ID + node ID, and the row is the only place that
-	// knows them.
-	rec, recErr := a.store.GetFabric(ctx, fabricIndex)
+	// knows them. A failed read is therefore a failed revoke, not a revoke
+	// without the mDNS half: deleting the row first and skipping the withdraw
+	// on a transient store error (a concurrent write holding the table) leaves
+	// the unpaired controller's operational `_matter._tcp` instance advertised
+	// until the daemon restarts, while every surface reports the fabric gone.
+	// The operator can retry a revoke that failed; they cannot retry one that
+	// answered 204.
+	rec, err := a.store.GetFabric(ctx, fabricIndex)
+	if err != nil {
+		return err
+	}
 	if err := a.store.RemoveFabric(ctx, fabricIndex); err != nil {
 		return err
 	}
-	if recErr == nil && a.withdraw != nil {
+	if a.withdraw != nil {
 		a.withdraw(ctx, rec.CompressedID, rec.NodeID)
 	}
 	if a.teardown != nil {

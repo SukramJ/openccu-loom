@@ -64,6 +64,10 @@ type SecurityMQTTPublisher struct {
 
 	mu      sync.Mutex
 	started bool
+	// reported records that the domain has published at least one event,
+	// which is the only signal that separates "this installation has no
+	// classes or zones" from "the domain has not built its index yet".
+	reported bool
 	// knownClasses / knownZones track what carries retained discovery
 	// right now, so a class that loses its last source or a zone that is
 	// deleted gets retracted rather than lingering.
@@ -135,6 +139,7 @@ func (p *SecurityMQTTPublisher) Stop() {
 		return
 	}
 	p.started = false
+	p.reported = false
 	unsubs := p.unsubs
 	p.unsubs = nil
 	p.mu.Unlock()
@@ -210,13 +215,46 @@ func (p *SecurityMQTTPublisher) enqueue(m securityMsg) {
 	}
 }
 
+// markDomainReported records that the domain has spoken on its bus.
+//
+// The publisher starts before the domain does and reconciles once on its
+// own, against whatever the source reports at that moment — which is a
+// placeholder, not the installation. The domain announces its state as
+// the last step of its own start, after it has built the classification
+// index, so the first event of any kind is the boundary between the two.
+// [SecurityMQTTPublisher.declareEntities] needs that boundary to tell an
+// installation that has no classes or zones from one whose index has not
+// been built yet.
+func (p *SecurityMQTTPublisher) markDomainReported() {
+	p.mu.Lock()
+	p.reported = true
+	p.mu.Unlock()
+}
+
+// domainReported reports whether the domain has published at least one
+// event since this publisher started.
+func (p *SecurityMQTTPublisher) domainReported() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.reported
+}
+
 // --- bus handlers (run on the domain goroutine — enqueue only) ---
 
-func (p *SecurityMQTTPublisher) onStateChanged(hmevent.SecurityStateChangedEvent) { p.reconcile() }
+func (p *SecurityMQTTPublisher) onStateChanged(hmevent.SecurityStateChangedEvent) {
+	p.markDomainReported()
+	p.reconcile()
+}
 
-func (p *SecurityMQTTPublisher) onClassChanged(hmevent.SecurityClassChangedEvent) { p.reconcile() }
+func (p *SecurityMQTTPublisher) onClassChanged(hmevent.SecurityClassChangedEvent) {
+	p.markDomainReported()
+	p.reconcile()
+}
 
-func (p *SecurityMQTTPublisher) onZoneChanged(hmevent.SecurityZoneChangedEvent) { p.reconcile() }
+func (p *SecurityMQTTPublisher) onZoneChanged(hmevent.SecurityZoneChangedEvent) {
+	p.markDomainReported()
+	p.reconcile()
+}
 
 // onFaultChanged republishes the retained half.
 //
@@ -236,6 +274,7 @@ func (p *SecurityMQTTPublisher) onZoneChanged(hmevent.SecurityZoneChangedEvent) 
 // It also removes an acknowledgement announcing itself as `raised`,
 // which is what a consumer's automation would act on a second time.
 func (p *SecurityMQTTPublisher) onFaultChanged(hmevent.SecurityFaultChangedEvent) {
+	p.markDomainReported()
 	p.reconcile()
 }
 
@@ -248,6 +287,7 @@ func (p *SecurityMQTTPublisher) onFaultChanged(hmevent.SecurityFaultChangedEvent
 // kept out of last_alarm, which would leave it readable on a screen an
 // attacker could reach long afterwards.
 func (p *SecurityMQTTPublisher) onNotification(e hmevent.SecurityNotificationEvent) {
+	p.markDomainReported()
 	body, err := json.Marshal(securityNotificationPayload(e))
 	if err != nil {
 		return

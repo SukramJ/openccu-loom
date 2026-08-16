@@ -1426,7 +1426,8 @@ func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (
 	//   VerifyOrExit(IsOperationalNodeId(caseAdminSubject) || IsCASEAuthTag(caseAdminSubject),
 	//                nocResponse = kInvalidAdminSubject)
 	// Operational Node IDs: 0x0000_0000_0000_0001 .. 0xFFFF_FFEF_FFFF_FFFF.
-	// CASE Auth Tag (CAT): 0xFFFF_FFFD_0000_0000 .. 0xFFFF_FFFD_FFFF_FFFF.
+	// CASE Auth Tag (CAT): 0xFFFF_FFFD_0000_0000 .. 0xFFFF_FFFD_FFFF_FFFF
+	// with a non-zero version in the low 16 bits.
 	// Reserved / group / temporary-local ranges must be rejected to
 	// prevent anonymous subjects gaining Administer privilege in the ACL.
 	// Rejecting here rather than after AddFabric keeps the fabric table,
@@ -1434,7 +1435,17 @@ func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (
 	// the store on a subject the bridge is going to refuse anyway — a
 	// retry in the same fail-safe window would otherwise hit
 	// fabricAlreadyInstalled and answer FabricConflict.
-	if !isOperationalNodeID(req.CaseAdminSubject) && !isCASEAuthTag(req.CaseAdminSubject) {
+	//
+	// The predicate is deliberately the ACL's own [aclIsValidCASESubject]
+	// and not chip's looser IsCASEAuthTag: the default ACL entry written
+	// below carries this subject, and chip reaches the same rejection one
+	// step later, when that entry fails AccessControl::Entry validation
+	// (chip src/access/AccessControl.cpp:76-88 IsValidCaseNodeId →
+	// GetCASEAuthTagVersion != 0, enforced at :736). A version-0 CAT
+	// accepted here would be persisted as an Administer entry that no
+	// controller can ever rewrite, because every round-trip of the ACL
+	// attribute rejects it.
+	if !aclIsValidCASESubject(req.CaseAdminSubject) {
 		return NOCResponse{StatusCode: NOCStatusInvalidAdminSubject, DebugText: "CaseAdminSubject is not a valid operational node ID or CASE auth tag"}, nil
 	}
 	// TableFull-Guard before persisting (matter.js
@@ -2054,31 +2065,6 @@ func (o *OperationalCredentials) revertAddNOC(ctx context.Context, fabricIndex u
 	_ = o.store.ReplaceACL(ctx, fabricIndex, nil)
 	_ = o.store.RemoveGroupKeysByFabric(ctx, fabricIndex)
 	_ = o.store.RemoveFabric(ctx, fabricIndex)
-}
-
-// isOperationalNodeID reports whether id is in the Operational Node ID range.
-// Mirrors chip src/lib/core/NodeId.h:59 kMaxOperationalNodeId and matter.js
-// packages/types/src/datatype/NodeId.ts:27-28 (OPERATIONAL_NODE_MIN/MAX):
-//
-//	id >= 0x0000_0000_0000_0001 && id <= 0xFFFF_FFEF_FFFF_FFFF
-//
-// Value 0 (kUndefinedNodeId) and everything above the bound — CAT
-// (0xFFFF_FFFD..), Temporary-Local (0xFFFF_FFFE..) and Group
-// (0xFFFF_FFFF_FFFF_FF00..) node IDs — are excluded. The byte-transposed
-// bound 0xFFFF_FFFF_FFFF_FFEF would admit that whole reserved range;
-// see the same warning on [aclIsValidCASESubject].
-func isOperationalNodeID(id uint64) bool {
-	return id >= 0x0000_0000_0000_0001 && id <= 0xFFFF_FFEF_FFFF_FFFF
-}
-
-// isCASEAuthTag reports whether id is a CASE Auth Tag (CAT) node-id encoding.
-// Mirrors chip src/lib/core/NodeId.h IsCASEAuthTag predicate:
-//
-//	(id >> 32) == 0xFFFF_FFFD
-//
-// The lower 32 bits encode the CAT value + version.
-func isCASEAuthTag(id uint64) bool {
-	return (id >> 32) == 0xFFFF_FFFD
 }
 
 // opcredsInvalidCommandErr is returned by VID-Verification commands when

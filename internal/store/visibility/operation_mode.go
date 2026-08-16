@@ -4,6 +4,7 @@
 package visibility
 
 import (
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -247,6 +248,7 @@ func ApplyUnIgnoredMarks(dev *device.Device, decider *ParameterDecider) {
 	if dev == nil || decider == nil {
 		return
 	}
+	withdrawn := false
 	for _, ch := range dev.Channels() {
 		for _, dp := range ch.DataPoints() {
 			m, ok := dp.(unIgnoredMarker)
@@ -263,7 +265,21 @@ func ApplyUnIgnoredMarks(dev *device.Device, decider *ParameterDecider) {
 			}
 			m.ClearUnIgnored()
 			reapplyValuesSuppression(dev, ch, dp, decider)
+			withdrawn = true
 		}
+	}
+	if withdrawn {
+		// The fourth pass that honours the mark is device-scoped, so it
+		// cannot run per data point: on a device that carries a custom
+		// data point every VALUES parameter without a forced usage is
+		// suppressed, and un-ignored ones are skipped. A parameter that
+		// was visible only because it carried the mark therefore keeps
+		// `usage=data_point` on REST, MQTT and the SPA until the daemon
+		// restarts unless that pass runs again here.
+		//
+		// Idempotent and cheap: it re-derives the same verdict for every
+		// data point whose mark did not change.
+		custom.SuppressUndefinedGenericDataPoints(dev)
 	}
 }
 

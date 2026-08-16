@@ -215,24 +215,37 @@ func hasPersistedToken(ctx context.Context, sqTokens *sqlitestore.TokenStore) bo
 	return n > 0
 }
 
-// warnOnDormantOnboarding logs once at boot when the operator has closed the
-// first-run surface on a daemon that cannot authenticate anyone. The lockout
-// is the point of `bootstrap.allow_first_run_setup: false`, but from the SPA
-// it is indistinguishable from a broken login — the log record is the only
-// place that can name the cause and the way out.
+// warnOnDormantOnboarding logs once at boot when nobody can log into this
+// daemon. Two states produce that, and from the SPA both are indistinguishable
+// from a broken login — the log record is the only place that can name the
+// cause and the way out.
+//
+// The first is the deliberate lockout: `bootstrap.allow_first_run_setup: false`
+// on a daemon with no authentication source at all. The second is an API token
+// as the only credential while `north.rest.auth.bearer_enabled` is false — the
+// token then resolves nobody, and onboarding stays closed on purpose, because a
+// configured credential must never re-open anonymous admin creation.
 func warnOnDormantOnboarding(ctx context.Context, cfg *config.Config, sqUsers *sqlitestore.UserStore, sqTokens *sqlitestore.TokenStore, sqCentrals *sqlitestore.CentralsStore, logger *slog.Logger) {
-	if cfg.Bootstrap.FirstRunSetupAllowed() || sqUsers == nil {
+	if sqUsers == nil {
 		return
 	}
 	n, err := sqUsers.Count(ctx)
 	if err != nil {
 		return
 	}
-	if !noAuthSourceConfigured(cfg, authSources{
+	sources := configuredAuthSources(cfg, authSources{
 		localUsers:      n,
 		persistedTokens: hasPersistedToken(ctx, sqTokens),
 		hasCentral:      hasConfiguredCentral(ctx, cfg, sqCentrals),
-	}) {
+	})
+	if len(sources) == 1 && sources[0] == authSourceAPIToken && !cfg.North.REST.Auth.BearerAuthEnabled() {
+		logger.Warn("auth.scheme.dormant",
+			slog.String("reason", "an API token is the only configured credential and north.rest.auth.bearer_enabled is false"),
+			slog.String("effect", "the token authenticates nobody, and onboarding stays closed because a configured credential must not open anonymous admin creation"),
+			slog.String("remedy", "set north.rest.auth.bearer_enabled: true in the config file (or seed a local admin) and restart"))
+		return
+	}
+	if cfg.Bootstrap.FirstRunSetupAllowed() || len(sources) > 0 {
 		return
 	}
 	logger.Warn("setup.onboarding.dormant",
@@ -316,32 +329,55 @@ type authSources struct {
 // while still reporting "first run", which leaves the unauthenticated
 // POST /api/v1/setup open for anyone on the network to mint an admin.
 //
-// A credential only counts while the scheme that resolves it is on. Tokens
-// reach the middleware exclusively through the Bearer scheme — [gatedAuthMiddleware]
-// hands it a nil token store when `bearer_enabled` is false — so with the
-// scheme off a stored token authenticates nobody. Counting it anyway closed
-// the onboarding wizard AND silenced [warnOnDormantOnboarding] on a daemon
-// whose users table is empty (fresh volume, restored DB), leaving no way in
-// at all. Local users keep counting regardless of `basic_enabled`: SPA session
-// login resolves them without the header scheme.
+// A configured credential counts even when the scheme that resolves it is
+// currently off. Tokens reach the middleware exclusively through the Bearer
+// scheme — [gatedAuthMiddleware] hands it a nil token store when
+// `bearer_enabled` is false — so with the scheme off a stored token
+// authenticates nobody, and that state does need to be diagnosable. It must
+// not be answered by opening anonymous admin creation: an operator who holds
+// API tokens has credentials, and re-enabling their scheme is a config edit,
+// while POST /api/v1/setup is reachable by anyone who can reach the listener.
+// [warnOnDormantOnboarding] names the state in the log instead. Local users
+// likewise count regardless of `basic_enabled`: SPA session login resolves
+// them without the header scheme.
 func noAuthSourceConfigured(cfg *config.Config, src authSources) bool {
-	bearer := cfg.North.REST.Auth.BearerAuthEnabled()
-	switch {
-	case src.localUsers > 0:
-		return false // a persisted local admin exists
-	case bearer && src.persistedTokens:
-		return false // a persisted API token authenticates as its role
-	case len(cfg.North.REST.Auth.Users) > 0:
-		return false // a YAML-pinned local user exists
-	case bearer && len(cfg.North.REST.Auth.Tokens) > 0:
-		return false // a YAML-pinned bearer token (seeded into the store on upgrade)
-	case ccuAuthEnabled(cfg.North.REST.Auth.CCU) && src.hasCentral:
-		return false // CCU-delegated login is available (ADR 0043)
-	case cfg.North.REST.Auth.OIDC.Enabled:
-		return false // OIDC SSO is available
-	default:
-		return true
+	return len(configuredAuthSources(cfg, src)) == 0
+}
+
+// The credential sources, named as the boot log names them.
+const (
+	authSourceLocalUser = "local-user"
+	authSourceAPIToken  = "api-token"
+	authSourceCCU       = "ccu"
+	authSourceOIDC      = "oidc"
+)
+
+// configuredAuthSources lists every credential source the operator has
+// configured. It is the single enumeration of them: [noAuthSourceConfigured]
+// asks whether the list is empty, and [warnOnDormantOnboarding] asks whether
+// the only entry is one whose scheme is currently switched off. Splitting the
+// two questions across two lists is how one of them would start missing a
+// credential again.
+func configuredAuthSources(cfg *config.Config, src authSources) []string {
+	sources := make([]string, 0, 4)
+	// A persisted local admin, or a YAML-pinned local user.
+	if src.localUsers > 0 || len(cfg.North.REST.Auth.Users) > 0 {
+		sources = append(sources, authSourceLocalUser)
 	}
+	// A persisted API token, or a YAML-pinned one (seeded into the store on
+	// upgrade).
+	if src.persistedTokens || len(cfg.North.REST.Auth.Tokens) > 0 {
+		sources = append(sources, authSourceAPIToken)
+	}
+	// CCU-delegated login authenticates against a CCU's user database, so it
+	// only counts once a central exists (ADR 0043).
+	if ccuAuthEnabled(cfg.North.REST.Auth.CCU) && src.hasCentral {
+		sources = append(sources, authSourceCCU)
+	}
+	if cfg.North.REST.Auth.OIDC.Enabled {
+		sources = append(sources, authSourceOIDC)
+	}
+	return sources
 }
 
 // awaitShutdown blocks until ctx is cancelled, then runs the graceful

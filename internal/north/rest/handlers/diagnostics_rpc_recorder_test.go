@@ -329,3 +329,54 @@ func TestStartRPCRecording_AuditEntryNamesTheOperator(t *testing.T) {
 		t.Fatalf("audit user=%q, want alice", entries[0].User)
 	}
 }
+
+// TestRPCRecordingAuditActionsAreStable pins the dotted action strings the
+// recorder lifecycle writes. They are what the audit store already holds,
+// so renaming one silently orphans every existing row.
+func TestRPCRecordingAuditActionsAreStable(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		serve  func(svc handlers.RPCRecorderService, rec audit.Recorder) http.Handler
+		method string
+		want   audit.Action
+	}{
+		{
+			name: "start",
+			serve: func(svc handlers.RPCRecorderService, rec audit.Recorder) http.Handler {
+				return handlers.StartRPCRecording(svc, rec)
+			},
+			method: http.MethodPost,
+			want:   audit.Action("diagnostics.rpc_recording_start"),
+		},
+		{
+			name: "stop",
+			serve: func(svc handlers.RPCRecorderService, rec audit.Recorder) http.Handler {
+				return handlers.StopRPCRecording(svc, rec)
+			},
+			method: http.MethodDelete,
+			want:   audit.Action("diagnostics.rpc_recording_stop"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rec := audit.NewBuffer(10)
+			req := httptest.NewRequest(tc.method, "/api/v1/diagnostics/rpc-recording",
+				strings.NewReader(`{"centrals":["ccu01"]}`))
+			w := httptest.NewRecorder()
+			tc.serve(&fakeRPCRecorderService{}, rec).ServeHTTP(w, req)
+
+			entries := rec.List(10)
+			if len(entries) != 1 {
+				t.Fatalf("audit entries=%d, want 1", len(entries))
+			}
+			if entries[0].Action != tc.want {
+				t.Fatalf("audit action=%q, want %q", entries[0].Action, tc.want)
+			}
+			if entries[0].Note != "centrals=ccu01" {
+				t.Fatalf("audit note=%q, want centrals=ccu01", entries[0].Note)
+			}
+		})
+	}
+}

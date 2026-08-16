@@ -140,7 +140,7 @@ func (s *Sysvar) Config() payload.ConfigPayload {
 	}
 	return &payload.SysvarConfig{
 		EnabledDefault: s.EnabledDefault,
-		Writable:       s.Writer != nil,
+		Writable:       s.Writable(),
 	}
 }
 

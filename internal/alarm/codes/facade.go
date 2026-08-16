@@ -93,14 +93,29 @@ type Deps struct {
 }
 
 // Facade authenticates alarm codes and projects the parsed code rows
-// for hardware-intent routing. It implements engine.CodeValidator.
+// for hardware-intent routing. It implements engine.CodeValidator and
+// engine.DuressMatcher.
 type Facade struct {
 	store   Store
 	journal engine.Journal
 	clk     clock.Clock
 	log     *slog.Logger
 	limiter *rateLimiter
+	// probes bounds the work MatchDuress does per source. It is a
+	// separate ledger from limiter on purpose: a duress probe must
+	// never move the code plane's lockout, and a locked-out code plane
+	// must never mute the covert channel.
+	probes *rateLimiter
 }
+
+// The engine resolves the duress matcher by interface assertion on the
+// validator it was wired with, so a facade that stopped satisfying the
+// port would silently lose duress detection on the no-op verbs rather
+// than fail to compile.
+var (
+	_ engine.CodeValidator = (*Facade)(nil)
+	_ engine.DuressMatcher = (*Facade)(nil)
+)
 
 // New constructs a Facade over deps.
 func New(deps Deps) *Facade {
@@ -118,6 +133,7 @@ func New(deps Deps) *Facade {
 		clk:     clk,
 		log:     logger,
 		limiter: newRateLimiter(),
+		probes:  newRateLimiter(),
 	}
 }
 
@@ -189,6 +205,62 @@ func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string
 
 	f.recordInvalid(ctx, zoneID, source, "invalid_code", opSource)
 	return "", false, engine.ErrInvalidCode
+}
+
+// MatchDuress implements engine.DuressMatcher: it reports whether code
+// is an enabled duress code for zoneID that is permitted to run verb,
+// and does nothing observable otherwise. No fault is journaled, the
+// code plane's lockout ledger is untouched, and no result other than
+// the boolean leaves the facade — the engine calls it only where the
+// verb is a no-op whatever the code is, so a wrong code must not be
+// able to lock the plane out or fill the journal.
+//
+// The work it does per source is still bounded, through its own probe
+// ledger: verifying an argon2id hash is deliberately expensive, and
+// this path is reachable by anyone who can publish a disarm. Only
+// duress rows are ever verified, so an installation without a duress
+// code does no hashing here at all.
+func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source string) (identity string, duress bool) {
+	if code == "" {
+		return "", false
+	}
+	now := f.clk.Now()
+	candidates, err := f.pinCandidates(ctx, zoneID, now.UnixMilli())
+	if err != nil {
+		f.log.Error("alarm duress match: load codes failed", "zone", zoneID, "error", err)
+		return "", false
+	}
+	var duressCandidates []pinCandidate
+	for _, c := range candidates {
+		if c.duress && permits(c.perms, verb) {
+			duressCandidates = append(duressCandidates, c)
+		}
+	}
+	if len(duressCandidates) == 0 {
+		return "", false
+	}
+	// Operator sources are exempt for the same reason they are exempt
+	// from the code-plane limiter: the session is already the
+	// authenticated factor, and throttling it would suppress duress
+	// detection exactly when it matters.
+	limited := !engine.IsOperatorSource(source)
+	if limited {
+		if allowed, _ := f.probes.allow(source, now); !allowed {
+			return "", false
+		}
+	}
+	for _, c := range duressCandidates {
+		if VerifyPIN(c.hash, code) {
+			if limited {
+				f.probes.recordSuccess(source)
+			}
+			return c.name, true
+		}
+	}
+	if limited {
+		f.probes.recordFailure(source, now)
+	}
+	return "", false
 }
 
 // HasPINCodes reports whether any enabled, in-validity pin code applies

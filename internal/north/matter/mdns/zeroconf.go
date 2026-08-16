@@ -65,6 +65,12 @@ type Zeroconf struct {
 	// (MdnsAdvertisement.ts broadcast() vs expire()).
 	published map[string]string
 	closed    bool
+	// afterSnapshot, when non-nil, runs between the snapshot of the
+	// active keys and the re-announce in [Zeroconf.republishAll]. It is
+	// the seam a test uses to land a Withdraw exactly in that gap —
+	// the interleaving that decides whether a re-announce can resurrect
+	// a record. Nil in production; set before any concurrent use.
+	afterSnapshot func()
 }
 
 // NewZeroconf returns a multicast advertiser backed by zeroconf. The
@@ -465,22 +471,40 @@ func (z *Zeroconf) StartReannounceLoop(ctx context.Context, interval time.Durati
 // Publish docstring), so the wire effect is a Probe + Announce burst
 // for every active service.
 func (z *Zeroconf) republishAll(_ context.Context) {
+	keys := z.snapshotKeys()
+	if z.afterSnapshot != nil {
+		z.afterSnapshot()
+	}
+	z.republishKeys(keys)
+}
+
+// snapshotKeys returns the keys of the currently active services, or
+// nil once the advertiser is closed.
+func (z *Zeroconf) snapshotKeys() []string {
 	z.mu.RLock()
+	defer z.mu.RUnlock()
 	if z.closed {
-		z.mu.RUnlock()
-		return
+		return nil
 	}
 	keys := make([]string, 0, len(z.items))
 	for k := range z.items {
 		keys = append(keys, k)
 	}
-	z.mu.RUnlock()
-	// Re-read each entry under the write lock and republish it in the
-	// same critical section. Republishing from a snapshot taken earlier
-	// resurrects a record that was withdrawn in the meantime — Publish
-	// re-registers it and nothing withdraws it a second time, so a
-	// removed fabric would keep answering commissioner browses until the
-	// daemon restarts.
+	return keys
+}
+
+// republishKeys re-announces the named services. The Service value is
+// re-read from z.items under the write lock and republished in the same
+// critical section, so a key that was withdrawn between the snapshot and
+// its turn here is skipped.
+//
+// Republishing from a snapshot of Service VALUES instead resurrects a
+// record that was withdrawn in the meantime — Publish re-registers it and
+// nothing withdraws it a second time, so a removed fabric would keep
+// answering commissioner browses until the daemon restarts. Splitting the
+// snapshot from the republish keeps that gap explicit (and testable)
+// rather than implicit in one long function.
+func (z *Zeroconf) republishKeys(keys []string) {
 	for _, k := range keys {
 		z.mu.Lock()
 		svc, ok := z.items[k]

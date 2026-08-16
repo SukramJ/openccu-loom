@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 49a7d643
-HEAD: 49a7d643
+Generated: 6c8ff468
+HEAD: 6c8ff468
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 29123 |
-| Reachable | 5085 |
-| Whitelisted | 21020 |
-| **Unreachable** | **3018** |
+| Total Exported | 29167 |
+| Reachable | 5087 |
+| Whitelisted | 21061 |
+| **Unreachable** | **3019** |
 
 ## Top-20 Packages by Dead Code
 
@@ -81,8 +81,8 @@ HEAD: 49a7d643
 | internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
-| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
-| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
+| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 111 |
+| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 111 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
@@ -120,7 +120,7 @@ HEAD: 49a7d643
 | internal/addonupdate | 0 | 18 | 18 |
 | internal/alarm | 0 | 25 | 0 |
 | internal/alarm/codes | 0 | 13 | 0 |
-| internal/alarm/engine | 0 | 29 | 6 |
+| internal/alarm/engine | 0 | 30 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
 | internal/alarm/outputs | 0 | 26 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |

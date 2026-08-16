@@ -96,6 +96,15 @@ type mqttSwap struct {
 	bridge       *mqtt.Bridge
 	cancelHealth func() // nil when no probe attached
 	stopSubs     func() // nil when no subscribers attached
+	// hooksAttached is set by [mqttSupervisor.announceConnected] once it has
+	// forwarded the supervisor's connect callbacks to this generation's
+	// lifecycle. Until then [mqttSupervisor.OnConnect] must NOT forward a
+	// newly registered callback itself: the swap is published before the
+	// callbacks are forwarded, so a callback landing in that window would be
+	// registered by both paths and then fire twice on every reconnect —
+	// republishing the initial snapshot and re-Starting the hub publisher one
+	// extra time per drop. Written and read under mqttSupervisor.mu.
+	hooksAttached bool
 }
 
 // SubscriberBuilder is the caller-supplied closure the supervisor
@@ -169,8 +178,13 @@ func (s *mqttSupervisor) OnConnect(fn func(context.Context)) {
 	s.mu.Lock()
 	s.onConnect = append(s.onConnect, fn)
 	cur := s.current
+	// Forward only to a generation that has already been handed the callback
+	// list; one that has not will pick fn up from s.onConnect itself. Both
+	// facts are read under the same lock announceConnected takes, so fn is
+	// registered exactly once whichever side of that window it lands on.
+	forward := cur != nil && cur.lifecycle != nil && cur.hooksAttached
 	s.mu.Unlock()
-	if cur != nil && cur.lifecycle != nil {
+	if forward {
 		cur.lifecycle.OnConnect(fn)
 	}
 }
@@ -590,6 +604,9 @@ func (s *mqttSupervisor) announceConnected(ctx context.Context, sw *mqttSwap) {
 	s.mu.Lock()
 	hooks := make([]func(context.Context), len(s.onConnect))
 	copy(hooks, s.onConnect)
+	// From here on [mqttSupervisor.OnConnect] forwards to this generation
+	// itself; everything registered before this point is in hooks.
+	sw.hooksAttached = true
 	s.mu.Unlock()
 	for _, fn := range hooks {
 		sw.lifecycle.OnConnect(fn)

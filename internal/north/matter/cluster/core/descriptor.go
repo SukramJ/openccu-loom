@@ -101,7 +101,14 @@ func (d *Descriptor) MatterRead(attrID uint32) (any, bool) {
 		// cluster set (Bug K).
 		d.mu.RLock()
 		provider := d.serverListProvider
-		static := append([]uint32(nil), d.serverList...)
+		var static []uint32
+		if provider == nil {
+			// Copy only on the fallback path: every assembled endpoint
+			// installs a provider, so materialising the static list first
+			// would allocate on every read Apple Home drives post-CASE and
+			// then throw the copy away.
+			static = append(static, d.serverList...)
+		}
 		d.mu.RUnlock()
 		if provider != nil {
 			return provider(), true
@@ -119,8 +126,13 @@ func (d *Descriptor) MatterRead(attrID uint32) (any, bool) {
 	case descriptorAttrPartsList:
 		d.mu.RLock()
 		provider := d.partsListProvider
-		out := make([]uint16, 0, len(d.partsList))
-		out = append(out, d.partsList...)
+		var out []uint16
+		if provider == nil {
+			// Same as ServerList above: the copy is only needed when no
+			// provider answers the read.
+			out = make([]uint16, 0, len(d.partsList))
+			out = append(out, d.partsList...)
+		}
 		d.mu.RUnlock()
 		if provider != nil {
 			return provider(), true

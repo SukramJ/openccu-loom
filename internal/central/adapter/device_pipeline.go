@@ -1770,9 +1770,9 @@ func (p *DevicePipeline) hydrateParamset(
 		// the persistence sink, fills the warm-boot descriptor cache)
 		// instead of only for per-channel reloads. Put copies during
 		// normalisation, so the map used for data-point construction
-		// below stays untouched; the registry's secondary index has no
-		// production reader, so entity naming
-		// (Channel.IsParameterInMultipleChannels) is unaffected.
+		// below stays untouched. Entity naming reads the device model
+		// rather than the registry (Channel.IsParameterInMultipleChannels
+		// walks the parent device's channels), so it is unaffected.
 		reg.Put(hmtypes.ParseWireInterfaceID(interfaceID), ch.Address, key, paramset)
 	}
 

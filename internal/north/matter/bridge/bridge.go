@@ -299,6 +299,25 @@ type Bridge struct {
 	// when the cap fires. See [Bridge.recordPaseFailure].
 	paseFailures atomic.Int32
 
+	// paseLockoutUntil / paseLockoutStreak implement the timed half of
+	// the brute-force cap: reaching [paseMaxErrors] refuses PASE until
+	// paseLockoutUntil, and each further lockout without an operator
+	// intervention doubles the cooldown up to [paseLockoutMaxCooldown].
+	// The cooldown is what makes the refusal recoverable — an
+	// uncommissioned bridge keeps its configured-passcode acceptor armed
+	// with no window open, so a permanent latch would let any LAN host
+	// disable pairing for the daemon's lifetime. Guarded by b.mu; a zero
+	// paseLockoutUntil means "never locked out". See
+	// [Bridge.recordPaseFailure] and [Bridge.paseLockedOut].
+	paseLockoutUntil  time.Time
+	paseLockoutStreak int
+
+	// nowFn is the wall-clock seam for the PASE lockout bookkeeping.
+	// Nil (the production value) means [time.Now]; tests replace it
+	// before any traffic is dispatched so the cooldown can be crossed
+	// without sleeping. See [Bridge.now].
+	nowFn func() time.Time
+
 	// paseInFlightExchange / paseInFlightSince implement the
 	// single-active-PASE invariant (Matter §4.13.1): while one PASE
 	// handshake is in progress the bridge SHALL NOT accept another —

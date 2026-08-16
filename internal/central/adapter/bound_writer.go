@@ -102,7 +102,18 @@ func (a *channelWriterAdapter) SetValue(
 	return a.bw.SetValue(ctx, channelAddress, parameter, value, priority)
 }
 
-// PutParamset routes through the backend's PutParamset directly.
+// PutParamset routes through the bound writer when that carries the
+// paramset capability, and only falls back to the raw backend when it
+// does not.
+//
+// The routing matters because every data point of a channel writes
+// through this adapter (it is what [device.Channel.Writer] wraps, and
+// that wrapper is the writer the data points capture). Going to the
+// backend directly would take the whole write-policy layer off the
+// data-point path — the (central, interface) resolution with its
+// missing-backend guard, the in-flight staging that lets a concurrent
+// callback echo find a reader, and the write options — while the
+// identical write issued through Channel.Set still had it.
 func (a *channelWriterAdapter) PutParamset(
 	ctx context.Context,
 	channelAddress string,
@@ -110,6 +121,12 @@ func (a *channelWriterAdapter) PutParamset(
 	values map[string]any,
 	priority hmenum.CommandPriority,
 ) error {
+	if pw, ok := a.bw.(generic.ParamsetWriter); ok {
+		return pw.PutParamset(ctx, channelAddress, paramsetKey, values, priority)
+	}
+	if a.backend == nil {
+		return ErrNoWriter
+	}
 	return a.backend.PutParamset(ctx, channelAddress, paramsetKey, values, priority, hmenum.CommandRxModeUnset)
 }
 

@@ -320,16 +320,18 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 	case mrp.SCOpcodePBKDFParamRequest, mrp.SCOpcodePake1, mrp.SCOpcodePake3:
 		if b.paseLockedOut() {
 			// Brute-force cap reached for the currently installed
-			// acceptor: stop processing PASE entirely until a new
-			// commissioning window installs a fresh one. matter.js
-			// aborts commissioning at PASE_COMMISSIONING_MAX_ERRORS
-			// (PaseServer.ts:95-110) and its PaseServer dies with the
-			// window; ours can outlive every window, so the refusal has
-			// to live on the receive path.
+			// acceptor: stop processing PASE entirely until the lockout
+			// cooldown expires or a new commissioning window installs a
+			// fresh acceptor. matter.js aborts commissioning at
+			// PASE_COMMISSIONING_MAX_ERRORS (PaseServer.ts:95-110) and its
+			// PaseServer dies with the window; ours can outlive every
+			// window, so the refusal has to live on the receive path — and
+			// has to expire, or the refusal itself becomes the denial of
+			// service.
 			b.logger.Warn("matter.rx.sc.pase_locked_out",
 				slog.String("src", srcString(src)),
 				slog.Int("opcode", int(proto.Opcode)),
-				slog.String("hint", "too many failed pairing attempts; open a new pairing window to re-enable PASE"))
+				slog.String("hint", "too many failed pairing attempts; PASE re-enables after the lockout period, or immediately when a new pairing window is opened"))
 			return nil
 		}
 		return b.dispatchPase(src, requestHdr, proto, payload)
@@ -493,6 +495,40 @@ const maxUnsecuredWindows = 256
 // is not locked out for the rest of the window.
 const pasePairingTimeout = 60 * time.Second
 
+// paseLockoutCooldown is how long PASE stays refused after the first time
+// [paseMaxErrors] is reached, and [paseLockoutMaxCooldown] is the ceiling
+// the doubling backoff runs into.
+//
+// matter.js and chip both end the refusal with the commissioning window:
+// matter.js throws MaximumPasePairingErrorsReachedError and lets the
+// PaseServer die with the window (PaseServer.ts:106-110), chip calls
+// CommissioningWindowManager::Cleanup once mFailedCommissioningAttempts
+// reaches kMaxFailedCommissioningAttempts
+// (CommissioningWindowManager.cpp:160-192). Neither can lock pairing out
+// beyond the window, because neither keeps a passcode acceptor armed once
+// the window closes. This bridge does: an uncommissioned daemon answers
+// PASE from its configured passcode with no window open, so the refusal
+// needs its own expiry or 20 malformed Pake1s from any LAN host would
+// disable pairing until the operator restarts the daemon.
+//
+// 20 guesses per 15 min (80/h) leaves the ~10^8 valid-passcode space out
+// of reach while keeping an operator who mistyped the code waiting
+// minutes, not hours — and opening a pairing window clears the lockout
+// immediately.
+const (
+	paseLockoutCooldown    = 15 * time.Minute
+	paseLockoutMaxCooldown = 4 * time.Hour
+)
+
+// now reads the wall clock through [Bridge.nowFn] so the PASE lockout
+// cooldown is testable without sleeping. Production leaves nowFn nil.
+func (b *Bridge) now() time.Time {
+	if b.nowFn != nil {
+		return b.nowFn()
+	}
+	return time.Now()
+}
+
 // claimPaseInFlight attempts to claim the single-active-PASE slot for
 // exchangeID. Returns true when the claim succeeds: the slot was idle,
 // expired, or already owned by the SAME exchange (PBKDFParamRequest
@@ -523,57 +559,98 @@ func (b *Bridge) releasePaseInFlight(exchangeID uint16) {
 
 // recordPaseFailure increments the PASE failure counter and, when it
 // reaches [paseMaxErrors], revokes the open commissioning window and
-// resets the counter. Mirrors matter.js PaseServer.ts:95-110 (count →
-// MaximumPasePairingErrorsReachedError) + DeviceCommissioner.ts:70-72
+// engages a timed PASE lockout. Mirrors matter.js PaseServer.ts:95-110
+// (count → MaximumPasePairingErrorsReachedError) + DeviceCommissioner.ts:70-72
 // (tooManyPaseErrors → endCommissioning). Called from the handlePase
 // error path for genuine pairing failures only (not missing-handler or
 // state-replay retransmits).
 func (b *Bridge) recordPaseFailure() {
 	if b.paseFailures.Add(1) != paseMaxErrors {
-		// Below the cap, or already past it. The counter is deliberately
-		// NOT reset at the cap: it is the latch [Bridge.paseLockedOut]
-		// reads, and only a fresh acceptor clears it (see
-		// [Bridge.resetPaseFailures]). Resetting handed an attacker an
-		// endless series of paseMaxErrors batches, because the
-		// configured-passcode acceptor stays armed for the daemon's
-		// lifetime and revoking a window that is not open is a no-op.
+		// Below the cap, or a straggler arriving between the cap and the
+		// lockout taking effect. Only the transition to exactly
+		// paseMaxErrors engages the lockout, so the revoke + diagnostic
+		// fire once per batch.
 		return
 	}
+	cooldown := b.engagePaseLockout()
 	win := b.CommissioningWindow()
 	b.logger.Warn("matter.rx.sc.pase_bruteforce",
 		slog.Int("max_errors", paseMaxErrors),
-		slog.String("hint", "too many PASE pairing failures; revoking commissioning window"))
+		slog.Duration("lockout", cooldown),
+		slog.String("hint", "too many PASE pairing failures; revoking commissioning window and refusing PASE for the lockout period"))
 	b.diagRing().Record(diagevent.Event{
 		Kind:     diagevent.KindPairing,
 		Severity: diagevent.SeverityError,
-		Message: "Pairing was locked after too many failed attempts. Open a new " +
-			"pairing window and re-check the pairing code.",
-		Detail: map[string]string{"max_errors": strconv.Itoa(paseMaxErrors)},
+		Message: "Pairing was locked after too many failed attempts. It unlocks " +
+			"again after the lockout period; opening a new pairing window " +
+			"unlocks it immediately.",
+		Detail: map[string]string{
+			"max_errors":       strconv.Itoa(paseMaxErrors),
+			"lockout_duration": cooldown.String(),
+		},
 	})
 	if win != nil {
 		_ = win.RevokeWindow(context.Background())
 	}
 }
 
-// paseLockedOut reports whether the PASE brute-force cap has been reached
-// since the current acceptor was installed. Revoking the commissioning
-// window is not enough on its own: an uncommissioned bridge keeps a
-// long-lived configured-passcode acceptor armed with no window open, so
-// without this latch the guessing continues after the cap. Cleared by
-// [Bridge.resetPaseFailures], which every acceptor install runs — opening
-// a new pairing window is the operator-visible way back.
-func (b *Bridge) paseLockedOut() bool {
-	return b.paseFailures.Load() >= paseMaxErrors
+// engagePaseLockout refuses PASE for a bounded cooldown and returns the
+// cooldown that was applied. Consecutive lockouts without an operator
+// intervention double it, up to [paseLockoutMaxCooldown], so a host that
+// keeps guessing pays an ever-growing price while a genuine operator
+// waits the base cooldown at worst.
+//
+// The failure counter starts over: from here on the cooldown — not the
+// counter — is what keeps PASE closed, and the next budget must be a
+// full [paseMaxErrors] once it expires.
+func (b *Bridge) engagePaseLockout() time.Duration {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.paseLockoutStreak++
+	cooldown := paseLockoutCooldown
+	for range b.paseLockoutStreak - 1 {
+		if cooldown >= paseLockoutMaxCooldown {
+			break
+		}
+		cooldown *= 2
+	}
+	cooldown = min(cooldown, paseLockoutMaxCooldown)
+	b.paseLockoutUntil = b.now().Add(cooldown)
+	b.paseFailures.Store(0)
+	return cooldown
 }
 
-// resetPaseFailures clears the per-window PASE state — the failure counter
-// and the unsecured duplicate-detection windows. Called when a fresh PASE
-// acceptor is installed ([Bridge.AttachPaseHandler] /
+// paseLockedOut reports whether PASE is currently refused because the
+// brute-force cap fired. Revoking the commissioning window is not enough
+// on its own: an uncommissioned bridge keeps a long-lived
+// configured-passcode acceptor armed with no window open, so without this
+// refusal the guessing continues after the cap.
+//
+// The refusal expires by itself after the cooldown
+// ([Bridge.engagePaseLockout]) — a permanent latch would hand any LAN
+// host a pairing kill switch for the daemon's lifetime. Installing a
+// fresh acceptor (opening a pairing window) clears it immediately, which
+// is the operator-visible way back.
+func (b *Bridge) paseLockedOut() bool {
+	b.mu.RLock()
+	until := b.paseLockoutUntil
+	b.mu.RUnlock()
+	return !until.IsZero() && b.now().Before(until)
+}
+
+// resetPaseFailures clears the per-window PASE state — the failure counter,
+// any active lockout and its backoff streak, and the unsecured
+// duplicate-detection windows. Called when a fresh PASE acceptor is
+// installed ([Bridge.AttachPaseHandler] /
 // [Bridge.AttachPaseHandlerProvider]) — a commissioning-window boundary —
-// so each window gets its own [paseMaxErrors] budget and a clean set of
-// per-source dedup windows.
+// so each window gets its own [paseMaxErrors] budget, an unlocked PASE
+// path and a clean set of per-source dedup windows.
 func (b *Bridge) resetPaseFailures() {
 	b.paseFailures.Store(0)
+	b.mu.Lock()
+	b.paseLockoutUntil = time.Time{}
+	b.paseLockoutStreak = 0
+	b.mu.Unlock()
 	b.unsecuredWindows.Clear()
 	b.unsecuredWindowCount.Store(0)
 }

@@ -136,3 +136,41 @@ func TestCallbackMetricsResolveBINRPCInterfaceIDs(t *testing.T) {
 		}
 	}
 }
+
+// TestCallbackMetricsChargeTheLongerOfTwoPrefixNames pins the routing for the
+// one fleet shape that makes the id reduction ambiguous: a central whose name
+// is a dash-prefix of another's.
+//
+// The registry is walked in ascending name order, so `ccu` is inspected first
+// and the canonical id of `ccu-2` starts with `ccu-` as well. Every CUxD
+// callback of the second CCU was therefore counted against the first, and the
+// second one's rpc_server diagnostics stayed at zero forever — with both
+// numbers looking entirely plausible.
+func TestCallbackMetricsChargeTheLongerOfTwoPrefixNames(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu", "ccu-2")
+	cfg := config.Default()
+	cfg.Centrals = []config.CentralConfig{
+		{Name: "ccu", Host: "127.0.0.1"},
+		{Name: "ccu-2", Host: "127.0.0.1"},
+	}
+	seedCentralHealthAndMetrics(reg, cfg, nil, slog.New(slog.DiscardHandler))
+	m := newCallbackMetrics(reg)
+
+	for _, tc := range []struct {
+		name     string
+		routeKey string
+		want     string
+	}{
+		{"the longer name owns its own id", "loom-ccu-2-CUxD", "ccu-2"},
+		{"the shorter name still owns its own id", "loom-ccu-CUxD", "ccu"},
+	} {
+		got, obs := m.observerFor(tc.routeKey)
+		if got != tc.want {
+			t.Errorf("%s: routeKey %q resolved to %q, want %q", tc.name, tc.routeKey, got, tc.want)
+		}
+		if obs == nil {
+			t.Errorf("%s: routeKey %q resolved to no observer; the callback is not counted anywhere", tc.name, tc.routeKey)
+		}
+	}
+}

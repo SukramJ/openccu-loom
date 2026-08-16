@@ -365,15 +365,21 @@
     void loadValuesCacheStats();
   });
 
-  // Poll RPC recording status every 5 s while any recording is active.
-  // Only a running recording changes on its own — its entry count grows
-  // and its window expires; with none running the list moves solely
-  // through the actions on this page, which refresh it themselves.
+  // Poll RPC recording status at two rates. A running recording changes on
+  // its own — its entry count grows and its window expires — so it is
+  // followed closely. An idle list still changes without this page: a
+  // recording started from the CLI, the REST API or a second browser
+  // session has to become visible here too, otherwise the operator starts
+  // a second one on top of it. The slow background poll finds that case
+  // without paying the fast rate for it.
+  const RPC_POLL_ACTIVE_MS = 5000;
+  const RPC_POLL_IDLE_MS = 60000;
+
   $effect(() => {
-    if (!anyRpcActive) return;
+    const period = anyRpcActive ? RPC_POLL_ACTIVE_MS : RPC_POLL_IDLE_MS;
     const timer = setInterval(() => {
       void refreshRpcRecordings();
-    }, 5000);
+    }, period);
     return () => clearInterval(timer);
   });
 

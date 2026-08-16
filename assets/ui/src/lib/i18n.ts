@@ -1325,6 +1325,8 @@ const EN: Catalog = {
   "settings.save_failed": "Save failed: {err}",
   "settings.reset": "Reset to default",
   "settings.section_unset": "Currently using built-in defaults.",
+  "settings.values_admin_only":
+    "Only administrators can see and change the current configuration values. The settings are listed here without them.",
   "config.source.bootstrap": "From the bootstrap config file",
   "config.source.db": "Saved via the UI",
   "config.source.env": "Overridden by environment variable",
@@ -5424,6 +5426,8 @@ const DE: Catalog = {
   "settings.save_failed": "Speichern fehlgeschlagen: {err}",
   "settings.reset": "Auf Standard zurücksetzen",
   "settings.section_unset": "Aktuell aktive eingebaute Standardwerte.",
+  "settings.values_admin_only":
+    "Nur Administratoren können die aktuellen Konfigurationswerte sehen und ändern. Die Einstellungen sind hier ohne sie aufgeführt.",
   "config.source.bootstrap": "Aus der Bootstrap-Konfigurationsdatei",
   "config.source.db": "Über die Oberfläche gespeichert",
   "config.source.env": "Durch Umgebungsvariable überschrieben",

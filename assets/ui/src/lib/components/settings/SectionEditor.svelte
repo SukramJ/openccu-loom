@@ -192,6 +192,11 @@
   let saving = $state(false);
   let deleting = $state(false);
   let usingDefaults = $state(false);
+  // The stored section values are admin-only (they carry hosts, broker URLs
+  // and callback ports). Without that role the field list still renders —
+  // labels, help texts and types — but with default values and without the
+  // action bar, which is more useful than an error over an empty panel.
+  let valuesRestricted = $state(false);
   let loadError = $state<string | null>(null);
 
   // humanize turns a snake_case identifier into a readable label.
@@ -494,6 +499,7 @@
     loading = true;
     loadError = null;
     usingDefaults = false;
+    valuesRestricted = false;
     try {
       const data = await api.getConfigSection<Record<string, unknown>>(section);
       const init: Record<string, unknown> = {};
@@ -504,8 +510,13 @@
       original = deepClone(init);
       working = deepClone(init);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
-        usingDefaults = true;
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
+        // 404: the section was never persisted, so the daemon runs on
+        // defaults. 403: the identity may not read the stored values —
+        // both render the field list seeded with defaults, and the notes
+        // below tell the two apart.
+        usingDefaults = err.status === 404;
+        valuesRestricted = err.status === 403;
         const init: Record<string, unknown> = {};
         for (const f of sectionFields) {
           setDeep(init, relativePath(f.path), parseValue(undefined, f));
@@ -820,6 +831,11 @@
         {t("settings.section_unset")}
       </p>
     {/if}
+    {#if valuesRestricted}
+      <p class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-[color-mix(in_srgb,var(--color-amber-900)_20%,transparent)] dark:text-amber-300">
+        {t("settings.values_admin_only")}
+      </p>
+    {/if}
 
     {#if hasSubgroups}
       <div class="space-y-5">
@@ -848,38 +864,43 @@
     {/if}
 
     <!-- Action bar sticks to the bottom of the viewport so Save stays
-         reachable on long sections without scrolling back up. -->
-    <div class="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white py-3 dark:border-slate-800 dark:bg-slate-900">
-      <Button
-        type="button"
-        variant="default"
-        size="sm"
-        disabled={!isDirty || saving || Object.keys(jsonErrors).length > 0}
-        onclick={() => void save()}
-      >
-        {saving ? t("common.saving") : t("common.save")}
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={!isDirty || saving}
-        onclick={resetWorking}
-      >
-        {t("common.reset")}
-      </Button>
-      {#if !usingDefaults}
+         reachable on long sections without scrolling back up. It is
+         omitted entirely when the values are admin-gated — every write
+         would be rejected, and offering defaults for Save would overwrite
+         values the identity cannot even see. -->
+    {#if !valuesRestricted}
+      <div class="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white py-3 dark:border-slate-800 dark:bg-slate-900">
         <Button
           type="button"
-          variant="ghost"
+          variant="default"
           size="sm"
-          disabled={deleting}
-          onclick={() => void resetSection()}
-          class="ml-auto text-red-600 hover:text-red-700 dark:text-red-400"
+          disabled={!isDirty || saving || Object.keys(jsonErrors).length > 0}
+          onclick={() => void save()}
         >
-          {t("settings.reset")}
+          {saving ? t("common.saving") : t("common.save")}
         </Button>
-      {/if}
-    </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!isDirty || saving}
+          onclick={resetWorking}
+        >
+          {t("common.reset")}
+        </Button>
+        {#if !usingDefaults}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={deleting}
+            onclick={() => void resetSection()}
+            class="ml-auto text-red-600 hover:text-red-700 dark:text-red-400"
+          >
+            {t("settings.reset")}
+          </Button>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </div>

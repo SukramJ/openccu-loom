@@ -6,6 +6,7 @@ package visibility_test
 import (
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
@@ -518,5 +519,68 @@ func TestApplyUnIgnoredMarksLeavesUnrelatedDataPointsVisible(t *testing.T) {
 	}
 	if dp.Usage() != hmenum.DataPointUsageDataPoint {
 		t.Errorf("STATE Usage()=%v, want DataPoint — the pass must not suppress unrelated parameters", dp.Usage())
+	}
+}
+
+// stubCustomDataPoint is the minimum a channel needs to count as
+// carrying a custom data point: the suppression pass only asks whether
+// one is attached, never what it does.
+type stubCustomDataPoint struct{ key hmtypes.DataPointKey }
+
+func (s stubCustomDataPoint) DataPointKey() hmtypes.DataPointKey { return s.key }
+
+// TestApplyUnIgnoredMarksReHidesOnACustomDPDevice is the custom-DP half
+// of the operator's round trip.
+//
+// On a device that carries a custom data point every VALUES parameter
+// without a forced usage is suppressed, and un-ignored ones are skipped —
+// which makes that pass the fourth consumer of the mark. Withdrawing the
+// mark without re-running it leaves the parameter surfacing as
+// `usage=data_point` on REST, MQTT and the SPA although the rule that
+// promoted it is gone, until the daemon restarts.
+func TestApplyUnIgnoredMarksReHidesOnACustomDPDevice(t *testing.T) {
+	t.Parallel()
+
+	const param = hmenum.Parameter("LEVEL_2")
+
+	decider := visibility.NewParameterDecider(nil)
+	decider.LoadUnIgnore([]visibility.UnIgnoreEntry{{Parameter: param, IsSimple: true}})
+
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "TEST200",
+		Model:       "HmIP-BROLL",
+	})
+	ch := dev.AddChannel("TEST200:4", 4, "SHUTTER_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	dp := putValuesBoolDP(ch, param)
+	ch.SetCustomDataPoint(stubCustomDataPoint{key: hmtypes.DataPointKey{
+		InterfaceID:    "HmIP-RF",
+		ChannelAddress: ch.Address,
+		ParamsetKey:    hmenum.ParamsetKeyValues,
+		Parameter:      "COVER",
+	}})
+
+	// Boot order: the un-ignore mark first, then the custom-DP
+	// suppression pass, which skips the marked parameter.
+	visibility.ApplyUnIgnoredMarks(dev, decider)
+	custom.SuppressUndefinedGenericDataPoints(dev)
+
+	if !dp.IsUnIgnored() {
+		t.Fatal("un-ignored parameter must carry the mark after the first pass")
+	}
+	if dp.Usage() != hmenum.DataPointUsageDataPoint {
+		t.Fatalf("un-ignored parameter Usage()=%v, want DataPoint", dp.Usage())
+	}
+
+	// The operator deletes the pattern; only the un-ignore pass re-runs.
+	decider.LoadUnIgnore(nil)
+	visibility.ApplyUnIgnoredMarks(dev, decider)
+
+	if dp.IsUnIgnored() {
+		t.Error("mark survived the removal of the rule that set it")
+	}
+	if dp.Usage() == hmenum.DataPointUsageDataPoint {
+		t.Error("the parameter still surfaces as a data point although only the un-ignore rule kept it past the custom-DP suppression pass")
 	}
 }

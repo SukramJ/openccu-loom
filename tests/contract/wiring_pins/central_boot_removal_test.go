@@ -61,6 +61,24 @@ func TestPin_BootCentralRemovalMirrorsEveryAdoptHook(t *testing.T) {
 		}
 	}
 
+	// The boot path may run only the detach half. A central the boot path
+	// registered was attached by the domain's own wiring, so re-running the
+	// attach to reach a paired unwire fires that attach's side effects on a
+	// CCU that is being deleted: the alarm service reconciles every zone of
+	// every central (adopting or stopping sirens on the CCUs that stay), the
+	// Matter hook kicks a topology reassemble, the security domain rebuilds
+	// its index.
+	if fn, ok := funcs["bootHandle"]; ok {
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			sel, isSel := n.(*ast.SelectorExpr)
+			if isSel && sel.Sel.Name == "attach" {
+				t.Error("bootHandle reaches the hooks' attach half; removing a boot-registered central " +
+					"must run the detach half alone, or deleting one CCU reconciles the alarm zones of the others")
+			}
+			return true
+		})
+	}
+
 	// Every hook read outside the shared list is a hook the boot path cannot
 	// see. Assignments in the set* installers are the one legitimate touch.
 	for name, fn := range funcs {

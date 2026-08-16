@@ -20,10 +20,11 @@ import (
 //
 // CentralName and InterfaceID are intentionally NOT filled here — at the
 // outer middleware position chi has not yet resolved URL parameters, so
-// neither value is available. Routes whose path names the central attach
-// [CentralScope] instead, which fills the scope once routing has run;
-// handlers that resolve it some other way (a session, a body field) call
-// [SetCentralName] directly.
+// neither value is available. Two paths fill the central scope instead:
+// routes whose path names the central attach [CentralScope], which reads
+// the URL parameter once routing has run, and a daemon wired to a single
+// central captures the name at boot through [ReqContextWithCentral].
+// A request that matches neither is logged without a central scope.
 //
 // The middleware MUST be mounted before [Logger] but after [RequestID] so
 // that the request id is already populated when the context is constructed.
@@ -35,11 +36,10 @@ func ReqContext(next http.Handler) http.Handler {
 // [reqctx.RequestContext] with [centralName] pre-filled. Used by the
 // daemon when the REST router is wired to a single central — the
 // closure captures the central scope at boot time, so every downstream
-// slog record carries `central_name` automatically without each
-// handler needing to call [SetCentralName].
+// slog record carries `central_name` automatically.
 //
-// Pass an empty string to fall back to the URL-parameter / handler-
-// driven model (handlers call [SetCentralName] dynamically).
+// Pass an empty string to fall back to the URL-parameter model, where
+// [CentralScope] fills the scope per route once chi has matched.
 func ReqContextWithCentral(centralName string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,9 +76,12 @@ func traceFromHeader(header string) (traceID, spanID, parentSpanID string) {
 }
 
 // SetCentralName replaces (or installs) the [reqctx.RequestContext] in
-// r.Context() with CentralName set. Called from handlers that have
-// already resolved the central from a URL parameter or session, so
-// downstream slog records carry the central scope.
+// r.Context() with CentralName set, so downstream slog records carry the
+// central scope. [CentralFromURL] is its caller once the URL parameter is
+// resolved; it stays exported because it is the only way to install the
+// scope on a request that reached the handler some other way, and it
+// rebuilds the whole request context when [ReqContext] never ran rather
+// than dropping the scope silently.
 func SetCentralName(r *http.Request, name string) *http.Request {
 	rc, ok := reqctx.FromContext(r.Context())
 	if !ok {

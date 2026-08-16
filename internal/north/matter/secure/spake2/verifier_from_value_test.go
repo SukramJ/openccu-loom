@@ -140,10 +140,10 @@ func TestNewVerifierFromValue_RejectsMalformedInput(t *testing.T) {
 
 // TestNewVerifierFromValue_RejectsDegenerateW0 pins the guard against a
 // commissioner-supplied verifier whose w0 is zero modulo the group
-// order. Accepting it makes w0*M the point at infinity, which
-// crypto/elliptic represents as (0, 0) and panics on in the Pake1
-// arithmetic — a single malformed OpenCommissioningWindow would then
-// kill every inbound Pake1 for the life of the window.
+// order. Accepting it makes w0*M the point at infinity — (0, 0) in
+// crypto/elliptic's encoding — and its negation (0, P) is an encoding
+// Add rejects with a panic, so a single malformed OpenCommissioningWindow
+// would kill every inbound Pake1 for the life of the window.
 func TestNewVerifierFromValue_RejectsDegenerateW0(t *testing.T) {
 	t.Parallel()
 	salt := testSalt()
@@ -165,7 +165,10 @@ func TestNewVerifierFromValue_RejectsDegenerateW0(t *testing.T) {
 
 // TestProcessPake1_RejectsIdentityDifference pins the second half of the
 // same guard: a prover that sends exactly X = w0*M makes X - w0*M the
-// identity, which the following ScalarMult would panic on.
+// identity. crypto/elliptic does not object to that — ScalarMult and
+// Marshal both accept (0, 0) — so without the abort the handshake would
+// continue with Z and V pinned to a value the peer picked, and the
+// transcript would no longer bind the passcode (RFC 9383 §3.3).
 func TestProcessPake1_RejectsIdentityDifference(t *testing.T) {
 	t.Parallel()
 	salt := testSalt()
@@ -181,5 +184,38 @@ func TestProcessPake1_RejectsIdentityDifference(t *testing.T) {
 
 	if _, err := v.ProcessPake1(pA); !errors.Is(err, ErrInvalidPoint) {
 		t.Fatalf("ProcessPake1(w0*M): err = %v, want ErrInvalidPoint", err)
+	}
+}
+
+// TestProcessPake2_RejectsIdentityDifference is the prover-side mirror of
+// TestProcessPake1_RejectsIdentityDifference: a verifier that answers with
+// Y = w0*N makes Y - w0*N the identity, and both Z and V collapse to a
+// peer-chosen constant. The guard has to exist on both roles — the
+// arithmetic is symmetric, so a guard on one side only leaves the other
+// deriving a session key from a degenerate transcript.
+func TestProcessPake2_RejectsIdentityDifference(t *testing.T) {
+	t.Parallel()
+	salt := testSalt()
+	p, err := NewProver(testPasscode, salt, testIterations, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProver: %v", err)
+	}
+	if _, err := p.GeneratePake1(); err != nil {
+		t.Fatalf("GeneratePake1: %v", err)
+	}
+
+	// Y = w0*N — a valid curve point, so unmarshalAndValidate accepts it.
+	w0, _, err := PBKDF(testPasscode, salt, testIterations)
+	if err != nil {
+		t.Fatalf("PBKDF: %v", err)
+	}
+	nx, ny := curve().ScalarMult(nPoint.X, nPoint.Y, w0.Bytes()) //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
+	yBytes := elliptic.Marshal(curve(), nx, ny)                  //nolint:staticcheck // SA1019: matches curve() usage elsewhere in this package
+
+	if _, err := p.ProcessPake2(yBytes, make([]byte, ConfirmTagSize)); !errors.Is(err, ErrInvalidPoint) {
+		t.Fatalf("ProcessPake2(w0*N): err = %v, want ErrInvalidPoint", err)
+	}
+	if secret := p.SharedSecret(); secret != nil {
+		t.Errorf("SharedSecret = %x after a rejected Pake2, want nil", secret)
 	}
 }

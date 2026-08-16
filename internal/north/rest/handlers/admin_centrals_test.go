@@ -584,6 +584,7 @@ func TestCentralRowsAreNarrowedForNonAdmins(t *testing.T) {
 	svc.centrals["home"] = sqlite.CentralRow{
 		Name:                  "home",
 		Host:                  "192.168.1.10",
+		Serial:                "3014F711A0001F58A99",
 		Port:                  2010,
 		JSONRPCPort:           80,
 		Username:              "Admin",
@@ -608,7 +609,7 @@ func TestCentralRowsAreNarrowedForNonAdmins(t *testing.T) {
 		if row.Name != "home" || !row.Enabled || len(row.Interfaces) != 1 {
 			t.Errorf("the fields the non-admin views read must survive: %+v", row)
 		}
-		if row.Host != "" || row.Username != "" || row.Port != 0 || row.JSONRPCPort != 0 {
+		if row.Host != "" || row.Username != "" || row.Port != 0 || row.JSONRPCPort != 0 || row.Serial != "" {
 			t.Errorf("viewer must not learn where the CCU lives: %+v", row)
 		}
 		if row.TLS || row.TLSInsecureSkipVerify || row.PasswordEnv != "" {
@@ -626,7 +627,7 @@ func TestCentralRowsAreNarrowedForNonAdmins(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
-		if row.Host != "192.168.1.10" || row.Username != "Admin" || row.Port != 2010 {
+		if row.Host != "192.168.1.10" || row.Username != "Admin" || row.Port != 2010 || row.Serial == "" {
 			t.Errorf("admin must keep the full row: %+v", row)
 		}
 		if row.PasswordPlain != maskSentinel {

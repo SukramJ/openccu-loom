@@ -91,14 +91,15 @@ type centralOrchestrator struct {
 	// and adopt alike.
 	matterHook matterCentralHook
 	// alarmHook subscribes an adopted central onto the alarm service's
-	// event routing. Set via [centralOrchestrator.setAlarmCentralHook];
-	// nil while the alarm engine is disabled.
-	alarmHook func(u *central.Unit) (unwire func())
+	// event routing and detaches it again by name. Set via
+	// [centralOrchestrator.setAlarmCentralHook]; zero while the alarm
+	// engine is disabled.
+	alarmHook perCentralHook
 	// securityHook subscribes an adopted central onto the Security &
-	// Safety domain. Its unwire half also drops the central from the
+	// Safety domain. Its detach half also drops the central from the
 	// aggregate, without which a removed CCU leaves ghost sources
 	// pinning their hazard class permanently active.
-	securityHook func(u *central.Unit) (unwire func())
+	securityHook perCentralHook
 	// eventSourceHook feeds an adopted central's model event sources from
 	// its device triggers. Set via
 	// [centralOrchestrator.setEventSourceCentralHook]. Without it the
@@ -171,28 +172,50 @@ func (o *centralOrchestrator) attachCentralHooks(unit *central.Unit) centralHook
 		h.detachBridge = func() { bridge.DetachCentral(name) }
 	}
 	for _, hook := range o.perCentralHooks() {
-		if unwire := hook(unit); unwire != nil {
+		if hook.attach == nil {
+			continue
+		}
+		if unwire := hook.attach(unit); unwire != nil {
 			h.unwires = append(h.unwires, unwire)
 		}
 	}
 	return h
 }
 
-// perCentralHook is one domain's per-central attach: it subscribes the unit
-// and returns the teardown for what it attached, or nil when it attached
-// nothing.
-type perCentralHook func(u *central.Unit) (unwire func())
+// perCentralHook is one domain's per-central lifecycle pair.
+//
+// attach subscribes the unit and returns the teardown for what it attached,
+// or nil when it attached nothing. It runs only for a central this
+// orchestrator adopts at runtime.
+//
+// detach releases what the domain holds for a central by name, with no attach
+// in front of it. It is the only half a boot-registered central can be torn
+// down with: that central was attached by the domain's own boot wiring, which
+// kept the unwire to itself, and calling attach just to reach a paired unwire
+// would run the attach's side effects on a CCU that is being deleted — an
+// alarm reconcile across every zone of every central (adopting or stopping
+// sirens that belong to the CCUs that stay), a Matter topology reassemble, a
+// Security & Safety index rebuild.
+//
+// detach is nil for a domain whose per-central state is nothing but
+// subscriptions on the removed unit's own EventBus: [central.Unit.Stop] drops
+// those, and there is nothing left to release by name.
+type perCentralHook struct {
+	attach func(u *central.Unit) (unwire func())
+	detach func(name string)
+}
 
 // perCentralHooks returns every per-central domain hook the orchestrator
 // carries, in attach order.
 //
 // It is one list read by both lifecycle paths: [centralOrchestrator.attachCentralHooks]
-// keeps each unwire for the central it adopted, and [centralOrchestrator.bootHandle]
-// runs each hook and releases it again for a central this orchestrator never
-// adopted. A hook added here therefore reaches the boot path as well — which
-// is the half that was previously silent: a boot-configured CCU deleted at
-// runtime never reached the security domain's detach, so its sources stayed
-// in the hazard aggregate and its open faults survived every restart.
+// runs the attach half for the central it adopted and keeps the unwire, and
+// [centralOrchestrator.bootHandle] runs the detach half for a central this
+// orchestrator never adopted. A hook added here therefore reaches the boot
+// path as well — which is the half that was previously silent: a
+// boot-configured CCU deleted at runtime never reached the security domain's
+// detach, so its sources stayed in the hazard aggregate and its open faults
+// survived every restart.
 func (o *centralOrchestrator) perCentralHooks() []perCentralHook {
 	o.mu.Lock()
 	matterHook := o.matterHook
@@ -204,12 +227,18 @@ func (o *centralOrchestrator) perCentralHooks() []perCentralHook {
 
 	hooks := make([]perCentralHook, 0, 5)
 	add := func(hook perCentralHook) {
-		if hook != nil {
+		if hook.attach != nil || hook.detach != nil {
 			hooks = append(hooks, hook)
 		}
 	}
 
-	add(perCentralHook(matterHook))
+	// The Matter hook carries no detach half: everything it attaches is a
+	// subscription on the unit's own EventBus, and the readiness latch that
+	// outlives the unit rides a registry observer which clears itself when
+	// the central leaves the registry.
+	if matterHook != nil {
+		add(perCentralHook{attach: matterHook})
+	}
 	add(alarmHook)
 	// The security domain attaches after the alarm service so its index
 	// rebuild sees the enrollment the alarm service has already loaded.
@@ -221,17 +250,21 @@ func (o *centralOrchestrator) perCentralHooks() []perCentralHook {
 	// point at which the model exists.
 	add(securityHook)
 	// Feed the central's model event sources from its device triggers, so the
-	// first keypress it reports is recorded on the channel's event group.
-	add(eventSourceHook)
+	// first keypress it reports is recorded on the channel's event group. The
+	// feed holds nothing but the unit's own bus subscription, so it has no
+	// detach half either.
+	if eventSourceHook != nil {
+		add(perCentralHook{attach: eventSourceHook})
+	}
 	// Subscribe onto the hub-discovery ready pipeline so the serial-gated hub
 	// discovery (named central device + sysvars) publishes once the
 	// readiness-gated bring-up resolves the serial — the same path a boot-time
 	// central takes. Subscribing BEFORE AddCentral launches the bring-up makes
 	// the ready event a non-race.
 	if hubReadyTrigger != nil {
-		add(func(u *central.Unit) func() {
+		add(perCentralHook{attach: func(u *central.Unit) func() {
 			return subscribeHubReadyTrigger(u.EventBus, hubReadyTrigger)
-		})
+		}})
 	}
 	return hooks
 }
@@ -249,7 +282,7 @@ func (o *centralOrchestrator) setCentralSeed(seed func(u *central.Unit, primaryI
 
 // setAlarmCentralHook installs the per-central alarm wiring hook.
 // Nil-safe on both sides, mirroring setMatterCentralHook.
-func (o *centralOrchestrator) setAlarmCentralHook(hook func(u *central.Unit) (unwire func())) {
+func (o *centralOrchestrator) setAlarmCentralHook(hook perCentralHook) {
 	if o == nil {
 		return
 	}
@@ -260,7 +293,7 @@ func (o *centralOrchestrator) setAlarmCentralHook(hook func(u *central.Unit) (un
 
 // setSecurityCentralHook installs the per-central Security & Safety
 // wiring hook. Nil-safe on both sides, mirroring setAlarmCentralHook.
-func (o *centralOrchestrator) setSecurityCentralHook(hook func(u *central.Unit) (unwire func())) {
+func (o *centralOrchestrator) setSecurityCentralHook(hook perCentralHook) {
 	if o == nil {
 		return
 	}
@@ -577,17 +610,21 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 //
 // That last part cannot be a stored closure: each domain attached its
 // boot-time centrals in its own registry walk and kept the unwire to itself.
-// The hooks are attach/detach pairs keyed by central name, so running one and
-// releasing it in the same breath performs the domain's detach, and the
-// subscriptions the attach added are dropped by that same release together
-// with the boot-time ones the domain keys under the name.
+// It is reached through the detach half of [perCentralHook] instead, which
+// releases the domain's per-central state by name.
 //
-// Skipping it is not the harmless bookkeeping it looks like: subscriptions do
-// ride the unit's EventBus and Unit.Stop drops them, but the detach halves
-// carry state that lives OUTSIDE the unit — the security domain's hazard
-// aggregate and its fault ledger above all. Without them a deleted
-// boot-configured CCU kept reporting its smoke/water class as active on REST,
-// MQTT and the SPA, and its open faults came back on every restart.
+// Only the detach half runs here. Re-running a domain's attach to reach a
+// paired unwire would fire that attach's side effects on a CCU being deleted:
+// the alarm service reconciles every zone of every central (adopting or
+// stopping sirens that belong to the CCUs that stay), the Matter hook kicks a
+// topology reassemble, the security domain rebuilds its whole index.
+//
+// Skipping the detach is not the harmless bookkeeping it looks like:
+// subscriptions do ride the unit's EventBus and Unit.Stop drops them, but the
+// detach halves carry state that lives OUTSIDE the unit — the security
+// domain's hazard aggregate and its fault ledger above all. Without them a
+// deleted boot-configured CCU kept reporting its smoke/water class as active
+// on REST, MQTT and the SPA, and its open faults came back on every restart.
 func (o *centralOrchestrator) bootHandle(name string) *centralHandle {
 	unit, live := o.reg.Get(name)
 	if !live || unit == nil {
@@ -603,11 +640,10 @@ func (o *centralOrchestrator) bootHandle(name string) *centralHandle {
 		}
 	}
 	for _, hook := range o.perCentralHooks() {
-		h.unwires = append(h.unwires, func() {
-			if unwire := hook(unit); unwire != nil {
-				unwire()
-			}
-		})
+		if hook.detach == nil {
+			continue
+		}
+		h.unwires = append(h.unwires, func() { hook.detach(name) })
 	}
 	if bridge := o.sbDeps.bridge; bridge != nil {
 		h.detachBridge = func() { bridge.DetachCentral(name) }

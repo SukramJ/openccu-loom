@@ -302,14 +302,14 @@ func (s *SysvarDpSensor) SensorValue() (label string, observed bool) {
 func WrapSysvar(sv *Sysvar) HubDataPointer {
 	switch sv.ValueType {
 	case hmenum.HubValueTypeLogic, hmenum.HubValueTypeAlarm:
-		if sv.Writer != nil {
+		if sv.Writable() {
 			return &SysvarDpSwitch{Sysvar: sv}
 		}
 		return &SysvarDpBinarySensor{Sysvar: sv}
 	case hmenum.HubValueTypeString:
 		return &SysvarDpText{Sysvar: sv}
 	case hmenum.HubValueTypeList:
-		if sv.Writer != nil {
+		if sv.Writable() {
 			return &SysvarDpSelect{Sysvar: sv}
 		}
 		// Read-only list sysvar: use SysvarDpSensor for label transform.
@@ -321,7 +321,7 @@ func WrapSysvar(sv *Sysvar) HubDataPointer {
 		}
 		return sv
 	case hmenum.HubValueTypeFloat, hmenum.HubValueTypeInteger:
-		if sv.Writer != nil {
+		if sv.Writable() {
 			return &SysvarDpNumber{Sysvar: sv}
 		}
 		return sv

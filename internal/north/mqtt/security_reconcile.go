@@ -147,7 +147,7 @@ func (p *SecurityMQTTPublisher) declareEntities(snap security.Snapshot) {
 		// configs it cannot find in the declared set.
 		return
 	}
-	if len(snap.Classes) == 0 && len(snap.Zones) == 0 {
+	if len(snap.Classes) == 0 && len(snap.Zones) == 0 && !p.domainReported() {
 		// The publisher starts before the domain does, so its first
 		// reconcile runs against a snapshot taken while the index is
 		// still empty. That pass publishes the system entities and
@@ -157,9 +157,16 @@ func (p *SecurityMQTTPublisher) declareEntities(snap security.Snapshot) {
 		// takes those safety entities off the consumer until a later
 		// reconcile republishes them.
 		//
-		// An installation that genuinely has neither classes nor zones
-		// has no such configs to sweep either, so withholding the
-		// declaration costs it nothing.
+		// Emptiness alone cannot carry that gate, which is why the
+		// domain's own voice decides it: an installation whose last
+		// class or zone disappeared while the daemon was down has an
+		// empty snapshot AND retained configs from the previous boot,
+		// and gating on emptiness would leave those on the broker for
+		// good — the exact leftover the sweep exists to remove. The
+		// domain announces its state once it has built its index (see
+		// security.Service.Start), so any event of its own means the
+		// snapshot is the installation's truth rather than a pre-boot
+		// placeholder.
 		return
 	}
 	// The plane has now declared, so its retained configs are eligible

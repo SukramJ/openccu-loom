@@ -1,5 +1,34 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.61.0
+
+The follow-up to the 0.60.0 audit — a fresh full-codebase pass, three defect
+waves, and an adversarial review that reverted the regressions the fixes
+themselves introduced. What you are most likely to notice:
+
+- **Security.** Revoking an API token now closes the WebSocket sessions it
+  had opened; a channel locked against control writes is now honoured on
+  every path (including MQTT and the SPA tiles); HTTP Basic no longer
+  bypasses CSRF; a wrong alarm code aimed at an already-disarmed zone can no
+  longer lock out the code plane.
+- **Data integrity.** Importing a default (redacted) config export no longer
+  wipes your stored secrets and CCU passwords; `backup restore` clears the
+  stale write-ahead log so it cannot bleed into the restored database.
+- **Home Assistant discovery** no longer creates entities that stay
+  permanently unavailable — turning discovery on now brings up the state
+  plane those entities need, and the first-run wizard's MQTT step actually
+  enables the bridge.
+- **Alarm.** A disarmed zone with an open window no longer reports ready after
+  a restart, so it can't be armed with a contact standing open.
+- The Matter fabric list shows each controller's exact 16-digit node id
+  instead of a rounded number, and a CCU that cannot be reached now says
+  *why* (rejected credentials vs a network outage).
+
+Under the hood: the MQTT transport moves to `go-mqtt` v1.3.0 (flapping
+connections back off, keep-alive-0 disables pinging). Note for API clients:
+the north-bound contract version moves to 6.0.0 — no add-on behaviour
+changed, the spec now matches what the daemon already did.
+
 ## 0.60.0
 
 A maintenance release built from a full audit of the code base. Every one

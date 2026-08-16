@@ -55,6 +55,11 @@
   let changedFields = $state<string[]>([]);
   let schemaLoading = $state(true);
   let schemaError = $state<string | null>(null);
+  // The assembled config names every CCU host, the broker URL and the OIDC
+  // issuer, so reading it is admin-only. The schema is not — a viewer or
+  // operator still gets the field list, rendered without current values and
+  // with a note saying so, rather than an error banner over an empty page.
+  let valuesRestricted = $state(false);
 
   // System section state (carried over from read-only phase).
   let startupCaptureEnabled = $state(false);
@@ -68,13 +73,34 @@
   // shutdown, so the button stays disabled.
   let restartSupervised = $state(false);
 
+  // Degrades a 403 from an admin-gated read to `fallback` while letting
+  // every other failure propagate, so a real outage still reaches the
+  // ErrorState instead of showing up as a silently empty page.
+  function tolerateForbidden<T>(fallback: T): (err: unknown) => T {
+    return (err: unknown) => {
+      if (err instanceof ApiError && err.status === 403) {
+        valuesRestricted = true;
+        return fallback;
+      }
+      throw err;
+    };
+  }
+
   async function loadSchema() {
     schemaLoading = true;
     schemaError = null;
+    valuesRestricted = false;
     try {
       const [schema, effective, changes] = await Promise.all([
         api.getConfigSchema(),
-        api.getEffectiveConfig(),
+        api
+          .getEffectiveConfig()
+          .catch(
+            tolerateForbidden({
+              config: {} as Record<string, unknown>,
+              sources: {} as Record<string, ConfigFieldSource>,
+            }),
+          ),
         api.getConfigChanges().catch(() => ({ fields: [] as string[] })),
       ]);
       schemaFields = schema.fields;
@@ -377,6 +403,14 @@
 
   {#if schemaError}
     <ErrorState class="mb-4" message={schemaError} onRetry={() => void loadSchema()} />
+  {/if}
+
+  {#if valuesRestricted}
+    <p
+      class="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-[color-mix(in_srgb,var(--color-amber-900)_20%,transparent)] dark:text-amber-300"
+    >
+      {t("settings.values_admin_only")}
+    </p>
   {/if}
 
   {#snippet tabButton(tab: Tab, full: boolean)}

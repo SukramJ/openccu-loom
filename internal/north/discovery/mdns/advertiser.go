@@ -24,7 +24,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -159,20 +161,40 @@ func (n *Noop) Active() bool {
 	return n.started
 }
 
+// responder is the half of a live mDNS server the advertiser drives:
+// it publishes on construction and stops on Shutdown. *zeroconf.Server
+// satisfies it; tests substitute a fake so the failure paths can be
+// exercised without a multicast wire.
+type responder interface {
+	Shutdown()
+}
+
+// registrar publishes svc and returns the live responder. The advertiser
+// holds one so the register step is substitutable in tests.
+type registrar func(svc Service) (responder, error)
+
 // Multicast publishes the service over multicast DNS via
 // grandcat/zeroconf. Start registers the record on every
 // multicast-capable interface; Stop tears it down.
 type Multicast struct {
-	svc Service
+	svc      Service
+	register registrar
+	logger   *slog.Logger
 
 	mu     sync.Mutex
-	server *zeroconf.Server
+	server responder
+	// started records the operator's intent rather than the wire state.
+	// The two differ after a failed re-register: the daemon wants to be
+	// advertised, but nothing is on the wire right now. Keeping the
+	// intent lets the next UpdateTXT re-publish instead of reporting
+	// [ErrNotStarted] forever.
+	started bool
 }
 
 // NewMulticast returns a Multicast advertiser bound to svc. The
 // service is not published until Start is called.
 func NewMulticast(svc Service) *Multicast {
-	return &Multicast{svc: svc}
+	return &Multicast{svc: svc, register: registerZeroconf, logger: slog.Default()}
 }
 
 // Start registers the service on the local multicast wire. Safe
@@ -180,6 +202,9 @@ func NewMulticast(svc Service) *Multicast {
 // on re-entry; returns the underlying zeroconf error when the
 // register call fails (typical causes: port-already-bound on a
 // host with another mDNS responder hogging UDP 5353).
+// Start also re-publishes an advertiser whose record was lost by a failed
+// [Multicast.UpdateTXT] — that state reports no live server, so it is not
+// [ErrAlreadyStarted].
 func (m *Multicast) Start(_ context.Context) error {
 	if err := m.svc.Validate(); err != nil {
 		return err
@@ -194,12 +219,31 @@ func (m *Multicast) Start(_ context.Context) error {
 		return err
 	}
 	m.server = server
+	m.started = true
 	return nil
 }
 
-// registerLocked publishes m.svc and returns the new zeroconf server. The
+// registerLocked publishes m.svc and returns the new responder. The
 // caller holds m.mu.
-func (m *Multicast) registerLocked() (*zeroconf.Server, error) {
+func (m *Multicast) registerLocked() (responder, error) {
+	if m.register == nil {
+		return registerZeroconf(m.svc)
+	}
+	return m.register(m.svc)
+}
+
+// log returns the advertiser's logger, defaulting for a zero-value
+// Multicast that was not built through [NewMulticast].
+func (m *Multicast) log() *slog.Logger {
+	if m.logger == nil {
+		return slog.Default()
+	}
+	return m.logger
+}
+
+// registerZeroconf is the production [registrar]: it publishes svc on the
+// local multicast wire.
+func registerZeroconf(svc Service) (responder, error) {
 	// Advertise only routable LAN addresses in the A/AAAA records, but keep
 	// broadcasting on every multicast interface (ifaces=nil) so peers on a
 	// container bridge — e.g. Home Assistant Core on the `hassio` network —
@@ -213,13 +257,13 @@ func (m *Multicast) registerLocked() (*zeroconf.Server, error) {
 	)
 	if ips := routableAdvertiseIPs(); len(ips) > 0 {
 		server, err = zeroconf.RegisterProxy(
-			m.svc.resolvedInstanceName(),
+			svc.resolvedInstanceName(),
 			ServiceType,
 			Domain,
-			m.svc.Port,
-			m.proxyHost(),
+			svc.Port,
+			svc.proxyHost(),
 			ips,
-			m.svc.TXT,
+			svc.TXT,
 			nil, // nil → broadcast on all multicast interfaces
 		)
 	} else {
@@ -227,11 +271,11 @@ func (m *Multicast) registerLocked() (*zeroconf.Server, error) {
 		// interfaces, or enumeration failed) — fall back to library
 		// auto-detection so discovery still works rather than going silent.
 		server, err = zeroconf.Register(
-			m.svc.resolvedInstanceName(),
+			svc.resolvedInstanceName(),
 			ServiceType,
 			Domain,
-			m.svc.Port,
-			m.svc.TXT,
+			svc.Port,
+			svc.TXT,
 			nil,
 		)
 	}
@@ -244,13 +288,13 @@ func (m *Multicast) registerLocked() (*zeroconf.Server, error) {
 // proxyHost returns the host label for the SRV/A records. RegisterProxy
 // (unlike Register) requires a non-empty host, so fall back to the
 // resolved instance name when the OS hostname is unavailable.
-func (m *Multicast) proxyHost() string {
+func (s Service) proxyHost() string {
 	if h, err := os.Hostname(); err == nil {
 		if h = strings.TrimSuffix(h, ".local"); h != "" {
 			return h
 		}
 	}
-	return m.svc.resolvedInstanceName()
+	return s.resolvedInstanceName()
 }
 
 // UpdateTXT re-announces the TXT bundle by republishing the record: the old
@@ -263,19 +307,46 @@ func (m *Multicast) proxyHost() string {
 // but keeps every field the responder reads immutable for the lifetime of the
 // server it belongs to.
 //
-// A failed re-register leaves the advertiser stopped and returns the error;
-// the caller can retry via Start.
+// Republishing has one failure mode the in-place update did not: the new
+// register can fail (another responder holding UDP 5353, a transient bind
+// race) after the old record is already withdrawn, which would take the
+// daemon off the network for good. Three things keep that from being
+// terminal: the previous bundle is re-registered so the record comes back
+// with stale TXT rather than not at all, the failure is logged at warn level
+// here — the caller's own logging is not relied upon — and the advertiser
+// stays "started", so the next refresh (every hub-ready and every
+// reconnect-ready event fires one) publishes again instead of reporting
+// [ErrNotStarted] for the rest of the process.
 func (m *Multicast) UpdateTXT(txt []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.server == nil {
+	if !m.started {
 		return ErrNotStarted
 	}
-	m.server.Shutdown()
-	m.server = nil
+	prev := m.svc.TXT
+	if m.server != nil && slices.Equal(prev, txt) {
+		// Republishing costs a goodbye packet: every browser drops the
+		// service from its cache before the new announcement arrives. The
+		// refresh runs on every hub-ready and every reconnect-ready event,
+		// most of which carry the bundle that is already published, so an
+		// unchanged bundle must not move the record at all.
+		return nil
+	}
+	if m.server != nil {
+		m.server.Shutdown()
+		m.server = nil
+	}
 	m.svc.TXT = append([]string(nil), txt...)
 	server, err := m.registerLocked()
 	if err != nil {
+		m.svc.TXT = prev
+		restored, restoreErr := m.registerLocked()
+		if restoreErr == nil {
+			m.server = restored
+		}
+		m.log().Warn("mdns.txt_refresh_failed",
+			slog.String("err", err.Error()),
+			slog.Bool("record_restored", restoreErr == nil))
 		return err
 	}
 	m.server = server
@@ -286,6 +357,7 @@ func (m *Multicast) UpdateTXT(txt []string) error {
 func (m *Multicast) Stop() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.started = false
 	if m.server == nil {
 		return nil
 	}

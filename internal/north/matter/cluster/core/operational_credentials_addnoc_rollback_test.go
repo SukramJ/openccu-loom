@@ -228,6 +228,11 @@ func TestAddNOC_InvalidCaseAdminSubject_PersistsNothing(t *testing.T) {
 		"undefined":       0,
 		"group":           0xFFFF_FFFF_FFFF_FF01,
 		"temporary-local": 0xFFFF_FFFE_0000_0001,
+		// A CAT whose low 16 bits (the version) are zero. The ACL
+		// validator refuses it, so accepting it here would persist an
+		// Administer entry no controller can ever rewrite — every
+		// round-trip of the ACL attribute rejects the same subject.
+		"cat-version-zero": 0xFFFF_FFFD_0001_0000,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -288,5 +293,81 @@ func TestAddNOC_InvalidCaseAdminSubject_PersistsNothing(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestAddNOC_VersionedCASEAuthTagSubjectIsAccepted is the positive half of
+// the CaseAdminSubject guard: a CAT with a non-zero version is a legitimate
+// administrator subject and must commission normally. It also pins that the
+// default ACL entry AddNOC installs carries a subject the AccessControl
+// cluster itself considers valid, so a controller can read the list back and
+// write it again.
+func TestAddNOC_VersionedCASEAuthTagSubjectIsAccepted(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	const catSubject uint64 = 0xFFFF_FFFD_0001_0001 // CAT id 0x0001, version 1
+
+	store := newFakeStore()
+	oc, err := core.NewOperationalCredentials(store, core.OpcredsConfig{SupportedFabrics: 5})
+	if err != nil {
+		t.Fatalf("NewOperationalCredentials: %v", err)
+	}
+	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	rootRaw := buildCoreSignedCert(t, rootPriv, true, rootPriv)
+	if _, err := oc.MatterInvoke(ctx, 0x0B,
+		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
+		hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("AddTrustedRootCertificate: %v", err)
+	}
+	pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
+	nocRaw := buildCoreSignedCertForPubKey(t, pendingPub, false, rootPriv, testDefaultFabricID, testDefaultNodeID)
+
+	resp, err := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{
+		NOCValue:         nocRaw,
+		IPKValue:         make([]byte, 16),
+		CaseAdminSubject: catSubject,
+		AdminVendorID:    0x1234,
+	}, hmenum.CommandPriorityHigh)
+	if err != nil {
+		t.Fatalf("AddNOC: unexpected IM error: %v", err)
+	}
+	nocResp, ok := resp.(core.NOCResponse)
+	if !ok {
+		t.Fatalf("AddNOC response type = %T, want NOCResponse", resp)
+	}
+	if nocResp.StatusCode != core.NOCStatusOK {
+		t.Fatalf("AddNOC StatusCode = %v (%s), want OK for a versioned CAT subject", nocResp.StatusCode, nocResp.DebugText)
+	}
+
+	entries, err := store.ListACL(ctx, nocResp.FabricIndex)
+	if err != nil {
+		t.Fatalf("ListACL: %v", err)
+	}
+	if len(entries) != 1 || len(entries[0].Subjects) != 1 || entries[0].Subjects[0] != catSubject {
+		t.Fatalf("default ACL = %+v, want a single Administer entry for the CAT subject", entries)
+	}
+
+	// The persisted subject must survive a controller round-trip through
+	// the ACL attribute — the write path is the same validator the
+	// AddNOC guard now uses.
+	ac, err := core.NewAccessControl(store)
+	if err != nil {
+		t.Fatalf("NewAccessControl: %v", err)
+	}
+	wire := make([]core.AccessControlEntryStruct, 0, len(entries))
+	for _, e := range entries {
+		wire = append(wire, core.AccessControlEntryStruct{
+			Privilege:   uint8(e.Privilege),
+			AuthMode:    uint8(e.AuthMode),
+			Subjects:    e.Subjects,
+			FabricIndex: e.FabricIndex,
+		})
+	}
+	if err := ac.MatterWrite(ctx, 0x0000, wire, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("ACL write-back of the AddNOC default entry: %v", err)
 	}
 }

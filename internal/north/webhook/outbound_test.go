@@ -535,54 +535,85 @@ func TestOutboundDisabledIsNoop(t *testing.T) {
 	}
 }
 
-// TestOutboundEnqueueRacingStopDoesNotPanic pins the lifecycle boundary between
-// the publishing goroutines and Stop. Stop clears the queue field and then
-// closes the channel; an enqueue that read the field before that and sends
-// afterwards hits a closed channel and panics the publisher — which, on the
-// event-bus goroutine, surfaces only as deliveries that silently stop. Every
-// queue operation must therefore happen under the same mutex that Stop uses.
-func TestOutboundEnqueueRacingStopDoesNotPanic(t *testing.T) {
+// TestOutboundEnqueueRacingStopDropsInsteadOfPanicking pins the lifecycle
+// boundary between the publishing goroutines and Stop.
+//
+// Stop clears the queue field and then closes the channel; an enqueue that
+// read the field before that and sends afterwards hits a closed channel and
+// panics the publisher — which, on the event-bus goroutine, surfaces only as
+// deliveries that silently stop. Every queue operation must therefore happen
+// under the same mutex that Stop uses.
+//
+// The window is narrow, so one pass proves little: the race is sampled over
+// many rounds, each with a fresh bridge, and every publishing goroutine
+// converts a panic into a test failure instead of taking the process down.
+// The deterministic half is the assertion below it — after Stop, an enqueue
+// must be a no-op rather than a panic — which fails on any build that lets
+// the send escape the mutex.
+func TestOutboundEnqueueRacingStopDropsInsteadOfPanicking(t *testing.T) {
 	t.Parallel()
-	u := makeCentral(t, "ccuA")
-	reg := makeRegistry(t, u)
-	ft := &fakeTransport{}
-	cfg := config.NorthWebhook{Enabled: true, URL: "http://hook.test"}
-	o := NewOutbound(
-		reg, cfg, nil,
-		WithHTTPClient(&http.Client{Transport: ft}),
-		WithBackoff(instantBackoff()),
-		WithClock(fixedClock),
+	const (
+		rounds     = 40
+		publishers = 8
 	)
-	if err := o.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
+	panics := make(chan any, rounds*publishers)
+
+	for range rounds {
+		u := makeCentral(t, "ccuA")
+		reg := makeRegistry(t, u)
+		ft := &fakeTransport{}
+		cfg := config.NorthWebhook{Enabled: true, URL: "http://hook.test"}
+		o := NewOutbound(
+			reg, cfg, nil,
+			WithHTTPClient(&http.Client{Transport: ft}),
+			WithBackoff(instantBackoff()),
+			WithClock(fixedClock),
+		)
+		if err := o.Start(context.Background()); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+
+		var wg sync.WaitGroup
+		stop := make(chan struct{})
+		for range publishers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						panics <- r
+					}
+				}()
+				for {
+					select {
+					case <-stop:
+						return
+					default:
+					}
+					o.enqueue(envelope{Schema: schemaVersion, Event: "test", TS: "now"})
+				}
+			}()
+		}
+		// Let the publishers saturate the queue, then stop underneath them;
+		// they keep going for a moment after Stop returns, which is the
+		// window a send outside the mutex falls into.
+		time.Sleep(time.Millisecond)
+		if err := o.Stop(context.Background()); err != nil {
+			t.Fatalf("Stop: %v", err)
+		}
+		time.Sleep(time.Millisecond)
+		close(stop)
+		wg.Wait()
+
+		// Deterministic half: the queue is gone, so an enqueue after Stop
+		// has to drop the delivery silently.
+		o.enqueue(envelope{Schema: schemaVersion, Event: "after-stop", TS: "now"})
 	}
 
-	const publishers = 8
-	var wg sync.WaitGroup
-	stop := make(chan struct{})
-	for range publishers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-stop:
-					return
-				default:
-				}
-				o.enqueue(envelope{Schema: schemaVersion, Event: "test", TS: "now"})
-			}
-		}()
+	close(panics)
+	for r := range panics {
+		t.Fatalf("enqueue panicked while Stop was closing the queue: %v", r)
 	}
-	// Give the publishers a moment to saturate the queue, then stop underneath
-	// them; the publishers keep going for a while after Stop returns.
-	time.Sleep(20 * time.Millisecond)
-	if err := o.Stop(context.Background()); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
-	time.Sleep(20 * time.Millisecond)
-	close(stop)
-	wg.Wait()
 }
 
 // TestOutboundHealthyReportsCounters checks that the delivery counters the doc

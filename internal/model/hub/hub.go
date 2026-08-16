@@ -102,9 +102,12 @@ type SysvarCreateSpec struct {
 // renames the variable. Visible and Logged are tri-state: nil leaves the
 // flag as-is, a non-nil pointer sets it.
 type SysvarUpdateSpec struct {
-	Name        string // current (target) sysvar name
-	NewName     string
-	Unit        string
+	Name    string // current (target) sysvar name
+	NewName string
+	Unit    string
+	// Min / Max are the numeric-bound controls. An empty string leaves the
+	// stored bound alone; a non-empty numeric string sets it. There is no
+	// removal path — a numeric sysvar always carries both bounds.
 	Min         string
 	Max         string
 	Description string

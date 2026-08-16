@@ -59,20 +59,28 @@ func wireAlarmService(cfg *config.Config, reg *central.Registry, db *gosql.DB, t
 }
 
 // alarmCentralHook adapts the alarm service onto the orchestrator's
-// central-added hook so runtime-adopted centrals feed the engine like
-// boot-time ones. The hook fires from the adoption flow and the
+// per-central hook pair so runtime-adopted centrals feed the engine like
+// boot-time ones. The attach fires from the adoption flow and the
 // service's reconcile pass runs on its own lifetime — deliberately
 // detached from the adopting request's context.
 //
+// The detach half is name-keyed and stands on its own so a central this
+// orchestrator never adopted can be torn down without an attach in front of
+// it: AttachCentral reconciles every zone of every central, which on a
+// removal would adopt or stop sirens belonging to the CCUs that stay.
+//
 //nolint:contextcheck // central-adoption hooks detach from the request ctx by design (see Service lifecycle)
-func alarmCentralHook(svc *alarm.Service) func(u *central.Unit) (unwire func()) {
+func alarmCentralHook(svc *alarm.Service) perCentralHook {
 	if svc == nil {
-		return nil
+		return perCentralHook{}
 	}
-	return func(u *central.Unit) (unwire func()) {
-		name := u.Name()
-		svc.AttachCentral(name)
-		return func() { svc.DetachCentral(name) }
+	return perCentralHook{
+		attach: func(u *central.Unit) (unwire func()) {
+			name := u.Name()
+			svc.AttachCentral(name)
+			return func() { svc.DetachCentral(name) }
+		},
+		detach: svc.DetachCentral,
 	}
 }
 

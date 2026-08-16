@@ -290,10 +290,6 @@ func newIPHdmConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig)
 			// HA payload omits position_topic / set_position_topic and the
 			// shade ships with open/close/stop but no position slider,
 			// even though the Blind registers a working set_position.
-			// LEVEL is what the HDM drives; without SupportsPosition the
-			// HA payload omits position_topic / set_position_topic and the
-			// shade ships with open/close/stop but no position slider,
-			// even though the Blind registers a working set_position.
 			SupportsPosition: true,
 			SupportsTilt:     true,
 			SupportsStop:     true,
