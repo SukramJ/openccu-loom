@@ -26,9 +26,9 @@ import (
 // other unconditional job — it advances each interface's
 // circuit-breaker OPEN → HALF_OPEN → CLOSED on its own probe
 // cadence, no caller need invoke it.
-func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slog.Logger) {
+func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slog.Logger, healthScore func(centralName string) int) {
 	for _, u := range reg.List() {
-		registerStandardJobsFor(u, cfg, logger)
+		registerStandardJobsFor(u, cfg, logger, healthScore)
 	}
 }
 
@@ -40,7 +40,7 @@ func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slo
 // from it simply gets no override (falls back to compiled-in defaults),
 // which is the same "zero means default" behavior a boot-time central with
 // no override section gets.
-func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.Logger) {
+func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.Logger, healthScore func(centralName string) int) {
 	jobs := central.StandardJobs{}
 	// Apply per-central overrides from the configuration. Zero means
 	// "use the compiled-in default".
@@ -119,6 +119,17 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 			HubModel:    u.HubModel,
 			Metrics:     u.HubModel.Metrics,
 		}
+	}
+	// Wire the system-health probe so reconcileSystemHealth has a producer
+	// for hub.MetricSystemHealth. The daemon's own health tracker already
+	// computes a per-central 0..100 score; without this the metric is never
+	// observed and the HA "Systemzustand" diagnostic sensor stays "unknown".
+	// healthScore is nil in WireHub-only tests, which keeps the old no-op.
+	if healthScore != nil && u.Reconciler.Health == nil {
+		name := u.Name()
+		u.Reconciler.Health = coordinators.HealthProbeFunc(func(context.Context) (int, error) {
+			return healthScore(name), nil
+		})
 	}
 	jobs.Reconcile = u.Reconciler.Reconcile
 	if _, err := central.RegisterStandardJobs(u, jobs); err != nil {

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 6.0.0
+  version: 6.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -10979,7 +10979,11 @@ components:
       required: [central, interface_id, reachable]
       properties:
         central: { type: string }
-        interface_id: { type: string }
+        interface_id:
+          type: string
+          description: >-
+            The interface's wire id `<central>-<interface>` — the same id GET
+            /interfaces reports and the REST connectivity data point carries.
         reachable: { type: boolean }
         latency_ms:
           type: number
@@ -11524,7 +11528,13 @@ components:
       description: Per-interface reachability hub singleton.
       required: [interface_id, reachable]
       properties:
-        interface_id: { type: string }
+        interface_id:
+          type: string
+          description: >-
+            The interface's wire id `<central>-<interface>` (e.g.
+            `ccu1-HmIP-RF`) — the same id GET /interfaces reports, so a client
+            can build its per-interface entities from /interfaces and key this
+            value onto them.
         reachable: { type: boolean }
 
     HubInstallModeDataPoint:

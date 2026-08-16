@@ -8321,6 +8321,7 @@ export interface components {
          */
         HubConnectivityChangedPayload: {
             central: string;
+            /** @description The interface's wire id `<central>-<interface>` — the same id GET /interfaces reports and the REST connectivity data point carries. */
             interface_id: string;
             reachable: boolean;
             /** @description Probe round-trip in milliseconds; omitted when not measured. */
@@ -8756,6 +8757,7 @@ export interface components {
         };
         /** @description Per-interface reachability hub singleton. */
         HubConnectivityDataPoint: {
+            /** @description The interface's wire id `<central>-<interface>` (e.g. `ccu1-HmIP-RF`) — the same id GET /interfaces reports, so a client can build its per-interface entities from /interfaces and key this value onto them. */
             interface_id: string;
             reachable: boolean;
         };

@@ -20,12 +20,32 @@ import (
 // InterfaceReachability is one (interface_id, reachable) pair returned
 // by the [ConnectivityProbe].
 type InterfaceReachability struct {
+	// InterfaceID is the identifier every consuming surface keys on. It must
+	// be the same id GET /interfaces reports (the wire form
+	// `<central>-<interface>`), because the client cross-references the two:
+	// it builds the connectivity sensors from /interfaces.id and looks their
+	// value up by this id. A probe that only knows the bare interface name
+	// sets Interface to the enum and lets the adapter stamp the wire id here.
 	InterfaceID string
-	Reachable   bool
+	// Interface is the typed enum for the interface, when the producer knows
+	// it independently of InterfaceID. Empty means "derive it from
+	// InterfaceID" — correct only while InterfaceID is a bare interface name.
+	Interface hmenum.Interface
+	Reachable bool
 	// LatencyMs is the round-trip duration measured during the probe, in
 	// milliseconds. Zero when the probe implementation does not track
 	// latency.
 	LatencyMs float64
+}
+
+// ResolvedInterface returns the typed interface enum: the explicit Interface
+// field when set, otherwise InterfaceID parsed as an interface token (valid
+// only when InterfaceID is still a bare name).
+func (r InterfaceReachability) ResolvedInterface() hmenum.Interface {
+	if r.Interface != "" {
+		return r.Interface
+	}
+	return hmenum.Interface(r.InterfaceID)
 }
 
 // ConnectivityProbe is the south-bound contract the [Reconciler] calls
@@ -197,8 +217,10 @@ func (r *Reconciler) reconcileConnectivity(ctx context.Context) error {
 		drifted := !observed || cached != p.Reachable
 		// Propagate the typed Interface enum so downstream consumers
 		// (REST, MQTT, Discovery) can render `interface_id` AND
-		// `interface` (e.g. "BidCos-RF" enum).
-		conn.OnStateWithInterface(p.InterfaceID, hmenum.Interface(p.InterfaceID), p.Reachable)
+		// `interface` (e.g. "BidCos-RF" enum). The enum comes from the
+		// probe entry, not from parsing InterfaceID, because InterfaceID
+		// now carries the wire form `<central>-<interface>`.
+		conn.OnStateWithInterface(p.InterfaceID, p.ResolvedInterface(), p.Reachable)
 		if !drifted {
 			continue
 		}

@@ -1,6 +1,6 @@
 # version MUST equal the release tag and is bumped in the release commit.
 name: OpenCCU-Loom
-version: "0.61.0"
+version: "0.61.1"
 slug: openccu-loom
 description: >-
   Standalone bridge that connects Homematic CCUs to MQTT, a REST + WebSocket

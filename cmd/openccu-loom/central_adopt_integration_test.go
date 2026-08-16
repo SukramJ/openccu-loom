@@ -203,7 +203,7 @@ func TestCentralOrchestratorAdoptsAndRemovesSecondCentralWithoutRestart(t *testi
 	// wiring deps only need `reg` for this scenario — every other field
 	// wireCentralNorthbound reads is nil-guarded (MQTT, health tracker, ...).
 	orch := newCentralOrchestrator(reg, mgr, southboundWiringDeps{reg: reg, logger: logger}, cfg, logger, "",
-		nil, nil, nil, nil)
+		nil, nil, nil, nil, nil)
 	if orch == nil {
 		t.Fatal("newCentralOrchestrator returned nil (bringUp manager was nil)")
 	}

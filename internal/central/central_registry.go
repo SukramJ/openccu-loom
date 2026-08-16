@@ -202,6 +202,21 @@ func (r *Registry) SerialSuffix(name string) string {
 	return routingkey.SerialSuffix(c.SystemInformation().Serial)
 }
 
+// CanonicalSerial returns the canonical (last-10, case-preserved) serial of
+// the named central, or "" when it is unknown or unresolved. This is the exact
+// string GET /system/ccu reports; consumers that must line up with that
+// surface — the mDNS ccus= advertisement HA de-dupes discovery on — use this
+// rather than the lower-cased [SerialSuffix] routing form.
+func (r *Registry) CanonicalSerial(name string) string {
+	r.mu.RLock()
+	c, ok := r.items[name]
+	r.mu.RUnlock()
+	if !ok || c == nil {
+		return ""
+	}
+	return routingkey.CanonicalSerial(c.SystemInformation().Serial)
+}
+
 // List returns every registered unit sorted by name for stable
 // iteration.
 func (r *Registry) List() []*Unit {

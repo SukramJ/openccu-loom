@@ -40,7 +40,7 @@ func buildBridgeTestOrchestrator(
 	t.Cleanup(bridge.Stop)
 
 	deps := southboundWiringDeps{reg: reg, logger: logger, bridge: bridge}
-	orch := newCentralOrchestrator(reg, mgr, deps, cfg, logger, "", nil, nil, nil, nil)
+	orch := newCentralOrchestrator(reg, mgr, deps, cfg, logger, "", nil, nil, nil, nil, nil)
 	if orch == nil {
 		t.Fatal("newCentralOrchestrator returned nil")
 	}

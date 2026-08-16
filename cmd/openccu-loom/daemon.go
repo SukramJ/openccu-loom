@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
@@ -18,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery"
@@ -177,7 +179,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		u.WireDevicesCreatedGate()
 	}
 
-	registerStandardJobs(reg, cfg, logger)
+	// The system-health metric producer needs the shared health tracker, but
+	// that is wired below (after StartAll), so resolve it lazily: the reconcile
+	// job that reads the score first fires minutes later, long after the store
+	// below latches the pointer. Until then the probe returns -1, which
+	// reconcileSystemHealth skips rather than observing a bogus value.
+	var healthTrackerRef atomic.Pointer[health.Tracker]
+	healthScore := func(centralName string) int {
+		if t := healthTrackerRef.Load(); t != nil {
+			return t.CentralScoreInt(centralName)
+		}
+		return -1
+	}
+	registerStandardJobs(reg, cfg, logger, healthScore)
 
 	if err := reg.StartAll(ctx); err != nil {
 		return fmt.Errorf("central start: %w", err)
@@ -215,6 +229,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	defer sharedInfraTeardown()
 	metricsReg := si.metricsReg
 	healthTracker := si.healthTracker
+	// Latch the tracker so the system-health probe registered above resolves
+	// it on its next slow-cadence tick.
+	healthTrackerRef.Store(healthTracker)
 	// Surface whether config secrets are encrypted at rest — only meaningful
 	// when the SQLite store that holds them is in use.
 	if ov.db != nil {
@@ -522,7 +539,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// below then leaves the plain SQLite-backed service in place.
 	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
 	centralOrch := newCentralOrchestrator(reg, sb.bringUpManager, sbDeps, cfg, logger, instanceName,
-		valuesCacheStore, masterValuesStore, historyStore, recordingStore)
+		valuesCacheStore, masterValuesStore, historyStore, recordingStore, healthScore)
 	// A runtime-adopted central must join the hub-discovery ready pipeline the
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.

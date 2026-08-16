@@ -1,5 +1,18 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.61.1
+
+Three fixes for the "Homematic(IP) Local for OpenCCU" integration:
+
+- An OpenCCU already added to Home Assistant is no longer offered as a new
+  discovery on every restart (the advertised CCU serial now matches the one
+  the integration keys on).
+- The per-interface connectivity sensors no longer show "disconnected"
+  permanently — their value now lines up with the interface list the sensors
+  are built from.
+- The "Systemzustand" diagnostic sensor no longer shows "unknown" — the daemon
+  now produces the system-health value it reports.
+
 ## 0.61.0
 
 The follow-up to the 0.60.0 audit — a fresh full-codebase pass, three defect
