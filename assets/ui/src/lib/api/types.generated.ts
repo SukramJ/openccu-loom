@@ -15404,6 +15404,15 @@ export interface operations {
                     "application/json": components["schemas"]["MatterDiagnosticEventList"];
                 };
             };
+            /** @description Matter bridge not enabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     matterForceSync: {

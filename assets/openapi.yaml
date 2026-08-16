@@ -5809,6 +5809,12 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MatterDiagnosticEventList" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /matter/force-sync:
     post:
       operationId: matterForceSync
