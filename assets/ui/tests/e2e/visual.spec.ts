@@ -156,6 +156,33 @@ test.describe('Visual regression - light mode', () => {
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-fabrics-light.png');
   });
+
+  // The pairing card in its most common state: a bridge controllers
+  // already hold, where the action is adding another one rather than
+  // first-time pairing. The open-window state carries a live countdown
+  // and is deliberately not baselined — the pixels move every second.
+  test('MatterPair light', async ({ page }) => {
+    await page.route('**/api/v1/matter/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/pair');
+    await page.waitForSelector('#main');
+    await page.getByText('controller(s) already hold').waitFor();
+    await page.waitForTimeout(500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-pair-light.png');
+  });
 });
 
 test.describe('Visual regression - dark mode', () => {
@@ -297,5 +324,32 @@ test.describe('Visual regression - dark mode', () => {
     await page.waitForTimeout(500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-fabrics-dark.png');
+  });
+
+  // The pairing card in its most common state: a bridge controllers
+  // already hold, where the action is adding another one rather than
+  // first-time pairing. The open-window state carries a live countdown
+  // and is deliberately not baselined — the pixels move every second.
+  test('MatterPair dark', async ({ page }) => {
+    await page.route('**/api/v1/matter/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/pair');
+    await page.waitForSelector('#main');
+    await page.getByText('controller(s) already hold').waitFor();
+    await page.waitForTimeout(500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-pair-dark.png');
   });
 });

@@ -4,7 +4,7 @@
   import { centralStore } from "$lib/stores/centrals.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
-  import { qrPlaceholderSvg } from "$lib/qr";
+  import { renderQrSvg } from "$lib/qr";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import { ApiError } from "$lib/api/client";
@@ -45,6 +45,31 @@
   // finishes loading.
   const noneReady = $derived(!centralStore.anyReady);
   const notReadyCentrals = $derived(centralStore.notReady);
+
+  // Opening a window on a bridge that controllers already hold is a
+  // different action from first-time pairing, and only the daemon knows
+  // which one it is. Without saying so the card reads the same either
+  // way, and an operator whose bridge is already in Apple Home has no
+  // way to tell "my setup did not stick" from "I am adding a second
+  // controller".
+  const fabricCount = $derived(matterStore.status?.fabric_count ?? 0);
+  const alreadyPaired = $derived(fabricCount > 0);
+
+  // Copying beats transcribing: the manual code is eleven digits and the
+  // QR payload is the fallback for every device that cannot scan. The
+  // clipboard API is unavailable on a page served over plain HTTP —
+  // which is how the Config UI is reached behind Home Assistant's
+  // ingress and on a bare LAN address — so a refusal has to surface.
+  // Reporting success there sends the operator to another device with
+  // an empty clipboard while the window counts down.
+  async function copyToClipboard(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      toastStore.success(t("matter.pair.copied"));
+    } catch {
+      toastStore.error(t("matter.pair.copy_failed"));
+    }
+  }
 
   let hydrateLoading = $state(true);
   let hydrateError = $state<string | null>(null);
@@ -89,7 +114,7 @@
 
   const qrSvg = $derived(() => {
     if (!window?.qr_code) return null;
-    return qrPlaceholderSvg(window.qr_code);
+    return renderQrSvg(window.qr_code);
   });
 </script>
 
@@ -104,6 +129,11 @@
       <h2 class="text-base font-semibold mb-4 text-slate-900 dark:text-slate-100">
         {t("matter.pair.window_open_duration")}
       </h2>
+      {#if alreadyPaired}
+        <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          {t("matter.pair.already_paired", { count: fabricCount })}
+        </p>
+      {/if}
       {#if noneReady}
         <p class="mb-4 text-sm font-medium text-slate-500 dark:text-slate-400">
           {t("matter.readiness.waiting")}
@@ -125,7 +155,11 @@
           {/each}
         </select>
         <Button class="w-full sm:w-auto" disabled={opening || noneReady} onclick={() => void openWindow()}>
-          {opening ? t("common.saving") : t("matter.pair.window_open")}
+          {opening
+            ? t("common.saving")
+            : alreadyPaired
+              ? t("matter.pair.add_controller")
+              : t("matter.pair.window_open")}
         </Button>
       </div>
       <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -185,9 +219,19 @@
           <p class="text-xs mb-1 text-slate-500 dark:text-slate-400">
             {t("matter.pair.manual_code")}
           </p>
-          <p class="text-lg font-mono font-semibold tracking-widest whitespace-nowrap overflow-x-auto text-slate-900 dark:text-slate-100">
-            {window.manual_code}
-          </p>
+          <div class="flex items-center justify-center gap-2">
+            <p class="text-lg font-mono font-semibold tracking-widest whitespace-nowrap overflow-x-auto text-slate-900 dark:text-slate-100">
+              {window.manual_code}
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={t("matter.pair.copy_manual_code")}
+              onclick={() => void copyToClipboard(window.manual_code)}
+            >
+              {t("common.copy")}
+            </Button>
+          </div>
         </div>
 
         <!-- QR payload (raw, for debugging / alternate scan) -->
@@ -195,9 +239,19 @@
           <summary class="text-xs cursor-pointer text-slate-500 dark:text-slate-400">
             {t("matter.pair.qr_payload")}
           </summary>
-          <p class="mt-1 text-xs font-mono break-all text-slate-500 dark:text-slate-400">
-            {window.qr_code}
-          </p>
+          <div class="mt-1 flex items-start gap-2">
+            <p class="text-xs font-mono break-all text-slate-500 dark:text-slate-400">
+              {window.qr_code}
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={t("matter.pair.copy_qr_payload")}
+              onclick={() => void copyToClipboard(window.qr_code)}
+            >
+              {t("common.copy")}
+            </Button>
+          </div>
         </details>
 
         <Button variant="outline" size="sm" disabled={closing} onclick={() => void closeWindow()}>

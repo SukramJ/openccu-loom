@@ -1678,13 +1678,6 @@ export const api = {
       method: "POST",
     });
   },
-  matterShareBridge(duration_seconds: number) {
-    return request<MatterCommissioningWindow>(`/matter/share`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ duration_seconds }),
-    });
-  },
   // --- Visibility / un_ignore ---------------------------------
   listVisibilityUnIgnore() {
     return request<UnIgnoreListResponse>(`/visibility/unignore`);
