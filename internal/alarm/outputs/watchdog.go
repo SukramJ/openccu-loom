@@ -117,17 +117,17 @@ func (m *Manager) verifyStop(inst *instance, act *activation, s stopper, verifyU
 	ctx := context.Background()
 	if s.verify() {
 		m.clearActivation(act)
-		if m.health != nil {
-			m.health(true, "alarm output stop verified")
-		}
+		// A verified stop resolves this output's own outstanding failure
+		// (if any) and reports healthy only when nothing else is still
+		// failed — never unconditionally, or it would erase an unrelated
+		// output's failed-fire degradation (S7).
+		m.resolveFailure(act.outputID)
 		return
 	}
 	if m.clk.Now().After(verifyUntil) {
 		m.clearActivation(act)
 		m.journalFault(ctx, act.zoneID, "output_stop_unverified", act.outputID, act.incidentID, nil)
-		if m.health != nil {
-			m.health(false, "alarm output "+act.outputID+" stop unverified")
-		}
+		m.noteFailure(act.outputID, "alarm output "+act.outputID+" stop unverified")
 		return
 	}
 	m.runStop(inst, act, s, verifyUntil)

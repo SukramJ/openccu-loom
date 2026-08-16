@@ -100,6 +100,14 @@ type Manager struct {
 	active    map[string]*activation // by output ID
 	demands   map[string]demandRec   // by output ID; see arbitration.go
 	lastChirp map[string]time.Time
+	// failed is the set of output IDs with an outstanding, unresolved
+	// failure (a failed fire, a failed stop write, an unverified stop).
+	// Alarm health is the worst outstanding condition, not the last
+	// sample: an output is added on failure and removed only when a
+	// verified stop of that same output confirms it is safely inactive,
+	// so a verified stop of an unrelated output can never erase the
+	// degradation a still-failed output owns (S7).
+	failed map[string]struct{} // by output ID
 }
 
 // NewManager constructs the driver layer. Call Reload before use.
@@ -140,6 +148,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		active:           map[string]*activation{},
 		demands:          map[string]demandRec{},
 		lastChirp:        map[string]time.Time{},
+		failed:           map[string]struct{}{},
 	}
 	if m.defaultSiren <= 0 {
 		m.defaultSiren = 180 * time.Second
@@ -621,14 +630,43 @@ func (m *Manager) outputFailed(
 	ctx context.Context, zoneID, event, outputID string, incidentID int64, cause error,
 ) {
 	m.journalFault(ctx, zoneID, event, outputID, incidentID, cause)
-	if m.health == nil {
-		return
-	}
 	note := "alarm output " + outputID + " " + event
 	if cause != nil {
 		note += ": " + cause.Error()
 	}
-	m.health(false, note)
+	m.noteFailure(outputID, note)
+}
+
+// noteFailure records an outstanding failure for outputID and emits the
+// degradation. The output stays in the outstanding-failure set until a
+// verified stop of that same output resolves it (see resolveFailure), so
+// a later success on an unrelated output cannot erase this degradation —
+// alarm health reflects the worst outstanding condition, not the last
+// sample (S7).
+func (m *Manager) noteFailure(outputID, note string) {
+	m.mu.Lock()
+	m.failed[outputID] = struct{}{}
+	m.mu.Unlock()
+	if m.health != nil {
+		m.health(false, note)
+	}
+}
+
+// resolveFailure clears any outstanding failure of outputID — a verified
+// stop confirms that output is safely inactive — and reports recovery
+// only when no other output still carries an outstanding failure. A
+// verified stop of one output must never clear the degradation another
+// failed output still owns: a siren whose fire failed and never sounded
+// stays degraded until its own condition resolves, not until any
+// unrelated stop verifies.
+func (m *Manager) resolveFailure(outputID string) {
+	m.mu.Lock()
+	delete(m.failed, outputID)
+	recovered := len(m.failed) == 0
+	m.mu.Unlock()
+	if recovered && m.health != nil {
+		m.health(true, "alarm output stop verified")
+	}
 }
 
 // noopJournal drops entries (unwired manager in tests).
