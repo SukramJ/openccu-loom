@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: f19d0088
-HEAD: f19d0088
+Generated: 33afdc40
+HEAD: 33afdc40
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 28863 |
-| Reachable | 5047 |
-| Whitelisted | 20811 |
+| Total Exported | 28879 |
+| Reachable | 5051 |
+| Whitelisted | 20823 |
 | **Unreachable** | **3005** |
 
 ## Top-20 Packages by Dead Code

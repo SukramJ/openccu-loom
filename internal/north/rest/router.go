@@ -434,6 +434,9 @@ type Deps struct {
 	// MatterCompatibilityReporter backs GET /api/v1/matter/compatibility.
 	MatterCompatibilityReporter handlers.MatterCompatibilityReporter
 
+	// MatterFabricPurger backs POST /api/v1/matter/factory-reset.
+	MatterFabricPurger handlers.MatterFabricPurger
+
 	// MatterFabricRevoker backs `DELETE /matter/fabrics/{id}`.
 	MatterFabricRevoker handlers.MatterFabricRevoker
 	// MatterCommissioningCloser backs `POST /matter/commissioning/window/close`.
@@ -1178,6 +1181,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/matter/endpoints", handlers.MatterEndpoints(d.MatterEndpointInspector))
 			pr.Get("/matter/compatibility", handlers.MatterCompatibilityHandler(d.MatterCompatibilityReporter))
 			pr.Get("/matter/events", handlers.MatterDiagnosticEvents(d.MatterDiagnosticEvents))
+			// Admin, not operator: force-sync changes what every paired
+			// controller sees, and the reset unpairs all of them.
+			pr.With(admin).Post("/matter/force-sync",
+				handlers.MatterForceSync(d.MatterTopologyReassembler, d.MatterEventPublisher, d.AuditRecorder))
+			pr.With(admin).Post("/matter/factory-reset",
+				handlers.MatterFactoryReset(d.MatterFabricPurger, d.MatterEventPublisher, d.AuditRecorder))
 			pr.With(admin).Delete("/matter/fabrics/{id}", handlers.MatterFabricRevoke(d.MatterFabricRevoker, d.MatterEventPublisher, d.MatterAuditRecorder))
 			// Admin-gated despite being a GET: the response carries the
 			// cfg:"secret" commissioning passcode and the QR / manual codes

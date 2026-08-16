@@ -4717,6 +4717,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/matter/force-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-assemble the exposed Matter topology (admin)
+         * @description Re-runs endpoint assembly against the current device model. Use when the bridge and the CCU disagree about what exists — a change that arrived while the bridge was down, an exposure edited outside the usual path. Not destructive: controllers keep their sessions and fabrics.
+         */
+        post: operations["matterForceSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/matter/factory-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove every Matter fabric (admin, destructive)
+         * @description Returns the bridge to its uncommissioned state. Every paired controller loses it and has to commission it again; there is no undo.
+         *
+         *     The request body must name the action — `{"confirm": "remove-all-fabrics"}` — so a replayed or mis-scripted POST cannot unpair an installation.
+         */
+        post: operations["matterFactoryReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/matter/fabrics": {
         parameters: {
             query?: never;
@@ -15360,6 +15402,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MatterDiagnosticEventList"];
+                };
+            };
+            /** @description Matter bridge not enabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    matterForceSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Topology re-assembled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Matter bridge not enabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    matterFactoryReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    confirm: "remove-all-fabrics";
+                };
+            };
+        };
+        responses: {
+            /** @description Every fabric removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Confirmation missing or wrong */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description Matter bridge not enabled */

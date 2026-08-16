@@ -123,6 +123,39 @@ test.describe('Visual regression - light mode', () => {
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-diagnostics-light.png');
   });
+
+  // The fabrics tab pairs a table of paired controllers with the two
+  // maintenance actions. One of those is irreversible, so its weight on
+  // the page — an outline-danger button, never a filled one competing
+  // with the everyday actions above it — is worth a baseline in both
+  // modes: the danger token is exactly what a theme change inverts.
+  test('MatterFabrics light', async ({ page }) => {
+    // Matter is off in the shared fixture and the surface registry hides
+    // the view; the status document is overridden for this test alone.
+    await page.route('**/api/v1/matter/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/fabrics');
+    await page.waitForSelector('#main');
+    // Wait for the content, not for a clock: a fixed timeout that the
+    // container overruns yields a blank screenshot, and a blank baseline
+    // passes the tolerance check against the next blank one.
+    await page.getByText('0x0000011F743AAD34').waitFor();
+    await page.waitForTimeout(500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-fabrics-light.png');
+  });
 });
 
 test.describe('Visual regression - dark mode', () => {
@@ -231,5 +264,38 @@ test.describe('Visual regression - dark mode', () => {
     await page.waitForTimeout(300);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-diagnostics-dark.png');
+  });
+
+  // The fabrics tab pairs a table of paired controllers with the two
+  // maintenance actions. One of those is irreversible, so its weight on
+  // the page — an outline-danger button, never a filled one competing
+  // with the everyday actions above it — is worth a baseline in both
+  // modes: the danger token is exactly what a theme change inverts.
+  test('MatterFabrics dark', async ({ page }) => {
+    // Matter is off in the shared fixture and the surface registry hides
+    // the view; the status document is overridden for this test alone.
+    await page.route('**/api/v1/matter/status', (route) =>
+      route.fulfill({
+        json: {
+          enabled: true,
+          listening: true,
+          endpoint_count: 4,
+          fabric_count: 2,
+          enabled_count: 4,
+          advertising: true,
+          commissioning_window_open: false,
+          commissioning_window_duration_seconds: 0,
+        },
+      }),
+    );
+    await page.goto('http://localhost:5173/app/#/matter/fabrics');
+    await page.waitForSelector('#main');
+    // Wait for the content, not for a clock: a fixed timeout that the
+    // container overruns yields a blank screenshot, and a blank baseline
+    // passes the tolerance check against the next blank one.
+    await page.getByText('0x0000011F743AAD34').waitFor();
+    await page.waitForTimeout(500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('matter-fabrics-dark.png');
   });
 });

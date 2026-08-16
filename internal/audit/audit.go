@@ -165,8 +165,16 @@ const (
 	ActionMatterExposureUpdate Action = "matter_exposure_update"
 	ActionMatterExposureBulk   Action = "matter_exposure_bulk"
 	ActionMatterFabricRevoke   Action = "matter_fabric_revoke"
-	ActionMatterCommissioning  Action = "matter_commissioning"
-	ActionMatterShare          Action = "matter_share"
+	// ActionMatterForceSync records a re-assembly of the exposed
+	// topology. Not destructive, but it changes what controllers see.
+	ActionMatterForceSync Action = "matter_force_sync"
+	// ActionMatterFactoryReset records removal of every fabric. The
+	// most consequential Matter action there is: each paired controller
+	// loses the bridge and there is no undo, so it belongs in the audit
+	// trail whoever finds the bridge unpaired will read.
+	ActionMatterFactoryReset  Action = "matter_factory_reset"
+	ActionMatterCommissioning Action = "matter_commissioning"
+	ActionMatterShare         Action = "matter_share"
 
 	// Visibility surface mutations (notes/concepts/ui/unignore-concept.md).
 	ActionUnIgnoreUpdate Action = "un_ignore_update"

@@ -83,6 +83,24 @@ func (a *matterFabricRevokerAdapter) RevokeFabric(ctx context.Context, fabricInd
 	return a.store.RemoveFabric(ctx, fabricIndex)
 }
 
+// ListFabricIndexes implements [handlers.MatterFabricPurger]. The
+// factory reset needs the set to remove, and the store is the only
+// place that knows which fabrics survived a restart.
+func (a *matterFabricRevokerAdapter) ListFabricIndexes(ctx context.Context) ([]uint8, error) {
+	if a == nil || a.store == nil {
+		return nil, matterbridge.ErrCommissioningWindowNotConfigured
+	}
+	records, err := a.store.ListFabrics(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uint8, 0, len(records))
+	for _, r := range records {
+		out = append(out, r.FabricIndex)
+	}
+	return out, nil
+}
+
 // matterCommissioningCloserAdapter implements
 // [handlers.MatterCommissioningCloser].
 type matterCommissioningCloserAdapter struct {

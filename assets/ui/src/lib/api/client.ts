@@ -1634,6 +1634,18 @@ export const api = {
   deleteMatterFabric(id: number) {
     return request<void>(`/matter/fabrics/${id}`, { method: "DELETE" });
   },
+  matterForceSync() {
+    return request<void>(`/matter/force-sync`, { method: "POST" });
+  },
+  matterFactoryReset() {
+    // The daemon requires the action to be named, so a replayed or
+    // mis-scripted POST cannot unpair an installation. The Config UI
+    // sends it after its own confirm dialog.
+    return request<void>(`/matter/factory-reset`, {
+      method: "POST",
+      body: JSON.stringify({ confirm: "remove-all-fabrics" }),
+    });
+  },
   matterExposable() {
     return request<MatterExposableResponse>(`/matter/exposable`);
   },

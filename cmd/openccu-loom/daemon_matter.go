@@ -2864,6 +2864,7 @@ type matterWiring struct {
 	opener            handlers.MatterCommissioningOpener
 	statusReader      handlers.MatterStatusReader
 	fabricRevoker     handlers.MatterFabricRevoker
+	fabricPurger      handlers.MatterFabricPurger
 	closer            handlers.MatterCommissioningCloser
 	exposureStore     handlers.MatterExposureStore
 	candidates        handlers.MatterCandidateProvider
@@ -3234,7 +3235,6 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		mb.AttachDiagnosticEvents(diagevent.NewRing(matterDiagEventCapacity))
 		wiring.diagEvents = mb
 		wiring.exposureStore = mfs
-		wiring.reassembler = mb
 		// Wire the allowlist checker so the assembler only bridges
 		// sources that the operator has explicitly enabled. Default
 		// = empty allowlist = empty topology. The exposure-management
@@ -3560,7 +3560,10 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		if healthTracker != nil {
 			_ = startMatterHealthProbe(ctx, wiring.statusReader, healthTracker, matterHealthProbeInterval)
 		}
-		wiring.fabricRevoker = &matterFabricRevokerAdapter{store: mfs}
+		revoker := &matterFabricRevokerAdapter{store: mfs}
+		wiring.fabricRevoker = revoker
+		wiring.fabricPurger = revoker
+		wiring.reassembler = mb
 		wiring.closer = &matterCommissioningCloserAdapter{window: window}
 		wiring.candidates = &matterCandidateProviderAdapter{reg: reg, cfg: cfg}
 	}
