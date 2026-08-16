@@ -178,7 +178,7 @@ test.describe('Visual regression - light mode', () => {
     );
     await page.goto('http://localhost:5173/app/#/matter/pair');
     await page.waitForSelector('#main');
-    await page.getByText('controller(s) already hold').waitFor();
+    await page.getByText('Controllers already holding this bridge').waitFor();
     await page.waitForTimeout(500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-pair-light.png');
@@ -347,7 +347,7 @@ test.describe('Visual regression - dark mode', () => {
     );
     await page.goto('http://localhost:5173/app/#/matter/pair');
     await page.waitForSelector('#main');
-    await page.getByText('controller(s) already hold').waitFor();
+    await page.getByText('Controllers already holding this bridge').waitFor();
     await page.waitForTimeout(500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('matter-pair-dark.png');
