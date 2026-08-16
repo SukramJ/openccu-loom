@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.61.2
+
+- Version alignment with OpenCCU-Loom 0.61.2. The proxy itself is
+  unchanged; the release corrects the 0.61.1 "Systemzustand" fix, which
+  reached the wrong internal health tracker and reported a constant 0 % —
+  the sensor now shows the CCU's real health score.
+
 # 0.61.1
 
 - Version alignment with OpenCCU-Loom 0.61.1. The proxy itself is

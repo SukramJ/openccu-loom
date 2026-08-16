@@ -26,9 +26,9 @@ import (
 // other unconditional job — it advances each interface's
 // circuit-breaker OPEN → HALF_OPEN → CLOSED on its own probe
 // cadence, no caller need invoke it.
-func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slog.Logger, healthScore func(centralName string) int) {
+func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slog.Logger) {
 	for _, u := range reg.List() {
-		registerStandardJobsFor(u, cfg, logger, healthScore)
+		registerStandardJobsFor(u, cfg, logger)
 	}
 }
 
@@ -40,7 +40,7 @@ func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slo
 // from it simply gets no override (falls back to compiled-in defaults),
 // which is the same "zero means default" behavior a boot-time central with
 // no override section gets.
-func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.Logger, healthScore func(centralName string) int) {
+func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.Logger) {
 	jobs := central.StandardJobs{}
 	// Apply per-central overrides from the configuration. Zero means
 	// "use the compiled-in default".
@@ -76,13 +76,11 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 		jobs.InstallModeRefresh = u.Hub.RefreshInstallMode
 		// HubMetricsRefresh is deliberately NOT wired: no wiring installs
 		// the coordinator's inner Metrics hook (WireHub sets every other
-		// hook), so the job would fire every interval as a permanent
-		// no-op. Of the two hub metrics that exist only
-		// MetricLastEventAgeSecs has a producer (LastEventAgeRefresh
-		// below). MetricSystemHealth has none: central.reconcile's health
-		// stage needs a coordinators.SystemHealthProbe and no CCU call is
-		// known that yields the score. Wire both slots once a real CCU
-		// metrics fetch exists.
+		// hook), so the job would fire every interval as a permanent no-op.
+		// The two hub metrics that exist both have a producer elsewhere:
+		// MetricLastEventAgeSecs via LastEventAgeRefresh below, and
+		// MetricSystemHealth via the reconcile pass's health stage (see the
+		// Reconciler.Health wiring further down).
 		jobs.HubConnectivityRefresh = u.Hub.RefreshConnectivity
 		// Per-BidCos-interface duty-cycle / carrier-sense poll. Delegates
 		// through the HubCoordinator; the inner listBidcosInterfaces hook is
@@ -121,14 +119,21 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 		}
 	}
 	// Wire the system-health probe so reconcileSystemHealth has a producer
-	// for hub.MetricSystemHealth. The daemon's own health tracker already
-	// computes a per-central 0..100 score; without this the metric is never
-	// observed and the HA "Systemzustand" diagnostic sensor stays "unknown".
-	// healthScore is nil in WireHub-only tests, which keeps the old no-op.
-	if healthScore != nil && u.Reconciler.Health == nil {
-		name := u.Name()
+	// for hub.MetricSystemHealth; without it the metric is never observed and
+	// the HA "Systemzustand" diagnostic sensor stays "unknown". The score is
+	// this central's own health tracker aggregate (u.Health) — the tracker the
+	// health-heartbeat / connectivity / scheduler jobs record into, so every
+	// component in it belongs to this central and ScoreInt is the per-central
+	// 0..100 value directly, no central-name filtering. Until the first
+	// heartbeat lands the tracker is empty; report -1 then, which
+	// reconcileSystemHealth skips rather than observing a spurious 0.
+	if u.Reconciler.Health == nil && u.Health != nil {
+		tracker := u.Health
 		u.Reconciler.Health = coordinators.HealthProbeFunc(func(context.Context) (int, error) {
-			return healthScore(name), nil
+			if len(tracker.Snapshot()) == 0 {
+				return -1, nil
+			}
+			return tracker.ScoreInt(), nil
 		})
 	}
 	jobs.Reconcile = u.Reconciler.Reconcile

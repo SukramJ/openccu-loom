@@ -4,6 +4,20 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.61.2]
+
+### Fixed
+
+- **The "Systemzustand" diagnostic sensor read 0 %, not the real score.** The
+  0.61.1 fix for #575 wired the system-health metric to the daemon-global
+  health tracker's per-central lookup, but the per-central health components
+  (the heartbeat, the scheduler, per-interface reachability) are recorded on
+  the central's own tracker, so that lookup found nothing and scored 0. The
+  metric is now the central's own health-tracker aggregate, so it reflects the
+  actual state; while that tracker is still empty at boot the metric is
+  withheld (the sensor stays "unknown" briefly) rather than reporting a
+  spurious 0.
+
 ## [0.61.1]
 
 Three fixes for the Home Assistant integration "Homematic(IP) Local for

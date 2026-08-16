@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.61.2
+
+- The "Systemzustand" diagnostic sensor now shows the real health value
+  instead of a constant 0 %. (The 0.61.1 fix reached the wrong internal
+  tracker; it now reads the CCU's own health score.)
+
 ## 0.61.1
 
 Three fixes for the "Homematic(IP) Local for OpenCCU" integration:
