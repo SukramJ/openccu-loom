@@ -937,6 +937,67 @@ func TestRunDiscoveryOrphanCleanupOnceSweepsEveryCentral(t *testing.T) {
 	}
 }
 
+// TestRunDiscoveryOrphanCleanupOnce_PrefixSiblingCentralNotEvicted pins that a
+// central whose slug is a prefix of a sibling's does not evict the sibling's
+// retained discovery configs.
+//
+// `CCU` slugs to `ccu`, `CCU Wohnung` to `ccu_wohnung`. The sweep matched the
+// node id with an unbounded HasPrefix("ccu_") test, so `ccu`'s boot sweep
+// judged every `ccu_wohnung_*` node id as its own. The sibling's entities are
+// not yet in `declared` at that moment (its snapshot has not run), so all of
+// them looked like orphans and were evicted — they never returned until the
+// daemon restarted. Anchoring on the last-underscore boundary makes the sibling
+// segment `ccu_wohnung`, not `ccu`, so it stays untouched while `ccu`'s own
+// orphans are still swept.
+//
+// The sibling is deliberately NOT configured on this bridge: the fix is
+// structural, so it must protect the sibling even before the daemon knows the
+// second CCU exists — which is exactly the boot-time race.
+func TestRunDiscoveryOrphanCleanupOnce_PrefixSiblingCentralNotEvicted(t *testing.T) {
+	t.Parallel()
+	const (
+		central = "CCU"         // slug: ccu
+		sibling = "CCU Wohnung" // slug: ccu_wohnung
+	)
+	if !strings.HasPrefix(naming.DiscoverySlug(sibling)+"_", naming.DiscoverySlug(central)+"_") {
+		t.Fatalf("fixture invalid: %q slug %q is not a prefix of %q slug %q",
+			central, naming.DiscoverySlug(central), sibling, naming.DiscoverySlug(sibling))
+	}
+	var (
+		ownOrphan    = "homeassistant/switch/" + naming.DiscoverySlug(central) + "_0001aaaa/state/config"
+		ownHubOrphan = "homeassistant/sensor/" + hubNodeID(central, "system") + "/connection_latency/config"
+		siblingDev   = "homeassistant/switch/" + naming.DiscoverySlug(sibling) + "_0001bbbb/state/config"
+		siblingHub   = "homeassistant/sensor/" + hubNodeID(sibling, "system") + "/connection_latency/config"
+	)
+	mc := &mockRetainClient{retained: []retainedMsg{
+		{topic: ownOrphan, payload: []byte(`{}`)},
+		{topic: ownHubOrphan, payload: []byte(`{}`)},
+		{topic: siblingDev, payload: []byte(`{}`)},
+		{topic: siblingHub, payload: []byte(`{}`)},
+	}}
+	b := NewBridge(BridgeConfig{
+		Base: "openccu-loom", HADiscoveryEnabled: true, CentralName: central,
+	}, mc)
+
+	if _, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), central, 50*time.Millisecond); err != nil {
+		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
+	}
+	evicted := map[string]bool{}
+	for _, topic := range mc.evicted() {
+		evicted[topic] = true
+	}
+	for _, topic := range []string{siblingDev, siblingHub} {
+		if evicted[topic] {
+			t.Errorf("sweep for %q evicted prefix-sibling %q's retained config %q — its entities vanish until the daemon restarts", central, sibling, topic)
+		}
+	}
+	for _, topic := range []string{ownOrphan, ownHubOrphan} {
+		if !evicted[topic] {
+			t.Errorf("sweep for %q failed to evict its own genuine orphan %q", central, topic)
+		}
+	}
+}
+
 // filterKeyedBroker models the one property of the shared subscribe client
 // that makes concurrent sweeps unsafe: subscriptions are keyed by filter,
 // so a second Subscribe on the same filter replaces the first handler, and
