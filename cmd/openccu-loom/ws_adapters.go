@@ -545,25 +545,32 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 	sysvars := h.Sysvars()
 	out := make([]map[string]any, 0, len(sysvars))
 	for _, s := range sysvars {
+		// One guarded snapshot of the mutable descriptor: the 30 s hub refresh
+		// rewrites these ten fields in place through Sysvar.ApplyMeta under the
+		// sysvar's own lock while this handler serves the list on another
+		// goroutine. Reading them straight off the struct (as this path used to)
+		// is a data race with that rewrite — REST and the MQTT publisher already
+		// read the same Meta() snapshot.
+		m := s.Meta()
 		e := map[string]any{
 			// Renaming a system variable on the CCU rewrites the name in
 			// place on the live entry (Hub.RenameSysvar), so it is read
 			// through the data point's own lock.
 			"name":        s.LegacyName(),
-			"description": s.Description,
-			"unit":        s.Unit,
-			"value_type":  string(s.ValueType),
-			"value_list":  s.ValueList,
-			"is_visible":  s.IsVisible,
-			"is_logged":   s.IsLogged,
+			"description": m.Description,
+			"unit":        m.Unit,
+			"value_type":  string(m.ValueType),
+			"value_list":  m.ValueList,
+			"is_visible":  m.IsVisible,
+			"is_logged":   m.IsLogged,
 		}
 		// Binary value labels are present only for LOGIC/ALARM variables;
 		// mirror the REST SysvarSummary by omitting them when empty.
-		if s.ValueName0 != "" {
-			e["value_name_0"] = s.ValueName0
+		if m.ValueName0 != "" {
+			e["value_name_0"] = m.ValueName0
 		}
-		if s.ValueName1 != "" {
-			e["value_name_1"] = s.ValueName1
+		if m.ValueName1 != "" {
+			e["value_name_1"] = m.ValueName1
 		}
 		if v, ok := s.Value(); ok {
 			e["value"] = v.Unwrap()
@@ -571,11 +578,14 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 		} else {
 			e["observed"] = false
 		}
-		if s.Min != nil {
-			e["min"] = s.Min.Float
+		// Read the bound type-aware: an INTEGER sysvar carries it in
+		// ParamValue.Int, a FLOAT in .Float — reading .Float raw reports 0/0
+		// for every INTEGER variable (the REST/MQTT planes convert correctly).
+		if mn := hub.SysvarBoundAsFloat(m.Min); mn != nil {
+			e["min"] = *mn
 		}
-		if s.Max != nil {
-			e["max"] = s.Max.Float
+		if mx := hub.SysvarBoundAsFloat(m.Max); mx != nil {
+			e["max"] = *mx
 		}
 		// Device association (explicit CCU channel assignment or name
 		// match). Present only when the sysvar belongs to a device —

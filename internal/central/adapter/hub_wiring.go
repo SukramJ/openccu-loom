@@ -2089,7 +2089,7 @@ func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCrea
 			vn1 = "true"
 		}
 	}
-	_, err := w.rega.Run(ctx, hmenum.RegaScriptCreateSystemVariable, map[string]string{
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptCreateSystemVariable, map[string]string{
 		"name":        spec.Name,
 		"type":        spec.ValueType,
 		"unit":        spec.Unit,
@@ -2101,7 +2101,20 @@ func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCrea
 		"valuename1":  vn1,
 		"channel":     strconv.Itoa(chnID),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	// The script writes the created (or, on a collision, the pre-existing)
+	// object id on success and an empty string only when dom.CreateObject
+	// failed. Empty output is a real CCU-side create failure: like the sibling
+	// SetSysvar's decline check, it must surface as an error, not answer a
+	// false 202. (A collision is caught earlier in Hub.CreateSysvarRemote — the
+	// script's quit branch still writes a non-empty id, indistinguishable here
+	// from a fresh create.)
+	if strings.TrimSpace(out) == "" {
+		return fmt.Errorf("create sysvar %q: rega create declined (object not created)", spec.Name)
+	}
+	return nil
 }
 
 // resolveChannelISEID resolves a device or channel address to its ReGa ise
@@ -2182,7 +2195,7 @@ func (w *hubJSONRPCWriter) UpdateSysvar(ctx context.Context, spec hub.SysvarUpda
 			channelParam = strconv.Itoa(id)
 		}
 	}
-	_, err := w.rega.Run(ctx, hmenum.RegaScriptUpdateSystemVariable, map[string]string{
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptUpdateSystemVariable, map[string]string{
 		"name":        spec.Name,
 		"newname":     spec.NewName,
 		"unit":        spec.Unit,
@@ -2196,7 +2209,18 @@ func (w *hubJSONRPCWriter) UpdateSysvar(ctx context.Context, spec hub.SysvarUpda
 		"logged":      boolFlagParam(spec.Logged),
 		"channel":     channelParam,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	// The script writes "ok" only inside its `if (oSv)` guard and emits nothing
+	// when the target name does not resolve to a sysvar (deleted on the CCU).
+	// Like the sibling SetSysvar's decline check, an empty result must surface
+	// as ErrSysvarNotFound rather than answer a false 202 and re-key the local
+	// cache to a name the CCU never renamed.
+	if strings.TrimSpace(out) != "ok" {
+		return fmt.Errorf("update sysvar %q: %w", spec.Name, hub.ErrSysvarNotFound)
+	}
+	return nil
 }
 
 // boolFlagParam renders a tri-state flag for a Rega script parameter:
@@ -2219,7 +2243,8 @@ func boolFlagParam(b *bool) string {
 func (w *hubJSONRPCWriter) SetDeviceRooms(
 	ctx context.Context, deviceAddress string, rooms []string,
 ) error {
-	_, err := w.rega.RunLists(ctx, hmenum.RegaScriptSetDeviceRooms,
+	_, err := w.rega.RunLists(
+		ctx, hmenum.RegaScriptSetDeviceRooms,
 		map[string]string{"address": deviceAddress},
 		map[string][]string{"rooms": rooms},
 	)
@@ -2231,7 +2256,8 @@ func (w *hubJSONRPCWriter) SetDeviceRooms(
 func (w *hubJSONRPCWriter) SetDeviceFunctions(
 	ctx context.Context, deviceAddress string, functions []string,
 ) error {
-	_, err := w.rega.RunLists(ctx, hmenum.RegaScriptSetDeviceFunctions,
+	_, err := w.rega.RunLists(
+		ctx, hmenum.RegaScriptSetDeviceFunctions,
 		map[string]string{"address": deviceAddress},
 		map[string][]string{"functions": functions},
 	)

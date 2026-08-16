@@ -579,6 +579,11 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 					problem.New(problem.TypeValidation, r, "channel_address does not resolve to a device channel", req.ChannelAddress))
 				return
 			}
+			if errors.Is(err, hub.ErrSysvarExists) {
+				problem.Write(w, http.StatusConflict,
+					problem.New(problem.TypeConflict, r, "A system variable with this name already exists", req.Name))
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar create failed", err)
 			return
 		}
@@ -670,6 +675,11 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 				}
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "channel_address does not resolve to a device channel", detail))
+				return
+			}
+			if errors.Is(err, hub.ErrSysvarNotFound) {
+				problem.Write(w, http.StatusNotFound,
+					problem.New(problem.TypeNotFound, r, "System variable not found", name))
 				return
 			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar update failed", err)
@@ -1034,15 +1044,11 @@ func toSysvarSummary(s *hub.Sysvar, serialSuffix string) SysvarSummary {
 	if ok {
 		sum.Value = v.Unwrap()
 	}
-	// Expose declared bounds when the CCU provided them.
-	if m.Min != nil {
-		f := m.Min.Float
-		sum.Min = &f
-	}
-	if m.Max != nil {
-		f := m.Max.Float
-		sum.Max = &f
-	}
+	// Expose declared bounds when the CCU provided them. The bound is read
+	// type-aware: an INTEGER sysvar stores it in ParamValue.Int, a FLOAT in
+	// .Float — reading .Float raw would report 0/0 for every INTEGER variable.
+	sum.Min = hub.SysvarBoundAsFloat(m.Min)
+	sum.Max = hub.SysvarBoundAsFloat(m.Max)
 	return sum
 }
 

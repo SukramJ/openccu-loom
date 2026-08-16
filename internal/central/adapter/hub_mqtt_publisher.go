@@ -655,22 +655,34 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 			w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, val.Unwrap()))
 		}
 	})
-	p.addUnsub(sv.OnUpdate(func(_, next hmtypes.ParamValue) {
+	unsubUpdate := sv.OnUpdate(func(_, next hmtypes.ParamValue) {
 		p.publish(func() {
 			w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, next.Unwrap()))
 		})
-	}))
+	})
+	p.addUnsub(unsubUpdate)
 	// A system variable the operator deleted in the CCU WebUI is dropped
 	// from the model by the next refresh, but its retained discovery config
 	// keeps the entity alive in every consumer — frozen at its last value,
 	// and across daemon restarts, because nothing ever clears a retained
 	// topic the model no longer knows about. Retract the config this sysvar
 	// declared the moment the model drops it, exactly as wireOneProgram
-	// does for programs.
+	// does for programs. A CCU-side rename reaches this same hook (the model
+	// retracts the old identity before re-announcing the new one via the
+	// registration observer), so the state subscription is released here too
+	// — otherwise the re-wire would leave the pre-rename OnUpdate slot live and
+	// every value change would publish to both the old (retracted) and the new
+	// state topic.
 	p.addUnsub(sv.OnRemoved(func() {
+		unsubUpdate()
+		// Build the retract item synchronously, on the notifying goroutine, so
+		// its topic is derived from the identity's CURRENT (pre-rename) name. A
+		// rename renames the live object immediately after this hook returns;
+		// deferring the build to the async worker would read the new name and
+		// retract the wrong topic, leaving the old entity stranded.
+		item := disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv))
 		p.publish(func() {
-			retractHubDiscoveryItems(ctx, b,
-				[]mqtt.DiscoveryItem{disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv))})
+			retractHubDiscoveryItems(ctx, b, []mqtt.DiscoveryItem{item})
 		})
 	}))
 }
@@ -697,8 +709,8 @@ func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
 		Writable:       sv.Writable(),
 		IsExtended:     m.IsExtended,
 		EnabledDefault: sv.EnabledByDefault(),
-		Min:            paramValueAsFloat(m.Min),
-		Max:            paramValueAsFloat(m.Max),
+		Min:            hub.SysvarBoundAsFloat(m.Min),
+		Max:            hub.SysvarBoundAsFloat(m.Max),
 		DeviceAddress:  sv.DeviceAddress(),
 	}
 }
@@ -756,26 +768,6 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 // the real Connectivity state aggregate; here we only need the topic
 // shape, which lives on the model type.
 var hubConnectivityTopics = hub.NewConnectivity()
-
-// paramValueAsFloat coerces a CCU [*hmtypes.ParamValue] bound (Min /
-// Max on a Sysvar) to the float64 form HA's number discovery wants.
-// Returns nil when the source is nil, absent, or carries a non-numeric
-// kind (e.g. a List sysvar's spurious bounds).
-func paramValueAsFloat(pv *hmtypes.ParamValue) *float64 {
-	if pv == nil || pv.IsNone() {
-		return nil
-	}
-	switch pv.Kind {
-	case hmtypes.ValueKindFloat:
-		v := pv.Float
-		return &v
-	case hmtypes.ValueKindInt:
-		v := float64(pv.Int)
-		return &v
-	default:
-		return nil
-	}
-}
 
 // sysvarStateForMQTT maps the CCU-side value into the payload HA
 // expects on the state topic. For List sysvars the CCU reports the
