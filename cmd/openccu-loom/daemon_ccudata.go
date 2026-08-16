@@ -10,6 +10,13 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 )
 
+// loadTranslations resolves the translation archive in this order:
+//  1. cfg.CCUData.TranslationsPath (explicit operator override)
+//  2. Embedded extract (shipped with the binary, see internal/ccudata)
+//  3. Empty fallback (raw CCU strings in the UI)
+//
+// Every transition is logged at INFO so operators can tell at a glance
+// which source their daemon is running against.
 func loadTranslations(cfg *config.Config, logger *slog.Logger) *ccudata.Translations {
 	if path := cfg.CCUData.TranslationsPath; path != "" {
 		t, err := ccudata.LoadTranslations(path)

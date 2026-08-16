@@ -41,6 +41,23 @@
 
   const display = $derived(pendingValue ?? value);
   const percent = $derived(((display - min) / (max - min)) * 100);
+  // Announce the value at the control's own resolution. A 0..1 LEVEL
+  // slider runs on a 0.01 step, so integer rounding would report only
+  // 0 or 1 — the same announcement for "off" and "40 % bright".
+  const announced = $derived(roundToStep(display));
+
+  function stepDecimals(): number {
+    if (!Number.isFinite(step) || step <= 0 || Number.isInteger(step)) return 0;
+    const text = step.toString();
+    const dot = text.indexOf(".");
+    if (dot < 0) return 6; // exponential notation (1e-7): cap the precision
+    return Math.min(6, text.length - dot - 1);
+  }
+
+  function roundToStep(v: number): number {
+    if (!Number.isFinite(v)) return v;
+    return Number(v.toFixed(stepDecimals()));
+  }
 
   function clamp(v: number): number {
     if (v < min) return min;
@@ -127,7 +144,7 @@
   aria-label={label}
   aria-valuemin={min}
   aria-valuemax={max}
-  aria-valuenow={Math.round(display)}
+  aria-valuenow={announced}
   aria-disabled={disabled}
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}

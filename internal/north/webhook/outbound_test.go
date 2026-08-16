@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -531,5 +532,76 @@ func TestOutboundDisabledIsNoop(t *testing.T) {
 
 	if ft.count() != 0 {
 		t.Errorf("expected 0 POSTs for disabled bridge, got %d", ft.count())
+	}
+}
+
+// TestOutboundEnqueueRacingStopDoesNotPanic pins the lifecycle boundary between
+// the publishing goroutines and Stop. Stop clears the queue field and then
+// closes the channel; an enqueue that read the field before that and sends
+// afterwards hits a closed channel and panics the publisher — which, on the
+// event-bus goroutine, surfaces only as deliveries that silently stop. Every
+// queue operation must therefore happen under the same mutex that Stop uses.
+func TestOutboundEnqueueRacingStopDoesNotPanic(t *testing.T) {
+	t.Parallel()
+	u := makeCentral(t, "ccuA")
+	reg := makeRegistry(t, u)
+	ft := &fakeTransport{}
+	cfg := config.NorthWebhook{Enabled: true, URL: "http://hook.test"}
+	o := NewOutbound(
+		reg, cfg, nil,
+		WithHTTPClient(&http.Client{Transport: ft}),
+		WithBackoff(instantBackoff()),
+		WithClock(fixedClock),
+	)
+	if err := o.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	const publishers = 8
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+	for range publishers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				o.enqueue(envelope{Schema: schemaVersion, Event: "test", TS: "now"})
+			}
+		}()
+	}
+	// Give the publishers a moment to saturate the queue, then stop underneath
+	// them; the publishers keep going for a while after Stop returns.
+	time.Sleep(20 * time.Millisecond)
+	if err := o.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// TestOutboundHealthyReportsCounters checks that the delivery counters the doc
+// promises actually reach the health detail once something went wrong; a clean
+// bridge stays silent.
+func TestOutboundHealthyReportsCounters(t *testing.T) {
+	t.Parallel()
+	o := NewOutbound(makeRegistry(t), config.NorthWebhook{Enabled: true, URL: "http://hook.test"}, nil)
+
+	if ok, detail := o.Healthy(); !ok || detail != "" {
+		t.Fatalf("fresh bridge: Healthy() = (%v, %q), want (true, \"\")", ok, detail)
+	}
+	o.dropped.Add(2)
+	o.failed.Add(3)
+	ok, detail := o.Healthy()
+	if !ok {
+		t.Error("delivery trouble must not report the bridge as unhealthy")
+	}
+	if !strings.Contains(detail, "dropped=2") || !strings.Contains(detail, "failed=3") {
+		t.Errorf("Healthy() detail = %q, want it to name dropped=2 and failed=3", detail)
 	}
 }

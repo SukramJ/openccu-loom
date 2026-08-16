@@ -433,7 +433,7 @@ func TestWriteScheduleError_NoScheduleParams_Returns404(t *testing.T) {
 	t.Parallel()
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	writeScheduleError(w, r, errors.New("schedules: channel exposes no climate schedule parameters"))
+	writeScheduleError(w, r, fmt.Errorf("read source profile: %w", hmerr.ErrNoSchedule))
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
 	}
@@ -506,8 +506,7 @@ func TestPostCopySchedule_EmptyTarget_Returns422(t *testing.T) {
 func TestPostCopySchedule_SourceWithoutSchedule_Returns404(t *testing.T) {
 	t.Parallel()
 	svc := &stubScheduleService{
-		copyErr: fmt.Errorf("schedules: copy read source: %w",
-			errors.New("schedules: channel exposes no climate schedule parameters")),
+		copyErr: fmt.Errorf("schedules: copy read source: %w", hmerr.ErrNoSchedule),
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"target_device_address":"DEV2"}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV1"}))
@@ -524,7 +523,7 @@ func TestPostCopySchedule_SourceWithoutSchedule_Returns404(t *testing.T) {
 func TestPostCopySchedule_NoOp_Returns422(t *testing.T) {
 	t.Parallel()
 	svc := &stubScheduleService{
-		copyErr: errors.New("schedules: copy source and destination are identical"),
+		copyErr: hmerr.ErrScheduleCopyNoOp,
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"target_device_address":"DEV1"}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV1"}))
@@ -542,7 +541,7 @@ func TestPostCopySchedule_NoOp_Returns422(t *testing.T) {
 func TestPostCopyProfile_DomainProfileRange_Returns422(t *testing.T) {
 	t.Parallel()
 	svc := &stubScheduleService{
-		copyProfileErr: errors.New("schedules: profile index out of range (1..6)"),
+		copyProfileErr: hmerr.ErrScheduleCopyProfileRange,
 	}
 	body := strings.NewReader(`{"source_profile":1,"target_channel_address":"DEV2:2","target_profile":2}`)
 	req := httptest.NewRequest(http.MethodPost, "/", body)

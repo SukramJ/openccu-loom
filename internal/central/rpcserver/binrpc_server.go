@@ -56,6 +56,10 @@ type BINRPCServer struct {
 	// Serve's accept loop refuses to launch new handler goroutines once
 	// shutdown started.
 	closed atomic.Bool
+
+	// metrics is the optional per-request observation sink. Nil means the
+	// listener runs unobserved.
+	metrics CallbackObserver
 }
 
 // trackConn registers one in-flight handler, reporting false when shutdown
@@ -99,6 +103,11 @@ type BINRPCConfig struct {
 	// connections close. <= 0 means uncapped; the daemon supplies a
 	// secure default from cfg.Callback.MaxConnections.
 	MaxConnections int
+
+	// Metrics, when non-nil, receives one observation per dispatched
+	// callback (see [CallbackObserver]). Nil leaves the listener
+	// unobserved.
+	Metrics CallbackObserver
 }
 
 // NewBINRPCServer binds a listener.
@@ -117,7 +126,9 @@ func NewBINRPCServer(cfg BINRPCConfig) (*BINRPCServer, error) {
 		return nil, fmt.Errorf("rpcserver: binrpc listen %s: %w", cfg.Addr, err)
 	}
 	ln = limitListener(ln, cfg.MaxConnections)
-	return newBINRPCServerOn(ln, logger, cfg.IOTimeout, cfg.PeerAllowlist), nil
+	s := newBINRPCServerOn(ln, logger, cfg.IOTimeout, cfg.PeerAllowlist)
+	s.metrics = cfg.Metrics
+	return s, nil
 }
 
 // newBINRPCServerOn assembles the server around an already-bound
@@ -421,6 +432,10 @@ func faultStruct(f *hmerr.XMLRPCFault) xmlrpc.StructValue {
 	}}
 }
 
+// dispatch routes one callback — a bare call, or one sub-call of a batch —
+// and reports it to the metrics observer. A multicall envelope is not
+// observed itself: every sub-call runs through here on its own, so counting
+// the envelope too would double every batched CUxD event.
 func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrpc.Value, error) {
 	// Unwrap batched callbacks before the interface_id lookup — a
 	// multicall envelope carries the id inside each sub-call, not in
@@ -428,6 +443,30 @@ func (s *BINRPCServer) dispatch(ctx context.Context, req *binrpc.Request) (xmlrp
 	if req.Method == "system.multicall" {
 		return s.dispatchMulticall(ctx, req.Params)
 	}
+	finish := observeCallbackStart(s.metrics, binrpcRouteKey(req))
+	val, err := s.dispatchCall(ctx, req)
+	finish(err != nil)
+	return val, err
+}
+
+// binrpcRouteKey reports the interface id [BINRPCServer.dispatchCall] will
+// route req by, or "" when the request carries none — introspection, or a
+// malformed envelope. It mirrors the extraction below rather than sharing it
+// because the observation has to happen around the dispatch, not inside it.
+func binrpcRouteKey(req *binrpc.Request) string {
+	if req.Method == "system.listMethods" || len(req.Params) == 0 {
+		return ""
+	}
+	id, err := xmlrpc.AsString(req.Params[0])
+	if err != nil {
+		return ""
+	}
+	return id
+}
+
+// dispatchCall routes a single non-batched callback to the handlers
+// registered for its interface id.
+func (s *BINRPCServer) dispatchCall(ctx context.Context, req *binrpc.Request) (xmlrpc.Value, error) {
 	// Introspection answers the same list for every interface, so it is
 	// exempt from the preamble too. The standard XML-RPC shape carries no
 	// argument at all, and a peer that does pass an id may well probe before

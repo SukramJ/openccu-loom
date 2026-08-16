@@ -59,7 +59,7 @@ describe("resolveTileColor — DIMMER family", () => {
 });
 
 describe("resolveTileColor — BLIND/JALOUSIE/SHUTTER family", () => {
-  it("returns cover-active only while partially open (0 < LEVEL < 1)", () => {
+  it("returns cover-active for every open position, including fully open", () => {
     for (const fam of [
       "BLIND",
       "JALOUSIE",
@@ -69,12 +69,15 @@ describe("resolveTileColor — BLIND/JALOUSIE/SHUTTER family", () => {
       expect(resolveTileColor(fam, 0.5, true)).toContain(
         "--state-cover-active-color",
       );
+      // LEVEL 1.0 is the fully-open end position, not a closed cover.
+      expect(resolveTileColor(fam, 1, true)).toContain(
+        "--state-cover-active-color",
+      );
     }
   });
 
-  it("returns neutral when fully open or fully closed", () => {
+  it("returns neutral only when fully closed", () => {
     expect(resolveTileColor("BLIND", 0, true)).toBe(NEUTRAL);
-    expect(resolveTileColor("BLIND", 1, true)).toBe(NEUTRAL);
   });
 });
 

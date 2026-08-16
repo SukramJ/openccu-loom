@@ -1074,17 +1074,17 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/system/ccu", handlers.SystemCCU(d.SystemCCU))
 			// Reboot one CCU host. Admin-gated like DELETE /devices; the
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
-			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
 			// Astro reference position. Admin-gated: it moves every
 			// sunrise/sunset time the CCU computes, for its own programs
 			// as well as the weekly profiles this daemon edits.
-			pr.With(admin).Put("/system/ccu/{central}/position", handlers.PutCCUPosition(d.CCUPosition, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Put("/system/ccu/{central}/position", handlers.PutCCUPosition(d.CCUPosition, d.AuditRecorder))
 			// Host power and boot mode. All three take the CCU out of
 			// normal service, so they sit next to the reboot: admin-gated,
 			// audited, and confirmed in the UI before dispatch.
-			pr.With(admin).Post("/system/ccu/{central}/poweroff", handlers.PostCCUPoweroff(d.CCUHostActions, d.AuditRecorder))
-			pr.With(admin).Post("/system/ccu/{central}/safe-mode", handlers.PostCCUSafeMode(d.CCUHostActions, d.AuditRecorder))
-			pr.With(admin).Post("/system/ccu/{central}/recovery-mode", handlers.PostCCURecoveryMode(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Post("/system/ccu/{central}/poweroff", handlers.PostCCUPoweroff(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Post("/system/ccu/{central}/safe-mode", handlers.PostCCUSafeMode(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin, middleware.CentralScope).Post("/system/ccu/{central}/recovery-mode", handlers.PostCCURecoveryMode(d.CCUHostActions, d.AuditRecorder))
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
 			// Add-on self-update (ADR 0057). GET always answers 200 (a nil
 			// d.AddonUpdate reports supported:false) — mounted unconditionally
@@ -1161,7 +1161,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(admin).Post("/diagnostics/rpc-recording", handlers.StartRPCRecording(d.RPCRecorder, d.AuditRecorder))
 				pr.With(admin).Post("/diagnostics/rpc-recording/stop", handlers.StopRPCRecording(d.RPCRecorder, d.AuditRecorder))
 				pr.With(admin).Get("/diagnostics/rpc-recording", handlers.ListRPCRecordings(d.RPCRecorder))
-				pr.With(admin).Get("/diagnostics/rpc-recording/{central}/download", handlers.DownloadRPCRecording(d.RPCRecorder))
+				pr.With(admin, middleware.CentralScope).Get("/diagnostics/rpc-recording/{central}/download", handlers.DownloadRPCRecording(d.RPCRecorder))
 			}
 			if d.Metrics != nil {
 				pr.Get("/metrics", handlers.MetricsHandler(d.Metrics))

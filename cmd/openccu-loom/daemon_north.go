@@ -543,10 +543,10 @@ func (s *alarmMQTTSink) emitArmFailure(zoneID, zoneName string, mode hmenum.Alar
 	hook(zoneID, zoneName, mode, blockers)
 }
 
-// buildOIDCRest discovers the IdP and constructs the REST OIDC deps backing
-// the SPA's SSO flow (`/api/v1/auth/oidc/{start,callback}`). Returns nil when
-// OIDC is disabled or discovery fails — the SPA then hides the SSO button.
-func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.AuthDeps) *handlers.OIDCDeps { //nolint:contextcheck // test callers outside owned set prevent ctx signature; buildOIDCClient uses context.Background() with a nolint inside
+// buildOIDCRest constructs the REST OIDC deps backing the SPA's SSO flow
+// (`/api/v1/auth/oidc/{start,callback}`). Returns nil when OIDC is disabled
+// or misconfigured — the SPA then hides the SSO button.
+func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.AuthDeps) *handlers.OIDCDeps {
 	client := buildOIDCClient(cfg, logger)
 	if client == nil {
 		return nil
@@ -554,15 +554,18 @@ func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.A
 	return handlers.NewOIDCDeps(client, authDeps, logger)
 }
 
+// buildOIDCClient builds the OIDC client from the configured issuer without
+// contacting it. Provider discovery is deferred to the first login, so an IdP
+// that happens to be down while the daemon boots does not disable SSO until
+// the next restart — it recovers on its own once the IdP answers again. Only
+// a configuration error (missing issuer / client id / redirect URL, or a
+// non-HTTPS issuer) yields nil.
 func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 	oc := cfg.North.REST.Auth.OIDC
 	if !oc.Enabled || oc.Issuer == "" {
 		return nil
 	}
-	//nolint:contextcheck // test callers outside owned set prevent threading ctx through here; discovery uses a short independent timeout
-	discoCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	client, err := oidc.New(discoCtx, oidc.Config{
+	client, err := oidc.NewDeferred(oidc.Config{
 		Issuer:       oc.Issuer,
 		ClientID:     oc.ClientID,
 		ClientSecret: oc.ClientSecret,
@@ -655,14 +658,19 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// topics of every configured CCU, not just the default one — a
 		// retired spelling of one CCU's name can be another CCU's live
 		// topic, and clearing that would blank a value in use.
-		CentralNames:       centralNames(),
-		RawEnabled:         cfg.North.MQTT.RawEnabled,
-		HADiscoveryEnabled: cfg.North.MQTT.DiscoveryEnabled,
-		SubDevicesEnabled:  cfg.North.MQTT.SubDevicesEnabled,
-		Locale:             cfg.Locale,
-		HealthSupplier:     bridgeHealthSupplier(centralNames, startedAt),
-		Collector:          collector,
-		ChannelHidden:      channelHidden,
+		CentralNames: centralNames(),
+		// The snapshot above is taken at boot. A CCU adopted afterwards is
+		// not in it, so a sweep would judge that CCU's live topics against
+		// a fleet it is not part of and clear them; the supplier is asked
+		// per sweep instead.
+		CentralNamesSupplier: centralNames,
+		RawEnabled:           cfg.North.MQTT.RawEnabled,
+		HADiscoveryEnabled:   cfg.North.MQTT.DiscoveryEnabled,
+		SubDevicesEnabled:    cfg.North.MQTT.SubDevicesEnabled,
+		Locale:               cfg.Locale,
+		HealthSupplier:       bridgeHealthSupplier(centralNames, startedAt),
+		Collector:            collector,
+		ChannelHidden:        channelHidden,
 	}, pub).WithSubscriber(client)
 	wiring := mqtt.NewWiring(bridge, logger)
 

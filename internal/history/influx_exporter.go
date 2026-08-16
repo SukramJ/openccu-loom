@@ -180,6 +180,36 @@ func (e *InfluxExporter) drain() []sqlite.MeasurementSample {
 	return out
 }
 
+// requeue puts a failed batch back in front of the samples that arrived while
+// the flush was in flight, so a transient outage retries on the next tick
+// instead of losing everything buffered since the last successful write. The
+// combined buffer stays bounded by maxBuffer; on overflow the oldest samples
+// are dropped and counted — bounded, metered loss, never a silent one. Mirrors
+// [Recorder.requeue], which solves the same problem for the SQLite tier.
+func (e *InfluxExporter) requeue(batch []sqlite.MeasurementSample) {
+	if len(batch) == 0 {
+		return
+	}
+	e.mu.Lock()
+	combined := make([]sqlite.MeasurementSample, 0, len(batch)+len(e.buf))
+	combined = append(combined, batch...)
+	combined = append(combined, e.buf...)
+	if over := len(combined) - e.maxBuffer; over > 0 {
+		combined = combined[over:]
+		e.dropped.Add(int64(over))
+	}
+	e.buf = combined
+	e.mu.Unlock()
+}
+
+// retryableStatus reports whether an Influx write may succeed on a later
+// attempt with the same body. A rejected payload or a rejected token never
+// will, so those batches are dropped rather than requeued — keeping them would
+// wedge the buffer full of poison and push live samples out of it.
+func retryableStatus(code int) bool {
+	return code == http.StatusTooManyRequests || code >= 500
+}
+
 func (e *InfluxExporter) flush(ctx context.Context) {
 	batch := e.drain()
 	if len(batch) == 0 {
@@ -197,6 +227,7 @@ func (e *InfluxExporter) flush(ctx context.Context) {
 	resp, err := e.client.Do(req)
 	if err != nil {
 		e.failures.Add(1)
+		e.requeue(batch)
 		e.logger.Warn("history.export.post_err",
 			slog.Int("samples", len(batch)), slog.String("err", err.Error()))
 		return
@@ -204,10 +235,17 @@ func (e *InfluxExporter) flush(ctx context.Context) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		e.failures.Add(1)
+		retryable := retryableStatus(resp.StatusCode)
+		if retryable {
+			e.requeue(batch)
+		} else {
+			e.dropped.Add(int64(len(batch)))
+		}
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
 		e.logger.Warn("history.export.bad_status",
 			slog.Int("status", resp.StatusCode),
 			slog.Int("samples", len(batch)),
+			slog.Bool("requeued", retryable),
 			slog.String("body", string(snippet)))
 		return
 	}

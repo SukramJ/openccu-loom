@@ -241,3 +241,32 @@ func TestWrapSysvarReturnsBaseForUnknown(t *testing.T) {
 		}
 	}
 }
+
+// TestSysvarInternalIsRaceFreeAgainstAHubScan pins that the internal flag
+// is read and written through the sysvar's own lock.
+//
+// Every hub scan rewrites the flag on the live objects north-bound
+// listings are walking at the same time, so a reader that took the field
+// directly raced the refresh — visible only under -race, and only when a
+// listing happened to overlap a scan.
+func TestSysvarInternalIsRaceFreeAgainstAHubScan(t *testing.T) {
+	t.Parallel()
+	sv := NewSysvar("ccu1", "Presence", "", hmenum.HubValueTypeLogic, nil)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 500 {
+			sv.SetInternal(i%2 == 0)
+		}
+	}()
+	for range 500 {
+		_ = sv.Internal()
+	}
+	<-done
+
+	sv.SetInternal(true)
+	if !sv.Internal() {
+		t.Error("Internal() did not report the value SetInternal wrote")
+	}
+}

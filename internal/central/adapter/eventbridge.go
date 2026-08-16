@@ -531,7 +531,13 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 	if bridge == nil {
 		return
 	}
-	bridge.RetractDiscoveryForDevice(ctx, e.Address)
+	// Both retractions are scoped to the removal's own central. Device
+	// addresses are unique per CCU but repeat verbatim across CCUs — the
+	// virtual remote (HmIP-RCV-1), the BidCoS pseudo devices and the
+	// INT000* internal devices carry the identical address everywhere — so
+	// an unscoped discovery sweep would clear the other centrals' live
+	// entities along with this one's.
+	bridge.RetractDiscoveryForCentralDevice(ctx, e.CentralName, e.Address)
 	bridge.RetractRawStateForDevice(ctx, e.CentralName, e.InterfaceID, e.Address)
 }
 

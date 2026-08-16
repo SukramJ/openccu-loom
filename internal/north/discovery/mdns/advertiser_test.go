@@ -114,3 +114,18 @@ func TestServiceTypeIsCanonical(t *testing.T) {
 		t.Fatalf("Domain drift: %q", Domain)
 	}
 }
+
+// TestMulticastUpdateTXTBeforeStart pins the not-started contract of the
+// multicast advertiser: republishing a record that was never registered must
+// report [ErrNotStarted] rather than touching a nil server. The published path
+// needs a live multicast responder and is exercised on the wire, not here.
+func TestMulticastUpdateTXTBeforeStart(t *testing.T) {
+	t.Parallel()
+	m := NewMulticast(Service{InstanceName: "loom", Port: 8080, TXT: []string{"a=1"}})
+	if err := m.UpdateTXT([]string{"a=2"}); !errors.Is(err, ErrNotStarted) {
+		t.Fatalf("UpdateTXT before Start: err = %v, want %v", err, ErrNotStarted)
+	}
+	if err := m.Stop(); err != nil {
+		t.Fatalf("Stop on a never-started advertiser: %v", err)
+	}
+}

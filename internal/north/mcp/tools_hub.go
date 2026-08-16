@@ -77,12 +77,12 @@ func registerListPrograms(s *mcpsdk.Server, d Deps) {
 				continue
 			}
 			for _, p := range h.Programs() {
-				if p.IsInternal {
+				if p.Internal() {
 					continue
 				}
 				ps := programSummary{
 					ID:           p.ID,
-					Name:         p.Name,
+					Name:         p.LegacyName(),
 					Description:  p.Description,
 					Central:      c,
 					LastExecuted: p.LastExecuteTimeString(),
@@ -124,11 +124,11 @@ func registerListSysvars(s *mcpsdk.Server, d Deps) {
 				continue
 			}
 			for _, sv := range h.Sysvars() {
-				if sv.IsInternal {
+				if sv.Internal() {
 					continue
 				}
 				ss := sysvarSummary{
-					Name:      sv.Name,
+					Name:      sv.LegacyName(),
 					Type:      string(sv.ValueType),
 					Unit:      sv.Unit,
 					ValueList: sv.ValueList,

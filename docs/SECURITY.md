@@ -83,12 +83,24 @@ controlled by `north.rest.csrf_enabled` (default **true**).
   echoes it back in the `X-CSRF-Token` header; server-rendered forms
   submit it as the `_csrf` field.
 - Safe methods (`GET`, `HEAD`, `OPTIONS`) pass through untouched.
-- **Per-request credential schemes bypass CSRF on purpose:** requests
-  authenticated with `Authorization: Basic` or `Authorization: Bearer`
-  skip the token check, because browsers never auto-attach those headers
-  cross-origin. CSRF defends ambient credentials (the session cookie)
-  only. `curl` / CI / automation using a bearer token are therefore
-  unaffected.
+- **Bearer tokens bypass CSRF on purpose:** a browser never attaches an
+  `Authorization: Bearer` header on its own, so a foreign page cannot
+  produce an authenticated request. `curl` / CI / automation using a
+  bearer token are therefore unaffected by the token check. The same
+  reasoning exempts the Home Assistant ingress scheme, which is trusted
+  per request by the supervisor network rather than by a browser cookie.
+- **Basic auth is only conditionally exempt.** Once a browser has cached
+  Basic credentials for the daemon's origin it replays the
+  `Authorization` header on requests *any* site triggers — that is
+  ambient authority, exactly like a session cookie. A Basic-authenticated
+  request therefore skips the token check only when it carries no
+  evidence of coming from a browser on another site (`Sec-Fetch-Site`, or
+  an `Origin` that is neither the request host nor the proxy-forwarded
+  host). Scripts stay exempt; a cross-site browser request must present
+  the double-submit token, which a foreign origin cannot read.
+- The WebSocket handshake applies the same rule to its Origin allow-list:
+  a handshake carrying a non-empty Bearer token skips the Origin check,
+  a Basic-authenticated one does not.
 - `north.rest.csrf_secure` (default **false**) adds the `Secure` flag to
   the CSRF cookie — turn it on when the daemon is behind HTTPS.
 

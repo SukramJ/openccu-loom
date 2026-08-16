@@ -237,6 +237,29 @@ const (
 	// part of a successful install, so this entry is the durable trace
 	// of who initiated it; the Note carries the target release version.
 	ActionAddonUpdateInstall Action = "addon_update_install"
+
+	// Operator diagnostics surface. These change what the daemon records
+	// about itself rather than what it does to a CCU, which is why they
+	// are audited: a log level lowered to debug on a busy install, or a
+	// capture left running, is a change somebody has to be able to trace
+	// back. The dotted strings are the values already written to the
+	// audit store, kept verbatim so existing rows keep resolving.
+	ActionLoggingOverrideSet      Action = "logging.override_set"
+	ActionLoggingOverrideReset    Action = "logging.override_reset"
+	ActionLoggingDefaultLevelSet  Action = "logging.default_level_set"
+	ActionDiagnosticsCaptureStart Action = "diagnostics.capture_start"
+	ActionDiagnosticsCaptureStop  Action = "diagnostics.capture_stop"
+
+	// ActionSystemRestartRequested records an operator-triggered restart
+	// of the daemon itself. It is the last row before the trail goes
+	// quiet, which is what tells a reader that the gap was intended.
+	ActionSystemRestartRequested Action = "system.restart_requested"
+
+	// ActionCacheClear records an operator-triggered flush of the
+	// daemon's caches. The Note carries which scopes were cleared; the
+	// next reads go to the CCU, so it explains a burst of radio traffic
+	// that has no other cause in the trail.
+	ActionCacheClear Action = "cache_clear"
 )
 
 // Entry is one recorded change. The User field is filled by the REST

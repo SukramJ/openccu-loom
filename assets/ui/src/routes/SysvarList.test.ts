@@ -527,6 +527,70 @@ describe("SysvarList edit dialog dispatch", () => {
       "ccu1",
     );
   });
+
+  // The declared bounds are the reason the fields exist: an operator can
+  // only verify or correct a limit they can see. Rendering them blank
+  // reads as "no bounds set" for a variable the CCU does constrain.
+  const numberVar = {
+    name: "Sollwert",
+    central: "ccu1",
+    value_type: "INTEGER",
+    value: 21,
+    value_list: [],
+    unit: "°C",
+    min: 0,
+    max: 100,
+    is_internal: false,
+    is_extended: false,
+  };
+
+  it("pre-fills the bounds of a numeric sysvar from the CCU", async () => {
+    const { dialog } = await openEditDialog(numberVar);
+    expect(findByLabel(dialog, t("common.min")).value).toBe("0");
+    expect(findByLabel(dialog, t("common.max")).value).toBe("100");
+  });
+
+  it("keeps unchanged bounds out of the patch body", async () => {
+    const { dialog } = await openEditDialog(numberVar);
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(api.patchSysvar).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(api.patchSysvar).mock.calls[0][1] as Record<string, unknown>;
+    expect(body.min).toBeUndefined();
+    expect(body.max).toBeUndefined();
+  });
+
+  // The CCU has no unbounded numeric system variable — its own WebUI
+  // writes both bounds on every save and ReGa coerces a blank one to 0 —
+  // so an emptied bound field is an edit the daemon cannot perform. It
+  // used to be dropped between the form and the request body: the save
+  // went through, the success toast appeared, and the bound was still
+  // there. The refusal has to reach the operator.
+  it("refuses a save that empties a declared bound instead of dropping it silently", async () => {
+    const { dialog } = await openEditDialog(numberVar);
+    const errorSpy = vi.spyOn(toastStore, "error");
+    const min = findByLabel(dialog, t("common.min"));
+    min.value = "";
+    await fireEvent.input(min);
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledTimes(1));
+    expect(api.patchSysvar).not.toHaveBeenCalled();
+    // The dialog stays open on the rejected value so the operator can fix it.
+    expect(findByLabel(dialog, t("common.min")).value).toBe("");
+  });
+
+  it("sends a corrected upper bound", async () => {
+    const { dialog } = await openEditDialog(numberVar);
+    const max = findByLabel(dialog, t("common.max"));
+    max.value = "30";
+    await fireEvent.input(max);
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(api.patchSysvar).toHaveBeenCalledTimes(1));
+    expect(api.patchSysvar).toHaveBeenCalledWith(
+      "Sollwert",
+      expect.objectContaining({ max: "30" }),
+      "ccu1",
+    );
+  });
 });
 
 // The edit overlay announces itself as aria-modal, so it owes a keyboard

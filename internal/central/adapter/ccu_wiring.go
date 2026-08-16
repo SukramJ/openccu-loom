@@ -34,6 +34,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -715,6 +716,9 @@ func wireInterface(
 		// backoff, so a long wait here would stall the client state machine
 		// instead of letting it cycle.
 		WaitCCUReady: newReconnectReadinessGate(cc, logger),
+		// Feeds the central's RPC + service metrics sections. See
+		// [newRPCOutcomeHook] for why the observer is resolved per call.
+		RPCOutcomeHook: newRPCOutcomeHook(unit, wireID),
 	}
 	// Operator-supplied reliability overrides default to
 	// openccu-loom's Go-idiomatic values when zero; a positive
@@ -1211,7 +1215,7 @@ func wireInterface(
 					// client sits in CREATED forever once the boot-time
 					// init() failed, and every subsequent recovery.trigger
 					// is rejected with "CanReconnect returned false".
-					ensureDisconnectedClientState(ic, logger)
+					ensureDisconnectedClientState(ic, err, logger)
 				}
 			} else {
 				logger.Info("wire.init.ok",
@@ -1300,9 +1304,19 @@ ingestLoop:
 // from CREATED → INITIALIZING → FAILED → DISCONNECTED so the recovery
 // coordinator can subsequently transition into RECONNECTING. Used when
 // the boot-time init() failed (CCU unreachable at daemon start).
-func ensureDisconnectedClientState(ic *client.InterfaceClient, logger *slog.Logger) {
+//
+// cause is the failure that ended the bring-up; it decides the reason the
+// FAILED state carries, so an operator reading the interface state sees
+// rejected credentials as "auth" rather than "network". A cause the
+// classifier cannot place stays "network", because from the operator's side
+// an interface that never came up is the interface not being on the wire.
+func ensureDisconnectedClientState(ic *client.InterfaceClient, cause error, logger *slog.Logger) {
 	if ic == nil {
 		return
+	}
+	reason := hmerr.ExceptionToFailureReason(cause)
+	if reason == hmenum.FailureReasonUnknown || reason == hmenum.FailureReasonNone {
+		reason = hmenum.FailureReasonNetwork
 	}
 	transitions := []struct {
 		target hmenum.ClientState
@@ -1313,7 +1327,7 @@ func ensureDisconnectedClientState(ic *client.InterfaceClient, logger *slog.Logg
 		{hmenum.ClientStateDisconnected, "wire.init.failed: failed→disconnected (ready for reconnect)"},
 	}
 	for _, t := range transitions {
-		if err := ic.TransitionTo(t.target, t.reason, false, hmenum.FailureReasonNetwork); err != nil {
+		if err := ic.TransitionTo(t.target, t.reason, false, reason); err != nil {
 			logger.Debug("wire.init.state_transition_skipped",
 				slog.String("target", string(t.target)),
 				slog.String("err", err.Error()))

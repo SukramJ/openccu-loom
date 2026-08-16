@@ -14,13 +14,17 @@ export type MatterStatus = {
 export type MatterFabric = {
   fabric_index: number;
   /**
-   * 64-bit fabric / operational node identifiers. Unlike the session DTO,
-   * which hex-encodes its ids into strings, the fabric list serves them as
-   * JSON numbers — render them with an explicit `toString(16)` rather than
-   * gluing a `0x` in front of the decimal value.
+   * 64-bit fabric / operational node identifiers. The numeric fields are
+   * JSON numbers and therefore carry only 53 bits of integer precision:
+   * every id a real controller assigns is larger, so JSON.parse rounds it
+   * before any code here sees it. Render the `_hex` fields — the daemon
+   * formats them as the 16-digit uppercase hex controllers and chip-tool
+   * print. The numeric fields remain for ordering and legacy callers.
    */
   fabric_id: number;
+  fabric_id_hex?: string;
   node_id: number;
+  node_id_hex?: string;
   vendor_id: number;
   vendor_name: string;
   label: string;

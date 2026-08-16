@@ -82,11 +82,13 @@
     POSITION_UNKNOWN: "cdp.cover.state_unknown",
   };
 
+  // Any LEVEL above the closed end position counts as open — 1.0 is the
+  // normal fully-open position, not a state that should read as closed.
   const isOpen = $derived.by(() => {
     if (isGarage) {
       return garageState === "OPEN" || garageState === "VENTILATION_POSITION";
     }
-    return level > 0 && level < 1;
+    return level > 0;
   });
 
   const tileColor = $derived(

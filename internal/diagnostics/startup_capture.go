@@ -4,6 +4,7 @@
 package diagnostics
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,28 +32,68 @@ type StartupCaptureConfig struct {
 	// [MaxCaptureDuration] are clamped down to that cap.
 	DurationS int `json:"duration_seconds"`
 	// Anonymise controls whether device-address-shaped values in the
-	// archive are hashed. Defaults to true on first write.
+	// archive are hashed. A body or file that omits the key means "yes"
+	// — see [StartupCaptureConfig.UnmarshalJSON].
 	Anonymise bool `json:"anonymise"`
 }
 
+// UnmarshalJSON decodes the config, defaulting Anonymise to true whenever the
+// key is absent. Plain bool decoding would turn every payload that only flips
+// `enabled` into a persisted `anonymise: false`, and the boot capture cannot
+// recover from that: [Manager.Start]'s anonymise-by-default fallback only
+// applies to captures with no trigger, while the startup path always passes
+// one. The next boot would then archive raw device addresses without anyone
+// having asked for it. An explicit `"anonymise": false` is still honoured.
+//
+// Unknown keys are rejected, mirroring the strictness the REST decoder applies
+// to every other request body — a payload we cannot fully interpret must not
+// silently configure what the daemon records about itself.
+func (c *StartupCaptureConfig) UnmarshalJSON(data []byte) error {
+	// The alias sheds this method so the nested decode does not recurse; the
+	// pointer field shadows the embedded bool and records "key was present".
+	type alias StartupCaptureConfig
+	var raw struct {
+		alias
+		Anonymise *bool `json:"anonymise"`
+	}
+	raw.Anonymise = nil
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	*c = StartupCaptureConfig(raw.alias)
+	c.Anonymise = raw.Anonymise == nil || *raw.Anonymise
+	return nil
+}
+
+// DefaultStartupCapture is the config a daemon that has never been configured
+// runs with: no boot capture, and anonymised archives if one is ever enabled.
+// It is also what the REST surface renders before the first write, so an
+// operator who toggles `enabled` and sends the form back does not carry an
+// accidental `anonymise: false` with it.
+func DefaultStartupCapture() StartupCaptureConfig {
+	return StartupCaptureConfig{Anonymise: true}
+}
+
 // LoadStartupCapture reads the persisted config from dataDir. A
-// missing file is treated as `{enabled: false}` rather than an error
+// missing file is treated as [DefaultStartupCapture] rather than an error
 // so a fresh daemon boot does not require any explicit init step.
 func LoadStartupCapture(dataDir string) (StartupCaptureConfig, error) {
 	if dataDir == "" {
-		return StartupCaptureConfig{}, nil
+		return DefaultStartupCapture(), nil
 	}
 	path := filepath.Join(dataDir, StartupCaptureFileName)
 	raw, err := os.ReadFile(path) //nolint:gosec // path is composed from the operator-controlled data dir; see #20
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return StartupCaptureConfig{}, nil
+			return DefaultStartupCapture(), nil
 		}
-		return StartupCaptureConfig{}, fmt.Errorf("diagnostics: read startup capture: %w", err)
+		return DefaultStartupCapture(), fmt.Errorf("diagnostics: read startup capture: %w", err)
 	}
 	var cfg StartupCaptureConfig
 	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return StartupCaptureConfig{}, fmt.Errorf("diagnostics: parse startup capture: %w", err)
+		return DefaultStartupCapture(), fmt.Errorf("diagnostics: parse startup capture: %w", err)
 	}
 	return cfg, nil
 }

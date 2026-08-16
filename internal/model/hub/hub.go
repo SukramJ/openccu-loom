@@ -551,14 +551,21 @@ func (h *Hub) ClearSysvars() {
 // RemoveSysvar drops a sysvar from the in-memory cache and reports
 // whether one existed. Use DeleteSysvarRemote for full CCU-side
 // removal — this method is the local-only path used during
-// re-snapshots.
+// re-snapshots. Fires the sysvar's [Sysvar.NotifyRemoved] hooks after
+// the entry is dropped so subscribers (MQTT discovery, UI state) can
+// clean up. Mirrors [Hub.RemoveProgram].
 func (h *Hub) RemoveSysvar(name string) bool {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	if _, ok := h.sysvars[name]; !ok {
+	sv, ok := h.sysvars[name]
+	if !ok {
+		h.mu.Unlock()
 		return false
 	}
 	delete(h.sysvars, name)
+	h.mu.Unlock()
+	if sv != nil {
+		sv.NotifyRemoved()
+	}
 	return true
 }
 

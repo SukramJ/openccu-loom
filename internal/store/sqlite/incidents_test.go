@@ -707,6 +707,52 @@ func TestIncidentStoreGetDiagnostics(t *testing.T) {
 	}
 }
 
+// TestIncidentStoreGetDiagnosticsReportsNewestIncidents pins which end of the
+// last_seen-descending list the "recent_incidents" summary is cut from. Taking
+// the tail instead of the head publishes the ten *oldest* incidents under a key
+// that promises the most recent ones — an operator reading the diagnostics
+// bundle then sees nothing of what just broke.
+func TestIncidentStoreGetDiagnosticsReportsNewestIncidents(t *testing.T) {
+	s := freshIncidentStore(t)
+	ctx := context.Background()
+
+	// CURRENT_TIMESTAMP has second granularity, so rows recorded in a tight
+	// loop share a last_seen and the ordering would be arbitrary. Write
+	// explicit, strictly increasing timestamps instead.
+	const total = 14
+	base := time.Date(2026, 1, 2, 3, 0, 0, 0, time.UTC)
+	for i := range total {
+		ts := base.Add(time.Duration(i) * time.Minute).Format("2006-01-02 15:04:05")
+		if _, err := s.db.ExecContext(
+			ctx, `
+INSERT INTO incidents (central_name, interface_id, type, severity, message, first_seen, last_seen, count)
+VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+			"ccu1", "BidCos-RF", string(hmenum.IncidentTypeConnectionLost),
+			string(hmenum.IncidentSeverityWarning), fmt.Sprintf("incident-%02d", i), ts, ts,
+		); err != nil {
+			t.Fatalf("insert incident %d: %v", i, err)
+		}
+	}
+
+	diag, err := s.GetDiagnostics(ctx, "ccu1", 100, 30)
+	if err != nil {
+		t.Fatalf("GetDiagnostics: %v", err)
+	}
+	recent, ok := diag["recent_incidents"].([]map[string]any)
+	if !ok {
+		t.Fatalf("recent_incidents type=%T", diag["recent_incidents"])
+	}
+	if len(recent) != 10 {
+		t.Fatalf("len(recent_incidents)=%d, want 10", len(recent))
+	}
+	for i, row := range recent {
+		want := fmt.Sprintf("incident-%02d", total-1-i)
+		if got := row["message"]; got != want {
+			t.Errorf("recent_incidents[%d].message = %v, want %s (newest first)", i, got, want)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // IncidentStore.RecordIncidentCtx
 // ---------------------------------------------------------------------------

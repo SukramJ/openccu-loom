@@ -385,3 +385,46 @@ describe("Diagnostics — daemon enums reach the operator localized", () => {
     expect(screen.queryByText("critical")).not.toBeInTheDocument();
   });
 });
+
+// The RPC-recording poll costs one request per interval for as long as the
+// view is open. Only a running recording changes on its own, so an idle
+// page must not keep asking — the counterpart of the running case below.
+describe("Diagnostics — RPC recording poll", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function settle() {
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  it("stays quiet while no recording is running", async () => {
+    mockListRpcRecordings.mockResolvedValue([
+      { central: "ccu1", active: false, entries: 0, randomize: false },
+    ]);
+    render(Diagnostics);
+    await settle();
+    const afterLoad = mockListRpcRecordings.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(20000);
+
+    expect(mockListRpcRecordings.mock.calls.length).toBe(afterLoad);
+  });
+
+  it("polls while a recording is running", async () => {
+    mockListRpcRecordings.mockResolvedValue([
+      { central: "ccu1", active: true, entries: 3, randomize: false },
+    ]);
+    render(Diagnostics);
+    await settle();
+    const afterLoad = mockListRpcRecordings.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(11000);
+
+    expect(mockListRpcRecordings.mock.calls.length).toBeGreaterThan(afterLoad);
+  });
+});

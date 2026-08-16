@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -185,7 +186,7 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 		}
 	}
 	p.refreshAfterPut(ctx, b, deviceAddress, key)
-	p.recordParamsetWrite(deviceAddress, string(key), before, values)
+	p.recordParamsetWrite(ctx, deviceAddress, string(key), before, values)
 	return nil
 }
 
@@ -230,17 +231,26 @@ func auditRedacted(before any) any {
 	return auditRedactedMask
 }
 
-func (p *ParamsetsDomain) recordParamsetWrite(channelAddress, paramset string, before, after map[string]any) {
+// recordParamsetWrite appends the write to the change log.
+//
+// The caller's operation label travels on the context and is recorded as
+// the entry's note. Every surface funnels into the same domain method, so
+// without it the log cannot tell a paramset an operator edited in the UI
+// from one an assistant wrote over MCP — which is the first question
+// asked of an unexplained configuration change.
+func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddress, paramset string, before, after map[string]any) {
 	if p.audit == nil {
 		return
 	}
 	changes := auditChanges(before, after)
+	rc, _ := reqctx.FromContext(ctx)
 	p.audit.Record(audit.Entry{
 		Action:        audit.ActionParamsetWrite,
 		DeviceAddress: deviceAddressOf(channelAddress),
 		ChannelNo:     channelNumberOf(channelAddress),
 		Paramset:      paramset,
 		Changes:       changes,
+		Note:          rc.Operation,
 	})
 }
 

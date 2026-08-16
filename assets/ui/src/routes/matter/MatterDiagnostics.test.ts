@@ -17,9 +17,14 @@ let endpoints: MatterEndpointsResponse = { endpoints: [] };
 let compat: MatterCompatibility = { ecosystems: [], endpoint_count: 0, findings: [] };
 let diagEvents: MatterDiagnosticEventList = { events: [] };
 
+// Set to make the sessions call fail, which is how any one of the five
+// parallel fetches failing reaches the view.
+let sessionsError: Error | null = null;
+
 vi.mock("$lib/api/client", () => ({
   api: {
-    matterSessions: () => Promise.resolve(sessions),
+    matterSessions: () =>
+      sessionsError ? Promise.reject(sessionsError) : Promise.resolve(sessions),
     matterMdns: () => Promise.resolve(mdns),
     matterEndpoints: () => Promise.resolve(endpoints),
     matterCompatibility: () => Promise.resolve(compat),
@@ -36,6 +41,7 @@ describe("MatterDiagnostics", () => {
     endpoints = { endpoints: [] };
     compat = { ecosystems: [], endpoint_count: 0, findings: [] };
     diagEvents = { events: [] };
+    sessionsError = null;
   });
   afterEach(cleanup);
 
@@ -192,5 +198,35 @@ describe("MatterDiagnostics", () => {
     expect(
       await screen.findByText(/revoked after too many failed pairing/i),
     ).toBeTruthy();
+  });
+
+  // Two commissioners refused inside the same UTC second produce two
+  // records with an identical timestamp and an identical message — the
+  // trace has to survive its own worst case, which is exactly the pairing
+  // failure it exists to explain.
+  it("renders two identical events recorded in the same second", async () => {
+    const repeated = {
+      at: "2026-08-15T12:00:30Z",
+      kind: "pairing" as const,
+      severity: "warning" as const,
+      message: "A pairing is already in progress.",
+    };
+    diagEvents = { events: [repeated, { ...repeated }] };
+
+    render(MatterDiagnostics);
+    expect(
+      (await screen.findAllByText("A pairing is already in progress.")).length,
+    ).toBe(2);
+  });
+
+  // "Nothing recorded" is a statement about the bridge. After a failed
+  // fetch nothing is known, so the view owes the operator the error and
+  // must not answer the question it could not ask.
+  it("does not claim an empty trace when the fetch failed", async () => {
+    sessionsError = new Error("matter bridge not enabled");
+
+    render(MatterDiagnostics);
+    expect(await screen.findByText(/matter bridge not enabled/i)).toBeTruthy();
+    expect(screen.queryByText(/Nothing recorded since the bridge started/i)).toBeNull();
   });
 });

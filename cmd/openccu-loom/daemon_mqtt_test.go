@@ -138,6 +138,45 @@ func TestBuildMQTT_RetainedSweepKnowsEveryConfiguredCentral(t *testing.T) {
 	}
 }
 
+// TestBuildMQTT_RetainedSweepFollowsARuntimeAdoptedCentral pins that the
+// bridge resolves the fleet per sweep rather than from the boot snapshot.
+//
+// A CCU adopted after boot is in no configured list, so a sweep that
+// reads the snapshot judges that CCU's live topics against a fleet it is
+// not part of. The failure is silent in both directions: the adopted
+// CCU's orphans are never cleared, and its live topics can be — and the
+// counters report the same numbers either way.
+func TestBuildMQTT_RetainedSweepFollowsARuntimeAdoptedCentral(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.MQTT.Enabled = true
+	cfg.North.MQTT.BrokerURL = "tcp://192.0.2.1:1883"
+	cfg.North.MQTT.ClientID = "openccu-loom-test"
+	cfg.North.MQTT.RawEnabled = true
+	cfg.North.MQTT.TopicBase = "openccu-loom"
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}}
+
+	// The live fleet, as the registry would report it after an adopt.
+	fleet := make([]string, 0, 2)
+	fleet = append(fleet, "ccu-01")
+	got := buildMQTT(cfg, slog.Default(), nil, nil, func() []string { return fleet })
+	if got == nil {
+		t.Fatal("expected non-nil stack")
+	}
+	bridge := got.wiring.Bridge()
+	if bridge == nil {
+		t.Fatal("expected non-nil bridge")
+	}
+
+	fleet = append(fleet, "Haus CCÜ")
+
+	want := "openccu-loom/" + strings.ToLower("Haus CCÜ") + "/system/health_score"
+	candidates := bridge.RetiredMetricTopics()
+	if !slices.Contains(candidates, want) {
+		t.Fatalf("retained-sweep candidates %v do not cover %q — the sweep is still reading the boot snapshot", candidates, want)
+	}
+}
+
 // ── announcePersistedFabric ───────────────────────────────────────────────────
 
 func TestAnnouncePersistedFabric_NilStore_IsNoop(t *testing.T) {

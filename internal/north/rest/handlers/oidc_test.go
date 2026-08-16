@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -477,5 +478,40 @@ func TestOIDCDeps_PutState_IsBoundedIndependentlyOfTheTTL(t *testing.T) {
 	// A flow started at the cap must still be completable.
 	if _, _, ok := d.consumeState(newest); !ok {
 		t.Error("the most recent flow was dropped instead of the oldest")
+	}
+}
+
+// TestOIDCStart_UndiscoverableProvider_Returns503 pins the behaviour when
+// provider metadata cannot be resolved: the client returns an empty
+// authorize URL, and the handler must say so rather than redirect the
+// browser to an empty location (which lands back on the SPA root and reads
+// as "the SSO button does nothing").
+func TestOIDCStart_UndiscoverableProvider_Returns503(t *testing.T) {
+	t.Parallel()
+	// A loopback address with nothing listening: discovery fails fast with
+	// connection refused instead of hanging on the provider timeout.
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	issuer := srv.URL
+	srv.Close()
+
+	client, err := oidc.NewDeferred(oidc.Config{
+		Issuer:      issuer,
+		ClientID:    "test-client",
+		RedirectURL: "http://localhost/callback",
+	}, nil)
+	if err != nil {
+		t.Fatalf("oidc.NewDeferred: %v", err)
+	}
+	d := NewOIDCDeps(client, nil, slog.New(slog.DiscardHandler))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/start", http.NoBody)
+	w := httptest.NewRecorder()
+	OIDCStart(d).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d (Location=%q)", w.Code, w.Header().Get("Location"))
+	}
+	if len(w.Result().Cookies()) != 0 {
+		t.Error("no state cookie may be minted for a flow that cannot start")
 	}
 }

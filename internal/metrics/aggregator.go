@@ -243,6 +243,13 @@ func NewAggregator(centralName string, observer *Observer, opts ...AggregatorOpt
 // CentralName returns the CCU name this aggregator is scoped to.
 func (a *Aggregator) CentralName() string { return a.centralName }
 
+// Observer returns the observation sink this aggregator reads from. It is
+// the write end of every section the aggregator renders from counters,
+// gauges and latency samples, so producers that are constructed after the
+// aggregator (the shared callback listeners, most notably) can reach the
+// right central's sink through the central registry.
+func (a *Aggregator) Observer() *Observer { return a.observer }
+
 // RPC returns aggregated outbound RPC metrics.
 func (a *Aggregator) RPC() RpcMetrics {
 	failedRequests := a.observer.AggregatedCounter("circuit.failure.")

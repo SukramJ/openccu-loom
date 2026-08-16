@@ -37,7 +37,9 @@ const handshakeMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 // when the list is non-empty: CSRF is a browser-only attack vector and
 // browsers always attach an Origin to WebSocket handshakes, so an absent
 // Origin identifies a non-browser client (native app, server-side
-// API-token client) that no cross-site page could have forged. Pass nil
+// API-token client) that no cross-site page could have forged. Handshakes
+// carrying a non-empty Bearer token are exempt for the same reason; Basic
+// credentials are not, because a browser replays them ambiently. Pass nil
 // or an empty slice to skip the check entirely.
 func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handler {
 	if logger == nil {
@@ -74,17 +76,21 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 			http.Error(w, "missing Sec-WebSocket-Key", http.StatusBadRequest)
 			return
 		}
-		// Only validate the Origin for cookie-authenticated browser handshakes.
-		// A request carrying an Authorization header (Bearer/Basic) is never a
-		// CSRF vector — CSRF rides ambient cookie auth, and a browser cannot set
-		// an Authorization header on a WebSocket handshake — so it is exempt,
-		// mirroring the CSRF middleware (auth.CSRFMiddleware). This lets the SPA
-		// connect through the remote-proxy add-on, which injects a Bearer token
-		// and strips the session cookie: across that proxy chain the browser's
-		// external Origin cannot be reconciled with the daemon's internal Host,
-		// yet the handshake is not a CSRF risk. A missing Origin (non-browser
-		// client) is likewise allowed.
-		if origin := r.Header.Get("Origin"); r.Header.Get("Authorization") == "" &&
+		// Only validate the Origin for handshakes whose credential a browser can
+		// attach on its own. A non-empty `Authorization: Bearer` header cannot be
+		// one: nothing in the browser adds a bearer token by itself, so a foreign
+		// page cannot produce an authenticated handshake. That exemption lets the
+		// SPA connect through the remote-proxy add-on, which injects a Bearer
+		// token and strips the session cookie: across that proxy chain the
+		// browser's external Origin cannot be reconciled with the daemon's
+		// internal Host, yet the handshake is not a CSRF risk.
+		//
+		// Basic is deliberately NOT exempt. Once the browser has cached the
+		// credentials for this origin it replays the Authorization header on
+		// requests any other site triggers, exactly like a session cookie — the
+		// same reasoning that scopes the REST-side exemption in auth.csrfExempt.
+		// A missing Origin (non-browser client) is likewise allowed.
+		if origin := r.Header.Get("Origin"); !hasBearerAuthHeader(r) &&
 			len(originSet) > 0 && origin != "" {
 			u, err := url.Parse(origin)
 			if err != nil {
@@ -184,6 +190,18 @@ func sameOriginHost(originHost string, r *http.Request) bool {
 		}
 	}
 	return false
+}
+
+// hasBearerAuthHeader reports whether the handshake carries a non-empty
+// `Authorization: Bearer <token>` header — the one credential class a browser
+// never attaches on its own, and therefore the only one that may skip the
+// Origin gate. An invalid token still fails authentication downstream, so
+// skipping the Origin check for it grants nothing. Mirrors the REST-side
+// predicate of the same name in the auth package, kept local because the
+// handshake path has no access to a resolved identity yet.
+func hasBearerAuthHeader(r *http.Request) bool {
+	h := r.Header.Get("Authorization")
+	return strings.HasPrefix(h, "Bearer ") && strings.TrimSpace(strings.TrimPrefix(h, "Bearer ")) != ""
 }
 
 func acceptKey(key string) string {

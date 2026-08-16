@@ -9,6 +9,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -68,12 +69,15 @@ func Open(ctx context.Context, dsn string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	// Wipe rows that belong to a previous on-disk schema. Failure here is
-	// non-fatal: callers can still operate against a non-wiped cache, just with
-	// stale rows that get refetched on access.
+	// Wipe rows that belong to a previous on-disk schema. This reclaims space;
+	// it is not load-bearing for correctness, because every paramset read
+	// already filters on the current schema_version, so a row that survives the
+	// wipe is invisible and gets refetched on access. Failing the open on a
+	// transient busy error would therefore abort daemon start-up over a
+	// housekeeping step — log and continue instead.
 	if _, err := NewParamsetStore(db).WipeOutdated(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("sqlite: wipe outdated caches: %w", err)
+		slog.Default().Warn("sqlite: wipe outdated caches failed, continuing with stale rows",
+			"error", err)
 	}
 	return db, nil
 }
@@ -176,8 +180,13 @@ func SchemaVersion(ctx context.Context, db *sql.DB) (int64, error) {
 // schema version. It does not run migrations, so an archived database is read
 // exactly as stamped. A path with no goose_db_version table (not a
 // OpenCCU-Loom database) surfaces the query error.
+//
+// The DSN must be a `file:` URI: the driver strips the query string from a DSN
+// that is not one, which turns `mode=ro` into a read-write open — and a
+// read-write open of a path that does not exist creates an empty database
+// instead of reporting the missing file.
 func SchemaVersionOfFile(ctx context.Context, path string) (int64, error) {
-	db, err := sql.Open(DriverName, path+"?mode=ro")
+	db, err := sql.Open(DriverName, "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: open %q: %w", path, err)
 	}

@@ -118,8 +118,9 @@ func Instrument(ctx context.Context, rec Recorder, name string, scope Scope, fn 
 	return fn(ctx)
 }
 
-// InstrumentValue ist die Value-Variante, in der die gewrappte
-// Funktion ein Ergebnis zurückgibt.
+// InstrumentValue is the result-carrying variant of [Instrument], for a
+// wrapped function that returns a value alongside its error. It records
+// the same latency, error and panic observations.
 func InstrumentValue[T any](ctx context.Context, rec Recorder, name string, scope Scope, fn func(ctx context.Context) (T, error)) (T, error) {
 	var out T
 	err := Instrument(ctx, rec, name, scope, func(ctx context.Context) error {

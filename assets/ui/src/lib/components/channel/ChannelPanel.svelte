@@ -1,3 +1,13 @@
+<script module lang="ts">
+  // Several ChannelPanels are mounted at once — device MASTER next to
+  // channel MASTER, or the two halves of the link editor. The undo /
+  // redo shortcuts are window-level, so without an owner one Ctrl+Z
+  // would step every mounted change stack and silently revert edits the
+  // operator never looked at. The panel the operator last interacted
+  // with (pointer or focus) owns the shortcut.
+  let focusedPanel: HTMLElement | null = null;
+</script>
+
 <script lang="ts">
   import type { UISchema } from "$lib/api/types";
   import { api, ApiError, friendlyError } from "$lib/api/client";
@@ -378,6 +388,26 @@
     banner = null;
   }
 
+  // Root element of this panel — the identity the shortcut owner is
+  // tracked by.
+  let panelRoot = $state<HTMLElement | null>(null);
+
+  $effect(() => {
+    const root = panelRoot;
+    if (!root) return;
+    function claim() {
+      focusedPanel = root;
+    }
+    root.addEventListener("pointerdown", claim);
+    root.addEventListener("focusin", claim);
+    return () => {
+      root.removeEventListener("pointerdown", claim);
+      root.removeEventListener("focusin", claim);
+      // Never leave a torn-down panel as the shortcut owner.
+      if (focusedPanel === root) focusedPanel = null;
+    };
+  });
+
   function onUndo() {
     const result = undo(stack, values, lockedParams);
     values = result.values;
@@ -403,6 +433,8 @@
   $effect(() => {
     function onKeydown(e: KeyboardEvent) {
       if (!(e.ctrlKey || e.metaKey)) return;
+      // Only the panel the operator last worked in reacts.
+      if (!panelRoot || focusedPanel !== panelRoot) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
@@ -771,6 +803,10 @@
   }
 </script>
 
+<!-- display:contents wrapper: no layout of its own, it only gives the
+     panel a DOM identity so the undo / redo shortcut can tell which of
+     the mounted panels the operator is working in. -->
+<div class="contents" bind:this={panelRoot}>
 <SessionTimeoutWarning dirty={dirtyNames.length > 0} />
 
 {#if lockedByOther}
@@ -1166,3 +1202,4 @@
     {/if}
   </Card>
 {/if}
+</div>

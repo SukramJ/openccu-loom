@@ -326,10 +326,10 @@ type xmlrpcCallback struct {
 // caller continues with a nil server. The returned teardown cancels the
 // callback context (folded from the original `defer cancelCallback()`); the
 // caller defers it.
-func wireXMLRPCCallback(ctx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, logger *slog.Logger) (cb *xmlrpcCallback, teardown func()) {
+func wireXMLRPCCallback(ctx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, obs rpcserver.CallbackObserver, logger *slog.Logger) (cb *xmlrpcCallback, teardown func()) {
 	callbackCtx, cancelCallback := context.WithCancel(ctx)
 	cb = &xmlrpcCallback{ctx: callbackCtx}
-	srv, port, err := startCallbackServer(callbackCtx, cfg, allowlist, logger)
+	srv, port, err := startCallbackServer(callbackCtx, cfg, allowlist, obs, logger)
 	if err != nil {
 		logger.Warn("callback.start.failed", slog.String("err", err.Error()))
 	}
@@ -358,7 +358,7 @@ type binrpcCallback struct {
 // envelope. The listener serves on callbackCtx so it shuts down together with
 // the XML-RPC callback server. A binding failure is logged and degraded to a
 // nil server.
-func wireBINRPCCallback(callbackCtx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, logger *slog.Logger) *binrpcCallback {
+func wireBINRPCCallback(callbackCtx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, obs rpcserver.CallbackObserver, logger *slog.Logger) *binrpcCallback {
 	cb := &binrpcCallback{}
 	binHost := cfg.Callback.Host
 	if binHost == "" {
@@ -369,6 +369,7 @@ func wireBINRPCCallback(callbackCtx context.Context, cfg *config.Config, allowli
 		Addr:           binAddr,
 		Logger:         logger.With(slog.String("component", "callback.binrpc")),
 		MaxConnections: cfg.Callback.MaxConnections,
+		Metrics:        obs,
 		PeerAllowlist:  allowlist,
 	}
 	srv, binErr := rpcserver.NewBINRPCServer(binCfg) //nolint:contextcheck // NewBINRPCServer/bindAddr has no ctx parameter; bind is instantaneous

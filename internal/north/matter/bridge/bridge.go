@@ -188,7 +188,13 @@ type Bridge struct {
 	// diagEvents records the moments that explain a failed pairing.
 	// Optional: a nil ring drops every record, which is what keeps the
 	// receive path safe when nothing wired one.
-	diagEvents *diagevent.Ring
+	//
+	// Atomic because the record calls sit on the per-datagram receive
+	// path, which runs concurrently with every attach: a plain field
+	// would be a data race the moment a ring is attached to a serving
+	// bridge, and taking b.mu per datagram would put the whole receive
+	// path behind the bridge's topology lock.
+	diagEvents atomic.Pointer[diagevent.Ring]
 	subManager *subscription.Manager // optional; when set Subscribe is fully wired
 
 	// measurementUnsubscribers holds the unsubscribe closures returned
@@ -1452,21 +1458,26 @@ func udpPort(listen string) int {
 // AttachDiagnosticEvents wires the ring the bridge records pairing and
 // session moments into. Passing nil detaches it.
 //
-// Call it before [Bridge.Start]: the receive path reads the field without
-// taking b.mu — the record calls sit on the per-datagram hot path — so the
-// serve goroutine must not be running yet when the ring is installed. The
-// lock taken here only orders concurrent attachers.
+// Safe to call while the bridge serves: the receive path loads the ring
+// atomically, and a nil ring drops the record rather than panicking, so a
+// datagram in flight during an attach or a detach either records into the
+// old ring or into the new one.
 func (b *Bridge) AttachDiagnosticEvents(ring *diagevent.Ring) {
 	if b == nil {
 		return
 	}
-	b.mu.Lock()
-	b.diagEvents = ring
-	b.mu.Unlock()
+	b.diagEvents.Store(ring)
 }
 
 // DiagnosticEvents returns the recorded trace, newest first. Empty when
 // no ring is attached.
 func (b *Bridge) DiagnosticEvents() []diagevent.Event {
-	return b.diagEvents.Snapshot()
+	return b.diagRing().Snapshot()
+}
+
+// diagRing loads the attached diagnostics ring. A nil result is usable —
+// every [diagevent.Ring] method tolerates a nil receiver — so callers on
+// the receive path record unconditionally.
+func (b *Bridge) diagRing() *diagevent.Ring {
+	return b.diagEvents.Load()
 }

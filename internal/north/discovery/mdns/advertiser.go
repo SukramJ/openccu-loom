@@ -189,7 +189,17 @@ func (m *Multicast) Start(_ context.Context) error {
 	if m.server != nil {
 		return ErrAlreadyStarted
 	}
+	server, err := m.registerLocked()
+	if err != nil {
+		return err
+	}
+	m.server = server
+	return nil
+}
 
+// registerLocked publishes m.svc and returns the new zeroconf server. The
+// caller holds m.mu.
+func (m *Multicast) registerLocked() (*zeroconf.Server, error) {
 	// Advertise only routable LAN addresses in the A/AAAA records, but keep
 	// broadcasting on every multicast interface (ifaces=nil) so peers on a
 	// container bridge — e.g. Home Assistant Core on the `hassio` network —
@@ -226,10 +236,9 @@ func (m *Multicast) Start(_ context.Context) error {
 		)
 	}
 	if err != nil {
-		return fmt.Errorf("mdns: zeroconf register: %w", err)
+		return nil, fmt.Errorf("mdns: zeroconf register: %w", err)
 	}
-	m.server = server
-	return nil
+	return server, nil
 }
 
 // proxyHost returns the host label for the SRV/A records. RegisterProxy
@@ -244,15 +253,32 @@ func (m *Multicast) proxyHost() string {
 	return m.svc.resolvedInstanceName()
 }
 
-// UpdateTXT re-announces the TXT bundle on the live record.
+// UpdateTXT re-announces the TXT bundle by republishing the record: the old
+// server is shut down and a fresh one registered with the new TXT set.
+//
+// The obvious alternative — zeroconf's Server.SetText — assigns the service's
+// Text field with no synchronisation while the responder goroutines read it
+// to compose query answers, so mutating the live record is a data race that no
+// lock on this side can close. Republishing costs one goodbye/announce cycle
+// but keeps every field the responder reads immutable for the lifetime of the
+// server it belongs to.
+//
+// A failed re-register leaves the advertiser stopped and returns the error;
+// the caller can retry via Start.
 func (m *Multicast) UpdateTXT(txt []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.server == nil {
 		return ErrNotStarted
 	}
+	m.server.Shutdown()
+	m.server = nil
 	m.svc.TXT = append([]string(nil), txt...)
-	m.server.SetText(m.svc.TXT)
+	server, err := m.registerLocked()
+	if err != nil {
+		return err
+	}
+	m.server = server
 	return nil
 }
 

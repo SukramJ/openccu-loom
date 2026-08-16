@@ -75,15 +75,18 @@
   let historyDPs = $state<import("$lib/api/types").DataPointSummary[]>([]);
   let historyDPsLoading = $state(false);
 
-  async function probeSchedule() {
-    if (!detail) {
-      scheduleSupported = null;
-      return;
-    }
+  // Probes the schedule endpoint for one device. The caller passes the
+  // load generation it belongs to: the probe outlives a device switch,
+  // and a late 404 for the previous device would otherwise hide the
+  // Schedule sub-tab of the device now on screen (or, in reverse, offer
+  // one for a device that has no week profile).
+  async function probeSchedule(addr: string, generation: number) {
     try {
-      await api.getDeviceSchedule(detail.address);
+      await api.getDeviceSchedule(addr);
+      if (generation !== loadGeneration) return;
       scheduleSupported = true;
     } catch (err) {
+      if (generation !== loadGeneration) return;
       if (err instanceof ApiError && err.status === 404) {
         scheduleSupported = false;
       } else {
@@ -187,7 +190,7 @@
       const next = await api.getDevice(addr);
       if (generation !== loadGeneration) return;
       detail = next;
-      void probeSchedule();
+      void probeSchedule(addr, generation);
     } catch (err) {
       if (generation !== loadGeneration) return;
       error =
@@ -258,6 +261,13 @@
   $effect(() => {
     const want = sub;
     if (want !== "links" && want !== "schedule" && want !== "device-config") {
+      // A route without a `?tab=` parameter must undo the previous deep
+      // link, not inherit it: following `#/devices/A?tab=schedule` with
+      // `#/devices/B` otherwise keeps the schedule sub-tab selected for a
+      // device that may have no week profile at all.
+      untrack(() => {
+        configSub = "channels";
+      });
       return;
     }
     untrack(() => {
@@ -738,6 +748,18 @@
     // profile these are the editors Home Assistant owns.
     return out.filter((sub) => surfacesStore.visible(`device.configure.${sub.key}`));
   });
+
+  // The selected sub-tab, reconciled against the tabs the strip actually
+  // offers. That list is data-driven — a schedule tab exists only for a
+  // device with a week profile, and the surface profile may hide any
+  // entry — so a selection can outlive the tab that named it and the
+  // panel would render an editor the strip no longer marks as selected.
+  // Rendering off the reconciled value keeps both in agreement, while the
+  // raw selection survives so a tab that appears late (the schedule probe
+  // resolving after the switch) is still honoured.
+  const activeConfigSub = $derived(
+    configSubs.some((s) => s.key === configSub) ? configSub : configSubs[0]?.key,
+  );
 </script>
 
 <svelte:window onkeydown={onDeleteDialogKey} />
@@ -1022,8 +1044,8 @@
             <button
               type="button"
               role="tab"
-              aria-selected={configSub === sub.key}
-              class="rounded-md px-3 py-1.5 text-sm font-medium transition {configSub === sub.key
+              aria-selected={activeConfigSub === sub.key}
+              class="rounded-md px-3 py-1.5 text-sm font-medium transition {activeConfigSub === sub.key
                 ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
                 : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}"
               onclick={() => (configSub = sub.key)}
@@ -1033,7 +1055,7 @@
           {/each}
         </div>
 
-        {#if configSub === "device-config"}
+        {#if activeConfigSub === "device-config"}
           {#if deviceChannel}
             <h3 class="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
               {t("device.subtab.device_config")} — {deviceChannel.address}
@@ -1070,7 +1092,7 @@
           {:else}
             <EmptyState message={t("device.no_device_config")} />
           {/if}
-        {:else if configSub === "channels"}
+        {:else if activeConfigSub === "channels"}
           <!-- Channel selector strip. Each chip carries channel name +
                number badge, virtual marker (≥50), and a click that
                either selects the channel for editing or — for week-
@@ -1237,7 +1259,7 @@
               />
             {/if}
           {/if}
-        {:else if configSub === "links"}
+        {:else if activeConfigSub === "links"}
           <div class="space-y-4">
             <CentralLinksPanel address={detail.address} />
             <DeviceLinks
@@ -1246,7 +1268,7 @@
               {locale}
             />
           </div>
-        {:else if configSub === "schedule"}
+        {:else if activeConfigSub === "schedule"}
           <ScheduleTab address={detail.address} />
         {/if}
       {:else if topTab === "history"}

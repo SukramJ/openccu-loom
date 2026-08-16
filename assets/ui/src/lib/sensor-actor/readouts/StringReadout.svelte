@@ -5,6 +5,7 @@
 <script lang="ts">
   import type { DataPointSummary } from "$lib/api/types";
   import { dpLabel } from "../classify";
+  import { formatValueAge } from "../age";
   import { resolveIconLoose } from "$lib/icons";
 
   type Props = {
@@ -22,17 +23,9 @@
     return String(v);
   }
 
-  function formatAge(seconds?: number): string {
-    if (seconds == null || !Number.isFinite(seconds)) return "";
-    if (seconds < 60) return `vor ${Math.floor(seconds)} s`;
-    if (seconds < 3600) return `vor ${Math.floor(seconds / 60)} min`;
-    if (seconds < 86400) return `vor ${Math.floor(seconds / 3600)} h`;
-    return `vor ${Math.floor(seconds / 86400)} d`;
-  }
-
   const display = $derived(asString(dp.value));
   const label = $derived(dpLabel(dp));
-  const age = $derived(showAge ? formatAge(dp.value_age_seconds) : "");
+  const age = $derived(showAge ? formatValueAge(dp.value_age_seconds) : "");
 </script>
 
 {#if density === "comfortable"}

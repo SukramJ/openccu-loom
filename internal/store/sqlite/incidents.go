@@ -181,21 +181,23 @@ func (s *IncidentStore) GetDiagnostics(ctx context.Context, centralName string, 
 		byType[string(all[i].Type)]++
 		bySev[string(all[i].Severity)]++
 	}
-	// Build recent slice (last 10).
-	start := 0
-	if len(all) > 10 {
-		start = len(all) - 10
+	// GetAllIncidents orders by last_seen DESC, so the newest incidents are at
+	// the head — taking the tail would report the ten *oldest* under a key that
+	// promises the most recent ones.
+	const recentLimit = 10
+	head := all
+	if len(head) > recentLimit {
+		head = head[:recentLimit]
 	}
-	tail := all[start:]
-	for i := range tail {
+	for i := range head {
 		recent = append(recent, map[string]any{
-			"id":           tail[i].ID,
-			"type":         string(tail[i].Type),
-			"severity":     string(tail[i].Severity),
-			"interface_id": tail[i].InterfaceID,
-			"message":      tail[i].Message,
-			"last_seen":    tail[i].LastSeen.Format(time.RFC3339),
-			"count":        tail[i].Count,
+			"id":           head[i].ID,
+			"type":         string(head[i].Type),
+			"severity":     string(head[i].Severity),
+			"interface_id": head[i].InterfaceID,
+			"message":      head[i].Message,
+			"last_seen":    head[i].LastSeen.Format(time.RFC3339),
+			"count":        head[i].Count,
 		})
 	}
 	return map[string]any{

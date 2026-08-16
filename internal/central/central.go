@@ -31,6 +31,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/patches"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -625,7 +626,17 @@ func (u *Unit) Start(ctx context.Context) error {
 		return err
 	}
 	if err := u.Scheduler.Start(ctx); err != nil {
-		_ = u.StateMachine.TransitionTo(hmenum.CentralStateFailed, hmenum.FailureReasonInternal)
+		// The reason is what an operator is shown for a central that did
+		// not come up. A fixed literal here names the call site rather
+		// than the cause — a start aborted by a cancelled boot context
+		// reads exactly like a scheduler defect. Anything the classifier
+		// cannot place stays internal: the scheduler is the daemon's own
+		// component, so an unrecognised failure of it is ours.
+		reason := hmerr.ExceptionToFailureReason(err)
+		if reason == hmenum.FailureReasonUnknown || reason == hmenum.FailureReasonNone {
+			reason = hmenum.FailureReasonInternal
+		}
+		_ = u.StateMachine.TransitionTo(hmenum.CentralStateFailed, reason)
 		return err
 	}
 	if err := u.StateMachine.TransitionTo(hmenum.CentralStateRunning, hmenum.FailureReasonNone); err != nil {

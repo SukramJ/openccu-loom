@@ -40,6 +40,9 @@
   const tiltWritable = $derived(tiltDP?.operations.write ?? false);
 
   const tileColor = $derived(resolveTileColor(resolved.family, level, observed));
+  // Fully open (LEVEL 1.0) is an open cover, same as any intermediate
+  // position — the icon must not fall back to the closed look there.
+  const isOpen = $derived(level > 0);
 
   const computedSecondary = $derived.by(() => {
     if (secondary) return secondary;
@@ -52,7 +55,7 @@
 
 <ControlTile {tileColor}>
   {#snippet icon()}
-    <ControlTileIcon active={level > 0 && level < 1} label={title}>
+    <ControlTileIcon active={isOpen} label={title}>
       <Icon name="mdi:sliders" size={22} />
     </ControlTileIcon>
   {/snippet}

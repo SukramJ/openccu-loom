@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -316,17 +315,13 @@ func PostCopyProfile(svc ScheduleService) http.HandlerFunc {
 	}
 }
 
-// The schedule domain's sentinels cannot be matched with errors.Is from
-// here: the domain package depends on this one (through the WebSocket
-// command surface), so the import cannot be inverted. The mapping
-// therefore matches the sentinel's message, wrap-tolerant, until the
-// sentinels move to a package both layers can import.
-const (
-	msgScheduleNoSchedule       = "schedules: channel exposes no climate schedule parameters"
-	msgScheduleCopyNoOp         = "schedules: copy source and destination are identical"
-	msgScheduleCopyProfileRange = "schedules: profile index out of range (1..6)"
-)
-
+// writeScheduleError maps a schedule-domain failure onto a problem
+// response.
+//
+// The schedule sentinels live in pkg/hmerr, which both layers import:
+// the domain package that raises them depends on this one (through the
+// WebSocket command surface), so a direct import here is impossible and
+// the classification would otherwise have to match error messages.
 func writeScheduleError(w http.ResponseWriter, r *http.Request, err error) {
 	// Device-not-found at the adapter layer maps to 404 — see
 	// SchedulesDomain.resolve / FindScheduleChannel.
@@ -335,27 +330,22 @@ func writeScheduleError(w http.ResponseWriter, r *http.Request, err error) {
 			problem.New(problem.TypeNotFound, r, "Device not found", ""))
 		return
 	}
-	msg := ""
-	if err != nil {
-		msg = err.Error()
-	}
 	// A channel without schedule parameters is a 404 so the SPA can show
 	// a friendly "device has no schedule" message. The copy source is
-	// read through the same path, which wraps the sentinel — match on
-	// containment, not equality.
-	if strings.Contains(msg, msgScheduleNoSchedule) {
+	// read through the same path, which wraps the sentinel.
+	if errors.Is(err, hmerr.ErrNoSchedule) {
 		problem.Write(w, http.StatusNotFound,
 			problem.New(problem.TypeNotFound, r, "Channel has no climate schedule", ""))
 		return
 	}
 	// A copy onto itself and an out-of-range profile index are caller
 	// mistakes the domain rejects before any wire call: 422, never 502.
-	if strings.Contains(msg, msgScheduleCopyNoOp) {
+	if errors.Is(err, hmerr.ErrScheduleCopyNoOp) {
 		problem.Write(w, http.StatusUnprocessableEntity,
 			problem.New(problem.TypeValidation, r, "Copy source and destination are identical", ""))
 		return
 	}
-	if strings.Contains(msg, msgScheduleCopyProfileRange) {
+	if errors.Is(err, hmerr.ErrScheduleCopyProfileRange) {
 		problem.Write(w, http.StatusUnprocessableEntity,
 			problem.New(problem.TypeValidation, r, "Profile index out of range (1..6)", ""))
 		return

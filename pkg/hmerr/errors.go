@@ -117,6 +117,27 @@ var (
 	// ErrGroupNotFound signals that a heating-group edit/delete named a group
 	// id the central's roster does not carry. Mapped to 404 / Not Found.
 	ErrGroupNotFound = errors.New("group not found")
+
+	// ErrNoSchedule signals that the addressed channel's MASTER paramset
+	// carries no climate-schedule parameters (no P<n>_* keys), so there is
+	// no week profile to read or write. North-bound adapters map it to a
+	// 404 / Not Found.
+	//
+	// The schedule sentinels live here rather than next to the domain that
+	// raises them because the REST layer classifies them with errors.Is and
+	// the domain package depends on the REST package through the WebSocket
+	// command surface — the import cannot be inverted.
+	ErrNoSchedule = errors.New("schedules: channel exposes no climate schedule parameters")
+
+	// ErrScheduleCopyNoOp signals that a profile copy names the same channel
+	// and profile as source and destination. A caller mistake the domain
+	// rejects before any wire call; mapped to 422 / Unprocessable Entity.
+	ErrScheduleCopyNoOp = errors.New("schedules: copy source and destination are identical")
+
+	// ErrScheduleCopyProfileRange signals that a profile index falls outside
+	// the supported 1..6 range. Like [ErrScheduleCopyNoOp] this is rejected
+	// before any wire call and maps to 422 / Unprocessable Entity.
+	ErrScheduleCopyProfileRange = errors.New("schedules: profile index out of range (1..6)")
 )
 
 // Context carries structured metadata for a transport error. Populated by the

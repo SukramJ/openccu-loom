@@ -1,12 +1,14 @@
 <!--
   EnumReadout — ENUM-typed value, displayed as the value_list entry
   at the numeric index. value_list tokens are localised via
-  enumValueText (i18n `enum.<TOKEN>`), falling back to a title-cased
+  enumValueText (i18n `enum.<TOKEN>`, then the data point's
+  server-resolved `value_translations`), falling back to a title-cased
   form so `INTRUSION_ALARM` still surfaces as "Intrusion Alarm".
 -->
 <script lang="ts">
   import type { DataPointSummary } from "$lib/api/types";
   import { dpLabel, enumValueText } from "../classify";
+  import { formatValueAge } from "../age";
   import { resolveIconLoose } from "$lib/icons";
   import { stateColorFor } from "../state-color";
 
@@ -29,20 +31,12 @@
     else if (typeof v === "boolean") idx = v ? 1 : 0;
     else return String(v);
     if (idx < 0 || idx >= dp.value_list.length) return String(v);
-    return enumValueText(dp.value_list[idx]);
-  }
-
-  function formatAge(seconds?: number): string {
-    if (seconds == null || !Number.isFinite(seconds)) return "";
-    if (seconds < 60) return `vor ${Math.floor(seconds)} s`;
-    if (seconds < 3600) return `vor ${Math.floor(seconds / 60)} min`;
-    if (seconds < 86400) return `vor ${Math.floor(seconds / 3600)} h`;
-    return `vor ${Math.floor(seconds / 86400)} d`;
+    return enumValueText(dp.value_list[idx], dp.value_translations);
   }
 
   const display = $derived(enumText(dp.value));
   const label = $derived(dpLabel(dp));
-  const age = $derived(showAge ? formatAge(dp.value_age_seconds) : "");
+  const age = $derived(showAge ? formatValueAge(dp.value_age_seconds) : "");
 </script>
 
 {#if density === "comfortable"}

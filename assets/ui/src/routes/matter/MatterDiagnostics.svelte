@@ -278,40 +278,49 @@
         </ul>
       {/if}
     </Card>
-  {/if}
 
-  <!-- Recent events: what happened, as opposed to what is currently true -->
-  <Card>
-    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
-      {t("matter.diag.events")}
-    </h3>
-    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-      {t("matter.diag.events_hint")}
-    </p>
-    {#if events.length === 0}
-      <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-        {t("matter.diag.events_empty")}
+    <!-- Recent events: what happened, as opposed to what is currently
+         true. It belongs inside the loading/error branch: "nothing
+         recorded" is a claim about the bridge, and printing it under an
+         ErrorState would assert it about a trace that was never fetched. -->
+    <Card class="p-4">
+      <h3 class="font-medium text-slate-900 dark:text-slate-100">
+        {t("matter.diag.events")}
+      </h3>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        {t("matter.diag.events_hint")}
       </p>
-    {:else}
-      <ul class="mt-3 space-y-2">
-        {#each events as event (event.at + event.message)}
-          <li class="flex gap-3 text-sm">
-            <span
-              class="shrink-0 font-mono text-xs text-slate-500 dark:text-slate-400"
-              >{new Date(event.at).toLocaleTimeString()}</span
-            >
-            <span
-              class="shrink-0 rounded px-1.5 py-0.5 text-xs {event.severity === 'error'
-                ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-                : event.severity === 'warning'
-                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}"
-              >{t(`matter.diag.kind_${event.kind}`)}</span
-            >
-            <span class="text-slate-700 dark:text-slate-200">{event.message}</span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-  </Card>
+      {#if events.length === 0}
+        <div class="mt-3">
+          <EmptyState message={t("matter.diag.events_empty")} />
+        </div>
+      {:else}
+        <ul class="mt-3 space-y-2">
+          <!-- Keyed by position: the DTO carries no id, and the fields
+               that look like one do not identify a record — timestamps
+               are second-precision and a refused-pairing message is a
+               constant, so two events can share both. The list is
+               replaced wholesale on every load, so position is stable
+               for as long as it is rendered. -->
+          {#each events as event, i (i)}
+            <li class="flex gap-3 text-sm">
+              <span
+                class="shrink-0 font-mono text-xs text-slate-500 dark:text-slate-400"
+                >{new Date(event.at).toLocaleTimeString()}</span
+              >
+              <span
+                class="shrink-0 rounded px-1.5 py-0.5 text-xs {event.severity === 'error'
+                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+                  : event.severity === 'warning'
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}"
+                >{t(`matter.diag.kind_${event.kind}`)}</span
+              >
+              <span class="text-slate-700 dark:text-slate-200">{event.message}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </Card>
+  {/if}
 </div>

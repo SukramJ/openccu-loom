@@ -1150,7 +1150,7 @@ func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubS
 	existing.ValueList = valueList
 	existing.Writer = writer
 	existing.IsExtended = isExtended
-	existing.IsInternal = v.IsInternal
+	existing.SetInternal(v.IsInternal)
 	existing.IsVisible = v.IsVisible
 	existing.IsLogged = v.IsLogged
 	existing.ValueName0 = v.ValueName0
@@ -1163,6 +1163,12 @@ func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubS
 	if vid, err := strconv.Atoi(v.ID); err == nil {
 		existing.Vid = vid
 	}
+	// The declared range is what the north-bound planes advertise (HA gets
+	// a min/max on the number entity) and what the model's range check
+	// validates a write against. Left unset, discovery falls back to the
+	// full float range and the check can never fire.
+	existing.Min = sysvarBound(valueType, v.MinValue)
+	existing.Max = sysvarBound(valueType, v.MaxValue)
 	if pv, pok := parseSysvarValue(valueType, v.Value); pok {
 		existing.OnValue(pv)
 	}
@@ -1837,6 +1843,31 @@ func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.Para
 	}
 	// Fallback: preserve as string so the caller at least sees something.
 	return hmtypes.StringValue(s), true
+}
+
+// sysvarBound coerces a declared minValue / maxValue payload into the bound
+// the model carries. Bounds are only meaningful for the numeric types — the
+// CCU also reports them for LOGIC / ALARM / LIST / STRING variables, where
+// they describe the wire encoding rather than an operator-facing range, so
+// those stay nil. Returns nil when the CCU omitted the field or the payload
+// does not parse as a number, because [parseSysvarValue] would otherwise fall
+// back to a string bound that no range check can compare against.
+func sysvarBound(vt hmenum.HubValueType, raw json.RawMessage) *hmtypes.ParamValue {
+	switch vt { //nolint:exhaustive // every non-numeric type carries no operator-facing range
+	case hmenum.HubValueTypeInteger, hmenum.HubValueTypeNumber, hmenum.HubValueTypeFloat:
+	default:
+		return nil
+	}
+	pv, ok := parseSysvarValue(vt, raw)
+	if !ok {
+		return nil
+	}
+	switch pv.Kind { //nolint:exhaustive // a non-numeric parse result means the CCU sent no usable bound
+	case hmtypes.ValueKindInt, hmtypes.ValueKindFloat:
+		return &pv
+	default:
+		return nil
+	}
 }
 
 // hubMessageAck adapts the ReGa [rega.Runner] to the model's

@@ -212,10 +212,21 @@ type MatterFabricStore interface {
 
 // MatterFabricResponse is one entry in GET /api/v1/matter/fabrics.
 // CompressedID + RootPublicKey are hex-encoded for transport-safety.
+//
+// FabricID and NodeID are 64-bit, and a JSON number carries only 53 bits
+// of integer precision: every operational node id a real controller
+// assigns is larger than that, so a browser rounds the value while
+// parsing and the low hex digits it then prints are not the
+// controller's. FabricIDHex/NodeIDHex carry the exact ids as the
+// 16-digit uppercase hex that controllers and chip-tool print, which is
+// what a client must render. The numeric fields stay for clients that
+// already read them.
 type MatterFabricResponse struct {
 	FabricIndex   uint8  `json:"fabric_index"`
 	FabricID      uint64 `json:"fabric_id"`
+	FabricIDHex   string `json:"fabric_id_hex"`
 	NodeID        uint64 `json:"node_id"`
+	NodeIDHex     string `json:"node_id_hex"`
 	VendorID      uint16 `json:"vendor_id"`
 	VendorName    string `json:"vendor_name"`
 	Label         string `json:"label,omitempty"`
@@ -250,7 +261,9 @@ func MatterFabrics(s MatterFabricStore) http.HandlerFunc {
 			out = append(out, MatterFabricResponse{
 				FabricIndex:   r.FabricIndex,
 				FabricID:      r.FabricID,
+				FabricIDHex:   fmt.Sprintf("%016X", r.FabricID),
 				NodeID:        r.NodeID,
+				NodeIDHex:     fmt.Sprintf("%016X", r.NodeID),
 				VendorID:      r.VendorID,
 				VendorName:    eligibility.VendorName(r.VendorID),
 				Label:         r.Label,

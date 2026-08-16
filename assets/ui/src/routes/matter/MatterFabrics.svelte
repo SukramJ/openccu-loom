@@ -6,6 +6,7 @@
   import { api, ApiError } from "$lib/api/client";
   import { t } from "$lib/i18n";
   import type { DataColumn } from "$lib/components/ui/data-table";
+  import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
@@ -32,11 +33,23 @@
     );
   }
 
-  // The fabric list serves node ids as JSON numbers; controllers and
-  // chip-tool print them as 16-digit hex, so a `0x` in front of the
-  // decimal value matches nothing the operator can compare against.
-  function nodeIdHex(nodeId: number): string {
-    return `0x${nodeId.toString(16).toUpperCase().padStart(16, "0")}`;
+  // Controllers and chip-tool print node ids as 16-digit hex, so a `0x`
+  // in front of the decimal value matches nothing the operator can
+  // compare against. The daemon serves the exact id pre-formatted in
+  // `node_id_hex`; the numeric field is only the fallback for a daemon
+  // older than that field.
+  function nodeIdHex(fabric: MatterFabric): string {
+    if (fabric.node_id_hex) return `0x${fabric.node_id_hex.toUpperCase()}`;
+    return `0x${fabric.node_id.toString(16).toUpperCase().padStart(16, "0")}`;
+  }
+
+  // A node id is a 64-bit value, and JSON numbers carry only 53 bits of
+  // integer precision: anything larger was already rounded by JSON.parse
+  // before it reached this component, so its low hex digits are not the
+  // controller's. The string field transports the id exactly, so only a
+  // response without it can be inexact — and then only above 2^53.
+  function nodeIdExact(fabric: MatterFabric): boolean {
+    return Boolean(fabric.node_id_hex) || Number.isSafeInteger(fabric.node_id);
   }
 
   let busy = $state(false);
@@ -97,7 +110,10 @@
     { key: "vendor", label: t("matter.fabrics.col_vendor"), sortable: true, title: true, get: (f) => vendorName(f) },
     { key: "label", label: t("matter.fabrics.col_label"), sortable: true, get: (f) => f.label || t("matter.fabric.label_unknown") },
     { key: "fabric", label: t("matter.fabrics.col_fabric"), sortable: true, get: (f) => f.fabric_index },
-    { key: "node_id", label: t("matter.fabrics.col_node_id"), sortable: true, get: (f) => f.node_id },
+    // Sorted on the zero-padded hex string: fixed width makes its
+    // lexical order the numeric order, and unlike the JSON number it has
+    // not been rounded.
+    { key: "node_id", label: t("matter.fabrics.col_node_id"), sortable: true, get: (f) => nodeIdHex(f) },
     { key: "action", label: "", align: "right", cellClass: "reflow-actions" },
   ]);
 </script>
@@ -127,7 +143,14 @@
           {:else if col.key === "fabric"}
             <span class="text-slate-500 dark:text-slate-400">{fabric.fabric_index}</span>
           {:else if col.key === "node_id"}
-            <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{nodeIdHex(fabric.node_id)}</span>
+            <span class="inline-flex flex-wrap items-center gap-1">
+              <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{nodeIdHex(fabric)}</span>
+              {#if !nodeIdExact(fabric)}
+                <Badge variant="warning" title={t("matter.fabrics.node_id_rounded_hint")}>
+                  {t("matter.fabrics.node_id_rounded")}
+                </Badge>
+              {/if}
+            </span>
           {:else if col.key === "action"}
             <Button
               size="sm"

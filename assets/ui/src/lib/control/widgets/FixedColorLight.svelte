@@ -20,6 +20,7 @@
   import ControlEnumSelect from "../controls/ControlEnumSelect.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { enumValueLabel, enumValueToken } from "$lib/sensor-actor/classify";
   import { t } from "$lib/i18n";
 
   type Props = {
@@ -40,6 +41,10 @@
   const writable = $derived(levelDP?.operations.write ?? false);
 
   const colorOptions = $derived<string[]>(colorDP?.value_list ?? []);
+  // COLOR is a writable ENUM, so the wire value is the value_list index —
+  // resolve it back before comparing or naming the current colour.
+  const colorToken = $derived(colorDP ? enumValueToken(colorDP) : undefined);
+  const colorCaption = $derived(colorDP ? enumValueLabel(colorDP) : undefined);
   const effectOptions = $derived<string[]>(effectDP?.value_list ?? []);
 
   const tileColor = $derived(resolveTileColor(resolved.family, level, levelObserved));
@@ -49,8 +54,9 @@
     if (secondary) return secondary;
     if (!levelObserved) return "—";
     const pct = `${Math.round(level * 100)} %`;
-    const c = colorDP?.value;
-    if (typeof c === "string" && c && c !== "BLACK") return `${pct} · ${c.toLowerCase()}`;
+    if (colorToken && colorToken !== "BLACK") {
+      return `${pct} · ${colorCaption ?? colorToken}`;
+    }
     return pct;
   });
 </script>

@@ -5,6 +5,7 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Section shell for the alarm panel (docs/alarm-concept.md §12). Owns
   // the store lifecycle (WS stream + 1 s countdown ticker + initial
@@ -71,6 +72,17 @@
   });
 </script>
 
+<!--
+  Fallback for the code-split tab views. Their chunks are content-hashed, so
+  a daemon update under an already-open alarm panel invalidates every chunk
+  the panel has not fetched yet and the import rejects. Without a catch
+  branch the pending block is torn down and the tab body stays empty, with
+  no hint that a reload fixes it.
+-->
+{#snippet tabLoadFailed()}
+  <ErrorState message={t("app.route_load_failed")} onRetry={() => location.reload()} />
+{/snippet}
+
 <section class="mx-auto max-w-6xl px-4 sm:px-6 py-8">
   <PageHeader title={t("alarm.title")} subtitle={t("alarm.subtitle")}>
     {#snippet actions()}
@@ -87,6 +99,8 @@
       <LoadingState />
     {:then { default: AlarmWizard }}
       <AlarmWizard />
+    {:catch}
+      {@render tabLoadFailed()}
     {/await}
   {:else}
     <!-- Tab bar -->
@@ -123,42 +137,56 @@
           <LoadingState />
         {:then { default: AlarmOverview }}
           <AlarmOverview />
+        {:catch}
+          {@render tabLoadFailed()}
         {/await}
       {:else if activeTab === "sensors"}
         {#await loadSensors()}
           <LoadingState />
         {:then { default: AlarmSensors }}
           <AlarmSensors />
+        {:catch}
+          {@render tabLoadFailed()}
         {/await}
       {:else if activeTab === "outputs"}
         {#await loadOutputs()}
           <LoadingState />
         {:then { default: AlarmOutputs }}
           <AlarmOutputs />
+        {:catch}
+          {@render tabLoadFailed()}
         {/await}
       {:else if activeTab === "policies"}
         {#await loadPolicies()}
           <LoadingState />
         {:then { default: AlarmPolicies }}
           <AlarmPolicies />
+        {:catch}
+          {@render tabLoadFailed()}
         {/await}
       {:else if activeTab === "codes"}
         {#await loadCodes()}
           <LoadingState />
         {:then { default: AlarmCodes }}
           <AlarmCodes />
+        {:catch}
+          {@render tabLoadFailed()}
         {/await}
       {:else if activeTab === "journal"}
         {#await loadJournal()}
           <LoadingState />
         {:then { default: AlarmJournal }}
           <AlarmJournal />
+        {:catch}
+          {@render tabLoadFailed()}
         {/await}
       {:else if activeTab === "walktest"}
         {#await loadWalkTest()}
           <LoadingState />
         {:then { default: AlarmWalkTest }}
           <AlarmWalkTest />
+        {:catch}
+          {@render tabLoadFailed()}
         {/await}
       {/if}
     </div>

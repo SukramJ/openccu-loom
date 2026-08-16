@@ -6,6 +6,7 @@
 <script lang="ts">
   import type { DataPointSummary } from "$lib/api/types";
   import { dpLabel, enumValueText } from "../classify";
+  import { formatValueAge } from "../age";
   import { resolveIconLoose } from "$lib/icons";
   import { stateColorFor } from "../state-color";
   import { t } from "$lib/i18n";
@@ -27,24 +28,16 @@
     if (dp.value_list && dp.value_list.length >= 2) {
       const idx = typeof v === "boolean" ? (v ? 1 : 0) : typeof v === "number" ? Math.round(v) : -1;
       if (idx >= 0 && idx < dp.value_list.length) {
-        return enumValueText(dp.value_list[idx]);
+        return enumValueText(dp.value_list[idx], dp.value_translations);
       }
     }
     if (typeof v === "boolean") return v ? t("quick.on") : t("quick.off");
     return String(v);
   }
 
-  function formatAge(seconds?: number): string {
-    if (seconds == null || !Number.isFinite(seconds)) return "";
-    if (seconds < 60) return `vor ${Math.floor(seconds)} s`;
-    if (seconds < 3600) return `vor ${Math.floor(seconds / 60)} min`;
-    if (seconds < 86400) return `vor ${Math.floor(seconds / 3600)} h`;
-    return `vor ${Math.floor(seconds / 86400)} d`;
-  }
-
   const display = $derived(boolText(dp.value));
   const label = $derived(dpLabel(dp));
-  const age = $derived(showAge ? formatAge(dp.value_age_seconds) : "");
+  const age = $derived(showAge ? formatValueAge(dp.value_age_seconds) : "");
 </script>
 
 {#if density === "comfortable"}

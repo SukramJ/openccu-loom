@@ -104,7 +104,7 @@ func bridgeHealthSupplier(centralNames func() []string, startedAt time.Time) fun
 //
 // The effective port is always read from srv.Addr() after construction,
 // never from the configured value.
-func startCallbackServer(ctx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, logger *slog.Logger) (*rpcserver.XMLRPCServer, int, error) {
+func startCallbackServer(ctx context.Context, cfg *config.Config, allowlist rpcserver.PeerAllowlist, obs rpcserver.CallbackObserver, logger *slog.Logger) (*rpcserver.XMLRPCServer, int, error) {
 	host := cfg.Callback.Host
 	if host == "" {
 		host = "0.0.0.0"
@@ -126,6 +126,7 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, allowlist rpcs
 		Addr:           addr,
 		Logger:         logger.With(slog.String("component", "callback.xmlrpc")),
 		MaxConnections: cfg.Callback.MaxConnections,
+		Metrics:        obs,
 		PeerAllowlist:  allowlist,
 		PortRange:      portRange,
 	}

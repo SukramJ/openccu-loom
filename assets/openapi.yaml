@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 5.34.0
+  version: 5.35.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -440,6 +440,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "423":
+          $ref: "#/components/responses/Locked"
         "502":
           $ref: "#/components/responses/BadGateway"
         "503":
@@ -1446,7 +1448,7 @@ paths:
       security:
         - basicAuth: []
         - bearerAuth: []
-        - openIdConnect: [admin]
+        - openIdConnect: [operator]
       requestBody:
         required: true
         content:
@@ -2755,6 +2757,12 @@ paths:
         BidCos-Wired); VirtualDevices and CUxD answer 422. Consult
         `DeviceSummary.communication_test_supported` before offering the
         action.
+
+        A device that does not answer is a **200** carrying
+        `timed_out: true`, not an error: the poll runs on the request
+        deadline minus a two-second response margin, and when that budget
+        elapses first the daemon reports the un-answered test as the result
+        it is. 502 is reserved for a genuine upstream failure.
       tags: [devices]
       security:
         - basicAuth: []
@@ -4517,24 +4525,45 @@ paths:
     delete:
       operationId: closeEditSession
       summary: Release an edit lock
+      description: >-
+        Names the session to release. A body without `key` — or no body at
+        all — is rejected 422 rather than answered 204, because a 204 would
+        claim a lock was released while it stays held until its TTL expires.
+        A `token` that does not hold the lock leaves it in place and still
+        answers 204.
       tags: [sessions]
       security:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditSessionRequest" }
       responses:
         "204": { description: Released }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /sessions/edit/heartbeat:
     post:
       operationId: heartbeatEditSession
       summary: Refresh an edit lock's TTL
+      description: >-
+        Names the session to refresh. A body without `key` — or no body at
+        all — is rejected 422. A `key`/`token` pair that no longer holds a
+        live lock answers 410.
       tags: [sessions]
       security:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditSessionRequest" }
       responses:
         "200":
           description: Refreshed
@@ -4543,6 +4572,7 @@ paths:
               schema: { $ref: "#/components/schemas/EditSessionResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "410": { description: Session expired }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /sessions/edit/take-over:
     post:
@@ -5618,9 +5648,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StartupCaptureConfig" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     put:
       operationId: putStartupCapture
       summary: Persist the startup-capture toggle (admin-only)
+      description: >-
+        Takes effect on the next daemon boot — pair it with
+        `POST /system/restart` for an end-to-end "capture the bootstrap"
+        workflow. Unknown properties are rejected: a body the daemon cannot
+        fully interpret must not silently configure what it records about
+        itself.
       tags: [system]
       security:
         - basicAuth: []
@@ -5637,6 +5675,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StartupCaptureConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /system/restart:
     post:
@@ -5793,7 +5834,7 @@ paths:
       description: >-
         A bounded, in-memory trace of the moments that explain a failed
         pairing — a commissioner refused while another was mid-handshake,
-        a commissioning window revoked after repeated failures, a session
+        pairing locked after repeated failed attempts, a session
         closed. The existing Matter diagnostics report state and
         therefore cannot answer "what happened thirty seconds ago", which
         is the question left after a controller gives up and goes quiet.
@@ -5832,6 +5873,7 @@ paths:
         - openIdConnect: [admin]
       responses:
         "204": { description: Topology re-assembled }
+        "500": { $ref: "#/components/responses/InternalError" }
         "503":
           description: Matter bridge not enabled
           content:
@@ -5871,6 +5913,14 @@ paths:
         "204": { description: Every fabric removed }
         "400":
           description: Confirmation missing or wrong
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500":
+          description: >-
+            The reset did not complete. It may be partial: the fabrics
+            already revoked stay revoked, and the problem detail names how
+            many of how many were removed. Re-run to finish.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -6105,10 +6155,18 @@ paths:
               schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503":
-          description: Matter bridge not enabled
+          description: >-
+            Matter bridge not enabled, or its endpoint topology has not
+            finished assembling yet — the latter carries a `Retry-After`
+            header and clears on its own.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying, when the topology is still assembling.
+              required: false
+              schema: { type: integer }
 
   /matter/setup-payload:
     get:
@@ -6165,10 +6223,18 @@ paths:
               schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503":
-          description: Matter bridge not enabled
+          description: >-
+            Matter bridge not enabled, or its endpoint topology has not
+            finished assembling yet — the latter carries a `Retry-After`
+            header and clears on its own.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying, when the topology is still assembling.
+              required: false
+              schema: { type: integer }
 
   # ---- Config live-edit (Wave-C) ----
   /config/schema:
@@ -6550,6 +6616,12 @@ paths:
     delete:
       operationId: deleteTokenV2
       summary: Revoke an API token by fingerprint (admin)
+      description: >-
+        The revocation reaches both planes. REST stops immediately because
+        every request re-resolves the credential; the WebSocket connections
+        the token opened are closed as part of this call, because a socket
+        resolves its identity once at the upgrade and would otherwise keep
+        the revoked token's role until the client happened to reconnect.
       tags: [token-admin]
       security:
         - basicAuth: []
@@ -6573,10 +6645,18 @@ paths:
     get:
       operationId: listCentrals
       summary: List all configured centrals
+      description: >-
+        Open to any authenticated identity, because the energy, backup and
+        rooms/functions views need the central list — but the row is
+        narrowed below the admin role. A non-admin caller receives `name`,
+        `enabled` and `interfaces`; `host` comes back empty and `serial`,
+        `port`, `json_rpc_port`, `ports`, `username`, `password_env` and both
+        TLS flags are omitted. Those fields say where the CCU lives and how
+        it is reached, which none of the lower-privileged views use.
       tags: [central-admin]
       responses:
         "200":
-          description: Central list
+          description: Central list (narrowed below the admin role — see description)
           content:
             application/json:
               schema:
@@ -6703,10 +6783,14 @@ paths:
     get:
       operationId: getCentral
       summary: Get a single central by name
+      description: >-
+        Open to any authenticated identity, and narrowed below the admin
+        role exactly as `GET /centrals` is — see that operation for which
+        fields a non-admin caller does and does not receive.
       tags: [central-admin]
       responses:
         "200":
-          description: OK
+          description: OK (narrowed below the admin role — see description)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CentralRow" }
@@ -7849,8 +7933,12 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
     Locked:
       description: >-
-        The resource is locked by an edit session and the request did not
-        present a valid X-Edit-Token that currently holds that lock.
+        The write was refused by a lock, not by the CCU — nothing reached
+        the wire and a retry cannot help until the lock is lifted. Either
+        the resource is held by an edit session and the request did not
+        present a valid X-Edit-Token for it, or the operator has locked the
+        channel against control writes (see
+        `PUT /devices/{addr}/channels/{no}/flags`).
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -7862,7 +7950,8 @@ components:
   schemas:
     StartupCaptureConfig:
       type: object
-      required: [enabled, duration_seconds, anonymise]
+      required: [enabled, duration_seconds]
+      additionalProperties: false
       properties:
         enabled:
           type: boolean
@@ -7874,7 +7963,13 @@ components:
           description: Duration of the boot-time capture. Zero falls back to the default (300 s).
         anonymise:
           type: boolean
-          description: Whether to hash device-address-shaped values in the recorded archive.
+          default: true
+          description: >-
+            Whether to hash device-address-shaped values in the recorded
+            archive. A write that omits the key means true: the boot capture
+            has no later chance to ask, so an unstated preference must not
+            end up archiving raw device addresses. Send `false` explicitly to
+            switch it off. The response always carries the field.
 
     ExportedConfiguration:
       type: object
@@ -9990,7 +10085,7 @@ components:
 
     MatterFabric:
       type: object
-      required: [fabric_index, fabric_id, node_id, vendor_id, compressed_id, root_public_key]
+      required: [fabric_index, fabric_id, fabric_id_hex, node_id, node_id_hex, vendor_id, compressed_id, root_public_key]
       properties:
         fabric_index:
           type: integer
@@ -9998,7 +10093,21 @@ components:
           maximum: 254
           description: "Stack-assigned fabric index per Matter Core Spec §11.18.5"
         fabric_id: { type: integer, format: int64 }
+        fabric_id_hex:
+          type: string
+          description: >-
+            The exact 64-bit fabric id as 16 uppercase hex digits. A JSON
+            number carries only 53 bits of integer precision, so a client
+            that renders `fabric_id` shows rounded low digits for any id
+            above 2^53. Render this field.
         node_id: { type: integer, format: int64 }
+        node_id_hex:
+          type: string
+          description: >-
+            The exact 64-bit operational node id as 16 uppercase hex
+            digits, in the form controllers and chip-tool print it.
+            Render this field rather than `node_id`, which loses
+            precision in transport.
         vendor_id: { type: integer, minimum: 0, maximum: 65535 }
         vendor_name:
           type: string
@@ -11958,7 +12067,10 @@ components:
             request, subscription and payload for this CCU.
         host:
           type: string
-          description: CCU hostname or IP address.
+          description: >-
+            CCU hostname or IP address. Present but empty on the two read
+            operations when the caller is below the admin role; the sibling
+            connection fields are omitted outright there.
         serial:
           type: string
           description: >-
@@ -12479,6 +12591,17 @@ components:
         central: { type: string }
         bytes: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
+
+    EditSessionRequest:
+      type: object
+      required: [key, token]
+      description: >-
+        Identifies a live edit session on the heartbeat and close routes.
+        The token is what proves ownership; a request that omits it is
+        accepted syntactically but cannot refresh or release the lock.
+      properties:
+        key: { type: string }
+        token: { type: string }
 
     EditSessionResponse:
       type: object

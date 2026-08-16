@@ -90,6 +90,7 @@ type Sysvar struct {
 	unconfirmedAt    time.Time           // timestamp of last WriteUnconfirmedValue
 	observed         bool
 	callbacks        []func(old, next hmtypes.ParamValue)
+	removedHandlers  []func()
 	// explicitChannel is the channel address the operator explicitly
 	// assigned to this variable in the CCU WebUI ("Kanalzuordnung"),
 	// as reported by the sysvar-description ReGa script. It is stored
@@ -310,6 +311,27 @@ func (s *Sysvar) Extended() bool {
 	return s.IsExtended
 }
 
+// Internal reports whether the CCU keeps this variable for its own
+// bookkeeping, so north-bound listings can omit it.
+//
+// The flag is refreshed in place by [SetInternal] on every hub scan while
+// readers walk the same live objects, so it is read under the sysvar lock
+// rather than off the field.
+func (s *Sysvar) Internal() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.IsInternal
+}
+
+// SetInternal records the CCU's isInternal flag for this variable. Every
+// hub scan calls it for every known variable, which is why it takes the
+// lock the readers take.
+func (s *Sysvar) SetInternal(internal bool) {
+	s.mu.Lock()
+	s.IsInternal = internal
+	s.mu.Unlock()
+}
+
 // Value returns the effective sysvar value. When an unconfirmed (optimistic)
 // value was written after the last confirmed value arrived, the unconfirmed
 // value is returned instead.
@@ -448,6 +470,46 @@ func (s *Sysvar) OnUpdate(fn func(old, next hmtypes.ParamValue)) func() {
 				s.callbacks[idx] = nil
 			}
 		})
+	}
+}
+
+// OnRemoved registers a lifecycle hook fired when [Sysvar.NotifyRemoved] is
+// called (typically from [Hub.RemoveSysvar]). Returns an idempotent
+// unsubscribe closure. Mirrors [Program.OnRemoved].
+func (s *Sysvar) OnRemoved(fn func()) func() {
+	s.mu.Lock()
+	s.removedHandlers = append(s.removedHandlers, fn)
+	idx := len(s.removedHandlers) - 1
+	s.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if idx < len(s.removedHandlers) {
+				s.removedHandlers[idx] = nil
+			}
+		})
+	}
+}
+
+// NotifyRemoved fires every registered removal hook. Called by
+// [Hub.RemoveSysvar] right before the entry is dropped, so subscribers can
+// retract the MQTT discovery configs and any other retained footprint of a
+// variable the operator deleted on the CCU. Without it a deleted variable
+// keeps its retained discovery config — and therefore its Home Assistant
+// entity — for the life of the broker.
+func (s *Sysvar) NotifyRemoved() {
+	s.mu.Lock()
+	cbs := make([]func(), len(s.removedHandlers))
+	copy(cbs, s.removedHandlers)
+	s.removedHandlers = nil
+	s.mu.Unlock()
+	for _, cb := range cbs {
+		if cb != nil {
+			cb()
+		}
 	}
 }
 

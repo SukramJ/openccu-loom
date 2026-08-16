@@ -157,6 +157,8 @@ const AUDIT_ACTIONS = [
   "matter_exposure_bulk",
   "matter_exposure_update",
   "matter_fabric_revoke",
+  "matter_factory_reset",
+  "matter_force_sync",
   "matter_share",
   "paramset_write",
   "program_delete",

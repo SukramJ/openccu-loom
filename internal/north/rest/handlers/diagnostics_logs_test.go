@@ -466,7 +466,7 @@ func TestPutDefaultLogLevel_AuditRecorderCalledOnSuccess(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("audit entries = %d, want 1", len(entries))
 	}
-	if entries[0].Action != audit.Action("logging.default_level_set") {
+	if entries[0].Action != audit.ActionLoggingDefaultLevelSet {
 		t.Errorf("action = %q, want logging.default_level_set", entries[0].Action)
 	}
 }

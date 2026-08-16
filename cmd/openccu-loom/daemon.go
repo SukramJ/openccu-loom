@@ -427,8 +427,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// One allowlist instance serves both listeners; it re-resolves the CCU
 	// set on its own so a central adopted at runtime is not refused until the
 	// next restart.
+	// Both listeners report every dispatched callback to the per-central
+	// metrics observers through this sink; it is what makes the `rpc_server`
+	// diagnostics section carry real numbers instead of permanent zeroes.
+	// It resolves centrals through the registry on each call, so a CCU
+	// adopted after the listeners are up is measured too.
 	callbackAllow := newCallbackAllowlist(ctx, cfg, sqCentrals, logger)
-	cb, cancelCallback := wireXMLRPCCallback(ctx, cfg, callbackAllow, logger)
+	callbackObs := newCallbackMetrics(reg)
+	cb, cancelCallback := wireXMLRPCCallback(ctx, cfg, callbackAllow, callbackObs, logger)
 	defer cancelCallback()
 	callbackCtx := cb.ctx
 	callbackSrv := cb.srv
@@ -437,7 +443,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// --- BIN-RPC callback server --------------------------------
 	// Extracted into wireBINRPCCallback (daemon_boot.go). Serves on
 	// callbackCtx so it shuts down with the XML-RPC callback server.
-	binCB := wireBINRPCCallback(callbackCtx, cfg, callbackAllow, logger) //nolint:contextcheck // callbackCtx is the cancellable callback context the BIN-RPC listener serves on; it is intentionally not re-derived from the daemon ctx
+	binCB := wireBINRPCCallback(callbackCtx, cfg, callbackAllow, callbackObs, logger) //nolint:contextcheck // callbackCtx is the cancellable callback context the BIN-RPC listener serves on; it is intentionally not re-derived from the daemon ctx
 	binRPCSrv := binCB.srv
 	binRPCPort := binCB.port
 

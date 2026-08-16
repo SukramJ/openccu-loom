@@ -7,8 +7,10 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -321,5 +323,50 @@ func TestCheckConnectionAvailabilityNoPingPongWhenFlagFalse(t *testing.T) {
 	}
 	if c.PingPong().PendingCount() != 0 {
 		t.Fatal("no pings should be recorded when handlePingPong=false")
+	}
+}
+
+// TestCheckConnectionAvailabilityShedProbeRecordsNoPing verifies that a probe
+// the circuit breaker sheds leaves no pending ping behind.
+//
+// While the breaker is OPEN the probe never reaches the wire, so the CCU can
+// never answer it. A token recorded for it can only expire into a pending-TTL
+// mismatch, which counts against interface health for a ping nobody sent —
+// exactly while the interface is already degraded.
+func TestCheckConnectionAvailabilityShedProbeRecordsNoPing(t *testing.T) {
+	t.Parallel()
+
+	circuit := reliability.NewCircuit(reliability.CircuitConfig{
+		FailureThreshold: 1,
+		ResetTimeout:     time.Hour, // stay OPEN for the test
+	})
+	circuit.RecordFailure()
+	if circuit.State() != hmenum.CircuitStateOpen {
+		t.Fatalf("circuit state = %v, want OPEN", circuit.State())
+	}
+
+	var calls int
+	c, err := New(Config{
+		CentralName: "ccu-shed",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Caller: CallerFunc(func(context.Context, string, []any) (any, error) {
+			calls++
+			return nil, nil
+		}),
+		Circuit:      circuit,
+		Capabilities: backends.CapabilityFor(backends.KindCCU),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if c.CheckConnectionAvailability(context.Background(), true) {
+		t.Error("CheckConnectionAvailability = true while the breaker is OPEN")
+	}
+	if calls != 0 {
+		t.Errorf("shed probe still reached the wire %d times", calls)
+	}
+	if n := c.PingPong().PendingCount(); n != 0 {
+		t.Errorf("PendingCount = %d after a shed probe, want 0", n)
 	}
 }

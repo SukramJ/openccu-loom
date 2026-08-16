@@ -58,6 +58,25 @@ const garageCdp = {
   capabilities: { vent: true, stop: true },
 } as unknown as CustomDPSummary;
 
+const blindCdp = {
+  name: "blind",
+  kind: "cover_blind",
+  channel_no: 3,
+  capabilities: { position: true, stop: true },
+} as unknown as CustomDPSummary;
+
+function levelDP(value: number): DataPointSummary {
+  return {
+    parameter: "LEVEL",
+    type: "FLOAT",
+    value,
+    min: 0,
+    max: 1,
+    observed: true,
+    operations: { read: true, write: true, event: true },
+  } as unknown as DataPointSummary;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockInvoke.mockResolvedValue(undefined);
@@ -84,5 +103,36 @@ describe("CoverTile — garage door state", () => {
     await waitFor(() =>
       expect(vent.getAttribute("aria-pressed")).toBe("true"),
     );
+  });
+});
+
+describe("CoverTile — blind open state", () => {
+  it.each([
+    ["fully open", 1],
+    ["half open", 0.5],
+  ])("paints the tile as open at %s", async (_name, level) => {
+    mockListDataPoints.mockResolvedValue([levelDP(level)]);
+    const { container } = render(CoverTile, {
+      props: { address: ADDRESS, cdp: blindCdp },
+    });
+
+    await waitFor(() => {
+      const icon = container.querySelector(".ha-tile-icon");
+      expect(icon?.classList.contains("active")).toBe(true);
+    });
+    const tile = container.querySelector(".ha-tile");
+    expect(tile?.getAttribute("style")).toContain("--state-cover-active-color");
+    expect(tile?.classList.contains("focused")).toBe(true);
+  });
+
+  it("paints the tile as closed at LEVEL 0", async () => {
+    mockListDataPoints.mockResolvedValue([levelDP(0)]);
+    const { container } = render(CoverTile, {
+      props: { address: ADDRESS, cdp: blindCdp },
+    });
+
+    await waitFor(() => expect(container.querySelector(".ha-tile")).toBeTruthy());
+    const icon = container.querySelector(".ha-tile-icon");
+    expect(icon?.classList.contains("active")).toBe(false);
   });
 });

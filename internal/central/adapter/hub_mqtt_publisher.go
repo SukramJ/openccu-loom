@@ -576,7 +576,7 @@ func (p *HubMQTTPublisher) wireOneProgram(
 	b *mqtt.Bridge,
 	w *mqtt.Wiring,
 ) {
-	if prog == nil || prog.IsInternal {
+	if prog == nil || prog.Internal() {
 		return
 	}
 	active, _ := prog.Active()
@@ -654,6 +654,19 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 			w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, next.Unwrap()))
 		})
 	}))
+	// A system variable the operator deleted in the CCU WebUI is dropped
+	// from the model by the next refresh, but its retained discovery config
+	// keeps the entity alive in every consumer — frozen at its last value,
+	// and across daemon restarts, because nothing ever clears a retained
+	// topic the model no longer knows about. Retract the config this sysvar
+	// declared the moment the model drops it, exactly as wireOneProgram
+	// does for programs.
+	p.addUnsub(sv.OnRemoved(func() {
+		p.publish(func() {
+			retractHubDiscoveryItems(ctx, b,
+				[]mqtt.DiscoveryItem{disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv))})
+		})
+	}))
 }
 
 // sysvarSpecFor projects a model sysvar onto the narrow discovery contract,
@@ -661,7 +674,10 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 // and republishHubEntityDiscovery so both build an identical payload.
 func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
 	return mqtt.HubSysvarSpec{
-		Name:           sv.Name,
+		// The name is mutable — a CCU-side rename rewrites it under the data
+		// point's own lock — so it is read through the accessor, never off
+		// the field.
+		Name:           sv.LegacyName(),
 		Description:    sv.Description,
 		Unit:           sv.Unit,
 		ValueList:      sv.ValueList,
@@ -680,8 +696,10 @@ func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
 // both build an identical payload.
 func programSpecFor(prog *hub.Program) mqtt.HubProgramSpec {
 	return mqtt.HubProgramSpec{
-		ID:             prog.ID,
-		Name:           prog.Name,
+		ID: prog.ID,
+		// Mutable under the data point's own lock (a CCU-side rename lands
+		// through UpdateMetadata), so read it through the accessor.
+		Name:           prog.LegacyName(),
 		DeviceAddress:  prog.DeviceAddress(),
 		EnabledDefault: prog.EnabledByDefault(),
 	}
@@ -702,7 +720,7 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 	b *mqtt.Bridge,
 ) {
 	for _, prog := range hubModel.Programs() {
-		if prog == nil || prog.IsInternal {
+		if prog == nil || prog.Internal() {
 			continue
 		}
 		for _, item := range disco.BuildProgramDiscoveryRoles(

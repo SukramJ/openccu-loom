@@ -751,6 +751,58 @@ func TestRunRetainCleanupOnceKeepsMetricTopicsTheEscapingNeverMoved(t *testing.T
 	}
 }
 
+// TestRunRetainCleanupOnceKeepsTheTopicsOfARuntimeAdoptedCentral pins that the
+// sweep judges candidates against the fleet the daemon serves right now, not
+// against the one it booted with.
+//
+// A CCU adopted through the SPA never reaches the boot config, so it is absent
+// from the snapshot the bridge was built with. The retired spelling of a
+// configured CCU's metric topic is the live topic of a CCU whose name differs
+// only in case — so a sweep that does not know the adopted CCU blanks its
+// health score, latency and last-event-age, and no publisher rewrites them
+// until the value changes.
+func TestRunRetainCleanupOnceKeepsTheTopicsOfARuntimeAdoptedCentral(t *testing.T) {
+	t.Parallel()
+
+	const (
+		base      = "openccu-loom"
+		booted    = "CCU1"
+		adopted   = "ccu1" // adopted at runtime; collides with booted's retired spelling
+		windowLen = 50 * time.Millisecond
+	)
+	topics := NewTopicBuilder(base)
+	live := []string{
+		topics.HubSystemHealthScore(adopted),
+		topics.HubConnectionLatency(adopted),
+		topics.HubLastEventAge(adopted),
+	}
+	retained := make([]retainedMsg, 0, len(live))
+	for _, topic := range live {
+		retained = append(retained, retainedMsg{topic: topic, payload: []byte(`{"value":42}`)})
+	}
+	mc := &mockRetainClient{retained: retained}
+	b := NewBridge(BridgeConfig{
+		Base:         base,
+		CentralName:  booted,
+		CentralNames: []string{booted},
+		CentralNamesSupplier: func() []string {
+			return []string{booted, adopted}
+		},
+		RawEnabled: true,
+	}, mc)
+
+	n, err := b.RunRetainCleanupOnce(context.Background(), windowLen)
+	if err != nil {
+		t.Fatalf("RunRetainCleanupOnce: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("evicted = %d, want 0 — the sweep blanked the adopted CCU's live metric values", n)
+	}
+	if cleared := mc.evicted(); len(cleared) != 0 {
+		t.Fatalf("cleared %v — those are the live metric topics of %q", cleared, adopted)
+	}
+}
+
 // unsubscribeTrackingClient is a [Client] that records every filter it
 // was asked to unsubscribe from, so a test can prove no sweep leaves its
 // wildcard subscription installed on the shared client.

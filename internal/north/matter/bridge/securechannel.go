@@ -372,7 +372,7 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		// operator reading the trace after a controller went quiet needs
 		// the open as much as the close: "it never came back after 14:02"
 		// is only readable when both ends of the session are recorded.
-		b.diagEvents.Record(diagevent.Event{
+		b.diagRing().Record(diagevent.Event{
 			Kind:     diagevent.KindSession,
 			Severity: diagevent.SeverityInfo,
 			Message:  "A controller completed a secure-session handshake with the bridge.",
@@ -439,7 +439,7 @@ func (b *Bridge) dispatchPase(
 			b.logger.Info("matter.rx.sc.pase_busy",
 				slog.String("src", srcString(src)),
 				slog.Int("exchange_id", int(proto.ExchangeID)))
-			b.diagEvents.Record(diagevent.Event{
+			b.diagRing().Record(diagevent.Event{
 				Kind:     diagevent.KindPairing,
 				Severity: diagevent.SeverityWarning,
 				Message: "A commissioner tried to pair while another pairing was already " +
@@ -543,7 +543,7 @@ func (b *Bridge) recordPaseFailure() {
 	b.logger.Warn("matter.rx.sc.pase_bruteforce",
 		slog.Int("max_errors", paseMaxErrors),
 		slog.String("hint", "too many PASE pairing failures; revoking commissioning window"))
-	b.diagEvents.Record(diagevent.Event{
+	b.diagRing().Record(diagevent.Event{
 		Kind:     diagevent.KindPairing,
 		Severity: diagevent.SeverityError,
 		Message: "Pairing was locked after too many failed attempts. Open a new " +
@@ -940,7 +940,7 @@ func (b *Bridge) handleSecureChannelStatusReport(src *net.UDPAddr, requestHdr *m
 	b.logger.Info("matter.rx.sc.close_session",
 		slog.String("src", srcString(src)),
 		slog.Int("session_id", int(requestHdr.SessionID)))
-	b.diagEvents.Record(diagevent.Event{
+	b.diagRing().Record(diagevent.Event{
 		Kind:     diagevent.KindSession,
 		Severity: diagevent.SeverityInfo,
 		Message:  "A controller closed its secure session with the bridge.",
@@ -1120,7 +1120,7 @@ func (b *Bridge) triggerSessionReannounce() {
 	// the trace when a controller stopped finding the bridge: the
 	// re-announce says the records went back on the wire, and its
 	// absence says they did not.
-	b.diagEvents.Record(diagevent.Event{
+	b.diagRing().Record(diagevent.Event{
 		Kind:     diagevent.KindDiscovery,
 		Severity: diagevent.SeverityInfo,
 		Message:  "The bridge re-announced itself on the network after a controller's last session ended.",

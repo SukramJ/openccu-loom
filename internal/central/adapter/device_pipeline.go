@@ -1669,12 +1669,16 @@ func (p *DevicePipeline) hydrateDeviceRoot(
 		return
 	}
 	root := d.EnsureRootChannel()
-	p.hydrateParamset(ctx, interfaceID, root, b, bw, hmenum.ParamsetKeyMaster, logger)
 	root.SetCentralName(p.unit.Name())
+	// Install the write + refresh dispatchers BEFORE the data points are
+	// built: the data points capture their write path at construction time,
+	// and [dataPointWriter] can only hand out the lock-enforcing wrapper once
+	// the channel has a writer.
 	if bw != nil {
 		root.SetWriter(&channelWriterAdapter{bw: bw, backend: b})
 		root.SetRefresher(b)
 	}
+	p.hydrateParamset(ctx, interfaceID, root, b, dataPointWriter(root, bw), hmenum.ParamsetKeyMaster, logger)
 	// Always assign: a re-ingest of an interface that lost its poller must
 	// clear the stale hook rather than keep the previous generation's.
 	root.SetMasterRefreshHook(p.masterRefreshHooks.get(interfaceID))
@@ -1689,8 +1693,6 @@ func (p *DevicePipeline) hydrateChannel(
 	bw generic.Writer,
 	logger *slog.Logger,
 ) {
-	p.hydrateParamset(ctx, interfaceID, ch, b, bw, hmenum.ParamsetKeyValues, logger)
-	p.hydrateParamset(ctx, interfaceID, ch, b, bw, hmenum.ParamsetKeyMaster, logger)
 	_ = d // reserved for future per-device labeling
 
 	// Stamp the Unit name on the channel so custom-DP
@@ -1703,10 +1705,18 @@ func (p *DevicePipeline) hydrateChannel(
 	// Wire the channel's write + refresh dispatchers so Channel.Set
 	// SetMany / Refresh route through the correct backend without the
 	// north-bound layer needing a direct backend reference.
+	//
+	// This runs BEFORE the paramsets are hydrated: the data points built
+	// there capture their write path once, at construction time, and
+	// [dataPointWriter] can only hand out the lock-enforcing wrapper once
+	// the channel has a writer installed.
 	if bw != nil && b != nil {
 		ch.SetWriter(&channelWriterAdapter{bw: bw, backend: b})
 		ch.SetRefresher(b)
 	}
+	dpWriter := dataPointWriter(ch, bw)
+	p.hydrateParamset(ctx, interfaceID, ch, b, dpWriter, hmenum.ParamsetKeyValues, logger)
+	p.hydrateParamset(ctx, interfaceID, ch, b, dpWriter, hmenum.ParamsetKeyMaster, logger)
 	// Wire the post-MASTER-write hook of the interface this channel belongs
 	// to. It is nil for HmIP channels (CONFIG_PENDING covers their refresh
 	// path); assigning unconditionally also clears a hook left over from an

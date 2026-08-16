@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
@@ -372,10 +373,20 @@ func (o *Outbound) Stop(_ context.Context) error {
 }
 
 // Healthy implements bridge.HealthReporter. The bridge is always "up" once
-// started; it reports the running failed/dropped counters as detail so an
-// operator can see delivery trouble without it tripping overall health.
+// started: an unreachable receiver is the receiver's problem, and reporting it
+// as a daemon fault would turn every operator's misconfigured endpoint into a
+// red overall health state. The running dropped/failed counters ride along in
+// detail for callers that render it. Note that bridge.Registry.Health only
+// surfaces the detail of services that report *not* healthy, so delivery
+// trouble reaches an operator through the log (webhook.outbound.queue_overflow
+// on the first drop, webhook.outbound.delivery_failed per exhausted delivery)
+// rather than through the health endpoint.
 func (o *Outbound) Healthy() (ok bool, detail string) {
-	return true, ""
+	dropped, failed := o.dropped.Load(), o.failed.Load()
+	if dropped == 0 && failed == 0 {
+		return true, ""
+	}
+	return true, fmt.Sprintf("dropped=%d failed=%d", dropped, failed)
 }
 
 // Dropped returns the number of deliveries discarded due to a full queue.
@@ -544,9 +555,15 @@ func (o *Outbound) enqueue(env envelope) {
 		o.logger.Warn("webhook.outbound.marshal", slog.String("err", err.Error()))
 		return
 	}
+	// Every channel operation happens under o.mu, and Stop clears o.queue
+	// under the same mutex before it closes the channel. Reading the field
+	// under the lock and sending after releasing it would leave exactly the
+	// window Stop needs to close the channel underneath the send, which panics
+	// the publishing goroutine. All operations here are non-blocking, so
+	// holding the mutex across them cannot stall the event bus.
 	o.mu.Lock()
+	defer o.mu.Unlock()
 	q := o.queue
-	o.mu.Unlock()
 	if q == nil {
 		return
 	}
@@ -556,19 +573,31 @@ func (o *Outbound) enqueue(env envelope) {
 		return
 	default:
 	}
-	// Queue full: drop the oldest, then enqueue the newest. The drains and
-	// sends are non-blocking so a racing Stop (which closes q) cannot panic
-	// us into a closed-channel send beyond a single recovered attempt.
+	// Queue full: drop the oldest, then enqueue the newest.
 	select {
 	case <-q:
-		o.dropped.Add(1)
+		o.countDrop(env.Event)
 	default:
 	}
 	select {
 	case q <- d:
 	default:
-		o.dropped.Add(1)
+		o.countDrop(env.Event)
 	}
+}
+
+// countDrop records one discarded delivery. The first drop is logged at warn
+// level because it marks the moment the endpoint stopped keeping up — after
+// that the queue usually overflows continuously, so further drops are logged
+// at debug to keep a dead receiver from flooding the log. Callers hold o.mu.
+func (o *Outbound) countDrop(event string) {
+	if o.dropped.Add(1) == 1 {
+		o.logger.Warn("webhook.outbound.queue_overflow",
+			slog.String("event", event),
+			slog.Int("capacity", cap(o.queue)))
+		return
+	}
+	o.logger.Debug("webhook.outbound.dropped", slog.String("event", event))
 }
 
 // worker drains queue and delivers each payload with retry. It exits when

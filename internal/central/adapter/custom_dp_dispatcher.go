@@ -237,6 +237,9 @@ func (d *CustomDPDispatcher) dispatch(
 	if s, ok := dp.(*switchdev.Switch); ok {
 		return d.dispatchSwitch(ctx, s, operation, params, priority)
 	}
+	if ap, ok := dp.(*switchdev.AccessPermission); ok {
+		return d.dispatchAccessPermission(ctx, ap, operation, priority)
+	}
 
 	return fmt.Errorf("custom_dp: unsupported data point type %T", dp)
 }
@@ -792,6 +795,32 @@ func (d *CustomDPDispatcher) dispatchSwitch(
 	case "toggle":
 		on, _ := s.IsOn()
 		return s.Set(ctx, !on, prio)
+	default:
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
+	}
+}
+
+// dispatchAccessPermission serves the access-permission switch of the
+// HomematicIP access-control devices. It reports the SWITCH category, so
+// every switch surface (SPA tile, REST, WS) sends the switch operations at
+// it; without this case they answered "unsupported data point type".
+//
+// There is no bounded-on operation: the permission is written through the
+// write-only ACCESS_AUTHORIZATION control, which carries no on-time.
+func (d *CustomDPDispatcher) dispatchAccessPermission(
+	ctx context.Context, ap *switchdev.AccessPermission, op string, prio hmenum.CommandPriority,
+) error {
+	switch op {
+	case "turn_on":
+		return ap.TurnOn(ctx, prio)
+	case "turn_off":
+		return ap.TurnOff(ctx, prio)
+	case "toggle":
+		on, _ := ap.IsOn()
+		if on {
+			return ap.TurnOff(ctx, prio)
+		}
+		return ap.TurnOn(ctx, prio)
 	default:
 		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}

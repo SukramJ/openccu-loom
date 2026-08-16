@@ -76,17 +76,10 @@ func bridgeSessionParameters() *sigma.SessionParameters {
 	}
 }
 
-// daemonServe boots the full process: config → registry → REST + UI
-// + MQTT servers → blocks on ctx.Done(). It is the real composition
-// root callers reach through `openccu-loom run --config path.yaml`.
-//
-// Production wires ctx via [signal.NotifyContext] so SIGINT / SIGTERM
-// triggers shutdown. Tests pass a cancellable ctx and call cancel()
-// instead of delivering a signal — that avoids syscall.Kill against
-// the test process's own PID, which would tear down the test
-// framework itself.
-// buildMatterAdvertiser returns the advertiser plus the closer that releases
-// what it owns beyond the Advertiser interface.
+// buildMatterAdvertiser selects the mDNS advertiser from mc.MDNSAdvertise and
+// returns it together with the closer that releases what it owns beyond the
+// Advertiser interface. "noop" is an explicit opt-out; empty or "zeroconf"
+// yields the default multicast advertiser.
 //
 // The closer exists for the subtype responder: it holds two multicast sockets
 // and a receive goroutine per address family, and the Zeroconf close path only
@@ -172,6 +165,17 @@ type matterBridgeBundle struct {
 	withdrawFabric func(ctx context.Context, compressedID [8]byte, nodeID uint64)
 }
 
+// startMatterBridge constructs and starts the Matter bridge when
+// matter.enabled is set. Returns the bridge and a stop function the caller
+// defers; both are nil when the feature flag is off or the bridge cannot
+// stand up. Errors are logged at warn level but never abort the daemon —
+// the bridge is feature-flagged and failing to start it must not take
+// REST / MQTT down with it.
+//
+// Defaults applied here mirror the [config.NorthMatter] doc strings:
+// VendorID 0xFFF1 (test vendor block — never ship), ProductID 0x8000,
+// NodeLabel "openccu-loom", Discriminator 0xF00, Listen ":5540".
+//
 // db is the shared <DataDir>/openccu-loom.db handle opened once by
 // [openLoomDB] in the composition root; startMatterBridge never opens or
 // closes it — a nil db degrades the bridge to disabled (same as a
@@ -2817,9 +2821,13 @@ func (a *paseSessionCloserAdapter) ClosePaseSessions(_ context.Context) error {
 	return nil
 }
 
-// buildRateLimitConfig projects the YAML config into the middleware
-// shape, returning nil when rate limiting is disabled so the router
-// skips the middleware wiring entirely.
+// startMDNSAdvertiser parses the REST listen address, builds the
+// daemon-discovery TXT bundle, and starts a multicast advertiser.
+// Returns (nil, nil) when the listen address has no usable port
+// (Unix socket etc.) so the caller can skip without an error path.
+// Returns (nil, err) when the port is malformed or zeroconf fails to
+// register; the caller is expected to log and continue (mDNS is a
+// convenience, not a hard dependency).
 func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, reg *central.Registry, logger *slog.Logger) (discoverymdns.Advertiser, error) {
 	svc, ok := mdnsServiceFor(cfg, len(reg.Names()), mdnsCCUSerials(reg))
 	if !ok {
@@ -3576,6 +3584,14 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			}
 			ephem := newMatterEphemeralProvider(mb, mcfg.Commissioning, bundle.opMgr, bundle.opCreds, bundle.configuredPase, configuredFactory, logger)
 			opener.SetEphemeralProvider(ephem)
+			// Same ownership as the verifier installer above: the provider
+			// holds the live per-exchange PASE provider and its reaper
+			// goroutine, which no window close ends on its own.
+			stopWithVerifier := teardown
+			teardown = func() {
+				ephem.Close()
+				stopWithVerifier()
+			}
 			logger.Info("matter.bridge.pase.ephemeral_armed",
 				slog.Bool("configured_fallback", bundle.configuredPase != nil),
 				slog.Bool("concurrent_pairings", mcfg.Commissioning.ConcurrentPairings))
@@ -3655,11 +3671,6 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}
 	return wiring, closers, teardown
 }
-
-// splitListenPort returns the TCP port from a Go net.Listen-style
-// address (":8119", "0.0.0.0:8119", "[::]:8119"). Reports ok=false
-// for addresses without a numeric port (e.g. Unix sockets, malformed
-// strings) so the caller can degrade gracefully.
 
 // matterSessionLister joins the two managers that each hold half of the
 // session picture: the operational manager knows which sessions exist

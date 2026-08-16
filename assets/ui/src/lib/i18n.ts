@@ -518,6 +518,14 @@ const EN: Catalog = {
   "alarm.sensors.add.no_devices": "No matching device channels found.",
   "alarm.sensors.add.show_all": "Show all channels",
   "alarm.sensors.zone": "Zone",
+  // Guard shown when switching the zone selector would drop an unsaved
+  // editing session. The zone-scoped views save whatever is on screen back
+  // under the zone the selector points at, so the buffer cannot travel with
+  // the operator — it is either saved first or discarded.
+  "alarm.zone_switch.discard.title": "Unsaved changes",
+  "alarm.zone_switch.discard.body":
+    "Your unsaved changes for this zone will be lost if you switch to another zone. Switch anyway?",
+  "alarm.zone_switch.discard.confirm": "Discard and switch",
   "alarm.sensors.field.channel": "Channel address",
   "alarm.sensors.field.device": "Device",
   "alarm.sensors.field.name": "Name",
@@ -765,6 +773,8 @@ const EN: Catalog = {
   "audit.action.matter_exposure_bulk": "Matter exposure (bulk)",
   "audit.action.matter_exposure_update": "Matter exposure",
   "audit.action.matter_fabric_revoke": "Matter fabric revoked",
+  "audit.action.matter_factory_reset": "Matter pairings removed",
+  "audit.action.matter_force_sync": "Matter topology re-synced",
   "audit.action.matter_share": "Matter share",
   "audit.action.program_delete": "Program deleted",
   "audit.action.program_execute": "Program executed",
@@ -1540,9 +1550,9 @@ const EN: Catalog = {
   "config.help.north.mqtt.topic_base":
     "Prefix every raw-plane and Discovery topic with this string. Change it when running multiple daemons against one broker.",
   "config.help.north.mqtt.raw_enabled":
-    "Publish per-data-point state under <topic_base>/<interface>/... — the raw topic plane non-HA consumers subscribe to.",
+    "Publish per-data-point state under <topic_base>/<interface>/... — the raw topic plane non-HA consumers subscribe to. Discovery needs it: switching Discovery on turns this on too, since Discovery payloads only point at raw-plane topics.",
   "config.help.north.mqtt.discovery_enabled":
-    "Emit Home Assistant Discovery payloads so HA auto-registers the daemon's devices.",
+    "Emit Home Assistant Discovery payloads so HA auto-registers the daemon's devices. Implies the raw plane — the payloads name its topics, so enabling this enables 'Publish raw plane' as well.",
   "config.help.north.mqtt.protocol_version":
     'MQTT wire dialect: "5" (default) or "3.1.1" for brokers without MQTT 5.0 support. No silent downgrade — a v5 connect against a v3-only broker fails with a named error.',
   "config.help.north.mqtt.payload_format":
@@ -2359,6 +2369,8 @@ const EN: Catalog = {
   "sysvars.edit.description": "Description",
   "sysvars.edit.note":
     "Type changes require delete + recreate. This dialog only updates metadata.",
+  "sysvars.edit.bound_required":
+    "A numeric system variable always has both bounds on the CCU — they can be changed, but not removed. Enter a value for the minimum and the maximum.",
   "sysvars.modified_badge": "modified",
   "sysvars.search": "Search…",
   "sysvars.confirm_remove": 'Really remove sysvar "{name}"?',
@@ -3161,6 +3173,8 @@ const EN: Catalog = {
   "api.error.rate_limited": "Too many requests — slowing down.",
   "api.error.server": "Server error ({status}).",
   "api.error.request": "Request rejected ({status}).",
+  "api.error.locked":
+    "Locked — this channel is protected against control writes. Lift the lock in the channel's flags.",
   // --- Matter bridge ---
   "nav.matter": "Matter",
   "sidebar.cluster.bridges": "Bridges",
@@ -3254,7 +3268,9 @@ const EN: Catalog = {
   "matter.expose.state_unmappable": "Cannot be mapped",
   "matter.expose.unmappable_checkbox_title":
     "Cannot be mapped to a Matter endpoint",
-  "matter.pair.already_paired": "{count} controller(s) already hold this bridge. Opening a window adds another one; the existing pairings are untouched.",
+  // Count-neutral phrasing on purpose: t() has no plural machinery, and
+  // one controller is the normal case.
+  "matter.pair.already_paired": "Controllers already holding this bridge: {count}. Opening a window adds another one; the existing pairings are untouched.",
   "matter.pair.add_controller": "Add another controller",
   "matter.pair.copy_manual_code": "Copy the manual pairing code",
   "matter.pair.copy_qr_payload": "Copy the QR payload",
@@ -3304,6 +3320,10 @@ const EN: Catalog = {
   "sensor_actor.false": "Off",
   "sensor_actor.event_last": "last {age}",
   "sensor_actor.event_idle": "not triggered yet",
+  "sensor_actor.age_sec": "{n} s ago",
+  "sensor_actor.age_min": "{n} min ago",
+  "sensor_actor.age_hour": "{n} h ago",
+  "sensor_actor.age_day": "{n} d ago",
   // --- Log viewer ---
   "nav.logs": "Logs",
   "logs.title": "Log Viewer",
@@ -3663,6 +3683,9 @@ const EN: Catalog = {
   "matter.fabrics.col_node_id": "Node ID",
   "matter.fabrics.col_vendor": "Vendor",
   "matter.fabrics.empty": "No fabrics paired yet.",
+  "matter.fabrics.node_id_rounded": "rounded",
+  "matter.fabrics.node_id_rounded_hint":
+    "This node id exceeds the precision this list transports, so its last digits may differ from the ones the controller shows.",
   "matter.pair.qr_payload": "QR payload",
   "select.placeholder": "Select…",
   "sysvars.create.values_placeholder": "off;on;blink",
@@ -4570,6 +4593,10 @@ const DE: Catalog = {
   "alarm.sensors.add.no_devices": "Keine passenden Gerätekanäle gefunden.",
   "alarm.sensors.add.show_all": "Alle Kanäle anzeigen",
   "alarm.sensors.zone": "Zone",
+  "alarm.zone_switch.discard.title": "Ungespeicherte Änderungen",
+  "alarm.zone_switch.discard.body":
+    "Ihre ungespeicherten Änderungen für diese Zone gehen verloren, wenn Sie zu einer anderen Zone wechseln. Trotzdem wechseln?",
+  "alarm.zone_switch.discard.confirm": "Verwerfen und wechseln",
   "alarm.sensors.field.channel": "Kanaladresse",
   "alarm.sensors.field.device": "Gerät",
   "alarm.sensors.field.name": "Name",
@@ -4823,6 +4850,8 @@ const DE: Catalog = {
   "audit.action.matter_exposure_bulk": "Matter-Freigabe (Sammeländerung)",
   "audit.action.matter_exposure_update": "Matter-Freigabe",
   "audit.action.matter_fabric_revoke": "Matter-Fabric entzogen",
+  "audit.action.matter_factory_reset": "Matter-Kopplungen entfernt",
+  "audit.action.matter_force_sync": "Matter-Topologie neu synchronisiert",
   "audit.action.matter_share": "Matter-Freigabe geteilt",
   "audit.action.program_delete": "Programm gelöscht",
   "audit.action.program_execute": "Programm ausgeführt",
@@ -5624,9 +5653,9 @@ const DE: Catalog = {
   "config.help.north.mqtt.topic_base":
     "Präfix für jedes Raw- und Discovery-Topic. Ändern, wenn mehrere Daemons gegen denselben Broker laufen.",
   "config.help.north.mqtt.raw_enabled":
-    "Veröffentlicht pro-DataPoint-State unter <topic_base>/<interface>/… — die rohe Ebene für non-HA-Konsumenten.",
+    "Veröffentlicht pro-DataPoint-State unter <topic_base>/<interface>/… — die rohe Ebene für non-HA-Konsumenten. Discovery braucht sie: Wird Discovery eingeschaltet, wird dies mit eingeschaltet, denn Discovery-Payloads verweisen ausschließlich auf Topics der Rohebene.",
   "config.help.north.mqtt.discovery_enabled":
-    "Emittiert Home-Assistant-Discovery-Payloads, sodass HA die Geräte automatisch registriert.",
+    "Emittiert Home-Assistant-Discovery-Payloads, sodass HA die Geräte automatisch registriert. Setzt die Rohebene voraus — die Payloads benennen deren Topics, daher wird „Rohebene veröffentlichen“ mit aktiviert.",
   "config.help.north.mqtt.protocol_version":
     'MQTT-Dialekt: "5" (Standard) oder "3.1.1" für Broker ohne MQTT-5.0-Unterstützung. Kein stilles Downgrade — ein v5-Connect gegen einen v3-Broker schlägt mit benanntem Fehler fehl.',
   "config.help.north.mqtt.payload_format":
@@ -6454,6 +6483,8 @@ const DE: Catalog = {
   "sysvars.edit.description": "Beschreibung",
   "sysvars.edit.note":
     "Typ-Änderungen erfordern Löschen + Neuanlegen. Hier werden nur Metadaten aktualisiert.",
+  "sysvars.edit.bound_required":
+    "Eine numerische Systemvariable hat auf der CCU immer beide Grenzen — sie lassen sich ändern, aber nicht entfernen. Bitte für Minimum und Maximum einen Wert eintragen.",
   "sysvars.modified_badge": "geändert",
   "sysvars.search": "Suchen…",
   "sysvars.confirm_remove": 'Systemvariable "{name}" wirklich entfernen?',
@@ -7266,6 +7297,8 @@ const DE: Catalog = {
   "api.error.rate_limited": "Zu viele Anfragen — Geschwindigkeit gedrosselt.",
   "api.error.server": "Server-Fehler ({status}).",
   "api.error.request": "Anfrage abgelehnt ({status}).",
+  "api.error.locked":
+    "Gesperrt — dieser Kanal ist gegen Steuerbefehle gesperrt. Die Sperre lässt sich in den Kanal-Flags aufheben.",
   // --- Matter-Bridge ---
   "nav.matter": "Matter",
   "sidebar.cluster.bridges": "Bridges",
@@ -7359,7 +7392,7 @@ const DE: Catalog = {
   "matter.expose.state_unmappable": "Nicht abbildbar",
   "matter.expose.unmappable_checkbox_title":
     "Nicht als Matter-Endpunkt abbildbar",
-  "matter.pair.already_paired": "{count} Controller halten diese Bridge bereits. Ein weiteres Fenster fügt einen zusätzlichen hinzu; die bestehenden Kopplungen bleiben unberührt.",
+  "matter.pair.already_paired": "Controller mit Zugriff auf diese Bridge: {count}. Ein weiteres Fenster fügt einen zusätzlichen hinzu; die bestehenden Kopplungen bleiben unberührt.",
   "matter.pair.add_controller": "Weiteren Controller hinzufügen",
   "matter.pair.copy_manual_code": "Manuellen Koppelcode kopieren",
   "matter.pair.copy_qr_payload": "QR-Nutzlast kopieren",
@@ -7406,6 +7439,10 @@ const DE: Catalog = {
   "sensor_actor.false": "Aus",
   "sensor_actor.event_last": "zuletzt {age}",
   "sensor_actor.event_idle": "noch nicht ausgelöst",
+  "sensor_actor.age_sec": "vor {n} s",
+  "sensor_actor.age_min": "vor {n} min",
+  "sensor_actor.age_hour": "vor {n} h",
+  "sensor_actor.age_day": "vor {n} d",
   // --- Log viewer ---
   "nav.logs": "Protokoll",
   "logs.title": "Protokoll-Viewer",
@@ -7743,6 +7780,9 @@ const DE: Catalog = {
   "matter.fabrics.col_node_id": "Node-ID",
   "matter.fabrics.col_vendor": "Hersteller",
   "matter.fabrics.empty": "Noch keine Fabrics gekoppelt.",
+  "matter.fabrics.node_id_rounded": "gerundet",
+  "matter.fabrics.node_id_rounded_hint":
+    "Diese Node-ID überschreitet die Genauigkeit, die diese Liste überträgt — die letzten Stellen können von denen abweichen, die der Controller anzeigt.",
   "matter.pair.qr_payload": "QR-Payload",
   "select.placeholder": "Auswählen…",
   "sysvars.create.values_placeholder": "aus;an;blink",

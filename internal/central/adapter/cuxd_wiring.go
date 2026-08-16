@@ -108,6 +108,9 @@ func wireCUxDInterface( //nolint:funlen,gocognit // composition/wiring: long seq
 		Enabled:             true,
 		Logger:              logger.With(slog.String("interface", wireID)),
 		SessionRecorderHook: sessionHook,
+		// Feeds the central's RPC + service metrics sections. See
+		// [newRPCOutcomeHook] for why the observer is resolved per call.
+		RPCOutcomeHook: newRPCOutcomeHook(unit, wireID),
 	}
 	// The retrier is always built here (not defaulted inside
 	// client.New) so its exhausted-chain incident sink is installed
@@ -383,7 +386,7 @@ func runCUxDActivation(
 				slog.String("central", centralName),
 				slog.String("interface", wireID),
 				slog.String("err", err.Error()))
-			ensureDisconnectedClientState(ic, logger)
+			ensureDisconnectedClientState(ic, err, logger)
 			return
 		}
 		logger.Debug("wire.interface.ingest_retry",
@@ -395,7 +398,7 @@ func runCUxDActivation(
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			ensureDisconnectedClientState(ic, logger)
+			ensureDisconnectedClientState(ic, ctx.Err(), logger)
 			return
 		case <-t.C:
 		}

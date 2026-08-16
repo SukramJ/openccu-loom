@@ -147,6 +147,42 @@ func TestPutStartupCapture_HappyPath_Returns200(t *testing.T) {
 	}
 }
 
+// TestPutStartupCapture_OmittedAnonymise_PersistsTrue crosses the handler's
+// decode seam: a body that enables the boot capture without naming `anonymise`
+// must persist the privacy default rather than a zero-valued false, or the next
+// boot archives raw device addresses nobody opted into.
+func TestPutStartupCapture_OmittedAnonymise_PersistsTrue(t *testing.T) {
+	t.Parallel()
+	svc := &fakeStartupCaptureService{}
+	body := `{"enabled":true,"duration_seconds":30}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/system/startup-capture", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	PutStartupCapture(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.savedCfg == nil {
+		t.Fatal("expected Save to be called")
+	}
+	if !svc.savedCfg.Anonymise {
+		t.Error("saved Anonymise = false for a body that omitted the key, want true")
+	}
+
+	// An explicit opt-out is still honoured.
+	svc2 := &fakeStartupCaptureService{}
+	req2 := httptest.NewRequest(http.MethodPut, "/api/v1/system/startup-capture",
+		strings.NewReader(`{"enabled":true,"anonymise":false}`))
+	w2 := httptest.NewRecorder()
+	PutStartupCapture(svc2, nil).ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w2.Code, w2.Body.String())
+	}
+	if svc2.savedCfg == nil || svc2.savedCfg.Anonymise {
+		t.Errorf("explicit anonymise=false was not persisted: %+v", svc2.savedCfg)
+	}
+}
+
 func TestPutStartupCapture_AuditRecorderCalled_OnEnable(t *testing.T) {
 	t.Parallel()
 	svc := &fakeStartupCaptureService{}

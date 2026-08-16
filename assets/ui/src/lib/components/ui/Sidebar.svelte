@@ -176,8 +176,10 @@
             <a
               href={item.href}
               onclick={onMobileClose}
-              class="relative flex items-center gap-3 px-3 py-2 text-sm font-medium transition"
-              style="color: {active ? 'var(--ha-primary-color)' : 'var(--ha-primary-text-color)'}; background-color: {active ? 'rgb(0 0 0 / 0.04)' : 'transparent'};"
+              class="relative flex items-center gap-3 px-3 py-2 text-sm font-medium transition {active
+                ? 'bg-black/[0.04] dark:bg-white/10'
+                : ''}"
+              style="color: {active ? 'var(--ha-primary-color)' : 'var(--ha-primary-text-color)'};"
               aria-current={active ? "page" : undefined}
               title={!expanded
                 ? showInstallDot

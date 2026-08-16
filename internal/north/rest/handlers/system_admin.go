@@ -138,7 +138,7 @@ func Restart(rec audit.Recorder) http.HandlerFunc {
 		if rec != nil {
 			rec.Record(audit.Entry{
 				User:   identityFromCtx(r.Context()),
-				Action: audit.Action("system.restart_requested"),
+				Action: audit.ActionSystemRestartRequested,
 			})
 		}
 		if alreadySignalled {

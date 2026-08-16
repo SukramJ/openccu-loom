@@ -72,7 +72,11 @@ var ErrNoScheduleBackend = errors.New("schedules: no backend for device")
 // ErrNoSchedule is returned when the MASTER paramset of a channel
 // carries no recognisable P<n>_ENDTIME/TEMPERATURE keys. The SPA
 // treats this as "device does not support climate scheduling".
-var ErrNoSchedule = errors.New("schedules: channel exposes no climate schedule parameters")
+//
+// The sentinel itself is [hmerr.ErrNoSchedule] so the REST layer can
+// classify it with errors.Is; see the doc there for why it lives in
+// pkg/hmerr rather than here.
+var ErrNoSchedule = hmerr.ErrNoSchedule
 
 // Wochentage in der CCU-Reihenfolge. Muss mit dem Frontend-Ordering
 // synchron bleiben (das Grid rendert in dieser Reihenfolge).
@@ -260,12 +264,15 @@ func (s *SchedulesDomain) SetActiveProfileAuto(
 
 // ErrScheduleCopyNoOp is returned when a copy would read and write the
 // same channel/profile (or device), which is always a no-op and almost
-// always a caller mistake.
-var ErrScheduleCopyNoOp = errors.New("schedules: copy source and destination are identical")
+// always a caller mistake. Aliases [hmerr.ErrScheduleCopyNoOp] so the
+// REST layer can classify it with errors.Is.
+var ErrScheduleCopyNoOp = hmerr.ErrScheduleCopyNoOp
 
 // ErrScheduleCopyProfileRange is returned when a profile index is
-// outside the supported 1..6 range.
-var ErrScheduleCopyProfileRange = errors.New("schedules: profile index out of range (1..6)")
+// outside the supported 1..6 range. Aliases
+// [hmerr.ErrScheduleCopyProfileRange] for the same reason as
+// [ErrScheduleCopyNoOp].
+var ErrScheduleCopyProfileRange = hmerr.ErrScheduleCopyProfileRange
 
 // CopyClimateProfile copies a single climate week-profile from the
 // source channel/profile to the destination channel/profile. It reads

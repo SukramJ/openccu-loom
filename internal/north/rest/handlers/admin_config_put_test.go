@@ -92,10 +92,11 @@ func TestPutConfigSection_ValidSemanticSectionPersists(t *testing.T) {
 	}
 }
 
-// TestPutConfigSection_RestartRequiredPerField proves finding #2: the PUT
-// response restart_required is computed per changed field, so a hot-appliable
-// change (CORS only) reports false while a restart-required change (public_url,
-// or any webhook field) reports true — consistent with GET /system/config-changes.
+// TestPutConfigSection_RestartRequiredPerField pins that the PUT response's
+// restart_required is computed per changed field: a hot-appliable change (the
+// MQTT broker, which the reload path re-wires) reports false, while a change
+// captured once at assembly time (public_url, the CORS origins, any webhook
+// field) reports true — consistent with GET /system/config-changes.
 func TestPutConfigSection_RestartRequiredPerField(t *testing.T) {
 	t.Parallel()
 
@@ -106,10 +107,14 @@ func TestPutConfigSection_RestartRequiredPerField(t *testing.T) {
 		want    bool
 	}{
 		{
-			name:    "cors only is hot-appliable",
+			// The allowed-origin list is captured when the CORS middleware
+			// is constructed at router assembly, and an empty list installs
+			// no middleware at all — so no CORS edit can take effect in a
+			// running daemon.
+			name:    "cors change needs restart",
 			section: "north.rest",
 			body:    `{"cors":["https://ui.example"]}`,
-			want:    false,
+			want:    true,
 		},
 		{
 			name:    "public_url change needs restart",

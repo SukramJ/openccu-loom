@@ -367,7 +367,7 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 			// otherwise the central's include_internal_programs config default.
 			include := effectiveBool(includeInternal, nh.Hub.IncludeInternalProgramsDefault())
 			for _, p := range nh.Hub.Programs() {
-				if p.IsInternal && !include {
+				if p.Internal() && !include {
 					continue
 				}
 				out = append(out, toProgramSummary(p, nh.Central, serial))
@@ -415,7 +415,7 @@ func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSumma
 		Central:     central,
 		UniqueID:    p.CanonicalUniqueID(serialSuffix),
 		ID:          p.ID,
-		Name:        p.Name,
+		Name:        p.LegacyName(),
 		Description: p.Description,
 	}
 	e.ExecuteAvailable = true
@@ -429,7 +429,7 @@ func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSumma
 		e.LastExecuted = rfc3339OrEmpty(ts)
 	}
 	// M-4: propagate IsInternal so north-bound can filter Tmp_*-programs.
-	e.IsInternal = p.IsInternal
+	e.IsInternal = p.Internal()
 	e.EnabledDefault = p.EnabledByDefault()
 	e.Channel = p.Channel()
 	e.DeviceAddress = p.DeviceAddress()
@@ -794,7 +794,7 @@ func DeleteProgram(idx HubIndex, rec audit.Recorder) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Program not found", id))
 			return
 		}
-		name := p.Name
+		name := p.LegacyName()
 		if err := h.DeleteProgramRemote(r.Context(), id); err != nil {
 			writeProgramDeleteError(w, r, err)
 			return
@@ -954,11 +954,11 @@ func GetSysvarUsage(idx HubIndex) http.HandlerFunc {
 			dto := SysvarUsageProgramDTO{ID: u.ID, Name: u.Name}
 			active := u.Active
 			if p, ok := h.Program(u.ID); ok {
-				if p.Name != "" {
-					dto.Name = p.Name
+				if n := p.LegacyName(); n != "" {
+					dto.Name = n
 				}
 				dto.UniqueID = p.CanonicalUniqueID(serial)
-				dto.IsInternal = p.IsInternal
+				dto.IsInternal = p.Internal()
 				if a, observed := p.Active(); observed {
 					active = a
 				}
@@ -1010,13 +1010,13 @@ func toSysvarSummary(s *hub.Sysvar, serialSuffix string) SysvarSummary {
 	sum := SysvarSummary{
 		Central:        s.Central(),
 		UniqueID:       s.CanonicalUniqueID(serialSuffix),
-		Name:           s.Name,
+		Name:           s.LegacyName(),
 		Description:    s.Description,
 		Unit:           s.Unit,
 		ValueType:      string(s.ValueType),
 		Observed:       ok,
 		ValueList:      s.ValueList,
-		IsInternal:     s.IsInternal,
+		IsInternal:     s.Internal(),
 		IsVisible:      s.IsVisible,
 		IsLogged:       s.IsLogged,
 		ValueName0:     s.ValueName0,

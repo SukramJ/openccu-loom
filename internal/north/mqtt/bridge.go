@@ -67,7 +67,19 @@ type BridgeConfig struct {
 	// carries a retired spelling of one CCU's name can be the live topic
 	// of another CCU, and clearing it would blank a value the daemon
 	// still publishes. Empty falls back to CentralName.
-	CentralNames         []string
+	//
+	// It is the boot snapshot: prefer CentralNamesSupplier wherever the
+	// caller can resolve the live fleet.
+	CentralNames []string
+
+	// CentralNamesSupplier resolves the centrals the daemon serves right
+	// now. A CCU adopted at runtime never reaches the CentralNames
+	// snapshot, so a sweep running after the adopt would judge that CCU's
+	// live topics against a fleet it is not part of and clear them. When
+	// set, it wins over CentralNames; a nil supplier, or one that returns
+	// nothing, falls back to the snapshot.
+	CentralNamesSupplier func() []string
+
 	RawEnabled           bool
 	HADiscoveryEnabled   bool
 	QoS                  QoSProfile
@@ -1397,14 +1409,25 @@ func (b *Bridge) resolvedCentral(centralName string) string {
 }
 
 // cleanupCentralNames returns every central the retained sweeps have to
-// reason about: the full configured set when the composition root wired
-// it, otherwise the bridge's default central alone.
+// reason about: the live fleet when the composition root wired a supplier,
+// the boot snapshot when it only wired the list, otherwise the bridge's
+// default central alone.
+//
+// The supplier is asked on every sweep rather than once at construction
+// because a CCU adopted at runtime is in no boot-time list — and a sweep
+// that does not know a central clears the topics that central is actively
+// publishing.
 //
 // The fallback keeps a single-CCU deployment covered, and it stays safe
 // for a multi-CCU one: a candidate topic is only ever cleared when it is
 // no configured central's live topic, so a shorter list clears less, not
 // more.
 func (b *Bridge) cleanupCentralNames() []string {
+	if b.cfg.CentralNamesSupplier != nil {
+		if live := b.cfg.CentralNamesSupplier(); len(live) > 0 {
+			return live
+		}
+	}
 	if len(b.cfg.CentralNames) > 0 {
 		return b.cfg.CentralNames
 	}
@@ -1870,6 +1893,10 @@ func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, ifac
 	return n
 }
 
+// publishDiscovery publishes one retained HA-Discovery config through the
+// shared dedup cache. An empty payload retracts the config: it is published
+// (clearing the retained message) and the topic leaves the `declared` set, so
+// that set keeps naming exactly the entities the bridge currently drives.
 func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, objectID string, payload []byte) error {
 	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
 	b.mu.Lock()
@@ -1890,8 +1917,18 @@ func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, object
 	// publish; caching the payload anyway would make the next identical
 	// payload hit the dedup gate above and publish nothing, leaving the
 	// entity absent from Home Assistant until the operator restarts it.
+	//
+	// An empty payload is a retraction, not a declaration: it tells every
+	// consumer the entity is gone. Keeping the topic in `declared` would
+	// leave the retracted entity in the set the orphan sweeps treat as
+	// live, and the HA-birth replay would re-publish the empty payload to
+	// a topic the broker no longer retains.
 	b.mu.Lock()
-	b.declared[topic] = payload
+	if len(payload) == 0 {
+		delete(b.declared, topic)
+	} else {
+		b.declared[topic] = payload
+	}
 	b.mu.Unlock()
 	b.incDiscoverySent()
 	return nil

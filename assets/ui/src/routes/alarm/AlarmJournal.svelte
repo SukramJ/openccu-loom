@@ -85,22 +85,32 @@
     return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
   }
 
+  // Monotonic generation guarding the filtered query. Every filter change
+  // starts another request, and a broad one can answer after a narrow one
+  // started later — without this the table would paint rows the filter
+  // controls no longer describe.
+  let loadGeneration = 0;
+
   async function load() {
+    const generation = ++loadGeneration;
     loading = true;
     error = null;
     try {
-      entries = await api.listAlarmJournal({
+      const rows = await api.listAlarmJournal({
         zone: zoneFilter || undefined,
         class: classFilter || undefined,
         from: toRFC3339(fromLocal),
         to: toRFC3339(toLocal),
         limit: 200,
       });
+      if (generation !== loadGeneration) return;
+      entries = rows;
       watermark = entries.reduce((m, e) => Math.max(m, e.id), 0);
     } catch (err) {
+      if (generation !== loadGeneration) return;
       error = friendlyError(err, t);
     } finally {
-      loading = false;
+      if (generation === loadGeneration) loading = false;
     }
   }
   onMount(load);

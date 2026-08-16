@@ -3,7 +3,10 @@
 
 package config
 
-import "reflect"
+import (
+	"reflect"
+	"slices"
+)
 
 // RestartRule describes one config surface that cannot be hot-reloaded.
 //
@@ -235,6 +238,16 @@ func restSurfaceRestartRules() []RestartRule {
 		{
 			Path:    "north.rest.csrf_secure",
 			Differs: func(b, e *Config) bool { return b.North.REST.CSRFSecure != e.North.REST.CSRFSecure },
+		},
+		// The allowed-origin list is captured when the CORS middleware is
+		// constructed, during router assembly. An empty list installs no
+		// middleware at all, so neither adding the first origin nor
+		// removing the last one can take effect in a running daemon.
+		{
+			Path: "north.rest.cors",
+			Differs: func(b, e *Config) bool {
+				return !slices.Equal(b.North.REST.CORS, e.North.REST.CORS)
+			},
 		},
 		// The OpenAPI request validator is loaded and wrapped around the
 		// router at boot only.

@@ -500,6 +500,12 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		// would show the same write twice, once with values and once
 		// without, so an operator counting or diffing changes sees one that
 		// never happened.
+		//
+		// Provenance rides the request context instead, the same way the
+		// program trigger below stamps itself: without it an assistant's
+		// write and an operator's write are indistinguishable afterwards,
+		// and "who changed this" is the first question asked about one.
+		ctx = reqctx.WithOperation(ctx, "mcp:paramset-write")
 		if err := d.Paramsets.PutParamset(ctx, address, key, in.Values); err != nil {
 			return nil, writeParamsetOut{}, fmt.Errorf("write paramset: %w", err)
 		}
@@ -534,7 +540,7 @@ func registerTriggerProgram(s *mcpsdk.Server, d Deps) {
 		if d.Audit != nil {
 			d.Audit.Record(audit.Entry{
 				Timestamp: time.Now().UTC(),
-				Action:    audit.Action("program_execute"),
+				Action:    audit.ActionProgramExecute,
 				Note:      "program=" + programID + " via mcp",
 			})
 		}

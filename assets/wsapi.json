@@ -719,7 +719,12 @@
       "description": "Close the pairing window for the named interface. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "install_mode.disable",
       "args": {
+        "interface_id": "string",
         "central_name": "string?"
+      },
+      "result": {
+        "enabled": "boolean",
+        "interface_id": "string"
       }
     },
     {
@@ -1048,7 +1053,12 @@
       "description": "Acknowledge (clear) a single service message by id. Targets one CCU: `central_name` selects it, and may be omitted only when a single central is configured — with several the command is rejected rather than resolved against an arbitrary one.",
       "name": "service_messages.ack",
       "args": {
+        "id": "string",
         "central_name": "string?"
+      },
+      "result": {
+        "acknowledged": "boolean",
+        "id": "string"
       }
     },
     {

@@ -123,7 +123,7 @@ func PutLogLevel(svc LogLevelsService, rec audit.Recorder) http.HandlerFunc {
 			}
 			rec.Record(audit.Entry{
 				User:   identityFromCtx(r.Context()),
-				Action: audit.Action("logging.override_set"),
+				Action: audit.ActionLoggingOverrideSet,
 				Note:   path + " " + note,
 			})
 		}
@@ -150,7 +150,7 @@ func DeleteLogLevel(svc LogLevelsService, rec audit.Recorder) http.HandlerFunc {
 		if removed && rec != nil {
 			rec.Record(audit.Entry{
 				User:   identityFromCtx(r.Context()),
-				Action: audit.Action("logging.override_reset"),
+				Action: audit.ActionLoggingOverrideReset,
 				Note:   path,
 			})
 		}

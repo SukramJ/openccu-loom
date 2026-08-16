@@ -207,6 +207,61 @@ func TestRetractRawStateForDeviceMatchesMixedCaseAddresses(t *testing.T) {
 	}
 }
 
+// TestHubDiscoveryRetractionLeavesTheDeclaredSet pins that retracting a hub
+// entity — the empty-payload publish the hub publisher emits when the CCU
+// operator deletes a program or a system variable — removes the topic from the
+// `declared` set instead of parking an empty entry there.
+//
+// The set is what the retained-orphan sweeps treat as "the entities this build
+// drives" and what the HA-birth replay re-publishes. A retracted entity left in
+// it shields its own topic from the sweep forever and makes every replay push
+// an empty payload to a topic the broker no longer retains.
+func TestHubDiscoveryRetractionLeavesTheDeclaredSet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom", HADiscoveryEnabled: true}, mp)
+	item := DiscoveryItem{
+		Component: "button", NodeID: "ccu01_hub_program", ObjectID: "morning_press",
+		Payload: []byte(`{"name":"Morning"}`), OK: true,
+	}
+	topic := b.topics.DiscoveryConfig(item.Component, item.NodeID, item.ObjectID)
+
+	if err := b.PublishHubDiscovery(ctx, item); err != nil {
+		t.Fatalf("PublishHubDiscovery: %v", err)
+	}
+	b.mu.Lock()
+	_, declared := b.declared[topic]
+	b.mu.Unlock()
+	if !declared {
+		t.Fatalf("%q is not in the declared set after the config was published", topic)
+	}
+
+	retraction := item
+	retraction.Payload = nil
+	if err := b.PublishHubDiscovery(ctx, retraction); err != nil {
+		t.Fatalf("PublishHubDiscovery (retraction): %v", err)
+	}
+	if got := len(mp.publications()); got != 2 {
+		t.Fatalf("publications = %d, want 2 (the retraction was swallowed by the dedup gate)", got)
+	}
+	b.mu.Lock()
+	_, stillDeclared := b.declared[topic]
+	b.mu.Unlock()
+	if stillDeclared {
+		t.Fatalf("%q is still in the declared set after its config was retracted", topic)
+	}
+
+	before := len(mp.publications())
+	if err := b.RepublishDiscovery(ctx); err != nil {
+		t.Fatalf("RepublishDiscovery: %v", err)
+	}
+	if got := len(mp.publications()) - before; got != 0 {
+		t.Fatalf("republished topics = %d, want 0 (the retracted entity was resurrected)", got)
+	}
+}
+
 // failingPublisher fails every publish whose topic contains failFor, so a
 // test can model a broker outage or an open circuit breaker that affects
 // part of the traffic only.

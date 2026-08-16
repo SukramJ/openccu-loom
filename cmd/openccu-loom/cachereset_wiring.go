@@ -150,7 +150,7 @@ func buildCacheResetService(
 		deps.Audit = func(_ context.Context, scope cachereset.Scope, rep cachereset.Report) {
 			auditRec.Record(audit.Entry{
 				Timestamp: time.Now(),
-				Action:    audit.Action("cache_clear"),
+				Action:    audit.ActionCacheClear,
 				Note: fmt.Sprintf(
 					"scope=%s devices=%d paramsets=%d values=%d master=%d reinit=%v",
 					scope.String(), rep.Devices, rep.Paramsets, rep.Values, rep.Master, rep.CentralsReinit,

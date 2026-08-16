@@ -125,6 +125,12 @@ func TestMatterFabrics_SingleRecord_Returns200(t *testing.T) {
 	if got.FabricID != 0xDEADBEEFCAFEBABE {
 		t.Errorf("fabric_id: got %d, want 0xDEADBEEFCAFEBABE", got.FabricID)
 	}
+	if got.FabricIDHex != "DEADBEEFCAFEBABE" {
+		t.Errorf("fabric_id_hex: got %q, want %q", got.FabricIDHex, "DEADBEEFCAFEBABE")
+	}
+	if got.NodeIDHex != "0000000000000001" {
+		t.Errorf("node_id_hex: got %q, want %q", got.NodeIDHex, "0000000000000001")
+	}
 	if got.Label != "home" {
 		t.Errorf("label: got %q, want %q", got.Label, "home")
 	}
@@ -160,6 +166,61 @@ func TestMatterFabrics_MultipleRecords_Returns200(t *testing.T) {
 	}
 	if body.Fabrics[0].FabricIndex != 1 || body.Fabrics[1].FabricIndex != 2 || body.Fabrics[2].FabricIndex != 3 {
 		t.Errorf("unexpected fabric indices: %+v", body.Fabrics)
+	}
+}
+
+// An operational node id above 2^53 does not survive a JSON number: a
+// browser rounds it while parsing, so the low hex digits it prints are
+// not the controller's. The hex fields must carry the exact value, and
+// they must be on the wire — a client cannot recover the id otherwise.
+func TestMatterFabrics_LargeIDsSurviveAsHexOnTheWire(t *testing.T) {
+	t.Parallel()
+	const (
+		fabricID = uint64(0x1B2C3D4E5F607182)
+		nodeID   = uint64(0xFEDCBA9876543210)
+	)
+	s := &fakeFabricStore{recs: []store.FabricRecord{{
+		FabricIndex:   1,
+		FabricID:      fabricID,
+		NodeID:        nodeID,
+		VendorID:      0x1349,
+		CompressedID:  [8]byte{1},
+		RootPublicKey: []byte{0x04},
+	}}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/matter/fabrics", http.NoBody)
+	w := httptest.NewRecorder()
+	MatterFabrics(s).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	raw := w.Body.String()
+	for _, want := range []string{`"fabric_id_hex":"1B2C3D4E5F607182"`, `"node_id_hex":"FEDCBA9876543210"`} {
+		if !strings.Contains(raw, want) {
+			t.Errorf("body missing %s: %s", want, raw)
+		}
+	}
+
+	// Decoded through a 53-bit float, as a browser would: the numeric
+	// field is lossy and the hex field is not.
+	var loose struct {
+		Fabrics []struct {
+			NodeID    float64 `json:"node_id"`
+			NodeIDHex string  `json:"node_id_hex"`
+		} `json:"fabrics"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &loose); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(loose.Fabrics) != 1 {
+		t.Fatalf("expected 1 fabric, got %d", len(loose.Fabrics))
+	}
+	if uint64(loose.Fabrics[0].NodeID) == nodeID {
+		t.Skip("float64 happened to round-trip this id; the hex field is asserted above")
+	}
+	if loose.Fabrics[0].NodeIDHex != "FEDCBA9876543210" {
+		t.Errorf("node_id_hex after lossy decode: got %q, want %q",
+			loose.Fabrics[0].NodeIDHex, "FEDCBA9876543210")
 	}
 }
 
