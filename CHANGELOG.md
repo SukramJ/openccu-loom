@@ -32,9 +32,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   under the wrong interface can show up at all.
 
   Two of these tests found defects in the simulator rather than the
-  daemon (object ids sent as JSON numbers, and the pairing automaton
-  missing from JSON-RPC); they are gated on the simulator release that
-  fixes them and skip with that reason until it lands.
+  daemon — object ids sent as JSON numbers, where a live CCU sends
+  strings, and the pairing automaton missing from JSON-RPC, the very
+  transport the daemon reads install mode over. Both are fixed
+  upstream and both tests run against it.
 
 - **Four CCU behaviours the simulator could not previously produce are
   now covered.** Batched event delivery: a burst arrives as one
