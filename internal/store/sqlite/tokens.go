@@ -218,12 +218,21 @@ func (s *TokenStore) AuthenticateToken(ctx context.Context, secret string) (auth
 	_, _ = s.db.ExecContext(ctx,
 		`UPDATE tokens SET last_seen_at = ? WHERE fingerprint = ?`,
 		time.Now().UTC(), fp)
-	return auth.Identity{
+	id := auth.Identity{
 		Subject: subject,
 		Scheme:  auth.SchemeBearer,
 		Role:    auth.Role(role),
 		TokenID: fp,
-	}, nil
+	}
+	// Carry the row's expiry with the identity. The check above covers every
+	// HTTP request, which re-resolves the credential; a consumer that
+	// resolves once and keeps the snapshot — the WebSocket upgrade — has no
+	// second resolve to enforce it at, and an expired token would keep its
+	// command authority for the life of the connection.
+	if expiresAt.Valid {
+		id.ExpiresAt = expiresAt.Time
+	}
+	return id, nil
 }
 
 // TokenRow is one entry of [TokenStore.List]; the secret is never

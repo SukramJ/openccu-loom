@@ -176,7 +176,15 @@ func CreateToken(d *AuthDeps) http.HandlerFunc {
 // DeleteToken revokes the token identified by the URL path segment.
 // Admin-only. Returns 204 on success, 404 problem+json when no token
 // matches the supplied ID.
-func DeleteToken(d *AuthDeps) http.HandlerFunc {
+//
+// The sockets the token opened are closed too, for the reason spelled out
+// on [TokenSocketRevoker]: REST refuses the revoked credential on the next
+// request because it re-resolves it every time, while a WebSocket resolved
+// it once at the upgrade and gates every later command on that snapshot.
+// The path segment is the token id, which is also the fingerprint the
+// in-memory store stamps onto the identities it issues, so it addresses
+// the same credential on both planes.
+func DeleteToken(d *AuthDeps, sockets TokenSocketRevoker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if d == nil || d.Tokens == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -193,6 +201,9 @@ func DeleteToken(d *AuthDeps) http.HandlerFunc {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Token not found", "no token registered with that id"))
 			return
+		}
+		if sockets != nil {
+			sockets.CloseByToken(id)
 		}
 		recordTokenAudit(d.AuditRecorder, r, audit.ActionTokenRevoke, "", "", id)
 		w.WriteHeader(http.StatusNoContent)
@@ -296,33 +307,30 @@ func Login(d *AuthDeps) http.HandlerFunc {
 // Logout revokes the caller's sessions, tears down their open WebSocket
 // connections, and clears the cookie.
 //
-// The socket teardown is the part that used to be missing: revoking the
-// session left an already-open /api/v1/events socket dispatching commands
-// under the operator/admin identity it captured at upgrade, so a logged-out
-// principal kept its privileges for the life of that connection. The
-// socket-aware revoker — the same [SessionRevoker] the user-update, delete and
-// password-change flows receive — closes those sockets by subject. Dropping
-// the subject's other tabs is the intended, acceptable consequence of an
-// explicit logout.
+// The presented session is always revoked by its own id. A by-subject sweep
+// cannot stand in for that: [auth.SessionStore.RevokeBySubject] deliberately
+// spares federated principals, so for a principal an external provider
+// vouched for it evicts nothing and the cookie value stays a valid
+// credential for the remainder of its TTL — while the browser is already on
+// the login screen and the operator has no other way to end the session.
+//
+// The by-subject sweep runs in addition: it drops the subject's other
+// server-side sessions and — via the composed socket-aware revoker — closes
+// its open WebSocket connections. That teardown is what stops an already-open
+// /api/v1/events socket from dispatching commands under the identity it
+// captured at upgrade. Dropping the subject's other tabs is the intended,
+// acceptable consequence of an explicit logout.
 //
 // A nil revoker (test fixtures, a daemon without a live WebSocket surface)
-// falls back to revoking only the current session by its cookie id.
+// leaves the cookie-id revocation as the whole operation.
 func Logout(d *AuthDeps, revoker SessionRevoker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		subject := ""
-		if id, ok := auth.IdentityFrom(r.Context()); ok {
-			subject = id.Subject
+		if c, err := r.Cookie(auth.SessionCookieName); err == nil && c.Value != "" &&
+			d != nil && d.Sessions != nil {
+			d.Sessions.Revoke(c.Value) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
 		}
-		switch {
-		case revoker != nil && subject != "":
-			// RevokeBySubject drops every server-side session for the subject
-			// AND (via the composed socket-aware revoker) closes its open
-			// WebSocket connections.
-			revoker.RevokeBySubject(subject)
-		default:
-			if c, err := r.Cookie(auth.SessionCookieName); err == nil && d != nil && d.Sessions != nil {
-				d.Sessions.Revoke(c.Value) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
-			}
+		if id, ok := auth.IdentityFrom(r.Context()); ok && revoker != nil && id.Subject != "" {
+			revoker.RevokeBySubject(id.Subject)
 		}
 		auth.ClearSessionCookie(w)
 		w.WriteHeader(http.StatusNoContent)

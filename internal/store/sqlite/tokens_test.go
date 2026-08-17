@@ -200,6 +200,37 @@ func TestTokenStoreAuthenticateTokenFutureExpiryAccepted(t *testing.T) {
 	if id.Subject != "heidi" {
 		t.Errorf("Subject=%q want heidi", id.Subject)
 	}
+	// The deadline has to travel with the identity. The expiry check above
+	// runs where the credential is resolved, i.e. per HTTP request; a
+	// consumer that resolves once and keeps the snapshot — the WebSocket
+	// upgrade — has no second resolve, so without this an expired token
+	// keeps its command plane for the life of the connection.
+	if !id.ExpiresAt.Equal(future) {
+		t.Errorf("ExpiresAt=%v want the row's own expiry %v", id.ExpiresAt, future)
+	}
+}
+
+// TestTokenStoreAuthenticateTokenNilExpiryCarriesNoDeadline is the negative
+// half: a token that opts out of expiry must not arrive with a zero-value
+// deadline that a consumer could read as "already expired".
+func TestTokenStoreAuthenticateTokenNilExpiryCarriesNoDeadline(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	res, err := s.Create(ctx, CreateInput{Subject: "iris", Role: auth.RoleOperator})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	id, err := s.AuthenticateToken(ctx, res.Token)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+	if !id.ExpiresAt.IsZero() {
+		t.Errorf("ExpiresAt=%v want the zero value for a token without expiry", id.ExpiresAt)
+	}
+	if id.Expired(time.Now()) {
+		t.Error("a token without expiry reports itself expired")
+	}
 }
 
 // TestTokenStoreAuthenticateTokenNilExpiryNeverExpires verifies that a

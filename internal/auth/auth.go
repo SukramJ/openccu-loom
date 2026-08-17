@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -54,6 +55,24 @@ type Identity struct {
 	Scheme  Scheme
 	Role    Role
 	TokenID string // set when Scheme == bearer
+	// ExpiresAt is the instant the credential behind this identity stops
+	// being accepted; the zero value means "no server-side expiry".
+	//
+	// A request-scoped consumer never needs it — every HTTP request
+	// re-resolves its credential, and a resolver only returns an identity
+	// for a credential that is still valid. It exists for the consumers
+	// that resolve once and then keep the snapshot: a WebSocket captures
+	// the identity at the upgrade and gates every later command on it, so
+	// without a deadline travelling along an expired session or an expired
+	// bearer token would keep full command authority for as long as the
+	// connection lives.
+	ExpiresAt time.Time
+}
+
+// Expired reports whether the credential behind i had already stopped
+// being valid at now. An identity without a deadline never expires.
+func (i Identity) Expired(now time.Time) bool {
+	return !i.ExpiresAt.IsZero() && !now.Before(i.ExpiresAt)
 }
 
 // CanonicalSubject folds a subject to the single spelling every store
@@ -105,18 +124,21 @@ type tokenEntry struct {
 // AuthenticateToken is O(1). Access is safe for concurrent use via
 // the embedded RWMutex.
 type MemoryTokenStore struct {
-	mu     sync.RWMutex
-	tokens map[string]tokenEntry // key: tokenID(rawToken)
+	mu sync.RWMutex
+	// Entries are held by pointer: they are replaced wholesale by Put and
+	// never mutated in place, so sharing them under the mutex is safe and the
+	// read paths do not copy a fixed-size digest per lookup.
+	tokens map[string]*tokenEntry // key: tokenID(rawToken)
 }
 
 // NewMemoryTokenStore constructs a store pre-populated with tokens.
 // The raw token values are hashed immediately; only the display
 // fingerprint is retained in memory.
 func NewMemoryTokenStore(tokens map[string]Identity) *MemoryTokenStore {
-	cp := make(map[string]tokenEntry, len(tokens))
+	cp := make(map[string]*tokenEntry, len(tokens))
 	for raw, id := range tokens {
 		id.Subject = CanonicalSubject(id.Subject)
-		cp[tokenID(raw)] = tokenEntry{
+		cp[tokenID(raw)] = &tokenEntry{
 			fingerprint: tokenFingerprint(raw),
 			digest:      sha256.Sum256([]byte(raw)),
 			identity:    id,
@@ -149,6 +171,12 @@ func (s *MemoryTokenStore) AuthenticateToken(_ context.Context, token string) (I
 	}
 	out := entry.identity
 	out.Scheme = SchemeBearer
+	// Stamp the credential's own id, the same value the management API
+	// publishes and `DELETE /auth/tokens/{id}` addresses. Without it every
+	// identity this store issues carries an empty TokenID, and the
+	// per-credential teardown that closes a revoked token's WebSocket
+	// connections matches nothing — a revoked token keeps its command plane.
+	out.TokenID = id
 	return out, nil
 }
 
@@ -221,10 +249,10 @@ func (s *MemoryTokenStore) Put(token string, id Identity) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tokens == nil {
-		s.tokens = make(map[string]tokenEntry)
+		s.tokens = make(map[string]*tokenEntry)
 	}
 	tid := tokenID(token)
-	s.tokens[tid] = tokenEntry{
+	s.tokens[tid] = &tokenEntry{
 		fingerprint: tokenFingerprint(token),
 		digest:      sha256.Sum256([]byte(token)),
 		identity:    id,
@@ -270,6 +298,10 @@ func (s *MemoryTokenStore) DeleteByID(id string) bool {
 // MemoryUserStore is the matching MVP UserStore.
 type MemoryUserStore struct {
 	users map[string]userRecord
+	// verified short-circuits the repeat password verification of a
+	// credential this store has already checked. See [VerifiedBasicCache]
+	// for why that is safe; a nil cache simply verifies every time.
+	verified *VerifiedBasicCache
 }
 
 type userRecord struct {
@@ -279,7 +311,7 @@ type userRecord struct {
 
 // NewMemoryUserStore constructs a user store.
 func NewMemoryUserStore() *MemoryUserStore {
-	return &MemoryUserStore{users: make(map[string]userRecord)}
+	return &MemoryUserStore{users: make(map[string]userRecord), verified: NewVerifiedBasicCache()}
 }
 
 // Put stores or replaces a user under its canonical subject.
@@ -344,7 +376,10 @@ func (s *MemoryUserStore) AuthenticateBasic(_ context.Context, username, passwor
 		return Identity{}, ErrUnauthenticated
 	}
 	if looksLikeBcryptHash(rec.password) {
-		if bcrypt.CompareHashAndPassword([]byte(rec.password), []byte(password)) != nil {
+		ok := s.verified.Verify(subject, rec.password, password, func() bool {
+			return bcrypt.CompareHashAndPassword([]byte(rec.password), []byte(password)) == nil
+		})
+		if !ok {
 			return Identity{}, ErrUnauthenticated
 		}
 	} else if subtle.ConstantTimeCompare([]byte(rec.password), []byte(password)) != 1 {

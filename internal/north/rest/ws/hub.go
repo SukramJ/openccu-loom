@@ -147,10 +147,14 @@ func (h *Hub) ResyncSignals() uint64 {
 // client reconnects and the upgrade re-runs the full auth chain, which
 // is the authority on what the principal may still do.
 //
-// Federated principals are skipped for the same reason
-// [auth.SessionStore.RevokeBySubject] skips them: an external provider
-// owns their credentials, so a local account change has no say over
-// their connections.
+// Federated principals are NOT skipped here, unlike in
+// [auth.SessionStore.RevokeBySubject]. Revoking a session takes a
+// credential away, which a local account change must never do to a
+// principal an external provider owns; closing a socket only forces that
+// re-authentication to happen now, and a principal whose credential is
+// still valid reconnects immediately. Skipping them meant an explicit
+// logout left the federated principal's command plane running under its
+// connect-time role — the one case where the socket must go.
 func (h *Hub) CloseBySubject(subject string) int {
 	subject = auth.CanonicalSubject(subject)
 	if subject == "" {
@@ -162,8 +166,7 @@ func (h *Hub) CloseBySubject(subject string) int {
 		if c.isClosed() {
 			continue
 		}
-		id := c.Identity()
-		if id.Scheme.Federated() || auth.CanonicalSubject(id.Subject) != subject {
+		if auth.CanonicalSubject(c.Identity().Subject) != subject {
 			continue
 		}
 		targets = append(targets, c)

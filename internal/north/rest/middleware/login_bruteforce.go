@@ -77,13 +77,10 @@ func (l *LoginRateLimiter) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
-// Budget reports whether the source of r may attempt a credential
-// verification — a token is available in its per-IP bucket — WITHOUT
-// consuming one, and the Retry-After seconds when it may not. It backs the
-// Resolve-stage Basic-auth guard ([auth.GuardBasicAuth]): a successful
-// verification must cost nothing, so the peek here and the [LoginRateLimiter.Charge]
-// on a failure are separate operations sharing the same per-IP buckets as the
-// login POST — a Basic-guessing sweep and a login sweep deplete one budget.
+// Budget reports whether the source of r has a credential-verification token
+// left in its per-IP bucket — WITHOUT consuming one — and the Retry-After
+// seconds when it does not. It backs the Basic-auth guard
+// ([auth.GuardBasicAuth]), which turns a spent budget into a 429.
 func (l *LoginRateLimiter) Budget(r *http.Request) (ok bool, retryAfter int) {
 	lim := l.store.get(loginClientIP(r))
 	if lim.Tokens() >= 1 {
@@ -92,10 +89,40 @@ func (l *LoginRateLimiter) Budget(r *http.Request) (ok bool, retryAfter int) {
 	return false, retryAfterSeconds(lim)
 }
 
-// Charge records one failed credential verification from the source of r,
-// consuming a token from the shared per-IP bucket so a Basic-auth guessing
-// sweep on any Resolve-protected route depletes the same budget the login
-// route does.
+// ReserveBasicAttempt takes one token from the source's bucket for a Basic
+// credential verification that is about to run, and returns the refund to
+// call when the credential turned out to be valid — a successful
+// verification must cost nothing, so the token goes back.
+//
+// Taking the token BEFORE the verification is the whole point: the bcrypt
+// compare behind it is the expensive operation, and accounting for it
+// afterwards let any number of concurrent attempts pass the same peek and run
+// the KDF in parallel. A reservation is per-attempt, so concurrency cannot
+// outrun it. The buckets are shared with the login POST, so a Basic-guessing
+// sweep and a login sweep deplete one budget.
+func (l *LoginRateLimiter) ReserveBasicAttempt(r *http.Request) (refund func(), ok bool) {
+	now := time.Now()
+	res := l.store.get(loginClientIP(r)).ReserveN(now, 1)
+	// A positive delay means the token only becomes available in the future:
+	// the bucket is empty now, so the attempt must not run. Cancelling undoes
+	// the reservation, or a refused attempt would push the next one further
+	// out.
+	if !res.OK() || res.Delay() > 0 {
+		res.Cancel()
+		return nil, false
+	}
+	// Cancel at the instant the token was taken, not at the instant of the
+	// refund: a reservation whose act time has already passed is treated as
+	// consumed and Cancel() then restores nothing, so a valid credential
+	// would silently spend the source's budget after all.
+	return func() { res.CancelAt(now) }, true
+}
+
+// Charge records one failed credential verification from the source of r that
+// nothing accounted for beforehand. It backs the Basic-auth guard's fallback
+// for a resolver with no throttle wired ([auth.GuardBasicAuth]); the wired
+// path uses [LoginRateLimiter.ReserveBasicAttempt] instead, which charges
+// before the verification rather than after it.
 func (l *LoginRateLimiter) Charge(r *http.Request) {
 	_ = l.store.get(loginClientIP(r)).Allow()
 }

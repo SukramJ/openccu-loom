@@ -232,9 +232,10 @@ type Deps struct {
 	TokenPurger handlers.TokenPurger
 
 	// TokenSockets closes the WebSocket connections a revoked bearer token
-	// opened, so DELETE /auth/tokens/v2/{fingerprint} ends the token's
-	// command plane too. Nil skips the teardown; wired to the *ws.Hub in
-	// production.
+	// opened, so both token-revocation routes — DELETE
+	// /auth/tokens/v2/{fingerprint} and the legacy DELETE
+	// /auth/tokens/{id} — end the token's command plane too. Nil skips the
+	// teardown; wired to the *ws.Hub in production.
 	TokenSockets handlers.TokenSocketRevoker
 
 	// Preferences backs per-user UI state (favorites, dashboard) at
@@ -764,7 +765,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			r.With(admin).Get("/auth/users", handlers.ListUsers(d.Auth))
 			r.With(admin).Get("/auth/tokens", handlers.ListTokens(d.Auth))
 			r.With(admin).Post("/auth/tokens", handlers.CreateToken(d.Auth))
-			r.With(admin).Delete("/auth/tokens/{id}", handlers.DeleteToken(d.Auth))
+			r.With(admin).Delete("/auth/tokens/{id}", handlers.DeleteToken(d.Auth, d.TokenSockets))
 		}
 		// Inbound webhook: external systems POST to set a value or run a
 		// program. Mounted OUTSIDE the AuthRequire group (like /auth/login)

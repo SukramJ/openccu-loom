@@ -187,21 +187,35 @@ func TestLogout_NoSession_Returns204(t *testing.T) {
 	}
 }
 
+// TestLogout_WithSession_ClearsCookie covers both schemes because they take
+// different revocation paths: the by-subject sweep spares a federated
+// principal, so only the revocation by cookie id ends an externally-vouched
+// session. Clearing the browser cookie without it left the value a working
+// credential for the rest of its TTL.
 func TestLogout_WithSession_ClearsCookie(t *testing.T) {
 	t.Parallel()
-	d := newTestAuthDeps(t)
-	id := auth.Identity{Subject: "admin", Role: auth.RoleAdmin, Scheme: auth.SchemeSession}
-	sess, err := d.Sessions.Issue(id)
-	if err != nil {
-		t.Fatalf("issue session: %v", err)
-	}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", http.NoBody)
-	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sess.ID})
-	w := httptest.NewRecorder()
-	Logout(d, nil).ServeHTTP(w, req)
+	for _, scheme := range []auth.Scheme{auth.SchemeSession, auth.SchemeOIDC} {
+		t.Run(string(scheme), func(t *testing.T) {
+			t.Parallel()
+			d := newTestAuthDeps(t)
+			id := auth.Identity{Subject: "admin", Role: auth.RoleAdmin, Scheme: scheme}
+			sess, err := d.Sessions.Issue(id)
+			if err != nil {
+				t.Fatalf("issue session: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", http.NoBody)
+			req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sess.ID})
+			req = req.WithContext(auth.ContextWithIdentity(req.Context(), id))
+			w := httptest.NewRecorder()
+			Logout(d, &fakeSessionRevoker{}).ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d", w.Code)
+			if w.Code != http.StatusNoContent {
+				t.Fatalf("expected 204, got %d", w.Code)
+			}
+			if d.Sessions.Lookup(sess.ID) != nil {
+				t.Fatal("the presented session is still resolvable after logout")
+			}
+		})
 	}
 }
 

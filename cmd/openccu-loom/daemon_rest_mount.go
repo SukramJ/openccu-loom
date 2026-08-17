@@ -284,6 +284,15 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			tlsCertSvc = rl
 		}
 	}
+	// One per-IP budget for every credential-verification path: the login
+	// POST, and the Basic verification the resolver runs on any route. The
+	// resolver has to hold it too, not just the guard in front of the
+	// handlers — the password KDF sits inside the resolver, so a throttle
+	// that only reads the bucket afterwards never stops the work.
+	loginLimiter := middleware.NewLoginRateLimiter()
+	if d.authMw != nil {
+		d.authMw.BasicThrottle = loginLimiter
+	}
 	deps := rest.Deps{
 		Logger:                  logger,
 		StartedAt:               time.Now(),
@@ -364,7 +373,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			Required:        d.noUsers,
 			FirstRunAllowed: cfg.Bootstrap.FirstRunSetupAllowed,
 		},
-		LoginRateLimit:  middleware.NewLoginRateLimiter(),
+		LoginRateLimit:  loginLimiter,
 		Backup:          d.backupAdapter,
 		BackupUpload:    d.backupAdapter,
 		PreUpdateBackup: d.backupAdapter,

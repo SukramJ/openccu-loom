@@ -116,11 +116,15 @@ func TestCloseBySubjectLeavesOtherPrincipalsConnected(t *testing.T) {
 	}
 }
 
-// TestCloseBySubjectSkipsFederatedPrincipals mirrors the rule
-// [auth.SessionStore.RevokeBySubject] already applies: an external provider
-// owns a federated principal's credentials, so a local account change of the
-// same name has no say over their connections.
-func TestCloseBySubjectSkipsFederatedPrincipals(t *testing.T) {
+// TestCloseBySubjectClosesFederatedPrincipals pins the one place where the
+// hub deliberately does NOT mirror [auth.SessionStore.RevokeBySubject]'s
+// federated exemption. Revoking a session takes a credential away, which the
+// daemon has no authority to do to a principal an external provider vouched
+// for; closing a socket only forces the re-authentication to happen now, and a
+// principal whose credential is still valid reconnects on its own backoff.
+// While federated connections were skipped, an explicit logout left the
+// principal's command plane dispatching under its connect-time role.
+func TestCloseBySubjectClosesFederatedPrincipals(t *testing.T) {
 	t.Parallel()
 	hub, _, _, _, _, _ := newTestHub(t)
 	server := httptest.NewServer(serveWithIdentity(
@@ -131,12 +135,11 @@ func TestCloseBySubjectSkipsFederatedPrincipals(t *testing.T) {
 	c := dialWS(t, server)
 	waitForClientCount(t, hub, 1)
 
-	if n := hub.CloseBySubject("alice"); n != 0 {
-		t.Fatalf("CloseBySubject closed %d federated connections, want 0", n)
+	if n := hub.CloseBySubject("alice"); n != 1 {
+		t.Fatalf("CloseBySubject closed %d federated connections, want 1", n)
 	}
-	if res := c.call("r1", "backup.trigger", map[string]any{}); res.Error != nil {
-		t.Fatalf("federated command after local revocation = %+v, want success", res.Error)
-	}
+	expectConnectionClosed(t, c)
+	waitForClientCount(t, hub, 0)
 }
 
 // TestRevokedTokenLosesItsOpenCommandPlane pins [Hub.CloseByToken]: a bearer

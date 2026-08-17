@@ -154,7 +154,7 @@ func TestDeleteToken_HappyPath(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &created)
 
 	r := chi.NewRouter()
-	r.Delete("/auth/tokens/{id}", DeleteToken(d))
+	r.Delete("/auth/tokens/{id}", DeleteToken(d, nil))
 	req := httptest.NewRequest(http.MethodDelete, "/auth/tokens/"+created.ID, http.NoBody)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
@@ -205,7 +205,7 @@ func TestDeleteToken_EmitsAuditEntry(t *testing.T) {
 	id := d.Tokens.Put("some-token-1234567890", auth.Identity{Subject: "ci", Role: auth.RoleViewer})
 
 	r := chi.NewRouter()
-	r.Delete("/auth/tokens/{id}", DeleteToken(d))
+	r.Delete("/auth/tokens/{id}", DeleteToken(d, nil))
 	req := httptest.NewRequest(http.MethodDelete, "/auth/tokens/"+id, http.NoBody)
 	req = req.WithContext(auth.ContextWithIdentity(req.Context(), auth.Identity{Subject: "alice", Role: auth.RoleAdmin}))
 	w := httptest.NewRecorder()

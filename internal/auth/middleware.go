@@ -22,6 +22,14 @@ type Middleware struct {
 	Users  UserStore
 	Tokens TokenStore
 	Realm  string
+	// BasicThrottle, when set, bounds how often a single source may pay for
+	// an HTTP Basic password verification. It is consulted immediately
+	// before the verification because the verification is the cost: the
+	// password KDF is deliberately slow, so an unauthenticated caller that
+	// reaches it can spend a CPU core per request on any route this
+	// middleware resolves credentials for — including routes that need no
+	// credential at all. Nil leaves the verification unthrottled.
+	BasicThrottle BasicAuthThrottle
 }
 
 // NewMiddleware constructs a Middleware for the given stores. Either
@@ -35,8 +43,17 @@ func NewMiddleware(users UserStore, tokens TokenStore) *Middleware {
 // traffic — that is Require's job.
 func (m *Middleware) Resolve(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if id, ok := m.resolve(r); ok {
-			ctx := context.WithValue(r.Context(), keyIdentity, id)
+		id, ok, throttled := m.resolve(r)
+		ctx := r.Context()
+		if throttled {
+			// Tell the downstream guard this attempt is already accounted for,
+			// so the two never charge the same source twice.
+			ctx = markBasicAttemptAccounted(ctx)
+		}
+		if ok {
+			ctx = context.WithValue(ctx, keyIdentity, id)
+		}
+		if throttled || ok {
 			r = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, r)
@@ -76,28 +93,47 @@ func (m *Middleware) RequireRole(want Role, next http.Handler) http.Handler {
 	})
 }
 
-func (m *Middleware) resolve(r *http.Request) (Identity, bool) {
+// resolve reports the identity the request's credentials carry, whether one
+// was found, and whether a Basic verification went through the throttle — the
+// last so the downstream guard knows the attempt is already accounted for.
+func (m *Middleware) resolve(r *http.Request) (id Identity, ok, throttled bool) {
 	// Bearer first — lets operators use tokens for CI/automation.
 	if m.Tokens != nil {
 		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 			token := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
 			if id, err := m.Tokens.AuthenticateToken(r.Context(), token); err == nil {
-				return id, true
+				return id, true, false
 			}
 		}
 	}
 	if m.Users != nil {
-		if user, pass, ok := r.BasicAuth(); ok {
+		if user, pass, hasBasic := r.BasicAuth(); hasBasic {
+			// Charge the attempt before the password KDF runs, not after: the
+			// KDF is what the throttle has to bound. A source out of budget
+			// is refused here, so it never reaches the verification.
+			refund := func() {}
+			if m.BasicThrottle != nil {
+				cancel, allowed := m.BasicThrottle.ReserveBasicAttempt(r)
+				if !allowed {
+					return Identity{}, false, true
+				}
+				refund = cancel
+				throttled = true
+			}
 			if id, err := m.Users.AuthenticateBasic(r.Context(), user, pass); err == nil {
-				return id, true
+				// A credential that verified costs nothing.
+				refund()
+				return id, true, throttled
 			} else if !errors.Is(err, ErrUnauthenticated) {
 				// Other errors propagate as unresolved — they'll be
-				// re-surfaced as 401 in Require below.
-				return Identity{}, false
+				// re-surfaced as 401 in Require below. A store failure is not
+				// the caller's doing, so the token goes back.
+				refund()
+				return Identity{}, false, throttled
 			}
 		}
 	}
-	return Identity{}, false
+	return Identity{}, false, throttled
 }
 
 // IdentityFrom returns the Identity attached to ctx by [Resolve].

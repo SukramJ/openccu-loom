@@ -92,8 +92,10 @@ at startup.
 ## Auth lifecycle on long-lived connections
 
 The bearer token / session cookie presented at the HTTP Upgrade
-handshake fixes the connection's identity until either side closes
-the connection or the client sends a `{op: "reauth"}` frame.
+handshake fixes the connection's identity. That identity holds until
+the client sends a `{op: "reauth"}` frame, until either side closes
+the connection, or until the daemon closes it because the credential
+behind it stopped being valid — see *Revocation and expiry* below.
 
 ### In-band reauth
 
@@ -115,15 +117,27 @@ WS without reconnecting. Useful when an operator revokes the active
 token via `DELETE /api/v1/auth/tokens/{id}` and the client wants to
 present a freshly-issued one without losing its subscription state.
 
-### Token-revoke semantics
+### Revocation and expiry
 
-If a client does NOT send `reauth` after the operator revokes its
-token, the existing WS connection continues to receive broadcasts —
-matching the standard WebSocket security model (no automatic
-in-band re-check of the upgrade-time credentials). Clients that
-need hard-revoke semantics should react to operator-side revocation
-(e.g. an audit-event tail) by either reauthing with a fresh token
-or closing the connection.
+The daemon closes a connection whose credential stops being valid; it
+never silently keeps dispatching on the identity captured at the
+upgrade. Three events reach an open socket:
+
+- **Token revocation.** `DELETE /api/v1/auth/tokens/{id}` and
+  `DELETE /api/v1/auth/tokens/v2/{fingerprint}` both close every
+  connection that authenticated with the revoked token.
+- **Credential change on a principal.** A logout, a role change, an
+  account deletion or a password change closes that subject's
+  connections.
+- **Expiry.** A session past its TTL and a bearer token past its
+  `expires_at` close the connection at the deadline; a command that
+  arrives in the meantime is refused with `unauthorized`.
+
+Clients reconnect and re-present credentials — the upgrade re-runs the
+full auth chain, which is the authority on what the principal may
+still do. A client holding a freshly-issued token can instead send
+`reauth` (above) to swap the identity without losing its subscription
+state.
 
 ## Multi-central addressing
 

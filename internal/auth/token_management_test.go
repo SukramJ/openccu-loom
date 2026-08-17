@@ -31,6 +31,49 @@ func TestMemoryTokenStore_PutAndDeleteByID_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestMemoryTokenStore_AuthenticateStampsTheTokenID pins the identity
+// plumbing every per-credential control depends on. The teardown that closes
+// a revoked token's WebSocket connections matches on the token id, so an
+// identity issued without one can never be matched — the revocation reaches
+// REST and leaves the socket dispatching under the revoked credential.
+func TestMemoryTokenStore_AuthenticateStampsTheTokenID(t *testing.T) {
+	t.Parallel()
+	store := NewMemoryTokenStore(nil)
+	const raw = "token-with-an-id-1234567890"
+	id := store.Put(raw, Identity{Subject: "svc", Role: RoleOperator})
+
+	got, err := store.AuthenticateToken(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+	if got.TokenID != id {
+		t.Fatalf("TokenID=%q, want the id Put returned (%q)", got.TokenID, id)
+	}
+	if got.Scheme != SchemeBearer {
+		t.Fatalf("Scheme=%q, want bearer", got.Scheme)
+	}
+}
+
+// TestMemoryTokenStore_SeededTokensAlsoCarryTheirID covers the other entry
+// point: tokens seeded from configuration go through the constructor, not
+// Put, and are just as revocable.
+func TestMemoryTokenStore_SeededTokensAlsoCarryTheirID(t *testing.T) {
+	t.Parallel()
+	const raw = "seeded-token-value-1234567890"
+	store := NewMemoryTokenStore(map[string]Identity{raw: {Subject: "ci", Role: RoleViewer}})
+
+	got, err := store.AuthenticateToken(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+	if got.TokenID == "" {
+		t.Fatal("a seeded token resolves to an identity with no TokenID")
+	}
+	if entries := store.List(); len(entries) != 1 || entries[0].ID != got.TokenID {
+		t.Fatalf("TokenID=%q does not match the id the management API publishes", got.TokenID)
+	}
+}
+
 func TestMemoryTokenStore_PutOverwritesExisting(t *testing.T) {
 	t.Parallel()
 	store := NewMemoryTokenStore(nil)
