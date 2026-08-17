@@ -1,0 +1,49 @@
+{
+  "description": "Declared Go-vs-reference divergence in the routing key: CUxD addresses are namespaced by the central on the Go side and are NOT namespaced by the Python reference. Kept in its own file so unique_id_golden.json / channel_unique_id_golden.json stay byte-identical copies of the shared cross-backend fixtures. `expected` is what Go emits; `reference_expected` is what the Python reference emits. tests/contract/routing_key_contract_test.go asserts Go == expected AND that the divergence is still real; script/routing_key_parity.py asserts Python == reference_expected AND that Python still differs from expected. Either side moving turns one of the two red instead of leaving `make routing-key-parity` silently green. Rationale + retirement condition: notes/parity/by_design.md -> BD-Identity-CUxDCentralScoping.",
+  "unique_id_cases": [
+    {
+      "central_id": "1234",
+      "address": "CUX2801001:1",
+      "parameter": "STATE",
+      "prefix": null,
+      "expected": "1234_cux2801001_1_state",
+      "reference_expected": "cux2801001_1_state"
+    },
+    {
+      "central_id": "ccu3",
+      "address": "CUX0300001:2",
+      "parameter": "LEVEL",
+      "prefix": null,
+      "expected": "ccu3_cux0300001_2_level",
+      "reference_expected": "cux0300001_2_level"
+    },
+    {
+      "central_id": "1234",
+      "address": "CUX2801001:1",
+      "parameter": "STATE",
+      "prefix": "calculated",
+      "expected": "1234_calculated_cux2801001_1_state",
+      "reference_expected": "calculated_cux2801001_1_state"
+    },
+    {
+      "central_id": "1234",
+      "address": "CUX2801001",
+      "parameter": null,
+      "prefix": null,
+      "expected": "1234_cux2801001",
+      "reference_expected": "cux2801001"
+    }
+  ],
+  "channel_unique_id_cases": [
+    {
+      "central_id": "1234",
+      "address": "CUX2801001:1",
+      "expected": "cux2801001_1"
+    },
+    {
+      "central_id": "1234",
+      "address": "CUX2801001",
+      "expected": "cux2801001"
+    }
+  ]
+}

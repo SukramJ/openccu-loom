@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // RetainCleanup implements a one-shot orphan-clear
@@ -936,10 +937,51 @@ const unscopedUniqueIDMarker = loomNamespacePrefix + "_"
 // matches the string that is actually on the broker.
 const loomNamespacePrefix = "loom_"
 
+// cuxdIDSegment opens a folded CUxD address inside a routing key. A CUxD
+// serial is "CUX" plus digits, so the digit that has to follow is what
+// separates the address from a CCU-serial discriminator that merely
+// happens to begin with the same three letters.
+const cuxdIDSegment = "cux"
+
+// carriesLegacyUnscopedCUxDID reports whether an entity id was built
+// before CUxD addresses joined the central-scoped address classes.
+//
+// CUxD hands out the same synthetic addresses on every CCU it runs on, so
+// its ids gained the CCU-serial discriminator. The discovery TOPIC did not
+// change — it is built from the address, not from the id — so the retained
+// config is overwritten in place and the ordinary orphan sweep, which
+// compares topics, sees nothing. Home Assistant keys its registry on the
+// id: it keeps the entity it already has under the old key and, on its
+// next restart, adds a second one under the new key while the first stays
+// registered and permanently unavailable.
+//
+// The two shapes below are the only ones the discovery builders ever
+// produced for a CUxD data point — every call site passes an empty family
+// prefix except the calculated branch — so the match is exact rather than
+// heuristic. The scoped spelling puts the serial discriminator in the
+// segment they occupy, so a current payload never matches.
+func carriesLegacyUnscopedCUxDID(uniqueID string) bool {
+	for _, marker := range [...]string{
+		loomNamespacePrefix + cuxdIDSegment,
+		loomNamespacePrefix + routingkey.CalculatedFamilyPrefix + "_" + cuxdIDSegment,
+	} {
+		rest, ok := strings.CutPrefix(uniqueID, marker)
+		if !ok || rest == "" {
+			continue
+		}
+		if rest[0] >= '0' && rest[0] <= '9' {
+			return true
+		}
+	}
+	return false
+}
+
 // RunUnscopedDiscoveryCleanupOnce subscribes to `homeassistant/#` for a
 // short window and clears every retained discovery config this daemon
-// published with an unscoped entity id — one whose CCU-serial slot was
-// empty, leaving `loom__…`.
+// published with an entity id it can no longer address: one whose
+// CCU-serial slot was empty, leaving `loom__…`, and one built for a CUxD
+// address before that class was namespaced by the central
+// ([carriesLegacyUnscopedCUxDID]).
 //
 // It exists because the ordinary orphan sweep cannot see this class. That
 // one compares topics against what the current build declared, and here
@@ -1014,12 +1056,14 @@ func (b *Bridge) RunUnscopedDiscoveryCleanupOnce(ctx context.Context, snapshotWi
 }
 
 // payloadCarriesUnscopedUniqueID reports whether a retained discovery
-// config was published by this daemon with an empty serial slot.
+// config was published by this daemon with an entity id the current build
+// no longer emits for that topic: an empty serial slot, or a CUxD address
+// from before that class was namespaced by the central.
 //
 // Both halves matter. The origin block keeps the sweep off other
 // integrations' payloads, which may legitimately use any id shape; the
-// marker identifies the ones this daemon can no longer address, because
-// a second CCU would produce the identical string.
+// markers identify the ones this daemon can no longer address, because a
+// second CCU would produce the identical string.
 func payloadCarriesUnscopedUniqueID(payload []byte) bool {
 	var body struct {
 		UniqueID string `json:"unique_id"`
@@ -1033,5 +1077,8 @@ func payloadCarriesUnscopedUniqueID(payload []byte) bool {
 	if body.Origin.Name != originName {
 		return false
 	}
-	return strings.HasPrefix(body.UniqueID, unscopedUniqueIDMarker)
+	if strings.HasPrefix(body.UniqueID, unscopedUniqueIDMarker) {
+		return true
+	}
+	return carriesLegacyUnscopedCUxDID(body.UniqueID)
 }

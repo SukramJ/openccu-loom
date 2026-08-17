@@ -100,6 +100,70 @@ func TestUnscopedDiscoveryCleanupClearsOnlyAmbiguousOwnPayloads(t *testing.T) {
 	}
 }
 
+// TestUnscopedDiscoveryCleanupClearsLegacyCUxDIdentities pins the second
+// class the sweep has to catch: a retained config published before CUxD
+// addresses joined the central-scoped families.
+//
+// CUxD hands out the same synthetic addresses on every CCU, so its ids
+// gained the CCU-serial discriminator — but the discovery topic is built
+// from the address and did not change, so the config is overwritten in
+// place and the topic-comparing orphan sweep sees nothing. Home Assistant
+// keys its registry on the id: leave the stale payload and the operator
+// gets the old entity permanently unavailable beside a `_2` duplicate on
+// the next restart. Clearing first makes the consumer forget, and the
+// snapshot that follows re-announces the entity under the scoped id.
+func TestUnscopedDiscoveryCleanupClearsLegacyCUxDIdentities(t *testing.T) {
+	t.Parallel()
+
+	const (
+		legacyTopic     = "homeassistant/switch/ccu_cuxd/cux2801001_1_state/config"
+		legacyCalcTopic = "homeassistant/sensor/ccu_cuxd/cux2801001_1_power/config"
+		scopedTopic     = "homeassistant/switch/ccu_cuxd/cux2801001_2_state/config"
+		deviceTopic     = "homeassistant/switch/ccu_hmip-rf/0001abcd_1_state/config"
+	)
+
+	mc := &mockRetainClient{
+		retained: []retainedMsg{
+			{topic: legacyTopic, payload: discoveryPayload(t, "loom_cux2801001_1_state", originName)},
+			{topic: legacyCalcTopic, payload: discoveryPayload(t, "loom_calculated_cux2801001_1_power", originName)},
+			{topic: scopedTopic, payload: discoveryPayload(t, "loom_11a0001234_cux2801001_2_state", originName)},
+			// A globally unique hardware address is unscoped by design and
+			// must survive: clearing it would delete a healthy entity and
+			// lose its registry customisations for nothing.
+			{topic: deviceTopic, payload: discoveryPayload(t, "loom_0001abcd_1_state", originName)},
+		},
+	}
+	b := NewBridge(BridgeConfig{Base: "openccu-loom", HADiscoveryEnabled: true, CentralName: "ccu"}, mc)
+
+	cleared, err := b.RunUnscopedDiscoveryCleanupOnce(context.Background(), 50)
+	if err != nil {
+		t.Fatalf("RunUnscopedDiscoveryCleanupOnce: %v", err)
+	}
+	if cleared != 2 {
+		t.Errorf("cleared %d configs, want the two carrying a pre-scoping CUxD identity", cleared)
+	}
+
+	cleanedTopics := map[string]bool{}
+	mc.mu.Lock()
+	for _, p := range mc.published {
+		if len(p.payload) == 0 && p.retain {
+			cleanedTopics[p.topic] = true
+		}
+	}
+	mc.mu.Unlock()
+	for _, want := range []string{legacyTopic, legacyCalcTopic} {
+		if !cleanedTopics[want] {
+			t.Errorf("%s was not cleared — Home Assistant keeps the pre-scoping identity and the "+
+				"republished payload adds a duplicate beside it", want)
+		}
+	}
+	for _, keep := range []string{scopedTopic, deviceTopic} {
+		if cleanedTopics[keep] {
+			t.Errorf("%s was cleared but carries an identity this build still emits", keep)
+		}
+	}
+}
+
 // TestUnscopedDiscoveryCleanupSkipsWhenDiscoveryIsOff pins that a daemon
 // not driving HA discovery never touches the discovery namespace.
 func TestUnscopedDiscoveryCleanupSkipsWhenDiscoveryIsOff(t *testing.T) {
