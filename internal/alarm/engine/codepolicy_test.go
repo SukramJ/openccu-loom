@@ -527,3 +527,151 @@ func TestCodePolicy_NilValidatorDisablesEveryPolicy(t *testing.T) {
 		t.Fatalf("disarm with codes disabled: %v", err)
 	}
 }
+
+// blockingCodeValidator holds Validate inside the call until it is
+// released, standing in for the argon2id derivations a real validator
+// runs — one per enabled code, hundreds of milliseconds each.
+type blockingCodeValidator struct {
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (b *blockingCodeValidator) Validate(_ context.Context, _, _, code, _ string) (identity string, duress bool, err error) {
+	b.once.Do(func() { close(b.entered) })
+	<-b.release
+	if code == "1234" {
+		return "Alice", false, nil
+	}
+	return "", false, engine.ErrInvalidCode
+}
+
+// TestCodeValidationDoesNotStallSensorEvents pins where the code
+// verification happens relative to the engine's single mutex.
+//
+// That mutex serialises every mutating entry point: the verbs, the
+// sensor activations, the entry/exit countdown fires. Verifying under it
+// froze the whole alarm system for the duration — measured in seconds
+// once a household has a handful of codes, because a wrong code is
+// checked against every one of them. The moment it froze was the worst
+// available: somebody standing in the doorway mistyping their PIN with
+// the entry delay running, while the intrusion that the window contact
+// would have reported waits behind the hash.
+//
+// The assertion is the effect, not the return: the activation must reach
+// the state machine and drive the zone to triggered while the validator
+// is still inside its call.
+func TestCodeValidationDoesNotStallSensorEvents(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	v := &blockingCodeValidator{entered: make(chan struct{}), release: make(chan struct{})}
+	h.startWithValidator(v)
+	h.armFull()
+
+	disarmed := make(chan error, 1)
+	go func() { disarmed <- h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", "1234") }()
+	select {
+	case <-v.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the disarm never reached the code validator")
+	}
+
+	handled := make(chan struct{})
+	go func() {
+		defer close(handled)
+		h.eng.HandleSensorEvent(h.ctx, "window", true)
+	}()
+	select {
+	case <-handled:
+	case <-time.After(2 * time.Second):
+		close(v.release)
+		<-disarmed
+		t.Fatal("a sensor activation did not reach the state machine while a code was being verified: " +
+			"every zone's sensors and countdowns wait behind the hash derivation")
+	}
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
+
+	// The verb that was waiting still applies, against the state the
+	// zone reached in the meantime.
+	close(v.release)
+	if err := <-disarmed; err != nil {
+		t.Fatalf("disarm after the validator returned: %v", err)
+	}
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+}
+
+// duressBlockingValidator blocks inside MatchDuress — the probe an
+// already-disarmed zone runs — while answering Validate immediately.
+type duressBlockingValidator struct {
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+
+	mu            sync.Mutex
+	validateCalls int
+}
+
+func (d *duressBlockingValidator) Validate(_ context.Context, _, _, code, _ string) (identity string, duress bool, err error) {
+	d.mu.Lock()
+	d.validateCalls++
+	d.mu.Unlock()
+	if code == "1234" {
+		return "Alice", false, nil
+	}
+	return "", false, engine.ErrInvalidCode
+}
+
+func (d *duressBlockingValidator) MatchDuress(_ context.Context, _, _, _, _ string) (identity string, duress bool) {
+	d.once.Do(func() { close(d.entered) })
+	<-d.release
+	return "", false
+}
+
+func (d *duressBlockingValidator) validateCount() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.validateCalls
+}
+
+// TestDisarmAuthenticatesAgainWhenTheZoneArmsDuringTheDuressProbe pins
+// the state race that resolving a code outside the lock opens.
+//
+// A disarm of an already-disarmed zone is a no-op that still looks at the
+// code, for duress only — a probe that authenticates nothing. If the zone
+// is armed while that probe runs (a schedule, a keypad, a second
+// surface), applying the no-op branch to the now-armed zone would either
+// leave the operator's disarm silently unapplied or disarm on a code
+// nothing verified. It has to resolve the code for real instead.
+func TestDisarmAuthenticatesAgainWhenTheZoneArmsDuringTheDuressProbe(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardZone()
+	v := &duressBlockingValidator{entered: make(chan struct{}), release: make(chan struct{})}
+	h.startWithValidator(v)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+
+	disarmed := make(chan error, 1)
+	go func() { disarmed <- h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", "1234") }()
+	select {
+	case <-v.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the disarm of a disarmed zone never reached the duress probe")
+	}
+
+	// Another surface arms the zone while the probe is still running.
+	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{
+		Mode: hmenum.AlarmModeFull, SkipDelay: true, By: "schedule", Source: "schedule",
+	}); err != nil {
+		t.Fatalf("arm while the duress probe runs: %v", err)
+	}
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
+
+	close(v.release)
+	if err := <-disarmed; err != nil {
+		t.Fatalf("disarm: %v", err)
+	}
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
+	if v.validateCount() == 0 {
+		t.Fatal("the zone was disarmed without the code being validated: a duress probe resolves nothing " +
+			"and must never stand in for the authentication an armed zone requires")
+	}
+}

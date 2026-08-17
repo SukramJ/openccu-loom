@@ -106,6 +106,8 @@ type Facade struct {
 	// never move the code plane's lockout, and a locked-out code plane
 	// must never mute the covert channel.
 	probes *rateLimiter
+	// memo narrows the per-attempt hash sweep of Validate to one row.
+	memo *verifyMemo
 }
 
 // The engine resolves the duress matcher by interface assertion on the
@@ -134,6 +136,7 @@ func New(deps Deps) *Facade {
 		log:     logger,
 		limiter: newRateLimiter(),
 		probes:  newRateLimiter(),
+		memo:    newVerifyMemo(),
 	}
 }
 
@@ -197,10 +200,7 @@ func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string
 		return "", false, engine.ErrInvalidCode
 	}
 
-	for _, c := range candidates {
-		if !VerifyPIN(c.hash, code) {
-			continue
-		}
+	if c := f.matchCandidate(candidates, code); c != nil {
 		if !permits(c.perms, verb) {
 			f.journalFault(ctx, zoneID, source, "code_permission_denied", map[string]any{
 				"code_id": c.id, "verb": verb,
@@ -327,6 +327,41 @@ func (f *Facade) Rows(ctx context.Context) ([]Row, error) {
 		out = append(out, row)
 	}
 	return out, nil
+}
+
+// matchCandidate returns the first candidate whose stored hash the
+// supplied code verifies against, or nil when it matches none.
+//
+// The memo narrows the sweep to a single row for a code that has already
+// been resolved against this exact candidate set, and answers "matches
+// nothing" without deriving anything at all — a mistyped PIN otherwise
+// costs one argon2id derivation per enabled code, every time it is typed.
+// The verification itself is never skipped on the accept path: a match
+// reported here always comes from a real hash comparison, so the memo can
+// deny fast but can never authenticate on its own.
+func (f *Facade) matchCandidate(candidates []pinCandidate, code string) *pinCandidate {
+	scope := candidateScope(candidates)
+	if rowID, known := f.memo.lookup(scope, code); known {
+		if rowID == "" {
+			return nil
+		}
+		for i := range candidates {
+			if candidates[i].id == rowID && VerifyPIN(candidates[i].hash, code) {
+				return &candidates[i]
+			}
+		}
+		// The remembered row no longer verifies: fall through to the full
+		// sweep rather than trust the memo about it.
+	}
+	for i := range candidates {
+		if !VerifyPIN(candidates[i].hash, code) {
+			continue
+		}
+		f.memo.remember(scope, code, candidates[i].id)
+		return &candidates[i]
+	}
+	f.memo.remember(scope, code, "")
+	return nil
 }
 
 // pinCandidates loads every enabled, in-validity-window pin-kind code

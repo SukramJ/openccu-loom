@@ -6,6 +6,7 @@ package alarm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -15,6 +16,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
+	sirencdp "github.com/SukramJ/openccu-loom/internal/model/custom/siren"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -34,6 +37,19 @@ var outputWiringStart = time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 // composition root proves the daemon makes it happen.
 func newOutputWiringService(t *testing.T, zoneID, zoneName string, rows ...sqlitestore.AlarmOutputRow) *Service {
 	t.Helper()
+	return newOutputWiringServiceWith(t, central.NewRegistry(), zoneID, zoneName, engine.ZoneConfig{
+		Modes: map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}},
+	}, rows...)
+}
+
+// newOutputWiringServiceWith is [newOutputWiringService] against a
+// caller-supplied central registry and zone configuration, for the cases
+// that need a real device behind the enrolled output.
+func newOutputWiringServiceWith(
+	t *testing.T, reg *central.Registry, zoneID, zoneName string,
+	zoneCfg engine.ZoneConfig, rows ...sqlitestore.AlarmOutputRow,
+) *Service {
+	t.Helper()
 	dsn := sqlitestore.FileDSN(filepath.Join(t.TempDir(), "alarm-output-wiring.db"))
 	db, err := sqlitestore.Open(context.Background(), dsn)
 	if err != nil {
@@ -43,9 +59,7 @@ func newOutputWiringService(t *testing.T, zoneID, zoneName string, rows ...sqlit
 
 	stores := NewStores(db)
 	ctx := context.Background()
-	cfg, err := json.Marshal(engine.ZoneConfig{
-		Modes: map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}},
-	})
+	cfg, err := json.Marshal(zoneCfg)
 	if err != nil {
 		t.Fatalf("marshal zone config: %v", err)
 	}
@@ -64,7 +78,7 @@ func newOutputWiringService(t *testing.T, zoneID, zoneName string, rows ...sqlit
 
 	svc, err := NewService(Deps{
 		Settings: Settings{Enabled: true},
-		Registry: central.NewRegistry(),
+		Registry: reg,
 		Stores:   stores,
 		Clock:    clock.NewFake(outputWiringStart),
 		Logger:   slog.New(slog.DiscardHandler),
@@ -175,6 +189,132 @@ func TestNotificationOutputReachesTheBusWithoutBlockingTheEngine(t *testing.T) {
 			t.Errorf("Disarm: %v", err)
 		}
 	})
+}
+
+// TestServiceStopSilencesTheSmokeSounderItCanNoLongerBound pins the
+// shutdown half of the smoke-sounder bound.
+//
+// The class latches: the activation writes
+// SMOKE_DETECTOR_COMMAND=INTRUSION_ALARM, the device (and every peer
+// detector of its group) sounds until INTRUSION_ALARM_OFF is written,
+// and the manager's watchdog is the only thing that ever writes it.
+// Stopping the service cancelled that watchdog without the write, so a
+// clean `docker stop` / add-on stop / systemctl stop inside the
+// activation window left the whole house sounding with nothing left in
+// the system able to end it — the operator's first reaction to a false
+// alarm being the very action that removed the bound.
+//
+// The stop goes through Service.Stop, the north-bridge lifecycle call
+// the daemon makes on SIGTERM, and the assertion is the wire command a
+// real detector would receive.
+func TestServiceStopSilencesTheSmokeSounderItCanNoLongerBound(t *testing.T) {
+	t.Parallel()
+
+	const (
+		centralName = "ccu"
+		ifaceID     = "ccu-HmIP-RF"
+		devAddress  = "0001D3C99ABCDE"
+		chAddress   = "0001D3C99ABCDE:1"
+		zoneID      = "eg"
+	)
+
+	unit, err := central.New(central.Config{Name: centralName})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("register central: %v", err)
+	}
+	writer := newRecordingCommandWriter()
+	addSmokeSounder(t, unit, ifaceID, devAddress, chAddress, writer)
+
+	svc := newOutputWiringServiceWith(t, reg, zoneID, "Erdgeschoss", engine.ZoneConfig{
+		Modes:        map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}},
+		PanicOutputs: engine.OutputPolicy{SmokeSounders: true},
+	}, sqlitestore.AlarmOutputRow{
+		ID: "swsd1", ZoneID: zoneID, Name: "Rauchmelder",
+		Class:       hmenum.AlarmOutputClassSmokeSounder,
+		CentralName: centralName, ChannelAddress: chAddress,
+	})
+
+	ctx := context.Background()
+	if err := svc.Engine().PanicTrigger(ctx, zoneID, false, "tester", "test"); err != nil {
+		t.Fatalf("PanicTrigger: %v", err)
+	}
+	if !writer.sawValue("INTRUSION_ALARM") {
+		t.Fatalf("the sounder never fired; commands = %v", writer.values())
+	}
+
+	runWithin(t, 5*time.Second, "Service.Stop", func() {
+		if err := svc.Stop(ctx); err != nil {
+			t.Errorf("Stop: %v", err)
+		}
+	})
+
+	if !writer.sawValue("INTRUSION_ALARM_OFF") {
+		t.Fatalf("stopping the service left the smoke sounder latched; commands = %v. The watchdog it "+
+			"cancelled was the only bound this class has, so the detectors keep sounding for as long "+
+			"as the daemon stays down", writer.values())
+	}
+}
+
+// recordingCommandWriter records the values written to the wire.
+type recordingCommandWriter struct {
+	mu   chan struct{}
+	seen []string
+}
+
+func newRecordingCommandWriter() *recordingCommandWriter {
+	return &recordingCommandWriter{mu: make(chan struct{}, 1)}
+}
+
+// SetValue implements the custom-data-point writer port.
+func (w *recordingCommandWriter) SetValue(
+	_ context.Context, _ string, _ hmenum.Parameter, value any, _ hmenum.CommandPriority,
+) error {
+	w.mu <- struct{}{}
+	defer func() { <-w.mu }()
+	w.seen = append(w.seen, fmt.Sprint(value))
+	return nil
+}
+
+func (w *recordingCommandWriter) values() []string {
+	w.mu <- struct{}{}
+	defer func() { <-w.mu }()
+	return append([]string(nil), w.seen...)
+}
+
+func (w *recordingCommandWriter) sawValue(want string) bool {
+	for _, v := range w.values() {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+// addSmokeSounder puts an HmIP-SWSD-class smoke detector into the
+// central's model, with the smoke-siren custom data point the alarm
+// output resolver looks for.
+func addSmokeSounder(
+	t *testing.T, unit *central.Unit, interfaceID, deviceAddress, channelAddress string,
+	writer *recordingCommandWriter,
+) {
+	t.Helper()
+	dev := device.New(device.Config{
+		InterfaceID: interfaceID,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     deviceAddress,
+		Model:       "HmIP-SWSD",
+	})
+	ch := dev.AddChannel(channelAddress, 1, "SMOKE_DETECTOR", hmenum.ParamsetKeyValues)
+	cdp := sirencdp.NewSmokeSiren(sirencdp.SmokeSirenConfig{Channel: ch, Writer: writer})
+	if cdp == nil {
+		t.Fatal("smoke siren custom data point was not constructed")
+	}
+	ch.SetCustomDataPoint(cdp)
+	unit.ModelRegistry.Put(dev)
 }
 
 // TestFailedOutputCommandPublishesAlarmHealthOnTheBus pins the health

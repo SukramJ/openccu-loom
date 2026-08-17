@@ -167,6 +167,102 @@ func TestPartialInterfaceRecoveryKeepsTheStillDownRadioDegraded(t *testing.T) {
 		"a sensor on a radio that never came back must keep blocking the arm")
 }
 
+// TestNotReadyDemotionKeepsTheZoneOutOfTheCentralLossPolicy pins the
+// boundary between a CCU that is away and a radio that is gone.
+//
+// While a central is not operational its reconcile pass cannot probe
+// anything, so the not-ready emitter demotes every interface it last
+// saw reachable — that keeps the retained MQTT/REST view honest during a
+// CCU outage. Those events say nothing about the radios themselves,
+// though, and feeding them to this domain turns every CCU reboot into
+// the zone's central-loss escalation: a fault in each armed zone's
+// journal on the default policy, and a sounding siren plus an incident
+// on `trigger`.
+//
+// The run goes through the real Reconciler and the real service
+// subscription: what is under test is that the escalation does not
+// happen, so anything short of the production producer would prove
+// nothing.
+func TestNotReadyDemotionKeepsTheZoneOutOfTheCentralLossPolicy(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		policy hmenum.AlarmCentralLossPolicy
+	}{
+		{name: "alert", policy: hmenum.AlarmCentralLossAlert},
+		{name: "trigger", policy: hmenum.AlarmCentralLossTrigger},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, unit := armedConnectivityServiceWithLoss(t, tc.policy)
+
+			conn := hub.NewConnectivity()
+			for _, iface := range []hmenum.Interface{hmenum.InterfaceHmIPRF, hmenum.InterfaceBidCosRF} {
+				conn.OnStateWithInterface(central.WireInterfaceID(connectivityTestCentral, iface), iface, true)
+			}
+			reconciler := &coordinators.Reconciler{
+				CentralName:  connectivityTestCentral,
+				Bus:          unit.EventBus,
+				Connectivity: conn,
+			}
+
+			// The demotion the CCU outage produces, from the production
+			// emitter the reconcile job runs while the central is FAILED.
+			if err := reconciler.EmitNotReady(context.Background()); err != nil {
+				t.Fatalf("emit not ready: %v", err)
+			}
+
+			// The diagnostic half must still happen: the aggregate every
+			// north-bound surface reads now reports the interfaces as down.
+			for _, entry := range conn.List() {
+				if entry.Reachable {
+					t.Fatalf("interface %s still reachable after the not-ready demotion", entry.InterfaceID)
+				}
+			}
+
+			expectNoJournalEvent(t, svc, "central_lost_while_armed",
+				"a CCU that is merely away must not run the zone's central-loss policy")
+			expectNoJournalEvent(t, svc, "sensor_unavailable_while_armed",
+				"a CCU that is merely away must not degrade the sensors behind its radios")
+			snap, ok := svc.Engine().Zone(connectivityTestZone)
+			if !ok {
+				t.Fatalf("unknown zone %q", connectivityTestZone)
+			}
+			if snap.State != hmenum.AlarmZoneStateArmed {
+				t.Fatalf("zone state = %q, want %q: a CCU reboot must not trigger the zone",
+					snap.State, hmenum.AlarmZoneStateArmed)
+			}
+			if snap.IncidentID != 0 {
+				t.Fatalf("incident %d opened by a CCU reboot", snap.IncidentID)
+			}
+		})
+	}
+}
+
+// expectNoJournalEvent fails when event shows up in the journal within a
+// short settle window. Bus dispatch and the journal write are both
+// asynchronous with respect to the publisher, so the absence has to be
+// given time to become present before it counts.
+func expectNoJournalEvent(t *testing.T, svc *Service, event, why string) {
+	t.Helper()
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		entries, err := svc.Stores().Journal.Query(context.Background(),
+			sqlitestore.AlarmJournalFilter{IncludeHidden: true})
+		if err != nil {
+			t.Fatalf("query journal: %v", err)
+		}
+		for i := range entries {
+			if entries[i].Event == event {
+				t.Fatalf("journal entry %q written: %s", event, why)
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // waitForBlockers polls the zone's readiness until its blockers for
 // mode equal want, or fails with why. The engine is fed from bus
 // handlers, so the verdict cannot be read once and be done.
@@ -193,6 +289,14 @@ func waitForBlockers(t *testing.T, svc *Service, zoneID string, mode hmenum.Alar
 // plus the central whose bus the connectivity events ride.
 func armedConnectivityService(t *testing.T) (*Service, *central.Unit) {
 	t.Helper()
+	return armedConnectivityServiceWithLoss(t, hmenum.AlarmCentralLossAlert)
+}
+
+// armedConnectivityServiceWithLoss is [armedConnectivityService] with an
+// explicit central-loss policy: the escalation the policy selects is the
+// observable the connectivity tests assert on.
+func armedConnectivityServiceWithLoss(t *testing.T, loss hmenum.AlarmCentralLossPolicy) (*Service, *central.Unit) {
+	t.Helper()
 
 	const (
 		centralName = connectivityTestCentral
@@ -218,7 +322,8 @@ func armedConnectivityService(t *testing.T) (*Service, *central.Unit) {
 	ctx := context.Background()
 	stores := NewStores(db)
 	zoneCfg, err := json.Marshal(engine.ZoneConfig{
-		Modes: map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}},
+		Modes:       map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}},
+		CentralLoss: loss,
 	})
 	if err != nil {
 		t.Fatalf("marshal zone config: %v", err)
