@@ -385,7 +385,7 @@ func TestLinksDomain_ListLinks_DuplicateLink_Deduped(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// refreshAfterPut — via PutParamset on ParamsetsDomain
+// refreshAfterPutOn — via PutParamset on ParamsetsDomain
 // ---------------------------------------------------------------------------
 
 func buildParamsetBoost10Fixture(t *testing.T) *ParamsetsDomain {
@@ -430,7 +430,7 @@ func TestParamsetsDomain_PutParamset_Values_CallsRefreshAfterPut(t *testing.T) {
 	t.Parallel()
 	p := buildParamsetBoost10Fixture(t)
 	// Use device address (no ":N") → resolveChannel returns nil → legacy backend path.
-	// This exercises the legacy direct backend path AND refreshAfterPut.
+	// This exercises the legacy direct backend path AND refreshAfterPutOn.
 	err := p.PutParamset(context.Background(), "DEV021", hmenum.ParamsetKeyValues,
 		map[string]any{"SET_POINT_TEMPERATURE": 21.0})
 	if err != nil {
@@ -1739,7 +1739,7 @@ func TestMQTTCommandSink_TriggerProgram_UnknownProgram(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// refreshAfterPut — nil registry short-circuit
+// refreshAfterPutOn — nil registry short-circuit
 // ---------------------------------------------------------------------------
 
 func TestRefreshAfterPut_NilRegistry_NoPanic(t *testing.T) {
@@ -1750,7 +1750,7 @@ func TestRefreshAfterPut_NilRegistry_NoPanic(t *testing.T) {
 		paramsetData: map[string]any{"STATE": true},
 	}
 	// Must return without panicking.
-	p.refreshAfterPut(context.Background(), fake, "DEV:1", hmenum.ParamsetKeyValues)
+	p.refreshAfterPutOn(context.Background(), "", fake, "DEV:1", hmenum.ParamsetKeyValues)
 }
 
 func TestRefreshAfterPut_BackendError_NoPanic(t *testing.T) {
@@ -1764,12 +1764,12 @@ func TestRefreshAfterPut_BackendError_NoPanic(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 	p := NewParamsetsDomain(reg, nil)
-	// Backend returns an error on GetParamset — refreshAfterPut must not panic.
+	// Backend returns an error on GetParamset — refreshAfterPutOn must not panic.
 	fakeFail := &configFakeOperations{
 		kind:        backends.KindCCU,
 		paramsetErr: errTestSentinel,
 	}
-	p.refreshAfterPut(context.Background(), fakeFail, "DEV:1", hmenum.ParamsetKeyValues)
+	p.refreshAfterPutOn(context.Background(), "", fakeFail, "DEV:1", hmenum.ParamsetKeyValues)
 }
 
 func TestRefreshAfterPut_DeviceNotInRegistry_NoPanic(t *testing.T) {
@@ -1788,7 +1788,7 @@ func TestRefreshAfterPut_DeviceNotInRegistry_NoPanic(t *testing.T) {
 		paramsetData: map[string]any{"STATE": true},
 	}
 	// Device "NOTFOUND" is not in the registry — must not panic.
-	p.refreshAfterPut(context.Background(), fake, "NOTFOUND:1", hmenum.ParamsetKeyValues)
+	p.refreshAfterPutOn(context.Background(), "", fake, "NOTFOUND:1", hmenum.ParamsetKeyValues)
 }
 
 // errTestSentinel is a reusable sentinel error for these tests.
@@ -2369,8 +2369,8 @@ func TestResolveChannelInfo_DeviceFoundChannelNil(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// refreshAfterPut — with a channel that has a VALUES data point
-// (to exercise the inner loop of refreshAfterPut)
+// refreshAfterPutOn — with a channel that has a VALUES data point
+// (to exercise the inner loop of refreshAfterPutOn)
 // ---------------------------------------------------------------------------
 
 func buildRefreshAfterPutFixture(t *testing.T) (*ParamsetsDomain, *configFakeOperations, string) {
@@ -2419,8 +2419,8 @@ func TestRefreshAfterPut_WithChannelHasNoDataPoints(t *testing.T) {
 	t.Parallel()
 	// Channel is found but has no DPs — inner dp loop exits cleanly.
 	p, fake, chAddr := buildRefreshAfterPutFixture(t)
-	// Call refreshAfterPut directly — must not panic.
-	p.refreshAfterPut(context.Background(), fake, chAddr, hmenum.ParamsetKeyValues)
+	// Call refreshAfterPutOn directly — must not panic.
+	p.refreshAfterPutOn(context.Background(), "", fake, chAddr, hmenum.ParamsetKeyValues)
 }
 
 func TestRefreshAfterPut_WithGetParamsetSuccess(t *testing.T) {
@@ -2428,7 +2428,7 @@ func TestRefreshAfterPut_WithGetParamsetSuccess(t *testing.T) {
 	p, fake, chAddr := buildRefreshAfterPutFixture(t)
 	// Ensure the GetParamset returns some data so we enter the channel loop.
 	fake.paramsetData = map[string]any{"STATE": false, "POWER": 1.2}
-	p.refreshAfterPut(context.Background(), fake, chAddr, hmenum.ParamsetKeyValues)
+	p.refreshAfterPutOn(context.Background(), "", fake, chAddr, hmenum.ParamsetKeyValues)
 }
 
 // ---------------------------------------------------------------------------
@@ -3715,8 +3715,8 @@ func TestPutParamset_ConvertValuesError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// refreshAfterPut — OnWireValue called on a real DP (paramsets.go:248-250)
-// Use IngestFromBackend to create a real DP, then call refreshAfterPut.
+// refreshAfterPutOn — OnWireValue called on a real DP (paramsets.go:248-250)
+// Use IngestFromBackend to create a real DP, then call refreshAfterPutOn.
 // ---------------------------------------------------------------------------
 
 func TestRefreshAfterPut_OnWireValueCalled(t *testing.T) {
@@ -3738,9 +3738,9 @@ func TestRefreshAfterPut_OnWireValueCalled(t *testing.T) {
 	w.Register("ccu-b19-rap1", "HmIP-RF", fake)
 
 	p := NewParamsetsDomain(reg, w)
-	// refreshAfterPut will find the channel (which has a LEVEL DP), get paramset,
+	// refreshAfterPutOn will find the channel (which has a LEVEL DP), get paramset,
 	// then call dp.OnWireValue(0.7) → setter.OnWireValue path covered.
-	p.refreshAfterPut(context.Background(), fake, "RAP1DEV01B19:1", hmenum.ParamsetKeyValues)
+	p.refreshAfterPutOn(context.Background(), "", fake, "RAP1DEV01B19:1", hmenum.ParamsetKeyValues)
 	// Must not panic.
 }
 

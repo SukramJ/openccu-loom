@@ -96,7 +96,6 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 		// race against the just-read YAML, not the prior boot.
 		deps.SetCurrentConfig(next)
 		applied := 0
-		restart := 0
 
 		// Hot-reloadable: MQTT. The supervisor owns the rebuild
 		// sequence (new stack starts before the old one tears down,
@@ -170,7 +169,7 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 		// Basic-auth gate off logged "reloaded, 0 restart-required fields"
 		// while neither change existed anywhere but in the file.
 		pending := config.RestartRequiredDiff(prev, next)
-		restart = len(pending)
+		restart := len(pending)
 		for _, field := range pending {
 			logger.Warn("daemon.reload.restart_required", slog.String("field", field))
 		}

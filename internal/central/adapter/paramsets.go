@@ -362,21 +362,11 @@ func channelNumberOf(channelAddress string) int {
 	return 0
 }
 
-// refreshAfterPut pulls the current paramset values and, when the
-// owning channel still holds the data points, forwards them through
-// [OnWireValue]. Best effort — a transient read failure here is
-// silently ignored because the write itself already succeeded.
-func (p *ParamsetsDomain) refreshAfterPut(
-	ctx context.Context,
-	b paramsetBackend,
-	channelAddress string,
-	key hmenum.ParamsetKey,
-) {
-	p.refreshAfterPutOn(ctx, "", b, channelAddress, key)
-}
-
-// refreshAfterPutOn is [ParamsetsDomain.refreshAfterPut] scoped to one
-// central; see [ParamsetsDomain.unitsFor] for what an empty name means.
+// refreshAfterPutOn pulls the current paramset values and, when the owning
+// channel still holds the data points, forwards them through [OnWireValue],
+// scoped to one central; see [ParamsetsDomain.unitsFor] for what an empty
+// name means. Best effort — a transient read failure here is silently
+// ignored because the write itself already succeeded.
 func (p *ParamsetsDomain) refreshAfterPutOn(
 	ctx context.Context,
 	centralName string,

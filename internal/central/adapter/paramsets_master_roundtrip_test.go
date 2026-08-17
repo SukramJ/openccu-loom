@@ -180,7 +180,8 @@ func TestMasterParamsetWriteSavesAndReachesBothPushPlanes(t *testing.T) {
 
 	// The save the config surface issues: JSON-decoded numbers, one parameter
 	// inside the MASTER data-point whitelist and one outside it.
-	if err := domain.PutParamset(context.Background(), chanAddr, hmenum.ParamsetKeyMaster,
+	if err := domain.PutParamset(
+		context.Background(), chanAddr, hmenum.ParamsetKeyMaster,
 		map[string]any{declared: float64(3), undeclared: float64(42)},
 	); err != nil {
 		t.Fatalf("PutParamset(MASTER): %v — a parameter the read surfaces offer must be writable", err)
@@ -216,7 +217,7 @@ func TestMasterParamsetWriteSavesAndReachesBothPushPlanes(t *testing.T) {
 		}
 	}
 	if found == "" {
-		var all []string
+		all := make([]string, 0, len(pub.Published()))
 		for _, p := range pub.Published() {
 			all = append(all, p.Topic)
 		}
