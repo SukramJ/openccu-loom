@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // SectionLoader is the persistence dependency the Store needs.
@@ -723,7 +724,10 @@ func (s *Store) SeedSectionsFromConfig(ctx context.Context, cfg *config.Config, 
 
 // layerCentrals materialises the centrals table into
 // [config.Config.Centrals]. Disabled rows are silently skipped so
-// the operator can park a CCU without removing it.
+// the operator can park a CCU without removing it. Rows whose name the
+// callback router cannot match are skipped too — see [centralRowRoutable];
+// the composition root reports them through [Store.UnroutableCentralNames]
+// rather than letting the daemon run a CCU that receives nothing.
 //
 // The tier rule keys on the presence of ROWS, not of enabled rows: an empty
 // table means the DB tier is unused and the YAML `centrals:` list stays
@@ -747,6 +751,9 @@ func (s *Store) layerCentrals(ctx context.Context, cfg *config.Config, srcs map[
 		if !r.Enabled {
 			continue
 		}
+		if !centralRowRoutable(*r) {
+			continue
+		}
 		cc, usedEnv := RowToCentralConfig(*r, s.envLookup)
 		if usedEnv {
 			srcs["centrals."+r.Name+".password"] = SourceEnv
@@ -756,6 +763,47 @@ func (s *Store) layerCentrals(ctx context.Context, cfg *config.Config, srcs map[
 	cfg.Centrals = out
 	srcs["centrals"] = SourceDB
 	return nil
+}
+
+// centralRowRoutable reports whether the callback router can match the row's
+// name. The name is a path segment of the callback URL the daemon announces
+// to the CCU, and the router rejects any segment outside the allowlist, so a
+// central whose stored name fails here is brought up, reports healthy and
+// receives no push event ever — every data point stays unobserved.
+//
+// The write path has enforced the allowlist since it was introduced, but rows
+// persisted before it are never re-checked, so the read path has to.
+func centralRowRoutable(r sqlite.CentralRow) bool {
+	return hmtypes.IsValidCentralName(r.Name)
+}
+
+// UnroutableCentralNames returns the names of the enabled central rows the
+// callback router would refuse to route (see [centralRowRoutable]). Those
+// rows are left out of the config [Store.OverlayInto] and [Store.Effective]
+// assemble, so the daemon does not bring up a CCU that cannot deliver a
+// single event; this is how the composition root learns which rows it
+// dropped, so it can tell the operator instead of leaving a silent gap.
+//
+// A nil centrals loader (test configurations that exercise the section tier
+// only) reports nothing.
+func (s *Store) UnroutableCentralNames(ctx context.Context) ([]string, error) {
+	if s.centrals == nil {
+		return nil, nil
+	}
+	rows, err := s.centrals.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("configstore: centrals list: %w", err)
+	}
+	var out []string
+	for i := range rows {
+		if !rows[i].Enabled {
+			continue
+		}
+		if !centralRowRoutable(rows[i]) {
+			out = append(out, rows[i].Name)
+		}
+	}
+	return out, nil
 }
 
 // RowToCentralConfig converts one persisted [sqlite.CentralRow] into the

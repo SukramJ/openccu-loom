@@ -4,6 +4,7 @@
 package config
 
 import (
+	"maps"
 	"reflect"
 	"slices"
 )
@@ -51,12 +52,17 @@ func (r RestartRule) annotatedFields() []string {
 func restartRules() []RestartRule {
 	groups := [][]RestartRule{
 		processRestartRules(),
+		scheduledJobRestartRules(),
 		matterRestartRules(),
+		matterEndpointRestartRules(),
 		restSurfaceRestartRules(),
+		restSecurityRestartRules(),
 		discoveryRestartRules(),
 		northBridgeRestartRules(),
 		authRestartRules(),
 		alarmRestartRules(),
+		southboundRestartRules(),
+		persistenceRestartRules(),
 	}
 	n := 0
 	for _, g := range groups {
@@ -95,6 +101,33 @@ func processRestartRules() []RestartRule {
 			Path:    "north.rest.public_url",
 			Differs: func(b, e *Config) bool { return b.North.REST.PublicURL != e.North.REST.PublicURL },
 		},
+		// The logger stack — writer format, default level and the per-path
+		// level overrides — is built once and installed as the process
+		// default. Nothing re-reads this block afterwards: the runtime level
+		// control is the diagnostics endpoint, which drives the level
+		// registry directly and does not touch the config.
+		{
+			Path: "logging",
+			Fields: []string{
+				"logging.level",
+				"logging.format",
+				"logging.overrides",
+			},
+			Differs: func(b, e *Config) bool {
+				return b.Logging.Level != e.Logging.Level ||
+					b.Logging.Format != e.Logging.Format ||
+					!maps.Equal(b.Logging.Overrides, e.Logging.Overrides)
+			},
+		},
+		// The daemon-wide default locale is read while the label resolver,
+		// the MQTT bridge, the Matter bridge and the alarm/security wiring
+		// are constructed, and each keeps the value it was built with — a
+		// live-adopted central included, because the orchestrator carries the
+		// config snapshot taken at boot.
+		{
+			Path:    "locale",
+			Differs: func(b, e *Config) bool { return b.Locale != e.Locale },
+		},
 		{
 			Path:    "callback.host",
 			Differs: func(b, e *Config) bool { return b.Callback.Host != e.Callback.Host },
@@ -132,16 +165,6 @@ func processRestartRules() []RestartRule {
 			Path:    "callback.max_connections",
 			Differs: func(b, e *Config) bool { return b.Callback.MaxConnections != e.Callback.MaxConnections },
 		},
-		// The scheduled-backup job is registered once at boot with the interval +
-		// keep-count captured then, so a change takes effect only after a restart.
-		{
-			Path:    "backup.schedule",
-			Differs: func(b, e *Config) bool { return b.Backup.Schedule != e.Backup.Schedule },
-		},
-		{
-			Path:    "backup.keep_last",
-			Differs: func(b, e *Config) bool { return b.Backup.KeepLast != e.Backup.KeepLast },
-		},
 		// Adding or removing a central is a live coordinator-lifecycle
 		// operation (the orchestrator adopts/tears down without a restart),
 		// so only an in-place modification of a central present in both
@@ -151,6 +174,32 @@ func processRestartRules() []RestartRule {
 		{
 			Path:    "centrals",
 			Differs: func(b, e *Config) bool { return CentralsModifiedInPlace(b.Centrals, e.Centrals) },
+		},
+	}
+}
+
+// scheduledJobRestartRules covers the periodic jobs the scheduler registers
+// once at boot: each captures its cadence (and whether it runs at all) at
+// registration time, so an edit lands with the next process, not the next tick.
+func scheduledJobRestartRules() []RestartRule {
+	return []RestartRule{
+		{
+			Path: "addon_update.enabled",
+			Differs: func(b, e *Config) bool {
+				return b.AddonUpdate.PeriodicCheckEnabled() != e.AddonUpdate.PeriodicCheckEnabled()
+			},
+		},
+		{
+			Path:    "addon_update.check_interval",
+			Differs: func(b, e *Config) bool { return b.AddonUpdate.CheckInterval != e.AddonUpdate.CheckInterval },
+		},
+		{
+			Path:    "backup.schedule",
+			Differs: func(b, e *Config) bool { return b.Backup.Schedule != e.Backup.Schedule },
+		},
+		{
+			Path:    "backup.keep_last",
+			Differs: func(b, e *Config) bool { return b.Backup.KeepLast != e.Backup.KeepLast },
 		},
 	}
 }
@@ -219,6 +268,68 @@ func matterRestartRules() []RestartRule {
 	}
 }
 
+// matterEndpointRestartRules covers the rest of the bridge's boot-time
+// surface: the attestation material read from disk while the root clusters are
+// built, the CASE identity handed to the session layer, and the label,
+// secondary-channel policy, time-sync opt-in and IPv4 preference frozen into
+// the endpoint assembly and the UDP listener.
+func matterEndpointRestartRules() []RestartRule {
+	return []RestartRule{
+		{
+			Path: "north.matter.attestation",
+			Fields: []string{
+				"north.matter.attestation.cd_path",
+				"north.matter.attestation.dac_path",
+				"north.matter.attestation.dac_key_path",
+				"north.matter.attestation.pai_path",
+			},
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.Attestation != e.North.Matter.Attestation
+			},
+		},
+		{
+			Path: "north.matter.case",
+			Fields: []string{
+				"north.matter.case.fabric_id",
+				"north.matter.case.node_id",
+			},
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.CASE != e.North.Matter.CASE
+			},
+		},
+		{
+			// Defaulted view: the empty label resolves to the compiled-in
+			// name, so unset → that same name is not a change.
+			Path: "north.matter.node_label",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.WithDefaults().NodeLabel != e.North.Matter.WithDefaults().NodeLabel
+			},
+		},
+		{
+			Path: "north.matter.expose_secondary_channels",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.ExposeSecondaryChannels != e.North.Matter.ExposeSecondaryChannels
+			},
+		},
+		{
+			Path: "north.matter.enable_time_sync",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.TimeSyncEnabled() != e.North.Matter.TimeSyncEnabled()
+			},
+		},
+		{
+			Path:    "north.matter.prefer_ipv4",
+			Differs: func(b, e *Config) bool { return b.North.Matter.PreferIPv4 != e.North.Matter.PreferIPv4 },
+		},
+		{
+			Path: "north.matter.dev_rotate_unique_ids",
+			Differs: func(b, e *Config) bool {
+				return b.North.Matter.DevRotateUniqueIDs != e.North.Matter.DevRotateUniqueIDs
+			},
+		},
+	}
+}
+
 // restSurfaceRestartRules covers the HTTP surfaces whose middleware chain and
 // mounts are decided exactly once, while the router is assembled: a middleware
 // that was not installed at assembly time cannot start running later, and one
@@ -264,6 +375,76 @@ func restSurfaceRestartRules() []RestartRule {
 			Differs: func(b, e *Config) bool {
 				return b.North.UI.IsEnabled() != e.North.UI.IsEnabled()
 			},
+		},
+		// Whether the REST + WebSocket surface is mounted at all is decided
+		// once, when the listener is assembled.
+		{
+			Path: "north.rest.enabled",
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.IsEnabled() != e.North.REST.IsEnabled()
+			},
+		},
+		// The OpenAPI document is read from this path while the validator is
+		// built, so pointing at a different spec needs a restart even when
+		// validation itself stays on.
+		{
+			Path:    "north.rest.openapi_spec_path",
+			Differs: func(b, e *Config) bool { return b.North.REST.OpenAPISpecPath != e.North.REST.OpenAPISpecPath },
+		},
+		// The span exporter is constructed during shared-infrastructure
+		// wiring; an endpoint added later collects nothing.
+		{
+			Path: "north.rest.tracing.otlp_endpoint",
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.Tracing.OTLPEndpoint != e.North.REST.Tracing.OTLPEndpoint
+			},
+		},
+		// The WebSocket replay ring is allocated with this capacity when the
+		// hub is created.
+		{
+			Path: "north.rest.ws.replay_capacity",
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.WS.ReplayCapacity != e.North.REST.WS.ReplayCapacity
+			},
+		},
+	}
+}
+
+// restSecurityRestartRules covers the two REST-side security controls that are
+// decided at router assembly. Both used to report "saved" for a change that
+// never happened, which is worse than an inert tuning knob: the operator
+// believes a control is protecting the surface while it is not.
+func restSecurityRestartRules() []RestartRule {
+	return []RestartRule{
+		// The rate limiter is built from the whole block while the router is
+		// assembled, and a disabled block installs no middleware at all — the
+		// same shape as the CORS rule. An operator who ticks the limiter on
+		// under a brute-force load otherwise gets a success response for a
+		// control that never starts gating a single request.
+		{
+			Path: "north.rest.rate_limit",
+			Fields: []string{
+				"north.rest.rate_limit.enabled",
+				"north.rest.rate_limit.requests_per_second",
+				"north.rest.rate_limit.burst",
+			},
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.RateLimit != e.North.REST.RateLimit
+			},
+		},
+		// The certificate RELOADER is built at boot only when both paths are
+		// set, and the listener is switched to TLS in the same step. The
+		// certificate BYTES are hot-reloaded through that reloader, but the
+		// paths themselves — and therefore HTTPS itself — are decided once. A
+		// silent no-op here leaves credentials travelling in the clear while
+		// the config surface shows TLS configured.
+		{
+			Path:    "north.rest.tls_cert_file",
+			Differs: func(b, e *Config) bool { return b.North.REST.TLSCertFile != e.North.REST.TLSCertFile },
+		},
+		{
+			Path:    "north.rest.tls_key_file",
+			Differs: func(b, e *Config) bool { return b.North.REST.TLSKeyFile != e.North.REST.TLSKeyFile },
 		},
 	}
 }
@@ -412,6 +593,26 @@ func authRestartRules() []RestartRule {
 				return b.North.REST.Auth.BearerAuthEnabled() != e.North.REST.Auth.BearerAuthEnabled()
 			},
 		},
+		// The OIDC client — issuer discovery, credentials, redirect URL and
+		// the role claim — is constructed once while the router is mounted and
+		// then lives for the process, so every field in the block is
+		// restart-required. The failure mode is worse than a deferred setting:
+		// an operator rotating a leaked client_secret is told the save took
+		// effect while the daemon keeps presenting the compromised one.
+		{
+			Path: "north.rest.auth.oidc",
+			Fields: []string{
+				"north.rest.auth.oidc.enabled",
+				"north.rest.auth.oidc.issuer",
+				"north.rest.auth.oidc.client_id",
+				"north.rest.auth.oidc.client_secret",
+				"north.rest.auth.oidc.redirect_url",
+				"north.rest.auth.oidc.role_claim",
+			},
+			Differs: func(b, e *Config) bool {
+				return b.North.REST.Auth.OIDC != e.North.REST.Auth.OIDC
+			},
+		},
 	}
 }
 
@@ -452,6 +653,113 @@ func alarmRestartRules() []RestartRule {
 			Differs: func(b, e *Config) bool { return b.Alarm.DuressVisibility != e.Alarm.DuressVisibility },
 		},
 	}
+}
+
+// southboundRestartRules covers the config the south-bound bring-up reads
+// once: the CCU metadata archives are loaded into the shared catalogues
+// during boot, and the reliability tunables are baked into each interface
+// client's retry and throttle stack while that client is constructed. A
+// central adopted at runtime is no exception — the orchestrator hands out
+// the config snapshot it was built with.
+func southboundRestartRules() []RestartRule {
+	return []RestartRule{
+		{
+			Path: "ccu_data",
+			Fields: []string{
+				"ccu_data.translations_path",
+				"ccu_data.easymode_path",
+			},
+			Differs: func(b, e *Config) bool { return b.CCUData != e.CCUData },
+		},
+		{
+			Path: "reliability",
+			Fields: []string{
+				"reliability.command_retry_initial_delay",
+				"reliability.command_throttle_inter_command_delay",
+			},
+			Differs: func(b, e *Config) bool { return b.Reliability != e.Reliability },
+		},
+	}
+}
+
+// persistenceRestartRules covers the values cache and the measurement-history
+// recorder. Both are wired once: the cache's enablement predicate, flush
+// ticker and per-central exclusions are captured during south-bound wiring,
+// and the recorder copies its whole settings block (retention tiers, flush
+// cadence, include/exclude globs, the push exporter and the energy tariff the
+// REST energy view renders) into the running instance at construction.
+//
+// The enablement gates compare their RESOLVED value: "unset" and the explicit
+// default mean the same thing to the daemon, and reporting a restart for that
+// difference would light the pending-restart banner for a save that changed
+// nothing.
+func persistenceRestartRules() []RestartRule {
+	return []RestartRule{
+		{
+			Path: "persistence.values_cache",
+			Fields: []string{
+				"persistence.values_cache.enabled",
+				"persistence.values_cache.flush_interval",
+				"persistence.values_cache.disabled_centrals",
+			},
+			Differs: func(b, e *Config) bool {
+				bv, ev := b.Persistence.ValuesCache, e.Persistence.ValuesCache
+				return orDefault(bv.Enabled, true) != orDefault(ev.Enabled, true) ||
+					bv.FlushInterval != ev.FlushInterval ||
+					!slices.Equal(bv.DisabledCentrals, ev.DisabledCentrals)
+			},
+		},
+		{
+			Path: "persistence.history",
+			Fields: []string{
+				"persistence.history.enabled",
+				"persistence.history.retention",
+				"persistence.history.retention_hourly",
+				"persistence.history.retention_daily",
+				"persistence.history.flush_interval",
+				"persistence.history.include",
+				"persistence.history.exclude",
+				"persistence.history.disabled_centrals",
+				"persistence.history.energy_price_per_kwh",
+				"persistence.history.energy_currency",
+				"persistence.history.export.enabled",
+				"persistence.history.export.kind",
+				"persistence.history.export.endpoint",
+				"persistence.history.export.org",
+				"persistence.history.export.bucket",
+				"persistence.history.export.token_env",
+			},
+			Differs: func(b, e *Config) bool {
+				return historyDiffers(b.Persistence.History, e.Persistence.History)
+			},
+		},
+	}
+}
+
+// historyDiffers compares two history blocks the way the recorder reads them:
+// the two enablement gates resolved, everything else by value. Comparing the
+// raw structs would flag "unset" against an explicit false as a change.
+func historyDiffers(b, e HistoryConfig) bool {
+	if b.HistoryFeatureEnabled() != e.HistoryFeatureEnabled() {
+		return true
+	}
+	if b.Retention != e.Retention || b.RetentionHourly != e.RetentionHourly ||
+		b.RetentionDaily != e.RetentionDaily || b.FlushInterval != e.FlushInterval {
+		return true
+	}
+	if !slices.Equal(b.Include, e.Include) || !slices.Equal(b.Exclude, e.Exclude) ||
+		!slices.Equal(b.DisabledCentrals, e.DisabledCentrals) {
+		return true
+	}
+	if b.EnergyPricePerKWh != e.EnergyPricePerKWh || b.EnergyCurrency != e.EnergyCurrency {
+		return true
+	}
+	if b.Export.ExportEnabled() != e.Export.ExportEnabled() {
+		return true
+	}
+	bx, ex := b.Export, e.Export
+	return bx.Kind != ex.Kind || bx.Endpoint != ex.Endpoint || bx.Org != ex.Org ||
+		bx.Bucket != ex.Bucket || bx.TokenEnv != ex.TokenEnv
 }
 
 // RestartRules returns the restart contract's rule table. Callers that only

@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
@@ -55,6 +56,13 @@ type auditOverlay struct {
 	// same failure makes GET /api/v1/config fail, so there is no in-UI repair
 	// path. The daemon surfaces it on /health rather than in one log line.
 	overlayErr error
+
+	// unroutableCentrals names the stored central rows left out of the
+	// assembled config because the callback router cannot match their name.
+	// Such a row predates the name allowlist; starting it would produce a CCU
+	// that looks healthy on every surface and never delivers an event, so the
+	// daemon skips it and reports the skip on /health.
+	unroutableCentrals []string
 
 	// yamlBase is the config as loaded from YAML/env, captured before
 	// OverlayInto mutates it with the DB-tier sections. Re-assembling the
@@ -213,15 +221,38 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		// effect. That is worth an error, not a warning: GET /api/v1/config
 		// fails the same way, so the operator has no in-UI repair path and
 		// needs the log (and the /health component recorded from ov) to find
-		// out at all. Validate unconditionally: the config the daemon is about
-		// to run on deserves the check whichever tier it came from.
+		// out at all.
 		if _, err := ov.configStore.OverlayInto(ctx, cfg); err != nil {
 			ov.overlayErr = err
 			logger.Error("configstore.overlay", slog.String("err", err.Error()),
 				slog.String("effect", "database config sections are not in effect; running on the config file"))
 		}
+		// A stored central whose name the callback router cannot match is
+		// left out of the assembled config, because bringing it up produces
+		// a CCU that connects, reports healthy and never delivers a single
+		// push event — every data point of that CCU stays unobserved for the
+		// life of the process. Names have been validated on write since the
+		// allowlist landed, so this can only be a row persisted by an older
+		// version; the operator repairs it by re-adding the CCU under a
+		// routable name. Error plus a /health component, because a warning
+		// line is not something anyone reads on an install that looks fine.
+		if names, err := ov.configStore.UnroutableCentralNames(ctx); err != nil {
+			logger.Warn("configstore.centrals.check", slog.String("err", err.Error()))
+		} else if len(names) > 0 {
+			ov.unroutableCentrals = names
+			logger.Error("configstore.centrals.unroutable",
+				slog.String("names", strings.Join(names, ",")),
+				slog.String("effect", "these CCUs are not started; their callback URL would be rejected, so they would receive no events"),
+				slog.String("repair", "remove and re-add the CCU with a name of letters, digits, \"-\" and \"_\""))
+		}
+		// The config the daemon is about to run on deserves the check
+		// whichever tier it came from. Error, not warning: an invalid value
+		// that survived into the running config is inert or misapplied, and
+		// the operator has no other signal that the tier they edited is not
+		// the tier in effect.
 		if err := cfg.Validate(); err != nil {
-			logger.Warn("configstore.overlay.validate", slog.String("err", err.Error()))
+			logger.Error("configstore.overlay.validate", slog.String("err", err.Error()),
+				slog.String("effect", "the daemon runs on a config that failed validation; the affected setting may not be in effect"))
 		}
 		// Replay the persisted audit history into the in-memory read
 		// buffer so GET /api/v1/audit surfaces past changes instead of

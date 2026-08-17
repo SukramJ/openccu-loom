@@ -1181,11 +1181,13 @@ type NorthREST struct {
 	Tracing TracingConfig `yaml:"tracing" json:"tracing" cfg:"expert"`
 	// TLSCertFile / TLSKeyFile, when both set, switch the REST + SPA
 	// listener to HTTPS. The same port serves the API and the SPA, so
-	// enabling TLS here secures both. PEM-encoded; the certificate is
-	// hot-reloaded on file change (and after an upload via
-	// POST /admin/tls/certificate) without a daemon restart. Empty
-	// (the default) keeps plain HTTP — correct behind a TLS-terminating
-	// reverse proxy (see PublicURL / CSRFSecure).
+	// enabling TLS here secures both. PEM-encoded. The certificate
+	// CONTENT is hot-reloaded on file change (and after an upload via
+	// POST /admin/tls/certificate) without a daemon restart; the PATHS
+	// are not — the reloader and the TLS listener are built at boot, so
+	// switching HTTPS on or off is restart-required (see restart.go).
+	// Empty (the default) keeps plain HTTP — correct behind a
+	// TLS-terminating reverse proxy (see PublicURL / CSRFSecure).
 	TLSCertFile string `yaml:"tls_cert_file" json:"tls_cert_file" cfg:"basic"`
 	TLSKeyFile  string `yaml:"tls_key_file" json:"tls_key_file" cfg:"basic"`
 }

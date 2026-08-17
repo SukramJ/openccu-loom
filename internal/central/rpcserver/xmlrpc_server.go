@@ -201,6 +201,16 @@ func (s *XMLRPCServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	centralName, ok := s.resolveCentralForPath(r.URL.Path)
 	if !ok {
 		s.errorCount.Add(1)
+		// Warn, not Debug: this is a callback the CCU delivered and the
+		// daemon threw away. A push channel that drops silently looks
+		// exactly like a quiet one — a central whose stored name is not a
+		// routable path segment answered 404 to every event with no trace at
+		// any level, so the CCU appeared healthy while nothing it sent
+		// arrived. Mirrors the BIN-RPC side's fault logging.
+		s.logger.Warn("xmlrpc callback: unroutable path, request dropped",
+			slog.String("path", r.URL.Path),
+			slog.String("remote", r.RemoteAddr),
+			slog.String("hint", "the path segment after /RPC2/ must match a registered central name"))
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -209,6 +219,9 @@ func (s *XMLRPCServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 	if handlers == nil {
 		s.errorCount.Add(1)
+		s.logger.Warn("xmlrpc callback: no central registered for path, request dropped",
+			slog.String("central", centralName),
+			slog.String("remote", r.RemoteAddr))
 		http.Error(w, "unknown central", http.StatusNotFound)
 		return
 	}

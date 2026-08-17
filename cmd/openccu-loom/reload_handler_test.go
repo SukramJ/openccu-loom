@@ -59,8 +59,11 @@ func TestHotReloadHandler_NoDiff_NothingLogged(t *testing.T) {
 	}
 }
 
-// TestHotReloadHandler_LoggingLevelChange verifies that a logging-level
-// diff is counted as a hot-reloadable field.
+// TestHotReloadHandler_LoggingLevelChange verifies that a logging-level diff
+// is reported as restart-required rather than counted as applied. The logger
+// stack is built once and installed as the process default; the handler has no
+// path to the level registry, so a record claiming the swap happened told the
+// operator their new level was live while every line kept the old one.
 func TestHotReloadHandler_LoggingLevelChange(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
@@ -73,11 +76,11 @@ func TestHotReloadHandler_LoggingLevelChange(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "daemon.reload.logging") {
-		t.Errorf("expected daemon.reload.logging in log; got:\n%s", out)
+	if !strings.Contains(out, "field=logging") {
+		t.Errorf("expected a restart_required record for logging; got:\n%s", out)
 	}
-	if !strings.Contains(out, "hot_reloaded_fields=1") {
-		t.Errorf("expected hot_reloaded_fields=1; got:\n%s", out)
+	if !strings.Contains(out, "hot_reloaded_fields=0") {
+		t.Errorf("expected hot_reloaded_fields=0 — nothing applies the new level; got:\n%s", out)
 	}
 }
 

@@ -107,8 +107,11 @@ north:
     # tls_cert_file: "/etc/openccu-loom/tls/cert.pem"
     # tls_key_file:  "/etc/openccu-loom/tls/key.pem"
     #                       # Set BOTH to serve the REST API + SPA over HTTPS on the
-    #                       # listen port. PEM-encoded; the certificate hot-reloads on
-    #                       # change or after POST /admin/tls/certificate — no restart.
+    #                       # listen port. PEM-encoded; the certificate CONTENT
+    #                       # hot-reloads on change or after POST
+    #                       # /admin/tls/certificate — no restart. Setting or
+    #                       # clearing the PATHS is restart-required: the TLS
+    #                       # listener is built at boot.
     #                       # Leave unset behind a TLS-terminating reverse proxy.
     # tracing:
     #   otlp_endpoint: ""   # OTLP/HTTP collector base URL, e.g. http://collector:4318.

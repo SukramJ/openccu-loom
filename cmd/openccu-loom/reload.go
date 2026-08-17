@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -23,27 +24,24 @@ import (
 //
 // Hot-reloadable matrix:
 //
-//   - logging.level         → swaps the slog handler at runtime
-//   - logging.format        → swaps the slog handler at runtime
 //   - north.mqtt.*          → tears down + rebuilds the MQTT stack atomically
 //     (broker URL, client_id, credentials, topic base, discovery toggles,
 //     payload format, enabled flag — see [mqttDiffersStructurally])
 //
-// Restart-required (any change in these fields logs and is ignored):
+// The logging block is NOT in that matrix. It used to be counted as applied
+// and logged as swapped, but the logger stack is built once and installed as
+// the process default, and nothing here reaches the level registry that could
+// change it — so the record said "applied" and the daemon kept logging at the
+// level it booted with. It is restart-required like everything else the rule
+// table names; the runtime control for log levels is the diagnostics endpoint.
 //
-//   - centrals: only an in-place modification of a central present in both
-//     the previous and next config (same name, changed host / credentials /
-//     interfaces / …). Adding or removing a central is a live
-//     orchestrator operation and is not restart-required.
-//   - callback.host / port / bin_port (callback servers bind once)
-//   - north.rest.listen / north.mqtt.listen
-//   - north.rest.public_url (add-on hint file is written once at boot)
-//   - north.rest.openapi_validate (router middleware is fixed at boot)
-//   - north.rest.cors (the allowed-origin list is captured when the CORS
-//     middleware is constructed at router assembly, and an empty list
-//     installs no middleware at all)
-//   - data_dir (SQLite / backup paths committed at boot)
-//   - locale, auth, oidc
+// Restart-required: everything [config.RestartRequiredDiff] reports —
+// the daemon's single source of truth for "changing this needs a restart",
+// shared with the REST save response and the restart-pending banner. Each
+// reported path logs a `daemon.reload.restart_required` warning and is
+// otherwise ignored. Keeping a second, hand-written list here is what let a
+// YAML edit report success for a setting nothing applied, so the punch-list
+// is derived, never enumerated.
 //
 // Empty configPath disables the watcher entirely (test mode + the
 // `--config` un-supplied path).
@@ -99,15 +97,6 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 		deps.SetCurrentConfig(next)
 		applied := 0
 		restart := 0
-
-		// Hot-reloadable: logging level + format.
-		if prev.Logging.Level != next.Logging.Level || prev.Logging.Format != next.Logging.Format {
-			applied++
-			logger.Info("daemon.reload.logging",
-				slog.String("level", next.Logging.Level),
-				slog.String("format", next.Logging.Format),
-				slog.String("note", "swap takes effect on next slog.Default() use; existing handlers keep their level until rebuild"))
-		}
 
 		// Hot-reloadable: MQTT. The supervisor owns the rebuild
 		// sequence (new stack starts before the old one tears down,
@@ -173,48 +162,31 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 
 		// Restart-required diffs — log each so the operator has a
 		// concrete punch-list of fields whose edit was *seen* but not
-		// *applied*. Reading the diff is intentionally explicit (no
-		// reflection): every entry below corresponds to a documented
-		// boot-time-only field.
-		if prev.DataDir != next.DataDir {
-			restart++
-			logger.Warn("daemon.reload.restart_required", slog.String("field", "data_dir"))
-		}
-		if prev.Locale != next.Locale {
-			restart++
-			logger.Warn("daemon.reload.restart_required", slog.String("field", "locale"))
-		}
-		if prev.Callback != next.Callback {
-			restart++
-			logger.Warn("daemon.reload.restart_required", slog.String("field", "callback"))
-		}
-		if prev.North.REST.Listen != next.North.REST.Listen {
-			restart++
-			logger.Warn("daemon.reload.restart_required", slog.String("field", "north.rest.listen"))
-		}
-		if prev.North.REST.PublicURL != next.North.REST.PublicURL {
-			restart++
-			logger.Warn("daemon.reload.restart_required", slog.String("field", "north.rest.public_url"))
-		}
-		if prev.North.REST.OpenAPIValidateEnabled() != next.North.REST.OpenAPIValidateEnabled() {
-			restart++
-			logger.Warn("daemon.reload.restart_required", slog.String("field", "north.rest.openapi_validate"))
-		}
-		// Add/remove of a central is a live orchestrator operation now, so
-		// only an in-place modification of a central present in both the
-		// previous and next config (same name, different fields) is
-		// restart-required — a pure count change (add or remove) is not.
-		if config.CentralsModifiedInPlace(prev.Centrals, next.Centrals) {
-			restart++
-			logger.Warn("daemon.reload.restart_required",
-				slog.String("field", "centrals"),
-				slog.Int("prev_count", len(prev.Centrals)),
-				slog.Int("next_count", len(next.Centrals)))
+		// *applied*. The punch-list comes from [config.RestartRequiredDiff],
+		// the same table the REST save response and the restart-pending
+		// banner read. It used to be a hand-written block of seven
+		// comparisons against a rule table many times that size: a
+		// hand-edited config.yaml that switched the Matter bridge on or the
+		// Basic-auth gate off logged "reloaded, 0 restart-required fields"
+		// while neither change existed anywhere but in the file.
+		pending := config.RestartRequiredDiff(prev, next)
+		restart = len(pending)
+		for _, field := range pending {
+			logger.Warn("daemon.reload.restart_required", slog.String("field", field))
 		}
 
-		logger.Info("daemon.reload.applied",
+		// The summary carries the field list so a single record answers
+		// "what did the daemon do with my edit"; at Warn when anything is
+		// pending, because an Info line reading "applied" is what an
+		// operator takes as confirmation.
+		summary := logger.Info
+		if restart > 0 {
+			summary = logger.Warn
+		}
+		summary("daemon.reload.applied",
 			slog.Int("hot_reloaded_fields", applied),
-			slog.Int("restart_required_fields", restart))
+			slog.Int("restart_required_fields", restart),
+			slog.String("restart_required", strings.Join(pending, ",")))
 		return nil
 	}
 }

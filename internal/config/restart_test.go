@@ -661,3 +661,67 @@ func TestRestartRequiredFieldPaths_DerivedFromRules(t *testing.T) {
 		}
 	}
 }
+
+// TestRestartRequiredDiff_OptInGatesTurnedOn covers the three gates whose
+// "unset" and "explicit false" mean the same thing. The mechanical guard in
+// tests/contract cannot express them: it mutates a nil pointer to its zero
+// value, which changes the encoding and not the state. The operator action
+// that matters is turning the feature ON, and each of these features is wired
+// exactly once — the history recorder and its push exporter when the
+// persistence stack is built, the TimeSynchronization cluster when the Matter
+// root endpoint is assembled — so switching one on has no effect until the
+// next boot.
+func TestRestartRequiredDiff_OptInGatesTurnedOn(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		rule string
+		on   func(c *Config)
+	}{
+		{
+			name: "history recorder",
+			rule: "persistence.history",
+			on:   func(c *Config) { on := true; c.Persistence.History.Enabled = &on },
+		},
+		{
+			name: "history push exporter",
+			rule: "persistence.history",
+			on:   func(c *Config) { on := true; c.Persistence.History.Export.Enabled = &on },
+		},
+		{
+			name: "matter time sync cluster",
+			rule: "north.matter.enable_time_sync",
+			on:   func(c *Config) { on := true; c.North.Matter.EnableTimeSync = &on },
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			boot := baseConfig()
+			eff := clone(boot)
+			tc.on(eff)
+			if got := RestartRequiredDiff(boot, eff); !slices.Contains(got, tc.rule) {
+				t.Errorf("turning on %s: diff = %v, want it to contain %q", tc.name, got, tc.rule)
+			}
+		})
+	}
+}
+
+// TestRestartRequiredDiff_UnsetOptInGateIsNotAPhantomRestart is the companion:
+// writing the documented default explicitly must not light the restart banner,
+// because nothing about the running daemon differs.
+func TestRestartRequiredDiff_UnsetOptInGateIsNotAPhantomRestart(t *testing.T) {
+	t.Parallel()
+
+	boot := baseConfig()
+	eff := clone(boot)
+	off := false
+	eff.Persistence.History.Enabled = &off
+	eff.Persistence.History.Export.Enabled = &off
+	eff.North.Matter.EnableTimeSync = &off
+
+	if got := RestartRequiredDiff(boot, eff); len(got) != 0 {
+		t.Errorf("writing an off gate explicitly reported %v — the banner would stay lit for a save that changed nothing", got)
+	}
+}
