@@ -106,10 +106,11 @@ curl -s -H "Authorization: Bearer $TOKEN" http://host:8119/info \
 
 ## 2. The tool surface
 
-Nineteen tools, in two tiers: 16 read tools + 3 write tools. **Read
+Twenty-five tools, in two tiers: 19 read tools + 6 write tools. **Read
 tools** are always registered (each gated on its backing subsystem
 being wired). **Write tools** are registered only when
-`allow_writes: true`.
+`allow_writes: true` — and that flag includes arming and disarming the
+alarm system; see §4.
 
 Tool names follow one taxonomy across the whole surface: `list_<plural>`
 enumerates like entities, `get_<singular>` fetches one record or an
@@ -142,6 +143,9 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_incidents` | `central_name?`, `limit?` (default 50, max 1000) | Recent reliability incident journal (circuit-breaker trips, ping/pong mismatches, retry exhaustion), newest first. Registered only when the daemon's `Incidents` dependency is wired. |
 | `get_health` | — | Overall daemon status + per-component status (CCU connectivity, subsystems). |
 | `get_system_info` | `central_name?` | Daemon version, plus per-central program/sysvar counts and CCU firmware-update state. |
+| `list_alarm_zones` | — | Every alarm zone with its arm state, active countdown and the number of latched motion detectors. The `id` is what `arm_alarm_zone` / `disarm_alarm_zone` take. Registered only when the alarm domain is wired. |
+| `list_triggered_motion` | `zone_id?` | The motion detectors that are currently latched and can be cleared. Omit `zone_id` for every zone. Registered only when the alarm domain is wired. |
+| `get_security_status` | — | Overall Security & Safety state: the folded severity, the hazard classes that have known sources, and the active faults. Registered only when the security domain is wired. |
 
 The central-spanning read tools (`central_name?`) span every configured
 central when `central_name` is omitted, or scope to the named one when
@@ -154,6 +158,9 @@ set — the same multi-CCU rule the rest of the surface follows.
 | `set_datapoint` | `central_name`, `address` (channel), `parameter` (e.g. `STATE`, `LEVEL`), `value` | Writes a value to a device data point. Recorded to the audit log with a `via mcp` note. |
 | `write_paramset` | `central_name`, `address` (channel), `key` (`MASTER`/`VALUES`), `values` (map) | Writes a paramset. Recorded to the audit log. |
 | `trigger_program` | `central_name`, `program_id` (CCU ISE object id) | Runs a CCU automation program. Recorded to the audit log. |
+| `arm_alarm_zone` | `zone_id`, `mode` (`perimeter`, `full`, `night`, `vacation`, `custom`) | Arms one alarm zone. Fails when a sensor blocks the arm — read `list_alarm_zones` first. |
+| `disarm_alarm_zone` | `zone_id` | Disarms one alarm zone. Zones whose policy requires a disarm code cannot be disarmed from here. |
+| `reset_motion` | `zone_id?` | Clears the latched motion detectors of one zone, or of every zone when `zone_id` is omitted. |
 
 Notes:
 
@@ -253,9 +260,17 @@ The server is designed to be **safe to enable**:
 1. `enabled: true` alone → **read-only**. The agent can inventory
    devices, read paramsets, inspect health, and read the audit log, but
    cannot change anything on the CCU.
-2. `allow_writes: true` *in addition* → the three write tools are
+2. `allow_writes: true` *in addition* → the six write tools are
    registered. This is a **separate, deliberate decision** — enabling
    MCP never silently grants write access.
+
+   Three of those six act on devices (`set_datapoint`, `write_paramset`,
+   `trigger_program`); the other three act on the **alarm system**
+   (`arm_alarm_zone`, `disarm_alarm_zone`, `reset_motion`). There is no
+   separate opt-in for the alarm tier — the one flag grants both, so an
+   agent that can switch a lamp can also disarm a zone. Zones whose
+   policy requires a disarm code are still refused, which is the only
+   distinction the daemon draws here.
 
 Why this matters for agents: an LLM exploring your home should be able
 to *answer questions* without any risk of toggling a real device. You
@@ -267,10 +282,12 @@ shows exactly what the agent changed and when.
 
 > **Operational guidance for real CCUs.** A write tool drives the same
 > `setValue` / paramset path as the REST API — i.e. it actuates real,
-> in-use devices. Treat `allow_writes: true` as you would handing an
-> automation script write access to your home. Start read-only, scope
-> the API token tightly, and turn writes on only against a CCU/devices
-> you're comfortable letting an agent move.
+> in-use devices — and the alarm write tools drive the same engine the
+> panel and the SPA drive. Treat `allow_writes: true` as you would
+> handing an automation script write access to your home *and* to your
+> alarm system. Start read-only, scope the API token tightly, and turn
+> writes on only against a CCU/devices you're comfortable letting an
+> agent move.
 
 ---
 
