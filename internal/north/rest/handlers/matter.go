@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/diagevent"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/setup"
@@ -133,13 +134,21 @@ var ErrBridgeTopologyNotReady = errors.New("matter: no bridged endpoints yet —
 
 // MatterCommissioningWindow opens a Matter commissioning window via
 // the bridge. When publisher is non-nil the handler emits
-// `matter.commissioning_window_opened` after a successful open.
-//
-// Audit recording for the open is wired through the
-// [MatterCommissioningWindowAudit] middleware in the daemon — the
-// handler itself stays publisher-only so its existing test surface
-// (15+ tests in matter_test.go) does not need a third parameter.
-func MatterCommissioningWindow(opener MatterCommissioningOpener, publisher MatterEventPublisher) http.HandlerFunc {
+// `matter.commissioning_window_opened` after a successful open. Audit
+// records the mutation when recorder is wired (only the fact of the
+// open + duration; never the passcode) — mirrors the close handler's
+// [MatterCommissioningClose] recording.
+func MatterCommissioningWindow(opener MatterCommissioningOpener, publisher MatterEventPublisher, recorder audit.Recorder) http.HandlerFunc {
+	return matterOpenCommissioningWindow(opener, publisher, recorder, audit.ActionMatterCommissioning)
+}
+
+// matterOpenCommissioningWindow is the shared implementation behind
+// [MatterCommissioningWindow] and [MatterShare]: opening a window is
+// identical wire behaviour for both routes, but each records under its
+// own audit action so the change log distinguishes an operator opening
+// pairing for the SPA's own onboarding flow from explicitly sharing the
+// bridge with a second controller.
+func matterOpenCommissioningWindow(opener MatterCommissioningOpener, publisher MatterEventPublisher, recorder audit.Recorder, action audit.Action) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if opener == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -200,6 +209,8 @@ func MatterCommissioningWindow(opener MatterCommissioningOpener, publisher Matte
 				Discriminator:   response.Discriminator,
 				DurationSeconds: response.DurationSeconds,
 			})
+		recordMatterAudit(recorder, req, action,
+			fmt.Sprintf("window opened, duration_seconds=%d", duration))
 		JSON(w, http.StatusOK, response)
 	}
 }

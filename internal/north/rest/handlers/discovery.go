@@ -173,6 +173,14 @@ func ListIgnoredCCUs(d *DiscoveryDeps) http.HandlerFunc {
 				out = list
 			}
 		}
+		// The store returns a nil slice (not an empty one) when there are
+		// no rows to scan, which would otherwise overwrite the safe
+		// default above and marshal as JSON null instead of []. The
+		// declared response schema is an array; a client that iterates
+		// it must not have to special-case an empty result.
+		if out == nil {
+			out = []sqlite.IgnoredCCU{}
+		}
 		JSON(w, http.StatusOK, out)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"unicode"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
@@ -295,7 +296,7 @@ func TestMatterCommissioningWindow_NilOpener_Returns503(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(nil, nil).ServeHTTP(w, req)
+	MatterCommissioningWindow(nil, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
@@ -311,7 +312,7 @@ func TestMatterCommissioningWindow_InvalidBody_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader("not-json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(opener, nil).ServeHTTP(w, req)
+	MatterCommissioningWindow(opener, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
@@ -325,7 +326,7 @@ func TestMatterCommissioningWindow_DurationTooShort_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(opener, nil).ServeHTTP(w, req)
+	MatterCommissioningWindow(opener, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for too-short duration, got %d body=%s", w.Code, w.Body.String())
@@ -339,7 +340,7 @@ func TestMatterCommissioningWindow_DurationTooLong_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(opener, nil).ServeHTTP(w, req)
+	MatterCommissioningWindow(opener, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for too-long duration, got %d body=%s", w.Code, w.Body.String())
@@ -356,7 +357,7 @@ func TestMatterCommissioningWindow_DurationZero_UsesDefault900(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(opener, nil).ServeHTTP(w, req)
+	MatterCommissioningWindow(opener, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for zero duration (default 900), got %d body=%s", w.Code, w.Body.String())
@@ -377,7 +378,7 @@ func TestMatterCommissioningWindow_CommissioningInProgress_Returns409(t *testing
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(opener, nil).ServeHTTP(w, req)
+	MatterCommissioningWindow(opener, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d body=%s", w.Code, w.Body.String())
@@ -391,7 +392,7 @@ func TestMatterCommissioningWindow_OpenerError_Returns500(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(opener, nil).ServeHTTP(w, req)
+	MatterCommissioningWindow(opener, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
@@ -415,7 +416,7 @@ func TestMatterCommissioningWindow_HappyPath_Returns200(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	MatterCommissioningWindow(opener, nil).ServeHTTP(w, req)
+	MatterCommissioningWindow(opener, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -438,5 +439,42 @@ func TestMatterCommissioningWindow_HappyPath_Returns200(t *testing.T) {
 	}
 	if resp.ManualCode != "12345678901" {
 		t.Errorf("manual_code: got %q", resp.ManualCode)
+	}
+}
+
+// TestMatterCommissioningWindow_HappyPath_RecordsAudit goes through the
+// real handler — not [recordMatterAudit] directly — so it proves the open
+// actually reaches the audit trail rather than merely that the helper can
+// write one. Before this pin, opening a window (or POST /matter/share) left
+// no audit row at all: the fabric revoke, force-sync, factory-reset and the
+// window CLOSE all recorded, but the open did not.
+func TestMatterCommissioningWindow_HappyPath_RecordsAudit(t *testing.T) {
+	t.Parallel()
+	opener := &fakeCommissioningOpener{result: MatterCommissioningWindowResult{
+		Discriminator: 0xABC,
+		Passcode:      12345678,
+		QRCode:        "MT:Y.GHY00-0007217580",
+		ManualCode:    "12345678901",
+	}}
+	rec := &captureRecorder{}
+	body := `{"duration_seconds":300}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/commissioning/window", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	MatterCommissioningWindow(opener, nil, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d: %+v", len(rec.entries), rec.entries)
+	}
+	if rec.entries[0].Action != audit.ActionMatterCommissioning {
+		t.Errorf("action = %q, want %q", rec.entries[0].Action, audit.ActionMatterCommissioning)
+	}
+	// The passcode must never reach the audit trail — it is a credential
+	// that commissions the bridge onto a new fabric.
+	if strings.Contains(rec.entries[0].Note, "12345678") {
+		t.Errorf("audit note leaks the passcode: %q", rec.entries[0].Note)
 	}
 }

@@ -636,6 +636,10 @@ paths:
         slow and unreliable). Admin-gated and audited. `?central=` selects
         the target CCU (optional when only one is configured).
       tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       parameters:
         - name: central
           in: query
@@ -732,6 +736,10 @@ paths:
         Edits an existing heating group (name, members, "operate only via
         group" flag) through the jpages save path. Admin-gated and audited.
       tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       parameters:
         - name: central
           in: query
@@ -757,6 +765,10 @@ paths:
         Deletes a heating group through the jpages delete path. Admin-gated
         and audited.
       tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       parameters:
         - name: central
           in: query
@@ -1792,6 +1804,7 @@ paths:
       security:
         - basicAuth: []
         - bearerAuth: []
+        - openIdConnect: [admin]
       parameters:
         - in: path
           name: central
@@ -1842,6 +1855,7 @@ paths:
       security:
         - basicAuth: []
         - bearerAuth: []
+        - openIdConnect: [admin]
       parameters:
         - in: path
           name: central
@@ -1874,6 +1888,7 @@ paths:
       security:
         - basicAuth: []
         - bearerAuth: []
+        - openIdConnect: [admin]
       parameters:
         - in: path
           name: central
@@ -1906,6 +1921,7 @@ paths:
       security:
         - basicAuth: []
         - bearerAuth: []
+        - openIdConnect: [admin]
       parameters:
         - in: path
           name: central
@@ -2844,8 +2860,7 @@ paths:
               type: object
               properties:
                 team:
-                  type: string
-                  nullable: true
+                  type: ["string", "null"]
                   description: The team channel address to join; null/empty resets to the default team.
       responses:
         "202":
@@ -3229,6 +3244,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/BadRequest" }
+        "423": { $ref: "#/components/responses/Locked" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/calc-dps:
@@ -4408,6 +4424,7 @@ paths:
       security:
         - basicAuth: []
         - bearerAuth: []
+        - openIdConnect: [admin]
       requestBody:
         required: true
         content:
@@ -4614,6 +4631,10 @@ paths:
       operationId: listAudit
       summary: Recent change history (FIFO buffer)
       tags: [audit]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       parameters:
         - in: query
           name: device
@@ -4779,6 +4800,10 @@ paths:
         clears the override so it falls back to the glob policy. Toggling
         affects only future samples; existing rows are untouched. Part of
         the opt-in history feature; 503 when disabled.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
       requestBody:
         required: true
         content:
@@ -5313,7 +5338,9 @@ paths:
           description: Capture list
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
   /diagnostics/capture/{id}:
     get:
       operationId: getCapture
@@ -6195,6 +6222,10 @@ paths:
         and manual codes derived from it, so anyone holding it can commission
         the bridge into their own fabric while a window is open.
       tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
       responses:
         "200":
           description: OK
@@ -6262,10 +6293,11 @@ paths:
       description: |
         Returns the static descriptor of every config field the daemon
         exposes: which sections exist, the Go type of each field, and
-        whether changing a field requires a daemon restart. No
-        authentication required — the schema carries no secret values.
+        whether changing a field requires a daemon restart. The schema
+        carries no secret values, but the route still sits behind the
+        standard authenticated-session gate like every other /config/*
+        route — any authenticated role may read it.
       tags: [config-admin]
-      security: []
       responses:
         "200":
           description: OK
@@ -6898,7 +6930,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/AlarmZone" }
+            schema: { $ref: "#/components/schemas/AlarmZoneCreate" }
       responses:
         "201":
           description: Created
@@ -8832,9 +8864,9 @@ components:
               properties:
                 IsReachable: { type: boolean }
                 LastUpdated: { type: string, format: date-time }
-                BatteryLevel: { type: integer, nullable: true }
-                LowBattery: { type: boolean, nullable: true }
-                SignalStrength: { type: integer, nullable: true }
+                BatteryLevel: { type: ["integer", "null"] }
+                LowBattery: { type: ["boolean", "null"] }
+                SignalStrength: { type: ["integer", "null"] }
             channels:
               type: array
               items: { $ref: "#/components/schemas/ChannelSummary" }
@@ -9170,6 +9202,14 @@ components:
           description: |
             Descriptor UNIT string ("°C", "% rF", "lx", "Wh", ...)
             as the CCU declares it. Empty when none.
+        multiplier:
+          type: number
+          description: |
+            Converts `value` (the raw wire value) into the unit `unit`
+            names — e.g. a LEVEL data point reports `value` in 0.0-1.0
+            with `unit` "%", so a client must multiply by `multiplier`
+            (100) to render "42 %" instead of "0.42 %". Only present
+            for a non-trivial multiplier; absent means 1.
         min: {}
         max: {}
         default: {}
@@ -9550,8 +9590,7 @@ components:
         channel: { type: string }
         parameter: { type: string }
         record:
-          type: boolean
-          nullable: true
+          type: ["boolean", "null"]
           description: true/false forces recording on/off; null clears the override.
     EnergyBucket:
       type: object
@@ -10451,6 +10490,12 @@ components:
           type: string
           enum: [mappable, partially_mappable, unmappable]
         device_type: { type: integer, minimum: 0, maximum: 65535 }
+        device_type_label:
+          type: string
+          description: |
+            Operator-facing Matter device-type name for `device_type`
+            (e.g. "On/Off Light"). Empty when `device_type` is zero
+            (measurement rides on a host endpoint).
         clusters:
           type: array
           items: { type: integer }
@@ -10516,7 +10561,11 @@ components:
         central_name: { type: string }
         patterns:
           type: array
-          items: { type: string, description: "MODEL:CHANNEL:PARAMETER pattern; bare names map to *:*:NAME" }
+          items:
+            {
+              type: string,
+              description: "PARAMETER (global un-ignore, any model/channel) or PARAMETER:PARAMSET@MODEL:CHANNEL (fully-qualified entry)",
+            }
 
     UnIgnoreUpdateResponse:
       type: object
@@ -11781,7 +11830,9 @@ components:
           type: boolean
           description: Whether changing this field requires a daemon restart to take effect.
         default:
-          nullable: true
+          # No `type` here on purpose: this field's shape follows `go_type`
+          # (string, bool, number, …) and an empty schema already admits
+          # every type including null — OpenAPI 3.1 has no `nullable` keyword.
           description: |
             The consumer-facing default value for this field, as emitted by
             the schema handler. Type follows the field's `go_type` (string,
@@ -12666,7 +12717,7 @@ components:
 
     EditSessionRequest:
       type: object
-      required: [key, token]
+      required: [key]
       description: >-
         Identifies a live edit session on the heartbeat and close routes.
         The token is what proves ownership; a request that omits it is
@@ -12903,6 +12954,23 @@ components:
         own arm state, sensor set, and output set.
       properties:
         id: { type: string }
+        name: { type: string }
+        position:
+          type: integer
+          description: Display ordering hint for the SPA zone list.
+        config:
+          $ref: "#/components/schemas/AlarmZoneConfig"
+
+    AlarmZoneCreate:
+      type: object
+      required: [name]
+      description: >-
+        Request body of POST /alarm/zones. Unlike [AlarmZone], `id` is not
+        required: the server always mints its own id
+        (uuid.NewString()) and ignores one sent in the body, so a
+        REST-conventional client that omits it is not rejected before the
+        handler ever runs.
+      properties:
         name: { type: string }
         position:
           type: integer

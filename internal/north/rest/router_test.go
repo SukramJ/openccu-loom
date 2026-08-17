@@ -1354,6 +1354,27 @@ func TestEventBusTapOutlivesTheGlobalRequestTimeout(t *testing.T) {
 	}
 }
 
+// TestFleetSnapshotNDJSONRouteIsExemptFromTheRequestDeadline pins the fix
+// directly against the literal path, independent of streamingPaths'
+// current contents: writeSnapshotNDJSON (internal/north/rest/handlers/
+// snapshot.go) flushes one line per interface/device/channel/data_point/
+// room/function/program/sysvar for the whole fleet, sharing the same
+// http.Flusher-per-line streaming pattern as the log tail and event-bus
+// tap this exemption already covers. The query string is asserted too —
+// r.URL.Path never includes it, so the exemption must key on path alone.
+func TestFleetSnapshotNDJSONRouteIsExemptFromTheRequestDeadline(t *testing.T) {
+	t.Parallel()
+	var gotDeadline bool
+	probe := timeoutExceptStreaming(time.Minute)(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+		_, gotDeadline = req.Context().Deadline()
+	}))
+	probe.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?ndjson=1&include=data_points", http.NoBody))
+	if gotDeadline {
+		t.Error("NDJSON fleet snapshot must be exempt from the router-wide request deadline, like the other streaming routes")
+	}
+}
+
 // TestRequestDeadlineAppliesToEveryRouteButTheStreams is the control for
 // TestLogStreamOutlivesTheGlobalRequestTimeout: exempting the long-lived
 // responses must not exempt the rest of the API from the deadline.

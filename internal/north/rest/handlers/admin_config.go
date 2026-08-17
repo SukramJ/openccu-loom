@@ -115,10 +115,16 @@ var consumerDefaults = map[string]any{
 	"north.rest.auth.basic_enabled":   true,
 	"north.rest.auth.bearer_enabled":  true,
 	"north.rest.auth.oidc.role_claim": "role",
-	// CCU metadata archives — paths the embedded extracts fall back
-	// to when the FS-side bundle is absent.
-	"ccu_data.translations_path": "./var/ccu_data/translation_extract.json.gz",
-	"ccu_data.easymode_path":     "./var/ccu_data/easymode_extract.json.gz",
+	// ccu_data.translations_path / ccu_data.easymode_path deliberately have
+	// no entry here: loadTranslations/loadEasymode (cmd/openccu-loom/
+	// daemon_ccudata.go) use the configured path only when non-empty and
+	// otherwise call the *Embedded loader directly — there is no
+	// filesystem fallback path to show as a placeholder. The help text
+	// (config.help.ccu_data.translations_path / .easymode_path) already
+	// states the real default in words ("the embedded archive bundled
+	// with the binary"); a fabricated './var/ccu_data/...' placeholder
+	// here led operators to type a path that does not exist on a normal
+	// install.
 	// Alarm — see internal/config/config.go AlarmConfig / applyDefaults.
 	"alarm.default_siren_seconds":             180,
 	"alarm.max_acoustic_per_incident_seconds": 900,

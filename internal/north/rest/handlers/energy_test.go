@@ -292,6 +292,50 @@ func TestFoldEnergyRows_CounterResetNeverNegative(t *testing.T) {
 	}
 }
 
+// TestFoldEnergyRows_CounterResetWithinBucketRecoversPreResetPeakViaMax
+// pins the fix for a reset-then-rise inside one bucket: 100 -> 150 (rise
+// 50) -> reset to 0 -> 20 (rise 20 since the reset). The rollup only
+// retains first=100, last=20, max=150 — without consulting max the bucket
+// would report consumed_wh=20 and silently drop the pre-reset 50.
+func TestFoldEnergyRows_CounterResetWithinBucketRecoversPreResetPeakViaMax(t *testing.T) {
+	t.Parallel()
+	ts := bucketTS(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	rows := []EnergyRawRow{
+		{ChannelAddress: "DEV1:4", Parameter: "ENERGY_COUNTER", BucketTS: ts, First: 100, Last: 20, Max: 150},
+	}
+	resp := FoldEnergyRows(EnergyQuery{Group: "day"}, rows, nil)
+	b := resp.Devices[0].Buckets[0]
+	if b.ConsumedWh != 70 {
+		t.Errorf("consumed_wh = %v, want 70 ((max-first)+last = (150-100)+20)", b.ConsumedWh)
+	}
+	if !b.Reset {
+		t.Errorf("reset = false, want true")
+	}
+	if resp.Devices[0].TotalConsumedWh != 70 {
+		t.Errorf("device range total = %v, want 70 to carry the same recovered peak", resp.Devices[0].TotalConsumedWh)
+	}
+}
+
+// TestFoldEnergyRows_CounterResetWithoutMaxStaysNonNegative guards the
+// degrade path: a store that has not backfilled max (or genuinely has none
+// higher than first) must still produce a safe, non-negative delta rather
+// than going negative from (max-first).
+func TestFoldEnergyRows_CounterResetWithoutMaxStaysNonNegative(t *testing.T) {
+	t.Parallel()
+	ts := bucketTS(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	rows := []EnergyRawRow{
+		{ChannelAddress: "DEV1:4", Parameter: "ENERGY_COUNTER", BucketTS: ts, First: 5000, Last: 120, Max: 0},
+	}
+	resp := FoldEnergyRows(EnergyQuery{Group: "day"}, rows, nil)
+	b := resp.Devices[0].Buckets[0]
+	if b.ConsumedWh != 120 {
+		t.Errorf("consumed_wh = %v, want 120 (max<first clamped to 0 rise)", b.ConsumedWh)
+	}
+	if b.ConsumedWh < 0 {
+		t.Fatalf("consumed_wh must never be negative, got %v", b.ConsumedWh)
+	}
+}
+
 func TestFoldEnergyRows_FeedInSameDeltaLogic(t *testing.T) {
 	t.Parallel()
 	ts := bucketTS(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))

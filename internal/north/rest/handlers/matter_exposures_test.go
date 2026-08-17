@@ -565,10 +565,41 @@ func TestMatterShare_NilOpener_Returns503(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/share", http.NoBody)
 	w := httptest.NewRecorder()
-	MatterShare(nil, nil).ServeHTTP(w, req)
+	MatterShare(nil, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestMatterShare_HappyPath_RecordsAuditUnderShareAction pins that
+// POST /matter/share records under audit.ActionMatterShare rather than
+// audit.ActionMatterCommissioning — the two routes open an identical
+// window but are distinct operator actions in the change log ("opened
+// pairing" vs. "shared the bridge with a second controller"), and the
+// action constant is how a reader of the audit trail tells them apart.
+func TestMatterShare_HappyPath_RecordsAuditUnderShareAction(t *testing.T) {
+	t.Parallel()
+	opener := &fakeCommissioningOpener{result: MatterCommissioningWindowResult{
+		Discriminator: 0xABC,
+		Passcode:      12345678,
+		QRCode:        "MT:Y.GHY00-0007217580",
+		ManualCode:    "12345678901",
+	}}
+	rec := &captureRecorder{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/matter/share", strings.NewReader(`{"duration_seconds":300}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	MatterShare(opener, nil, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d: %+v", len(rec.entries), rec.entries)
+	}
+	if rec.entries[0].Action != audit.ActionMatterShare {
+		t.Errorf("action = %q, want %q", rec.entries[0].Action, audit.ActionMatterShare)
 	}
 }
 

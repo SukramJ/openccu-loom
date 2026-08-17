@@ -80,40 +80,51 @@ func maskCentralRow(ctx context.Context, row sqlite.CentralRow) sqlite.CentralRo
 }
 
 // decodeCentralRow decodes a central request body and additionally reports
-// whether the payload carried a password_plain key at all.
+// whether the payload carried a password_plain key, an enabled key and an
+// interfaces key.
 //
-// The distinction is load-bearing on the update path. GET masks the stored
-// credential to [maskSentinel] and [sqlite.CentralRow] marshals
-// password_plain with omitempty, so a client following the published schema —
-// where password_plain is optional — has no way to send the real password
-// back, and [CentralAdminService.Put] is an unconditional upsert. Without the
-// presence probe a partial replace that only flips `enabled` decodes to the
-// Go zero value and destroys the CCU password on disk. An absent key (and an
-// explicit null) therefore means "unchanged", matching the contract the
-// config section editor implements in [restoreMaskedSecrets]; only an
-// explicit empty string clears the password.
-func decodeCentralRow(r *http.Request) (row sqlite.CentralRow, passwordSent bool, err error) {
+// The password_plain distinction is load-bearing on the update path. GET
+// masks the stored credential to [maskSentinel] and [sqlite.CentralRow]
+// marshals password_plain with omitempty, so a client following the
+// published schema — where password_plain is optional — has no way to send
+// the real password back, and [CentralAdminService.Put] is an unconditional
+// upsert. Without the presence probe a partial replace that only flips
+// `enabled` decodes to the Go zero value and destroys the CCU password on
+// disk. An absent key (and an explicit null) therefore means "unchanged",
+// matching the contract the config section editor implements in
+// [restoreMaskedSecrets]; only an explicit empty string clears the password.
+//
+// enabled and interfaces carry no `omitempty` in [sqlite.CentralRow], so a
+// missing key decodes to false / nil exactly like an explicit "turn this CCU
+// off and forget every interface" — [UpdateCentral] uses the two flags to
+// reject that ambiguity outright rather than silently applying it.
+func decodeCentralRow(r *http.Request) (row sqlite.CentralRow, passwordSent, enabledSent, interfacesSent bool, err error) {
 	body, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, maxRequestBodyBytes))
 	if err != nil {
-		return row, false, err
+		return row, false, false, false, err
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&row); err != nil {
-		return row, false, err
+		return row, false, false, false, err
 	}
 	var keys map[string]json.RawMessage
 	if err := json.Unmarshal(body, &keys); err != nil {
-		return row, false, err
+		return row, false, false, false, err
 	}
 	for k, v := range keys {
 		// encoding/json matches object keys case-insensitively, so the
 		// presence probe has to as well.
-		if strings.EqualFold(k, "password_plain") {
-			return row, string(v) != "null", nil
+		switch {
+		case strings.EqualFold(k, "password_plain"):
+			passwordSent = string(v) != "null"
+		case strings.EqualFold(k, "enabled"):
+			enabledSent = true
+		case strings.EqualFold(k, "interfaces"):
+			interfacesSent = true
 		}
 	}
-	return row, false, nil
+	return row, passwordSent, enabledSent, interfacesSent, nil
 }
 
 // writeCentralSecretRefusal answers a store refusal to persist a CCU
@@ -235,7 +246,7 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				problem.New(problem.TypeValidation, r, "Missing name", "name path parameter is required"))
 			return
 		}
-		row, passwordSent, err := decodeCentralRow(r)
+		row, passwordSent, enabledSent, interfacesSent, err := decodeCentralRow(r)
 		if err != nil {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
@@ -252,6 +263,21 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 		if row.Host == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
+			return
+		}
+		// This is a full-replace PUT: unlike password_plain, `enabled` and
+		// `interfaces` have no "unchanged" fallback to restore, so a body
+		// that omits either is rejected rather than silently decoding to
+		// the Go zero value — false / nil — which would disable the central
+		// and drop every configured interface.
+		if !enabledSent {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing enabled", "enabled is required for a full replace"))
+			return
+		}
+		if !interfacesSent {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing interfaces", "interfaces is required for a full replace"))
 			return
 		}
 		// The GET path masks password_plain to the sentinel and omits it

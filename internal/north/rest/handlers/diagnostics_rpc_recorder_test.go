@@ -5,6 +5,7 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -285,6 +286,48 @@ func TestDownloadRPCRecording_KnownCentral_Returns200WithAttachment(t *testing.T
 	}
 	if len(out) == 0 {
 		t.Error("expected non-empty body")
+	}
+}
+
+// TestDownloadRPCRecording_CentralNameWithQuote_HeaderStaysValid pins the
+// filename-escaping invariant [handlers.ContentDispositionAttachment]
+// documents: a central name (operator-editable via /centrals CRUD, and not
+// validated against a character set) carrying a double quote must not be
+// able to break out of the filename parameter and inject a second
+// Content-Disposition directive.
+func TestDownloadRPCRecording_CentralNameWithQuote_HeaderStaysValid(t *testing.T) {
+	t.Parallel()
+	svc := &fakeRPCRecorderService{
+		exportResult: map[string]any{"foo": "bar"},
+		exportOK:     true,
+	}
+	r := newRPCRecorderRouter(svc)
+	req := httptest.NewRequest(http.MethodGet, `/api/v1/diagnostics/rpc-recording/ccu";evil="x`, http.NoBody)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	cd := w.Header().Get("Content-Disposition")
+	// Parse the header the way a real client would, rather than
+	// substring-matching: mime.FormatMediaType backslash-escapes the
+	// embedded quote, so "evil=" legitimately still appears in the raw
+	// header text as *escaped filename content* — asserting its absence
+	// would false-positive on the safe, fixed output. The only thing
+	// that matters is whether it parses as a second parameter.
+	disposition, params, err := mime.ParseMediaType(cd)
+	if err != nil {
+		t.Fatalf("Content-Disposition = %q failed to parse as a media type: %v", cd, err)
+	}
+	if disposition != "attachment" {
+		t.Errorf("disposition = %q, want attachment", disposition)
+	}
+	if _, injected := params["evil"]; injected {
+		t.Errorf("Content-Disposition = %q, header injection: the embedded quote broke out and injected a second parameter", cd)
+	}
+	if !strings.Contains(params["filename"], `evil="x`) {
+		t.Errorf("filename = %q, want the raw central name preserved as literal filename content", params["filename"])
 	}
 }
 

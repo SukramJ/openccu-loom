@@ -14,6 +14,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -170,6 +171,26 @@ func TestCreateAlarmZone_InvalidConfig_Returns422(t *testing.T) {
 	}
 }
 
+func TestCreateAlarmZone_EmptyName_Returns422(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+
+	body := alarmZoneRequestBody(t, hmapi.AlarmZone{
+		Name:   "   ",
+		Config: marshalZoneConfig(t, fullModeZoneConfig(30, 15, 60)),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones", body)
+	w := httptest.NewRecorder()
+	CreateAlarmZone(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422, body=%s", w.Code, w.Body.String())
+	}
+	if got, err := fx.stores.Zones.GetAll(context.Background()); err != nil || len(got) != 0 {
+		t.Errorf("no zone must be persisted for an empty name: zones=%+v err=%v", got, err)
+	}
+}
+
 func TestCreateAlarmZone_MalformedJSON_Returns400(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
@@ -227,6 +248,32 @@ func TestPutAlarmZone_HappyPath_Returns204AndPersists(t *testing.T) {
 	}
 	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionAlarmConfigChange {
 		t.Fatalf("audit entries = %+v, want one alarm_config_change", rec.entries)
+	}
+}
+
+func TestPutAlarmZone_EmptyName_Returns422AndKeepsStoredName(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(30, 15, 60))
+
+	body := alarmZoneRequestBody(t, hmapi.AlarmZone{
+		Name:   "",
+		Config: marshalZoneConfig(t, fullModeZoneConfig(45, 20, 90)),
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/zones/eg", body)
+	req = withChiParam(req, "id", "eg")
+	w := httptest.NewRecorder()
+	PutAlarmZone(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422, body=%s", w.Code, w.Body.String())
+	}
+	row, ok, err := fx.stores.Zones.Get(context.Background(), "eg")
+	if err != nil || !ok {
+		t.Fatalf("get zone after rejected put: ok=%v err=%v", ok, err)
+	}
+	if row.Name != "Erdgeschoss" {
+		t.Errorf("name = %q, want the stored name to survive a rejected update", row.Name)
 	}
 }
 
@@ -457,5 +504,74 @@ func TestPutAlarmZoneOutputs_DuplicateIDsInPayload_AreReminted(t *testing.T) {
 	}
 	if rows[0].ID == rows[1].ID {
 		t.Errorf("both rows share id %q, want distinct ids", rows[0].ID)
+	}
+}
+
+// --- uniqueZoneSlug ---
+
+// TestUniqueZoneSlug_BlankStoredSlugStillReservesTheDerivedOne pins a
+// post-migration state: a zone whose stored slug was blanked (e.g. by the
+// alarm_zone_slug_charset migration) resolves to routingkey.HubSlug(name)
+// at read time (internal/security/index.go refreshZoneSlugs), so a new
+// zone whose name transliterates to the same slug must not be handed the
+// identity the existing zone already answers to.
+func TestUniqueZoneSlug_BlankStoredSlugStillReservesTheDerivedOne(t *testing.T) {
+	t.Parallel()
+	existing := []sqlitestore.AlarmZoneRow{
+		{ID: "eg", Name: "Küche", Slug: ""},
+	}
+	got := uniqueZoneSlug("Kuche", existing)
+	if got == "kuche" {
+		t.Errorf("slug = %q, want a slug distinct from the existing zone's derived %q", got, "kuche")
+	}
+	if got != "kuche-2" {
+		t.Errorf("slug = %q, want kuche-2", got)
+	}
+}
+
+// TestUniqueZoneSlug_NonBlankStoredSlugStillWins pins the ordinary case:
+// a normally-persisted slug is reserved as-is, independent of the name.
+func TestUniqueZoneSlug_NonBlankStoredSlugStillWins(t *testing.T) {
+	t.Parallel()
+	existing := []sqlitestore.AlarmZoneRow{
+		{ID: "eg", Name: "Erdgeschoss", Slug: "custom-slug"},
+	}
+	got := uniqueZoneSlug("Erdgeschoss", existing)
+	if got != "erdgeschoss" {
+		t.Errorf("slug = %q, want erdgeschoss (the stored slug must not block the name-derived one)", got)
+	}
+}
+
+// TestCreateAlarmZone_BlankSiblingSlug_DoesNotCollide is the handler-level
+// twin of TestUniqueZoneSlug_BlankStoredSlugStillReservesTheDerivedOne:
+// seedZone leaves Slug empty exactly like a post-migration row, and the
+// new zone must come out with a slug the security domain will not fold
+// into the existing zone's identity.
+func TestCreateAlarmZone_BlankSiblingSlug_DoesNotCollide(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedZone("eg", "Küche", fullModeZoneConfig(30, 15, 60))
+
+	body := alarmZoneRequestBody(t, hmapi.AlarmZone{
+		Name:   "Kuche",
+		Config: marshalZoneConfig(t, fullModeZoneConfig(30, 15, 60)),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones", body)
+	w := httptest.NewRecorder()
+	CreateAlarmZone(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201, body=%s", w.Code, w.Body.String())
+	}
+	var created hmapi.AlarmZone
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	row, ok, err := fx.stores.Zones.Get(context.Background(), created.ID)
+	if err != nil || !ok {
+		t.Fatalf("get created zone: ok=%v err=%v", ok, err)
+	}
+	if row.Slug == "kuche" {
+		t.Errorf("slug = %q, must not collide with the existing zone's derived slug", row.Slug)
 	}
 }

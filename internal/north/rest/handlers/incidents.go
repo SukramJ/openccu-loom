@@ -136,7 +136,16 @@ func ListIncidents(reader IncidentsReader) http.HandlerFunc {
 			return
 		}
 		if querier, ok := reader.(IncidentsQuerier); ok {
-			JSON(w, http.StatusOK, querier.IncidentsFiltered(f.central, f.since, f.until, f.limit))
+			list := querier.IncidentsFiltered(f.central, f.since, f.until, f.limit)
+			// A querier backed by SQL scan idioms ("var out []T; append in
+			// the loop") returns nil rather than an empty slice when
+			// nothing matches, which the declared array-typed response
+			// schema forbids — it would marshal as JSON null and break a
+			// client that iterates the result unconditionally.
+			if list == nil {
+				list = []hmapi.Incident{}
+			}
+			JSON(w, http.StatusOK, list)
 			return
 		}
 		JSON(w, http.StatusOK, applyIncidentsFilter(reader.Incidents(), f))

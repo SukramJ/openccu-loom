@@ -581,7 +581,8 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 			}
 			if errors.Is(err, hub.ErrSysvarExists) {
 				problem.Write(w, http.StatusConflict,
-					problem.New(problem.TypeConflict, r, "A system variable with this name already exists", req.Name))
+					problem.New(problem.TypeConflict, r, "System variable already exists",
+						"a system variable named \""+req.Name+"\" already exists"))
 				return
 			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar create failed", err)

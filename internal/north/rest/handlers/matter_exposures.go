@@ -435,8 +435,9 @@ func MatterCommissioningClose(closer MatterCommissioningCloser, publisher Matter
 }
 
 // MatterShare opens a commissioning window for a second commissioner.
-// Identical to /commissioning/window; documented separately
-// because the semantic meaning ("share bridge") differs in the UI.
-func MatterShare(opener MatterCommissioningOpener, publisher MatterEventPublisher) http.HandlerFunc {
-	return MatterCommissioningWindow(opener, publisher)
+// Identical to /commissioning/window; documented separately because
+// the semantic meaning ("share bridge") differs in the UI — and
+// recorded under its own audit action for the same reason.
+func MatterShare(opener MatterCommissioningOpener, publisher MatterEventPublisher, recorder audit.Recorder) http.HandlerFunc {
+	return matterOpenCommissioningWindow(opener, publisher, recorder, audit.ActionMatterShare)
 }
