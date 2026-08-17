@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.61.4
+
+- Version alignment with OpenCCU-Loom 0.61.4. The proxy itself is unchanged;
+  the release re-lands the classic-RF thermostat weekly-profile fix and corrects
+  the install-mode sensor id so pairing-mode sensors seed on start.
+
 # 0.61.3
 
 - Version alignment with OpenCCU-Loom 0.61.3. The proxy itself is unchanged;

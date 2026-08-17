@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 6.2.0
+  version: 6.2.1
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -11554,7 +11554,16 @@ components:
       description: Per-interface install-mode hub singleton.
       required: [interface_id, enabled, remaining_s, observed]
       properties:
-        interface_id: { type: string }
+        interface_id:
+          type: string
+          description: >-
+            The interface's wire id `<central>-<interface>` (e.g.
+            `ccu1-HmIP-RF`) — the same id space as
+            `HubConnectivityDataPoint.interface_id` and GET /interfaces, so a
+            client can build its per-interface entities from /interfaces and key
+            this value onto them. (The dedicated GET/POST /install-mode/interfaces
+            surface splits the central into a separate field and uses the bare
+            interface name instead.)
         enabled: { type: boolean }
         remaining_s:
           type: integer

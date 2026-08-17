@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // HubDataPoints is the aggregated hub-singleton snapshot for one central,
@@ -60,6 +62,12 @@ type HubConnectivityDataPoint struct {
 // HubInstallModeDataPoint is the per-interface install-mode singleton.
 // RemainingS is the seconds left while enabled; Observed is false until the
 // first state has been read from the CCU.
+//
+// InterfaceID is the wire id `<central>-<interface>`, the same id space as the
+// sibling HubConnectivityDataPoint.InterfaceID and GET /interfaces[].id. A
+// client that indexes the interfaces of GET /interfaces by that id can then
+// look each install-mode entry straight up; a bare interface name would never
+// match, leaving the install-mode sensors stuck at their initial value.
 type HubInstallModeDataPoint struct {
 	InterfaceID string `json:"interface_id"`
 	Enabled     bool   `json:"enabled"`
@@ -145,8 +153,13 @@ func hubDataPoints(central string, h *hub.Hub) HubDataPoints {
 	}
 	for _, im := range h.InstallModeDPs() {
 		enabled, remaining, observed := im.InstallState()
+		// The install-mode DP carries the bare interface name (the operator
+		// surfaces GET/POST /install-mode/interfaces split the central into its
+		// own field), but this aggregate keys every per-interface entry by the
+		// wire id, so promote it here to line up with the connectivity sibling
+		// and GET /interfaces.
 		dp.InstallMode = append(dp.InstallMode, HubInstallModeDataPoint{
-			InterfaceID: im.InterfaceID,
+			InterfaceID: hmtypes.NewWireInterfaceID(central, hmenum.Interface(im.InterfaceID)).String(),
 			Enabled:     enabled,
 			RemainingS:  int(remaining.Seconds()),
 			Observed:    observed,

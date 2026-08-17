@@ -391,8 +391,12 @@ def _gen_siren_turn_on() -> None:
 
 def _gen_climate_rf_set_profile() -> None:
     """
-    ClimateRF SetProfile: should be 1 put_paramset via @bind_collector
-    (AUTO_MODE, BOOST_MODE, WEEK_PROGRAM_POINTER together). Loom sends 3 separate SetValues.
+    ClimateRF SetProfile: two put_paramset calls. AUTO_MODE/BOOST_MODE are VALUES
+    parameters on the climate channel; WEEK_PROGRAM_POINTER is a MASTER parameter
+    on the device root (real device: HM-TC-IT-WM-W-EU VCU0000341/MASTER holds
+    WEEK_PROGRAM_POINTER and TEMPERATURE_OFFSET, never a VALUES paramset). Because
+    @bind_collector groups by (channel, paramset), the VALUES pair and the MASTER
+    pointer flush as separate PutParamset calls.
     """
     profiles = [
         ("WeekProgram1", True, False, "WEEK PROGRAM 1"),
@@ -403,16 +407,25 @@ def _gen_climate_rf_set_profile() -> None:
     for label, auto_mode, boost_mode, week_prog in profiles:
         inputs.append({
             "label": label,
-            "calls": [{
-                "method": "PutParamset",
-                "address": "RFTHR0001:1",
-                "paramset_key": "VALUES",
-                "put_values": {
-                    "AUTO_MODE": auto_mode,
-                    "BOOST_MODE": boost_mode,
-                    "WEEK_PROGRAM_POINTER": week_prog,
+            "calls": [
+                {
+                    "method": "PutParamset",
+                    "address": "RFTHR0001:1",
+                    "paramset_key": "VALUES",
+                    "put_values": {
+                        "AUTO_MODE": auto_mode,
+                        "BOOST_MODE": boost_mode,
+                    },
                 },
-            }],
+                {
+                    "method": "PutParamset",
+                    "address": "RFTHR0001",
+                    "paramset_key": "MASTER",
+                    "put_values": {
+                        "WEEK_PROGRAM_POINTER": week_prog,
+                    },
+                },
+            ],
         })
     _write_snapshot("ClimateRF", "SetProfile", inputs)
 
