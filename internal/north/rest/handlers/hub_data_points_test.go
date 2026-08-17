@@ -169,12 +169,15 @@ func TestGetHubDataPoints_OneCentral_PopulatedSingletons(t *testing.T) {
 		t.Errorf("connectivity[1]=%+v want HmIP-RF reachable=true", dp.Connectivity[1])
 	}
 
-	// install mode
+	// install mode: the DP carries the bare interface name, but the aggregate
+	// promotes it to the wire id `<central>-<interface>` so it lines up with the
+	// connectivity sibling and GET /interfaces (a client keys install-mode
+	// entries onto the interface list by exactly this id).
 	if len(dp.InstallMode) != 1 {
 		t.Fatalf("install_mode count=%d want 1", len(dp.InstallMode))
 	}
-	if dp.InstallMode[0].InterfaceID != "HmIP-RF" {
-		t.Errorf("install_mode interface=%q want HmIP-RF", dp.InstallMode[0].InterfaceID)
+	if dp.InstallMode[0].InterfaceID != "ccu-a-HmIP-RF" {
+		t.Errorf("install_mode interface=%q want ccu-a-HmIP-RF", dp.InstallMode[0].InterfaceID)
 	}
 	if dp.InstallMode[0].Enabled {
 		t.Error("install_mode enabled must be false")
