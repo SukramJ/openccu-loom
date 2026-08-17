@@ -124,6 +124,7 @@ func cmdParamsetSet(args []string, stdout, stderr io.Writer) error {
 	if err := client.sendJSONHeaders(ctx, http.MethodPut, "/api/v1/devices/"+url.PathEscape(addr)+"/paramsets/"+url.PathEscape(key), body, nil, headers); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{
+		"address": addr, "key": key, "parameter": param, "value": body[param],
+	})
 }

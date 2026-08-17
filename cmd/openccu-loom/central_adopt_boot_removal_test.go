@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
 // TestRemoveCentralTearsDownABootTimeCentral pins the teardown path for a
@@ -196,4 +197,56 @@ func startRegisteredTestCentral(ctx context.Context, t *testing.T, reg *central.
 		t.Fatalf("unit.Start(%s): %v", name, err)
 	}
 	return unit
+}
+
+// TestRemoveCentralPurgesTheMatterExposureAllowlist is the regression guard
+// for a removed central leaving its Matter exposure allowlist rows behind:
+// GET /api/v1/matter/status's enabled_count is computed from these
+// persisted rows, not the live model, so an orphaned row would keep
+// counting an endpoint that can never exist again — verified through
+// removeCentral itself, not by calling the store's DeleteForCentral
+// directly, so the assertion covers the wiring as well as the mechanism.
+func TestRemoveCentralPurgesTheMatterExposureAllowlist(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	const (
+		removed   = "matter-purge-removed"
+		survivor  = "matter-purge-survivor"
+		ifaceName = "HmIP-RF"
+	)
+	cfg := &config.Config{Centrals: []config.CentralConfig{{
+		Name:       removed,
+		Interfaces: []config.InterfaceSpec{{Name: ifaceName}},
+	}}}
+
+	reg := central.NewRegistry()
+	unit := startRegisteredTestCentral(ctx, t, reg, removed)
+
+	orch := buildLiveTestOrchestrator(ctx, t, reg, cfg)
+	wireCentralNorthbound(orch.sbDeps, unit)
+
+	db := openMigratedTestDB(t, "matter_purge_exposures.db")
+	exposureStore := matterstore.New(db)
+	orch.setMatterExposureStore(exposureStore)
+
+	removedKey := matterstore.EndpointKey{CentralName: removed, DeviceAddress: "S:1", ChannelNo: 1, DPKind: matterstore.DPKindCustom, DPKey: "D"}
+	survivorKey := matterstore.EndpointKey{CentralName: survivor, DeviceAddress: "S:1", ChannelNo: 1, DPKind: matterstore.DPKindCustom, DPKey: "D"}
+	if err := exposureStore.UpsertExposure(ctx, matterstore.ExposureRecord{Key: removedKey, Enabled: true, Actor: "test"}); err != nil {
+		t.Fatalf("UpsertExposure(removed): %v", err)
+	}
+	if err := exposureStore.UpsertExposure(ctx, matterstore.ExposureRecord{Key: survivorKey, Enabled: true, Actor: "test"}); err != nil {
+		t.Fatalf("UpsertExposure(survivor): %v", err)
+	}
+
+	if err := orch.removeCentral(ctx, removed); err != nil {
+		t.Fatalf("removeCentral: %v", err)
+	}
+
+	if _, err := exposureStore.GetExposure(ctx, removedKey); !errors.Is(err, matterstore.ErrExposureNotFound) {
+		t.Errorf("removed central's exposure row survived removeCentral: err=%v, want ErrExposureNotFound", err)
+	}
+	if _, err := exposureStore.GetExposure(ctx, survivorKey); err != nil {
+		t.Errorf("a sibling central's exposure row was deleted by removeCentral: %v", err)
+	}
 }

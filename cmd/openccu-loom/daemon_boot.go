@@ -71,6 +71,15 @@ type auditOverlay struct {
 	// seed runs once, on a database with no sections at all), so an assembly
 	// starting from defaults would silently drop it.
 	yamlBase *config.Config
+
+	// dbOpenErr holds the failure of the shared <DataDir>/openccu-loom.db
+	// open, if any — set alongside db == nil. The daemon surfaces it as the
+	// critical `sqlite` /health component (mapped to HTTP 503) rather than
+	// leaving that component unregistered: every downstream store that
+	// would have started its own health probe is guarded on `db != nil`
+	// too, so a nil db otherwise leaves /health with nothing at all to
+	// report the one failure that matters most.
+	dbOpenErr error
 }
 
 // openLoomDB opens the single shared <DataDir>/openccu-loom.db database used
@@ -80,7 +89,9 @@ type auditOverlay struct {
 // instead of each independently resolving the dataDir fallback, building the
 // DSN, and opening the file — four opens racing to migrate the same SQLite
 // file at boot. Returns nil (logged as a warning) when the DB cannot be
-// opened; callers must degrade gracefully on a nil handle.
+// opened; callers must degrade gracefully on a nil handle. err carries the
+// open failure so a caller that surfaces it on /health has more than the
+// boot log to point at.
 //
 // The open runs on its own [context.Background] timeout rather than the
 // caller's ctx: this executes early in the composition root, before the
@@ -88,9 +99,9 @@ type auditOverlay struct {
 // daemon's lifecycle ctx (which also carries shutdown) happens to already be
 // cancelled — e.g. a signal arriving in the same instant as boot. Every
 // original per-site open this replaces used the same independent timeout.
-func openLoomDB(cfg *config.Config, logger *slog.Logger) *gosql.DB {
+func openLoomDB(cfg *config.Config, logger *slog.Logger) (db *gosql.DB, err error) {
 	if cfg == nil {
-		return nil
+		return nil, nil
 	}
 	dataDir := cfg.DataDir
 	if dataDir == "" {
@@ -99,12 +110,12 @@ func openLoomDB(cfg *config.Config, logger *slog.Logger) *gosql.DB {
 	dsn := sqlitestore.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 	openCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	db, err := sqlitestore.Open(openCtx, dsn)
+	db, err = sqlitestore.Open(openCtx, dsn)
 	if err != nil {
 		logger.Warn("loom_db.open_failed", slog.String("dsn", dsn), slog.String("err", err.Error()))
-		return nil
+		return nil, err
 	}
-	return db
+	return db, nil
 }
 
 // wireAuditOverlay opens the SQLite-backed audit / config store BEFORE the
@@ -133,7 +144,7 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	// four independent sqlite.Open calls racing to migrate the same database on
 	// every boot. teardown closes it last (LIFO defer in daemonServeWithDeps),
 	// after every downstream user has torn down.
-	ov.db = openLoomDB(cfg, logger) //nolint:contextcheck // deliberately opens on its own timeout, independent of the lifecycle ctx — see openLoomDB doc comment
+	ov.db, ov.dbOpenErr = openLoomDB(cfg, logger) //nolint:contextcheck // deliberately opens on its own timeout, independent of the lifecycle ctx — see openLoomDB doc comment
 	var stopAuditSink func()
 	ov.rec, ov.durableStats, stopAuditSink = wireAuditPersistenceWithDB(ov.db, ov.buf, logger) //nolint:contextcheck // the durable sink persists on its own per-write timeout, detached from the boot ctx by design
 	if ov.db != nil {

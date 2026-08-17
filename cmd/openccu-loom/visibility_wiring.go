@@ -123,16 +123,25 @@ func applyVisibilityUnIgnore(
 	}
 
 	// 2. Read every central's persisted list and union into the shared
-	//    registry.
+	//    registry. A read failure on any one central must not shrink the
+	//    union: proceeding with the patterns that DID read successfully
+	//    would replace the registry with a subset and un-apply patterns
+	//    that are still persisted, on nothing worse than a transient
+	//    SQLite error (SQLITE_BUSY, a cancelled context). Abort the whole
+	//    apply instead and keep the registry's previous contents; the next
+	//    OnRegister run (the next adopt/remove, or the periodic re-apply
+	//    the caller may schedule) retries the full read.
 	var union []string
 	seen := make(map[string]struct{})
 	appliedCount := 0
+	readFailed := false
 	for _, name := range reg.Names() {
 		patterns, err := store.Patterns(ctx, name)
 		if err != nil {
 			logger.Warn("visibility.unignore.read_failed",
 				slog.String("central", name),
 				slog.String("err", err.Error()))
+			readFailed = true
 			continue
 		}
 		if len(patterns) == 0 {
@@ -146,6 +155,11 @@ func applyVisibilityUnIgnore(
 			seen[p] = struct{}{}
 			union = append(union, p)
 		}
+	}
+	if readFailed {
+		logger.Warn("visibility.unignore.apply_aborted",
+			slog.String("reason", "a per-central pattern read failed; keeping the registry's previous contents"))
+		return appliedCount
 	}
 	// An empty union still has to be loaded once something was loaded before:
 	// that is what withdraws the patterns of a central that left the fleet.

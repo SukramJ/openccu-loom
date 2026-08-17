@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
@@ -29,10 +30,17 @@ import (
 func discardTestLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
 
 // buildPurgeTestStores opens a private main-schema SQLite DB (for
-// ValuesCacheStore/MasterValuesStore) plus a fresh migrated history DB (for
+// ValuesCacheStore/MasterValuesStore/VisibilityUnIgnoreStore/
+// ChannelFlagsStore) plus a fresh migrated history DB (for
 // MeasurementStore). The history schema is a separate migration set with no
 // template, so that open still runs goose under the lock.
-func buildPurgeTestStores(t *testing.T) (*sqlitestore.ValuesCacheStore, *sqlitestore.MasterValuesStore, *sqlitestore.MeasurementStore) {
+func buildPurgeTestStores(t *testing.T) (
+	*sqlitestore.ValuesCacheStore,
+	*sqlitestore.MasterValuesStore,
+	*sqlitestore.MeasurementStore,
+	*sqlitestore.VisibilityUnIgnoreStore,
+	*sqlitestore.ChannelFlagsStore,
+) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -47,16 +55,21 @@ func buildPurgeTestStores(t *testing.T) (*sqlitestore.ValuesCacheStore, *sqlites
 	}
 	t.Cleanup(func() { _ = histDB.Close() })
 
-	return sqlitestore.NewValuesCacheStore(mainDB), sqlitestore.NewMasterValuesStore(mainDB), sqlitestore.NewMeasurementStore(histDB)
+	return sqlitestore.NewValuesCacheStore(mainDB),
+		sqlitestore.NewMasterValuesStore(mainDB),
+		sqlitestore.NewMeasurementStore(histDB),
+		sqlitestore.NewVisibilityUnIgnoreStore(mainDB),
+		sqlitestore.NewChannelFlagsStore(mainDB)
 }
 
 // TestPurgeCentralStateDeletesOnlyTheNamedCentral seeds VALUES-cache,
-// MASTER-cache and history rows for two centrals sharing an interface name,
-// purges one, and asserts the other central's rows are untouched — the
-// live-remove path must never bleed into a peer central's persisted state.
+// MASTER-cache, history, visibility-unignore and channel-flags rows for two
+// centrals sharing an interface name, purges one, and asserts the other
+// central's rows are untouched — the live-remove path must never bleed into
+// a peer central's persisted state.
 func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 	t.Parallel()
-	valuesStore, masterStore, historyStore := buildPurgeTestStores(t)
+	valuesStore, masterStore, historyStore, visibilityStore, channelFlagsStore := buildPurgeTestStores(t)
 	ctx := context.Background()
 	now := time.Now()
 
@@ -90,9 +103,24 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
+	if err := visibilityStore.Replace(ctx, removedCentral, []string{"ACTIVE"}, "test"); err != nil {
+		t.Fatalf("visibilityStore.Replace(removed): %v", err)
+	}
+	if err := visibilityStore.Replace(ctx, survivorCentral, []string{"LOWBAT"}, "test"); err != nil {
+		t.Fatalf("visibilityStore.Replace(survivor): %v", err)
+	}
+	if err := channelFlagsStore.Set(ctx, removedCentral, "AAAA0001:1", true, false, "test"); err != nil {
+		t.Fatalf("channelFlagsStore.Set(removed): %v", err)
+	}
+	if err := channelFlagsStore.Set(ctx, survivorCentral, "BBBB0001:1", true, false, "test"); err != nil {
+		t.Fatalf("channelFlagsStore.Set(survivor): %v", err)
+	}
+	overlay := channelflags.New()
+	overlay.Set(removedCentral, "AAAA0001:1", channelflags.Flags{Hidden: true})
+	overlay.Set(survivorCentral, "BBBB0001:1", channelflags.Flags{Hidden: true})
 
 	cc := config.CentralConfig{Name: removedCentral, Interfaces: []config.InterfaceSpec{{Name: ifaceName}}}
-	purgeCentralState(ctx, valuesStore, masterStore, historyStore, nil, cc, discardTestLogger())
+	purgeCentralState(ctx, valuesStore, masterStore, historyStore, nil, visibilityStore, channelFlagsStore, overlay, cc, discardTestLogger())
 
 	if rows, err := valuesStore.LoadChannel(ctx, removedCentral, removedIfaceID, "AAAA0001:1"); err != nil {
 		t.Fatalf("LoadChannel(removed): %v", err)
@@ -123,6 +151,43 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 	if stats.Rows != 1 {
 		t.Errorf("history rows remaining = %d, want 1 (only the survivor)", stats.Rows)
 	}
+
+	if patterns, err := visibilityStore.Patterns(ctx, removedCentral); err != nil {
+		t.Fatalf("visibilityStore.Patterns(removed): %v", err)
+	} else if len(patterns) != 0 {
+		t.Errorf("visibility_unignore patterns for %s survived purge: %v", removedCentral, patterns)
+	}
+	if patterns, err := visibilityStore.Patterns(ctx, survivorCentral); err != nil {
+		t.Fatalf("visibilityStore.Patterns(survivor): %v", err)
+	} else if len(patterns) != 1 {
+		t.Errorf("visibility_unignore patterns for %s = %v, want 1 (untouched)", survivorCentral, patterns)
+	}
+
+	flags, err := channelFlagsStore.List(ctx)
+	if err != nil {
+		t.Fatalf("channelFlagsStore.List: %v", err)
+	}
+	for _, f := range flags {
+		if f.CentralName == removedCentral {
+			t.Errorf("channel_flags row for %s survived purge: %+v", removedCentral, f)
+		}
+	}
+	survivorFlagFound := false
+	for _, f := range flags {
+		if f.CentralName == survivorCentral {
+			survivorFlagFound = true
+		}
+	}
+	if !survivorFlagFound {
+		t.Errorf("channel_flags row for %s was deleted, want untouched", survivorCentral)
+	}
+
+	if got := overlay.Get(removedCentral, "AAAA0001:1"); got.Set() {
+		t.Errorf("in-memory channel-flags overlay for %s survived purge: %+v", removedCentral, got)
+	}
+	if got := overlay.Get(survivorCentral, "BBBB0001:1"); !got.Set() {
+		t.Errorf("in-memory channel-flags overlay for %s was cleared, want untouched", survivorCentral)
+	}
 }
 
 // TestPurgeCentralStateNilStoresAreSafe verifies purgeCentralState tolerates
@@ -130,7 +195,7 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 func TestPurgeCentralStateNilStoresAreSafe(t *testing.T) {
 	t.Parallel()
 	cc := config.CentralConfig{Name: "x", Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}}}
-	purgeCentralState(context.Background(), nil, nil, nil, nil, cc, discardTestLogger())
+	purgeCentralState(context.Background(), nil, nil, nil, nil, nil, nil, nil, cc, discardTestLogger())
 }
 
 // TestEvictModelRemovesDevicesDescriptionsAndParamsets mirrors

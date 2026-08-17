@@ -52,6 +52,17 @@ type Sample struct {
 	// un-localized values in Note). Never used for sentinel matching.
 	NoteKey   string
 	Timestamp time.Time
+	// Sticky marks a one-shot verdict that has no periodic refresher — e.g. a
+	// boot-time check recorded exactly once and never again. A sticky sample
+	// never decays to [StatusUnknown] via [Tracker.applyStaleLocked]: the
+	// fact it reports is a permanent boot-time observation, not a heartbeat,
+	// so treating its age as staleness would drag ServiceAvailability/Overall
+	// down to "unknown" [DefaultStaleAfter] after every boot regardless of
+	// how healthy every live component stays. Leave false for anything with
+	// a periodic or event-driven re-recorder — staleness is exactly the
+	// right signal there (an interface that has gone silent should not look
+	// healthy forever on its last good reading).
+	Sticky bool
 }
 
 // Component holds the latest state for one registered component.
@@ -297,6 +308,9 @@ func (t *Tracker) Snapshot() []Component {
 // [Tracker.staleAfter]. Caller must hold mu.
 func (t *Tracker) applyStaleLocked(c Component) Component {
 	if t.staleAfter <= 0 {
+		return c
+	}
+	if c.LastSample.Sticky {
 		return c
 	}
 	if c.LastSample.Timestamp.IsZero() {

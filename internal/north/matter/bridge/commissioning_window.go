@@ -222,6 +222,23 @@ func (w *CommissioningWindow) Discriminator() uint16 {
 	return w.discriminator
 }
 
+// RequestedDurationSeconds returns the duration the currently-open window
+// was opened with (0 when closed). It is not a Matter wire attribute — the
+// AdministratorCommissioning cluster's WindowStatus carries no duration —
+// so it is a sibling accessor rather than part of [CommissioningWindow.CurrentWindow]'s
+// snapshot. It exists so a client that rehydrates state after a page
+// reload (GET /api/v1/matter/status's commissioning_window_duration_seconds)
+// can restore its countdown instead of losing it whenever it re-syncs
+// against an already-open window.
+func (w *CommissioningWindow) RequestedDurationSeconds() uint16 {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if !w.open {
+		return 0
+	}
+	return w.durationSec
+}
+
 // HasSuppliedVerifier reports whether the currently-open window was opened
 // with a commissioner-supplied PAKE verifier (a true Matter Enhanced
 // Commissioning Window), as opposed to the REST/operator open (also

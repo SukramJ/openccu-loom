@@ -19,6 +19,7 @@ package mcp
 import (
 	"context"
 	"net/http"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -86,6 +87,32 @@ type EditLockVerifier interface {
 	Verify(key, token string) bool
 }
 
+// EditSessionOpener lets an MCP tool acquire and release the same edit
+// lock [EditLockVerifier] checks — the seam open_edit_session /
+// close_edit_session wrap. MCP has no HTTP session to piggyback a lock
+// acquisition onto the way the REST POST/DELETE /sessions/edit endpoints
+// and the WS config.session.open/close commands do, so without this an
+// MCP client has no way to ever produce the edit_token write_paramset's
+// MASTER/LINK path requires — the gate becomes permanently unreachable,
+// not merely stricter.
+//
+// Deliberately separate from EditLockVerifier (not embedded by it) so a
+// caller that only wires read-side Verify enforcement is unaffected; nil
+// leaves open_edit_session / close_edit_session unregistered, the same
+// nil-disables-its-own-tools rule every other optional Deps seam follows.
+// Uses primitive/stdlib return types rather than
+// [github.com/SukramJ/openccu-loom/internal/north/rest/handlers.EditLock]
+// so this package stays decoupled from the REST-specific DTO; the
+// composition root adapts *handlers.EditSessions to this shape.
+type EditSessionOpener interface {
+	// Open acquires the lock for key on behalf of subject. ok is false
+	// when another live session already holds it; token and expires are
+	// the zero value in that case.
+	Open(key, subject string) (token string, expires time.Time, ok bool)
+	// Close releases the lock for key if token still holds it.
+	Close(key, token string) bool
+}
+
 // HubResolver resolves a central's hub model by name — the seam the
 // gated trigger_program tool uses to find and run a CCU program.
 // *central.Registry satisfies it.
@@ -118,6 +145,11 @@ type Deps struct {
 	// Nil disables enforcement (test-only escape hatch); the production
 	// composition root wires the shared *handlers.EditSessions instance.
 	EditLocks EditLockVerifier
+	// EditSessions lets open_edit_session / close_edit_session acquire
+	// and release the lock EditLocks enforces. Nil leaves those two
+	// tools unregistered — the production composition root adapts the
+	// same shared *handlers.EditSessions instance EditLocks wraps.
+	EditSessions EditSessionOpener
 	// Alarm / AlarmControl project the alarm system; Security projects
 	// the Security & Safety domain. Each is optional: a nil seam leaves
 	// its tools unregistered rather than advertising a tool that

@@ -12,7 +12,9 @@ package mcp_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -242,5 +244,146 @@ func TestWriteParamset_ValuesNotGatedByEditLock(t *testing.T) {
 	}
 	if locks.key != "" {
 		t.Errorf("the edit-lock verifier must not be consulted for a VALUES write, but it saw key %q", locks.key)
+	}
+}
+
+// fakeEditSessions is a minimal, single-holder-per-key lock registry
+// implementing [mcp.EditSessionOpener] with the same contract
+// *handlers.EditSessions enforces: Open fails while another live token
+// holds the key, Close requires the matching token. Used to pin the
+// open_edit_session / close_edit_session tools end-to-end without pulling
+// the REST-specific handlers package into this test.
+type fakeEditSessions struct {
+	held  map[string]string // key -> token
+	opens int
+}
+
+func newFakeEditSessions() *fakeEditSessions { return &fakeEditSessions{held: map[string]string{}} }
+
+func (f *fakeEditSessions) Open(key, _ string) (string, time.Time, bool) {
+	f.opens++
+	if _, ok := f.held[key]; ok {
+		return "", time.Time{}, false
+	}
+	token := fmt.Sprintf("tok-%d", f.opens)
+	f.held[key] = token
+	return token, time.Now().Add(5 * time.Minute), true
+}
+
+func (f *fakeEditSessions) Close(key, token string) bool {
+	if f.held[key] != token {
+		return false
+	}
+	delete(f.held, key)
+	return true
+}
+
+// Verify implements [mcp.EditLockVerifier] too, mirroring
+// *handlers.EditSessions: the same registry backs both roles in
+// production (EditLocks and EditSessions wrap the same instance).
+func (f *fakeEditSessions) Verify(key, token string) bool {
+	return f.held[key] == token
+}
+
+// TestOpenEditSessionThenWriteParamsetSucceeds is the regression guard for
+// wiring EditLocks into MCP without any way for an MCP client to ever
+// produce the edit_token it demands: before open_edit_session /
+// close_edit_session existed, every MASTER write over MCP failed
+// unconditionally, because nothing could satisfy EditLockVerifier.Verify.
+// This drives the full real sequence a client must follow: open the
+// session, take the returned token, and use it on write_paramset.
+func TestOpenEditSessionThenWriteParamsetSucceeds(t *testing.T) {
+	ps := newFakeParamsets()
+	devs, _, _ := makeDeviceFixture()
+	sessions := newFakeEditSessions()
+
+	deps := mcp.Deps{
+		Centrals:     &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:      devs,
+		Paramsets:    ps,
+		EditLocks:    sessions,
+		EditSessions: sessions,
+		AllowWrites:  true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	openRes := callTool(t, cs, "open_edit_session", map[string]any{
+		"address": "ADDR001",
+		"key":     "MASTER",
+	})
+	if openRes.IsError {
+		t.Fatalf("open_edit_session returned error: %v", openRes.Content)
+	}
+	var opened struct {
+		EditToken string `json:"edit_token"`
+	}
+	unmarshalStructured(t, openRes, &opened)
+	if opened.EditToken == "" {
+		t.Fatal("open_edit_session returned an empty edit_token")
+	}
+
+	writeRes := callTool(t, cs, "write_paramset", map[string]any{
+		"central_name": "ccu1",
+		"address":      "ADDR001",
+		"key":          "MASTER",
+		"values":       map[string]any{"MIN_SETPOINT": 10.0},
+		"edit_token":   opened.EditToken,
+	})
+	if writeRes.IsError {
+		t.Fatalf("write_paramset with the token from open_edit_session returned error: %v", writeRes.Content)
+	}
+	if len(ps.putCalls) != 1 {
+		t.Fatalf("expected 1 PutParamset call, got %d", len(ps.putCalls))
+	}
+
+	closeRes := callTool(t, cs, "close_edit_session", map[string]any{
+		"address":    "ADDR001",
+		"key":        "MASTER",
+		"edit_token": opened.EditToken,
+	})
+	var closed struct {
+		OK bool `json:"ok"`
+	}
+	unmarshalStructured(t, closeRes, &closed)
+	if !closed.OK {
+		t.Error("close_edit_session with the matching token reported ok=false")
+	}
+
+	// The lock is gone: a write with the same (now-stale) token must fail.
+	staleRes := callTool(t, cs, "write_paramset", map[string]any{
+		"central_name": "ccu1",
+		"address":      "ADDR001",
+		"key":          "MASTER",
+		"values":       map[string]any{"MIN_SETPOINT": 11.0},
+		"edit_token":   opened.EditToken,
+	})
+	if !staleRes.IsError {
+		t.Error("write_paramset succeeded with a token for a closed session; want it rejected")
+	}
+}
+
+// TestOpenEditSessionRefusedWhileAlreadyHeld pins that a second
+// open_edit_session for the same channel+key fails while the first is
+// still live — the same 423-Locked semantics the REST session endpoint
+// enforces.
+func TestOpenEditSessionRefusedWhileAlreadyHeld(t *testing.T) {
+	sessions := newFakeEditSessions()
+	deps := mcp.Deps{
+		Centrals:     &fakeCentrals{names: []string{"ccu1"}},
+		Devices:      newFakeDevices(),
+		EditSessions: sessions,
+		AllowWrites:  true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	first := callTool(t, cs, "open_edit_session", map[string]any{"address": "ADDR001", "key": "MASTER"})
+	if first.IsError {
+		t.Fatalf("first open_edit_session returned error: %v", first.Content)
+	}
+	second := callTool(t, cs, "open_edit_session", map[string]any{"address": "ADDR001", "key": "MASTER"})
+	if !second.IsError {
+		t.Error("second open_edit_session for the same key succeeded while the first session is still live")
 	}
 }

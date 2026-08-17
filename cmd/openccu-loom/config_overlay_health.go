@@ -8,6 +8,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 const (
@@ -34,16 +35,20 @@ const (
 //
 // The component is non-critical: the daemon runs correctly on the config
 // file, so this must not turn liveness probes red.
+//
+// Recorded exactly once, at boot, with no periodic refresher — Sticky so it
+// does not decay to StatusUnknown 90s later and drag a genuinely healthy
+// daemon's /health to "unknown" for the rest of the process lifetime.
 func recordConfigOverlayHealth(tracker *health.Tracker, reg *metrics.Registry, err error) {
 	if tracker != nil {
 		if err == nil {
 			tracker.Record(configOverlayHealthComponent, health.Sample{
-				Healthy: true, Note: "database sections applied",
+				Healthy: true, Note: "database sections applied", Sticky: true,
 			})
 		} else {
 			tracker.Record(configOverlayHealthComponent, health.Sample{
-				Healthy: false,
-				Note:    "database config sections not applied: " + err.Error(),
+				Healthy: false, Sticky: true,
+				Note: "database config sections not applied: " + err.Error(),
 			})
 		}
 	}
@@ -68,15 +73,19 @@ func recordConfigOverlayHealth(tracker *health.Tracker, reg *metrics.Registry, e
 // The component is non-critical — the rest of the daemon, including any other
 // CCU, runs normally — so it must not turn liveness probes red. It names the
 // rows so the operator can find and re-create them.
+//
+// Recorded exactly once, at boot, with no periodic refresher — Sticky for
+// the same reason as [recordConfigOverlayHealth]: it reports a boot-time
+// fact, not a heartbeat, and must not decay to StatusUnknown 90s later.
 func recordUnroutableCentralHealth(tracker *health.Tracker, reg *metrics.Registry, names []string) {
 	if tracker != nil {
 		if len(names) == 0 {
 			tracker.Record(configCentralsHealthComponent, health.Sample{
-				Healthy: true, Note: "all stored centrals are routable",
+				Healthy: true, Note: "all stored centrals are routable", Sticky: true,
 			})
 		} else {
 			tracker.Record(configCentralsHealthComponent, health.Sample{
-				Healthy: false,
+				Healthy: false, Sticky: true,
 				Note: "not started, the CCU callback would be rejected: " + strings.Join(names, ", ") +
 					" — re-add each CCU with a name of letters, digits, \"-\" and \"_\"",
 			})
@@ -87,4 +96,36 @@ func recordUnroutableCentralHealth(tracker *health.Tracker, reg *metrics.Registr
 			"number of stored centrals not started because their name is not a routable callback path segment").
 			Set(float64(len(names)))
 	}
+}
+
+// recordSQLiteOpenFailureHealth registers the critical `sqlite` /health
+// component as unhealthy when the shared <DataDir>/openccu-loom.db handle
+// never opened (openLoomDB returned a nil db).
+//
+// Without this, a nil db leaves the component unregistered rather than
+// unhealthy: sqlite.StartHealthProbe only starts when the handle is non-nil
+// (daemon_rest.go), and recordSecretHealth / recordConfigOverlayHealth /
+// recordUnroutableCentralHealth are all guarded on the same nil check — so
+// the one component health.isCriticalComponent maps to HTTP 503 is simply
+// absent, and ServiceAvailability only inspects components present in the
+// snapshot. GET /health answers 200 "healthy" while every CCU list, every
+// SPA-saved config section and every audit row is permanently inactive.
+//
+// Sticky: there is no periodic refresher for this verdict (a failed boot
+// open is never retried), matching recordSecretHealth /
+// recordConfigOverlayHealth for the same reason — it must not decay to
+// StatusUnknown 90s later, which would only trade one silently-wrong
+// "healthy" reading for an equally wrong "unknown" one instead of the
+// unhealthy/503 the condition actually warrants.
+func recordSQLiteOpenFailureHealth(tracker *health.Tracker, openErr error) {
+	if tracker == nil {
+		return
+	}
+	note := "shared database failed to open at boot"
+	if openErr != nil {
+		note += ": " + openErr.Error()
+	}
+	tracker.Record(sqlitestore.StoreComponentName, health.Sample{
+		Healthy: false, Sticky: true, Note: note,
+	})
 }

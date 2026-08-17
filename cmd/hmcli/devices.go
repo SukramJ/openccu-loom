@@ -299,18 +299,34 @@ func cmdDevicesGetValue(args []string, stdout, stderr io.Writer) error {
 
 // ─── set ──────────────────────────────────────────────────────────────────────
 
+// validCommandPriorities is the REST API's SetValueRequest.priority enum
+// (assets/openapi.yaml). A value outside this set is rejected by the
+// server's OpenAPI request validator — or, with validation disabled,
+// silently coerced to "high" (see parsePriority) — neither of which is the
+// value the operator asked for, so the CLI validates locally and fails with
+// a usable message instead of relaying either outcome.
+var validCommandPriorities = map[string]bool{
+	"critical": true,
+	"high":     true,
+	"default":  true,
+	"low":      true,
+}
+
 func cmdDevicesSet(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("devices set", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var f connFlags
 	f.bind(fs)
-	priority := fs.String("priority", "", "command priority (e.g. normal, high)")
+	priority := fs.String("priority", "", "command priority (critical, high, default, low)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	rest := fs.Args()
 	if len(rest) < 4 {
 		return errors.New("devices set: usage: set <address> <channel> <parameter> <value>")
+	}
+	if *priority != "" && !validCommandPriorities[*priority] {
+		return fmt.Errorf("devices set: invalid --priority %q (must be one of critical, high, default, low)", *priority)
 	}
 	addr, ch, param, rawVal := rest[0], rest[1], rest[2], rest[3]
 
@@ -331,8 +347,9 @@ func cmdDevicesSet(args []string, stdout, stderr io.Writer) error {
 	if err := client.sendJSON(ctx, http.MethodPut, path, body, nil); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{
+		"address": addr, "channel": ch, "parameter": param, "value": body.Value,
+	})
 }
 
 // coerceValue converts a raw string argument to the most specific Go type the
@@ -360,4 +377,21 @@ func writeJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+// writeOKResult reports a write/action command's success. With --json it
+// emits `{"status":"ok", ...fields}` so a script piping into jq can rely on
+// a parseable object; without it, it keeps the plain "ok" line every
+// existing script already expects.
+func writeOKResult(w io.Writer, jsonOut bool, fields map[string]any) error {
+	if !jsonOut {
+		_, err := fmt.Fprintln(w, "ok")
+		return err
+	}
+	out := make(map[string]any, len(fields)+1)
+	out["status"] = "ok"
+	for k, v := range fields {
+		out[k] = v
+	}
+	return writeJSON(w, out)
 }

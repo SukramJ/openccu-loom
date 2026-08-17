@@ -203,11 +203,97 @@ func TestPublishFabricAddedStillEmitsWhenTheFabricCannotBeResolved(t *testing.T)
 	if len(events) != 1 {
 		t.Fatalf("published %d events, want 1", len(events))
 	}
-	payload, ok := events[0].Payload.(map[string]any)
+	payload, ok := events[0].Payload.(handlers.MatterFabricResponse)
 	if !ok {
-		t.Fatalf("payload type = %T, want the degraded map", events[0].Payload)
+		t.Fatalf("payload type = %T, want handlers.MatterFabricResponse", events[0].Payload)
 	}
-	if payload["fabric_index"] != uint8(3) {
-		t.Errorf("fabric_index = %v, want 3", payload["fabric_index"])
+	if payload.FabricIndex != 3 {
+		t.Errorf("FabricIndex = %v, want 3", payload.FabricIndex)
+	}
+	assertMatterFabricPayloadHasEveryRequiredField(t, payload)
+}
+
+// TestPublishFabricAddedStillEmitsWhenNoStoreIsWired covers the other
+// no-lookup degrade branch (p.fabrics == nil, "minimal wirings" per the
+// matterEventPublisher.fabrics doc comment) with the same required-field
+// assertion as the store-error case.
+func TestPublishFabricAddedStillEmitsWhenNoStoreIsWired(t *testing.T) {
+	t.Parallel()
+	hub := ws.NewHub()
+	hub.SetReplayCapacity(4)
+	pub := &matterEventPublisher{hub: hub, fabrics: nil}
+
+	pub.publishFabricAdded(7)
+
+	events := hub.Replay(0, nil).Events
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	payload, ok := events[0].Payload.(handlers.MatterFabricResponse)
+	if !ok {
+		t.Fatalf("payload type = %T, want handlers.MatterFabricResponse", events[0].Payload)
+	}
+	if payload.FabricIndex != 7 {
+		t.Errorf("FabricIndex = %v, want 7", payload.FabricIndex)
+	}
+	assertMatterFabricPayloadHasEveryRequiredField(t, payload)
+}
+
+// TestPublishFabricAddedStillEmitsWhenTheFabricIsNotInTheList covers the
+// third degrade branch: the store answers successfully but the just-added
+// fabric_index is not (yet) among the returned records — a race between
+// AddNOC's write and this read, within the same bounded window the store-
+// error and nil-store branches already guard.
+func TestPublishFabricAddedStillEmitsWhenTheFabricIsNotInTheList(t *testing.T) {
+	t.Parallel()
+	hub := ws.NewHub()
+	hub.SetReplayCapacity(4)
+	pub := &matterEventPublisher{hub: hub, fabrics: stubFabricStore{
+		recs: []store.FabricRecord{{FabricIndex: 9}}, // a different fabric
+	}}
+
+	pub.publishFabricAdded(3)
+
+	events := hub.Replay(0, nil).Events
+	if len(events) != 1 {
+		t.Fatalf("published %d events, want 1", len(events))
+	}
+	payload, ok := events[0].Payload.(handlers.MatterFabricResponse)
+	if !ok {
+		t.Fatalf("payload type = %T, want handlers.MatterFabricResponse", events[0].Payload)
+	}
+	if payload.FabricIndex != 3 {
+		t.Errorf("FabricIndex = %v, want 3", payload.FabricIndex)
+	}
+	assertMatterFabricPayloadHasEveryRequiredField(t, payload)
+}
+
+// assertMatterFabricPayloadHasEveryRequiredField is the regression guard for
+// matter.fabric_added shipping a payload missing fields
+// assets/openapi.yaml's MatterFabric schema (which assets/wsapi.json's
+// broadcast payload schema references) declares required: a generated
+// strict client rejects a frame that omits any of them. Marshals the
+// payload the same way the WS write path does and checks every declared
+// required key is present, regardless of which degrade branch produced it.
+func assertMatterFabricPayloadHasEveryRequiredField(t *testing.T, payload handlers.MatterFabricResponse) {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	// assets/openapi.yaml MatterFabric: required: [fabric_index, fabric_id,
+	// fabric_id_hex, node_id, node_id_hex, vendor_id, compressed_id,
+	// root_public_key].
+	for _, key := range []string{
+		"fabric_index", "fabric_id", "fabric_id_hex", "node_id",
+		"node_id_hex", "vendor_id", "compressed_id", "root_public_key",
+	} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("payload is missing required key %q: %s", key, raw)
+		}
 	}
 }

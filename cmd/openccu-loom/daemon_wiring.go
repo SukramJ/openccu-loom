@@ -147,9 +147,14 @@ func seedCentralHealthAndMetricsFor(
 // every registered central. Grouping these wirings keeps the composition
 // root's branch-count down without changing behaviour.
 //
-// LinkCoordinator wiring is UNCONDITIONAL — it must run even when REST is off,
-// otherwise `central.Link.resolver==nil` and link operations from MQTT/WS
-// adapters that bypass REST break.
+// LinkCoordinator wiring is UNCONDITIONAL — it runs even when REST is off.
+// Both REST (internal/north/rest/handlers/links.go) and the WS link commands
+// (cmd/openccu-loom/ws_adapters.go, via wsLinkQuery) call
+// *adapter.LinksDomain directly and never read central.Unit.Link; MQTT has
+// no link.* commands at all. WireLinkCoordinator's resolver is set but has
+// no production reader today — kept unconditional because a resolver that
+// exists only when REST happens to be enabled is a trap for the next
+// consumer that reaches for central.Unit.Link expecting it to be populated.
 //
 // The bus resolver lets WriteOptions.WaitForCallback subscribe to the right
 // central's EventBus per call (multi-CCU deployments hit different busses).

@@ -188,8 +188,7 @@ func cmdAlarmDisarm(args []string, stdout, stderr io.Writer) error {
 	if err := client.sendJSON(ctx, http.MethodPost, path, nil, nil); err != nil {
 		return fmt.Errorf("alarm disarm: %w", err)
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{"zone": *zone})
 }
 
 // cmdAlarmSilence is `alarm silence [--zone <id>|--all]`: POST
@@ -227,8 +226,7 @@ func cmdAlarmSilence(args []string, stdout, stderr io.Writer) error {
 	if err := client.sendJSON(ctx, http.MethodPost, path, nil, nil); err != nil {
 		return fmt.Errorf("alarm silence: %w", err)
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{"zone": *zone, "all": *all})
 }
 
 // cmdAlarmAck is `alarm ack --zone <id>`: POST
@@ -258,8 +256,7 @@ func cmdAlarmAck(args []string, stdout, stderr io.Writer) error {
 	if err := client.sendJSON(ctx, http.MethodPost, path, nil, nil); err != nil {
 		return fmt.Errorf("alarm ack: %w", err)
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{"zone": *zone})
 }
 
 // alarmZoneLabel formats an zone's AREA column: the id alone, or

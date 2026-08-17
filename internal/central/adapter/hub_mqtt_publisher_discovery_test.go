@@ -351,7 +351,7 @@ func TestRetractCentralClearsEveryHubDiscoveryConfig(t *testing.T) {
 
 	// Runtime removal of the central: every retained discovery config it
 	// declared must be cleared with an empty payload.
-	publisher.RetractCentral(c)
+	publisher.RetractCentral(c, nil)
 	publisher.Flush()
 
 	retracted := map[string]bool{}
@@ -365,4 +365,55 @@ func TestRetractCentralClearsEveryHubDiscoveryConfig(t *testing.T) {
 			t.Errorf("hub discovery config %s was never retracted on central removal", topic)
 		}
 	}
+}
+
+// TestRetractCentralClearsConnectivityFromSnapshotEvenAfterClientsDrained is
+// the regression guard for the live-remove ordering bug: production drains
+// and removes every entry from the unit's client registry (via
+// BringUpManager.RemoveCentral) before calling RetractCentral, so a
+// connectivity retract that reads u.Clients.List() live sees an empty
+// registry and silently skips the connectivity binary_sensor. The caller
+// must snapshot the interface list beforehand and pass it in.
+func TestRetractCentralClearsConnectivityFromSnapshotEvenAfterClientsDrained(t *testing.T) {
+	t.Parallel()
+	c, pub, publisher := hubDiscoveryFixture(t)
+	c.SetSystemInformation(central.SystemInfo{
+		Model:   "HomeMatic Central",
+		Version: "3.79.6",
+		Serial:  "3014F711A0001F5A4993D962",
+	})
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF),
+		Interface:   hmenum.InterfaceHmIPRF,
+	}); err != nil {
+		t.Fatalf("Clients.Register: %v", err)
+	}
+
+	publisher.Start(context.Background())
+	defer publisher.Stop()
+	publisher.Flush()
+
+	var connectivityTopic string
+	for _, p := range pub.Published() {
+		if strings.HasSuffix(p.Topic, "/config") && len(p.Payload) > 0 && strings.Contains(p.Topic, "connectivity") {
+			connectivityTopic = p.Topic
+		}
+	}
+	if connectivityTopic == "" {
+		t.Fatalf("no connectivity discovery config was declared; topics=%v", publishedTopics(pub))
+	}
+
+	// Mirror BringUpManager.RemoveCentral's own teardown: the client entry is
+	// gone before RetractCentral runs, exactly like a live central removal.
+	c.Clients.Remove(WireInterfaceID("ccu-01", hmenum.InterfaceHmIPRF))
+
+	publisher.RetractCentral(c, []hmenum.Interface{hmenum.InterfaceHmIPRF})
+	publisher.Flush()
+
+	for _, p := range pub.Published() {
+		if p.Topic == connectivityTopic && len(p.Payload) == 0 {
+			return
+		}
+	}
+	t.Errorf("connectivity discovery config %s was never retracted once the client registry was already drained", connectivityTopic)
 }

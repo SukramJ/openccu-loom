@@ -46,6 +46,7 @@ type southboundWiringDeps struct {
 	masterValuesStore   *sqlite.MasterValuesStore
 	valuesCacheStore    *sqlite.ValuesCacheStore
 	channelFlagsOverlay *channelflags.Overlay
+	channelFlagsStore   *sqlite.ChannelFlagsStore
 	descriptorStores    adapter.DescriptorStores
 	// sqCentrals persists per-central serials backfilled at bring-up so SSDP
 	// discovery recognises configured centrals by serial. Nil disables backfill.
@@ -274,11 +275,17 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// to genuine live wire value changes and persists a numeric
 	// time-series for SPA charts (no-op when history is off — nil store).
 	// See ADR 0040. Both helpers manage their own daemon-lifetime context.
-	evictor := adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger)                                         //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
+	evictor := adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger) //nolint:contextcheck // the eviction handler takes no ctx; each DELETE bounds its own
+	// Same eviction, for the persisted MASTER-paramset cache: DevicePipeline's
+	// MASTER hydration is cache-first, so without this a device re-paired at
+	// the same address after removal is seeded from the previous pairing's
+	// stale configuration instead of the CCU's current one.
+	masterEvictor := adapter.WireMasterValuesEviction(reg, d.masterValuesStore, logger)
 	stopHistoryRecorder := wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger) //nolint:contextcheck // the recorder bounds its own internal contexts; it takes no ctx
 	teardowns = append(
 		teardowns,
 		evictor.Stop,
+		masterEvictor.Stop,
 		stopHistoryRecorder,
 	)
 	// Surface the values-cache counters as health gauges so the
