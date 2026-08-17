@@ -34,6 +34,16 @@ type brokerClient struct {
 	// how a test publishes "while the window is open" without a sleep.
 	onSubscribe func()
 
+	// holdTopic models a PUBLISH the broker has accepted and fanned out
+	// but whose acknowledgement has not reached the publisher yet: its
+	// Publish call blocks until hold is closed. That is the state every
+	// in-flight discovery config is in while the sweep judges it.
+	holdTopic string
+	hold      chan struct{}
+	// fannedOut is closed once holdTopic has been delivered to the
+	// subscribers, so a test can wait for the delivery instead of sleeping.
+	fannedOut chan struct{}
+
 	published []publishedMsg
 }
 
@@ -70,6 +80,10 @@ func (c *brokerClient) Publish(_ context.Context, topic string, payload []byte, 
 	// accepts it, the publisher learns that only on the PUBACK.
 	for _, h := range handlers {
 		h(&Message{Topic: topic, Payload: payload})
+	}
+	if topic == c.holdTopic && len(payload) > 0 {
+		close(c.fannedOut)
+		<-c.hold
 	}
 	return nil
 }
@@ -173,15 +187,28 @@ func TestDiscoveryOrphanSweepKeepsConfigsPublishedInsideItsWindow(t *testing.T) 
 
 	live := sysvarItem(t, b, centralName, "living_room_light")
 	liveTopic := b.Topics().DiscoveryConfig(live.Component, live.NodeID, live.ObjectID)
-	// Publish it from inside the snapshot window, which is exactly where the
-	// hub plane's burst lands on a real boot.
+	// Publish it from inside the snapshot window — where the hub plane's
+	// burst lands on a real boot — and keep the publish in flight for the
+	// whole sweep. That is the state the defect lives in: the broker has
+	// the config and has already handed it to the sweep's subscription,
+	// while the publisher has not returned and so has recorded nothing.
+	cl.holdTopic = liveTopic
+	cl.hold = make(chan struct{})
+	cl.fannedOut = make(chan struct{})
+	publishDone := make(chan struct{})
 	cl.onSubscribe = func() {
-		if err := b.PublishHubDiscovery(context.Background(), live); err != nil {
-			t.Errorf("PublishHubDiscovery: %v", err)
-		}
+		go func() {
+			defer close(publishDone)
+			if err := b.PublishHubDiscovery(context.Background(), live); err != nil {
+				t.Errorf("PublishHubDiscovery: %v", err)
+			}
+		}()
+		<-cl.fannedOut
 	}
 
 	n, err := b.RunDiscoveryOrphanCleanupOnce(context.Background(), centralName, 50*time.Millisecond)
+	close(cl.hold)
+	<-publishDone
 	if err != nil {
 		t.Fatalf("RunDiscoveryOrphanCleanupOnce: %v", err)
 	}
