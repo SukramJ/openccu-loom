@@ -709,7 +709,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 	// resolve chain put into the context — without it every request,
 	// credentialed or not, is rejected with 401 (the MCP mount sits
 	// outside the REST router's own middleware stack).
-	var mcpInner http.Handler = d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
+	mcpInner := d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
 		Centrals:     d.reg,
 		Devices:      d.devicesAdapter,
 		Writer:       d.dpWriterAdapter,
@@ -724,7 +724,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLim
 		// The shared edit-lock registry REST and WS gate MASTER/LINK writes
 		// on, so an assistant's write_paramset obeys the same lock a human
 		// editor's open session holds.
-		EditLocks: d.editSessions,
+		EditLocks:   d.editSessions,
 		AllowWrites: cfg.North.MCP.AllowWrites,
 		Version:     build.Version,
 	}))
@@ -793,7 +793,6 @@ func mcpSecuritySeam(d restMountDeps) mcp.SecurityReader {
 	}
 	return d.security
 }
-
 
 // mcpAlarmAdapter satisfies both MCP alarm ports over the engine.
 type mcpAlarmAdapter struct{ svc *alarm.Service }

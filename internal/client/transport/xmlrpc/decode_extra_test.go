@@ -99,7 +99,6 @@ func TestDecodeValueNonFiniteDoubleRejected(t *testing.T) {
 	t.Parallel()
 
 	for _, text := range []string{"nan", "NaN", "inf", "+Inf", "-Inf", "infinity"} {
-		text := text
 		t.Run(text, func(t *testing.T) {
 			t.Parallel()
 			if _, err := decodeValueFromString(t, `<value><double>`+text+`</double></value>`); err == nil {

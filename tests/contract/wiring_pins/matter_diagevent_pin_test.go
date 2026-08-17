@@ -59,8 +59,8 @@ func TestAnAttachedRingIsWhatTheBridgeServes(t *testing.T) {
 	}
 	if attachIdx > startIdx {
 		t.Errorf(
-			"AttachDiagnosticEvents is wired after bridge.Start(ctx) in daemon_matter.go — "+
-				"this races the serve goroutine (which reads the ring without the bridge lock) "+
+			"AttachDiagnosticEvents is wired after bridge.Start(ctx) in daemon_matter.go — " +
+				"this races the serve goroutine (which reads the ring without the bridge lock) " +
 				"and loses every pairing moment recorded before the attach",
 		)
 	}

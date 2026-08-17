@@ -279,7 +279,7 @@ func TestMountMCPAppliesRateLimit(t *testing.T) {
 	}
 
 	saw429 := false
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if call() == http.StatusTooManyRequests {
 			saw429 = true
 			break

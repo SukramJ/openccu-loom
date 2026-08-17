@@ -1101,7 +1101,7 @@ func (s *SchedulesDomain) SetActiveProfile(
 // CCU's own ACTIVE_PROFILE value is the 1-based P<n> slot number.
 func (s *SchedulesDomain) readActiveProfile(
 	ctx context.Context, backend paramsetBackend, channelAddr string,
-) (string, int, bool) {
+) (profileID string, index int, ok bool) {
 	values, err := backend.GetParamset(ctx, channelAddr, hmenum.ParamsetKeyValues)
 	if err != nil {
 		return "", 0, false
