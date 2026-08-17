@@ -45,14 +45,19 @@ const addonUpdateUniqueID = "loom_addon_update"
 func (d *DefaultDiscoveryBuilder) BuildAddonUpdateDiscovery() DiscoveryItem {
 	topic := d.TopicBuilder.AddonUpdateState()
 	body := map[string]any{
-		"name":                    d.tr("discovery.addon_update"),
-		"unique_id":               addonUpdateUniqueID,
-		"default_entity_id":       defaultEntityID(string(HAComponentUpdate), addonUpdateUniqueID),
+		"name":              d.tr("discovery.addon_update"),
+		"unique_id":         addonUpdateUniqueID,
+		"default_entity_id": defaultEntityID(string(HAComponentUpdate), addonUpdateUniqueID),
+		// No `value_template`: HA's MQTT update platform parses the raw
+		// state_topic payload natively against its state-payload schema
+		// (installed_version, latest_version, in_progress) when no
+		// value_template narrows it to a scalar first. `in_progress_template`
+		// is not a schema option at all — HA reads `in_progress` only from
+		// that native parse — so setting either one here left the entity
+		// showing no install-in-progress indication.
 		"state_topic":             topic,
-		"value_template":          "{{ value_json.installed_version }}",
 		"latest_version_topic":    topic,
 		"latest_version_template": "{{ value_json.latest_version }}",
-		"in_progress_template":    "{{ value_json.in_progress }}",
 		"command_topic":           d.TopicBuilder.AddonUpdateCommand(),
 		"payload_install":         "INSTALL",
 		"entity_category":         "diagnostic",

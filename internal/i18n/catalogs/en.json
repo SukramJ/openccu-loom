@@ -37,6 +37,7 @@
   "discovery.duration": "Duration",
   "discovery.energy_counter_feed_in_total": "Energy Counter feed in Total",
   "discovery.energy_counter_total": "Energy Counter Total",
+  "discovery.entity_name.button_lock": "Button lock",
   "discovery.firmware": "Firmware",
   "discovery.hs_color": "HS Color",
   "discovery.inbox": "Inbox",

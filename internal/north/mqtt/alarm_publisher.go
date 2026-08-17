@@ -679,14 +679,22 @@ func (b *Bridge) RetractAlarmDiscovery(ctx context.Context, component, nodeID, o
 }
 
 // PublishAlarmState publishes the retained plain HA state token for an
-// zone (or the master panel).
+// zone (or the master panel). Returns nil silently when the raw plane is
+// disabled, matching every other raw-plane publisher on [Bridge].
 func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
 	return b.client.Publish(ctx, topic, []byte(token), b.cfg.QoS.State, true)
 }
 
 // PublishAlarmAvailability publishes the retained per-panel availability
-// flag (online/offline).
+// flag (online/offline). Returns nil silently when the raw plane is
+// disabled, matching every other raw-plane publisher on [Bridge].
 func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, online bool) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
 	body := []byte("offline")
 	if online {
 		body = []byte("online")
@@ -695,12 +703,22 @@ func (b *Bridge) PublishAlarmAvailability(ctx context.Context, topic string, onl
 }
 
 // RetractAlarmTopic clears a retained alarm state or availability topic.
+// Returns nil silently when the raw plane is disabled — there is nothing
+// to retract on a plane that never published.
 func (b *Bridge) RetractAlarmTopic(ctx context.Context, topic string) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
 	return b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true)
 }
 
-// PublishAlarmEvent publishes a non-retained JSON alarm event.
+// PublishAlarmEvent publishes a non-retained JSON alarm event. Returns nil
+// silently when the raw plane is disabled, matching every other raw-plane
+// publisher on [Bridge].
 func (b *Bridge) PublishAlarmEvent(ctx context.Context, topic string, body []byte) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
 	return b.client.Publish(ctx, topic, body, QoS0, false)
 }
 

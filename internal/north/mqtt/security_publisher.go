@@ -177,6 +177,12 @@ func (p *SecurityMQTTPublisher) publish(ctx context.Context, m securityMsg) {
 	if b == nil {
 		return
 	}
+	// The security plane has no discovery-only fast path — every message
+	// on this topic funnel is a raw-plane write, so this is the one gate
+	// the whole plane needs, matching every raw-plane publisher on [Bridge].
+	if !b.cfg.RawEnabled {
+		return
+	}
 	qos := b.cfg.QoS.State
 	if !m.retained {
 		// An event is a moment, not a state: at-most-once delivery is
