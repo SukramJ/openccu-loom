@@ -33,10 +33,11 @@ func securityTestTr(_, fallback string) string { return fallback }
 
 // TestSecuritySystemEntities_CommonShape covers the fields every entity
 // from [securitySystemEntities] carries regardless of its component:
-// OK=true, the shared "security" node, a unique_id/object_id of
-// `loom_security_<key>`, the two-source availability list in "all"
-// mode, and the `openccu-loom_security` device block carrying model +
-// sw_version.
+// OK=true, the shared "security" node, a unique_id of
+// `loom_security_<key>` mirrored into default_entity_id as
+// `<component>.loom_security_<key>`, the two-source availability list
+// in "all" mode, and the `openccu-loom_security` device block carrying
+// model + sw_version.
 func TestSecuritySystemEntities_CommonShape(t *testing.T) {
 	t.Parallel()
 	for _, e := range securitySystemEntities(securityTestTr) {
@@ -55,8 +56,12 @@ func TestSecuritySystemEntities_CommonShape(t *testing.T) {
 			if got := body["unique_id"]; got != wantUnique {
 				t.Errorf("unique_id = %v, want %v", got, wantUnique)
 			}
-			if got := body["object_id"]; got != wantUnique {
-				t.Errorf("object_id = %v, want %v", got, wantUnique)
+			wantDefaultEntityID := string(e.component) + "." + wantUnique
+			if got := body["default_entity_id"]; got != wantDefaultEntityID {
+				t.Errorf("default_entity_id = %v, want %v", got, wantDefaultEntityID)
+			}
+			if _, has := body["object_id"]; has {
+				t.Errorf("discovery payload must not carry the removed object_id key; got %v", body["object_id"])
 			}
 
 			avail, ok := body["availability"].([]any)

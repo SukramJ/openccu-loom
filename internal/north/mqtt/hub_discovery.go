@@ -218,7 +218,6 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	body := map[string]any{
 		"name":               displaySysvarName(sv),
 		"unique_id":          uniqueID,
-		"object_id":          uniqueID,
 		"state_topic":        stateTopic,
 		"enabled_by_default": sv.EnabledDefault,
 		"availability":       hubAvailability(d.TopicBuilder),
@@ -356,6 +355,8 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		}
 	}
 
+	body["default_entity_id"] = defaultEntityID(component, uniqueID)
+
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
@@ -458,7 +459,7 @@ func (d *DefaultDiscoveryBuilder) buildProgramRole(
 	body := map[string]any{
 		"name":               displayName,
 		"unique_id":          uniqueID,
-		"object_id":          uniqueID,
+		"default_entity_id":  defaultEntityID(role.Component, uniqueID),
 		"enabled_by_default": p.EnabledDefault,
 		"availability":       availability,
 		"availability_mode":  "all",
@@ -523,7 +524,7 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p Hu
 	body := map[string]any{
 		"name":               displayName,
 		"unique_id":          uniqueID,
-		"object_id":          uniqueID,
+		"default_entity_id":  defaultEntityID(string(HAComponentSwitch), uniqueID),
 		"state_topic":        stateTopic,
 		"command_topic":      commandTopic,
 		"payload_on":         "true",
@@ -560,7 +561,7 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 	body := map[string]any{
 		"name":                     d.tr("discovery.alarm_messages"),
 		"unique_id":                uniqueID,
-		"object_id":                uniqueID,
+		"default_entity_id":        defaultEntityID(string(HAComponentSensor), uniqueID),
 		"state_topic":              topic,
 		"value_template":           "{{ value_json | length }}",
 		"json_attributes_topic":    topic,
@@ -592,7 +593,7 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 	body := map[string]any{
 		"name":                     d.tr("discovery.service_messages"),
 		"unique_id":                uniqueID,
-		"object_id":                uniqueID,
+		"default_entity_id":        defaultEntityID(string(HAComponentSensor), uniqueID),
 		"state_topic":              topic,
 		"value_template":           "{{ value_json | length }}",
 		"json_attributes_topic":    topic,
@@ -628,7 +629,7 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 	body := map[string]any{
 		"name":                     d.tr("discovery.inbox"),
 		"unique_id":                uniqueID,
-		"object_id":                uniqueID,
+		"default_entity_id":        defaultEntityID(string(HAComponentSensor), uniqueID),
 		"state_topic":              topic,
 		"value_template":           "{{ value_json | length }}",
 		"json_attributes_topic":    topic,
@@ -708,7 +709,7 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeSensorDiscovery(centralName, i
 	body := map[string]any{
 		"name":                d.trIface("discovery.install_mode_duration", installModeInterfaceLabel(iface)),
 		"unique_id":           uniqueID,
-		"object_id":           uniqueID,
+		"default_entity_id":   defaultEntityID(string(HAComponentSensor), uniqueID),
 		"translation_key":     "install_mode_" + suffix,
 		"state_topic":         topic,
 		"device_class":        "duration",
@@ -750,7 +751,7 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeButtonDiscovery(centralName, i
 	body := map[string]any{
 		"name":              d.trIface("discovery.install_mode_activate", installModeInterfaceLabel(iface)),
 		"unique_id":         uniqueID,
-		"object_id":         uniqueID,
+		"default_entity_id": defaultEntityID(string(HAComponentButton), uniqueID),
 		"translation_key":   "install_mode_" + suffix + "_button",
 		"command_topic":     commandTopic,
 		"payload_press":     "PRESS",
@@ -785,7 +786,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 	body := map[string]any{
 		"name":              d.trIface("discovery.connectivity", iface),
 		"unique_id":         uniqueID,
-		"object_id":         uniqueID,
+		"default_entity_id": defaultEntityID(string(HAComponentBinarySensor), uniqueID),
 		"state_topic":       topic,
 		"payload_on":        "true",
 		"payload_off":       "false",
@@ -827,7 +828,7 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 	body := map[string]any{
 		"name":                        d.tr("discovery.system_health"),
 		"unique_id":                   uniqueID,
-		"object_id":                   uniqueID,
+		"default_entity_id":           defaultEntityID(string(HAComponentSensor), uniqueID),
 		"translation_key":             "system_health",
 		"state_topic":                 topic,
 		"unit_of_measurement":         "%",
@@ -867,7 +868,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName st
 	body := map[string]any{
 		"name":                        d.tr("discovery.connection_latency"),
 		"unique_id":                   uniqueID,
-		"object_id":                   uniqueID,
+		"default_entity_id":           defaultEntityID(string(HAComponentSensor), uniqueID),
 		"translation_key":             "connection_latency",
 		"state_topic":                 topic,
 		"unit_of_measurement":         "ms",
@@ -909,7 +910,7 @@ func (d *DefaultDiscoveryBuilder) BuildLastEventAgeDiscovery(centralName string)
 	body := map[string]any{
 		"name":                        d.tr("discovery.last_event_age"),
 		"unique_id":                   uniqueID,
-		"object_id":                   uniqueID,
+		"default_entity_id":           defaultEntityID(string(HAComponentSensor), uniqueID),
 		"translation_key":             "last_event_age",
 		"state_topic":                 topic,
 		"device_class":                "duration",
@@ -953,7 +954,7 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 	body := map[string]any{
 		"name":                    d.tr("discovery.system_update"),
 		"unique_id":               uniqueID,
-		"object_id":               uniqueID,
+		"default_entity_id":       defaultEntityID(string(HAComponentUpdate), uniqueID),
 		"state_topic":             topic,
 		"value_template":          "{{ value_json.installed_version }}",
 		"latest_version_topic":    topic,

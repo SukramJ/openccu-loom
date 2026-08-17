@@ -556,9 +556,63 @@ type retainCleanupError string
 
 func (e retainCleanupError) Error() string { return string(e) }
 
-// MarkPlaneDeclared records that a daemon-level plane has finished its
-// first discovery pass, making its retained configs eligible for the
+// hubPlaneNodeKinds are the node-id leaves the per-central hub plane
+// publishes under: `<central-slug>_<kind>`. Device configs use the
+// device address as their leaf, which is never one of these words.
+//
+// The hub plane needs naming because it is central-scoped and therefore
+// passes the sweep's `<central>_` ownership filter, unlike the
+// daemon-level planes in [daemonLevelNodeIDs] — and it is the plane that
+// publishes LAST: sysvars, programs, install-mode and the system sensors
+// only reach the broker once the CCU's serial has resolved, well after
+// the device snapshot that triggers the sweep.
+var hubPlaneNodeKinds = map[string]bool{
+	"central":      true,
+	"connectivity": true,
+	"messages":     true,
+	"programs":     true,
+	"sysvars":      true,
+	"system":       true,
+}
+
+// hubPlaneNodeID reports whether nodeID is a hub-plane node id — its leaf
+// (everything after the central-slug separator [discoveryNodeIDBelongsTo]
+// matched on) names one of [hubPlaneNodeKinds].
+func hubPlaneNodeID(nodeID string) bool {
+	i := strings.LastIndexByte(nodeID, '_')
+	if i < 0 {
+		return false
+	}
+	return hubPlaneNodeKinds[nodeID[i+1:]]
+}
+
+// hubPlaneKey is the [Bridge.planesDeclared] key of one central's hub
+// plane. Namespaced so it can never collide with a daemon-level plane's
+// node id.
+func hubPlaneKey(centralName string) string {
+	return "hub:" + naming.DiscoverySlug(centralName)
+}
+
+// MarkHubPlaneDeclared records that the hub plane has published everything
+// it declares for centralName, making its retained configs eligible for the
 // orphan sweep.
+//
+// The hub publisher calls it behind its own publish queue, so by the time
+// the mark lands every config of that pass is on the broker and in
+// `declared`. Until then the sweep leaves hub node ids alone: a hub config
+// the previous boot retained is indistinguishable from an orphan, and
+// retracting it deletes the Home Assistant entity (and its registry entry,
+// with the operator's name / area / entity_id on it) seconds before this
+// boot re-announces it.
+func (b *Bridge) MarkHubPlaneDeclared(centralName string) {
+	if b == nil || centralName == "" {
+		return
+	}
+	b.MarkPlaneDeclared(hubPlaneKey(centralName))
+}
+
+// MarkPlaneDeclared records that a plane has finished its first discovery
+// pass, making its retained configs eligible for the orphan sweep.
 //
 // Until a plane says this, the sweep cannot distinguish its orphans from
 // its not-yet-published entities, and treating the two alike deletes
@@ -720,6 +774,14 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 		nodeID := strings.ToLower(parts[1])
 		switch {
 		case discoveryNodeIDBelongsTo(nodeID, nodePrefixes):
+			// The central's own namespace — but the hub plane inside it
+			// publishes on its own schedule, long after the device
+			// snapshot that triggers this sweep. Judging it before it has
+			// declared retracts every sysvar, program, install-mode and
+			// system entity of the previous boot; the pass runs once per
+			// boot, so whatever it deletes stays deleted until the daemon
+			// restarts. See [Bridge.MarkHubPlaneDeclared].
+			_ = hubPlaneNodeID
 		case daemonLevelNodeIDs[nodeID]:
 			// A daemon-level plane is only swept once it has declared.
 			//
@@ -741,13 +803,18 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 		mu.Lock()
 		seen++
 		mu.Unlock()
-		// Compare against the live `declared` map: any retained topic
+		// Compare against what this process claims: any retained topic
 		// the current build did not (re)publish during boot is an
-		// orphan. The check is lock-protected by the bridge.
+		// orphan. `announced` is consulted alongside `declared` because
+		// a config still inside its Publish call is already on the
+		// broker — and already delivered to this very subscription —
+		// while `declared` records it only afterwards. The check is
+		// lock-protected by the bridge.
 		b.mu.Lock()
 		_, declared := b.declared[topic]
+		claimed := declared
 		b.mu.Unlock()
-		if declared {
+		if claimed {
 			return
 		}
 		mu.Lock()
@@ -770,15 +837,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 	topics := append([]string(nil), orphans...)
 	inspected := seen
 	mu.Unlock()
-	for _, topic := range topics {
-		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
-		// Also drop the orphan from `declared` so a subsequent
-		// publish with the same topic is not silently dedup-suppressed
-		// against the now-empty payload.
-		b.mu.Lock()
-		delete(b.declared, topic)
-		b.mu.Unlock()
-	}
+	evicted := b.evictDiscoveryOrphans(ctx, topics)
 	// The pair is what makes a silent sweep diagnosable: zero inspected
 	// means the snapshot window saw none of our retained configs, which
 	// is a different fault from a window that saw them all and found
@@ -786,8 +845,38 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 	slog.Default().Debug("mqtt.discovery_orphan_cleanup.snapshot",
 		slog.String("central", rawCentral),
 		slog.Int("inspected", inspected),
-		slog.Int("evicted", len(topics)))
-	return len(topics), nil
+		slog.Int("evicted", evicted))
+	return evicted, nil
+}
+
+// evictDiscoveryOrphans retracts each candidate topic and reports how many
+// it actually cleared.
+//
+// Every topic is re-checked against the bridge's claims immediately before
+// its retraction rather than on the verdict the snapshot window produced:
+// clearing thousands of topics takes seconds, and a publisher that declared
+// one of them in the meantime has made it live again — retracting it would
+// delete an entity that exists.
+func (b *Bridge) evictDiscoveryOrphans(ctx context.Context, topics []string) int {
+	evicted := 0
+	for _, topic := range topics {
+		b.mu.Lock()
+		_, declared := b.declared[topic]
+		claimed := declared
+		b.mu.Unlock()
+		if claimed {
+			continue
+		}
+		_ = b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true)
+		evicted++
+		// Also drop the orphan from `declared` so a subsequent publish
+		// with the same topic is not silently dedup-suppressed against
+		// the now-empty payload.
+		b.mu.Lock()
+		delete(b.declared, topic)
+		b.mu.Unlock()
+	}
+	return evicted
 }
 
 // rawCentralPrefix returns the `<base>/<central>/` prefix the raw plane

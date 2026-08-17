@@ -552,6 +552,26 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	p.addUnsub(hubModel.Update.OnUpdate(func(info hub.UpdateInfo) {
 		publishUpdate(info)
 	}))
+
+	p.declareHubPlane(u, b, centralName)
+}
+
+// declareHubPlane tells the retained-orphan sweep that this central's hub
+// plane has spoken. The mark is queued like every other job, so the single
+// worker runs it only after all of the pass's publishes have returned — at
+// which point each of them is recorded on the bridge and the sweep can tell
+// a leftover from a live entity.
+//
+// Gated on the same resolved serial that gates the payloads themselves:
+// with no serial every hub builder returns an empty item, so the pass
+// declared nothing, and claiming otherwise would let the sweep retract the
+// previous boot's hub entities moments before the re-wire (which the daemon
+// runs once the serial lands) re-announces them.
+func (p *HubMQTTPublisher) declareHubPlane(u *central.Unit, b *mqtt.Bridge, centralName string) {
+	if hi := hubInfoFromUnit(u); hi.Serial == "" {
+		return
+	}
+	p.publish(func() { b.MarkHubPlaneDeclared(centralName) })
 }
 
 // hubInfoFromUnit projects a central's resolved CCU metadata onto the MQTT
