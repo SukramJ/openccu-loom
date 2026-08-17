@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.61.3
+
+- Version alignment with OpenCCU-Loom 0.61.3. The proxy itself is unchanged;
+  the release is a full-codebase audit fix wave for the daemon — security
+  hardening (Basic-auth rate limiting, logout closing open connections, a
+  closed script-injection path), MQTT/Home-Assistant entity and backup fixes,
+  alarm keypad-lockout fixes, and honest "unknown" status during a CCU outage.
+
 # 0.61.2
 
 - Version alignment with OpenCCU-Loom 0.61.2. The proxy itself is
