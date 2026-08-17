@@ -781,7 +781,9 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 			// system entity of the previous boot; the pass runs once per
 			// boot, so whatever it deletes stays deleted until the daemon
 			// restarts. See [Bridge.MarkHubPlaneDeclared].
-			_ = hubPlaneNodeID
+			if hubPlaneNodeID(nodeID) && !b.planeDeclared(hubPlaneKey(rawCentral)) {
+				return
+			}
 		case daemonLevelNodeIDs[nodeID]:
 			// A daemon-level plane is only swept once it has declared.
 			//
@@ -812,7 +814,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, centralName 
 		// lock-protected by the bridge.
 		b.mu.Lock()
 		_, declared := b.declared[topic]
-		claimed := declared
+		claimed := declared || b.announced[topic]
 		b.mu.Unlock()
 		if claimed {
 			return
@@ -862,7 +864,7 @@ func (b *Bridge) evictDiscoveryOrphans(ctx context.Context, topics []string) int
 	for _, topic := range topics {
 		b.mu.Lock()
 		_, declared := b.declared[topic]
-		claimed := declared
+		claimed := declared || b.announced[topic]
 		b.mu.Unlock()
 		if claimed {
 			continue

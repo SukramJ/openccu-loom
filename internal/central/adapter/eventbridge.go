@@ -1226,9 +1226,18 @@ func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPo
 // device-availability broadcast on the WebSocket plane, no Matter
 // ReachableChanged, and no retained availability topic — on every deployment,
 // because the suppression is the shipped default.
+// The hoist is scoped to the reachability parameters on purpose. For any
+// other parameter the refresh only ever flips a device back to online — news
+// that the value publish itself already carries — so running it for a
+// parameter the filter dropped would put a retained availability topic on the
+// broker for a data point the operator asked not to see, and for a device
+// whose data points are all hidden it would create an availability topic with
+// no entity to own it.
 func (b *EventBridge) publishValueChangedSinks(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
-	b.publishValueChangedMQTT(ctx, centralName, envKind, e)
-	b.refreshDeviceAvailabilityFor(ctx, centralName, e)
+	published := b.publishValueChangedMQTT(ctx, centralName, envKind, e)
+	if published || isReachabilityParameter(e.Key.Parameter) {
+		b.refreshDeviceAvailabilityFor(ctx, centralName, e)
+	}
 }
 
 // refreshDeviceAvailabilityFor resolves the device coordinates of a value
@@ -1374,9 +1383,13 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 // [EventBridge.publishValueChangedSinks], because this function drops
 // everything for a globally suppressed parameter and the reachability
 // parameters are suppressed by default.
-func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+// It reports whether the value reached the broker — false when there is no
+// wiring, or when the global visibility filter dropped the parameter. The
+// availability refresh in [EventBridge.publishValueChangedSinks] keys on that
+// answer.
+func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) bool {
 	if b.mqtt == nil {
-		return
+		return false
 	}
 	channel, channelNo := parseChannel(e.Key.ChannelAddress)
 	deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
@@ -1388,7 +1401,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 		// Globally suppressed (operator's ignoredParameters
 		// hiddenParameters / un-ignore overrides) — drop every
 		// downstream publish.
-		return
+		return false
 	}
 	// Discovery has TWO independent gates:
 	//
@@ -1490,6 +1503,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName, 
 	// reflected; the bridge diff-gates the broker traffic.
 	b.publishCustomDPState(ctx, centralName, iface, deviceAddr, channelNo, ch)
 	b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, channelNo, ch)
+	return true
 }
 
 // refreshDeviceAvailability re-evaluates a device's effective availability

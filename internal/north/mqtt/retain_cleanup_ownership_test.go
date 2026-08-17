@@ -5,7 +5,6 @@ package mqtt
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -62,7 +61,7 @@ func (c *brokerClient) Publish(_ context.Context, topic string, payload []byte, 
 	}
 	handlers := make([]MessageHandler, 0, len(c.subs))
 	for filter, h := range c.subs {
-		if topicMatchesFilter(filter, topic) {
+		if topicMatchesFilter(topic, filter) {
 			handlers = append(handlers, h)
 		}
 	}
@@ -79,7 +78,7 @@ func (c *brokerClient) Subscribe(_ context.Context, filter string, _ QoS, handle
 	c.mu.Lock()
 	replay := make(map[string][]byte, len(c.retained))
 	for t, p := range c.retained {
-		if topicMatchesFilter(filter, t) {
+		if topicMatchesFilter(t, filter) {
 			replay[t] = p
 		}
 	}
@@ -113,15 +112,6 @@ func (c *brokerClient) retractions() []string {
 		}
 	}
 	return out
-}
-
-// topicMatchesFilter implements the `#` suffix wildcard, which is the only
-// shape the sweeps subscribe with.
-func topicMatchesFilter(filter, topic string) bool {
-	if strings.HasSuffix(filter, "#") {
-		return strings.HasPrefix(topic, strings.TrimSuffix(filter, "#"))
-	}
-	return filter == topic
 }
 
 func contains(list []string, want string) bool {
