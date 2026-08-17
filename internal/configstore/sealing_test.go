@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/secret"
 )
 
@@ -180,5 +181,40 @@ func TestTransformSectionJSONUnavailableCipherPassthrough(t *testing.T) {
 	}
 	if !strings.Contains(string(sealed), "hunter2") {
 		t.Errorf("unavailable cipher clobbered plaintext password: %s", sealed)
+	}
+}
+
+// TestEveryConfigBackedSectionHasASealingTarget pins the reach of the at-rest
+// secret transform (ADR 0027). TransformSectionJSON derives the paths it seals
+// by reflecting over the struct sectionTarget returns; a section without one
+// is silently skipped, so a cfg:"secret" field added to it later would be
+// written to the database in the clear with nothing failing anywhere.
+//
+// The two exemptions are sections whose payload is not a config sub-tree at
+// all: locale is a single language tag, and security is not config-backed
+// (marshalSection reports ok=false for it) — neither can grow a secret leaf
+// without first growing a struct, which lands here.
+func TestEveryConfigBackedSectionHasASealingTarget(t *testing.T) {
+	t.Parallel()
+
+	exempt := map[Section]string{
+		SectionLocale:   "single non-secret language tag, no config sub-tree",
+		SectionSecurity: "not config-backed — marshalSection reports ok=false",
+	}
+
+	for _, sec := range AllSections() {
+		if _, ok := exempt[sec]; ok {
+			continue
+		}
+		if _, ok, err := marshalSection(sec, config.Default()); err != nil || !ok {
+			t.Errorf("marshalSection(%s): ok=%v err=%v — a section that serialises "+
+				"nothing belongs in the exempt list with a reason", sec, ok, err)
+			continue
+		}
+		if sectionTarget(sec) == nil {
+			t.Errorf("section %s is serialised into a config_sections row but has no "+
+				"sealing target: a cfg:\"secret\" field added to it would be stored "+
+				"in the clear", sec)
+		}
 	}
 }

@@ -12,9 +12,31 @@ import (
 )
 
 // ConfigSectionSchemaVersion identifies the on-disk format of stored config
-// sections. Bump this whenever the serialisation shape changes so that rows
-// written by an older daemon are treated as stale and dropped on boot (the
-// operator re-saves via the SPA). Version history:
+// sections. A mismatch makes [ConfigSectionStore.WipeOutdatedSections] drop
+// the row on boot, so the daemon falls back to the YAML/compiled-in values
+// until the operator re-saves via the SPA.
+//
+// When a change to a persisted config struct makes an existing row decode into
+// something other than what the daemon that wrote it meant, one of two repairs
+// is mandatory — the third option, doing nothing, is what let a stored
+// `basic_enabled: false` silently reject every HTTP Basic and Bearer request
+// after those switches became tri-state gates:
+//
+//   - Bump this constant when the payload can no longer be decoded at all, or
+//     when no evidence in the row distinguishes an old value from a deliberate
+//     new one. It is the blunt instrument: the wipe drops EVERY section row,
+//     across all sections, discarding every setting the operator ever saved in
+//     the SPA that the config file does not also carry.
+//   - Otherwise add a migration that rewrites only the affected keys, guarded
+//     on evidence that the row predates the change — see
+//     migrations/038_config_sections_auth_gates.sql, which keys on a sibling
+//     field that the same change removed and no later daemon can write.
+//
+// The choice is enforced at the moment of change by the pinned section shape
+// in tests/contract (TestConfigSectionPayloadShapeIsPinned), which fails on
+// any type or key change inside a persisted section sub-tree.
+//
+// Version history:
 //
 //	0: pre-versioning (rows written before migration 020 default to 0)
 //	1: initial versioned schema
