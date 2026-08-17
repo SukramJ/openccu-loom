@@ -67,16 +67,17 @@ type SensorCandidate struct {
 // The mapping is deliberately small: it covers the channel types whose
 // role is unambiguous, and leaves everything else to the operator.
 var sensorTypeByChannelType = map[string]hmenum.AlarmSensorType{
-	"SHUTTER_CONTACT":              hmenum.AlarmSensorTypeWindow,
-	"TILT_SENSOR":                  hmenum.AlarmSensorTypeWindow,
-	"ROTARY_HANDLE_SENSOR":         hmenum.AlarmSensorTypeWindow,
-	"MOTIONDETECTOR":               hmenum.AlarmSensorTypeMotion,
-	"MOTIONDETECTOR_TRANSCEIVER":   hmenum.AlarmSensorTypeMotion,
-	"MOTION_DETECTOR":              hmenum.AlarmSensorTypeMotion,
-	"PRESENCEDETECTOR_TRANSCEIVER": hmenum.AlarmSensorTypeMotion,
-	"SMOKE_DETECTOR":               hmenum.AlarmSensorTypeHazard,
-	"WATER_DETECTION_TRANSMITTER":  hmenum.AlarmSensorTypeHazard,
-	"WATERDETECTIONSENSOR":         hmenum.AlarmSensorTypeHazard,
+	"SHUTTER_CONTACT":                    hmenum.AlarmSensorTypeWindow,
+	"TILT_SENSOR":                        hmenum.AlarmSensorTypeWindow,
+	"ROTARY_HANDLE_SENSOR":               hmenum.AlarmSensorTypeWindow,
+	"ROTARY_HANDLE_TRANSCEIVER":          hmenum.AlarmSensorTypeWindow,
+	"MOTIONDETECTOR_TRANSCEIVER":         hmenum.AlarmSensorTypeMotion,
+	"MOTIONDETECTOR_VIRTUAL_TRANSCEIVER": hmenum.AlarmSensorTypeMotion,
+	"MOTION_DETECTOR":                    hmenum.AlarmSensorTypeMotion,
+	"PRESENCEDETECTOR_TRANSCEIVER":       hmenum.AlarmSensorTypeMotion,
+	"SMOKE_DETECTOR":                     hmenum.AlarmSensorTypeHazard,
+	"WATER_DETECTION_TRANSMITTER":        hmenum.AlarmSensorTypeHazard,
+	"WATERDETECTIONSENSOR":               hmenum.AlarmSensorTypeHazard,
 }
 
 // SensorCandidates enumerates the enrollable alarm-sensor data points

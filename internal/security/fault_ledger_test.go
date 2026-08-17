@@ -120,6 +120,154 @@ func TestRebuildIndexRaisesLedgerFaultForAlreadyActiveSource(t *testing.T) {
 	}
 }
 
+// TestRebuildIndexClearsFaultOfADeviceRemovedFromTheModel pins that a
+// fault can still be closed once the device that raised it is gone.
+//
+// Faults.Clear/applyFault both need an *indexedSource, and the wire
+// path only dispatches for a source still present in s.agg.sources, so
+// removing the faulty device — the obvious operator response to a
+// standing fault — used to be a dead end: RebuildIndex's own reconcile
+// pass walked only the fresh index, which by construction no longer
+// carries the removed source either, so nothing anywhere ever revisited
+// it again. The fault, and the severity it raised, stood forever.
+func TestRebuildIndexClearsFaultOfADeviceRemovedFromTheModel(t *testing.T) {
+	t.Parallel()
+	const (
+		centralName = "c1"
+		deviceAddr  = "DEV0002"
+	)
+
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF", Address: deviceAddr, Model: "HmIP-SWDO", Name: "Back Door",
+	})
+	maint := dev.AddChannel(deviceAddr+":0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	unreach := generic.NewBinarySensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID: "HmIP-RF", ChannelAddress: maint.Address,
+			ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterUnreach),
+		},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeBool, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	unreach.OnEvent(true)
+	maint.Put(unreach)
+
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: centralName})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	unit.ModelRegistry.Put(dev)
+	// Southbound-ready gates the orphan-clear: without it, a source
+	// missing from a rebuild reads as "not loaded yet", not "removed",
+	// and the fault this test expects to close would rightly stay open.
+	unit.MarkSouthboundReady()
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+
+	svc, stores, _ := newTestService(t, func(d *Deps) { d.Registry = reg })
+	ctx := context.Background()
+
+	now := time.Now().UnixMilli()
+	if err := stores.Sensors.Upsert(ctx, sqlitestore.AlarmSensorRow{
+		ID: "s1", ZoneID: "z1", CentralName: centralName, InterfaceID: "HmIP-RF",
+		ChannelAddress: deviceAddr + ":1", Parameter: "STATE", SensorType: hmenum.AlarmSensorTypeDoor,
+		Name: "Back Door", ConfigJSON: "{}", CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		t.Fatalf("seed alarm sensor enrollment: %v", err)
+	}
+
+	if err := svc.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	rows, err := stores.Faults.ListOpen(ctx)
+	if err != nil {
+		t.Fatalf("ListOpen: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("ListOpen after Start on an unreachable device = %d row(s), want 1; the rest of "+
+			"this test would pass vacuously", len(rows))
+	}
+
+	// The operator's response to a permanently unreachable device:
+	// remove it from the CCU. The next model change (a device deleted
+	// event, in production) drives a rebuild.
+	unit.ModelRegistry.Remove(deviceAddr)
+	if err := svc.RebuildIndex(ctx); err != nil {
+		t.Fatalf("RebuildIndex after device removal: %v", err)
+	}
+
+	rows, err = stores.Faults.ListOpen(ctx)
+	if err != nil {
+		t.Fatalf("ListOpen: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("ListOpen after removing the faulty device = %d row(s), want 0 — a fault whose "+
+			"source is gone can never resolve on its own, the row is gone", len(rows))
+	}
+
+	snap := svc.Snapshot()
+	if st, ok := snap.Classes[hmenum.SecurityClassTechnical]; ok && st.Active {
+		t.Errorf("technical class state = %+v, want Active=false after the only faulting device was removed", st)
+	}
+	if snap.Severity != hmenum.SecuritySeverityOK {
+		t.Errorf("severity = %q, want %q after the only fault cleared", snap.Severity, hmenum.SecuritySeverityOK)
+	}
+}
+
+// TestRebuildIndexNeverClearsAFaultOfACentralNotYetSouthboundReady pins
+// the safety rail on the fix above: RebuildIndex can run before a
+// registered central's model has finished loading (attachUnit's own
+// doc: the model "is populated asynchronously ... long after this
+// service starts"), and a source missing from that partial pass is not
+// evidence it is gone. Judging removal against an incomplete model
+// would clear every standing fault on a plain restart — a false
+// all-clear for smoke, water, door and duress monitoring at exactly
+// the moment nothing has been checked yet.
+func TestRebuildIndexNeverClearsAFaultOfACentralNotYetSouthboundReady(t *testing.T) {
+	t.Parallel()
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: "c1"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	// Registered, but never marked southbound-ready: the model has not
+	// finished loading, exactly the window between Start and the first
+	// CentralSouthboundReadyEvent.
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+
+	svc, stores, clk := newTestService(t, func(d *Deps) { d.Registry = reg })
+	ctx := context.Background()
+
+	row := sqlitestore.SecurityFault{
+		ID: "c1|HmIP-RF|DEV1:1|UNREACH|seed", Ref: "c1|HmIP-RF|DEV1:1|UNREACH",
+		Class: string(hmenum.SecurityClassTechnical), Reason: string(hmenum.SecurityFaultReasonUnreachable),
+		Severity: string(hmenum.SecuritySeverityInfo), CentralName: "c1", InterfaceID: "HmIP-RF",
+		DeviceAddress: "DEV1", ChannelAddress: "DEV1:1", Parameter: "UNREACH", Name: "DEV1",
+		SinceMS: clk.Now().UnixMilli(),
+	}
+	if _, _, err := stores.Faults.Raise(ctx, row); err != nil {
+		t.Fatalf("seed raise: %v", err)
+	}
+
+	if err := svc.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	rows, err := stores.Faults.ListOpen(ctx)
+	if err != nil {
+		t.Fatalf("ListOpen: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("ListOpen after Start against a not-yet-ready central = %d row(s), want 1 — a "+
+			"fault must never be cleared before its owning central's model has finished loading",
+			len(rows))
+	}
+}
+
 // --- M2: retention ---
 
 // TestSecurityFaultRetentionPurgesOnlyFaultsPastTheWindow pins the

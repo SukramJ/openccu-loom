@@ -384,6 +384,21 @@ func (e *Engine) restorePending(ctx context.Context, a *zone, timers []persisted
 	})
 }
 
+// stopSilencedIncidentOnRestore issues the S3 counter-stop for a
+// silenced incident on restore: a silenced incident never sounds
+// again, on either the plausible- or implausible-clock path. The
+// counter-stop covers a crash that landed between the silence persist
+// and the output stop — stopping again is free.
+func (e *Engine) stopSilencedIncidentOnRestore(ctx context.Context, a *zone, inc *sqlitestore.AlarmIncident) {
+	if err := e.outputs.StopAll(ctx, a.id, inc.ID); err != nil {
+		e.journalFault(ctx, a, "output_stop_failed", err, inc.ID)
+	}
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassSilence, Event: "silenced_incident_restored",
+		IncidentID: inc.ID,
+	})
+}
+
 // restoreTriggered restores an interrupted triggered phase per §10.2:
 // resume outputs inside the window (counting the re-fire against the
 // loop breaker), execute the post-trigger policy when the window
@@ -442,6 +457,9 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *zone, timers []persist
 			Class: hmenum.AlarmJournalClassFault, Event: "triggered_restored_implausible_clock",
 			IncidentID: inc.ID,
 		})
+		if inc.Silenced {
+			e.stopSilencedIncidentOnRestore(ctx, a, inc)
+		}
 		return
 	}
 
@@ -463,16 +481,7 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *zone, timers []persist
 	e.persist(ctx, a)
 
 	if inc.Silenced {
-		// S3 persistence: a silenced incident never sounds again. The
-		// counter-stop covers a crash that landed between the silence
-		// persist and the output stop — stopping again is free.
-		if err := e.outputs.StopAll(ctx, a.id, inc.ID); err != nil {
-			e.journalFault(ctx, a, "output_stop_failed", err, inc.ID)
-		}
-		e.journalEntry(ctx, a, JournalEntry{
-			Class: hmenum.AlarmJournalClassSilence, Event: "silenced_incident_restored",
-			IncidentID: inc.ID,
-		})
+		e.stopSilencedIncidentOnRestore(ctx, a, inc)
 		return
 	}
 

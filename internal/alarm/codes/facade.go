@@ -270,21 +270,34 @@ func (f *Facade) MatchDuress(ctx context.Context, zoneID, verb, code, source str
 			return "", false
 		}
 	}
-	// Single verification pass over every applicable code. A duress
-	// match fires the covert channel; any other match is the household's
-	// ordinary correct PIN — a success, not a probe. Only a code that
-	// matches nothing is a failed probe.
-	knownCode := false
+	// Duress-eligible candidates are verified exhaustively first: a
+	// duress match fires the covert channel and returns immediately, and
+	// checking every one of them before any ordinary row guarantees a
+	// duress code is never missed behind an earlier ordinary match on
+	// the same code string. Only once duress is ruled out is the
+	// remaining set verified, and only until the first match —
+	// knownCode only needs to know a code is valid, not which row it
+	// matches, so it stops at the first hit instead of hashing every
+	// enabled PIN in the installation.
 	for _, c := range candidates {
-		if !VerifyPIN(c.hash, code) {
+		if !c.duress || !permits(c.perms, verb) {
 			continue
 		}
-		knownCode = true
-		if c.duress && permits(c.perms, verb) {
+		if VerifyPIN(c.hash, code) {
 			if limited {
 				f.probes.recordSuccess(source)
 			}
 			return c.name, true
+		}
+	}
+	knownCode := false
+	for _, c := range candidates {
+		if c.duress && permits(c.perms, verb) {
+			continue // already verified above
+		}
+		if VerifyPIN(c.hash, code) {
+			knownCode = true
+			break
 		}
 	}
 	if limited {

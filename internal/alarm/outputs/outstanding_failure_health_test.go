@@ -98,3 +98,36 @@ func TestVerifiedStopReportsHealthyOnlyWhenNothingElseFailed(t *testing.T) {
 		t.Fatalf("resolving the last outstanding failure = %+v, want healthy", got)
 	}
 }
+
+// TestReloadPrunesOutstandingFailuresOfRemovedOutputs covers the other
+// way an outstanding failure's condition can go away: the operator
+// deletes the broken output instead of fixing it. Reload already drops
+// stale arbitration demands for a removed row (pruneDemands); the
+// outstanding-failure set needs the same treatment, or the removed
+// output's failure can never resolve — resolveFailure only runs from a
+// verified stop of that same output, and a deleted row's watchdog and
+// stop can never run again — leaving the alarm domain reporting
+// degraded, with the note of a device that no longer exists, until the
+// daemon restarts.
+func TestReloadPrunesOutstandingFailuresOfRemovedOutputs(t *testing.T) {
+	h := newHarness(t)
+	h.seedOutputs(
+		outputRow("sirA", hmenum.AlarmOutputClassAcousticSiren, OutputConfig{DurationSeconds: 120}),
+	)
+
+	h.siren("sirA").setTurnOnErr(errDeviceUnreachable)
+	_ = h.mgr.FireCycle(h.ctx, "eg", newIncident(1, hmenum.AlarmModeFull),
+		engine.FireOptions{Policy: noPolicy})
+	assertUnhealthy(t, h, "sirA")
+
+	// The operator removes the broken siren from the zone's outputs.
+	h.rows.set(nil)
+	if err := h.mgr.Reload(h.ctx); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+
+	if got := h.lastHealth(t); !got.Healthy {
+		t.Fatalf("removing the only failed output left health degraded: %+v — its condition can never "+
+			"resolve, the row is gone", got)
+	}
+}

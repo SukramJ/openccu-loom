@@ -127,6 +127,38 @@ func (s *Service) applyFault(parent context.Context, src *indexedSource, active 
 	}, true)
 }
 
+// clearOrphanedFault closes a fault whose source has left the model
+// entirely — the device was removed, not merely deactivated — so
+// nothing on the live wire path or the reconcile pass in RebuildIndex
+// will ever call applyFault for it again: both need an *indexedSource,
+// and a vanished source has none. Unlike applyFault's own clear branch
+// this never re-derives severity or the resolved report from a source
+// document that no longer exists; it closes the ledger row from what
+// the fault itself already recorded.
+func (s *Service) clearOrphanedFault(parent context.Context, f *security.Fault) {
+	ctx, cancel := context.WithTimeout(parent, faultWriteTimeout)
+	defer cancel()
+	now := s.clk.Now()
+	cleared, err := s.stores.Faults.Clear(ctx, f.Source.Ref, string(f.Reason), nowMS(now))
+	if err != nil {
+		s.log.Error("security: clear fault of a removed source", "ref", f.Source.Ref, "error", err)
+		return
+	}
+	if !cleared {
+		return
+	}
+	s.mu.Lock()
+	delete(s.agg.faults, f.ID)
+	open := len(s.agg.faults)
+	snap := s.agg.snapshot()
+	s.mu.Unlock()
+	events.Publish(s.bus, hmevent.SecurityFaultChangedEvent{
+		Base: hmevent.NewBaseAt(now), Class: f.Class, Reason: f.Reason,
+		Source: f.Source, Open: false, OpenCount: open,
+	})
+	s.publishState(snap)
+}
+
 // AcknowledgeFault marks a standing fault as seen. It never clears the
 // fault: the condition is still there.
 func (s *Service) AcknowledgeFault(ctx context.Context, id, by string) (bool, error) {

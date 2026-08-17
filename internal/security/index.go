@@ -6,6 +6,7 @@ package security
 import (
 	"context"
 	"sort"
+	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -43,8 +44,17 @@ func (s *Service) RebuildIndex(ctx context.Context) error {
 	// source that is already active when the index is built starts out
 	// active rather than waiting for a change that may never come.
 	seed := map[string]bool{}
+	// readyCentrals names every central whose initial southbound
+	// bring-up has completed at least once. RebuildIndex can run before
+	// that — attachUnit's own doc notes the model is populated
+	// asynchronously, "long after this service starts" — so a source's
+	// absence from this pass only means "genuinely gone" when its
+	// owning central is in this set; otherwise it may simply not have
+	// loaded yet.
+	readyCentrals := map[string]bool{}
 	for _, u := range s.reg.List() {
 		s.indexUnit(u, overrides, enrolled, alarmDevices, index, seed)
+		readyCentrals[u.Name()] = u.IsSouthboundReady()
 	}
 
 	now := nowMS(s.clk.Now())
@@ -85,6 +95,29 @@ func (s *Service) RebuildIndex(ctx context.Context) error {
 			reconcileFaults[key] = src
 		}
 	}
+	// Faults whose source left the model entirely (the device was
+	// removed, not merely reclassified). This loop only walks the fresh
+	// index above, so a fault like this is never revisited by anything
+	// else either: applyFault needs an *indexedSource for the source it
+	// clears, and the live wire path only dispatches for a key that is
+	// still in s.agg.sources. Without closing it here, removing the
+	// faulty device is an operator's only recourse for a stuck fault
+	// and it does not work — the fault, and the severity it holds up,
+	// would stand forever.
+	var orphaned []*security.Fault
+	for _, f := range s.agg.faults {
+		if !readyCentrals[f.Source.Central] {
+			// The owning central is not currently registered, or its
+			// model has never finished loading: a source missing from
+			// this pass is not evidence it is gone, only that this pass
+			// cannot see it yet (or DetachCentral already owns clearing
+			// it, for a central that left entirely).
+			continue
+		}
+		if _, stillPresent := index[f.Source.Ref]; !stillPresent {
+			orphaned = append(orphaned, f)
+		}
+	}
 	snap := s.agg.snapshot()
 	s.mu.Unlock()
 
@@ -99,6 +132,9 @@ func (s *Service) RebuildIndex(ctx context.Context) error {
 		_, isActive := s.agg.active[key]
 		s.mu.Unlock()
 		s.applyFault(ctx, src, isActive)
+	}
+	for _, f := range orphaned {
+		s.clearOrphanedFault(ctx, f)
 	}
 	s.refreshZoneSlugs(ctx)
 	// A rebuild changes what is active, which class is known and which
@@ -146,7 +182,12 @@ func (s *Service) faultStandsLocked(src *indexedSource) bool {
 // Without it the domain fell back to the zone UUID, which then reached
 // the MQTT topic and the consumer entity id — exactly what the slug
 // exists to prevent. A pre-migration row with an empty slug gets one
-// derived here rather than keeping the UUID.
+// derived here rather than keeping the UUID, and the derived value is
+// written back through the store so it is frozen from this boot on —
+// exactly like a freshly created zone's slug — instead of being
+// re-derived from the current name on every future boot, which would
+// let a later rename move it and orphan every consumer entity of that
+// zone.
 func (s *Service) refreshZoneSlugs(ctx context.Context) {
 	if s.stores.Zones == nil {
 		return
@@ -156,23 +197,56 @@ func (s *Service) refreshZoneSlugs(ctx context.Context) {
 		s.log.Error("security: load zone slugs", "error", err)
 		return
 	}
+	taken := make(map[string]bool, len(rows))
+	for i := range rows {
+		if rows[i].Slug != "" {
+			taken[rows[i].Slug] = true
+		}
+	}
+	slugs := make([]string, len(rows))
+	for i := range rows {
+		if rows[i].Slug != "" {
+			slugs[i] = rows[i].Slug
+			continue
+		}
+		slug := deriveUniqueZoneSlug(rows[i].Name, taken)
+		taken[slug] = true
+		if err := s.stores.Zones.SetSlug(ctx, rows[i].ID, slug); err != nil {
+			s.log.Error("security: persist repaired zone slug", "zone", rows[i].ID, "error", err)
+		}
+		slugs[i] = slug
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range rows {
-		slug := rows[i].Slug
-		if slug == "" {
-			slug = routingkey.HubSlug(rows[i].Name)
-		}
-		if slug == "" {
-			slug = "zone"
-		}
 		z := s.agg.zones[rows[i].ID]
 		z.ID = rows[i].ID
-		z.Slug = slug
+		z.Slug = slugs[i]
 		if z.Name == "" {
 			z.Name = rows[i].Name
 		}
 		s.agg.zones[rows[i].ID] = z
+	}
+}
+
+// deriveUniqueZoneSlug derives a stable external identifier for name,
+// unique against taken — the same base-plus-numeric-suffix rule a
+// freshly created zone gets (mirrors uniqueZoneSlug in the alarm-config
+// REST handler, which this package cannot import without an inverted
+// dependency).
+func deriveUniqueZoneSlug(name string, taken map[string]bool) string {
+	base := routingkey.HubSlug(name)
+	if base == "" {
+		base = "zone"
+	}
+	if !taken[base] {
+		return base
+	}
+	for n := 2; ; n++ {
+		candidate := base + "-" + strconv.Itoa(n)
+		if !taken[candidate] {
+			return candidate
+		}
 	}
 }
 

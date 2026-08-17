@@ -490,6 +490,12 @@ func (e *Engine) beginArm(ctx context.Context, a *zone, req ArmRequest, mcfg Mod
 	// A fresh arm supersedes any pending auto-rearm.
 	a.cancelAutoRearm()
 
+	// A walk-test session is arm-less by definition (§12.4): an
+	// operator forgetting to stop it before an arm — human or
+	// AutoArm-scheduled — must never leave it consuming every future
+	// disarmed-period sensor activation once the zone disarms again.
+	e.abortWalkTestForArm(ctx, a, req.By, req.Source)
+
 	// Clear latched motion detectors as early as possible, so the write
 	// is on the radio before the exit delay starts ticking.
 	//

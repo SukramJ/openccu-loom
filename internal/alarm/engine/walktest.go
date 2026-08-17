@@ -129,6 +129,27 @@ func (e *Engine) walkStatusLocked(a *zone) WalkTestStatus {
 	return st
 }
 
+// abortWalkTestForArm ends a running walk-test session before an arm
+// takes effect. Without this, a session left open across an arm stays
+// open through the whole armed period — walkTestObserve already
+// refuses to consume events while the zone is not disarmed, so an
+// intrusion during that period alarms normally — but the session
+// itself survives, and once the zone disarms again it silently
+// resumes swallowing every sensor activation as walk-test progress
+// instead of real disarmed-state handling (door chime, open-at-arm
+// bookkeeping). The caller holds the lock.
+func (e *Engine) abortWalkTestForArm(ctx context.Context, a *zone, by, source string) {
+	if a.walk == nil {
+		return
+	}
+	status := e.walkStatusLocked(a)
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassTest, Event: "walktest_aborted_by_arm", Actor: by, Source: source,
+		Details: map[string]any{"seen": status.Seen, "total": status.Total},
+	})
+	a.walk = nil
+}
+
 // walkTestObserve records a sensor activation during a running
 // session. The caller holds the lock; returns true when consumed.
 func (e *Engine) walkTestObserve(ctx context.Context, a *zone, sensorID string, active bool) bool {
