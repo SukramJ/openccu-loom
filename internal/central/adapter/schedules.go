@@ -111,12 +111,9 @@ var climateScheduleChannelTypes = map[string]struct{}{
 }
 
 // weekProfileChannelPattern matches every channel type that ends in
-// WEEK_PROFILE — examples observed on real CCUs:
-//
-//	WEEK_PROFILE                  (BidCos heating regulator)
-//	SWITCH_WEEK_PROFILE           (HmIP-PSM, HmIP-FSM, HmIP-PS, …)
-//	HEATING_WEEK_PROFILE          (HmIP-FALMOT, HmIP-eTRV-CL)
-//	COVER_WEEK_PROFILE            (HmIP-BBL, HmIP-BROLL)
+// WEEK_PROFILE. The types real devices carry are enumerated in
+// [weekProfileDomains]; the pattern stays open-ended so a firmware that
+// adds one is still recognised as a schedule channel.
 //
 // 1:1 port of
 // (`.*WEEK_PROFILE$` in const.py).
@@ -527,25 +524,40 @@ func resolveScheduleDomain(dev *device.Device, scheduleChannelNo int) string {
 	return ""
 }
 
+// weekProfileDomains maps each "<X>_WEEK_PROFILE" channel type onto the
+// user-facing domain bucket. Keyed by the exact type, not by a prefix:
+// the real names do not share a prefix with the domain they belong to.
+// UNIVERSAL_LIGHT_WEEK_PROFILE (HmIP-RGBW / LSC / DRG-DALI) and
+// SHADING_WEEK_PROFILE (HmIP-HDM1 / HDM2) start with neither DIMMER_
+// nor BLIND_, so a prefix rule set leaves them unclassified and the
+// resolution falls through to the actor-channel scan — which answers
+// with whichever actor channel sorts first and therefore hands two
+// devices carrying the same schedule channel type two different
+// domains. An unresolved domain reaches the operator as a schedule
+// editor without the brightness slider, without the ramp-time field
+// and without the slat control, and as an MQTT `schedule_domain` of
+// "switch" on a device that is not one.
+//
+// SERVO_WEEK_PROFILE carries no device in the simulated fleet; it is
+// declared by the CCU WebUI's channel-description table and drives a
+// percentage level actor (SERVO_TRANSMITTER.LEVEL + RAMP_TIME), which
+// puts it in the same bucket as the other non-light level actors.
+var weekProfileDomains = map[string]string{
+	"SWITCH_WEEK_PROFILE":                  "switch",
+	"DIMMER_WEEK_PROFILE":                  "light",
+	"DIMMER_OUTPUT_BEHAVIOUR_WEEK_PROFILE": "light",
+	"UNIVERSAL_LIGHT_WEEK_PROFILE":         "light",
+	"BLIND_WEEK_PROFILE":                   "cover",
+	"SHADING_WEEK_PROFILE":                 "cover",
+	"WATER_SWITCH_WEEK_PROFILE":            "valve",
+	"SERVO_WEEK_PROFILE":                   "valve",
+}
+
 // domainFromWeekProfileType maps a "<X>_WEEK_PROFILE" channel type to
-// the user-facing domain bucket.
+// the user-facing domain bucket. Returns "" for a type no shipped
+// firmware declares, leaving the decision to the actor-type scan.
 func domainFromWeekProfileType(channelType string) string {
-	switch {
-	case strings.HasPrefix(channelType, "SWITCH_WEEK"):
-		return "switch"
-	case strings.HasPrefix(channelType, "DIMMER_WEEK"), strings.HasPrefix(channelType, "LIGHT_WEEK"):
-		return "light"
-	case strings.HasPrefix(channelType, "BLIND_WEEK"), strings.HasPrefix(channelType, "COVER_WEEK"),
-		strings.HasPrefix(channelType, "SHUTTER_WEEK"):
-		return "cover"
-	case strings.HasPrefix(channelType, "LOCK_WEEK"), strings.HasPrefix(channelType, "DOOR_LOCK_WEEK"):
-		return "lock"
-	case strings.HasPrefix(channelType, "VALVE_WEEK"), strings.HasPrefix(channelType, "WATER_WEEK"):
-		return "valve"
-	case strings.HasPrefix(channelType, "HEATING_WEEK"), strings.HasPrefix(channelType, "CLIMATECONTROL_WEEK"):
-		return "climate"
-	}
-	return ""
+	return weekProfileDomains[channelType]
 }
 
 // domainFromActorType maps a regular channel type to a domain

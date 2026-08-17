@@ -129,8 +129,14 @@ func TestParityIsActiveFromOpticalEvent(t *testing.T) {
 	}
 }
 
-// TestParityConvertSoundfileIndexValidRange verifies the 1..189 valid range.
-// Mirrors test_ip_siren_smoke → soundfile_index conversion.
+// TestParityConvertSoundfileIndexValidRange verifies the accepted index
+// range and the SOUNDFILE_%03d label shape.
+//
+// The upper bound is the device's own: the HmIP-MP3P SOUNDFILE
+// VALUE_LIST runs to SOUNDFILE_252. The reference stack stops at 189,
+// which is a deliberate divergence catalogued in
+// notes/parity/by_design.md — a lower cap makes the daemon advertise
+// tones it then refuses to send.
 func TestParityConvertSoundfileIndexValidRange(t *testing.T) {
 	t.Parallel()
 
@@ -142,8 +148,9 @@ func TestParityConvertSoundfileIndexValidRange(t *testing.T) {
 		{1, "SOUNDFILE_001", false},
 		{42, "SOUNDFILE_042", false},
 		{189, "SOUNDFILE_189", false},
+		{252, "SOUNDFILE_252", false},
 		{0, "", true},   // below min
-		{190, "", true}, // above max
+		{253, "", true}, // above the device's highest numbered file
 		{-1, "", true},  // negative
 	}
 	for _, tc := range cases {

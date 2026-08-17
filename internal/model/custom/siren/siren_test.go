@@ -313,8 +313,10 @@ func TestConvertSoundfileIndex(t *testing.T) {
 		{1, "SOUNDFILE_001", false},
 		{42, "SOUNDFILE_042", false},
 		{189, "SOUNDFILE_189", false},
+		{190, "SOUNDFILE_190", false},
+		{252, "SOUNDFILE_252", false},
 		{0, "", true},   // below min
-		{190, "", true}, // above max
+		{253, "", true}, // above the device's highest numbered file
 		{-1, "", true},  // negative
 	} {
 		got, err := ConvertSoundfileIndex(tc.index)

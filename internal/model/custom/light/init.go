@@ -290,6 +290,7 @@ func newEffectLightConstructor(ch *device.Channel, rebased custom.RebasedChannel
 	el := newEffectLightOn(
 		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}),
 		programChannel(ch, rebased),
+		colorChannel(ch, rebased),
 	)
 	applyGroupLevel(el.Light, ch, rebased)
 	return el, nil
@@ -360,6 +361,28 @@ func programChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig
 		}
 	}
 	return ch
+}
+
+// colorChannel resolves the channel the profile maps COLOR onto. The RF
+// colour dimmers carry a single COLOR integer one channel above the
+// light's own and no HUE / SATURATION anywhere, so a light that only
+// looks at its own channel finds no colour axis at all — while the
+// discovery payload still advertises the hs colour mode and every colour
+// command comes back as "channel missing HUE or SATURATION".
+func colorChannel(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) *device.Channel {
+	for chNo, fields := range rebased.ChannelFields {
+		fv, ok := fields[hmenum.FieldColor]
+		if !ok {
+			continue
+		}
+		if param, _ := custom.ResolveFieldValue(fv); param != hmenum.ParameterColor {
+			continue
+		}
+		if sibling := siblingChannel(ch, chNo); sibling != nil {
+			return sibling
+		}
+	}
+	return nil
 }
 
 // whitePointChannel resolves the channel the profile maps COLOR_LEVEL

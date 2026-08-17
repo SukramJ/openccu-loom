@@ -1,0 +1,274 @@
+{
+ "devices": [
+  {
+   "model": "ELV-SH-BS2",
+   "schedule_channel": 11,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "SWITCH_WEEK_PROFILE"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "SWITCH_TRANSMITTER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "SWITCH_TRANSMITTER"}, {"no": 8, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 9, "type": "SWITCH_VIRTUAL_RECEIVER"}]
+  },
+  {
+   "model": "ELV-SH-SW1-BAT",
+   "schedule_channel": 6,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "ELV-SH-WSM",
+   "schedule_channel": 7,
+   "schedule_channel_type": "WATER_SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "FLOW_METER_TRANSMITTER"}, {"no": 3, "type": "WATER_SWITCH_TRANSMITTER"}, {"no": 4, "type": "WATER_SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "WATER_SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "WATER_SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "WATER_SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HMIP-PS",
+   "schedule_channel": 6,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HMIP-PSM",
+   "schedule_channel": 8,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "ENERGIE_METER_TRANSMITTER"}, {"no": 7, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 8, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-BDT",
+   "schedule_channel": 7,
+   "schedule_channel_type": "DIMMER_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "DIMMER_TRANSMITTER"}, {"no": 4, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 5, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 6, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 7, "type": "DIMMER_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-BROLL",
+   "schedule_channel": 7,
+   "schedule_channel_type": "BLIND_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "SHUTTER_TRANSMITTER"}, {"no": 4, "type": "SHUTTER_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SHUTTER_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SHUTTER_VIRTUAL_RECEIVER"}, {"no": 7, "type": "BLIND_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-BSL",
+   "schedule_channel": 15,
+   "schedule_channel_type": "DIMMER_OUTPUT_BEHAVIOUR_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 10, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 11, "type": "DIMMER_TRANSMITTER"}, {"no": 12, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 13, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 14, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 15, "type": "DIMMER_OUTPUT_BEHAVIOUR_WEEK_PROFILE"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "SWITCH_TRANSMITTER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "DIMMER_TRANSMITTER"}, {"no": 8, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 9, "type": "DIMMER_VIRTUAL_RECEIVER"}]
+  },
+  {
+   "model": "HmIP-BSM",
+   "schedule_channel": 9,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "SWITCH_TRANSMITTER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "ENERGIE_METER_TRANSMITTER"}, {"no": 8, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 9, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-DLD",
+   "schedule_channel": 10,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "DOOR_LOCK_STATE_TRANSMITTER"}, {"no": 10, "type": "SWITCH_WEEK_PROFILE"}, {"no": 2, "type": "ACCESS_RECEIVER"}, {"no": 3, "type": "ACCESS_RECEIVER"}, {"no": 4, "type": "ACCESS_RECEIVER"}, {"no": 5, "type": "ACCESS_RECEIVER"}, {"no": 6, "type": "ACCESS_RECEIVER"}, {"no": 7, "type": "ACCESS_RECEIVER"}, {"no": 8, "type": "ACCESS_RECEIVER"}, {"no": 9, "type": "ACCESS_RECEIVER"}]
+  },
+  {
+   "model": "HmIP-DLP",
+   "schedule_channel": 14,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 10, "type": "PERMISSION_TRANSCEIVER"}, {"no": 11, "type": "PERMISSION_TRANSCEIVER"}, {"no": 12, "type": "DOOR_LOCK_TRANSCEIVER"}, {"no": 13, "type": "AUTO_RELOCK_TRANSCEIVER"}, {"no": 14, "type": "SWITCH_WEEK_PROFILE"}, {"no": 15, "type": "ALARM_COND_SWITCH_TRANSMITTER"}, {"no": 2, "type": "ACCELERATION_TRANSCEIVER"}, {"no": 3, "type": "DOOR_STATE_TRANSCEIVER"}, {"no": 4, "type": "PERMISSION_TRANSCEIVER"}, {"no": 5, "type": "PERMISSION_TRANSCEIVER"}, {"no": 6, "type": "PERMISSION_TRANSCEIVER"}, {"no": 7, "type": "PERMISSION_TRANSCEIVER"}, {"no": 8, "type": "PERMISSION_TRANSCEIVER"}, {"no": 9, "type": "PERMISSION_TRANSCEIVER"}]
+  },
+  {
+   "model": "HmIP-DRBLI4",
+   "schedule_channel": 25,
+   "schedule_channel_type": "BLIND_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 10, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 11, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 12, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 13, "type": "BLIND_TRANSMITTER"}, {"no": 14, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 15, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 16, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 17, "type": "BLIND_TRANSMITTER"}, {"no": 18, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 19, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 2, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 20, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 21, "type": "BLIND_TRANSMITTER"}, {"no": 22, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 23, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 24, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 25, "type": "BLIND_WEEK_PROFILE"}, {"no": 3, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 4, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 5, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 6, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 7, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 8, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 9, "type": "BLIND_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIP-DRDI3",
+   "schedule_channel": 16,
+   "schedule_channel_type": "DIMMER_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 10, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 11, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 12, "type": "DIMMER_TRANSMITTER"}, {"no": 13, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 14, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 15, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 16, "type": "DIMMER_WEEK_PROFILE"}, {"no": 2, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 3, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 4, "type": "DIMMER_TRANSMITTER"}, {"no": 5, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 6, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 7, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 8, "type": "DIMMER_TRANSMITTER"}, {"no": 9, "type": "DIMMER_VIRTUAL_RECEIVER"}]
+  },
+  {
+   "model": "HmIP-DRG-DALI",
+   "schedule_channel": 49,
+   "schedule_channel_type": "UNIVERSAL_LIGHT_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 10, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 11, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 12, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 13, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 14, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 15, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 16, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 17, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 18, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 19, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 2, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 20, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 21, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 22, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 23, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 24, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 25, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 26, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 27, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 28, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 29, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 3, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 30, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 31, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 32, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 33, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 34, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 35, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 36, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 37, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 38, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 39, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 4, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 40, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 41, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 42, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 43, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 44, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 45, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 46, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 47, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 48, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 49, "type": "UNIVERSAL_LIGHT_WEEK_PROFILE"}, {"no": 5, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 6, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 7, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 8, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 9, "type": "UNIVERSAL_LIGHT_RECEIVER"}]
+  },
+  {
+   "model": "HmIP-DRSI1",
+   "schedule_channel": 6,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-DRSI4",
+   "schedule_channel": 21,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 12, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 13, "type": "SWITCH_TRANSMITTER"}, {"no": 14, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 15, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 16, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 17, "type": "SWITCH_TRANSMITTER"}, {"no": 18, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 19, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 2, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 20, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 21, "type": "SWITCH_WEEK_PROFILE"}, {"no": 3, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 4, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 5, "type": "SWITCH_TRANSMITTER"}, {"no": 6, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 8, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 9, "type": "SWITCH_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIP-FBL",
+   "schedule_channel": 7,
+   "schedule_channel_type": "BLIND_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "BLIND_TRANSMITTER"}, {"no": 4, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 5, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 6, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 7, "type": "BLIND_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-FDT",
+   "schedule_channel": 5,
+   "schedule_channel_type": "DIMMER_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "DIMMER_TRANSMITTER"}, {"no": 2, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 3, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 4, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 5, "type": "DIMMER_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-FROLL",
+   "schedule_channel": 7,
+   "schedule_channel_type": "BLIND_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "SHUTTER_TRANSMITTER"}, {"no": 4, "type": "SHUTTER_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SHUTTER_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SHUTTER_VIRTUAL_RECEIVER"}, {"no": 7, "type": "BLIND_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-FSI16",
+   "schedule_channel": 6,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-FSM16",
+   "schedule_channel": 7,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "SWITCH_TRANSMITTER"}, {"no": 2, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "ENERGIE_METER_TRANSMITTER"}, {"no": 6, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 7, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-FWI",
+   "schedule_channel": 13,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "ACCESS_TRANSCEIVER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 12, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 13, "type": "SWITCH_WEEK_PROFILE"}, {"no": 14, "type": "ALARM_COND_SWITCH_TRANSMITTER"}, {"no": 2, "type": "ACCESS_TRANSCEIVER"}, {"no": 3, "type": "ACCESS_TRANSCEIVER"}, {"no": 4, "type": "ACCESS_TRANSCEIVER"}, {"no": 5, "type": "ACCESS_TRANSCEIVER"}, {"no": 6, "type": "ACCESS_TRANSCEIVER"}, {"no": 7, "type": "ACCESS_TRANSCEIVER"}, {"no": 8, "type": "ACCESS_TRANSCEIVER"}, {"no": 9, "type": "SWITCH_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIP-HDM1",
+   "schedule_channel": 2,
+   "schedule_channel_type": "SHADING_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "SHADING_RECEIVER"}, {"no": 2, "type": "SHADING_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-HDM2",
+   "schedule_channel": 2,
+   "schedule_channel_type": "SHADING_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "SHADING_RECEIVER"}, {"no": 2, "type": "SHADING_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-LSC",
+   "schedule_channel": 2,
+   "schedule_channel_type": "UNIVERSAL_LIGHT_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 2, "type": "UNIVERSAL_LIGHT_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-MIO16-PCB",
+   "schedule_channel": 49,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "ANALOG_INPUT_TRANSMITTER"}, {"no": 10, "type": "ANALOG_INPUT_TRANSMITTER"}, {"no": 11, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 12, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 13, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 14, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 15, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 16, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 17, "type": "SWITCH_TRANSMITTER"}, {"no": 18, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 19, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 2, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 20, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 21, "type": "SWITCH_TRANSMITTER"}, {"no": 22, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 23, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 24, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 25, "type": "SWITCH_TRANSMITTER"}, {"no": 26, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 27, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 28, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 29, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 30, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 31, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 32, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 33, "type": "SWITCH_TRANSMITTER"}, {"no": 34, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 35, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 36, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 37, "type": "SWITCH_TRANSMITTER"}, {"no": 38, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 39, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "ANALOG_INPUT_TRANSMITTER"}, {"no": 40, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 41, "type": "SWITCH_TRANSMITTER"}, {"no": 42, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 43, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 44, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 45, "type": "SWITCH_TRANSMITTER"}, {"no": 46, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 47, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 48, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 49, "type": "SWITCH_WEEK_PROFILE"}, {"no": 5, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 6, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 7, "type": "ANALOG_INPUT_TRANSMITTER"}, {"no": 8, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 9, "type": "COND_SWITCH_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIP-MOD-OC8",
+   "schedule_channel": 41,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 12, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 13, "type": "SWITCH_TRANSMITTER"}, {"no": 14, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 15, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 16, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 17, "type": "SWITCH_TRANSMITTER"}, {"no": 18, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 19, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 20, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 21, "type": "SWITCH_TRANSMITTER"}, {"no": 22, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 23, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 24, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 25, "type": "SWITCH_TRANSMITTER"}, {"no": 26, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 27, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 28, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 29, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "KEY_TRANSCEIVER"}, {"no": 30, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 31, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 32, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 33, "type": "SWITCH_TRANSMITTER"}, {"no": 34, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 35, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 36, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 37, "type": "SWITCH_TRANSMITTER"}, {"no": 38, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 39, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "KEY_TRANSCEIVER"}, {"no": 40, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 41, "type": "SWITCH_WEEK_PROFILE"}, {"no": 5, "type": "KEY_TRANSCEIVER"}, {"no": 6, "type": "KEY_TRANSCEIVER"}, {"no": 7, "type": "KEY_TRANSCEIVER"}, {"no": 8, "type": "KEY_TRANSCEIVER"}, {"no": 9, "type": "SWITCH_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIP-MP3P",
+   "schedule_channel": 9,
+   "schedule_channel_type": "DIMMER_OUTPUT_BEHAVIOUR_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "ACOUSTIC_SIGNAL_TRANSMITTER"}, {"no": 2, "type": "ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER"}, {"no": 3, "type": "ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER"}, {"no": 4, "type": "ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER"}, {"no": 5, "type": "DIMMER_TRANSMITTER"}, {"no": 6, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 7, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 8, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 9, "type": "DIMMER_OUTPUT_BEHAVIOUR_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-PCBS-BAT",
+   "schedule_channel": 6,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-PCBS",
+   "schedule_channel": 6,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-PCBS2",
+   "schedule_channel": 11,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "SWITCH_WEEK_PROFILE"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "SWITCH_TRANSMITTER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "SWITCH_TRANSMITTER"}, {"no": 8, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 9, "type": "SWITCH_VIRTUAL_RECEIVER"}]
+  },
+  {
+   "model": "HmIP-PSMCO",
+   "schedule_channel": 8,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "ENERGIE_METER_TRANSMITTER"}, {"no": 7, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 8, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-RGBW",
+   "schedule_channel": 5,
+   "schedule_channel_type": "UNIVERSAL_LIGHT_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 2, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 3, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 4, "type": "UNIVERSAL_LIGHT_RECEIVER"}, {"no": 5, "type": "UNIVERSAL_LIGHT_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-SCTH230",
+   "schedule_channel": 15,
+   "schedule_channel_type": "DIMMER_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "CARBON_DIOXIDE_RECEIVER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "DIMMER_TRANSMITTER"}, {"no": 12, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 13, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 14, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 15, "type": "DIMMER_WEEK_PROFILE"}, {"no": 2, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 3, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 4, "type": "CLIMATE_TRANSCEIVER"}, {"no": 5, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 6, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 7, "type": "SWITCH_TRANSMITTER"}, {"no": 8, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 9, "type": "SWITCH_VIRTUAL_RECEIVER"}]
+  },
+  {
+   "model": "HmIP-SMO230-A",
+   "schedule_channel": 13,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "MOTIONDETECTOR_TRANSCEIVER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 12, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 13, "type": "SWITCH_WEEK_PROFILE"}, {"no": 14, "type": "ALARM_COND_SWITCH_TRANSMITTER"}, {"no": 2, "type": "MOTIONDETECTOR_TRANSCEIVER"}, {"no": 3, "type": "MOTIONDETECTOR_TRANSCEIVER"}, {"no": 4, "type": "MOTIONDETECTOR_VIRTUAL_TRANSCEIVER"}, {"no": 5, "type": "STATE_RESET_RECEIVER"}, {"no": 6, "type": "STATE_RESET_RECEIVER"}, {"no": 7, "type": "STATE_RESET_RECEIVER"}, {"no": 8, "type": "STATE_RESET_VIRTUAL_RECEIVER"}, {"no": 9, "type": "SWITCH_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIP-UDI-SMI55",
+   "schedule_channel": 10,
+   "schedule_channel_type": "DIMMER_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 10, "type": "DIMMER_WEEK_PROFILE"}, {"no": 11, "type": "ALARM_COND_SWITCH_TRANSMITTER"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 4, "type": "MOTIONDETECTOR_TRANSCEIVER"}, {"no": 5, "type": "STATE_RESET_RECEIVER"}, {"no": 6, "type": "DIMMER_TRANSMITTER"}, {"no": 7, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 8, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 9, "type": "DIMMER_VIRTUAL_RECEIVER"}]
+  },
+  {
+   "model": "HmIP-USBSM",
+   "schedule_channel": 8,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 2, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "ENERGIE_METER_TRANSMITTER"}, {"no": 7, "type": "COND_SWITCH_TRANSMITTER"}, {"no": 8, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-WGTC",
+   "schedule_channel": 7,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 10, "type": "HEATING_CLIMATECONTROL_CL_TRANSMITTER"}, {"no": 11, "type": "HEATING_SHUTTER_CONTACT_RECEIVER"}, {"no": 12, "type": "HEATING_KEY_RECEIVER"}, {"no": 13, "type": "CLIMATECONTROL_FLOOR_TRANSMITTER"}, {"no": 14, "type": "CLIMATECONTROL_FLOOR_DIRECT_TRANSMITTER"}, {"no": 15, "type": "CLIMATECONTROL_HEAT_DEMAND_BOILER_TRANSMITTER"}, {"no": 16, "type": "CLIMATECONTROL_HEAT_DEMAND_PUMP_TRANSMITTER"}, {"no": 17, "type": "CLIMATECONTROL_DEHUMIDIFIER_TRANSMITER"}, {"no": 18, "type": "CLIMATECONTROL_INPUT_RECEIVER"}, {"no": 19, "type": "KWL_CONTROLLER_TRANSMITTER"}, {"no": 2, "type": "BACKLIGHTING_RECEIVER"}, {"no": 20, "type": "LEVEL_COMMAND_TRANSMITTER_TEMPERATURE"}, {"no": 21, "type": "LEVEL_COMMAND_TRANSMITTER_HUMIDITY"}, {"no": 22, "type": "LEVEL_COMMAND_TRANSMITTER_CO2"}, {"no": 3, "type": "SWITCH_TRANSMITTER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 6, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "SWITCH_WEEK_PROFILE"}, {"no": 8, "type": "HEATING_CLIMATECONTROL_TRANSCEIVER"}, {"no": 9, "type": "HEATING_CLIMATECONTROL_RECEIVER"}]
+  },
+  {
+   "model": "HmIP-WHS2",
+   "schedule_channel": 9,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "SWITCH_TRANSMITTER"}, {"no": 2, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_TRANSMITTER"}, {"no": 6, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 8, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 9, "type": "SWITCH_WEEK_PROFILE"}]
+  },
+  {
+   "model": "HmIP-WKP",
+   "schedule_channel": 18,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "ACCESS_TRANSCEIVER"}, {"no": 10, "type": "ACCESS_TRANSCEIVER"}, {"no": 11, "type": "ACCESS_TRANSCEIVER"}, {"no": 12, "type": "ACCESS_TRANSCEIVER"}, {"no": 13, "type": "ACCESS_TRANSCEIVER"}, {"no": 14, "type": "ACCESS_TRANSCEIVER"}, {"no": 15, "type": "ACCESS_TRANSCEIVER"}, {"no": 16, "type": "ACCESS_TRANSCEIVER"}, {"no": 17, "type": "ALARM_COND_SWITCH_TRANSMITTER"}, {"no": 18, "type": "SWITCH_WEEK_PROFILE"}, {"no": 2, "type": "ACCESS_TRANSCEIVER"}, {"no": 3, "type": "ACCESS_TRANSCEIVER"}, {"no": 4, "type": "ACCESS_TRANSCEIVER"}, {"no": 5, "type": "ACCESS_TRANSCEIVER"}, {"no": 6, "type": "ACCESS_TRANSCEIVER"}, {"no": 7, "type": "ACCESS_TRANSCEIVER"}, {"no": 8, "type": "ACCESS_TRANSCEIVER"}, {"no": 9, "type": "ACCESS_TRANSCEIVER"}]
+  },
+  {
+   "model": "HmIPW-DRBL4",
+   "schedule_channel": 17,
+   "schedule_channel_type": "BLIND_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "BLIND_TRANSMITTER"}, {"no": 10, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 11, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 12, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 13, "type": "BLIND_TRANSMITTER"}, {"no": 14, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 15, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 16, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 17, "type": "BLIND_WEEK_PROFILE"}, {"no": 2, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 3, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 4, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 5, "type": "BLIND_TRANSMITTER"}, {"no": 6, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 7, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 8, "type": "BLIND_VIRTUAL_RECEIVER"}, {"no": 9, "type": "BLIND_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIPW-DRD3",
+   "schedule_channel": 13,
+   "schedule_channel_type": "DIMMER_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "DIMMER_TRANSMITTER"}, {"no": 10, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 11, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 12, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 13, "type": "DIMMER_WEEK_PROFILE"}, {"no": 2, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 3, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 4, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 5, "type": "DIMMER_TRANSMITTER"}, {"no": 6, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 7, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 8, "type": "DIMMER_VIRTUAL_RECEIVER"}, {"no": 9, "type": "DIMMER_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIPW-DRS8",
+   "schedule_channel": 33,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "SWITCH_TRANSMITTER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 12, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 13, "type": "SWITCH_TRANSMITTER"}, {"no": 14, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 15, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 16, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 17, "type": "SWITCH_TRANSMITTER"}, {"no": 18, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 19, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 2, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 20, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 21, "type": "SWITCH_TRANSMITTER"}, {"no": 22, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 23, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 24, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 25, "type": "SWITCH_TRANSMITTER"}, {"no": 26, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 27, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 28, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 29, "type": "SWITCH_TRANSMITTER"}, {"no": 3, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 30, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 31, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 32, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 33, "type": "SWITCH_WEEK_PROFILE"}, {"no": 4, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 5, "type": "SWITCH_TRANSMITTER"}, {"no": 6, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 7, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 8, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 9, "type": "SWITCH_TRANSMITTER"}]
+  },
+  {
+   "model": "HmIPW-FIO6",
+   "schedule_channel": 31,
+   "schedule_channel_type": "SWITCH_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 10, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 11, "type": "SWITCH_TRANSMITTER"}, {"no": 12, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 13, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 14, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 15, "type": "SWITCH_TRANSMITTER"}, {"no": 16, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 17, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 18, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 19, "type": "SWITCH_TRANSMITTER"}, {"no": 2, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 20, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 21, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 22, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 23, "type": "SWITCH_TRANSMITTER"}, {"no": 24, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 25, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 26, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 27, "type": "SWITCH_TRANSMITTER"}, {"no": 28, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 29, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 3, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 30, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 31, "type": "SWITCH_WEEK_PROFILE"}, {"no": 32, "type": "ALARM_COND_SWITCH_TRANSMITTER"}, {"no": 4, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 5, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 6, "type": "MULTI_MODE_INPUT_TRANSMITTER"}, {"no": 7, "type": "SWITCH_TRANSMITTER"}, {"no": 8, "type": "SWITCH_VIRTUAL_RECEIVER"}, {"no": 9, "type": "SWITCH_VIRTUAL_RECEIVER"}]
+  },
+  {
+   "model": "HmIPW-WRC6",
+   "schedule_channel": 14,
+   "schedule_channel_type": "DIMMER_OUTPUT_BEHAVIOUR_WEEK_PROFILE",
+   "channels": [{"no": 0, "type": "MAINTENANCE"}, {"no": 1, "type": "KEY_TRANSCEIVER"}, {"no": 10, "type": "OPTICAL_SIGNAL_RECEIVER"}, {"no": 11, "type": "OPTICAL_SIGNAL_RECEIVER"}, {"no": 12, "type": "OPTICAL_SIGNAL_RECEIVER"}, {"no": 13, "type": "OPTICAL_SIGNAL_RECEIVER"}, {"no": 14, "type": "DIMMER_OUTPUT_BEHAVIOUR_WEEK_PROFILE"}, {"no": 2, "type": "KEY_TRANSCEIVER"}, {"no": 3, "type": "KEY_TRANSCEIVER"}, {"no": 4, "type": "KEY_TRANSCEIVER"}, {"no": 5, "type": "KEY_TRANSCEIVER"}, {"no": 6, "type": "KEY_TRANSCEIVER"}, {"no": 7, "type": "OPTICAL_SIGNAL_RECEIVER"}, {"no": 8, "type": "OPTICAL_SIGNAL_RECEIVER"}, {"no": 9, "type": "OPTICAL_SIGNAL_RECEIVER"}]
+  }
+ ]
+}

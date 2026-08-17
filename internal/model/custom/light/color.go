@@ -27,20 +27,57 @@ type ColorLight struct {
 
 	hue        *generic.Integer
 	saturation *generic.Float
+
+	// colorIndex is the single COLOR integer the RF colour dimmers carry
+	// instead of a HUE / SATURATION pair. It lives on a sibling channel
+	// (HM-LC-RGBW-WM: LEVEL on :1, COLOR on :2) which the profile's
+	// FieldColor mapping names, so it is resolved by
+	// [newColorLightOn] rather than off the light's own channel. Exactly
+	// one of (hue+saturation) and colorIndex is populated per device
+	// family; when neither is, the light carries no colour axis at all.
+	colorIndex *generic.Integer
 }
+
+// colorIndexWhite is the COLOR value that means "white": the wire
+// encodes the hue circle as 0..199 and reserves 200 for the white
+// point. Larger values are undefined and are read back as white for
+// robustness. Mirrors `CustomDpColorDimmer.hs_color` (light.py:447-460).
+const (
+	colorIndexWhite = 200
+	colorIndexSpan  = 199
+	// colorWhiteSaturationCutoff is the saturation below which a command
+	// is treated as a request for white. HA-canonical 0..100, mirroring
+	// the reference's `saturation < 0.1` on its 0..1 fraction
+	// (light.py:471).
+	colorWhiteSaturationCutoff = 10.0
+)
 
 // NewColorLight constructs a ColorLight against the channel from cfg.
 func NewColorLight(cfg Config) *ColorLight {
+	return newColorLightOn(cfg, nil)
+}
+
+// newColorLightOn is [NewColorLight] with an explicit COLOR channel for
+// the RF colour dimmers, whose colour lives one channel above the
+// light's own. Pass nil for the HmIP families, which carry HUE and
+// SATURATION on the light channel itself.
+func newColorLightOn(cfg Config, colorChannel *device.Channel) *ColorLight {
 	cl := &ColorLight{
 		Light:      New(cfg),
 		hue:        custom.IntegerField(cfg.Channel, hmenum.ParameterHue),
 		saturation: custom.FloatField(cfg.Channel, hmenum.ParameterSaturation),
+	}
+	if cl.hue == nil || cl.saturation == nil {
+		cl.colorIndex = custom.IntegerField(colorChannel, hmenum.ParameterColor)
 	}
 	if cl.Float != nil {
 		cl.registerColorLightServices()
 	}
 	if cl.saturation != nil {
 		_ = cl.saturation.OnConfirmedUpdate(func(_, _ float64) { cl.dataVersion.Bump() })
+	}
+	if cl.colorIndex != nil {
+		_ = cl.colorIndex.OnConfirmedUpdate(func(_, _ int32) { cl.dataVersion.Bump() })
 	}
 	// Attach an HSColor combined DP so the aggregate (hue + saturation) is
 	// surfaced on the event bus and visible via Channel.CombinedDataPoints.
@@ -83,7 +120,26 @@ func (l *ColorLight) Subscribe(ch *device.Channel) func() {
 			}
 		}
 	}
+	// Replay the single-integer COLOR of the RF colour dimmers.
+	if l.colorIndex != nil {
+		if v, observed := l.colorIndex.RawValue(); observed {
+			if iv, ok := v.(int32); ok {
+				l.colorIndex.OnEvent(iv)
+			}
+		}
+	}
 	return unsub
+}
+
+// SupportsColor reports whether the light carries a colour axis at all —
+// either the HUE / SATURATION pair or the single COLOR integer. The HA
+// discovery payload declares the `hs` colour mode on this, so a light
+// that answers false must not render a colour wheel it cannot serve.
+func (l *ColorLight) SupportsColor() bool {
+	if l == nil {
+		return false
+	}
+	return (l.hue != nil && l.saturation != nil) || l.colorIndex != nil
 }
 
 // Color returns the last observed (hue, saturation, observed) triple.
@@ -96,11 +152,33 @@ func (l *ColorLight) Subscribe(ch *device.Channel) func() {
 // and the Matter projection share one unit.
 func (l *ColorLight) Color() (hue int32, saturation float64, observed bool) {
 	if l.hue == nil || l.saturation == nil {
-		return 0, 0, false
+		return l.colorFromIndex()
 	}
 	h, hOK := l.hue.Value()
 	s, sOK := l.saturation.Value()
 	return h, s * 100, hOK && sOK
+}
+
+// colorFromIndex projects the RF colour dimmers' single COLOR integer
+// onto the same (hue, saturation) surface the HUE / SATURATION pair
+// produces. Mirrors `CustomDpColorDimmer.hs_color` (light.py:447-460):
+// COLOR >= 200 is the white point (saturation 0), everything else walks
+// the hue circle in 200 steps at full saturation.
+func (l *ColorLight) colorFromIndex() (hue int32, saturation float64, observed bool) {
+	if l == nil || l.colorIndex == nil {
+		return 0, 0, false
+	}
+	c, ok := l.colorIndex.Value()
+	if !ok {
+		return 0, 0, false
+	}
+	if c >= colorIndexWhite {
+		return 0, 0, true
+	}
+	if c < 0 {
+		c = 0
+	}
+	return int32(float64(c) / colorIndexWhite * 360), 100, true //nolint:gosec // c < 200 keeps the product below 360
 }
 
 // SetColor commands a new (hue, saturation) pair. Hue wraps around 360°;
@@ -137,7 +215,7 @@ func (l *ColorLight) SetColor(
 		return nil
 	}
 	if l.hue == nil || l.saturation == nil {
-		return errors.New("colorlight: channel missing HUE or SATURATION")
+		return l.setColorIndex(ctx, hue, saturation, priority)
 	}
 	if l.hue.Writer == nil {
 		return errors.New("colorlight: no writer")
@@ -156,6 +234,27 @@ func (l *ColorLight) SetColor(
 	if err = l.saturation.Set(ctx, wireSat, priority); err != nil {
 		err = fmt.Errorf("colorlight: SATURATION: %w", err)
 		return err
+	}
+	return nil
+}
+
+// setColorIndex is the [ColorLight.SetColor] write half for the RF
+// colour dimmers, which carry one COLOR integer instead of a HUE /
+// SATURATION pair. Mirrors `CustomDpColorDimmer.turn_on`
+// (light.py:462-473): a saturation below the white cutoff commands the
+// white point, everything else maps the hue circle onto 0..199.
+func (l *ColorLight) setColorIndex(
+	ctx context.Context, hue int32, saturation float64, priority hmenum.CommandPriority,
+) error {
+	if l.colorIndex == nil {
+		return errors.New("colorlight: channel missing HUE or SATURATION")
+	}
+	value := int32(colorIndexWhite)
+	if saturation >= colorWhiteSaturationCutoff {
+		value = int32(math.Round(float64(hue) / 360 * colorIndexSpan))
+	}
+	if err := l.colorIndex.Set(custom.EnsureContext(ctx), value, priority); err != nil {
+		return fmt.Errorf("colorlight: COLOR: %w", err)
 	}
 	return nil
 }

@@ -376,9 +376,12 @@ func (sp *SoundPlayer) registerSoundPlayerServices() {
 			// The player advertises its soundfiles as `available_tones`,
 			// so HA returns the chosen one by label while the handler
 			// expected an index — the choice never reached the device.
-			if i, ok := sp.soundfileIndexFor(label); ok {
-				cfg.SoundfileIndex = i
-			}
+			// The label travels verbatim: it is the only form the
+			// device's non-numbered entries (INTERNAL_SOUNDFILE,
+			// RANDOM_SOUNDFILE) have, and PlaySound rejects a label the
+			// device does not offer rather than dropping the parameter
+			// and playing whatever was selected before.
+			cfg.SoundfileLabel = label
 		}
 		if v, err := payload.ParamFloat64(params, "volume"); err == nil {
 			cfg.Volume = v
