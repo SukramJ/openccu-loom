@@ -249,8 +249,10 @@ func runCacheClearOnline(
 
 // runCacheClearOffline opens the SQLite database directly and deletes the
 // CCU-derivable rows for the scope. It never touches operator/system tables —
-// only the VALUES and MASTER caches, the two stores whose contents the daemon
-// re-pulls from the CCU on the next start. Because it cannot re-pull itself, it
+// only the VALUES cache, the MASTER-paramset cache, and the persisted device
+// / paramset descriptions, the four stores whose contents the daemon
+// re-pulls from the CCU on the next start (mirroring the online path's
+// [cachereset.Service.clearUnit]). Because it cannot re-pull itself, it
 // prints a restart notice.
 func runCacheClearOffline(
 	kind cachereset.ScopeKind,
@@ -282,6 +284,8 @@ func runCacheClearOffline(
 
 	valStore := sqlite.NewValuesCacheStore(db)
 	masterStore := sqlite.NewMasterValuesStore(db)
+	deviceStore := sqlite.NewDeviceStore(db)
+	paramsetStore := sqlite.NewParamsetStore(db)
 	sum := clearSummary{scope: string(kind)}
 
 	ctx := context.Background()
@@ -295,7 +299,16 @@ func runCacheClearOffline(
 		if errM := masterStore.DeleteDevice(ctx, central, wireIface, device); errM != nil {
 			sum.errors = append(sum.errors, fmt.Sprintf("master[%s/%s]: %v", central, wireIface, errM))
 		}
-		// The device-scoped deletes do not report row counts; leave them at 0.
+		if n, errD := deviceStore.Delete(ctx, central, wireIface, device); errD != nil {
+			sum.errors = append(sum.errors, fmt.Sprintf("devices[%s/%s]: %v", central, wireIface, errD))
+		} else {
+			sum.devices += n
+		}
+		if n, errP := paramsetStore.DeleteDevice(ctx, central, wireIface, device); errP != nil {
+			sum.errors = append(sum.errors, fmt.Sprintf("paramsets[%s/%s]: %v", central, wireIface, errP))
+		} else {
+			sum.paramsets += n
+		}
 		return finishOfflineClear(stdout, sum)
 	}
 
@@ -315,6 +328,18 @@ func runCacheClearOffline(
 			sum.errors = append(sum.errors, fmt.Sprintf("master[%s/%s]: %v", u.central, u.iface, errM))
 		} else {
 			sum.master += m
+		}
+		d, errD := deviceStore.Clear(ctx, u.central, u.iface)
+		if errD != nil {
+			sum.errors = append(sum.errors, fmt.Sprintf("devices[%s/%s]: %v", u.central, u.iface, errD))
+		} else {
+			sum.devices += d
+		}
+		p, errP := paramsetStore.ClearForInterface(ctx, u.central, u.iface)
+		if errP != nil {
+			sum.errors = append(sum.errors, fmt.Sprintf("paramsets[%s/%s]: %v", u.central, u.iface, errP))
+		} else {
+			sum.paramsets += p
 		}
 	}
 

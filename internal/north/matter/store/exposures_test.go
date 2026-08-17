@@ -276,6 +276,47 @@ func TestDeleteExposure_Missing_NoError(t *testing.T) {
 	}
 }
 
+// TestDeleteForCentral_RemovesOnlyThatCentralsRows is the regression guard
+// for a removed central leaving its Matter exposure allowlist rows behind:
+// GET /api/v1/matter/status's enabled_count is computed from these
+// persisted rows (not the live model), so an orphaned row keeps counting
+// an endpoint that can never exist again.
+func TestDeleteForCentral_RemovesOnlyThatCentralsRows(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+	s := store.New(db)
+	ctx := context.Background()
+
+	removedKey := testKey("removed", "S:1", 1, store.DPKindCustom, "D")
+	survivorKey := testKey("survivor", "S:1", 1, store.DPKindCustom, "D")
+	if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: removedKey, Enabled: true, Actor: "u"}); err != nil {
+		t.Fatalf("UpsertExposure(removed): %v", err)
+	}
+	if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: survivorKey, Enabled: true, Actor: "u"}); err != nil {
+		t.Fatalf("UpsertExposure(survivor): %v", err)
+	}
+
+	if err := s.DeleteForCentral(ctx, "removed"); err != nil {
+		t.Fatalf("DeleteForCentral: %v", err)
+	}
+
+	if _, err := s.GetExposure(ctx, removedKey); !errors.Is(err, store.ErrExposureNotFound) {
+		t.Errorf("removed central's row survived: err=%v, want ErrExposureNotFound", err)
+	}
+	if _, err := s.GetExposure(ctx, survivorKey); err != nil {
+		t.Errorf("survivor central's row was deleted: %v", err)
+	}
+}
+
+func TestDeleteForCentral_NoRowsForCentral_NoError(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+	s := store.New(db)
+	if err := s.DeleteForCentral(context.Background(), "never-seen"); err != nil {
+		t.Fatalf("DeleteForCentral on absent central: %v", err)
+	}
+}
+
 // ---- CountEnabled ----
 
 func TestCountEnabled_Zero(t *testing.T) {

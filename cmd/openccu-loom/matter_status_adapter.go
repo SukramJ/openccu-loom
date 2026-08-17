@@ -9,6 +9,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
+	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -52,6 +53,9 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 	if r.window != nil {
 		snap := r.window.CurrentWindow()
 		res.WindowOpen = snap.Status != 0
+		if res.WindowOpen {
+			res.WindowDuration = r.window.RequestedDurationSeconds()
+		}
 	}
 	if r.store != nil {
 		fabrics, err := r.store.ListFabrics(ctx)
@@ -74,6 +78,9 @@ func (r *matterStatusReaderAdapter) MatterStatus(ctx context.Context) handlers.M
 // the operator surfaces have to run the same fan-out themselves.
 type matterFabricRevokerAdapter struct {
 	store *matterstore.Store
+	// opCreds is the live OperationalCredentials cluster instance. Nil in
+	// tests that exercise the store half alone. See [RevokeFabric].
+	opCreds *mattercore.OperationalCredentials
 	// teardown is the shared fabric-removal fan-out (session + subscription
 	// close, resumption purge, fabric-removed emission). Nil only in tests
 	// that exercise the store half alone.
@@ -92,6 +99,17 @@ type matterFabricRevokerAdapter struct {
 // to zero, and the unpaired controller kept its live CASE session, its
 // subscription and the operational `_matter._tcp` record until the daemon
 // restarted.
+//
+// It also runs [mattercore.OperationalCredentials.NotifyFabricRemoved]
+// directly — the same call handleRemoveFabric makes inline for the wire
+// command — rather than through the shared a.teardown closure: that closure
+// is also the wire command's own onFabricRemoved hook, and the wire path
+// already runs NotifyFabricRemoved itself, so folding it into the shared
+// closure would double it there. Without this call here at all, the
+// OperationalCredentials cluster's DataVersion never bumps for a REST
+// revoke or a factory reset, so a controller reading behind a cached
+// DataVersionFilter keeps seeing the removed fabric in Fabrics /
+// CommissionedFabrics.
 func (a *matterFabricRevokerAdapter) RevokeFabric(ctx context.Context, fabricIndex uint8) error {
 	if a == nil || a.store == nil {
 		return matterbridge.ErrCommissioningWindowNotConfigured
@@ -111,6 +129,9 @@ func (a *matterFabricRevokerAdapter) RevokeFabric(ctx context.Context, fabricInd
 	}
 	if err := a.store.RemoveFabric(ctx, fabricIndex); err != nil {
 		return err
+	}
+	if a.opCreds != nil {
+		a.opCreds.NotifyFabricRemoved(fabricIndex)
 	}
 	if a.withdraw != nil {
 		a.withdraw(ctx, rec.CompressedID, rec.NodeID)

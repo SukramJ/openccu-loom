@@ -407,6 +407,43 @@ func TestValidateChecksTheRESTCapacityKnobs(t *testing.T) {
 	})
 }
 
+// TestValidateRejectsAnUnknownHAIngressRole is the regression guard for
+// north.rest.auth.ha_ingress.role silently escalating any unrecognised
+// value to admin: the field is free text with no schema enum (see
+// ingressRole in cmd/openccu-loom/ingress_auth_wiring.go), so this
+// validator is the only gate between an operator's typo — "Viewer",
+// "read-only", "operatr" — and every HA-Ingress-proxied request being
+// granted full admin.
+func TestValidateRejectsAnUnknownHAIngressRole(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		role    string
+		wantErr bool
+	}{
+		{"empty selects the admin default", "", false},
+		{"admin", "admin", false},
+		{"operator", "operator", false},
+		{"viewer", "viewer", false},
+		{"capitalised near-miss", "Viewer", true},
+		{"a different word entirely", "read-only", true},
+		{"a typo", "operatr", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := Default()
+			cfg.North.REST.Auth.HAIngress.Role = tc.role
+			err := cfg.Validate()
+			if tc.wantErr {
+				assertRejected(t, err, "north.rest.auth.ha_ingress.role")
+				return
+			}
+			assertAccepted(t, err)
+		})
+	}
+}
+
 // TestValidateRejectsNegativeDurations is table-driven over one setter per
 // duration knob reachable from Config, each pinning that a negative value
 // is rejected by name. The reflective walk in [validateNonNegativeDurations]

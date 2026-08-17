@@ -122,6 +122,8 @@ func cmdProgramGet(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	var f connFlags
 	f.bind(fs)
+	var central string
+	fs.StringVar(&central, "central", "", "disambiguate an id that exists on more than one CCU")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -139,8 +141,12 @@ func cmdProgramGet(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := f.requestContext()
 	defer cancel()
 
+	path := "/api/v1/programs/" + url.PathEscape(id)
+	if central != "" {
+		path += "?" + url.Values{"central": {central}}.Encode()
+	}
 	var p programSummary
-	if err := client.getJSON(ctx, "/api/v1/programs/"+url.PathEscape(id), &p); err != nil {
+	if err := client.getJSON(ctx, path, &p); err != nil {
 		return err
 	}
 
@@ -168,6 +174,8 @@ func cmdProgramRun(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	var f connFlags
 	f.bind(fs)
+	var central string
+	fs.StringVar(&central, "central", "", "required on a multi-CCU daemon unless the id is unique across every CCU")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -185,11 +193,14 @@ func cmdProgramRun(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := f.requestContext()
 	defer cancel()
 
-	if err := client.sendJSON(ctx, http.MethodPost, "/api/v1/programs/"+url.PathEscape(id)+"/execute", nil, nil); err != nil {
+	path := "/api/v1/programs/" + url.PathEscape(id) + "/execute"
+	if central != "" {
+		path += "?" + url.Values{"central": {central}}.Encode()
+	}
+	if err := client.sendJSON(ctx, http.MethodPost, path, nil, nil); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{"id": id})
 }
 
 func cmdProgramEnable(args []string, stdout, stderr io.Writer) error {
@@ -209,6 +220,8 @@ func cmdProgramSetActive(args []string, stdout, stderr io.Writer, active bool) e
 	fs.SetOutput(stderr)
 	var f connFlags
 	f.bind(fs)
+	var central string
+	fs.StringVar(&central, "central", "", "required on a multi-CCU daemon unless the id is unique across every CCU")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -226,10 +239,13 @@ func cmdProgramSetActive(args []string, stdout, stderr io.Writer, active bool) e
 	ctx, cancel := f.requestContext()
 	defer cancel()
 
+	path := "/api/v1/programs/" + url.PathEscape(id)
+	if central != "" {
+		path += "?" + url.Values{"central": {central}}.Encode()
+	}
 	body := setProgramActiveRequest{Active: active}
-	if err := client.sendJSON(ctx, http.MethodPatch, "/api/v1/programs/"+url.PathEscape(id), body, nil); err != nil {
+	if err := client.sendJSON(ctx, http.MethodPatch, path, body, nil); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{"id": id, "active": active})
 }

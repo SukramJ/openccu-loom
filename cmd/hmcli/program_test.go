@@ -152,6 +152,28 @@ func TestProgramGetCallsCorrectEndpoint(t *testing.T) {
 	}
 }
 
+// TestProgramGetWithCentralFlagAppendsQueryParam mirrors
+// TestProgramRunWithCentralFlagAppendsQueryParam for the read path
+// (GetProgram / resolveHubForRead).
+func TestProgramGetWithCentralFlagAppendsQueryParam(t *testing.T) {
+	t.Parallel()
+	var gotQuery string
+	boolTrue := true
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/programs/P001": func(w http.ResponseWriter, r *http.Request) {
+			gotQuery = r.URL.RawQuery
+			writeJSON200(w, programSummary{ID: "P001", Name: "Nightlight", Active: &boolTrue})
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"program", "get", "--host", ts.URL, "--central", "ccu-attic", "P001"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v\nstderr: %s", err, stderr.String())
+	}
+	if gotQuery != "central=ccu-attic" {
+		t.Errorf("query=%q, want central=ccu-attic", gotQuery)
+	}
+}
+
 func TestProgramGetPrintsFields(t *testing.T) {
 	t.Parallel()
 	boolTrue := true
@@ -205,6 +227,30 @@ func TestProgramRunCallsCorrectEndpointAndMethod(t *testing.T) {
 	}
 }
 
+// TestProgramRunWithCentralFlagAppendsQueryParam is the regression guard for
+// `program run` having no way to disambiguate an id that exists on more than
+// one CCU: the daemon's ExecuteProgram handler is gated by
+// requireMutationHub, which answers 400 "central required (multiple CCUs)"
+// without a `?central=` query parameter, and until this fix the CLI had no
+// flag to supply one.
+func TestProgramRunWithCentralFlagAppendsQueryParam(t *testing.T) {
+	t.Parallel()
+	var gotQuery string
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/programs/P001/execute": func(w http.ResponseWriter, r *http.Request) {
+			gotQuery = r.URL.RawQuery
+			w.WriteHeader(http.StatusNoContent)
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"program", "run", "--host", ts.URL, "--central", "ccu-attic", "P001"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v\nstderr: %s", err, stderr.String())
+	}
+	if gotQuery != "central=ccu-attic" {
+		t.Errorf("query=%q, want central=ccu-attic", gotQuery)
+	}
+}
+
 func TestProgramRunPrintsOkOnSuccess(t *testing.T) {
 	t.Parallel()
 	ts := newDevicesServer(t, map[string]http.HandlerFunc{
@@ -221,6 +267,33 @@ func TestProgramRunPrintsOkOnSuccess(t *testing.T) {
 	}
 }
 
+// TestProgramRunWithJSONFlagEmitsParseableObject is the regression guard for
+// the --json flag being silently dropped on write/action commands: without
+// the fix, --json still printed the bare literal "ok" instead of an object a
+// script could parse.
+func TestProgramRunWithJSONFlagEmitsParseableObject(t *testing.T) {
+	t.Parallel()
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/programs/P001/execute": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"program", "run", "--host", ts.URL, "--json", "P001"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("--json output did not parse as JSON: %v (got %q)", err, stdout.String())
+	}
+	if got["status"] != "ok" {
+		t.Errorf("status=%v, want ok", got["status"])
+	}
+	if got["id"] != "P001" {
+		t.Errorf("id=%v, want P001", got["id"])
+	}
+}
+
 func TestProgramRunMissingIDReturnsError(t *testing.T) {
 	t.Parallel()
 	var stdout, stderr bytes.Buffer
@@ -231,6 +304,27 @@ func TestProgramRunMissingIDReturnsError(t *testing.T) {
 }
 
 // ─── program enable / disable ─────────────────────────────────────────────────
+
+// TestProgramEnableWithCentralFlagAppendsQueryParam mirrors
+// TestProgramRunWithCentralFlagAppendsQueryParam for SetProgramEnabled,
+// which is gated by the same requireMutationHub central disambiguation.
+func TestProgramEnableWithCentralFlagAppendsQueryParam(t *testing.T) {
+	t.Parallel()
+	var gotQuery string
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/programs/P001": func(w http.ResponseWriter, r *http.Request) {
+			gotQuery = r.URL.RawQuery
+			w.WriteHeader(http.StatusNoContent)
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"program", "enable", "--host", ts.URL, "--central", "ccu-basement", "P001"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v\nstderr: %s", err, stderr.String())
+	}
+	if gotQuery != "central=ccu-basement" {
+		t.Errorf("query=%q, want central=ccu-basement", gotQuery)
+	}
+}
 
 func TestProgramEnableCallsCorrectEndpointAndMethod(t *testing.T) {
 	t.Parallel()

@@ -135,16 +135,14 @@ implementation, fronted by:
 
 ## Implementation note — descriptor persistence
 
-In the current build the `devices` / `paramsets` SQLite tables are not written
-on the pipeline persistence path (only the boot-time schema wipe touches them);
-device and paramset **descriptions** live in the in-memory registries and are
-refreshed when the re-pull re-ingests from the CCU (a fresh `ListDevices` +
-`hydrateDataPoints` overwrites the registry entries). The persisted caches that
-the re-pull would otherwise reload stale — the VALUES cache and the MASTER
-values — are the ones the clear deletes. The `DeviceClearer` / `ParamsetClearer`
-ports are still part of the service (nil-safe, so a disabled store is a no-op)
-so that the SQLite descriptor clear is wired automatically if that persistence
-path is added later, without changing the surfaces.
+The `devices` / `paramsets` SQLite tables are written on the pipeline
+persistence path: `WireDescriptorPersistence` attaches a sink to the device
+and paramset registries, so every registry `Put` also writes a row. The
+online clear already covers them through the `DeviceClearer` /
+`ParamsetClearer` ports (nil-safe, so a disabled store is a no-op). The
+offline hmcli mode opens the same two stores directly, alongside the VALUES
+cache and MASTER values, so `hmcli cache clear --offline` empties all four
+persisted caches — matching the online path's `clearUnit`.
 
 ## Consequences
 

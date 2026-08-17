@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -138,10 +139,19 @@ func (p *HubMQTTPublisher) Flush() {
 // broker — visible and frozen in Home Assistant, and surviving daemon restarts —
 // until the topic is cleared by hand.
 //
-// Call it BEFORE the unit's model is torn down: the retract items are rebuilt
-// from the live hub model (programs, sysvars, install-mode DPs) and interface
-// list, so they carry the same unique_ids the declare side published.
-func (p *HubMQTTPublisher) RetractCentral(u *central.Unit) {
+// Call it BEFORE the unit's model is torn down: the hub-plane items are
+// rebuilt from the live hub model (programs, sysvars, install-mode DPs), so
+// they carry the same unique_ids the declare side published.
+//
+// connectivityInterfaces is the central's interface list for the
+// connectivity binary_sensor retract. It must be captured by the caller
+// BEFORE BringUpManager.RemoveCentral runs: that call drains and removes
+// every entry from u.Clients as part of its own teardown, so reading
+// u.Clients.List() here — after that call already ran — sees an empty
+// registry and silently skips every connectivity retract. Pass nil to fall
+// back to reading u.Clients.List() live (only correct when the caller is
+// certain the client registry has not been torn down yet).
+func (p *HubMQTTPublisher) RetractCentral(u *central.Unit, connectivityInterfaces []hmenum.Interface) {
 	if p == nil || u == nil || p.wiring == nil {
 		return
 	}
@@ -199,7 +209,15 @@ func (p *HubMQTTPublisher) RetractCentral(u *central.Unit) {
 	}
 	// Connectivity: one binary_sensor per registered interface, keyed by the same
 	// `<central>-<iface>` wire id seedConnectivityDiscovery declares.
-	if u.Clients != nil {
+	switch {
+	case connectivityInterfaces != nil:
+		for _, iface := range connectivityInterfaces {
+			if iface == "" {
+				continue
+			}
+			items = append(items, disco.BuildConnectivityDiscovery(centralName, WireInterfaceID(centralName, iface)))
+		}
+	case u.Clients != nil:
 		for _, entry := range u.Clients.List() {
 			if entry == nil {
 				continue

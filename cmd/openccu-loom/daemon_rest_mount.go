@@ -521,7 +521,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	router := rest.NewRouter(deps)
 	var topHandler http.Handler = router
 	if cfg.North.MCP.Enabled {
-		topHandler = mountMCP(cfg, d, router, logger)
+		topHandler = mountMCP(cfg, d, router, loginLimiter, logger)
 	}
 	restServer := rest.NewServer(cfg.North.REST.Listen, topHandler, logger)
 	if tlsReloader != nil {
@@ -669,7 +669,19 @@ func (d restMountDeps) tokenSocketRevoker() handlers.TokenSocketRevoker {
 // Streamable-HTTP MCP handler behind the same auth chain as REST, while
 // every other path falls through to the REST router. The MCP server is
 // read-only unless North.MCP.AllowWrites is also set. See ADR 0025.
-func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *slog.Logger) http.Handler {
+//
+// The mount sits on a bare http.ServeMux ahead of the chi router (below),
+// so it inherits none of rest.NewRouter's r.Use(...) chain — in
+// particular auth.GuardBasicAuth and middleware.RateLimit, which exist
+// precisely to throttle credential-guessing and abusive request volume on
+// every credential-accepting path, not only the login endpoint. Without
+// wrapping them here explicitly, an unauthenticated caller could probe
+// Basic-auth credentials against the MCP path at whatever rate the CPU
+// allows, with none of the per-IP throttling every other route enforces.
+// loginLimiter is the SAME instance the REST router's Deps.LoginRateLimit
+// wires, so the brute-force budget is genuinely shared across both
+// surfaces rather than each getting its own independent allowance.
+func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, loginLimiter *middleware.LoginRateLimiter, logger *slog.Logger) http.Handler {
 	// http.ServeMux answers a malformed pattern with a panic while
 	// registering it, and the value reaching us here has been persisted, so
 	// a panic would repeat on every subsequent boot with the SPA that could
@@ -697,7 +709,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 	// resolve chain put into the context — without it every request,
 	// credentialed or not, is rejected with 401 (the MCP mount sits
 	// outside the REST router's own middleware stack).
-	mcpHandler := d.restResolve(d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
+	var mcpInner http.Handler = d.authMw.RequireRole(mcpRole, mcp.Handler(mcp.Deps{
 		Centrals:     d.reg,
 		Devices:      d.devicesAdapter,
 		Writer:       d.dpWriterAdapter,
@@ -712,10 +724,21 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 		// The shared edit-lock registry REST and WS gate MASTER/LINK writes
 		// on, so an assistant's write_paramset obeys the same lock a human
 		// editor's open session holds.
-		EditLocks:   d.editSessions,
+		EditLocks: d.editSessions,
 		AllowWrites: cfg.North.MCP.AllowWrites,
 		Version:     build.Version,
-	})))
+	}))
+	// Rebuild the same two request-volume guards rest.NewRouter mounts —
+	// see the doc comment above for why the MCP path needs its own copy.
+	// Order mirrors the router: RateLimit closest to the handler,
+	// GuardBasicAuth right after Resolve.
+	if rl := buildRateLimitConfig(cfg); rl != nil {
+		mcpInner = middleware.RateLimit(*rl)(mcpInner)
+	}
+	if loginLimiter != nil {
+		mcpInner = auth.GuardBasicAuth(loginLimiter)(mcpInner)
+	}
+	mcpHandler := d.restResolve(mcpInner)
 	path := cfg.North.MCP.MountPath()
 	mux := http.NewServeMux()
 	mux.Handle(path, mcpHandler)
@@ -770,6 +793,7 @@ func mcpSecuritySeam(d restMountDeps) mcp.SecurityReader {
 	}
 	return d.security
 }
+
 
 // mcpAlarmAdapter satisfies both MCP alarm ports over the engine.
 type mcpAlarmAdapter struct{ svc *alarm.Service }

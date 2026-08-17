@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,8 +16,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
 // newTestConfig builds a two-central topology used by the offline
@@ -559,5 +563,79 @@ func TestRunCacheClearOfflineSucceedsAgainstIntactDB(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Cache cleared: scope=interface") {
 		t.Errorf("summary missing from stdout: %q", stdout.String())
+	}
+}
+
+// TestRunCacheClearOfflineEmptiesDeviceAndParamsetRows is the regression
+// guard for the offline clear leaving persisted device / paramset
+// descriptor rows behind: the online path clears four stores (values,
+// master, devices, paramsets — see cachereset.Service.clearUnit), and the
+// offline path must delete the same four so `hmcli cache clear --offline`
+// followed by a restart re-pulls a genuinely empty cache, not one still
+// carrying the previous pairing's stale device/paramset descriptions.
+func TestRunCacheClearOfflineEmptiesDeviceAndParamsetRows(t *testing.T) {
+	t.Parallel()
+	dbPath := newOfflineCacheDB(t, false)
+	ctx := context.Background()
+	wireIface := cachereset.StoreInterfaceID("ccu1", "HmIP-RF")
+
+	db, err := sqlite.Open(ctx, sqlite.FileDSN(dbPath))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	deviceStore := sqlite.NewDeviceStore(db)
+	paramsetStore := sqlite.NewParamsetStore(db)
+	if err := deviceStore.Upsert(ctx, sqlite.DeviceRecord{
+		CentralName:  "ccu1",
+		InterfaceID:  wireIface,
+		Address:      "DEVICE1",
+		Type:         "HmIP-PS",
+		Model:        "HmIP-PS",
+		Manufacturer: hmenum.ManufacturerEQ3,
+		ProductGroup: hmenum.ProductGroupHmIP,
+		Hash:         "h1",
+		Description:  hmproto.DeviceDescription{Address: "DEVICE1", Type: "HmIP-PS"},
+	}); err != nil {
+		t.Fatalf("seed device row: %v", err)
+	}
+	if err := paramsetStore.Upsert(ctx, sqlite.ParamsetRecord{
+		CentralName:    "ccu1",
+		InterfaceID:    wireIface,
+		ChannelAddress: "DEVICE1:1",
+		ParamsetKey:    hmenum.ParamsetKeyValues,
+		Hash:           "h1",
+		Paramset:       hmproto.Paramset{"STATE": {Type: "BOOL"}},
+	}); err != nil {
+		t.Fatalf("seed paramset row: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{
+		"cache", "clear", "--offline",
+		"--scope", "interface", "--central", "ccu1", "--interface", "HmIP-RF",
+		"--db", dbPath,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("clear against an intact db: %v\nstderr: %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "devices:    1") {
+		t.Errorf("summary should report 1 device row cleared, got: %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "paramsets:  1") {
+		t.Errorf("summary should report 1 paramset row cleared, got: %q", stdout.String())
+	}
+
+	verifyDB, err := sqlite.Open(ctx, sqlite.FileDSN(dbPath))
+	if err != nil {
+		t.Fatalf("reopen db: %v", err)
+	}
+	defer func() { _ = verifyDB.Close() }()
+	if _, err := sqlite.NewDeviceStore(verifyDB).Get(ctx, "ccu1", wireIface, "DEVICE1"); !errors.Is(err, sqlite.ErrDeviceNotFound) {
+		t.Errorf("device row survived offline clear: err=%v, want ErrDeviceNotFound", err)
+	}
+	if _, err := sqlite.NewParamsetStore(verifyDB).Get(ctx, "ccu1", wireIface, "DEVICE1:1", hmenum.ParamsetKeyValues); !errors.Is(err, sqlite.ErrParamsetNotFound) {
+		t.Errorf("paramset row survived offline clear: err=%v, want ErrParamsetNotFound", err)
 	}
 }

@@ -75,6 +75,34 @@ func TestCommissioningWindow_OpenWindow_Valid_StatusBecomesEnhanced(t *testing.T
 	}
 }
 
+// TestCommissioningWindow_RequestedDurationSeconds_ReflectsOpenWindow is the
+// regression guard for GET /api/v1/matter/status never reporting
+// commissioning_window_duration_seconds: the accessor must report the
+// duration the window was actually opened with while open, and 0 once
+// closed — a client that rehydrates state after a reload needs this to
+// restore its countdown.
+func TestCommissioningWindow_RequestedDurationSeconds_ReflectsOpenWindow(t *testing.T) {
+	t.Parallel()
+	w := bridge.NewCommissioningWindow()
+	if got := w.RequestedDurationSeconds(); got != 0 {
+		t.Errorf("fresh window: RequestedDurationSeconds() = %d, want 0", got)
+	}
+	if err := w.OpenWindow(context.Background(), wire.OpenWindowParams{
+		CommissioningTimeoutSeconds: 600,
+	}); err != nil {
+		t.Fatalf("OpenWindow: unexpected error: %v", err)
+	}
+	if got := w.RequestedDurationSeconds(); got != 600 {
+		t.Errorf("open window: RequestedDurationSeconds() = %d, want 600", got)
+	}
+	if err := w.RevokeWindow(context.Background()); err != nil {
+		t.Fatalf("RevokeWindow: unexpected error: %v", err)
+	}
+	if got := w.RequestedDurationSeconds(); got != 0 {
+		t.Errorf("closed window: RequestedDurationSeconds() = %d, want 0", got)
+	}
+}
+
 func TestCommissioningWindow_OpenWindow_Twice_ReturnsBusy(t *testing.T) {
 	t.Parallel()
 	w := bridge.NewCommissioningWindow()

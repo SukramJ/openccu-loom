@@ -477,6 +477,62 @@ func TestVisibilityAdapter_LoadUnIgnore_WithDevicesInRegistry_TouchesDevices(t *
 	}
 }
 
+// TestVisibilityAdapter_LoadUnIgnore_TouchesSiblingCentralsDevicesToo is the
+// regression guard for the REST un-ignore PUT re-marking only the requesting
+// central's devices while the decider it feeds is fleet-wide: the un-ignore
+// patterns are unioned across every central into ONE shared ParameterDecider
+// (visibility.Registry), so a device on a sibling central that was never
+// named in the request must still pick up the new mark — otherwise it keeps
+// a stale forced-usage=Ignored bit until that central's next full pipeline
+// cycle.
+func TestVisibilityAdapter_LoadUnIgnore_TouchesSiblingCentralsDevicesToo(t *testing.T) {
+	t.Parallel()
+	store := buildVisibilityStore(t)
+	visReg := visibility.NewRegistry()
+	reg := buildTestRegistry(t, "ccu-01", "ccu-02")
+
+	cu1, ok := reg.Get("ccu-01")
+	if !ok {
+		t.Fatal("ccu-01 not in registry")
+	}
+	cu1.ModelRegistry.Put(device.New(device.Config{
+		Address:     "VISDEV-CCU1",
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Model:       "HmIP-PSM",
+	}))
+	cu2, ok := reg.Get("ccu-02")
+	if !ok {
+		t.Fatal("ccu-02 not in registry")
+	}
+	cu2.ModelRegistry.Put(device.New(device.Config{
+		Address:     "VISDEV-CCU2",
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Model:       "HmIP-PSM",
+	}))
+
+	ctx := context.Background()
+	if err := store.Replace(ctx, "ccu-01", []string{"ACTIVE"}, "test"); err != nil {
+		t.Fatalf("Replace ccu-01: %v", err)
+	}
+
+	a := newVisibilityAdapter(visReg, store, reg)
+	// The request names only ccu-01; ccu-02 owns the device that must still
+	// be touched.
+	count, parseErrors, err := a.LoadUnIgnore("ccu-01", nil)
+	if err != nil {
+		t.Fatalf("LoadUnIgnore: %v", err)
+	}
+	if len(parseErrors) != 0 {
+		t.Errorf("expected no parse errors, got %v", parseErrors)
+	}
+	// Both centrals' devices must be touched — not just ccu-01's.
+	if count != 2 {
+		t.Errorf("expected 2 affected devices across both centrals, got %d", count)
+	}
+}
+
 // ── ws_adapters.go: GetParamsetDescription with device found + psKey="" ──────
 
 // TestWSDeviceQuery_GetParamsetDescription_DeviceFound_EmptyKey_DefaultMaster

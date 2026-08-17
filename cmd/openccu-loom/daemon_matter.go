@@ -1707,16 +1707,55 @@ type rootClusterRefs struct {
 //
 // A nil store (test wiring, no persistence) yields the derived value without
 // persisting it — identical to the un-pinned behaviour for that process.
+//
+// north.matter.dev_rotate_unique_ids bypasses pinning entirely: every boot
+// re-derives (with [mattercore.DeriveUniqueID]'s per-boot bootid.Salt(),
+// active only while the flag is on) and re-persists, so the knob keeps
+// rotating the root identity across restarts instead of freezing on the
+// value the first rotated boot happened to persist. The persisted value is
+// tagged with [matterstore.SettingUniqueIDRotated] while rotation writes it,
+// so a later boot with the flag off can tell a leftover salted value apart
+// from a genuinely pinned one and re-derive the deterministic form instead
+// of pinning the stale salt forever.
 func resolveBridgeUniqueID(ctx context.Context, store *matterstore.Store, mc config.NorthMatter, rootSerial string, logger *slog.Logger) string {
-	if store != nil {
-		if v, ok, err := store.GetSetting(ctx, matterstore.SettingUniqueID); err == nil && ok && v != "" {
-			return v
+	if store != nil && !mc.DevRotateUniqueIDs {
+		v, ok, err := store.GetSetting(ctx, matterstore.SettingUniqueID)
+		if err != nil {
+			// A failed read is "unknown", not "unset": deriving and
+			// persisting below would silently overwrite a pinned value the
+			// daemon simply could not read this boot, reassigning the
+			// bridge's Matter identity under every paired controller.
+			// Derive an in-memory value for THIS boot only — its inputs are
+			// identical to the pinned derivation whenever the identity
+			// hasn't changed, so this degrades to the same value in the
+			// common case — and leave the store untouched; the next boot
+			// retries the read.
+			logger.Warn("matter.bridge.basicinfo.read_unique_id", slog.String("err", err.Error()))
+			return mattercore.DeriveUniqueID(mc.VendorID, mc.ProductID, mc.NodeLabel, rootSerial)
+		}
+		if ok && v != "" {
+			rotated, rOK, rErr := store.GetSetting(ctx, matterstore.SettingUniqueIDRotated)
+			if rErr != nil || !rOK || rotated != "1" {
+				return v
+			}
+			// The pinned value was salted by a boot that had
+			// dev_rotate_unique_ids enabled; rotation is off now, so this
+			// is a stale one-shot salt, not a real pinned identity. Fall
+			// through to re-derive and persist the deterministic form,
+			// which also clears the rotated marker below.
 		}
 	}
 	uid := mattercore.DeriveUniqueID(mc.VendorID, mc.ProductID, mc.NodeLabel, rootSerial)
 	if store != nil {
 		if err := store.SetSetting(ctx, matterstore.SettingUniqueID, uid); err != nil {
 			logger.Warn("matter.bridge.basicinfo.persist_unique_id", slog.String("err", err.Error()))
+		}
+		rotatedFlag := ""
+		if mc.DevRotateUniqueIDs {
+			rotatedFlag = "1"
+		}
+		if err := store.SetSetting(ctx, matterstore.SettingUniqueIDRotated, rotatedFlag); err != nil {
+			logger.Warn("matter.bridge.basicinfo.persist_unique_id_rotated_marker", slog.String("err", err.Error()))
 		}
 	}
 	return uid
@@ -3007,11 +3046,17 @@ type matterWiring struct {
 	fabricRevoker     handlers.MatterFabricRevoker
 	fabricPurger      handlers.MatterFabricPurger
 	closer            handlers.MatterCommissioningCloser
-	exposureStore     handlers.MatterExposureStore
-	candidates        handlers.MatterCandidateProvider
-	pub               *matterEventPublisher
-	reassembler       handlers.MatterTopologyReassembler
-	bi                *mattercore.BasicInformation
+	// exposureStore is the concrete allowlist store rather than the narrower
+	// handlers.MatterExposureStore port: the live-adopt orchestrator also
+	// needs DeleteForCentral (matterExposureStore/setMatterExposureStore in
+	// central_adopt.go), which that REST-facing interface does not declare.
+	// It still satisfies handlers.MatterExposureStore at every assignment
+	// site below.
+	exposureStore *matterstore.Store
+	candidates    handlers.MatterCandidateProvider
+	pub           *matterEventPublisher
+	reassembler   handlers.MatterTopologyReassembler
+	bi            *mattercore.BasicInformation
 	// centralHook wires a runtime-adopted central into the running bridge
 	// (reassemble-on-ready, hot-plug lifecycle, reachable forward). Nil when
 	// the bridge is disabled; the live-adopt orchestrator skips it then. The
@@ -3723,6 +3768,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		}
 		revoker := &matterFabricRevokerAdapter{
 			store:    mfs,
+			opCreds:  bundle.opCreds,
 			teardown: bundle.fabricTeardown,
 			withdraw: bundle.withdrawFabric,
 		}

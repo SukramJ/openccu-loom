@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
@@ -235,6 +236,105 @@ func TestMatterStatusReaderAdapter_WindowNonNil_SetsWindowOpenFalse(t *testing.T
 	// Window is closed → WindowOpen = false; but the nil-check IS exercised.
 	if status.WindowOpen {
 		t.Error("expected WindowOpen=false for closed window")
+	}
+}
+
+// TestRevokeFabricBumpsOperationalCredentialsDataVersion is the regression
+// guard for a REST fabric revoke skipping the OperationalCredentials
+// DataVersion bump the wire RemoveFabric command performs inline
+// (handleRemoveFabric). Without it, a controller that cached
+// CurrentFabricIndex / Fabrics behind a DataVersionFilter keeps reading
+// "unchanged" and never learns the fabric it revoked through the SPA (or a
+// factory reset, which loops the same RevokeFabric) is actually gone.
+func TestRevokeFabricBumpsOperationalCredentialsDataVersion(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
+	cfg.North.Matter.Listen = ":0"
+	cfg.DataDir = t.TempDir()
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-status", Host: "127.0.0.1"}}
+
+	reg := buildTestRegistry(t, "ccu-status")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	if bundle == nil {
+		t.Skip("bridge did not start")
+	}
+	t.Cleanup(bundle.stop)
+	if bundle.opCreds == nil {
+		t.Fatal("startMatterBridge produced a nil OperationalCredentials cluster")
+	}
+
+	idx, err := bundle.store.AddFabric(ctx, matterstore.FabricRecord{
+		FabricID:      0x1122,
+		NodeID:        0x3344,
+		RootPublicKey: make([]byte, 65),
+		CompressedID:  [8]byte{9, 8, 7, 6, 5, 4, 3, 2},
+	})
+	if err != nil {
+		t.Fatalf("AddFabric: %v", err)
+	}
+
+	before := bundle.opCreds.MatterDataVersion()
+
+	a := &matterFabricRevokerAdapter{store: bundle.store, opCreds: bundle.opCreds}
+	if err := a.RevokeFabric(ctx, idx); err != nil {
+		t.Fatalf("RevokeFabric: %v", err)
+	}
+
+	after := bundle.opCreds.MatterDataVersion()
+	if after == before {
+		t.Errorf("DataVersion did not change after RevokeFabric: before=%d after=%d", before, after)
+	}
+}
+
+// TestMatterStatusReaderAdapter_WindowOpen_ReportsRequestedDuration is the
+// regression guard for GET /api/v1/matter/status never emitting
+// commissioning_window_duration_seconds: with a genuinely open window, the
+// response must carry the duration it was opened with so the SPA pairing
+// panel's countdown survives a page reload (assets/ui/src/lib/stores/
+// matter.svelte.ts hydrateCommissioning).
+func TestMatterStatusReaderAdapter_WindowOpen_ReportsRequestedDuration(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
+	cfg.North.Matter.Listen = ":0"
+	cfg.DataDir = t.TempDir()
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-status", Host: "127.0.0.1"}}
+
+	reg := buildTestRegistry(t, "ccu-status")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	if bundle == nil {
+		t.Skip("bridge did not start")
+	}
+	t.Cleanup(bundle.stop)
+
+	w := matterbridge.NewCommissioningWindow()
+	if err := w.OpenWindow(context.Background(), wire.OpenWindowParams{
+		CommissioningTimeoutSeconds: 600,
+	}); err != nil {
+		t.Fatalf("OpenWindow: unexpected error: %v", err)
+	}
+	r := &matterStatusReaderAdapter{
+		enabled: true,
+		bridge:  bundle.bridge,
+		window:  w,
+	}
+	status := r.MatterStatus(context.Background())
+	if !status.WindowOpen {
+		t.Fatal("expected WindowOpen=true for an opened window")
+	}
+	if status.WindowDuration != 600 {
+		t.Errorf("WindowDuration = %d, want 600", status.WindowDuration)
 	}
 }
 

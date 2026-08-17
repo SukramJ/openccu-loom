@@ -311,6 +311,9 @@ func (t *Tracker) applyStaleLocked(c Component) Component {
 	if t.staleAfter <= 0 || c.LastSample.Sticky {
 		return c
 	}
+	if c.LastSample.Sticky {
+		return c
+	}
 	if c.LastSample.Timestamp.IsZero() {
 		return c
 	}

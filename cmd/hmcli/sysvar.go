@@ -114,6 +114,8 @@ func cmdSysvarGet(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	var f connFlags
 	f.bind(fs)
+	var central string
+	fs.StringVar(&central, "central", "", "disambiguate a name that exists on more than one CCU")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -131,8 +133,12 @@ func cmdSysvarGet(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := f.requestContext()
 	defer cancel()
 
+	path := "/api/v1/sysvars/" + url.PathEscape(name)
+	if central != "" {
+		path += "?" + url.Values{"central": {central}}.Encode()
+	}
 	var sv sysvarSummary
-	if err := client.getJSON(ctx, "/api/v1/sysvars/"+url.PathEscape(name), &sv); err != nil {
+	if err := client.getJSON(ctx, path, &sv); err != nil {
 		return err
 	}
 
@@ -162,6 +168,8 @@ func cmdSysvarSet(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	var f connFlags
 	f.bind(fs)
+	var central string
+	fs.StringVar(&central, "central", "", "required on a multi-CCU daemon unless the name is unique across every CCU")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -179,12 +187,15 @@ func cmdSysvarSet(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := f.requestContext()
 	defer cancel()
 
+	path := "/api/v1/sysvars/" + url.PathEscape(name)
+	if central != "" {
+		path += "?" + url.Values{"central": {central}}.Encode()
+	}
 	body := sysvarSetRequest{Value: coerceValue(rawVal)}
-	if err := client.sendJSON(ctx, http.MethodPut, "/api/v1/sysvars/"+url.PathEscape(name), body, nil); err != nil {
+	if err := client.sendJSON(ctx, http.MethodPut, path, body, nil); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{"name": name, "value": body.Value})
 }
 
 func cmdSysvarFetch(args []string, stdout, stderr io.Writer) error {
@@ -213,6 +224,5 @@ func cmdSysvarFetch(args []string, stdout, stderr io.Writer) error {
 	if err := client.sendJSON(ctx, http.MethodPost, path, nil, nil); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeOKResult(stdout, f.jsonOut, map[string]any{"central": central})
 }

@@ -19,8 +19,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/history"
+	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -95,6 +97,14 @@ type centralOrchestrator struct {
 	// is NOT part of it — that rides a registry observer, which covers boot
 	// and adopt alike.
 	matterHook matterCentralHook
+	// matterExposureStore is the Matter exposure allowlist (matter_exposures
+	// table). Set via [centralOrchestrator.setMatterExposureStore] after the
+	// Matter runtime is stood up; nil while the bridge is disabled or never
+	// came up. purgeCentralState uses it to drop a removed central's
+	// allowlist rows, which otherwise survive the removal and inflate
+	// GET /api/v1/matter/status's enabled_count for endpoints that can no
+	// longer exist.
+	matterExposureStore *matterstore.Store
 	// alarmHook subscribes an adopted central onto the alarm service's
 	// event routing and detaches it again by name. Set via
 	// [centralOrchestrator.setAlarmCentralHook]; zero while the alarm
@@ -327,6 +337,18 @@ func (o *centralOrchestrator) setMatterCentralHook(hook matterCentralHook) {
 	}
 	o.mu.Lock()
 	o.matterHook = hook
+	o.mu.Unlock()
+}
+
+// setMatterExposureStore installs the Matter exposure allowlist store so
+// removeCentral can drop a removed central's rows. Nil-safe / idempotent,
+// mirroring [centralOrchestrator.setMatterCentralHook].
+func (o *centralOrchestrator) setMatterExposureStore(store *matterstore.Store) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.matterExposureStore = store
 	o.mu.Unlock()
 }
 
@@ -590,6 +612,27 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 		}
 	}
 
+	// Snapshot the interface list for the connectivity retract BEFORE
+	// bringUp.RemoveCentral runs: that call drains and removes every entry
+	// from the unit's client registry as part of its own teardown, so
+	// building the retract items from a live read afterward always sees an
+	// empty registry and silently skips every connectivity binary_sensor.
+	var connectivityInterfaces []hmenum.Interface
+	if unit, live := o.reg.Get(name); live && unit.Clients != nil {
+		for _, entry := range unit.Clients.List() {
+			if entry == nil {
+				continue
+			}
+			iface := entry.Interface
+			if iface == "" {
+				iface = adapter.BareInterfaceFromWireID(name, entry.InterfaceID)
+			}
+			if iface != "" {
+				connectivityInterfaces = append(connectivityInterfaces, iface)
+			}
+		}
+	}
+
 	o.bringUp.RemoveCentral(name)
 
 	// Every per-central domain unwire, in attach order: the Matter
@@ -619,7 +662,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 		// retracted separately by the model eviction below via the event bridge.
 		if o.sbDeps.hubMQTT != nil {
 			//nolint:contextcheck // RetractCentral publishes on the fan-out worker's own context, like every publisher method
-			o.sbDeps.hubMQTT.RetractCentral(unit)
+			o.sbDeps.hubMQTT.RetractCentral(unit, connectivityInterfaces)
 		}
 		evictModel(unit)
 		unit.Stop() //nolint:contextcheck // Unit.Stop takes no ctx parameter; teardown always runs to completion regardless of the caller's ctx
@@ -632,8 +675,15 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 		h.detachBridge()
 	}
 
-	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore, o.recordingOverrides,
-		o.channelFlagsStore, o.channelFlagsOverlay, h.cc, o.logger)
+	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore,
+		o.recordingOverrides, o.sbDeps.visibilityUnIgnoreStore, o.channelFlagsStore, o.channelFlagsOverlay,
+		h.cc, o.logger)
+	if o.matterExposureStore != nil {
+		if err := o.matterExposureStore.DeleteForCentral(ctx, name); err != nil {
+			o.logger.Warn("central.remove.purge_matter_exposures",
+				slog.String("central", name), slog.String("err", err.Error()))
+		}
+	}
 	o.logger.Info("central.remove.live", slog.String("central", name))
 	return nil
 }
@@ -735,11 +785,18 @@ func evictModel(u *central.Unit) {
 }
 
 // purgeCentralState deletes every derived SQLite row keyed to a removed
-// central: per-interface VALUES/MASTER cache rows and the measurement
-// history. The `centrals` row itself is deliberately NOT deleted here — the
-// REST decorator's Delete calls the underlying [handlers.CentralAdminService]
-// (persistence) right after this returns, so deleting it here would race /
-// double-delete against that call.
+// central: per-interface VALUES/MASTER cache rows, the measurement history,
+// the recording overrides, the visibility un-ignore patterns and the
+// channel-flags overlay (hidden/locked overrides) — plus its in-memory
+// mirror. Without the last two, a central re-adopted under the same name
+// (or a different CCU later given that name) has the previous incarnation's
+// un-ignore patterns silently revived by the [central.Registry.OnRegister]
+// observer that replays whatever SQLite still holds, and keeps the old
+// hidden/locked channel overrides forever (the overlay is hydrated once at
+// boot and never purged per central). The `centrals` row itself is
+// deliberately NOT deleted here — the REST decorator's Delete calls the
+// underlying [handlers.CentralAdminService] (persistence) right after this
+// returns, so deleting it here would race / double-delete against that call.
 func purgeCentralState(
 	ctx context.Context,
 	valuesCacheStore *sqlite.ValuesCacheStore,
@@ -747,6 +804,7 @@ func purgeCentralState(
 	historyStore *sqlite.MeasurementStore,
 	recordingStore *sqlite.RecordingOverrideStore,
 	recordingOverrides *history.RecordingOverrides,
+	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore,
 	channelFlagsStore *sqlite.ChannelFlagsStore,
 	channelFlagsOverlay *channelflags.Overlay,
 	cc config.CentralConfig,
@@ -790,6 +848,12 @@ func purgeCentralState(
 	if n := recordingOverrides.DeleteCentral(cc.Name); n > 0 {
 		logger.Info("central.remove.purge_recording_overrides_overlay",
 			slog.String("central", cc.Name), slog.Int("count", n))
+	}
+	if visibilityUnIgnoreStore != nil {
+		if err := visibilityUnIgnoreStore.DeleteForCentral(ctx, cc.Name); err != nil {
+			logger.Warn("central.remove.purge_visibility_unignore",
+				slog.String("central", cc.Name), slog.String("err", err.Error()))
+		}
 	}
 	if channelFlagsStore != nil {
 		if err := channelFlagsStore.DeleteForCentral(ctx, cc.Name); err != nil {

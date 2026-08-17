@@ -149,6 +149,29 @@ func TestSysvarGetCallsCorrectEndpoint(t *testing.T) {
 	}
 }
 
+// TestSysvarGetWithCentralFlagAppendsQueryParam is the regression guard for
+// `sysvar get` having no way to disambiguate a name that exists on more than
+// one CCU: the daemon's GetSysvar handler answers 400 "central required
+// (multiple CCUs)" without a `?central=` query parameter, and until this
+// fix the CLI had no flag to supply one.
+func TestSysvarGetWithCentralFlagAppendsQueryParam(t *testing.T) {
+	t.Parallel()
+	var gotQuery string
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/sysvars/MYVAR": func(w http.ResponseWriter, r *http.Request) {
+			gotQuery = r.URL.RawQuery
+			writeJSON200(w, sysvarSummary{Name: "MYVAR", ValueType: "string", Value: "hello"})
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"sysvar", "get", "--host", ts.URL, "--central", "ccu-attic", "MYVAR"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v\nstderr: %s", err, stderr.String())
+	}
+	if gotQuery != "central=ccu-attic" {
+		t.Errorf("query=%q, want central=ccu-attic", gotQuery)
+	}
+}
+
 func TestSysvarGetPrintsFields(t *testing.T) {
 	t.Parallel()
 	ts := newDevicesServer(t, map[string]http.HandlerFunc{
@@ -221,6 +244,28 @@ func TestSysvarSetCallsCorrectEndpointAndMethod(t *testing.T) {
 	}
 }
 
+// TestSysvarSetWithCentralFlagAppendsQueryParam mirrors
+// TestSysvarGetWithCentralFlagAppendsQueryParam for the write path: the
+// daemon's PutSysvar handler is gated by requireMutationHub, which answers
+// 400 "central required (multiple CCUs)" without `?central=`.
+func TestSysvarSetWithCentralFlagAppendsQueryParam(t *testing.T) {
+	t.Parallel()
+	var gotQuery string
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/sysvars/MYVAR": func(w http.ResponseWriter, r *http.Request) {
+			gotQuery = r.URL.RawQuery
+			w.WriteHeader(http.StatusNoContent)
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"sysvar", "set", "--host", ts.URL, "--central", "ccu-basement", "MYVAR", "true"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v\nstderr: %s", err, stderr.String())
+	}
+	if gotQuery != "central=ccu-basement" {
+		t.Errorf("query=%q, want central=ccu-basement", gotQuery)
+	}
+}
+
 func TestSysvarSetSendsCoercedValue(t *testing.T) {
 	t.Parallel()
 	var gotBody map[string]any
@@ -253,6 +298,26 @@ func TestSysvarSetPrintsOkOnSuccess(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "ok") {
 		t.Errorf("expected 'ok' in stdout, got: %q", stdout.String())
+	}
+}
+
+func TestSysvarSetWithJSONFlagEmitsParseableObject(t *testing.T) {
+	t.Parallel()
+	ts := newDevicesServer(t, map[string]http.HandlerFunc{
+		"/api/v1/sysvars/SV": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		},
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"sysvar", "set", "--host", ts.URL, "--json", "SV", "42"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("--json output did not parse as JSON: %v (got %q)", err, stdout.String())
+	}
+	if got["status"] != "ok" {
+		t.Errorf("status=%v, want ok", got["status"])
 	}
 }
 

@@ -41,7 +41,13 @@ type eventsPongMsg struct {
 // eventsInbound is a generic shape for frames arriving from the server.
 // Fields not present in a given frame are zero-valued / nil.
 type eventsInbound struct {
-	// broadcast event fields
+	// broadcast event fields. Kind and Seq mirror outboundEvent
+	// (internal/north/rest/ws/client.go) verbatim, without omitempty, so a
+	// genuine zero seq or an event carrying no kind is not indistinguishable
+	// from the field being absent — --json re-encodes this struct as the
+	// JSONL line, so a dropped or omitted field here is a dropped field on
+	// every consumer of `hmcli events tail --json`.
+	Kind    string          `json:"kind"`
 	Topic   string          `json:"topic,omitempty"`
 	Type    string          `json:"type,omitempty"`
 	TS      string          `json:"ts,omitempty"`
@@ -49,7 +55,7 @@ type eventsInbound struct {
 	// control / ack fields
 	Op     string   `json:"op,omitempty"`
 	Topics []string `json:"topics,omitempty"`
-	Seq    int64    `json:"seq,omitempty"`
+	Seq    uint64   `json:"seq"`
 }
 
 // ─── flags ───────────────────────────────────────────────────────────────────
