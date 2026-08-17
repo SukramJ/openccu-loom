@@ -10,6 +10,7 @@ package backends
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -949,24 +950,76 @@ func (b *CcuBackend) DeleteSystemVariable(ctx context.Context, name string) (boo
 // --- ISE-ID lookup ----------------------------------------------------
 
 // GetIseIDByAddress implements Operations. Resolves a device or channel
-// address to its ReGa ISE-ID via JSON-RPC.
+// address to its ReGa ISE-ID from Device.listAllDetail, which reports every
+// device's and every channel's id next to its address.
+//
+// It does not ask the CCU to resolve the address: the JSON-RPC API exposes
+// no address→ise-id lookup. Interface.getIseIDByAddress is absent from the
+// CCU's method directory and answers "method not found" for every address,
+// and Device.getReGaIDByAddress covers device addresses only (it reports
+// "noDeviceFound" for a channel address). The device- and channel-rename
+// path resolves through here, so an unresolvable address means no rename
+// ever reaches the CCU.
+//
+// A missing address yields (0, nil) — the caller distinguishes "not found"
+// from a transport failure by the error, and reports a non-positive id as
+// an unknown address.
+//
+// Wire: Device.listAllDetail, no params.
 func (b *CcuBackend) GetIseIDByAddress(ctx context.Context, address string) (int, error) {
 	if b.json == nil {
 		return 0, ErrUnsupported
 	}
-	raw, err := b.json.Call(ctx, "Interface.getIseIDByAddress", map[string]any{
-		"address": address,
-	})
+	raw, err := b.json.Call(ctx, "Device.listAllDetail")
 	if err != nil {
 		return 0, err
 	}
-	switch v := raw.(type) {
-	case int:
-		return v, nil
-	case float64:
-		return int(v), nil
+	devices, ok := raw.([]any)
+	if !ok {
+		return 0, fmt.Errorf("resolve ise id for %s: unexpected result type %T", address, raw)
+	}
+	for _, entry := range devices {
+		device, isMap := entry.(map[string]any)
+		if !isMap {
+			continue
+		}
+		if id, found := detailEntryISEID(device, address); found {
+			return id, nil
+		}
+		channels, _ := device["channels"].([]any)
+		for _, channelEntry := range channels {
+			channel, isMap := channelEntry.(map[string]any)
+			if !isMap {
+				continue
+			}
+			if id, found := detailEntryISEID(channel, address); found {
+				return id, nil
+			}
+		}
 	}
 	return 0, nil
+}
+
+// detailEntryISEID reports the numeric id of one Device.listAllDetail entry
+// when its address matches. The CCU transports both fields as strings, but
+// a JSON number decodes to float64, so both shapes are accepted.
+func detailEntryISEID(entry map[string]any, address string) (int, bool) {
+	if addr, _ := entry["address"].(string); addr != address {
+		return 0, false
+	}
+	switch v := entry["id"].(type) {
+	case string:
+		id, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return 0, false
+		}
+		return id, true
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	}
+	return 0, false
 }
 
 // --- link info ---------------------------------------------------------
@@ -1020,6 +1073,16 @@ func (b *CcuBackend) SetLinkInfo(ctx context.Context, iface, senderAddress, rece
 //
 // Wire: Interface.getSuppressedServiceMessages, params: {interface,
 // channelAddress}. Mirrors json_rpc.py get_suppressed_service_messages.
+//
+// The CCU renders the array as text and then JSON-encodes that text a
+// second time, so the result arrives as a STRING carrying the array
+// (`"[]"`, `"[\"LOW_BAT\"]"`) rather than as an array. Both shapes are
+// accepted; a shape that is neither is an error, never an empty list.
+// The reconciler in [hub.ServiceMessages.Suppressed] reads an empty list
+// as "the CCU no longer suppresses anything on this channel" and drops
+// every parameter-scoped record, while an error leaves them in place —
+// so a decode failure that answers `nil, nil` erases the operator's
+// suppression view instead of degrading it.
 func (b *CcuBackend) GetSuppressedServiceMessages(ctx context.Context, iface, channelAddress string) ([]string, error) {
 	if b.json == nil {
 		return nil, ErrUnsupported
@@ -1036,7 +1099,13 @@ func (b *CcuBackend) GetSuppressedServiceMessages(ctx context.Context, iface, ch
 	}
 	list, ok := raw.([]any)
 	if !ok {
-		return nil, nil
+		encoded, isString := raw.(string)
+		if !isString {
+			return nil, fmt.Errorf("suppressed service messages for %s: unexpected result type %T", channelAddress, raw)
+		}
+		if err := json.Unmarshal([]byte(encoded), &list); err != nil {
+			return nil, fmt.Errorf("suppressed service messages for %s: decode %q: %w", channelAddress, encoded, err)
+		}
 	}
 	out := make([]string, 0, len(list))
 	for _, entry := range list {

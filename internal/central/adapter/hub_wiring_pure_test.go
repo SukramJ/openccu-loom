@@ -147,6 +147,25 @@ func TestParseSysvarValueAlarmTrue(t *testing.T) {
 	_ = pv
 }
 
+// A boolean-typed variable whose payload is not a boolean records NO
+// value. Falling back to the string kind gives the data point a kind no
+// downstream bool dispatch matches and puts that raw token on the state
+// topic of an entity declared with payload_on / payload_off, where it
+// matches neither and the entity stays unknown. The CCU makes this
+// reachable in normal operation: it reports an empty value for every
+// ALARM variable.
+func TestParseSysvarValueBooleanTypesRejectNonBooleanPayload(t *testing.T) {
+	t.Parallel()
+	for _, vt := range []hmenum.HubValueType{hmenum.HubValueTypeLogic, hmenum.HubValueTypeAlarm} {
+		for _, raw := range []string{`""`, `"ausgelöst"`, `"2"`} {
+			pv, ok := parseSysvarValue(vt, json.RawMessage(raw))
+			if ok {
+				t.Errorf("parseSysvarValue(%s, %s) = %#v, ok=true; want no value", vt, raw, pv)
+			}
+		}
+	}
+}
+
 // The numeric assertions below pin the ParamValue KIND, not just the
 // parse success: the CCU delivers every sysvar value as a quoted
 // string, and a value that stays ValueKindString silently breaks every

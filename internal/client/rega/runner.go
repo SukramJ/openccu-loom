@@ -457,6 +457,14 @@ type ProgramDescription struct {
 	// program's root-rule activities (object name := value, joined by "; ").
 	// Empty when the program has no rule. URL-encoded on the wire.
 	ActivitySummary string `json:"activity_summary"`
+	// LastExecuteSeconds is when the CCU last ran the program, in Unix
+	// seconds (UTC); 0 when it never ran. Program.getAll reports the same
+	// instant as a CCU-local wall-clock string that carries no zone offset
+	// and is therefore not parsable on its own, so the script reads the
+	// *Seconds() accessor instead — same rationale as [ServiceMessage].
+	// A CCU whose script predates the field decodes to 0, which callers
+	// treat as "never ran".
+	LastExecuteSeconds int64 `json:"last_execute_seconds"`
 }
 
 // GetProgramDescriptions returns the URI-encoded description string and the
@@ -507,6 +515,12 @@ type SystemVariableDescription struct {
 	// results) that omit the field decode to the empty string, so callers
 	// treat "" as "no explicit assignment".
 	ChannelAddress string `json:"channel_address"`
+	// AlarmState is the triggered flag of an ALARM variable: "1" raised,
+	// "0" not raised, "" for every variable that is not of the alarm
+	// sub-type (and for a script result that predates the field). It is
+	// the only state source for these variables: the CCU keeps it in
+	// AlState() and answers SysVar.getAll with an empty value for them.
+	AlarmState string `json:"alarm_state"`
 }
 
 // GetSystemVariableDescriptions returns the URI-encoded description string

@@ -331,6 +331,29 @@ func (p *Program) OnActive(active bool) {
 	}
 }
 
+// SeedLastExecution records an execution the CCU performed on its own —
+// a scheduled or condition-triggered run the daemon never saw — from the
+// timestamp the hub scan reads off the CCU.
+//
+// It deliberately does NOT fire subscribers and does NOT touch the
+// success flag: the run happened before this observation, often long
+// before, and announcing it as a fresh [ProgramEventKindExecution] would
+// replay every program's last run onto MQTT / WS / webhooks on each boot.
+// The value only moves forward, so a refresh reporting an older
+// timestamp than one the daemon itself observed cannot walk it back. A
+// zero ts is ignored — the CCU reports "never ran" that way.
+func (p *Program) SeedLastExecution(ts time.Time) {
+	if ts.IsZero() {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !ts.After(p.lastExecute) {
+		return
+	}
+	p.lastExecute = ts
+}
+
 // OnExecution records an execution event emitted by the hub
 // coordinator. Fires subscribers. Clears [HubDataPoint.StateUncertain]
 func (p *Program) OnExecution(success bool, trigger hmenum.ProgramTrigger) {

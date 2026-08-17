@@ -35,20 +35,22 @@ type sysvarMockServer struct {
 	regaCnt    atomic.Int32
 	setBool    atomic.Int32
 	setFloat   atomic.Int32
-	iseCnt     atomic.Int32
+	detailCnt  atomic.Int32
 
-	// iseID is returned by Interface.getIseIDByAddress; iseFault makes it
-	// answer with a CCU-side error object instead (the unresolvable-address
-	// case). newSysvarMock seeds iseID with a valid id so channel-carrying
-	// tests resolve by default.
-	iseID    atomic.Int32
-	iseFault atomic.Bool
+	// fleet maps a device or channel address to its ReGa ise id and backs
+	// the Device.listAllDetail answer — the CCU's only address→ise-id
+	// source. The server deliberately does NOT serve
+	// Interface.getIseIDByAddress: real CCU firmware has no such method, so
+	// answering it here would keep a call alive that fails on every real
+	// installation. detailFault turns the read into a server error, the
+	// "CCU unreachable" case, which must not look like a bad address.
+	fleet       atomic.Pointer[map[string]string]
+	detailFault atomic.Bool
 
-	lastCreate  atomic.Pointer[map[string]any]
-	lastSet     atomic.Pointer[map[string]any]
-	lastDelete  atomic.Pointer[string]
-	lastRega    atomic.Pointer[string]
-	lastIseAddr atomic.Pointer[string]
+	lastCreate atomic.Pointer[map[string]any]
+	lastSet    atomic.Pointer[map[string]any]
+	lastDelete atomic.Pointer[string]
+	lastRega   atomic.Pointer[string]
 
 	// regaResult is what ReGa.runScript returns as result; the string-only
 	// set_system_variable script emits the written value on success and
@@ -59,7 +61,7 @@ type sysvarMockServer struct {
 func newSysvarMock(t *testing.T) *sysvarMockServer {
 	t.Helper()
 	m := &sysvarMockServer{}
-	m.iseID.Store(4321)
+	m.setFleet(map[string]string{"ABC0000001": "4320", "ABC0000001:1": "4321"})
 	// Default the ReGa result to a success token so a create ("id") and an
 	// update ("ok") both read as accepted — the writers now reject an empty
 	// result (a decline / failed create). "ok" is non-empty (create's success
@@ -108,15 +110,13 @@ func newSysvarMock(t *testing.T) *sysvarMockServer {
 			cp := copyMap(env.Params)
 			m.lastSet.Store(&cp)
 			_, _ = w.Write([]byte(`{"result":true}`))
-		case "Interface.getIseIDByAddress":
-			m.iseCnt.Add(1)
-			addr, _ := env.Params["address"].(string)
-			m.lastIseAddr.Store(&addr)
-			if m.iseFault.Load() {
-				_, _ = w.Write([]byte(`{"error":{"code":500,"message":"address not found"}}`))
+		case "Device.listAllDetail":
+			m.detailCnt.Add(1)
+			if m.detailFault.Load() {
+				http.Error(w, "ccu unreachable", http.StatusBadGateway)
 				return
 			}
-			payload, _ := json.Marshal(map[string]any{"result": m.iseID.Load()})
+			payload, _ := json.Marshal(map[string]any{"result": m.detailPayload()})
 			_, _ = w.Write(payload)
 		case "ReGa.runScript":
 			m.regaCnt.Add(1)
@@ -136,6 +136,48 @@ func newSysvarMock(t *testing.T) *sysvarMockServer {
 func copyMap(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
 	maps.Copy(out, in)
+	return out
+}
+
+// setFleet replaces the address→ise-id table the server reports through
+// Device.listAllDetail. Keys carrying a ":" are channels of the device
+// named by their prefix.
+func (m *sysvarMockServer) setFleet(fleet map[string]string) {
+	cp := make(map[string]string, len(fleet))
+	maps.Copy(cp, fleet)
+	m.fleet.Store(&cp)
+}
+
+// detailPayload renders the fleet in the shape the CCU's
+// Device.listAllDetail answers with: one entry per device carrying its own
+// id plus a nested channel list, each channel with its own id and address.
+func (m *sysvarMockServer) detailPayload() []map[string]any {
+	fleet := map[string]string{}
+	if p := m.fleet.Load(); p != nil {
+		fleet = *p
+	}
+	byDevice := make(map[string][]map[string]any)
+	for addr, id := range fleet {
+		device, _, isChannel := strings.Cut(addr, ":")
+		if !isChannel {
+			if _, seen := byDevice[addr]; !seen {
+				byDevice[addr] = nil
+			}
+			continue
+		}
+		byDevice[device] = append(byDevice[device], map[string]any{
+			"id": id, "address": addr, "name": addr,
+		})
+	}
+	out := make([]map[string]any, 0, len(byDevice))
+	for device, channels := range byDevice {
+		out = append(out, map[string]any{
+			"id":       fleet[device],
+			"address":  device,
+			"name":     device,
+			"channels": channels,
+		})
+	}
 	return out
 }
 
@@ -863,18 +905,22 @@ func TestUpdateSysvarIndependentFlags(t *testing.T) {
 	}
 }
 
-// ─── Channel assignment (SV06) ──────────────────────────────────────────────
+// ─── Channel assignment ─────────────────────────────────────────────────────
 //
 // A create/patch carrying a channel address resolves it to the channel's
-// ReGa ise id via Interface.getIseIDByAddress before it reaches the CCU. The
-// native create path threads the id into chn_id (no longer hard-coded -1);
-// the Rega paths bind it into the script's ##channel## slot.
+// ReGa ise id before it reaches the CCU. The resolution reads
+// Device.listAllDetail, the CCU's only address→ise-id source; the mock
+// server serves no Interface.getIseIDByAddress, exactly as real firmware
+// does not, so a writer reaching for that method fails here the way it
+// fails on a CCU. The native create path threads the id into chn_id (no
+// longer hard-coded -1); the Rega paths bind it into the script's
+// ##channel## slot.
 
 // A BOOL create with a channel address resolves the address and threads the
 // numeric ise id into SysVar.createBool's chn_id (replacing the -1 default).
 func TestCreateSysvarChannelResolvesIntoNativeChnID(t *testing.T) {
 	m := newSysvarMock(t)
-	m.iseID.Store(5678)
+	m.setFleet(map[string]string{"ABC0000001": "5677", "ABC0000001:3": "5678"})
 	w := newWriterAgainst(t, m.srv.URL)
 
 	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
@@ -883,11 +929,8 @@ func TestCreateSysvarChannelResolvesIntoNativeChnID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
-	if got := m.iseCnt.Load(); got != 1 {
-		t.Fatalf("expected 1 Interface.getIseIDByAddress call, got %d", got)
-	}
-	if addr := m.lastIseAddr.Load(); addr == nil || *addr != "ABC0000001:3" {
-		t.Fatalf("resolved address = %v, want ABC0000001:3", addr)
+	if got := m.detailCnt.Load(); got != 1 {
+		t.Fatalf("expected 1 Device.listAllDetail call, got %d", got)
 	}
 	got := m.lastCreate.Load()
 	if got == nil || (*got)["chn_id"] != float64(5678) {
@@ -895,11 +938,30 @@ func TestCreateSysvarChannelResolvesIntoNativeChnID(t *testing.T) {
 	}
 }
 
+// The device address itself resolves too — the CCU lists a device's own ise
+// id next to its channels', and an operator may bind a variable to either.
+func TestCreateSysvarChannelResolvesDeviceAddress(t *testing.T) {
+	m := newSysvarMock(t)
+	m.setFleet(map[string]string{"ABC0000001": "5677", "ABC0000001:3": "5678"})
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
+		Name: "Alarm", ValueType: "BOOL", Channel: "ABC0000001",
+	})
+	if err != nil {
+		t.Fatalf("CreateSysvar: %v", err)
+	}
+	got := m.lastCreate.Load()
+	if got == nil || (*got)["chn_id"] != float64(5677) {
+		t.Fatalf("create chn_id = %v, want 5677", got)
+	}
+}
+
 // A create forced onto the Rega path (INTEGER) with a channel address resolves
 // the id and binds it into the script's ##channel## slot.
 func TestCreateSysvarChannelViaRegaBindsResolvedID(t *testing.T) {
 	m := newSysvarMock(t)
-	m.iseID.Store(9001)
+	m.setFleet(map[string]string{"ABC0000001": "9000", "ABC0000001:3": "9001"})
 	w := newWriterAgainst(t, m.srv.URL)
 
 	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
@@ -908,7 +970,7 @@ func TestCreateSysvarChannelViaRegaBindsResolvedID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
-	if got := m.iseCnt.Load(); got != 1 {
+	if got := m.detailCnt.Load(); got != 1 {
 		t.Fatalf("expected 1 resolve call, got %d", got)
 	}
 	body := m.lastRega.Load()
@@ -926,7 +988,7 @@ func TestCreateSysvarNoChannelKeepsUnassigned(t *testing.T) {
 	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Alarm", ValueType: "BOOL"}); err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
-	if got := m.iseCnt.Load(); got != 0 {
+	if got := m.detailCnt.Load(); got != 0 {
 		t.Fatalf("no channel must not resolve an address, got %d calls", got)
 	}
 	got := m.lastCreate.Load()
@@ -935,11 +997,10 @@ func TestCreateSysvarNoChannelKeepsUnassigned(t *testing.T) {
 	}
 }
 
-// A channel address the CCU cannot resolve (a JSON-RPC fault) surfaces as the
+// An address the CCU does not list surfaces as the
 // hub.ErrSysvarChannelUnknown sentinel, which the REST handler maps to 422.
 func TestCreateSysvarChannelUnknownAddressReturnsSentinel(t *testing.T) {
 	m := newSysvarMock(t)
-	m.iseFault.Store(true)
 	w := newWriterAgainst(t, m.srv.URL)
 
 	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
@@ -953,11 +1014,11 @@ func TestCreateSysvarChannelUnknownAddressReturnsSentinel(t *testing.T) {
 	}
 }
 
-// A non-positive resolved id (address exists on the wire but names nothing)
+// A non-positive listed id (the address appears but names nothing usable)
 // is also treated as unresolvable.
 func TestCreateSysvarChannelZeroIDReturnsSentinel(t *testing.T) {
 	m := newSysvarMock(t)
-	m.iseID.Store(0)
+	m.setFleet(map[string]string{"ABC": "0", "ABC:1": "0"})
 	w := newWriterAgainst(t, m.srv.URL)
 
 	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
@@ -968,18 +1029,40 @@ func TestCreateSysvarChannelZeroIDReturnsSentinel(t *testing.T) {
 	}
 }
 
+// A failed device read is a transport problem, not a bad address: it must
+// NOT carry the sentinel, so the REST handler answers 502 instead of
+// blaming the operator's input with a 422.
+func TestCreateSysvarChannelReadFailureIsNotAValidationError(t *testing.T) {
+	m := newSysvarMock(t)
+	m.detailFault.Store(true)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
+		Name: "Alarm", ValueType: "BOOL", Channel: "ABC0000001:1",
+	})
+	if err == nil {
+		t.Fatal("expected an error when the device list cannot be read")
+	}
+	if errors.Is(err, hub.ErrSysvarChannelUnknown) {
+		t.Fatalf("a failed read must not report an unknown channel: %v", err)
+	}
+	if got := m.createBool.Load(); got != 0 {
+		t.Fatalf("createBool must not run when the address could not be checked, got %d", got)
+	}
+}
+
 // A PATCH with a channel address resolves it and binds the id into the update
 // script's ##channel## slot.
 func TestUpdateSysvarChannelResolvesAndMarshals(t *testing.T) {
 	m := newSysvarMock(t)
-	m.iseID.Store(7777)
+	m.setFleet(map[string]string{"ABC0000001": "7776", "ABC0000001:5": "7777"})
 	w := newWriterAgainst(t, m.srv.URL)
 
 	addr := "ABC0000001:5"
 	if err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "X", Channel: &addr}); err != nil {
 		t.Fatalf("UpdateSysvar: %v", err)
 	}
-	if got := m.iseCnt.Load(); got != 1 {
+	if got := m.detailCnt.Load(); got != 1 {
 		t.Fatalf("expected 1 resolve call, got %d", got)
 	}
 	body := m.lastRega.Load()
@@ -998,7 +1081,7 @@ func TestUpdateSysvarChannelClearMarshalsMinusOne(t *testing.T) {
 	if err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "X", Channel: &empty}); err != nil {
 		t.Fatalf("UpdateSysvar: %v", err)
 	}
-	if got := m.iseCnt.Load(); got != 0 {
+	if got := m.detailCnt.Load(); got != 0 {
 		t.Fatalf("clearing must not resolve an address, got %d calls", got)
 	}
 	body := m.lastRega.Load()
@@ -1016,7 +1099,7 @@ func TestUpdateSysvarChannelNilLeavesSlotEmpty(t *testing.T) {
 	if err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "X", Unit: "°C"}); err != nil {
 		t.Fatalf("UpdateSysvar: %v", err)
 	}
-	if got := m.iseCnt.Load(); got != 0 {
+	if got := m.detailCnt.Load(); got != 0 {
 		t.Fatalf("nil channel must not resolve an address, got %d calls", got)
 	}
 	body := m.lastRega.Load()
@@ -1029,7 +1112,6 @@ func TestUpdateSysvarChannelNilLeavesSlotEmpty(t *testing.T) {
 // never dispatches the update script.
 func TestUpdateSysvarChannelUnknownAddressReturnsSentinel(t *testing.T) {
 	m := newSysvarMock(t)
-	m.iseFault.Store(true)
 	w := newWriterAgainst(t, m.srv.URL)
 
 	addr := "BAD:9"

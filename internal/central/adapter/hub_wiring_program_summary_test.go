@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
@@ -273,5 +274,102 @@ func TestLoadProgramsRefreshUpdatesRuleSummaryOnExistingPointer(t *testing.T) {
 	}
 	if cond, act := refreshed.RuleSummary(); cond != "Flur == 1.00" || act != "Bücherregal := 0.00" {
 		t.Errorf("refreshed RuleSummary = (%q, %q), want (%q, %q)", cond, act, "Flur == 1.00", "Bücherregal := 0.00")
+	}
+}
+
+// TestLoadProgramsSeedsLastExecutionFromCCU pins where a program's last
+// execution comes from. Most CCU programs run on their own schedule, so
+// the daemon never observes the run; without the seed the model reports
+// "never executed" for every one of them and last_executed is absent from
+// REST, MCP and the MQTT program payload until the daemon itself triggers
+// the program. The CCU reports the instant as a Unix epoch through the
+// description script (its Program.getAll counterpart is a zone-less local
+// wall-clock string).
+func TestLoadProgramsSeedsLastExecutionFromCCU(t *testing.T) {
+	t.Parallel()
+	const epoch = 1786970913
+	s := newProgramSummaryServer(t, `[{"id":"p1","description":"",`+
+		`"condition_summary":"","activity_summary":"","last_execute_seconds":1786970913}]`)
+	jc, runner := newProgramSummaryRunner(t, s.srv)
+
+	h := hub.NewHub("c")
+	if err := loadPrograms(context.Background(), jc, runner, h, &noopProgramWriter{},
+		hubScanOptions{enableProgramScan: true}); err != nil {
+		t.Fatalf("loadPrograms: %v", err)
+	}
+	prog, ok := h.Program("p1")
+	if !ok {
+		t.Fatal("program p1 not loaded")
+	}
+	ts, has := prog.LastExecution()
+	if !has {
+		t.Fatal("LastExecution not recorded for a program the CCU has run")
+	}
+	if want := time.Unix(epoch, 0).UTC(); !ts.Equal(want) {
+		t.Fatalf("LastExecution = %s, want %s", ts, want)
+	}
+	// The same instant in the RFC 3339 form the north-bound surfaces publish.
+	if got, wantStr := prog.LastExecuteTimeString(), time.Unix(epoch, 0).UTC().Format(time.RFC3339); got != wantStr {
+		t.Fatalf("LastExecuteTimeString = %q, want %q", got, wantStr)
+	}
+}
+
+// TestLoadProgramsNeverExecutedStaysEmpty verifies the CCU's "never ran"
+// answer (epoch 0, which its own JSON API renders as 1970-01-01) does not
+// become a 1970 timestamp on the north-bound surfaces.
+func TestLoadProgramsNeverExecutedStaysEmpty(t *testing.T) {
+	t.Parallel()
+	s := newProgramSummaryServer(t, `[{"id":"p1","description":"",`+
+		`"condition_summary":"","activity_summary":"","last_execute_seconds":0}]`)
+	jc, runner := newProgramSummaryRunner(t, s.srv)
+
+	h := hub.NewHub("c")
+	if err := loadPrograms(context.Background(), jc, runner, h, &noopProgramWriter{},
+		hubScanOptions{enableProgramScan: true}); err != nil {
+		t.Fatalf("loadPrograms: %v", err)
+	}
+	prog, ok := h.Program("p1")
+	if !ok {
+		t.Fatal("program p1 not loaded")
+	}
+	if ts, has := prog.LastExecution(); has {
+		t.Fatalf("LastExecution = %s, want none for a program that never ran", ts)
+	}
+	if got := prog.LastExecuteTimeString(); got != "" {
+		t.Fatalf("LastExecuteTimeString = %q, want empty", got)
+	}
+}
+
+// TestLoadProgramsSeedNeverWalksBackAnObservedExecution verifies the seed
+// only moves the timestamp forward: a run the daemon performed after the
+// CCU's reported one must survive the next refresh, which still carries
+// the older CCU value.
+func TestLoadProgramsSeedNeverWalksBackAnObservedExecution(t *testing.T) {
+	t.Parallel()
+	s := newProgramSummaryServer(t, `[{"id":"p1","description":"",`+
+		`"condition_summary":"","activity_summary":"","last_execute_seconds":1786970913}]`)
+	jc, runner := newProgramSummaryRunner(t, s.srv)
+
+	h := hub.NewHub("c")
+	opts := hubScanOptions{enableProgramScan: true}
+	if err := loadPrograms(context.Background(), jc, runner, h, &noopProgramWriter{}, opts); err != nil {
+		t.Fatalf("loadPrograms (initial): %v", err)
+	}
+	prog, ok := h.Program("p1")
+	if !ok {
+		t.Fatal("program p1 not loaded")
+	}
+	prog.OnExecution(true, hmenum.ProgramTriggerAPI)
+	observed, has := prog.LastExecution()
+	if !has {
+		t.Fatal("OnExecution did not record a timestamp")
+	}
+
+	if err := loadPrograms(context.Background(), jc, runner, h, &noopProgramWriter{}, opts); err != nil {
+		t.Fatalf("loadPrograms (refresh): %v", err)
+	}
+	after, _ := prog.LastExecution()
+	if !after.Equal(observed) {
+		t.Fatalf("refresh walked the last execution back to %s, want %s", after, observed)
 	}
 }
