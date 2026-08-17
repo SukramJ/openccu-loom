@@ -11,7 +11,14 @@
           "address": "RFTHR0001:1",
           "put_values": {
             "AUTO_MODE": true,
-            "BOOST_MODE": false,
+            "BOOST_MODE": false
+          }
+        },
+        {
+          "method": "PutParamset",
+          "paramset_key": "MASTER",
+          "address": "RFTHR0001",
+          "put_values": {
             "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 1"
           }
         }
@@ -26,7 +33,14 @@
           "address": "RFTHR0001:1",
           "put_values": {
             "AUTO_MODE": true,
-            "BOOST_MODE": false,
+            "BOOST_MODE": false
+          }
+        },
+        {
+          "method": "PutParamset",
+          "paramset_key": "MASTER",
+          "address": "RFTHR0001",
+          "put_values": {
             "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 2"
           }
         }
@@ -41,7 +55,14 @@
           "address": "RFTHR0001:1",
           "put_values": {
             "AUTO_MODE": true,
-            "BOOST_MODE": false,
+            "BOOST_MODE": false
+          }
+        },
+        {
+          "method": "PutParamset",
+          "paramset_key": "MASTER",
+          "address": "RFTHR0001",
+          "put_values": {
             "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 3"
           }
         }

@@ -384,6 +384,11 @@ func newClimateRFFixtureRef(t *testing.T, w *fakeWriter) *climate.Climate {
 		})
 		ch.Put(fp)
 	}
+	// WEEK_PROGRAM_POINTER and TEMPERATURE_OFFSET live on the device-root MASTER
+	// paramset on classic RF thermostats (real device: HM-TC-IT-WM-W-EU
+	// VCU0000341/MASTER — they exist in no VALUES paramset), so the write must
+	// target the device root, not the climate channel's VALUES.
+	registerRFThermostatRootMaster(d, w)
 	caps := custom.ClimateCapabilities{
 		SupportsBoost:   true,
 		SupportsProfile: true,

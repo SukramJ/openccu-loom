@@ -572,6 +572,12 @@ func newClimateRFFixture(t *testing.T, w *fakeWriter) *climate.Climate {
 		})
 		ch.Put(fp)
 	}
+	// WEEK_PROGRAM_POINTER and TEMPERATURE_OFFSET live on the device-root MASTER
+	// paramset on classic RF thermostats (real device: HM-TC-IT-WM-W-EU
+	// VCU0000341/MASTER — they exist in no VALUES paramset), so the write must
+	// target the device root, not the climate channel's VALUES. Register them
+	// there so the fixture resolves exactly as it does against a real CCU.
+	registerRFThermostatRootMaster(d, w)
 	caps := custom.ClimateCapabilities{
 		SupportsBoost:   true,
 		SupportsProfile: true,
@@ -585,6 +591,24 @@ func newClimateRFFixture(t *testing.T, w *fakeWriter) *climate.Climate {
 		TemperatureStep: 0.5,
 	}
 	return climate.New(climate.Config{Channel: ch, Writer: w, Capabilities: caps, Kind: climate.KindRF})
+}
+
+// registerRFThermostatRootMaster registers WEEK_PROGRAM_POINTER and
+// TEMPERATURE_OFFSET as MASTER data points on the device-root channel, where
+// the classic RF thermostat family exposes them (the climate channel carries
+// neither). The write value is supplied by the climate setter, so the DP type
+// is irrelevant to the wire output — it only has to make the config-parameter
+// resolver find the parameter on the device root.
+func registerRFThermostatRootMaster(d *device.Device, w *fakeWriter) {
+	root := d.EnsureRootChannel()
+	for _, p := range []hmenum.Parameter{hmenum.ParameterWeekProgramPointer, hmenum.ParameterTemperatureOffset} {
+		root.PutMaster(generic.NewInteger(generic.Spec{
+			Key:         hmtypes.DataPointKey{ChannelAddress: d.Address, ParamsetKey: hmenum.ParamsetKeyMaster, Parameter: string(p)},
+			Descriptor:  hmproto.ParameterData{Type: hmenum.ParameterTypeInteger, Operations: hmenum.OperationsRead | hmenum.OperationsWrite},
+			Writer:      w,
+			CentralName: "testcentral",
+		}))
+	}
 }
 
 func newGarageFixture(t *testing.T, w *fakeWriter) *cover.Garage {

@@ -571,6 +571,19 @@ func newClimateRFFixture(t *testing.T, w *fakeWriter) *climate.Climate {
 		})
 		ch.Put(fp)
 	}
+	// WEEK_PROGRAM_POINTER and TEMPERATURE_OFFSET live on the device-root MASTER
+	// paramset on classic RF thermostats (real device: HM-TC-IT-WM-W-EU
+	// VCU0000341/MASTER — they exist in no VALUES paramset), so the write must
+	// target the device root, not the climate channel's VALUES.
+	root := d.EnsureRootChannel()
+	for _, p := range []hmenum.Parameter{hmenum.ParameterWeekProgramPointer, hmenum.ParameterTemperatureOffset} {
+		root.PutMaster(generic.NewInteger(generic.Spec{
+			Key:         hmtypes.DataPointKey{ChannelAddress: d.Address, ParamsetKey: hmenum.ParamsetKeyMaster, Parameter: string(p)},
+			Descriptor:  hmproto.ParameterData{Type: hmenum.ParameterTypeInteger, Operations: hmenum.OperationsRead | hmenum.OperationsWrite},
+			Writer:      w,
+			CentralName: "testcentral",
+		}))
+	}
 	caps := custom.ClimateCapabilities{
 		SupportsBoost:   true,
 		SupportsProfile: true,
