@@ -466,7 +466,23 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	registerStandardJobsFor(unit, o.cfg, o.logger)
 	registerFirmwareJobsFor(unit, o.sbDeps.valueWriter, o.logger)
 
-	if err := unit.Start(ctx); err != nil {
+	// Start the unit — and with it its scheduler — on the bring-up manager's
+	// teardown-bounded daemon-lifetime context, NOT on the caller's.
+	// Unit.Start hands its context to Scheduler.Start, which makes it the
+	// parent of every job goroutine, and every caller of adoptCentral is an
+	// HTTP handler (POST/PUT /api/v1/centrals, the first-run setup wizard) whose
+	// context net/http cancels the moment the response is written. On the
+	// caller's context every one of this central's periodic jobs — the health
+	// heartbeat, the hub program/sysvar/inbox/service-message/alarm-message/
+	// system-update/install-mode refreshes, the firmware checks, the reconcile
+	// pass — exit before the operator sees the 201, and nothing ever restarts
+	// them: Scheduler.Start refuses a second call, and the boot-time StartAll
+	// has long since run. The CCU keeps answering and its push events keep
+	// arriving, so the only visible symptom is a fleet whose hub data silently
+	// stops being maintained and whose health tile decays to unknown.
+	//
+	//nolint:contextcheck // the scheduler's jobs must outlive the adopting request; see above
+	if err := unit.Start(o.bringUp.LifecycleContext()); err != nil {
 		rollback()
 		return fmt.Errorf("central_adopt: start %s: %w", cc.Name, err)
 	}

@@ -52,6 +52,24 @@ type mqttSupervisor struct {
 	mu     sync.Mutex
 	logger *slog.Logger
 
+	// lifecycleCtx is the daemon-lifetime context [Start] was handed, and the
+	// context EVERY stack generation's reconnect loop and health probe runs on
+	// — never the context of the call that happened to build the generation.
+	//
+	// go-mqtt's Lifecycle.Start binds the whole reconnect loop to the context
+	// it receives, and both operator-triggered [mqttSupervisor.Swap] callers
+	// hand over a short-lived one: the REST reload handler passes the request
+	// context, which net/http cancels the instant the response is written, and
+	// the config watcher passes a 30 s timeout it cancels as soon as the swap
+	// returns. A generation bound to either keeps whatever TCP session it has
+	// and never reconnects again — the next broker restart takes every Home
+	// Assistant entity to `unavailable` via the LWT, permanently and without a
+	// log line, until the daemon process is restarted.
+	//
+	// Nil until Start runs; [mqttSupervisor.buildSwap] then falls back to the
+	// caller's context so a supervisor driven without Start still works.
+	lifecycleCtx context.Context //nolint:containedctx // daemon-lifetime ctx governing every stack generation's reconnect loop
+
 	wiring *mqtt.Wiring // stable across swaps; allocated by Start, nil before it
 
 	healthTracker *health.Tracker
@@ -303,6 +321,12 @@ func (s *mqttSupervisor) CurrentBridge() *mqtt.Bridge {
 func (s *mqttSupervisor) Start(ctx context.Context, cfg *config.Config) error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
+	// Captured before the disabled branch below: an operator who enables MQTT
+	// later reaches Swap without Start ever having built a stack, and that
+	// generation's reconnect loop needs the daemon's context just as much.
+	s.mu.Lock()
+	s.lifecycleCtx = ctx
+	s.mu.Unlock()
 	if cfg == nil || !cfg.North.MQTT.Enabled {
 		// The Wiring is allocated even with MQTT off, for the same reason the
 		// failed-connect branch below allocates it: every consumer binds this
@@ -419,16 +443,14 @@ func (s *mqttSupervisor) retryInitialConnect(ctx context.Context, cfg *config.Co
 			if live {
 				return
 			}
-			// Rebuild on the daemon-lifetime ctx, NOT retryCtx: Swap installs a
-			// lifecycle whose whole reconnect loop (and its health probe + hub
-			// fan-out worker) is governed by the context handed to it, and
-			// retryCtx is cancelled by this goroutine's deferred cancel() the
-			// instant the retry returns. Binding the recovered lifecycle to
-			// retryCtx therefore kills its reconnect loop on the very first
-			// broker drop after a late boot connect — permanently and silently.
-			// The normal boot path passes the daemon ctx to Start for the same
-			// reason. retryCtx still governs only this loop's own backoff wait
-			// and Shutdown-driven early exit.
+			// Rebuild on the daemon-lifetime ctx, NOT retryCtx, which this
+			// goroutine's deferred cancel() fires the instant the retry
+			// returns. The reconnect loop itself is safe either way — every
+			// generation runs on [mqttSupervisor.lifecycleCtx] — but the swap's
+			// own bounded work (the first connect, the subscriber build, the
+			// republish hooks) would otherwise be racing a cancellation that is
+			// about to happen. retryCtx governs only this loop's backoff wait
+			// and its Shutdown-driven early exit.
 			if err := s.swapFn(ctx, cfg); err == nil {
 				s.logger.Info("mqtt.supervisor.connect.recovered",
 					slog.String("broker", redactBrokerURL(cfg.North.MQTT.BrokerURL)))
@@ -563,12 +585,17 @@ func (s *mqttSupervisor) Shutdown(ctx context.Context) {
 // is configured) but no subscribers — the caller assigns those
 // after a successful Wiring.SwapBridge so the new bridge is live
 // before subscriber handlers can race.
+//
+// ctx bounds only the build itself. Everything with a lifetime of its own —
+// the reconnect loop, the health probe — runs on [mqttSupervisor.lifecycleCtx]
+// instead; see that field for what a short-lived context does to them.
 func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mqttSwap, error) {
 	s.mu.Lock()
 	col := s.collector
 	hidden := s.channelHidden
 	names := s.centralNames
 	s.mu.Unlock()
+	runCtx := s.runContext(ctx)
 	stack := buildMQTT(cfg, s.logger, col, hidden, names)
 	if stack == nil {
 		return nil, errors.New("mqtt.supervisor.build: buildMQTT returned nil with MQTT enabled")
@@ -592,13 +619,16 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 		// through none at all) and silently reach nothing.
 		// [mqttSupervisor.announceConnected] attaches and runs them once the
 		// commit has happened.
-		if err := sw.lifecycle.Start(ctx); err != nil {
+		//
+		//nolint:contextcheck // runCtx is the daemon-lifetime ctx that must govern the reconnect loop, not the build's ctx
+		if err := sw.lifecycle.Start(runCtx); err != nil {
 			logConnectFailure(s.logger, cfg.North.MQTT, err)
 			return nil, fmt.Errorf("lifecycle.Start: %w", err)
 		}
 	}
 	if cs, ok := sw.client.(mqtt.ConnectionStatus); ok && s.healthTracker != nil {
-		sw.cancelHealth = mqtt.StartHealthProbe(ctx, cs, s.healthTracker, mqtt.DefaultProbeInterval)
+		//nolint:contextcheck // same rationale as the lifecycle above: the probe outlives the call that built this stack
+		sw.cancelHealth = mqtt.StartHealthProbe(runCtx, cs, s.healthTracker, mqtt.DefaultProbeInterval)
 	}
 	return sw, nil
 }
@@ -614,6 +644,17 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 // publishes onto the previous bridge, or onto no bridge at all when the boot
 // connect had failed. That is what left a recovered link with a live broker and
 // no state on it.
+//
+// The callbacks receive [mqttSupervisor.lifecycleCtx], not the ctx of the call
+// that built this generation — the same rule the reconnect loop follows, and
+// for the same reason. A connect callback is not pure republish work: the hub
+// publisher's callback re-Starts its fan-out worker on the context it is given
+// (internal/central/adapter/hub_mqtt_publisher.go), so a reload triggered from
+// the SPA would leave that worker bound to the HTTP request and every later hub
+// publish — programs, system variables, connectivity, install mode, service and
+// alarm messages — queued for a drain loop that has already exited. On a
+// later reconnect the lifecycle passes its own run context, which is derived
+// from the very same lifecycleCtx, so both paths agree.
 func (s *mqttSupervisor) announceConnected(ctx context.Context, sw *mqttSwap) {
 	if sw == nil || sw.lifecycle == nil {
 		return
@@ -625,12 +666,25 @@ func (s *mqttSupervisor) announceConnected(ctx context.Context, sw *mqttSwap) {
 	// itself; everything registered before this point is in hooks.
 	sw.hooksAttached = true
 	s.mu.Unlock()
+	runCtx := s.runContext(ctx)
 	for _, fn := range hooks {
 		sw.lifecycle.OnConnect(fn)
 	}
 	for _, fn := range hooks {
-		fn(ctx)
+		fn(runCtx)
 	}
+}
+
+// runContext returns the context long-lived work this supervisor starts must
+// run on: the daemon-lifetime context [Start] captured, or fallback when the
+// supervisor was never started (only a test constructs that state).
+func (s *mqttSupervisor) runContext(fallback context.Context) context.Context {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lifecycleCtx != nil {
+		return s.lifecycleCtx
+	}
+	return fallback
 }
 
 // teardown runs the per-swap shutdown sequence in safe order:
