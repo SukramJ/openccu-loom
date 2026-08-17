@@ -48,6 +48,16 @@ vi.mock("$lib/stores/toast.svelte", () => ({
   toastStore: { success: vi.fn(), error: vi.fn(), warn: vi.fn() },
 }));
 
+// Imported once, statically, at module scope. The component pulls in
+// the shared icon barrel (Card/Badge/ErrorState → Icon → the full
+// Lucide set), which Vitest has to compile the first time anything
+// touches it — tens of seconds on a cold cache. A dynamic `import()`
+// inside a test body charges that one-time compile against that
+// test's own timeout window; a static top-level import instead pays
+// it during module collection, before any `it()` timer starts, so
+// both tests below run in milliseconds regardless of that cost.
+import Logs from "./Logs.svelte";
+
 // A minimal EventSource stand-in. The production code only uses
 // addEventListener + close, so that is all this implements. Every
 // `new EventSource(...)` call is recorded so the test can drive
@@ -86,6 +96,18 @@ function logEvent(r: LogRecord) {
   return { data: JSON.stringify(r) };
 }
 
+// Drains every microtask queued so far — including a fire-and-forget
+// async chain like `void resyncAfterReconnect()` that a test never
+// gets a handle on. A macrotask boundary (a real, immediate timer)
+// only fires once the whole microtask queue in front of it — however
+// many ticks that chain needs — has fully settled, so this is exact
+// regardless of the chain's internal await count. Real time, but a
+// 0 ms timer resolves on the next event-loop turn, not after any
+// meaningful delay.
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   MockEventSource.instances = [];
@@ -102,7 +124,6 @@ describe("Logs — resync after a daemon restart", () => {
   it("resumes the tail once the daemon's own seq counter has reset", async () => {
     mockGetLogs.mockResolvedValueOnce({ last_seq: 100, records: [] });
 
-    const Logs = (await import("./Logs.svelte")).default;
     render(Logs);
 
     await waitFor(() => expect(MockEventSource.instances).toHaveLength(1));
@@ -149,15 +170,11 @@ describe("Logs — resync after a daemon restart", () => {
 
     // ...and the pre-restart line must still be there, exactly once.
     expect(screen.getAllByText("before restart")).toHaveLength(1);
-  // The first test in this file pays the cold-transform cost of the
-  // shared icon barrel that Card/Badge/ErrorState pull in; subsequent
-  // runs are fast, but a cold run needs more than the 5s default.
-  }, 150000);
+  });
 
   it("does not reopen the stream on an ordinary same-process reconnect", async () => {
     mockGetLogs.mockResolvedValueOnce({ last_seq: 50, records: [] });
 
-    const Logs = (await import("./Logs.svelte")).default;
     render(Logs);
 
     await waitFor(() => expect(MockEventSource.instances).toHaveLength(1));
@@ -165,13 +182,27 @@ describe("Logs — resync after a daemon restart", () => {
     first.emit("open");
     first.emit("error");
 
-    // Same process: its last_seq only ever grows.
+    // Same process: its last_seq only ever grows. `first.emit("open")`
+    // runs the listener synchronously, and resyncAfterReconnect's own
+    // `await api.getLogs(...)` calls the (synchronous) mock as the
+    // first thing it does — so the call has already happened by the
+    // time emit() returns; no need to poll for it.
     mockGetLogs.mockResolvedValueOnce({ last_seq: 55, records: [] });
     first.emit("open");
+    expect(mockGetLogs).toHaveBeenCalledWith({ limit: 1, minLevel: "debug" });
 
-    await waitFor(() => expect(mockGetLogs).toHaveBeenCalledWith({ limit: 1, minLevel: "debug" }));
+    // resyncAfterReconnect() is fired with `void` — the test has no
+    // handle on its promise — so let its whole microtask chain (the
+    // await + the synchronous branch after it) drain before asserting
+    // the negative outcome below. A `waitFor` keyed on "the probe was
+    // called" resolves as soon as that's true, which can be before the
+    // fire-and-forget continuation after the probe's own await has
+    // actually run; this instead waits out a full macrotask boundary,
+    // so nothing pending can still land after the assertions run.
+    await flushMicrotasks();
+
     // No reset detected — the original connection is left alone.
     expect(MockEventSource.instances).toHaveLength(1);
     expect(first.closed).toBe(false);
-  }, 150000);
+  });
 });
