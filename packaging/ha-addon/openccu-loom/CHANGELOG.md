@@ -1,5 +1,23 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.61.3
+
+A full-codebase audit fix wave. Highlights:
+
+- **Security hardening.** Password guessing over HTTP Basic is now rate-limited
+  like the login page, logging out closes the account's open connections, and a
+  system-variable value can no longer smuggle a script onto the CCU.
+- **MQTT / Home Assistant.** Fixed the per-interface connectivity sensors
+  (a dead duplicate per radio), select/enum controls that sent the wrong value,
+  and two CCUs merging into one device card; a backup no longer loses its
+  measurement history.
+- **Alarm.** A code-free master disarm and a correct PIN no longer lock the
+  keypad, and a siren that failed to sound stays flagged.
+- **Config UI.** No more silently lost edits in Navigation & views, a live log
+  that stops after a restart, or a schedule editor stuck at 24 entries.
+- **Honest status.** The "Systemzustand" and connectivity sensors show
+  "unknown" during a CCU outage instead of a frozen last value.
+
 ## 0.61.2
 
 - The "Systemzustand" diagnostic sensor now shows the real health value
