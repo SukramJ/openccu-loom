@@ -60,11 +60,11 @@ type ConnectivityProbe interface {
 // Returning -1 means the metric is unavailable for this poll cycle
 // the Reconciler then leaves the cached value untouched.
 //
-// [Reconciler.Health] is unset in the daemon: no CCU call is known that
-// yields the score, so [hub.MetricSystemHealth] has no producer and
-// reconcileSystemHealth skips every tick. Wiring an implementation into
-// that field is the only thing standing between the metric and its
-// north-bound surfaces.
+// [Reconciler.Health] is wired by the daemon's job registration
+// (cmd/openccu-loom/daemon_jobs.go) for every central: the probe reports the
+// central's own health-tracker aggregate score, or -1 before the first
+// heartbeat lands, which reconcileSystemHealth skips rather than observing
+// a spurious 0.
 type SystemHealthProbe interface {
 	Probe(ctx context.Context) (int, error)
 }

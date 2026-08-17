@@ -1063,12 +1063,32 @@ func (u *Unit) RenameDevice(ctx context.Context, address, name string) error {
 	if u.ModelRegistry != nil {
 		if dev, ok := u.ModelRegistry.Get(address); ok && dev != nil {
 			dev.Name = name
+			u.PublishDeviceMetadataChanged(dev)
 		}
 	}
 	if fn == nil {
 		return nil
 	}
 	return fn(ctx, address, name)
+}
+
+// PublishDeviceMetadataChanged notifies north-bound adapters (MQTT,
+// Matter) that a device's name, room, or function assignment changed, so
+// they re-materialise the device's footprint (HA discovery name /
+// suggested_area, Matter NodeLabel) instead of keeping the value observed
+// at boot for the rest of the daemon's life. Called after every mutation
+// of the fields those surfaces read — see RenameDevice, RenameChannel and
+// the room/function setters in the adapter layer's DeviceAdminDomain.
+func (u *Unit) PublishDeviceMetadataChanged(dev *device.Device) {
+	if u.EventBus == nil || dev == nil {
+		return
+	}
+	events.Publish(u.EventBus, hmevent.DeviceMetadataChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: u.Name(),
+		InterfaceID: dev.InterfaceID,
+		Address:     dev.Address,
+	})
 }
 
 // SetRenameDeviceFn wires the persistent-rename handler. Pass nil to
@@ -1135,6 +1155,7 @@ func (u *Unit) RenameChannel(ctx context.Context, channelAddress, name string) e
 		if dev, ok := u.ModelRegistry.Get(base); ok && dev != nil {
 			if ch := dev.Channel(channelAddress); ch != nil {
 				ch.SetName(name)
+				u.PublishDeviceMetadataChanged(dev)
 			}
 		}
 	}

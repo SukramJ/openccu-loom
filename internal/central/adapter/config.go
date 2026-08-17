@@ -19,12 +19,39 @@ import (
 type ConfigAdapter struct {
 	source   *config.Config
 	registry *central.Registry
+
+	// effectiveXMLRPCPort / effectiveBINRPCPort hold the ports the callback
+	// listeners actually bound, once known. In the dynamic-port modes
+	// (`callback.port_range`, `bin_port: 0`) the configured value is not
+	// the bound one — applyDefaults rewrites an unset callback.port to
+	// 8120 regardless of port_range, and bin_port 0 means "let the OS
+	// choose". Zero means "not yet bound" (or a fixed-port deployment,
+	// where the configured value already is the effective one); the
+	// snapshot falls back to the configured value in that case.
+	effectiveXMLRPCPort int
+	effectiveBINRPCPort int
 }
 
 // NewConfigAdapter constructs the adapter. source may be nil; the
 // adapter then reports the zero snapshot.
 func NewConfigAdapter(source *config.Config, registry *central.Registry) *ConfigAdapter {
 	return &ConfigAdapter{source: source, registry: registry}
+}
+
+// SetEffectiveCallbackPorts records the ports the XML-RPC / BIN-RPC
+// callback listeners actually bound, so [ConfigAdapter.SanitizedConfig]
+// reports the port the CCU was actually told to push to — not the
+// configured value, which a dynamic-port mode (`callback.port_range`,
+// `bin_port: 0`) never equals. Call once the listeners have bound, with
+// the same effective values re-advertised in every `init()` call. A zero
+// argument leaves the corresponding port unset (falls back to the
+// configured value).
+func (a *ConfigAdapter) SetEffectiveCallbackPorts(xmlrpcPort, binrpcPort int) {
+	if a == nil {
+		return
+	}
+	a.effectiveXMLRPCPort = xmlrpcPort
+	a.effectiveBINRPCPort = binrpcPort
 }
 
 // SanitizedConfig implements interfaces.ConfigReader.
@@ -35,6 +62,12 @@ func (a *ConfigAdapter) SanitizedConfig() hmapi.ConfigSnapshot {
 		snap.CallbackPorts = hmapi.ConfigPorts{
 			XMLRPC: a.source.Callback.Port,
 			BINRPC: a.source.Callback.BinPort,
+		}
+		if a.effectiveXMLRPCPort != 0 {
+			snap.CallbackPorts.XMLRPC = a.effectiveXMLRPCPort
+		}
+		if a.effectiveBINRPCPort != 0 {
+			snap.CallbackPorts.BINRPC = a.effectiveBINRPCPort
 		}
 		snap.Features = map[string]bool{
 			"rest":         a.source.North.REST.IsEnabled(),

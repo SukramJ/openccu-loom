@@ -137,6 +137,32 @@ func TestParseSysvarValueLogicFalse(t *testing.T) {
 	}
 }
 
+// TestParseSysvarValueLogicBareBool is the regression guard for the bare
+// JSON boolean shape: godevccu's SysVar.getAll can return {"value":true}
+// rather than the quoted-string shape every other case in this file
+// exercises. The string-unmarshal fast path fails on that shape, and the
+// pre-fix fallback only tried json.Number — which also fails on `true` —
+// so the sysvar was recorded with no value at all.
+func TestParseSysvarValueLogicBareBool(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		raw  string
+		want bool
+	}{
+		{`true`, true},
+		{`false`, false},
+	}
+	for _, tc := range cases {
+		pv, ok := parseSysvarValue(hmenum.HubValueTypeLogic, json.RawMessage(tc.raw))
+		if !ok {
+			t.Fatalf("parseSysvarValue(LOGIC, %s) ok=false, want true", tc.raw)
+		}
+		if pv.Kind != hmtypes.ValueKindBool || pv.Bool != tc.want {
+			t.Errorf("parseSysvarValue(LOGIC, %s) = %+v, want bool %v", tc.raw, pv, tc.want)
+		}
+	}
+}
+
 func TestParseSysvarValueAlarmTrue(t *testing.T) {
 	t.Parallel()
 	raw := json.RawMessage(`"1"`)

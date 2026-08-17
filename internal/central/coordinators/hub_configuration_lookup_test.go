@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
@@ -230,6 +231,41 @@ func TestHubCoordinatorPublishInstallModeRefreshedPublishesEvent(t *testing.T) {
 	h.PublishInstallModeRefreshed()
 	if published != 1 {
 		t.Fatalf("want 1 InstallModeChangedEvent, got %d", published)
+	}
+}
+
+// TestHubCoordinatorPublishInstallModeRefreshedSkipsUnchangedSteadyState is
+// the regression guard for the 30 s-poll flood: install mode is off far
+// more often than it is on, so republishing the identical (false, 0) pair
+// on every scheduled refresh floods the replay buffer and every WS/MQTT
+// subscriber with a "changed" event that changed nothing.
+func TestHubCoordinatorPublishInstallModeRefreshedSkipsUnchangedSteadyState(t *testing.T) {
+	t.Parallel()
+	bus := events.NewBus()
+	h := NewHubCoordinator("c", bus)
+	m := hub.NewHub("c")
+	im := hub.NewInstallMode("ccu-HmIP-RF", nil)
+	m.PutInstallMode(im)
+	h.SetHubModel(m)
+
+	var published int
+	unsub := events.Subscribe(bus, func(hmevent.InstallModeChangedEvent) { published++ })
+	defer unsub()
+
+	// Three consecutive refreshes with install mode off the whole time
+	// (the default, unobserved state): only the first must publish.
+	h.PublishInstallModeRefreshed()
+	h.PublishInstallModeRefreshed()
+	h.PublishInstallModeRefreshed()
+	if published != 1 {
+		t.Fatalf("published = %d over 3 identical polls, want exactly 1", published)
+	}
+
+	// A real transition (install mode enabled) must still publish.
+	im.OnState(true, 60*time.Second)
+	h.PublishInstallModeRefreshed()
+	if published != 2 {
+		t.Fatalf("published = %d after a real enable transition, want 2", published)
 	}
 }
 

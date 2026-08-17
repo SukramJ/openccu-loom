@@ -102,6 +102,40 @@ func TestConfigAdapterSanitizedConfig(t *testing.T) {
 	}
 }
 
+// TestConfigAdapterSanitizedConfigReportsEffectivePortsWhenSet is the
+// regression guard for the dynamic-port-mode defect: with
+// `callback.port_range` set, applyDefaults rewrites the unset
+// callback.port to 8120 — a port nothing listens on — while the XML-RPC
+// listener actually binds the first free port in the range. Before
+// SetEffectiveCallbackPorts, SanitizedConfig always reported the
+// configured (wrong) value; this pins that a bound effective port wins.
+func TestConfigAdapterSanitizedConfigReportsEffectivePortsWhenSet(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Callback: config.CallbackConfig{
+			Port:    8120, // applyDefaults' rewrite of an unset port_range config
+			BinPort: 0,    // the genuinely dynamic BIN-RPC mode
+		},
+	}
+	a := NewConfigAdapter(cfg, nil)
+
+	// Before the listeners bind, the snapshot still falls back to the
+	// configured value.
+	snap := a.SanitizedConfig()
+	if snap.CallbackPorts.XMLRPC != 8120 || snap.CallbackPorts.BINRPC != 0 {
+		t.Fatalf("pre-bind snapshot = %+v, want the configured values unchanged", snap.CallbackPorts)
+	}
+
+	a.SetEffectiveCallbackPorts(18310, 18320)
+	snap = a.SanitizedConfig()
+	if snap.CallbackPorts.XMLRPC != 18310 {
+		t.Errorf("XMLRPC port = %d, want the effective bound port 18310, not the configured 8120", snap.CallbackPorts.XMLRPC)
+	}
+	if snap.CallbackPorts.BINRPC != 18320 {
+		t.Errorf("BINRPC port = %d, want the effective bound port 18320, not the configured 0", snap.CallbackPorts.BINRPC)
+	}
+}
+
 // TestConfigAdapterMultipleCentrals verifies multiple centrals are all
 // included in the snapshot.
 func TestConfigAdapterMultipleCentrals(t *testing.T) {

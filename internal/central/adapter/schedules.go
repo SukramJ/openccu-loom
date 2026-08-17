@@ -365,13 +365,32 @@ func (s *SchedulesDomain) ListScheduleDevices(_ context.Context) ([]hmapi.Schedu
 }
 
 // scheduleChannelByType picks the schedule-carrying channel from the
-// device's channel types, mirroring the two paths of FindScheduleChannel
-// minus its MASTER probe. A dedicated WEEK_PROFILE channel wins, as there.
+// device's channel types, mirroring the three paths of
+// FindScheduleChannel minus its live MASTER probe on the climate
+// candidate channels — the device-root check below substitutes an
+// in-memory equivalent so the fleet-wide summary stays a cheap,
+// no-CCU-round-trip listing. A dedicated WEEK_PROFILE channel wins, as
+// there.
 func scheduleChannelByType(dev *device.Device) (*device.Channel, string, bool) {
 	for _, ch := range dev.Channels() {
 		if isWeekProfileChannel(ch.Type) {
 			return ch, "week_profile", true
 		}
+	}
+	// Classic bare-schema thermostats (HM-CC-RT-DN, HM-CC-RT-DN-BoM,
+	// HM-CC-VG-1) and devices with no dedicated climate channel at all
+	// (HM-TC-IT-WM-W-EU) carry their week profile on the device-root
+	// MASTER paramset, never on a CLIMATECONTROL_* channel — even when
+	// one of those channel types is also present. hydrateDeviceRoot only
+	// materialises the root channel when the device genuinely has
+	// device-level MASTER content, and rootChannelCarriesSchedule checks
+	// the already-materialised parameter names against the same slot
+	// pattern FindScheduleChannel's live probe would match, so this stays
+	// a cheap in-memory check. Checked before the CLIMATECONTROL_* match
+	// below so it wins over pointing at a channel that carries no
+	// schedule for exactly these models.
+	if root := dev.RootChannel(); rootChannelCarriesSchedule(root) {
+		return root, "climate", true
 	}
 	for _, ch := range dev.Channels() {
 		if _, isClimate := climateScheduleChannelTypes[ch.Type]; isClimate {
@@ -379,6 +398,22 @@ func scheduleChannelByType(dev *device.Device) (*device.Channel, string, bool) {
 		}
 	}
 	return nil, "", false
+}
+
+// rootChannelCarriesSchedule reports whether root's already-materialised
+// MASTER data points include at least one week-profile slot key
+// (P<n>_ENDTIME_*/TEMPERATURE_* or the bare ENDTIME_/TEMPERATURE_ form).
+// nil-safe: a device with no device-root channel returns false.
+func rootChannelCarriesSchedule(root *device.Channel) bool {
+	if root == nil {
+		return false
+	}
+	for _, dp := range root.MasterDataPoints() {
+		if slotPattern.MatchString(dp.DataPointKey().Parameter) {
+			return true
+		}
+	}
+	return false
 }
 
 // CopySchedule copies the entire week schedule of the source device to
@@ -962,22 +997,24 @@ func (s *SchedulesDomain) PutClimateSchedule(
 		}
 	case "climate", "":
 		// A bare-schema thermostat (HM-CC-RT-DN) must receive prefix-less
-		// keys — sending the P<n>_ form silently no-ops on the CCU, and
-		// the field filter below does not catch it (ExtractSupportedScheduleFields
-		// only recognises WP_ keys), so this branch is load-bearing.
+		// keys — sending the P<n>_ form silently no-ops on the CCU. This
+		// branch is load-bearing regardless of which filter runs below.
 		if climateScheduleIsBare(descKeys) {
 			raw, err = serializeClimateScheduleBare(sched)
 		} else {
 			raw, err = serializeClimateSchedule(sched)
 		}
 		if err == nil && len(raw) > 0 && len(descKeys) > 0 {
-			// Filter out climate-schedule fields the device does not expose in
-			// its MASTER paramset description. Devices differ in which
-			// ENDTIME_*/TEMPERATURE_* keys they support; sending unsupported
-			// keys causes the CCU to reject the write and leave CONFIG_PENDING
-			// set.
-			supported := weekprofile.ExtractSupportedScheduleFields(descKeys)
-			raw = weekprofile.FilterRawScheduleByFields(raw, supported)
+			// Filter out ENDTIME_/TEMPERATURE_ slot keys the device does not
+			// declare in its MASTER paramset description. A climate slot key IS
+			// the exact paramset parameter name (no group-number abstraction the
+			// way WP_ fields have), so an exact-membership check against
+			// descKeys is the correct filter — [weekprofile.ExtractSupportedScheduleFields]
+			// only recognises the `_WP_` shape and would never match here.
+			// Devices declare fewer than the 13×7 slots the serializer always
+			// emits; sending the undeclared ones causes the CCU to reject the
+			// write and leave CONFIG_PENDING set.
+			raw = filterClimateScheduleByDescKeys(raw, descKeys)
 		}
 	default:
 		return fmt.Errorf("schedules: unknown kind %q", sched.Kind)
@@ -1390,6 +1427,25 @@ func scheduleDescKeys(
 		keys[k] = struct{}{}
 	}
 	return keys, nil
+}
+
+// filterClimateScheduleByDescKeys keeps only the ENDTIME_/TEMPERATURE_ slot
+// keys the device's own MASTER paramset description declares. Every key in
+// raw (built by [serializeClimateSchedule] / [serializeClimateScheduleBare])
+// is itself a CCU paramset parameter name, so an exact membership check
+// against descKeys is the whole filter — unlike the WP_-style simple
+// schedule, a climate slot has no group-number indirection to abstract over.
+func filterClimateScheduleByDescKeys(raw map[string]any, descKeys map[string]struct{}) map[string]any {
+	if len(descKeys) == 0 || len(raw) == 0 {
+		return raw
+	}
+	out := make(map[string]any, len(raw))
+	for k, v := range raw {
+		if _, ok := descKeys[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // climateScheduleIsBare reports whether a device carries its climate

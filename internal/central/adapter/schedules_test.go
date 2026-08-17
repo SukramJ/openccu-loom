@@ -1015,6 +1015,59 @@ func TestListScheduleDevicesPrefersTheDedicatedChannel(t *testing.T) {
 	}
 }
 
+// TestListScheduleDevicesIncludesDeviceRootOnlySchedule is the regression
+// guard for HM-TC-IT-WM-W-EU (and any device whose schedule lives only on
+// the device-root MASTER paramset with no dedicated WEEK_PROFILE channel
+// and no CLIMATECONTROL_* channel type): it must be listed, resolved
+// through the synthetic device-root channel, matching what
+// FindScheduleChannel's Path 3 resolves for the device detail view.
+func TestListScheduleDevicesIncludesDeviceRootOnlySchedule(t *testing.T) {
+	t.Parallel()
+
+	reg, unit := scheduleTestRegistry(t)
+	dev := scheduleTestDevice(unit, "ABC020", "HM-TC-IT-WM-W-EU", "Wall thermostat")
+	dev.AddChannel("ABC020:1", 1, "THERMALCONTROL_TRANSMIT", hmenum.ParamsetKeyValues)
+	root := dev.EnsureRootChannel()
+	root.PutMaster(intDP("ABC020", hmenum.Parameter("ENDTIME_MONDAY_1"), nil))
+
+	got, err := NewSchedulesDomain(reg, nil).ListScheduleDevices(context.Background())
+	if err != nil {
+		t.Fatalf("ListScheduleDevices: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("listed %d devices, want the wall thermostat: %+v", len(got), got)
+	}
+	if got[0].Address != "ABC020" || got[0].Kind != "climate" || got[0].Channel.Number != device.ChannelNumberDevice {
+		t.Errorf("entry = %+v, want ABC020 climate on the synthetic device-root channel", got[0])
+	}
+}
+
+// TestListScheduleDevicesPrefersDeviceRootOverClimateChannel is the
+// regression guard for HM-CC-RT-DN / HM-CC-RT-DN-BoM / HM-CC-VG-1: these
+// devices carry a CLIMATECONTROL_RT_TRANSCEIVER channel per
+// climateScheduleChannelTypes, but their actual week profile lives on the
+// device-root MASTER paramset (bare ENDTIME_/TEMPERATURE_ keys, no P<n>_
+// prefix) — the channel itself carries no schedule. The summary must
+// resolve to the root, not the channel, so it agrees with what
+// FindScheduleChannel resolves for the same device.
+func TestListScheduleDevicesPrefersDeviceRootOverClimateChannel(t *testing.T) {
+	t.Parallel()
+
+	reg, unit := scheduleTestRegistry(t)
+	dev := scheduleTestDevice(unit, "ABC021", "HM-CC-RT-DN", "Radiator")
+	dev.AddChannel("ABC021:2", 2, "CLIMATECONTROL_RT_TRANSCEIVER", hmenum.ParamsetKeyMaster)
+	root := dev.EnsureRootChannel()
+	root.PutMaster(intDP("ABC021", hmenum.Parameter("ENDTIME_MONDAY_1"), nil))
+
+	got, err := NewSchedulesDomain(reg, nil).ListScheduleDevices(context.Background())
+	if err != nil {
+		t.Fatalf("ListScheduleDevices: %v", err)
+	}
+	if len(got) != 1 || got[0].Kind != "climate" || got[0].Channel.Number != device.ChannelNumberDevice {
+		t.Fatalf("entry = %+v, want ABC021 climate on the synthetic device-root channel, not channel 2", got)
+	}
+}
+
 // scheduleTestRegistry builds a one-central registry for the overview tests.
 func scheduleTestRegistry(t *testing.T) (*central.Registry, *central.Unit) {
 	t.Helper()

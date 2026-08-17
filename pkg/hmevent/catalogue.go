@@ -39,20 +39,28 @@ const (
 	EventTypeCustomDataPointStateChanged EventType = "custom_data_point.state_changed"
 	EventTypeDeviceCreated               EventType = "device.created"
 	EventTypeDeviceRemoved               EventType = "device.removed"
-	EventTypeDeviceTrigger               EventType = "device.trigger"
-	EventTypeLinkPeerChanged             EventType = "link.peer_changed"
-	EventTypeConnectionLost              EventType = "connection.lost"
-	EventTypeCircuitBreakerStateChanged  EventType = "client.circuit_breaker_state_changed"
-	EventTypeHeartbeatTimerFired         EventType = "client.heartbeat_timer_fired"
-	EventTypePingPongMismatch            EventType = "client.pingpong_mismatch"
-	EventTypeRequestCoalesced            EventType = "client.request_coalesced"
-	EventTypeRecoveryStarted             EventType = "recovery.started"
-	EventTypeRecoveryStageChanged        EventType = "recovery.stage_changed"
-	EventTypeRecoveryCompleted           EventType = "recovery.completed"
-	EventTypeRecoveryFailed              EventType = "recovery.failed"
-	EventTypeProgramExecuted             EventType = "hub.program_executed"
-	EventTypeProgramChanged              EventType = "hub.program_changed"
-	EventTypeSysvarChanged               EventType = "hub.sysvar_changed"
+	// EventTypeDeviceMetadataChanged fires when an operator renames a
+	// device/channel or changes its room/function assignment. It carries no
+	// per-field detail — consumers re-derive the current name/room/function
+	// from the live model — because every subscriber's response is the same
+	// regardless of which field changed: re-materialise the device's
+	// north-bound footprint (MQTT HA-discovery name/suggested_area, Matter
+	// NodeLabel).
+	EventTypeDeviceMetadataChanged      EventType = "device.metadata_changed"
+	EventTypeDeviceTrigger              EventType = "device.trigger"
+	EventTypeLinkPeerChanged            EventType = "link.peer_changed"
+	EventTypeConnectionLost             EventType = "connection.lost"
+	EventTypeCircuitBreakerStateChanged EventType = "client.circuit_breaker_state_changed"
+	EventTypeHeartbeatTimerFired        EventType = "client.heartbeat_timer_fired"
+	EventTypePingPongMismatch           EventType = "client.pingpong_mismatch"
+	EventTypeRequestCoalesced           EventType = "client.request_coalesced"
+	EventTypeRecoveryStarted            EventType = "recovery.started"
+	EventTypeRecoveryStageChanged       EventType = "recovery.stage_changed"
+	EventTypeRecoveryCompleted          EventType = "recovery.completed"
+	EventTypeRecoveryFailed             EventType = "recovery.failed"
+	EventTypeProgramExecuted            EventType = "hub.program_executed"
+	EventTypeProgramChanged             EventType = "hub.program_changed"
+	EventTypeSysvarChanged              EventType = "hub.sysvar_changed"
 	// EventTypeHubChannelsAssigned fires when the device-association pass
 	// (assignHubChannels) changes which physical device one or more system
 	// variables / programs are linked to. North-bound adapters re-publish the
@@ -309,6 +317,21 @@ type DeviceRemovedEvent struct {
 
 // Type implements Event.
 func (DeviceRemovedEvent) Type() EventType { return EventTypeDeviceRemoved }
+
+// DeviceMetadataChangedEvent fires when a device or channel is renamed, or
+// its room/function assignment changes. Address is always the device
+// address (never a channel address) — a channel-level change still
+// republishes the whole device, because MQTT/Matter materialise a device's
+// name/area as one unit.
+type DeviceMetadataChangedEvent struct {
+	Base
+	CentralName string
+	InterfaceID string
+	Address     string
+}
+
+// Type implements Event.
+func (DeviceMetadataChangedEvent) Type() EventType { return EventTypeDeviceMetadataChanged }
 
 // HubChannelsAssignedEvent fires when the device-association pass changes the
 // device link of at least one system variable or program on a central (a

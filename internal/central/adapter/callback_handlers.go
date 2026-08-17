@@ -636,9 +636,12 @@ func (h *CallbackHandlers) dropDevice(iface hmtypes.WireInterfaceID, address str
 
 // UpdateDevice handles a firmware-update notification (hint=0) or a link
 // partner change (hint=1) from the CCU. For hint=0 the firmware cache is
-// invalidated and a background refresh is scheduled to pull fresh device and
-// paramset descriptions. hint=1 is a no-op beyond logging — link-peer
-// changes are small and reconciled on the next scheduled sweep.
+// invalidated and a background refresh is scheduled to pull fresh device
+// descriptions; the paramset registry is only invalidated, not re-fetched —
+// a caller that needs a fresh MASTER schema for the affected channels still
+// has to run [coordinators.DeviceCoordinator.ReloadChannelConfig]. hint=1 is
+// a no-op beyond logging — link-peer changes are small and reconciled on the
+// next scheduled sweep.
 func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, address string, hint int) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.update_device",
@@ -732,12 +735,16 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 		defer cancel()
 		for _, addr := range addresses {
 			h.unit.Devices.InvalidateFirmwareCache(iface, addr)
-			if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
-				h.logger.Warn("callback.readded_device.refresh_failed",
-					slog.String("interface", interfaceID),
-					slog.String("address", addr),
-					slog.String("err", err.Error()))
-			}
+		}
+		// One listDevices covers every re-paired address on this interface —
+		// the refresh is address-independent (it re-pulls the whole interface
+		// inventory), so calling it once per address repeated the same
+		// full-interface fetch K times inside the shared 30 s budget.
+		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
+			h.logger.Warn("callback.readded_device.refresh_failed",
+				slog.String("interface", interfaceID),
+				slog.Int("count", len(addresses)),
+				slog.String("err", err.Error()))
 		}
 	})
 	return nil

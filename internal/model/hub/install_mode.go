@@ -48,6 +48,16 @@ type InstallMode struct {
 	expiresAt time.Time
 	observed  bool
 	callbacks []func(enabled bool, remaining time.Duration)
+
+	// hasPublished / publishedEnabled / publishedRemainingS track the
+	// (enabled, remaining_s) pair last reported by
+	// [InstallMode.ConsumeChangeSincePublish], so the periodic refresh
+	// job can skip re-publishing an identical steady-state tuple every
+	// poll. See ConsumeChangeSincePublish for why this does not affect
+	// the live countdown while install mode is actually active.
+	hasPublished        bool
+	publishedEnabled    bool
+	publishedRemainingS int
 }
 
 // NewInstallMode constructs an InstallMode for interfaceID.
@@ -78,6 +88,28 @@ func (m *InstallMode) InstallState() (enabled bool, remaining time.Duration, obs
 	}
 	remain := max(time.Until(m.expiresAt), 0)
 	return true, remain, m.observed
+}
+
+// ConsumeChangeSincePublish returns the current (enabled, remaining_s) pair
+// and reports whether it differs from the pair the last call returned,
+// then records the current pair as "last published". The first call always
+// reports changed=true so the initial state is never suppressed.
+//
+// remaining_s is a live countdown while install mode is active (see
+// InstallState), so this only ever suppresses the steady-state case — the
+// same (false, 0) tuple every poll while install mode stays off the whole
+// time — never a genuine countdown tick, because a running countdown's
+// remaining_s changes on almost every call by construction.
+func (m *InstallMode) ConsumeChangeSincePublish() (enabled bool, remainingS int, changed bool) {
+	enabled, remaining, _ := m.InstallState()
+	remainingS = int(remaining.Seconds())
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	changed = !m.hasPublished || enabled != m.publishedEnabled || remainingS != m.publishedRemainingS
+	m.hasPublished = true
+	m.publishedEnabled = enabled
+	m.publishedRemainingS = remainingS
+	return enabled, remainingS, changed
 }
 
 // OnState records a CCU-driven install-mode update.

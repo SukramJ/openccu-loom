@@ -988,7 +988,7 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			// OnUpdate (e.g. MQTT publisher) remain valid across periodic
 			// refreshes. Only create a new Program when the ID is genuinely new.
 			existing.UpdateMetadata(p.Name, p.IsInternal, writer)
-			existing.EnabledDefault = hubEnabledDefault(p.IsInternal, meta.description, opts.programMarkers)
+			existing.SetEnabledDefault(hubEnabledDefault(p.IsInternal, meta.description, opts.programMarkers))
 			existing.OnActive(p.IsActive)
 			existing.SetRuleSummary(meta.conditionSummary, meta.activitySummary)
 			existing.SeedLastExecution(meta.lastExecute)
@@ -1914,7 +1914,15 @@ func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.Para
 		if err := json.Unmarshal(raw, &n); err == nil {
 			s = n.String()
 		} else {
-			return hmtypes.ParamValue{}, false
+			var b bool
+			if err := json.Unmarshal(raw, &b); err == nil {
+				// Normalised to the same "true"/"false" token the quoted-string
+				// shape uses, so the LOGIC/ALARM branch below handles both wire
+				// shapes identically.
+				s = strconv.FormatBool(b)
+			} else {
+				return hmtypes.ParamValue{}, false
+			}
 		}
 	}
 	switch vt { //nolint:exhaustive // ALARM collapses to bool, unknown types fall through
