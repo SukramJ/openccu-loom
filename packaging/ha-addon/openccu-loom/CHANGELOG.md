@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.61.4
+
+Follow-ups to the 0.61.3 audit:
+
+- **Weekly-profile switches on classic-RF thermostats (HM-CC-RT-DN,
+  HM-TC-IT-WM-W-EU, …) work again** — selecting a week program reaches the CCU
+  instead of being silently rejected.
+- **Install-mode ("pairing") sensors show the right state on start** instead of
+  staying blank until the next pairing window.
+
 ## 0.61.3
 
 A full-codebase audit fix wave. Highlights:

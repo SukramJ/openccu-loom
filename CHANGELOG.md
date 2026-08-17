@@ -4,6 +4,29 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.61.4]
+
+Follow-ups to the 0.61.3 post-release audit. The north-bound API contract moves
+to **6.2.1** (a backward-compatible value correction, no shape change).
+
+### Fixed
+
+- **Classic-RF thermostat profile writes reach the CCU again.** `SetProfile`
+  now writes `WEEK_PROGRAM_POINTER` to the device-root `MASTER` paramset (where
+  the classic-RF thermostat family exposes it) instead of bundling it into the
+  climate channel's `VALUES` paramset, where the CCU rejected it. The wire
+  snapshots pin the two-call `VALUES`+`MASTER` split so the shape cannot
+  regress. (Re-lands a fix that an earlier snapshot mismatch had reverted.)
+- **Install-mode sensors seed correctly on a fresh start.**
+  `GET /hub/data-points` reported `install_mode[].interface_id` as the bare
+  interface name while the sibling `connectivity[].interface_id` and
+  `GET /interfaces` use the wire id `<central>-<interface>`. A client keying the
+  aggregate onto its interface list never matched, so the install-mode sensors
+  stayed at their initial value until a pairing window happened to fire. The
+  aggregate now reports the wire id (the dedicated
+  `GET/POST /install-mode/interfaces` surface keeps its bare interface + separate
+  central field). The field is now documented in the OpenAPI spec.
+
 ## [0.61.3]
 
 Post-release audit of the 0.61.x fix wave: a full-codebase re-review found
