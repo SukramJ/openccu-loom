@@ -17,6 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
 )
 
 // Errors surfaced by the reply path. They are not returned to the
@@ -277,15 +278,29 @@ func EncodeReportData(rd im.ReportData) ([]byte, error) {
 
 // reportChunkPayloadBudget is the per-datagram budget for the
 // IM ReportData payload alone — the raw TLV bytes that ride inside
-// one Matter message. The IPv6 minimum MTU caps the wire datagram at
-// 1280 bytes ([udp.MaxDatagramSize]); subtracting the message header
-// (~16 B), protocol header (~8 B), and AES-CCM tag (16 B) plus a bit
-// of headroom leaves ~1100 B for the encoded ReportData. Apple Home
-// commissioner reads (PartsList, ServerList, FeatureMap, …) routinely
-// breach this budget by an order of magnitude, so the read handler
-// now splits oversized reports into multiple chunks via
-// [chunkReportData].
+// one Matter message. It targets the IPv6 minimum MTU (1280 bytes,
+// Matter Core Spec §4.4.4) as a soft budget: subtracting the message
+// header (~16 B), protocol header (~8 B), and AES-CCM tag (16 B) plus
+// a bit of headroom leaves ~1100 B for the encoded ReportData. This is
+// a soft target, not the wire's hard ceiling — [udp.MaxDatagramSize]
+// (2048 B) is the hard limit [udp.Listener.Send] enforces; see
+// [reportChunkHardCap] for the entries this budget alone cannot
+// bound. Apple Home commissioner reads (PartsList, ServerList,
+// FeatureMap, …) routinely breach this budget by an order of
+// magnitude, so the read handler now splits oversized reports into
+// multiple chunks via [chunkReportData].
 const reportChunkPayloadBudget = 1100
+
+// reportChunkHardCap is the absolute ceiling a single AttributeReport
+// or EventReport may reach once it is alone in its own chunk.
+// [udp.MaxDatagramSize] is what [udp.Listener.Send] enforces on the
+// wire; the margin subtracted here covers the message header (~16 B),
+// protocol header (~8 B), and AES-CCM tag (16 B) that wrap the IM
+// payload before it reaches the socket, plus headroom. A value that
+// breaches this on its own cannot be sent at all — chunkReportData
+// downgrades it to an AttributeStatusIB/EventStatusIB(ResourceExhausted)
+// instead of shipping (and Send rejecting) an oversized datagram.
+const reportChunkHardCap = udp.MaxDatagramSize - 200
 
 // chunkReportData splits rd into per-datagram chunks whose encoded
 // size stays within budget. All chunks except the last carry
@@ -298,11 +313,14 @@ const reportChunkPayloadBudget = 1100
 // a time; whenever the running encode breaches budget the current
 // chunk closes and the entry seeds a fresh chunk. A single oversized
 // entry (e.g. a Descriptor.PartsList with 1000+ endpoint IDs) cannot
-// be sub-split at this layer — it ships in its own chunk and the
-// receiver decides whether to tolerate the over-sized datagram or
-// fragment further. v1.1 leaves the in-attribute split to a future
-// iteration; controllers we test (Apple Home, chip-tool) accept
-// over-budget chunks when no other option exists.
+// be sub-split at this layer — v1.1 leaves the in-attribute list-index
+// split (Matter §10.6.1) to a future iteration — so it ships in its
+// own chunk. When that chunk alone would still exceed
+// [reportChunkHardCap] (the hard wire ceiling [udp.Listener.Send]
+// enforces, so an oversized chunk could never be sent regardless), the
+// entry is downgraded to an AttributeStatusIB / EventStatusIB carrying
+// StatusResourceExhausted for that one path instead — the rest of the
+// report, and the SubscribeResponse that depends on it, still go out.
 func chunkReportData(rd im.ReportData, budget int) ([]im.ReportData, error) {
 	// Fast path: single small report → no work.
 	probe, err := EncodeReportData(rd)
@@ -320,6 +338,10 @@ func chunkReportData(rd im.ReportData, budget int) ([]im.ReportData, error) {
 	}
 
 	addAttributeReport := func(rep im.AttributeReport) error {
+		rep, err := capOversizedAttributeReport(rd, rep)
+		if err != nil {
+			return err
+		}
 		candidate := current
 		candidate.Reports = append(candidate.Reports, rep)
 		body, err := EncodeReportData(candidate)
@@ -339,6 +361,10 @@ func chunkReportData(rd im.ReportData, budget int) ([]im.ReportData, error) {
 		return nil
 	}
 	addEventReport := func(ev im.EventReport) error {
+		ev, err := capOversizedEventReport(rd, ev)
+		if err != nil {
+			return err
+		}
 		candidate := current
 		candidate.EventReports = append(candidate.EventReports, ev)
 		body, err := EncodeReportData(candidate)
@@ -384,6 +410,62 @@ func chunkReportData(rd im.ReportData, budget int) ([]im.ReportData, error) {
 		chunks[len(chunks)-1].SuppressResponse = true
 	}
 	return chunks, nil
+}
+
+// capOversizedAttributeReport downgrades rep to an
+// AttributeStatusIB(ResourceExhausted) when its own encoded size —
+// alone, with no sibling report in the chunk — already breaches
+// [reportChunkHardCap]. Such an entry can never occupy a chunk by
+// itself without [udp.Listener.Send] rejecting the datagram, so
+// shipping the raw value is never an option. Split out of
+// [chunkReportData] to keep that function's per-entry bookkeeping
+// readable.
+func capOversizedAttributeReport(rd im.ReportData, rep im.AttributeReport) (im.AttributeReport, error) {
+	if rep.IsStatus {
+		return rep, nil
+	}
+	alone := im.ReportData{
+		HasSubscription: rd.HasSubscription,
+		SubscriptionID:  rd.SubscriptionID,
+		Reports:         []im.AttributeReport{rep},
+	}
+	aloneBody, err := EncodeReportData(alone)
+	if err != nil {
+		return im.AttributeReport{}, err
+	}
+	if len(aloneBody) <= reportChunkHardCap {
+		return rep, nil
+	}
+	return im.AttributeReport{
+		Path:     rep.Path,
+		IsStatus: true,
+		Status:   im.StatusIB{Status: im.StatusResourceExhausted},
+	}, nil
+}
+
+// capOversizedEventReport is [capOversizedAttributeReport]'s twin for
+// EventReport.
+func capOversizedEventReport(rd im.ReportData, ev im.EventReport) (im.EventReport, error) {
+	if ev.IsStatus {
+		return ev, nil
+	}
+	alone := im.ReportData{
+		HasSubscription: rd.HasSubscription,
+		SubscriptionID:  rd.SubscriptionID,
+		EventReports:    []im.EventReport{ev},
+	}
+	aloneBody, err := EncodeReportData(alone)
+	if err != nil {
+		return im.EventReport{}, err
+	}
+	if len(aloneBody) <= reportChunkHardCap {
+		return ev, nil
+	}
+	return im.EventReport{
+		Path:     ev.Path,
+		IsStatus: true,
+		Status:   im.StatusIB{Status: im.StatusResourceExhausted},
+	}, nil
 }
 
 // EncodeWriteResponse serialises wr into the TLV bytes that ride as
@@ -692,11 +774,32 @@ func defaultAttributeValueWriter(enc *tlv.Encoder, tag tlv.Tag, v im.AttributeVa
 			enc.PutOctets(tlv.AnonymousTag(), b)
 		}
 		_ = enc.EndContainer()
+	case []mattercore.AccessControlExtensionEntry:
+		// AccessControl.Extension (Matter §9.10.4.6). fabric-sensitive
+		// list of AccessControlExtensionStruct:
+		//   [1]   Data        octet_string<128>
+		//   [254] FabricIndex fabric_idx (uint8)
+		// Mirrors matter.js access-control.element.ts
+		// AccessControlExtensionStruct (Data id 0x1, FabricIndex id
+		// 0xfe). A Go type switch matches the exact dynamic type, so
+		// this concrete slice never fell into the `[]any` case below —
+		// without this case every read/subscribe of 0x001F:0x0001 fell
+		// through to `default:` and returned TLV null regardless of
+		// what AccessControl.MatterWrite had stored.
+		enc.StartArray(tag)
+		for _, e := range x {
+			enc.StartStruct(tlv.AnonymousTag())
+			enc.PutOctets(tlv.ContextTag(1), e.Data)
+			enc.PutUint(tlv.ContextTag(254), uint64(e.FabricIndex))
+			_ = enc.EndContainer()
+		}
+		_ = enc.EndContainer()
 	case []any:
-		// Empty list pass-through — used by AccessControl.extension
-		// and any cluster that surfaces an empty-list attribute.
-		// Returning `null` here would parse as "missing", whereas an
-		// empty array is a present, empty value.
+		// Empty list pass-through for a cluster that surfaces an
+		// empty-list attribute as `[]any{}` (e.g. ScenesManagement,
+		// OTASoftwareUpdateRequestor). Returning `null` here would
+		// parse as "missing", whereas an empty array is a present,
+		// empty value.
 		enc.StartArray(tag)
 		for range x {
 			// Cannot encode arbitrary `any` items without per-type
@@ -986,6 +1089,40 @@ func defaultAttributeValueWriter(enc *tlv.Encoder, tag tlv.Tag, v im.AttributeVa
 				}
 				_ = enc.EndContainer()
 			}
+			enc.PutUint(tlv.ContextTag(254), uint64(lv.FabricIndex))
+			_ = enc.EndContainer()
+		} else {
+			enc.PutNull(tlv.ContextTag(4))
+		}
+		enc.PutUint(tlv.ContextTag(254), uint64(x.FabricIndex))
+		_ = enc.EndContainer()
+	case mattercore.AccessControlExtensionChangedEvent:
+		// AccessControl §9.10.7.2. Same field tags as
+		// AccessControlEntryChanged above, per matter.js
+		// access-control.element.ts:84-98, but LatestValue is an
+		// AccessControlExtensionStruct ([1] Data octstr, [254]
+		// FabricIndex) instead of AccessControlEntryStruct:
+		//   [1] AdminNodeID        node-id (uint64) nullable
+		//   [2] AdminPasscodeID    uint16          nullable
+		//   [3] ChangeType         enum8
+		//   [4] LatestValue        AccessControlExtensionStruct nullable
+		//   [0xFE] FabricIndex     uint8 (auto-added fabric-scoped tag)
+		enc.StartStruct(tag)
+		if x.AdminNodeID != nil {
+			enc.PutUint64(tlv.ContextTag(1), *x.AdminNodeID)
+		} else {
+			enc.PutNull(tlv.ContextTag(1))
+		}
+		if x.AdminPasscodeID != nil {
+			enc.PutUint16(tlv.ContextTag(2), *x.AdminPasscodeID)
+		} else {
+			enc.PutNull(tlv.ContextTag(2))
+		}
+		enc.PutUint(tlv.ContextTag(3), uint64(x.ChangeType))
+		if x.LatestValue != nil {
+			lv := *x.LatestValue
+			enc.StartStruct(tlv.ContextTag(4))
+			enc.PutOctets(tlv.ContextTag(1), lv.Data)
 			enc.PutUint(tlv.ContextTag(254), uint64(lv.FabricIndex))
 			_ = enc.EndContainer()
 		} else {

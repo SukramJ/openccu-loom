@@ -666,13 +666,31 @@ func TestFromMeasurementClassOccupancy(t *testing.T) {
 	}
 }
 
-// TestFromMeasurementClassBatteryReturnsNil verifies that Battery class returns nil (host-endpoint cluster, not wired here).
-func TestFromMeasurementClassBatteryReturnsNil(t *testing.T) {
+// TestFromMeasurementClassBattery_FloatSource verifies that a Battery
+// class source implementing MatterFloatMeasurementSource (e.g. a
+// derived battery-percentage sensor such as
+// calculated.OperatingVoltageLevelSensor) materialises a
+// PowerSourceServer that reports BatPercentRemaining — mirroring the
+// existing bool-source case (TestFromMeasurementClass_Battery), which
+// materialises a PowerSourceServer reporting BatChargeLevel instead.
+// Before this fix the switch only checked MatterBoolMeasurementSource,
+// so a float-only source silently produced zero cluster servers.
+func TestFromMeasurementClassBattery_FloatSource(t *testing.T) {
 	t.Parallel()
 	src := fakeFloat{class: interfaces.MatterMeasurementBattery, val: 80.0, obs: true}
 	servers := measurement.FromMeasurementClass(interfaces.MatterMeasurementBattery, src)
-	if servers != nil {
-		t.Errorf("want nil for Battery class, got %v", servers)
+	if len(servers) != 1 {
+		t.Fatalf("want 1 server for Battery class with a float source, got %d", len(servers))
+	}
+	if got := servers[0].MatterClusterID(); got != measurement.ClusterPowerSource {
+		t.Errorf("ClusterID = 0x%04X, want 0x%04X (PowerSource)", got, measurement.ClusterPowerSource)
+	}
+	v, ok := servers[0].MatterRead(0x000C) // BatPercentRemaining
+	if !ok {
+		t.Fatal("MatterRead(BatPercentRemaining) ok = false")
+	}
+	if got, want := v.(uint8), uint8(160); got != want { // 80% -> 160 half-percent
+		t.Errorf("BatPercentRemaining = %d, want %d", got, want)
 	}
 }
 
@@ -1210,6 +1228,125 @@ func TestPowerSourceServerReportable(t *testing.T) {
 	}
 }
 
+// TestPowerSourceServerFromBool_BatPercentRemainingNotSupported verifies
+// that a bool-constructed PowerSourceServer neither reports
+// BatPercentRemaining (0x000C) via MatterRead nor lists it in
+// MatterAttributes/MatterReportable — the optional conformance [BAT]
+// attribute is genuinely absent, not reported as null.
+func TestPowerSourceServerFromBool_BatPercentRemainingNotSupported(t *testing.T) {
+	t.Parallel()
+	s := measurement.NewPowerSourceServer(fakeBool{class: interfaces.MatterMeasurementBattery, val: false, obs: true})
+
+	if v, ok := s.MatterRead(0x000C); ok || v != nil {
+		t.Errorf("MatterRead(BatPercentRemaining) = (%v, %v), want (nil, false)", v, ok)
+	}
+	for _, a := range s.MatterAttributes() {
+		if a == 0x000C {
+			t.Error("MatterAttributes lists BatPercentRemaining for a bool-constructed instance")
+		}
+	}
+	for _, a := range s.MatterReportable() {
+		if a == 0x000C {
+			t.Error("MatterReportable lists BatPercentRemaining for a bool-constructed instance")
+		}
+	}
+}
+
+// TestPowerSourceServerFromFloat_BatPercentRemaining verifies that a
+// float-constructed PowerSourceServer converts its source's 0-100
+// percentage to Matter's half-percent BatPercentRemaining encoding,
+// and that BatChargeLevel still reports OK (no boolean LOWBAT signal
+// to derive Warning from) without panicking on the nil bool source.
+func TestPowerSourceServerFromFloat_BatPercentRemaining(t *testing.T) {
+	t.Parallel()
+	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: interfaces.MatterMeasurementBattery, val: 42.3, obs: true})
+
+	v, ok := s.MatterRead(0x000C)
+	if !ok {
+		t.Fatal("MatterRead(BatPercentRemaining) ok = false")
+	}
+	if got, want := v.(uint8), uint8(85); got != want { // 42.3% rounds to 85 half-percent units
+		t.Errorf("BatPercentRemaining = %d, want %d", got, want)
+	}
+
+	charge, ok := s.MatterRead(0x000E)
+	if !ok {
+		t.Fatal("MatterRead(BatChargeLevel) ok = false")
+	}
+	if got, want := charge.(uint8), uint8(0); got != want {
+		t.Errorf("BatChargeLevel = %d, want %d (OK — no bool source to derive Warning)", got, want)
+	}
+}
+
+// TestPowerSourceServerFromFloat_BatPercentRemaining_Unobserved verifies
+// that an unobserved float source reports BatPercentRemaining as TLV
+// null (present, quality X) rather than a fabricated value.
+func TestPowerSourceServerFromFloat_BatPercentRemaining_Unobserved(t *testing.T) {
+	t.Parallel()
+	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: interfaces.MatterMeasurementBattery, val: 0, obs: false})
+	v, ok := s.MatterRead(0x000C)
+	if !ok {
+		t.Fatal("MatterRead(BatPercentRemaining) ok = false, want true (present, null)")
+	}
+	if v != nil {
+		t.Errorf("BatPercentRemaining = %v, want nil (unobserved)", v)
+	}
+}
+
+// TestPowerSourceServerFromFloat_BatPercentRemaining_Clamped verifies
+// the round-then-clamp bounds: 0% -> 0, 100% -> 200, and an
+// out-of-range value clamps to the ceiling instead of overflowing.
+func TestPowerSourceServerFromFloat_BatPercentRemaining_Clamped(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		pct  float64
+		want uint8
+	}{
+		{pct: 0, want: 0},
+		{pct: 100, want: 200},
+		{pct: 150, want: 200}, // out of the documented 0-100 range; clamp defensively
+		{pct: -5, want: 0},    // ditto, negative
+	}
+	for _, tc := range tests {
+		s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: interfaces.MatterMeasurementBattery, val: tc.pct, obs: true})
+		v, ok := s.MatterRead(0x000C)
+		if !ok {
+			t.Fatalf("pct=%v: MatterRead(BatPercentRemaining) ok = false", tc.pct)
+		}
+		if got := v.(uint8); got != tc.want {
+			t.Errorf("pct=%v: BatPercentRemaining = %d, want %d", tc.pct, got, tc.want)
+		}
+	}
+}
+
+// TestPowerSourceServerFromFloat_MatterAttributesIncludesBatPercentRemaining
+// verifies that a float-constructed instance lists BatPercentRemaining
+// in both MatterAttributes (wildcard reads) and MatterReportable
+// (subscription surface) — the mirror image of
+// TestPowerSourceServerFromBool_BatPercentRemainingNotSupported.
+func TestPowerSourceServerFromFloat_MatterAttributesIncludesBatPercentRemaining(t *testing.T) {
+	t.Parallel()
+	s := measurement.NewPowerSourceServerFromFloat(fakeFloat{class: interfaces.MatterMeasurementBattery, val: 50, obs: true})
+
+	var inAttrs, inReportable bool
+	for _, a := range s.MatterAttributes() {
+		if a == 0x000C {
+			inAttrs = true
+		}
+	}
+	for _, a := range s.MatterReportable() {
+		if a == 0x000C {
+			inReportable = true
+		}
+	}
+	if !inAttrs {
+		t.Error("MatterAttributes does not list BatPercentRemaining for a float-constructed instance")
+	}
+	if !inReportable {
+		t.Error("MatterReportable does not list BatPercentRemaining for a float-constructed instance")
+	}
+}
+
 // --- Materializer (FromMeasurementClass) — concentration + battery coverage ---
 
 // TestFromMeasurementClassP2Coverage verifies dispatch for CO2, PM2.5, PM10, Battery, and wrong-type sources.
@@ -1259,10 +1396,15 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:    "Battery+fakeFloat→nil(wrong type)",
+			// Battery accepts both a bool source (BatChargeLevel) and a
+			// float source (BatPercentRemaining, e.g. a derived
+			// battery-percentage sensor) — see
+			// TestFromMeasurementClassBattery_FloatSource for the
+			// dedicated coverage of the wire-level projection.
+			name:    "Battery+fakeFloat→0x002F",
 			class:   interfaces.MatterMeasurementBattery,
 			src:     fakeFloat{class: interfaces.MatterMeasurementBattery, val: 80.0, obs: true},
-			wantNil: true,
+			wantIDs: []uint32{0x002F},
 		},
 	}
 

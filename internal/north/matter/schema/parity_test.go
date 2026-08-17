@@ -9,22 +9,29 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 )
 
-// TestParityCodeMatchesGeneratedSchema verifies that every cluster revision
-// constant hand-coded in the bridge's cluster packages matches the
-// corresponding entry in the codegen'd schema maps. This catches drift
-// between a matter.js HEAD update (which regenerates clusters.go via
-// `make generate-matter-schema`) and the hand-written constants that
-// haven't been updated yet.
+// TestParityCodeMatchesGeneratedSchema verifies that the codeRev literals
+// below — a maintained snapshot of the revision constants hand-coded in
+// the bridge's cluster packages — match the corresponding entry in the
+// codegen'd schema maps.
 //
-// Each pair {id, codeRev} reflects the current value of the private constant
-// in the relevant cluster package. When matter.js bumps a revision:
+// This does NOT read the actual constants from the cluster source
+// files: codeRev is a transcribed literal, not an import or a
+// MatterRead(0xFFFD) off a constructed server, so a hand-edited
+// revision constant that this table is not also updated for will not
+// fail here. The per-cluster parity tests
+// (parity_matterjs_test.go under each cluster package, e.g.
+// internal/north/matter/cluster/core/parity_matterjs_test.go) are the
+// guard that reads the real constant for the clusters they cover; this
+// test only catches a matter.js HEAD schema-snapshot update
+// (`make generate-matter-schema`) that this table's codeRev values
+// were not updated to track. When matter.js bumps a revision:
 //  1. Run `make generate-matter-schema` — clusters.go is updated.
 //  2. This test fails, naming the drifted cluster.
 //  3. Update the constant in the cluster source file, then update codeRev here.
 func TestParityCodeMatchesGeneratedSchema(t *testing.T) {
 	t.Parallel()
 
-	// Each pair maps a cluster ID to the revision constant currently used in
+	// Each pair maps a cluster ID to the revision value currently used in
 	// the corresponding cluster source file. Covers all clusters from the
 	// Covers: core/, measurement/, and wire/ packages.
 	//
@@ -48,11 +55,14 @@ func TestParityCodeMatchesGeneratedSchema(t *testing.T) {
 	//   measurement/measurement.go    → tempMeasClusterRevision, humidityClusterRevision, etc.
 	//   wire/genericswitch.go         → switchClusterRevision
 	//   wire/admincommissioning.go    → admCommClusterRevision
+	//   wire/groups.go                → groupsClusterRevision
 	//   model/generic/switch_matter.go → matterGenericOnOffClusterRevision
-	//   model/custom/light/matter.go  → matterOnOffClusterRevision, matterGroupsClusterRevision, etc.
+	//   model/custom/light/matter.go  → matterOnOffClusterRevision, matterLevelControlClusterRevision, etc.
 	//   model/custom/climate/matter.go → matterThermClusterRevision, etc.
 	//   model/custom/cover/matter.go  → matterWindowCoveringClusterRevision
-	//   model/custom/lock/matter.go   → matterDoorLockClusterRevision
+	//   model/custom/lock/matter.go   → the DoorLock cluster's revision constant
+	//     (also covered directly by model/custom/lock/parity_matterjs_test.go,
+	//     which reads it via MatterRead(0xFFFD) off a constructed server)
 	//   model/custom/siren/matter.go  → matterSmokeCOAlarmClusterRevision
 	cases := []struct {
 		id      uint32
@@ -115,7 +125,7 @@ func TestParityCodeMatchesGeneratedSchema(t *testing.T) {
 			continue
 		}
 		if c.codeRev != schemaRev {
-			t.Errorf("cluster 0x%04X (%s): code revision %d != matter.js schema revision %d — update the constant in the cluster source file",
+			t.Errorf("cluster 0x%04X (%s): this table's codeRev %d != matter.js schema revision %d — update BOTH the constant in the cluster source file AND codeRev here",
 				c.id, c.name, c.codeRev, schemaRev)
 		}
 	}

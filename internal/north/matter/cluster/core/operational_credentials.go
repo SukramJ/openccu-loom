@@ -697,7 +697,7 @@ func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) { //nolin
 	// AttributeList during the initial subscribe sweep and marks the
 	// cluster unknown when they return UnsupportedAttribute. Adding these
 	// cases mirrors matter.js ClusterServer auto-populated globalAttributes
-	// (packages/node/src/behaviors/ClusterBehavior.ts) and chip
+	// (packages/node/src/behavior/cluster/ClusterBehavior.ts) and chip
 	// endpoint_config.h cluster metadata tables.
 	case cluster.AttrGlobalGeneratedCommandList:
 		// OpCreds generated commands: AttestationResponse (0x01),

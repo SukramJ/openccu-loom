@@ -629,7 +629,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// chain) leaves the operational session and ongoing subscription
 	// alive — the next pair retry collides on session-id 1 with
 	// `aesccm: authentication failed` and Apple gives up.
-	fabricTeardown := matterFabricTeardown(bridge, rootRefs.BasicInformation, opMgr, subMgr, store, logger)
+	fabricTeardown := matterFabricTeardown(bridge, rootRefs.BasicInformation, rootRefs.AccessControl, opMgr, subMgr, store, logger)
 	if opCreds != nil {
 		opCreds.SetOnFabricRemoved(func(_ context.Context, fabricIndex uint8) {
 			fabricTeardown(context.Background(), fabricIndex) //nolint:contextcheck // the teardown outlives the invoking exchange by design; see matterFabricTeardown
@@ -1079,6 +1079,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 func matterFabricTeardown(
 	bridge *matterbridge.Bridge,
 	basicInfo *mattercore.BasicInformation,
+	accessControl *mattercore.AccessControl,
 	opMgr *operational.Manager,
 	subMgr *subscription.Manager,
 	store *matterstore.Store,
@@ -1090,6 +1091,15 @@ func matterFabricTeardown(
 		}
 		if basicInfo != nil {
 			basicInfo.EmitLeave(fabricIndex)
+		}
+		if accessControl != nil {
+			// Purge the removed fabric's in-memory Extension entry
+			// (attribute 0x0001) synchronously — a plain map delete, no
+			// wire race with the in-flight NOCResponse the deferred
+			// session/subscription close below waits out. Without this a
+			// fabric index reused by a later commissioning inherits the
+			// removed controller's Extension metadata.
+			accessControl.RemoveFabricExtension(fabricIndex)
 		}
 		logger.Info("matter.bridge.fabric.removed",
 			slog.Int("fabric_index", int(fabricIndex)))
@@ -1677,6 +1687,7 @@ type rootClusterRefs struct {
 	BasicInformation     *mattercore.BasicInformation
 	GeneralDiagnostics   *mattercore.GeneralDiagnostics
 	GeneralCommissioning *mattercore.GeneralCommissioning
+	AccessControl        *mattercore.AccessControl
 }
 
 // resolveBridgeUniqueID returns the root node's stable BasicInformation
@@ -2029,6 +2040,7 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 		// row this cluster reads back.
 		if ac, err := mattercore.NewAccessControl(store); err == nil {
 			out = append(out, ac)
+			refs.AccessControl = ac
 		} else {
 			logger.Warn("matter.bridge.access_control.build", slog.String("err", err.Error()))
 		}

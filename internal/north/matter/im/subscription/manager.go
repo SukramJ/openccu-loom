@@ -406,8 +406,8 @@ func (m *Manager) CloseFabricExcept(fabricIndex uint8, exceptSessionID uint16) {
 // topology Reassemble removes an endpoint so that the engine stops
 // ticking subscriptions that can never match a live cluster again.
 //
-// Mirrors matter.js packages/protocol/src/interaction/SubscriptionHandler.ts
-// (ServerSubscription) lifecycle: when a BridgedNode endpoint is
+// Mirrors matter.js packages/node/src/node/server/ServerSubscription.ts
+// lifecycle: when a BridgedNode endpoint is
 // removed from the Aggregator the outer bridge calls
 // `endpoint.lifecycle.remove()` which causes any subscription targeting
 // that endpoint to be closed by the InteractionServer.

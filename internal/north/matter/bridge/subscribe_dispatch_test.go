@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
 )
 
@@ -162,6 +163,74 @@ func TestRegisterSubscription_NoManager_ReturnsZeroSubID(t *testing.T) {
 	}
 	if report.HasSubscription {
 		t.Error("no manager: report.HasSubscription should remain false")
+	}
+}
+
+// TestRegisterSubscription_KeepSubscriptionsTrue_BothSurvive is the
+// regression guard for the ReplaceSessionDuplicate wiring bug: two
+// SubscribeRequests arriving on the same CASE session, both with
+// KeepSubscriptions=true — what chip and any client built on
+// matter.js's InteractionClient (default keepSubscriptions=true)
+// produce when a wildcard subscription and a narrow one are opened
+// over one session — must both remain active. matter.js only tears
+// down a peer's existing subscriptions when KeepSubscriptions=false
+// (packages/node/src/node/server/InteractionServer.ts:611 `if (fabric
+// !== undefined && !keepSubscriptions)`). Before the fix,
+// registerSubscription's ReplaceSessionDuplicate ignored
+// req.KeepSubscriptions entirely, so the second SubscribeRequest
+// silently closed the first regardless of the flag.
+func TestRegisterSubscription_KeepSubscriptionsTrue_BothSurvive(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	b.AttachSessionLookup(fabricResolvingLookup{fabricMap: map[uint16]uint8{42: 1}})
+	mgr := subscription.NewManager(subscription.Config{}, nil, nil)
+	b.AttachSubscriptionManager(mgr)
+
+	hdr := &message.Header{SessionID: 42, SourceNodeID: 0xA1B2C3D4, HasSourceNodeID: true}
+	proto := message.ProtocolHeader{ExchangeID: 1}
+
+	req1 := im.SubscribeRequest{
+		KeepSubscriptions: true,
+		AttributeRequests: []im.ConcreteAttributePath{
+			{HasEndpoint: true, Endpoint: 1, HasCluster: true, Cluster: 0x0006, HasAttribute: true, Attribute: 0x0000},
+		},
+		MinIntervalFloor:   0,
+		MaxIntervalCeiling: 60,
+	}
+	report1 := im.ReportData{}
+	subID1, err := b.registerSubscription(loopbackSrc(), hdr, proto, req1, &report1)
+	if err != nil {
+		t.Fatalf("registerSubscription (first): %v", err)
+	}
+	if subID1 == 0 {
+		t.Fatal("registerSubscription (first): subID = 0")
+	}
+
+	req2 := im.SubscribeRequest{
+		KeepSubscriptions: true,
+		AttributeRequests: []im.ConcreteAttributePath{
+			{HasEndpoint: true, Endpoint: 1, HasCluster: true, Cluster: 0x0008, HasAttribute: true, Attribute: 0x0000},
+		},
+		MinIntervalFloor:   0,
+		MaxIntervalCeiling: 60,
+	}
+	report2 := im.ReportData{}
+	subID2, err := b.registerSubscription(loopbackSrc(), hdr, proto, req2, &report2)
+	if err != nil {
+		t.Fatalf("registerSubscription (second): %v", err)
+	}
+	if subID2 == 0 {
+		t.Fatal("registerSubscription (second): subID = 0")
+	}
+
+	if _, err := mgr.Get(subID1); err != nil {
+		t.Errorf("first subscription %d was closed despite KeepSubscriptions=true: %v", subID1, err)
+	}
+	if _, err := mgr.Get(subID2); err != nil {
+		t.Errorf("second subscription %d not registered: %v", subID2, err)
+	}
+	if got := mgr.Active(); got != 2 {
+		t.Errorf("Active() = %d, want 2 (both subscriptions survive)", got)
 	}
 }
 

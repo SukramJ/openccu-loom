@@ -25,6 +25,11 @@ import (
 type sessionMissBurst struct {
 	mu      sync.Mutex
 	entries map[uint16]*sessionMissEntry
+	// lastSweepAt gates [sessionMissBurst.maybeSweepLocked] to at most
+	// one full map walk per [sessionMissBurstSweepInterval], the same
+	// amortisation [exchangeRouting.maybeSweepExpiredTimedDeadlines]
+	// uses for its own unbounded-map guard.
+	lastSweepAt time.Time
 }
 
 // sessionMissEntry caps each session-id's bookkeeping at a few words —
@@ -34,6 +39,14 @@ type sessionMissEntry struct {
 	firstAt       time.Time // start of the current rolling window
 	count         uint32    // misses observed inside the current window
 	lastEmittedAt time.Time // last time a burst INFO fired for this session-id
+	// lastSeenAt is updated on every record() call for this entry,
+	// independent of whether the rolling window reset — it is the
+	// staleness clock [maybeSweepLocked] reclaims against. firstAt
+	// alone cannot serve this role: a session-id seen exactly once
+	// never revisits the window-reset branch that would otherwise
+	// touch firstAt, so its entry would sit forever without a
+	// separate recency field.
+	lastSeenAt time.Time
 }
 
 const (
@@ -51,6 +64,16 @@ const (
 	// same session-id so a permanently-wedged iPhone produces one row
 	// per cooldown, not one per arriving datagram.
 	sessionMissBurstCooldown = 5 * time.Minute
+	// sessionMissBurstSweepInterval bounds how often record() pays the
+	// full-map reclamation cost.
+	sessionMissBurstSweepInterval = time.Minute
+	// sessionMissBurstMaxEntries hard-caps the table the way
+	// maxUnsecuredWindows caps unsecuredWindows (securechannel.go): a
+	// session-id miss arrives on the pre-decrypt path (any LAN host
+	// that can reach the operational UDP port can spray them), so
+	// without a cap a spoofed/varying-session-id flood grows the table
+	// without bound faster than the periodic sweep can reclaim it.
+	sessionMissBurstMaxEntries = 4096
 )
 
 // record registers one session-id miss at `at` and reports whether
@@ -63,11 +86,21 @@ func (t *sessionMissBurst) record(sessionID uint16, at time.Time) (emit bool) {
 	if t.entries == nil {
 		t.entries = make(map[uint16]*sessionMissEntry)
 	}
+	t.maybeSweepLocked(at)
+
 	e, ok := t.entries[sessionID]
 	if !ok {
-		t.entries[sessionID] = &sessionMissEntry{firstAt: at, count: 1}
+		if len(t.entries) >= sessionMissBurstMaxEntries {
+			// At the hard cap: refuse to grow further rather than
+			// evict an existing (possibly still-relevant) entry. A
+			// flood that outpaces the sweep interval still cannot
+			// grow the table past this bound.
+			return false
+		}
+		t.entries[sessionID] = &sessionMissEntry{firstAt: at, count: 1, lastSeenAt: at}
 		return false
 	}
+	e.lastSeenAt = at
 	// Reset the rolling window when it has aged out — a single late
 	// retransmit after a quiet period must not chain onto the previous
 	// burst.
@@ -88,4 +121,22 @@ func (t *sessionMissBurst) record(sessionID uint16, at time.Time) (emit bool) {
 	}
 	e.lastEmittedAt = at
 	return true
+}
+
+// maybeSweepLocked reclaims entries that have gone quiet for longer
+// than the window+cooldown horizon — an entry past that horizon can no
+// longer influence any future decision record() makes for it, so it is
+// unambiguous garbage. Must be called with t.mu held. Amortises to at
+// most one full map walk per [sessionMissBurstSweepInterval].
+func (t *sessionMissBurst) maybeSweepLocked(now time.Time) {
+	if !t.lastSweepAt.IsZero() && now.Sub(t.lastSweepAt) < sessionMissBurstSweepInterval {
+		return
+	}
+	t.lastSweepAt = now
+	horizon := sessionMissBurstWindow + sessionMissBurstCooldown
+	for id, e := range t.entries {
+		if now.Sub(e.lastSeenAt) > horizon {
+			delete(t.entries, id)
+		}
+	}
 }

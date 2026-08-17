@@ -130,3 +130,72 @@ func TestSessionMissBurst_PerSessionIDIsolation(t *testing.T) {
 		t.Fatalf("session 2 emitted at miss 2")
 	}
 }
+
+// TestSessionMissBurst_StaleEntriesAreReclaimed locks the leak fix: a
+// session-id seen exactly once (the shape a spoofed-source-id flood
+// produces — one datagram per distinct session-id, never revisited)
+// must not occupy its map entry forever. Once the sweep interval and
+// the window+cooldown horizon have both elapsed, the next record()
+// call reclaims it.
+func TestSessionMissBurst_StaleEntriesAreReclaimed(t *testing.T) {
+	t.Parallel()
+
+	var b sessionMissBurst
+	now := time.Now()
+
+	// One-shot misses on 1000 distinct session-ids — never revisited,
+	// exactly the shape that never touches the window-reset branch and
+	// so previously sat in the map forever.
+	for id := range uint16(1000) {
+		b.record(id, now)
+	}
+	if got := len(b.entries); got != 1000 {
+		t.Fatalf("entries after initial burst = %d, want 1000", got)
+	}
+
+	// Advance past both the sweep interval and the reclamation horizon
+	// (window + cooldown) with one fresh miss on an unrelated session-id
+	// — record() always sweeps opportunistically once the interval has
+	// elapsed, regardless of which session-id triggers it.
+	horizon := sessionMissBurstWindow + sessionMissBurstCooldown
+	past := now.Add(sessionMissBurstSweepInterval).Add(horizon).Add(time.Second)
+	b.record(9999, past)
+
+	b.mu.Lock()
+	remaining := len(b.entries)
+	_, stillPresent := b.entries[0]
+	b.mu.Unlock()
+
+	if stillPresent {
+		t.Error("session-id 0's stale entry survived the sweep")
+	}
+	// Only the fresh session-id (9999) should remain.
+	if remaining != 1 {
+		t.Errorf("entries after sweep = %d, want 1 (only the triggering session-id)", remaining)
+	}
+}
+
+// TestSessionMissBurst_HardCapStopsGrowth locks the backstop for a
+// flood that outpaces the periodic sweep: past
+// sessionMissBurstMaxEntries distinct session-ids, record() stops
+// creating new entries rather than growing the table without bound.
+func TestSessionMissBurst_HardCapStopsGrowth(t *testing.T) {
+	t.Parallel()
+
+	var b sessionMissBurst
+	now := time.Now()
+
+	// Every record() call lands within the same instant, so the
+	// amortised sweep (gated to once per sessionMissBurstSweepInterval)
+	// never fires mid-loop and cannot mask the cap.
+	for id := range uint16(sessionMissBurstMaxEntries + 500) {
+		b.record(id, now)
+	}
+
+	b.mu.Lock()
+	got := len(b.entries)
+	b.mu.Unlock()
+	if got != sessionMissBurstMaxEntries {
+		t.Errorf("entries = %d, want %d (hard cap)", got, sessionMissBurstMaxEntries)
+	}
+}

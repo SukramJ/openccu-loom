@@ -186,7 +186,7 @@ func (b *Bridge) buildInitialReport(
 //
 // Mirrors matter.js packages/node/src/node/server/InteractionServer.ts:549-566
 // for the KeepSubscriptions teardown, and
-// packages/protocol/src/interaction/SubscriptionHandler.ts for the
+// packages/protocol/src/action/server/EventReadResponse.ts for the
 // EventPaths wiring.
 func (b *Bridge) registerSubscription(
 	src *net.UDPAddr,
@@ -249,7 +249,7 @@ func (b *Bridge) registerSubscription(
 			// …) queued via [Manager.OnEventFired] failed to match
 			// any active subscription and was silently dropped.
 			// matter.js
-			// packages/protocol/src/interaction/SubscriptionHandler.ts
+			// packages/protocol/src/action/server/EventReadResponse.ts
 			// always passes both path arrays.
 			EventPaths: req.EventRequests,
 			// Replace any stale subscription that arrived on the same
@@ -261,7 +261,19 @@ func (b *Bridge) registerSubscription(
 			// real SourceNodeID) because PASE re-subscribe cleanup is
 			// handled by the KeepSubscriptions=false / CloseSession
 			// path above.
-			ReplaceSessionDuplicate: fabricIndex != 0 && requestHdr.HasSourceNodeID,
+			//
+			// Gated on !req.KeepSubscriptions: a peer that sets
+			// KeepSubscriptions=true is explicitly asking for its existing
+			// subscriptions on this session to survive — chip and any
+			// client built on matter.js's InteractionClient (default
+			// keepSubscriptions=true) routinely hold two subscriptions
+			// with different path sets on one CASE session. Without this
+			// gate every second SubscribeRequest on a session silently
+			// tore down the first one regardless of the flag, contradicting
+			// the KeepSubscriptions=false teardown matter.js performs at
+			// packages/node/src/node/server/InteractionServer.ts:611
+			// (`if (fabric !== undefined && !keepSubscriptions)`).
+			ReplaceSessionDuplicate: !req.KeepSubscriptions && fabricIndex != 0 && requestHdr.HasSourceNodeID,
 		})
 		if err != nil {
 			b.logger.Warn("matter.rx.im.subscribe.manager",

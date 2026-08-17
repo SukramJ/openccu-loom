@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -111,8 +112,9 @@ const (
 	// accessControlEventExtensionChanged is the Matter §9.10.7.2 event
 	// (id 0x1, conformance EXTS). chip emits this event per spec §9.10.7
 	// and matter.js element.ts:77-88 lists it as conformance "EXTS".
-	// Declared here so MatterEvents() returns a complete set for EventList
-	// synthesis when EventList suppression is lifted in a future release.
+	// Emitted from the Extension write path alongside the DataVersion
+	// bump, mirroring how accessControlEventEntryChanged rides the ACL
+	// write.
 	accessControlEventExtensionChanged uint32 = 0x0001
 )
 
@@ -143,6 +145,23 @@ type AccessControlEntryChangedEvent struct {
 	AdminPasscodeID *uint16                   // nullable; nil = "not tracked"
 	ChangeType      uint8                     // AccessControlChangeType{Changed,Added,Removed}
 	LatestValue     *AccessControlEntryStruct // nullable; nil for bulk-replace
+	FabricIndex     uint8
+}
+
+// AccessControlExtensionChangedEvent is the payload for event 0x0001
+// on cluster 0x001F. Mirrors Matter §9.10.7.2 and matter.js
+// packages/model/src/standard/elements/access-control.element.ts:84-98
+// (same field set as AccessControlEntryChanged, but LatestValue is an
+// AccessControlExtensionStruct). Priority: Info
+// (MatterEventPriorityInfo).
+//
+// AdminNodeID and AdminPasscodeID are both nullable (quality X); both
+// are nil in v1.1 for the same reason as [AccessControlEntryChangedEvent].
+type AccessControlExtensionChangedEvent struct {
+	AdminNodeID     *uint64                      // nullable; nil = "not tracked"
+	AdminPasscodeID *uint16                      // nullable; nil = "not tracked"
+	ChangeType      uint8                        // AccessControlChangeType{Changed,Added,Removed}
+	LatestValue     *AccessControlExtensionEntry // nullable; nil for bulk-replace
 	FabricIndex     uint8
 }
 
@@ -226,6 +245,36 @@ func (a *AccessControl) SetCurrentFabric(idx uint8) {
 	a.mu.Lock()
 	a.currentFabric = idx
 	a.mu.Unlock()
+}
+
+// RemoveFabricExtension purges fabricIndex's entry from the in-memory
+// Extension map (attribute 0x0001) and bumps DataVersion when an entry
+// was actually present. Every fabric-scoped attribute must be purged
+// when its fabric is removed (Matter §9.10.5, mirroring how
+// OperationalCredentials.handleRemoveFabric clears its own fabric-scoped
+// in-memory state — see that method's FabricManager.ts:241-248
+// #handleFabricDeleted citation) — the ACL list is store-backed and
+// already cleared by the store's FK CASCADE, but Extension is an
+// in-memory map keyed by fabric index this cluster owns exclusively, so
+// nothing else purges it. Without this, a fabric index reused by a later
+// commissioning inherits the removed controller's Extension entry: fabric
+// indices are reused (AddNOC allocates from the store's free indices),
+// so the next controller assigned index N would read back index N's
+// stale metadata as if it had written it itself.
+//
+// Called from the daemon's matterFabricTeardown, the same composition-
+// root fan-out that closes operational sessions and subscriptions for
+// the removed fabric — see cmd/openccu-loom/daemon_matter.go.
+func (a *AccessControl) RemoveFabricExtension(fabricIndex uint8) {
+	a.mu.Lock()
+	_, had := a.extensions[fabricIndex]
+	if had {
+		delete(a.extensions, fabricIndex)
+	}
+	a.mu.Unlock()
+	if had {
+		a.dataVersion.Bump()
+	}
 }
 
 // MatterRead implements [interfaces.MatterClusterServer].
@@ -599,9 +648,27 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 		if !ok {
 			return fmt.Errorf("matter: AccessControl.Extension write: value type %T not []AccessControlExtensionEntry", value)
 		}
+		// Every entry this write stores is re-stamped to the writer's own
+		// fabric below (v1.1 has no cross-fabric write path to begin
+		// with), so more than one entry in a single write always means
+		// more than one entry for that fabric. Mirrors matter.js
+		// AccessControlServer.ts:352-370
+		// (#validateAccessControlExtensionChanges): a fabric may hold at
+		// most one AccessControlExtensionStruct.
+		if len(entries) > 1 {
+			return fmt.Errorf("matter: AccessControl.Extension write: constraint error: a fabric may hold at most one entry, got %d", len(entries))
+		}
 		for i, e := range entries {
 			if len(e.Data) > 128 {
-				return fmt.Errorf("matter: AccessControl.Extension[%d] write: Data length %d exceeds max 128", i, len(e.Data))
+				return fmt.Errorf("matter: AccessControl.Extension[%d] write: constraint error: Data length %d exceeds max 128", i, len(e.Data))
+			}
+			// Data must itself decode as a well-formed TLV List — mirrors
+			// matter.js AccessControlServer.ts:424-441
+			// (extensionEntryValidator's default implementation). A blob
+			// that fails this is rejected rather than stored, so a
+			// garbage write cannot wedge a later fabric-scoped read.
+			if err := validateAccessControlExtensionData(e.Data); err != nil {
+				return fmt.Errorf("matter: AccessControl.Extension[%d] write: constraint error: %w", i, err)
 			}
 		}
 		_, ctxFabric := im.FabricFilterFromContext(ctx)
@@ -625,9 +692,50 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 		if a.extensions == nil {
 			a.extensions = make(map[uint8][]AccessControlExtensionEntry)
 		}
+		oldExtensions := a.extensions[fabric]
 		a.extensions[fabric] = stamped
+		emitter := a.emitter
+		endpoint := a.endpoint
 		a.mu.Unlock()
 		a.dataVersion.Bump()
+
+		// Emit AccessControlExtensionChanged per Matter §9.10.7.2, the
+		// same way the ACL write emits AccessControlEntryChanged above:
+		// one event per write, ChangeType derived from the per-fabric
+		// list-length delta, LatestValue=nil for a bulk-replace (spec
+		// quality X — permitted to omit) unless exactly one entry is
+		// involved on either side of the change.
+		if emitter != nil {
+			changeType := AccessControlChangeTypeChanged
+			switch {
+			case len(stamped) > len(oldExtensions):
+				changeType = AccessControlChangeTypeAdded
+			case len(stamped) < len(oldExtensions):
+				changeType = AccessControlChangeTypeRemoved
+			}
+			var latest *AccessControlExtensionEntry
+			switch {
+			case changeType == AccessControlChangeTypeRemoved && len(oldExtensions) > 0:
+				v := oldExtensions[0]
+				latest = &v
+			case changeType != AccessControlChangeTypeRemoved && len(stamped) > 0:
+				v := stamped[0]
+				latest = &v
+			}
+			emitter.MatterEmitEvent(
+				endpoint,
+				accessControlClusterID,
+				accessControlEventExtensionChanged,
+				AccessControlExtensionChangedEvent{
+					AdminNodeID:     nil,
+					AdminPasscodeID: nil,
+					ChangeType:      changeType,
+					LatestValue:     latest,
+					FabricIndex:     fabric,
+				},
+				interfaces.MatterEventPriorityInfo,
+			)
+		}
 		return nil
 	}
 	return fmt.Errorf("matter: AccessControl attribute 0x%04X not writable", attrID)
@@ -759,4 +867,24 @@ func aclIsValidDeviceTypeID(id uint32) bool {
 // src/access/AccessControl.cpp:735 IsValidGroupNodeId guard.
 func aclIsValidGroupSubject(id uint64) bool {
 	return id >= 0xFFFF_FFFF_FFFF_FF00
+}
+
+// validateAccessControlExtensionData reports whether data decodes as a
+// well-formed TLV List — a single top-level, untagged element whose
+// type byte is TlvType.List (0x17) and whose final byte is the
+// EndOfContainer marker (0x18), with everything in between parsing as
+// balanced TLV. Mirrors matter.js
+// packages/node/src/behaviors/access-control/AccessControlServer.ts:424-441
+// (extensionEntryValidator, the default implementation): a controller
+// may attach arbitrary vendor metadata to a fabric's Extension entry,
+// but the octet-string must itself be decodable TLV, or a later
+// fabric-scoped read of it can wedge a strict controller's decoder.
+func validateAccessControlExtensionData(data []byte) error {
+	if len(data) < 2 || data[0] != byte(tlv.TypeList) || data[len(data)-1] != byte(tlv.TypeEndContainer) {
+		return errors.New("extension must be a valid TLV")
+	}
+	if err := tlv.Validate(data); err != nil {
+		return fmt.Errorf("extension must be a valid TLV: %w", err)
+	}
+	return nil
 }

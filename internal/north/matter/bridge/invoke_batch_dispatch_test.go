@@ -52,6 +52,34 @@ func encodeInvokeRequestSuppress(t *testing.T, suppressResponse bool, paths ...i
 	return body
 }
 
+// encodeInvokeRequestWithRefs mirrors encodeInvokeRequestSuppress but also
+// stamps a CommandRef (tag 2) on every CommandDataIB — needed to isolate
+// the batch-size check from the separate "every concrete path in a batch
+// needs a CommandRef" rule, which would otherwise reject the same batch
+// for an unrelated reason and mask the check under test.
+func encodeInvokeRequestWithRefs(t *testing.T, paths ...im.ConcreteCommandPath) []byte {
+	t.Helper()
+	enc := tlv.NewEncoder()
+	enc.StartStruct(tlv.AnonymousTag())
+	enc.PutBool(tlv.ContextTag(0), false) // SuppressResponse
+	enc.PutBool(tlv.ContextTag(1), false) // TimedRequest
+	enc.StartArray(tlv.ContextTag(2))     // InvokeRequests
+	for i, p := range paths {
+		enc.StartStruct(tlv.AnonymousTag()) // CommandDataIB
+		p.MarshalTLV(enc, tlv.ContextTag(0))
+		//nolint:gosec // test fixture, len(paths) bounded by callers.
+		enc.PutUint16(tlv.ContextTag(2), uint16(i+1)) // CommandRef
+		_ = enc.EndContainer()
+	}
+	_ = enc.EndContainer()
+	_ = enc.EndContainer()
+	body, err := enc.Bytes()
+	if err != nil {
+		t.Fatalf("encodeInvokeRequestWithRefs: %v", err)
+	}
+	return body
+}
+
 // dispatchInvokeCapture ships buf through [Bridge.dispatch] and returns the
 // reply datagram, or (nil, false) if no reply is emitted within timeout.
 func dispatchInvokeCapture(t *testing.T, b *Bridge, buf []byte, timeout time.Duration) ([]byte, bool) {
@@ -102,6 +130,46 @@ func TestDispatchInvokeRequest_BatchMissingCommandRef_RejectsInvalidAction(t *te
 		im.ConcreteCommandPath{Endpoint: unreliabilityTestEndpoint, Cluster: 0x0006, Command: 0x01, HasEndpoint: true, HasCluster: true, HasCommand: true},
 		im.ConcreteCommandPath{Endpoint: unreliabilityTestEndpoint, Cluster: 0x0006, Command: 0x00, HasEndpoint: true, HasCluster: true, HasCommand: true},
 	)
+	buf := buildDatagram(hdr, proto, payload)
+
+	got, ok := dispatchInvokeCapture(t, b, buf, 2*time.Second)
+	if !ok {
+		t.Fatal("expected a StatusResponse(InvalidAction), got no reply")
+	}
+	status := decodeWriteChunkedStatusResponse(t, got)
+	if status != im.StatusInvalidAction {
+		t.Errorf("StatusResponse status = %v, want StatusInvalidAction (0x80)", status)
+	}
+}
+
+// TestDispatchInvokeRequest_BatchExceedsMaxPaths_RejectsInvalidAction drives
+// an InvokeRequest one path past im.DefaultMaxPathsPerInvoke — every path
+// individually well-formed, on its own endpoint, with a distinct
+// CommandRef — and asserts the wire reply is a top-level
+// StatusResponse(InvalidAction), proving dispatchInvokeRequest's batch
+// guard rejects an over-sized batch before dispatching any command in
+// it. Mirrors matter.js InteractionServer.ts:950-955
+// (`if (invokeRequests.length > this.#maxPathsPerInvoke) throw new
+// StatusResponseError(..., Status.InvalidAction)`).
+func TestDispatchInvokeRequest_BatchExceedsMaxPaths_RejectsInvalidAction(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+
+	hdr := buildHeader(0, 52)
+	proto := buildProtocolHeader(im.InteractionModelProtocolID, im.OpcodeInvokeRequest)
+
+	paths := make([]im.ConcreteCommandPath, im.DefaultMaxPathsPerInvoke+1)
+	for i := range paths {
+		//nolint:gosec // test fixture, bounded by im.DefaultMaxPathsPerInvoke.
+		paths[i] = im.ConcreteCommandPath{
+			Endpoint: uint16(i + 1), Cluster: 0x0006, Command: 0x01,
+			HasEndpoint: true, HasCluster: true, HasCommand: true,
+		}
+	}
+	// Every path carries a distinct CommandRef so a rejection can only be
+	// attributed to the path-count check, not the separate
+	// missing-CommandRef rule (which would also reject this batch).
+	payload := encodeInvokeRequestWithRefs(t, paths...)
 	buf := buildDatagram(hdr, proto, payload)
 
 	got, ok := dispatchInvokeCapture(t, b, buf, 2*time.Second)

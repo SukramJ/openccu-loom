@@ -246,6 +246,61 @@ func TestUnmarshalReadRequest_ScalarEventFiltersFieldIsSkipped(t *testing.T) {
 	}
 }
 
+// TestReadEventFilterArray_NestedContainerElementIsDrainedNotDesynced pins
+// the container-drain fix inside the EventFilters array itself: a peer
+// that encodes an unknown/forward-compat container element (here a
+// nested Array) ahead of a well-formed EventFilterIB must have that
+// container fully drained before the loop resumes — dropping straight
+// to `continue` without draining leaves the nested array's inner
+// elements to be misread as the next EventFilters array member, which
+// desyncs the whole decode and used to surface as "EventRequests not
+// array" further down in UnmarshalReadRequestTLV.
+func TestReadEventFilterArray_NestedContainerElementIsDrainedNotDesynced(t *testing.T) {
+	t.Parallel()
+	enc := tlv.NewEncoder()
+	enc.StartStruct(tlv.AnonymousTag())
+	enc.StartArray(tlv.ContextTag(tagReadReqEventFilters))
+	// Unknown/forward-compat container element: a nested Array with
+	// content the receiver has no schema for.
+	enc.StartArray(tlv.AnonymousTag())
+	enc.PutUint(tlv.AnonymousTag(), 1)
+	enc.PutUint(tlv.AnonymousTag(), 2)
+	if err := enc.EndContainer(); err != nil {
+		t.Fatalf("EndContainer nested array: %v", err)
+	}
+	// A well-formed EventFilterIB right after the unknown element.
+	enc.StartStruct(tlv.AnonymousTag())
+	enc.PutUint(tlv.ContextTag(1), 40) // EventMin
+	if err := enc.EndContainer(); err != nil {
+		t.Fatalf("EndContainer filter struct: %v", err)
+	}
+	if err := enc.EndContainer(); err != nil {
+		t.Fatalf("EndContainer filters array: %v", err)
+	}
+	enc.PutBool(tlv.ContextTag(tagReadReqFabricFiltered), true)
+	if err := enc.EndContainer(); err != nil {
+		t.Fatalf("EndContainer ReadRequest: %v", err)
+	}
+	wire, err := enc.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+
+	req, err := UnmarshalReadRequestTLV(tlv.NewDecoder(wire))
+	if err != nil {
+		t.Fatalf("UnmarshalReadRequestTLV: %v", err)
+	}
+	if len(req.EventFilters) != 1 {
+		t.Fatalf("EventFilters: got %d, want 1 (the unknown array element must be skipped, not counted)", len(req.EventFilters))
+	}
+	if got := req.EventFilters[0].EventMin; got != 40 {
+		t.Errorf("EventMin = %d, want 40", got)
+	}
+	if !req.FabricFiltered {
+		t.Error("FabricFiltered: got false — the field after EventFilters was not decoded, meaning the array desynced")
+	}
+}
+
 // TestUnmarshalSubscribeRequest_ScalarEventFiltersFieldIsSkipped is the
 // SubscribeRequest twin of the ReadRequest case above.
 func TestUnmarshalSubscribeRequest_ScalarEventFiltersFieldIsSkipped(t *testing.T) {

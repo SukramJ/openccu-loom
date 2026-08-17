@@ -89,7 +89,7 @@ func (t *TimeSynchronization) MatterWrite(_ context.Context, attrID uint32, _ an
 }
 
 // timeSyncCmdSetUTCTime is the SetUTCTime command ID (Matter §11.16.9.1).
-// Mirrors matter.js packages/model/src/standard/elements/time-synchronization-cluster.element.ts
+// Mirrors matter.js packages/model/src/standard/elements/time-synchronization.element.ts
 // command id 0x00.
 const timeSyncCmdSetUTCTime uint32 = 0x00
 
