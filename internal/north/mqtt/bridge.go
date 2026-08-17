@@ -892,6 +892,33 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 	return nil
 }
 
+// AnnounceOffline publishes the retained `offline` marker on
+// `<base>/bridge/status` — the counterpart of [Bridge.AnnounceOnline] and the
+// same payload the broker publishes as the connection's Last Will.
+//
+// It exists because a graceful stop sends a clean DISCONNECT, and an MQTT
+// broker discards the will of a client that disconnects cleanly. Without this
+// call a `systemctl stop`, an add-on stop or a `docker stop` leaves the topic
+// retained at `online` while nothing is running, so every entity whose
+// discovery payload lists it as an availability source — which is all of them
+// — stays available in Home Assistant, showing its last value forever. A
+// SIGKILL, by contrast, has always been reported correctly by the will.
+//
+// The per-device availability topics are deliberately left untouched. They
+// answer "is this device reachable", a property of the CCU-to-device link
+// that the daemon can no longer observe once it is gone, and every discovery
+// payload declares `availability_mode: all` with the bridge status alongside
+// them precisely so the whole retained state can be read as "last known,
+// valid while the bridge is online". A kill cannot rewrite those topics
+// either, so rewriting them on a clean stop would only make the two shutdown
+// paths disagree while destroying the last-known state a restart starts from.
+//
+// The health snapshot on `<base>/bridge/health` is left at its last value for
+// the same reason: it describes the run that just ended.
+func (b *Bridge) AnnounceOffline(ctx context.Context) error {
+	return b.client.Publish(ctx, b.topics.BridgeStatus(), []byte("offline"), QoS1, true)
+}
+
 // PublishState publishes a device data point's current value to the
 // raw plane and — when enabled — emits the corresponding HA
 // Discovery config (idempotent per topic).

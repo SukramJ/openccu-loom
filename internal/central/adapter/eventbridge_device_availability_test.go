@@ -14,7 +14,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -208,5 +211,59 @@ func TestOnDeviceRemovedForgetsAvailability(t *testing.T) {
 
 	if !eb.markAvailability(ctx, "ccu-01", "HmIP-RF", "AVAILGATE02", true) {
 		t.Fatal("availability must be publishable again after the topic was retracted")
+	}
+}
+
+// TestEventBridgeAnnouncesAvailabilityOfSuppressedReachabilityParameter is
+// [TestEventBridgeAnnouncesAvailabilityTransition] with the gate the daemon
+// actually wires.
+//
+// UNREACH, STICKY_UNREACH and CONFIG_PENDING are the three parameters that
+// carry per-device reachability, and all three are suppressed by the shipped
+// visibility rules. A bridge built without a visibility set — which is how
+// every other test here builds it — sees them, so an announcement placed
+// behind that gate looks correct in the suite and reaches nobody in a running
+// daemon: no WebSocket device-availability broadcast, no Matter
+// ReachableChanged, no retained availability topic, on every deployment.
+func TestEventBridgeAnnouncesAvailabilityOfSuppressedReachabilityParameter(t *testing.T) {
+	t.Parallel()
+
+	// The assertion below is only meaningful while the rules really do
+	// suppress the parameter carrying the news.
+	if visibility.NewRegistry().IsAllowedForChannel(
+		"HmIP-STH", "MAINTENANCE", 0, hmenum.ParamsetKeyValues, hmenum.ParameterUnreach,
+	) {
+		t.Fatal("precondition: the shipped visibility rules are expected to suppress UNREACH")
+	}
+
+	reg, d := registryWithDevice(t)
+	mqttBridge := mqtt.NewBridge(
+		mqtt.BridgeConfig{Base: "openccu-loom", CentralName: "ccu-01", RawEnabled: true},
+		mqtt.NewNoopClient(),
+	)
+	eb := NewEventBridge(reg, ws.NewHub(), mqtt.NewWiring(mqttBridge, nil)).
+		WithVisibility(filter.NewAdapter(visibility.NewRegistry()))
+	eb.Start(context.Background())
+	t.Cleanup(func() { eb.Flush(); eb.Stop() })
+
+	u := reg.List()[0]
+	dp := unreachSensor(t, d)
+	read := collectAvailabilityEvents(t, u)
+
+	dp.OnEvent(true)
+	events.Publish(u.EventBus, hmevent.DataPointValueChangedEvent{
+		Base: hmevent.NewBase(),
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: d.Address + ":0",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterUnreach),
+		},
+		NewValue: hmtypes.BoolValue(true),
+	})
+
+	waitFor(t, func() bool { return len(read()) == 1 })
+	if got := read()[0]; got.Available || got.Address != d.Address {
+		t.Fatalf("announcement = %+v, want the device announced unavailable", got)
 	}
 }

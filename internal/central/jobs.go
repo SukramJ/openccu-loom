@@ -536,6 +536,12 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					entry.Client.SweepPingPong()
 
 					alive := entry.Client.CheckConnectionAvailability(ctx, true)
+					// Feed the verdict back into the client's own state
+					// machine. Detection alone leaves a client that reached
+					// CONNECTED reporting CONNECTED forever against a CCU
+					// that is powered off, and every availability surface
+					// north of it repeats that answer.
+					entry.Client.RecordConnectivityProbe(alive)
 					connected := entry.Client.ClientState() == hmenum.ClientStateConnected
 					callbackAlive := entry.Client.IsCallbackAlive()
 					if alive && connected && callbackAlive {

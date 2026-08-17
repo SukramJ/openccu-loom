@@ -1026,7 +1026,13 @@ func wireInterface(
 				if probeUnit != nil && !probeUnit.IsSouthboundReady() {
 					tickCtx = hmlog.WithExpectedSlowness(probeCtx)
 				}
-				if !probeIC.CheckConnectionAvailability(tickCtx, false) {
+				alive := probeIC.CheckConnectionAvailability(tickCtx, false)
+				// Detection is not enough on its own: nothing else moves a
+				// CONNECTED client off that state while the CCU is silent,
+				// and the forced-availability propagation that clears the
+				// stale online entities hangs off exactly that transition.
+				probeIC.RecordConnectivityProbe(alive)
+				if !alive {
 					publishLost()
 					continue
 				}

@@ -297,6 +297,11 @@ type InterfaceClient struct {
 	// attempt fails and reset to zero on success. exposed via
 	// ReconnectAttempts() / SetReconnectAttempts().
 	reconnectAttempts int
+
+	// connectivityErrors counts consecutive failed connectivity probes fed
+	// in by [RecordConnectivityProbe]. Reset to zero by any successful probe
+	// and by every transition into CONNECTED.
+	connectivityErrors atomic.Int64
 }
 
 // New constructs a client, filling in defaults for any nil reliability
@@ -373,8 +378,16 @@ func New(cfg Config) (*InterfaceClient, error) {
 		sm:      NewClientStateMachine(),
 	}
 	// The machine is the single source of state truth; its listener
-	// wakes every WaitForState waiter on each successful transition.
-	c.sm.AddOnStateChange(func(_, _ hmenum.ClientState) { c.wakeStateWaiters() })
+	// wakes every WaitForState waiter on each successful transition and
+	// clears the connectivity-failure streak whenever the link is (re-)
+	// established, so a streak accumulated during an outage cannot make the
+	// first probe after the comeback look like a fresh outage.
+	c.sm.AddOnStateChange(func(_, to hmenum.ClientState) {
+		if to == hmenum.ClientStateConnected {
+			c.connectivityErrors.Store(0)
+		}
+		c.wakeStateWaiters()
+	})
 	return c, nil
 }
 
@@ -935,9 +948,9 @@ func (c *InterfaceClient) ReinitProxy(ctx context.Context, b backends.Operations
 // caller_id string in the PONG event; the event coordinator extracts the
 // token suffix and calls RecordPong to close the round-trip.
 //
-// The method is intentionally thin — the full is_connected orchestration
-// (tracking connection-error counts, forcing device availability) lives in
-// the coordinator layer.
+// The method is intentionally thin — the verdict it returns has to be fed
+// back through [InterfaceClient.RecordConnectivityProbe] for the client's own
+// lifecycle state to follow the wire.
 func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handlePingPong bool) bool {
 	if c.cfg.Circuit == nil {
 		return false
@@ -980,6 +993,69 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 		return callErr
 	})
 	return err == nil && callErr == nil
+}
+
+// connectivityErrorThreshold is how many consecutive failed connectivity
+// probes are tolerated before the client leaves CONNECTED. One tolerated
+// failure absorbs a single dropped ping — a busy CCU, a lost UDP frame, a
+// probe the circuit breaker happened to shed — without flapping every
+// north-bound availability surface; the second consecutive failure is an
+// outage.
+const connectivityErrorThreshold = 1
+
+// RecordConnectivityProbe folds the verdict of one periodic connectivity
+// probe into the client's own lifecycle state.
+//
+// A CCU that stops answering produces nothing on the wire, so no inbound
+// event, no transport error and no callback can move the state machine: a
+// client that reached CONNECTED stays CONNECTED for as long as the daemon
+// runs. Everything downstream reads that state as ground truth — the REST
+// interface list, the forced-availability propagation onto every device of
+// the interface (and through it the retained MQTT availability topics, the
+// WebSocket device-lifecycle plane and the Matter Reachable attribute) — so
+// without this feedback a powered-off CCU leaves every one of those surfaces
+// reporting every device online indefinitely.
+//
+// The reconnect path is not that feedback: it can only run once the CCU is
+// answering again, which is precisely when the devices are about to come
+// back.
+//
+// alive is the return of [InterfaceClient.CheckConnectionAvailability]. A
+// success clears the streak; the transition fires once, on the probe that
+// crosses [connectivityErrorThreshold], and only out of CONNECTED — every
+// other state either already reports the outage or belongs to the
+// initial-connect path.
+func (c *InterfaceClient) RecordConnectivityProbe(alive bool) {
+	if alive {
+		c.connectivityErrors.Store(0)
+		return
+	}
+	if c.connectivityErrors.Add(1) <= connectivityErrorThreshold {
+		return
+	}
+	if c.ClientState() != hmenum.ClientStateConnected {
+		return
+	}
+	if err := c.TransitionTo(
+		hmenum.ClientStateDisconnected,
+		"connectivity probe failed",
+		false,
+		hmenum.FailureReasonNetwork,
+	); err != nil {
+		c.cfg.Logger.Debug(
+			"RecordConnectivityProbe: TransitionTo DISCONNECTED refused",
+			slog.String("central", c.cfg.CentralName),
+			slog.String("interface", string(c.cfg.Interface)),
+			slog.Any("err", err),
+		)
+		return
+	}
+	c.cfg.Logger.Warn(
+		"wire.connectivity.lost",
+		slog.String("central", c.cfg.CentralName),
+		slog.String("interface", string(c.cfg.Interface)),
+		slog.Int64("consecutive_failures", c.connectivityErrors.Load()),
+	)
 }
 
 // VirtualRemote reports the address of the CCU's virtual-remote device for

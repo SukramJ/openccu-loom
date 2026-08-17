@@ -577,6 +577,19 @@ func (s *mqttSupervisor) Shutdown(ctx context.Context) {
 	if swap == nil {
 		return
 	}
+	// Retract the bridge's liveness marker before the client disconnects.
+	// The broker drops the Last Will of a client that disconnects cleanly,
+	// so on a normal stop this publish is the only thing that ever writes
+	// `offline` to the topic every discovery payload names as an
+	// availability source. It runs here rather than in [teardown] because a
+	// config swap also tears a stack down, and announcing the bridge offline
+	// mid-swap would blink every entity unavailable for the length of a
+	// reconnect.
+	if swap.bridge != nil {
+		if err := swap.bridge.AnnounceOffline(ctx); err != nil {
+			s.logger.Warn("mqtt.supervisor.announce_offline", slog.String("err", err.Error()))
+		}
+	}
 	s.teardown(ctx, swap)
 }
 
