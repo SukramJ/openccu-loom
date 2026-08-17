@@ -4,7 +4,9 @@
 package mqtt
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -23,15 +25,20 @@ import (
 // each hub builder in hub_discovery.go derives its topics from a
 // [naming.MQTTHub*] free function or a [TopicBuilder] method, and the
 // real publish call sites (hub_mqtt_publisher.go, bridge.go) are
-// supposed to call the very same function. Nothing today compares the
-// two, so a discovery-side helper that starts hand-building a topic
-// string instead of calling the shared function would leave that
-// entity unavailable forever without either half's own tests noticing.
+// supposed to call the very same function. A discovery-side helper
+// that starts hand-building a topic string instead of calling the
+// shared function would leave that entity unavailable forever, and a
+// "published" set built by calling the same helpers a second time
+// cannot see it: both halves would move together by construction.
 //
-// The command half (sysvar/program/install-mode `set` and program
-// `trigger` topics) is checked against a topic mirrored independently
-// from [CommandSubscriber.Start]'s own wildcard registrations, not by
-// calling the naming helper a second time — see [hubPublishedTopics].
+// The state half of "published" therefore comes from one run of the
+// real [Bridge] publish call sites (PublishSysvar, PublishProgram,
+// PublishAlarmMessages, PublishServiceMessages, PublishInbox,
+// PublishInstallMode, PublishConnectivity, the three metric
+// publishers, PublishHubUpdate) against a recording broker, driven
+// with real [hub] model objects so the topic comes out of each type's
+// own MQTTTopics resolver. The command half is checked against the
+// filters the real [CommandSubscriber] registered.
 //
 // The comparison is one-directional: declared-but-unpublished fails;
 // published-but-undeclared (the nested availability topics, and the
@@ -49,6 +56,7 @@ func TestHubPlaneTopicsRoundTrip(t *testing.T) {
 		base       = "openccu-loom"
 		central    = "Haus CCÜ"
 		sysvarName = "Außen Temperatur"
+		programID  = "PRG_1"
 	)
 	db := newHubBuilder()
 	// The hub builders gate every payload on a known CCU serial.
@@ -79,7 +87,7 @@ func TestHubPlaneTopicsRoundTrip(t *testing.T) {
 	// internal/central/adapter/hub_mqtt_publisher.go uses via
 	// Bridge.ProgramRoles — so this test also exercises the real
 	// role-declaration path, not a hand-rolled substitute.
-	prog := hub.NewProgram(central, "PRG_1", "Morning", "", false, nil)
+	prog := hub.NewProgram(central, programID, "Morning", "", false, nil)
 	roles := prog.MQTTRoles(base, central)
 	for _, item := range db.BuildProgramDiscoveryRoles(central, HubProgramSpec{ID: prog.ID, Name: prog.Name}, roles) {
 		collectHubDeclaredTopics(t, declared, item)
@@ -89,22 +97,88 @@ func TestHubPlaneTopicsRoundTrip(t *testing.T) {
 		t.Fatal("no topics declared; the walk found no discovery payloads and would pass vacuously")
 	}
 
-	published := hubPublishedTopics(base, central, sysvarName)
-	if len(published) == 0 {
-		t.Fatal("no topics published/subscribed; the walk found nothing and would pass vacuously")
+	obs := runHubPlane(t, base, central, sysvarName, programID)
+	planeRoundTrip(t, "hub plane", declared, obs.publishedTopics(), obs.subscribedFilters(), nil)
+}
+
+// runHubPlane drives the real hub plane's publish call sites and the
+// real [CommandSubscriber] against a recording broker and returns
+// everything carried.
+//
+// Every state write goes through a real [hub] model object — a
+// Sysvar, a Program, the AlarmMessages/ServiceMessages/Inbox
+// aggregates, a Connectivity tracker — so the topic comes from that
+// type's own MQTTTopics resolver, the same one the discovery builders
+// call. The command half is registered by starting the real
+// [CommandSubscriber]; a declared command topic counts as carried
+// only when one of its real wildcard subscriptions matches it.
+func runHubPlane(t *testing.T, base, central, sysvarName, programID string) *observedPlane {
+	t.Helper()
+	ctx := context.Background()
+	obs := newObservedPlane()
+	bridge := NewBridge(BridgeConfig{
+		Base: base, CentralName: central,
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, obs)
+
+	sv := hub.NewSysvar(central, sysvarName, "", hmenum.HubValueTypeLogic, nil)
+	if err := bridge.PublishSysvar(ctx, central, sv, true); err != nil {
+		t.Fatalf("publish sysvar: %v", err)
 	}
 
-	for topic := range declared {
-		if !published[topic] {
-			t.Errorf("declared but never published/subscribed: %q — a consumer creates this entity "+
-				"and it either stays unavailable forever (state) or its commands vanish silently (command)", topic)
-		}
+	prog := hub.NewProgram(central, programID, "Morning", "", false, nil)
+	if err := bridge.PublishProgram(ctx, central, prog, false); err != nil {
+		t.Fatalf("publish program: %v", err)
 	}
-	for topic := range published {
-		if !declared[topic] {
-			t.Logf("published but not declared: %q (no entity is created for it)", topic)
-		}
+
+	alarmMessages := hub.NewAlarmMessagesWithCentral(central, nil)
+	if err := bridge.PublishAlarmMessages(ctx, central, alarmMessages, alarmMessages.List()); err != nil {
+		t.Fatalf("publish alarm messages: %v", err)
 	}
+
+	serviceMessages := hub.NewServiceMessagesWithCentral(central, nil)
+	if err := bridge.PublishServiceMessages(ctx, central, serviceMessages, serviceMessages.List()); err != nil {
+		t.Fatalf("publish service messages: %v", err)
+	}
+
+	inbox := hub.NewInboxWithCentral(central)
+	if err := bridge.PublishInbox(ctx, central, inbox, inbox.List()); err != nil {
+		t.Fatalf("publish inbox: %v", err)
+	}
+
+	if err := bridge.PublishInstallMode(ctx, central, "HmIP-RF", 120); err != nil {
+		t.Fatalf("publish install mode: %v", err)
+	}
+
+	connectivity := hub.NewConnectivity()
+	if err := bridge.PublishConnectivity(ctx, central, connectivity, "HmIP-RF", true); err != nil {
+		t.Fatalf("publish connectivity: %v", err)
+	}
+
+	if err := bridge.PublishHubSystemHealthScore(ctx, central, 97.5); err != nil {
+		t.Fatalf("publish system health score: %v", err)
+	}
+	if err := bridge.PublishHubConnectionLatency(ctx, central, 42); err != nil {
+		t.Fatalf("publish connection latency: %v", err)
+	}
+	if err := bridge.PublishHubLastEventAge(ctx, central, 3); err != nil {
+		t.Fatalf("publish last event age: %v", err)
+	}
+	if err := bridge.PublishHubUpdate(ctx, central, "1.0.0", "1.1.0", false); err != nil {
+		t.Fatalf("publish hub update: %v", err)
+	}
+
+	// The command half is observed rather than mirrored: the real
+	// subscriber registers its own wildcards, and a declared command
+	// topic counts as heard only when one of them matches it.
+	cs := NewCommandSubscriber(obs, NewTopicBuilder(base), nil, slog.Default())
+	if err := cs.Start(ctx); err != nil {
+		t.Fatalf("command subscriber start: %v", err)
+	}
+	t.Cleanup(cs.Close)
+
+	obs.settle(t)
+	return obs
 }
 
 // TestHubSystemTopicsShareTheCentralSegmentOfTheRestOfThePlane asserts
@@ -163,48 +237,5 @@ func collectHubDeclaredTopics(t *testing.T, out map[string]bool, items ...Discov
 				out[v] = true
 			}
 		}
-	}
-}
-
-// hubPublishedTopics is the set of topics the hub plane actually
-// writes to or subscribes on for the fixture built above.
-//
-// The state/json-attributes/latest-version half is derived from the
-// same [naming.MQTTHub*] free functions and [TopicBuilder] methods the
-// real publish call sites use (internal/central/adapter/hub_mqtt_publisher.go,
-// bridge.go's PublishHubSystemHealthScore/PublishHubConnectionLatency/
-// PublishHubLastEventAge/PublishHubUpdate). The command half mirrors
-// [CommandSubscriber.Start]'s own wildcard registrations
-// (`<base>/+/hub/sysvars/+/set`, `<base>/+/hub/programs/+/set`,
-// `<base>/+/hub/programs/+/trigger`, `<base>/+/hub/install_mode/+/set`)
-// with the wildcard segment substituted by the fixture's concrete
-// name/id/interface — not by calling the naming helper a second time —
-// so a drift in either side's topic shape is what makes this test fail.
-func hubPublishedTopics(base, central, sysvarName string) map[string]bool {
-	topics := NewTopicBuilder(base)
-	// The command half substitutes the wildcard of the subscriber's own
-	// filters with the segment that reaches the wire — i.e. the escaped
-	// name, exactly as the broker sees it.
-	seg := naming.TopicSafe(central)
-	return map[string]bool{
-		naming.MQTTHubSysvarState(base, central, sysvarName):                       true,
-		base + "/" + seg + "/hub/sysvars/" + naming.TopicSafe(sysvarName) + "/set": true,
-		naming.MQTTHubProgramState(base, central, "PRG_1"):                         true,
-		base + "/" + seg + "/hub/programs/PRG_1/set":                               true,
-		base + "/" + seg + "/hub/programs/PRG_1/trigger":                           true,
-		naming.MQTTHubAlarmMessages(base, central):                                 true,
-		naming.MQTTHubServiceMessages(base, central):                               true,
-		naming.MQTTHubInbox(base, central):                                         true,
-		naming.MQTTHubInstallModeForInterface(base, central, "HmIP-RF"):            true,
-		base + "/" + seg + "/hub/install_mode/HmIP-RF/set":                         true,
-		naming.MQTTHubConnectivity(base, central, "HmIP-RF"):                       true,
-		topics.HubSystemHealthScore(central):                                       true,
-		topics.HubConnectionLatency(central):                                       true,
-		topics.HubLastEventAge(central):                                            true,
-		naming.MQTTHubUpdate(base, central):                                        true,
-		// Published, but never a top-level discovery field — the
-		// program execute-availability gate rides the nested
-		// `availability` list (see t.Logf output for this run).
-		naming.MQTTHubProgramExecuteAvailability(base, central, "PRG_1"): true,
 	}
 }

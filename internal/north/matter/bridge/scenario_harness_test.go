@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
@@ -115,6 +116,13 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 	if err != nil {
 		t.Fatalf("scenario: bridge New: %v", err)
 	}
+	// Scenarios exercise the wire, not the AccessControl entries: they drive
+	// operational reads on fabrics no scenario ever provisions an ACL for.
+	// An unwired source denies those, so the harness states its opt-out
+	// rather than inheriting it — the scenario for per-fabric projection
+	// otherwise reports an empty AttributeDataIB, which reads as a codec
+	// defect rather than as a denied read.
+	br.AttachACLLister(endpoint.UnenforcedACL{})
 	startCtx, startCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer startCancel()
 	if err := br.Start(startCtx); err != nil {

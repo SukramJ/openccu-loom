@@ -4,10 +4,14 @@
 package mqtt
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"testing"
+	"time"
 
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/internal/alarm"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // TestAlarmPlaneTopicsRoundTrip asserts that every topic the alarm
@@ -19,12 +23,19 @@ import (
 // disagreeing with each other. Here the risk is concrete —
 // [BuildAlarmPanelDiscovery] derives `state_topic`/`command_topic` from
 // [alarmStateTopic]/[alarmCommandTopic], while [AlarmMQTTPublisher.reconcile]
-// writes the state through the very same [alarmStateTopic] helper and
-// [CommandSubscriber.Start] subscribes the command plane through its own,
-// independently written wildcard (`<base>/alarm/+/set`). A future edit to
-// either helper's topic shape without a matching edit on the other side
-// would leave a panel's state forever unavailable, or its arm/disarm
-// button silently unheard by the daemon.
+// writes the state through [alarmStateTopic] and [CommandSubscriber.Start]
+// subscribes the command plane through its own, independently written
+// wildcard. A future edit to either helper's topic shape without a matching
+// edit on the other side would leave a panel's state forever unavailable, or
+// its arm/disarm button silently unheard by the daemon.
+//
+// Both sides are observed from one run of the real components against a
+// recording broker: the declarations are read back out of the discovery
+// configs the publisher published, the state topics are the writes of the
+// same run, and the command topics are matched against the filters the real
+// [CommandSubscriber] registered. Nothing is restated — a "published" set
+// rebuilt from the plane's own topic helpers agrees with the declaration
+// whatever either one says.
 //
 // The comparison is one-directional: a declared topic nobody
 // writes/subscribes is the defect. A topic written without a
@@ -41,115 +52,66 @@ import (
 func TestAlarmPlaneTopicsRoundTrip(t *testing.T) {
 	t.Parallel()
 	for _, base := range []string{"gh", "gh/"} {
-		alarmPlaneTopicsRoundTrip(t, base)
+		obs := runAlarmPlane(t, base)
+		planeRoundTrip(t, "base "+base,
+			obs.declaredTopics(t), obs.publishedTopics(), obs.subscribedFilters(), nil)
 	}
 }
 
-func alarmPlaneTopicsRoundTrip(t *testing.T, base string) {
-	t.Helper()
-	zones := []string{"eg", "og"}
-
-	declared := map[string]bool{}
-	for _, zone := range zones {
-		item := BuildAlarmPanelDiscovery(base, zone, "Zone "+zone,
-			[]hmenum.AlarmMode{hmenum.AlarmModeFull}, false, false, false)
-		collectAlarmDeclaredTopics(t, item, declared)
-	}
-	// The reset button and the latched-detector count are entities of
-	// the same plane and are declared from the same walk. The button
-	// rides the panel's command topic; the sensor introduces a state
-	// topic of its own, which is exactly the shape that can be declared
-	// and then never written.
-	for _, zone := range zones {
-		collectAlarmDeclaredTopics(t, BuildAlarmMotionResetDiscovery(base, zone, "Zone "+zone, "Reset motion", false), declared)
-		collectAlarmDeclaredTopics(t, BuildAlarmTriggeredMotionDiscovery(base, zone, "Zone "+zone, "Triggered motion detectors", false), declared)
-	}
-	// The aggregate master panel — same builder, master=true.
-	masterItem := BuildAlarmPanelDiscovery(base, "ignored", "Alarm system",
-		[]hmenum.AlarmMode{hmenum.AlarmModeFull}, true, false, false)
-	collectAlarmDeclaredTopics(t, masterItem, declared)
-	collectAlarmDeclaredTopics(t, BuildAlarmMotionResetDiscovery(base, "ignored", "Alarm system", "Reset motion", true), declared)
-	collectAlarmDeclaredTopics(t, BuildAlarmTriggeredMotionDiscovery(base, "ignored", "Alarm system", "Triggered motion detectors", true), declared)
-
-	if len(declared) == 0 {
-		t.Fatal("no topics declared; the walk found no discovery payloads and would pass vacuously")
-	}
-
-	published := alarmPublishedTopics(base, zones)
-	if len(published) == 0 {
-		t.Fatal("no topics published/subscribed; the walk found nothing and would pass vacuously")
-	}
-
-	for topic := range declared {
-		if !published[topic] {
-			t.Errorf("base %q: declared but never published/subscribed: %q — a consumer creates this entity "+
-				"and it either stays unavailable forever (state) or its commands vanish silently (command)", base, topic)
-		}
-	}
-	for topic := range published {
-		if !declared[topic] {
-			t.Logf("base %q: published but not declared: %q (no entity is created for it)", base, topic)
-		}
-	}
-}
-
-// collectAlarmDeclaredTopics extracts the top-level state_topic and
-// command_topic fields plus every availability source from one
-// alarm-panel discovery payload into out.
-func collectAlarmDeclaredTopics(t *testing.T, item DiscoveryItem, out map[string]bool) {
-	t.Helper()
-	if !item.OK {
-		t.Fatalf("a discovery builder returned OK=false for a valid entity")
-	}
-	var body map[string]any
-	if err := json.Unmarshal(item.Payload, &body); err != nil {
-		t.Fatalf("discovery payload for %q is not JSON: %v", item.ObjectID, err)
-	}
-	for _, field := range []string{"state_topic", "command_topic"} {
-		if v, ok := body[field].(string); ok && v != "" {
-			out[v] = true
-		}
-	}
-	collectAvailabilityTopics(t, body, out)
-}
-
-// alarmPublishedTopics is the set of topics the alarm plane actually
-// writes to or subscribes on, for the given zones plus the reserved
-// master segment.
+// runAlarmPlane drives the real alarm plane against a recording broker
+// and returns everything it carried.
 //
-// The state half is derived from [alarmStateTopic] — the same helper
-// [AlarmMQTTPublisher.reconcile] calls at the real publish call site
-// (alarm_publisher.go). The command half is NOT derived by calling
-// [alarmCommandTopic] again (that would only prove the discovery
-// builder agrees with itself); it reproduces, independently,
-// [CommandSubscriber.Start]'s own literal wildcard registration
-// (`<base>/alarm/+/set`) with the wildcard segment substituted by the
-// concrete zone — so a drift in either helper's topic shape, without a
-// matching edit on the other side, is what makes this test fail.
-func alarmPublishedTopics(base string, zones []string) map[string]bool {
-	out := map[string]bool{
-		base + "/alarm/" + alarmMasterZone + "/state":        true,
-		base + "/alarm/" + alarmMasterZone + "/set":          true,
-		base + "/alarm/" + alarmMasterZone + "/availability": true,
-		// The bridge writes its retained status through the topic
-		// builder, so the published side is spelled the way the bridge
-		// spells it — not the way the plane's own helper does.
-		NewTopicBuilder(base).BridgeStatus(): true,
-		// Restated literally, not via alarmTriggeredMotionTopic: calling
-		// the same helper on both sides would move them in lockstep and
-		// the comparison could never fail. Mirrors what
-		// AlarmMQTTPublisher.publishMotionEntities writes.
-		base + "/alarm/" + alarmMasterZone + "/triggered-motion": true,
+// Two zones are seeded because the aggregate master panel is only
+// declared once the engine knows more than one — a single-zone run would
+// silently skip half the plane's entities.
+func runAlarmPlane(t *testing.T, base string) *observedPlane {
+	t.Helper()
+	ctx := context.Background()
+	svc := newAlarmFixtureService(t)
+	seedRoundTripZone(t, svc, "eg", "Erdgeschoss")
+	seedRoundTripZone(t, svc, "og", "Obergeschoss")
+
+	obs := newObservedPlane()
+	bridge := NewBridge(BridgeConfig{
+		Base: base, CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+	}, obs)
+	if err := bridge.AnnounceOnline(ctx); err != nil {
+		t.Fatalf("bridge announce: %v", err)
 	}
-	for _, zone := range zones {
-		out[alarmStateTopic(base, zone)] = true
-		// Mirrors CommandSubscriber.Start's `base+"/alarm/+/set"` wildcard.
-		out[base+"/alarm/"+zone+"/set"] = true
-		out[base+"/alarm/"+zone+"/triggered-motion"] = true
-		// Mirrors AlarmMQTTPublisher.reconcile's per-zone availability
-		// write, restated literally for the same reason as the command
-		// half above.
-		out[base+"/alarm/"+zone+"/availability"] = true
+
+	pub := NewAlarmMQTTPublisher(svc, NewWiring(bridge, slog.Default()), slog.Default())
+	pub.Start()
+	t.Cleanup(pub.Stop)
+
+	// The command half is observed rather than mirrored: the real
+	// subscriber registers its own wildcards, and a panel's command topic
+	// counts as heard only when one of them matches it.
+	cs := NewCommandSubscriber(obs, NewTopicBuilder(base), nil, slog.Default())
+	if err := cs.Start(ctx); err != nil {
+		t.Fatalf("command subscriber start: %v", err)
 	}
-	return out
+	t.Cleanup(cs.Close)
+
+	obs.settle(t)
+	return obs
+}
+
+// seedRoundTripZone persists one zone with no exit or entry delay and
+// reloads the service, so the publisher's reconcile sees it.
+func seedRoundTripZone(t *testing.T, svc *alarm.Service, id, name string) {
+	t.Helper()
+	cfg, err := json.Marshal(zeroDelayFullMode())
+	if err != nil {
+		t.Fatalf("marshal zone config: %v", err)
+	}
+	now := time.Now().UnixMilli()
+	if err := svc.Stores().Zones.Upsert(context.Background(), sqlitestore.AlarmZoneRow{
+		ID: id, Name: name, ConfigJSON: string(cfg), CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		t.Fatalf("seed zone %s: %v", id, err)
+	}
+	if err := svc.Reload(context.Background()); err != nil {
+		t.Fatalf("reload after seeding zone %s: %v", id, err)
+	}
 }

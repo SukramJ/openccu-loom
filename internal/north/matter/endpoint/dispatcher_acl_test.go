@@ -85,7 +85,19 @@ func TestTopologyDispatcher_CheckACL(t *testing.T) {
 		required   uint8
 		want       im.StatusCode
 	}{
-		{"nil lister fails open", nil, 1, peerA, nil, onOff, privManage, im.StatusSuccess},
+		// A dispatcher with no ACL source cannot tell an authorised
+		// controller from any other node that completed CASE, so it must
+		// deny. Granting instead made the whole gate hang off one wiring
+		// line in the composition root whose removal nothing observed.
+		{"nil lister denies operational access", nil, 1, peerA, nil, onOff, privManage, im.StatusUnsupportedAccess},
+		{"nil lister denies even a view read", nil, 1, peerA, nil, onOff, privView, im.StatusUnsupportedAccess},
+		// Commissioning runs over PASE and is decided before the source is
+		// consulted, so a bridge that has never been commissioned can still
+		// be commissioned with no ACL source wired.
+		{"nil lister still admits PASE commissioning", nil, 0, 0, nil, onOff, privManage, im.StatusSuccess},
+		// The deliberate opt-out: a setup that runs without stored entries
+		// says so, and then behaves as an all-granting fabric.
+		{"unenforced lister grants", UnenforcedACL{}, 1, peerA, nil, onOff, privManage, im.StatusSuccess},
 		{"PASE fabric 0 bypass", fakeACLLister{}, 0, 0, nil, onOff, privManage, im.StatusSuccess},
 		{
 			"administer wildcard subjects grants operate",

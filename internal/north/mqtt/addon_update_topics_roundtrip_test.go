@@ -4,7 +4,9 @@
 package mqtt
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"testing"
 )
 
@@ -20,16 +22,13 @@ import (
 // [CommandSubscriber.Start]'s `<base>/system/addon_update/set`
 // subscription must agree on the command topic.
 //
-// The state topic is checked via [TopicBuilder.AddonUpdateState] — the
-// same method [Bridge.PublishAddonUpdateState] calls, so a rename that
-// only touches one of the two call sites breaks the other and this
-// test catches it. The command topic is deliberately NOT checked via
-// [TopicBuilder.AddonUpdateCommand]: that method and the discovery
-// builder are the same call path, so reusing it here would only prove
-// discovery agrees with itself. It is checked against the literal
-// string [CommandSubscriber.Start] subscribes, reproduced
-// independently below — so a drift in either the topic-builder method
-// or the hand-written subscription literal is what makes this test fail.
+// Both halves come from one run of the real production code against a
+// recording broker: the state topic is read back from
+// [Bridge.PublishAddonUpdateState]'s own write, and the command topic
+// is matched against the filters the real [CommandSubscriber]
+// registered — never by calling [TopicBuilder.AddonUpdateState] /
+// [TopicBuilder.AddonUpdateCommand] a second time, which would only
+// prove either call site agrees with itself.
 func TestAddonUpdatePlaneTopicsRoundTrip(t *testing.T) {
 	t.Parallel()
 	topics := NewTopicBuilder("gh")
@@ -56,37 +55,34 @@ func TestAddonUpdatePlaneTopicsRoundTrip(t *testing.T) {
 		t.Fatal("no topics declared; the walk found no discovery payload and would pass vacuously")
 	}
 
-	published := map[string]bool{
-		// PublishAddonUpdateState's own call site (bridge.go) —
-		// b.topics.AddonUpdateState() — is the same TopicBuilder method
-		// the discovery builder used above.
-		topics.AddonUpdateState(): true,
-		// Reproduces CommandSubscriber.Start's literal subscription
-		// independently of TopicBuilder.AddonUpdateCommand — see the
-		// doc comment above.
-		"gh/system/addon_update/set": true,
-	}
-	if len(published) == 0 {
-		t.Fatal("no topics published/subscribed; the walk found nothing and would pass vacuously")
-	}
-
-	for topic := range declared {
-		if !published[topic] && !addonUpdateUndeclaredByDesign[topic] {
-			t.Errorf("declared but never published/subscribed: %q — the update entity would stay "+
-				"unavailable forever or its INSTALL command would vanish silently", topic)
-		}
-	}
-	for topic := range published {
-		if !declared[topic] {
-			t.Logf("published but not declared: %q (no entity is created for it)", topic)
-		}
-	}
+	obs := runAddonUpdatePlane(t)
+	planeRoundTrip(t, "addon update plane", declared, obs.publishedTopics(), obs.subscribedFilters(), nil)
 }
 
-// addonUpdateUndeclaredByDesign is empty today — the add-on update
-// entity declares exactly the two topics it writes/subscribes, plus the
-// bridge/hub availability topics that are referenced from the nested
-// `availability` list rather than as a top-level field. Kept as a named
-// map (rather than an inline empty check) so a future exception reads
-// the same way every other plane's exception map does.
-var addonUpdateUndeclaredByDesign = map[string]bool{}
+// runAddonUpdatePlane drives [Bridge.PublishAddonUpdateState] and the
+// real [CommandSubscriber] against a recording broker and returns
+// everything carried.
+func runAddonUpdatePlane(t *testing.T) *observedPlane {
+	t.Helper()
+	ctx := context.Background()
+	obs := newObservedPlane()
+	bridge := NewBridge(BridgeConfig{
+		Base: "gh", RawEnabled: true, HADiscoveryEnabled: true,
+	}, obs)
+
+	if err := bridge.PublishAddonUpdateState(ctx, "1.0.0", "1.1.0", false); err != nil {
+		t.Fatalf("publish addon update state: %v", err)
+	}
+
+	// The command half is observed rather than mirrored: the real
+	// subscriber registers its own literal subscription, and the
+	// declared command topic counts as heard only when it matches.
+	cs := NewCommandSubscriber(obs, NewTopicBuilder("gh"), nil, slog.Default())
+	if err := cs.Start(ctx); err != nil {
+		t.Fatalf("command subscriber start: %v", err)
+	}
+	t.Cleanup(cs.Close)
+
+	obs.settle(t)
+	return obs
+}
