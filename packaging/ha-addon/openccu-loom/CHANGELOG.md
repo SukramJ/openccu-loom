@@ -1,5 +1,46 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.62.0
+
+The critical and high findings of a full-codebase audit. What you will notice:
+
+- **Your entities stop lying when the CCU is down.** An unreachable CCU used to
+  leave every device showing "online" with its last value frozen; interfaces,
+  devices, MQTT availability and Matter now all report the outage, and a device
+  the CCU cannot reach goes unavailable on its own.
+- **Door and window contacts show open/closed** instead of "unknown".
+- **Hub entities (system variables, programs, pairing mode) stop vanishing after
+  a restart** — the clean-up pass was deleting entities the add-on was still
+  publishing.
+- **MQTT reconnects after you reload it.** Reloading the MQTT settings used to
+  leave the connection unable to recover, so the next broker restart took every
+  entity down until you restarted the add-on.
+- **A CCU you add while it is running keeps updating.** Its system variables,
+  programs, service messages and pairing state used to freeze at the values they
+  had when you pressed save.
+- **Channel configuration can be saved again.** Almost every parameter the
+  configuration dialog offered was refused with "parameter hidden".
+- **Alarm:** a CCU reboot no longer counts as losing the central (no fault entry
+  per armed zone, and no siren if you configured that policy); stopping the
+  add-on now switches smoke-detector sounders off instead of leaving them
+  sounding; and a sensor whose device disappears from the CCU no longer lets a
+  zone report itself ready to arm.
+- **Logging out really ends the session**, including with an external login
+  provider, and an expired session or API token can no longer keep issuing
+  commands over an open connection.
+- **Upgrading a very old installation** (first started before v0.26) no longer
+  disables Basic and Bearer authentication, which broke the CLI, Node-RED and
+  every REST automation while the web UI kept working.
+- **CUxD entities survive the upgrade** instead of being replaced by duplicates.
+  If you already upgraded to 0.61.3 or 0.61.4 and restarted Home Assistant, the
+  orphaned copies have to be deleted by hand.
+- **On real CCUs:** alarm system variables report their state, assigning a
+  channel to a system variable works, renaming a device or channel works,
+  suppressed service messages are shown, and programs report when they last ran.
+- **Matter access control now denies by default.** A bridge without stored
+  access-control entries refuses operational requests rather than allowing them.
+  Pairing and already-paired controllers are unaffected.
+
 ## 0.61.4
 
 Follow-ups to the 0.61.3 audit:
