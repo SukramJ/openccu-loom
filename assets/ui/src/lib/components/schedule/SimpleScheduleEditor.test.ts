@@ -140,6 +140,34 @@ describe("SimpleScheduleEditor — add / edit / save", () => {
   });
 });
 
+describe("SimpleScheduleEditor — save payload carries the schedule's domain", () => {
+  it("includes domain so the daemon's lock-encoding branch actually runs", async () => {
+    const onReload = vi.fn();
+    const schedule: ClimateSchedule = {
+      channel: { address: `${ADDRESS}:4`, number: 4, device_address: ADDRESS },
+      kind: "simple",
+      domain: "lock",
+      simple_entries: [
+        { slot_no: 1, weekdays: ["MONDAY"], time: "07:00", lock_action: "unlock_autorelock_end" },
+      ],
+    } as ClimateSchedule;
+    render(SimpleScheduleEditor, { props: { address: ADDRESS, schedule, onReload } });
+
+    // Dirty the entry so Save enables, then save without further edits.
+    const weekdayGroup = screen.getByRole("group", { name: "schedule.aria.weekdays" });
+    await fireEvent.click(within(weekdayGroup).getByText("weekday.short.TUESDAY"));
+    const saveButton = screen.getByText(/^common\.save$/);
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => expect(mockPutDeviceSchedule).toHaveBeenCalledOnce());
+    const [, payload] = mockPutDeviceSchedule.mock.calls[0] as [string, ClimateSchedule];
+    // Before the fix this was omitted, so the daemon's
+    // serializeSimpleScheduleWithDomain always took its non-lock branch.
+    expect(payload.domain).toBe("lock");
+  });
+});
+
 describe("SimpleScheduleEditor — universal-light colour (W02)", () => {
   function lightSchedule(capable: boolean, colorType: number | null): ClimateSchedule {
     return {

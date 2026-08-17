@@ -23,12 +23,18 @@ vi.mock("$lib/i18n", () => ({
   t: (key: string) => key,
 }));
 
+vi.mock("$lib/stores/events.svelte", () => ({
+  shutdown: vi.fn(),
+}));
+
 import { api } from "$lib/api/client";
+import { shutdown as shutdownEventPump } from "$lib/stores/events.svelte";
 import { authStore } from "./auth.svelte";
 
 const meMock = api.me as ReturnType<typeof vi.fn>;
 const loginMock = api.login as ReturnType<typeof vi.fn>;
 const logoutMock = api.logout as ReturnType<typeof vi.fn>;
+const shutdownMock = shutdownEventPump as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -103,6 +109,15 @@ describe("authStore.logout", () => {
     // The store's logout catches errors and still clears identity.
     expect(authStore.authenticated).toBe(false);
   });
+
+  it("shuts down the shared WS pump so an idle tab does not keep reconnecting a rejected socket", async () => {
+    loginMock.mockResolvedValueOnce({ subject: "admin", role: "admin" });
+    await authStore.login("admin", "secret");
+
+    logoutMock.mockResolvedValueOnce(undefined);
+    await authStore.logout();
+    expect(shutdownMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("authStore.expire", () => {
@@ -118,6 +133,8 @@ describe("authStore.expire", () => {
     expect(meMock).toHaveBeenCalledTimes(1);
     expect(authStore.authenticated).toBe(true);
     expect(authStore.identity?.subject).toBe("ha-ingress");
+    // The session survived — the WS pump must stay untouched.
+    expect(shutdownMock).not.toHaveBeenCalled();
   });
 
   it("transitions authenticated→unauthenticated when the re-probe also 401s", async () => {
@@ -132,6 +149,9 @@ describe("authStore.expire", () => {
     expect(authStore.identity).toBeNull();
     // error carries the i18n key (mocked to return the key itself)
     expect(authStore.error).toBe("api.error.unauthorized");
+    // The session is genuinely gone — shut down the WS pump so an idle
+    // tab does not keep reconnecting a socket the daemon now rejects.
+    expect(shutdownMock).toHaveBeenCalledTimes(1);
   });
 
   it("is a no-op when already unauthenticated (no re-probe)", async () => {
@@ -139,6 +159,7 @@ describe("authStore.expire", () => {
     logoutMock.mockResolvedValueOnce(undefined);
     await authStore.logout();
     expect(authStore.authenticated).toBe(false);
+    shutdownMock.mockClear();
 
     // calling expire when already logged-out must not throw, re-probe, or set error
     const prevError = authStore.error;
@@ -147,5 +168,6 @@ describe("authStore.expire", () => {
     expect(meMock).not.toHaveBeenCalled();
     // expire is guarded: no-op when identity is already null
     expect(authStore.error).toBe(prevError);
+    expect(shutdownMock).not.toHaveBeenCalled();
   });
 });

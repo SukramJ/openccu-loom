@@ -101,3 +101,25 @@ describe("ChannelControl — rejected write", () => {
     );
   });
 });
+
+describe("ChannelControl — listDataPoints failure", () => {
+  it("renders the shared ErrorState with a retry that reloads the channel", async () => {
+    mockListDataPoints.mockRejectedValueOnce(new Error("upstream 502"));
+    render(ChannelControl, {
+      props: { address: ADDRESS, channel: 1, title: "Bookshelf" },
+    });
+
+    await waitFor(() => expect(screen.getByText(/upstream 502/)).toBeInTheDocument());
+    // The shared ErrorState renders an alert icon + a localized retry
+    // button — not a bare styled <div> with the raw error string.
+    expect(screen.getByText(/common\.error/)).toBeInTheDocument();
+    const retry = screen.getByText("common.reload");
+    expect(retry).toBeInTheDocument();
+
+    mockListDataPoints.mockResolvedValueOnce([stateDP]);
+    await fireEvent.click(retry);
+
+    await waitFor(() => expect(mockListDataPoints).toHaveBeenCalledTimes(2));
+    await screen.findByLabelText("Bookshelf — quick.on");
+  });
+});

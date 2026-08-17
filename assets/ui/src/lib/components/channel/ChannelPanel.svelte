@@ -9,6 +9,7 @@
 </script>
 
 <script lang="ts">
+  import { untrack } from "svelte";
   import type { UISchema } from "$lib/api/types";
   import { api, ApiError, friendlyError } from "$lib/api/client";
   import ParameterGrid from "./ParameterGrid.svelte";
@@ -178,9 +179,32 @@
   // Reload whenever the caller switches channels, paramsets, or
   // devices. $effect tracks every reactive read it performs, so
   // changes to any of the props re-invoke load() automatically. The
-  // expert flag is read here too — toggling it triggers a refetch.
+  // locale and expert flag are read here too — a language switch or
+  // an expert-mode toggle changes what the ui-schema returns (labels,
+  // field set), so both trigger a refetch.
+  //
+  // A locale/expert-mode change alone (address/channel/paramset/peer
+  // unchanged) must not silently reload over an unsaved working copy —
+  // that discards the edits and the undo stack with no confirm and no
+  // toast. The CONFIG_PENDING-settle and resync reload paths below
+  // both already guard on `dirtyNames`; this one is read via untrack()
+  // so its value gates this decision without becoming a dependency —
+  // a save clearing `dirtyNames` must not by itself re-trigger a
+  // reload that's already happening through save()'s own call to load().
+  let loadedSubject: string | null = null;
   $effect(() => {
-    void load(address, channel, paramset, locale, peer, expertMode);
+    const addr = address;
+    const ch = channel;
+    const ps = paramset;
+    const loc = locale;
+    const pr = peer;
+    const exp = expertMode;
+    const subject = `${addr}:${ch}:${ps}:${pr ?? ""}`;
+    if (subject === loadedSubject && untrack(() => dirtyNames.length > 0)) {
+      return;
+    }
+    loadedSubject = subject;
+    void load(addr, ch, ps, loc, pr, exp);
   });
 
   // Live-Updates: subscribe to data_point events for our channel

@@ -133,6 +133,36 @@ describe("CentralsAdmin — edit save toast honesty", () => {
     expect(mockToastWarn).not.toHaveBeenCalled();
   });
 
+  it("hints that a password is stored instead of the generic storage-location text", async () => {
+    mockListCentrals.mockResolvedValue([{ ...baseRow, password_plain: "***" }]);
+    const { container, getByText } = render(CentralsAdmin);
+
+    await openEditModal(container);
+    expect(getByText("centrals.field.password_hint_unchanged")).toBeTruthy();
+
+    const pwInput = container.querySelector<HTMLInputElement>("input[type='password']");
+    if (!pwInput) throw new Error("Password input not found");
+    await fireEvent.input(pwInput, { target: { value: "x" } });
+
+    // Once touched, the "a password is stored" hint gives way to the
+    // regular storage-location hint every other field shows.
+    expect(getByText("centrals.field.password_hint")).toBeTruthy();
+  });
+
+  it("never renders the GET-masked sentinel into the password field's value", async () => {
+    // GET /centrals masks a stored password to the literal "***" so the
+    // response is safe to log. That sentinel must never appear as the
+    // input's own value — an operator who clicks in and types would
+    // otherwise persist "***" plus whatever they typed as the credential.
+    mockListCentrals.mockResolvedValue([{ ...baseRow, password_plain: "***" }]);
+    const { container } = render(CentralsAdmin);
+
+    await openEditModal(container);
+    const pwInput = container.querySelector<HTMLInputElement>("input[type='password']");
+    if (!pwInput) throw new Error("Password input not found");
+    expect(pwInput.value).toBe("");
+  });
+
   it("sends the emptied password as an explicit empty string so the daemon clears it", async () => {
     // The daemon reads an absent password_plain as "unchanged" — it has to,
     // because GET masks the stored credential and a client that round-trips a
@@ -144,7 +174,6 @@ describe("CentralsAdmin — edit save toast honesty", () => {
     await openEditModal(container);
     const pwInput = container.querySelector<HTMLInputElement>("input[type='password']");
     if (!pwInput) throw new Error("Password input not found");
-    expect(pwInput.value).toBe("***");
     await fireEvent.input(pwInput, { target: { value: "" } });
 
     await clickSave(container);
@@ -156,7 +185,9 @@ describe("CentralsAdmin — edit save toast honesty", () => {
     expect(payload.password_plain).toBe("");
   });
 
-  it("echoes the mask back when the password was not touched", async () => {
+  it("omits password_plain entirely when the password was not touched, so the daemon keeps the stored credential", async () => {
+    // Before the fix this echoed the "***" sentinel back verbatim, which
+    // the daemon would have persisted as the literal 3-character password.
     mockListCentrals.mockResolvedValue([{ ...baseRow, password_plain: "***" }]);
     const { container } = render(CentralsAdmin);
 
@@ -167,7 +198,44 @@ describe("CentralsAdmin — edit save toast honesty", () => {
       expect(mockUpdateCentral).toHaveBeenCalledOnce();
     });
     const payload = mockUpdateCentral.mock.calls[0][1] as { password_plain?: string };
-    expect(payload.password_plain).toBe("***");
+    expect(payload.password_plain).toBeUndefined();
+  });
+
+  it("sends the typed password verbatim once the operator replaces it", async () => {
+    mockListCentrals.mockResolvedValue([{ ...baseRow, password_plain: "***" }]);
+    const { container } = render(CentralsAdmin);
+
+    await openEditModal(container);
+    const pwInput = container.querySelector<HTMLInputElement>("input[type='password']");
+    if (!pwInput) throw new Error("Password input not found");
+    await fireEvent.input(pwInput, { target: { value: "new-secret" } });
+
+    await clickSave(container);
+
+    await waitFor(() => {
+      expect(mockUpdateCentral).toHaveBeenCalledOnce();
+    });
+    const payload = mockUpdateCentral.mock.calls[0][1] as { password_plain?: string };
+    expect(payload.password_plain).toBe("new-secret");
+  });
+
+  it("does not claim a restart-relevant change from an untouched, GET-masked password", async () => {
+    // Regression guard for the omitted-password_plain fix above:
+    // buildRow() now sends `undefined` (not "***") when the password was
+    // not touched, so the restart-signal diff must treat that omission
+    // as "no change" rather than comparing it against the "***" sentinel
+    // stored on the loaded row and reporting a spurious restart requirement.
+    mockListCentrals.mockResolvedValue([{ ...baseRow, password_plain: "***" }]);
+    const { container } = render(CentralsAdmin);
+
+    await openEditModal(container);
+    await clickSave(container);
+
+    await waitFor(() => {
+      expect(mockUpdateCentral).toHaveBeenCalledOnce();
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("centrals.updated");
+    expect(mockToastWarn).not.toHaveBeenCalled();
   });
 
   it("shows a restart-required warning toast (not a bare success) when the host changes on an already-enabled CCU", async () => {

@@ -136,11 +136,13 @@
     else if (v === "never") setPath(["code_policy", "require_disarm"], false);
     else setPath(["code_policy", "require_disarm"], undefined);
   }
-  const requireDisarmOptions = [
+  // $derived, not a plain const: a top-level initializer only runs once
+  // at mount, freezing these labels at whatever locale was active then.
+  const requireDisarmOptions = $derived([
     { value: "default", label: t("alarm.policies.code.require_disarm.default") },
     { value: "always", label: t("alarm.policies.code.require_disarm.always") },
     { value: "never", label: t("alarm.policies.code.require_disarm.never") },
-  ];
+  ]);
 
   // --- output policy (hazard / panic, §6.1 / §7) -----------------------
   // Only the fields meaningful for an always-on 24/7 output policy are

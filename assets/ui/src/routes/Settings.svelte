@@ -32,6 +32,7 @@
   import { t } from "$lib/i18n";
   import ConnectivityLights from "$lib/components/settings/ConnectivityLights.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { dirty } from "$lib/stores/dirty.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { startRouteStore } from "$lib/stores/startRoute.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
@@ -268,7 +269,10 @@
     adminOnly?: boolean;
   };
 
-  const ALL_TABS: Tab[] = [
+  // $derived, not a plain const: t() reads the live locale, and a plain
+  // top-level initializer would only run once at mount, freezing every
+  // tab label at whatever language was active when Settings first opened.
+  const ALL_TABS = $derived<Tab[]>([
     { id: "general", label: t("settings.tab.general") },
     { id: "changes", label: t("settings.tab.changes") },
     { id: "ccus", label: t("settings.tab.ccus") },
@@ -288,7 +292,7 @@
     { id: "tokens", label: t("settings.tab.tokens"), adminOnly: true },
     { id: "system", label: t("settings.tab.system") },
     { id: "navviews", label: t("settings.tab.navviews"), adminOnly: true },
-  ];
+  ]);
 
   // Seeded from the URL so a deep link paints its tab directly; later
   // changes to the prop are picked up by the effect below (untrack keeps
@@ -328,7 +332,7 @@
     ALL_TABS.filter((candidate) => candidate.id !== "changes").filter(isAvailable),
   );
 
-  const changesTab = ALL_TABS.find((tab) => tab.id === "changes");
+  const changesTab = $derived(ALL_TABS.find((tab) => tab.id === "changes"));
   const hasChanges = $derived(changedFields.length > 0);
 
   // Groups with their currently-visible tabs resolved. A group whose
@@ -350,6 +354,27 @@
 
   function toggleGroup(id: string) {
     collapsedGroups[id] = !collapsedGroups[id];
+  }
+
+  // A sidebar tab click swaps `activeTab` directly, without touching the
+  // URL router (see the replaceState comment below) — so it never went
+  // through App's `dirty.any()` route guard. Each SectionEditor lives in
+  // its own `{:else if activeTab === ...}` branch, so switching tabs
+  // destroys the current one outright; without this gate an edited but
+  // unsaved config field vanished silently, no confirm, no toast.
+  async function selectTab(id: string) {
+    if (id === activeTab) return;
+    if (dirty.any()) {
+      const ok = await confirmStore.ask({
+        title: t("nav.leave_title"),
+        body: t("nav.leave_body"),
+        confirmLabel: t("nav.leave_confirm"),
+        destructive: true,
+      });
+      if (!ok) return;
+      dirty.discardAll();
+    }
+    activeTab = id;
   }
 
   // Follow the URL: a deep link, or a redirect from one of the views that
@@ -423,7 +448,7 @@
           ? 'bg-brand-50 font-medium text-brand-900 dark:bg-[color-mix(in_srgb,var(--color-brand-900)_20%,transparent)] dark:text-brand-100'
           : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
       aria-current={activeTab === tab.id ? "page" : undefined}
-      onclick={() => (activeTab = tab.id)}
+      onclick={() => void selectTab(tab.id)}
     >
       {tab.label}
     </button>

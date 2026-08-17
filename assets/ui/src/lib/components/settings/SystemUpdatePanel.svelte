@@ -90,9 +90,12 @@
     }
   }
   // Poll every 5s while any central reports an install in progress.
+  // `pollStopped` is only ever set by stopPoll() (component teardown), and
+  // it must stay set once the component is gone — an onMount or install()
+  // continuation that resolves after unmount would otherwise re-arm a timer
+  // that nothing can cancel anymore. Do not reset it here.
   function ensurePoll() {
-    if (pollTimer) return;
-    pollStopped = false;
+    if (pollTimer || pollStopped) return;
     const tick = async () => {
       pollTimer = null;
       await load();

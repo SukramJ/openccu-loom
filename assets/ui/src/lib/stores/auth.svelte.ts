@@ -4,6 +4,7 @@ import {
   setUnauthorizedHandler,
   type Identity,
 } from "$lib/api/client";
+import { shutdown as shutdownEventPump } from "$lib/stores/events.svelte";
 import { t } from "$lib/i18n";
 
 /**
@@ -60,6 +61,11 @@ function createAuthStore() {
       // UI returns to the login screen.
     }
     identity = null;
+    // The shared WS pump ref-counts its handlers, but a store bound for
+    // the tab's lifetime (maintenanceStore) never unsubscribes, so the
+    // count never reaches zero on its own — without this the pump keeps
+    // reconnecting a socket the daemon now rejects with 401, forever.
+    shutdownEventPump();
   }
 
   // expire is called by the API client when any non-login call returns
@@ -85,6 +91,9 @@ function createAuthStore() {
       // formatter already exposes, so the login screen shows it in the
       // active locale instead of a hard-coded German line.
       error = t("api.error.unauthorized");
+      // The re-probe also failed: the session is genuinely gone, so stop
+      // the WS pump the same way logout() does (see the comment there).
+      shutdownEventPump();
     } finally {
       reprobing = false;
     }

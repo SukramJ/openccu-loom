@@ -215,6 +215,12 @@
       const payload: ClimateSchedule = {
         channel: schedule.channel,
         kind: "simple",
+        // Without this, serializeSimpleScheduleWithDomain (schedules.go)
+        // takes its non-lock branch for every SPA save, so a lock
+        // device's lock_mode/lock_action/permission picks never reach
+        // applyLockEncoding and the LEVEL/DURATION_BASE/DURATION_FACTOR
+        // encoding the CCU actually reads is never written.
+        domain: schedule.domain,
         simple_entries: entries,
       };
       await api.putDeviceSchedule(address, payload);

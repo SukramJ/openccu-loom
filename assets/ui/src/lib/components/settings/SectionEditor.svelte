@@ -13,6 +13,7 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
+  import { dirty } from "$lib/stores/dirty.svelte";
 
   type Props = {
     section: string;
@@ -539,6 +540,19 @@
     working = deepClone(original);
     jsonErrors = {};
   }
+
+  // Register with the global unsaved-changes guard (App's route guard and
+  // beforeunload handler both read `dirty.any()`). Without this, editing a
+  // config field and then switching Settings tabs — which destroys this
+  // component outright — or closing the tab discarded the edit silently:
+  // no confirm, no toast, no browser "leave site?" prompt. resetWorking is
+  // the rollback discardAll() needs so a confirmed "leave anyway" actually
+  // leaves nothing behind for the next SectionEditor instance to inherit.
+  $effect(() => {
+    const id = "config:" + section;
+    dirty.set(id, isDirty, resetWorking);
+    return () => dirty.clear(id);
+  });
 
   function onDurationInput(rel: string, val: string) {
     try {

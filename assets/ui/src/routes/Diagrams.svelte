@@ -57,6 +57,9 @@
     name: string;
     visibility: "private" | "shared";
     rows: DraftRow[];
+    // Not editable from this view yet (set via REST / node-red-contrib);
+    // carried through unchanged so an SPA edit does not drop it.
+    defaultRangeHours: number | undefined;
   };
   let draft = $state<Draft | null>(null);
   let saving = $state(false);
@@ -97,6 +100,7 @@
       name: "",
       visibility: "private",
       rows: [emptyRow()],
+      defaultRangeHours: undefined,
     };
   }
   function editDraft(d: DiagramConfig) {
@@ -105,6 +109,7 @@
       name: d.name,
       visibility: (d.visibility as "private" | "shared") ?? "private",
       rows: docOf(d).series.map((s) => row({ ...s })),
+      defaultRangeHours: docOf(d).default_range_hours,
     };
   }
   function addSeries() {
@@ -138,10 +143,14 @@
       return;
     }
     saving = true;
+    const config: DiagramDocument = { series };
+    if (draft.defaultRangeHours !== undefined) {
+      config.default_range_hours = draft.defaultRangeHours;
+    }
     const body = {
       name: draft.name.trim(),
       visibility: draft.visibility,
-      config: { series } as unknown as Record<string, never>,
+      config: config as unknown as Record<string, never>,
     };
     try {
       if (draft.id) {

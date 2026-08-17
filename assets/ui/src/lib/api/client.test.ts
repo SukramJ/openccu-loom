@@ -826,14 +826,17 @@ describe("friendlyError — validation and conflict responses", () => {
   });
 });
 
-describe("friendlyError — 423 Locked carries either a channel lock or a lapsed edit token", () => {
-  // The daemon answers 423 for two different situations: a control write
-  // against a locked channel (writeChannelLocked in
-  // internal/north/rest/handlers/devices.go) and a MASTER/LINK write
-  // missing/lapsed edit-lock token (enforceEditLock in
-  // internal/north/rest/handlers/paramsets.go). The blanket channel-lock
-  // text used to answer both; it must defer to the daemon's own detail
-  // whenever one is present.
+describe("friendlyError — 423 Locked discriminates by problem.title", () => {
+  // The daemon answers 423 for three different situations, and every one
+  // of them carries a problem.detail — so "is any text present" can never
+  // tell them apart; only problem.title (a fixed, known set) can.
+  //   - a control write against a locked channel (writeChannelLocked in
+  //     internal/north/rest/handlers/devices.go) → title "Channel locked"
+  //   - a MASTER/LINK write with a missing/lapsed edit-lock token
+  //     (enforceEditLock in internal/north/rest/handlers/paramsets.go)
+  //     → title "Edit lock required"
+  //   - anything else (e.g. session.go's "Resource already locked") falls
+  //     back to the daemon's own detail behind a localized frame.
   const translate = (key: string, vars?: Record<string, number | string>) =>
     vars ? `${key}::${JSON.stringify(vars)}` : key;
 
@@ -847,20 +850,33 @@ describe("friendlyError — 423 Locked carries either a channel lock or a lapsed
     }
   }
 
-  it("surfaces the daemon's own detail instead of the generic channel-lock text", async () => {
+  it("uses the localized channel-lock text for a locked-channel write, not the raw REST-path detail", async () => {
+    const err = await errorFrom(423, {
+      title: "Channel locked",
+      detail: "the channel is locked against control writes; lift the lock via PUT /devices/{addr}/channels/{no}/flags",
+    });
+    expect(friendlyError(err, translate)).toBe("api.error.locked");
+  });
+
+  it("uses the localized edit-lock-lapsed text for a lapsed MASTER edit-lock token", async () => {
     const err = await errorFrom(423, {
       title: "Edit lock required",
       detail: "hold an edit session (device:0002E4A17B93C1) and present its token via X-Edit-Token",
     });
+    expect(friendlyError(err, translate)).toBe("api.error.edit_lock_lapsed");
+  });
+
+  it("falls back to the daemon's own detail for an unrecognized 423 title", async () => {
+    const err = await errorFrom(423, { title: "Resource already locked", detail: "held by alice" });
     expect(friendlyError(err, translate)).toBe(
-      'api.error.locked_reason::{"status":"423"} — hold an edit session (device:0002E4A17B93C1) and present its token via X-Edit-Token',
+      'api.error.locked_reason::{"status":"423"} — held by alice',
     );
   });
 
-  it("falls back to problem.title when the body carries a title but no detail", async () => {
-    const err = await errorFrom(423, { title: "Edit lock required" });
+  it("falls back to problem.title when the body carries an unrecognized title but no detail", async () => {
+    const err = await errorFrom(423, { title: "Resource already locked" });
     expect(friendlyError(err, translate)).toBe(
-      'api.error.locked_reason::{"status":"423"} — Edit lock required',
+      'api.error.locked_reason::{"status":"423"} — Resource already locked',
     );
   });
 

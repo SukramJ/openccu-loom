@@ -90,6 +90,23 @@ export function subscribe(
 }
 
 /**
+ * Force-closes the pump's socket regardless of how many handlers are
+ * still registered. The ref-counted teardown in `subscribe()`'s
+ * unsubscribe only fires once every handler unsubscribes — a store
+ * that binds once for the lifetime of the tab (e.g. `maintenanceStore`)
+ * never lets that count reach zero, so on its own the pump would keep
+ * reconnecting a socket the daemon rejects (401) for the rest of the
+ * tab's life after logout or session expiry. Call this whenever the
+ * session ends; the next `subscribe()`/`onResync()` reopens the stream
+ * lazily against the (by then re-authenticated) session.
+ */
+export function shutdown(): void {
+  stream?.close();
+  stream = null;
+  connectionState.current = "closed";
+}
+
+/**
  * Reactive connection state of the WS pump. Returns a getter so
  * Svelte's reactivity graph tracks reads inside `$derived` blocks.
  * Components call `wsState()` (no arguments needed — no tick polling).

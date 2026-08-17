@@ -174,7 +174,17 @@
   }
 
   // ── SSE connection ─────────────────────────────────────────────────
+  // onMount is async: its `openStream()` call runs after an `await`, so
+  // it — and resyncAfterReconnect()'s own `openStream()` call below —
+  // can both still fire after the component has already unmounted (the
+  // operator navigated away while the seed fetch was in flight).
+  // onDestroy's teardown only closes whatever `eventSource` it can see
+  // at that moment; a continuation that resolves afterwards would
+  // otherwise open a live, self-reconnecting EventSource that nothing
+  // owns. Guarding here covers every caller in one place.
+  let destroyed = false;
   function openStream() {
+    if (destroyed) return;
     if (eventSource) {
       eventSource.close();
       eventSource = null;
@@ -298,6 +308,7 @@
   });
 
   onDestroy(() => {
+    destroyed = true;
     eventSource?.close();
     eventSource = null;
   });

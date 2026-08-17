@@ -380,6 +380,7 @@ const EN: Catalog = {
   "alarm.journal_event.code_action_failed": "Code action failed",
   "alarm.journal_event.code_locked_out": "Code entry locked out",
   "alarm.journal_event.code_lockout": "Code lockout started",
+  "alarm.journal_event.code_missing": "Code required",
   "alarm.journal_event.code_permission_denied":
     "Code not permitted for this action",
   "alarm.journal_event.cross_zone_first_hit": "First cross-zone hit",
@@ -392,6 +393,7 @@ const EN: Catalog = {
   "alarm.journal_event.incident_load_failed": "Incident could not be loaded",
   "alarm.journal_event.incident_lost_on_restore": "Incident lost on restore",
   "alarm.journal_event.incident_persist_failed": "Incident could not be saved",
+  "alarm.journal_event.invalid_code": "Invalid code entered",
   "alarm.journal_event.keypad_blocked": "Keypad blocked",
   "alarm.journal_event.keypad_press_unmatched": "Keypad entry did not match",
   "alarm.journal_event.mode_removed_while_armed":
@@ -789,6 +791,13 @@ const EN: Catalog = {
   "audit.action.tls_cert_upload": "TLS certificate",
   "audit.action.token_create": "Token created",
   "audit.action.token_revoke": "Token revoked",
+  "audit.action.logging.override_set": "Log level override set",
+  "audit.action.logging.override_reset": "Log level override reset",
+  "audit.action.logging.default_level_set": "Default log level changed",
+  "audit.action.diagnostics.capture_start": "Diagnostic capture started",
+  "audit.action.diagnostics.capture_stop": "Diagnostic capture stopped",
+  "audit.action.system.restart_requested": "Daemon restart requested",
+  "audit.action.cache_clear": "Cache cleared",
   "audit.action.un_ignore_update": "Update un-ignored",
   "audit.action.user_create": "User created",
   "audit.action.user_delete": "User deleted",
@@ -2344,6 +2353,8 @@ const EN: Catalog = {
   "centrals.field.password": "Password",
   "centrals.field.password_hint":
     "Stored in the daemon's SQLite database (file mode 0600). Backup tarballs redact it unless --include-secrets is passed.",
+  "centrals.field.password_hint_unchanged":
+    "A password is stored. Leave blank to keep it — type a new one to replace it.",
   "centrals.field.password_placeholder_env": "(resolved from env variable)",
   "centrals.field.password_env": "Password env-var (override)",
   "centrals.field.password_env_hint":
@@ -3178,6 +3189,8 @@ const EN: Catalog = {
   "api.error.locked":
     "Locked — this channel is protected against control writes. Lift the lock in the channel's flags.",
   "api.error.locked_reason": "Locked ({status}).",
+  "api.error.edit_lock_lapsed":
+    "Your edit session has expired — reopen the paramset editor to get a new lock.",
   // --- Matter bridge ---
   "nav.matter": "Matter",
   "sidebar.cluster.bridges": "Bridges",
@@ -4439,6 +4452,7 @@ const DE: Catalog = {
   "alarm.journal_event.code_action_failed": "Code-Aktion fehlgeschlagen",
   "alarm.journal_event.code_locked_out": "Code-Eingabe gesperrt",
   "alarm.journal_event.code_lockout": "Code-Sperre gestartet",
+  "alarm.journal_event.code_missing": "Code erforderlich",
   "alarm.journal_event.code_permission_denied":
     "Code für diese Aktion nicht berechtigt",
   "alarm.journal_event.cross_zone_first_hit":
@@ -4456,6 +4470,7 @@ const DE: Catalog = {
     "Vorfall beim Wiederherstellen verloren",
   "alarm.journal_event.incident_persist_failed":
     "Vorfall konnte nicht gespeichert werden",
+  "alarm.journal_event.invalid_code": "Ungültiger Code eingegeben",
   "alarm.journal_event.keypad_blocked": "Bedienteil gesperrt",
   "alarm.journal_event.keypad_press_unmatched":
     "Eingabe am Bedienteil ohne Treffer",
@@ -4869,6 +4884,13 @@ const DE: Catalog = {
   "audit.action.tls_cert_upload": "TLS-Zertifikat",
   "audit.action.token_create": "Token erstellt",
   "audit.action.token_revoke": "Token widerrufen",
+  "audit.action.logging.override_set": "Log-Level-Override gesetzt",
+  "audit.action.logging.override_reset": "Log-Level-Override zurückgesetzt",
+  "audit.action.logging.default_level_set": "Standard-Log-Level geändert",
+  "audit.action.diagnostics.capture_start": "Diagnose-Aufzeichnung gestartet",
+  "audit.action.diagnostics.capture_stop": "Diagnose-Aufzeichnung gestoppt",
+  "audit.action.system.restart_requested": "Daemon-Neustart angefordert",
+  "audit.action.cache_clear": "Cache geleert",
   "audit.action.un_ignore_update": "Update nicht mehr ignoriert",
   "audit.action.user_create": "Benutzer angelegt",
   "audit.action.user_delete": "Benutzer gelöscht",
@@ -6461,6 +6483,8 @@ const DE: Catalog = {
   "centrals.field.password": "Passwort",
   "centrals.field.password_hint":
     "Wird in der SQLite-Datenbank des Daemons abgelegt (Dateirechte 0600). Backup-Archive redaktieren das Feld, außer du verwendest --include-secrets.",
+  "centrals.field.password_hint_unchanged":
+    "Es ist ein Passwort gespeichert. Leer lassen, um es zu behalten — ein neues eingeben, um es zu ersetzen.",
   "centrals.field.password_placeholder_env": "(wird aus Env-Variable gelesen)",
   "centrals.field.password_env": "Passwort-Umgebungsvariable (überschreibt)",
   "centrals.field.password_env_hint":
@@ -7305,6 +7329,8 @@ const DE: Catalog = {
   "api.error.locked":
     "Gesperrt — dieser Kanal ist gegen Steuerbefehle gesperrt. Die Sperre lässt sich in den Kanal-Flags aufheben.",
   "api.error.locked_reason": "Gesperrt ({status}).",
+  "api.error.edit_lock_lapsed":
+    "Deine Editiersitzung ist abgelaufen — öffne den Parameter-Editor erneut, um eine neue Sperre zu erhalten.",
   // --- Matter-Bridge ---
   "nav.matter": "Matter",
   "sidebar.cluster.bridges": "Bridges",

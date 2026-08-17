@@ -27,11 +27,13 @@
 
   let selectedDuration = $state(300); // seconds
 
-  const DURATION_OPTIONS = [
+  // $derived, not a plain const: a top-level initializer only runs once
+  // at mount, freezing these labels at whatever locale was active then.
+  const DURATION_OPTIONS = $derived([
     { label: `5 ${t("matter.pair.minutes")}`, value: 300 },
     { label: `10 ${t("matter.pair.minutes")}`, value: 600 },
     { label: `15 ${t("matter.pair.minutes")}`, value: 900 },
-  ];
+  ]);
 
   const phase = $derived(matterStore.commissioning.phase);
   const window = $derived(matterStore.commissioning.window);
