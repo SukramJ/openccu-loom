@@ -22,7 +22,9 @@ import (
 )
 
 // VisibilityGate decides whether a parameter is visible and therefore
-// writable. A nil gate is a no-op (all parameters are allowed).
+// writable. A nil gate is a no-op (all parameters are allowed), and so is
+// every MASTER query — see [gateDecidesWrites] for why the gate does not
+// answer for the MASTER paramset.
 //
 // The concrete *visibility.Registry from internal/store/visibility
 // satisfies this interface. It is defined here so that the adapter
@@ -46,10 +48,11 @@ type VisibilityGate interface {
 // through the client layer's ValueWriter: the registered backend
 // answers `GetParamset` / `PutParamset`.
 //
-// When a VisibilityGate is configured via [SetVisibilityGate], every
-// write (PutParamset, PutLinkParamset) checks each parameter name
-// against the gate before forwarding the request. Hidden parameters
-// cause the entire write to be rejected with [hmerr.ErrParameterHidden].
+// When a VisibilityGate is configured via [SetVisibilityGate], every VALUES
+// and LINK write (PutParamset, PutLinkParamset) checks each parameter name
+// against the gate before forwarding the request. Hidden parameters cause the
+// entire write to be rejected with [hmerr.ErrParameterHidden]. MASTER writes
+// are decided by the parameter descriptor instead — see [gateDecidesWrites].
 type ParamsetsDomain struct {
 	registry *central.Registry
 	writer   *client.ValueWriter
@@ -94,7 +97,22 @@ var ErrNoParamsetBackend = errors.New("paramsets: no backend for device")
 // diagnostic tooling on an unknown address) the call falls through to
 // the direct backend round-trip.
 func (p *ParamsetsDomain) GetParamset(ctx context.Context, deviceAddress string, key hmenum.ParamsetKey) (map[string]any, error) {
-	ch := p.resolveChannel(deviceAddress)
+	return p.GetParamsetOn(ctx, "", deviceAddress, key)
+}
+
+// GetParamsetOn is [ParamsetsDomain.GetParamset] restricted to one central.
+//
+// An empty centralName keeps the unscoped behaviour: the first central in
+// name-sorted registry order that holds the device answers. A non-empty name
+// pins the lookup to that CCU and fails when it does not hold the device,
+// instead of silently answering from another one. Device addresses are not
+// globally unique — the virtual-remote buses, the INT000* internal devices
+// and CUxD devices repeat verbatim on every CCU — so a caller that knows
+// which CCU it is talking about (a config edit session) must say so.
+func (p *ParamsetsDomain) GetParamsetOn(
+	ctx context.Context, centralName, deviceAddress string, key hmenum.ParamsetKey,
+) (map[string]any, error) {
+	ch := p.resolveChannelOn(centralName, deviceAddress)
 	if ch != nil {
 		snapshot := ch.GetAll(key)
 		if len(snapshot) > 0 {
@@ -113,7 +131,7 @@ func (p *ParamsetsDomain) GetParamset(ctx context.Context, deviceAddress string,
 		// Refresh failed or returned nothing — fall through to the
 		// backend direct call so the caller still gets a result.
 	}
-	b, err := p.resolve(deviceAddress)
+	b, err := p.resolveOn(centralName, deviceAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -123,9 +141,10 @@ func (p *ParamsetsDomain) GetParamset(ctx context.Context, deviceAddress string,
 // PutParamset implements handlers.ParamsetService.
 //
 // The write is routed through [device.Channel.SetMany] so the model is
-// the single source of truth for every write. The VisibilityGate (F1)
-// runs BEFORE the channel is touched as defense-in-depth — a hidden
-// parameter rejects the entire write. On success the adapter re-fetches
+// the single source of truth for every write. The VisibilityGate runs
+// BEFORE the channel is touched as defense-in-depth — on the paramsets it
+// decides ([gateDecidesWrites]), a hidden parameter rejects the entire
+// write. On success the adapter re-fetches
 // the authoritative values and pushes them back through the channel's
 // data points so the SPA always sees post-write state.
 //
@@ -138,18 +157,32 @@ func (p *ParamsetsDomain) GetParamset(ctx context.Context, deviceAddress string,
 // tooling, unknown address), the call falls through to a direct backend
 // round-trip.
 func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string, key hmenum.ParamsetKey, values map[string]any) error {
+	return p.PutParamsetOn(ctx, "", deviceAddress, key, values)
+}
+
+// PutParamsetOn is [ParamsetsDomain.PutParamset] restricted to one central.
+//
+// Scoping rules are the ones [ParamsetsDomain.GetParamsetOn] documents. Every
+// caller that carries a central — the config edit session, the configuration
+// import — goes through here so descriptor coercion, min/max validation, the
+// post-write model refresh and the audit row apply to the multi-CCU case too.
+// Writing straight to the scoped backend instead skips all four, and the audit
+// row is missing exactly where "which CCU did this change land on" matters.
+func (p *ParamsetsDomain) PutParamsetOn(
+	ctx context.Context, centralName, deviceAddress string, key hmenum.ParamsetKey, values map[string]any,
+) error {
 	// VisibilityGate runs first — before the channel is touched.
-	if err := p.checkVisibility(deviceAddress, key, values); err != nil {
+	if err := p.checkVisibilityOn(centralName, deviceAddress, key, values); err != nil {
 		return err
 	}
-	b, err := p.resolve(deviceAddress)
+	b, err := p.resolveOn(centralName, deviceAddress)
 	if err != nil {
 		return err
 	}
 	// Capture before-state for the audit log (best-effort).
 	before, _ := b.GetParamset(ctx, deviceAddress, key)
 
-	ch := p.resolveChannel(deviceAddress)
+	ch := p.resolveChannelOn(centralName, deviceAddress)
 	if key == hmenum.ParamsetKeyLink {
 		// A LINK paramset exists per peer and has no channel-level data
 		// point, so the model's parameter lookup resolves nothing and
@@ -175,17 +208,19 @@ func (p *ParamsetsDomain) PutParamset(ctx context.Context, deviceAddress string,
 			return err
 		}
 	} else {
-		// No channel in model — validate min/max before the direct backend call
-		// so invalid values are rejected early with a clear error instead of a
-		// CCU-side XML-RPC fault.
-		if validErr := validateParamsetValues(ctx, b, deviceAddress, key, values); validErr != nil {
+		// No channel in model — coerce against the descriptor and validate
+		// min/max before the direct backend call, so invalid values are
+		// rejected early with a clear error instead of a CCU-side XML-RPC
+		// fault, and a whole-number INTEGER does not travel as <double>.
+		wire, validErr := coerceParamsetValues(ctx, b, deviceAddress, key, values)
+		if validErr != nil {
 			return validErr
 		}
-		if err := b.PutParamset(ctx, deviceAddress, key, values, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
+		if err := b.PutParamset(ctx, deviceAddress, key, wire, hmenum.CommandPriorityLow, hmenum.CommandRxModeUnset); err != nil {
 			return err
 		}
 	}
-	p.refreshAfterPut(ctx, b, deviceAddress, key)
+	p.refreshAfterPutOn(ctx, centralName, b, deviceAddress, key)
 	p.recordParamsetWrite(ctx, deviceAddress, string(key), before, values)
 	return nil
 }
@@ -254,27 +289,38 @@ func (p *ParamsetsDomain) recordParamsetWrite(ctx context.Context, channelAddres
 	})
 }
 
-// validateParamsetValues fetches the paramset descriptor from the backend and
-// checks every supplied value against its min/max range. Any parameter that
-// fails validation is collected into a combined error so the caller receives
-// the full rejection list in one shot.
+// coerceParamsetValues fetches the paramset descriptor from the backend,
+// coerces every supplied value into the descriptor's type and checks it
+// against its min/max range. It returns the map that goes on the wire. Any
+// parameter that fails validation is collected into a combined error so the
+// caller receives the full rejection list in one shot.
+//
+// The coerced map is what the caller must send, not the input: the values
+// arrive as decoded JSON, where a number is always a float64, and the XML-RPC
+// encoder maps float64 to <double>. An INTEGER parameter written from the SPA
+// or over MCP would therefore reach the CCU as a double and fault. Coercion
+// against the descriptor is the same correction the model path performs in
+// [anyMapToParamValues]; this is the branch for channels the model does not
+// hold.
 //
 // The function is a best-effort guard: if the descriptor lookup fails (e.g.
 // the CCU is temporarily unreachable) the values pass through unchanged so
 // the backend error path handles the failure instead.
-func validateParamsetValues(ctx context.Context, b interface {
+func coerceParamsetValues(ctx context.Context, b interface {
 	GetParamsetDescription(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error)
 }, address string, key hmenum.ParamsetKey, values map[string]any,
-) error {
+) (map[string]any, error) {
 	descs, err := b.GetParamsetDescription(ctx, address, key)
 	if err != nil {
 		// Descriptor unavailable — skip validation so the backend error path handles the failure.
-		return nil //nolint:nilerr // intentional soft-path: descriptor fetch failure is non-fatal
+		return values, nil //nolint:nilerr // intentional soft-path: descriptor fetch failure is non-fatal
 	}
+	out := make(map[string]any, len(values))
 	var errs []error
 	for name, rawVal := range values {
 		desc, ok := descs[name]
 		if !ok {
+			out[name] = rawVal
 			continue
 		}
 		// Coerce, not NewParamValue: the descriptor is right here, and a
@@ -287,12 +333,14 @@ func validateParamsetValues(ctx context.Context, b interface {
 		}
 		if valErr := parameter.Validate(desc, pv); valErr != nil {
 			errs = append(errs, fmt.Errorf("paramsets: %s: %w", name, valErr))
+			continue
 		}
+		out[name] = pv.Unwrap()
 	}
 	if len(errs) == 0 {
-		return nil
+		return out, nil
 	}
-	return fmt.Errorf("%w: %w", hmerr.ErrValidation, errors.Join(errs...))
+	return nil, fmt.Errorf("%w: %w", hmerr.ErrValidation, errors.Join(errs...))
 }
 
 // channelNumberOf parses "DEV:N" → N. Returns 0 when the channel is
@@ -324,6 +372,18 @@ func (p *ParamsetsDomain) refreshAfterPut(
 	channelAddress string,
 	key hmenum.ParamsetKey,
 ) {
+	p.refreshAfterPutOn(ctx, "", b, channelAddress, key)
+}
+
+// refreshAfterPutOn is [ParamsetsDomain.refreshAfterPut] scoped to one
+// central; see [ParamsetsDomain.unitsFor] for what an empty name means.
+func (p *ParamsetsDomain) refreshAfterPutOn(
+	ctx context.Context,
+	centralName string,
+	b paramsetBackend,
+	channelAddress string,
+	key hmenum.ParamsetKey,
+) {
 	if p.registry == nil {
 		return
 	}
@@ -332,7 +392,7 @@ func (p *ParamsetsDomain) refreshAfterPut(
 		return
 	}
 	deviceAddr := deviceAddressOf(channelAddress)
-	for _, u := range p.registry.List() {
+	for _, u := range p.unitsFor(centralName) {
 		dev, ok := u.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue
@@ -438,23 +498,51 @@ func (p *ParamsetsDomain) PutLinkParamset(
 	return nil
 }
 
-// checkVisibility consults the VisibilityGate (if configured) against
+// gateDecidesWrites reports whether the VisibilityGate is the authority on
+// whether a write to key may proceed.
+//
+// VALUES and LINK: yes. The gate's VALUES arm is the operator's ignore /
+// un-ignore configuration plus the static hide lists, which is exactly an
+// "is this parameter exposed at all" question.
+//
+// MASTER: no. The gate's MASTER arm is the data-point-CREATION whitelist —
+// it decides which of a channel's ~25 configuration parameters become north-
+// bound entities, and it default-denies everything it does not name. It was
+// never an authorization list, and using it as one made the configuration
+// feature contradict itself: the paramset read, the channel UI schema and the
+// edit session all hand out the channel's full MASTER descriptor, so every
+// parameter outside that whitelist could be displayed and staged but rejected
+// the operator's save with "parameter is hidden and may not be written".
+// Which parameters may be written is decided by the descriptor instead — the
+// WRITE bit and the value bounds, enforced by [device.Channel.SetMany] on the
+// model path and by [coerceParamsetValues] on the backend path.
+func gateDecidesWrites(key hmenum.ParamsetKey) bool {
+	return key != hmenum.ParamsetKeyMaster
+}
+
+// checkVisibility is [ParamsetsDomain.checkVisibilityOn] across every central.
+func (p *ParamsetsDomain) checkVisibility(channelAddress string, key hmenum.ParamsetKey, values map[string]any) error {
+	return p.checkVisibilityOn("", channelAddress, key, values)
+}
+
+// checkVisibilityOn consults the VisibilityGate (if configured) against
 // every parameter name in values. Returns [hmerr.ErrParameterHidden]
 // on the first hidden parameter found.
 //
-// When the gate is nil this method is a no-op and returns nil. When
-// the device cannot be found in the registry, the check is skipped
-// (lenient: unknown devices are not gated so that diagnostic tooling
-// can still write arbitrary paramsets).
+// When the gate is nil, when the paramset is not gate-decided (see
+// [gateDecidesWrites]) or when the device cannot be found in the registry the
+// check is skipped — the last case is lenient on purpose so diagnostic tooling
+// can still write arbitrary paramsets.
 //
 // The channel number is extracted from channelAddress (e.g. "DEV:3" → 3)
-// and forwarded to [VisibilityGate.IsAllowedForChannel] for precise MASTER
-// channel-whitelist filtering.
-func (p *ParamsetsDomain) checkVisibility(channelAddress string, key hmenum.ParamsetKey, values map[string]any) error {
-	if p.gate == nil || len(values) == 0 {
+// and forwarded to [VisibilityGate.IsAllowedForChannel].
+func (p *ParamsetsDomain) checkVisibilityOn(
+	centralName, channelAddress string, key hmenum.ParamsetKey, values map[string]any,
+) error {
+	if p.gate == nil || len(values) == 0 || !gateDecidesWrites(key) {
 		return nil
 	}
-	model, channelType := p.resolveChannelInfo(channelAddress)
+	model, channelType := p.resolveChannelInfoOn(centralName, channelAddress)
 	// When the device cannot be found, skip the gate check. Diagnostic
 	// tooling may write to addresses that are not yet in the model
 	// registry; blocking them here would break initialisation sequences.
@@ -480,8 +568,13 @@ func (p *ParamsetsDomain) checkVisibility(channelAddress string, key hmenum.Para
 // out a snapshot containing hidden parameters produces a file that
 // cannot be imported again, because [ParamsetsDomain.PutParamset]
 // rejects the whole write on the first hidden name.
+//
+// It therefore has to answer the same question the write gate asks — see
+// [gateDecidesWrites]. A MASTER paramset passes through untouched: the write
+// side accepts every writable MASTER parameter, so filtering the read side by
+// the data-point-creation whitelist would export less than can be imported.
 func (p *ParamsetsDomain) VisibleValues(channelAddress string, key hmenum.ParamsetKey, values map[string]any) map[string]any {
-	if p == nil || p.gate == nil || len(values) == 0 {
+	if p == nil || p.gate == nil || len(values) == 0 || !gateDecidesWrites(key) {
 		return values
 	}
 	model, channelType := p.resolveChannelInfo(channelAddress)
@@ -498,15 +591,40 @@ func (p *ParamsetsDomain) VisibleValues(channelAddress string, key hmenum.Params
 	return out
 }
 
+// unitsFor returns the central units a lookup must consider. An empty
+// centralName means "every central, in name-sorted registry order" — the
+// first-match behaviour every unscoped caller relies on. A non-empty name
+// narrows the walk to that one central and returns nothing when it is not
+// registered, so a scoped call can never answer from another CCU.
+func (p *ParamsetsDomain) unitsFor(centralName string) []*central.Unit {
+	if p.registry == nil {
+		return nil
+	}
+	if centralName == "" {
+		return p.registry.List()
+	}
+	u, ok := p.registry.Get(centralName)
+	if !ok || u == nil {
+		return nil
+	}
+	return []*central.Unit{u}
+}
+
 // resolveChannelInfo returns the device model string and channel type
 // string for the given channel address by walking the central registry.
 // Returns ("", "") when the channel cannot be found.
 func (p *ParamsetsDomain) resolveChannelInfo(channelAddress string) (model, channelType string) {
+	return p.resolveChannelInfoOn("", channelAddress)
+}
+
+// resolveChannelInfoOn is [ParamsetsDomain.resolveChannelInfo] scoped to one
+// central; see [ParamsetsDomain.unitsFor] for what an empty name means.
+func (p *ParamsetsDomain) resolveChannelInfoOn(centralName, channelAddress string) (model, channelType string) {
 	if p.registry == nil {
 		return "", ""
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, u := range p.registry.List() {
+	for _, u := range p.unitsFor(centralName) {
 		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue
@@ -524,11 +642,17 @@ func (p *ParamsetsDomain) resolveChannelInfo(channelAddress string) (model, chan
 // resolve maps a device address to the owning central's backend.
 // Walks the registry so multi-CCU setups work out of the box.
 func (p *ParamsetsDomain) resolve(deviceOrChannel string) (paramsetBackend, error) {
+	return p.resolveOn("", deviceOrChannel)
+}
+
+// resolveOn is [ParamsetsDomain.resolve] scoped to one central; see
+// [ParamsetsDomain.unitsFor] for what an empty name means.
+func (p *ParamsetsDomain) resolveOn(centralName, deviceOrChannel string) (paramsetBackend, error) {
 	if p.registry == nil || p.writer == nil {
 		return nil, ErrNoParamsetBackend
 	}
 	addr := deviceAddressOf(deviceOrChannel)
-	for _, u := range p.registry.List() {
+	for _, u := range p.unitsFor(centralName) {
 		dev, ok := u.ModelRegistry.Get(addr)
 		if !ok {
 			continue
@@ -546,11 +670,17 @@ func (p *ParamsetsDomain) resolve(deviceOrChannel string) (paramsetBackend, erro
 // for channelAddress, or nil when not found. The lookup is intentionally
 // lenient — unknown addresses fall through to the backend path.
 func (p *ParamsetsDomain) resolveChannel(channelAddress string) *device.Channel {
+	return p.resolveChannelOn("", channelAddress)
+}
+
+// resolveChannelOn is [ParamsetsDomain.resolveChannel] scoped to one central;
+// see [ParamsetsDomain.unitsFor] for what an empty name means.
+func (p *ParamsetsDomain) resolveChannelOn(centralName, channelAddress string) *device.Channel {
 	if p.registry == nil {
 		return nil
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, u := range p.registry.List() {
+	for _, u := range p.unitsFor(centralName) {
 		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue

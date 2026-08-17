@@ -223,6 +223,49 @@ func TestParamsetsDomainVisibleValuesDropsHiddenParam(t *testing.T) {
 	}
 }
 
+// TestParamsetsDomainMasterWriteIsNotGatedByTheCreationWhitelist pins the
+// asymmetry the write gate has to respect.
+//
+// The gate's MASTER arm is the data-point-creation whitelist: it decides which
+// of a channel's configuration parameters become north-bound entities, and it
+// default-denies everything else. The configuration surfaces do not use it —
+// paramset.get MASTER, the channel UI schema and the edit session all offer
+// the channel's full MASTER descriptor. Asking the same list on the write side
+// therefore rejected the operator's save of every parameter it does not name,
+// with "parameter is hidden and may not be written", on a form whose every
+// field it had just handed out.
+//
+// POWERUP_JUMPTARGET on an HmIP-BSM switch channel is one of those: writable
+// per its descriptor, offered by every read surface, named by no whitelist.
+// The VALUES control below keeps the gate itself wired — this is a MASTER-only
+// exemption, not a disabled gate.
+func TestParamsetsDomainMasterWriteIsNotGatedByTheCreationWhitelist(t *testing.T) {
+	t.Parallel()
+
+	domain, _ := registryWithDeviceAndChannel(t, "HmIP-BSM", "0001ABCD:4", "SWITCH_VIRTUAL_RECEIVER")
+	domain.SetVisibilityGate(visibility.NewRegistry())
+
+	offered := map[string]any{"POWERUP_JUMPTARGET": 1, "LOGIC_COMBINATION": 2}
+	if err := domain.checkVisibility("0001ABCD:4", hmenum.ParamsetKeyMaster, offered); err != nil {
+		t.Fatalf("MASTER write rejected: %v — the read surfaces offer these parameters, so the write "+
+			"surface has to accept them", err)
+	}
+	if out := domain.VisibleValues("0001ABCD:4", hmenum.ParamsetKeyMaster, offered); len(out) != len(offered) {
+		t.Errorf("VisibleValues dropped %d of %d MASTER parameters — the read side must offer exactly "+
+			"what the write side accepts", len(offered)-len(out), len(offered))
+	}
+
+	// Control: the VALUES arm of the same gate still refuses a hidden parameter.
+	gate := visibility.NewRegistry()
+	gate.Rules().HideGlobal(hmenum.ParameterTemperatureOffset)
+	domain.SetVisibilityGate(gate)
+	err := domain.checkVisibility("0001ABCD:4", hmenum.ParamsetKeyValues,
+		map[string]any{"TEMPERATURE_OFFSET": 0.5})
+	if !errors.Is(err, hmerr.ErrParameterHidden) {
+		t.Fatalf("VALUES write of a hidden parameter: got %v, want ErrParameterHidden", err)
+	}
+}
+
 // TestParamsetsDomainVisibleValuesWithoutGate keeps the ungated daemon
 // unaffected: nothing is filtered when no gate is wired.
 func TestParamsetsDomainVisibleValuesWithoutGate(t *testing.T) {

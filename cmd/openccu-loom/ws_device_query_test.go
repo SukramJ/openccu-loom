@@ -6,13 +6,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -68,7 +71,7 @@ func TestWSConfigSession_ReadsAndWritesTheScopedCentral(t *testing.T) {
 
 	paramsets := adapter.NewParamsetsDomain(reg, writer)
 	q := &wsDeviceQuery{paramsets: paramsets, registry: reg, writer: writer}
-	pw := &wsParamsetWriter{domain: paramsets, registry: reg, writer: writer}
+	pw := &wsParamsetWriter{domain: paramsets}
 	keyB := configui.SessionKey{CentralName: "ccu-b", ChannelAddress: channel, ParamsetKey: hmenum.ParamsetKeyMaster}
 
 	got, err := q.GetParamset(context.Background(), keyB)
@@ -87,6 +90,117 @@ func TestWSConfigSession_ReadsAndWritesTheScopedCentral(t *testing.T) {
 	}
 	if backendA.putCalled {
 		t.Error("write scoped to ccu-b leaked to ccu-a (the default first-match central)")
+	}
+}
+
+// coercingBackendStub answers a MASTER descriptor declaring one INTEGER
+// parameter and records the values the write put on the wire, so the test can
+// see what type actually left the daemon.
+type coercingBackendStub struct {
+	*testBackendOps
+	mu    sync.Mutex
+	wrote map[string]any
+}
+
+func (b *coercingBackendStub) GetParamsetDescription(
+	_ context.Context, _ string, _ hmenum.ParamsetKey,
+) (map[string]hmproto.ParameterData, error) {
+	return map[string]hmproto.ParameterData{
+		"DBL_PRESS_TIME": {
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite,
+			Min:        []byte(`0`),
+			Max:        []byte(`100`),
+		},
+	}, nil
+}
+
+func (b *coercingBackendStub) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+	return map[string]any{"DBL_PRESS_TIME": 1}, nil
+}
+
+func (b *coercingBackendStub) PutParamset(
+	_ context.Context, _ string, _ hmenum.ParamsetKey, values map[string]any,
+	_ hmenum.CommandPriority, _ hmenum.CommandRxMode,
+) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.wrote = values
+	return nil
+}
+
+func (b *coercingBackendStub) written() map[string]any {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.wrote
+}
+
+// TestWSConfigSessionScopedSaveKeepsTheDomainGuarantees pins what the
+// central-scoped branch of the session save must not lose.
+//
+// Honouring central_name is one requirement; going around the paramset domain
+// to do it is not the way to meet it. The domain is where a write is coerced
+// against the parameter descriptor and where the change-log row is written. A
+// session value arrives as decoded JSON, so every number is a float64, and the
+// XML-RPC encoder maps float64 to <double> — an INTEGER parameter sent from
+// the scoped branch faulted on the device. The audit row went missing in
+// exactly the multi-CCU case where "which CCU did this change land on" is the
+// question being asked.
+func TestWSConfigSessionScopedSaveKeepsTheDomainGuarantees(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-a", "ccu-b")
+	const channel = "COLLIDE02:1"
+	for _, name := range []string{"ccu-a", "ccu-b"} {
+		cu, ok := reg.Get(name)
+		if !ok {
+			t.Fatalf("%s not in registry", name)
+		}
+		cu.ModelRegistry.Put(device.New(device.Config{
+			Address:     "COLLIDE02",
+			InterfaceID: "BidCos-RF",
+			Interface:   hmenum.InterfaceBidCosRF,
+			Model:       "HM-PB-2-WM55",
+		}))
+	}
+
+	writer := clientpkg.NewValueWriter()
+	backendA := &scopedBackendStub{testBackendOps: &testBackendOps{}, label: "ccu-a"}
+	backendB := &coercingBackendStub{testBackendOps: &testBackendOps{}}
+	wireID := hmtypes.ParseWireInterfaceID("BidCos-RF")
+	writer.Register("ccu-a", wireID, backendA)
+	writer.Register("ccu-b", wireID, backendB)
+
+	rec := audit.NewBuffer(16)
+	pw := &wsParamsetWriter{
+		domain: adapter.NewParamsetsDomain(reg, writer).SetAuditRecorder(rec),
+	}
+	keyB := configui.SessionKey{CentralName: "ccu-b", ChannelAddress: channel, ParamsetKey: hmenum.ParamsetKeyMaster}
+
+	if err := pw.PutParamset(context.Background(), keyB, map[string]any{"DBL_PRESS_TIME": float64(7)}); err != nil {
+		t.Fatalf("PutParamset: %v", err)
+	}
+	if backendA.putCalled {
+		t.Error("write scoped to ccu-b leaked to ccu-a (the default first-match central)")
+	}
+
+	got, ok := backendB.written()["DBL_PRESS_TIME"]
+	if !ok {
+		t.Fatalf("the write never reached ccu-b (wrote=%v)", backendB.written())
+	}
+	switch got.(type) {
+	case int, int32, int64:
+	default:
+		t.Errorf("DBL_PRESS_TIME reached the CCU as %T (%v), want an integer — a float travels as "+
+			"<double> and the CCU faults on an INTEGER parameter", got, got)
+	}
+
+	entries := rec.List(0)
+	if len(entries) != 1 {
+		t.Fatalf("change log holds %d entries, want 1 — a scoped save must leave the same trail as an "+
+			"unscoped one", len(entries))
+	}
+	if entries[0].Action != audit.ActionParamsetWrite || entries[0].DeviceAddress != "COLLIDE02" {
+		t.Errorf("change-log entry = %+v, want a paramset write on COLLIDE02", entries[0])
 	}
 }
 
