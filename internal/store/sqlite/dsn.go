@@ -17,7 +17,16 @@ package sqlite
 // the whole pool enforce it. journal_mode and busy_timeout are carried here
 // too so a file-backed database is fully configured the moment any connection
 // opens, independent of the single-connection applyPragmas priming pass.
-const connectionPragmas = "_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
+//
+// synchronous, cache_size and temp_store are also connection-scoped and were
+// missing here even though applyPragmas sets them: that primes only the one
+// connection sql.DB happens to hand ExecContext, so 15 of a 16-connection
+// pool ran on SQLite's compiled defaults (synchronous=FULL, a 2 MB cache,
+// file-backed temp storage) instead of the SPECIFICATION §13.2 tuning —
+// nearly every write paid an extra fsync and reads got a tenth of the
+// intended page cache.
+const connectionPragmas = "_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)" +
+	"&_pragma=synchronous(NORMAL)&_pragma=cache_size(-20000)&_pragma=temp_store(MEMORY)"
 
 // FileDSN builds the canonical modernc.org/sqlite DSN for a file-backed
 // database at path. Every caller that opens a daemon database must build its

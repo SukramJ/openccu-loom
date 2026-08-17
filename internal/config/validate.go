@@ -110,8 +110,14 @@ func validateWebhook(w *NorthWebhook) error {
 // validateMCP checks the Model Context Protocol mount path. The value
 // becomes an [net/http.ServeMux] pattern verbatim, which is why the rules
 // live on the config type itself — see [NorthMCP.ValidateMountPath].
+//
+// The check only runs while the adapter is enabled: while disabled the path
+// is never handed to ServeMux (see mountMCP), so a stale or legacy-format
+// value left over in an unused section must not abort startup. Without this
+// gate, upgrading past the mount-path syntax tightened by ADR 0025 could
+// fail every subsequent boot for an operator who never turned MCP on.
 func validateMCP(m *NorthMCP) error {
-	if m.Path == "" {
+	if !m.Enabled || m.Path == "" {
 		return nil
 	}
 	return m.ValidateMountPath()

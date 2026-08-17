@@ -523,8 +523,8 @@ func (c ValuesCacheConfig) ValuesCacheEnabled(centralName string) bool {
 type ReliabilityConfig struct {
 	// CommandRetryInitialDelay overrides the first backoff delay in
 	// [reliability.RetryConfig.Initial]. Zero (default) keeps the
-	// OpenCCU-Loom 250 ms default. Set to 2s to match
-	// Production behaviour, or 100 ms for the
+	// production-hardened 2 s default ([hmreliability.RetryInitialBackoff]).
+	// Lower it (e.g. 100ms) for a fast test rig.
 	CommandRetryInitialDelay time.Duration `yaml:"command_retry_initial_delay,omitempty" json:"command_retry_initial_delay,omitempty" cfg:"expert"`
 
 	// CommandThrottleInterCommandDelay overrides the minimum gap
@@ -567,7 +567,7 @@ type LoggingConfig struct {
 type CallbackConfig struct {
 	Host    string `yaml:"host" json:"host" cfg:"expert"`
 	Port    int    `yaml:"port" json:"port" cfg:"expert"`         // XML-RPC; ignored when PortRange is set
-	BinPort int    `yaml:"bin_port" json:"bin_port" cfg:"expert"` // BIN-RPC; 0 = dynamic
+	BinPort int    `yaml:"bin_port" json:"bin_port" cfg:"expert"` // BIN-RPC; 0 resolves to the 8129 default, same as Port — no range equivalent exists for this listener
 	// PortRange bounds the XML-RPC listener to "<lo>-<hi>" (e.g.
 	// "30000-30099"); the server binds the first free port in it. Empty
 	// leaves Port in charge.
@@ -1442,13 +1442,12 @@ type NorthMQTT struct {
 	// surfaces a named error, and this knob is the fix.
 	ProtocolVersion string `yaml:"protocol_version,omitempty" json:"protocol_version,omitempty" cfg:"expert"`
 
-	// PayloadFormat selects the wire format the bridge publishes to
-	// state topics. Empty / "bare" (default) keeps primitive scalar
-	// payloads — backwards-compatible with non-HA consumers.
-	// "json" wraps state in `{"value":..,"available":..}`.
-	// `value_template` filters and gets per-DP availability for
-	// free. Switching this BREAKS bare-value subscribers; flip it
-	// only after every consumer has been updated.
+	// PayloadFormat is currently reserved and has no effect: the bridge
+	// always publishes the JSON envelope `{"value":..,"available":..,
+	// "modified_at":..}` on state topics (the bare-scalar mode was retired
+	// with the ADR-0011 payload unification). The value is still validated
+	// (accepts "", "bare" or "json") so a saved config round-trips, but no
+	// publisher branches on it.
 	PayloadFormat string `yaml:"payload_format" json:"payload_format" cfg:"expert"`
 
 	// SubDevicesEnabled splits multi-channel-group devices into one

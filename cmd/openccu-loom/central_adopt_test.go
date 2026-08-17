@@ -17,7 +17,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -92,7 +94,7 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 	}
 
 	cc := config.CentralConfig{Name: removedCentral, Interfaces: []config.InterfaceSpec{{Name: ifaceName}}}
-	purgeCentralState(ctx, valuesStore, masterStore, historyStore, nil, cc, discardTestLogger())
+	purgeCentralState(ctx, valuesStore, masterStore, historyStore, nil, nil, nil, nil, cc, discardTestLogger())
 
 	if rows, err := valuesStore.LoadChannel(ctx, removedCentral, removedIfaceID, "AAAA0001:1"); err != nil {
 		t.Fatalf("LoadChannel(removed): %v", err)
@@ -130,7 +132,123 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 func TestPurgeCentralStateNilStoresAreSafe(t *testing.T) {
 	t.Parallel()
 	cc := config.CentralConfig{Name: "x", Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}}}
-	purgeCentralState(context.Background(), nil, nil, nil, nil, cc, discardTestLogger())
+	purgeCentralState(context.Background(), nil, nil, nil, nil, nil, nil, nil, cc, discardTestLogger())
+}
+
+// TestPurgeCentralStateDropsRecordingOverridesOverlay pins the fix for a
+// removed-and-re-adopted central serving stale history-recording verdicts.
+// RecordingOverrides.Load only runs once at wire time (history_wiring.go),
+// so the durable delete purgeCentralState already performs on
+// [sqlite.RecordingOverrideStore] alone left the in-memory overlay — what
+// the recorder actually consults on the hot path — holding the removed
+// central's overrides forever. This goes through the real
+// purgeCentralState the orchestrator calls, not a bracketing test that
+// only proves RecordingOverrides.DeleteCentral works in isolation.
+func TestPurgeCentralStateDropsRecordingOverridesOverlay(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	histDSN := "file:" + t.TempDir() + "/purge_recording_overrides.db?_pragma=journal_mode(WAL)"
+	gooseMigrateMu.Lock()
+	db, err := sqlitestore.OpenHistory(ctx, histDSN)
+	gooseMigrateMu.Unlock()
+	if err != nil {
+		t.Fatalf("sqlitestore.OpenHistory: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	recStore := sqlitestore.NewRecordingOverrideStore(db)
+	overlay := history.NewRecordingOverrides(recStore, nil, nil)
+
+	const removedCentral = "purge-central"
+	const survivorCentral = "other-central"
+	if err := overlay.Set(ctx, removedCentral, "HmIP-RF", "AAAA0001:1", "STATE", false, "test"); err != nil {
+		t.Fatalf("Set(removed): %v", err)
+	}
+	if err := overlay.Set(ctx, survivorCentral, "HmIP-RF", "BBBB0001:1", "STATE", false, "test"); err != nil {
+		t.Fatalf("Set(survivor): %v", err)
+	}
+
+	// Precondition: both centrals force STATE off, overriding whatever the
+	// glob policy would otherwise decide.
+	if overlay.Decide(removedCentral, "HmIP-RF", "AAAA0001:1", "STATE", true) {
+		t.Fatal("precondition: removed central's override must force STATE off")
+	}
+
+	cc := config.CentralConfig{Name: removedCentral}
+	purgeCentralState(ctx, nil, nil, nil, recStore, overlay, nil, nil, cc, discardTestLogger())
+
+	// The removed central's override must no longer shadow the policy
+	// decision — this is the in-memory overlay Decide reads, so it proves
+	// the fix rather than only the durable row being gone.
+	if !overlay.Decide(removedCentral, "HmIP-RF", "AAAA0001:1", "STATE", true) {
+		t.Error("removed central's recording override survived purgeCentralState in the live overlay")
+	}
+	// The survivor's override must be untouched.
+	if overlay.Decide(survivorCentral, "HmIP-RF", "BBBB0001:1", "STATE", true) {
+		t.Error("purgeCentralState removed an unrelated central's recording override")
+	}
+
+	// The durable row is gone too, so a fresh Load (the next daemon boot)
+	// would not resurrect the stale override.
+	rows, err := recStore.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, r := range rows {
+		if r.CentralName == removedCentral {
+			t.Errorf("recording_overrides row for %s survived purge: %+v", removedCentral, r)
+		}
+	}
+}
+
+// TestPurgeCentralStateDropsChannelFlagsOverlay pins the fix for a removed-
+// and-re-adopted central serving stale channel Hidden/Locked flags. Neither
+// the durable store nor the in-memory overlay had a caller in
+// purgeCentralState before the fix — both the row and the overlay entry
+// must be gone, and a survivor central's flags must be untouched, exactly
+// mirroring TestPurgeCentralStateDropsRecordingOverridesOverlay.
+func TestPurgeCentralStateDropsChannelFlagsOverlay(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db := openMigratedTestDB(t, "purge_channel_flags.db")
+	store := sqlitestore.NewChannelFlagsStore(db)
+	overlay := channelflags.New()
+
+	const removedCentral = "purge-central"
+	const survivorCentral = "other-central"
+	if err := store.Set(ctx, removedCentral, "AAAA0001:1", true, true, "test"); err != nil {
+		t.Fatalf("Set(removed): %v", err)
+	}
+	overlay.Set(removedCentral, "AAAA0001:1", channelflags.Flags{Hidden: true, Locked: true})
+	if err := store.Set(ctx, survivorCentral, "BBBB0001:1", true, false, "test"); err != nil {
+		t.Fatalf("Set(survivor): %v", err)
+	}
+	overlay.Set(survivorCentral, "BBBB0001:1", channelflags.Flags{Hidden: true})
+
+	// Precondition: the overlay is what the ingest/control-write hot paths
+	// read, so this is what proves the leak, not just the durable row.
+	if !overlay.Get(removedCentral, "AAAA0001:1").Set() {
+		t.Fatal("precondition: removed central's channel must start flagged")
+	}
+
+	cc := config.CentralConfig{Name: removedCentral}
+	purgeCentralState(ctx, nil, nil, nil, nil, nil, store, overlay, cc, discardTestLogger())
+
+	if overlay.Get(removedCentral, "AAAA0001:1").Set() {
+		t.Error("removed central's channel flags survived purgeCentralState in the live overlay")
+	}
+	if !overlay.Get(survivorCentral, "BBBB0001:1").Set() {
+		t.Error("purgeCentralState removed an unrelated central's channel flags from the overlay")
+	}
+
+	rows, err := store.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, r := range rows {
+		if r.CentralName == removedCentral {
+			t.Errorf("channel_flags row for %s survived purge: %+v", removedCentral, r)
+		}
+	}
 }
 
 // TestEvictModelRemovesDevicesDescriptionsAndParamsets mirrors
@@ -200,7 +318,7 @@ func TestEvictModelNilSafe(t *testing.T) {
 func TestNewCentralOrchestratorNilBringUpReturnsNil(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	orch := newCentralOrchestrator(reg, nil, southboundWiringDeps{reg: reg}, &config.Config{}, discardTestLogger(), "", nil, nil, nil, nil)
+	orch := newCentralOrchestrator(reg, nil, southboundWiringDeps{reg: reg}, &config.Config{}, discardTestLogger(), "", nil, nil, nil, nil, nil, nil, nil)
 	if orch != nil {
 		t.Fatal("newCentralOrchestrator(bringUp=nil) returned a non-nil orchestrator")
 	}
@@ -236,7 +354,7 @@ func buildLiveTestOrchestrator(ctx context.Context, t *testing.T, reg *central.R
 		t.Fatalf("adapter.WireCentrals: %v", err)
 	}
 	t.Cleanup(mgr.Teardown)
-	orch := newCentralOrchestrator(reg, mgr, southboundWiringDeps{reg: reg, logger: logger}, cfg, logger, "", nil, nil, nil, nil)
+	orch := newCentralOrchestrator(reg, mgr, southboundWiringDeps{reg: reg, logger: logger}, cfg, logger, "", nil, nil, nil, nil, nil, nil, nil)
 	if orch == nil {
 		t.Fatal("newCentralOrchestrator returned nil")
 	}

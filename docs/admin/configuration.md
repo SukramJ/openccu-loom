@@ -670,7 +670,7 @@ to pin a specific timing (e.g. on heavily-loaded BidCos-RF).
 
 | Key | Type | Default | Env | Secret? |
 |---|---|---|---|---|
-| `reliability.command_retry_initial_delay` | duration | `0` (250 ms default) | — | no |
+| `reliability.command_retry_initial_delay` | duration | `0` (2 s default) | — | no |
 | `reliability.command_throttle_inter_command_delay` | duration | `0` (no pacing) | — | no |
 
 ### `ccu_data`

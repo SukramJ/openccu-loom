@@ -75,6 +75,60 @@ func TestOverrides_LoadPopulatesFromStore(t *testing.T) {
 	}
 }
 
+// TestOverrides_DeleteCentralNilSafe pins the nil-receiver contract every
+// other mutator on RecordingOverrides shares.
+func TestOverrides_DeleteCentralNilSafe(t *testing.T) {
+	t.Parallel()
+	var o *RecordingOverrides
+	if n := o.DeleteCentral("c"); n != 0 {
+		t.Errorf("nil overlay DeleteCentral = %d, want 0", n)
+	}
+}
+
+// TestOverrides_DeleteCentralDropsOnlyThatCentralsOverrides pins the fix for
+// a removed-and-re-adopted central serving stale overrides: DeleteCentral
+// must clear every key for the given central from the in-memory overlay —
+// which Decide/Effective consult on the hot path — while leaving every
+// other central's overrides untouched.
+func TestOverrides_DeleteCentralDropsOnlyThatCentralsOverrides(t *testing.T) {
+	t.Parallel()
+	o, _ := newOverlay(t, nil, nil)
+	ctx := context.Background()
+
+	if err := o.Set(ctx, "haus", "i", "ch", "TEMPERATURE", false, "u"); err != nil {
+		t.Fatalf("Set(haus): %v", err)
+	}
+	if err := o.Set(ctx, "haus", "i", "ch2", "STATE", true, "u"); err != nil {
+		t.Fatalf("Set(haus/ch2): %v", err)
+	}
+	if err := o.Set(ctx, "other", "i", "ch", "TEMPERATURE", false, "u"); err != nil {
+		t.Fatalf("Set(other): %v", err)
+	}
+
+	if n := o.DeleteCentral("haus"); n != 2 {
+		t.Errorf("DeleteCentral(haus) removed %d keys, want 2", n)
+	}
+
+	// The removed central's overrides are gone: Decide falls back to the
+	// policy argument instead of returning the stale forced verdict.
+	if !o.Decide("haus", "i", "ch", "TEMPERATURE", true) {
+		t.Error("haus override survived DeleteCentral: Decide still returns the forced false")
+	}
+	if o.Decide("haus", "i", "ch2", "STATE", false) {
+		t.Error("haus override survived DeleteCentral: Decide still returns the forced true")
+	}
+
+	// A different central's override must be untouched.
+	if o.Decide("other", "i", "ch", "TEMPERATURE", true) {
+		t.Error("DeleteCentral(haus) must not remove an unrelated central's override")
+	}
+
+	// Idempotent: a second call finds nothing left to remove.
+	if n := o.DeleteCentral("haus"); n != 0 {
+		t.Errorf("second DeleteCentral(haus) removed %d keys, want 0", n)
+	}
+}
+
 // TestRecorder_OverrideForceOffDropsIncludedDP: a DP the glob policy would
 // record is dropped when an explicit force-off override is present.
 func TestRecorder_OverrideForceOffDropsIncludedDP(t *testing.T) {

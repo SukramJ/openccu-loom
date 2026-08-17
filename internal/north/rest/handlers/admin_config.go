@@ -70,8 +70,8 @@ type SchemaField struct {
 // zero value is misleading.
 var consumerDefaults = map[string]any{
 	// Reliability — see internal/config/config.go ReliabilityConfig.
-	"reliability.command_retry_initial_delay":          int64(250_000_000), // 250 ms
-	"reliability.command_throttle_inter_command_delay": int64(0),           // disabled (no inter-command pacing)
+	"reliability.command_retry_initial_delay":          int64(2_000_000_000), // 2 s (hmreliability.RetryInitialBackoff)
+	"reliability.command_throttle_inter_command_delay": int64(0),             // disabled (no inter-command pacing)
 	// Persistence/ValuesCache — see internal/config/config.go ValuesCacheConfig
 	// and internal/central/adapter.DefaultValuesCacheFlushInterval.
 	"persistence.values_cache.enabled":        true,

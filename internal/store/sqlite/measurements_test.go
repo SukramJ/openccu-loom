@@ -369,6 +369,103 @@ func TestMeasurement_DeleteDevice_PrefixSafety(t *testing.T) {
 	}
 }
 
+// TestMeasurement_DeleteDevice_IsAtomicAcrossTiers pins the regression guard
+// for the audit finding: the three tiers used to be three independent
+// autocommit statements, so a failure after the raw-table delete left the
+// device's rollups behind — the exact resurfacing the multi-tier delete
+// exists to prevent, reached through a partial run instead of a
+// single-tier delete. Dropping the hourly tier's table forces the second
+// statement to fail; the fix wraps all three in one transaction, so the
+// already-executed raw-table delete must roll back too.
+func TestMeasurement_DeleteDevice_IsAtomicAcrossTiers(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+	ts := time.UnixMilli(1000)
+	const central, iface = "ccu1", "HmIP-RF"
+
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: "ABC123:1", Parameter: "P", TS: ts, Value: 1},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DROP TABLE measurements_hourly`); err != nil {
+		t.Fatalf("DROP TABLE measurements_hourly: %v", err)
+	}
+
+	if err := s.DeleteDevice(ctx, central, iface, "ABC123"); err == nil {
+		t.Fatal("DeleteDevice succeeded despite the hourly tier being unreachable, want an error")
+	}
+
+	st, err := s.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if st.Rows != 1 {
+		t.Errorf("Stats.Rows = %d after a failed DeleteDevice, want 1 (the raw-tier delete must have rolled back)", st.Rows)
+	}
+}
+
+// TestMeasurement_DeleteForCentral_IsAtomicAcrossTiers is the DeleteForCentral
+// half of the same guard — see TestMeasurement_DeleteDevice_IsAtomicAcrossTiers.
+func TestMeasurement_DeleteForCentral_IsAtomicAcrossTiers(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+	ts := time.UnixMilli(1000)
+
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: "central-a", InterfaceID: "HmIP-RF", ChannelAddress: "DEV:1", Parameter: "TEMP", TS: ts, Value: 1},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DROP TABLE measurements_hourly`); err != nil {
+		t.Fatalf("DROP TABLE measurements_hourly: %v", err)
+	}
+
+	if err := s.DeleteForCentral(ctx, "central-a"); err == nil {
+		t.Fatal("DeleteForCentral succeeded despite the hourly tier being unreachable, want an error")
+	}
+
+	st, err := s.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if st.Rows != 1 {
+		t.Errorf("Stats.Rows = %d after a failed DeleteForCentral, want 1 (the raw-tier delete must have rolled back)", st.Rows)
+	}
+}
+
+// TestMeasurement_DeleteAll_IsAtomicAcrossTiers is the DeleteAll half of the
+// same guard — see TestMeasurement_DeleteDevice_IsAtomicAcrossTiers.
+func TestMeasurement_DeleteAll_IsAtomicAcrossTiers(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+	ts := time.UnixMilli(1000)
+
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: "central-a", InterfaceID: "HmIP-RF", ChannelAddress: "DEV:1", Parameter: "TEMP", TS: ts, Value: 1},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DROP TABLE measurements_hourly`); err != nil {
+		t.Fatalf("DROP TABLE measurements_hourly: %v", err)
+	}
+
+	if err := s.DeleteAll(ctx); err == nil {
+		t.Fatal("DeleteAll succeeded despite the hourly tier being unreachable, want an error")
+	}
+
+	st, err := s.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if st.Rows != 1 {
+		t.Errorf("Stats.Rows = %d after a failed DeleteAll, want 1 (the raw-tier delete must have rolled back)", st.Rows)
+	}
+}
+
 // TestMeasurement_DeleteForCentral_RemovesOnlyThatCentral verifies that
 // DeleteForCentral removes every row for the named central across all its
 // interfaces/devices while leaving another central's history untouched.

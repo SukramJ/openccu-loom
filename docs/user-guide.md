@@ -128,8 +128,8 @@ logging:
 
 callback:
   host: 0.0.0.0
-  port: 8120          # XML-RPC callback listener (0 = dynamic)
-  bin_port: 8129      # BIN-RPC callback listener (CUxD; 0 = dynamic)
+  port: 8120          # XML-RPC callback listener (0 resolves to 8120; use port_range for an OS-assigned port)
+  bin_port: 8129      # BIN-RPC callback listener (CUxD; 0 resolves to 8129, no OS-assigned mode exists)
 
 north:
   rest:

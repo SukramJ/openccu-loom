@@ -15,8 +15,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
+	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -65,10 +67,13 @@ type centralOrchestrator struct {
 	logger       *slog.Logger
 	instanceName string
 
-	valuesCacheStore  *sqlite.ValuesCacheStore
-	masterValuesStore *sqlite.MasterValuesStore
-	historyStore      *sqlite.MeasurementStore
-	recordingStore    *sqlite.RecordingOverrideStore
+	valuesCacheStore    *sqlite.ValuesCacheStore
+	masterValuesStore   *sqlite.MasterValuesStore
+	historyStore        *sqlite.MeasurementStore
+	recordingStore      *sqlite.RecordingOverrideStore
+	recordingOverrides  *history.RecordingOverrides
+	channelFlagsStore   *sqlite.ChannelFlagsStore
+	channelFlagsOverlay *channelflags.Overlay
 
 	mu      sync.Mutex
 	handles map[string]*centralHandle
@@ -354,22 +359,28 @@ func newCentralOrchestrator(
 	masterValuesStore *sqlite.MasterValuesStore,
 	historyStore *sqlite.MeasurementStore,
 	recordingStore *sqlite.RecordingOverrideStore,
+	recordingOverrides *history.RecordingOverrides,
+	channelFlagsStore *sqlite.ChannelFlagsStore,
+	channelFlagsOverlay *channelflags.Overlay,
 ) *centralOrchestrator {
 	if bringUp == nil {
 		return nil
 	}
 	return &centralOrchestrator{
-		reg:               reg,
-		bringUp:           bringUp,
-		sbDeps:            sbDeps,
-		cfg:               cfg,
-		logger:            logger,
-		instanceName:      instanceName,
-		valuesCacheStore:  valuesCacheStore,
-		masterValuesStore: masterValuesStore,
-		historyStore:      historyStore,
-		recordingStore:    recordingStore,
-		handles:           make(map[string]*centralHandle),
+		reg:                 reg,
+		bringUp:             bringUp,
+		sbDeps:              sbDeps,
+		cfg:                 cfg,
+		logger:              logger,
+		instanceName:        instanceName,
+		valuesCacheStore:    valuesCacheStore,
+		masterValuesStore:   masterValuesStore,
+		historyStore:        historyStore,
+		recordingStore:      recordingStore,
+		recordingOverrides:  recordingOverrides,
+		channelFlagsStore:   channelFlagsStore,
+		channelFlagsOverlay: channelFlagsOverlay,
+		handles:             make(map[string]*centralHandle),
 	}
 }
 
@@ -621,7 +632,8 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 		h.detachBridge()
 	}
 
-	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore, h.cc, o.logger)
+	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore, o.recordingOverrides,
+		o.channelFlagsStore, o.channelFlagsOverlay, h.cc, o.logger)
 	o.logger.Info("central.remove.live", slog.String("central", name))
 	return nil
 }
@@ -734,6 +746,9 @@ func purgeCentralState(
 	masterValuesStore *sqlite.MasterValuesStore,
 	historyStore *sqlite.MeasurementStore,
 	recordingStore *sqlite.RecordingOverrideStore,
+	recordingOverrides *history.RecordingOverrides,
+	channelFlagsStore *sqlite.ChannelFlagsStore,
+	channelFlagsOverlay *channelflags.Overlay,
 	cc config.CentralConfig,
 	logger *slog.Logger,
 ) {
@@ -767,6 +782,28 @@ func purgeCentralState(
 				slog.String("central", cc.Name), slog.String("err", err.Error()))
 		}
 	}
+	// The durable delete above does not reach the in-memory overlay the
+	// recorder consults on every value-changed event: RecordingOverrides is
+	// loaded once at wire time, so without this a central removed and
+	// re-adopted under the same name keeps serving the stale "never record"
+	// verdict from rows the store no longer has, until the daemon restarts.
+	if n := recordingOverrides.DeleteCentral(cc.Name); n > 0 {
+		logger.Info("central.remove.purge_recording_overrides_overlay",
+			slog.String("central", cc.Name), slog.Int("count", n))
+	}
+	if channelFlagsStore != nil {
+		if err := channelFlagsStore.DeleteForCentral(ctx, cc.Name); err != nil {
+			logger.Warn("central.remove.purge_channel_flags",
+				slog.String("central", cc.Name), slog.String("err", err.Error()))
+		}
+	}
+	// Replace(central, nil) drops the whole per-central sub-map from the
+	// overlay the ingest and control-write hot paths read — without this
+	// the durable delete above is invisible until restart, and a central
+	// removed and re-adopted under the same name comes back with its old
+	// channels silently hidden/locked from the previous incarnation's
+	// operator overrides.
+	channelFlagsOverlay.Replace(cc.Name, nil)
 }
 
 // liveCentralAdmin wraps a persisted [handlers.CentralAdminService] (the

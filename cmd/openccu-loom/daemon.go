@@ -526,7 +526,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// below then leaves the plain SQLite-backed service in place.
 	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
 	centralOrch := newCentralOrchestrator(reg, sb.bringUpManager, sbDeps, cfg, logger, instanceName,
-		valuesCacheStore, masterValuesStore, historyStore, recordingStore)
+		valuesCacheStore, masterValuesStore, historyStore, recordingStore, recordingOverrides,
+		channelFlagsStore, channelFlagsOverlay)
 	// A runtime-adopted central must join the hub-discovery ready pipeline the
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.

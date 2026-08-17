@@ -162,8 +162,6 @@ func SetOriginVersion(v string) {
 // position + slats, siren, lock with capability sets) are handled
 // by targeted overrides in future scheibes.
 //
-// The optional [PayloadFormat] selector aligns the produced payloads
-// with the bridge's wire format. In `bare` mode (default) state
 // State topics carry the canonical JSON envelope
 // `{"value":..,"available":..,"modified_at":..}` and the discovery
 // payload uses `value_template` filters to pick the scalar out of
