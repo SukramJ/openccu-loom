@@ -70,8 +70,12 @@ func spaSurfaceIDs(t *testing.T) []surface.ID {
 		out = append(out, surface.ID("nav."+m[1]))
 	}
 
+	// The tab table is a rune, not a plain const: its labels call t(...), so a
+	// top-level initializer would freeze every label at the language Settings
+	// first opened in. Match the declaration without its initializer form so
+	// wrapping it in a rune does not read as "the SPA lost its tabs".
 	settings := spaFile(t, "routes", "Settings.svelte")
-	tabs := sliceBetween(t, settings, "const ALL_TABS: Tab[] = [", "];")
+	tabs := sliceBetween(t, settings, "const ALL_TABS", "\n  ]")
 	for _, m := range tabIDRe.FindAllStringSubmatch(tabs, -1) {
 		out = append(out, surface.ID("settings."+m[1]))
 	}
